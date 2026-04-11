@@ -16,9 +16,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Stack
 
 - **Go** — Implementation language for both `orbital` and `orb`
-- **DGraph** — Graph database with GraphQL API on top of RDF-like storage; stores all configuration items
+- **DGraph** (community edition) — Graph database with native GraphQL API on top of RDF-like storage; stores all configuration items. Chosen because the RDF model fits configuration items naturally, and the GraphQL API lets external teams (e.g. a digital twin UI) consume data without custom endpoints. Do not suggest replacing DGraph. Some enterprise features (namespaces, backups) may be implemented in-house later.
 - **PostgreSQL** — Relational database for metadata and general backend services for `orbital`
-- **Valkey** — In-memory cache for `orbital`
+- **Valkey** — In-memory cache for `orbital`; chosen over Redis due to licensing. Do not suggest switching to Redis.
+
+## Architecture Notes
+
+Clients never query DGraph directly. All queries go through the Go server, which acts as middleware and is responsible for rate limiting, caching, auth, and any other cross-cutting concerns. This applies to external consumers (e.g. digital twin UI teams) as well.
 
 ## Local Development
 
@@ -46,10 +50,30 @@ deploy/
   orbital/         # Deployment files for orbital control plane
 ```
 
+## Working Style
+
+- Don't add comments that just restate what the code does
+- Don't refactor code that wasn't part of the request — ask first
+- Don't add third-party packages without asking first
+- Only touch files relevant to the task
+- Don't clean up unrelated code while working on something else
+- Don't add TODOs or placeholder comments
+
+## Go Conventions
+
+- **Error wrapping** — use `fmt.Errorf("...: %w", err)`; never discard or log-and-return
+- **Context** — always the first argument: `func Foo(ctx context.Context, ...)`
+- **Constructors** — named `New[Type]`, e.g. `NewServer`, `NewClient`
+- **`cmd/` is thin** — entry points only; all logic lives in separate packages
+- **Tests** — table-driven with `t.Run`; avoid test helpers that obscure failure sites
+- No `init()` functions
+- No global variables
+- No `panic()` outside of `main()`
+
 ## Development Status
 
 This is an early-stage project. Go module files (`go.mod`/`go.sum`) have not yet been initialized. Before adding packages or running Go commands, initialize the module:
 
 ```bash
-go mod init github.com/armada/orb   # or the appropriate module path
+go mod init github.com/armada/orbital   # or the appropriate module path
 ```
