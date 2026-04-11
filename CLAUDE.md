@@ -36,6 +36,7 @@ docker compose -f deploy/local/docker-compose.yml up -d
 |---|---|---|
 | DGraph Zero | 5080, 6080 | Cluster coordinator |
 | DGraph Alpha | 8080 (HTTP/GraphQL), 9080 (gRPC) | GraphQL playground at http://localhost:8080 |
+| DGraph Ratel | 8000 | DGraph UI |
 | PostgreSQL | 5432 | user/password/db: `orbital` |
 
 ## Repository Structure
@@ -46,8 +47,14 @@ cmd/
   server/orb/      # Edge orb service (entry point: main.go)
   server/orbital/  # Control plane server
 deploy/
+  local/           # Local development stack (docker-compose)
   orb/             # Deployment files for edge orb service
   orbital/         # Deployment files for orbital control plane
+orb/
+  config/          # Orb configuration (port, timeouts, DGraph URL)
+  handler/         # HTTP handlers (GraphQL proxy)
+  server/          # Echo server setup and lifecycle
+  static/          # Static files served by orb (GraphiQL UI)
 ```
 
 ## Working Style
@@ -72,8 +79,4 @@ deploy/
 
 ## Development Status
 
-This is an early-stage project. Go module files (`go.mod`/`go.sum`) have not yet been initialized. Before adding packages or running Go commands, initialize the module:
-
-```bash
-go mod init github.com/armada/orbital   # or the appropriate module path
-```
+This is an early-stage project. The Go module is initialized at `github.com/armada/orbital`.
