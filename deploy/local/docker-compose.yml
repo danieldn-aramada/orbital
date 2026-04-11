@@ -1,0 +1,37 @@
+services:
+  dgraph-zero:
+    image: dgraph/dgraph:latest
+    command: dgraph zero --my=dgraph-zero:5080
+    ports:
+      - "5080:5080"
+      - "6080:6080"
+    volumes:
+      - dgraph-zero-data:/dgraph
+
+  dgraph-alpha:
+    image: dgraph/dgraph:latest
+    command: dgraph alpha --my=dgraph-alpha:7080 --zero=dgraph-zero:5080
+    ports:
+      - "7080:7080"
+      - "8080:8080"
+      - "9080:9080"
+    volumes:
+      - dgraph-alpha-data:/dgraph
+    depends_on:
+      - dgraph-zero
+
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: orbital
+      POSTGRES_PASSWORD: orbital
+      POSTGRES_DB: orbital
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  dgraph-zero-data:
+  dgraph-alpha-data:
+  postgres-data:
