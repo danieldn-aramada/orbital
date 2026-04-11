@@ -20,6 +20,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **PostgreSQL** — Relational database for metadata and general backend services for `orbital`
 - **Valkey** — In-memory cache for `orbital`
 
+## Local Development
+
+Start the local stack (DGraph + PostgreSQL) with:
+
+```bash
+docker compose -f deploy/local/docker-compose.yml up -d
+```
+
+| Service | Port(s) | Notes |
+|---|---|---|
+| DGraph Zero | 5080, 6080 | Cluster coordinator |
+| DGraph Alpha | 8080 (HTTP/GraphQL), 9080 (gRPC) | GraphQL playground at http://localhost:8080 |
+| PostgreSQL | 5432 | user/password/db: `orbital` |
+
 ## Repository Structure
 
 ```
