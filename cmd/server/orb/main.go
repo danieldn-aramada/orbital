@@ -6,8 +6,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/armada/orbital/orb/config"
-	"github.com/armada/orbital/orb/server"
+	"github.com/armada/orbital/internal/config"
+	"github.com/armada/orbital/internal/server"
 )
 
 func main() {

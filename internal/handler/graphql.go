@@ -31,5 +31,5 @@ func (h *GraphQL) Handle(c echo.Context) error {
 	}
 
 	slog.Info("GET /graphql")
-	return c.File("orb/static/index.html")
+	return c.File("internal/static/index.html")
 }

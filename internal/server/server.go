@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/armada/orbital/orb/config"
-	"github.com/armada/orbital/orb/handler"
+	"github.com/armada/orbital/internal/config"
+	"github.com/armada/orbital/internal/handler"
 	"github.com/labstack/echo/v4"
 )
 
@@ -17,7 +17,7 @@ type Server struct {
 func New(cfg *config.Config) *Server {
 	e := echo.New()
 	e.HideBanner = true
-	e.Static("/", "orb/static")
+	e.Static("/", "internal/static")
 
 	gql := handler.NewGraphQL(cfg.DGraphURL)
 	e.Any("/graphql", gql.Handle)

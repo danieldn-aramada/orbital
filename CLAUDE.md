@@ -4,14 +4,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Orbital** is a configuration management framework for modular data centers, focused on multi-site and air-gapped deployments. Written in Go.
+**Orbital** is a graph-native framework for continuously reconciling infrastructure across modular, air-gapped data centers. Written in Go.
 
 ### Key Concepts
 
-- **`orbital`** — Cloud control plane holding design intent (configuration items) for all modular data centers. Serves APIs for digital twin building and pushes configuration down to orbs.
-- **`orb`** — Standalone edge service running inside a modular data center. Serves configuration, detects drift, suitable for air-gapped deployments.
-- **`orbital import [orb]`** — Merges existing configuration from a modular data center into orbital.
-- **`orbital export [orb]`** — Exports configuration from orbital and pushes it down to an orb instance.
+- **`orbital`** — Server running in cloud. Holds design intent (configuration items) for all modular data centers, serves the Topology API for digital twin building, and pushes configuration down to orbs.
+- **`orb`** — Standalone binary running inside a modular data center. Serves configuration, detects drift, suitable for air-gapped deployments.
+
+### Features
+
+- Graph-first infrastructure model — represent data centers as relationships between physical and logical resources
+- Multi-source infrastructure discovery — ingest from bare metal systems (BMC) and external inventory systems via API integrations
+- Topology API (digital twin) — build and query a live, traversable graph of infrastructure design intent
+- Air-gap ready — operates in disconnected and edge environments without external dependencies
+
+### Non-Goals
+
+- Full DCIM system with dashboards, alerting, and observability
+- End-to-end infrastructure management suite
 
 ## Stack
 
@@ -43,18 +53,22 @@ docker compose -f deploy/local/docker-compose.yml up -d
 
 ```
 cmd/
-  cli/orbital/     # CLI for the orbital control plane
-  server/orb/      # Edge orb service (entry point: main.go)
-  server/orbital/  # Control plane server
+  cli/orbital/        # orbital CLI entry point
+  server/orb/         # orb server entry point
+  server/orbital/     # orbital server entry point
 deploy/
-  local/           # Local development stack (docker-compose)
-  orb/             # Deployment files for edge orb service
-  orbital/         # Deployment files for orbital control plane
-orb/
-  config/          # Orb configuration (port, timeouts, DGraph URL)
-  handler/         # HTTP handlers (GraphQL proxy)
-  server/          # Echo server setup and lifecycle
-  static/          # Static files served by orb (GraphiQL UI)
+  local/              # Local development stack (docker-compose)
+  orb/                # Deployment files for orb
+  orbital/            # Deployment files for orbital
+internal/
+  config/             # Shared config (port, timeouts, DGraph URL)
+  discovery/          # Discovery orchestration (used by orbital)
+    bmc/              # BMC/bare metal discovery
+  drift/              # Drift detection (used by orb)
+  graph/              # DGraph client and topology operations
+  handler/            # HTTP handlers (GraphQL proxy, topology API)
+  server/             # Shared Echo server setup and lifecycle
+  static/             # Static files (GraphiQL UI)
 ```
 
 ## Working Style
