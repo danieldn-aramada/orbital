@@ -4,35 +4,102 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Orbital** is a graph-native framework for continuously reconciling infrastructure across modular, air-gapped data centers. Written in Go.
+**Orbital** is an API-first, graph-native configuration management framework for modular data centers. Written in Go.
 
 ### Key Concepts
 
-- **`orbital`** — Server running in cloud. Holds design intent (configuration items) for all modular data centers, serves the Topology API for digital twin building, and pushes configuration down to orbs.
+- **`orbital`** — Server running in cloud. Central configuration hub — holds design intent (configuration items) for all modular data centers, serves the Topology API for digital twin building, and pushes configuration down to orbs.
 - **`orb`** — Standalone binary running inside a modular data center. Serves configuration, detects drift, suitable for air-gapped deployments.
 
-### Features
+### Goals
 
+- Air-gap ready design — operates in disconnected and edge environments without external dependencies
 - Graph-first infrastructure model — represent data centers as relationships between physical and logical resources
 - Multi-source infrastructure discovery — ingest from bare metal systems (BMC) and external inventory systems via API integrations
 - Topology API (digital twin) — build and query a live, traversable graph of infrastructure design intent
-- Air-gap ready — operates in disconnected and edge environments without external dependencies
 
 ### Non-Goals
 
 - Full DCIM system with dashboards, alerting, and observability
-- End-to-end infrastructure management suite
+- End-to-end infrastructure control plane or management suite
 
 ## Stack
 
 - **Go** — Implementation language for both `orbital` and `orb`
-- **DGraph** (community edition) — Graph database with native GraphQL API on top of RDF-like storage; stores all configuration items. Chosen because the RDF model fits configuration items naturally, and the GraphQL API lets external teams (e.g. a digital twin UI) consume data without custom endpoints. Do not suggest replacing DGraph. Some enterprise features (namespaces, backups) may be implemented in-house later.
-- **PostgreSQL** — Relational database for metadata and general backend services for `orbital`
+- **DGraph** (community edition) — Graph database with native GraphQL API on top of RDF-like storage; stores all configuration items. Chosen because the RDF model fits configuration items naturally, and the GraphQL API lets external teams (e.g. a digital twin UI) consume data without custom endpoints. Do not suggest replacing DGraph. Self-hosted in the same Kubernetes namespace as orbital. Some enterprise features (namespaces, backups) may be implemented in-house later.
+- **PostgreSQL** — Stores all managed-service operational data for `orbital`: orb registry, user accounts, audit logs, job/sync history, DGraph backup metadata (e.g. S3 locations). Anything typical for running a managed service goes here, not in DGraph.
 - **Valkey** — In-memory cache for `orbital`; chosen over Redis due to licensing. Do not suggest switching to Redis.
 
 ## Architecture Notes
 
-Clients never query DGraph directly. All queries go through the Go server, which acts as middleware and is responsible for rate limiting, caching, auth, and any other cross-cutting concerns. This applies to external consumers (e.g. digital twin UI teams) as well.
+### Data flow
+For ongoing config management, flow is **orbital → orb**. Orb does not write back to orbital directly over the network. The exception is onboarding: orb discovers existing infrastructure, exports a graph, and an admin manually carries it to orbital (USB/file upload) to seed the cloud control plane. After import, orbital becomes the source of truth going forward.
+
+### Air-gap sync
+Two mechanisms for getting config into an air-gapped orb:
+1. **Scheduled polling** — orb polls orbital on an admin-controlled schedule when connectivity is available
+2. **Manual file import** — admin physically imports a config file (e.g. via USB) into orb when the modular data center is fully disconnected
+
+### Discovery and onboarding
+For customers with existing infrastructure, discovery runs at the edge:
+1. Orb scans the local modular data center (BMC, inventory APIs)
+2. Orb exports the discovered graph to a portable file
+3. Admin copies the file out (e.g. USB)
+4. Admin uploads to orbital (`orbital import`) to seed the cloud control plane
+
+This is the primary onboarding workflow — discovered reality flows from orb into orbital, not the other way.
+
+### Configuration items
+Configuration items span the full spectrum from physical (racks, servers, switches, screws, door parts) to logical (VLANs, IPs, K8s clusters, app configs). The schema is intentionally broad and user-defined. DGraph's RDF model fits this naturally.
+
+### Orb registration and auth
+Modeled after the GitHub Actions runner pattern, which has precedent in these deployments:
+
+1. Orbital admin creates an orb slot for a modular data center → generates a **one-time registration token** (short-lived, ~1 hour, stored hashed in PostgreSQL)
+2. Token is handed to the on-site admin (printed, USB, email)
+3. Orb presents the token to orbital's registration endpoint → orbital issues a **long-lived orb API key** tied to that orb's identity
+4. Orb stores the key locally and uses it for all future polling
+
+Do not use expiring JWTs for orb auth. Orbs may be disconnected for months — a JWT that expires while air-gapped bricks the orb until someone rotates it. A long-lived opaque API key, revocable from orbital, is more resilient.
+
+### Orb CLI vs orb server
+These are two separate binaries. The **orb server** (`cmd/server/orb`) is the long-running edge service. The **orb CLI** (`cmd/cli/orb`) is an admin tool used at the data center to build the local config graph and export it to a file for later upload to orbital. They share packages from `internal/`.
+
+### Schema management
+DGraph schema is defined in versioned GraphQL files under `schema/` (e.g. `schema/v1.graphql`) and applied to DGraph via its admin API (`POST /admin/schema`). Orbital owns the schema — orb never modifies it.
+
+**Rules:**
+- Schema changes must always be backwards compatible. Orbs may be running an older version while orbital is newer. Breaking changes (removing/renaming types or fields, adding non-null fields to existing types) are rejected.
+- Safe changes: new types, new nullable fields on existing types.
+- Orbital tracks the active schema version in PostgreSQL (`schema_versions` table: version, checksum, applied timestamp, applied by).
+- On startup, orbital compares its bundled schema version against PostgreSQL and applies if behind, after validating backwards compatibility.
+- Schema is never applied manually — always through orbital's startup or admin API.
+
+A custom schema migration tool will be built into orbital (not a standalone binary) to handle version tracking, compatibility validation, and DGraph apply. This is deliberate — no existing tool handles DGraph GraphQL migrations with the version skew constraints this project requires.
+
+### Orb sync payload
+When orb polls orbital, it receives a DGraph export — the same output as DGraph's export mutation:
+
+```graphql
+mutation { export(input: { format: "json" }) { response { code message } } }
+```
+
+This produces `json.gz` (data) and `schema.gz` (schema). Orb receives these files and loads them into its local DGraph instance. This means orb always has a complete local copy of its data center's graph, usable fully offline.
+
+### Topology API
+Orbital proxies DGraph's auto-generated GraphQL API as-is. No custom GraphQL layer for now. External consumers (digital twin UI) query orbital's GraphQL endpoint, which forwards to DGraph. Orbital adds auth, rate limiting, and caching in the middleware layer — but does not transform the GraphQL schema.
+
+### DGraph topology
+One shared DGraph instance for all modular data centers in orbital. `DataCenter` is the root partitioning node in the graph. A future evolution may run one DGraph instance per data center (e.g. using DGraph namespaces or separate clusters), but the current schema and graph package should not assume multi-instance.
+
+### Caching (Valkey)
+Orbital must operate correctly without Valkey — cache is an optimization, not a dependency. Use cache-aside: check Valkey first, fall back to DGraph on miss, populate cache on response. Heavy read load is expected from digital twin frontends rendering data center topology. Cache DGraph GraphQL query responses. Invalidate on config changes.
+
+### Drift detection
+When orb detects that actual state diverges from intended state, it alerts. No auto-reconciliation for now — reconciliation services are a future concern.
+
+### GraphQL middleware
+Clients never query DGraph directly. All queries go through the Go server, which handles rate limiting, caching, auth, and other cross-cutting concerns. This applies to external consumers (e.g. digital twin UI teams) as well.
 
 ## Local Development
 
@@ -53,7 +120,7 @@ docker compose -f deploy/local/docker-compose.yml up -d
 
 ```
 cmd/
-  cli/orbital/        # orbital CLI entry point
+  cli/orb/            # orb CLI — edge admin tool (build graph, export for upload to orbital)
   server/orb/         # orb server entry point
   server/orbital/     # orbital server entry point
 deploy/
@@ -65,10 +132,12 @@ internal/
   discovery/          # Discovery orchestration (used by orbital)
     bmc/              # BMC/bare metal discovery
   drift/              # Drift detection (used by orb)
-  graph/              # DGraph client and topology operations
+  graph/              # DGraph client, schema loading, topology operations
   handler/            # HTTP handlers (GraphQL proxy, topology API)
   server/             # Shared Echo server setup and lifecycle
   static/             # Static files (GraphiQL UI)
+schema/
+  v1.graphql          # DGraph GraphQL schema (versioned, managed by orbital)
 ```
 
 ## Working Style
