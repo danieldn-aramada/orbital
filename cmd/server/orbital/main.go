@@ -1,47 +1,23 @@
 package main
 
 import (
-	"io"
+	"context"
 	"log"
-	"log/slog"
-	"net/http"
-	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/armada/orbital/internal/config"
+	"github.com/armada/orbital/internal/server"
 )
 
-func graphqlHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost {
-		dgraphURL := os.Getenv("DGRAPH_URL")
-		if dgraphURL == "" {
-			dgraphURL = "http://localhost:8080/graphql"
-		}
-
-		// Proxy POST requests to Dgraph GraphQL endpoint
-		resp, err := http.Post(dgraphURL, "application/json", r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
-
-		defer resp.Body.Close()
-
-		w.Header().Set("Content-Type", "application/json")
-		io.Copy(w, resp.Body)
-		return
-	}
-	slog.Info("GET /graphql")
-
-	// Serve GraphiQL HTML for GET requests
-	http.ServeFile(w, r, "./static/index.html")
-}
-
 func main() {
-	// Static files (JS/CSS) served at /
-	fs := http.FileServer(http.Dir("./static"))
-	http.Handle("/", fs)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
 
-	// GraphQL proxy
-	http.HandleFunc("/graphql", graphqlHandler)
+	cfg := config.New()
+	srv := server.New(cfg)
 
-	log.Println("Listening on :8001")
-	log.Fatal(http.ListenAndServe(":8001", nil))
+	if err := srv.Start(ctx); err != nil {
+		log.Fatal(err)
+	}
 }

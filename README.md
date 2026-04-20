@@ -166,6 +166,12 @@ TODO
 ## Deploy
 
 ### Local
+
+Setup dependencies
+```bash
+docker-compose -f deploy/local/docker-compose.yml up -d
+```
+
 Build
 ```bash
 docker build -t orbital:v0.0.1 .

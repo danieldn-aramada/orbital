@@ -22,7 +22,7 @@ WORKDIR /app
 
 # Copy binary + static assets
 COPY --from=builder /app/orbital .
-COPY --from=builder /app/static ./static
+COPY --from=builder /app/internal/static ./internal/static
 
 EXPOSE 8001
 
