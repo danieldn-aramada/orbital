@@ -1,0 +1,92 @@
+# Orbital DGraph Schema - v1
+#
+# Rules:
+#   - Schema changes must be backwards compatible. Orbs may be on older versions.
+#   - New types and nullable fields are safe. Removing or renaming fields is not.
+#   - Schema is managed by orbital and applied via the DGraph admin API on startup.
+#   - Do not apply this manually — orbital tracks the active version in PostgreSQL.
+#
+# DGraph directives used:
+#   @search     — enables filtering/querying on a field
+#   @hasInverse — declares the reverse edge of a relationship
+#   @id         — marks a field as a unique identifier (like a unique index)
+type Namespace {
+    id: ID!
+    name: String! @id @search(by: [hash])
+    createdBy: String
+    createdAt: DateTime
+}
+
+type User {
+  id: ID!
+  email: String! @id @search(by: [hash])
+}
+
+########################
+# Interfaces
+########################
+interface ConfigItem {
+    id: ID!
+    namespace: Namespace!
+    name: String! @id @search(by: [hash])
+    createdBy: String @search(by: [hash])
+    createdAt: DateTime @search
+    updatedBy: String @search(by: [hash])
+    updatedAt: DateTime @search
+    version: Float
+}
+
+########################
+# Config Items
+########################
+type DataCenter implements ConfigItem {
+    id: ID!
+
+    servers: [Server] @hasInverse(field: dataCenter)
+}
+
+type Server implements ConfigItem {
+    id: ID!
+    bmcIP: String @id @search(by: [term])
+    model: String @search(by: [term])
+    serviceTag: String @search(by: [term])
+
+    dataCenter: DataCenter!
+    serverConfigurationProfile: ServerConfigurationProfile @hasInverse(field: server)
+    storageControllers: [StorageController] @hasInverse(field: server)
+}
+
+type ServerConfigurationProfile implements ConfigItem {
+    json: String 
+
+    server: Server!
+}
+
+type StorageController implements ConfigItem {
+    id: ID!
+
+    server: Server!
+    storageDevices: [StorageDevice] @hasInverse(field: storageController)
+}
+
+type StorageDevice implements ConfigItem {
+    capacityBytes: Int
+    manufacturer: String
+    model: String
+    serialNumber: String
+    wwn: String
+
+    storageController: StorageController!
+    storageVolumes: [StorageVolume] @hasInverse(field: storageDevices)
+}
+
+type StorageVolume implements ConfigItem {
+    capacityBytes: Int
+    manufacturer: String
+    model: String
+    serialNumber: String
+    wwn: String
+
+    storageController: StorageController!
+    storageDevices: [StorageDevice] @hasInverse(field: storageVolumes)
+}

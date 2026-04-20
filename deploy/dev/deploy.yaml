@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orbital
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orbital
+  template:
+    metadata:
+      labels:
+        app: orbital
+    spec:
+      containers:
+        - name: orbital
+          image: armadaeksatest.azurecr.io/orbital:v0.0.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8001
+          env:
+            - name: DGRAPH_URL
+              value: http://dgraph-dgraph-alpha:8080/graphql
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orbital
+spec:
+  selector:
+    app: orbital
+  ports:
+    - port: 80
+      targetPort: 8001
+  type: ClusterIP

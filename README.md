@@ -30,7 +30,7 @@ However, for the edge and modular data centers, all fall short in these areas:
 
 ## Goals 
 
-- **Air-gap ready design** — operates in disconnected and edge environments
+- **Air-gapped ready** — operates in disconnected and edge environments
   without external dependencies  
 - **Graph-first infrastructure model** — represent data centers as relationships
   between physical and logical resources  
@@ -84,12 +84,12 @@ that, orbital takes over as the source of truth.
                                  |
                                  | config sync (orbital -> orb)
                                  |
-                     +---------v---------+
-                     |                   |
-                 +----v----+         +----v----+
-                 |  Orb A  |         |  Orb B  |
-                 |  DC 1   |         |  DC 2   |
-                 +---------+         +---------+
+                       +---------v---------+
+                       |                   |
+                  +----v----+         +----v----+
+                  |  Orb A  |         |  Orb B  |
+                  |  DC 1   |         |  DC 2   |
+                  +---------+         +---------+
 ```
 
 ### Graph model
@@ -159,5 +159,50 @@ compatible — orbs may be running an older version while orbital has advanced.
 Orbital tracks the active schema version in PostgreSQL and applies migrations on
 startup after validating compatibility.
 
-## Example
+## Examples
+
+TODO
+
+## Deploy
+
+### Local
+Build
+```bash
+docker build -t orbital:v0.0.1 .
+```
+
+Run
+```bash
+docker run -p 8001:8001 \
+  -e DGRAPH_URL=http://host.docker.internal:8080/graphql \
+  orbital:v0.0.1
+```
+
+### AKS devcc
+
+Deploy Dgraph
+```bash
+helm install dgraph dgraph/dgraph \
+  --version 24.1.4 \
+  --namespace <namespace>
+  -f deploy/charts/values-dev.yaml 
+
+helm install dgraph ./deploy/charts/dgraph --namespace=<namespace> --values deploy/charts/values-dev.yaml
+# or upgrade if need
+helm upgrade dgraph ./deploy/charts/dgraph --namespace=<namespace> --values deploy/charts/values-dev.yaml
+```
+
+Build and push to test registry
+[armadaeksatest](https://portal.azure.com/#@armada.ai/resource/subscriptions/212ddfb2-b7cf-4041-8eed-8882792f8d41/resourceGroups/eksa-acr-test/providers/Microsoft.ContainerRegistry/registries/armadaeksatest/repository)
+
+```bash
+# Assuming access to Sandbox Services Landing Zone
+az login 
+az acr login --name armadaeksatest
+
+docker buildx build \
+  --platform linux/amd64 \
+  -t armadaeksatest.azurecr.io/orbital:v0.0.1 \
+  --push .
+```
 

@@ -1,0 +1,14 @@
+zero:
+  replicaCount: 1
+  persistence:
+    size: 8Gi
+alpha:
+  replicaCount: 1
+  persistence:
+    size: 25Gi
+  extraFlags: "--graphql extensions=false"
+ratel:
+  enabled: true
+  image:
+    # repository: dgraph/ratel
+    tag: latest
