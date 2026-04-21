@@ -46,12 +46,42 @@ Non-Goals
 
 ## Concepts
 
-`orbital` - This project. Server runs in cloud. Holds design intent (i.e.
-configuration items) for all modular data centers and serves APIs for digital
-twin building. Pushes configuration down to `orbs`.
+`orbital` — Server running in the cloud. Single source of truth for configuration
+intent across all modular data centers. Serves the Topology API, manages schema,
+and pushes configuration down to `orbs`.
 
-`orb` - Standalone binary running in modular data center. Serves configuration
-and can detect drift. Suitable for air-gapped deployments.
+`orb` — Self-contained edge service running inside a modular data center. Holds a local
+copy of its data center's graph and serves it entirely offline. Detects drift
+between design intent and discovered reality. Suitable for air-gapped deployments.
+
+`configuration item` — The fundamental unit of the graph. Anything in a modular
+data center that can be named, related, and tracked — from physical assets (racks,
+servers, cables, door hardware) to logical constructs (VLANs, IP ranges, Kubernetes
+clusters, application configs). All configuration items share common audit fields
+and are stored as nodes in DGraph.
+
+`design intent` — What orbital says a modular data center should look like. The
+authoritative graph of configuration items held in orbital and pushed to orbs.
+Distinct from discovered reality — what orb actually finds on the ground.
+
+`topology` — The live, traversable graph of a modular data center's configuration
+items and their relationships. Served via the Topology API (GraphQL). The foundation
+for digital twin use cases — external consumers can query and visualize the full
+structure of a data center at any point in time.
+
+`graph export` — A portable snapshot of a data center's graph, produced by DGraph's
+export mechanism (`json.gz` + `schema.gz`). Used in two ways: orbital sends graph
+exports to orbs during config sync; orb sends a discovered graph export to orbital
+during onboarding. The same format enables both air-gap sync and the onboarding
+import workflow.
+
+`drift` — The gap between design intent and discovered reality. When orb scans the
+local data center and finds that actual state diverges from what orbital says it
+should be, that is drift. Orb detects and reports drift — it does not auto-reconcile.
+
+`namespace` — A logical partition scoping all configuration items to a specific
+modular data center. Designed for future multi-tenancy. DGraph community edition
+does not support namespaces natively — this is implemented at the schema level.
 
 ## Architecture
 

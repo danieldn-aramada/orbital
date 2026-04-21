@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Key Concepts
 
 - **`orbital`** — Server running in cloud. Central configuration hub — holds design intent (configuration items) for all modular data centers, serves the Topology API for digital twin building, and pushes configuration down to orbs.
-- **`orb`** — Standalone binary running inside a modular data center. Serves configuration, detects drift, suitable for air-gapped deployments.
+- **`orb`** — Self-contained edge service running inside a modular data center. Serves configuration, detects drift, suitable for air-gapped deployments.
 
 ### Goals
 

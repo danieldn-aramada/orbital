@@ -4,6 +4,17 @@ This file documents how AI (Claude, via Claude Code) was used during the develop
 
 AI was used as a collaborative engineering partner, not a code generator. All architectural decisions were made by the human engineer. Claude was used to implement, document, and pressure-test those decisions.
 
+## Contributing
+
+When using AI assistance on this project, log it here. Add a new session entry with:
+- What tool and model was used
+- What was built or changed
+- What instructions or constraints were given
+- Which decisions were made by the human vs accepted from AI suggestions
+- What AI suggested that was rejected and why
+
+Also update `CLAUDE.md` if any architectural decisions, terminology, or working conventions change — it is the source of truth for how Claude should behave in this repo.
+
 ---
 
 ## Sessions
@@ -51,6 +62,9 @@ AI was used as a collaborative engineering partner, not a code generator. All ar
 - Separating NetworkPolicy (L3/L4) from Istio AuthorizationPolicy (L7) concerns
 - Framing spike 5 as a decision ("build vs runbook") rather than an assumption
 - `AI.md` as the transparency mechanism over inline comments or commit trailers alone
+
+**Terminology decisions:**
+- "standalone binary" → "self-contained edge service" for orb — "standalone" undersells the independence property; "edge service" signals both where it runs and that it operates without orbital. Updated in README.md, CLAUDE.md.
 
 **What AI suggested that was rejected:**
 - Alpha/Beta release stages (unnecessary for an internal tool)
