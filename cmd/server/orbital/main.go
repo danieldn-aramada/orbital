@@ -1,3 +1,8 @@
+// @title           Orbital API
+// @version         0.1.0
+// @description     API-first, graph-native configuration management system for modular data centers.
+// @BasePath        /
+
 package main
 
 import (
@@ -6,6 +11,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	_ "github.com/armada/orbital/docs"
 	"github.com/armada/orbital/internal/config"
 	"github.com/armada/orbital/internal/server"
 )

@@ -38,6 +38,7 @@ Results from these spikes define the MVP.
 | 4 | DGraph operations | Can our team operate DGraph on AKS without prior experience? | — | Not started | — |
 | 5 | Schema migration — build vs runbook | Do we need automation or is a runbook sufficient? | — | Not started | Spike 4 |
 | 6 | Air-gap sync round-trip | Does the DGraph export/import model work reliably for orb sync? | — | Not started | — |
+| 7 | Orb registration | What is the right mechanism for securely registering an orb with orbital? | — | Not started | — |
 
 ---
 
@@ -101,6 +102,17 @@ Results from these spikes define the MVP.
 - Orb receives and loads it into local DGraph
 - Orb serves the graph correctly offline after import
 - Validate file sizes are reasonable for USB/manual transfer
+
+### Spike 7. Orb registration
+**Question:** What is the right mechanism for securely registering an orb with orbital?
+
+**Context:** The current design follows the GitHub Actions runner pattern — one-time token → long-lived opaque API key. This needs to be validated against the realities of our deployment model: tokens handed to on-site admins, orbs potentially offline for months, and the need to revoke access without touching the orb.
+
+**Success criteria:**
+- Validate the one-time token → long-lived API key flow end-to-end
+- Confirm that long-lived keys are the right choice over expiring tokens given air-gap constraints
+- Define how keys are stored on the orb and how revocation works from orbital
+- Produce a design doc covering the registration API, token lifecycle, and key storage
 
 ---
 

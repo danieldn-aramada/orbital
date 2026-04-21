@@ -1,0 +1,48 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "API-first, graph-native configuration management system for modular data centers.",
+        "title": "Orbital API",
+        "contact": {},
+        "version": "0.1.0"
+    },
+    "basePath": "/",
+    "paths": {
+        "/graphql": {
+            "post": {
+                "description": "POST: proxies GraphQL queries and mutations to DGraph. GET: serves the GraphiQL explorer UI.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "graphql"
+                ],
+                "summary": "GraphQL endpoint",
+                "parameters": [
+                    {
+                        "example": "\"{\\\"query\\\": \\\"{ queryDataCenter { id name } }\\\"}\"",
+                        "description": "GraphQL request body",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

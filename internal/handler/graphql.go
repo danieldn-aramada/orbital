@@ -17,6 +17,16 @@ func NewGraphQL(dgraphURL string) *GraphQL {
 	return &GraphQL{dgraphURL: dgraphURL}
 }
 
+// Handle proxies GraphQL requests to DGraph and serves GraphiQL on GET.
+//
+// @Summary     GraphQL endpoint
+// @Description POST: proxies GraphQL queries and mutations to DGraph. GET: serves the GraphiQL explorer UI.
+// @Tags        graphql
+// @Accept      json
+// @Produce     json
+// @Param       body body string true "GraphQL request body" example("{\"query\": \"{ queryDataCenter { id name } }\"}")
+// @Success     200 {object} map[string]interface{}
+// @Router      /graphql [post]
 func (h *GraphQL) Handle(c echo.Context) error {
 	if c.Request().Method == http.MethodPost {
 		resp, err := http.Post(h.dgraphURL, "application/json", c.Request().Body)

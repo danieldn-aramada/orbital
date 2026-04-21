@@ -1,0 +1,34 @@
+basePath: /
+info:
+  contact: {}
+  description: API-first, graph-native configuration management system for modular
+    data centers.
+  title: Orbital API
+  version: 0.1.0
+paths:
+  /graphql:
+    post:
+      consumes:
+      - application/json
+      description: 'POST: proxies GraphQL queries and mutations to DGraph. GET: serves
+        the GraphiQL explorer UI.'
+      parameters:
+      - description: GraphQL request body
+        example: '"{\"query\": \"{ queryDataCenter { id name } }\"}"'
+        in: body
+        name: body
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: GraphQL endpoint
+      tags:
+      - graphql
+swagger: "2.0"

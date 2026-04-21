@@ -7,6 +7,7 @@ import (
 	"github.com/armada/orbital/internal/config"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/labstack/echo/v4"
+	echoswagger "github.com/swaggo/echo-swagger"
 )
 
 type Server struct {
@@ -21,6 +22,7 @@ func New(cfg *config.Config) *Server {
 
 	gql := handler.NewGraphQL(cfg.DGraphURL)
 	e.Any("/graphql", gql.Handle)
+	e.GET("/swagger/*", echoswagger.WrapHandler)
 
 	return &Server{
 		cfg:  cfg,
