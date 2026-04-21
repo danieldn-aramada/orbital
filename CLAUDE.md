@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Orbital** is an API-first, graph-native configuration management framework for modular data centers. Written in Go.
+**Orbital** is an API-first, graph-native configuration management system for modular data centers. Written in Go.
 
 ### Key Concepts
 
@@ -85,6 +85,9 @@ mutation { export(input: { format: "json" }) { response { code message } } }
 ```
 
 This produces `json.gz` (data) and `schema.gz` (schema). Orb receives these files and loads them into its local DGraph instance. This means orb always has a complete local copy of its data center's graph, usable fully offline.
+
+### External integrations (PLM, ITSM)
+Orbital may integrate with external systems such as PLM (product lifecycle management) for bill of materials and ITSM (IT service management) for linking tickets to configuration changes. These integrations must be designed behind Go interfaces — orbital defines the interface, concrete implementations are swappable. Do not couple orbital directly to any specific vendor or product. The integration layer should be designed so that a different PLM or ITSM vendor can be adopted without changing orbital's core.
 
 ### Topology API
 Orbital proxies DGraph's auto-generated GraphQL API as-is. No custom GraphQL layer for now. External consumers (digital twin UI) query orbital's GraphQL endpoint, which forwards to DGraph. Orbital adds auth, rate limiting, and caching in the middleware layer — but does not transform the GraphQL schema.

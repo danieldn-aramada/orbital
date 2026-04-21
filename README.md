@@ -1,6 +1,6 @@
 # Orbital
 
-Orbital is an API-first, graph-native configuration management framework for
+Orbital is an API-first, graph-native configuration management system for
 modular data centers.
 
 ## Motivation
