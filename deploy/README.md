@@ -1,4 +1,4 @@
-# Deployment
+# Manual Deployment
 
 ## Local
 

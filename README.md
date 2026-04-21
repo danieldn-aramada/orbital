@@ -3,6 +3,8 @@
 Orbital is an API-first, graph-native configuration management system for
 modular data centers.
 
+For project status, see [ROADMAP.md](./ROADMAP.md)
+
 ## Quick Start
 
 Clone this repo and run dependencies
@@ -32,8 +34,6 @@ Cleanup
 ```bash
 docker-compose -f deploy/local/docker-compose.yml down
 ```
-
-
 ## Motivation
 
 Many solutions exist in the IT asset and data center infrastructure
@@ -41,23 +41,26 @@ management space (e.g. ITAM, DCIM).
 
 Open source solutions such as [GLPI](https://www.glpi-project.org/en/), and
 [Ralph](https://ralph-ng.readthedocs.io/en/stable/) are mature and solve the
-common problem ofc tracking infrastructure, configuration, and asset lifecycle.
+common problem of tracking infrastructure, configuration, and asset lifecycle.
 
 Commercial platforms like [Device42](https://www.device42.com/) and [Sunbird
 DCIM](https://www.sunbirddcim.com/) extend many of these capabilities and even
 offer compliance-ready deployments.
 
 However, for the edge and modular data centers, all fall short in these areas:
-- **Not built for disconnected environments** — every platform assumes
-  persistent connectivity. None credibly support air-gapped facilities where
-  config is served locally and sync happens on-demand or via physical media
+- **Not built for disconnected environments** — most platforms assume
+  persistent connectivity. None were designed with air-gapped facilities first
+  with strict compliance standards and config sync happens on-demand or via
+  physical media
 - **Relational models treat relationships as an afterthought** — topology
-  queries are expensive joins, not natural graph traversals. No foundation for a
-  live digital twin
-- **Drift detection is not a core concept** — tools track what exists, not the
-  gap between design intent and discovered reality
-- **Products, not frameworks** — opinionated SaaS stacks with fixed workflows.
-  Not readily designed to be built on. 
+  queries are expensive joins, not natural graph traversals. Not flexible for
+  client to define response schema which is desired for digital twin
+  applications.
+- **Drift detection is not a core concept** — tools track what exists, not the gap
+  between design intent and discovered reality
+- **Limited flexibility** — existing solutions bundle monitoring,
+  observability, and dashboards we already have. There is no path to adopt just
+  the configuration management layer without the rest of the product.
 
 ## Goals 
 
@@ -68,12 +71,14 @@ However, for the edge and modular data centers, all fall short in these areas:
 - **Multi-source infrastructure discovery** — ingest infrastructure from bare
   metal systems (BMC) and external inventory systems via API
   integrations
-- **Topology API (digital twin)** — build and query a live, traversable graph of
-  infrastructure design intent
+- **Topology API (digital twin)** — expose a live, traversable graph of
+  infrastructure design intent via GraphQL. Consumers define their own query
+  shape — no custom endpoints required for each digital twin use case
 
 Non-Goals
-- Full DCIM system with dashboards, alerting, and observability  
-- End-to-end infrastructure control plane or management suite  
+- Full DCIM system with dashboards, alerting, and observability built in
+- End-to-end infrastructure automation with workflow orchestration and
+  reconciliation
 
 ## Concepts
 

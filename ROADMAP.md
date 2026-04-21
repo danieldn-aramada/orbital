@@ -39,6 +39,7 @@ Results from these spikes define the MVP.
 | 5 | Schema migration — build vs runbook | Do we need automation or is a runbook sufficient? | — | Not started | Spike 4 |
 | 6 | Air-gap sync round-trip | Does the DGraph export/import model work reliably for orb sync? | — | Not started | — |
 | 7 | Orb registration | What is the right mechanism for securely registering an orb with orbital? | — | Not started | — |
+| 8 | DGraph backup to blob storage | What is the right backup strategy and can we build it ourselves? | — | Not started | Spike 4 |
 
 ---
 
@@ -114,6 +115,28 @@ Results from these spikes define the MVP.
 - Define how keys are stored on the orb and how revocation works from orbital
 - Produce a design doc covering the registration API, token lifecycle, and key storage
 
+### Spike 8. DGraph backup to blob storage
+**Question:** What is the right backup strategy for DGraph, and can we build it ourselves without enterprise features?
+
+**Context:** DGraph enterprise supports incremental binary backups to S3/GCS/Azure. Community edition only has the export mutation (`json.gz` + `schema.gz`), which produces full snapshots — no diffs. This spike evaluates the right approach for our scale and builds or validates a solution. Backup metadata (timestamp, location, schema version, size) will be tracked in PostgreSQL.
+
+**Approaches to evaluate:**
+
+| Approach | Notes |
+|---|---|
+| DGraph export + blob upload | CronJob triggers export mutation, uploads to Azure Blob. Simple, portable, same format as orb sync. Full snapshots only. |
+| Velero | Backs up DGraph PVCs at the Kubernetes storage layer. More atomic but heavier dependency. |
+| Azure Disk snapshots | VolumeSnapshot via CSI driver. Near-instant but Azure-specific and restore process needs validation. |
+
+**Success criteria:**
+- Determine if full snapshot backups are acceptable at our data volume, or if incremental is required
+- Validate chosen approach end-to-end: trigger backup, store in Azure Blob, restore from backup into a fresh DGraph instance
+- Measure backup size and restore time against a representative dataset
+- Define retention policy and storage cost estimate
+- Design how orbital tracks backup records in PostgreSQL
+
+**Do not start until spike 4 (DGraph operations) is complete.**
+
 ---
 
 ## MVP Definition
@@ -149,4 +172,4 @@ Items that are intentionally deferred until post-MVP:
 - Valkey caching layer
 - Drift detection reconciliation
 - Multi-DGraph instance per data center
-- DGraph backup pipeline (S3 + metadata in PostgreSQL) — depends on spike 3 (DGraph operations)
+- DGraph backup pipeline — see Spike 8
