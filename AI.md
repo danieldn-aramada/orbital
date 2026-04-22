@@ -1,72 +1,12 @@
 # AI Usage Log
 
-This file documents how AI (Claude, via Claude Code) was used during the development of Orbital. The goal is transparency and reproducibility — anyone reading this should understand what was delegated to AI, what instructions were given, and what human decisions shaped the outcome.
+This file is a minimal audit log of AI assistance used during development. It records when AI was used, which model, and the scope — not the full narrative. Architectural decisions, working conventions, and "do not suggest" rules live in `CLAUDE.md`, which is the source of truth for AI behavior in this repo.
 
-AI was used as a collaborative engineering partner, not a code generator. All architectural decisions were made by the human engineer. Claude was used to implement, document, and pressure-test those decisions.
+AI was used as a collaborative engineering partner, not a code generator. All architectural decisions were made by the human engineer.
 
-## Contributing
+## Log
 
-When using AI assistance on this project, log it here. Add a new session entry with:
-- What tool and model was used
-- What was built or changed
-- What instructions or constraints were given
-- Which decisions were made by the human vs accepted from AI suggestions
-- What AI suggested that was rejected and why
-
-Also update `CLAUDE.md` if any architectural decisions, terminology, or working conventions change — it is the source of truth for how Claude should behave in this repo.
-
----
-
-## Sessions
-
-### April 2026 — Architecture, Scaffold, and Roadmap
-
-**Tool:** Claude Code (claude-sonnet-4-6) via CLI
-
-**What was done:**
-- Established Go project structure (`cmd/`, `internal/`, `pkg/`, `schema/`, `deploy/`)
-- Built Echo server for orb with graceful shutdown and config package
-- Designed and documented full system architecture through Q&A dialogue
-- Wrote `CLAUDE.md` — conventions, architecture decisions, working style
-- Rewrote README motivation and architecture sections
-- Defined GraphQL schema `schema/schema-v1.graphql` with `ConfigItem` interface
-- Created public Go types in `pkg/orbital/types.go` mirroring the schema
-- Refactored `cmd/server/orbital/main.go` to match established repo patterns
-- Consolidated static files into `internal/static/`
-- Added Kubernetes NetworkPolicy to restrict DGraph access to orbital only
-- Created `ROADMAP.md` with Gantt chart, spike definitions, and external integration dependencies
-
-**Key instructions given:**
-- "Don't add comments that just restate what the code does"
-- "Keep cmd/ thin — entry points only, all logic in packages"
-- "Don't refactor code that wasn't part of the request"
-- "Orbital is an API-first system, not a framework — design PLM/ITSM integrations behind Go interfaces, no tight coupling to any vendor"
-- "Do not use expiring JWTs for orb auth — orbs may be disconnected for months"
-- "Do not suggest replacing DGraph or switching to Redis"
-- "Proxy reads, own writes — GraphQL proxy stays for topology queries, orbital validates and handles admin mutations directly"
-
-**Decisions made by the human engineer (not AI):**
-- DGraph as the graph database (evaluated separately before this session)
-- Valkey over Redis (licensing)
-- GitHub Actions runner pattern for orb registration
-- Air-gap sync via DGraph export (`json.gz` + `schema.gz`)
-- One shared DGraph instance per orbital deployment (not per data center)
-- `version: String` over `version: Float` in the schema
-- "system" over "framework" in the project description
-- Roadmap spike prioritization and sequencing
-- Decision to question schema migration automation (build vs runbook framing)
-
-**What AI suggested that was accepted:**
-- `pkg/orbital/` over `api/` for public types (import ergonomics — `orbital.Server` vs `api.Server`)
-- Pointer types (`*string`, `*int64`) for nullable GraphQL fields
-- Separating NetworkPolicy (L3/L4) from Istio AuthorizationPolicy (L7) concerns
-- Framing spike 5 as a decision ("build vs runbook") rather than an assumption
-- `AI.md` as the transparency mechanism over inline comments or commit trailers alone
-
-**Terminology decisions:**
-- "standalone binary" → "self-contained edge service" for orb — "standalone" undersells the independence property; "edge service" signals both where it runs and that it operates without orbital. Updated in README.md, CLAUDE.md.
-
-**What AI suggested that was rejected:**
-- Alpha/Beta release stages (unnecessary for an internal tool)
-- Dev/stage/prod callout in the SDLC diagram (deployment topology, not lifecycle)
-- Embedding static files at this stage (deferred — would require bundling all dependencies)
+| Date     | Model                | Scope                                      |
+|----------|----------------------|--------------------------------------------|
+| 2026-04  | claude-sonnet-4-6    | Architecture, scaffold, roadmap            |
+| 2026-04  | claude-sonnet-4-6    | Orb CLI scaffold and output UX             |

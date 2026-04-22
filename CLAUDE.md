@@ -26,9 +26,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Stack
 
 - **Go** — Implementation language for both `orbital` and `orb`
-- **DGraph** (community edition) — Graph database with native GraphQL API on top of RDF-like storage; stores all configuration items. Chosen because the RDF model fits configuration items naturally, and the GraphQL API lets external teams (e.g. a digital twin UI) consume data without custom endpoints. Do not suggest replacing DGraph. Self-hosted in the same Kubernetes namespace as orbital. Some enterprise features (namespaces, backups) may be implemented in-house later.
+- **DGraph** (community edition) — Graph database with native GraphQL API on top of RDF-like storage; stores all configuration items. Chosen because the RDF model fits configuration items naturally, and the GraphQL API lets external teams (e.g. a digital twin UI) consume data without custom endpoints. Self-hosted in the same Kubernetes namespace as orbital. Some enterprise features (namespaces, backups) may be implemented in-house later.
 - **PostgreSQL** — Stores all managed-service operational data for `orbital`: orb registry, user accounts, audit logs, job/sync history, DGraph backup metadata (e.g. S3 locations). Anything typical for running a managed service goes here, not in DGraph.
-- **Valkey** — In-memory cache for `orbital`; chosen over Redis due to licensing. Do not suggest switching to Redis.
+- **Valkey** — In-memory cache for `orbital`; chosen over Redis due to licensing.
 
 ## Architecture Notes
 
@@ -146,6 +146,15 @@ schema/
 - Only touch files relevant to the task
 - Don't clean up unrelated code while working on something else
 - Don't add TODOs or placeholder comments
+- Before marking a task as done: check whether any architectural decisions, conventions, or settled rules from this session should be added to CLAUDE.md. If AI assistance was used, append a row to the AI.md audit log.
+
+## Settled Decisions
+
+These have been explicitly decided. Do not re-suggest them.
+
+- **Do not replace DGraph** — chosen deliberately; RDF model fits configuration items naturally
+- **Do not switch to Redis** — Valkey chosen over Redis due to licensing
+- **Do not use `schollz/progressbar` alone for spinners** — indeterminate mode causes terminal jitter; use `briandowns/spinner` for spinners and `schollz/progressbar` for determinate progress bars
 
 ## Go Conventions
 
