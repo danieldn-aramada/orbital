@@ -154,7 +154,7 @@ schema/
 - **Constructors** — named `New[Type]`, e.g. `NewServer`, `NewClient`
 - **`cmd/` is thin** — entry points only; all logic lives in separate packages
 - **Tests** — table-driven with `t.Run`; avoid test helpers that obscure failure sites
-- No `init()` functions
+- No `init()` functions — exception: Cobra command files in `internal/cli/` may use `init()` to register subcommands and flags, which is the standard Cobra pattern
 - No global variables
 - No `panic()` outside of `main()`
 
