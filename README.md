@@ -19,7 +19,7 @@ curl -s --data-binary '@./schema/schema-v1.graphql' --header 'content-type: appl
 
 Run orbital server
 ```
-go run cmd/server/orbital/main.go
+go run cmd/orbital/main.go
 ```
 
 Browse API docs

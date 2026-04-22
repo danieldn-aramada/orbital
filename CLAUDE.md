@@ -58,7 +58,7 @@ Configuration items span the full spectrum from physical (racks, servers, switch
 Do not use expiring JWTs for orb auth. Orbs may be disconnected for months — a JWT that expires while air-gapped bricks the orb until someone rotates it. A long-lived opaque API key, revocable from orbital, is more resilient.
 
 ### Orb CLI vs orb server
-These are two separate binaries. The **orb server** (`cmd/server/orb`) is the long-running edge service. The **orb CLI** (`cmd/cli/orb`) is an admin tool used at the data center to build the local config graph and export it to a file for later upload to orbital. They share packages from `internal/`.
+`orb` is a single binary with subcommands (`cmd/orb/`). `orb start` runs the long-running edge service. Other subcommands (`orb scan`, `orb export`, `orb import`) are admin operations. All share packages from `internal/`.
 
 ### Schema management
 DGraph schema is defined in versioned GraphQL files under `schema/` (e.g. `schema/v1.graphql`) and applied to DGraph via its admin API (`POST /admin/schema`). Orbital owns the schema — orb never modifies it.
@@ -118,9 +118,8 @@ docker compose -f deploy/local/docker-compose.yml up -d
 
 ```
 cmd/
-  cli/orb/            # orb CLI — edge admin tool (build graph, export for upload to orbital)
-  server/orb/         # orb server entry point
-  server/orbital/     # orbital server entry point
+  orb/                # orb binary — subcommand-driven (orb start, orb scan, orb export, orb import)
+  orbital/            # orbital server entry point
 deploy/
   local/              # Local development stack (docker-compose)
   orb/                # Deployment files for orb

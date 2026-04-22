@@ -13,7 +13,7 @@ RUN go mod download
 COPY . .
 
 # Build binary
-RUN go build -o orbital ./cmd/server/orbital/main.go
+RUN go build -o orbital ./cmd/orbital/main.go
 
 # ---- Runtime stage ----
 FROM alpine:3.19
