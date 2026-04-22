@@ -77,7 +77,7 @@ However, for the edge and modular data centers, all fall short in these areas:
 
 Non-Goals
 - Full DCIM system with dashboards, alerting, and observability built in
-- End-to-end infrastructure automation with workflow orchestration and
+- Out of the box infrastructure automation with workflow orchestration and
   reconciliation
 
 ## Concepts

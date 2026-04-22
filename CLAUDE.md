@@ -53,12 +53,7 @@ This is the primary onboarding workflow — discovered reality flows from orb in
 Configuration items span the full spectrum from physical (racks, servers, switches, screws, door parts) to logical (VLANs, IPs, K8s clusters, app configs). The schema is intentionally broad and user-defined. DGraph's RDF model fits this naturally.
 
 ### Orb registration and auth
-Modeled after the GitHub Actions runner pattern, which has precedent in these deployments:
-
-1. Orbital admin creates an orb slot for a modular data center → generates a **one-time registration token** (short-lived, ~1 hour, stored hashed in PostgreSQL)
-2. Token is handed to the on-site admin (printed, USB, email)
-3. Orb presents the token to orbital's registration endpoint → orbital issues a **long-lived orb API key** tied to that orb's identity
-4. Orb stores the key locally and uses it for all future polling
+**Not yet designed — see Spike 7 in ROADMAP.md.** The current hypothesis is a GitHub Actions runner pattern (one-time token → long-lived API key), but this has not been validated. Do not implement until the spike is complete.
 
 Do not use expiring JWTs for orb auth. Orbs may be disconnected for months — a JWT that expires while air-gapped bricks the orb until someone rotates it. A long-lived opaque API key, revocable from orbital, is more resilient.
 
@@ -132,10 +127,11 @@ deploy/
   orbital/            # Deployment files for orbital
 internal/
   config/             # Shared config (port, timeouts, DGraph URL)
-  discovery/          # Discovery orchestration (used by orbital)
+  discovery/          # Discovery orchestration (used by orb — runs at the edge, not in orbital)
     bmc/              # BMC/bare metal discovery
   drift/              # Drift detection (used by orb)
-  graph/              # DGraph client, schema loading, topology operations
+  graph/              # DGraph client, schema loading, topology operations; orbital's graph import logic lives here (not in discovery/)
+
   handler/            # HTTP handlers (GraphQL proxy, topology API)
   server/             # Shared Echo server setup and lifecycle
   static/             # Static files (GraphiQL UI)

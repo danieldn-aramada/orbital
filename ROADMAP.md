@@ -40,6 +40,7 @@ Results from these spikes define the MVP.
 | 6 | Air-gap sync round-trip | Does the DGraph export/import model work reliably for orb sync? | — | Not started | — |
 | 7 | Orb registration | What is the right mechanism for securely registering an orb with orbital? | — | Not started | — |
 | 8 | DGraph backup to blob storage | What is the right backup strategy and can we build it ourselves? | — | Not started | Spike 4 |
+| 9 | Authentication | How do we implement the three auth flows (Entra ID OIDC, JWT bearer, orb API key) in orbital? | — | Not started | — |
 
 ---
 
@@ -137,6 +138,17 @@ Results from these spikes define the MVP.
 
 **Do not start until spike 4 (DGraph operations) is complete.**
 
+### Spike 9. Authentication
+**Question:** How do we implement the three auth flows in orbital?
+
+**Context:** Three distinct flows are designed in `docs/auth.md` — Entra ID OIDC for admin UI, JWT bearer for API consumers (any OIDC-compliant IdP), and long-lived API key for orbs. This spike validates and implements all three.
+
+**Success criteria:**
+- Entra ID OIDC flow working end-to-end for admin UI login with session backed by Valkey
+- JWT bearer validation working for API consumers — IdP-agnostic, validated against OIDC provider JWKS
+- Orb API key middleware validating SHA-256 hashed keys against PostgreSQL
+- All three flows covered by E2E tests
+
 ---
 
 ## MVP Definition
@@ -157,8 +169,8 @@ These are integration touchpoints that orbital must support but does not own. Ve
 | System | Role | Status |
 |---|---|---|
 | **Atlas UI** | Customer-facing digital twin — queries orbital via GraphQL to visualize modular data center topology | Integration approach defined. Atlas calls orbital; orbital proxies DGraph. |
-| **PLM (Product Lifecycle Management)** | Source of bill of materials for data center hardware — orbital may query PLM to enrich or validate configuration items | Vendor evaluation in progress by another team. Integration design TBD. |
-| **ITSM (IT Service Management)** | Links customer support tickets to configuration changes in the data center — ITSM may call orbital to correlate incidents with config state | Vendor evaluation in progress by another team. Integration design TBD. |
+| **Product Lifecycle Management (PLM)** | Source of bill of materials for data center hardware — orbital may query PLM to enrich or validate configuration items | Vendor evaluation in progress by another team. Integration design TBD. |
+| **IT Service Management (ITSM)** | Links customer support tickets to configuration changes in the data center — ITSM may call orbital to correlate incidents with config state | Vendor evaluation in progress by another team. Integration design TBD. |
 
 ---
 
