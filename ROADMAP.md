@@ -9,26 +9,27 @@ gantt
     axisFormat %b %Y
 
     Section Completed
-    Req Gather & Solution Eval (DCIM, PLM, ITSM)  :done, 2026-01-01, 2026-03-04
+    Req Gather & Solution Eval (DCIM, PLM, ITSM)    :done, 2026-01-01, 2026-03-04
     Req Gather (Digital Twin in Atlas)              :done, 2026-03-04, 2026-04-10
     Research & Technology Selection                 :done, 2026-04-10, 2026-04-14
-    Architecture Design                             :done, 2026-04-14, 2026-04-20
+    Architecture Design                             :done, 2026-04-14, 2026-05-08
 
     Section Current
-    Prototyping                   :active, 2026-04-20, 2026-05-20
+    Prototyping                   :active, 2026-04-14, 2026-05-20
     
     Section Upcoming
     MVP                           :2026-05-20, 2026-06-20
     General Availability          :2026-06-20, 2026-07-20
 ```
 
-**Up next:** MVP → General Availability. Dates to be set once prototyping spikes are complete.
+**Note:** All future dates are subject to change.
 
 
-## Current Phase: Prototyping
+## Current Phase: Architecture Design + Prototyping
 
-Goal is learning, not shipping. Each spike below is a question to answer, not a feature to build.
-Results from these spikes define the MVP.
+Architecture Design closes out this week (2026-05-08) — final design review meetings in progress. Prototyping is running in parallel; spike scope may still evolve as design concludes.
+
+Goal of prototyping is learning, not shipping. Each spike below is a question to answer, not a feature to build. Results from these spikes define the MVP.
 
 | # | Spike | Key Question | Owner | Status | Depends On |
 |---|---|---|---|---|---|
@@ -37,10 +38,11 @@ Results from these spikes define the MVP.
 | 3 | DGraph performance and cost | Does DGraph hold up at scale, and what does it cost on AKS? | — | Not started | — |
 | 4 | DGraph operations | Can our team operate DGraph on AKS without prior experience? | — | Not started | — |
 | 5 | Schema migration — build vs runbook | Do we need automation or is a runbook sufficient? | — | Not started | Spike 4 |
-| 6 | Air-gap sync round-trip | Does the DGraph export/import model work reliably for orb sync? | — | Not started | — |
-| 7 | Orb registration | What is the right mechanism for securely registering an orb with orbital? | — | Not started | — |
-| 8 | DGraph backup to blob storage | What is the right backup strategy and can we build it ourselves? | — | Not started | Spike 4 |
-| 9 | Authentication | How do we implement the three auth flows (Entra ID OIDC, JWT bearer, orb API key) in orbital? | — | Not started | — |
+| 6 | Air-gap sync round-trip | Does orbital's config export work reliably as a complete, importable payload for orb? | — | Not started | — |
+| 7 | Orb import API | What is the right API contract for orb's local config import endpoint? | — | Not started | — |
+| 8 | Backup, DR, and availability | What is the right backup and DR strategy for orbital as a tier-0 service? | — | Not started | Spike 4 |
+| 9 | Authentication | How do we implement JWT bearer auth in orbital for Atlas UI consumers? | — | Not started | — |
+| 10 | Report intake API | What is the right transport-agnostic API for orbital to receive drift and divergence reports? | — | Not started | — |
 
 ---
 
@@ -97,68 +99,100 @@ Results from these spikes define the MVP.
 - If no — produce a runbook that covers schema apply, rollback, and version tracking in PostgreSQL
 
 ### Spike 6. Air-gap sync round-trip
-**Question:** Does the DGraph export/import model work reliably for orb sync?
+**Question:** Does orbital's config export work reliably as a complete, importable payload?
+
+**Context:** Orbital must expose a data center-scoped export endpoint (`POST /api/v1/datacenters/{id}/export`) that returns a `json.gz` + `schema.gz` pair for that data center's subgraph. This is not a raw pass-through of DGraph's export mutation — orbital must partition the graph by data center. In deployments using `configbundle`, its Bundle Generator calls this endpoint to produce a ConfigBundle. This spike builds the endpoint and validates the export is reliable and loadable.
 
 **Success criteria:**
-- Orbital exports a data center subgraph (`json.gz` + `schema.gz`)
-- Orb receives and loads it into local DGraph
+- Implement `POST /api/v1/datacenters/{id}/export` — returns scoped `json.gz` + `schema.gz`
+- Orb receives and loads the `json.gz` into local DGraph (simulating what `configbundle`'s edge agent does)
 - Orb serves the graph correctly offline after import
-- Validate file sizes are reasonable for USB/manual transfer
+- Validate export sizes are reasonable (reference point: USB/manual transfer)
 
-### Spike 7. Orb registration
-**Question:** What is the right mechanism for securely registering an orb with orbital?
+### Spike 7. Orb import API
+**Question:** What is the right API contract for orb's local config import endpoint?
 
-**Context:** The current design follows the GitHub Actions runner pattern — one-time token → long-lived opaque API key. This needs to be validated against the realities of our deployment model: tokens handed to on-site admins, orbs potentially offline for months, and the need to revoke access without touching the orb.
+**Context:** In deployments using `configbundle`, config reaches orb via the edge agent calling orb's local `/import` API with the `json.gz` payload — not by orb polling orbital directly. Orb has no direct connection to orbital; the delivery mechanism is the deployment layer's concern. This spike defines and validates that local API contract between the delivery layer and orb.
 
 **Success criteria:**
-- Validate the one-time token → long-lived API key flow end-to-end
-- Confirm that long-lived keys are the right choice over expiring tokens given air-gap constraints
-- Define how keys are stored on the orb and how revocation works from orbital
-- Produce a design doc covering the registration API, token lifecycle, and key storage
+- Define the `/import` API: endpoint, payload format, auth model (local loopback — what, if any, auth is appropriate)
+- Validate that orb correctly loads the `json.gz` into local DGraph and serves it offline after import
+- Confirm the import is idempotent and safe to re-run on the same or newer payload
+- Confirm behaviour on a stale or older payload (should orb reject, warn, or accept?)
+- Produce an API design doc covering the endpoint contract
 
-### Spike 8. DGraph backup to blob storage
-**Question:** What is the right backup strategy for DGraph, and can we build it ourselves without enterprise features?
+### Spike 8. Backup, DR, and availability
+**Question:** What is the right backup and DR strategy for orbital as a tier-0 service?
 
-**Context:** DGraph enterprise supports incremental binary backups to S3/GCS/Azure. Community edition only has the export mutation (`json.gz` + `schema.gz`), which produces full snapshots — no diffs. This spike evaluates the right approach for our scale and builds or validates a solution. Backup metadata (timestamp, location, schema version, size) will be tracked in PostgreSQL.
+**Context:** Orbital is the authoritative intent store for the fleet — if it is unavailable or its data is lost, no configuration exports can be produced and no new modular data centers can be onboarded. This places stronger availability and recovery requirements on orbital than a typical service. DGraph community edition only has the export mutation (`json.gz` + `schema.gz`) for full snapshots — no incremental backups. PostgreSQL (orb registry, audit logs, schema versions) also requires a backup strategy. Both must be addressed together.
 
-**Approaches to evaluate:**
+**Approaches to evaluate for DGraph:**
 
 | Approach | Notes |
 |---|---|
-| DGraph export + blob upload | CronJob triggers export mutation, uploads to Azure Blob. Simple, portable, same format as orb sync. Full snapshots only. |
+| DGraph export + blob upload | CronJob triggers export mutation, uploads to Azure Blob. Simple, portable, same format as orb sync payload. Full snapshots only. |
 | Velero | Backs up DGraph PVCs at the Kubernetes storage layer. More atomic but heavier dependency. |
 | Azure Disk snapshots | VolumeSnapshot via CSI driver. Near-instant but Azure-specific and restore process needs validation. |
 
 **Success criteria:**
-- Determine if full snapshot backups are acceptable at our data volume, or if incremental is required
-- Validate chosen approach end-to-end: trigger backup, store in Azure Blob, restore from backup into a fresh DGraph instance
-- Measure backup size and restore time against a representative dataset
+- Define RTO and RPO targets appropriate for a tier-0 service
+- Validate DGraph backup approach end-to-end: trigger backup, store in Azure Blob, restore into a fresh DGraph instance
+- Validate PostgreSQL backup approach end-to-end: backup and restore for all orbital operational data
+- Measure backup size and restore time against a representative dataset; confirm they meet RTO/RPO targets
+- Assess whether single-region Azure Blob storage is sufficient or geo-redundancy is required
 - Define retention policy and storage cost estimate
-- Design how orbital tracks backup records in PostgreSQL
+- Design how orbital tracks backup records in PostgreSQL (`backup_records` table)
 
-**Do not start until spike 4 (DGraph operations) is complete.**
+**Do not start until Spike 4 (DGraph operations) is complete.**
 
 ### Spike 9. Authentication
-**Question:** How do we implement the three auth flows in orbital?
+**Question:** How do we implement auth in orbital?
 
-**Context:** Three distinct flows are designed in `docs/auth.md` — Entra ID OIDC for admin UI, JWT bearer for API consumers (any OIDC-compliant IdP), and long-lived API key for orbs. This spike validates and implements all three.
+**Context:** The primary consumer is Atlas UI — users authenticate with their OIDC provider, get a JWT, and send it as a Bearer token to orbital. Orbital validates the token against the provider's JWKS endpoint. The implementation must be IdP-agnostic — orbital should not be wired to any specific provider.
 
 **Success criteria:**
-- Entra ID OIDC flow working end-to-end for admin UI login with session backed by Valkey
-- JWT bearer validation working for API consumers — IdP-agnostic, validated against OIDC provider JWKS
-- Orb API key middleware validating SHA-256 hashed keys against PostgreSQL
-- All three flows covered by E2E tests
+- JWT bearer validation working end-to-end — token validated against OIDC provider JWKS
+- IdP-agnostic: works with any OIDC-compliant provider
+- Covered by E2E tests
+
+### Spike 10. Report intake API
+**Question:** What is the right API for orbital to receive drift and divergence reports?
+
+**Context:** Orbital exposes a transport-agnostic report intake API. The edge writes signed reports to a shared external location (deployment layer concern); a delivery agent reads from that location and calls orbital's intake API. Orbital never knows or cares about the transport — it just receives and verifies structured reports.
+
+Orbital must receive these reports and expose divergence to cloud administrators, who resolve field-level conflicts by publishing a new ConfigBundle with one of three directives: **Force** (cloud intent wins), **Accept overrides** (incorporate local values), or **Ignore** (acknowledge divergence, leave as-is).
+
+**Success criteria:**
+- Define the intake API: endpoint(s), payload schema, Ed25519 signature verification against the orb's registered public key
+- Validate that reports are actionable — orbital can surface which modular data centers have diverged, on which fields, by whom, since when
+- Define how orbital stores report state and orb public keys in PostgreSQL and how they are queried by admins
+- Confirm orbital imposes no constraints on how the report reached the intake API — transport is the caller's concern
+- Produce an API design doc covering the endpoint contract, data model, and the three resolution modes
 
 ---
 
 ## MVP Definition
 
-> To be defined once spikes are complete.
+> Working draft — final scope will be confirmed once spikes complete.
 
-The MVP will be scoped based on what the spikes validate. At minimum it will answer:
-- What does orbital *must* do on day one for a customer to get value?
-- What does orb *must* do fully disconnected?
-- What is explicitly out of scope for v1?
+### Orbital (cloud)
+- GraphQL Topology API — proxy DGraph with auth, rate limiting, and caching
+- Schema management — versioned schema apply with backwards compatibility validation on startup
+- Export API — `POST /api/v1/datacenters/{id}/export` returning scoped `json.gz` + `schema.gz`
+- Orb registry — register, authenticate, and revoke orbs
+- Audit log — record all config mutations with actor and timestamp
+- Backup — DGraph and PostgreSQL backup to Azure Blob with tracked records
+
+### Orb (edge)
+- Local DGraph — hold a complete copy of its data center's intended state, fully offline
+- Config import — load `json.gz` from export API or file (air-gap)
+- Drift reporting — observe actual state, compare to intended state, report the gap to orbital
+- Discovery — scan local BMC and inventory APIs; export discovered graph for orbital import
+
+### Explicitly out of scope for v1
+- Network infrastructure config items (owned externally)
+- PLM and ITSM integrations — design TBD, vendor selection in progress
+- Multi-DGraph instance per data center
 
 ---
 
@@ -171,17 +205,3 @@ These are integration touchpoints that orbital must support but does not own. Ve
 | **Atlas UI** | Customer-facing digital twin — queries orbital via GraphQL to visualize modular data center topology | Integration approach defined. Atlas calls orbital; orbital proxies DGraph. |
 | **Product Lifecycle Management (PLM)** | Source of bill of materials for data center hardware — orbital may query PLM to enrich or validate configuration items | Vendor evaluation in progress by another team. Integration design TBD. |
 | **IT Service Management (ITSM)** | Links customer support tickets to configuration changes in the data center — ITSM may call orbital to correlate incidents with config state | Vendor evaluation in progress by another team. Integration design TBD. |
-
----
-
-## Parking Lot
-
-Items that are intentionally deferred until post-MVP:
-
-- Internal admin UI
-- External SDK (`pkg/orbital`)
-- Istio AuthorizationPolicy
-- Valkey caching layer
-- Drift detection reconciliation
-- Multi-DGraph instance per data center
-- DGraph backup pipeline — see Spike 8

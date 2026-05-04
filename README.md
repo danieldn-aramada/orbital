@@ -56,7 +56,7 @@ However, for the edge and modular data centers, all fall short in these areas:
   queries are expensive joins, not natural graph traversals. Not flexible for
   client to define response schema which is desired for digital twin
   applications.
-- **Drift detection is not a core concept** — tools track what exists, not the gap
+- **Drift reporting is not a core concept** — tools track what exists, not the gap
   between design intent and discovered reality
 - **Limited flexibility** — existing solutions bundle monitoring,
   observability, and dashboards we already have. There is no path to adopt just
@@ -84,10 +84,10 @@ Non-Goals
 
 `orbital` — Server running in the cloud. Single source of truth for configuration
 intent across all modular data centers. Serves the Topology API, manages schema,
-and pushes configuration down to `orbs`.
+and exposes a config export API consumed by `orbs` and the delivery layer above orbital.
 
 `orb` — Self-contained edge service running inside a modular data center. Holds a
-local copy of its data center's graph and serves it entirely offline. Detects drift
+local copy of its data center's graph and serves it entirely offline. Reports drift
 between design intent and discovered reality. Suitable for air-gapped deployments.
 
 `configuration item` — The fundamental unit of the graph. Anything in a modular
@@ -95,8 +95,9 @@ data center that can be named, related, and tracked — from physical assets (ra
 servers, cables, door hardware) to logical constructs (VLANs, IP ranges, Kubernetes
 clusters, application configs).
 
-`drift` — The gap between design intent and discovered reality. Orb detects and
-reports drift — it does not auto-reconcile.
+`drift` — The gap between design intent and discovered reality. Orb observes actual
+state, compares it to intended state, and reports the gap. Orbital does not act on
+drift and is not in the reconciliation path.
 
 ## Architecture
 
@@ -104,9 +105,7 @@ reports drift — it does not auto-reconcile.
 intent across all modular data centers. `orb` runs at each modular data center
 and serves configuration locally — fully offline if needed.
 
-Config flows **orbital → orb**. The exception is onboarding: orb discovers
-existing infrastructure and exports a graph, which an admin imports into orbital
-to seed the source of truth.
+Config flows **orbital → orb**. For reporting, orb writes drift and divergence reports to a shared location when connected; a delivery agent forwards them to orbital's report intake API — read-only telemetry, not configuration. The exception to the one-way config flow is onboarding: orb discovers existing infrastructure and exports a graph, which an admin imports into orbital to seed the source of truth.
 
 ```
             +------------------------------------------+
