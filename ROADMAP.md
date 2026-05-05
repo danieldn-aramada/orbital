@@ -40,7 +40,7 @@ Goal of prototyping is learning, not shipping. Each spike below is a question to
 | 5 | Schema migration — build vs runbook | Do we need automation or is a runbook sufficient? | — | Not started | Spike 4 |
 | 6 | Air-gap sync round-trip | Does orbital's config export work reliably as a complete, importable payload for orb? | — | Not started | — |
 | 7 | Orb import API | What is the right API contract for orb's local config import endpoint? | — | Not started | — |
-| 8 | Backup, DR, and availability | What is the right backup and DR strategy for orbital as a tier-0 service? | — | Not started | Spike 4 |
+| 8 | DGraph backup to blob storage | What is the right DGraph backup strategy, including deduplication and eventual incremental snapshots? | — | Not started | Spike 4 |
 | 9 | Authentication | How do we implement JWT bearer auth in orbital for Atlas UI consumers? | — | Not started | — |
 | 10 | Report intake API | What is the right transport-agnostic API for orbital to receive drift and divergence reports? | — | Not started | — |
 
@@ -121,27 +121,26 @@ Goal of prototyping is learning, not shipping. Each spike below is a question to
 - Confirm behaviour on a stale or older payload (should orb reject, warn, or accept?)
 - Produce an API design doc covering the endpoint contract
 
-### Spike 8. Backup, DR, and availability
-**Question:** What is the right backup and DR strategy for orbital as a tier-0 service?
+### Spike 8. DGraph backup to blob storage
+**Question:** What is the right backup strategy for DGraph, and how do we handle deduplication and eventual incremental snapshots?
 
-**Context:** Orbital is the authoritative intent store for the fleet — if it is unavailable or its data is lost, no configuration exports can be produced and no new modular data centers can be onboarded. This places stronger availability and recovery requirements on orbital than a typical service. DGraph community edition only has the export mutation (`json.gz` + `schema.gz`) for full snapshots — no incremental backups. PostgreSQL (orb registry, audit logs, schema versions) also requires a backup strategy. Both must be addressed together.
+**Context:** Orbital is the authoritative intent store for the fleet — if DGraph data is lost, no configuration exports can be produced and no modular data centers can be onboarded. DGraph community edition only has the export mutation (`json.gz` + `schema.gz`), which produces full snapshots. PostgreSQL is Azure-managed and handled automatically.
 
-**Approaches to evaluate for DGraph:**
+**v1 approach — full snapshots with checksum dedup:**
+A scheduled CronJob triggers DGraph's export mutation and uploads to Azure Blob Storage. Before uploading, orbital compares the checksum of the new export against the last `backup_records` entry — if they match, the upload is skipped. Backup records (timestamp, blob path, schema version, checksum, size) are tracked in PostgreSQL.
 
-| Approach | Notes |
-|---|---|
-| DGraph export + blob upload | CronJob triggers export mutation, uploads to Azure Blob. Simple, portable, same format as orb sync payload. Full snapshots only. |
-| Velero | Backs up DGraph PVCs at the Kubernetes storage layer. More atomic but heavier dependency. |
-| Azure Disk snapshots | VolumeSnapshot via CSI driver. Near-instant but Azure-specific and restore process needs validation. |
+**Post-v1 — incremental and dedup:**
+DGraph community has no native incremental backup. Options to evaluate once real data volumes are known from Spike 3:
+- DGraph enterprise binary incremental backups
+- Blob storage versioning + retention policies with frequent full snapshots
+- Export diff against previous snapshot (complex, validate only if snapshot sizes are a real problem)
 
 **Success criteria:**
 - Define RTO and RPO targets appropriate for a tier-0 service
-- Validate DGraph backup approach end-to-end: trigger backup, store in Azure Blob, restore into a fresh DGraph instance
-- Validate PostgreSQL backup approach end-to-end: backup and restore for all orbital operational data
+- Validate end-to-end: trigger export, checksum dedup, upload to Azure Blob, restore into a fresh DGraph instance
 - Measure backup size and restore time against a representative dataset; confirm they meet RTO/RPO targets
-- Assess whether single-region Azure Blob storage is sufficient or geo-redundancy is required
+- Assess whether single-region Azure Blob is sufficient or geo-redundancy is required
 - Define retention policy and storage cost estimate
-- Design how orbital tracks backup records in PostgreSQL (`backup_records` table)
 
 **Do not start until Spike 4 (DGraph operations) is complete.**
 
@@ -163,7 +162,7 @@ Goal of prototyping is learning, not shipping. Each spike below is a question to
 Orbital must receive these reports and expose divergence to cloud administrators, who resolve field-level conflicts by publishing a new ConfigBundle with one of three directives: **Force** (cloud intent wins), **Accept overrides** (incorporate local values), or **Ignore** (acknowledge divergence, leave as-is).
 
 **Success criteria:**
-- Define the intake API: endpoint(s), payload schema, Ed25519 signature verification against the orb's registered public key
+- Define the intake API: endpoint(s), payload schema, and signature verification behavior — verify Ed25519 signature when a public key is registered for the orb; accept without verification when no key is registered
 - Validate that reports are actionable — orbital can surface which modular data centers have diverged, on which fields, by whom, since when
 - Define how orbital stores report state and orb public keys in PostgreSQL and how they are queried by admins
 - Confirm orbital imposes no constraints on how the report reached the intake API — transport is the caller's concern

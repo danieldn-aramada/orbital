@@ -82,22 +82,25 @@ Non-Goals
 
 ## Concepts
 
-`orbital` — Server running in the cloud. Single source of truth for configuration
-intent across all modular data centers. Serves the Topology API, manages schema,
-and exposes a config export API consumed by `orbs` and the delivery layer above orbital.
+`orbital` — Cloud-side CMDB and Topology API. Single source of truth for configuration
+intent across all modular data centers. Manages the configuration graph, exposes a
+GraphQL Topology API for digital twin consumers, and produces scoped config exports
+(`json.gz` + `schema.gz`) for edge consumption. Orbital's contract ends at the export
+— how that payload is packaged, signed, and delivered is the consuming layer's concern.
 
-`orb` — Self-contained edge service running inside a modular data center. Holds a
-local copy of its data center's graph and serves it entirely offline. Reports drift
-between design intent and discovered reality. Suitable for air-gapped deployments.
+`orb` — Self-contained edge service inside a modular data center. Holds a complete
+local copy of its data center's intended state and serves it fully offline. Discovers
+actual infrastructure state and produces signed divergence reports. Designed for
+air-gapped and intermittently connected deployments.
 
-`configuration item` — The fundamental unit of the graph. Anything in a modular
-data center that can be named, related, and tracked — from physical assets (racks,
-servers, cables, door hardware) to logical constructs (VLANs, IP ranges, Kubernetes
-clusters, application configs).
+`configuration item` — The fundamental unit of the graph. Anything in a modular data
+center that can be named, related, and tracked — from physical assets (racks, servers,
+cables) to logical constructs (Kubernetes clusters, application configs).
 
-`drift` — The gap between design intent and discovered reality. Orb observes actual
-state, compares it to intended state, and reports the gap. Orbital does not act on
-drift and is not in the reconciliation path.
+`divergence report` — A signed, structured report produced by the edge describing the
+gap between design intent and observed reality. Delivered to orbital's report intake API
+by the deployment layer. Orbital stores and surfaces divergence to administrators — it
+does not act on it and is not in the reconciliation path.
 
 ## Architecture
 
@@ -108,24 +111,25 @@ and serves configuration locally — fully offline if needed.
 Config flows **orbital → orb**. For reporting, orb writes drift and divergence reports to a shared location when connected; a delivery agent forwards them to orbital's report intake API — read-only telemetry, not configuration. The exception to the one-way config flow is onboarding: orb discovers existing infrastructure and exports a graph, which an admin imports into orbital to seed the source of truth.
 
 ```
-            +------------------------------------------+
-            |                 Orbital                  |
-            |                                          |
-            |       Topology API (GraphQL proxy)       |
-            |                    |                     |
-            |          Go server (middleware)          |
-            |         /          |           \         |
-            |     DGraph       Valkey    PostgreSQL    |
-            +--------------------+---------------------+
-                                 |
-                                 | config sync (orbital -> orb)
-                                 |
-                       +---------v---------+
-                       |                   |
-                  +----v----+         +----v----+
-                  |  Orb A  |         |  Orb B  |
-                  |  DC 1   |         |  DC 2   |
-                  +---------+         +---------+
+  ┌─────────────────────────────────────────────────────┐
+  │                       orbital                       │
+  │                                                     │
+  │   Topology API    Export API    Report Intake API   │
+  └───────────────────────┬─────────────────▲───────────┘
+                          │                 │
+              signed config export          │ signed divergence
+              (json.gz + schema.gz)         │ reports
+                          │                 │
+  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ data transport boundary ╌╌╌╌╌╌╌╌╌╌╌╌
+                          │                 │
+                   ┌──────▼─────────────────┴──────┐
+                   │         delivery layer         │
+                   └──────┬─────────────────┬───────┘
+                          │                 │
+                   ┌──────▼────┐   ┌────────▼──┐
+                   │    orb    │   │    orb    │
+                   │   DC 1    │   │   DC 2    │
+                   └───────────┘   └───────────┘
 ```
 
 For detailed architecture decisions see [CLAUDE.md](CLAUDE.md).

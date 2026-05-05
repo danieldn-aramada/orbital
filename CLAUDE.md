@@ -27,7 +27,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Go** — Implementation language for both `orbital` and `orb`
 - **DGraph** (community edition) — Graph database with native GraphQL API on top of RDF-like storage; stores all configuration items. Chosen because the RDF model fits configuration items naturally, and the GraphQL API lets external teams (e.g. a digital twin UI) consume data without custom endpoints. Self-hosted in the same Kubernetes namespace as orbital. Some enterprise features (namespaces, backups) may be implemented in-house later.
-- **PostgreSQL** — Stores all managed-service operational data for `orbital`: orb registry (`orbs` table — id, datacenter_id, Ed25519 public key, registered_at, registered_by, status), user accounts, audit logs, job/sync history, schema versions, DGraph backup metadata. Anything typical for running a managed service goes here, not in DGraph.
+- **PostgreSQL** — Stores all managed-service operational data for `orbital`: orb registry (`orbs` table — id, datacenter_id, Ed25519 public key (optional), status, created_at, created_by), user accounts, audit logs, job/sync history, schema versions, DGraph backup records (timestamp, blob path, schema version, checksum, size). Anything typical for running a managed service goes here, not in DGraph. PostgreSQL backup is handled by Azure managed PostgreSQL — not orbital's concern.
 - **Valkey** — In-memory cache for `orbital`; chosen over Redis due to licensing.
 
 ## Architecture Notes
@@ -79,7 +79,7 @@ Configuration items span the full spectrum from physical (racks, servers, switch
 ### Orb identity
 Orbital is the system of record for orb identity. Each orb has a per-orb Ed25519 key pair generated at bootstrap by the deployment layer. The public key is registered with orbital by an admin at onboarding time and stored in the `orbs` PostgreSQL table. The private key never leaves the orb.
 
-Orbital uses the registered public key to verify the Ed25519 signature on incoming drift/divergence reports via the report intake API. Any report that fails verification is rejected. Registration → `INSERT` into `orbs`. Revocation → `UPDATE status = 'revoked'`. Verification → `SELECT public_key WHERE id = ? AND status = 'active'`.
+The public key is optional — signing of divergence reports is not guaranteed in all deployments. When a public key is registered, orbital verifies the Ed25519 signature on incoming reports via the report intake API and rejects reports that fail verification. When no key is registered, reports are accepted without signature verification. Registration → `INSERT` into `orbs`. Revocation → `UPDATE status = 'revoked'`. Verification → `SELECT public_key WHERE id = ? AND status = 'active'`.
 
 The transport between the edge and orbital's intake API is entirely the deployment layer's concern — orbital does not know or care how the report arrived.
 
