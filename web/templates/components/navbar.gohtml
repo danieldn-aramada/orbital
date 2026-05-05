@@ -1,0 +1,73 @@
+<nav class="navbar is-dark" role="navigation" aria-label="main navigation">
+
+  <div class="navbar-brand">
+    <a class="navbar-item" href="/" style="gap: 0.1rem;">
+      <img src="/static/logo/logo-armada.png" alt="Orbital logo">
+      <span class="varela-round-regular has-text-white is-size-4"><strong>Orbital</strong></span>
+    </a>
+
+    <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbar-menu">
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+    </a>
+  </div>
+
+  <div id="navbar-menu" class="navbar-menu">
+    <div class="navbar-start">
+      <div class="navbar-item">
+        <div class="is-size-7 has-text-grey-light">
+          <div>Configuration Management</div>
+          <div>for Edge Data Centers</div>
+        </div>
+      </div>
+      <a class="navbar-item" href="/swagger/index.html">
+        <span class="icon-text">
+          <span class="icon has-text-primary">
+            <i class="fa-solid fa-code"></i>
+          </span>
+          <strong>API</strong>
+        </span>
+      </a>
+
+      <a class="navbar-item" href="/graphql">
+        <span class="icon-text">
+          <span class="icon" style="color: #f19646;">
+            <i class="fa-solid fa-diagram-project"></i>
+          </span>
+          <strong>GraphQL</strong>
+        </span>
+      </a>
+
+      <div class="navbar-item has-dropdown is-hoverable">
+        <a class="navbar-link">
+          <span class="icon-text">
+            <span class="icon has-text-danger">
+              <i class="fa-solid fa-plus"></i>
+            </span>
+            <strong>More</strong>
+          </span>
+        </a>
+        <div class="navbar-dropdown">
+          <a class="navbar-item" href="https://github.com/danieldn-aramada/demo" target="_blank" rel="noopener">
+            <strong>GitHub</strong>
+          </a>
+          <a class="navbar-item" href="/docs/design">
+            <strong>Design</strong>
+          </a>
+          <hr class="navbar-divider">
+          <a class="navbar-item" href="/report-issue">
+            <strong>Report Issue</strong>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="navbar-end">
+    </div>
+  </div>
+
+</nav>
+
+{{template "todo-toast.gohtml" .}}

@@ -1,0 +1,90 @@
+<form class="form-cluster-create" hx-boost="true" method="post" >
+
+  <div class="field">
+    <label class="label">
+      Cluster Name
+      <span class="icon is-small tooltip"   data-text="Names must follow dns label standard RFC 1035">
+        <svg xmlns="http://www.w3.org/2000/svg"  viewBox="0 0 48 48" width="48px" height="48px"><path fill="#2196f3" d="M44,24c0,11.045-8.955,20-20,20S4,35.045,4,24S12.955,4,24,4S44,12.955,44,24z"/><path fill="#fff" d="M22 22h4v11h-4V22zM26.5 16.5c0 1.379-1.121 2.5-2.5 2.5s-2.5-1.121-2.5-2.5S22.621 14 24 14 26.5 15.121 26.5 16.5z"/></svg>
+      </span>
+    </label>
+
+    <div class="control has-icons-right">
+
+      {{with (index .Form.FieldsMap "name")}}
+        {{with .Status}}
+          <input class="input {{.StatusClass}}" type="text" name="name" autocomplete="off" {{with .Value}} value={{.}} {{end}}>
+          <span class="icon is-small is-right">
+            <i class="{{.IconClassAttribute}}"></i>
+          </span>
+          {{if .HelpMessageText}}
+            <p class="help {{.StatusClass}}">{{.HelpMessageText}}</p>
+          {{end}}
+
+        {{else}}
+          <input class="input" type="text" name="name" autocomplete="off"  {{with .Value}} value={{.}} {{else}}placeholder="mark-cluster-1"{{end}}>
+        {{end}}
+        
+      {{end}}
+
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label">Account ID</label>
+    <div class="control has-icons-right"> 
+
+      {{with (index .Form.FieldsMap "account")}}
+        {{with .Status}}
+          <input class="input {{.StatusClass}}" type="text" name="account" autocomplete="off"  {{with .Value}} value={{.}} {{end}}>
+          <span class="icon is-small is-right">
+            <i class="{{.IconClassAttribute}}"></i>
+          </span>
+          {{if .HelpMessageText}}
+            <p class="help {{.StatusClass}}">{{.HelpMessageText}}</p>
+          {{end}}
+        {{else}}
+          <input class="input" type="text" name="account" autocomplete="off" {{with .Value}} value={{.}} {{else}}placeholder="123456789"{{end}}>
+        {{end}}
+      {{end}}
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label">Region</label>
+    {{with (index .Form.FieldsMap "region")}}
+      <div class="control">
+        <div class="select {{with .Status}} {{.StatusClass}} {{end}}">
+          <select name="region">
+            <option disabled selected value> -- select region -- </option>
+            <option {{if eq .Value "us-west-2"}} selected {{end}}>us-west-2</option>
+            <option {{if eq .Value "us-central-1"}} selected {{end}}>us-central-1</option>
+            <option {{if eq .Value "us-east-1"}} selected {{end}}>us-east-1</option>
+          </select>
+        </div>
+      </div>
+      {{with .Status}}
+        {{if .HelpMessageText}}
+          <p class="help {{.StatusClass}}">{{.HelpMessageText}}</p>
+        {{end}}
+      {{end}}
+    {{end}}
+  </div>
+
+  <div class="field">
+    <label class="label">Justification (optional)</label>
+    <div class="control">
+        <textarea class="textarea" placeholder="Message to the account admin"></textarea>
+      </div>
+  </div>
+
+  <input type="hidden" name="csrf" value="{{.CsrfToken}}"/>
+
+  <div class="field is-grouped">
+    <div class="control">
+      <button class="button is-primary">Submit</button>
+    </div>
+    <div class="control">
+      <button class="button is-primary is-light">Cancel</button>
+    </div>
+  </div>
+</form>

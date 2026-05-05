@@ -1,0 +1,719 @@
+@charset "utf-8";
+
+// $bootstrap: #6f5499;
+// $github: #1b1f23;
+// $facebook: #1877f2;
+// $twitter: #55acee;
+// $patreon: #f96854;
+// $patreon-blue: #052d49;
+// $fortyfour: #5f45bb;
+// $amazon: #ffd863;
+// $bleeding-green: #abf47c;
+// $bleeding-red: #ca1f26;
+// $rss: #f26522;
+// $algolia: #3c4fe0;
+// $star: #ffd257;
+// $purple: #b86bff;
+// $sass: #bf4080;
+// $mercedes: #0b938f;
+// $sun: #ffb70f;
+// $moon: #8158f5;
+// $start: #f19646;
+// $css: #264de4;
+// $html: #e44d26;
+// $js: #f7df1e;
+// $bulma: #00d1b2;
+
+// override bulma vars here.... anything with --bulma- prefix
+// @use "node_modules/bulma/sass" with (
+  // $scheme-h: 0deg,
+  // $scheme-s: 0%,
+  // $dark-l: 21,
+  // $navbar-background-color: #f5f5f7,
+  // $navbar-background-color: #363636, //	hsl(0, 0%, 21%)
+  // $navbar-item-background: #363636, 
+  // $footer-padding: 3vh 0rem 3vh,
+  // $navbar-item-img-max-height: 2rem,
+// );
+// @use "node_modules/bulma/sass/utilities/initial-variables" as iv with (
+//   $scheme-h: 0,
+//   $scheme-s: 0%,
+//   $dark-l: 21,
+// );
+@use "../node_modules/bulma/sass" with (
+  // $primary: #fa7c91,
+  $scheme-h: 0,
+  $scheme-s: 0%,
+  $dark-l: 21,
+
+  // $black: hsl(221, 14%, 4%),
+  // $black-bis: hsl(221, 14%, 9%),
+  // $black-ter: hsl(221, 14%, 14%),
+  // $grey-darker: hsl(221, 14%, 21%),
+  // $grey-dark: hsl(221, 14%, 29%),
+  // $grey: hsl(221, 14%, 48%),
+  // $grey-light: hsl(221, 14%, 71%),
+  // $grey-lighter: hsl(221, 14%, 86%),
+  // $grey-lightest: hsl(221, 14%, 93%),
+
+  $black: hsl(221, 14%, 4%),
+  $black-bis: hsl(221, 14%, 9%),
+  $black-ter: hsl(221, 14%, 14%),
+
+  // corresponds to dark shade
+  $grey-darker: hsl(0, 0%, 21%),
+  $grey-dark: hsl(0, 0%, 29%),
+  $grey: hsl(0, 0%, 48%),
+
+  $grey-light: hsl(221, 14%, 71%),
+  $grey-lighter: hsl(221, 14%, 86%),
+  $grey-lightest: hsl(221, 14%, 93%),
+
+  $white-ter: hsl(221, 14%, 96%),
+  $white-bis: hsl(221, 14%, 98%),
+  $white: hsl(221, 14%, 100%),
+  $orange: hsl(14, 100%, 53%),
+  $yellow: hsl(42, 100%, 53%),
+  $green: hsl(153, 53%, 53%),
+  $turquoise: hsl(171, 100%, 41%),
+  $cyan: hsl(198, 100%, 70%),
+  $blue: hsl(233, 100%, 63%),
+  $purple: hsl(271, 100%, 71%),
+  $red: hsl(348, 100%, 70%),
+
+  $navbar-dropdown-border-style: none,
+  // $navbar-item-img-max-height: 1.75rem,
+  $navbar-item-img-max-height: 2.5rem,
+  $navbar-dropdown-radius: 0.4rem,
+  // $notification-padding: 0.75em 1.25em,
+
+  // $size-small: 14px
+  $size-normal: 14px,
+);
+
+
+
+
+// @use "node_modules/bulma/sass/utilities/initial-variables" as iv;
+
+// 1. Import the initial variables
+// @import "../node_modules/bulma/sass/utilities/initial-variables";
+
+
+:root {
+  --theme-h: 330;
+  --theme-s: 50%;
+  --theme-l: 50%; 
+  --theme-color: hsl(var(--theme-h), var(--theme-s), var(--theme-l));
+
+  --bulma-start-h: 28deg;
+  --bulma-start-s: 86%; 
+  --bulma-start-l: 61%; 
+  --bulma-danger-h: 348deg;
+  --bulma-danger-s: 100%;
+  --bulma-danger-l: 70%;
+  --h: var(--theme-h);
+  --s: var(--theme-s);
+  --l: 60%;
+  --a: 0.1;
+  --color: var(--theme-color);
+
+  // --bulma-family-primary: Arial, sans-serif;
+  --list-item-padding: 1em;
+  --orange:  #f19646;
+  --dt-row-selected: var(--bulma-link-rgb); 
+  --dt-row-selected-text: var(--bulma-white-rgb); 
+}
+
+html {
+  // font-size: 14px
+
+}
+
+.modal-card.is-large {
+    width: 80%;
+    max-height: 80%;
+    // max-height: calc(100vh - 40px);
+}
+
+// overwrite bulma defaults
+.modal-card-head {
+  padding: 2em;
+  background-color: var(--bulma-modal-card-foot-background-color); // prefer matching footer
+  border-bottom: 1px solid #dbdbdb;
+  box-shadow: none;
+  // box-shadow: 0 0.05em 0.1em hsla(var(--bulma-scheme-h), var(--bulma-scheme-s), var(--bulma-scheme-invert-l), 0.1);
+}
+
+.modal-card-body {
+  // min-height: 40vh;
+  // box-shadow: 0 0.05em 0.1em hsla(var(--bulma-scheme-h), var(--bulma-scheme-s), var(--bulma-scheme-invert-l), 0.1);
+}
+
+.modal-card-foot {
+  padding: 2em;
+  border-top: 1px solid #dbdbdb;
+}
+
+.form-cluster-create {
+  // margin: auto;
+  // max-width: 80%;
+  max-width: 800px;
+}
+.form-user-create {
+  // margin: auto;
+  // max-width: 80%;
+  max-width: 800px;
+}
+
+.tooltip {
+  position:relative; /* making the .tooltip span a container for the tooltip text */
+  // border-bottom:1px dashed #000; /* little indicater to indicate it's hoverable */
+}
+
+.tooltip::after {
+  content: attr(data-text); /* here's the magic */
+  position: absolute;
+  z-index: 1;
+
+  // move up and to right
+  top: 80%; 
+  transform:translateY(-80%);
+  left:100%;
+  margin-left:15px; /* and add a small left margin */
+  
+  padding: 1em;
+  border-radius:10px;
+  border-color: hsl(var(--bulma-scheme-h), var(--bulma-scheme-s), calc(var(--bulma-scheme-main-l) + -6%));
+  text-align:center;
+  white-space: nowrap;
+  font-weight: 400;
+  font-size: small;
+  background-color: rgb(255, 249, 235);
+
+  display:none; // hide by default
+}
+
+.tooltip:hover::after {
+  display:block;
+}
+
+.app-main-grid {
+  display: grid;
+  grid-template-columns: 12em 1fr;
+  border-top: 1px solid transparent;
+  border-bottom: 1px solid transparent;
+  border-color: hsl(var(--bulma-scheme-h), var(--bulma-scheme-s), calc(var(--bulma-scheme-main-l) + -6%));
+  min-height: 86vh;
+}
+
+.app-main {
+  // margin: 2em;
+  // padding: 2em;
+  font-size: 14px;
+  min-width: 0;   /* critical for flex/grid children to shrink */
+  flex: 1;        /* if parent is flexbox */
+  width: 100%;    /* allow shrinking */
+
+//   div.tabs {
+//     ul {
+//         border-bottom-right-radius: 4%;
+//     }
+
+//   }
+  .tabs {
+    .tab {
+      // a {
+      //   display: inline-block;
+      // }
+      a:focus-visible, a:target {
+        outline-color: hsl(var(--bulma-focus-h), var(--bulma-focus-s), var(--bulma-focus-l));
+        outline-offset: -3px; 
+        outline-style: var(--bulma-focus-style);
+        outline-width: var(--bulma-focus-width);
+      }
+    }
+  }
+
+  .tab-content {
+    .box{
+      padding: 1.5em;
+      // box-shadow: 0 0.5em 1em -0.125em hsla(var(--bulma-shadow-h), var(--bulma-shadow-s), var(--bulma-shadow-l), 0.1), 0 0px 0 1px hsla(var(--bulma-shadow-h), var(--bulma-shadow-s), var(--bulma-shadow-l), 0.02);
+      box-shadow: 0 0.1em 0.2em hsla(var(--bulma-scheme-h), var(--bulma-scheme-s), var(--bulma-scheme-invert-l), 0.1);
+    }
+  }
+}
+
+.notification {
+    &:hover {
+        background-color: hsl(var(--bulma-notification-h), var(--bulma-notification-s), calc(var(--bulma-notification-background-l) + var(--bulma-hover-background-l-delta)));
+    }
+    a {
+        color: blue !important;
+        text-decoration: none !important;
+    }
+}
+
+.table {
+  width: max-content !important;
+  min-width: 100%;
+
+  // width: 100% !important;
+  border-collapse: collapse;
+  table-layout: fixed; /* forces shrinking */
+}
+
+.th, .td {
+  padding: 8px;
+  border: 1px solid #ccc;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+
+// .navbar {
+//   span.icon-text {
+//     strong {
+//       color: var(--bulma-strong-color);
+//     }
+//   }
+//   a {
+//     strong {
+//       color: var(--bulma-strong-color);
+//     }
+//   }
+// }
+
+// extend a bulma css rule via @use and @extend. Following adds
+// .app-menu-label to css rule .menu-label AND new rule with just
+// .app-menu-label with lowercase property. You must add !important
+// rule if you wish to override existing properties
+.app-menu-label {
+  // @extend .menu-label; 
+  font-size: var(--bulma-body-font-size) !important;
+  text-transform: lowercase !important;
+  letter-spacing: normal !important;
+}
+.navbar-brand {
+  // padding-right: 2.7em; // align with main's grid better
+  .navbar-item {
+    // @extend #{bulma}.navbar-item, bulma.navbar-link;
+    padding-right: 1.5em; // align with main's grid better
+    gap: 0.5rem ;
+    line-height: normal;
+  }
+  
+  //   &:focus-visible {
+  //     outline-color: hsl(var(--bulma-focus-h), var(--bulma-focus-s), var(--bulma-focus-l));
+  //     outline-offset: -3px; 
+  //     outline-style: var(--bulma-focus-style);
+  //     outline-width: var(--bulma-focus-width);
+  //   }
+  // }
+  
+  
+}
+#app-nav-item {
+    &:hover {
+      color: #ffffff;
+      filter: brightness(120%);
+    }
+}
+
+// button focus act like hover 
+.button.is-primary:focus-visible, .button.is-primary.is-focused {
+  --bulma-button-border-width: max(2px, 0.125em) !important;
+  --bulma-button-outer-shadow-alpha: 1 !important;
+}
+
+.navbar-item, 
+.navbar-link {
+  &:focus-visible {
+    outline-color: hsl(var(--bulma-focus-h), var(--bulma-focus-s), var(--bulma-focus-l));
+    outline-offset: -3px; 
+    outline-style: var(--bulma-focus-style);
+    outline-width: var(--bulma-focus-width);
+  }
+  
+}
+
+
+.navbar-dropdown {
+  padding-bottom: 0.3rem;
+  padding-top: 0rem;
+  // margin-top: 0.25rem;
+  box-shadow: 0 0.1em 0.2em hsla(var(--bulma-scheme-h), var(--bulma-scheme-s), var(--bulma-scheme-invert-l), 0.1);
+  // .navbar-item {
+    // margin-bottom: 0.4rem;
+  // }
+  // .navbar-item{
+    // background-color: aqua !important;
+  // }
+  .navbar-divider {
+    margin: 0;
+  }
+}
+
+.app-menu {
+  --offset: 2rem; // for icon + gap alignment
+  padding: 1em 0.5em 1em 1em;
+  border-right: 1px solid hsl(
+    var(--bulma-scheme-h),
+    var(--bulma-scheme-s),
+    calc(var(--bulma-scheme-main-l) - 6%)
+  );
+  font-size: 14px; // menu items default
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .app-menu-section {
+    display: flex;
+    flex-direction: column;
+    padding: 0.25em 0;
+    line-height: 1.25rem;
+  }
+
+  .app-menu-section-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    color: var(--section-color);
+    padding: 0.4em 0;
+    font-size: 16px; // explicitly larger for headings
+
+    strong {
+      // keep default title color
+    }
+  }
+
+  .app-menu-section-list {
+    display: flex;
+    flex-direction: column;
+    padding-left: calc(var(--offset) - var(--list-item-padding));
+    font-weight: 500;
+    font-size: inherit;
+  }
+
+  /* Main links */
+  .app-menu-link {
+    display: flex;
+    align-items: center;
+    padding: 0.3em 0.4em 0.3em var(--list-item-padding);
+    font-size: inherit;
+
+    .icon {
+      margin-left: auto;
+      transform: rotate(0deg);
+      transition-timing-function: ease;
+      transition-duration: var(--bulma-duration);
+      transition-property: transform;
+
+      i {
+        transform-origin: center;
+      }
+    }
+
+    &.is-open {
+      .icon {
+        transform: rotate(90deg);
+      }
+    }
+
+    &:hover {
+      background-color: hsla(
+        var(--bulma-text-h),
+        var(--bulma-text-s),
+        var(--bulma-text-l),
+        0.1
+      );
+    }
+
+    &:focus-visible {
+      outline-color: hsl(var(--bulma-focus-h), var(--bulma-focus-s), var(--bulma-focus-l));
+      outline-offset: 0px;
+      outline-style: var(--bulma-focus-style);
+      outline-width: var(--bulma-focus-width);
+    }
+  }
+
+  @keyframes show-overflow {
+    from { overflow: hidden; }
+    to { overflow: unset; }
+  }
+
+  /* Submenu (collapsible) */
+  .app-menu-section-sublist {
+    display: block;
+    overflow: hidden;
+    visibility: hidden;
+    max-height: 0px;
+    padding-left: calc(1rem - var(--list-item-padding));
+    transition: max-height var(--bulma-duration) ease,
+      visibility 0s calc(var(--sublist-size) * 0.1s);
+
+    &.is-open {
+      max-height: calc(var(--sublist-size) * 2.5em);
+      visibility: visible;
+      transition: max-height var(--bulma-duration) ease;
+      overflow: unset;
+      animation: show-overflow 1s;
+    }
+  }
+
+  /* Sublinks */
+  .app-menu-sublink {
+    display: flex;
+    align-items: center;
+    padding: 0.2em 0 0.2em var(--list-item-padding);
+    margin: 0.5em 0 0.5em 1.5em;
+    font-size: inherit;
+
+    &.is-active {
+      background-color: hsla(
+        var(--bulma-text-h),
+        var(--bulma-text-s),
+        var(--bulma-text-l),
+        0.1
+      );
+    }
+
+    &:hover {
+      background-color: hsla(
+        var(--bulma-text-h),
+        var(--bulma-text-s),
+        var(--bulma-text-l),
+        0.1
+      );
+    }
+
+    &:focus-visible {
+      outline-color: hsl(var(--bulma-focus-h), var(--bulma-focus-s), var(--bulma-focus-l));
+      outline-offset: 0px;
+      outline-style: var(--bulma-focus-style);
+      outline-width: var(--bulma-focus-width);
+    }
+  }
+}
+// .app-menu {
+//   --offset: 2rem; // for vert align, equals width of icon width 1.5em + flex gap 0.5em
+//   padding: 1em 0.5em 1em 1em;
+//   // background-color: #f5f5f7;
+//   // background-color: hsl(
+//   //   cv.getVar("scheme-h"),
+//   //   cv.getVar("scheme-s"),
+//   //   calc(#{cv.getVar("scheme-main-l")} + -2%) 
+//   // );
+//   border-right: 1px solid transparent;
+//   border-right-color: hsl(var(--bulma-scheme-h), var(--bulma-scheme-s), calc(var(--bulma-scheme-main-l) + -6%));
+
+//   a {
+//     color: inherit;
+//     text-decoration: none;
+//   }
+// }
+
+// .app-menu-section {
+//   // --color: hsl(var(--bulma-start-h), var(--bulma-start-s), var(--bulma-start-l));
+//   // --color: hsl(var(--h), var(--s), var(--l));
+//   display: flex;
+//   flex-direction: column;
+//   padding: 0.25em 0em;
+//   line-height: 1.25rem; // a little smaller than default
+// }
+
+// .app-menu-section-heading {
+//   display: flex;
+//   align-items: center;
+//   gap: 0.5em;
+//   color: var(--section-color);
+//   padding: 0.4em 0em;
+
+//   strong {
+//     // color: inherit; // keep default title black
+//   }
+// }
+
+
+// .app-menu-section-list {
+//   display: flex;
+//   flex-direction: column;
+//   padding-left: calc(var(--offset) - var(--list-item-padding));
+//   // font-weight: cv.getVar("weight-medium");
+//   // font-weight: 400;
+//   font-weight: 500;
+//   font-size: 0.875em; // half of line height
+//   // line-height: 1.25rem; // a little smaller than default
+// }
+
+// .app-menu-link {
+//   display: flex;
+//   align-items: center;
+//   padding: 0.3em 0.4em 0.3em var(--list-item-padding);
+//   // margin-top: 0.3em;
+
+
+//   .icon {
+//     margin-left: auto ;
+//     transform: rotate(0deg);
+//     transition-timing-function: ease;
+//     transition-duration: var(--bulma-duration);
+//     transition-property: transform;
+//   }
+
+//   &.is-open {
+//     .icon {
+//       transform: rotate(90deg);
+//     }
+//   }
+
+//   &:hover {
+//     background-color: hsla(
+//       var(--bulma-text-h),
+//       var(--bulma-text-s),
+//       var(--bulma-text-l),
+//       0.1
+//     );
+//   }
+
+//   &:focus-visible {
+//     outline-color: hsl(var(--bulma-focus-h), var(--bulma-focus-s), var(--bulma-focus-l));
+//     outline-offset: 0px; 
+//     outline-style: var(--bulma-focus-style);
+//     outline-width: var(--bulma-focus-width);
+//   }
+// }
+
+// @keyframes show-overflow {
+//   from { overflow: hidden; }
+//   to { overflow: unset; }
+// }
+ 
+// .app-menu-section-sublist {
+//   display: block;
+//   overflow: hidden;
+//   visibility: hidden; // disable tab nav until open
+//   max-height: 0px;
+//   padding-left: calc(1rem - var(--list-item-padding));
+//   // transition: max-height var(--bulma-duration) ease, visibility 0s 2s; // delay on viz so we don't see flash 
+//   transition: max-height var(--bulma-duration) ease, visibility 0s calc(var(--sublist-size) * 0.1s); // delay on viz so we don't see flash 
+
+//   &.is-open {
+//     max-height: calc(var(--sublist-size) * 2.5em);
+//     visibility: visible;
+//     transition: max-height var(--bulma-duration) ease;
+//     overflow: unset; // allow focus visible properly highlight
+//     animation: show-overflow 1s;
+//   }
+// }
+
+// .app-menu-sublink {
+//   display: flex;
+//   align-items: center;
+//   padding: 0.2em 0 0.2em var(--list-item-padding);
+//   // margin: 0.3em 0 0.3em 1.5em;
+//   margin: 0.5em 0 0.5em 1.5em;
+//   // padding: 0.2em 0em 0.2em var(--list-item-padding);
+//   // margin: 0.5em 0em 0.5em 0em;
+//   &.is-active {
+//     background-color: hsla(
+//       var(--bulma-text-h),
+//       var(--bulma-text-s),
+//       var(--bulma-text-l),
+//       0.1
+//     );
+//   }
+
+//   &:hover {
+//     background-color: hsla(
+//       var(--bulma-text-h),
+//       var(--bulma-text-s),
+//       var(--bulma-text-l),
+//       0.1
+//     );
+//   }
+//   &:focus-visible {
+//     outline-color: hsl(var(--bulma-focus-h), var(--bulma-focus-s), var(--bulma-focus-l));
+//     outline-offset: 0px; 
+//     outline-style: var(--bulma-focus-style);
+//     outline-width: var(--bulma-focus-width);
+//   }
+// }
+
+// // debug
+// &:focus-visible {
+//   outline-color: hsl(var(--bulma-focus-h), var(--bulma-focus-s), var(--bulma-focus-l));
+//   outline-offset: var(--bulma-focus-offset);
+//   outline-style: var(--bulma-focus-style);
+//   outline-width: var(--bulma-focus-width);
+// }
+
+// @import "../node_modules/bulma/bulma";
+// @use "../node_modules/bulma/bulma";
+.varela-round-regular {
+  font-family: "Varela Round", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+}
+
+// @import url('https://fonts.googleapis.com/css2?family=Varela+Round&display=swap');
+.select.is-borderless {
+  select {
+    border: none;
+    box-shadow: none;
+    background-color: transparent;
+
+    &:focus {
+      box-shadow: none;
+    }
+  }
+}
+
+// .table tr.is-selected,
+// .table td.is-selected,
+// .table th.is-selected {
+//   background-color: #7a7a7a !important; /* your secondary color */
+//   color: white !important;
+// }
+.diff-output {
+  background: inherit !important;
+  padding: 0px;
+  // color: inherit;
+  // font-family: monospace;
+  // white-space: pre-wrap;
+  // margin: 0;
+  // padding: 0.25em 0;
+  // border: none;
+  // line-height: 1.3;
+  // font-size: 0.8em;
+  color: #004ed0;
+}
+
+/* only color the text */
+.diff-added {
+  color: rgb(0, 128, 0);
+  margin-left: 20px;
+}
+
+.diff-removed {
+  color: rgb(255, 0, 0); 
+  margin-left: 20px;
+  font-style: italic;
+}
+
+.wrap-text {
+  white-space: normal !important;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.no-wrap-text {
+  white-space: nowrap !important;
+  overflow: visible !important; /* ✅ let content overflow naturally */
+}
+.k8s-icon img {
+  filter: invert(100%);
+}

@@ -1,0 +1,82 @@
+<div class="fixed-grid has-3-cols mb-0">
+
+  <div class="columns m-0">
+    <div class="column pt-0 pl-0 pr-0 is-one-third">
+      <button class="button is-rounded is-small is-warning mt-1">
+        <span class="icon"><i class="fa-solid fa-bolt"></i></span>
+        <span>Button 1</span>
+      </button>
+      <button class="button is-rounded is-small is-warning mt-1">
+        <span class="icon"><i class="fa-solid fa-bolt"></i></span>
+        <span>Button 2</span>
+      </button>
+      <button class="button is-rounded is-small is-warning mt-1">
+        <span class="icon"><i class="fa-solid fa-bolt"></i></span>
+        <span>Button 3</span>
+      </button>
+    </div>
+    <div class="column pt-0 pl-0">
+      <button class="button is-rounded is-small is-link mt-1">
+        <span class="icon"><i class="fa-solid fa-refresh"></i></span>
+        <span>Reload</span>
+      </button>
+      <button class="button is-rounded is-small is-link mt-1">
+        <span class="icon"><i class="fa-solid fa-pen-to-square"></i></span>
+        <span>Edit</span>
+      </button>
+      <button class="button is-rounded is-small is-danger mt-1">
+        <span class="icon"><i class="fa-solid fa-trash"></i></span>
+        <span>Delete</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="cell is-col-span-2 is-row-span-1">
+      <article class="box">
+        <p class="is-size-4 pb-4">Data Center Summary</p>
+        <table class="table is-fullwidth">
+          <tbody>
+            <tr><td style="width:40%">Name</td><td>{{.Name}}</td></tr>
+            <tr><td>ID</td><td>{{.ID}}</td></tr>
+            <tr><td>Created By</td><td>{{if .CreatedBy}}{{.CreatedBy}}{{else}}—{{end}}</td></tr>
+            <tr><td>Created At</td><td>{{if .CreatedAt}}{{.CreatedAt}}{{else}}—{{end}}</td></tr>
+          </tbody>
+        </table>
+      </article>
+    </div>
+
+    <div class="cell is-row-span-1">
+      <article class="box" style="height:100%">
+        <p class="is-size-4 mb-4">Metadata</p>
+        <table class="table mb-0">
+          <tbody>
+            <tr><td style="width:40%">Namespace</td><td>—</td></tr>
+            <tr><td>Orbs</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </article>
+    </div>
+
+    <div class="cell is-col-span-3 is-fullheight">
+      <article class="box pb-2">
+        <p class="is-size-4 pb-4">Details</p>
+        <div class="tabs is-boxed">
+          <ul>
+            <li class="is-active">
+              <a><span class="icon is-small"><i class="fa-solid fa-server"></i></span><span>Servers</span></a>
+            </li>
+            <li>
+              <a><span class="icon is-small"><i class="fa-solid fa-circle-nodes"></i></span><span>Orbs</span></a>
+            </li>
+            <li>
+              <a><span class="icon is-small"><i class="fa-solid fa-triangle-exclamation"></i></span><span>Divergence Reports</span></a>
+            </li>
+          </ul>
+        </div>
+        <p class="is-size-7 has-text-grey p-2">No servers discovered yet.</p>
+      </article>
+    </div>
+  </div>
+
+</div>

@@ -9,6 +9,7 @@ type Config struct {
 	Port            string
 	ShutdownTimeout time.Duration
 	DGraphURL       string
+	Dev             bool
 }
 
 func New() *Config {
@@ -20,5 +21,6 @@ func New() *Config {
 		Port:            "8001",
 		ShutdownTimeout: 10 * time.Second,
 		DGraphURL:       dgraphURL,
+		Dev:             os.Getenv("ORBITAL_DEV") == "true",
 	}
 }

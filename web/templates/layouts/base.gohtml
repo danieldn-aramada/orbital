@@ -1,0 +1,15 @@
+<!doctype html>
+<html>
+  <head>
+    {{template "head.gohtml" . }}
+  </head>
+  <body>
+    <header>
+      {{template "navbar.gohtml" .}}
+    </header>
+    {{template "page" .}}
+    <footer class="footer pb-4 pt-4">
+      {{template "footer.gohtml" .Footer}}
+    </footer>
+  </body>
+</html>

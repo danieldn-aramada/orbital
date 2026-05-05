@@ -1,0 +1,81 @@
+<div id="register-modal" class="modal">
+  <div class="modal-background"></div>
+  <div class="modal-content">
+    <div class="box">
+
+    <form method="post" action={{.RegisterUrl}} class="box" id="form-register">
+      
+      <div class="field">
+        <label class="label" for="register-name">Name</label>
+        <div class="control has-icons-left">
+          <input 
+            type="text" 
+            placeholder="John Doe"
+            class="input" id="register-name" name="name"
+          /> 
+          <span class="icon is-small is-left">
+            <i class="fas fa-user"></i>
+          </span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="label" for="register-email">Email</label>
+        <div class="control has-icons-left">
+          <input 
+            type="email" 
+            class="input" id="register-email" name="email"
+            placeholder="user@example.com" 
+            oninput="this.setCustomValidity('')"
+            oninvalid="this.setCustomValidity('Email must match pattern like user@example.com')"
+            autocomplete="on"
+          /> 
+          <span class="icon is-small is-left">
+            <i class="fas fa-envelope"></i>
+          </span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="label" for="register-password">Password</label>
+        <div class="control has-icons-left">
+          <input
+            type="password" 
+            class="input" id="register-password" name="password"
+            placeholder="password"
+          />
+          <span class="icon is-small is-left">
+            <i class="fas fa-lock"></i>
+          </span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="label" for="register-password-confirm">Confirm Password</label>
+        <div class="control has-icons-left">
+          <input
+            type="password" 
+            class="input" id="register-password-confirm" name="passwordConfirm"
+            placeholder="password"
+          />
+          <span class="icon is-small is-left">
+            <i class="fas fa-lock"></i>
+          </span>
+        </div>
+      </div>
+
+      <input type="hidden" name="csrf" value="{{.CsrfToken}}"/>
+
+      <div class="field">
+        <div class="control">
+          <button class="button is-link" id="button-register-submit">Submit</button>
+        </div>
+      </div>
+
+    </form>
+    </div>
+
+    <button class="modal-close is-large" aria-label="close"></button>
+
+  </div>
+</div>

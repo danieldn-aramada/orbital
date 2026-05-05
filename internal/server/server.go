@@ -27,7 +27,7 @@ func New(cfg *config.Config) *Server {
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
-	e.Static("/", "internal/static")
+	e.Static("/static", "web/static")
 
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogMethod:  true,
@@ -44,6 +44,12 @@ func New(cfg *config.Config) *Server {
 			return nil
 		},
 	}))
+
+	ui := handler.NewUI(cfg.Dev)
+	e.GET("/", ui.Index)
+
+	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.Dev)
+	e.GET("/datacenters/:id", dc.Tab)
 
 	gql := handler.NewGraphQL(cfg.DGraphURL)
 	e.Any("/graphql", gql.Handle)

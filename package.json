@@ -1,0 +1,13 @@
+{
+  "name": "orbital",
+  "version": "0.0.1",
+  "dependencies": {
+    "bulma": "1.0.4",
+    "bulma-toast": "^2.4.4",
+    "sass": "^1.77.8"
+  },
+  "scripts": {
+    "build-css": "sass --load-path=node_modules web/sass/main.scss web/static/css/main.css",
+    "build-css-dev": "sass --watch --load-path=node_modules web/sass/main.scss:web/static/css/main.css"
+  }
+}

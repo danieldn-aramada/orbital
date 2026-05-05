@@ -1,0 +1,107 @@
+<div id="login-modal" class="modal modal-fx-3dRotateFromBottom">
+  <div class="modal-background"></div>
+  <div class="modal-content">
+    <div class="box">
+
+    <form method="post" action="/user/login" class="box" id="form-login">
+
+      <div class="field">
+        <label class="label" for="email">Email</label>
+        <div class="control has-icons-left">
+          <input 
+            type="email" 
+            class="input" id="email" name="email"
+            placeholder="user@example.com" 
+            oninput="this.setCustomValidity('')"
+            oninvalid="this.setCustomValidity('Email must match pattern like user@example.com')"
+            autocomplete="on"
+          /> 
+          <span class="icon is-small is-left">
+            <i class="fas fa-envelope"></i>
+          </span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="label" for="password">Password</label>
+        <div class="control has-icons-left">
+          <input
+            type="password" 
+            class="input" id="password" name="password"
+            placeholder="password"
+            autocomplete="on"
+          />
+          <span class="icon is-small is-left">
+            <i class="fas fa-lock"></i>
+          </span>
+        </div>
+      </div>
+
+      <input type="hidden" name="csrf" value="{{.CsrfToken}}"/>
+
+      <div class="field">
+        <div class="control">
+          <button class="button is-link" id="button-login-submit">Submit</button>
+        </div>
+      </div>
+
+    </form>
+
+  </div>
+  <button class="modal-close is-large" aria-label="close"></button>
+</div>
+<script>
+  function openModal($el) {
+      $el.classList.add('is-active');
+    }
+
+  function closeModal($el) {
+      const form = document.getElementById("form-login").reset();;
+      $el.classList.remove('is-active');
+    }
+
+  function closeAllModals() {
+    (document.querySelectorAll('.modal') || []).forEach(($modal) => {
+      closeModal($modal);
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // Listener on open login modal
+    (document.querySelectorAll('.js-modal-trigger') || []).forEach((trigger) => {
+      const modalId = trigger.dataset.target; // dataset-target attribute
+      const $target = document.getElementById(modalId);
+      trigger.addEventListener('click', () => {
+        console.log('clicked')
+        openModal($target);
+      });
+    });
+
+    // Add a click event on various child elements to close the parent modal
+    (document.querySelectorAll('.modal-background, .modal-close, .modal-card-head .delete, .modal-card-foot .button') || []).forEach(($close) => {
+      const $target = $close.closest('.modal');
+      $close.addEventListener('click', () => {
+        closeModal($target);
+      });
+    });
+
+    // Add a keyboard event to close all modals
+    document.addEventListener('keydown', (event) => {
+      if(event.key === "Escape") {
+        closeAllModals();
+      }
+    });
+
+    // Submit button
+    $("#button-login-submit").click(function(event) {
+      event.preventDefault(); // disables default validation box so we need to handle
+      $(this).toggleClass('is-loading');
+      setTimeout(() => {
+        $(this).toggleClass('is-loading');
+        document.forms["form-login"].submit();
+        // logout.classList.toggle("is-loading")
+        // location.href = "/user/logout";
+      }, 500);
+    });
+  });
+</script>

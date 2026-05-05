@@ -1,0 +1,30 @@
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // display todo toast
+    (document.querySelectorAll('.todo') || []).forEach((todo) => {
+      todo.addEventListener('click', () => {
+        displayTodoToast()
+      });
+    });
+  })
+</script>
+
+<script type="module">
+  import * as bulmaToast from "/static/bulma-toast.js";
+
+  function displayTodoToast() {
+    bulmaToast.toast({
+      message: "Hang tight!</br>We are currently building this feature 🚧", 
+      closeOnClick: false,
+      type: "is-danger is-light", 
+      position: "top-right",
+      dismissible: true,
+      duration: 4000,
+      offsetTop: "4em",
+      pauseOnHover: true,
+      animate: { in: 'fadeInRight', out: 'fadeOutRight' },
+      extraClasses: 'is-size-7',
+    })
+  }
+  window.displayTodoToast = displayTodoToast
+</script>

@@ -1,0 +1,8 @@
+.json-editor {
+    --jse-theme-color: #383e42;
+    --jse-theme-color-highlight: #687177;
+}
+
+.app-main-bar {
+    color: green;
+}
