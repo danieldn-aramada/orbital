@@ -16,14 +16,15 @@ import (
 	echoswagger "github.com/swaggo/echo-swagger"
 )
 
-var logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
-
 type Server struct {
-	cfg  *config.Config
-	echo *echo.Echo
+	cfg    *config.Config
+	echo   *echo.Echo
+	logger *slog.Logger
 }
 
 func New(cfg *config.Config) *Server {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))
+
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
@@ -35,7 +36,7 @@ func New(cfg *config.Config) *Server {
 		LogStatus:  true,
 		LogLatency: true,
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
-			logger.Info("request",
+			logger.Info("request", // logger captured from New() scope
 				"method", v.Method,
 				"uri", v.URI,
 				"status", v.Status,
@@ -53,7 +54,7 @@ func New(cfg *config.Config) *Server {
 	e.GET("/audit-log", ui.AuditLog)
 	e.GET("/schema", ui.Schema)
 
-	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.Dev)
+	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.Dev, logger)
 	e.GET("/datacenters/:id", dc.Tab)
 
 	exp := handler.NewExport(cfg.DGraphAdminURL)
@@ -64,15 +65,16 @@ func New(cfg *config.Config) *Server {
 	e.GET("/swagger/*", echoswagger.WrapHandler)
 
 	return &Server{
-		cfg:  cfg,
-		echo: e,
+		cfg:    cfg,
+		echo:   e,
+		logger: logger,
 	}
 }
 
 func (s *Server) Start(ctx context.Context) error {
 	errCh := make(chan error, 1)
 
-	logger.Info("starting orb", "port", s.cfg.Port, "dgraph", s.cfg.DGraphURL)
+	s.logger.Info("starting orb", "port", s.cfg.Port, "dgraph", s.cfg.DGraphURL)
 
 	go func() {
 		if err := s.echo.Start(":" + s.cfg.Port); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -86,7 +88,7 @@ func (s *Server) Start(ctx context.Context) error {
 	case err := <-errCh:
 		return fmt.Errorf("server error: %w", err)
 	default:
-		logger.Info("orb ready", "addr", ":"+s.cfg.Port)
+		s.logger.Info("orb ready", "addr", ":"+s.cfg.Port)
 	}
 
 	select {
@@ -95,7 +97,7 @@ func (s *Server) Start(ctx context.Context) error {
 	case <-ctx.Done():
 	}
 
-	logger.Info("shutting down")
+	s.logger.Info("shutting down")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), s.cfg.ShutdownTimeout)
 	defer cancel()

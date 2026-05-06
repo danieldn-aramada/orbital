@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/armada/orbital/ent/backup"
+	"github.com/armada/orbital/ent/namespace"
 	"github.com/armada/orbital/ent/orb"
 	"github.com/armada/orbital/ent/schema"
 	"github.com/armada/orbital/ent/user"
@@ -29,6 +30,23 @@ func init() {
 	backupDescID := backupFields[0].Descriptor()
 	// backup.DefaultID holds the default value on creation for the id field.
 	backup.DefaultID = backupDescID.Default.(func() uuid.UUID)
+	namespaceMixin := schema.Namespace{}.Mixin()
+	namespaceMixinFields0 := namespaceMixin[0].Fields()
+	_ = namespaceMixinFields0
+	namespaceFields := schema.Namespace{}.Fields()
+	_ = namespaceFields
+	// namespaceDescCreatedAt is the schema descriptor for created_at field.
+	namespaceDescCreatedAt := namespaceMixinFields0[0].Descriptor()
+	// namespace.DefaultCreatedAt holds the default value on creation for the created_at field.
+	namespace.DefaultCreatedAt = namespaceDescCreatedAt.Default.(func() time.Time)
+	// namespaceDescName is the schema descriptor for name field.
+	namespaceDescName := namespaceFields[1].Descriptor()
+	// namespace.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	namespace.NameValidator = namespaceDescName.Validators[0].(func(string) error)
+	// namespaceDescID is the schema descriptor for id field.
+	namespaceDescID := namespaceFields[0].Descriptor()
+	// namespace.DefaultID holds the default value on creation for the id field.
+	namespace.DefaultID = namespaceDescID.Default.(func() uuid.UUID)
 	orbMixin := schema.Orb{}.Mixin()
 	orbMixinFields0 := orbMixin[0].Fields()
 	_ = orbMixinFields0

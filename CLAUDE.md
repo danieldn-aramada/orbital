@@ -71,6 +71,16 @@ For customers with existing infrastructure, discovery runs at the edge:
 
 This is the primary onboarding workflow — discovered reality flows from orb into orbital, not the other way. Public key registration is a one-time manual step at provisioning time; no automated edge→cloud call is needed.
 
+### Namespace and DataCenter
+
+`Namespace` is a pure tenancy boundary — it is not a config item and does not implement `ConfigItem`. It exists solely as an isolation scope for graph partitioning and orphan detection. It has no config fields.
+
+`DataCenter implements ConfigItem` — it holds all data center configuration fields (location, region, size, etc.) and is the root node for a data center's subgraph.
+
+**Convention: 1:1 between Namespace and DataCenter.** Each data center has exactly one namespace; each namespace contains exactly one data center. DGraph does not enforce this — orbital's application layer does. This convention must not be violated.
+
+The `namespace: Namespace!` field on every `ConfigItem` (inherited from the interface) is a direct reference kept for query performance — it avoids traversing up through `DataCenter` to reach the namespace boundary when scoping queries. It is always set to the same namespace as the data center the item belongs to.
+
 ### Configuration items
 Configuration items span the full spectrum from physical (racks, servers, switches, screws, door parts) to logical (VLANs, IPs, K8s clusters, app configs). The schema is intentionally broad and user-defined. DGraph's RDF model fits this naturally.
 
@@ -101,8 +111,26 @@ DGraph schema is defined in versioned GraphQL files under `schema/` (e.g. `schem
 
 A custom schema migration tool will be built into orbital (not a standalone binary) to handle version tracking, compatibility validation, and DGraph apply. This is deliberate — no existing tool handles DGraph GraphQL migrations with the version skew constraints this project requires.
 
+**DGraph schema update behavior — critical:** Applying a new GraphQL schema to DGraph is additive at the RDF predicate layer. Removing a field from the GraphQL schema does NOT delete the underlying RDF triples — the data persists in DGraph, it is just no longer queryable via GraphQL. To permanently remove a field and its data, you must explicitly drop the predicate via the alter API:
+```
+POST /alter  {"drop_attr": "<predicate_name>"}
+```
+This is irreversible. The migration tool must treat field removals as explicit, versioned, destructive steps — never silent side effects of applying a new schema file. "Removed from GraphQL schema" and "deleted from DGraph" are two separate operations that must both be tracked.
+
 ### Export API
-Orbital exposes a data center-scoped export endpoint (`POST /api/v1/datacenters/{id}/export`) that returns a `json.gz` + `schema.gz` pair representing the intended state for that data center's subgraph. This is what the deployment layer (e.g. `configbundle`'s Bundle Generator) calls to produce a ConfigBundle. It is not a raw pass-through of DGraph's export mutation — orbital must partition the graph by data center before exporting.
+Orbital exposes a data center-scoped export endpoint (`POST /api/v1/datacenters/{id}/export`) that returns a `json.gz` + `schema.gz` pair representing the intended state for that data center's subgraph. This is what the deployment layer (e.g. `configbundle`'s Bundle Generator) calls to produce a ConfigBundle.
+
+**Export mechanism — blue-green DGraph:** Orbital runs two DGraph instances (blue and green). Blue is live and serves the Topology API. Green is idle-warm and used exclusively for export and validation. The export workflow (managed by Temporal):
+1. Query blue for the target data center's subgraph (GraphQL, scoped to DC)
+2. Load subgraph into green via `addDataCenter(upsert: true)` mutation
+3. Run native DGraph export mutation on green → `json.gz`
+4. Validate green is queryable (sanity check)
+5. Ship `json.gz` + `schema.gz`
+6. Wipe green for next use (or preserve on failure for debugging)
+
+Only one export may run at a time — enforced by Temporal workflow ID uniqueness (`export-{datacenter-id}`).
+
+DGraph's export mutation does not support subgraph filtering — it is a full-graph dump. The blue-green approach scopes the export by loading only the target DC's subgraph into green before exporting. This gives orb a native DGraph import file with correct UIDs.
 
 How the resulting payload is packaged, signed, and delivered is outside orbital's scope. Orbital's responsibility ends at producing a correct, complete, scoped export. In deployments using [`configbundle`](https://github.com/armada/configbundle), it wraps the export as a signed OCI artifact and handles delivery. A different deployment model can consume the raw export directly.
 
@@ -115,7 +143,9 @@ Orbital may integrate with external systems such as PLM (product lifecycle manag
 Orbital proxies DGraph's auto-generated GraphQL API as-is. No custom GraphQL layer for now. External consumers (digital twin UI) query orbital's GraphQL endpoint, which forwards to DGraph. Orbital adds auth, rate limiting, and caching in the middleware layer — but does not transform the GraphQL schema.
 
 ### DGraph topology
-One shared DGraph instance for all modular data centers in orbital. `DataCenter` is the root partitioning node in the graph. A future evolution may run one DGraph instance per data center (e.g. using DGraph namespaces or separate clusters), but the current schema and graph package should not assume multi-instance.
+Orbital runs two DGraph instances: **blue** (live, serves the Topology API and all client queries) and **green** (idle-warm, used exclusively for export validation). The Topology API always queries blue. Green is never exposed to external clients.
+
+One shared blue DGraph instance serves all modular data centers. `DataCenter` is the root partitioning node. The cross-datacenter query requirement (Atlas UI needs fleet-wide traversal) makes per-datacenter DGraph instances impractical — federation across N instances would be required for fleet-wide queries. Do not assume or design for multi-instance blue topology.
 
 ### Caching (Valkey)
 Orbital must operate correctly without Valkey — cache is an optimization, not a dependency. Use cache-aside: check Valkey first, fall back to DGraph on miss, populate cache on response. Heavy read load is expected from digital twin frontends rendering data center topology. Cache DGraph GraphQL query responses. Invalidate on config changes.
@@ -184,6 +214,20 @@ These have been explicitly decided. Do not re-suggest them.
 - **Do not use `schollz/progressbar` alone for spinners** — indeterminate mode causes terminal jitter; use `briandowns/spinner` for spinners and `schollz/progressbar` for determinate progress bars
 - **Do not prescribe a data transport mechanism** — orbital's contract ends at the export API (`json.gz` + `schema.gz`). How that payload is transported, packaged, or stored (e.g. OCI registry) is the consumer's concern. Suggesting a transport mechanism in orbital would break the project boundary and couple it to a specific deployment model.
 - **Report intake API is transport-agnostic** — orbital exposes an intake API and receives structured reports. How reports travel from the edge to that API (shared external location, polling agent, direct call) is the deployment layer's concern. Do not couple the intake API to any specific transport or storage mechanism.
+- **Temporal for workflow orchestration** — multi-step, durable workflows (export, backup, schema migration) are managed by Temporal. Temporal uses a dedicated `temporal` schema within orbital's existing PostgreSQL database (`orbital`) — no separate database. Do not implement these workflows as ad-hoc Go goroutines or cron jobs.
+- **Namespace and DataCenter are 1:1** — one namespace per data center, enforced by orbital's application layer. `Namespace` is a pure boundary node (no config fields). Do not add config fields to `Namespace` or allow multiple data centers per namespace.
+- **DGraph export mutation has no subgraph filtering** — the export mutation dumps the full graph. Scoped exports use the blue-green mechanism (load DC subgraph into green, export green). Do not attempt to filter DGraph's export output directly.
+
+## Example Data / Seeding
+
+Example GraphQL mutation files live in `examples/`. Each file seeds one data center (namespace + DC + racks + servers) into DGraph via the GraphQL playground at `http://localhost:8080`.
+
+**Seeding rules — learned from practice:**
+- `addNamespace` takes a single object (not array): `addNamespace(input: { name: "..." }, upsert: true)`
+- Cross-type references must use `orbId`, not `name`, since `orbId` is the `@id` field. Example: `dataCenter: { orbId: "ns:dc-name" }`, `rack: { orbId: "ns:rack-name" }`. Using `{ name: "..." }` fails with "field orbId cannot be empty" because DGraph treats it as a new object with no orbId.
+- `orbId` format convention: `"<namespace>:<entity-name>"` — e.g. `"alaska-dot:alaska-dot-galleon"`, `"alaska-dot:Rack-5"`, `"alaska-dot:GRTLY24"`
+- All ConfigItem nodes require `orbId`, `name`, `namespace`, and `createdBy`/`createdAt`
+- Run `addNamespace` → `addDataCenter` → `addRack` → `addServer` in that order within a single mutation batch
 
 ## Go Conventions
 

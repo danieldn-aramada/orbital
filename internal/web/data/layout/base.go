@@ -20,6 +20,7 @@ type Head struct {
 	LinksJsText   []string
 	LinksJsModule []string
 	LinksCss      []string
+	Version       string
 }
 
 type NavBar struct {

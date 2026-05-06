@@ -8,6 +8,11 @@
   },
   "scripts": {
     "build-css": "sass --load-path=node_modules web/sass/main.scss web/static/css/main.css",
-    "build-css-dev": "sass --watch --load-path=node_modules web/sass/main.scss:web/static/css/main.css"
+    "build-css-dev": "sass --watch --load-path=node_modules web/sass/main.scss:web/static/css/main.css",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
   }
 }

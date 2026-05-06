@@ -5,27 +5,57 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
+	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/labstack/echo/v4"
 )
 
 const getDataCenterQuery = `
   query GetDataCenter($id: ID!) {
-    getDataCenter(id: $id) { id name createdBy createdAt }
+    getDataCenter(id: $id) {
+      id
+      name
+      orbId
+      createdBy
+      createdAt
+      updatedBy
+      updatedAt
+      namespace { name }
+      racks(order: { asc: name }) {
+        id
+        orbId
+        name
+      }
+      servers(order: { asc: rackPosition }) {
+        id
+        orbId
+        name
+        serviceTag
+        model
+        oobIP
+        oobMAC
+        rackPosition
+        rack { name }
+      }
+    }
   }`
 
 type DataCenter struct {
 	dev       bool
 	dgraphURL string
 	fragment  *template.Template
+	logger    *slog.Logger
 }
 
-func NewDataCenter(dgraphURL string, dev bool) *DataCenter {
+func NewDataCenter(dgraphURL string, dev bool, logger *slog.Logger) *DataCenter {
 	return &DataCenter{
 		dgraphURL: dgraphURL,
 		dev:       dev,
 		fragment:  parseDataCenterFragment(),
+		logger:    logger,
 	}
 }
 
@@ -35,16 +65,77 @@ func parseDataCenterFragment() *template.Template {
 	))
 }
 
+// dcQueryResponse is the raw JSON shape returned by DGraph.
+type dcQueryResponse struct {
+	ID        string `json:"id"`
+	OrbID     string `json:"orbId"`
+	Name      string `json:"name"`
+	CreatedBy string `json:"createdBy"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedBy string `json:"updatedBy"`
+	UpdatedAt string `json:"updatedAt"`
+	Namespace struct {
+		Name string `json:"name"`
+	} `json:"namespace"`
+	Racks []struct {
+		ID    string `json:"id"`
+		OrbID string `json:"orbId"`
+		Name  string `json:"name"`
+	} `json:"racks"`
+	Servers []struct {
+		ID           string `json:"id"`
+		OrbID        string `json:"orbId"`
+		Name         string `json:"name"`
+		ServiceTag   string `json:"serviceTag"`
+		Model        string `json:"model"`
+		OobIP        string `json:"oobIP"`
+		OobMAC       string `json:"oobMAC"`
+		RackPosition int    `json:"rackPosition"`
+		Rack         struct {
+			Name string `json:"name"`
+		} `json:"rack"`
+	} `json:"servers"`
+}
+
+type serverTabData struct {
+	ID           string
+	OrbID        string
+	Name         string
+	ServiceTag   string
+	Model        string
+	OobIP        string
+	OobMAC       string
+	RackPosition int
+	Rack         struct{ Name string }
+}
+
+type rackTabData struct {
+	ID          string
+	OrbID       string
+	Name        string
+	ServerCount int
+}
+
 type dataCenterTabData struct {
 	ID        string
+	OrbID     string
 	Name      string
 	CreatedBy string
 	CreatedAt string
+	UpdatedBy string
+	UpdatedAt string
+	Namespace struct{ Name string }
+	Racks     []rackTabData
+	Servers   []serverTabData
 }
 
 func (h *DataCenter) Tab(c echo.Context) error {
 	if c.Request().Header.Get("HX-Request") != "true" {
 		return c.Redirect(http.StatusFound, "/")
+	}
+
+	if h.dev {
+		time.Sleep(150 * time.Millisecond)
 	}
 
 	id := c.Param("id")
@@ -60,13 +151,59 @@ func (h *DataCenter) Tab(c echo.Context) error {
 	}
 	defer resp.Body.Close()
 
+	rawBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read response: %w", err)
+	}
+	h.logger.Debug("dgraph response", "body", string(rawBody))
+
 	var result struct {
 		Data struct {
-			GetDataCenter dataCenterTabData `json:"getDataCenter"`
+			GetDataCenter dcQueryResponse `json:"getDataCenter"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(rawBody, &result); err != nil {
 		return fmt.Errorf("decode response: %w", err)
+	}
+
+	raw := result.Data.GetDataCenter
+	h.logger.Debug("dgraph decoded", "servers", len(raw.Servers), "racks", len(raw.Racks))
+
+	serversByRack := make(map[string]int)
+	for _, s := range raw.Servers {
+		serversByRack[s.Rack.Name]++
+	}
+
+	dc := dataCenterTabData{
+		ID:        raw.ID,
+		OrbID:     raw.OrbID,
+		Name:      raw.Name,
+		CreatedBy: raw.CreatedBy,
+		CreatedAt: raw.CreatedAt,
+		UpdatedBy: raw.UpdatedBy,
+		UpdatedAt: raw.UpdatedAt,
+		Namespace: struct{ Name string }{Name: raw.Namespace.Name},
+	}
+	for _, r := range raw.Racks {
+		dc.Racks = append(dc.Racks, rackTabData{
+			ID:          r.ID,
+			OrbID:       r.OrbID,
+			Name:        r.Name,
+			ServerCount: serversByRack[r.Name],
+		})
+	}
+	for _, s := range raw.Servers {
+		dc.Servers = append(dc.Servers, serverTabData{
+			ID:           s.ID,
+			OrbID:        s.OrbID,
+			Name:         s.Name,
+			ServiceTag:   s.ServiceTag,
+			Model:        s.Model,
+			OobIP:        s.OobIP,
+			OobMAC:       s.OobMAC,
+			RackPosition: s.RackPosition,
+			Rack:         struct{ Name string }{Name: s.Rack.Name},
+		})
 	}
 
 	tmpl := h.fragment
@@ -75,5 +212,5 @@ func (h *DataCenter) Tab(c echo.Context) error {
 	}
 
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return tmpl.Execute(c.Response().Writer, result.Data.GetDataCenter)
+	return tmpl.Execute(c.Response().Writer, dc)
 }

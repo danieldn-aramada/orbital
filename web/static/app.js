@@ -458,7 +458,113 @@ function openServerTab(tabId) {
   }
 }
 
+// ─── Todo toast (works for dynamically loaded content) ───────────────────────
+
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.todo')) {
+    displayTodoToast()
+  }
+})
+
 // ─── Data Centers ────────────────────────────────────────────────────────────
+
+function showDatacenterSkeleton(id) {
+  const target = document.getElementById(`tab-content-${id}`)
+  if (!target) return
+
+  const skeletonRows = Array.from({ length: 10 }, () => `
+    <tr>
+      <td><span class="is-skeleton">XXXXXXXXX</span></td>
+      <td><span class="is-skeleton">PowerEdge R750</span></td>
+      <td><span class="is-skeleton">A.OF.C.09</span></td>
+      <td><span class="is-skeleton">00</span></td>
+      <td><span class="is-skeleton">10.20.21.00</span></td>
+      <td><span class="is-skeleton">c8:4b:d6:9c:87:74</span></td>
+    </tr>`).join('')
+
+  target.innerHTML = `
+    <div class="fixed-grid has-3-cols mb-0">
+      <div class="columns m-0">
+        <div class="column pt-0 pl-0">
+          <button class="button is-rounded is-small is-warning mt-1" disabled>
+            <span class="icon"><i class="fa-solid fa-gauge-high"></i></span>
+            <span>Grafana</span>
+          </button>
+          <button class="button is-rounded is-small is-link mt-1 is-loading" disabled>
+            <span class="icon"><i class="fa-solid fa-refresh"></i></span>
+            <span>Reload</span>
+          </button>
+          <button class="button is-rounded is-small is-link mt-1" disabled>
+            <span class="icon"><i class="fa-solid fa-pen-to-square"></i></span>
+            <span>Edit</span>
+          </button>
+          <button class="button is-rounded is-small is-danger mt-1" disabled>
+            <span class="icon"><i class="fa-solid fa-trash"></i></span>
+            <span>Delete</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="grid mt-2">
+        <div class="cell is-col-span-2">
+          <article class="box">
+            <p class="is-size-4 pb-4">Data Center Summary</p>
+            <table class="table is-fullwidth">
+              <tbody>
+                <tr><td style="width:40%">Name</td><td><span class="is-skeleton">colo-galleon</span></td></tr>
+                <tr><td>Servers</td><td><span class="is-skeleton">00</span></td></tr>
+                <tr><td>Created By</td><td><span class="is-skeleton">admin@example.com</span></td></tr>
+                <tr><td>Created At</td><td><span class="is-skeleton">2024-01-01 00:00:00</span></td></tr>
+              </tbody>
+            </table>
+          </article>
+        </div>
+        <div class="cell">
+          <article class="box" style="height:100%">
+            <p class="is-size-4 mb-4">Metadata</p>
+            <table class="table mb-0">
+              <tbody>
+                <tr><td style="width:40%">Namespace</td><td><span class="is-skeleton">colo</span></td></tr>
+                <tr><td>Orb ID</td><td><span class="is-skeleton">colo:colo-galleon</span></td></tr>
+              </tbody>
+            </table>
+          </article>
+        </div>
+        <div class="cell is-col-span-3">
+          <article class="box pb-2">
+            <p class="is-size-4 pb-4">Details</p>
+            <table class="table is-striped is-fullwidth is-size-7 mt-2">
+              <thead>
+                <tr>
+                  <th>Service Tag</th><th>Model</th><th>Rack</th>
+                  <th>Rack Position</th><th>OOB IP</th><th>OOB MAC</th>
+                </tr>
+              </thead>
+              <tbody>${skeletonRows}</tbody>
+            </table>
+          </article>
+        </div>
+      </div>
+    </div>
+  </div>`
+}
+
+function initDcDetailTabs(id) {
+  const tabContainer = document.getElementById(`dc-detail-tabs-${id}`)
+  if (!tabContainer) return
+
+  const tabs = tabContainer.querySelectorAll('li[data-panel]')
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const panelId = tab.dataset.panel
+      tabs.forEach(t => t.classList.remove('is-active'))
+      tab.classList.add('is-active')
+      tabContainer.parentElement.querySelectorAll('[id^="dc-panel-"]').forEach(panel => {
+        panel.style.display = panel.id === panelId ? '' : 'none'
+      })
+    })
+  })
+}
 
 function loadDataCenterTab(displayName, id) {
   const tabHtml = `<li class="tab">
@@ -485,6 +591,20 @@ function loadDataCenterTab(displayName, id) {
     activateTab(tabLink.parentElement)
     displayTabContent(`tab-content-${id}`)
     setCurrentTab(`tab-${id}`)
+  })
+  const tabContent = document.getElementById(`tab-content-${id}`)
+
+  tabLink.addEventListener('htmx:before-request', (e) => {
+    if (tabContent.dataset.loaded) {
+      e.preventDefault()
+      return
+    }
+    showDatacenterSkeleton(id)
+  })
+
+  tabContent.addEventListener('htmx:after-swap', () => {
+    tabContent.dataset.loaded = 'true'
+    initDcDetailTabs(id)
   })
 
   const tabClose = document.getElementById(`tab-close-${id}`)

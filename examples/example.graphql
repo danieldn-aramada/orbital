@@ -1,0 +1,119 @@
+
+query GetDataCenters {
+  queryDataCenter {
+    id
+    name
+    servers {
+      id
+      name
+      orbId
+    }
+    namespace {
+      id
+      name
+    }
+    orbId
+  }
+}
+
+# Upsert data center
+mutation UpsertDataCenter {
+  addDataCenter(
+    input: {
+      namespace: {name: "colo"}
+      orbId: "colo-galleon"
+      name: "colo-galleon"
+    }
+    upsert: true
+  ) {
+    numUids
+  }
+}
+
+mutation UpsertDataCenterWithServers {
+  addDataCenter(
+    input: {
+      orbId: "colo-galleon"
+      name: "colo-galleon"
+      namespace: {name: "colo"}
+      servers: {
+        name: "server-1"
+        orbId: "colo:server-1"
+        namespace: {name: "colo"}
+      }
+    }
+    upsert: true
+  ) {
+    numUids
+  }
+}
+
+mutation UpsertAll {
+  addNamespace(input: {name: "colo"}, upsert: true) {
+    numUids
+  }
+  addDataCenter(
+    input: {
+      orbId: "colo:colo-galleon"
+      name: "colo-galleon"
+      namespace: {name: "colo"}
+    }
+    upsert: true
+  ) {
+    numUids
+  }
+    addRack(
+    input: {
+      orbId: "colo:A.OF.C.09"
+      name: "A.OF.C.09"
+      namespace: {name: "colo"}
+      dataCenter: {orbId: "colo:colo-galleon"}
+    }
+    upsert: true
+  ) {
+    numUids
+  }
+    addServer(
+    input: {
+      orbId: "colo:server-1"
+      name: "server-1"
+      oobIP: "10.20.21.41"
+      oobMAC: "c8:4b:d6:9c:87:74"
+      model: "PowerEdge R750"
+      rackPosition: 2
+      serviceTag: "CWJHDX3"
+      namespace: {name: "colo"}
+      dataCenter: {orbId: "colo:colo-galleon"}
+      rack: {orbId: "colo:A.OF.C.09"}
+    }
+    upsert: true
+  ) {
+    numUids
+  }
+}
+
+
+query GetAll {
+  queryNamespace {
+    name
+    id
+  }
+  queryDataCenter {
+    id
+    name
+    servers {
+      id
+      name
+      orbId
+      rack {
+        name
+        orbId
+      }
+    }
+    namespace {
+      id
+      name
+    }
+    orbId
+  }
+}

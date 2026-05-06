@@ -32,6 +32,22 @@ var (
 		Columns:    BackupsColumns,
 		PrimaryKey: []*schema.Column{BackupsColumns[0]},
 	}
+	// NamespacesColumns holds the columns for the "namespaces" table.
+	NamespacesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_at", Type: field.TypeTime, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "name", Type: field.TypeString, Unique: true},
+		{Name: "dgraph_id", Type: field.TypeString, Nullable: true},
+	}
+	// NamespacesTable holds the schema information for the "namespaces" table.
+	NamespacesTable = &schema.Table{
+		Name:       "namespaces",
+		Columns:    NamespacesColumns,
+		PrimaryKey: []*schema.Column{NamespacesColumns[0]},
+	}
 	// OrbsColumns holds the columns for the "orbs" table.
 	OrbsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -68,6 +84,7 @@ var (
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		BackupsTable,
+		NamespacesTable,
 		OrbsTable,
 		UsersTable,
 	}

@@ -11,3 +11,4 @@ AI was used as a collaborative engineering partner, not a code generator. All ar
 | 2026-04  | claude-sonnet-4-6    | Architecture, scaffold, roadmap            |
 | 2026-04  | claude-sonnet-4-6    | Orb CLI scaffold and output UX             |
 | 2026-05  | claude-sonnet-4-6    | SDD v0.3 review, project boundary, configbundle integration, roadmap and MVP definition, reporting auth architecture (transport-agnostic intake API, orb identity + Ed25519 signing, orbs PostgreSQL registry), deployment-generic terminology cleanup |
+| 2026-05  | claude-sonnet-4-6    | UI: datacenter tab (htmx, htmx:after-swap inner tab wiring, load-once tab caching with dataset.loaded, skeleton, Grafana todo button, overflow fix, cache busting); Playwright E2E tests; example graphql seeds parsed from xlsx (seattle-galleon, houston-galleon, alaska-dot-galleon) |

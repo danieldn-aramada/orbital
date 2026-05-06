@@ -1,0 +1,503 @@
+mutation UpsertAll {
+  addNamespace(input: {name: "houston"}, upsert: true) {
+    numUids
+  }
+  addDataCenter(
+    input: {
+      orbId: "houston:houston-galleon"
+      name: "houston-galleon"
+      namespace: {name: "houston"}
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+    }
+    upsert: true
+  ) {
+    numUids
+  }
+  addRack(
+    input: [
+      {
+        orbId: "houston:Rack-3"
+        name: "Rack-3"
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+      },
+      {
+        orbId: "houston:Rack-5"
+        name: "Rack-5"
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+      },
+      {
+        orbId: "houston:Rack-6"
+        name: "Rack-6"
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+      }
+    ]
+    upsert: true
+  ) {
+    numUids
+  }
+  addServer(
+    input: [
+      {
+        orbId: "houston:F9J1X54"
+        name: "F9J1X54"
+        serviceTag: "F9J1X54"
+        model: "Dell AS760"
+        oobIP: "10.10.22.70"
+        oobMAC: "d0:c1:b5:05:a9:45"
+        rackPosition: 9
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-3"}
+      }
+      {
+        orbId: "houston:D9J1X54"
+        name: "D9J1X54"
+        serviceTag: "D9J1X54"
+        model: "Dell AS760"
+        oobIP: "10.10.22.69"
+        oobMAC: "d0:c1:b5:05:aa:59"
+        rackPosition: 11
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-3"}
+      }
+      {
+        orbId: "houston:H9J1X54"
+        name: "H9J1X54"
+        serviceTag: "H9J1X54"
+        model: "Dell AS760"
+        oobIP: "10.10.22.68"
+        oobMAC: "d0:c1:b5:03:d4:54"
+        rackPosition: 13
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-3"}
+      }
+      {
+        orbId: "houston:G9J1X54"
+        name: "G9J1X54"
+        serviceTag: "G9J1X54"
+        model: "Dell AS760"
+        oobIP: "10.10.22.67"
+        oobMAC: "d0:c1:b5:03:c5:1e"
+        rackPosition: 15
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-3"}
+      }
+      {
+        orbId: "houston:C9J1X54"
+        name: "C9J1X54"
+        serviceTag: "C9J1X54"
+        model: "Dell AS760"
+        oobIP: "10.10.22.66"
+        oobMAC: "d0:c1:b5:03:d2:6e"
+        rackPosition: 17
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-3"}
+      }
+      {
+        orbId: "houston:8N4VW54"
+        name: "8N4VW54"
+        serviceTag: "8N4VW54"
+        model: "Dell AS760"
+        oobIP: "10.10.22.6"
+        oobMAC: "d0:c1:b5:03:cb:24"
+        rackPosition: 20
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-3"}
+      }
+      {
+        orbId: "houston:9N4VW54"
+        name: "9N4VW54"
+        serviceTag: "9N4VW54"
+        model: "Dell AS760"
+        oobIP: "10.10.22.5"
+        oobMAC: "d0:c1:b5:03:80:d2"
+        rackPosition: 22
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-3"}
+      }
+      {
+        orbId: "houston:CN4VW54"
+        name: "CN4VW54"
+        serviceTag: "CN4VW54"
+        model: "Dell AS760"
+        oobIP: "10.10.22.4"
+        oobMAC: "d0:c1:b5:05:a9:93"
+        rackPosition: 24
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-3"}
+      }
+      {
+        orbId: "houston:BN4VW54"
+        name: "BN4VW54"
+        serviceTag: "BN4VW54"
+        model: "Dell AS760"
+        oobIP: "10.10.22.3"
+        oobMAC: "d0:c1:b5:03:8a:14"
+        rackPosition: 26
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-3"}
+      }
+      {
+        orbId: "houston:J9J1X54"
+        name: "J9J1X54"
+        serviceTag: "J9J1X54"
+        model: "Dell AS760"
+        oobIP: "10.10.22.2"
+        oobMAC: "d0:c1:b5:03:d0:70"
+        rackPosition: 28
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-3"}
+      }
+      {
+        orbId: "houston:7PJ1FZ3"
+        name: "7PJ1FZ3"
+        serviceTag: "7PJ1FZ3"
+        model: "Dell R750"
+        oobIP: "10.10.7.70"
+        oobMAC: "c8:4b:d6:a7:07:65"
+        rackPosition: 9
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-5"}
+      }
+      {
+        orbId: "houston:4PJ1FZ3"
+        name: "4PJ1FZ3"
+        serviceTag: "4PJ1FZ3"
+        model: "Dell R750"
+        oobIP: "10.10.7.71"
+        oobMAC: "c8:4b:d6:a7:07:35"
+        rackPosition: 11
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-5"}
+      }
+      {
+        orbId: "houston:3B52FZ3"
+        name: "3B52FZ3"
+        serviceTag: "3B52FZ3"
+        model: "Dell R650"
+        oobIP: "10.10.7.69"
+        oobMAC: "c8:4b:d6:a6:ef:39"
+        rackPosition: 14
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-5"}
+      }
+      {
+        orbId: "houston:CB52FZ3"
+        name: "CB52FZ3"
+        serviceTag: "CB52FZ3"
+        model: "Dell R650"
+        oobIP: "10.10.7.61"
+        oobMAC: "c8:4b:d6:a6:ee:3d"
+        rackPosition: 15
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-5"}
+      }
+      {
+        orbId: "houston:7B52FZ3"
+        name: "7B52FZ3"
+        serviceTag: "7B52FZ3"
+        model: "Dell R650"
+        oobIP: "10.10.7.62"
+        oobMAC: "c8:4b:d6:a6:ef:bd"
+        rackPosition: 16
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-5"}
+      }
+      {
+        orbId: "houston:FB52FZ3"
+        name: "FB52FZ3"
+        serviceTag: "FB52FZ3"
+        model: "Dell R650"
+        oobIP: "10.10.7.63"
+        oobMAC: "c8:4b:d6:a6:ef:e1"
+        rackPosition: 17
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-5"}
+      }
+      {
+        orbId: "houston:1552FZ3"
+        name: "1552FZ3"
+        serviceTag: "1552FZ3"
+        model: "Dell R450"
+        oobIP: "10.10.7.50"
+        oobMAC: "b4:45:06:fb:90:20"
+        rackPosition: 21
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-5"}
+      }
+      {
+        orbId: "houston:6B22FZ3"
+        name: "6B22FZ3"
+        serviceTag: "6B22FZ3"
+        model: "Dell R450"
+        oobIP: "10.10.7.51"
+        oobMAC: "b4:45:06:fb:8b:80"
+        rackPosition: 22
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-5"}
+      }
+      {
+        orbId: "houston:3B22FZ3"
+        name: "3B22FZ3"
+        serviceTag: "3B22FZ3"
+        model: "Dell R450"
+        oobIP: "10.10.7.52"
+        oobMAC: "b4:45:06:fb:8b:48"
+        rackPosition: 23
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-5"}
+      }
+      {
+        orbId: "houston:7B22FZ3"
+        name: "7B22FZ3"
+        serviceTag: "7B22FZ3"
+        model: "Dell R450"
+        oobIP: "10.10.7.53"
+        oobMAC: "b4:45:06:fb:86:98"
+        rackPosition: 24
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-5"}
+      }
+      {
+        orbId: "houston:5B22FZ3"
+        name: "5B22FZ3"
+        serviceTag: "5B22FZ3"
+        model: "Dell R450"
+        oobIP: "10.10.7.54"
+        oobMAC: "b4:45:06:fb:74:d8"
+        rackPosition: 25
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-5"}
+      }
+      {
+        orbId: "houston:6PJ1FZ3"
+        name: "6PJ1FZ3"
+        serviceTag: "6PJ1FZ3"
+        model: "Dell R750"
+        oobIP: "10.10.7.72"
+        oobMAC: "c8:4b:d6:a7:07:e3"
+        rackPosition: 12
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-6"}
+      }
+      {
+        orbId: "houston:9B52FZ3"
+        name: "9B52FZ3"
+        serviceTag: "9B52FZ3"
+        model: "Dell R650"
+        oobIP: "10.10.7.64"
+        oobMAC: "c8:4b:d6:a6:1b:09"
+        rackPosition: 14
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-6"}
+      }
+      {
+        orbId: "houston:BB52FZ3"
+        name: "BB52FZ3"
+        serviceTag: "BB52FZ3"
+        model: "Dell R650"
+        oobIP: "10.10.7.65"
+        oobMAC: "c8:4b:d6:a6:ef:f9"
+        rackPosition: 15
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-6"}
+      }
+      {
+        orbId: "houston:DB52FZ3"
+        name: "DB52FZ3"
+        serviceTag: "DB52FZ3"
+        model: "Dell R650"
+        oobIP: "10.10.7.66"
+        oobMAC: "c8:4b:d6:a6:ef:ff"
+        rackPosition: 16
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-6"}
+      }
+      {
+        orbId: "houston:6B52FZ3"
+        name: "6B52FZ3"
+        serviceTag: "6B52FZ3"
+        model: "Dell R650"
+        oobIP: "10.10.7.67"
+        oobMAC: "c8:4b:d6:a6:ef:09"
+        rackPosition: 17
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-6"}
+      }
+      {
+        orbId: "houston:8B52FZ3"
+        name: "8B52FZ3"
+        serviceTag: "8B52FZ3"
+        model: "Dell R650"
+        oobIP: "10.10.7.68"
+        oobMAC: "c8:4b:d6:a6:ee:5b"
+        rackPosition: 18
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-6"}
+      }
+      {
+        orbId: "houston:J922FZ3"
+        name: "J922FZ3"
+        serviceTag: "J922FZ3"
+        model: "Dell R450"
+        oobIP: "10.10.7.98"
+        oobMAC: "b4:45:06:fb:70:58"
+        rackPosition: 22
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-6"}
+      }
+      {
+        orbId: "houston:J452FZ3"
+        name: "J452FZ3"
+        serviceTag: "J452FZ3"
+        model: "Dell R450"
+        oobIP: "10.10.7.55"
+        oobMAC: "b4:45:06:fb:7a:d0"
+        rackPosition: 23
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-6"}
+      }
+      {
+        orbId: "houston:1B22FZ3"
+        name: "1B22FZ3"
+        serviceTag: "1B22FZ3"
+        model: "Dell R450"
+        oobIP: "10.10.7.56"
+        oobMAC: "b4:45:06:fb:8d:58"
+        rackPosition: 24
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-6"}
+      }
+      {
+        orbId: "houston:2B22FZ3"
+        name: "2B22FZ3"
+        serviceTag: "2B22FZ3"
+        model: "Dell R450"
+        oobIP: "10.10.7.57"
+        oobMAC: "b4:45:06:fb:8e:00"
+        rackPosition: 25
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-6"}
+      }
+      {
+        orbId: "houston:4B22FZ3"
+        name: "4B22FZ3"
+        serviceTag: "4B22FZ3"
+        model: "Dell R450"
+        oobIP: "10.10.7.58"
+        oobMAC: "b4:45:06:fb:6a:d8"
+        rackPosition: 26
+        namespace: {name: "houston"}
+        dataCenter: {orbId: "houston:houston-galleon"}
+        createdBy: "admin@armada.ai"
+        createdAt: "2026-05-06T00:00:00Z"
+        rack: {orbId: "houston:Rack-6"}
+      }
+    ]
+    upsert: true
+  ) {
+    numUids
+  }
+}

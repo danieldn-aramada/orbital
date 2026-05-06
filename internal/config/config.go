@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log/slog"
 	"os"
 	"time"
 )
@@ -12,6 +13,7 @@ type Config struct {
 	DGraphAdminURL  string
 	RatelURL        string
 	Dev             bool
+	LogLevel        slog.Level
 }
 
 func New() *Config {
@@ -27,6 +29,11 @@ func New() *Config {
 	if ratelURL == "" {
 		ratelURL = "http://localhost:8000"
 	}
+	logLevel := slog.LevelInfo
+	if os.Getenv("ORBITAL_LOG_LEVEL") == "debug" {
+		logLevel = slog.LevelDebug
+	}
+
 	return &Config{
 		Port:            "8001",
 		ShutdownTimeout: 10 * time.Second,
@@ -34,5 +41,6 @@ func New() *Config {
 		DGraphAdminURL:  dgraphAdminURL,
 		RatelURL:        ratelURL,
 		Dev:             os.Getenv("ORBITAL_DEV") == "true",
+		LogLevel:        logLevel,
 	}
 }

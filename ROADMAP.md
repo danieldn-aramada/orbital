@@ -15,19 +15,19 @@ gantt
     Architecture Design                             :done, 2026-04-14, 2026-05-08
 
     Section Current
-    Prototyping                   :active, 2026-04-14, 2026-05-20
+    Prototyping                   :active, 2026-04-14, 2026-05-27
     
     Section Upcoming
-    MVP                           :2026-05-20, 2026-06-20
-    General Availability          :2026-06-20, 2026-07-20
+    MVP                           :2026-05-27, 2026-06-27
+    General Availability          :2026-06-27, 2026-07-27
 ```
 
 **Note:** All future dates are subject to change.
 
 
-## Current Phase: Architecture Design + Prototyping
+## Current Phase: Prototyping
 
-Architecture Design closes out this week (2026-05-08) — final design review meetings in progress. Prototyping is running in parallel; spike scope may still evolve as design concludes.
+Architecture Design is complete (closed 2026-05-06). Prototyping continues through 2026-05-27; spike scope is now stable.
 
 Goal of prototyping is learning, not shipping. Each spike below is a question to answer, not a feature to build. Results from these spikes define the MVP.
 

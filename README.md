@@ -28,7 +28,15 @@ http://localhost:8001/swagger/index.html
 
 http://localhost:8001/graphql
 
-Load example data (TODO)
+Load example data (optional — paste into GraphQL playground at `http://localhost:8080`):
+
+```
+examples/colo-galleon.graphql    # colo namespace, 50 servers
+examples/seattle-galleon.graphql # seattle namespace, 24 servers
+examples/houston-galleon.graphql # houston namespace, 32 servers
+examples/alaska-dot-galleon.graphql     # alaska-dot namespace, 13 servers
+examples/alaska-unit-2-galleon.graphql  # alaska-unit-2 namespace, 15 servers
+```
 
 Cleanup
 ```bash
@@ -61,6 +69,14 @@ However, for the edge and modular data centers, all fall short in these areas:
 - **Limited flexibility** — existing solutions bundle monitoring,
   observability, and dashboards we already have. There is no path to adopt just
   the configuration management layer without the rest of the product.
+- **CMDB as a bottleneck, not an enabler** — traditional CMDBs sit in the
+  reconciliation path, creating a tight coupling between the source of truth
+  and how configuration reaches infrastructure. This breaks down in air-gapped
+  and multi-deployment-model environments. A GraphQL mutation against a CMDB
+  should update authoritative intent — it should never execute an action
+  remotely or be part of the reconciliation path. Nothing in the cloud should
+  execute directly against a modular data center. The CMDB provides the API
+  surface; transport and reconciliation are the adopter's concern.
 
 ## Goals 
 
@@ -69,16 +85,23 @@ However, for the edge and modular data centers, all fall short in these areas:
 - **Graph-first infrastructure model** — represent data centers as relationships
   between physical and logical resources  
 - **Multi-source infrastructure discovery** — ingest infrastructure from bare
-  metal systems (BMC) and external inventory systems via API
-  integrations
+  metal systems (BMC) and external inventory systems via API integrations
 - **Topology API (digital twin)** — expose a live, traversable graph of
   infrastructure design intent via GraphQL. Consumers define their own query
   shape — no custom endpoints required for each digital twin use case
+- **API-first transport enablement** — orbital provides the primitives (export
+  API, report intake API, Topology API) that teams wire into their own delivery
+  and reconciliation layer. Configuration actuation at the edge follows a
+  controller pattern: ConfigBundles are pulled and reconciled locally, never
+  pushed from the cloud. Divergence during disconnection windows is data, not
+  an error condition. Orbital does not prescribe transport or reconciliation —
+  those decisions belong to the adopting team's deployment model
 
 Non-Goals
 - Full DCIM system with dashboards, alerting, and observability built in
-- Out of the box infrastructure automation with workflow orchestration and
-  reconciliation
+- Prescribing a data transport or reconciliation mechanism — orbital provides
+  the API surface; how config is packaged, delivered, and applied is the
+  deployment layer's concern
 
 ## Concepts
 

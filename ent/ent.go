@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/armada/orbital/ent/backup"
+	"github.com/armada/orbital/ent/namespace"
 	"github.com/armada/orbital/ent/orb"
 	"github.com/armada/orbital/ent/user"
 )
@@ -75,9 +76,10 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			backup.Table: backup.ValidColumn,
-			orb.Table:    orb.ValidColumn,
-			user.Table:   user.ValidColumn,
+			backup.Table:    backup.ValidColumn,
+			namespace.Table: namespace.ValidColumn,
+			orb.Table:       orb.ValidColumn,
+			user.Table:      user.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

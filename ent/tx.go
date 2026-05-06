@@ -14,6 +14,8 @@ type Tx struct {
 	config
 	// Backup is the client for interacting with the Backup builders.
 	Backup *BackupClient
+	// Namespace is the client for interacting with the Namespace builders.
+	Namespace *NamespaceClient
 	// Orb is the client for interacting with the Orb builders.
 	Orb *OrbClient
 	// User is the client for interacting with the User builders.
@@ -150,6 +152,7 @@ func (tx *Tx) Client() *Client {
 
 func (tx *Tx) init() {
 	tx.Backup = NewBackupClient(tx.config)
+	tx.Namespace = NewNamespaceClient(tx.config)
 	tx.Orb = NewOrbClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 }

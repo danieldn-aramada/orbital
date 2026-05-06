@@ -10,6 +10,33 @@ docker compose -f deploy/local/docker-compose.yml up -d
 
 See the README for service ports and details.
 
+## Running end-to-end tests
+
+E2E tests use [Playwright](https://playwright.dev/) and run against a live local stack. Before running:
+
+1. Start the local stack and the orbital server:
+   ```bash
+   docker compose -f deploy/local/docker-compose.yml up -d
+   go run ./cmd/orbital
+   ```
+
+2. Seed test data into DGraph (via the GraphiQL UI at `http://localhost:8080` or any GraphQL client):
+   ```
+   examples/colo-galleon.graphql
+   ```
+
+3. Run the tests:
+   ```bash
+   npm run test:e2e
+   ```
+
+   Or open the interactive Playwright UI:
+   ```bash
+   npm run test:e2e:ui
+   ```
+
+Tests assume the `colo-galleon` data center is seeded and orbital is running on `http://localhost:8001`.
+
 ## Development workflow
 
 - Branch from `main`, PR back to `main`

@@ -1,22 +1,16 @@
 <div class="fixed-grid has-3-cols mb-0">
 
   <div class="columns m-0">
-    <div class="column pt-0 pl-0 pr-0 is-one-third">
-      <button class="button is-rounded is-small is-warning mt-1">
-        <span class="icon"><i class="fa-solid fa-bolt"></i></span>
-        <span>Button 1</span>
-      </button>
-      <button class="button is-rounded is-small is-warning mt-1">
-        <span class="icon"><i class="fa-solid fa-bolt"></i></span>
-        <span>Button 2</span>
-      </button>
-      <button class="button is-rounded is-small is-warning mt-1">
-        <span class="icon"><i class="fa-solid fa-bolt"></i></span>
-        <span>Button 3</span>
-      </button>
-    </div>
     <div class="column pt-0 pl-0">
-      <button class="button is-rounded is-small is-link mt-1">
+      <button class="button is-rounded is-small is-warning mt-1 todo">
+        <span class="icon"><i class="fa-solid fa-gauge-high"></i></span>
+        <span>Grafana</span>
+      </button>
+      <button class="button is-rounded is-small is-link mt-1"
+        hx-get="/datacenters/{{.ID}}"
+        hx-target="#tab-content-{{.ID}}"
+        hx-swap="innerHTML"
+        hx-on:htmx:before-request="showDatacenterSkeleton('{{.ID}}')">
         <span class="icon"><i class="fa-solid fa-refresh"></i></span>
         <span>Reload</span>
       </button>
@@ -31,50 +25,124 @@
     </div>
   </div>
 
+
   <div class="grid">
     <div class="cell is-col-span-2 is-row-span-1">
       <article class="box">
         <p class="is-size-4 pb-4">Data Center Summary</p>
+        <div style="overflow-x: auto">
         <table class="table is-fullwidth">
           <tbody>
             <tr><td style="width:40%">Name</td><td>{{.Name}}</td></tr>
-            <tr><td>ID</td><td>{{.ID}}</td></tr>
+            <tr><td>Servers</td><td>{{len .Servers}}</td></tr>
+            <tr><td>Racks</td><td>{{len .Racks}}</td></tr>
             <tr><td>Created By</td><td>{{if .CreatedBy}}{{.CreatedBy}}{{else}}—{{end}}</td></tr>
             <tr><td>Created At</td><td>{{if .CreatedAt}}{{.CreatedAt}}{{else}}—{{end}}</td></tr>
           </tbody>
         </table>
+        </div>
       </article>
     </div>
 
     <div class="cell is-row-span-1">
       <article class="box" style="height:100%">
         <p class="is-size-4 mb-4">Metadata</p>
+        <div style="overflow-x: auto">
         <table class="table mb-0">
           <tbody>
-            <tr><td style="width:40%">Namespace</td><td>—</td></tr>
-            <tr><td>Orbs</td><td>—</td></tr>
+            <tr><td style="width:40%">Namespace</td><td>{{if .Namespace.Name}}{{.Namespace.Name}}{{else}}—{{end}}</td></tr>
+            <tr><td>Orb ID</td><td>{{if .OrbID}}{{.OrbID}}{{else}}—{{end}}</td></tr>
+            <tr><td>Last Updated</td><td>{{if .UpdatedAt}}{{.UpdatedAt}}{{else}}—{{end}}</td></tr>
+            <tr><td>Last Updated By</td><td>{{if .UpdatedBy}}{{.UpdatedBy}}{{else}}—{{end}}</td></tr>
           </tbody>
         </table>
+        </div>
       </article>
     </div>
 
     <div class="cell is-col-span-3 is-fullheight">
       <article class="box pb-2">
         <p class="is-size-4 pb-4">Details</p>
-        <div class="tabs is-boxed">
+        <div class="tabs is-boxed" id="dc-detail-tabs-{{.ID}}">
           <ul>
-            <li class="is-active">
+            <li class="is-active" data-panel="dc-panel-servers-{{.ID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-server"></i></span><span>Servers</span></a>
             </li>
-            <li>
-              <a><span class="icon is-small"><i class="fa-solid fa-circle-nodes"></i></span><span>Orbs</span></a>
+            <li data-panel="dc-panel-racks-{{.ID}}">
+              <a><span class="icon is-small"><i class="fa-solid fa-table-cells"></i></span><span>Racks</span></a>
             </li>
-            <li>
+            <li data-panel="dc-panel-divergence-{{.ID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-triangle-exclamation"></i></span><span>Divergence Reports</span></a>
             </li>
           </ul>
         </div>
-        <p class="is-size-7 has-text-grey p-2">No servers discovered yet.</p>
+
+        <div style="min-height: 400px">
+        <div id="dc-panel-servers-{{.ID}}">
+          {{if .Servers}}
+          <div style="overflow-x: auto">
+          <table class="table is-striped is-hoverable is-fullwidth is-size-7 mt-2">
+            <thead>
+              <tr>
+                <th>Service Tag</th>
+                <th>Model</th>
+                <th>Rack</th>
+                <th>Rack Position</th>
+                <th>OOB IP</th>
+                <th>OOB MAC</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .Servers}}
+              <tr>
+                <td>{{.ServiceTag}}</td>
+                <td>{{if .Model}}{{.Model}}{{else}}—{{end}}</td>
+                <td>{{if .Rack.Name}}{{.Rack.Name}}{{else}}—{{end}}</td>
+                <td>{{if .RackPosition}}{{.RackPosition}}{{else}}—{{end}}</td>
+                <td>{{if .OobIP}}{{.OobIP}}{{else}}—{{end}}</td>
+                <td>{{if .OobMAC}}{{.OobMAC}}{{else}}—{{end}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+          </div>
+          {{else}}
+          <p class="is-size-7 has-text-grey p-2">No servers discovered yet.</p>
+          {{end}}
+        </div>
+
+        <div id="dc-panel-racks-{{.ID}}" style="display:none">
+          {{if .Racks}}
+          <div style="overflow-x: auto">
+          <table class="table is-striped is-hoverable is-fullwidth is-size-7 mt-2">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Orb ID</th>
+                <th>Servers</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .Racks}}
+              <tr>
+                <td>{{.Name}}</td>
+                <td>{{if .OrbID}}{{.OrbID}}{{else}}—{{end}}</td>
+                <td>{{.ServerCount}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+          </div>
+          {{else}}
+          <p class="is-size-7 has-text-grey p-2">No racks discovered yet.</p>
+          {{end}}
+        </div>
+
+        <div id="dc-panel-divergence-{{.ID}}" style="display:none">
+          <p class="is-size-7 has-text-grey p-2">No divergence reports.</p>
+        </div>
+        </div>
+
       </article>
     </div>
   </div>
