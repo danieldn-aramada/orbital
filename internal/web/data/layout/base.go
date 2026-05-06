@@ -23,6 +23,7 @@ type Head struct {
 }
 
 type NavBar struct {
+	RatelURL string
 }
 
 type LoginModal struct {

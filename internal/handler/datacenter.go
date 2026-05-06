@@ -10,6 +10,11 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+const getDataCenterQuery = `
+  query GetDataCenter($id: ID!) {
+    getDataCenter(id: $id) { id name createdBy createdAt }
+  }`
+
 type DataCenter struct {
 	dev       bool
 	dgraphURL string
@@ -38,10 +43,16 @@ type dataCenterTabData struct {
 }
 
 func (h *DataCenter) Tab(c echo.Context) error {
+	if c.Request().Header.Get("HX-Request") != "true" {
+		return c.Redirect(http.StatusFound, "/")
+	}
+
 	id := c.Param("id")
 
-	query := fmt.Sprintf(`{ getDataCenter(id: "%s") { id name createdBy createdAt } }`, id)
-	body, _ := json.Marshal(map[string]string{"query": query})
+	body, _ := json.Marshal(map[string]any{
+		"query":     getDataCenterQuery,
+		"variables": map[string]any{"id": id},
+	})
 
 	resp, err := http.Post(h.dgraphURL, "application/json", bytes.NewReader(body))
 	if err != nil {

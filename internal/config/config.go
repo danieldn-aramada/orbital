@@ -9,6 +9,8 @@ type Config struct {
 	Port            string
 	ShutdownTimeout time.Duration
 	DGraphURL       string
+	DGraphAdminURL  string
+	RatelURL        string
 	Dev             bool
 }
 
@@ -17,10 +19,20 @@ func New() *Config {
 	if dgraphURL == "" {
 		dgraphURL = "http://localhost:8080/graphql"
 	}
+	dgraphAdminURL := os.Getenv("DGRAPH_ADMIN_URL")
+	if dgraphAdminURL == "" {
+		dgraphAdminURL = "http://localhost:8080/admin"
+	}
+	ratelURL := os.Getenv("RATEL_URL")
+	if ratelURL == "" {
+		ratelURL = "http://localhost:8000"
+	}
 	return &Config{
 		Port:            "8001",
 		ShutdownTimeout: 10 * time.Second,
 		DGraphURL:       dgraphURL,
+		DGraphAdminURL:  dgraphAdminURL,
+		RatelURL:        ratelURL,
 		Dev:             os.Getenv("ORBITAL_DEV") == "true",
 	}
 }

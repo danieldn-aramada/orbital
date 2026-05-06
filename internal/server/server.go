@@ -45,11 +45,19 @@ func New(cfg *config.Config) *Server {
 		},
 	}))
 
-	ui := handler.NewUI(cfg.Dev)
+	ui := handler.NewUI(cfg.Dev, cfg.RatelURL)
 	e.GET("/", ui.Index)
+	e.GET("/datacenters", ui.Index)
+	e.GET("/backups", ui.Backups)
+	e.GET("/divergence-reports", ui.DivergenceReports)
+	e.GET("/audit-log", ui.AuditLog)
+	e.GET("/schema", ui.Schema)
 
 	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.Dev)
 	e.GET("/datacenters/:id", dc.Tab)
+
+	exp := handler.NewExport(cfg.DGraphAdminURL)
+	e.POST("/api/v1/export", exp.Trigger)
 
 	gql := handler.NewGraphQL(cfg.DGraphURL)
 	e.Any("/graphql", gql.Handle)

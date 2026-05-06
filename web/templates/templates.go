@@ -26,6 +26,10 @@ func page(path string) []string {
 // is unambiguous per route.
 func Map() map[string]*template.Template {
 	return map[string]*template.Template{
-		"home": template.Must(template.ParseFiles(page("web/templates/pages/home.gohtml")...)),
+		"home":               template.Must(template.ParseFiles(page("web/templates/pages/home.gohtml")...)),
+		"backups":            template.Must(template.ParseFiles(page("web/templates/pages/backups.gohtml")...)),
+		"divergence-reports": template.Must(template.ParseFiles(page("web/templates/pages/divergence-reports.gohtml")...)),
+		"audit-log":          template.Must(template.ParseFiles(page("web/templates/pages/audit-log.gohtml")...)),
+		"schema":             template.Must(template.ParseFiles(page("web/templates/pages/schema.gohtml")...)),
 	}
 }

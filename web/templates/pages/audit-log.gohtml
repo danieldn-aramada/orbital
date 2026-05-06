@@ -1,0 +1,33 @@
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div>
+    <div class="app-main p-5">
+
+      <nav class="tabs is-boxed has-text-weight-medium" style="font-size: 14px;">
+        <ul id="tablist" role="tablist">
+          <li class="tab is-active">
+            <a id="tab-summary" data-target="tab-content-audit-log" role="tab" aria-selected="true" tabindex="0">
+              Summary
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="tab-content" role="tabpanel" id="tab-content-audit-log">
+        <table id="audit-log-table" class="table is-striped is-hoverable is-fullwidth">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>User</th>
+              <th>Action</th>
+              <th>Resource</th>
+            </tr>
+          </thead>
+        </table>
+      </div>
+
+    </div>
+  </main>
+{{end}}

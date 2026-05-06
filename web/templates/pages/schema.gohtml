@@ -1,0 +1,47 @@
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div>
+    <div class="app-main p-5">
+
+      <nav class="tabs is-boxed has-text-weight-medium" style="font-size: 14px;">
+        <ul id="tablist" role="tablist">
+          <li class="tab is-active">
+            <a id="tab-summary" data-target="tab-content-schema" role="tab" aria-selected="true" tabindex="0">
+              Schema
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="tab-content" role="tabpanel" id="tab-content-schema">
+        <div class="columns mt-2">
+
+          <div class="column is-narrow">
+            <article class="box" style="min-width: 280px;">
+              <p class="is-size-6 has-text-weight-semibold mb-3">Active Version</p>
+              <table class="table is-fullwidth is-size-7">
+                <tbody>
+                  <tr><td style="width:45%">Version</td><td><span class="tag is-info is-light">{{.Version}}</span></td></tr>
+                  <tr><td>Checksum</td><td><code>{{.Checksum}}</code></td></tr>
+                  <tr><td>Applied At</td><td>{{.AppliedAt}}</td></tr>
+                  <tr><td>Applied By</td><td>{{.AppliedBy}}</td></tr>
+                </tbody>
+              </table>
+            </article>
+          </div>
+
+          <div class="column">
+            <article class="box">
+              <p class="is-size-6 has-text-weight-semibold mb-3">Schema Definition Language (SDL)</p>
+              <pre style="font-size: 0.78rem; max-height: 600px; overflow-y: auto;">{{.SDL}}</pre>
+            </article>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </main>
+{{end}}

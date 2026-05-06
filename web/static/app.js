@@ -500,6 +500,15 @@ function loadDataCenterTab(displayName, id) {
 document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('datacenter-table')) return
 
+  // Wire up static tabs (e.g. Summary) — dynamic tabs get their own listeners in loadDataCenterTab
+  document.querySelectorAll('li.tab a[data-target]').forEach((a) => {
+    a.addEventListener('click', () => {
+      activateTab(a.parentElement)
+      displayTabContent(a.dataset.target)
+      setCurrentTab(a.id)
+    })
+  })
+
   const datacenterTable = new DataTable('#datacenter-table', {
     layout: {
       top2Start: {
@@ -507,11 +516,11 @@ document.addEventListener('DOMContentLoaded', () => {
       },
       topStart: {
         buttons: [
-          { extend: 'excel', text: '<span><i class="fa-regular fa-file-excel"></i></span><span>Excel</span>', className: 'is-link is-outlined is-small', titleAttr: 'Excel' },
-          { extend: 'csv', text: '<span><i class="fa-regular fa-file-text"></i></span><span>CSV</span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV' },
-          { extend: 'copy', text: '<span><i class="fa-regular fa-copy"></i></span><span>Copy</span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
-          { extend: 'colvis', text: '<span><i class="fa fa-columns"></i></span><span>Select</span>', className: 'is-link is-small', titleAttr: 'Select Columns' },
-          { text: '<span><i class="fa-solid fa-rotate-right"></i></span><span>Reload</span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-datacenters' } },
+          { extend: 'excel', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.72rem;"><i class="fa-regular fa-file-excel"></i><span>Excel</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Excel' },
+          { extend: 'csv', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.72rem;"><i class="fa-regular fa-file-text"></i><span>CSV</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV' },
+          { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.72rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
+          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.72rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-small', titleAttr: 'Select Columns' },
+          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.72rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-datacenters' } },
         ],
       },
       topEnd: { search: { placeholder: 'Type search here' } },
@@ -572,6 +581,39 @@ document.addEventListener('DOMContentLoaded', () => {
       saveTab(displayName, id)
       document.getElementById(`tab-${id}`).click()
     }
+  })
+})
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!document.getElementById('backup-table')) return
+
+  document.querySelectorAll('li.tab a[data-target]').forEach((a) => {
+    a.addEventListener('click', () => {
+      activateTab(a.parentElement)
+      displayTabContent(a.dataset.target)
+      setCurrentTab(a.id)
+    })
+  })
+
+  new DataTable('#backup-table', {
+    layout: {
+      topEnd: { search: { placeholder: 'Type search here' } },
+    },
+    autoWidth: true,
+    scrollX: true,
+    language: {
+      infoEmpty: 'No backups to show',
+      info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
+      entries: { _: 'backups', 1: 'backup' },
+    },
+    columns: [
+      { data: 'timestamp' },
+      { data: 'schemaVersion' },
+      { data: 'size' },
+      { data: 'checksum' },
+      { data: 'blobPath' },
+    ],
+    data: [],
   })
 })
 
