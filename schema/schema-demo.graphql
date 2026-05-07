@@ -3,7 +3,7 @@
 ########################
 type Namespace {
     id: ID!
-    name: String! @id @search(by: [hash])
+    name: String! @id @search(by: [term])
     createdBy: String
     createdAt: DateTime
 }
@@ -15,17 +15,16 @@ type User {
 
 ########################
 # Interfaces
-# types implementing this interface should consider UPSERT support with the @id directive
-# for example, type Serv
+#
+# types implementing this interface should consider UPSERT support with the @id
+# directive
 ########################
 interface ConfigItem {
     id: ID!
     namespace: Namespace!
+    orbId: String! @id @search(by: [hash]) # unique key for upsert
 
-    # unique key for upsert
-    orbId: String! @id @search(by: [hash])
-
-    name: String! @search(by: [hash])
+    name: String @search(by: [term])
     createdBy: String @search(by: [hash])
     createdAt: DateTime @search
     updatedBy: String @search(by: [hash])
@@ -37,25 +36,24 @@ interface ConfigItem {
 # Config Items
 ########################
 type DataCenter implements ConfigItem {
-    id: ID!
 
     servers: [Server] @hasInverse(field: dataCenter)
     racks: [Rack] @hasInverse(field: dataCenter)
 }
 
 type Rack implements ConfigItem {
-    id: ID!
-    
+
     dataCenter: DataCenter!
     servers: [Server] @hasInverse(field: rack)
 }
 
 type Server implements ConfigItem {
+    hostname: String @search(by: [term])
     model: String @search(by: [term])
     manufacturer: String @search(by: [hash]) 
     serviceTag: String @search(by: [hash])
     rackPosition: Int
-    oobIP: String @search(by: [has])
+    oobIP: String @search(by: [hash])
     oobMAC: String
 
     dataCenter: DataCenter!

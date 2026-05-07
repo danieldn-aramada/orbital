@@ -34,7 +34,7 @@
         <table class="table is-fullwidth">
           <tbody>
             <tr><td style="width:40%">Name</td><td>{{.Name}}</td></tr>
-            <tr><td>Servers</td><td>{{len .Servers}}</td></tr>
+            <tr><td>Servers</td><td>{{.ServerCount}}</td></tr>
             <tr><td>Racks</td><td>{{len .Racks}}</td></tr>
             <tr><td>Created By</td><td>{{if .CreatedBy}}{{.CreatedBy}}{{else}}—{{end}}</td></tr>
             <tr><td>Created At</td><td>{{if .CreatedAt}}{{.CreatedAt}}{{else}}—{{end}}</td></tr>
@@ -84,23 +84,23 @@
           <table class="table is-striped is-hoverable is-fullwidth is-size-7 mt-2">
             <thead>
               <tr>
-                <th>Service Tag</th>
+                <th>OOB IP</th>
                 <th>Model</th>
+                <th>Service Tag</th>
+                <th>Hostname</th>
                 <th>Rack</th>
                 <th>Rack Position</th>
-                <th>OOB IP</th>
-                <th>OOB MAC</th>
               </tr>
             </thead>
             <tbody>
               {{range .Servers}}
               <tr>
-                <td>{{.ServiceTag}}</td>
+                <td>{{if .OobIP}}{{.OobIP}}{{else}}—{{end}}</td>
                 <td>{{if .Model}}{{.Model}}{{else}}—{{end}}</td>
+                <td>{{.ServiceTag}}</td>
+                <td>{{if .Hostname}}{{.Hostname}}{{else}}—{{end}}</td>
                 <td>{{if .Rack.Name}}{{.Rack.Name}}{{else}}—{{end}}</td>
                 <td>{{if .RackPosition}}{{.RackPosition}}{{else}}—{{end}}</td>
-                <td>{{if .OobIP}}{{.OobIP}}{{else}}—{{end}}</td>
-                <td>{{if .OobMAC}}{{.OobMAC}}{{else}}—{{end}}</td>
               </tr>
               {{end}}
             </tbody>

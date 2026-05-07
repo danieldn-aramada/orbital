@@ -32,7 +32,8 @@ mutation {
     {
       serviceTag: "GRTLY24"
       orbId: "alaska-dot:GRTLY24"
-      name: "G3_GH100_R5_U3"
+      name: "r05-u03.alaska-dot-galleon"
+      hostname: "r05-u03.alaska-dot-galleon"
       model: "Dell XE9680"
       rackPosition: 3
       oobIP: "10.61.95.50"
@@ -46,7 +47,8 @@ mutation {
     {
       serviceTag: "55W8K44"
       orbId: "alaska-dot:55W8K44"
-      name: "G3_WN_R5_U10"
+      name: "r05-u10.alaska-dot-galleon"
+      hostname: "r05-u10.alaska-dot-galleon"
       model: "Dell R660"
       rackPosition: 10
       oobIP: "10.61.95.51"
@@ -60,7 +62,8 @@ mutation {
     {
       serviceTag: "75W8K44"
       orbId: "alaska-dot:75W8K44"
-      name: "G3_WN_R5_U11"
+      name: "r05-u11.alaska-dot-galleon"
+      hostname: "r05-u11.alaska-dot-galleon"
       model: "Dell R660"
       rackPosition: 11
       oobIP: "10.61.95.52"
@@ -74,7 +77,8 @@ mutation {
     {
       serviceTag: "65W8K44"
       orbId: "alaska-dot:65W8K44"
-      name: "G3_WN_R5_U12"
+      name: "r05-u12.alaska-dot-galleon"
+      hostname: "r05-u12.alaska-dot-galleon"
       model: "Dell R660"
       rackPosition: 12
       oobIP: "10.61.95.53"
@@ -88,7 +92,8 @@ mutation {
     {
       serviceTag: "85W8K44"
       orbId: "alaska-dot:85W8K44"
-      name: "G3_WN_R5_U13"
+      name: "r05-u13.alaska-dot-galleon"
+      hostname: "r05-u13.alaska-dot-galleon"
       model: "Dell R660"
       rackPosition: 13
       oobIP: "10.61.95.54"
@@ -102,7 +107,8 @@ mutation {
     {
       serviceTag: "6FK8K44"
       orbId: "alaska-dot:6FK8K44"
-      name: "G3_WN_R5_U15"
+      name: "r05-u15.alaska-dot-galleon"
+      hostname: "r05-u15.alaska-dot-galleon"
       model: "Dell R450"
       rackPosition: 15
       oobIP: "10.61.95.55"
@@ -116,7 +122,8 @@ mutation {
     {
       serviceTag: "3FK8K44"
       orbId: "alaska-dot:3FK8K44"
-      name: "G3_WN_R5_U16"
+      name: "r05-u16.alaska-dot-galleon"
+      hostname: "r05-u16.alaska-dot-galleon"
       model: "Dell R450"
       rackPosition: 16
       oobIP: "10.61.95.56"
@@ -130,7 +137,8 @@ mutation {
     {
       serviceTag: "1FK8K44"
       orbId: "alaska-dot:1FK8K44"
-      name: "G3_WN_R5_U17"
+      name: "r05-u17.alaska-dot-galleon"
+      hostname: "r05-u17.alaska-dot-galleon"
       model: "Dell R450"
       rackPosition: 17
       oobIP: "10.61.95.57"
@@ -144,7 +152,8 @@ mutation {
     {
       serviceTag: "5FK8K44"
       orbId: "alaska-dot:5FK8K44"
-      name: "G3_WN_R5_U18"
+      name: "r05-u18.alaska-dot-galleon"
+      hostname: "r05-u18.alaska-dot-galleon"
       model: "Dell R450"
       rackPosition: 18
       oobIP: "10.61.95.58"
@@ -158,7 +167,8 @@ mutation {
     {
       serviceTag: "4FK8K44"
       orbId: "alaska-dot:4FK8K44"
-      name: "G3_WN_R5_U19"
+      name: "r05-u19.alaska-dot-galleon"
+      hostname: "r05-u19.alaska-dot-galleon"
       model: "Dell R450"
       rackPosition: 19
       oobIP: "10.61.95.59"
@@ -171,7 +181,8 @@ mutation {
     {
       serviceTag: "JDK8K44"
       orbId: "alaska-dot:JDK8K44"
-      name: "G3_WN_R5_U20"
+      name: "r05-u20.alaska-dot-galleon"
+      hostname: "r05-u20.alaska-dot-galleon"
       model: "Dell R450"
       rackPosition: 20
       oobIP: "10.61.95.60"
@@ -185,7 +196,8 @@ mutation {
     {
       serviceTag: "2FK8K44"
       orbId: "alaska-dot:2FK8K44"
-      name: "G3_WN_R5_U21"
+      name: "r05-u21.alaska-dot-galleon"
+      hostname: "r05-u21.alaska-dot-galleon"
       model: "Dell R450"
       rackPosition: 21
       oobIP: "10.61.95.61"
@@ -199,7 +211,8 @@ mutation {
     {
       serviceTag: "3H3V564"
       orbId: "alaska-dot:3H3V564"
-      name: "G3_WN_R5_U25"
+      name: "r05-u25.alaska-dot-galleon"
+      hostname: "r05-u25.alaska-dot-galleon"
       model: "Dell R760"
       rackPosition: 25
       oobIP: "10.61.95.62"

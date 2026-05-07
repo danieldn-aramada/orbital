@@ -12,6 +12,7 @@ var base = []string{
 	"web/templates/components/navbar.gohtml",
 	"web/templates/components/menu.gohtml",
 	"web/templates/components/todo-toast.gohtml",
+	"web/templates/components/report-issue-modal.gohtml",
 }
 
 func page(path string) []string {
@@ -31,5 +32,6 @@ func Map() map[string]*template.Template {
 		"divergence-reports": template.Must(template.ParseFiles(page("web/templates/pages/divergence-reports.gohtml")...)),
 		"audit-log":          template.Must(template.ParseFiles(page("web/templates/pages/audit-log.gohtml")...)),
 		"schema":             template.Must(template.ParseFiles(page("web/templates/pages/schema.gohtml")...)),
+		"export":             template.Must(template.ParseFiles(page("web/templates/pages/export.gohtml")...)),
 	}
 }

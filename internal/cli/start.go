@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"os/signal"
 	"syscall"
 
@@ -20,8 +21,12 @@ func runStart(cmd *cobra.Command, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	cfg := config.New()
-	srv := server.New(cfg)
+	cfg, err := config.New()
+	if err != nil {
+		return fmt.Errorf("config: %w", err)
+	}
+	// orb is the edge binary — no PostgreSQL dependency.
+	srv := server.New(cfg, nil)
 
 	return srv.Start(ctx)
 }

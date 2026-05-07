@@ -2,45 +2,39 @@ package config
 
 import (
 	"log/slog"
-	"os"
 	"time"
+
+	"github.com/kelseyhightower/envconfig"
 )
 
 type Config struct {
-	Port            string
-	ShutdownTimeout time.Duration
-	DGraphURL       string
-	DGraphAdminURL  string
-	RatelURL        string
-	Dev             bool
-	LogLevel        slog.Level
+	Port            string        `envconfig:"ORBITAL_PORT"             default:"8001"`
+	ShutdownTimeout time.Duration `envconfig:"ORBITAL_SHUTDOWN_TIMEOUT" default:"10s"`
+	DGraphURL       string        `envconfig:"DGRAPH_URL"               default:"http://localhost:8080/graphql"`
+	DGraphAdminURL  string        `envconfig:"DGRAPH_ADMIN_URL"         default:"http://localhost:8080/admin"`
+	RatelURL        string        `envconfig:"RATEL_URL"                default:"http://localhost:8000"`
+	IssueTrackerURL    string        `envconfig:"ORBITAL_ISSUE_TRACKER_URL" default:""`
+	Dev                bool          `envconfig:"ORBITAL_DEV"               default:"false"`
+	LogLevel           string        `envconfig:"ORBITAL_LOG_LEVEL"         default:"info"`
+	DGraphScratchURL      string        `envconfig:"DGRAPH_SCRATCH_URL"       default:"http://localhost:8081/graphql"`
+	DGraphScratchAdminURL string        `envconfig:"DGRAPH_SCRATCH_ADMIN_URL" default:"http://localhost:8081/admin"`
+	DatabaseURL           string        `envconfig:"DATABASE_URL"             default:"postgres://orbital:orbital@localhost:5432/orbital?sslmode=disable"`
+	ExportDir             string        `envconfig:"ORBITAL_EXPORT_DIR"            default:"./subgraph-exports"`
+	DGraphScratchExportDir string       `envconfig:"DGRAPH_SCRATCH_EXPORT_DIR"     default:"./subgraph-exports/scratch"`
+	SchemaPath            string        `envconfig:"ORBITAL_SCHEMA_PATH"           default:"schema/schema-demo.graphql"`
 }
 
-func New() *Config {
-	dgraphURL := os.Getenv("DGRAPH_URL")
-	if dgraphURL == "" {
-		dgraphURL = "http://localhost:8080/graphql"
+func New() (*Config, error) {
+	var cfg Config
+	if err := envconfig.Process("", &cfg); err != nil {
+		return nil, err
 	}
-	dgraphAdminURL := os.Getenv("DGRAPH_ADMIN_URL")
-	if dgraphAdminURL == "" {
-		dgraphAdminURL = "http://localhost:8080/admin"
-	}
-	ratelURL := os.Getenv("RATEL_URL")
-	if ratelURL == "" {
-		ratelURL = "http://localhost:8000"
-	}
-	logLevel := slog.LevelInfo
-	if os.Getenv("ORBITAL_LOG_LEVEL") == "debug" {
-		logLevel = slog.LevelDebug
-	}
+	return &cfg, nil
+}
 
-	return &Config{
-		Port:            "8001",
-		ShutdownTimeout: 10 * time.Second,
-		DGraphURL:       dgraphURL,
-		DGraphAdminURL:  dgraphAdminURL,
-		RatelURL:        ratelURL,
-		Dev:             os.Getenv("ORBITAL_DEV") == "true",
-		LogLevel:        logLevel,
+func (c *Config) SlogLevel() slog.Level {
+	if c.LogLevel == "debug" {
+		return slog.LevelDebug
 	}
+	return slog.LevelInfo
 }

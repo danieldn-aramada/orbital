@@ -1,0 +1,406 @@
+mutation {
+  addNamespace(input: { name: "seattle" }, upsert: true) {
+    numUids
+  }
+
+  addDataCenter(input: [
+    {
+      name: "seattle-galleon"
+      orbId: "seattle:seattle-galleon"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+    }
+  ], upsert: true) {
+    numUids
+  }
+
+  addRack(input: [
+    {
+      name: "Rack-1"
+      orbId: "seattle:Rack-1"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+    }
+    {
+      name: "Rack-2"
+      orbId: "seattle:Rack-2"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+    }
+    {
+      name: "Rack-3"
+      orbId: "seattle:Rack-3"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+    }
+    {
+      name: "Rack-4"
+      orbId: "seattle:Rack-4"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+    }
+    {
+      name: "Rack-5"
+      orbId: "seattle:Rack-5"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+    }
+  ], upsert: true) {
+    numUids
+  }
+
+  addServer(input: [
+    {
+      serviceTag: "65WVM34"
+      orbId: "seattle:65WVM34"
+      name: "r05-u03.seattle-galleon"
+      hostname: "r05-u03.seattle-galleon"
+      model: "XE8640"
+      rackPosition: 3
+      oobIP: "10.20.43.7"
+      oobMAC: "c4:cb:e1:ba:37:84"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-5" }
+    }
+    {
+      serviceTag: "95WVM34"
+      orbId: "seattle:95WVM34"
+      name: "r05-u07.seattle-galleon"
+      hostname: "r05-u07.seattle-galleon"
+      model: "XE8640"
+      rackPosition: 7
+      oobIP: "10.20.43.4"
+      oobMAC: "c4:cb:e1:ba:37:5a"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-5" }
+    }
+    {
+      serviceTag: "JD268Y3"
+      orbId: "seattle:JD268Y3"
+      model: "PowerEdge R350"
+      oobIP: "10.20.33.49"
+      oobMAC: "c4:5a:b1:ac:62:36"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-5" }
+    }
+    {
+      serviceTag: "FZ7P7Y3"
+      orbId: "seattle:FZ7P7Y3"
+      model: "PowerEdge R750"
+      oobIP: "10.20.33.51"
+      oobMAC: "c8:4b:d6:a0:66:60"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-5" }
+    }
+    {
+      serviceTag: "5L4P7Y3"
+      orbId: "seattle:5L4P7Y3"
+      model: "PowerEdge R650"
+      oobIP: "10.20.33.52"
+      oobMAC: "c8:4b:d6:9f:8e:2a"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-5" }
+    }
+    {
+      serviceTag: "6L4P7Y3"
+      orbId: "seattle:6L4P7Y3"
+      model: "PowerEdge R650"
+      oobIP: "10.20.33.53"
+      oobMAC: "c8:4b:d6:9f:81:be"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-5" }
+    }
+    {
+      serviceTag: "7L4P7Y3"
+      orbId: "seattle:7L4P7Y3"
+      model: "PowerEdge R650"
+      oobIP: "10.20.33.54"
+      oobMAC: "c8:4b:d6:9f:81:ac"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-5" }
+    }
+    {
+      serviceTag: "GMP6K74"
+      orbId: "seattle:GMP6K74"
+      model: "PowerEdge R450"
+      oobIP: "10.20.43.2"
+      oobMAC: "d0:c1:b5:0c:b1:d8"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-5" }
+    }
+    {
+      serviceTag: "JMP6K74"
+      orbId: "seattle:JMP6K74"
+      model: "PowerEdge R450"
+      oobIP: "10.20.43.3"
+      oobMAC: "d0:c1:b5:0c:b1:c0"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-5" }
+    }
+    {
+      serviceTag: "HVZ8Z44"
+      orbId: "seattle:HVZ8Z44"
+      name: "r04-u13.seattle-galleon"
+      hostname: "r04-u13.seattle-galleon"
+      model: "Dell AX650"
+      rackPosition: 13
+      oobIP: "10.20.33.61"
+      oobMAC: "a8:3c:a5:42:42:f2"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-4" }
+    }
+    {
+      serviceTag: "3WZ8Z44"
+      orbId: "seattle:3WZ8Z44"
+      name: "r04-u14.seattle-galleon"
+      hostname: "r04-u14.seattle-galleon"
+      model: "Dell AX650"
+      rackPosition: 14
+      oobIP: "10.20.33.62"
+      oobMAC: "a8:3c:a5:43:f5:98"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-4" }
+    }
+    {
+      serviceTag: "2WZ8Z44"
+      orbId: "seattle:2WZ8Z44"
+      name: "r04-u15.seattle-galleon"
+      hostname: "r04-u15.seattle-galleon"
+      model: "Dell AX650"
+      rackPosition: 15
+      oobIP: "10.20.33.63"
+      oobMAC: "a8:3c:a5:43:e9:56"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-4" }
+    }
+    {
+      serviceTag: "1WZ8Z44"
+      orbId: "seattle:1WZ8Z44"
+      name: "r04-u16.seattle-galleon"
+      hostname: "r04-u16.seattle-galleon"
+      model: "Dell AX650"
+      rackPosition: 16
+      oobIP: "10.20.33.64"
+      oobMAC: "a8:3c:a5:43:e9:6e"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-4" }
+    }
+    {
+      serviceTag: "4WZ8Z44"
+      orbId: "seattle:4WZ8Z44"
+      name: "r04-u17.seattle-galleon"
+      hostname: "r04-u17.seattle-galleon"
+      model: "Dell AX650"
+      rackPosition: 17
+      oobIP: "10.20.33.65"
+      oobMAC: "a8:3c:a5:40:dd:07"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-4" }
+    }
+    {
+      serviceTag: "JVZ8Z44"
+      orbId: "seattle:JVZ8Z44"
+      name: "r04-u18.seattle-galleon"
+      hostname: "r04-u18.seattle-galleon"
+      model: "Dell AX650"
+      rackPosition: 18
+      oobIP: "10.20.33.66"
+      oobMAC: "a8:3c:a5:40:c5:07"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-4" }
+    }
+    {
+      serviceTag: "7FS1L44"
+      orbId: "seattle:7FS1L44"
+      name: "r04-u21.seattle-galleon"
+      hostname: "r04-u21.seattle-galleon"
+      model: "Dell AX650"
+      rackPosition: 21
+      oobIP: "10.20.33.67"
+      oobMAC: "a8:3c:a5:43:f2:50"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-4" }
+    }
+    {
+      serviceTag: "BDP1L44"
+      orbId: "seattle:BDP1L44"
+      name: "r04-u22.seattle-galleon"
+      hostname: "r04-u22.seattle-galleon"
+      model: "Dell AX650"
+      rackPosition: 22
+      oobIP: "10.20.33.68"
+      oobMAC: "a8:3c:a5:43:f4:54"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-4" }
+    }
+    {
+      serviceTag: "9DP1L44"
+      orbId: "seattle:9DP1L44"
+      name: "r04-u23.seattle-galleon"
+      hostname: "r04-u23.seattle-galleon"
+      model: "Dell AX650"
+      rackPosition: 23
+      oobIP: "10.20.33.69"
+      oobMAC: "a8:3c:a5:43:f4:fc"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-4" }
+    }
+    {
+      serviceTag: "97WVM34"
+      orbId: "seattle:97WVM34"
+      name: "r03-u01.seattle-galleon"
+      hostname: "r03-u01.seattle-galleon"
+      model: "Dell XE8640"
+      rackPosition: 1
+      oobIP: "10.20.43.5"
+      oobMAC: "c4:cb:e1:b6:45:48"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-3" }
+    }
+    {
+      serviceTag: "DLP6K74"
+      orbId: "seattle:DLP6K74"
+      name: "r02-u21.seattle-galleon"
+      hostname: "r02-u21.seattle-galleon"
+      model: "Dell R450"
+      rackPosition: 21
+      oobIP: "10.96.87.15"
+      oobMAC: "e8:cf:83:27:a5:73"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-2" }
+    }
+    {
+      serviceTag: "75WVM34"
+      orbId: "seattle:75WVM34"
+      name: "r03-u05.seattle-galleon"
+      hostname: "r03-u05.seattle-galleon"
+      model: "Dell XE8640"
+      rackPosition: 5
+      oobIP: "10.20.43.6"
+      oobMAC: "c4:cb:e1:ba:3a:90"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-3" }
+    }
+    {
+      serviceTag: "GLP6K74"
+      orbId: "seattle:GLP6K74"
+      name: "r01-u15.seattle-galleon"
+      hostname: "r01-u15.seattle-galleon"
+      model: "Dell R450"
+      rackPosition: 15
+      oobIP: "10.96.87.17"
+      oobMAC: "e8:cf:83:27:b2:9b"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-1" }
+    }
+    {
+      serviceTag: "HLP6K74"
+      orbId: "seattle:HLP6K74"
+      name: "r01-u17.seattle-galleon"
+      hostname: "r01-u17.seattle-galleon"
+      model: "Dell R450"
+      rackPosition: 17
+      oobIP: "10.96.87.16"
+      oobMAC: "e8:cf:83:27:aa:2b"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-1" }
+    }
+    {
+      serviceTag: "42TD3H4"
+      orbId: "seattle:42TD3H4"
+      name: "r04-u03.seattle-galleon"
+      hostname: "r04-u03.seattle-galleon"
+      model: "Dell XE7745"
+      rackPosition: 3
+      oobIP: "10.20.43.8"
+      oobMAC: "6c:3c:8c:93:bd:72"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "seattle" }
+      dataCenter: { orbId: "seattle:seattle-galleon" }
+      rack: { orbId: "seattle:Rack-4" }
+    }
+  ], upsert: true) {
+    numUids
+  }
+}

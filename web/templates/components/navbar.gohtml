@@ -66,7 +66,7 @@
             <strong>Design</strong>
           </a>
           <hr class="navbar-divider">
-          <a class="navbar-item" href="/report-issue">
+          <a class="navbar-item" onclick="openReportIssueModal()">
             <strong>Report Issue</strong>
           </a>
         </div>
@@ -80,3 +80,4 @@
 </nav>
 
 {{template "todo-toast.gohtml" .}}
+{{template "report-issue-modal.gohtml" .}}

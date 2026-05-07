@@ -14,18 +14,20 @@ import (
 )
 
 type UI struct {
-	dev       bool
-	ratelURL  string
-	version   string
-	templates map[string]*template.Template
+	dev             bool
+	ratelURL        string
+	issueTrackerURL string
+	version         string
+	templates       map[string]*template.Template
 }
 
-func NewUI(dev bool, ratelURL string) *UI {
+func NewUI(dev bool, ratelURL, issueTrackerURL string) *UI {
 	return &UI{
-		dev:       dev,
-		ratelURL:  ratelURL,
-		version:   fmt.Sprintf("%d", time.Now().Unix()),
-		templates: webtemplates.Map(),
+		dev:             dev,
+		ratelURL:        ratelURL,
+		issueTrackerURL: issueTrackerURL,
+		version:         fmt.Sprintf("%d", time.Now().Unix()),
+		templates:       webtemplates.Map(),
 	}
 }
 
@@ -41,38 +43,45 @@ func (h *UI) render(c echo.Context, name string, data any) error {
 	return tmpl.ExecuteTemplate(c.Response().Writer, "base.gohtml", data)
 }
 
-func (h *UI) base(ratelURL string) layout.Base {
+func (h *UI) base() layout.Base {
 	return layout.Base{
 		Head:   layout.Head{Version: h.version},
-		NavBar: layout.NavBar{RatelURL: ratelURL},
+		NavBar: layout.NavBar{RatelURL: h.ratelURL, IssueTrackerURL: h.issueTrackerURL},
 	}
 }
 
 func (h *UI) Index(c echo.Context) error {
 	return h.render(c, "home", page.Home{
-		Base:      h.base(h.ratelURL),
+		Base:      h.base(),
 		PageTitle: "Orbital",
 	})
 }
 
 func (h *UI) Backups(c echo.Context) error {
 	return h.render(c, "backups", page.Backups{
-		Base:      h.base(h.ratelURL),
+		Base:      h.base(),
 		PageTitle: "Backups",
 	})
 }
 
 func (h *UI) DivergenceReports(c echo.Context) error {
 	return h.render(c, "divergence-reports", page.DivergenceReports{
-		Base:      h.base(h.ratelURL),
+		Base:      h.base(),
 		PageTitle: "Divergence Reports",
 	})
 }
 
 func (h *UI) AuditLog(c echo.Context) error {
 	return h.render(c, "audit-log", page.AuditLog{
-		Base:      h.base(h.ratelURL),
+		Base:      h.base(),
 		PageTitle: "Audit Log",
+	})
+}
+
+func (h *UI) Export(c echo.Context) error {
+	return h.render(c, "export", page.Export{
+		Base:      h.base(),
+		PageTitle: "Export Subgraph",
 	})
 }
 
@@ -83,7 +92,7 @@ func (h *UI) Schema(c echo.Context) error {
 	}
 	sum := sha256.Sum256(content)
 	return h.render(c, "schema", page.Schema{
-		Base:      h.base(h.ratelURL),
+		Base:      h.base(),
 		PageTitle: "Schema",
 		Version:   "v1",
 		Checksum:  fmt.Sprintf("%x", sum[:6]),

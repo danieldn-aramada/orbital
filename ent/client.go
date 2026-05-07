@@ -16,6 +16,7 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent/backup"
+	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/namespace"
 	"github.com/armada/orbital/ent/orb"
 	"github.com/armada/orbital/ent/user"
@@ -28,6 +29,8 @@ type Client struct {
 	Schema *migrate.Schema
 	// Backup is the client for interacting with the Backup builders.
 	Backup *BackupClient
+	// ExportJob is the client for interacting with the ExportJob builders.
+	ExportJob *ExportJobClient
 	// Namespace is the client for interacting with the Namespace builders.
 	Namespace *NamespaceClient
 	// Orb is the client for interacting with the Orb builders.
@@ -46,6 +49,7 @@ func NewClient(opts ...Option) *Client {
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.Backup = NewBackupClient(c.config)
+	c.ExportJob = NewExportJobClient(c.config)
 	c.Namespace = NewNamespaceClient(c.config)
 	c.Orb = NewOrbClient(c.config)
 	c.User = NewUserClient(c.config)
@@ -142,6 +146,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ctx:       ctx,
 		config:    cfg,
 		Backup:    NewBackupClient(cfg),
+		ExportJob: NewExportJobClient(cfg),
 		Namespace: NewNamespaceClient(cfg),
 		Orb:       NewOrbClient(cfg),
 		User:      NewUserClient(cfg),
@@ -165,6 +170,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ctx:       ctx,
 		config:    cfg,
 		Backup:    NewBackupClient(cfg),
+		ExportJob: NewExportJobClient(cfg),
 		Namespace: NewNamespaceClient(cfg),
 		Orb:       NewOrbClient(cfg),
 		User:      NewUserClient(cfg),
@@ -197,6 +203,7 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	c.Backup.Use(hooks...)
+	c.ExportJob.Use(hooks...)
 	c.Namespace.Use(hooks...)
 	c.Orb.Use(hooks...)
 	c.User.Use(hooks...)
@@ -206,6 +213,7 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	c.Backup.Intercept(interceptors...)
+	c.ExportJob.Intercept(interceptors...)
 	c.Namespace.Intercept(interceptors...)
 	c.Orb.Intercept(interceptors...)
 	c.User.Intercept(interceptors...)
@@ -216,6 +224,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
 	case *BackupMutation:
 		return c.Backup.mutate(ctx, m)
+	case *ExportJobMutation:
+		return c.ExportJob.mutate(ctx, m)
 	case *NamespaceMutation:
 		return c.Namespace.mutate(ctx, m)
 	case *OrbMutation:
@@ -357,6 +367,139 @@ func (c *BackupClient) mutate(ctx context.Context, m *BackupMutation) (Value, er
 		return (&BackupDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Backup mutation op: %q", m.Op())
+	}
+}
+
+// ExportJobClient is a client for the ExportJob schema.
+type ExportJobClient struct {
+	config
+}
+
+// NewExportJobClient returns a client for the ExportJob from the given config.
+func NewExportJobClient(c config) *ExportJobClient {
+	return &ExportJobClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `exportjob.Hooks(f(g(h())))`.
+func (c *ExportJobClient) Use(hooks ...Hook) {
+	c.hooks.ExportJob = append(c.hooks.ExportJob, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `exportjob.Intercept(f(g(h())))`.
+func (c *ExportJobClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ExportJob = append(c.inters.ExportJob, interceptors...)
+}
+
+// Create returns a builder for creating a ExportJob entity.
+func (c *ExportJobClient) Create() *ExportJobCreate {
+	mutation := newExportJobMutation(c.config, OpCreate)
+	return &ExportJobCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ExportJob entities.
+func (c *ExportJobClient) CreateBulk(builders ...*ExportJobCreate) *ExportJobCreateBulk {
+	return &ExportJobCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ExportJobClient) MapCreateBulk(slice any, setFunc func(*ExportJobCreate, int)) *ExportJobCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ExportJobCreateBulk{err: fmt.Errorf("calling to ExportJobClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ExportJobCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ExportJobCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ExportJob.
+func (c *ExportJobClient) Update() *ExportJobUpdate {
+	mutation := newExportJobMutation(c.config, OpUpdate)
+	return &ExportJobUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ExportJobClient) UpdateOne(_m *ExportJob) *ExportJobUpdateOne {
+	mutation := newExportJobMutation(c.config, OpUpdateOne, withExportJob(_m))
+	return &ExportJobUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ExportJobClient) UpdateOneID(id uuid.UUID) *ExportJobUpdateOne {
+	mutation := newExportJobMutation(c.config, OpUpdateOne, withExportJobID(id))
+	return &ExportJobUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ExportJob.
+func (c *ExportJobClient) Delete() *ExportJobDelete {
+	mutation := newExportJobMutation(c.config, OpDelete)
+	return &ExportJobDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ExportJobClient) DeleteOne(_m *ExportJob) *ExportJobDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ExportJobClient) DeleteOneID(id uuid.UUID) *ExportJobDeleteOne {
+	builder := c.Delete().Where(exportjob.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ExportJobDeleteOne{builder}
+}
+
+// Query returns a query builder for ExportJob.
+func (c *ExportJobClient) Query() *ExportJobQuery {
+	return &ExportJobQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeExportJob},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ExportJob entity by its id.
+func (c *ExportJobClient) Get(ctx context.Context, id uuid.UUID) (*ExportJob, error) {
+	return c.Query().Where(exportjob.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ExportJobClient) GetX(ctx context.Context, id uuid.UUID) *ExportJob {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ExportJobClient) Hooks() []Hook {
+	return c.hooks.ExportJob
+}
+
+// Interceptors returns the client interceptors.
+func (c *ExportJobClient) Interceptors() []Interceptor {
+	return c.inters.ExportJob
+}
+
+func (c *ExportJobClient) mutate(ctx context.Context, m *ExportJobMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ExportJobCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ExportJobUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ExportJobUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ExportJobDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ExportJob mutation op: %q", m.Op())
 	}
 }
 
@@ -762,9 +905,9 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Backup, Namespace, Orb, User []ent.Hook
+		Backup, ExportJob, Namespace, Orb, User []ent.Hook
 	}
 	inters struct {
-		Backup, Namespace, Orb, User []ent.Interceptor
+		Backup, ExportJob, Namespace, Orb, User []ent.Interceptor
 	}
 )

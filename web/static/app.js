@@ -474,12 +474,12 @@ function showDatacenterSkeleton(id) {
 
   const skeletonRows = Array.from({ length: 10 }, () => `
     <tr>
-      <td><span class="is-skeleton">XXXXXXXXX</span></td>
+      <td><span class="is-skeleton">10.20.21.00</span></td>
       <td><span class="is-skeleton">PowerEdge R750</span></td>
+      <td><span class="is-skeleton">XXXXXXXXX</span></td>
+      <td><span class="is-skeleton">r03-u14.houston-galleon</span></td>
       <td><span class="is-skeleton">A.OF.C.09</span></td>
       <td><span class="is-skeleton">00</span></td>
-      <td><span class="is-skeleton">10.20.21.00</span></td>
-      <td><span class="is-skeleton">c8:4b:d6:9c:87:74</span></td>
     </tr>`).join('')
 
   target.innerHTML = `
@@ -536,8 +536,8 @@ function showDatacenterSkeleton(id) {
             <table class="table is-striped is-fullwidth is-size-7 mt-2">
               <thead>
                 <tr>
-                  <th>Service Tag</th><th>Model</th><th>Rack</th>
-                  <th>Rack Position</th><th>OOB IP</th><th>OOB MAC</th>
+                  <th>OOB IP</th><th>Model</th><th>Service Tag</th><th>Hostname</th><th>Rack</th>
+                  <th>Rack Position</th>
                 </tr>
               </thead>
               <tbody>${skeletonRows}</tbody>
@@ -657,26 +657,29 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     columns: [
       { data: 'name' },
+      { data: 'serverCount' },
       { data: 'createdBy' },
       { data: 'createdAt' },
       { data: 'id' },
     ],
     columnDefs: [
       { targets: 0 },
-      { targets: 1 },
+      { targets: 1, className: 'dt-body-left dt-head-left' },
       { targets: 2 },
-      { targets: 3, visible: false },
+      { targets: 3 },
+      { targets: 4, visible: false },
     ],
     ajax: {
       url: '/graphql',
       type: 'POST',
       contentType: 'application/json',
-      data: () => JSON.stringify({ query: `{ queryDataCenter { id name createdBy createdAt } }` }),
+      data: () => JSON.stringify({ query: `{ queryDataCenter { id name createdBy createdAt serversAggregate { count } } }` }),
       dataSrc: (json) => (json.data?.queryDataCenter ?? []).map(dc => ({
         id: dc.id,
         name: dc.name,
         createdBy: dc.createdBy ?? '',
         createdAt: dc.createdAt ?? '',
+        serverCount: dc.serversAggregate?.count ?? 0,
       })),
     },
   })

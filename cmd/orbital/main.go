@@ -12,16 +12,32 @@ import (
 	"syscall"
 
 	_ "github.com/armada/orbital/docs"
+	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/internal/config"
 	"github.com/armada/orbital/internal/server"
+	_ "github.com/lib/pq"
 )
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	cfg := config.New()
-	srv := server.New(cfg)
+	cfg, err := config.New()
+	if err != nil {
+		log.Fatalf("config: %v", err)
+	}
+
+	db, err := ent.Open("postgres", cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("db: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.Schema.Create(ctx); err != nil {
+		log.Fatalf("migrate: %v", err)
+	}
+
+	srv := server.New(cfg, db)
 
 	if err := srv.Start(ctx); err != nil {
 		log.Fatal(err)

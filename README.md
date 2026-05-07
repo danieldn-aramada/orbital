@@ -18,8 +18,9 @@ curl -s --data-binary '@./schema/schema-v1.graphql' --header 'content-type: appl
 ```
 
 Run orbital server
-```
-go run cmd/orbital/main.go
+```bash
+source deploy/local/.env
+go run ./cmd/orbital
 ```
 
 Browse API docs
@@ -35,7 +36,7 @@ examples/colo-galleon.graphql    # colo namespace, 50 servers
 examples/seattle-galleon.graphql # seattle namespace, 24 servers
 examples/houston-galleon.graphql # houston namespace, 32 servers
 examples/alaska-dot-galleon.graphql     # alaska-dot namespace, 13 servers
-examples/alaska-unit-2-galleon.graphql  # alaska-unit-2 namespace, 15 servers
+examples/alaska-dot-cruiser.graphql     # alaska-dot-cruiser namespace, 15 servers
 ```
 
 Cleanup

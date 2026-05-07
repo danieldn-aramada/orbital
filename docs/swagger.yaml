@@ -1,4 +1,29 @@
 basePath: /
+definitions:
+  handler.statusResponse:
+    properties:
+      completedAt:
+        type: string
+      createdAt:
+        type: string
+      dataCenter:
+        type: string
+      error:
+        type: string
+      jobId:
+        type: string
+      startedAt:
+        type: string
+      status:
+        type: string
+    type: object
+  handler.triggerResponse:
+    properties:
+      jobId:
+        type: string
+      status:
+        type: string
+    type: object
 info:
   contact: {}
   description: API-first, graph-native configuration management system for modular
@@ -6,6 +31,89 @@ info:
   title: Orbital API
   version: 0.1.0
 paths:
+  /api/v1/datacenters/{id}/export:
+    post:
+      description: Triggers an async export of the data center's configuration subgraph.
+        Returns immediately with a job ID. Returns 409 if an export is already in
+        progress for this data center.
+      parameters:
+      - description: Data center ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/handler.triggerResponse'
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Trigger subgraph export
+      tags:
+      - export
+  /api/v1/export/jobs:
+    get:
+      description: Returns the 50 most recent export jobs ordered by creation time.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.statusResponse'
+            type: array
+      summary: List export jobs
+      tags:
+      - export
+  /api/v1/export/jobs/{jobId}:
+    get:
+      description: Returns the current status of an export job.
+      parameters:
+      - description: Job ID (UUID)
+        in: path
+        name: jobId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.statusResponse'
+        "404":
+          description: Not Found
+      summary: Get export job status
+      tags:
+      - export
+  /api/v1/export/jobs/{jobId}/download:
+    get:
+      description: Downloads the export artifact as a zip archive containing data.json.gz
+        and schema.gz.
+      parameters:
+      - description: Job ID (UUID)
+        in: path
+        name: jobId
+        required: true
+        type: string
+      produces:
+      - application/zip
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not Found
+      summary: Download export artifact
+      tags:
+      - export
   /graphql:
     post:
       consumes:

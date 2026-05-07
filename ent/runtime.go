@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/armada/orbital/ent/backup"
+	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/namespace"
 	"github.com/armada/orbital/ent/orb"
 	"github.com/armada/orbital/ent/schema"
@@ -30,6 +31,19 @@ func init() {
 	backupDescID := backupFields[0].Descriptor()
 	// backup.DefaultID holds the default value on creation for the id field.
 	backup.DefaultID = backupDescID.Default.(func() uuid.UUID)
+	exportjobMixin := schema.ExportJob{}.Mixin()
+	exportjobMixinFields0 := exportjobMixin[0].Fields()
+	_ = exportjobMixinFields0
+	exportjobFields := schema.ExportJob{}.Fields()
+	_ = exportjobFields
+	// exportjobDescCreatedAt is the schema descriptor for created_at field.
+	exportjobDescCreatedAt := exportjobMixinFields0[0].Descriptor()
+	// exportjob.DefaultCreatedAt holds the default value on creation for the created_at field.
+	exportjob.DefaultCreatedAt = exportjobDescCreatedAt.Default.(func() time.Time)
+	// exportjobDescID is the schema descriptor for id field.
+	exportjobDescID := exportjobFields[0].Descriptor()
+	// exportjob.DefaultID holds the default value on creation for the id field.
+	exportjob.DefaultID = exportjobDescID.Default.(func() uuid.UUID)
 	namespaceMixin := schema.Namespace{}.Mixin()
 	namespaceMixinFields0 := namespaceMixin[0].Fields()
 	_ = namespaceMixinFields0

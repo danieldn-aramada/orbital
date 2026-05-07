@@ -9,6 +9,9 @@ import (
 // Backup is the predicate function for backup builders.
 type Backup func(*sql.Selector)
 
+// ExportJob is the predicate function for exportjob builders.
+type ExportJob func(*sql.Selector)
+
 // Namespace is the predicate function for namespace builders.
 type Namespace func(*sql.Selector)
 

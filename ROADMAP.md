@@ -195,6 +195,14 @@ Orbital must receive these reports and expose divergence to cloud administrators
 
 ---
 
+## Technical Debt
+
+| Item | Notes |
+|---|---|
+| Switch DGraph DQL calls to `dgo` client | `internal/handler/export.go` uses raw HTTP calls to `/query`, `/mutate`, `/alter`. Replace with `dgraph-io/dgo` (gRPC-based official Go client) for idiomatic usage and proper transaction management. |
+
+---
+
 ## External Integration Dependencies
 
 These are integration touchpoints that orbital must support but does not own. Vendor selection and design are being driven by other teams. Orbital's API-first design should remain flexible enough to accommodate them — no orbital work is blocked on these, but MVP scope may be affected by their timelines.

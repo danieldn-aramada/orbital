@@ -1,4 +1,5 @@
 services:
+  # Blue cluster — live, serves the Topology API
   dgraph-zero:
     image: dgraph/dgraph:v25.3.1
     command: dgraph zero --my=dgraph-zero:5080
@@ -8,20 +9,40 @@ services:
 
   dgraph-alpha:
     image: dgraph/dgraph:v25.3.1
-    # command: dgraph alpha --my=dgraph-alpha:7080 --zero=dgraph-zero:5080 --graphql extensions=false
     command: >
       dgraph alpha
       --my=dgraph-alpha:7080
       --zero=dgraph-zero:5080
       --graphql extensions=false
       --security whitelist=0.0.0.0/0
-      --graphql extensions=false
     ports:
       - "7080:7080"
       - "8080:8080"
       - "9080:9080"
     depends_on:
       - dgraph-zero
+
+  # Scratch cluster — isolated, used only for subgraph export
+  dgraph-zero-scratch:
+    image: dgraph/dgraph:v25.3.1
+    command: dgraph zero --my=dgraph-zero-scratch:5080
+
+  dgraph-alpha-scratch:
+    image: dgraph/dgraph:v25.3.1
+    command: >
+      dgraph alpha
+      --my=dgraph-alpha-scratch:7080
+      --zero=dgraph-zero-scratch:5080
+      --graphql extensions=false
+      --security whitelist=0.0.0.0/0
+    ports:
+      - "7081:7080"
+      - "8081:8080"
+      - "9081:9080"
+    volumes:
+      - ../../subgraph-exports/scratch:/dgraph/export
+    depends_on:
+      - dgraph-zero-scratch
 
   dgraph-ratel:
     image: dgraph/ratel:latest
@@ -32,7 +53,7 @@ services:
       - dgraph-alpha
 
   postgres:
-    image: postgres:18.3-alpine3.23 
+    image: postgres:18.3-alpine3.23
     environment:
       POSTGRES_USER: orbital
       POSTGRES_PASSWORD: orbital

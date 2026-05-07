@@ -9,8 +9,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/internal/config"
 	"github.com/armada/orbital/internal/handler"
+	"github.com/armada/orbital/internal/metrics"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	echoswagger "github.com/swaggo/echo-swagger"
@@ -22,13 +24,16 @@ type Server struct {
 	logger *slog.Logger
 }
 
-func New(cfg *config.Config) *Server {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))
+func New(cfg *config.Config, db *ent.Client) *Server {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.SlogLevel()}))
 
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
 	e.Static("/static", "web/static")
+
+	e.Use(metrics.Middleware())
+	e.GET("/metrics", metrics.Handler())
 
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogMethod:  true,
@@ -36,7 +41,7 @@ func New(cfg *config.Config) *Server {
 		LogStatus:  true,
 		LogLatency: true,
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
-			logger.Info("request", // logger captured from New() scope
+			logger.Info("request",
 				"method", v.Method,
 				"uri", v.URI,
 				"status", v.Status,
@@ -46,19 +51,25 @@ func New(cfg *config.Config) *Server {
 		},
 	}))
 
-	ui := handler.NewUI(cfg.Dev, cfg.RatelURL)
+	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL)
 	e.GET("/", ui.Index)
 	e.GET("/datacenters", ui.Index)
 	e.GET("/backups", ui.Backups)
 	e.GET("/divergence-reports", ui.DivergenceReports)
 	e.GET("/audit-log", ui.AuditLog)
 	e.GET("/schema", ui.Schema)
+	e.GET("/export", ui.Export)
 
 	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.Dev, logger)
 	e.GET("/datacenters/:id", dc.Tab)
 
-	exp := handler.NewExport(cfg.DGraphAdminURL)
-	e.POST("/api/v1/export", exp.Trigger)
+	if db != nil {
+		exp := handler.NewExport(db, cfg.DGraphURL, cfg.DGraphScratchURL, cfg.DGraphScratchAdminURL, cfg.ExportDir, cfg.DGraphScratchExportDir, cfg.SchemaPath, logger)
+		e.POST("/api/v1/datacenters/:id/export", exp.Trigger)
+		e.GET("/api/v1/export/jobs", exp.List)
+		e.GET("/api/v1/export/jobs/:jobId", exp.Status)
+		e.GET("/api/v1/export/jobs/:jobId/download", exp.Download)
+	}
 
 	gql := handler.NewGraphQL(cfg.DGraphURL)
 	e.Any("/graphql", gql.Handle)

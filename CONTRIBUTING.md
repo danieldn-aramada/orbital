@@ -10,6 +10,17 @@ docker compose -f deploy/local/docker-compose.yml up -d
 
 See the README for service ports and details.
 
+## Local environment variables
+
+A `.env` file with local defaults is provided. Source it before running orbital:
+
+```bash
+source deploy/local/.env
+go run ./cmd/orbital
+```
+
+This sets `ORBITAL_DEV=true`, `ORBITAL_LOG_LEVEL=debug`, and all local service URLs. Production deployments set these via their own environment (K8s secrets, Azure App Configuration, etc.).
+
 ## Running end-to-end tests
 
 E2E tests use [Playwright](https://playwright.dev/) and run against a live local stack. Before running:

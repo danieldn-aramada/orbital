@@ -21,6 +21,18 @@ func (f BackupFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, erro
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BackupMutation", m)
 }
 
+// The ExportJobFunc type is an adapter to allow the use of ordinary
+// function as ExportJob mutator.
+type ExportJobFunc func(context.Context, *ent.ExportJobMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ExportJobFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ExportJobMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ExportJobMutation", m)
+}
+
 // The NamespaceFunc type is an adapter to allow the use of ordinary
 // function as Namespace mutator.
 type NamespaceFunc func(context.Context, *ent.NamespaceMutation) (ent.Value, error)

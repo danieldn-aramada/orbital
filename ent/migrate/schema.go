@@ -32,6 +32,27 @@ var (
 		Columns:    BackupsColumns,
 		PrimaryKey: []*schema.Column{BackupsColumns[0]},
 	}
+	// ExportJobsColumns holds the columns for the "export_jobs" table.
+	ExportJobsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_at", Type: field.TypeTime, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "datacenter_id", Type: field.TypeString},
+		{Name: "datacenter_name", Type: field.TypeString},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "running", "completed", "failed"}},
+		{Name: "artifact_path", Type: field.TypeString, Nullable: true},
+		{Name: "error", Type: field.TypeString, Nullable: true},
+		{Name: "started_at", Type: field.TypeTime, Nullable: true},
+		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
+	}
+	// ExportJobsTable holds the schema information for the "export_jobs" table.
+	ExportJobsTable = &schema.Table{
+		Name:       "export_jobs",
+		Columns:    ExportJobsColumns,
+		PrimaryKey: []*schema.Column{ExportJobsColumns[0]},
+	}
 	// NamespacesColumns holds the columns for the "namespaces" table.
 	NamespacesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -84,6 +105,7 @@ var (
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		BackupsTable,
+		ExportJobsTable,
 		NamespacesTable,
 		OrbsTable,
 		UsersTable,

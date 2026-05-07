@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent/backup"
+	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/namespace"
 	"github.com/armada/orbital/ent/orb"
 	"github.com/armada/orbital/ent/predicate"
@@ -29,6 +30,7 @@ const (
 
 	// Node types.
 	TypeBackup    = "Backup"
+	TypeExportJob = "ExportJob"
 	TypeNamespace = "Namespace"
 	TypeOrb       = "Orb"
 	TypeUser      = "User"
@@ -1277,6 +1279,1014 @@ func (m *BackupMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *BackupMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Backup edge %s", name)
+}
+
+// ExportJobMutation represents an operation that mutates the ExportJob nodes in the graph.
+type ExportJobMutation struct {
+	config
+	op              Op
+	typ             string
+	id              *uuid.UUID
+	created_at      *time.Time
+	created_by      *string
+	updated_at      *time.Time
+	updated_by      *string
+	datacenter_id   *string
+	datacenter_name *string
+	status          *exportjob.Status
+	artifact_path   *string
+	error           *string
+	started_at      *time.Time
+	completed_at    *time.Time
+	clearedFields   map[string]struct{}
+	done            bool
+	oldValue        func(context.Context) (*ExportJob, error)
+	predicates      []predicate.ExportJob
+}
+
+var _ ent.Mutation = (*ExportJobMutation)(nil)
+
+// exportjobOption allows management of the mutation configuration using functional options.
+type exportjobOption func(*ExportJobMutation)
+
+// newExportJobMutation creates new mutation for the ExportJob entity.
+func newExportJobMutation(c config, op Op, opts ...exportjobOption) *ExportJobMutation {
+	m := &ExportJobMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeExportJob,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withExportJobID sets the ID field of the mutation.
+func withExportJobID(id uuid.UUID) exportjobOption {
+	return func(m *ExportJobMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ExportJob
+		)
+		m.oldValue = func(ctx context.Context) (*ExportJob, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ExportJob.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withExportJob sets the old ExportJob of the mutation.
+func withExportJob(node *ExportJob) exportjobOption {
+	return func(m *ExportJobMutation) {
+		m.oldValue = func(context.Context) (*ExportJob, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ExportJobMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ExportJobMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of ExportJob entities.
+func (m *ExportJobMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ExportJobMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ExportJobMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ExportJob.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *ExportJobMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *ExportJobMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the ExportJob entity.
+// If the ExportJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExportJobMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *ExportJobMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *ExportJobMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *ExportJobMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the ExportJob entity.
+// If the ExportJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExportJobMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *ExportJobMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[exportjob.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *ExportJobMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[exportjob.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *ExportJobMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, exportjob.FieldCreatedBy)
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *ExportJobMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *ExportJobMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the ExportJob entity.
+// If the ExportJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExportJobMutation) OldUpdatedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ClearUpdatedAt clears the value of the "updated_at" field.
+func (m *ExportJobMutation) ClearUpdatedAt() {
+	m.updated_at = nil
+	m.clearedFields[exportjob.FieldUpdatedAt] = struct{}{}
+}
+
+// UpdatedAtCleared returns if the "updated_at" field was cleared in this mutation.
+func (m *ExportJobMutation) UpdatedAtCleared() bool {
+	_, ok := m.clearedFields[exportjob.FieldUpdatedAt]
+	return ok
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *ExportJobMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+	delete(m.clearedFields, exportjob.FieldUpdatedAt)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *ExportJobMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *ExportJobMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the ExportJob entity.
+// If the ExportJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExportJobMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *ExportJobMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[exportjob.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *ExportJobMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[exportjob.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *ExportJobMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, exportjob.FieldUpdatedBy)
+}
+
+// SetDatacenterID sets the "datacenter_id" field.
+func (m *ExportJobMutation) SetDatacenterID(s string) {
+	m.datacenter_id = &s
+}
+
+// DatacenterID returns the value of the "datacenter_id" field in the mutation.
+func (m *ExportJobMutation) DatacenterID() (r string, exists bool) {
+	v := m.datacenter_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDatacenterID returns the old "datacenter_id" field's value of the ExportJob entity.
+// If the ExportJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExportJobMutation) OldDatacenterID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDatacenterID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDatacenterID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDatacenterID: %w", err)
+	}
+	return oldValue.DatacenterID, nil
+}
+
+// ResetDatacenterID resets all changes to the "datacenter_id" field.
+func (m *ExportJobMutation) ResetDatacenterID() {
+	m.datacenter_id = nil
+}
+
+// SetDatacenterName sets the "datacenter_name" field.
+func (m *ExportJobMutation) SetDatacenterName(s string) {
+	m.datacenter_name = &s
+}
+
+// DatacenterName returns the value of the "datacenter_name" field in the mutation.
+func (m *ExportJobMutation) DatacenterName() (r string, exists bool) {
+	v := m.datacenter_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDatacenterName returns the old "datacenter_name" field's value of the ExportJob entity.
+// If the ExportJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExportJobMutation) OldDatacenterName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDatacenterName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDatacenterName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDatacenterName: %w", err)
+	}
+	return oldValue.DatacenterName, nil
+}
+
+// ResetDatacenterName resets all changes to the "datacenter_name" field.
+func (m *ExportJobMutation) ResetDatacenterName() {
+	m.datacenter_name = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *ExportJobMutation) SetStatus(e exportjob.Status) {
+	m.status = &e
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *ExportJobMutation) Status() (r exportjob.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the ExportJob entity.
+// If the ExportJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExportJobMutation) OldStatus(ctx context.Context) (v exportjob.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *ExportJobMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetArtifactPath sets the "artifact_path" field.
+func (m *ExportJobMutation) SetArtifactPath(s string) {
+	m.artifact_path = &s
+}
+
+// ArtifactPath returns the value of the "artifact_path" field in the mutation.
+func (m *ExportJobMutation) ArtifactPath() (r string, exists bool) {
+	v := m.artifact_path
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldArtifactPath returns the old "artifact_path" field's value of the ExportJob entity.
+// If the ExportJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExportJobMutation) OldArtifactPath(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldArtifactPath is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldArtifactPath requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldArtifactPath: %w", err)
+	}
+	return oldValue.ArtifactPath, nil
+}
+
+// ClearArtifactPath clears the value of the "artifact_path" field.
+func (m *ExportJobMutation) ClearArtifactPath() {
+	m.artifact_path = nil
+	m.clearedFields[exportjob.FieldArtifactPath] = struct{}{}
+}
+
+// ArtifactPathCleared returns if the "artifact_path" field was cleared in this mutation.
+func (m *ExportJobMutation) ArtifactPathCleared() bool {
+	_, ok := m.clearedFields[exportjob.FieldArtifactPath]
+	return ok
+}
+
+// ResetArtifactPath resets all changes to the "artifact_path" field.
+func (m *ExportJobMutation) ResetArtifactPath() {
+	m.artifact_path = nil
+	delete(m.clearedFields, exportjob.FieldArtifactPath)
+}
+
+// SetError sets the "error" field.
+func (m *ExportJobMutation) SetError(s string) {
+	m.error = &s
+}
+
+// Error returns the value of the "error" field in the mutation.
+func (m *ExportJobMutation) Error() (r string, exists bool) {
+	v := m.error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldError returns the old "error" field's value of the ExportJob entity.
+// If the ExportJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExportJobMutation) OldError(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldError: %w", err)
+	}
+	return oldValue.Error, nil
+}
+
+// ClearError clears the value of the "error" field.
+func (m *ExportJobMutation) ClearError() {
+	m.error = nil
+	m.clearedFields[exportjob.FieldError] = struct{}{}
+}
+
+// ErrorCleared returns if the "error" field was cleared in this mutation.
+func (m *ExportJobMutation) ErrorCleared() bool {
+	_, ok := m.clearedFields[exportjob.FieldError]
+	return ok
+}
+
+// ResetError resets all changes to the "error" field.
+func (m *ExportJobMutation) ResetError() {
+	m.error = nil
+	delete(m.clearedFields, exportjob.FieldError)
+}
+
+// SetStartedAt sets the "started_at" field.
+func (m *ExportJobMutation) SetStartedAt(t time.Time) {
+	m.started_at = &t
+}
+
+// StartedAt returns the value of the "started_at" field in the mutation.
+func (m *ExportJobMutation) StartedAt() (r time.Time, exists bool) {
+	v := m.started_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartedAt returns the old "started_at" field's value of the ExportJob entity.
+// If the ExportJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExportJobMutation) OldStartedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartedAt: %w", err)
+	}
+	return oldValue.StartedAt, nil
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (m *ExportJobMutation) ClearStartedAt() {
+	m.started_at = nil
+	m.clearedFields[exportjob.FieldStartedAt] = struct{}{}
+}
+
+// StartedAtCleared returns if the "started_at" field was cleared in this mutation.
+func (m *ExportJobMutation) StartedAtCleared() bool {
+	_, ok := m.clearedFields[exportjob.FieldStartedAt]
+	return ok
+}
+
+// ResetStartedAt resets all changes to the "started_at" field.
+func (m *ExportJobMutation) ResetStartedAt() {
+	m.started_at = nil
+	delete(m.clearedFields, exportjob.FieldStartedAt)
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (m *ExportJobMutation) SetCompletedAt(t time.Time) {
+	m.completed_at = &t
+}
+
+// CompletedAt returns the value of the "completed_at" field in the mutation.
+func (m *ExportJobMutation) CompletedAt() (r time.Time, exists bool) {
+	v := m.completed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompletedAt returns the old "completed_at" field's value of the ExportJob entity.
+// If the ExportJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExportJobMutation) OldCompletedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompletedAt: %w", err)
+	}
+	return oldValue.CompletedAt, nil
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (m *ExportJobMutation) ClearCompletedAt() {
+	m.completed_at = nil
+	m.clearedFields[exportjob.FieldCompletedAt] = struct{}{}
+}
+
+// CompletedAtCleared returns if the "completed_at" field was cleared in this mutation.
+func (m *ExportJobMutation) CompletedAtCleared() bool {
+	_, ok := m.clearedFields[exportjob.FieldCompletedAt]
+	return ok
+}
+
+// ResetCompletedAt resets all changes to the "completed_at" field.
+func (m *ExportJobMutation) ResetCompletedAt() {
+	m.completed_at = nil
+	delete(m.clearedFields, exportjob.FieldCompletedAt)
+}
+
+// Where appends a list predicates to the ExportJobMutation builder.
+func (m *ExportJobMutation) Where(ps ...predicate.ExportJob) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ExportJobMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ExportJobMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ExportJob, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ExportJobMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ExportJobMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ExportJob).
+func (m *ExportJobMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ExportJobMutation) Fields() []string {
+	fields := make([]string, 0, 11)
+	if m.created_at != nil {
+		fields = append(fields, exportjob.FieldCreatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, exportjob.FieldCreatedBy)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, exportjob.FieldUpdatedAt)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, exportjob.FieldUpdatedBy)
+	}
+	if m.datacenter_id != nil {
+		fields = append(fields, exportjob.FieldDatacenterID)
+	}
+	if m.datacenter_name != nil {
+		fields = append(fields, exportjob.FieldDatacenterName)
+	}
+	if m.status != nil {
+		fields = append(fields, exportjob.FieldStatus)
+	}
+	if m.artifact_path != nil {
+		fields = append(fields, exportjob.FieldArtifactPath)
+	}
+	if m.error != nil {
+		fields = append(fields, exportjob.FieldError)
+	}
+	if m.started_at != nil {
+		fields = append(fields, exportjob.FieldStartedAt)
+	}
+	if m.completed_at != nil {
+		fields = append(fields, exportjob.FieldCompletedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ExportJobMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case exportjob.FieldCreatedAt:
+		return m.CreatedAt()
+	case exportjob.FieldCreatedBy:
+		return m.CreatedBy()
+	case exportjob.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case exportjob.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case exportjob.FieldDatacenterID:
+		return m.DatacenterID()
+	case exportjob.FieldDatacenterName:
+		return m.DatacenterName()
+	case exportjob.FieldStatus:
+		return m.Status()
+	case exportjob.FieldArtifactPath:
+		return m.ArtifactPath()
+	case exportjob.FieldError:
+		return m.Error()
+	case exportjob.FieldStartedAt:
+		return m.StartedAt()
+	case exportjob.FieldCompletedAt:
+		return m.CompletedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ExportJobMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case exportjob.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case exportjob.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case exportjob.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case exportjob.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case exportjob.FieldDatacenterID:
+		return m.OldDatacenterID(ctx)
+	case exportjob.FieldDatacenterName:
+		return m.OldDatacenterName(ctx)
+	case exportjob.FieldStatus:
+		return m.OldStatus(ctx)
+	case exportjob.FieldArtifactPath:
+		return m.OldArtifactPath(ctx)
+	case exportjob.FieldError:
+		return m.OldError(ctx)
+	case exportjob.FieldStartedAt:
+		return m.OldStartedAt(ctx)
+	case exportjob.FieldCompletedAt:
+		return m.OldCompletedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown ExportJob field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ExportJobMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case exportjob.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case exportjob.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case exportjob.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case exportjob.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case exportjob.FieldDatacenterID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDatacenterID(v)
+		return nil
+	case exportjob.FieldDatacenterName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDatacenterName(v)
+		return nil
+	case exportjob.FieldStatus:
+		v, ok := value.(exportjob.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case exportjob.FieldArtifactPath:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetArtifactPath(v)
+		return nil
+	case exportjob.FieldError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetError(v)
+		return nil
+	case exportjob.FieldStartedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartedAt(v)
+		return nil
+	case exportjob.FieldCompletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompletedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ExportJob field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ExportJobMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ExportJobMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ExportJobMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown ExportJob numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ExportJobMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(exportjob.FieldCreatedBy) {
+		fields = append(fields, exportjob.FieldCreatedBy)
+	}
+	if m.FieldCleared(exportjob.FieldUpdatedAt) {
+		fields = append(fields, exportjob.FieldUpdatedAt)
+	}
+	if m.FieldCleared(exportjob.FieldUpdatedBy) {
+		fields = append(fields, exportjob.FieldUpdatedBy)
+	}
+	if m.FieldCleared(exportjob.FieldArtifactPath) {
+		fields = append(fields, exportjob.FieldArtifactPath)
+	}
+	if m.FieldCleared(exportjob.FieldError) {
+		fields = append(fields, exportjob.FieldError)
+	}
+	if m.FieldCleared(exportjob.FieldStartedAt) {
+		fields = append(fields, exportjob.FieldStartedAt)
+	}
+	if m.FieldCleared(exportjob.FieldCompletedAt) {
+		fields = append(fields, exportjob.FieldCompletedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ExportJobMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ExportJobMutation) ClearField(name string) error {
+	switch name {
+	case exportjob.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case exportjob.FieldUpdatedAt:
+		m.ClearUpdatedAt()
+		return nil
+	case exportjob.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case exportjob.FieldArtifactPath:
+		m.ClearArtifactPath()
+		return nil
+	case exportjob.FieldError:
+		m.ClearError()
+		return nil
+	case exportjob.FieldStartedAt:
+		m.ClearStartedAt()
+		return nil
+	case exportjob.FieldCompletedAt:
+		m.ClearCompletedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown ExportJob nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ExportJobMutation) ResetField(name string) error {
+	switch name {
+	case exportjob.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case exportjob.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case exportjob.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case exportjob.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case exportjob.FieldDatacenterID:
+		m.ResetDatacenterID()
+		return nil
+	case exportjob.FieldDatacenterName:
+		m.ResetDatacenterName()
+		return nil
+	case exportjob.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case exportjob.FieldArtifactPath:
+		m.ResetArtifactPath()
+		return nil
+	case exportjob.FieldError:
+		m.ResetError()
+		return nil
+	case exportjob.FieldStartedAt:
+		m.ResetStartedAt()
+		return nil
+	case exportjob.FieldCompletedAt:
+		m.ResetCompletedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown ExportJob field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ExportJobMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ExportJobMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ExportJobMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ExportJobMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ExportJobMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ExportJobMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ExportJobMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown ExportJob unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ExportJobMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown ExportJob edge %s", name)
 }
 
 // NamespaceMutation represents an operation that mutates the Namespace nodes in the graph.

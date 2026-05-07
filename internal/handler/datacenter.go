@@ -29,10 +29,14 @@ const getDataCenterQuery = `
         orbId
         name
       }
+      serversAggregate {
+        count
+      }
       servers(order: { asc: rackPosition }) {
         id
         orbId
         name
+        hostname
         serviceTag
         model
         oobIP
@@ -82,10 +86,14 @@ type dcQueryResponse struct {
 		OrbID string `json:"orbId"`
 		Name  string `json:"name"`
 	} `json:"racks"`
+	ServersAggregate struct {
+		Count int `json:"count"`
+	} `json:"serversAggregate"`
 	Servers []struct {
 		ID           string `json:"id"`
 		OrbID        string `json:"orbId"`
 		Name         string `json:"name"`
+		Hostname     string `json:"hostname"`
 		ServiceTag   string `json:"serviceTag"`
 		Model        string `json:"model"`
 		OobIP        string `json:"oobIP"`
@@ -101,6 +109,7 @@ type serverTabData struct {
 	ID           string
 	OrbID        string
 	Name         string
+	Hostname     string
 	ServiceTag   string
 	Model        string
 	OobIP        string
@@ -117,16 +126,17 @@ type rackTabData struct {
 }
 
 type dataCenterTabData struct {
-	ID        string
-	OrbID     string
-	Name      string
-	CreatedBy string
-	CreatedAt string
-	UpdatedBy string
-	UpdatedAt string
-	Namespace struct{ Name string }
-	Racks     []rackTabData
-	Servers   []serverTabData
+	ID          string
+	OrbID       string
+	Name        string
+	CreatedBy   string
+	CreatedAt   string
+	UpdatedBy   string
+	UpdatedAt   string
+	Namespace   struct{ Name string }
+	ServerCount int
+	Racks       []rackTabData
+	Servers     []serverTabData
 }
 
 func (h *DataCenter) Tab(c echo.Context) error {
@@ -175,14 +185,15 @@ func (h *DataCenter) Tab(c echo.Context) error {
 	}
 
 	dc := dataCenterTabData{
-		ID:        raw.ID,
-		OrbID:     raw.OrbID,
-		Name:      raw.Name,
-		CreatedBy: raw.CreatedBy,
-		CreatedAt: raw.CreatedAt,
-		UpdatedBy: raw.UpdatedBy,
-		UpdatedAt: raw.UpdatedAt,
-		Namespace: struct{ Name string }{Name: raw.Namespace.Name},
+		ID:          raw.ID,
+		OrbID:       raw.OrbID,
+		Name:        raw.Name,
+		CreatedBy:   raw.CreatedBy,
+		CreatedAt:   raw.CreatedAt,
+		UpdatedBy:   raw.UpdatedBy,
+		UpdatedAt:   raw.UpdatedAt,
+		Namespace:   struct{ Name string }{Name: raw.Namespace.Name},
+		ServerCount: raw.ServersAggregate.Count,
 	}
 	for _, r := range raw.Racks {
 		dc.Racks = append(dc.Racks, rackTabData{
@@ -197,6 +208,7 @@ func (h *DataCenter) Tab(c echo.Context) error {
 			ID:           s.ID,
 			OrbID:        s.OrbID,
 			Name:         s.Name,
+			Hostname:     s.Hostname,
 			ServiceTag:   s.ServiceTag,
 			Model:        s.Model,
 			OobIP:        s.OobIP,
