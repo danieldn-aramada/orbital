@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/armada/orbital/ent"
+	"github.com/armada/orbital/internal/auth"
 	"github.com/armada/orbital/internal/config"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/metrics"
+	webtemplates "github.com/armada/orbital/web/templates"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	echoswagger "github.com/swaggo/echo-swagger"
@@ -35,6 +37,19 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	e.Use(metrics.Middleware())
 	e.GET("/metrics", metrics.Handler())
 
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			u, err := auth.GetUserSession(cfg.SessionSecret, c.Request())
+			c.Set("user_id", u.ID)
+			c.Set("user_name", u.Name)
+			c.Set("user_email", u.Email)
+			c.Set("is_authn", err == nil && u.ID > 0)
+			csrfToken, _ := auth.GetOrCreateCSRF(cfg.SessionSecret, c.Request(), c.Response().Writer)
+			c.Set("csrf_token", csrfToken)
+			return next(c)
+		}
+	})
+
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogMethod:  true,
 		LogURI:     true,
@@ -51,7 +66,8 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		},
 	}))
 
-	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL)
+	oidcEnabled := cfg.OIDCIssuerURL != ""
+	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled)
 	e.GET("/", ui.Index)
 	e.GET("/datacenters", ui.Index)
 	e.GET("/backups", ui.Backups)
@@ -59,6 +75,31 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	e.GET("/audit-log", ui.AuditLog)
 	e.GET("/schema", ui.Schema)
 	e.GET("/export", ui.Export)
+
+	if db != nil {
+		login := handler.NewLogin(db, cfg.SessionSecret, webtemplates.LoginForm())
+		e.POST("/user/login", login.Post)
+		e.POST("/user/logout", login.Logout)
+
+		if oidcEnabled {
+			oidc, err := handler.NewOIDC(
+				context.Background(),
+				db,
+				cfg.SessionSecret,
+				cfg.OIDCIssuerURL,
+				cfg.OIDCClientID,
+				cfg.OIDCClientSecret,
+				cfg.OIDCRedirectURL,
+				logger,
+			)
+			if err != nil {
+				logger.Error("oidc provider init failed", "err", err)
+			} else {
+				e.GET("/auth/login", oidc.Login)
+				e.GET("/auth/callback", oidc.Callback)
+			}
+		}
+	}
 
 	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.Dev, logger)
 	e.GET("/datacenters/:id", dc.Tab)
@@ -85,7 +126,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 func (s *Server) Start(ctx context.Context) error {
 	errCh := make(chan error, 1)
 
-	s.logger.Info("starting orb", "port", s.cfg.Port, "dgraph", s.cfg.DGraphURL)
+	s.logger.Info("starting orbital", "port", s.cfg.Port, "dgraph", s.cfg.DGraphURL)
 
 	go func() {
 		if err := s.echo.Start(":" + s.cfg.Port); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -99,7 +140,7 @@ func (s *Server) Start(ctx context.Context) error {
 	case err := <-errCh:
 		return fmt.Errorf("server error: %w", err)
 	default:
-		s.logger.Info("orb ready", "addr", ":"+s.cfg.Port)
+		s.logger.Info("orbital ready", "addr", ":"+s.cfg.Port)
 	}
 
 	select {

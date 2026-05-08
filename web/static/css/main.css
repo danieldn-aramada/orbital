@@ -21640,7 +21640,7 @@ has-background-danger.is-hoverable:active {
   border-top: 1px solid transparent;
   border-bottom: 1px solid transparent;
   border-color: hsl(var(--bulma-scheme-h), var(--bulma-scheme-s), calc(var(--bulma-scheme-main-l) - 6%));
-  min-height: 86vh;
+  flex: 1;
 }
 
 .app-main {
@@ -21727,6 +21727,8 @@ has-background-danger.is-hoverable:active {
   padding: 1em 0.5em 1em 1em;
   border-right: 1px solid hsl(var(--bulma-scheme-h), var(--bulma-scheme-s), calc(var(--bulma-scheme-main-l) - 6%));
   font-size: 14px;
+  display: flex;
+  flex-direction: column;
 }
 .app-menu a {
   color: inherit;
@@ -21879,6 +21881,16 @@ has-background-danger.is-hoverable:active {
 
 .k8s-icon img {
   filter: invert(100%);
+}
+
+.navbar {
+  --bulma-navbar-height: 4.5rem;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
 /*# sourceMappingURL=main.css.map */

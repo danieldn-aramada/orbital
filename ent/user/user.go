@@ -13,12 +13,12 @@ const (
 	Label = "user"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldFirstName holds the string denoting the first_name field in the database.
-	FieldFirstName = "first_name"
-	// FieldLastName holds the string denoting the last_name field in the database.
-	FieldLastName = "last_name"
 	// FieldEmail holds the string denoting the email field in the database.
 	FieldEmail = "email"
+	// FieldName holds the string denoting the name field in the database.
+	FieldName = "name"
+	// FieldPreferredUsername holds the string denoting the preferred_username field in the database.
+	FieldPreferredUsername = "preferred_username"
 	// FieldPasswordHash holds the string denoting the password_hash field in the database.
 	FieldPasswordHash = "password_hash"
 	// FieldVerified holds the string denoting the verified field in the database.
@@ -32,9 +32,9 @@ const (
 // Columns holds all SQL columns for user fields.
 var Columns = []string{
 	FieldID,
-	FieldFirstName,
-	FieldLastName,
 	FieldEmail,
+	FieldName,
+	FieldPreferredUsername,
 	FieldPasswordHash,
 	FieldVerified,
 	FieldCreatedAt,
@@ -51,14 +51,12 @@ func ValidColumn(column string) bool {
 }
 
 var (
-	// FirstNameValidator is a validator for the "first_name" field. It is called by the builders before save.
-	FirstNameValidator func(string) error
-	// LastNameValidator is a validator for the "last_name" field. It is called by the builders before save.
-	LastNameValidator func(string) error
 	// EmailValidator is a validator for the "email" field. It is called by the builders before save.
 	EmailValidator func(string) error
-	// PasswordHashValidator is a validator for the "password_hash" field. It is called by the builders before save.
-	PasswordHashValidator func(string) error
+	// NameValidator is a validator for the "name" field. It is called by the builders before save.
+	NameValidator func(string) error
+	// PreferredUsernameValidator is a validator for the "preferred_username" field. It is called by the builders before save.
+	PreferredUsernameValidator func(string) error
 	// DefaultVerified holds the default value on creation for the "verified" field.
 	DefaultVerified bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
@@ -73,19 +71,19 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
 }
 
-// ByFirstName orders the results by the first_name field.
-func ByFirstName(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldFirstName, opts...).ToFunc()
-}
-
-// ByLastName orders the results by the last_name field.
-func ByLastName(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldLastName, opts...).ToFunc()
-}
-
 // ByEmail orders the results by the email field.
 func ByEmail(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEmail, opts...).ToFunc()
+}
+
+// ByName orders the results by the name field.
+func ByName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldName, opts...).ToFunc()
+}
+
+// ByPreferredUsername orders the results by the preferred_username field.
+func ByPreferredUsername(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPreferredUsername, opts...).ToFunc()
 }
 
 // ByPasswordHash orders the results by the password_hash field.

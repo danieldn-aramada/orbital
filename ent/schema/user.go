@@ -15,10 +15,10 @@ type User struct {
 // Fields of the User.
 func (User) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("first_name").NotEmpty(),
-		field.String("last_name").NotEmpty(),
 		field.String("email").NotEmpty().Unique(),
-		field.String("password_hash").Sensitive().NotEmpty(),
+		field.String("name").NotEmpty(),
+		field.String("preferred_username").NotEmpty(),
+		field.String("password_hash").Sensitive().Optional().Nillable(),
 		field.Bool("verified").Default(false),
 		field.Time("created_at").Default(time.Now).Immutable(),
 	}

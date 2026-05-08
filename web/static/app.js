@@ -490,7 +490,7 @@ function showDatacenterSkeleton(id) {
             <span class="icon"><i class="fa-solid fa-gauge-high"></i></span>
             <span>Grafana</span>
           </button>
-          <button class="button is-rounded is-small is-link mt-1 is-loading" disabled>
+          <button class="button is-rounded is-small is-link mt-1" disabled>
             <span class="icon"><i class="fa-solid fa-refresh"></i></span>
             <span>Reload</span>
           </button>
@@ -742,6 +742,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.addEventListener('load', () => {
   if (!document.getElementById('datacenter-table')) return
+
+  if (new URLSearchParams(window.location.search).get('fresh') === '1') {
+    localStorage.removeItem('tabs')
+    localStorage.removeItem('tabCurrent')
+    history.replaceState(null, '', '/')
+  }
+
   if (!localStorage.tabs) return
   const tabSet = new Set(JSON.parse(localStorage.tabs))
   tabSet.forEach(tabData => {

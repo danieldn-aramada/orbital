@@ -13,6 +13,7 @@ var base = []string{
 	"web/templates/components/menu.gohtml",
 	"web/templates/components/todo-toast.gohtml",
 	"web/templates/components/report-issue-modal.gohtml",
+	"web/templates/components/login-modal.gohtml",
 }
 
 func page(path string) []string {
@@ -20,6 +21,12 @@ func page(path string) []string {
 	copy(files, base)
 	files[len(base)] = path
 	return files
+}
+
+// LoginForm returns a parsed template for the login form fragment.
+// Used by the login handler to re-render the form with error states.
+func LoginForm() *template.Template {
+	return template.Must(template.ParseFiles("web/templates/fragments/login-form.gohtml"))
 }
 
 // Map builds the full template map at startup. Each entry is an isolated

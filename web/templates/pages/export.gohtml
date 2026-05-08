@@ -4,6 +4,11 @@
       {{template "menu.gohtml" .}}
     </div>
     <div class="app-main p-5">
+      {{if not .IsAuthn}}
+        <div class="notification is-warning is-light">
+          <a class="js-modal-trigger" data-target="login-modal">Login</a> to view this page.
+        </div>
+      {{else}}
 
       <p class="is-size-4 mb-2">Export Subgraph</p>
       <p class="has-text-grey mb-5" style="font-size: 0.875rem;">
@@ -219,4 +224,7 @@
     }
 
   </script>
+      {{end}}
+    </div>
+  </main>
 {{end}}

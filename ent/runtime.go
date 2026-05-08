@@ -80,22 +80,18 @@ func init() {
 	orb.DefaultID = orbDescID.Default.(func() uuid.UUID)
 	userFields := schema.User{}.Fields()
 	_ = userFields
-	// userDescFirstName is the schema descriptor for first_name field.
-	userDescFirstName := userFields[0].Descriptor()
-	// user.FirstNameValidator is a validator for the "first_name" field. It is called by the builders before save.
-	user.FirstNameValidator = userDescFirstName.Validators[0].(func(string) error)
-	// userDescLastName is the schema descriptor for last_name field.
-	userDescLastName := userFields[1].Descriptor()
-	// user.LastNameValidator is a validator for the "last_name" field. It is called by the builders before save.
-	user.LastNameValidator = userDescLastName.Validators[0].(func(string) error)
 	// userDescEmail is the schema descriptor for email field.
-	userDescEmail := userFields[2].Descriptor()
+	userDescEmail := userFields[0].Descriptor()
 	// user.EmailValidator is a validator for the "email" field. It is called by the builders before save.
 	user.EmailValidator = userDescEmail.Validators[0].(func(string) error)
-	// userDescPasswordHash is the schema descriptor for password_hash field.
-	userDescPasswordHash := userFields[3].Descriptor()
-	// user.PasswordHashValidator is a validator for the "password_hash" field. It is called by the builders before save.
-	user.PasswordHashValidator = userDescPasswordHash.Validators[0].(func(string) error)
+	// userDescName is the schema descriptor for name field.
+	userDescName := userFields[1].Descriptor()
+	// user.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	user.NameValidator = userDescName.Validators[0].(func(string) error)
+	// userDescPreferredUsername is the schema descriptor for preferred_username field.
+	userDescPreferredUsername := userFields[2].Descriptor()
+	// user.PreferredUsernameValidator is a validator for the "preferred_username" field. It is called by the builders before save.
+	user.PreferredUsernameValidator = userDescPreferredUsername.Validators[0].(func(string) error)
 	// userDescVerified is the schema descriptor for verified field.
 	userDescVerified := userFields[4].Descriptor()
 	// user.DefaultVerified holds the default value on creation for the verified field.

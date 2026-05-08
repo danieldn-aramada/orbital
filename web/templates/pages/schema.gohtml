@@ -4,6 +4,11 @@
       {{template "menu.gohtml" .}}
     </div>
     <div class="app-main p-5">
+      {{if not .IsAuthn}}
+        <div class="notification is-warning is-light">
+          <a class="js-modal-trigger" data-target="login-modal">Login</a> to view this page.
+        </div>
+      {{else}}
 
       <nav class="tabs is-boxed has-text-weight-medium" style="font-size: 14px;">
         <ul id="tablist" role="tablist">
@@ -42,6 +47,7 @@
         </div>
       </div>
 
+      {{end}}
     </div>
   </main>
 {{end}}

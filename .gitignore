@@ -3,6 +3,7 @@
 
 # Deployment
 deploy/charts/dgraph/
+deploy/local/.env.local
 
 # Node
 node_modules/

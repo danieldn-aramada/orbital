@@ -7,10 +7,12 @@ type Base struct {
 	RegisterModal
 	Footer
 
-	Domain    string // default localhost:8080, production console.com
-	Links     []string
-	IsAuthn   bool
-	CsrfToken string
+	Domain     string // default localhost:8080, production console.com
+	Links      []string
+	IsAuthn    bool
+	OIDCEnabled bool
+	CsrfToken  string
+	AppVersion string
 
 	User
 }
@@ -41,7 +43,7 @@ type Footer struct {
 }
 
 type User struct {
-	Id        int
-	FirstName string
-	LastName  string
+	Id    int
+	Name  string
+	Email string
 }

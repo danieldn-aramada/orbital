@@ -1,19 +1,36 @@
 <div class="app-menu-section">
-  <h3 class="app-menu-section-heading" style="--section-color: #00b2ff;">
+  <h3 class="app-menu-section-heading has-text-primary">
     <span class="icon">
-      <i class="fa-solid fa-database"></i>
+      <i class="fa-solid fa-diagram-project"></i>
     </span>
-    <strong>Configuration</strong>
+    <strong>Graph</strong>
   </h3>
   <ul class="app-menu-section-list">
     <li class="app-menu-item">
-      <a class="app-menu-link" href="/datacenters">Data Centers</a>
+      <a class="app-menu-link" href="/">Data Centers</a>
+    </li>
+    <li class="app-menu-item">
+      <a class="app-menu-link" href="/schema">Schema Version</a>
     </li>
   </ul>
 </div>
 
 <div class="app-menu-section">
-  <h3 class="app-menu-section-heading" style="--section-color: #f19646;">
+  <h3 class="app-menu-section-heading has-text-warning">
+    <span class="icon">
+      <i class="fa-solid fa-paper-plane"></i>
+    </span>
+    <strong>Edge Delivery</strong>
+  </h3>
+  <ul class="app-menu-section-list">
+    <li class="app-menu-item">
+      <a class="app-menu-link" href="/export">Export Subgraph</a>
+    </li>
+  </ul>
+</div>
+
+<div class="app-menu-section">
+  <h3 class="app-menu-section-heading has-text-danger">
     <span class="icon">
       <i class="fa-solid fa-clock-rotate-left"></i>
     </span>
@@ -21,19 +38,17 @@
   </h3>
   <ul class="app-menu-section-list">
     <li class="app-menu-item">
-      <a class="app-menu-link" href="/divergence-reports">Divergence Reports</a>
+      <a class="app-menu-link" href="/backups">Backup Graph</a>
     </li>
     <li class="app-menu-item">
-      <a class="app-menu-link" href="/backups">Backups</a>
+      <a class="app-menu-link" href="/divergence-reports">Divergence Reports</a>
     </li>
     <li class="app-menu-item">
       <a class="app-menu-link" href="/audit-log">Audit Log</a>
     </li>
-    <li class="app-menu-item">
-      <a class="app-menu-link" href="/export">Export Subgraph</a>
-    </li>
-    <li class="app-menu-item">
-      <a class="app-menu-link" href="/schema">Schema Version</a>
-    </li>
   </ul>
+</div>
+
+<div class="is-size-7 has-text-grey has-text-centered" style="margin-top: auto; padding-top: 1rem;">
+  Orbital {{.AppVersion}}
 </div>

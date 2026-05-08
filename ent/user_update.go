@@ -27,34 +27,6 @@ func (_u *UserUpdate) Where(ps ...predicate.User) *UserUpdate {
 	return _u
 }
 
-// SetFirstName sets the "first_name" field.
-func (_u *UserUpdate) SetFirstName(v string) *UserUpdate {
-	_u.mutation.SetFirstName(v)
-	return _u
-}
-
-// SetNillableFirstName sets the "first_name" field if the given value is not nil.
-func (_u *UserUpdate) SetNillableFirstName(v *string) *UserUpdate {
-	if v != nil {
-		_u.SetFirstName(*v)
-	}
-	return _u
-}
-
-// SetLastName sets the "last_name" field.
-func (_u *UserUpdate) SetLastName(v string) *UserUpdate {
-	_u.mutation.SetLastName(v)
-	return _u
-}
-
-// SetNillableLastName sets the "last_name" field if the given value is not nil.
-func (_u *UserUpdate) SetNillableLastName(v *string) *UserUpdate {
-	if v != nil {
-		_u.SetLastName(*v)
-	}
-	return _u
-}
-
 // SetEmail sets the "email" field.
 func (_u *UserUpdate) SetEmail(v string) *UserUpdate {
 	_u.mutation.SetEmail(v)
@@ -65,6 +37,34 @@ func (_u *UserUpdate) SetEmail(v string) *UserUpdate {
 func (_u *UserUpdate) SetNillableEmail(v *string) *UserUpdate {
 	if v != nil {
 		_u.SetEmail(*v)
+	}
+	return _u
+}
+
+// SetName sets the "name" field.
+func (_u *UserUpdate) SetName(v string) *UserUpdate {
+	_u.mutation.SetName(v)
+	return _u
+}
+
+// SetNillableName sets the "name" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableName(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetName(*v)
+	}
+	return _u
+}
+
+// SetPreferredUsername sets the "preferred_username" field.
+func (_u *UserUpdate) SetPreferredUsername(v string) *UserUpdate {
+	_u.mutation.SetPreferredUsername(v)
+	return _u
+}
+
+// SetNillablePreferredUsername sets the "preferred_username" field if the given value is not nil.
+func (_u *UserUpdate) SetNillablePreferredUsername(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetPreferredUsername(*v)
 	}
 	return _u
 }
@@ -80,6 +80,12 @@ func (_u *UserUpdate) SetNillablePasswordHash(v *string) *UserUpdate {
 	if v != nil {
 		_u.SetPasswordHash(*v)
 	}
+	return _u
+}
+
+// ClearPasswordHash clears the value of the "password_hash" field.
+func (_u *UserUpdate) ClearPasswordHash() *UserUpdate {
+	_u.mutation.ClearPasswordHash()
 	return _u
 }
 
@@ -131,24 +137,19 @@ func (_u *UserUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *UserUpdate) check() error {
-	if v, ok := _u.mutation.FirstName(); ok {
-		if err := user.FirstNameValidator(v); err != nil {
-			return &ValidationError{Name: "first_name", err: fmt.Errorf(`ent: validator failed for field "User.first_name": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.LastName(); ok {
-		if err := user.LastNameValidator(v); err != nil {
-			return &ValidationError{Name: "last_name", err: fmt.Errorf(`ent: validator failed for field "User.last_name": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.Email(); ok {
 		if err := user.EmailValidator(v); err != nil {
 			return &ValidationError{Name: "email", err: fmt.Errorf(`ent: validator failed for field "User.email": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.PasswordHash(); ok {
-		if err := user.PasswordHashValidator(v); err != nil {
-			return &ValidationError{Name: "password_hash", err: fmt.Errorf(`ent: validator failed for field "User.password_hash": %w`, err)}
+	if v, ok := _u.mutation.Name(); ok {
+		if err := user.NameValidator(v); err != nil {
+			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "User.name": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PreferredUsername(); ok {
+		if err := user.PreferredUsernameValidator(v); err != nil {
+			return &ValidationError{Name: "preferred_username", err: fmt.Errorf(`ent: validator failed for field "User.preferred_username": %w`, err)}
 		}
 	}
 	return nil
@@ -166,17 +167,20 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
-	if value, ok := _u.mutation.FirstName(); ok {
-		_spec.SetField(user.FieldFirstName, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.LastName(); ok {
-		_spec.SetField(user.FieldLastName, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.Email(); ok {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.Name(); ok {
+		_spec.SetField(user.FieldName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PreferredUsername(); ok {
+		_spec.SetField(user.FieldPreferredUsername, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.PasswordHash(); ok {
 		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)
+	}
+	if _u.mutation.PasswordHashCleared() {
+		_spec.ClearField(user.FieldPasswordHash, field.TypeString)
 	}
 	if value, ok := _u.mutation.Verified(); ok {
 		_spec.SetField(user.FieldVerified, field.TypeBool, value)
@@ -201,34 +205,6 @@ type UserUpdateOne struct {
 	mutation *UserMutation
 }
 
-// SetFirstName sets the "first_name" field.
-func (_u *UserUpdateOne) SetFirstName(v string) *UserUpdateOne {
-	_u.mutation.SetFirstName(v)
-	return _u
-}
-
-// SetNillableFirstName sets the "first_name" field if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableFirstName(v *string) *UserUpdateOne {
-	if v != nil {
-		_u.SetFirstName(*v)
-	}
-	return _u
-}
-
-// SetLastName sets the "last_name" field.
-func (_u *UserUpdateOne) SetLastName(v string) *UserUpdateOne {
-	_u.mutation.SetLastName(v)
-	return _u
-}
-
-// SetNillableLastName sets the "last_name" field if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableLastName(v *string) *UserUpdateOne {
-	if v != nil {
-		_u.SetLastName(*v)
-	}
-	return _u
-}
-
 // SetEmail sets the "email" field.
 func (_u *UserUpdateOne) SetEmail(v string) *UserUpdateOne {
 	_u.mutation.SetEmail(v)
@@ -239,6 +215,34 @@ func (_u *UserUpdateOne) SetEmail(v string) *UserUpdateOne {
 func (_u *UserUpdateOne) SetNillableEmail(v *string) *UserUpdateOne {
 	if v != nil {
 		_u.SetEmail(*v)
+	}
+	return _u
+}
+
+// SetName sets the "name" field.
+func (_u *UserUpdateOne) SetName(v string) *UserUpdateOne {
+	_u.mutation.SetName(v)
+	return _u
+}
+
+// SetNillableName sets the "name" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableName(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetName(*v)
+	}
+	return _u
+}
+
+// SetPreferredUsername sets the "preferred_username" field.
+func (_u *UserUpdateOne) SetPreferredUsername(v string) *UserUpdateOne {
+	_u.mutation.SetPreferredUsername(v)
+	return _u
+}
+
+// SetNillablePreferredUsername sets the "preferred_username" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillablePreferredUsername(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetPreferredUsername(*v)
 	}
 	return _u
 }
@@ -254,6 +258,12 @@ func (_u *UserUpdateOne) SetNillablePasswordHash(v *string) *UserUpdateOne {
 	if v != nil {
 		_u.SetPasswordHash(*v)
 	}
+	return _u
+}
+
+// ClearPasswordHash clears the value of the "password_hash" field.
+func (_u *UserUpdateOne) ClearPasswordHash() *UserUpdateOne {
+	_u.mutation.ClearPasswordHash()
 	return _u
 }
 
@@ -318,24 +328,19 @@ func (_u *UserUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *UserUpdateOne) check() error {
-	if v, ok := _u.mutation.FirstName(); ok {
-		if err := user.FirstNameValidator(v); err != nil {
-			return &ValidationError{Name: "first_name", err: fmt.Errorf(`ent: validator failed for field "User.first_name": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.LastName(); ok {
-		if err := user.LastNameValidator(v); err != nil {
-			return &ValidationError{Name: "last_name", err: fmt.Errorf(`ent: validator failed for field "User.last_name": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.Email(); ok {
 		if err := user.EmailValidator(v); err != nil {
 			return &ValidationError{Name: "email", err: fmt.Errorf(`ent: validator failed for field "User.email": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.PasswordHash(); ok {
-		if err := user.PasswordHashValidator(v); err != nil {
-			return &ValidationError{Name: "password_hash", err: fmt.Errorf(`ent: validator failed for field "User.password_hash": %w`, err)}
+	if v, ok := _u.mutation.Name(); ok {
+		if err := user.NameValidator(v); err != nil {
+			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "User.name": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PreferredUsername(); ok {
+		if err := user.PreferredUsernameValidator(v); err != nil {
+			return &ValidationError{Name: "preferred_username", err: fmt.Errorf(`ent: validator failed for field "User.preferred_username": %w`, err)}
 		}
 	}
 	return nil
@@ -370,17 +375,20 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			}
 		}
 	}
-	if value, ok := _u.mutation.FirstName(); ok {
-		_spec.SetField(user.FieldFirstName, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.LastName(); ok {
-		_spec.SetField(user.FieldLastName, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.Email(); ok {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.Name(); ok {
+		_spec.SetField(user.FieldName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PreferredUsername(); ok {
+		_spec.SetField(user.FieldPreferredUsername, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.PasswordHash(); ok {
 		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)
+	}
+	if _u.mutation.PasswordHashCleared() {
+		_spec.ClearField(user.FieldPasswordHash, field.TypeString)
 	}
 	if value, ok := _u.mutation.Verified(); ok {
 		_spec.SetField(user.FieldVerified, field.TypeBool, value)

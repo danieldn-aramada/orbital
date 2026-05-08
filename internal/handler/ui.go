@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	appversion "github.com/armada/orbital/internal/version"
 	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/armada/orbital/internal/web/data/page"
 	webtemplates "github.com/armada/orbital/web/templates"
@@ -17,15 +18,17 @@ type UI struct {
 	dev             bool
 	ratelURL        string
 	issueTrackerURL string
+	oidcEnabled     bool
 	version         string
 	templates       map[string]*template.Template
 }
 
-func NewUI(dev bool, ratelURL, issueTrackerURL string) *UI {
+func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled bool) *UI {
 	return &UI{
 		dev:             dev,
 		ratelURL:        ratelURL,
 		issueTrackerURL: issueTrackerURL,
+		oidcEnabled:     oidcEnabled,
 		version:         fmt.Sprintf("%d", time.Now().Unix()),
 		templates:       webtemplates.Map(),
 	}
@@ -43,44 +46,58 @@ func (h *UI) render(c echo.Context, name string, data any) error {
 	return tmpl.ExecuteTemplate(c.Response().Writer, "base.gohtml", data)
 }
 
-func (h *UI) base() layout.Base {
+func (h *UI) base(c echo.Context) layout.Base {
+	isAuthn, _ := c.Get("is_authn").(bool)
+	userID, _ := c.Get("user_id").(int)
+	userName, _ := c.Get("user_name").(string)
+	userEmail, _ := c.Get("user_email").(string)
+	csrfToken, _ := c.Get("csrf_token").(string)
+	version := h.version
+	if h.dev {
+		version = fmt.Sprintf("%d", time.Now().UnixNano())
+	}
 	return layout.Base{
-		Head:   layout.Head{Version: h.version},
-		NavBar: layout.NavBar{RatelURL: h.ratelURL, IssueTrackerURL: h.issueTrackerURL},
+		Head:        layout.Head{Version: version},
+		NavBar:      layout.NavBar{RatelURL: h.ratelURL, IssueTrackerURL: h.issueTrackerURL},
+		IsAuthn:     isAuthn,
+		OIDCEnabled: h.oidcEnabled,
+		User:        layout.User{Id: userID, Name: userName, Email: userEmail},
+		CsrfToken:   csrfToken,
+		AppVersion:  appversion.Version,
 	}
 }
 
 func (h *UI) Index(c echo.Context) error {
 	return h.render(c, "home", page.Home{
-		Base:      h.base(),
+		Base:      h.base(c),
 		PageTitle: "Orbital",
 	})
 }
 
 func (h *UI) Backups(c echo.Context) error {
 	return h.render(c, "backups", page.Backups{
-		Base:      h.base(),
+		Base:      h.base(c),
 		PageTitle: "Backups",
 	})
 }
 
 func (h *UI) DivergenceReports(c echo.Context) error {
 	return h.render(c, "divergence-reports", page.DivergenceReports{
-		Base:      h.base(),
+		Base:      h.base(c),
 		PageTitle: "Divergence Reports",
 	})
 }
 
 func (h *UI) AuditLog(c echo.Context) error {
 	return h.render(c, "audit-log", page.AuditLog{
-		Base:      h.base(),
+		Base:      h.base(c),
 		PageTitle: "Audit Log",
 	})
 }
 
 func (h *UI) Export(c echo.Context) error {
 	return h.render(c, "export", page.Export{
-		Base:      h.base(),
+		Base:      h.base(c),
 		PageTitle: "Export Subgraph",
 	})
 }
@@ -92,7 +109,7 @@ func (h *UI) Schema(c echo.Context) error {
 	}
 	sum := sha256.Sum256(content)
 	return h.render(c, "schema", page.Schema{
-		Base:      h.base(),
+		Base:      h.base(c),
 		PageTitle: "Schema",
 		Version:   "v1",
 		Checksum:  fmt.Sprintf("%x", sum[:6]),

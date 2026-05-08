@@ -20,27 +20,35 @@ type UserCreate struct {
 	hooks    []Hook
 }
 
-// SetFirstName sets the "first_name" field.
-func (_c *UserCreate) SetFirstName(v string) *UserCreate {
-	_c.mutation.SetFirstName(v)
-	return _c
-}
-
-// SetLastName sets the "last_name" field.
-func (_c *UserCreate) SetLastName(v string) *UserCreate {
-	_c.mutation.SetLastName(v)
-	return _c
-}
-
 // SetEmail sets the "email" field.
 func (_c *UserCreate) SetEmail(v string) *UserCreate {
 	_c.mutation.SetEmail(v)
 	return _c
 }
 
+// SetName sets the "name" field.
+func (_c *UserCreate) SetName(v string) *UserCreate {
+	_c.mutation.SetName(v)
+	return _c
+}
+
+// SetPreferredUsername sets the "preferred_username" field.
+func (_c *UserCreate) SetPreferredUsername(v string) *UserCreate {
+	_c.mutation.SetPreferredUsername(v)
+	return _c
+}
+
 // SetPasswordHash sets the "password_hash" field.
 func (_c *UserCreate) SetPasswordHash(v string) *UserCreate {
 	_c.mutation.SetPasswordHash(v)
+	return _c
+}
+
+// SetNillablePasswordHash sets the "password_hash" field if the given value is not nil.
+func (_c *UserCreate) SetNillablePasswordHash(v *string) *UserCreate {
+	if v != nil {
+		_c.SetPasswordHash(*v)
+	}
 	return _c
 }
 
@@ -119,22 +127,6 @@ func (_c *UserCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *UserCreate) check() error {
-	if _, ok := _c.mutation.FirstName(); !ok {
-		return &ValidationError{Name: "first_name", err: errors.New(`ent: missing required field "User.first_name"`)}
-	}
-	if v, ok := _c.mutation.FirstName(); ok {
-		if err := user.FirstNameValidator(v); err != nil {
-			return &ValidationError{Name: "first_name", err: fmt.Errorf(`ent: validator failed for field "User.first_name": %w`, err)}
-		}
-	}
-	if _, ok := _c.mutation.LastName(); !ok {
-		return &ValidationError{Name: "last_name", err: errors.New(`ent: missing required field "User.last_name"`)}
-	}
-	if v, ok := _c.mutation.LastName(); ok {
-		if err := user.LastNameValidator(v); err != nil {
-			return &ValidationError{Name: "last_name", err: fmt.Errorf(`ent: validator failed for field "User.last_name": %w`, err)}
-		}
-	}
 	if _, ok := _c.mutation.Email(); !ok {
 		return &ValidationError{Name: "email", err: errors.New(`ent: missing required field "User.email"`)}
 	}
@@ -143,12 +135,20 @@ func (_c *UserCreate) check() error {
 			return &ValidationError{Name: "email", err: fmt.Errorf(`ent: validator failed for field "User.email": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.PasswordHash(); !ok {
-		return &ValidationError{Name: "password_hash", err: errors.New(`ent: missing required field "User.password_hash"`)}
+	if _, ok := _c.mutation.Name(); !ok {
+		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "User.name"`)}
 	}
-	if v, ok := _c.mutation.PasswordHash(); ok {
-		if err := user.PasswordHashValidator(v); err != nil {
-			return &ValidationError{Name: "password_hash", err: fmt.Errorf(`ent: validator failed for field "User.password_hash": %w`, err)}
+	if v, ok := _c.mutation.Name(); ok {
+		if err := user.NameValidator(v); err != nil {
+			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "User.name": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.PreferredUsername(); !ok {
+		return &ValidationError{Name: "preferred_username", err: errors.New(`ent: missing required field "User.preferred_username"`)}
+	}
+	if v, ok := _c.mutation.PreferredUsername(); ok {
+		if err := user.PreferredUsernameValidator(v); err != nil {
+			return &ValidationError{Name: "preferred_username", err: fmt.Errorf(`ent: validator failed for field "User.preferred_username": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.Verified(); !ok {
@@ -183,21 +183,21 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		_node = &User{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(user.Table, sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt))
 	)
-	if value, ok := _c.mutation.FirstName(); ok {
-		_spec.SetField(user.FieldFirstName, field.TypeString, value)
-		_node.FirstName = value
-	}
-	if value, ok := _c.mutation.LastName(); ok {
-		_spec.SetField(user.FieldLastName, field.TypeString, value)
-		_node.LastName = value
-	}
 	if value, ok := _c.mutation.Email(); ok {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)
 		_node.Email = value
 	}
+	if value, ok := _c.mutation.Name(); ok {
+		_spec.SetField(user.FieldName, field.TypeString, value)
+		_node.Name = value
+	}
+	if value, ok := _c.mutation.PreferredUsername(); ok {
+		_spec.SetField(user.FieldPreferredUsername, field.TypeString, value)
+		_node.PreferredUsername = value
+	}
 	if value, ok := _c.mutation.PasswordHash(); ok {
 		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)
-		_node.PasswordHash = value
+		_node.PasswordHash = &value
 	}
 	if value, ok := _c.mutation.Verified(); ok {
 		_spec.SetField(user.FieldVerified, field.TypeBool, value)

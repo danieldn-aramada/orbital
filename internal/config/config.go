@@ -22,6 +22,11 @@ type Config struct {
 	ExportDir             string        `envconfig:"ORBITAL_EXPORT_DIR"            default:"./subgraph-exports"`
 	DGraphScratchExportDir string       `envconfig:"DGRAPH_SCRATCH_EXPORT_DIR"     default:"./subgraph-exports/scratch"`
 	SchemaPath            string        `envconfig:"ORBITAL_SCHEMA_PATH"           default:"schema/schema-demo.graphql"`
+	SessionSecret         string        `envconfig:"ORBITAL_SESSION_SECRET"        default:"change-me-in-production"`
+	OIDCIssuerURL         string        `envconfig:"ORBITAL_OIDC_ISSUER_URL"       default:""`
+	OIDCClientID          string        `envconfig:"ORBITAL_OIDC_CLIENT_ID"        default:""`
+	OIDCClientSecret      string        `envconfig:"ORBITAL_OIDC_CLIENT_SECRET"    default:""`
+	OIDCRedirectURL       string        `envconfig:"ORBITAL_OIDC_REDIRECT_URL"     default:""`
 }
 
 func New() (*Config, error) {
