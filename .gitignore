@@ -3,7 +3,6 @@
 
 # Deployment
 deploy/charts/dgraph/
-deploy/local/.env.local
 
 # Node
 node_modules/
@@ -32,6 +31,7 @@ playwright-report/
 
 # Export artifacts
 subgraph-exports/
+dgraph-exports/
 
 # OS
 .DS_Store

@@ -6,24 +6,23 @@ import (
 	"github.com/google/uuid"
 )
 
-// Backup holds the schema definition for the Backup entity.
+// Backup tracks an async DGraph backup operation.
 type Backup struct {
 	ent.Schema
 }
 
-// Fields of the Backup.
 func (Backup) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).Default(uuid.New),
-		field.String("bucket"),
-		field.String("key"),
-		field.String("endpoint"),
-		field.Enum("status").Values("pending", "in_progress", "completed", "failed"),
-		field.String("dgraph_instance").Optional(),
-		field.String("checksum").Optional(),
+		field.Enum("status").Values("pending", "running", "completed", "skipped", "failed"),
+		field.String("s3_bucket").Optional(),
+		field.String("s3_key").Optional(),        // object key within the bucket
+		field.String("s3_endpoint").Optional(),   // custom endpoint; empty = AWS S3
+		field.String("checksum").Optional(),      // SHA-256 of json.gz; used for dedup
 		field.String("schema_version").Optional(),
-		field.String("error").Optional(),
-		field.Int64("size_bytes").Optional(),
+		field.Int64("size_bytes").Optional().Nillable(),
+		field.String("error").Optional().Nillable(),
+		field.Time("started_at").Optional().Nillable(),
 		field.Time("completed_at").Optional().Nillable(),
 	}
 }
@@ -34,7 +33,6 @@ func (Backup) Mixin() []ent.Mixin {
 	}
 }
 
-// Edges of the Backup.
 func (Backup) Edges() []ent.Edge {
 	return nil
 }

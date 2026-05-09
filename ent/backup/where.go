@@ -75,24 +75,19 @@ func UpdatedBy(v string) predicate.Backup {
 	return predicate.Backup(sql.FieldEQ(FieldUpdatedBy, v))
 }
 
-// Bucket applies equality check predicate on the "bucket" field. It's identical to BucketEQ.
-func Bucket(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldEQ(FieldBucket, v))
+// S3Bucket applies equality check predicate on the "s3_bucket" field. It's identical to S3BucketEQ.
+func S3Bucket(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldEQ(FieldS3Bucket, v))
 }
 
-// Key applies equality check predicate on the "key" field. It's identical to KeyEQ.
-func Key(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldEQ(FieldKey, v))
+// S3Key applies equality check predicate on the "s3_key" field. It's identical to S3KeyEQ.
+func S3Key(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldEQ(FieldS3Key, v))
 }
 
-// Endpoint applies equality check predicate on the "endpoint" field. It's identical to EndpointEQ.
-func Endpoint(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldEQ(FieldEndpoint, v))
-}
-
-// DgraphInstance applies equality check predicate on the "dgraph_instance" field. It's identical to DgraphInstanceEQ.
-func DgraphInstance(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldEQ(FieldDgraphInstance, v))
+// S3Endpoint applies equality check predicate on the "s3_endpoint" field. It's identical to S3EndpointEQ.
+func S3Endpoint(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldEQ(FieldS3Endpoint, v))
 }
 
 // Checksum applies equality check predicate on the "checksum" field. It's identical to ChecksumEQ.
@@ -105,14 +100,19 @@ func SchemaVersion(v string) predicate.Backup {
 	return predicate.Backup(sql.FieldEQ(FieldSchemaVersion, v))
 }
 
+// SizeBytes applies equality check predicate on the "size_bytes" field. It's identical to SizeBytesEQ.
+func SizeBytes(v int64) predicate.Backup {
+	return predicate.Backup(sql.FieldEQ(FieldSizeBytes, v))
+}
+
 // Error applies equality check predicate on the "error" field. It's identical to ErrorEQ.
 func Error(v string) predicate.Backup {
 	return predicate.Backup(sql.FieldEQ(FieldError, v))
 }
 
-// SizeBytes applies equality check predicate on the "size_bytes" field. It's identical to SizeBytesEQ.
-func SizeBytes(v int64) predicate.Backup {
-	return predicate.Backup(sql.FieldEQ(FieldSizeBytes, v))
+// StartedAt applies equality check predicate on the "started_at" field. It's identical to StartedAtEQ.
+func StartedAt(v time.Time) predicate.Backup {
+	return predicate.Backup(sql.FieldEQ(FieldStartedAt, v))
 }
 
 // CompletedAt applies equality check predicate on the "completed_at" field. It's identical to CompletedAtEQ.
@@ -360,201 +360,6 @@ func UpdatedByContainsFold(v string) predicate.Backup {
 	return predicate.Backup(sql.FieldContainsFold(FieldUpdatedBy, v))
 }
 
-// BucketEQ applies the EQ predicate on the "bucket" field.
-func BucketEQ(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldEQ(FieldBucket, v))
-}
-
-// BucketNEQ applies the NEQ predicate on the "bucket" field.
-func BucketNEQ(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldNEQ(FieldBucket, v))
-}
-
-// BucketIn applies the In predicate on the "bucket" field.
-func BucketIn(vs ...string) predicate.Backup {
-	return predicate.Backup(sql.FieldIn(FieldBucket, vs...))
-}
-
-// BucketNotIn applies the NotIn predicate on the "bucket" field.
-func BucketNotIn(vs ...string) predicate.Backup {
-	return predicate.Backup(sql.FieldNotIn(FieldBucket, vs...))
-}
-
-// BucketGT applies the GT predicate on the "bucket" field.
-func BucketGT(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldGT(FieldBucket, v))
-}
-
-// BucketGTE applies the GTE predicate on the "bucket" field.
-func BucketGTE(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldGTE(FieldBucket, v))
-}
-
-// BucketLT applies the LT predicate on the "bucket" field.
-func BucketLT(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldLT(FieldBucket, v))
-}
-
-// BucketLTE applies the LTE predicate on the "bucket" field.
-func BucketLTE(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldLTE(FieldBucket, v))
-}
-
-// BucketContains applies the Contains predicate on the "bucket" field.
-func BucketContains(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldContains(FieldBucket, v))
-}
-
-// BucketHasPrefix applies the HasPrefix predicate on the "bucket" field.
-func BucketHasPrefix(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldHasPrefix(FieldBucket, v))
-}
-
-// BucketHasSuffix applies the HasSuffix predicate on the "bucket" field.
-func BucketHasSuffix(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldHasSuffix(FieldBucket, v))
-}
-
-// BucketEqualFold applies the EqualFold predicate on the "bucket" field.
-func BucketEqualFold(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldEqualFold(FieldBucket, v))
-}
-
-// BucketContainsFold applies the ContainsFold predicate on the "bucket" field.
-func BucketContainsFold(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldContainsFold(FieldBucket, v))
-}
-
-// KeyEQ applies the EQ predicate on the "key" field.
-func KeyEQ(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldEQ(FieldKey, v))
-}
-
-// KeyNEQ applies the NEQ predicate on the "key" field.
-func KeyNEQ(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldNEQ(FieldKey, v))
-}
-
-// KeyIn applies the In predicate on the "key" field.
-func KeyIn(vs ...string) predicate.Backup {
-	return predicate.Backup(sql.FieldIn(FieldKey, vs...))
-}
-
-// KeyNotIn applies the NotIn predicate on the "key" field.
-func KeyNotIn(vs ...string) predicate.Backup {
-	return predicate.Backup(sql.FieldNotIn(FieldKey, vs...))
-}
-
-// KeyGT applies the GT predicate on the "key" field.
-func KeyGT(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldGT(FieldKey, v))
-}
-
-// KeyGTE applies the GTE predicate on the "key" field.
-func KeyGTE(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldGTE(FieldKey, v))
-}
-
-// KeyLT applies the LT predicate on the "key" field.
-func KeyLT(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldLT(FieldKey, v))
-}
-
-// KeyLTE applies the LTE predicate on the "key" field.
-func KeyLTE(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldLTE(FieldKey, v))
-}
-
-// KeyContains applies the Contains predicate on the "key" field.
-func KeyContains(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldContains(FieldKey, v))
-}
-
-// KeyHasPrefix applies the HasPrefix predicate on the "key" field.
-func KeyHasPrefix(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldHasPrefix(FieldKey, v))
-}
-
-// KeyHasSuffix applies the HasSuffix predicate on the "key" field.
-func KeyHasSuffix(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldHasSuffix(FieldKey, v))
-}
-
-// KeyEqualFold applies the EqualFold predicate on the "key" field.
-func KeyEqualFold(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldEqualFold(FieldKey, v))
-}
-
-// KeyContainsFold applies the ContainsFold predicate on the "key" field.
-func KeyContainsFold(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldContainsFold(FieldKey, v))
-}
-
-// EndpointEQ applies the EQ predicate on the "endpoint" field.
-func EndpointEQ(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldEQ(FieldEndpoint, v))
-}
-
-// EndpointNEQ applies the NEQ predicate on the "endpoint" field.
-func EndpointNEQ(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldNEQ(FieldEndpoint, v))
-}
-
-// EndpointIn applies the In predicate on the "endpoint" field.
-func EndpointIn(vs ...string) predicate.Backup {
-	return predicate.Backup(sql.FieldIn(FieldEndpoint, vs...))
-}
-
-// EndpointNotIn applies the NotIn predicate on the "endpoint" field.
-func EndpointNotIn(vs ...string) predicate.Backup {
-	return predicate.Backup(sql.FieldNotIn(FieldEndpoint, vs...))
-}
-
-// EndpointGT applies the GT predicate on the "endpoint" field.
-func EndpointGT(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldGT(FieldEndpoint, v))
-}
-
-// EndpointGTE applies the GTE predicate on the "endpoint" field.
-func EndpointGTE(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldGTE(FieldEndpoint, v))
-}
-
-// EndpointLT applies the LT predicate on the "endpoint" field.
-func EndpointLT(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldLT(FieldEndpoint, v))
-}
-
-// EndpointLTE applies the LTE predicate on the "endpoint" field.
-func EndpointLTE(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldLTE(FieldEndpoint, v))
-}
-
-// EndpointContains applies the Contains predicate on the "endpoint" field.
-func EndpointContains(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldContains(FieldEndpoint, v))
-}
-
-// EndpointHasPrefix applies the HasPrefix predicate on the "endpoint" field.
-func EndpointHasPrefix(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldHasPrefix(FieldEndpoint, v))
-}
-
-// EndpointHasSuffix applies the HasSuffix predicate on the "endpoint" field.
-func EndpointHasSuffix(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldHasSuffix(FieldEndpoint, v))
-}
-
-// EndpointEqualFold applies the EqualFold predicate on the "endpoint" field.
-func EndpointEqualFold(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldEqualFold(FieldEndpoint, v))
-}
-
-// EndpointContainsFold applies the ContainsFold predicate on the "endpoint" field.
-func EndpointContainsFold(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldContainsFold(FieldEndpoint, v))
-}
-
 // StatusEQ applies the EQ predicate on the "status" field.
 func StatusEQ(v Status) predicate.Backup {
 	return predicate.Backup(sql.FieldEQ(FieldStatus, v))
@@ -575,79 +380,229 @@ func StatusNotIn(vs ...Status) predicate.Backup {
 	return predicate.Backup(sql.FieldNotIn(FieldStatus, vs...))
 }
 
-// DgraphInstanceEQ applies the EQ predicate on the "dgraph_instance" field.
-func DgraphInstanceEQ(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldEQ(FieldDgraphInstance, v))
+// S3BucketEQ applies the EQ predicate on the "s3_bucket" field.
+func S3BucketEQ(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldEQ(FieldS3Bucket, v))
 }
 
-// DgraphInstanceNEQ applies the NEQ predicate on the "dgraph_instance" field.
-func DgraphInstanceNEQ(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldNEQ(FieldDgraphInstance, v))
+// S3BucketNEQ applies the NEQ predicate on the "s3_bucket" field.
+func S3BucketNEQ(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldNEQ(FieldS3Bucket, v))
 }
 
-// DgraphInstanceIn applies the In predicate on the "dgraph_instance" field.
-func DgraphInstanceIn(vs ...string) predicate.Backup {
-	return predicate.Backup(sql.FieldIn(FieldDgraphInstance, vs...))
+// S3BucketIn applies the In predicate on the "s3_bucket" field.
+func S3BucketIn(vs ...string) predicate.Backup {
+	return predicate.Backup(sql.FieldIn(FieldS3Bucket, vs...))
 }
 
-// DgraphInstanceNotIn applies the NotIn predicate on the "dgraph_instance" field.
-func DgraphInstanceNotIn(vs ...string) predicate.Backup {
-	return predicate.Backup(sql.FieldNotIn(FieldDgraphInstance, vs...))
+// S3BucketNotIn applies the NotIn predicate on the "s3_bucket" field.
+func S3BucketNotIn(vs ...string) predicate.Backup {
+	return predicate.Backup(sql.FieldNotIn(FieldS3Bucket, vs...))
 }
 
-// DgraphInstanceGT applies the GT predicate on the "dgraph_instance" field.
-func DgraphInstanceGT(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldGT(FieldDgraphInstance, v))
+// S3BucketGT applies the GT predicate on the "s3_bucket" field.
+func S3BucketGT(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldGT(FieldS3Bucket, v))
 }
 
-// DgraphInstanceGTE applies the GTE predicate on the "dgraph_instance" field.
-func DgraphInstanceGTE(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldGTE(FieldDgraphInstance, v))
+// S3BucketGTE applies the GTE predicate on the "s3_bucket" field.
+func S3BucketGTE(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldGTE(FieldS3Bucket, v))
 }
 
-// DgraphInstanceLT applies the LT predicate on the "dgraph_instance" field.
-func DgraphInstanceLT(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldLT(FieldDgraphInstance, v))
+// S3BucketLT applies the LT predicate on the "s3_bucket" field.
+func S3BucketLT(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldLT(FieldS3Bucket, v))
 }
 
-// DgraphInstanceLTE applies the LTE predicate on the "dgraph_instance" field.
-func DgraphInstanceLTE(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldLTE(FieldDgraphInstance, v))
+// S3BucketLTE applies the LTE predicate on the "s3_bucket" field.
+func S3BucketLTE(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldLTE(FieldS3Bucket, v))
 }
 
-// DgraphInstanceContains applies the Contains predicate on the "dgraph_instance" field.
-func DgraphInstanceContains(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldContains(FieldDgraphInstance, v))
+// S3BucketContains applies the Contains predicate on the "s3_bucket" field.
+func S3BucketContains(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldContains(FieldS3Bucket, v))
 }
 
-// DgraphInstanceHasPrefix applies the HasPrefix predicate on the "dgraph_instance" field.
-func DgraphInstanceHasPrefix(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldHasPrefix(FieldDgraphInstance, v))
+// S3BucketHasPrefix applies the HasPrefix predicate on the "s3_bucket" field.
+func S3BucketHasPrefix(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldHasPrefix(FieldS3Bucket, v))
 }
 
-// DgraphInstanceHasSuffix applies the HasSuffix predicate on the "dgraph_instance" field.
-func DgraphInstanceHasSuffix(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldHasSuffix(FieldDgraphInstance, v))
+// S3BucketHasSuffix applies the HasSuffix predicate on the "s3_bucket" field.
+func S3BucketHasSuffix(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldHasSuffix(FieldS3Bucket, v))
 }
 
-// DgraphInstanceIsNil applies the IsNil predicate on the "dgraph_instance" field.
-func DgraphInstanceIsNil() predicate.Backup {
-	return predicate.Backup(sql.FieldIsNull(FieldDgraphInstance))
+// S3BucketIsNil applies the IsNil predicate on the "s3_bucket" field.
+func S3BucketIsNil() predicate.Backup {
+	return predicate.Backup(sql.FieldIsNull(FieldS3Bucket))
 }
 
-// DgraphInstanceNotNil applies the NotNil predicate on the "dgraph_instance" field.
-func DgraphInstanceNotNil() predicate.Backup {
-	return predicate.Backup(sql.FieldNotNull(FieldDgraphInstance))
+// S3BucketNotNil applies the NotNil predicate on the "s3_bucket" field.
+func S3BucketNotNil() predicate.Backup {
+	return predicate.Backup(sql.FieldNotNull(FieldS3Bucket))
 }
 
-// DgraphInstanceEqualFold applies the EqualFold predicate on the "dgraph_instance" field.
-func DgraphInstanceEqualFold(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldEqualFold(FieldDgraphInstance, v))
+// S3BucketEqualFold applies the EqualFold predicate on the "s3_bucket" field.
+func S3BucketEqualFold(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldEqualFold(FieldS3Bucket, v))
 }
 
-// DgraphInstanceContainsFold applies the ContainsFold predicate on the "dgraph_instance" field.
-func DgraphInstanceContainsFold(v string) predicate.Backup {
-	return predicate.Backup(sql.FieldContainsFold(FieldDgraphInstance, v))
+// S3BucketContainsFold applies the ContainsFold predicate on the "s3_bucket" field.
+func S3BucketContainsFold(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldContainsFold(FieldS3Bucket, v))
+}
+
+// S3KeyEQ applies the EQ predicate on the "s3_key" field.
+func S3KeyEQ(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldEQ(FieldS3Key, v))
+}
+
+// S3KeyNEQ applies the NEQ predicate on the "s3_key" field.
+func S3KeyNEQ(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldNEQ(FieldS3Key, v))
+}
+
+// S3KeyIn applies the In predicate on the "s3_key" field.
+func S3KeyIn(vs ...string) predicate.Backup {
+	return predicate.Backup(sql.FieldIn(FieldS3Key, vs...))
+}
+
+// S3KeyNotIn applies the NotIn predicate on the "s3_key" field.
+func S3KeyNotIn(vs ...string) predicate.Backup {
+	return predicate.Backup(sql.FieldNotIn(FieldS3Key, vs...))
+}
+
+// S3KeyGT applies the GT predicate on the "s3_key" field.
+func S3KeyGT(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldGT(FieldS3Key, v))
+}
+
+// S3KeyGTE applies the GTE predicate on the "s3_key" field.
+func S3KeyGTE(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldGTE(FieldS3Key, v))
+}
+
+// S3KeyLT applies the LT predicate on the "s3_key" field.
+func S3KeyLT(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldLT(FieldS3Key, v))
+}
+
+// S3KeyLTE applies the LTE predicate on the "s3_key" field.
+func S3KeyLTE(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldLTE(FieldS3Key, v))
+}
+
+// S3KeyContains applies the Contains predicate on the "s3_key" field.
+func S3KeyContains(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldContains(FieldS3Key, v))
+}
+
+// S3KeyHasPrefix applies the HasPrefix predicate on the "s3_key" field.
+func S3KeyHasPrefix(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldHasPrefix(FieldS3Key, v))
+}
+
+// S3KeyHasSuffix applies the HasSuffix predicate on the "s3_key" field.
+func S3KeyHasSuffix(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldHasSuffix(FieldS3Key, v))
+}
+
+// S3KeyIsNil applies the IsNil predicate on the "s3_key" field.
+func S3KeyIsNil() predicate.Backup {
+	return predicate.Backup(sql.FieldIsNull(FieldS3Key))
+}
+
+// S3KeyNotNil applies the NotNil predicate on the "s3_key" field.
+func S3KeyNotNil() predicate.Backup {
+	return predicate.Backup(sql.FieldNotNull(FieldS3Key))
+}
+
+// S3KeyEqualFold applies the EqualFold predicate on the "s3_key" field.
+func S3KeyEqualFold(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldEqualFold(FieldS3Key, v))
+}
+
+// S3KeyContainsFold applies the ContainsFold predicate on the "s3_key" field.
+func S3KeyContainsFold(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldContainsFold(FieldS3Key, v))
+}
+
+// S3EndpointEQ applies the EQ predicate on the "s3_endpoint" field.
+func S3EndpointEQ(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldEQ(FieldS3Endpoint, v))
+}
+
+// S3EndpointNEQ applies the NEQ predicate on the "s3_endpoint" field.
+func S3EndpointNEQ(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldNEQ(FieldS3Endpoint, v))
+}
+
+// S3EndpointIn applies the In predicate on the "s3_endpoint" field.
+func S3EndpointIn(vs ...string) predicate.Backup {
+	return predicate.Backup(sql.FieldIn(FieldS3Endpoint, vs...))
+}
+
+// S3EndpointNotIn applies the NotIn predicate on the "s3_endpoint" field.
+func S3EndpointNotIn(vs ...string) predicate.Backup {
+	return predicate.Backup(sql.FieldNotIn(FieldS3Endpoint, vs...))
+}
+
+// S3EndpointGT applies the GT predicate on the "s3_endpoint" field.
+func S3EndpointGT(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldGT(FieldS3Endpoint, v))
+}
+
+// S3EndpointGTE applies the GTE predicate on the "s3_endpoint" field.
+func S3EndpointGTE(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldGTE(FieldS3Endpoint, v))
+}
+
+// S3EndpointLT applies the LT predicate on the "s3_endpoint" field.
+func S3EndpointLT(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldLT(FieldS3Endpoint, v))
+}
+
+// S3EndpointLTE applies the LTE predicate on the "s3_endpoint" field.
+func S3EndpointLTE(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldLTE(FieldS3Endpoint, v))
+}
+
+// S3EndpointContains applies the Contains predicate on the "s3_endpoint" field.
+func S3EndpointContains(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldContains(FieldS3Endpoint, v))
+}
+
+// S3EndpointHasPrefix applies the HasPrefix predicate on the "s3_endpoint" field.
+func S3EndpointHasPrefix(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldHasPrefix(FieldS3Endpoint, v))
+}
+
+// S3EndpointHasSuffix applies the HasSuffix predicate on the "s3_endpoint" field.
+func S3EndpointHasSuffix(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldHasSuffix(FieldS3Endpoint, v))
+}
+
+// S3EndpointIsNil applies the IsNil predicate on the "s3_endpoint" field.
+func S3EndpointIsNil() predicate.Backup {
+	return predicate.Backup(sql.FieldIsNull(FieldS3Endpoint))
+}
+
+// S3EndpointNotNil applies the NotNil predicate on the "s3_endpoint" field.
+func S3EndpointNotNil() predicate.Backup {
+	return predicate.Backup(sql.FieldNotNull(FieldS3Endpoint))
+}
+
+// S3EndpointEqualFold applies the EqualFold predicate on the "s3_endpoint" field.
+func S3EndpointEqualFold(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldEqualFold(FieldS3Endpoint, v))
+}
+
+// S3EndpointContainsFold applies the ContainsFold predicate on the "s3_endpoint" field.
+func S3EndpointContainsFold(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldContainsFold(FieldS3Endpoint, v))
 }
 
 // ChecksumEQ applies the EQ predicate on the "checksum" field.
@@ -800,6 +755,56 @@ func SchemaVersionContainsFold(v string) predicate.Backup {
 	return predicate.Backup(sql.FieldContainsFold(FieldSchemaVersion, v))
 }
 
+// SizeBytesEQ applies the EQ predicate on the "size_bytes" field.
+func SizeBytesEQ(v int64) predicate.Backup {
+	return predicate.Backup(sql.FieldEQ(FieldSizeBytes, v))
+}
+
+// SizeBytesNEQ applies the NEQ predicate on the "size_bytes" field.
+func SizeBytesNEQ(v int64) predicate.Backup {
+	return predicate.Backup(sql.FieldNEQ(FieldSizeBytes, v))
+}
+
+// SizeBytesIn applies the In predicate on the "size_bytes" field.
+func SizeBytesIn(vs ...int64) predicate.Backup {
+	return predicate.Backup(sql.FieldIn(FieldSizeBytes, vs...))
+}
+
+// SizeBytesNotIn applies the NotIn predicate on the "size_bytes" field.
+func SizeBytesNotIn(vs ...int64) predicate.Backup {
+	return predicate.Backup(sql.FieldNotIn(FieldSizeBytes, vs...))
+}
+
+// SizeBytesGT applies the GT predicate on the "size_bytes" field.
+func SizeBytesGT(v int64) predicate.Backup {
+	return predicate.Backup(sql.FieldGT(FieldSizeBytes, v))
+}
+
+// SizeBytesGTE applies the GTE predicate on the "size_bytes" field.
+func SizeBytesGTE(v int64) predicate.Backup {
+	return predicate.Backup(sql.FieldGTE(FieldSizeBytes, v))
+}
+
+// SizeBytesLT applies the LT predicate on the "size_bytes" field.
+func SizeBytesLT(v int64) predicate.Backup {
+	return predicate.Backup(sql.FieldLT(FieldSizeBytes, v))
+}
+
+// SizeBytesLTE applies the LTE predicate on the "size_bytes" field.
+func SizeBytesLTE(v int64) predicate.Backup {
+	return predicate.Backup(sql.FieldLTE(FieldSizeBytes, v))
+}
+
+// SizeBytesIsNil applies the IsNil predicate on the "size_bytes" field.
+func SizeBytesIsNil() predicate.Backup {
+	return predicate.Backup(sql.FieldIsNull(FieldSizeBytes))
+}
+
+// SizeBytesNotNil applies the NotNil predicate on the "size_bytes" field.
+func SizeBytesNotNil() predicate.Backup {
+	return predicate.Backup(sql.FieldNotNull(FieldSizeBytes))
+}
+
 // ErrorEQ applies the EQ predicate on the "error" field.
 func ErrorEQ(v string) predicate.Backup {
 	return predicate.Backup(sql.FieldEQ(FieldError, v))
@@ -875,54 +880,54 @@ func ErrorContainsFold(v string) predicate.Backup {
 	return predicate.Backup(sql.FieldContainsFold(FieldError, v))
 }
 
-// SizeBytesEQ applies the EQ predicate on the "size_bytes" field.
-func SizeBytesEQ(v int64) predicate.Backup {
-	return predicate.Backup(sql.FieldEQ(FieldSizeBytes, v))
+// StartedAtEQ applies the EQ predicate on the "started_at" field.
+func StartedAtEQ(v time.Time) predicate.Backup {
+	return predicate.Backup(sql.FieldEQ(FieldStartedAt, v))
 }
 
-// SizeBytesNEQ applies the NEQ predicate on the "size_bytes" field.
-func SizeBytesNEQ(v int64) predicate.Backup {
-	return predicate.Backup(sql.FieldNEQ(FieldSizeBytes, v))
+// StartedAtNEQ applies the NEQ predicate on the "started_at" field.
+func StartedAtNEQ(v time.Time) predicate.Backup {
+	return predicate.Backup(sql.FieldNEQ(FieldStartedAt, v))
 }
 
-// SizeBytesIn applies the In predicate on the "size_bytes" field.
-func SizeBytesIn(vs ...int64) predicate.Backup {
-	return predicate.Backup(sql.FieldIn(FieldSizeBytes, vs...))
+// StartedAtIn applies the In predicate on the "started_at" field.
+func StartedAtIn(vs ...time.Time) predicate.Backup {
+	return predicate.Backup(sql.FieldIn(FieldStartedAt, vs...))
 }
 
-// SizeBytesNotIn applies the NotIn predicate on the "size_bytes" field.
-func SizeBytesNotIn(vs ...int64) predicate.Backup {
-	return predicate.Backup(sql.FieldNotIn(FieldSizeBytes, vs...))
+// StartedAtNotIn applies the NotIn predicate on the "started_at" field.
+func StartedAtNotIn(vs ...time.Time) predicate.Backup {
+	return predicate.Backup(sql.FieldNotIn(FieldStartedAt, vs...))
 }
 
-// SizeBytesGT applies the GT predicate on the "size_bytes" field.
-func SizeBytesGT(v int64) predicate.Backup {
-	return predicate.Backup(sql.FieldGT(FieldSizeBytes, v))
+// StartedAtGT applies the GT predicate on the "started_at" field.
+func StartedAtGT(v time.Time) predicate.Backup {
+	return predicate.Backup(sql.FieldGT(FieldStartedAt, v))
 }
 
-// SizeBytesGTE applies the GTE predicate on the "size_bytes" field.
-func SizeBytesGTE(v int64) predicate.Backup {
-	return predicate.Backup(sql.FieldGTE(FieldSizeBytes, v))
+// StartedAtGTE applies the GTE predicate on the "started_at" field.
+func StartedAtGTE(v time.Time) predicate.Backup {
+	return predicate.Backup(sql.FieldGTE(FieldStartedAt, v))
 }
 
-// SizeBytesLT applies the LT predicate on the "size_bytes" field.
-func SizeBytesLT(v int64) predicate.Backup {
-	return predicate.Backup(sql.FieldLT(FieldSizeBytes, v))
+// StartedAtLT applies the LT predicate on the "started_at" field.
+func StartedAtLT(v time.Time) predicate.Backup {
+	return predicate.Backup(sql.FieldLT(FieldStartedAt, v))
 }
 
-// SizeBytesLTE applies the LTE predicate on the "size_bytes" field.
-func SizeBytesLTE(v int64) predicate.Backup {
-	return predicate.Backup(sql.FieldLTE(FieldSizeBytes, v))
+// StartedAtLTE applies the LTE predicate on the "started_at" field.
+func StartedAtLTE(v time.Time) predicate.Backup {
+	return predicate.Backup(sql.FieldLTE(FieldStartedAt, v))
 }
 
-// SizeBytesIsNil applies the IsNil predicate on the "size_bytes" field.
-func SizeBytesIsNil() predicate.Backup {
-	return predicate.Backup(sql.FieldIsNull(FieldSizeBytes))
+// StartedAtIsNil applies the IsNil predicate on the "started_at" field.
+func StartedAtIsNil() predicate.Backup {
+	return predicate.Backup(sql.FieldIsNull(FieldStartedAt))
 }
 
-// SizeBytesNotNil applies the NotNil predicate on the "size_bytes" field.
-func SizeBytesNotNil() predicate.Backup {
-	return predicate.Backup(sql.FieldNotNull(FieldSizeBytes))
+// StartedAtNotNil applies the NotNil predicate on the "started_at" field.
+func StartedAtNotNil() predicate.Backup {
+	return predicate.Backup(sql.FieldNotNull(FieldStartedAt))
 }
 
 // CompletedAtEQ applies the EQ predicate on the "completed_at" field.

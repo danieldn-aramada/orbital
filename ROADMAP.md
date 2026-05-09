@@ -40,9 +40,10 @@ Goal of prototyping is learning, not shipping. Each spike below is a question to
 | 5 | Schema migration — build vs runbook | Do we need automation or is a runbook sufficient? | — | Not started | Spike 4 |
 | 6 | Air-gap sync round-trip | Does orbital's config export work reliably as a complete, importable payload for orb? | — | Not started | — |
 | 7 | Orb import API | What is the right API contract for orb's local config import endpoint? | — | Not started | — |
-| 8 | DGraph backup to blob storage | What is the right DGraph backup strategy, including deduplication and eventual incremental snapshots? | — | Not started | Spike 4 |
-| 9 | Authentication | How do we implement JWT bearer auth in orbital for Atlas UI consumers? | — | Not started | — |
+| 8 | DGraph backup to S3-compatible storage | What is the right DGraph backup strategy, including deduplication and retention? | — | Not started | Spike 4 |
+| 9 | Authentication | How do we implement JWT bearer auth in orbital for Atlas UI consumers? | Daniel | ✅ Done (5/8) | — |
 | 10 | Report intake API | What is the right transport-agnostic API for orbital to receive drift and divergence reports? | — | Not started | — |
+| 11 | Authorization | How do we restrict mutations to authorized roles using Azure AD App Roles + DGraph @auth, and how do we test authz offline? | — | Not started | 9 |
 
 ---
 
@@ -121,38 +122,91 @@ Goal of prototyping is learning, not shipping. Each spike below is a question to
 - Confirm behaviour on a stale or older payload (should orb reject, warn, or accept?)
 - Produce an API design doc covering the endpoint contract
 
-### Spike 8. DGraph backup to blob storage
-**Question:** What is the right backup strategy for DGraph, and how do we handle deduplication and eventual incremental snapshots?
+### Spike 8. DGraph backup to S3-compatible storage
+**Question:** What is the right backup strategy for DGraph, and how do we handle deduplication and retention?
 
-**Context:** Orbital is the authoritative intent store for the fleet — if DGraph data is lost, no configuration exports can be produced and no modular data centers can be onboarded. DGraph community edition only has the export mutation (`json.gz` + `schema.gz`), which produces full snapshots. PostgreSQL is Azure-managed and handled automatically.
+**Context:** Orbital is the authoritative intent store for the fleet — if DGraph data is lost, no configuration exports can be produced and no modular data centers can be onboarded. DGraph community edition only has the export mutation (`json.gz` + `schema.gz`), which produces full snapshots. PostgreSQL is handled by the managed service layer and is not orbital's concern.
 
-**v1 approach — full snapshots with checksum dedup:**
-A scheduled CronJob triggers DGraph's export mutation and uploads to Azure Blob Storage. Before uploading, orbital compares the checksum of the new export against the last `backup_records` entry — if they match, the upload is skipped. Backup records (timestamp, blob path, schema version, checksum, size) are tracked in PostgreSQL.
+**v1 approach — admin-initiated full snapshots with checksum dedup:**
+An admin triggers a backup via the UI or API. Orbital runs DGraph's export mutation, computes a checksum, compares against the last successful backup record — if identical, skips the upload. Otherwise uploads `json.gz` + `schema.gz` to S3-compatible storage and records the result in PostgreSQL. Backup is async: the trigger returns a job ID; a status endpoint tracks progress.
+
+**Storage:** Any S3-compatible backend (AWS S3, Cloudflare R2, MinIO, Azure Blob via S3 API). Configured at startup via environment variables — not user-selectable at runtime.
+
+**S3 configuration (env vars):**
+- `ORBITAL_S3_ENDPOINT` — custom endpoint for S3-compatible providers; empty = AWS S3
+- `ORBITAL_S3_REGION`
+- `ORBITAL_S3_BUCKET`
+- `ORBITAL_S3_ACCESS_KEY`
+- `ORBITAL_S3_SECRET_KEY`
+- `ORBITAL_S3_PREFIX` — optional path prefix within the bucket (e.g. `orbital/backups/`)
+- `ORBITAL_S3_RETENTION_COUNT` — max number of backups to retain; oldest deleted after upload (default: 30)
+
+If S3 is not configured, the backup UI button is disabled with a visible explanation.
+
+**PostgreSQL `backup_records` table:**
+| Column | Type | Notes |
+|---|---|---|
+| `id` | serial PK | |
+| `status` | varchar | `pending`, `running`, `completed`, `failed` |
+| `initiated_by` | int FK → users | |
+| `initiated_at` | timestamptz | |
+| `completed_at` | timestamptz | nullable |
+| `s3_path` | text | full S3 URI of the uploaded archive; nullable until complete |
+| `schema_version` | text | orbital schema version at time of backup |
+| `checksum` | text | SHA-256 of `json.gz`; used for dedup |
+| `size_bytes` | bigint | nullable until complete |
+| `error` | text | nullable; populated on failure |
 
 **Post-v1 — incremental and dedup:**
 DGraph community has no native incremental backup. Options to evaluate once real data volumes are known from Spike 3:
 - DGraph enterprise binary incremental backups
-- Blob storage versioning + retention policies with frequent full snapshots
-- Export diff against previous snapshot (complex, validate only if snapshot sizes are a real problem)
+- Frequent full snapshots with storage-side versioning and lifecycle rules
+- Export diff against previous snapshot (complex — only if snapshot sizes become a real problem)
 
 **Success criteria:**
-- Define RTO and RPO targets appropriate for a tier-0 service
-- Validate end-to-end: trigger export, checksum dedup, upload to Azure Blob, restore into a fresh DGraph instance
-- Measure backup size and restore time against a representative dataset; confirm they meet RTO/RPO targets
-- Assess whether single-region Azure Blob is sufficient or geo-redundancy is required
-- Define retention policy and storage cost estimate
+- `POST /api/v1/backups` triggers an async backup job; returns job ID
+- `GET /api/v1/backups` lists backup history from PostgreSQL
+- `GET /api/v1/backups/:id` returns job status
+- `GET /api/v1/backups/:id/download` returns a presigned S3 URL (valid for a short TTL) for admin download
+- Checksum dedup: if graph unchanged since last backup, upload is skipped and job completes with status `skipped`
+- Retention: after a successful upload, backups exceeding `ORBITAL_S3_RETENTION_COUNT` are deleted from S3 and marked `deleted` in PostgreSQL
+- S3 credentials validated at startup — warning logged and backup disabled if missing or unreachable
+- End-to-end validated: trigger backup, confirm `json.gz` + `schema.gz` appear in S3, confirm record in PostgreSQL
 
 **Do not start until Spike 4 (DGraph operations) is complete.**
 
-### Spike 9. Authentication
+### Spike 9. Authentication ✅
 **Question:** How do we implement auth in orbital?
 
-**Context:** The primary consumer is Atlas UI — users authenticate with their OIDC provider, get a JWT, and send it as a Bearer token to orbital. Orbital validates the token against the provider's JWKS endpoint. The implementation must be IdP-agnostic — orbital should not be wired to any specific provider.
+**Completed:** May 8, 2026
+
+**What was built:**
+- OIDC Authorization Code Flow via `go-oidc/v3` + `golang.org/x/oauth2`
+- Azure AD as the IdP (tenant `8f231c2a-9551-4b40-be17-5b24afe5e890`)
+- Session-based auth via `gorilla/sessions` cookie; CSRF token in same cookie
+- User auto-provisioned on first OIDC login (no password hash = SSO-only account)
+- Local email/password login retained for dev/seed user (`admin@armada.ai`)
+- Name and email stored in session at login — no DB query per request
+- `password_hash` is nullable in PostgreSQL; nil = OIDC-only user
+
+### Spike 11. Authorization
+**Question:** How do we restrict mutations to authorized roles, and how do we test authz offline?
+
+**Context:** Authentication (Spike 9) is complete — orbital knows who the user is. Authorization is the next layer: what they are allowed to do. Two mechanisms will work together: Azure AD App Roles for role assignment, and DGraph's native `@auth` directive for enforcing mutation access at the graph layer.
+
+**Approach settled:**
+- **Azure AD App Roles** (not group GUIDs) — define roles like `orbital-admin` and `orbital-viewer` in the Azure app manifest. App Roles appear in the JWT `roles` claim as strings, not GUIDs, and can be included in a custom namespace claim that DGraph's `@auth` can read.
+- **DGraph `@auth` directive** — add `@auth(add/update/delete: { rule: ... })` to each type in `schema/v1.graphql`. Mutation rules check the `roles` claim; query requires only a valid JWT (`ClosedByDefault: true`). Field-level auth is not supported by DGraph and will not be attempted.
+- **Go middleware** — route-group-level role checks in Echo for REST endpoints. GraphQL endpoint protected at HTTP layer (role check); DGraph `@auth` is defense-in-depth.
+- **Offline JWT testing** — integration tests generate and sign JWTs locally using a test RSA key pair. DGraph's `# Dgraph.Authorization` in the test schema points to the test public key (not Azure JWKS). No network call required. This pattern allows authz integration tests to run fully offline and in CI.
 
 **Success criteria:**
-- JWT bearer validation working end-to-end — token validated against OIDC provider JWKS
-- IdP-agnostic: works with any OIDC-compliant provider
-- Covered by E2E tests
+- Azure AD App Roles defined in app manifest; `orbital-admin` and `orbital-viewer` roles assignable to users/groups
+- DGraph schema updated with `@auth` directives on all mutable types; `ClosedByDefault: true` active
+- Orbital Go middleware enforces role checks on REST mutation endpoints
+- Integration tests sign JWTs with a local test key — authz enforced without hitting Azure AD
+- A user with `orbital-viewer` role cannot perform mutations via GraphQL or REST
+- A user with `orbital-admin` role can perform all operations
 
 ### Spike 10. Report intake API
 **Question:** What is the right API for orbital to receive drift and divergence reports?

@@ -23,7 +23,6 @@ interface ConfigItem {
     id: ID!
     namespace: Namespace!
     orbId: String! @id @search(by: [hash]) # unique key for upsert
-
     name: String @search(by: [term])
     createdBy: String @search(by: [hash])
     createdAt: DateTime @search
@@ -36,13 +35,13 @@ interface ConfigItem {
 # Config Items
 ########################
 type DataCenter implements ConfigItem {
+    assetDataV2: String # json
 
     servers: [Server] @hasInverse(field: dataCenter)
     racks: [Rack] @hasInverse(field: dataCenter)
 }
 
 type Rack implements ConfigItem {
-
     dataCenter: DataCenter!
     servers: [Server] @hasInverse(field: rack)
 }
@@ -58,8 +57,18 @@ type Server implements ConfigItem {
 
     dataCenter: DataCenter!
     rack: Rack
+    idracSettings: IdracSettings @hasInverse(field: server)
     serverConfigurationProfile: ServerConfigurationProfile @hasInverse(field: server)
     storageControllers: [StorageController] @hasInverse(field: server)
+}
+
+type IdracSettings implements ConfigItem {
+    firmwareVersion: String
+    osToIdracPassThroughEnabled: Boolean
+    sshEnabled: Boolean
+    usbManagementPortEnabled: Boolean
+
+    server: Server!
 }
 
 type ServerConfigurationProfile implements ConfigItem {

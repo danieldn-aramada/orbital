@@ -22,8 +22,8 @@ for f in examples/seed/*.graphql; do
 done
 
 echo "==> Creating admin user..."
-# bcrypt hash for password "admin" (cost 10)
-HASH='$2a$10$E6/cPxIcuMLbARjU1U7jr.cj7XEeWQheHMJAxnbQjhXlOcE59Sb/i'
+# bcrypt hash for password "admin" (cost 12)
+HASH='$2a$12$Wb3DtBrZbW9528J/FKL81ON73s7PEPNkup9FN8JN.jGBtM03.sckG'
 ${PSQL} -c "
   INSERT INTO users (email, name, preferred_username, password_hash, verified, created_at)
   VALUES ('admin@armada.ai', 'Admin', 'admin@armada.ai', '${HASH}', true, NOW())

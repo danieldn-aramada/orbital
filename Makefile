@@ -24,8 +24,8 @@ build-orbital: ## Build the orbital server binary → bin/orbital
 build-orb: ## Build the orb edge binary → bin/orb
 	go build $(LDFLAGS) -o $(ORB_BIN) ./cmd/orb
 
-run-orbital: ## Run orbital server (sources deploy/local/.env and .env.local if present)
-	bash -c 'source deploy/local/.env; [ -f deploy/local/.env.local ] && source deploy/local/.env.local; go run $(LDFLAGS) ./cmd/orbital'
+run-orbital: ## Run orbital server
+	go run $(LDFLAGS) ./cmd/orbital
 
 test: ## Run all tests
 	go test ./...

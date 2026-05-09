@@ -21,19 +21,32 @@ const (
 
 var ErrNotAuthenticated = errors.New("not authenticated")
 
-func newStore(secret string) *sessions.CookieStore {
-	s := sessions.NewCookieStore([]byte(secret))
+// SessionKeys holds the HMAC signing key and optional AES-256 encryption key
+// for the session cookie. HMACKey is required. EncryptionKey must be exactly
+// 32 bytes when set — if empty, cookie contents are signed but not encrypted.
+type SessionKeys struct {
+	HMACKey       string
+	EncryptionKey string // 32 bytes for AES-256; empty = no encryption
+}
+
+func newStore(keys SessionKeys) *sessions.CookieStore {
+	var s *sessions.CookieStore
+	if keys.EncryptionKey != "" {
+		s = sessions.NewCookieStore([]byte(keys.HMACKey), []byte(keys.EncryptionKey))
+	} else {
+		s = sessions.NewCookieStore([]byte(keys.HMACKey))
+	}
 	s.Options = &sessions.Options{
 		Path:     "/",
-		MaxAge:   86400 * 7,
+		MaxAge:   86400,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	}
 	return s
 }
 
-func SetUserSession(secret string, r *http.Request, w http.ResponseWriter, id int, name, email string) error {
-	store := newStore(secret)
+func SetUserSession(keys SessionKeys, r *http.Request, w http.ResponseWriter, id int, name, email string) error {
+	store := newStore(keys)
 	session, err := store.Get(r, cookieName)
 	if err != nil {
 		session, _ = store.New(r, cookieName)
@@ -45,8 +58,8 @@ func SetUserSession(secret string, r *http.Request, w http.ResponseWriter, id in
 }
 
 // SetUserID is kept for callers that don't have name/email available.
-func SetUserID(secret string, r *http.Request, w http.ResponseWriter, id int) error {
-	return SetUserSession(secret, r, w, id, "", "")
+func SetUserID(keys SessionKeys, r *http.Request, w http.ResponseWriter, id int) error {
+	return SetUserSession(keys, r, w, id, "", "")
 }
 
 type UserSession struct {
@@ -55,8 +68,8 @@ type UserSession struct {
 	Email string
 }
 
-func GetUserSession(secret string, r *http.Request) (UserSession, error) {
-	store := newStore(secret)
+func GetUserSession(keys SessionKeys, r *http.Request) (UserSession, error) {
+	store := newStore(keys)
 	session, err := store.Get(r, cookieName)
 	if err != nil {
 		return UserSession{}, ErrNotAuthenticated
@@ -70,13 +83,13 @@ func GetUserSession(secret string, r *http.Request) (UserSession, error) {
 	return UserSession{ID: id, Name: name, Email: email}, nil
 }
 
-func GetUserID(secret string, r *http.Request) (int, error) {
-	u, err := GetUserSession(secret, r)
+func GetUserID(keys SessionKeys, r *http.Request) (int, error) {
+	u, err := GetUserSession(keys, r)
 	return u.ID, err
 }
 
-func ClearSession(secret string, r *http.Request, w http.ResponseWriter) error {
-	store := newStore(secret)
+func ClearSession(keys SessionKeys, r *http.Request, w http.ResponseWriter) error {
+	store := newStore(keys)
 	session, err := store.Get(r, cookieName)
 	if err != nil {
 		return nil
@@ -87,8 +100,8 @@ func ClearSession(secret string, r *http.Request, w http.ResponseWriter) error {
 
 // GetOrCreateCSRF returns the CSRF token for the current session, creating one
 // if it doesn't exist yet. The token is stored in the session cookie.
-func GetOrCreateCSRF(secret string, r *http.Request, w http.ResponseWriter) (string, error) {
-	store := newStore(secret)
+func GetOrCreateCSRF(keys SessionKeys, r *http.Request, w http.ResponseWriter) (string, error) {
+	store := newStore(keys)
 	session, err := store.Get(r, cookieName)
 	if err != nil {
 		session, _ = store.New(r, cookieName)
@@ -109,8 +122,8 @@ func GetOrCreateCSRF(secret string, r *http.Request, w http.ResponseWriter) (str
 }
 
 // SetOIDCState stores a random state value in the session for OIDC callback verification.
-func SetOIDCState(secret string, r *http.Request, w http.ResponseWriter, state string) error {
-	store := newStore(secret)
+func SetOIDCState(keys SessionKeys, r *http.Request, w http.ResponseWriter, state string) error {
+	store := newStore(keys)
 	session, err := store.Get(r, cookieName)
 	if err != nil {
 		session, _ = store.New(r, cookieName)
@@ -120,8 +133,8 @@ func SetOIDCState(secret string, r *http.Request, w http.ResponseWriter, state s
 }
 
 // GetAndClearOIDCState returns the stored OIDC state and removes it from the session.
-func GetAndClearOIDCState(secret string, r *http.Request, w http.ResponseWriter) (string, error) {
-	store := newStore(secret)
+func GetAndClearOIDCState(keys SessionKeys, r *http.Request, w http.ResponseWriter) (string, error) {
+	store := newStore(keys)
 	session, err := store.Get(r, cookieName)
 	if err != nil {
 		return "", errors.New("no session")
@@ -136,8 +149,8 @@ func GetAndClearOIDCState(secret string, r *http.Request, w http.ResponseWriter)
 }
 
 // ValidateCSRF compares the submitted token against the one stored in the session.
-func ValidateCSRF(secret string, r *http.Request, submitted string) bool {
-	store := newStore(secret)
+func ValidateCSRF(keys SessionKeys, r *http.Request, submitted string) bool {
+	store := newStore(keys)
 	session, err := store.Get(r, cookieName)
 	if err != nil {
 		return false

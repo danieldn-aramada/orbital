@@ -19,6 +19,8 @@ services:
       - "7080:7080"
       - "8080:8080"
       - "9080:9080"
+    volumes:
+      - ../../dgraph-exports:/dgraph/export
     depends_on:
       - dgraph-zero
 

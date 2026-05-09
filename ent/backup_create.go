@@ -77,40 +77,50 @@ func (_c *BackupCreate) SetNillableUpdatedBy(v *string) *BackupCreate {
 	return _c
 }
 
-// SetBucket sets the "bucket" field.
-func (_c *BackupCreate) SetBucket(v string) *BackupCreate {
-	_c.mutation.SetBucket(v)
-	return _c
-}
-
-// SetKey sets the "key" field.
-func (_c *BackupCreate) SetKey(v string) *BackupCreate {
-	_c.mutation.SetKey(v)
-	return _c
-}
-
-// SetEndpoint sets the "endpoint" field.
-func (_c *BackupCreate) SetEndpoint(v string) *BackupCreate {
-	_c.mutation.SetEndpoint(v)
-	return _c
-}
-
 // SetStatus sets the "status" field.
 func (_c *BackupCreate) SetStatus(v backup.Status) *BackupCreate {
 	_c.mutation.SetStatus(v)
 	return _c
 }
 
-// SetDgraphInstance sets the "dgraph_instance" field.
-func (_c *BackupCreate) SetDgraphInstance(v string) *BackupCreate {
-	_c.mutation.SetDgraphInstance(v)
+// SetS3Bucket sets the "s3_bucket" field.
+func (_c *BackupCreate) SetS3Bucket(v string) *BackupCreate {
+	_c.mutation.SetS3Bucket(v)
 	return _c
 }
 
-// SetNillableDgraphInstance sets the "dgraph_instance" field if the given value is not nil.
-func (_c *BackupCreate) SetNillableDgraphInstance(v *string) *BackupCreate {
+// SetNillableS3Bucket sets the "s3_bucket" field if the given value is not nil.
+func (_c *BackupCreate) SetNillableS3Bucket(v *string) *BackupCreate {
 	if v != nil {
-		_c.SetDgraphInstance(*v)
+		_c.SetS3Bucket(*v)
+	}
+	return _c
+}
+
+// SetS3Key sets the "s3_key" field.
+func (_c *BackupCreate) SetS3Key(v string) *BackupCreate {
+	_c.mutation.SetS3Key(v)
+	return _c
+}
+
+// SetNillableS3Key sets the "s3_key" field if the given value is not nil.
+func (_c *BackupCreate) SetNillableS3Key(v *string) *BackupCreate {
+	if v != nil {
+		_c.SetS3Key(*v)
+	}
+	return _c
+}
+
+// SetS3Endpoint sets the "s3_endpoint" field.
+func (_c *BackupCreate) SetS3Endpoint(v string) *BackupCreate {
+	_c.mutation.SetS3Endpoint(v)
+	return _c
+}
+
+// SetNillableS3Endpoint sets the "s3_endpoint" field if the given value is not nil.
+func (_c *BackupCreate) SetNillableS3Endpoint(v *string) *BackupCreate {
+	if v != nil {
+		_c.SetS3Endpoint(*v)
 	}
 	return _c
 }
@@ -143,6 +153,20 @@ func (_c *BackupCreate) SetNillableSchemaVersion(v *string) *BackupCreate {
 	return _c
 }
 
+// SetSizeBytes sets the "size_bytes" field.
+func (_c *BackupCreate) SetSizeBytes(v int64) *BackupCreate {
+	_c.mutation.SetSizeBytes(v)
+	return _c
+}
+
+// SetNillableSizeBytes sets the "size_bytes" field if the given value is not nil.
+func (_c *BackupCreate) SetNillableSizeBytes(v *int64) *BackupCreate {
+	if v != nil {
+		_c.SetSizeBytes(*v)
+	}
+	return _c
+}
+
 // SetError sets the "error" field.
 func (_c *BackupCreate) SetError(v string) *BackupCreate {
 	_c.mutation.SetError(v)
@@ -157,16 +181,16 @@ func (_c *BackupCreate) SetNillableError(v *string) *BackupCreate {
 	return _c
 }
 
-// SetSizeBytes sets the "size_bytes" field.
-func (_c *BackupCreate) SetSizeBytes(v int64) *BackupCreate {
-	_c.mutation.SetSizeBytes(v)
+// SetStartedAt sets the "started_at" field.
+func (_c *BackupCreate) SetStartedAt(v time.Time) *BackupCreate {
+	_c.mutation.SetStartedAt(v)
 	return _c
 }
 
-// SetNillableSizeBytes sets the "size_bytes" field if the given value is not nil.
-func (_c *BackupCreate) SetNillableSizeBytes(v *int64) *BackupCreate {
+// SetNillableStartedAt sets the "started_at" field if the given value is not nil.
+func (_c *BackupCreate) SetNillableStartedAt(v *time.Time) *BackupCreate {
 	if v != nil {
-		_c.SetSizeBytes(*v)
+		_c.SetStartedAt(*v)
 	}
 	return _c
 }
@@ -249,15 +273,6 @@ func (_c *BackupCreate) check() error {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Backup.created_at"`)}
 	}
-	if _, ok := _c.mutation.Bucket(); !ok {
-		return &ValidationError{Name: "bucket", err: errors.New(`ent: missing required field "Backup.bucket"`)}
-	}
-	if _, ok := _c.mutation.Key(); !ok {
-		return &ValidationError{Name: "key", err: errors.New(`ent: missing required field "Backup.key"`)}
-	}
-	if _, ok := _c.mutation.Endpoint(); !ok {
-		return &ValidationError{Name: "endpoint", err: errors.New(`ent: missing required field "Backup.endpoint"`)}
-	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Backup.status"`)}
 	}
@@ -317,25 +332,21 @@ func (_c *BackupCreate) createSpec() (*Backup, *sqlgraph.CreateSpec) {
 		_spec.SetField(backup.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := _c.mutation.Bucket(); ok {
-		_spec.SetField(backup.FieldBucket, field.TypeString, value)
-		_node.Bucket = value
-	}
-	if value, ok := _c.mutation.Key(); ok {
-		_spec.SetField(backup.FieldKey, field.TypeString, value)
-		_node.Key = value
-	}
-	if value, ok := _c.mutation.Endpoint(); ok {
-		_spec.SetField(backup.FieldEndpoint, field.TypeString, value)
-		_node.Endpoint = value
-	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(backup.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
 	}
-	if value, ok := _c.mutation.DgraphInstance(); ok {
-		_spec.SetField(backup.FieldDgraphInstance, field.TypeString, value)
-		_node.DgraphInstance = value
+	if value, ok := _c.mutation.S3Bucket(); ok {
+		_spec.SetField(backup.FieldS3Bucket, field.TypeString, value)
+		_node.S3Bucket = value
+	}
+	if value, ok := _c.mutation.S3Key(); ok {
+		_spec.SetField(backup.FieldS3Key, field.TypeString, value)
+		_node.S3Key = value
+	}
+	if value, ok := _c.mutation.S3Endpoint(); ok {
+		_spec.SetField(backup.FieldS3Endpoint, field.TypeString, value)
+		_node.S3Endpoint = value
 	}
 	if value, ok := _c.mutation.Checksum(); ok {
 		_spec.SetField(backup.FieldChecksum, field.TypeString, value)
@@ -345,13 +356,17 @@ func (_c *BackupCreate) createSpec() (*Backup, *sqlgraph.CreateSpec) {
 		_spec.SetField(backup.FieldSchemaVersion, field.TypeString, value)
 		_node.SchemaVersion = value
 	}
-	if value, ok := _c.mutation.Error(); ok {
-		_spec.SetField(backup.FieldError, field.TypeString, value)
-		_node.Error = value
-	}
 	if value, ok := _c.mutation.SizeBytes(); ok {
 		_spec.SetField(backup.FieldSizeBytes, field.TypeInt64, value)
-		_node.SizeBytes = value
+		_node.SizeBytes = &value
+	}
+	if value, ok := _c.mutation.Error(); ok {
+		_spec.SetField(backup.FieldError, field.TypeString, value)
+		_node.Error = &value
+	}
+	if value, ok := _c.mutation.StartedAt(); ok {
+		_spec.SetField(backup.FieldStartedAt, field.TypeTime, value)
+		_node.StartedAt = &value
 	}
 	if value, ok := _c.mutation.CompletedAt(); ok {
 		_spec.SetField(backup.FieldCompletedAt, field.TypeTime, value)

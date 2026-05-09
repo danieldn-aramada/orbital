@@ -23,24 +23,24 @@ const (
 	FieldUpdatedAt = "updated_at"
 	// FieldUpdatedBy holds the string denoting the updated_by field in the database.
 	FieldUpdatedBy = "updated_by"
-	// FieldBucket holds the string denoting the bucket field in the database.
-	FieldBucket = "bucket"
-	// FieldKey holds the string denoting the key field in the database.
-	FieldKey = "key"
-	// FieldEndpoint holds the string denoting the endpoint field in the database.
-	FieldEndpoint = "endpoint"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
-	// FieldDgraphInstance holds the string denoting the dgraph_instance field in the database.
-	FieldDgraphInstance = "dgraph_instance"
+	// FieldS3Bucket holds the string denoting the s3_bucket field in the database.
+	FieldS3Bucket = "s3_bucket"
+	// FieldS3Key holds the string denoting the s3_key field in the database.
+	FieldS3Key = "s3_key"
+	// FieldS3Endpoint holds the string denoting the s3_endpoint field in the database.
+	FieldS3Endpoint = "s3_endpoint"
 	// FieldChecksum holds the string denoting the checksum field in the database.
 	FieldChecksum = "checksum"
 	// FieldSchemaVersion holds the string denoting the schema_version field in the database.
 	FieldSchemaVersion = "schema_version"
-	// FieldError holds the string denoting the error field in the database.
-	FieldError = "error"
 	// FieldSizeBytes holds the string denoting the size_bytes field in the database.
 	FieldSizeBytes = "size_bytes"
+	// FieldError holds the string denoting the error field in the database.
+	FieldError = "error"
+	// FieldStartedAt holds the string denoting the started_at field in the database.
+	FieldStartedAt = "started_at"
 	// FieldCompletedAt holds the string denoting the completed_at field in the database.
 	FieldCompletedAt = "completed_at"
 	// Table holds the table name of the backup in the database.
@@ -54,15 +54,15 @@ var Columns = []string{
 	FieldCreatedBy,
 	FieldUpdatedAt,
 	FieldUpdatedBy,
-	FieldBucket,
-	FieldKey,
-	FieldEndpoint,
 	FieldStatus,
-	FieldDgraphInstance,
+	FieldS3Bucket,
+	FieldS3Key,
+	FieldS3Endpoint,
 	FieldChecksum,
 	FieldSchemaVersion,
-	FieldError,
 	FieldSizeBytes,
+	FieldError,
+	FieldStartedAt,
 	FieldCompletedAt,
 }
 
@@ -88,10 +88,11 @@ type Status string
 
 // Status values.
 const (
-	StatusPending    Status = "pending"
-	StatusInProgress Status = "in_progress"
-	StatusCompleted  Status = "completed"
-	StatusFailed     Status = "failed"
+	StatusPending   Status = "pending"
+	StatusRunning   Status = "running"
+	StatusCompleted Status = "completed"
+	StatusSkipped   Status = "skipped"
+	StatusFailed    Status = "failed"
 )
 
 func (s Status) String() string {
@@ -101,7 +102,7 @@ func (s Status) String() string {
 // StatusValidator is a validator for the "status" field enum values. It is called by the builders before save.
 func StatusValidator(s Status) error {
 	switch s {
-	case StatusPending, StatusInProgress, StatusCompleted, StatusFailed:
+	case StatusPending, StatusRunning, StatusCompleted, StatusSkipped, StatusFailed:
 		return nil
 	default:
 		return fmt.Errorf("backup: invalid enum value for status field: %q", s)
@@ -136,29 +137,24 @@ func ByUpdatedBy(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedBy, opts...).ToFunc()
 }
 
-// ByBucket orders the results by the bucket field.
-func ByBucket(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldBucket, opts...).ToFunc()
-}
-
-// ByKey orders the results by the key field.
-func ByKey(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldKey, opts...).ToFunc()
-}
-
-// ByEndpoint orders the results by the endpoint field.
-func ByEndpoint(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldEndpoint, opts...).ToFunc()
-}
-
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
 }
 
-// ByDgraphInstance orders the results by the dgraph_instance field.
-func ByDgraphInstance(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldDgraphInstance, opts...).ToFunc()
+// ByS3Bucket orders the results by the s3_bucket field.
+func ByS3Bucket(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldS3Bucket, opts...).ToFunc()
+}
+
+// ByS3Key orders the results by the s3_key field.
+func ByS3Key(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldS3Key, opts...).ToFunc()
+}
+
+// ByS3Endpoint orders the results by the s3_endpoint field.
+func ByS3Endpoint(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldS3Endpoint, opts...).ToFunc()
 }
 
 // ByChecksum orders the results by the checksum field.
@@ -171,14 +167,19 @@ func BySchemaVersion(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSchemaVersion, opts...).ToFunc()
 }
 
+// BySizeBytes orders the results by the size_bytes field.
+func BySizeBytes(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSizeBytes, opts...).ToFunc()
+}
+
 // ByError orders the results by the error field.
 func ByError(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldError, opts...).ToFunc()
 }
 
-// BySizeBytes orders the results by the size_bytes field.
-func BySizeBytes(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSizeBytes, opts...).ToFunc()
+// ByStartedAt orders the results by the started_at field.
+func ByStartedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStartedAt, opts...).ToFunc()
 }
 
 // ByCompletedAt orders the results by the completed_at field.

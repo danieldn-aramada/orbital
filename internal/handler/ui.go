@@ -19,16 +19,22 @@ type UI struct {
 	ratelURL        string
 	issueTrackerURL string
 	oidcEnabled     bool
+	backupEnabled   bool
+	s3Endpoint      string
+	s3Bucket        string
 	version         string
 	templates       map[string]*template.Template
 }
 
-func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled bool) *UI {
+func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, backupEnabled bool, s3Endpoint, s3Bucket string) *UI {
 	return &UI{
 		dev:             dev,
 		ratelURL:        ratelURL,
 		issueTrackerURL: issueTrackerURL,
 		oidcEnabled:     oidcEnabled,
+		backupEnabled:   backupEnabled,
+		s3Endpoint:      s3Endpoint,
+		s3Bucket:        s3Bucket,
 		version:         fmt.Sprintf("%d", time.Now().Unix()),
 		templates:       webtemplates.Map(),
 	}
@@ -76,8 +82,11 @@ func (h *UI) Index(c echo.Context) error {
 
 func (h *UI) Backups(c echo.Context) error {
 	return h.render(c, "backups", page.Backups{
-		Base:      h.base(c),
-		PageTitle: "Backups",
+		Base:          h.base(c),
+		PageTitle:     "Backups",
+		BackupEnabled: h.backupEnabled,
+		S3Endpoint:    h.s3Endpoint,
+		S3Bucket:      h.s3Bucket,
 	})
 }
 

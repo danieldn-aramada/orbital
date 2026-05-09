@@ -39,28 +39,28 @@ const (
 // BackupMutation represents an operation that mutates the Backup nodes in the graph.
 type BackupMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *uuid.UUID
-	created_at      *time.Time
-	created_by      *string
-	updated_at      *time.Time
-	updated_by      *string
-	bucket          *string
-	key             *string
-	endpoint        *string
-	status          *backup.Status
-	dgraph_instance *string
-	checksum        *string
-	schema_version  *string
-	error           *string
-	size_bytes      *int64
-	addsize_bytes   *int64
-	completed_at    *time.Time
-	clearedFields   map[string]struct{}
-	done            bool
-	oldValue        func(context.Context) (*Backup, error)
-	predicates      []predicate.Backup
+	op             Op
+	typ            string
+	id             *uuid.UUID
+	created_at     *time.Time
+	created_by     *string
+	updated_at     *time.Time
+	updated_by     *string
+	status         *backup.Status
+	s3_bucket      *string
+	s3_key         *string
+	s3_endpoint    *string
+	checksum       *string
+	schema_version *string
+	size_bytes     *int64
+	addsize_bytes  *int64
+	error          *string
+	started_at     *time.Time
+	completed_at   *time.Time
+	clearedFields  map[string]struct{}
+	done           bool
+	oldValue       func(context.Context) (*Backup, error)
+	predicates     []predicate.Backup
 }
 
 var _ ent.Mutation = (*BackupMutation)(nil)
@@ -350,114 +350,6 @@ func (m *BackupMutation) ResetUpdatedBy() {
 	delete(m.clearedFields, backup.FieldUpdatedBy)
 }
 
-// SetBucket sets the "bucket" field.
-func (m *BackupMutation) SetBucket(s string) {
-	m.bucket = &s
-}
-
-// Bucket returns the value of the "bucket" field in the mutation.
-func (m *BackupMutation) Bucket() (r string, exists bool) {
-	v := m.bucket
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldBucket returns the old "bucket" field's value of the Backup entity.
-// If the Backup object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BackupMutation) OldBucket(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldBucket is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldBucket requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldBucket: %w", err)
-	}
-	return oldValue.Bucket, nil
-}
-
-// ResetBucket resets all changes to the "bucket" field.
-func (m *BackupMutation) ResetBucket() {
-	m.bucket = nil
-}
-
-// SetKey sets the "key" field.
-func (m *BackupMutation) SetKey(s string) {
-	m.key = &s
-}
-
-// Key returns the value of the "key" field in the mutation.
-func (m *BackupMutation) Key() (r string, exists bool) {
-	v := m.key
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldKey returns the old "key" field's value of the Backup entity.
-// If the Backup object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BackupMutation) OldKey(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldKey is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldKey requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldKey: %w", err)
-	}
-	return oldValue.Key, nil
-}
-
-// ResetKey resets all changes to the "key" field.
-func (m *BackupMutation) ResetKey() {
-	m.key = nil
-}
-
-// SetEndpoint sets the "endpoint" field.
-func (m *BackupMutation) SetEndpoint(s string) {
-	m.endpoint = &s
-}
-
-// Endpoint returns the value of the "endpoint" field in the mutation.
-func (m *BackupMutation) Endpoint() (r string, exists bool) {
-	v := m.endpoint
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldEndpoint returns the old "endpoint" field's value of the Backup entity.
-// If the Backup object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BackupMutation) OldEndpoint(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldEndpoint is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldEndpoint requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldEndpoint: %w", err)
-	}
-	return oldValue.Endpoint, nil
-}
-
-// ResetEndpoint resets all changes to the "endpoint" field.
-func (m *BackupMutation) ResetEndpoint() {
-	m.endpoint = nil
-}
-
 // SetStatus sets the "status" field.
 func (m *BackupMutation) SetStatus(b backup.Status) {
 	m.status = &b
@@ -494,53 +386,151 @@ func (m *BackupMutation) ResetStatus() {
 	m.status = nil
 }
 
-// SetDgraphInstance sets the "dgraph_instance" field.
-func (m *BackupMutation) SetDgraphInstance(s string) {
-	m.dgraph_instance = &s
+// SetS3Bucket sets the "s3_bucket" field.
+func (m *BackupMutation) SetS3Bucket(s string) {
+	m.s3_bucket = &s
 }
 
-// DgraphInstance returns the value of the "dgraph_instance" field in the mutation.
-func (m *BackupMutation) DgraphInstance() (r string, exists bool) {
-	v := m.dgraph_instance
+// S3Bucket returns the value of the "s3_bucket" field in the mutation.
+func (m *BackupMutation) S3Bucket() (r string, exists bool) {
+	v := m.s3_bucket
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldDgraphInstance returns the old "dgraph_instance" field's value of the Backup entity.
+// OldS3Bucket returns the old "s3_bucket" field's value of the Backup entity.
 // If the Backup object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BackupMutation) OldDgraphInstance(ctx context.Context) (v string, err error) {
+func (m *BackupMutation) OldS3Bucket(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldDgraphInstance is only allowed on UpdateOne operations")
+		return v, errors.New("OldS3Bucket is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldDgraphInstance requires an ID field in the mutation")
+		return v, errors.New("OldS3Bucket requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldDgraphInstance: %w", err)
+		return v, fmt.Errorf("querying old value for OldS3Bucket: %w", err)
 	}
-	return oldValue.DgraphInstance, nil
+	return oldValue.S3Bucket, nil
 }
 
-// ClearDgraphInstance clears the value of the "dgraph_instance" field.
-func (m *BackupMutation) ClearDgraphInstance() {
-	m.dgraph_instance = nil
-	m.clearedFields[backup.FieldDgraphInstance] = struct{}{}
+// ClearS3Bucket clears the value of the "s3_bucket" field.
+func (m *BackupMutation) ClearS3Bucket() {
+	m.s3_bucket = nil
+	m.clearedFields[backup.FieldS3Bucket] = struct{}{}
 }
 
-// DgraphInstanceCleared returns if the "dgraph_instance" field was cleared in this mutation.
-func (m *BackupMutation) DgraphInstanceCleared() bool {
-	_, ok := m.clearedFields[backup.FieldDgraphInstance]
+// S3BucketCleared returns if the "s3_bucket" field was cleared in this mutation.
+func (m *BackupMutation) S3BucketCleared() bool {
+	_, ok := m.clearedFields[backup.FieldS3Bucket]
 	return ok
 }
 
-// ResetDgraphInstance resets all changes to the "dgraph_instance" field.
-func (m *BackupMutation) ResetDgraphInstance() {
-	m.dgraph_instance = nil
-	delete(m.clearedFields, backup.FieldDgraphInstance)
+// ResetS3Bucket resets all changes to the "s3_bucket" field.
+func (m *BackupMutation) ResetS3Bucket() {
+	m.s3_bucket = nil
+	delete(m.clearedFields, backup.FieldS3Bucket)
+}
+
+// SetS3Key sets the "s3_key" field.
+func (m *BackupMutation) SetS3Key(s string) {
+	m.s3_key = &s
+}
+
+// S3Key returns the value of the "s3_key" field in the mutation.
+func (m *BackupMutation) S3Key() (r string, exists bool) {
+	v := m.s3_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldS3Key returns the old "s3_key" field's value of the Backup entity.
+// If the Backup object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BackupMutation) OldS3Key(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldS3Key is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldS3Key requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldS3Key: %w", err)
+	}
+	return oldValue.S3Key, nil
+}
+
+// ClearS3Key clears the value of the "s3_key" field.
+func (m *BackupMutation) ClearS3Key() {
+	m.s3_key = nil
+	m.clearedFields[backup.FieldS3Key] = struct{}{}
+}
+
+// S3KeyCleared returns if the "s3_key" field was cleared in this mutation.
+func (m *BackupMutation) S3KeyCleared() bool {
+	_, ok := m.clearedFields[backup.FieldS3Key]
+	return ok
+}
+
+// ResetS3Key resets all changes to the "s3_key" field.
+func (m *BackupMutation) ResetS3Key() {
+	m.s3_key = nil
+	delete(m.clearedFields, backup.FieldS3Key)
+}
+
+// SetS3Endpoint sets the "s3_endpoint" field.
+func (m *BackupMutation) SetS3Endpoint(s string) {
+	m.s3_endpoint = &s
+}
+
+// S3Endpoint returns the value of the "s3_endpoint" field in the mutation.
+func (m *BackupMutation) S3Endpoint() (r string, exists bool) {
+	v := m.s3_endpoint
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldS3Endpoint returns the old "s3_endpoint" field's value of the Backup entity.
+// If the Backup object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BackupMutation) OldS3Endpoint(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldS3Endpoint is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldS3Endpoint requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldS3Endpoint: %w", err)
+	}
+	return oldValue.S3Endpoint, nil
+}
+
+// ClearS3Endpoint clears the value of the "s3_endpoint" field.
+func (m *BackupMutation) ClearS3Endpoint() {
+	m.s3_endpoint = nil
+	m.clearedFields[backup.FieldS3Endpoint] = struct{}{}
+}
+
+// S3EndpointCleared returns if the "s3_endpoint" field was cleared in this mutation.
+func (m *BackupMutation) S3EndpointCleared() bool {
+	_, ok := m.clearedFields[backup.FieldS3Endpoint]
+	return ok
+}
+
+// ResetS3Endpoint resets all changes to the "s3_endpoint" field.
+func (m *BackupMutation) ResetS3Endpoint() {
+	m.s3_endpoint = nil
+	delete(m.clearedFields, backup.FieldS3Endpoint)
 }
 
 // SetChecksum sets the "checksum" field.
@@ -641,55 +631,6 @@ func (m *BackupMutation) ResetSchemaVersion() {
 	delete(m.clearedFields, backup.FieldSchemaVersion)
 }
 
-// SetError sets the "error" field.
-func (m *BackupMutation) SetError(s string) {
-	m.error = &s
-}
-
-// Error returns the value of the "error" field in the mutation.
-func (m *BackupMutation) Error() (r string, exists bool) {
-	v := m.error
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldError returns the old "error" field's value of the Backup entity.
-// If the Backup object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BackupMutation) OldError(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldError is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldError requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldError: %w", err)
-	}
-	return oldValue.Error, nil
-}
-
-// ClearError clears the value of the "error" field.
-func (m *BackupMutation) ClearError() {
-	m.error = nil
-	m.clearedFields[backup.FieldError] = struct{}{}
-}
-
-// ErrorCleared returns if the "error" field was cleared in this mutation.
-func (m *BackupMutation) ErrorCleared() bool {
-	_, ok := m.clearedFields[backup.FieldError]
-	return ok
-}
-
-// ResetError resets all changes to the "error" field.
-func (m *BackupMutation) ResetError() {
-	m.error = nil
-	delete(m.clearedFields, backup.FieldError)
-}
-
 // SetSizeBytes sets the "size_bytes" field.
 func (m *BackupMutation) SetSizeBytes(i int64) {
 	m.size_bytes = &i
@@ -708,7 +649,7 @@ func (m *BackupMutation) SizeBytes() (r int64, exists bool) {
 // OldSizeBytes returns the old "size_bytes" field's value of the Backup entity.
 // If the Backup object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BackupMutation) OldSizeBytes(ctx context.Context) (v int64, err error) {
+func (m *BackupMutation) OldSizeBytes(ctx context.Context) (v *int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldSizeBytes is only allowed on UpdateOne operations")
 	}
@@ -758,6 +699,104 @@ func (m *BackupMutation) ResetSizeBytes() {
 	m.size_bytes = nil
 	m.addsize_bytes = nil
 	delete(m.clearedFields, backup.FieldSizeBytes)
+}
+
+// SetError sets the "error" field.
+func (m *BackupMutation) SetError(s string) {
+	m.error = &s
+}
+
+// Error returns the value of the "error" field in the mutation.
+func (m *BackupMutation) Error() (r string, exists bool) {
+	v := m.error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldError returns the old "error" field's value of the Backup entity.
+// If the Backup object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BackupMutation) OldError(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldError: %w", err)
+	}
+	return oldValue.Error, nil
+}
+
+// ClearError clears the value of the "error" field.
+func (m *BackupMutation) ClearError() {
+	m.error = nil
+	m.clearedFields[backup.FieldError] = struct{}{}
+}
+
+// ErrorCleared returns if the "error" field was cleared in this mutation.
+func (m *BackupMutation) ErrorCleared() bool {
+	_, ok := m.clearedFields[backup.FieldError]
+	return ok
+}
+
+// ResetError resets all changes to the "error" field.
+func (m *BackupMutation) ResetError() {
+	m.error = nil
+	delete(m.clearedFields, backup.FieldError)
+}
+
+// SetStartedAt sets the "started_at" field.
+func (m *BackupMutation) SetStartedAt(t time.Time) {
+	m.started_at = &t
+}
+
+// StartedAt returns the value of the "started_at" field in the mutation.
+func (m *BackupMutation) StartedAt() (r time.Time, exists bool) {
+	v := m.started_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartedAt returns the old "started_at" field's value of the Backup entity.
+// If the Backup object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BackupMutation) OldStartedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartedAt: %w", err)
+	}
+	return oldValue.StartedAt, nil
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (m *BackupMutation) ClearStartedAt() {
+	m.started_at = nil
+	m.clearedFields[backup.FieldStartedAt] = struct{}{}
+}
+
+// StartedAtCleared returns if the "started_at" field was cleared in this mutation.
+func (m *BackupMutation) StartedAtCleared() bool {
+	_, ok := m.clearedFields[backup.FieldStartedAt]
+	return ok
+}
+
+// ResetStartedAt resets all changes to the "started_at" field.
+func (m *BackupMutation) ResetStartedAt() {
+	m.started_at = nil
+	delete(m.clearedFields, backup.FieldStartedAt)
 }
 
 // SetCompletedAt sets the "completed_at" field.
@@ -856,20 +895,17 @@ func (m *BackupMutation) Fields() []string {
 	if m.updated_by != nil {
 		fields = append(fields, backup.FieldUpdatedBy)
 	}
-	if m.bucket != nil {
-		fields = append(fields, backup.FieldBucket)
-	}
-	if m.key != nil {
-		fields = append(fields, backup.FieldKey)
-	}
-	if m.endpoint != nil {
-		fields = append(fields, backup.FieldEndpoint)
-	}
 	if m.status != nil {
 		fields = append(fields, backup.FieldStatus)
 	}
-	if m.dgraph_instance != nil {
-		fields = append(fields, backup.FieldDgraphInstance)
+	if m.s3_bucket != nil {
+		fields = append(fields, backup.FieldS3Bucket)
+	}
+	if m.s3_key != nil {
+		fields = append(fields, backup.FieldS3Key)
+	}
+	if m.s3_endpoint != nil {
+		fields = append(fields, backup.FieldS3Endpoint)
 	}
 	if m.checksum != nil {
 		fields = append(fields, backup.FieldChecksum)
@@ -877,11 +913,14 @@ func (m *BackupMutation) Fields() []string {
 	if m.schema_version != nil {
 		fields = append(fields, backup.FieldSchemaVersion)
 	}
+	if m.size_bytes != nil {
+		fields = append(fields, backup.FieldSizeBytes)
+	}
 	if m.error != nil {
 		fields = append(fields, backup.FieldError)
 	}
-	if m.size_bytes != nil {
-		fields = append(fields, backup.FieldSizeBytes)
+	if m.started_at != nil {
+		fields = append(fields, backup.FieldStartedAt)
 	}
 	if m.completed_at != nil {
 		fields = append(fields, backup.FieldCompletedAt)
@@ -902,24 +941,24 @@ func (m *BackupMutation) Field(name string) (ent.Value, bool) {
 		return m.UpdatedAt()
 	case backup.FieldUpdatedBy:
 		return m.UpdatedBy()
-	case backup.FieldBucket:
-		return m.Bucket()
-	case backup.FieldKey:
-		return m.Key()
-	case backup.FieldEndpoint:
-		return m.Endpoint()
 	case backup.FieldStatus:
 		return m.Status()
-	case backup.FieldDgraphInstance:
-		return m.DgraphInstance()
+	case backup.FieldS3Bucket:
+		return m.S3Bucket()
+	case backup.FieldS3Key:
+		return m.S3Key()
+	case backup.FieldS3Endpoint:
+		return m.S3Endpoint()
 	case backup.FieldChecksum:
 		return m.Checksum()
 	case backup.FieldSchemaVersion:
 		return m.SchemaVersion()
-	case backup.FieldError:
-		return m.Error()
 	case backup.FieldSizeBytes:
 		return m.SizeBytes()
+	case backup.FieldError:
+		return m.Error()
+	case backup.FieldStartedAt:
+		return m.StartedAt()
 	case backup.FieldCompletedAt:
 		return m.CompletedAt()
 	}
@@ -939,24 +978,24 @@ func (m *BackupMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldUpdatedAt(ctx)
 	case backup.FieldUpdatedBy:
 		return m.OldUpdatedBy(ctx)
-	case backup.FieldBucket:
-		return m.OldBucket(ctx)
-	case backup.FieldKey:
-		return m.OldKey(ctx)
-	case backup.FieldEndpoint:
-		return m.OldEndpoint(ctx)
 	case backup.FieldStatus:
 		return m.OldStatus(ctx)
-	case backup.FieldDgraphInstance:
-		return m.OldDgraphInstance(ctx)
+	case backup.FieldS3Bucket:
+		return m.OldS3Bucket(ctx)
+	case backup.FieldS3Key:
+		return m.OldS3Key(ctx)
+	case backup.FieldS3Endpoint:
+		return m.OldS3Endpoint(ctx)
 	case backup.FieldChecksum:
 		return m.OldChecksum(ctx)
 	case backup.FieldSchemaVersion:
 		return m.OldSchemaVersion(ctx)
-	case backup.FieldError:
-		return m.OldError(ctx)
 	case backup.FieldSizeBytes:
 		return m.OldSizeBytes(ctx)
+	case backup.FieldError:
+		return m.OldError(ctx)
+	case backup.FieldStartedAt:
+		return m.OldStartedAt(ctx)
 	case backup.FieldCompletedAt:
 		return m.OldCompletedAt(ctx)
 	}
@@ -996,27 +1035,6 @@ func (m *BackupMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetUpdatedBy(v)
 		return nil
-	case backup.FieldBucket:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetBucket(v)
-		return nil
-	case backup.FieldKey:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetKey(v)
-		return nil
-	case backup.FieldEndpoint:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetEndpoint(v)
-		return nil
 	case backup.FieldStatus:
 		v, ok := value.(backup.Status)
 		if !ok {
@@ -1024,12 +1042,26 @@ func (m *BackupMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetStatus(v)
 		return nil
-	case backup.FieldDgraphInstance:
+	case backup.FieldS3Bucket:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetDgraphInstance(v)
+		m.SetS3Bucket(v)
+		return nil
+	case backup.FieldS3Key:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetS3Key(v)
+		return nil
+	case backup.FieldS3Endpoint:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetS3Endpoint(v)
 		return nil
 	case backup.FieldChecksum:
 		v, ok := value.(string)
@@ -1045,6 +1077,13 @@ func (m *BackupMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSchemaVersion(v)
 		return nil
+	case backup.FieldSizeBytes:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSizeBytes(v)
+		return nil
 	case backup.FieldError:
 		v, ok := value.(string)
 		if !ok {
@@ -1052,12 +1091,12 @@ func (m *BackupMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetError(v)
 		return nil
-	case backup.FieldSizeBytes:
-		v, ok := value.(int64)
+	case backup.FieldStartedAt:
+		v, ok := value.(time.Time)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetSizeBytes(v)
+		m.SetStartedAt(v)
 		return nil
 	case backup.FieldCompletedAt:
 		v, ok := value.(time.Time)
@@ -1120,8 +1159,14 @@ func (m *BackupMutation) ClearedFields() []string {
 	if m.FieldCleared(backup.FieldUpdatedBy) {
 		fields = append(fields, backup.FieldUpdatedBy)
 	}
-	if m.FieldCleared(backup.FieldDgraphInstance) {
-		fields = append(fields, backup.FieldDgraphInstance)
+	if m.FieldCleared(backup.FieldS3Bucket) {
+		fields = append(fields, backup.FieldS3Bucket)
+	}
+	if m.FieldCleared(backup.FieldS3Key) {
+		fields = append(fields, backup.FieldS3Key)
+	}
+	if m.FieldCleared(backup.FieldS3Endpoint) {
+		fields = append(fields, backup.FieldS3Endpoint)
 	}
 	if m.FieldCleared(backup.FieldChecksum) {
 		fields = append(fields, backup.FieldChecksum)
@@ -1129,11 +1174,14 @@ func (m *BackupMutation) ClearedFields() []string {
 	if m.FieldCleared(backup.FieldSchemaVersion) {
 		fields = append(fields, backup.FieldSchemaVersion)
 	}
+	if m.FieldCleared(backup.FieldSizeBytes) {
+		fields = append(fields, backup.FieldSizeBytes)
+	}
 	if m.FieldCleared(backup.FieldError) {
 		fields = append(fields, backup.FieldError)
 	}
-	if m.FieldCleared(backup.FieldSizeBytes) {
-		fields = append(fields, backup.FieldSizeBytes)
+	if m.FieldCleared(backup.FieldStartedAt) {
+		fields = append(fields, backup.FieldStartedAt)
 	}
 	if m.FieldCleared(backup.FieldCompletedAt) {
 		fields = append(fields, backup.FieldCompletedAt)
@@ -1161,8 +1209,14 @@ func (m *BackupMutation) ClearField(name string) error {
 	case backup.FieldUpdatedBy:
 		m.ClearUpdatedBy()
 		return nil
-	case backup.FieldDgraphInstance:
-		m.ClearDgraphInstance()
+	case backup.FieldS3Bucket:
+		m.ClearS3Bucket()
+		return nil
+	case backup.FieldS3Key:
+		m.ClearS3Key()
+		return nil
+	case backup.FieldS3Endpoint:
+		m.ClearS3Endpoint()
 		return nil
 	case backup.FieldChecksum:
 		m.ClearChecksum()
@@ -1170,11 +1224,14 @@ func (m *BackupMutation) ClearField(name string) error {
 	case backup.FieldSchemaVersion:
 		m.ClearSchemaVersion()
 		return nil
+	case backup.FieldSizeBytes:
+		m.ClearSizeBytes()
+		return nil
 	case backup.FieldError:
 		m.ClearError()
 		return nil
-	case backup.FieldSizeBytes:
-		m.ClearSizeBytes()
+	case backup.FieldStartedAt:
+		m.ClearStartedAt()
 		return nil
 	case backup.FieldCompletedAt:
 		m.ClearCompletedAt()
@@ -1199,20 +1256,17 @@ func (m *BackupMutation) ResetField(name string) error {
 	case backup.FieldUpdatedBy:
 		m.ResetUpdatedBy()
 		return nil
-	case backup.FieldBucket:
-		m.ResetBucket()
-		return nil
-	case backup.FieldKey:
-		m.ResetKey()
-		return nil
-	case backup.FieldEndpoint:
-		m.ResetEndpoint()
-		return nil
 	case backup.FieldStatus:
 		m.ResetStatus()
 		return nil
-	case backup.FieldDgraphInstance:
-		m.ResetDgraphInstance()
+	case backup.FieldS3Bucket:
+		m.ResetS3Bucket()
+		return nil
+	case backup.FieldS3Key:
+		m.ResetS3Key()
+		return nil
+	case backup.FieldS3Endpoint:
+		m.ResetS3Endpoint()
 		return nil
 	case backup.FieldChecksum:
 		m.ResetChecksum()
@@ -1220,11 +1274,14 @@ func (m *BackupMutation) ResetField(name string) error {
 	case backup.FieldSchemaVersion:
 		m.ResetSchemaVersion()
 		return nil
+	case backup.FieldSizeBytes:
+		m.ResetSizeBytes()
+		return nil
 	case backup.FieldError:
 		m.ResetError()
 		return nil
-	case backup.FieldSizeBytes:
-		m.ResetSizeBytes()
+	case backup.FieldStartedAt:
+		m.ResetStartedAt()
 		return nil
 	case backup.FieldCompletedAt:
 		m.ResetCompletedAt()

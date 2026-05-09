@@ -15,13 +15,13 @@ import (
 )
 
 type Login struct {
-	db            *ent.Client
-	sessionSecret string
-	formTmpl      *template.Template
+	db          *ent.Client
+	sessionKeys auth.SessionKeys
+	formTmpl    *template.Template
 }
 
-func NewLogin(db *ent.Client, sessionSecret string, formTmpl *template.Template) *Login {
-	return &Login{db: db, sessionSecret: sessionSecret, formTmpl: formTmpl}
+func NewLogin(db *ent.Client, sessionKeys auth.SessionKeys, formTmpl *template.Template) *Login {
+	return &Login{db: db, sessionKeys: sessionKeys, formTmpl: formTmpl}
 }
 
 func (h *Login) renderForm(c echo.Context, errMsg string) error {
@@ -39,7 +39,7 @@ func (h *Login) Post(c echo.Context) error {
 	password := c.FormValue("password")
 	csrf := c.FormValue("csrf")
 
-	if !auth.ValidateCSRF(h.sessionSecret, c.Request(), csrf) {
+	if !auth.ValidateCSRF(h.sessionKeys, c.Request(), csrf) {
 		return h.renderForm(c, "Invalid request.")
 	}
 
@@ -57,7 +57,7 @@ func (h *Login) Post(c echo.Context) error {
 		return h.renderForm(c, "Invalid email or password.")
 	}
 
-	if err := auth.SetUserSession(h.sessionSecret, c.Request(), c.Response().Writer, u.ID, u.Name, u.Email); err != nil {
+	if err := auth.SetUserSession(h.sessionKeys, c.Request(), c.Response().Writer, u.ID, u.Name, u.Email); err != nil {
 		return fmt.Errorf("set session: %w", err)
 	}
 
@@ -68,10 +68,10 @@ func (h *Login) Post(c echo.Context) error {
 // Logout handles POST /user/logout.
 func (h *Login) Logout(c echo.Context) error {
 	csrf := c.FormValue("csrf")
-	if !auth.ValidateCSRF(h.sessionSecret, c.Request(), csrf) {
+	if !auth.ValidateCSRF(h.sessionKeys, c.Request(), csrf) {
 		return c.Redirect(http.StatusSeeOther, "/")
 	}
-	if err := auth.ClearSession(h.sessionSecret, c.Request(), c.Response().Writer); err != nil {
+	if err := auth.ClearSession(h.sessionKeys, c.Request(), c.Response().Writer); err != nil {
 		return fmt.Errorf("clear session: %w", err)
 	}
 	return c.Redirect(http.StatusSeeOther, "/")

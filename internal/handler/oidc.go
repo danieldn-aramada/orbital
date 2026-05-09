@@ -18,21 +18,21 @@ import (
 )
 
 type OIDC struct {
-	db            *ent.Client
-	sessionSecret string
-	oauth2Cfg     oauth2.Config
-	verifier      *gooidc.IDTokenVerifier
-	logger        *slog.Logger
+	db          *ent.Client
+	sessionKeys auth.SessionKeys
+	oauth2Cfg   oauth2.Config
+	verifier    *gooidc.IDTokenVerifier
+	logger      *slog.Logger
 }
 
-func NewOIDC(ctx context.Context, db *ent.Client, sessionSecret, issuerURL, clientID, clientSecret, redirectURL string, logger *slog.Logger) (*OIDC, error) {
+func NewOIDC(ctx context.Context, db *ent.Client, sessionKeys auth.SessionKeys, issuerURL, clientID, clientSecret, redirectURL string, logger *slog.Logger) (*OIDC, error) {
 	provider, err := gooidc.NewProvider(ctx, issuerURL)
 	if err != nil {
 		return nil, fmt.Errorf("oidc provider discovery: %w", err)
 	}
 	return &OIDC{
-		db:            db,
-		sessionSecret: sessionSecret,
+		db:          db,
+		sessionKeys: sessionKeys,
 		oauth2Cfg: oauth2.Config{
 			ClientID:     clientID,
 			ClientSecret: clientSecret,
@@ -53,7 +53,7 @@ func (h *OIDC) Login(c echo.Context) error {
 	}
 	state := base64.URLEncoding.EncodeToString(b)
 
-	if err := auth.SetOIDCState(h.sessionSecret, c.Request(), c.Response().Writer, state); err != nil {
+	if err := auth.SetOIDCState(h.sessionKeys, c.Request(), c.Response().Writer, state); err != nil {
 		return fmt.Errorf("set oidc state: %w", err)
 	}
 
@@ -62,7 +62,7 @@ func (h *OIDC) Login(c echo.Context) error {
 
 // Callback handles GET /auth/callback — exchanges the code, verifies the token, creates a session.
 func (h *OIDC) Callback(c echo.Context) error {
-	storedState, err := auth.GetAndClearOIDCState(h.sessionSecret, c.Request(), c.Response().Writer)
+	storedState, err := auth.GetAndClearOIDCState(h.sessionKeys, c.Request(), c.Response().Writer)
 	if err != nil || storedState != c.QueryParam("state") {
 		return c.Redirect(http.StatusSeeOther, "/?error=invalid_state")
 	}
@@ -122,7 +122,7 @@ func (h *OIDC) Callback(c echo.Context) error {
 		}
 	}
 
-	if err := auth.SetUserSession(h.sessionSecret, c.Request(), c.Response().Writer, u.ID, u.Name, u.Email); err != nil {
+	if err := auth.SetUserSession(h.sessionKeys, c.Request(), c.Response().Writer, u.ID, u.Name, u.Email); err != nil {
 		return fmt.Errorf("set session: %w", err)
 	}
 

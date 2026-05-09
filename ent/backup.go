@@ -26,24 +26,24 @@ type Backup struct {
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 	// UpdatedBy holds the value of the "updated_by" field.
 	UpdatedBy string `json:"updated_by,omitempty"`
-	// Bucket holds the value of the "bucket" field.
-	Bucket string `json:"bucket,omitempty"`
-	// Key holds the value of the "key" field.
-	Key string `json:"key,omitempty"`
-	// Endpoint holds the value of the "endpoint" field.
-	Endpoint string `json:"endpoint,omitempty"`
 	// Status holds the value of the "status" field.
 	Status backup.Status `json:"status,omitempty"`
-	// DgraphInstance holds the value of the "dgraph_instance" field.
-	DgraphInstance string `json:"dgraph_instance,omitempty"`
+	// S3Bucket holds the value of the "s3_bucket" field.
+	S3Bucket string `json:"s3_bucket,omitempty"`
+	// S3Key holds the value of the "s3_key" field.
+	S3Key string `json:"s3_key,omitempty"`
+	// S3Endpoint holds the value of the "s3_endpoint" field.
+	S3Endpoint string `json:"s3_endpoint,omitempty"`
 	// Checksum holds the value of the "checksum" field.
 	Checksum string `json:"checksum,omitempty"`
 	// SchemaVersion holds the value of the "schema_version" field.
 	SchemaVersion string `json:"schema_version,omitempty"`
-	// Error holds the value of the "error" field.
-	Error string `json:"error,omitempty"`
 	// SizeBytes holds the value of the "size_bytes" field.
-	SizeBytes int64 `json:"size_bytes,omitempty"`
+	SizeBytes *int64 `json:"size_bytes,omitempty"`
+	// Error holds the value of the "error" field.
+	Error *string `json:"error,omitempty"`
+	// StartedAt holds the value of the "started_at" field.
+	StartedAt *time.Time `json:"started_at,omitempty"`
 	// CompletedAt holds the value of the "completed_at" field.
 	CompletedAt  *time.Time `json:"completed_at,omitempty"`
 	selectValues sql.SelectValues
@@ -56,9 +56,9 @@ func (*Backup) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case backup.FieldSizeBytes:
 			values[i] = new(sql.NullInt64)
-		case backup.FieldCreatedBy, backup.FieldUpdatedBy, backup.FieldBucket, backup.FieldKey, backup.FieldEndpoint, backup.FieldStatus, backup.FieldDgraphInstance, backup.FieldChecksum, backup.FieldSchemaVersion, backup.FieldError:
+		case backup.FieldCreatedBy, backup.FieldUpdatedBy, backup.FieldStatus, backup.FieldS3Bucket, backup.FieldS3Key, backup.FieldS3Endpoint, backup.FieldChecksum, backup.FieldSchemaVersion, backup.FieldError:
 			values[i] = new(sql.NullString)
-		case backup.FieldCreatedAt, backup.FieldUpdatedAt, backup.FieldCompletedAt:
+		case backup.FieldCreatedAt, backup.FieldUpdatedAt, backup.FieldStartedAt, backup.FieldCompletedAt:
 			values[i] = new(sql.NullTime)
 		case backup.FieldID:
 			values[i] = new(uuid.UUID)
@@ -108,35 +108,29 @@ func (_m *Backup) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.UpdatedBy = value.String
 			}
-		case backup.FieldBucket:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field bucket", values[i])
-			} else if value.Valid {
-				_m.Bucket = value.String
-			}
-		case backup.FieldKey:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field key", values[i])
-			} else if value.Valid {
-				_m.Key = value.String
-			}
-		case backup.FieldEndpoint:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field endpoint", values[i])
-			} else if value.Valid {
-				_m.Endpoint = value.String
-			}
 		case backup.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				_m.Status = backup.Status(value.String)
 			}
-		case backup.FieldDgraphInstance:
+		case backup.FieldS3Bucket:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field dgraph_instance", values[i])
+				return fmt.Errorf("unexpected type %T for field s3_bucket", values[i])
 			} else if value.Valid {
-				_m.DgraphInstance = value.String
+				_m.S3Bucket = value.String
+			}
+		case backup.FieldS3Key:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field s3_key", values[i])
+			} else if value.Valid {
+				_m.S3Key = value.String
+			}
+		case backup.FieldS3Endpoint:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field s3_endpoint", values[i])
+			} else if value.Valid {
+				_m.S3Endpoint = value.String
 			}
 		case backup.FieldChecksum:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -150,17 +144,26 @@ func (_m *Backup) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.SchemaVersion = value.String
 			}
-		case backup.FieldError:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field error", values[i])
-			} else if value.Valid {
-				_m.Error = value.String
-			}
 		case backup.FieldSizeBytes:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field size_bytes", values[i])
 			} else if value.Valid {
-				_m.SizeBytes = value.Int64
+				_m.SizeBytes = new(int64)
+				*_m.SizeBytes = value.Int64
+			}
+		case backup.FieldError:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field error", values[i])
+			} else if value.Valid {
+				_m.Error = new(string)
+				*_m.Error = value.String
+			}
+		case backup.FieldStartedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field started_at", values[i])
+			} else if value.Valid {
+				_m.StartedAt = new(time.Time)
+				*_m.StartedAt = value.Time
 			}
 		case backup.FieldCompletedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -219,20 +222,17 @@ func (_m *Backup) String() string {
 	builder.WriteString("updated_by=")
 	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
-	builder.WriteString("bucket=")
-	builder.WriteString(_m.Bucket)
-	builder.WriteString(", ")
-	builder.WriteString("key=")
-	builder.WriteString(_m.Key)
-	builder.WriteString(", ")
-	builder.WriteString("endpoint=")
-	builder.WriteString(_m.Endpoint)
-	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Status))
 	builder.WriteString(", ")
-	builder.WriteString("dgraph_instance=")
-	builder.WriteString(_m.DgraphInstance)
+	builder.WriteString("s3_bucket=")
+	builder.WriteString(_m.S3Bucket)
+	builder.WriteString(", ")
+	builder.WriteString("s3_key=")
+	builder.WriteString(_m.S3Key)
+	builder.WriteString(", ")
+	builder.WriteString("s3_endpoint=")
+	builder.WriteString(_m.S3Endpoint)
 	builder.WriteString(", ")
 	builder.WriteString("checksum=")
 	builder.WriteString(_m.Checksum)
@@ -240,11 +240,20 @@ func (_m *Backup) String() string {
 	builder.WriteString("schema_version=")
 	builder.WriteString(_m.SchemaVersion)
 	builder.WriteString(", ")
-	builder.WriteString("error=")
-	builder.WriteString(_m.Error)
+	if v := _m.SizeBytes; v != nil {
+		builder.WriteString("size_bytes=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
-	builder.WriteString("size_bytes=")
-	builder.WriteString(fmt.Sprintf("%v", _m.SizeBytes))
+	if v := _m.Error; v != nil {
+		builder.WriteString("error=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.StartedAt; v != nil {
+		builder.WriteString("started_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	if v := _m.CompletedAt; v != nil {
 		builder.WriteString("completed_at=")

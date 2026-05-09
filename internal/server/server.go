@@ -39,12 +39,12 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			u, err := auth.GetUserSession(cfg.SessionSecret, c.Request())
+			u, err := auth.GetUserSession(cfg.SessionKeys(), c.Request())
 			c.Set("user_id", u.ID)
 			c.Set("user_name", u.Name)
 			c.Set("user_email", u.Email)
 			c.Set("is_authn", err == nil && u.ID > 0)
-			csrfToken, _ := auth.GetOrCreateCSRF(cfg.SessionSecret, c.Request(), c.Response().Writer)
+			csrfToken, _ := auth.GetOrCreateCSRF(cfg.SessionKeys(), c.Request(), c.Response().Writer)
 			c.Set("csrf_token", csrfToken)
 			return next(c)
 		}
@@ -66,8 +66,12 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		},
 	}))
 
-	oidcEnabled := cfg.OIDCIssuerURL != ""
-	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled)
+	oidcEnabled := cfg.OIDCIssuerURL != "" && cfg.OIDCClientSecret != ""
+	if cfg.OIDCIssuerURL != "" && cfg.OIDCClientSecret == "" {
+		logger.Warn("ORBITAL_OIDC_CLIENT_SECRET is not set — SSO login disabled")
+	}
+	s3Configured := cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != ""
+	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, s3Configured, cfg.S3Endpoint, cfg.S3Bucket)
 	e.GET("/", ui.Index)
 	e.GET("/datacenters", ui.Index)
 	e.GET("/backups", ui.Backups)
@@ -77,7 +81,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	e.GET("/export", ui.Export)
 
 	if db != nil {
-		login := handler.NewLogin(db, cfg.SessionSecret, webtemplates.LoginForm())
+		login := handler.NewLogin(db, cfg.SessionKeys(), webtemplates.LoginForm())
 		e.POST("/user/login", login.Post)
 		e.POST("/user/logout", login.Logout)
 
@@ -85,7 +89,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 			oidc, err := handler.NewOIDC(
 				context.Background(),
 				db,
-				cfg.SessionSecret,
+				cfg.SessionKeys(),
 				cfg.OIDCIssuerURL,
 				cfg.OIDCClientID,
 				cfg.OIDCClientSecret,
@@ -110,6 +114,32 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		e.GET("/api/v1/export/jobs", exp.List)
 		e.GET("/api/v1/export/jobs/:jobId", exp.Status)
 		e.GET("/api/v1/export/jobs/:jobId/download", exp.Download)
+
+		if !s3Configured {
+			logger.Warn("S3 not configured (ORBITAL_S3_BUCKET, ORBITAL_S3_ACCESS_KEY, ORBITAL_S3_SECRET_KEY) — backup disabled")
+		} else {
+			bk, err := handler.NewBackupHandler(context.Background(), db, handler.BackupConfig{
+				DGraphAdminURL:  cfg.DGraphAdminURL,
+				DGraphExportDir: cfg.DGraphExportDir,
+				SchemaPath:      cfg.SchemaPath,
+				S3Endpoint:      cfg.S3Endpoint,
+				S3Region:        cfg.S3Region,
+				S3Bucket:        cfg.S3Bucket,
+				S3AccessKey:     cfg.S3AccessKey,
+				S3SecretKey:     cfg.S3SecretKey,
+				S3Prefix:        cfg.S3Prefix,
+				RetentionCount:  cfg.S3RetentionCount,
+			}, logger)
+			if err != nil {
+				logger.Error("backup handler init failed", "err", err)
+			} else {
+				e.POST("/api/v1/backups", bk.Trigger)
+				e.GET("/api/v1/backups", bk.List)
+				e.GET("/api/v1/backups/:id", bk.Status)
+				e.GET("/api/v1/backups/:id/download", bk.Download)
+				e.DELETE("/api/v1/backups/:id", bk.Delete)
+			}
+		}
 	}
 
 	gql := handler.NewGraphQL(cfg.DGraphURL)

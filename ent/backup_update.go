@@ -88,48 +88,6 @@ func (_u *BackupUpdate) ClearUpdatedBy() *BackupUpdate {
 	return _u
 }
 
-// SetBucket sets the "bucket" field.
-func (_u *BackupUpdate) SetBucket(v string) *BackupUpdate {
-	_u.mutation.SetBucket(v)
-	return _u
-}
-
-// SetNillableBucket sets the "bucket" field if the given value is not nil.
-func (_u *BackupUpdate) SetNillableBucket(v *string) *BackupUpdate {
-	if v != nil {
-		_u.SetBucket(*v)
-	}
-	return _u
-}
-
-// SetKey sets the "key" field.
-func (_u *BackupUpdate) SetKey(v string) *BackupUpdate {
-	_u.mutation.SetKey(v)
-	return _u
-}
-
-// SetNillableKey sets the "key" field if the given value is not nil.
-func (_u *BackupUpdate) SetNillableKey(v *string) *BackupUpdate {
-	if v != nil {
-		_u.SetKey(*v)
-	}
-	return _u
-}
-
-// SetEndpoint sets the "endpoint" field.
-func (_u *BackupUpdate) SetEndpoint(v string) *BackupUpdate {
-	_u.mutation.SetEndpoint(v)
-	return _u
-}
-
-// SetNillableEndpoint sets the "endpoint" field if the given value is not nil.
-func (_u *BackupUpdate) SetNillableEndpoint(v *string) *BackupUpdate {
-	if v != nil {
-		_u.SetEndpoint(*v)
-	}
-	return _u
-}
-
 // SetStatus sets the "status" field.
 func (_u *BackupUpdate) SetStatus(v backup.Status) *BackupUpdate {
 	_u.mutation.SetStatus(v)
@@ -144,23 +102,63 @@ func (_u *BackupUpdate) SetNillableStatus(v *backup.Status) *BackupUpdate {
 	return _u
 }
 
-// SetDgraphInstance sets the "dgraph_instance" field.
-func (_u *BackupUpdate) SetDgraphInstance(v string) *BackupUpdate {
-	_u.mutation.SetDgraphInstance(v)
+// SetS3Bucket sets the "s3_bucket" field.
+func (_u *BackupUpdate) SetS3Bucket(v string) *BackupUpdate {
+	_u.mutation.SetS3Bucket(v)
 	return _u
 }
 
-// SetNillableDgraphInstance sets the "dgraph_instance" field if the given value is not nil.
-func (_u *BackupUpdate) SetNillableDgraphInstance(v *string) *BackupUpdate {
+// SetNillableS3Bucket sets the "s3_bucket" field if the given value is not nil.
+func (_u *BackupUpdate) SetNillableS3Bucket(v *string) *BackupUpdate {
 	if v != nil {
-		_u.SetDgraphInstance(*v)
+		_u.SetS3Bucket(*v)
 	}
 	return _u
 }
 
-// ClearDgraphInstance clears the value of the "dgraph_instance" field.
-func (_u *BackupUpdate) ClearDgraphInstance() *BackupUpdate {
-	_u.mutation.ClearDgraphInstance()
+// ClearS3Bucket clears the value of the "s3_bucket" field.
+func (_u *BackupUpdate) ClearS3Bucket() *BackupUpdate {
+	_u.mutation.ClearS3Bucket()
+	return _u
+}
+
+// SetS3Key sets the "s3_key" field.
+func (_u *BackupUpdate) SetS3Key(v string) *BackupUpdate {
+	_u.mutation.SetS3Key(v)
+	return _u
+}
+
+// SetNillableS3Key sets the "s3_key" field if the given value is not nil.
+func (_u *BackupUpdate) SetNillableS3Key(v *string) *BackupUpdate {
+	if v != nil {
+		_u.SetS3Key(*v)
+	}
+	return _u
+}
+
+// ClearS3Key clears the value of the "s3_key" field.
+func (_u *BackupUpdate) ClearS3Key() *BackupUpdate {
+	_u.mutation.ClearS3Key()
+	return _u
+}
+
+// SetS3Endpoint sets the "s3_endpoint" field.
+func (_u *BackupUpdate) SetS3Endpoint(v string) *BackupUpdate {
+	_u.mutation.SetS3Endpoint(v)
+	return _u
+}
+
+// SetNillableS3Endpoint sets the "s3_endpoint" field if the given value is not nil.
+func (_u *BackupUpdate) SetNillableS3Endpoint(v *string) *BackupUpdate {
+	if v != nil {
+		_u.SetS3Endpoint(*v)
+	}
+	return _u
+}
+
+// ClearS3Endpoint clears the value of the "s3_endpoint" field.
+func (_u *BackupUpdate) ClearS3Endpoint() *BackupUpdate {
+	_u.mutation.ClearS3Endpoint()
 	return _u
 }
 
@@ -204,26 +202,6 @@ func (_u *BackupUpdate) ClearSchemaVersion() *BackupUpdate {
 	return _u
 }
 
-// SetError sets the "error" field.
-func (_u *BackupUpdate) SetError(v string) *BackupUpdate {
-	_u.mutation.SetError(v)
-	return _u
-}
-
-// SetNillableError sets the "error" field if the given value is not nil.
-func (_u *BackupUpdate) SetNillableError(v *string) *BackupUpdate {
-	if v != nil {
-		_u.SetError(*v)
-	}
-	return _u
-}
-
-// ClearError clears the value of the "error" field.
-func (_u *BackupUpdate) ClearError() *BackupUpdate {
-	_u.mutation.ClearError()
-	return _u
-}
-
 // SetSizeBytes sets the "size_bytes" field.
 func (_u *BackupUpdate) SetSizeBytes(v int64) *BackupUpdate {
 	_u.mutation.ResetSizeBytes()
@@ -248,6 +226,46 @@ func (_u *BackupUpdate) AddSizeBytes(v int64) *BackupUpdate {
 // ClearSizeBytes clears the value of the "size_bytes" field.
 func (_u *BackupUpdate) ClearSizeBytes() *BackupUpdate {
 	_u.mutation.ClearSizeBytes()
+	return _u
+}
+
+// SetError sets the "error" field.
+func (_u *BackupUpdate) SetError(v string) *BackupUpdate {
+	_u.mutation.SetError(v)
+	return _u
+}
+
+// SetNillableError sets the "error" field if the given value is not nil.
+func (_u *BackupUpdate) SetNillableError(v *string) *BackupUpdate {
+	if v != nil {
+		_u.SetError(*v)
+	}
+	return _u
+}
+
+// ClearError clears the value of the "error" field.
+func (_u *BackupUpdate) ClearError() *BackupUpdate {
+	_u.mutation.ClearError()
+	return _u
+}
+
+// SetStartedAt sets the "started_at" field.
+func (_u *BackupUpdate) SetStartedAt(v time.Time) *BackupUpdate {
+	_u.mutation.SetStartedAt(v)
+	return _u
+}
+
+// SetNillableStartedAt sets the "started_at" field if the given value is not nil.
+func (_u *BackupUpdate) SetNillableStartedAt(v *time.Time) *BackupUpdate {
+	if v != nil {
+		_u.SetStartedAt(*v)
+	}
+	return _u
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (_u *BackupUpdate) ClearStartedAt() *BackupUpdate {
+	_u.mutation.ClearStartedAt()
 	return _u
 }
 
@@ -343,23 +361,26 @@ func (_u *BackupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(backup.FieldUpdatedBy, field.TypeString)
 	}
-	if value, ok := _u.mutation.Bucket(); ok {
-		_spec.SetField(backup.FieldBucket, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.Key(); ok {
-		_spec.SetField(backup.FieldKey, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.Endpoint(); ok {
-		_spec.SetField(backup.FieldEndpoint, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(backup.FieldStatus, field.TypeEnum, value)
 	}
-	if value, ok := _u.mutation.DgraphInstance(); ok {
-		_spec.SetField(backup.FieldDgraphInstance, field.TypeString, value)
+	if value, ok := _u.mutation.S3Bucket(); ok {
+		_spec.SetField(backup.FieldS3Bucket, field.TypeString, value)
 	}
-	if _u.mutation.DgraphInstanceCleared() {
-		_spec.ClearField(backup.FieldDgraphInstance, field.TypeString)
+	if _u.mutation.S3BucketCleared() {
+		_spec.ClearField(backup.FieldS3Bucket, field.TypeString)
+	}
+	if value, ok := _u.mutation.S3Key(); ok {
+		_spec.SetField(backup.FieldS3Key, field.TypeString, value)
+	}
+	if _u.mutation.S3KeyCleared() {
+		_spec.ClearField(backup.FieldS3Key, field.TypeString)
+	}
+	if value, ok := _u.mutation.S3Endpoint(); ok {
+		_spec.SetField(backup.FieldS3Endpoint, field.TypeString, value)
+	}
+	if _u.mutation.S3EndpointCleared() {
+		_spec.ClearField(backup.FieldS3Endpoint, field.TypeString)
 	}
 	if value, ok := _u.mutation.Checksum(); ok {
 		_spec.SetField(backup.FieldChecksum, field.TypeString, value)
@@ -373,12 +394,6 @@ func (_u *BackupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.SchemaVersionCleared() {
 		_spec.ClearField(backup.FieldSchemaVersion, field.TypeString)
 	}
-	if value, ok := _u.mutation.Error(); ok {
-		_spec.SetField(backup.FieldError, field.TypeString, value)
-	}
-	if _u.mutation.ErrorCleared() {
-		_spec.ClearField(backup.FieldError, field.TypeString)
-	}
 	if value, ok := _u.mutation.SizeBytes(); ok {
 		_spec.SetField(backup.FieldSizeBytes, field.TypeInt64, value)
 	}
@@ -387,6 +402,18 @@ func (_u *BackupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.SizeBytesCleared() {
 		_spec.ClearField(backup.FieldSizeBytes, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.Error(); ok {
+		_spec.SetField(backup.FieldError, field.TypeString, value)
+	}
+	if _u.mutation.ErrorCleared() {
+		_spec.ClearField(backup.FieldError, field.TypeString)
+	}
+	if value, ok := _u.mutation.StartedAt(); ok {
+		_spec.SetField(backup.FieldStartedAt, field.TypeTime, value)
+	}
+	if _u.mutation.StartedAtCleared() {
+		_spec.ClearField(backup.FieldStartedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.CompletedAt(); ok {
 		_spec.SetField(backup.FieldCompletedAt, field.TypeTime, value)
@@ -474,48 +501,6 @@ func (_u *BackupUpdateOne) ClearUpdatedBy() *BackupUpdateOne {
 	return _u
 }
 
-// SetBucket sets the "bucket" field.
-func (_u *BackupUpdateOne) SetBucket(v string) *BackupUpdateOne {
-	_u.mutation.SetBucket(v)
-	return _u
-}
-
-// SetNillableBucket sets the "bucket" field if the given value is not nil.
-func (_u *BackupUpdateOne) SetNillableBucket(v *string) *BackupUpdateOne {
-	if v != nil {
-		_u.SetBucket(*v)
-	}
-	return _u
-}
-
-// SetKey sets the "key" field.
-func (_u *BackupUpdateOne) SetKey(v string) *BackupUpdateOne {
-	_u.mutation.SetKey(v)
-	return _u
-}
-
-// SetNillableKey sets the "key" field if the given value is not nil.
-func (_u *BackupUpdateOne) SetNillableKey(v *string) *BackupUpdateOne {
-	if v != nil {
-		_u.SetKey(*v)
-	}
-	return _u
-}
-
-// SetEndpoint sets the "endpoint" field.
-func (_u *BackupUpdateOne) SetEndpoint(v string) *BackupUpdateOne {
-	_u.mutation.SetEndpoint(v)
-	return _u
-}
-
-// SetNillableEndpoint sets the "endpoint" field if the given value is not nil.
-func (_u *BackupUpdateOne) SetNillableEndpoint(v *string) *BackupUpdateOne {
-	if v != nil {
-		_u.SetEndpoint(*v)
-	}
-	return _u
-}
-
 // SetStatus sets the "status" field.
 func (_u *BackupUpdateOne) SetStatus(v backup.Status) *BackupUpdateOne {
 	_u.mutation.SetStatus(v)
@@ -530,23 +515,63 @@ func (_u *BackupUpdateOne) SetNillableStatus(v *backup.Status) *BackupUpdateOne 
 	return _u
 }
 
-// SetDgraphInstance sets the "dgraph_instance" field.
-func (_u *BackupUpdateOne) SetDgraphInstance(v string) *BackupUpdateOne {
-	_u.mutation.SetDgraphInstance(v)
+// SetS3Bucket sets the "s3_bucket" field.
+func (_u *BackupUpdateOne) SetS3Bucket(v string) *BackupUpdateOne {
+	_u.mutation.SetS3Bucket(v)
 	return _u
 }
 
-// SetNillableDgraphInstance sets the "dgraph_instance" field if the given value is not nil.
-func (_u *BackupUpdateOne) SetNillableDgraphInstance(v *string) *BackupUpdateOne {
+// SetNillableS3Bucket sets the "s3_bucket" field if the given value is not nil.
+func (_u *BackupUpdateOne) SetNillableS3Bucket(v *string) *BackupUpdateOne {
 	if v != nil {
-		_u.SetDgraphInstance(*v)
+		_u.SetS3Bucket(*v)
 	}
 	return _u
 }
 
-// ClearDgraphInstance clears the value of the "dgraph_instance" field.
-func (_u *BackupUpdateOne) ClearDgraphInstance() *BackupUpdateOne {
-	_u.mutation.ClearDgraphInstance()
+// ClearS3Bucket clears the value of the "s3_bucket" field.
+func (_u *BackupUpdateOne) ClearS3Bucket() *BackupUpdateOne {
+	_u.mutation.ClearS3Bucket()
+	return _u
+}
+
+// SetS3Key sets the "s3_key" field.
+func (_u *BackupUpdateOne) SetS3Key(v string) *BackupUpdateOne {
+	_u.mutation.SetS3Key(v)
+	return _u
+}
+
+// SetNillableS3Key sets the "s3_key" field if the given value is not nil.
+func (_u *BackupUpdateOne) SetNillableS3Key(v *string) *BackupUpdateOne {
+	if v != nil {
+		_u.SetS3Key(*v)
+	}
+	return _u
+}
+
+// ClearS3Key clears the value of the "s3_key" field.
+func (_u *BackupUpdateOne) ClearS3Key() *BackupUpdateOne {
+	_u.mutation.ClearS3Key()
+	return _u
+}
+
+// SetS3Endpoint sets the "s3_endpoint" field.
+func (_u *BackupUpdateOne) SetS3Endpoint(v string) *BackupUpdateOne {
+	_u.mutation.SetS3Endpoint(v)
+	return _u
+}
+
+// SetNillableS3Endpoint sets the "s3_endpoint" field if the given value is not nil.
+func (_u *BackupUpdateOne) SetNillableS3Endpoint(v *string) *BackupUpdateOne {
+	if v != nil {
+		_u.SetS3Endpoint(*v)
+	}
+	return _u
+}
+
+// ClearS3Endpoint clears the value of the "s3_endpoint" field.
+func (_u *BackupUpdateOne) ClearS3Endpoint() *BackupUpdateOne {
+	_u.mutation.ClearS3Endpoint()
 	return _u
 }
 
@@ -590,26 +615,6 @@ func (_u *BackupUpdateOne) ClearSchemaVersion() *BackupUpdateOne {
 	return _u
 }
 
-// SetError sets the "error" field.
-func (_u *BackupUpdateOne) SetError(v string) *BackupUpdateOne {
-	_u.mutation.SetError(v)
-	return _u
-}
-
-// SetNillableError sets the "error" field if the given value is not nil.
-func (_u *BackupUpdateOne) SetNillableError(v *string) *BackupUpdateOne {
-	if v != nil {
-		_u.SetError(*v)
-	}
-	return _u
-}
-
-// ClearError clears the value of the "error" field.
-func (_u *BackupUpdateOne) ClearError() *BackupUpdateOne {
-	_u.mutation.ClearError()
-	return _u
-}
-
 // SetSizeBytes sets the "size_bytes" field.
 func (_u *BackupUpdateOne) SetSizeBytes(v int64) *BackupUpdateOne {
 	_u.mutation.ResetSizeBytes()
@@ -634,6 +639,46 @@ func (_u *BackupUpdateOne) AddSizeBytes(v int64) *BackupUpdateOne {
 // ClearSizeBytes clears the value of the "size_bytes" field.
 func (_u *BackupUpdateOne) ClearSizeBytes() *BackupUpdateOne {
 	_u.mutation.ClearSizeBytes()
+	return _u
+}
+
+// SetError sets the "error" field.
+func (_u *BackupUpdateOne) SetError(v string) *BackupUpdateOne {
+	_u.mutation.SetError(v)
+	return _u
+}
+
+// SetNillableError sets the "error" field if the given value is not nil.
+func (_u *BackupUpdateOne) SetNillableError(v *string) *BackupUpdateOne {
+	if v != nil {
+		_u.SetError(*v)
+	}
+	return _u
+}
+
+// ClearError clears the value of the "error" field.
+func (_u *BackupUpdateOne) ClearError() *BackupUpdateOne {
+	_u.mutation.ClearError()
+	return _u
+}
+
+// SetStartedAt sets the "started_at" field.
+func (_u *BackupUpdateOne) SetStartedAt(v time.Time) *BackupUpdateOne {
+	_u.mutation.SetStartedAt(v)
+	return _u
+}
+
+// SetNillableStartedAt sets the "started_at" field if the given value is not nil.
+func (_u *BackupUpdateOne) SetNillableStartedAt(v *time.Time) *BackupUpdateOne {
+	if v != nil {
+		_u.SetStartedAt(*v)
+	}
+	return _u
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (_u *BackupUpdateOne) ClearStartedAt() *BackupUpdateOne {
+	_u.mutation.ClearStartedAt()
 	return _u
 }
 
@@ -759,23 +804,26 @@ func (_u *BackupUpdateOne) sqlSave(ctx context.Context) (_node *Backup, err erro
 	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(backup.FieldUpdatedBy, field.TypeString)
 	}
-	if value, ok := _u.mutation.Bucket(); ok {
-		_spec.SetField(backup.FieldBucket, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.Key(); ok {
-		_spec.SetField(backup.FieldKey, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.Endpoint(); ok {
-		_spec.SetField(backup.FieldEndpoint, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(backup.FieldStatus, field.TypeEnum, value)
 	}
-	if value, ok := _u.mutation.DgraphInstance(); ok {
-		_spec.SetField(backup.FieldDgraphInstance, field.TypeString, value)
+	if value, ok := _u.mutation.S3Bucket(); ok {
+		_spec.SetField(backup.FieldS3Bucket, field.TypeString, value)
 	}
-	if _u.mutation.DgraphInstanceCleared() {
-		_spec.ClearField(backup.FieldDgraphInstance, field.TypeString)
+	if _u.mutation.S3BucketCleared() {
+		_spec.ClearField(backup.FieldS3Bucket, field.TypeString)
+	}
+	if value, ok := _u.mutation.S3Key(); ok {
+		_spec.SetField(backup.FieldS3Key, field.TypeString, value)
+	}
+	if _u.mutation.S3KeyCleared() {
+		_spec.ClearField(backup.FieldS3Key, field.TypeString)
+	}
+	if value, ok := _u.mutation.S3Endpoint(); ok {
+		_spec.SetField(backup.FieldS3Endpoint, field.TypeString, value)
+	}
+	if _u.mutation.S3EndpointCleared() {
+		_spec.ClearField(backup.FieldS3Endpoint, field.TypeString)
 	}
 	if value, ok := _u.mutation.Checksum(); ok {
 		_spec.SetField(backup.FieldChecksum, field.TypeString, value)
@@ -789,12 +837,6 @@ func (_u *BackupUpdateOne) sqlSave(ctx context.Context) (_node *Backup, err erro
 	if _u.mutation.SchemaVersionCleared() {
 		_spec.ClearField(backup.FieldSchemaVersion, field.TypeString)
 	}
-	if value, ok := _u.mutation.Error(); ok {
-		_spec.SetField(backup.FieldError, field.TypeString, value)
-	}
-	if _u.mutation.ErrorCleared() {
-		_spec.ClearField(backup.FieldError, field.TypeString)
-	}
 	if value, ok := _u.mutation.SizeBytes(); ok {
 		_spec.SetField(backup.FieldSizeBytes, field.TypeInt64, value)
 	}
@@ -803,6 +845,18 @@ func (_u *BackupUpdateOne) sqlSave(ctx context.Context) (_node *Backup, err erro
 	}
 	if _u.mutation.SizeBytesCleared() {
 		_spec.ClearField(backup.FieldSizeBytes, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.Error(); ok {
+		_spec.SetField(backup.FieldError, field.TypeString, value)
+	}
+	if _u.mutation.ErrorCleared() {
+		_spec.ClearField(backup.FieldError, field.TypeString)
+	}
+	if value, ok := _u.mutation.StartedAt(); ok {
+		_spec.SetField(backup.FieldStartedAt, field.TypeTime, value)
+	}
+	if _u.mutation.StartedAtCleared() {
+		_spec.ClearField(backup.FieldStartedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.CompletedAt(); ok {
 		_spec.SetField(backup.FieldCompletedAt, field.TypeTime, value)

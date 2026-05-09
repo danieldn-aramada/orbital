@@ -707,37 +707,156 @@ document.addEventListener('DOMContentLoaded', () => {
   })
 })
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (!document.getElementById('backup-table')) return
+// ─── Backups ──────────────────────────────────────────────────────────────────
 
-  document.querySelectorAll('li.tab a[data-target]').forEach((a) => {
-    a.addEventListener('click', () => {
-      activateTab(a.parentElement)
-      displayTabContent(a.dataset.target)
-      setCurrentTab(a.id)
+const backupStatusColors = {
+  completed: 'is-success',
+  skipped:   'is-info',
+  running:   'is-warning',
+  pending:   'is-warning',
+  failed:    'is-danger',
+}
+
+let pendingDeleteId = null
+
+function formatBytes(bytes) {
+  if (!bytes) return '—'
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / 1048576).toFixed(1) + ' MB'
+}
+
+function renderBackups(jobs) {
+  const tbody = document.getElementById('backup-tbody')
+  if (!tbody) return
+  if (!jobs || jobs.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="has-text-grey has-text-centered">No backups yet.</td></tr>'
+    return
+  }
+  tbody.innerHTML = jobs.map(j => {
+    const tag = backupStatusColors[j.status] || 'is-light'
+    const checksum = j.checksum ? j.checksum.substring(0, 12) + '…' : '—'
+    const statusCell = j.status === 'failed' && j.error
+      ? `<span class="tag ${tag}">${j.status} ⚠</span><br><span class="has-text-danger is-size-7" style="display:block;max-width:400px;white-space:normal;word-break:break-word;margin-top:4px;">${j.error}</span>`
+      : `<span class="tag ${tag}">${j.status}</span>`
+    const canDelete = j.status !== 'running' && j.status !== 'pending'
+    const actions = [
+      j.status === 'completed' && j.s3Key
+        ? `<a class="button is-small is-light" onclick="downloadBackup('${j.id}')" title="Download"><span class="icon"><i class="fas fa-download"></i></span></a>`
+        : '',
+      canDelete
+        ? `<a class="button is-small is-light has-text-danger" onclick="openDeleteModal('${j.id}', '${new Date(j.initiatedAt).toLocaleString()}')" title="Delete"><span class="icon"><i class="fas fa-trash"></i></span></a>`
+        : '',
+    ].join('')
+    return `<tr>
+      <td>${new Date(j.initiatedAt).toLocaleString()}</td>
+      <td>${statusCell}</td>
+      <td>${j.initiatedBy || '—'}</td>
+      <td>${formatBytes(j.sizeBytes)}</td>
+      <td title="${j.checksum || ''}">${checksum}</td>
+      <td><div class="buttons is-right" style="gap: 0.25rem; flex-wrap: nowrap;">${actions}</div></td>
+    </tr>`
+  }).join('')
+}
+
+function loadBackups() {
+  fetch('/api/v1/backups')
+    .then(r => r.json())
+    .then(renderBackups)
+    .catch(() => {})
+}
+
+function triggerBackup() {
+  const btn = document.getElementById('btn-backup')
+  const msg = document.getElementById('backup-status-msg')
+  btn.classList.add('is-loading')
+  btn.disabled = true
+  msg.style.display = 'none'
+
+  fetch('/api/v1/backups', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        msg.textContent = data.error
+        msg.style.display = ''
+        btn.classList.remove('is-loading')
+        btn.disabled = false
+      } else {
+        loadBackups()
+        pollBackup(data.jobId)
+      }
     })
-  })
+    .catch(() => {
+      msg.textContent = 'Request failed.'
+      msg.style.display = ''
+      btn.classList.remove('is-loading')
+      btn.disabled = false
+    })
+}
 
-  new DataTable('#backup-table', {
-    layout: {
-      topEnd: { search: { placeholder: 'Type search here' } },
-    },
-    autoWidth: true,
-    scrollX: true,
-    language: {
-      infoEmpty: 'No backups to show',
-      info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
-      entries: { _: 'backups', 1: 'backup' },
-    },
-    columns: [
-      { data: 'timestamp' },
-      { data: 'schemaVersion' },
-      { data: 'size' },
-      { data: 'checksum' },
-      { data: 'blobPath' },
-    ],
-    data: [],
-  })
+function pollBackup(jobId) {
+  const btn = document.getElementById('btn-backup')
+  const interval = setInterval(() => {
+    fetch('/api/v1/backups/' + jobId)
+      .then(r => r.json())
+      .then(data => {
+        loadBackups()
+        if (data.status === 'completed' || data.status === 'skipped' || data.status === 'failed') {
+          clearInterval(interval)
+          btn.classList.remove('is-loading')
+          btn.disabled = false
+        }
+      })
+      .catch(() => { clearInterval(interval); btn.classList.remove('is-loading'); btn.disabled = false })
+  }, 2000)
+}
+
+function downloadBackup(id) {
+  fetch('/api/v1/backups/' + id + '/download')
+    .then(r => r.json())
+    .then(data => { if (data.url) window.open(data.url, '_blank') })
+    .catch(() => {})
+}
+
+function openDeleteModal(id, label) {
+  pendingDeleteId = id
+  document.getElementById('delete-modal-detail').textContent = 'Backup initiated at: ' + label
+  document.getElementById('delete-modal').classList.add('is-active')
+}
+
+function closeDeleteModal() {
+  pendingDeleteId = null
+  document.getElementById('delete-modal').classList.remove('is-active')
+  const btn = document.getElementById('delete-confirm-btn')
+  btn.classList.remove('is-loading')
+  btn.disabled = false
+}
+
+function confirmDelete() {
+  if (!pendingDeleteId) return
+  const btn = document.getElementById('delete-confirm-btn')
+  btn.classList.add('is-loading')
+  btn.disabled = true
+
+  fetch('/api/v1/backups/' + pendingDeleteId, { method: 'DELETE' })
+    .then(r => {
+      if (r.status === 204 || r.ok) {
+        closeDeleteModal()
+        loadBackups()
+      } else {
+        return r.json().then(d => { throw new Error(d.error || 'Delete failed') })
+      }
+    })
+    .catch(err => {
+      btn.classList.remove('is-loading')
+      btn.disabled = false
+      alert(err.message)
+    })
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!document.getElementById('backup-tbody')) return
+  loadBackups()
 })
 
 window.addEventListener('load', () => {
