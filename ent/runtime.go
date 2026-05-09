@@ -9,6 +9,7 @@ import (
 	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/namespace"
 	"github.com/armada/orbital/ent/orb"
+	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/ent/schema"
 	"github.com/armada/orbital/ent/user"
 	"github.com/google/uuid"
@@ -78,6 +79,16 @@ func init() {
 	orbDescID := orbFields[0].Descriptor()
 	// orb.DefaultID holds the default value on creation for the id field.
 	orb.DefaultID = orbDescID.Default.(func() uuid.UUID)
+	registryartifactFields := schema.RegistryArtifact{}.Fields()
+	_ = registryartifactFields
+	// registryartifactDescDatacenterName is the schema descriptor for datacenter_name field.
+	registryartifactDescDatacenterName := registryartifactFields[2].Descriptor()
+	// registryartifact.DefaultDatacenterName holds the default value on creation for the datacenter_name field.
+	registryartifact.DefaultDatacenterName = registryartifactDescDatacenterName.Default.(string)
+	// registryartifactDescSigned is the schema descriptor for signed field.
+	registryartifactDescSigned := registryartifactFields[8].Descriptor()
+	// registryartifact.DefaultSigned holds the default value on creation for the signed field.
+	registryartifact.DefaultSigned = registryartifactDescSigned.Default.(bool)
 	userFields := schema.User{}.Fields()
 	_ = userFields
 	// userDescEmail is the schema descriptor for email field.

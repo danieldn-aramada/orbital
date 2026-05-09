@@ -18,6 +18,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/exportjob"
+	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
@@ -58,20 +59,21 @@ type triggerResponse struct {
 }
 
 type statusResponse struct {
-	JobID       string  `json:"jobId"`
-	DataCenter  string  `json:"dataCenter"`
-	Status      string  `json:"status"`
-	Error       *string `json:"error,omitempty"`
-	StartedAt   *string `json:"startedAt,omitempty"`
-	CompletedAt *string `json:"completedAt,omitempty"`
-	CreatedAt   string  `json:"createdAt"`
+	JobID        string  `json:"jobId"`
+	DataCenter   string  `json:"dataCenter"`
+	Status       string  `json:"status"`
+	Published    bool    `json:"published"`
+	Error        *string `json:"error,omitempty"`
+	StartedAt    *string `json:"startedAt,omitempty"`
+	CompletedAt  *string `json:"completedAt,omitempty"`
+	CreatedAt    string  `json:"createdAt"`
 }
 
 // Trigger handles POST /api/v1/datacenters/:id/export
 //
 // @Summary     Trigger subgraph export
 // @Description Triggers an async export of the data center's configuration subgraph. Returns immediately with a job ID. Returns 409 if an export is already in progress for this data center.
-// @Tags        export
+// @Tags        export subgraph
 // @Produce     json
 // @Param       id path string true "Data center ID"
 // @Success     202 {object} triggerResponse
@@ -86,11 +88,9 @@ func (h *Export) Trigger(c echo.Context) error {
 		dcName = datacenterID
 	}
 
+	// Scratch DGraph is shared — only one export can run at a time across all data centers.
 	existing, err := h.db.ExportJob.Query().
-		Where(
-			exportjob.DatacenterID(datacenterID),
-			exportjob.StatusIn(exportjob.StatusPending, exportjob.StatusRunning),
-		).
+		Where(exportjob.StatusIn(exportjob.StatusPending, exportjob.StatusRunning)).
 		First(c.Request().Context())
 	if err != nil && !ent.IsNotFound(err) {
 		return fmt.Errorf("check existing job: %w", err)
@@ -123,7 +123,7 @@ func (h *Export) Trigger(c echo.Context) error {
 //
 // @Summary     List export jobs
 // @Description Returns the 50 most recent export jobs ordered by creation time.
-// @Tags        export
+// @Tags        export subgraph
 // @Produce     json
 // @Success     200 {array} statusResponse
 // @Router      /api/v1/export/jobs [get]
@@ -136,12 +136,43 @@ func (h *Export) List(c echo.Context) error {
 		return fmt.Errorf("list jobs: %w", err)
 	}
 
+	// Detect stale jobs: completed jobs whose artifact file no longer exists.
+	for _, job := range jobs {
+		if job.Status == exportjob.StatusCompleted && job.ArtifactPath != nil {
+			if _, statErr := os.Stat(*job.ArtifactPath); os.IsNotExist(statErr) {
+				h.db.ExportJob.UpdateOneID(job.ID). //nolint:errcheck
+					SetStatus(exportjob.StatusStale).
+					Save(c.Request().Context())
+				job.Status = exportjob.StatusStale
+			}
+		}
+	}
+
+	// Build a set of job IDs that have at least one published artifact.
+	publishedJobIDs := map[uuid.UUID]bool{}
+	if len(jobs) > 0 {
+		jobIDs := make([]uuid.UUID, 0, len(jobs))
+		for _, j := range jobs {
+			jobIDs = append(jobIDs, j.ID)
+		}
+		artifactRows, err := h.db.RegistryArtifact.Query().
+			Where(registryartifact.ExportJobIDIn(jobIDs...)).
+			Select(registryartifact.FieldExportJobID).
+			All(c.Request().Context())
+		if err == nil {
+			for _, a := range artifactRows {
+				publishedJobIDs[a.ExportJobID] = true
+			}
+		}
+	}
+
 	out := make([]statusResponse, 0, len(jobs))
 	for _, job := range jobs {
 		r := statusResponse{
 			JobID:      job.ID.String(),
 			DataCenter: job.DatacenterName,
 			Status:     string(job.Status),
+			Published:  publishedJobIDs[job.ID],
 			CreatedAt:  job.CreatedAt.Format(time.RFC3339),
 		}
 		if job.Error != nil {
@@ -164,7 +195,7 @@ func (h *Export) List(c echo.Context) error {
 //
 // @Summary     Get export job status
 // @Description Returns the current status of an export job.
-// @Tags        export
+// @Tags        export subgraph
 // @Produce     json
 // @Param       jobId path string true "Job ID (UUID)"
 // @Success     200 {object} statusResponse
@@ -209,7 +240,7 @@ func (h *Export) Status(c echo.Context) error {
 //
 // @Summary     Download export artifact
 // @Description Downloads the export artifact as a zip archive containing data.json.gz and schema.gz.
-// @Tags        export
+// @Tags        export subgraph
 // @Produce     application/zip
 // @Param       jobId path string true "Job ID (UUID)"
 // @Success     200
@@ -239,7 +270,7 @@ func (h *Export) Download(c echo.Context) error {
 	}
 	defer f.Close()
 
-	filename := fmt.Sprintf("export-%s.zip", job.ID)
+	filename := fmt.Sprintf("%s-%s.zip", job.DatacenterName, job.ID)
 	c.Response().Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	return c.Stream(http.StatusOK, "application/zip", f)
 }
@@ -309,20 +340,26 @@ func (h *Export) doExport(ctx context.Context, jobID uuid.UUID, log *slog.Logger
 		return fmt.Errorf("load subgraph into scratch: %w", err)
 	}
 
-	// 6. Clean scratch export dir so we find the new file unambiguously
-	if err := h.cleanScratchExportDir(); err != nil {
-		return fmt.Errorf("clean scratch export dir: %w", err)
+	// 6. Create a per-job directory under the scratch export mount.
+	// Host path:      scratchExportDir/<jobID>/
+	// Container path: /dgraph/export/<jobID>/   (passed as destination in the export mutation)
+	// This gives each job an isolated, clearly-labelled output directory.
+	jobScratchDir := filepath.Join(h.scratchExportDir, jobID.String())
+	if err := os.MkdirAll(jobScratchDir, 0o755); err != nil {
+		return fmt.Errorf("create job scratch dir: %w", err)
 	}
 
-	// 7. Trigger native DGraph export mutation on scratch
-	log.Info("triggering native DGraph export on scratch")
-	if err := h.triggerScratchExport(ctx); err != nil {
+	jobContainerDir := "/dgraph/export/" + jobID.String()
+
+	// 7. Trigger native DGraph export mutation on scratch, scoped to the job's directory.
+	log.Info("triggering native DGraph export on scratch", "destination", jobContainerDir)
+	if err := h.triggerScratchExport(ctx, jobContainerDir); err != nil {
 		return fmt.Errorf("trigger scratch export: %w", err)
 	}
 
-	// 8. Find the exported json.gz written by DGraph into the mounted volume
-	log.Info("locating exported data file")
-	dataGZPath, err := h.findScratchExport()
+	// 8. Find the exported json.gz written by DGraph into the job's directory.
+	log.Info("locating exported data file", "dir", jobScratchDir)
+	dataGZPath, err := h.findScratchExport(jobScratchDir)
 	if err != nil {
 		return fmt.Errorf("find scratch export: %w", err)
 	}
@@ -594,22 +631,8 @@ func (h *Export) applyScratchSchema(ctx context.Context) error {
 	return nil
 }
 
-func (h *Export) cleanScratchExportDir() error {
-	entries, err := os.ReadDir(h.scratchExportDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	for _, e := range entries {
-		os.RemoveAll(filepath.Join(h.scratchExportDir, e.Name()))
-	}
-	return nil
-}
-
-func (h *Export) triggerScratchExport(ctx context.Context) error {
-	const mutation = `{"query": "mutation { export(input: { format: \"json\" }) { response { code message } } }"}`
+func (h *Export) triggerScratchExport(ctx context.Context, destination string) error {
+	mutation := fmt.Sprintf(`{"query": "mutation { export(input: { format: \"json\", destination: \"%s\" }) { response { code message } } }"}`, destination)
 	resp, err := http.Post(h.dgraphScratchAdminURL, "application/json", strings.NewReader(mutation))
 	if err != nil {
 		return err
@@ -623,15 +646,15 @@ func (h *Export) triggerScratchExport(ctx context.Context) error {
 	return nil
 }
 
-// findScratchExport walks the scratch export dir and returns the first *.json.gz file.
-// DGraph writes to a timestamped subdirectory under /dgraph/export (mounted to scratchExportDir).
+// findScratchExport walks dir and returns the first *.json.gz file.
+// DGraph writes to a timestamped subdirectory under the destination path.
 // Retries for up to 15 seconds since DGraph may flush the file slightly after the mutation returns.
-func (h *Export) findScratchExport() (string, error) {
+func (h *Export) findScratchExport(dir string) (string, error) {
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		var found string
 		var seen []string
-		err := filepath.Walk(h.scratchExportDir, func(path string, info os.FileInfo, err error) error {
+		err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
@@ -647,13 +670,13 @@ func (h *Export) findScratchExport() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		h.logger.Info("scratch export dir contents", "files", seen)
+		h.logger.Info("scratch export dir contents", "dir", dir, "files", seen)
 		if found != "" {
 			return found, nil
 		}
 		time.Sleep(1 * time.Second)
 	}
-	return "", fmt.Errorf("no json.gz found in %s after export", h.scratchExportDir)
+	return "", fmt.Errorf("no json.gz found in %s after export", dir)
 }
 
 // ── Archive helpers ───────────────────────────────────────────────────────────

@@ -26,7 +26,7 @@
                 <p class="help is-danger">Set ORBITAL_S3_BUCKET, ORBITAL_S3_ACCESS_KEY, ORBITAL_S3_SECRET_KEY</p>
               {{end}}
             </div>
-            {{if .BackupEnabled}}<p class="help has-text-grey-light">Configurable only via environment variable right now</p>{{end}}
+            {{if .BackupEnabled}}<p class="help has-text-grey-light">Configurable only via environment variable</p>{{end}}
           </div>
 
           <div class="field mt-5">
@@ -36,6 +36,10 @@
                   <span class="icon"><i class="fas fa-database"></i></span>
                   <span>Backup Now</span>
                 </button>
+                <button id="btn-test-backup-connection" class="button is-light is-small" onclick="testBackupConnection()">
+                  <span class="icon"><i class="fa-solid fa-plug"></i></span>
+                  <span>Test Connection</span>
+                </button>
               {{else}}
                 <button class="button is-primary is-small" disabled>
                   <span class="icon"><i class="fas fa-database"></i></span>
@@ -43,6 +47,7 @@
                 </button>
               {{end}}
               <span id="backup-status-msg" style="display:none;" class="is-size-7"></span>
+              <span id="backup-connection-result" class="is-size-7"></span>
             </div>
           </div>
         </div>

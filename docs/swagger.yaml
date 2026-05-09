@@ -1,5 +1,49 @@
 basePath: /
 definitions:
+  handler.artifactResponse:
+    properties:
+      completedAt:
+        type: string
+      datacenterId:
+        type: string
+      datacenterName:
+        type: string
+      digest:
+        type: string
+      error:
+        type: string
+      exportJobId:
+        type: string
+      id:
+        type: integer
+      initiatedAt:
+        type: string
+      registry:
+        type: string
+      repository:
+        type: string
+      signed:
+        type: boolean
+      signingKeyFingerprint:
+        type: string
+      sizeBytes:
+        type: integer
+      status:
+        type: string
+      tag:
+        type: string
+    type: object
+  handler.publishResponse:
+    properties:
+      artifactId:
+        type: integer
+      repository:
+        type: string
+      status:
+        type: string
+      tag:
+        type: string
+    type: object
   handler.statusResponse:
     properties:
       completedAt:
@@ -12,6 +56,8 @@ definitions:
         type: string
       jobId:
         type: string
+      published:
+        type: boolean
       startedAt:
         type: string
       status:
@@ -31,6 +77,22 @@ info:
   title: Orbital API
   version: 0.1.0
 paths:
+  /api/v1/backups/test-connection:
+    post:
+      description: 'Pings the configured S3-compatible or Azure Blob storage to verify
+        credentials and reachability. Returns {"ok": true} on success or {"ok": false,
+        "error": "..."} on failure.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Test backup storage connection
+      tags:
+      - backup graph
   /api/v1/datacenters/{id}/export:
     post:
       description: Triggers an async export of the data center's configuration subgraph.
@@ -57,7 +119,7 @@ paths:
             type: object
       summary: Trigger subgraph export
       tags:
-      - export
+      - export subgraph
   /api/v1/export/jobs:
     get:
       description: Returns the 50 most recent export jobs ordered by creation time.
@@ -72,8 +134,31 @@ paths:
             type: array
       summary: List export jobs
       tags:
-      - export
+      - export subgraph
   /api/v1/export/jobs/{jobId}:
+    delete:
+      description: Deletes an export job record and removes its local scratch file.
+        Does not remove any published OCI artifacts from the registry.
+      parameters:
+      - description: Export job ID
+        in: path
+        name: jobId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Delete export job
+      tags:
+      - export subgraph
     get:
       description: Returns the current status of an export job.
       parameters:
@@ -93,7 +178,7 @@ paths:
           description: Not Found
       summary: Get export job status
       tags:
-      - export
+      - export subgraph
   /api/v1/export/jobs/{jobId}/download:
     get:
       description: Downloads the export artifact as a zip archive containing data.json.gz
@@ -113,7 +198,126 @@ paths:
           description: Not Found
       summary: Download export artifact
       tags:
-      - export
+      - export subgraph
+  /api/v1/export/jobs/{jobId}/publish:
+    post:
+      description: Pushes a completed export job's artifact to the configured OCI
+        registry as a signed artifact. Returns 503 if OCI publishing is not configured,
+        422 if the job is not completed or its artifact file is missing.
+      parameters:
+      - description: Export job ID
+        in: path
+        name: jobId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/handler.publishResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Publish export as OCI artifact
+      tags:
+      - oci
+  /api/v1/oci/artifacts:
+    get:
+      description: Returns the 100 most recent OCI artifacts ordered by publish time
+        descending.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.artifactResponse'
+            type: array
+      summary: List OCI artifacts
+      tags:
+      - oci
+  /api/v1/oci/artifacts/{id}:
+    get:
+      description: Returns a single OCI artifact record by ID.
+      parameters:
+      - description: Artifact ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.artifactResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get OCI artifact
+      tags:
+      - oci
+  /api/v1/oci/public-key:
+    get:
+      description: Returns the PEM-encoded public key corresponding to the configured
+        OCI signing key. Used by edge consumers to verify artifact signatures.
+      produces:
+      - application/x-pem-file
+      responses:
+        "200":
+          description: OK
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get OCI signing public key
+      tags:
+      - oci
+  /api/v1/oci/test-connection:
+    post:
+      description: 'Pings the configured OCI registry to verify credentials and reachability.
+        Returns {"ok": true} on success or {"ok": false, "error": "..."} on failure.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Test OCI registry connection
+      tags:
+      - oci
   /graphql:
     post:
       consumes:
@@ -140,3 +344,7 @@ paths:
       tags:
       - graphql
 swagger: "2.0"
+tags:
+- name: backup graph
+- name: export subgraph
+- name: oci

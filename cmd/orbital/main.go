@@ -2,6 +2,10 @@
 // @version         0.1.0
 // @description     API-first, graph-native configuration management system for modular data centers.
 // @BasePath        /
+//
+// @tag.name         backup graph
+// @tag.name         export subgraph
+// @tag.name         oci
 
 package main
 

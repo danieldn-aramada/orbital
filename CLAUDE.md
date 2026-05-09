@@ -22,6 +22,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - Full DCIM system with dashboards, alerting, and observability
 - End-to-end infrastructure control plane or management suite
+- Reconciling configuration drift — orbital surfaces divergence to administrators but never auto-resolves it and is never in the reconciliation path
+- Packaging, signing, or transporting config payloads — orbital's contract ends at the export API (`json.gz` + `schema.gz`); how that is packaged into a ConfigBundle, signed, and delivered to the edge is the deployment layer's concern (e.g. the [`configbundle`](https://github.com/armada/configbundle) project)
 
 ## Stack
 
@@ -34,11 +36,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Project boundary
 
-Orbital is responsible for: the configuration graph, the Topology API, drift reporting, and producing an exportable config payload for edge consumption.
+Orbital is responsible for: the configuration graph, the Topology API, drift reporting, producing an exportable config payload for edge consumption, and optionally publishing those exports as signed OCI artifacts to an operator-configured registry.
 
-Orbital is **not** responsible for: how that payload is packaged or signed, how it is delivered to the edge (registries, OCI, USB), or how configuration is reconciled against real infrastructure. Those concerns belong to the deployment layer above orbital.
+Orbital is **not** responsible for: how edge consumers pull and apply OCI artifacts, how configuration is reconciled against real infrastructure, or how orbs receive and apply configuration. Those concerns belong to the deployment layer above orbital.
 
-This boundary keeps orbital adoptable outside any specific deployment context. A consumer that doesn't use Kubernetes controllers or OCI registries should still be able to use orbital as a CMDB and Topology API.
+**OCI publishing is a standalone delivery capability.** When `ORBITAL_OCI_REGISTRY` and `ORBITAL_OCI_SIGNING_KEY_PATH` are configured, orbital can push subgraph exports as signed OCI artifacts directly — no external tooling required. This does not conflict with the `configbundle` project: `configbundle` remains a valid consumer that calls orbital's export API and handles its own packaging. An operator can use orbital's built-in publish feature, use `configbundle`, or implement a completely different transport. These are not mutually exclusive.
+
+This boundary keeps orbital adoptable outside any specific deployment context. A consumer that doesn't use OCI registries should still be able to use orbital as a CMDB and Topology API.
 
 ### Deployment model invariants
 
@@ -48,11 +52,17 @@ The following invariants apply to Kubernetes-based deployments of orbital. Orbit
 2. **Desired state and observed state are represented explicitly and may diverge.** Divergence during disconnection windows is data, not an error condition.
 3. **Authoritative reconcilers run locally within the modular data center.** The cloud is never part of the reconciliation path. The CMDB is not part of the reconciliation path.
 4. **The CMDB (DGraph) is a graph index and relationship store.** Configuration actuation flows through the deployment layer — not through the CMDB.
+5. **GraphQL mutations on orbital update authoritative intent only.** They do not execute actions remotely or trigger actuation. Actuation is deferred to the deployment layer — it occurs when config is delivered to and reconciled at the edge.
 
 ### Data flow
-Configuration intent flows **orbital → orb**. In deployments using [`configbundle`](https://github.com/armada/configbundle), it sits between them — its Bundle Generator calls orbital's export API and its edge agent delivers the payload to orb. In other deployments, consumers may call the export API directly.
+Orbital provides the APIs — consumers wire the transport. Orbital does not prescribe how its APIs are called or how payloads move between systems.
 
-For reporting, the edge agent writes drift and divergence reports to a shared external location when connected. A cloud-side polling agent (deployment layer concern) reads from that location and calls orbital's report intake API. Orbital never communicates directly with the edge for reporting — the transport is entirely the caller's concern.
+- **Export API** (`POST /api/v1/datacenters/{id}/export`) — produces a scoped `json.gz` + `schema.gz` for a data center's subgraph. How that payload is packaged and delivered to the edge is the caller's concern.
+- **Publish API** (`POST /api/v1/export/jobs/:jobId/publish`) — pushes a completed export as a signed OCI artifact to the configured registry. Optional — requires `ORBITAL_OCI_REGISTRY` and `ORBITAL_OCI_SIGNING_KEY_PATH`. Signing is mandatory when publishing; keys are configured via env vars, never via UI forms.
+- **Report intake API** — receives drift and divergence reports. How those reports travel from the edge to orbital is the caller's concern. Orbital never initiates contact with the edge.
+- **Topology API** — proxies DGraph's GraphQL API for digital twin consumers. No transport concern.
+
+The [`configbundle`](https://github.com/armada/configbundle) project is one example of a deployment layer built on top of orbital: its Bundle Generator calls the export API, packages the result as a signed OCI artifact, and its edge agent delivers it to orb. This is a reference implementation, not a requirement.
 
 The exception to the one-way config flow is onboarding: orb discovers existing infrastructure, exports a graph, and an admin manually carries it to orbital (USB/file upload) to seed the cloud control plane. After import, orbital becomes the source of truth going forward.
 
@@ -253,6 +263,19 @@ These have been explicitly decided. Do not re-suggest them.
 - **Offline JWT testing for authz** — integration tests generate and sign JWTs locally with a test RSA key pair. No network call to Azure AD required in tests or CI.
 - **Session encryption key must be exactly 32 bytes** — gorilla/sessions silently fails to decode sessions if the AES key is the wrong length. Orbital validates this at startup and refuses to start if misconfigured.
 - **Azure Blob Storage uses Shared Key auth, not AWS Signature V4** — Azure's standard endpoint rejects AWS signatures. Auto-detected by `.blob.core.windows.net` in the endpoint; uses the Azure SDK. All other S3-compatible endpoints use the AWS SDK with path-style addressing.
+- **OCI publishing uses oras-go v2 + cosign Go SDK** — `oras.land/oras-go/v2` for pushing, `github.com/sigstore/cosign/v2` for signing. Do not use the cosign binary — the SDK is used directly in-process. Cosign keys are configured via `ORBITAL_OCI_SIGNING_KEY_PATH` (private key file, unencrypted); signing is mandatory and publish fails if key is not configured.
+- **OCI credentials stay in env vars** — `ORBITAL_OCI_USERNAME`/`ORBITAL_OCI_PASSWORD` are env-only. No credential storage in PostgreSQL. The signing private key is also env/file-only, never a form field.
+- **OCI artifact format** — `artifactType: application/vnd.orbital.subgraph.v1`, two layers: `data.json.gz` (`application/vnd.orbital.subgraph.data.v1+gzip`) and `schema.gz` (`application/vnd.orbital.subgraph.schema.v1+gzip`). Manifest annotations use `com.armada.orbital.*` prefix.
+- **OCI tag strategy** — monotonic `v{n}` tags per data center repo, derived from count of existing `registry_artifacts` rows. `:latest` updated on every successful publish. Re-publishing creates a new `registry_artifacts` row — full audit trail retained.
+- **OCI signing is air-gap safe** — `TlogUpload: false` is set; no Sigstore network calls. Signature stored as OCI referrer. Public key distributed via orb onboarding response (primary, air-gap) and `GET /api/v1/oci/public-key` (secondary).
+- **Export job lifecycle** — `pending → running → completed → stale`. Stale detection: on export job list page load, orbital checks scratch file existence for each completed job and marks stale if missing. Delete removes the PostgreSQL record, the export zip, and the job's scratch directory.
+- **Export and publish are separate actions** — publish never happens automatically on export. Publish button appears on completed jobs. Re-publishing is allowed (creates new `registry_artifacts` row).
+- **Export jobs are globally serialized** — scratch DGraph is shared state; only one export job may be pending or running at a time across all data centers. Trigger returns 409 if any export is already in progress.
+- **Per-job scratch export directories** — each export job writes DGraph output to `/dgraph/export/<jobID>/` inside the scratch container (host-side: `DGRAPH_SCRATCH_EXPORT_DIR/<jobID>/`). The container-side base path `/dgraph/export` is hardcoded; only the host-side mount path is configurable. The directory persists until the user deletes the job — never auto-cleaned.
+- **DGraph export `destination` parameter** — DGraph's export mutation accepts `destination` to route output to a specific path. Used to isolate per-job output. DGraph writes a timestamped subdirectory (`dgraph.r<raft>.u<date>.<time>/`) inside the destination.
+- **Backup zip naming** — `orbital-<version>-<timestamp>.zip` (e.g. `orbital-v0.1.0-20260509T135041Z.zip`). Version comes from `internal/version.Version` injected at build time via ldflags.
+- **Swagger docs regenerated via `make docs`** — runs `swag init -g cmd/orbital/main.go -o docs`. Both `make build-orbital` and `make run-orbital` depend on this target, so docs are always up to date. Swagger tag names: `backup graph`, `export subgraph`, `oci`.
+- **`registry_artifact.datacenter_name` stores DC name at publish time** — denormalized for display; avoids a DGraph lookup on every artifact list. Default `""` allows migration on existing rows.
 
 ## Example Data / Seeding
 

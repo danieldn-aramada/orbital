@@ -33,6 +33,9 @@ playwright-report/
 subgraph-exports/
 dgraph-exports/
 
+# Cosign keys — private key must never be committed
+cosign.key
+
 # OS
 .DS_Store
 Thumbs.db

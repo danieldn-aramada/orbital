@@ -16,6 +16,7 @@ import (
 	"github.com/armada/orbital/ent/namespace"
 	"github.com/armada/orbital/ent/orb"
 	"github.com/armada/orbital/ent/predicate"
+	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/ent/user"
 	"github.com/google/uuid"
 )
@@ -29,11 +30,12 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
-	TypeBackup    = "Backup"
-	TypeExportJob = "ExportJob"
-	TypeNamespace = "Namespace"
-	TypeOrb       = "Orb"
-	TypeUser      = "User"
+	TypeBackup           = "Backup"
+	TypeExportJob        = "ExportJob"
+	TypeNamespace        = "Namespace"
+	TypeOrb              = "Orb"
+	TypeRegistryArtifact = "RegistryArtifact"
+	TypeUser             = "User"
 )
 
 // BackupMutation represents an operation that mutates the Backup nodes in the graph.
@@ -3760,6 +3762,1276 @@ func (m *OrbMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *OrbMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Orb edge %s", name)
+}
+
+// RegistryArtifactMutation represents an operation that mutates the RegistryArtifact nodes in the graph.
+type RegistryArtifactMutation struct {
+	config
+	op                      Op
+	typ                     string
+	id                      *int
+	export_job_id           *uuid.UUID
+	datacenter_id           *string
+	datacenter_name         *string
+	registry                *string
+	repository              *string
+	tag                     *string
+	digest                  *string
+	size_bytes              *int64
+	addsize_bytes           *int64
+	signed                  *bool
+	signing_key_fingerprint *string
+	status                  *registryartifact.Status
+	initiated_by            *int
+	addinitiated_by         *int
+	initiated_at            *time.Time
+	completed_at            *time.Time
+	error                   *string
+	clearedFields           map[string]struct{}
+	done                    bool
+	oldValue                func(context.Context) (*RegistryArtifact, error)
+	predicates              []predicate.RegistryArtifact
+}
+
+var _ ent.Mutation = (*RegistryArtifactMutation)(nil)
+
+// registryartifactOption allows management of the mutation configuration using functional options.
+type registryartifactOption func(*RegistryArtifactMutation)
+
+// newRegistryArtifactMutation creates new mutation for the RegistryArtifact entity.
+func newRegistryArtifactMutation(c config, op Op, opts ...registryartifactOption) *RegistryArtifactMutation {
+	m := &RegistryArtifactMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeRegistryArtifact,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withRegistryArtifactID sets the ID field of the mutation.
+func withRegistryArtifactID(id int) registryartifactOption {
+	return func(m *RegistryArtifactMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *RegistryArtifact
+		)
+		m.oldValue = func(ctx context.Context) (*RegistryArtifact, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().RegistryArtifact.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withRegistryArtifact sets the old RegistryArtifact of the mutation.
+func withRegistryArtifact(node *RegistryArtifact) registryartifactOption {
+	return func(m *RegistryArtifactMutation) {
+		m.oldValue = func(context.Context) (*RegistryArtifact, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m RegistryArtifactMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m RegistryArtifactMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *RegistryArtifactMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *RegistryArtifactMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().RegistryArtifact.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetExportJobID sets the "export_job_id" field.
+func (m *RegistryArtifactMutation) SetExportJobID(u uuid.UUID) {
+	m.export_job_id = &u
+}
+
+// ExportJobID returns the value of the "export_job_id" field in the mutation.
+func (m *RegistryArtifactMutation) ExportJobID() (r uuid.UUID, exists bool) {
+	v := m.export_job_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExportJobID returns the old "export_job_id" field's value of the RegistryArtifact entity.
+// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistryArtifactMutation) OldExportJobID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExportJobID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExportJobID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExportJobID: %w", err)
+	}
+	return oldValue.ExportJobID, nil
+}
+
+// ResetExportJobID resets all changes to the "export_job_id" field.
+func (m *RegistryArtifactMutation) ResetExportJobID() {
+	m.export_job_id = nil
+}
+
+// SetDatacenterID sets the "datacenter_id" field.
+func (m *RegistryArtifactMutation) SetDatacenterID(s string) {
+	m.datacenter_id = &s
+}
+
+// DatacenterID returns the value of the "datacenter_id" field in the mutation.
+func (m *RegistryArtifactMutation) DatacenterID() (r string, exists bool) {
+	v := m.datacenter_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDatacenterID returns the old "datacenter_id" field's value of the RegistryArtifact entity.
+// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistryArtifactMutation) OldDatacenterID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDatacenterID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDatacenterID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDatacenterID: %w", err)
+	}
+	return oldValue.DatacenterID, nil
+}
+
+// ResetDatacenterID resets all changes to the "datacenter_id" field.
+func (m *RegistryArtifactMutation) ResetDatacenterID() {
+	m.datacenter_id = nil
+}
+
+// SetDatacenterName sets the "datacenter_name" field.
+func (m *RegistryArtifactMutation) SetDatacenterName(s string) {
+	m.datacenter_name = &s
+}
+
+// DatacenterName returns the value of the "datacenter_name" field in the mutation.
+func (m *RegistryArtifactMutation) DatacenterName() (r string, exists bool) {
+	v := m.datacenter_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDatacenterName returns the old "datacenter_name" field's value of the RegistryArtifact entity.
+// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistryArtifactMutation) OldDatacenterName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDatacenterName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDatacenterName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDatacenterName: %w", err)
+	}
+	return oldValue.DatacenterName, nil
+}
+
+// ResetDatacenterName resets all changes to the "datacenter_name" field.
+func (m *RegistryArtifactMutation) ResetDatacenterName() {
+	m.datacenter_name = nil
+}
+
+// SetRegistry sets the "registry" field.
+func (m *RegistryArtifactMutation) SetRegistry(s string) {
+	m.registry = &s
+}
+
+// Registry returns the value of the "registry" field in the mutation.
+func (m *RegistryArtifactMutation) Registry() (r string, exists bool) {
+	v := m.registry
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRegistry returns the old "registry" field's value of the RegistryArtifact entity.
+// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistryArtifactMutation) OldRegistry(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRegistry is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRegistry requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRegistry: %w", err)
+	}
+	return oldValue.Registry, nil
+}
+
+// ResetRegistry resets all changes to the "registry" field.
+func (m *RegistryArtifactMutation) ResetRegistry() {
+	m.registry = nil
+}
+
+// SetRepository sets the "repository" field.
+func (m *RegistryArtifactMutation) SetRepository(s string) {
+	m.repository = &s
+}
+
+// Repository returns the value of the "repository" field in the mutation.
+func (m *RegistryArtifactMutation) Repository() (r string, exists bool) {
+	v := m.repository
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRepository returns the old "repository" field's value of the RegistryArtifact entity.
+// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistryArtifactMutation) OldRepository(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRepository is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRepository requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRepository: %w", err)
+	}
+	return oldValue.Repository, nil
+}
+
+// ResetRepository resets all changes to the "repository" field.
+func (m *RegistryArtifactMutation) ResetRepository() {
+	m.repository = nil
+}
+
+// SetTag sets the "tag" field.
+func (m *RegistryArtifactMutation) SetTag(s string) {
+	m.tag = &s
+}
+
+// Tag returns the value of the "tag" field in the mutation.
+func (m *RegistryArtifactMutation) Tag() (r string, exists bool) {
+	v := m.tag
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTag returns the old "tag" field's value of the RegistryArtifact entity.
+// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistryArtifactMutation) OldTag(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTag is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTag requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTag: %w", err)
+	}
+	return oldValue.Tag, nil
+}
+
+// ResetTag resets all changes to the "tag" field.
+func (m *RegistryArtifactMutation) ResetTag() {
+	m.tag = nil
+}
+
+// SetDigest sets the "digest" field.
+func (m *RegistryArtifactMutation) SetDigest(s string) {
+	m.digest = &s
+}
+
+// Digest returns the value of the "digest" field in the mutation.
+func (m *RegistryArtifactMutation) Digest() (r string, exists bool) {
+	v := m.digest
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDigest returns the old "digest" field's value of the RegistryArtifact entity.
+// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistryArtifactMutation) OldDigest(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDigest is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDigest requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDigest: %w", err)
+	}
+	return oldValue.Digest, nil
+}
+
+// ClearDigest clears the value of the "digest" field.
+func (m *RegistryArtifactMutation) ClearDigest() {
+	m.digest = nil
+	m.clearedFields[registryartifact.FieldDigest] = struct{}{}
+}
+
+// DigestCleared returns if the "digest" field was cleared in this mutation.
+func (m *RegistryArtifactMutation) DigestCleared() bool {
+	_, ok := m.clearedFields[registryartifact.FieldDigest]
+	return ok
+}
+
+// ResetDigest resets all changes to the "digest" field.
+func (m *RegistryArtifactMutation) ResetDigest() {
+	m.digest = nil
+	delete(m.clearedFields, registryartifact.FieldDigest)
+}
+
+// SetSizeBytes sets the "size_bytes" field.
+func (m *RegistryArtifactMutation) SetSizeBytes(i int64) {
+	m.size_bytes = &i
+	m.addsize_bytes = nil
+}
+
+// SizeBytes returns the value of the "size_bytes" field in the mutation.
+func (m *RegistryArtifactMutation) SizeBytes() (r int64, exists bool) {
+	v := m.size_bytes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSizeBytes returns the old "size_bytes" field's value of the RegistryArtifact entity.
+// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistryArtifactMutation) OldSizeBytes(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSizeBytes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSizeBytes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSizeBytes: %w", err)
+	}
+	return oldValue.SizeBytes, nil
+}
+
+// AddSizeBytes adds i to the "size_bytes" field.
+func (m *RegistryArtifactMutation) AddSizeBytes(i int64) {
+	if m.addsize_bytes != nil {
+		*m.addsize_bytes += i
+	} else {
+		m.addsize_bytes = &i
+	}
+}
+
+// AddedSizeBytes returns the value that was added to the "size_bytes" field in this mutation.
+func (m *RegistryArtifactMutation) AddedSizeBytes() (r int64, exists bool) {
+	v := m.addsize_bytes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearSizeBytes clears the value of the "size_bytes" field.
+func (m *RegistryArtifactMutation) ClearSizeBytes() {
+	m.size_bytes = nil
+	m.addsize_bytes = nil
+	m.clearedFields[registryartifact.FieldSizeBytes] = struct{}{}
+}
+
+// SizeBytesCleared returns if the "size_bytes" field was cleared in this mutation.
+func (m *RegistryArtifactMutation) SizeBytesCleared() bool {
+	_, ok := m.clearedFields[registryartifact.FieldSizeBytes]
+	return ok
+}
+
+// ResetSizeBytes resets all changes to the "size_bytes" field.
+func (m *RegistryArtifactMutation) ResetSizeBytes() {
+	m.size_bytes = nil
+	m.addsize_bytes = nil
+	delete(m.clearedFields, registryartifact.FieldSizeBytes)
+}
+
+// SetSigned sets the "signed" field.
+func (m *RegistryArtifactMutation) SetSigned(b bool) {
+	m.signed = &b
+}
+
+// Signed returns the value of the "signed" field in the mutation.
+func (m *RegistryArtifactMutation) Signed() (r bool, exists bool) {
+	v := m.signed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSigned returns the old "signed" field's value of the RegistryArtifact entity.
+// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistryArtifactMutation) OldSigned(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSigned is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSigned requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSigned: %w", err)
+	}
+	return oldValue.Signed, nil
+}
+
+// ResetSigned resets all changes to the "signed" field.
+func (m *RegistryArtifactMutation) ResetSigned() {
+	m.signed = nil
+}
+
+// SetSigningKeyFingerprint sets the "signing_key_fingerprint" field.
+func (m *RegistryArtifactMutation) SetSigningKeyFingerprint(s string) {
+	m.signing_key_fingerprint = &s
+}
+
+// SigningKeyFingerprint returns the value of the "signing_key_fingerprint" field in the mutation.
+func (m *RegistryArtifactMutation) SigningKeyFingerprint() (r string, exists bool) {
+	v := m.signing_key_fingerprint
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSigningKeyFingerprint returns the old "signing_key_fingerprint" field's value of the RegistryArtifact entity.
+// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistryArtifactMutation) OldSigningKeyFingerprint(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSigningKeyFingerprint is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSigningKeyFingerprint requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSigningKeyFingerprint: %w", err)
+	}
+	return oldValue.SigningKeyFingerprint, nil
+}
+
+// ClearSigningKeyFingerprint clears the value of the "signing_key_fingerprint" field.
+func (m *RegistryArtifactMutation) ClearSigningKeyFingerprint() {
+	m.signing_key_fingerprint = nil
+	m.clearedFields[registryartifact.FieldSigningKeyFingerprint] = struct{}{}
+}
+
+// SigningKeyFingerprintCleared returns if the "signing_key_fingerprint" field was cleared in this mutation.
+func (m *RegistryArtifactMutation) SigningKeyFingerprintCleared() bool {
+	_, ok := m.clearedFields[registryartifact.FieldSigningKeyFingerprint]
+	return ok
+}
+
+// ResetSigningKeyFingerprint resets all changes to the "signing_key_fingerprint" field.
+func (m *RegistryArtifactMutation) ResetSigningKeyFingerprint() {
+	m.signing_key_fingerprint = nil
+	delete(m.clearedFields, registryartifact.FieldSigningKeyFingerprint)
+}
+
+// SetStatus sets the "status" field.
+func (m *RegistryArtifactMutation) SetStatus(r registryartifact.Status) {
+	m.status = &r
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *RegistryArtifactMutation) Status() (r registryartifact.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the RegistryArtifact entity.
+// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistryArtifactMutation) OldStatus(ctx context.Context) (v registryartifact.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *RegistryArtifactMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetInitiatedBy sets the "initiated_by" field.
+func (m *RegistryArtifactMutation) SetInitiatedBy(i int) {
+	m.initiated_by = &i
+	m.addinitiated_by = nil
+}
+
+// InitiatedBy returns the value of the "initiated_by" field in the mutation.
+func (m *RegistryArtifactMutation) InitiatedBy() (r int, exists bool) {
+	v := m.initiated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInitiatedBy returns the old "initiated_by" field's value of the RegistryArtifact entity.
+// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistryArtifactMutation) OldInitiatedBy(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInitiatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInitiatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInitiatedBy: %w", err)
+	}
+	return oldValue.InitiatedBy, nil
+}
+
+// AddInitiatedBy adds i to the "initiated_by" field.
+func (m *RegistryArtifactMutation) AddInitiatedBy(i int) {
+	if m.addinitiated_by != nil {
+		*m.addinitiated_by += i
+	} else {
+		m.addinitiated_by = &i
+	}
+}
+
+// AddedInitiatedBy returns the value that was added to the "initiated_by" field in this mutation.
+func (m *RegistryArtifactMutation) AddedInitiatedBy() (r int, exists bool) {
+	v := m.addinitiated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearInitiatedBy clears the value of the "initiated_by" field.
+func (m *RegistryArtifactMutation) ClearInitiatedBy() {
+	m.initiated_by = nil
+	m.addinitiated_by = nil
+	m.clearedFields[registryartifact.FieldInitiatedBy] = struct{}{}
+}
+
+// InitiatedByCleared returns if the "initiated_by" field was cleared in this mutation.
+func (m *RegistryArtifactMutation) InitiatedByCleared() bool {
+	_, ok := m.clearedFields[registryartifact.FieldInitiatedBy]
+	return ok
+}
+
+// ResetInitiatedBy resets all changes to the "initiated_by" field.
+func (m *RegistryArtifactMutation) ResetInitiatedBy() {
+	m.initiated_by = nil
+	m.addinitiated_by = nil
+	delete(m.clearedFields, registryartifact.FieldInitiatedBy)
+}
+
+// SetInitiatedAt sets the "initiated_at" field.
+func (m *RegistryArtifactMutation) SetInitiatedAt(t time.Time) {
+	m.initiated_at = &t
+}
+
+// InitiatedAt returns the value of the "initiated_at" field in the mutation.
+func (m *RegistryArtifactMutation) InitiatedAt() (r time.Time, exists bool) {
+	v := m.initiated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInitiatedAt returns the old "initiated_at" field's value of the RegistryArtifact entity.
+// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistryArtifactMutation) OldInitiatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInitiatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInitiatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInitiatedAt: %w", err)
+	}
+	return oldValue.InitiatedAt, nil
+}
+
+// ResetInitiatedAt resets all changes to the "initiated_at" field.
+func (m *RegistryArtifactMutation) ResetInitiatedAt() {
+	m.initiated_at = nil
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (m *RegistryArtifactMutation) SetCompletedAt(t time.Time) {
+	m.completed_at = &t
+}
+
+// CompletedAt returns the value of the "completed_at" field in the mutation.
+func (m *RegistryArtifactMutation) CompletedAt() (r time.Time, exists bool) {
+	v := m.completed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompletedAt returns the old "completed_at" field's value of the RegistryArtifact entity.
+// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistryArtifactMutation) OldCompletedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompletedAt: %w", err)
+	}
+	return oldValue.CompletedAt, nil
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (m *RegistryArtifactMutation) ClearCompletedAt() {
+	m.completed_at = nil
+	m.clearedFields[registryartifact.FieldCompletedAt] = struct{}{}
+}
+
+// CompletedAtCleared returns if the "completed_at" field was cleared in this mutation.
+func (m *RegistryArtifactMutation) CompletedAtCleared() bool {
+	_, ok := m.clearedFields[registryartifact.FieldCompletedAt]
+	return ok
+}
+
+// ResetCompletedAt resets all changes to the "completed_at" field.
+func (m *RegistryArtifactMutation) ResetCompletedAt() {
+	m.completed_at = nil
+	delete(m.clearedFields, registryartifact.FieldCompletedAt)
+}
+
+// SetError sets the "error" field.
+func (m *RegistryArtifactMutation) SetError(s string) {
+	m.error = &s
+}
+
+// Error returns the value of the "error" field in the mutation.
+func (m *RegistryArtifactMutation) Error() (r string, exists bool) {
+	v := m.error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldError returns the old "error" field's value of the RegistryArtifact entity.
+// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistryArtifactMutation) OldError(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldError: %w", err)
+	}
+	return oldValue.Error, nil
+}
+
+// ClearError clears the value of the "error" field.
+func (m *RegistryArtifactMutation) ClearError() {
+	m.error = nil
+	m.clearedFields[registryartifact.FieldError] = struct{}{}
+}
+
+// ErrorCleared returns if the "error" field was cleared in this mutation.
+func (m *RegistryArtifactMutation) ErrorCleared() bool {
+	_, ok := m.clearedFields[registryartifact.FieldError]
+	return ok
+}
+
+// ResetError resets all changes to the "error" field.
+func (m *RegistryArtifactMutation) ResetError() {
+	m.error = nil
+	delete(m.clearedFields, registryartifact.FieldError)
+}
+
+// Where appends a list predicates to the RegistryArtifactMutation builder.
+func (m *RegistryArtifactMutation) Where(ps ...predicate.RegistryArtifact) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the RegistryArtifactMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *RegistryArtifactMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.RegistryArtifact, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *RegistryArtifactMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *RegistryArtifactMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (RegistryArtifact).
+func (m *RegistryArtifactMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *RegistryArtifactMutation) Fields() []string {
+	fields := make([]string, 0, 15)
+	if m.export_job_id != nil {
+		fields = append(fields, registryartifact.FieldExportJobID)
+	}
+	if m.datacenter_id != nil {
+		fields = append(fields, registryartifact.FieldDatacenterID)
+	}
+	if m.datacenter_name != nil {
+		fields = append(fields, registryartifact.FieldDatacenterName)
+	}
+	if m.registry != nil {
+		fields = append(fields, registryartifact.FieldRegistry)
+	}
+	if m.repository != nil {
+		fields = append(fields, registryartifact.FieldRepository)
+	}
+	if m.tag != nil {
+		fields = append(fields, registryartifact.FieldTag)
+	}
+	if m.digest != nil {
+		fields = append(fields, registryartifact.FieldDigest)
+	}
+	if m.size_bytes != nil {
+		fields = append(fields, registryartifact.FieldSizeBytes)
+	}
+	if m.signed != nil {
+		fields = append(fields, registryartifact.FieldSigned)
+	}
+	if m.signing_key_fingerprint != nil {
+		fields = append(fields, registryartifact.FieldSigningKeyFingerprint)
+	}
+	if m.status != nil {
+		fields = append(fields, registryartifact.FieldStatus)
+	}
+	if m.initiated_by != nil {
+		fields = append(fields, registryartifact.FieldInitiatedBy)
+	}
+	if m.initiated_at != nil {
+		fields = append(fields, registryartifact.FieldInitiatedAt)
+	}
+	if m.completed_at != nil {
+		fields = append(fields, registryartifact.FieldCompletedAt)
+	}
+	if m.error != nil {
+		fields = append(fields, registryartifact.FieldError)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *RegistryArtifactMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case registryartifact.FieldExportJobID:
+		return m.ExportJobID()
+	case registryartifact.FieldDatacenterID:
+		return m.DatacenterID()
+	case registryartifact.FieldDatacenterName:
+		return m.DatacenterName()
+	case registryartifact.FieldRegistry:
+		return m.Registry()
+	case registryartifact.FieldRepository:
+		return m.Repository()
+	case registryartifact.FieldTag:
+		return m.Tag()
+	case registryartifact.FieldDigest:
+		return m.Digest()
+	case registryartifact.FieldSizeBytes:
+		return m.SizeBytes()
+	case registryartifact.FieldSigned:
+		return m.Signed()
+	case registryartifact.FieldSigningKeyFingerprint:
+		return m.SigningKeyFingerprint()
+	case registryartifact.FieldStatus:
+		return m.Status()
+	case registryartifact.FieldInitiatedBy:
+		return m.InitiatedBy()
+	case registryartifact.FieldInitiatedAt:
+		return m.InitiatedAt()
+	case registryartifact.FieldCompletedAt:
+		return m.CompletedAt()
+	case registryartifact.FieldError:
+		return m.Error()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *RegistryArtifactMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case registryartifact.FieldExportJobID:
+		return m.OldExportJobID(ctx)
+	case registryartifact.FieldDatacenterID:
+		return m.OldDatacenterID(ctx)
+	case registryartifact.FieldDatacenterName:
+		return m.OldDatacenterName(ctx)
+	case registryartifact.FieldRegistry:
+		return m.OldRegistry(ctx)
+	case registryartifact.FieldRepository:
+		return m.OldRepository(ctx)
+	case registryartifact.FieldTag:
+		return m.OldTag(ctx)
+	case registryartifact.FieldDigest:
+		return m.OldDigest(ctx)
+	case registryartifact.FieldSizeBytes:
+		return m.OldSizeBytes(ctx)
+	case registryartifact.FieldSigned:
+		return m.OldSigned(ctx)
+	case registryartifact.FieldSigningKeyFingerprint:
+		return m.OldSigningKeyFingerprint(ctx)
+	case registryartifact.FieldStatus:
+		return m.OldStatus(ctx)
+	case registryartifact.FieldInitiatedBy:
+		return m.OldInitiatedBy(ctx)
+	case registryartifact.FieldInitiatedAt:
+		return m.OldInitiatedAt(ctx)
+	case registryartifact.FieldCompletedAt:
+		return m.OldCompletedAt(ctx)
+	case registryartifact.FieldError:
+		return m.OldError(ctx)
+	}
+	return nil, fmt.Errorf("unknown RegistryArtifact field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *RegistryArtifactMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case registryartifact.FieldExportJobID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExportJobID(v)
+		return nil
+	case registryartifact.FieldDatacenterID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDatacenterID(v)
+		return nil
+	case registryartifact.FieldDatacenterName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDatacenterName(v)
+		return nil
+	case registryartifact.FieldRegistry:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRegistry(v)
+		return nil
+	case registryartifact.FieldRepository:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRepository(v)
+		return nil
+	case registryartifact.FieldTag:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTag(v)
+		return nil
+	case registryartifact.FieldDigest:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDigest(v)
+		return nil
+	case registryartifact.FieldSizeBytes:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSizeBytes(v)
+		return nil
+	case registryartifact.FieldSigned:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSigned(v)
+		return nil
+	case registryartifact.FieldSigningKeyFingerprint:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSigningKeyFingerprint(v)
+		return nil
+	case registryartifact.FieldStatus:
+		v, ok := value.(registryartifact.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case registryartifact.FieldInitiatedBy:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInitiatedBy(v)
+		return nil
+	case registryartifact.FieldInitiatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInitiatedAt(v)
+		return nil
+	case registryartifact.FieldCompletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompletedAt(v)
+		return nil
+	case registryartifact.FieldError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetError(v)
+		return nil
+	}
+	return fmt.Errorf("unknown RegistryArtifact field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *RegistryArtifactMutation) AddedFields() []string {
+	var fields []string
+	if m.addsize_bytes != nil {
+		fields = append(fields, registryartifact.FieldSizeBytes)
+	}
+	if m.addinitiated_by != nil {
+		fields = append(fields, registryartifact.FieldInitiatedBy)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *RegistryArtifactMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case registryartifact.FieldSizeBytes:
+		return m.AddedSizeBytes()
+	case registryartifact.FieldInitiatedBy:
+		return m.AddedInitiatedBy()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *RegistryArtifactMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case registryartifact.FieldSizeBytes:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSizeBytes(v)
+		return nil
+	case registryartifact.FieldInitiatedBy:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddInitiatedBy(v)
+		return nil
+	}
+	return fmt.Errorf("unknown RegistryArtifact numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *RegistryArtifactMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(registryartifact.FieldDigest) {
+		fields = append(fields, registryartifact.FieldDigest)
+	}
+	if m.FieldCleared(registryartifact.FieldSizeBytes) {
+		fields = append(fields, registryartifact.FieldSizeBytes)
+	}
+	if m.FieldCleared(registryartifact.FieldSigningKeyFingerprint) {
+		fields = append(fields, registryartifact.FieldSigningKeyFingerprint)
+	}
+	if m.FieldCleared(registryartifact.FieldInitiatedBy) {
+		fields = append(fields, registryartifact.FieldInitiatedBy)
+	}
+	if m.FieldCleared(registryartifact.FieldCompletedAt) {
+		fields = append(fields, registryartifact.FieldCompletedAt)
+	}
+	if m.FieldCleared(registryartifact.FieldError) {
+		fields = append(fields, registryartifact.FieldError)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *RegistryArtifactMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *RegistryArtifactMutation) ClearField(name string) error {
+	switch name {
+	case registryartifact.FieldDigest:
+		m.ClearDigest()
+		return nil
+	case registryartifact.FieldSizeBytes:
+		m.ClearSizeBytes()
+		return nil
+	case registryartifact.FieldSigningKeyFingerprint:
+		m.ClearSigningKeyFingerprint()
+		return nil
+	case registryartifact.FieldInitiatedBy:
+		m.ClearInitiatedBy()
+		return nil
+	case registryartifact.FieldCompletedAt:
+		m.ClearCompletedAt()
+		return nil
+	case registryartifact.FieldError:
+		m.ClearError()
+		return nil
+	}
+	return fmt.Errorf("unknown RegistryArtifact nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *RegistryArtifactMutation) ResetField(name string) error {
+	switch name {
+	case registryartifact.FieldExportJobID:
+		m.ResetExportJobID()
+		return nil
+	case registryartifact.FieldDatacenterID:
+		m.ResetDatacenterID()
+		return nil
+	case registryartifact.FieldDatacenterName:
+		m.ResetDatacenterName()
+		return nil
+	case registryartifact.FieldRegistry:
+		m.ResetRegistry()
+		return nil
+	case registryartifact.FieldRepository:
+		m.ResetRepository()
+		return nil
+	case registryartifact.FieldTag:
+		m.ResetTag()
+		return nil
+	case registryartifact.FieldDigest:
+		m.ResetDigest()
+		return nil
+	case registryartifact.FieldSizeBytes:
+		m.ResetSizeBytes()
+		return nil
+	case registryartifact.FieldSigned:
+		m.ResetSigned()
+		return nil
+	case registryartifact.FieldSigningKeyFingerprint:
+		m.ResetSigningKeyFingerprint()
+		return nil
+	case registryartifact.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case registryartifact.FieldInitiatedBy:
+		m.ResetInitiatedBy()
+		return nil
+	case registryartifact.FieldInitiatedAt:
+		m.ResetInitiatedAt()
+		return nil
+	case registryartifact.FieldCompletedAt:
+		m.ResetCompletedAt()
+		return nil
+	case registryartifact.FieldError:
+		m.ResetError()
+		return nil
+	}
+	return fmt.Errorf("unknown RegistryArtifact field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *RegistryArtifactMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *RegistryArtifactMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *RegistryArtifactMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *RegistryArtifactMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *RegistryArtifactMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *RegistryArtifactMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *RegistryArtifactMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown RegistryArtifact unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *RegistryArtifactMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown RegistryArtifact edge %s", name)
 }
 
 // UserMutation represents an operation that mutates the User nodes in the graph.

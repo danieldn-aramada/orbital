@@ -34,16 +34,18 @@ Goal of prototyping is learning, not shipping. Each spike below is a question to
 | # | Spike | Key Question | Owner | Status | Depends On |
 |---|---|---|---|---|---|
 | 1 | AKS Deployment Validation | Can we deploy orbital and DGraph on AKS and reach a working baseline? | Daniel | ✅ Done (4/20) | — |
-| 2 | BMC Discovery end-to-end | Can we scan a real fleet and get clean data into the graph? | — | 🔄 In progress | — |
-| 3 | DGraph performance and cost | Does DGraph hold up at scale, and what does it cost on AKS? | — | Not started | — |
-| 4 | DGraph operations | Can our team operate DGraph on AKS without prior experience? | — | Not started | — |
-| 5 | Schema migration — build vs runbook | Do we need automation or is a runbook sufficient? | — | Not started | Spike 4 |
-| 6 | Air-gap sync round-trip | Does orbital's config export work reliably as a complete, importable payload for orb? | — | Not started | — |
-| 7 | Orb import API | What is the right API contract for orb's local config import endpoint? | — | Not started | — |
-| 8 | DGraph backup to S3-compatible storage | What is the right DGraph backup strategy, including deduplication and retention? | — | Not started | Spike 4 |
-| 9 | Authentication | How do we implement JWT bearer auth in orbital for Atlas UI consumers? | Daniel | ✅ Done (5/8) | — |
-| 10 | Report intake API | What is the right transport-agnostic API for orbital to receive drift and divergence reports? | — | Not started | — |
-| 11 | Authorization | How do we restrict mutations to authorized roles using Azure AD App Roles + DGraph @auth, and how do we test authz offline? | — | Not started | 9 |
+| 2 | Orb CLI structure | What is the right command structure for the orb binary — flags or subcommands? | Daniel | ✅ Done (4/22) | — |
+| 3 | PostgreSQL / ent data model | What is the right schema for orbital's operational data in PostgreSQL? | Daniel | ✅ Done (5/5) | — |
+| 4 | Web UI scaffold | Can we build the orbital management UI with HTMX and Go templates? What pages does it need? | Daniel | ✅ Done (5/6) | — |
+| 5 | Authentication | How do we implement JWT bearer auth in orbital for Atlas UI consumers? | Daniel | ✅ Done (5/8) | — |
+| 6 | DGraph backup to S3-compatible storage | What is the right DGraph backup strategy, including deduplication and retention? | Daniel | ✅ Done (5/9) | — |
+| 7 | Air-gap sync round-trip | Does orbital's config export work reliably as a complete, importable payload for orb? | — | 🔄 In progress | — |
+| 8 | Authorization | How do we restrict mutations to authorized roles using Azure AD App Roles + DGraph @auth, and how do we test authz offline? | — | 🔄 In progress | Spike 5 |
+| 9 | DGraph performance and cost | Does DGraph hold up at scale, and what does it cost on AKS? | — | Not started | — |
+| 10 | DGraph operations | Can our team operate DGraph on AKS without prior experience? | — | Not started | — |
+| 11 | Schema migration — build vs runbook | Do we need automation or is a runbook sufficient? | — | Not started | Spike 10 |
+| 12 | Orb import API | What is the right API contract for orb's local config import endpoint? | — | Not started | — |
+| 13 | Report intake API | What is the right transport-agnostic API for orbital to receive drift and divergence reports? | — | Not started | — |
 
 ---
 
@@ -54,76 +56,75 @@ Goal of prototyping is learning, not shipping. Each spike below is a question to
 
 **Completed:** April 20, 2026 — orbital and DGraph deployed in AKS dev. GraphQL endpoint reachable. NetworkPolicy applied to restrict DGraph access to orbital only.
 
-### Spike 2. BMC Discovery end-to-end
-**Question:** Can we scan a real server fleet over Redfish, build a graph, export it from orb, and import it into orbital cleanly?
+### Spike 2. Orb CLI structure ✅
+**Question:** What is the right command structure for the orb binary — flags or subcommands?
+
+**Completed:** April 22, 2026
+
+**What was built:**
+- `cmd/orb/` entry point with Cobra root command
+- Subcommand split: `orb start` (long-running edge service), `orb scan` (BMC/inventory discovery), `orb export` (graph export), `orb import` (config load)
+- `internal/cli/` package with shared CLI scaffolding and output utilities (`internal/cli/out/`)
+- Confirmed: single binary, subcommand-driven is the right model for the edge deployment context
+
+### Spike 3. PostgreSQL / ent data model ✅
+**Question:** What is the right schema for orbital's operational data in PostgreSQL?
+
+**Completed:** May 5, 2026
+
+**What was built:**
+- `ent/` schema covering all orbital operational entities: `users`, `orbs`, `namespaces`, `backups`, `export_jobs`, `registry_artifacts`
+- `ent generate` workflow; all CRUD methods code-generated
+- Schema migrations managed by ent's `migrate` package against local PostgreSQL
+- Confirmed: PostgreSQL via ent is the right approach for all managed-service operational data; DGraph holds only graph/config data
+
+### Spike 4. Web UI scaffold ✅
+**Question:** Can we build the orbital management UI with HTMX and Go templates? What pages does it need?
+
+**Completed:** May 6, 2026
+
+**What was built:**
+- HTMX + Go templates (`web/templates/`) with Bulma CSS, server-side rendering
+- Pages: datacenter management, backups, operations (export jobs + edge delivery), audit log, divergence reports, schema
+- Shared layout components: navbar, sidebar menu, delete/edit modals, table partials
+- All page JS in `web/static/app.js` — no inline scripts
+- Playwright E2E test suite (`e2e/`) covering datacenter and namespace flows
+- Example GraphQL seed files (`examples/seed/`) for 5 data centers (Alaska DOT, Houston, Seattle, Colo, Alaska Unit 2)
 
 **Success criteria:**
-- Orb CLI scans BMCs and produces a valid DGraph-importable file
-- Orbital ingests the file and the graph is queryable via the Topology API
-- Data is accurate against known hardware
+- ✅ Server-rendered UI with HTMX for dynamic updates (no full SPA)
+- ✅ Pages for all major operational areas
+- ✅ E2E tests validate core flows against a live stack
 
-### Spike 3. DGraph performance and cost
-**Question:** Does DGraph hold up at realistic scale for graph traversal queries, and what does it cost to run on AKS?
+### Spike 5. Authentication ✅
+**Question:** How do we implement auth in orbital?
 
-**Context:** There are unsubstantiated reports of high CPU usage under unknown conditions. This spike reproduces and characterizes that before any optimization work begins.
+**Completed:** May 8, 2026
 
-**Success criteria:**
-- Define a realistic query mix: expected patterns from the digital twin UI (deep traversals — DataCenter → Servers → StorageControllers → StorageDevices), read/write ratio, and target dataset size for v1
-- Seed DGraph with a representative dataset and benchmark query latency under increasing concurrency
-- Identify which specific queries are expensive and whether they correlate with the reported CPU spikes
-- Determine if Valkey caching is sufficient mitigation or if DGraph is a hard bottleneck
-- Map peak CPU/memory profile to an AKS node SKU and produce a cost estimate for v1 workload
+**What was built:**
+- OIDC Authorization Code Flow via `go-oidc/v3` + `golang.org/x/oauth2`
+- Azure AD as the IdP (tenant `8f231c2a-9551-4b40-be17-5b24afe5e890`)
+- Session-based auth via `gorilla/sessions` cookie; CSRF token in same cookie
+- User auto-provisioned on first OIDC login (no password hash = SSO-only account)
+- Local email/password login retained for dev/seed user (`admin@armada.ai`)
+- Name and email stored in session at login — no DB query per request
+- `password_hash` is nullable in PostgreSQL; nil = OIDC-only user
 
-### Spike 4. DGraph operations
-**Question:** Can our team operate DGraph reliably on AKS without prior experience?
-
-**Context:** The team has strong Go/Java and PostgreSQL experience but no DGraph operational background. Schema migrations, backup/restore, and cluster behavior during restarts are all unknowns. This spike must be completed before building any automation around these processes.
-
-**Success criteria:**
-- Perform a full backup and restore cycle on AKS — validate data integrity after restore
-- Apply a schema change to a live DGraph instance — document the process, failure modes, and rollback steps
-- Test DGraph behavior during a rolling restart on AKS (pod eviction, zero downtime feasibility)
-- Evaluate blue/green deployment viability — determine if DGraph cluster state makes this practical or prohibitively complex
-- Produce a runbook: what the on-call engineer does for each of the above scenarios
-
-### Spike 5. Schema migration — build vs runbook
-**Question:** Do we need a built-in schema migration tool in orbital, or is a well-maintained runbook sufficient?
-
-**Context:** The architecture calls for orbital to own schema versioning and apply changes to DGraph automatically on startup. But this is non-trivial to build correctly. Spike 4 (DGraph operations) will reveal how painful schema changes are in practice — this spike uses those findings to decide whether automation is worth the investment or whether operational discipline (runbooks, manual apply, version tracking in PostgreSQL) is good enough for the foreseeable future.
-
-**Do not start until spike 4 is complete.**
-
-**Success criteria:**
-- Assess the real operational cost of manual schema migrations based on spike 4 findings
-- Determine if the frequency and risk of schema changes justifies building automation
-- If yes — produce a design doc for the migration tool (not code)
-- If no — produce a runbook that covers schema apply, rollback, and version tracking in PostgreSQL
-
-### Spike 6. Air-gap sync round-trip
-**Question:** Does orbital's config export work reliably as a complete, importable payload?
-
-**Context:** Orbital must expose a data center-scoped export endpoint (`POST /api/v1/datacenters/{id}/export`) that returns a `json.gz` + `schema.gz` pair for that data center's subgraph. This is not a raw pass-through of DGraph's export mutation — orbital must partition the graph by data center. In deployments using `configbundle`, its Bundle Generator calls this endpoint to produce a ConfigBundle. This spike builds the endpoint and validates the export is reliable and loadable.
-
-**Success criteria:**
-- Implement `POST /api/v1/datacenters/{id}/export` — returns scoped `json.gz` + `schema.gz`
-- Orb receives and loads the `json.gz` into local DGraph (simulating what `configbundle`'s edge agent does)
-- Orb serves the graph correctly offline after import
-- Validate export sizes are reasonable (reference point: USB/manual transfer)
-
-### Spike 7. Orb import API
-**Question:** What is the right API contract for orb's local config import endpoint?
-
-**Context:** In deployments using `configbundle`, config reaches orb via the edge agent calling orb's local `/import` API with the `json.gz` payload — not by orb polling orbital directly. Orb has no direct connection to orbital; the delivery mechanism is the deployment layer's concern. This spike defines and validates that local API contract between the delivery layer and orb.
-
-**Success criteria:**
-- Define the `/import` API: endpoint, payload format, auth model (local loopback — what, if any, auth is appropriate)
-- Validate that orb correctly loads the `json.gz` into local DGraph and serves it offline after import
-- Confirm the import is idempotent and safe to re-run on the same or newer payload
-- Confirm behaviour on a stale or older payload (should orb reject, warn, or accept?)
-- Produce an API design doc covering the endpoint contract
-
-### Spike 8. DGraph backup to S3-compatible storage
+### Spike 6. DGraph backup to S3-compatible storage ✅
 **Question:** What is the right backup strategy for DGraph, and how do we handle deduplication and retention?
+
+**Completed:** May 9, 2026
+
+**What was built:**
+- `POST /api/v1/backups` — triggers async backup job; returns job ID
+- `GET /api/v1/backups` / `GET /api/v1/backups/:id` — list and status
+- `GET /api/v1/backups/:id/download` — presigned URL (15 min TTL)
+- `DELETE /api/v1/backups/:id` — removes record and S3 object
+- `POST /api/v1/backups/test-connection` — validates storage credentials
+- SHA-256 checksum dedup — skips upload if graph unchanged since last backup
+- Retention enforcement — prunes oldest completed backups beyond `ORBITAL_S3_RETENTION_COUNT`
+- Azure Blob Storage auto-detected by `.blob.core.windows.net`; uses Shared Key auth. All other endpoints use AWS SDK with path-style addressing.
+- Backup zip named `orbital-<version>-<timestamp>.zip`
 
 **Context:** Orbital is the authoritative intent store for the fleet — if DGraph data is lost, no configuration exports can be produced and no modular data centers can be onboarded. DGraph community edition only has the export mutation (`json.gz` + `schema.gz`), which produces full snapshots. PostgreSQL is handled by the managed service layer and is not orbital's concern.
 
@@ -158,41 +159,53 @@ If S3 is not configured, the backup UI button is disabled with a visible explana
 | `error` | text | nullable; populated on failure |
 
 **Post-v1 — incremental and dedup:**
-DGraph community has no native incremental backup. Options to evaluate once real data volumes are known from Spike 3:
+DGraph community has no native incremental backup. Options to evaluate once real data volumes are known from Spike 9:
 - DGraph enterprise binary incremental backups
 - Frequent full snapshots with storage-side versioning and lifecycle rules
 - Export diff against previous snapshot (complex — only if snapshot sizes become a real problem)
 
 **Success criteria:**
-- `POST /api/v1/backups` triggers an async backup job; returns job ID
-- `GET /api/v1/backups` lists backup history from PostgreSQL
-- `GET /api/v1/backups/:id` returns job status
-- `GET /api/v1/backups/:id/download` returns a presigned S3 URL (valid for a short TTL) for admin download
-- Checksum dedup: if graph unchanged since last backup, upload is skipped and job completes with status `skipped`
-- Retention: after a successful upload, backups exceeding `ORBITAL_S3_RETENTION_COUNT` are deleted from S3 and marked `deleted` in PostgreSQL
-- S3 credentials validated at startup — warning logged and backup disabled if missing or unreachable
-- End-to-end validated: trigger backup, confirm `json.gz` + `schema.gz` appear in S3, confirm record in PostgreSQL
+- ✅ `POST /api/v1/backups` triggers an async backup job; returns job ID
+- ✅ `GET /api/v1/backups` lists backup history from PostgreSQL
+- ✅ `GET /api/v1/backups/:id` returns job status
+- ✅ `GET /api/v1/backups/:id/download` returns a presigned S3 URL (valid for a short TTL) for admin download
+- ✅ Checksum dedup: if graph unchanged since last backup, upload is skipped and job completes with status `skipped`
+- ✅ Retention: after a successful upload, backups exceeding `ORBITAL_S3_RETENTION_COUNT` are deleted from S3
+- ✅ End-to-end validated: trigger backup, confirm archive appears in storage, confirm record in PostgreSQL
 
-**Do not start until Spike 4 (DGraph operations) is complete.**
+### Spike 7. Air-gap sync round-trip 🔄
+**Question:** Does orbital's config export work reliably as a complete, importable payload?
 
-### Spike 9. Authentication ✅
-**Question:** How do we implement auth in orbital?
+**Context:** Orbital must expose a data center-scoped export endpoint (`POST /api/v1/datacenters/{id}/export`) that returns a `json.gz` + `schema.gz` pair for that data center's subgraph. This is not a raw pass-through of DGraph's export mutation — orbital must partition the graph by data center. In deployments using `configbundle`, its Bundle Generator calls this endpoint to produce a ConfigBundle. This spike builds the endpoint and validates the export is reliable and loadable. OCI artifact publishing (pushing signed exports to a registry for edge consumers to pull) is also in scope here.
 
-**Completed:** May 8, 2026
+**What's been built (as of 5/9):**
+- `POST /api/v1/datacenters/{id}/export` — async job; queries blue DGraph, loads subgraph into scratch DGraph, triggers native export, packages into `json.gz` + `schema.gz` zip
+- Export jobs globally serialized (scratch DGraph is shared state)
+- Per-job scratch export directories via DGraph `destination` parameter (`/dgraph/export/<jobID>/`)
+- `GET /api/v1/export/jobs`, `GET /api/v1/export/jobs/:jobId`, `GET /api/v1/export/jobs/:jobId/download`
+- `DELETE /api/v1/export/jobs/:jobId` — removes record, zip, and scratch dir
+- Stale detection on list: marks jobs whose scratch file no longer exists
+- OCI publish: `POST /api/v1/export/jobs/:jobId/publish` — pushes signed OCI artifact to configured registry (oras-go v2 + cosign, air-gap safe, `TlogUpload: false`)
+- OCI artifacts: `GET /api/v1/oci/artifacts`, `GET /api/v1/oci/artifacts/:id`
+- `GET /api/v1/oci/public-key` — distributes signing public key to edge consumers
+- `POST /api/v1/oci/test-connection` — validates registry credentials
+- Edge Delivery UI page — registry status, test connection, published artifacts table
 
-**What was built:**
-- OIDC Authorization Code Flow via `go-oidc/v3` + `golang.org/x/oauth2`
-- Azure AD as the IdP (tenant `8f231c2a-9551-4b40-be17-5b24afe5e890`)
-- Session-based auth via `gorilla/sessions` cookie; CSRF token in same cookie
-- User auto-provisioned on first OIDC login (no password hash = SSO-only account)
-- Local email/password login retained for dev/seed user (`admin@armada.ai`)
-- Name and email stored in session at login — no DB query per request
-- `password_hash` is nullable in PostgreSQL; nil = OIDC-only user
+**Remaining:**
+- Orb receives and loads the `json.gz` into local DGraph and serves graph offline after import
+- Validate export sizes are reasonable (USB/manual transfer reference point)
 
-### Spike 11. Authorization
+**Success criteria:**
+- ✅ Implement `POST /api/v1/datacenters/{id}/export` — returns scoped `json.gz` + `schema.gz`
+- ⬜ Orb receives and loads the `json.gz` into local DGraph (simulating what `configbundle`'s edge agent does)
+- ⬜ Orb serves the graph correctly offline after import
+- ✅ Validate export can be published as a signed OCI artifact for edge pull
+- ⬜ Validate export sizes are reasonable (reference point: USB/manual transfer)
+
+### Spike 8. Authorization 🔄
 **Question:** How do we restrict mutations to authorized roles, and how do we test authz offline?
 
-**Context:** Authentication (Spike 9) is complete — orbital knows who the user is. Authorization is the next layer: what they are allowed to do. Two mechanisms will work together: Azure AD App Roles for role assignment, and DGraph's native `@auth` directive for enforcing mutation access at the graph layer.
+**Context:** Authentication (Spike 5) is complete — orbital knows who the user is. Authorization is the next layer: what they are allowed to do. Two mechanisms will work together: Azure AD App Roles for role assignment, and DGraph's native `@auth` directive for enforcing mutation access at the graph layer.
 
 **Approach settled:**
 - **Azure AD App Roles** (not group GUIDs) — define roles like `orbital-admin` and `orbital-viewer` in the Azure app manifest. App Roles appear in the JWT `roles` claim as strings, not GUIDs, and can be included in a custom namespace claim that DGraph's `@auth` can read.
@@ -208,7 +221,56 @@ DGraph community has no native incremental backup. Options to evaluate once real
 - A user with `orbital-viewer` role cannot perform mutations via GraphQL or REST
 - A user with `orbital-admin` role can perform all operations
 
-### Spike 10. Report intake API
+### Spike 9. DGraph performance and cost
+**Question:** Does DGraph hold up at realistic scale for graph traversal queries, and what does it cost to run on AKS?
+
+**Context:** There are unsubstantiated reports of high CPU usage under unknown conditions. This spike reproduces and characterizes that before any optimization work begins.
+
+**Success criteria:**
+- Define a realistic query mix: expected patterns from the digital twin UI (deep traversals — DataCenter → Servers → StorageControllers → StorageDevices), read/write ratio, and target dataset size for v1
+- Seed DGraph with a representative dataset and benchmark query latency under increasing concurrency
+- Identify which specific queries are expensive and whether they correlate with the reported CPU spikes
+- Determine if Valkey caching is sufficient mitigation or if DGraph is a hard bottleneck
+- Map peak CPU/memory profile to an AKS node SKU and produce a cost estimate for v1 workload
+
+### Spike 10. DGraph operations
+**Question:** Can our team operate DGraph reliably on AKS without prior experience?
+
+**Context:** The team has strong Go/Java and PostgreSQL experience but no DGraph operational background. Schema migrations, backup/restore, and cluster behavior during restarts are all unknowns. This spike must be completed before building any automation around these processes.
+
+**Success criteria:**
+- Perform a full backup and restore cycle on AKS — validate data integrity after restore
+- Apply a schema change to a live DGraph instance — document the process, failure modes, and rollback steps
+- Test DGraph behavior during a rolling restart on AKS (pod eviction, zero downtime feasibility)
+- Evaluate blue/green deployment viability — determine if DGraph cluster state makes this practical or prohibitively complex
+- Produce a runbook: what the on-call engineer does for each of the above scenarios
+
+### Spike 11. Schema migration — build vs runbook
+**Question:** Do we need a built-in schema migration tool in orbital, or is a well-maintained runbook sufficient?
+
+**Context:** The architecture calls for orbital to own schema versioning and apply changes to DGraph automatically on startup. But this is non-trivial to build correctly. Spike 10 (DGraph operations) will reveal how painful schema changes are in practice — this spike uses those findings to decide whether automation is worth the investment or whether operational discipline (runbooks, manual apply, version tracking in PostgreSQL) is good enough for the foreseeable future.
+
+**Do not start until Spike 10 is complete.**
+
+**Success criteria:**
+- Assess the real operational cost of manual schema migrations based on Spike 10 findings
+- Determine if the frequency and risk of schema changes justifies building automation
+- If yes — produce a design doc for the migration tool (not code)
+- If no — produce a runbook that covers schema apply, rollback, and version tracking in PostgreSQL
+
+### Spike 12. Orb import API
+**Question:** What is the right API contract for orb's local config import endpoint?
+
+**Context:** In deployments using `configbundle`, config reaches orb via the edge agent calling orb's local `/import` API with the `json.gz` payload — not by orb polling orbital directly. Orb has no direct connection to orbital; the delivery mechanism is the deployment layer's concern. This spike defines and validates that local API contract between the delivery layer and orb.
+
+**Success criteria:**
+- Define the `/import` API: endpoint, payload format, auth model (local loopback — what, if any, auth is appropriate)
+- Validate that orb correctly loads the `json.gz` into local DGraph and serves it offline after import
+- Confirm the import is idempotent and safe to re-run on the same or newer payload
+- Confirm behaviour on a stale or older payload (should orb reject, warn, or accept?)
+- Produce an API design doc covering the endpoint contract
+
+### Spike 13. Report intake API
 **Question:** What is the right API for orbital to receive drift and divergence reports?
 
 **Context:** Orbital exposes a transport-agnostic report intake API. The edge writes signed reports to a shared external location (deployment layer concern); a delivery agent reads from that location and calls orbital's intake API. Orbital never knows or cares about the transport — it just receives and verifies structured reports.

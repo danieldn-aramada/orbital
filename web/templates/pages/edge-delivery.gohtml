@@ -1,0 +1,73 @@
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div>
+    <div class="app-main p-5">
+      {{if not .IsAuthn}}
+        <div class="notification is-warning is-light">
+          <a class="js-modal-trigger" data-target="login-modal">Login</a> to view this page.
+        </div>
+      {{else}}
+
+      <p class="is-size-4 mb-2">Edge Delivery</p>
+      <p class="has-text-grey mb-5" style="font-size: 0.875rem;">
+        OCI artifacts published from subgraph exports. Each artifact is a signed, versioned snapshot of a data center's configuration — ready to be pulled by orbs.
+      </p>
+
+      <section class="mb-6" style="max-width: 520px;">
+        <div class="field">
+          <label class="label">Registry</label>
+          <div class="control has-icons-right">
+            {{if .OCIConfigured}}
+              <input class="input is-small has-background-light has-text-grey-dark" type="text" value="{{.OCIRegistry}}/{{.OCIRepo}}" readonly style="cursor: default;">
+              <span class="icon is-small is-right has-text-grey-light"><i class="fas fa-lock"></i></span>
+            {{else}}
+              <input class="input is-small is-danger" type="text" value="OCI not configured" readonly style="cursor: default;">
+              <p class="help is-danger">Set ORBITAL_OCI_REGISTRY and ORBITAL_OCI_SIGNING_KEY_PATH</p>
+            {{end}}
+          </div>
+          {{if .OCIConfigured}}<p class="help has-text-grey-light">Configurable only via environment variable</p>{{end}}
+        </div>
+
+        {{if .OCIConfigured}}
+        <div class="field mt-4">
+          <div class="control is-flex is-align-items-center" style="gap: 0.75rem;">
+            <button id="btn-test-connection" class="button is-light is-small" onclick="testOCIConnection()">
+              <span class="icon"><i class="fa-solid fa-plug"></i></span>
+              <span>Test Connection</span>
+            </button>
+            <span id="test-connection-result" class="is-size-7"></span>
+          </div>
+        </div>
+        {{end}}
+      </section>
+
+      <div class="mt-4">
+        <p class="is-size-5 mb-3">Published Artifacts</p>
+        <div style="overflow-x: auto">
+          <table id="artifacts-table" class="table is-striped is-hoverable is-fullwidth is-size-7">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Data Center</th>
+                <th>Repository</th>
+                <th>Tag</th>
+                <th>Digest</th>
+                <th>Signed</th>
+                <th>Status</th>
+                <th>Published At</th>
+                <th>Error</th>
+              </tr>
+            </thead>
+            <tbody id="artifacts-tbody">
+              <tr><td colspan="9" class="has-text-grey">No artifacts yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {{end}}
+    </div>
+  </main>
+{{end}}

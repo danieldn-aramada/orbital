@@ -41,7 +41,7 @@ var (
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "datacenter_id", Type: field.TypeString},
 		{Name: "datacenter_name", Type: field.TypeString},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "running", "completed", "failed"}},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "running", "completed", "failed", "stale"}},
 		{Name: "artifact_path", Type: field.TypeString, Nullable: true},
 		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime, Nullable: true},
@@ -86,6 +86,31 @@ var (
 		Columns:    OrbsColumns,
 		PrimaryKey: []*schema.Column{OrbsColumns[0]},
 	}
+	// RegistryArtifactsColumns holds the columns for the "registry_artifacts" table.
+	RegistryArtifactsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "export_job_id", Type: field.TypeUUID},
+		{Name: "datacenter_id", Type: field.TypeString},
+		{Name: "datacenter_name", Type: field.TypeString, Default: ""},
+		{Name: "registry", Type: field.TypeString},
+		{Name: "repository", Type: field.TypeString},
+		{Name: "tag", Type: field.TypeString},
+		{Name: "digest", Type: field.TypeString, Nullable: true},
+		{Name: "size_bytes", Type: field.TypeInt64, Nullable: true},
+		{Name: "signed", Type: field.TypeBool, Default: false},
+		{Name: "signing_key_fingerprint", Type: field.TypeString, Nullable: true},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "pushing", "completed", "failed"}},
+		{Name: "initiated_by", Type: field.TypeInt, Nullable: true},
+		{Name: "initiated_at", Type: field.TypeTime},
+		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "error", Type: field.TypeString, Nullable: true},
+	}
+	// RegistryArtifactsTable holds the schema information for the "registry_artifacts" table.
+	RegistryArtifactsTable = &schema.Table{
+		Name:       "registry_artifacts",
+		Columns:    RegistryArtifactsColumns,
+		PrimaryKey: []*schema.Column{RegistryArtifactsColumns[0]},
+	}
 	// UsersColumns holds the columns for the "users" table.
 	UsersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -108,6 +133,7 @@ var (
 		ExportJobsTable,
 		NamespacesTable,
 		OrbsTable,
+		RegistryArtifactsTable,
 		UsersTable,
 	}
 )

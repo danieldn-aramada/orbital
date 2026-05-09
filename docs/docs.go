@@ -15,6 +15,27 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/v1/backups/test-connection": {
+            "post": {
+                "description": "Pings the configured S3-compatible or Azure Blob storage to verify credentials and reachability. Returns {\"ok\": true} on success or {\"ok\": false, \"error\": \"...\"} on failure.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "backup graph"
+                ],
+                "summary": "Test backup storage connection",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/datacenters/{id}/export": {
             "post": {
                 "description": "Triggers an async export of the data center's configuration subgraph. Returns immediately with a job ID. Returns 409 if an export is already in progress for this data center.",
@@ -22,7 +43,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "export"
+                    "export subgraph"
                 ],
                 "summary": "Trigger subgraph export",
                 "parameters": [
@@ -60,7 +81,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "export"
+                    "export subgraph"
                 ],
                 "summary": "List export jobs",
                 "responses": {
@@ -83,7 +104,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "export"
+                    "export subgraph"
                 ],
                 "summary": "Get export job status",
                 "parameters": [
@@ -106,6 +127,39 @@ const docTemplate = `{
                         "description": "Not Found"
                     }
                 }
+            },
+            "delete": {
+                "description": "Deletes an export job record and removes its local scratch file. Does not remove any published OCI artifacts from the registry.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "export subgraph"
+                ],
+                "summary": "Delete export job",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Export job ID",
+                        "name": "jobId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/api/v1/export/jobs/{jobId}/download": {
@@ -115,7 +169,7 @@ const docTemplate = `{
                     "application/zip"
                 ],
                 "tags": [
-                    "export"
+                    "export subgraph"
                 ],
                 "summary": "Download export artifact",
                 "parameters": [
@@ -133,6 +187,179 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found"
+                    }
+                }
+            }
+        },
+        "/api/v1/export/jobs/{jobId}/publish": {
+            "post": {
+                "description": "Pushes a completed export job's artifact to the configured OCI registry as a signed artifact. Returns 503 if OCI publishing is not configured, 422 if the job is not completed or its artifact file is missing.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "oci"
+                ],
+                "summary": "Publish export as OCI artifact",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Export job ID",
+                        "name": "jobId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/handler.publishResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/oci/artifacts": {
+            "get": {
+                "description": "Returns the 100 most recent OCI artifacts ordered by publish time descending.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "oci"
+                ],
+                "summary": "List OCI artifacts",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handler.artifactResponse"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/oci/artifacts/{id}": {
+            "get": {
+                "description": "Returns a single OCI artifact record by ID.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "oci"
+                ],
+                "summary": "Get OCI artifact",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Artifact ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.artifactResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/oci/public-key": {
+            "get": {
+                "description": "Returns the PEM-encoded public key corresponding to the configured OCI signing key. Used by edge consumers to verify artifact signatures.",
+                "produces": [
+                    "application/x-pem-file"
+                ],
+                "tags": [
+                    "oci"
+                ],
+                "summary": "Get OCI signing public key",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/oci/test-connection": {
+            "post": {
+                "description": "Pings the configured OCI registry to verify credentials and reachability. Returns {\"ok\": true} on success or {\"ok\": false, \"error\": \"...\"} on failure.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "oci"
+                ],
+                "summary": "Test OCI registry connection",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     }
                 }
             }
@@ -175,6 +402,73 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "handler.artifactResponse": {
+            "type": "object",
+            "properties": {
+                "completedAt": {
+                    "type": "string"
+                },
+                "datacenterId": {
+                    "type": "string"
+                },
+                "datacenterName": {
+                    "type": "string"
+                },
+                "digest": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "exportJobId": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "initiatedAt": {
+                    "type": "string"
+                },
+                "registry": {
+                    "type": "string"
+                },
+                "repository": {
+                    "type": "string"
+                },
+                "signed": {
+                    "type": "boolean"
+                },
+                "signingKeyFingerprint": {
+                    "type": "string"
+                },
+                "sizeBytes": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "tag": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.publishResponse": {
+            "type": "object",
+            "properties": {
+                "artifactId": {
+                    "type": "integer"
+                },
+                "repository": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "tag": {
+                    "type": "string"
+                }
+            }
+        },
         "handler.statusResponse": {
             "type": "object",
             "properties": {
@@ -192,6 +486,9 @@ const docTemplate = `{
                 },
                 "jobId": {
                     "type": "string"
+                },
+                "published": {
+                    "type": "boolean"
                 },
                 "startedAt": {
                     "type": "string"
@@ -212,7 +509,18 @@ const docTemplate = `{
                 }
             }
         }
-    }
+    },
+    "tags": [
+        {
+            "name": "backup graph"
+        },
+        {
+            "name": "export subgraph"
+        },
+        {
+            "name": "oci"
+        }
+    ]
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it

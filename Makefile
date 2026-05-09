@@ -10,7 +10,7 @@ ORB_BIN      := $(BIN_DIR)/orb
 
 COMPOSE_FILE := deploy/local/docker-compose.yml
 
-.PHONY: help build build-orbital build-orb run-orbital test lint up down seed
+.PHONY: help build build-orbital build-orb run-orbital test lint up down seed docs
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -18,7 +18,10 @@ help: ## Show this help
 
 build: build-orbital build-orb ## Build all binaries
 
-build-orbital: ## Build the orbital server binary → bin/orbital
+docs: ## Regenerate Swagger docs (requires swag: go install github.com/swaggo/swag/cmd/swag@latest)
+	swag init -g cmd/orbital/main.go -o docs
+
+build-orbital: docs ## Build the orbital server binary → bin/orbital
 	go build $(LDFLAGS) -o $(ORBITAL_BIN) ./cmd/orbital
 
 build-orb: ## Build the orb edge binary → bin/orb

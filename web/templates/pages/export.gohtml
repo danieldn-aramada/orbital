@@ -59,7 +59,11 @@
       <div class="mt-6">
         <p class="is-size-5 mb-3">Export Jobs</p>
         <div style="overflow-x: auto">
-          <table id="export-jobs-table" class="table is-striped is-hoverable is-fullwidth is-size-7">
+          <table
+            id="export-jobs-table"
+            class="table is-striped is-hoverable is-fullwidth is-size-7"
+            data-oci-configured="{{if .OCIConfigured}}true{{else}}false{{end}}"
+          >
             <thead>
               <tr>
                 <th>Job ID</th>
@@ -78,152 +82,6 @@
         </div>
       </div>
 
-    </div>
-  </main>
-
-  <script>
-    let pollTimer = null
-
-    document.addEventListener('DOMContentLoaded', () => {
-      const select = document.getElementById('export-datacenter-select')
-      const submitBtn = document.getElementById('export-submit-btn')
-
-      fetch('/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: '{ queryDataCenter { id name } }' }),
-      })
-        .then(r => r.json())
-        .then(json => {
-          const dcs = json.data?.queryDataCenter ?? []
-          select.innerHTML = '<option value="" disabled selected>— select a data center —</option>'
-          dcs.forEach(dc => {
-            const opt = document.createElement('option')
-            opt.value = dc.id
-            opt.textContent = dc.name
-            select.appendChild(opt)
-          })
-          select.addEventListener('change', () => {
-            submitBtn.disabled = !select.value
-          })
-        })
-        .catch(() => {
-          select.innerHTML = '<option value="" disabled selected>Failed to load data centers</option>'
-        })
-
-      loadJobsTable()
-    })
-
-    function handleExportSubmit() {
-      const select = document.getElementById('export-datacenter-select')
-      const id = select.value
-      if (!id) return
-
-      const submitBtn = document.getElementById('export-submit-btn')
-      submitBtn.classList.add('is-loading')
-      submitBtn.disabled = true
-
-      fetch(`/api/v1/datacenters/${id}/export`, { method: 'POST' })
-        .then(r => r.json())
-        .then(json => {
-          submitBtn.classList.remove('is-loading')
-          submitBtn.disabled = false
-          if (json.error) {
-            showStatus('is-warning', 'fa-triangle-exclamation', json.error)
-            return
-          }
-          showStatus('is-info', 'fa-spinner fa-spin', 'Export started…')
-          pollStatus(json.jobId)
-          loadJobsTable()
-        })
-        .catch(() => {
-          submitBtn.classList.remove('is-loading')
-          submitBtn.disabled = false
-          showStatus('is-danger', 'fa-circle-xmark', 'Failed to start export.')
-        })
-    }
-
-    function pollStatus(jobId) {
-      clearTimeout(pollTimer)
-      fetch(`/api/v1/export/jobs/${jobId}`)
-        .then(r => r.json())
-        .then(job => {
-          loadJobsTable()
-          if (job.status === 'completed') {
-            showStatus('is-success', 'fa-circle-check', `Export complete.`, jobId)
-          } else if (job.status === 'failed') {
-            showStatus('is-danger', 'fa-circle-xmark', `Export failed: ${job.error ?? 'unknown error'}`)
-          } else {
-            pollTimer = setTimeout(() => pollStatus(jobId), 2000)
-            const label = job.status === 'running' ? 'Exporting…' : 'Pending…'
-            showStatus('is-info', 'fa-spinner fa-spin', label)
-          }
-        })
-        .catch(() => {
-          pollTimer = setTimeout(() => pollStatus(jobId), 3000)
-        })
-    }
-
-    function showStatus(colorClass, iconClass, text, downloadJobId) {
-      const box = document.getElementById('export-status-box')
-      const article = document.getElementById('export-status-article')
-      const icon = document.getElementById('export-status-icon')
-      const textEl = document.getElementById('export-status-text')
-      const dlWrap = document.getElementById('export-download-link')
-      const dlAnchor = document.getElementById('export-download-anchor')
-
-      article.className = `message ${colorClass}`
-      icon.innerHTML = `<i class="fa-solid ${iconClass}"></i>`
-      textEl.textContent = text
-      box.style.display = ''
-
-      if (downloadJobId) {
-        dlAnchor.href = `/api/v1/export/jobs/${downloadJobId}/download`
-        dlWrap.style.display = ''
-      } else {
-        dlWrap.style.display = 'none'
-      }
-    }
-
-    function loadJobsTable() {
-      const tbody = document.getElementById('export-jobs-tbody')
-      fetch('/api/v1/export/jobs')
-        .then(r => r.json())
-        .then(jobs => {
-          tbody.innerHTML = jobs.length === 0
-            ? '<tr><td colspan="7" class="has-text-grey">No export jobs yet.</td></tr>'
-            : jobs.map(job => `
-            <tr>
-              <td style="font-family:monospace;font-size:0.7rem">${job.jobId}</td>
-              <td>${job.dataCenter ?? '—'}</td>
-              <td>${statusBadge(job.status)}</td>
-              <td>${fmtTime(job.createdAt)}</td>
-              <td>${fmtTime(job.startedAt)}</td>
-              <td>${fmtTime(job.completedAt)}</td>
-              <td>${job.status === 'completed'
-                ? `<a class="button is-small is-link is-outlined" href="/api/v1/export/jobs/${job.jobId}/download"><span class="icon"><i class="fa-solid fa-download"></i></span><span>Download</span></a>`
-                : ''}</td>
-            </tr>`).join('')
-        })
-        .catch(() => {})
-    }
-
-    function statusBadge(status) {
-      const map = {
-        pending:   'is-warning is-light',
-        running:   'is-info is-light',
-        completed: 'is-success is-light',
-        failed:    'is-danger is-light',
-      }
-      return `<span class="tag ${map[status] ?? ''}">${status}</span>`
-    }
-
-    function fmtTime(iso) {
-      if (!iso) return '—'
-      return new Date(iso).toLocaleString()
-    }
-
-  </script>
       {{end}}
     </div>
   </main>

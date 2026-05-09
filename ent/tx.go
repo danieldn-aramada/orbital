@@ -20,6 +20,8 @@ type Tx struct {
 	Namespace *NamespaceClient
 	// Orb is the client for interacting with the Orb builders.
 	Orb *OrbClient
+	// RegistryArtifact is the client for interacting with the RegistryArtifact builders.
+	RegistryArtifact *RegistryArtifactClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 
@@ -157,6 +159,7 @@ func (tx *Tx) init() {
 	tx.ExportJob = NewExportJobClient(tx.config)
 	tx.Namespace = NewNamespaceClient(tx.config)
 	tx.Orb = NewOrbClient(tx.config)
+	tx.RegistryArtifact = NewRegistryArtifactClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 }
 

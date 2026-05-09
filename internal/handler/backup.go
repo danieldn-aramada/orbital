@@ -33,6 +33,7 @@ type blobStorage interface {
 	upload(ctx context.Context, localPath, key string) error
 	presignURL(ctx context.Context, key string) (string, error)
 	deleteObject(ctx context.Context, key string) error
+	ping(ctx context.Context) error
 }
 
 // BackupHandler handles async DGraph backup operations.
@@ -46,6 +47,7 @@ type BackupHandler struct {
 	s3Prefix        string
 	s3Endpoint      string
 	retentionCount  int
+	version         string
 	logger          *slog.Logger
 }
 
@@ -61,6 +63,7 @@ type BackupConfig struct {
 	S3SecretKey     string
 	S3Prefix        string
 	RetentionCount  int
+	Version         string
 }
 
 func NewBackupHandler(ctx context.Context, db *ent.Client, cfg BackupConfig, logger *slog.Logger) (*BackupHandler, error) {
@@ -91,6 +94,7 @@ func NewBackupHandler(ctx context.Context, db *ent.Client, cfg BackupConfig, log
 		s3Prefix:        prefix,
 		s3Endpoint:      cfg.S3Endpoint,
 		retentionCount:  cfg.RetentionCount,
+		version:         cfg.Version,
 		logger:          logger,
 	}, nil
 }
@@ -153,6 +157,12 @@ func (a *azureStorage) presignURL(ctx context.Context, key string) (string, erro
 
 func (a *azureStorage) deleteObject(ctx context.Context, key string) error {
 	_, err := a.client.DeleteBlob(ctx, a.container, key, nil)
+	return err
+}
+
+func (a *azureStorage) ping(ctx context.Context) error {
+	pager := a.client.NewListBlobsFlatPager(a.container, nil)
+	_, err := pager.NextPage(ctx)
 	return err
 }
 
@@ -221,6 +231,11 @@ func (s *s3Storage) deleteObject(ctx context.Context, key string) error {
 	return err
 }
 
+func (s *s3Storage) ping(ctx context.Context) error {
+	_, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &s.bucket})
+	return err
+}
+
 // ── HTTP handlers ──────────────────────────────────────────────────────────────
 
 type backupResponse struct {
@@ -233,6 +248,23 @@ type backupResponse struct {
 	Checksum    string  `json:"checksum,omitempty"`
 	SizeBytes   *int64  `json:"sizeBytes,omitempty"`
 	Error       *string `json:"error,omitempty"`
+}
+
+// TestConnection handles POST /api/v1/backups/test-connection
+//
+// @Summary     Test backup storage connection
+// @Description Pings the configured S3-compatible or Azure Blob storage to verify credentials and reachability. Returns {"ok": true} on success or {"ok": false, "error": "..."} on failure.
+// @Tags        backup graph
+// @Produce     json
+// @Success     200 {object} map[string]any
+// @Router      /api/v1/backups/test-connection [post]
+func (h *BackupHandler) TestConnection(c echo.Context) error {
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 10*time.Second)
+	defer cancel()
+	if err := h.storage.ping(ctx); err != nil {
+		return c.JSON(http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, map[string]any{"ok": true})
 }
 
 // Trigger handles POST /api/v1/backups
@@ -431,13 +463,15 @@ func (h *BackupHandler) doBackup(ctx context.Context, jobID uuid.UUID, log *slog
 		return fmt.Errorf("gzip schema: %w", err)
 	}
 
-	zipPath := filepath.Join(os.TempDir(), fmt.Sprintf("orbital-backup-%s.zip", jobID))
+	ts := time.Now().UTC().Format("20060102T150405Z")
+	zipName := fmt.Sprintf("orbital-%s-%s.zip", h.version, ts)
+	zipPath := filepath.Join(os.TempDir(), zipName)
 	if err := writeZip(zipPath, dataGZ, schemaGZ); err != nil {
 		return fmt.Errorf("write zip: %w", err)
 	}
 	defer os.Remove(zipPath)
 
-	storageKey := fmt.Sprintf("%sorbital-backup-%s.zip", h.s3Prefix, jobID)
+	storageKey := fmt.Sprintf("%s%s", h.s3Prefix, zipName)
 	log.Info("uploading backup", "bucket", h.s3Bucket, "key", storageKey)
 	if err := h.storage.upload(ctx, zipPath, storageKey); err != nil {
 		return fmt.Errorf("upload: %w", err)

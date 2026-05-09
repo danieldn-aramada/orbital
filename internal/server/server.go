@@ -14,6 +14,8 @@ import (
 	"github.com/armada/orbital/internal/config"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/metrics"
+	"github.com/armada/orbital/internal/oci"
+	appversion "github.com/armada/orbital/internal/version"
 	webtemplates "github.com/armada/orbital/web/templates"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -71,7 +73,12 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		logger.Warn("ORBITAL_OIDC_CLIENT_SECRET is not set — SSO login disabled")
 	}
 	s3Configured := cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != ""
+	ociConfigured := cfg.OCIConfigured()
+	if !ociConfigured {
+		logger.Warn("OCI publishing not configured (ORBITAL_OCI_REGISTRY and ORBITAL_OCI_SIGNING_KEY_PATH) — publish disabled")
+	}
 	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, s3Configured, cfg.S3Endpoint, cfg.S3Bucket)
+	ui.SetOCIConfig(ociConfigured, cfg.OCIRegistry, cfg.OCIRepo)
 	e.GET("/", ui.Index)
 	e.GET("/datacenters", ui.Index)
 	e.GET("/backups", ui.Backups)
@@ -115,6 +122,22 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		e.GET("/api/v1/export/jobs/:jobId", exp.Status)
 		e.GET("/api/v1/export/jobs/:jobId/download", exp.Download)
 
+		ociCfg := oci.Config{
+			Registry:      cfg.OCIRegistry,
+			Repo:          cfg.OCIRepo,
+			Username:      cfg.OCIUsername,
+			Password:      cfg.OCIPassword,
+			SigningKeyPath: cfg.OCISigningKeyPath,
+		}
+		ociH := handler.NewOCI(db, ociCfg, cfg.DGraphScratchExportDir, logger)
+		e.POST("/api/v1/export/jobs/:jobId/publish", ociH.Publish)
+		e.DELETE("/api/v1/export/jobs/:jobId", ociH.DeleteJob)
+		e.GET("/api/v1/oci/artifacts", ociH.ListArtifacts)
+		e.GET("/api/v1/oci/artifacts/:id", ociH.GetArtifact)
+		e.GET("/api/v1/oci/public-key", ociH.PublicKey)
+		e.POST("/api/v1/oci/test-connection", ociH.TestConnection)
+		e.GET("/edge-delivery", ui.EdgeDelivery)
+
 		if !s3Configured {
 			logger.Warn("S3 not configured (ORBITAL_S3_BUCKET, ORBITAL_S3_ACCESS_KEY, ORBITAL_S3_SECRET_KEY) — backup disabled")
 		} else {
@@ -129,6 +152,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 				S3SecretKey:     cfg.S3SecretKey,
 				S3Prefix:        cfg.S3Prefix,
 				RetentionCount:  cfg.S3RetentionCount,
+				Version:         appversion.Version,
 			}, logger)
 			if err != nil {
 				logger.Error("backup handler init failed", "err", err)
@@ -138,6 +162,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 				e.GET("/api/v1/backups/:id", bk.Status)
 				e.GET("/api/v1/backups/:id/download", bk.Download)
 				e.DELETE("/api/v1/backups/:id", bk.Delete)
+				e.POST("/api/v1/backups/test-connection", bk.TestConnection)
 			}
 		}
 	}

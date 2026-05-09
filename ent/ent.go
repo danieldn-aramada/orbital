@@ -16,6 +16,7 @@ import (
 	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/namespace"
 	"github.com/armada/orbital/ent/orb"
+	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/ent/user"
 )
 
@@ -77,11 +78,12 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			backup.Table:    backup.ValidColumn,
-			exportjob.Table: exportjob.ValidColumn,
-			namespace.Table: namespace.ValidColumn,
-			orb.Table:       orb.ValidColumn,
-			user.Table:      user.ValidColumn,
+			backup.Table:           backup.ValidColumn,
+			exportjob.Table:        exportjob.ValidColumn,
+			namespace.Table:        namespace.ValidColumn,
+			orb.Table:              orb.ValidColumn,
+			registryartifact.Table: registryartifact.ValidColumn,
+			user.Table:             user.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

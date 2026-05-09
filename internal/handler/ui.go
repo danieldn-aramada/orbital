@@ -22,6 +22,9 @@ type UI struct {
 	backupEnabled   bool
 	s3Endpoint      string
 	s3Bucket        string
+	ociConfigured   bool
+	ociRegistry     string
+	ociRepo         string
 	version         string
 	templates       map[string]*template.Template
 }
@@ -38,6 +41,13 @@ func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, backupEnable
 		version:         fmt.Sprintf("%d", time.Now().Unix()),
 		templates:       webtemplates.Map(),
 	}
+}
+
+// SetOCIConfig passes OCI config to the UI handler for rendering state-aware pages.
+func (h *UI) SetOCIConfig(configured bool, registry, repo string) {
+	h.ociConfigured = configured
+	h.ociRegistry = registry
+	h.ociRepo = repo
 }
 
 func (h *UI) render(c echo.Context, name string, data any) error {
@@ -106,8 +116,19 @@ func (h *UI) AuditLog(c echo.Context) error {
 
 func (h *UI) Export(c echo.Context) error {
 	return h.render(c, "export", page.Export{
-		Base:      h.base(c),
-		PageTitle: "Export Subgraph",
+		Base:          h.base(c),
+		PageTitle:     "Export Subgraph",
+		OCIConfigured: h.ociConfigured,
+	})
+}
+
+func (h *UI) EdgeDelivery(c echo.Context) error {
+	return h.render(c, "edge-delivery", page.EdgeDelivery{
+		Base:          h.base(c),
+		PageTitle:     "Edge Delivery",
+		OCIConfigured: h.ociConfigured,
+		OCIRegistry:   h.ociRegistry,
+		OCIRepo:       h.ociRepo,
 	})
 }
 

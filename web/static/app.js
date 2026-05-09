@@ -1053,3 +1053,289 @@ function addEventListeners() {
     });
   });
 }
+
+// ── Export page ───────────────────────────────────────────────────────────────
+
+let exportPollTimer = null
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!document.getElementById('export-jobs-tbody')) return
+
+  const select = document.getElementById('export-datacenter-select')
+  const submitBtn = document.getElementById('export-submit-btn')
+
+  fetch('/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: '{ queryDataCenter { id name } }' }),
+  })
+    .then(r => r.json())
+    .then(json => {
+      const dcs = json.data?.queryDataCenter ?? []
+      select.innerHTML = '<option value="" disabled selected>— select a data center —</option>'
+      dcs.forEach(dc => {
+        const opt = document.createElement('option')
+        opt.value = dc.id
+        opt.textContent = dc.name
+        select.appendChild(opt)
+      })
+      select.addEventListener('change', () => {
+        submitBtn.disabled = !select.value
+      })
+    })
+    .catch(() => {
+      select.innerHTML = '<option value="" disabled selected>Failed to load data centers</option>'
+    })
+
+  loadExportJobsTable()
+})
+
+function handleExportSubmit() {
+  const select = document.getElementById('export-datacenter-select')
+  const id = select.value
+  if (!id) return
+
+  const submitBtn = document.getElementById('export-submit-btn')
+  submitBtn.classList.add('is-loading')
+  submitBtn.disabled = true
+
+  fetch(`/api/v1/datacenters/${id}/export`, { method: 'POST' })
+    .then(r => r.json())
+    .then(json => {
+      submitBtn.classList.remove('is-loading')
+      submitBtn.disabled = false
+      if (json.error) {
+        showExportStatus('is-warning', 'fa-triangle-exclamation', json.error)
+        return
+      }
+      showExportStatus('is-info', 'fa-spinner fa-spin', 'Export started…')
+      pollExportStatus(json.jobId)
+      loadExportJobsTable()
+    })
+    .catch(() => {
+      submitBtn.classList.remove('is-loading')
+      submitBtn.disabled = false
+      showExportStatus('is-danger', 'fa-circle-xmark', 'Failed to start export.')
+    })
+}
+
+function pollExportStatus(jobId) {
+  clearTimeout(exportPollTimer)
+  fetch(`/api/v1/export/jobs/${jobId}`)
+    .then(r => r.json())
+    .then(job => {
+      loadExportJobsTable()
+      if (job.status === 'completed') {
+        showExportStatus('is-success', 'fa-circle-check', 'Export complete.', jobId)
+      } else if (job.status === 'failed') {
+        showExportStatus('is-danger', 'fa-circle-xmark', `Export failed: ${job.error ?? 'unknown error'}`)
+      } else {
+        exportPollTimer = setTimeout(() => pollExportStatus(jobId), 2000)
+        const label = job.status === 'running' ? 'Exporting…' : 'Pending…'
+        showExportStatus('is-info', 'fa-spinner fa-spin', label)
+      }
+    })
+    .catch(() => {
+      exportPollTimer = setTimeout(() => pollExportStatus(jobId), 3000)
+    })
+}
+
+function showExportStatus(colorClass, iconClass, text, downloadJobId) {
+  const box = document.getElementById('export-status-box')
+  const article = document.getElementById('export-status-article')
+  const icon = document.getElementById('export-status-icon')
+  const textEl = document.getElementById('export-status-text')
+  const dlWrap = document.getElementById('export-download-link')
+  const dlAnchor = document.getElementById('export-download-anchor')
+
+  article.className = `message ${colorClass}`
+  icon.innerHTML = `<i class="fa-solid ${iconClass}"></i>`
+  textEl.textContent = text
+  box.style.display = ''
+
+  if (downloadJobId) {
+    dlAnchor.href = `/api/v1/export/jobs/${downloadJobId}/download`
+    dlWrap.style.display = ''
+  } else {
+    dlWrap.style.display = 'none'
+  }
+}
+
+function loadExportJobsTable() {
+  const tbody = document.getElementById('export-jobs-tbody')
+  if (!tbody) return
+  const table = document.getElementById('export-jobs-table')
+  const ociConfigured = table && table.dataset.ociConfigured === 'true'
+
+  fetch('/api/v1/export/jobs')
+    .then(r => r.json())
+    .then(jobs => {
+      tbody.innerHTML = jobs.length === 0
+        ? '<tr><td colspan="7" class="has-text-grey">No export jobs yet.</td></tr>'
+        : jobs.map(job => {
+            const actions = []
+            if (job.status === 'completed') {
+              actions.push(`<a class="button is-small is-link is-outlined" href="/api/v1/export/jobs/${job.jobId}/download"><span class="icon"><i class="fa-solid fa-download"></i></span><span>Download</span></a>`)
+              if (ociConfigured) {
+                const publishLabel = job.published ? 'Publish Again' : 'Publish'
+                actions.push(`<button class="button is-small is-warning is-outlined ml-1" onclick="publishExportJob('${job.jobId}')"><span class="icon"><i class="fa-solid fa-box-archive"></i></span><span>${publishLabel}</span></button>`)
+              }
+            }
+            actions.push(`<button class="button is-small is-danger is-outlined ml-1" title="Delete" onclick="deleteExportJob('${job.jobId}')"><span class="icon"><i class="fa-solid fa-trash"></i></span></button>`)
+
+            const statusCell = exportJobStatusBadge(job.status, job.published)
+            return `<tr>
+              <td style="font-family:monospace;font-size:0.7rem">${job.jobId}</td>
+              <td>${job.dataCenter ?? '—'}</td>
+              <td>${statusCell}</td>
+              <td>${fmtTime(job.createdAt)}</td>
+              <td>${fmtTime(job.startedAt)}</td>
+              <td>${fmtTime(job.completedAt)}</td>
+              <td class="is-flex" style="gap:0.25rem">${actions.join('')}</td>
+            </tr>`
+          }).join('')
+    })
+    .catch(() => {})
+}
+
+function exportJobStatusBadge(status, published) {
+  const colorMap = {
+    pending:   'is-warning is-light',
+    running:   'is-info is-light',
+    completed: 'is-success is-light',
+    failed:    'is-danger is-light',
+    stale:     'is-light',
+  }
+  let badge = `<span class="tag ${colorMap[status] ?? ''}">${status}</span>`
+  if (published) {
+    badge += ` <span class="tag is-primary is-light ml-1">published</span>`
+  }
+  return badge
+}
+
+function publishExportJob(jobId) {
+  fetch(`/api/v1/export/jobs/${jobId}/publish`, { method: 'POST' })
+    .then(r => r.json())
+    .then(res => {
+      if (res.error) {
+        alert(`Publish failed: ${res.error}`)
+        return
+      }
+      loadExportJobsTable()
+      pollPublishJob(res.artifactId)
+    })
+    .catch(() => alert('Failed to start publish.'))
+}
+
+function pollPublishJob(artifactId) {
+  fetch(`/api/v1/oci/artifacts/${artifactId}`)
+    .then(r => r.json())
+    .then(a => {
+      if (a.status === 'completed' || a.status === 'failed') {
+        loadExportJobsTable()
+        return
+      }
+      setTimeout(() => pollPublishJob(artifactId), 2000)
+    })
+    .catch(() => setTimeout(() => pollPublishJob(artifactId), 3000))
+}
+
+function deleteExportJob(jobId) {
+  if (!confirm('Delete this export job and its local artifact file?\n\nThis does not remove any published OCI artifacts from the registry.')) return
+  fetch(`/api/v1/export/jobs/${jobId}`, { method: 'DELETE' })
+    .then(r => {
+      if (r.ok) loadExportJobsTable()
+      else r.json().then(j => alert(`Delete failed: ${j.error ?? 'unknown'}`))
+    })
+    .catch(() => alert('Failed to delete job.'))
+}
+
+function fmtTime(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString()
+}
+
+// ── Edge Delivery page ────────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!document.getElementById('artifacts-tbody')) return
+  loadArtifactsTable()
+  setInterval(loadArtifactsTable, 5000)
+})
+
+function loadArtifactsTable() {
+  const tbody = document.getElementById('artifacts-tbody')
+  if (!tbody) return
+  fetch('/api/v1/oci/artifacts')
+    .then(r => r.json())
+    .then(artifacts => {
+      tbody.innerHTML = artifacts.length === 0
+        ? '<tr><td colspan="9" class="has-text-grey">No artifacts yet.</td></tr>'
+        : artifacts.map(a => `<tr>
+            <td>${a.id}</td>
+            <td>${a.datacenterName}</td>
+            <td style="font-family:monospace;font-size:0.7rem">${a.repository}</td>
+            <td><span class="tag is-light">${a.tag}</span></td>
+            <td style="font-family:monospace;font-size:0.65rem">${a.digest ? a.digest.substring(0, 19) + '…' : '—'}</td>
+            <td>${a.signed ? '<span class="tag is-success is-light">signed</span>' : '<span class="tag is-light">unsigned</span>'}</td>
+            <td>${artifactStatusBadge(a.status)}</td>
+            <td>${fmtTime(a.initiatedAt)}</td>
+            <td class="has-text-danger is-size-7">${a.error ?? ''}</td>
+          </tr>`).join('')
+    })
+    .catch(() => {})
+}
+
+function artifactStatusBadge(status) {
+  const colorMap = {
+    pending:   'is-warning is-light',
+    pushing:   'is-info is-light',
+    completed: 'is-success is-light',
+    failed:    'is-danger is-light',
+  }
+  return `<span class="tag ${colorMap[status] ?? ''}">${status}</span>`
+}
+
+function testOCIConnection() {
+  const btn = document.getElementById('btn-test-connection')
+  const result = document.getElementById('test-connection-result')
+  btn.classList.add('is-loading')
+  result.textContent = ''
+  fetch('/api/v1/oci/test-connection', { method: 'POST' })
+    .then(r => r.json())
+    .then(res => {
+      btn.classList.remove('is-loading')
+      if (res.ok) {
+        result.innerHTML = '<span class="has-text-success"><i class="fa-solid fa-circle-check"></i> Connected</span>'
+      } else {
+        result.innerHTML = `<span class="has-text-danger"><i class="fa-solid fa-circle-xmark"></i> ${res.error ?? 'Failed'}</span>`
+      }
+    })
+    .catch(() => {
+      btn.classList.remove('is-loading')
+      result.innerHTML = '<span class="has-text-danger">Request failed</span>'
+    })
+}
+
+// ── Backups page ──────────────────────────────────────────────────────────────
+
+function testBackupConnection() {
+  const btn = document.getElementById('btn-test-backup-connection')
+  const result = document.getElementById('backup-connection-result')
+  btn.classList.add('is-loading')
+  result.textContent = ''
+  fetch('/api/v1/backups/test-connection', { method: 'POST' })
+    .then(r => r.json())
+    .then(res => {
+      btn.classList.remove('is-loading')
+      if (res.ok) {
+        result.innerHTML = '<span class="has-text-success"><i class="fa-solid fa-circle-check"></i> Connected</span>'
+      } else {
+        result.innerHTML = `<span class="has-text-danger"><i class="fa-solid fa-circle-xmark"></i> ${res.error ?? 'Failed'}</span>`
+      }
+    })
+    .catch(() => {
+      btn.classList.remove('is-loading')
+      result.innerHTML = '<span class="has-text-danger">Request failed</span>'
+    })
+}
