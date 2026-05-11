@@ -75,7 +75,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 
 // saveSession writes the access token to the file store and updates the
 // refresh token in the keychain (Azure AD may rotate it on each refresh).
-func saveSession(fileStore *orbauth.FileStore, kcStore *orbauth.KeychainStore, creds *orbauth.Credentials) {
+func saveSession(fileStore *orbauth.FileStore, kcStore orbauth.Store, creds *orbauth.Credentials) {
 	if err := fileStore.Save(sessionCreds(creds)); err != nil {
 		out.Warning("Could not save session: " + err.Error())
 	}
@@ -95,14 +95,14 @@ func sessionCreds(creds *orbauth.Credentials) *orbauth.Credentials {
 	}
 }
 
-// keychainStore returns a KeychainStore with a file fallback at
-// ~/.orbital/.keychain-fallback.json for headless / CI environments.
-func keychainStore() *orbauth.KeychainStore {
+// keychainStore returns a Store backed by the OS keychain with a file fallback
+// at ~/.orbital/.keychain-fallback.json for headless / CI environments.
+// On macOS this is a Touch ID / device passcode protected keychain entry;
+// on other platforms it uses the system keyring.
+func keychainStore() orbauth.Store {
 	home, _ := os.UserHomeDir()
 	fallbackPath := filepath.Join(home, ".orbital", ".keychain-fallback.json")
-	return &orbauth.KeychainStore{
-		Fallback: &orbauth.FileStore{Path: fallbackPath},
-	}
+	return orbauth.NewKeychainStore(&orbauth.FileStore{Path: fallbackPath})
 }
 
 func printToken(token string) {

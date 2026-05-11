@@ -1,0 +1,361 @@
+mutation {
+  addNamespace(input: { name: "livermore" }, upsert: true) {
+    numUids
+  }
+
+  addDataCenter(input: [
+    {
+      name: "livermore-galleon"
+      orbId: "livermore:livermore-galleon"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      assetDataV2: "{\"6cd2a964-e00b-45ff-b91f-906f61733713\":{\"kvmURL\":\"\",\"cfTunnelID\":\"07b06125-8fcc-4a99-9937-0290276adcdc\"}}"
+    }
+  ], upsert: true) {
+    numUids
+  }
+
+  addRack(input: [
+    {
+      name: "Rack-1"
+      orbId: "livermore:Rack-1"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+    }
+    {
+      name: "Rack-2"
+      orbId: "livermore:Rack-2"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+    }
+    {
+      name: "Rack-3"
+      orbId: "livermore:Rack-3"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+    }
+  ], upsert: true) {
+    numUids
+  }
+
+  addIPAddress(input: [
+    { orbId: "livermore:10.96.149.50" address: "10.96.149.50" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.51" address: "10.96.149.51" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.52" address: "10.96.149.52" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.53" address: "10.96.149.53" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.54" address: "10.96.149.54" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.55" address: "10.96.149.55" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.56" address: "10.96.149.56" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.57" address: "10.96.149.57" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.58" address: "10.96.149.58" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.59" address: "10.96.149.59" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.60" address: "10.96.149.60" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.61" address: "10.96.149.61" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.62" address: "10.96.149.62" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.63" address: "10.96.149.63" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.64" address: "10.96.149.64" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.65" address: "10.96.149.65" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.66" address: "10.96.149.66" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.67" address: "10.96.149.67" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.68" address: "10.96.149.68" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+  ], upsert: true) {
+    numUids
+  }
+
+  addServer(input: [
+    {
+      serviceTag: "FY69K74"
+      orbId: "livermore:FY69K74"
+      name: "r01-u07.livermore-galleon"
+      hostname: "r01-u07.livermore-galleon"
+      model: "Dell R650"
+      rackPosition: 7
+      oobIP: { orbId: "livermore:10.96.149.61" }
+      oobMAC: "a8:3c:a5:48:5b:4b"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+    {
+      serviceTag: "8Y69K74"
+      orbId: "livermore:8Y69K74"
+      name: "r01-u08.livermore-galleon"
+      hostname: "r01-u08.livermore-galleon"
+      model: "Dell R650"
+      rackPosition: 8
+      oobIP: { orbId: "livermore:10.96.149.62" }
+      oobMAC: "a8:3c:a5:4c:2b:23"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+    {
+      serviceTag: "1Z69K74"
+      orbId: "livermore:1Z69K74"
+      name: "r01-u09.livermore-galleon"
+      hostname: "r01-u09.livermore-galleon"
+      model: "Dell R650"
+      rackPosition: 9
+      oobIP: { orbId: "livermore:10.96.149.63" }
+      oobMAC: "c0:47:0e:c6:21:79"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+    {
+      serviceTag: "2Z69K74"
+      orbId: "livermore:2Z69K74"
+      name: "r01-u10.livermore-galleon"
+      hostname: "r01-u10.livermore-galleon"
+      model: "Dell R650"
+      rackPosition: 10
+      oobIP: { orbId: "livermore:10.96.149.64" }
+      oobMAC: "c0:47:0e:c6:21:49"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+    {
+      serviceTag: "6Z69K74"
+      orbId: "livermore:6Z69K74"
+      name: "r01-u11.livermore-galleon"
+      hostname: "r01-u11.livermore-galleon"
+      model: "Dell R650"
+      rackPosition: 11
+      oobIP: { orbId: "livermore:10.96.149.65" }
+      oobMAC: "c0:47:0e:c6:20:c5"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+    {
+      serviceTag: "3Z69K74"
+      orbId: "livermore:3Z69K74"
+      name: "r01-u12.livermore-galleon"
+      hostname: "r01-u12.livermore-galleon"
+      model: "Dell R650"
+      rackPosition: 12
+      oobIP: { orbId: "livermore:10.96.149.66" }
+      oobMAC: "c0:47:0e:c6:1e:df"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+    {
+      serviceTag: "4Z69K74"
+      orbId: "livermore:4Z69K74"
+      name: "r01-u13.livermore-galleon"
+      hostname: "r01-u13.livermore-galleon"
+      model: "Dell R650"
+      rackPosition: 13
+      oobIP: { orbId: "livermore:10.96.149.67" }
+      oobMAC: "c0:47:0e:c6:1f:4b"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+    {
+      serviceTag: "5Z69K74"
+      orbId: "livermore:5Z69K74"
+      name: "r01-u14.livermore-galleon"
+      hostname: "r01-u14.livermore-galleon"
+      model: "Dell R650"
+      rackPosition: 14
+      oobIP: { orbId: "livermore:10.96.149.68" }
+      oobMAC: "c0:47:0e:c6:1e:31"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+    {
+      serviceTag: "9CZZ5G4"
+      orbId: "livermore:9CZZ5G4"
+      name: "r01-u19.livermore-galleon"
+      hostname: "r01-u19.livermore-galleon"
+      model: "Dell R450"
+      rackPosition: 19
+      oobIP: { orbId: "livermore:10.96.149.51" }
+      oobMAC: "84:5c:31:f0:e5:59"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+    {
+      serviceTag: "BCZZ5G4"
+      orbId: "livermore:BCZZ5G4"
+      name: "r01-u20.livermore-galleon"
+      hostname: "r01-u20.livermore-galleon"
+      model: "Dell R450"
+      rackPosition: 20
+      oobIP: { orbId: "livermore:10.96.149.52" }
+      oobMAC: "84:5c:31:f0:f0:29"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+    {
+      serviceTag: "6CZZ5G4"
+      orbId: "livermore:6CZZ5G4"
+      name: "r01-u21.livermore-galleon"
+      hostname: "r01-u21.livermore-galleon"
+      model: "Dell R450"
+      rackPosition: 21
+      oobIP: { orbId: "livermore:10.96.149.53" }
+      oobMAC: "84:5c:31:f0:dc:a9"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+    {
+      serviceTag: "8CZZ5G4"
+      orbId: "livermore:8CZZ5G4"
+      name: "r01-u22.livermore-galleon"
+      hostname: "r01-u22.livermore-galleon"
+      model: "Dell R450"
+      rackPosition: 22
+      oobIP: { orbId: "livermore:10.96.149.54" }
+      oobMAC: "84:5c:31:f0:d8:19"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+    {
+      serviceTag: "7CZZ5G4"
+      orbId: "livermore:7CZZ5G4"
+      name: "r01-u23.livermore-galleon"
+      hostname: "r01-u23.livermore-galleon"
+      model: "Dell R450"
+      rackPosition: 23
+      oobIP: { orbId: "livermore:10.96.149.55" }
+      oobMAC: "84:5c:31:f0:f0:01"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+    {
+      serviceTag: "3KLN3D4"
+      orbId: "livermore:3KLN3D4"
+      name: "r01-u24.livermore-galleon"
+      hostname: "r01-u24.livermore-galleon"
+      model: "Dell R450"
+      rackPosition: 24
+      oobIP: { orbId: "livermore:10.96.149.56" }
+      oobMAC: "fc:4c:ea:68:a4:73"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+    {
+      serviceTag: "HJLN3D4"
+      orbId: "livermore:HJLN3D4"
+      name: "r01-u25.livermore-galleon"
+      hostname: "r01-u25.livermore-galleon"
+      model: "Dell R450"
+      rackPosition: 25
+      oobIP: { orbId: "livermore:10.96.149.57" }
+      oobMAC: "fc:4c:ea:69:3d:53"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+    {
+      serviceTag: "JJLN3D4"
+      orbId: "livermore:JJLN3D4"
+      name: "r01-u26.livermore-galleon"
+      hostname: "r01-u26.livermore-galleon"
+      model: "Dell R450"
+      rackPosition: 26
+      oobIP: { orbId: "livermore:10.96.149.58" }
+      oobMAC: "fc:4c:ea:69:3f:93"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+    {
+      serviceTag: "5KLN3D4"
+      orbId: "livermore:5KLN3D4"
+      name: "r01-u27.livermore-galleon"
+      hostname: "r01-u27.livermore-galleon"
+      model: "Dell R450"
+      rackPosition: 27
+      oobIP: { orbId: "livermore:10.96.149.59" }
+      oobMAC: "fc:4c:ea:69:3e:63"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+    {
+      serviceTag: "4KLN3D4"
+      orbId: "livermore:4KLN3D4"
+      name: "r01-u28.livermore-galleon"
+      hostname: "r01-u28.livermore-galleon"
+      model: "Dell R450"
+      rackPosition: 28
+      oobIP: { orbId: "livermore:10.96.149.60" }
+      oobMAC: "fc:4c:ea:69:42:4b"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+    {
+      serviceTag: "3TFRMC4"
+      orbId: "livermore:3TFRMC4"
+      name: "r01-u29.livermore-galleon"
+      hostname: "r01-u29.livermore-galleon"
+      model: "Dell R660"
+      rackPosition: 29
+      oobIP: { orbId: "livermore:10.96.149.50" }
+      oobMAC: "a8:3c:a5:5d:cf:72"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "livermore" }
+      dataCenter: { orbId: "livermore:livermore-galleon" }
+      rack: { orbId: "livermore:Rack-1" }
+    }
+  ], upsert: true) {
+    numUids
+  }
+}

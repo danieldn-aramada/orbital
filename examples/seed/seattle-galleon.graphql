@@ -8,7 +8,7 @@ mutation {
       name: "seattle-galleon"
       orbId: "seattle:seattle-galleon"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       assetDataV2: "{\"072a5bf6-459d-405f-93b4-667509ead0c2\":{\"kvmURL\":\"https://kubevirt.colo.armada.ai/vmlist\",\"cfTunnelID\":\"\"},\"44a8c40e-6a4a-48bf-acaa-45706b1e1e77\":{\"kvmURL\":\"https://kubevirt.colo.armada.ai/vmlist\",\"cfTunnelID\":\"\"},\"bdf378a1-0e73-4088-9889-0000e1531948\":{\"kvmURL\":\"https://kubevirt-dg.armada.ai/vmlist\",\"cfTunnelID\":\"5571f458-6d95-4e66-81c3-ba8baf50dbe7\",\"metricsAPIURL\":\"https://metrics-api-dg-seattle.armadaapps.io\"}}"
     }
@@ -21,7 +21,7 @@ mutation {
       name: "Rack-1"
       orbId: "seattle:Rack-1"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
     }
@@ -29,7 +29,7 @@ mutation {
       name: "Rack-2"
       orbId: "seattle:Rack-2"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
     }
@@ -37,7 +37,7 @@ mutation {
       name: "Rack-3"
       orbId: "seattle:Rack-3"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
     }
@@ -45,7 +45,7 @@ mutation {
       name: "Rack-4"
       orbId: "seattle:Rack-4"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
     }
@@ -53,7 +53,7 @@ mutation {
       name: "Rack-5"
       orbId: "seattle:Rack-5"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
     }
@@ -68,7 +68,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.43.4"
@@ -76,7 +76,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.33.49"
@@ -84,7 +84,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.33.51"
@@ -92,7 +92,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.33.52"
@@ -100,7 +100,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.33.53"
@@ -108,7 +108,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.33.54"
@@ -116,7 +116,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.43.2"
@@ -124,7 +124,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.43.3"
@@ -132,7 +132,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.33.61"
@@ -140,7 +140,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.33.62"
@@ -148,7 +148,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.33.63"
@@ -156,7 +156,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.33.64"
@@ -164,7 +164,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.33.65"
@@ -172,7 +172,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.33.66"
@@ -180,7 +180,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.33.67"
@@ -188,7 +188,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.33.68"
@@ -196,7 +196,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.33.69"
@@ -204,7 +204,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.43.5"
@@ -212,7 +212,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.96.87.15"
@@ -220,7 +220,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.43.6"
@@ -228,7 +228,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.96.87.17"
@@ -236,7 +236,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.96.87.16"
@@ -244,7 +244,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "seattle:10.20.43.8"
@@ -252,7 +252,7 @@ mutation {
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     }
   ], upsert: true) {
     numUids
@@ -269,7 +269,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.43.7" }
       oobMAC: "c4:cb:e1:ba:37:84"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-5" }
@@ -284,7 +284,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.43.4" }
       oobMAC: "c4:cb:e1:ba:37:5a"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-5" }
@@ -296,7 +296,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.33.49" }
       oobMAC: "c4:5a:b1:ac:62:36"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-5" }
@@ -308,7 +308,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.33.51" }
       oobMAC: "c8:4b:d6:a0:66:60"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-5" }
@@ -320,7 +320,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.33.52" }
       oobMAC: "c8:4b:d6:9f:8e:2a"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-5" }
@@ -332,7 +332,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.33.53" }
       oobMAC: "c8:4b:d6:9f:81:be"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-5" }
@@ -344,7 +344,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.33.54" }
       oobMAC: "c8:4b:d6:9f:81:ac"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-5" }
@@ -356,7 +356,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.43.2" }
       oobMAC: "d0:c1:b5:0c:b1:d8"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-5" }
@@ -368,7 +368,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.43.3" }
       oobMAC: "d0:c1:b5:0c:b1:c0"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-5" }
@@ -383,7 +383,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.33.61" }
       oobMAC: "a8:3c:a5:42:42:f2"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-4" }
@@ -398,7 +398,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.33.62" }
       oobMAC: "a8:3c:a5:43:f5:98"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-4" }
@@ -413,7 +413,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.33.63" }
       oobMAC: "a8:3c:a5:43:e9:56"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-4" }
@@ -428,7 +428,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.33.64" }
       oobMAC: "a8:3c:a5:43:e9:6e"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-4" }
@@ -443,7 +443,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.33.65" }
       oobMAC: "a8:3c:a5:40:dd:07"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-4" }
@@ -458,7 +458,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.33.66" }
       oobMAC: "a8:3c:a5:40:c5:07"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-4" }
@@ -473,7 +473,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.33.67" }
       oobMAC: "a8:3c:a5:43:f2:50"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-4" }
@@ -488,7 +488,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.33.68" }
       oobMAC: "a8:3c:a5:43:f4:54"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-4" }
@@ -503,7 +503,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.33.69" }
       oobMAC: "a8:3c:a5:43:f4:fc"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-4" }
@@ -518,7 +518,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.43.5" }
       oobMAC: "c4:cb:e1:b6:45:48"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-3" }
@@ -533,7 +533,7 @@ mutation {
       oobIP: { orbId: "seattle:10.96.87.15" }
       oobMAC: "e8:cf:83:27:a5:73"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-2" }
@@ -548,7 +548,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.43.6" }
       oobMAC: "c4:cb:e1:ba:3a:90"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-3" }
@@ -563,7 +563,7 @@ mutation {
       oobIP: { orbId: "seattle:10.96.87.17" }
       oobMAC: "e8:cf:83:27:b2:9b"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-1" }
@@ -578,7 +578,7 @@ mutation {
       oobIP: { orbId: "seattle:10.96.87.16" }
       oobMAC: "e8:cf:83:27:aa:2b"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-1" }
@@ -593,7 +593,7 @@ mutation {
       oobIP: { orbId: "seattle:10.20.43.8" }
       oobMAC: "6c:3c:8c:93:bd:72"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "seattle" }
       dataCenter: { orbId: "seattle:seattle-galleon" }
       rack: { orbId: "seattle:Rack-4" }

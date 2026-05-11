@@ -25,7 +25,7 @@ build-orbital: docs ## Build the orbital server binary → bin/orbital
 	go build $(LDFLAGS) -o $(ORBITAL_BIN) ./cmd/orbital
 
 build-orbital-cli: ## Build the orbital admin CLI (experimental) → bin/orbital-cli
-	go build $(LDFLAGS) -o $(BIN_DIR)/orbital-cli ./cmd/orbital-cli
+	CGO_ENABLED=1 go build $(LDFLAGS) -o $(BIN_DIR)/orbital-cli ./cmd/orbital-cli
 
 build-orb: ## Build the orb edge binary → bin/orb
 	go build $(LDFLAGS) -o $(ORB_BIN) ./cmd/orb

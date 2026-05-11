@@ -1,3 +1,5 @@
+//go:build !darwin
+
 package orbauth
 
 import (
@@ -12,20 +14,9 @@ const (
 	keychainAccount = "credentials"
 )
 
-// keychainData is the subset of Credentials stored in the OS keychain.
-// Only the refresh token and identity fields are stored — the access token
-// is large (~6 KB for Azure AD JWTs) and exceeds go-keyring's 4096-byte
-// command limit on macOS. A fresh access token is obtained via refresh on
-// every load.
-type keychainData struct {
-	RefreshToken string `json:"refresh_token"`
-	Name         string `json:"name"`
-	Email        string `json:"email"`
-}
-
 // KeychainStore persists credentials in the OS keychain.
-// On macOS this is the login Keychain; on Linux it uses libsecret (Secret
-// Service); on Windows it uses the Credential Manager.
+// On Linux it uses libsecret (Secret Service); on Windows it uses the
+// Credential Manager.
 //
 // If Fallback is set and the keychain is unavailable, operations fall back to
 // the FileStore. This keeps the CLI functional in headless / CI environments.
@@ -73,4 +64,9 @@ func (s *KeychainStore) Save(creds *Credentials) error {
 		return fmt.Errorf("keychain set: %w", err)
 	}
 	return nil
+}
+
+// NewKeychainStore returns a KeychainStore with the given fallback.
+func NewKeychainStore(fallback *FileStore) Store {
+	return &KeychainStore{Fallback: fallback}
 }

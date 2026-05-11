@@ -8,7 +8,7 @@ mutation {
       name: "alaska-dot-galleon"
       orbId: "alaska-dot:alaska-dot-galleon"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "alaska-dot" }
       assetDataV2: "{\"dbb2ad03-60c4-465b-9700-7fc7d0c1dd3d\":{\"kvmURL\":\"https://guacamole.adot.armada.ai/guacamole\",\"cfTunnelID\":\"16500101-de46-4f51-b347-fd241c467dd8\"}}"
     }
@@ -21,7 +21,7 @@ mutation {
       name: "Rack-1"
       orbId: "alaska-dot:Rack-1"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
     }
@@ -36,7 +36,7 @@ mutation {
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "alaska-dot:10.61.95.51"
@@ -44,7 +44,7 @@ mutation {
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "alaska-dot:10.61.95.52"
@@ -52,7 +52,7 @@ mutation {
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "alaska-dot:10.61.95.53"
@@ -60,7 +60,7 @@ mutation {
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "alaska-dot:10.61.95.54"
@@ -68,7 +68,7 @@ mutation {
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "alaska-dot:10.61.95.55"
@@ -76,7 +76,7 @@ mutation {
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "alaska-dot:10.61.95.56"
@@ -84,7 +84,7 @@ mutation {
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "alaska-dot:10.61.95.57"
@@ -92,7 +92,7 @@ mutation {
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "alaska-dot:10.61.95.58"
@@ -100,7 +100,7 @@ mutation {
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "alaska-dot:10.61.95.59"
@@ -108,7 +108,7 @@ mutation {
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "alaska-dot:10.61.95.60"
@@ -116,7 +116,7 @@ mutation {
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "alaska-dot:10.61.95.61"
@@ -124,7 +124,7 @@ mutation {
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     },
     {
       orbId: "alaska-dot:10.61.95.62"
@@ -132,7 +132,7 @@ mutation {
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
     }
   ], upsert: true) {
     numUids
@@ -149,7 +149,7 @@ mutation {
       oobIP: { orbId: "alaska-dot:10.61.95.50" }
       oobMAC: "c4:cb:e1:c8:a0:38"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
@@ -164,7 +164,7 @@ mutation {
       oobIP: { orbId: "alaska-dot:10.61.95.51" }
       oobMAC: "c4:5a:b1:cb:12:65"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
@@ -179,7 +179,7 @@ mutation {
       oobIP: { orbId: "alaska-dot:10.61.95.52" }
       oobMAC: "c4:5a:b1:cb:11:0f"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
@@ -194,7 +194,7 @@ mutation {
       oobIP: { orbId: "alaska-dot:10.61.95.53" }
       oobMAC: "c4:5a:b1:cb:12:59"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
@@ -209,7 +209,7 @@ mutation {
       oobIP: { orbId: "alaska-dot:10.61.95.54" }
       oobMAC: "c4:5a:b1:c7:b7:0b"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
@@ -224,7 +224,7 @@ mutation {
       oobIP: { orbId: "alaska-dot:10.61.95.55" }
       oobMAC: "d0:46:0c:73:3d:90"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
@@ -239,7 +239,7 @@ mutation {
       oobIP: { orbId: "alaska-dot:10.61.95.56" }
       oobMAC: "d0:46:0c:73:3c:80"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
@@ -254,7 +254,7 @@ mutation {
       oobIP: { orbId: "alaska-dot:10.61.95.57" }
       oobMAC: "d0:46:0c:73:2c:98"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
@@ -269,7 +269,7 @@ mutation {
       oobIP: { orbId: "alaska-dot:10.61.95.58" }
       oobMAC: "d0:46:0c:73:3c:90"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
@@ -283,7 +283,7 @@ mutation {
       rackPosition: 19
       oobIP: { orbId: "alaska-dot:10.61.95.59" }
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
@@ -298,7 +298,7 @@ mutation {
       oobIP: { orbId: "alaska-dot:10.61.95.60" }
       oobMAC: "d0:46:0c:73:3f:38"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
@@ -313,7 +313,7 @@ mutation {
       oobIP: { orbId: "alaska-dot:10.61.95.61" }
       oobMAC: "d0:46:0c:73:3c:98"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
@@ -328,7 +328,7 @@ mutation {
       oobIP: { orbId: "alaska-dot:10.61.95.62" }
       oobMAC: "d0:c1:b5:04:6a:12"
       createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
+      createdAt: "2026-05-11T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }

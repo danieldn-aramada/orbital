@@ -1,0 +1,265 @@
+mutation {
+  addNamespace(input: { name: "grayling" }, upsert: true) {
+    numUids
+  }
+
+  addDataCenter(input: [
+    {
+      name: "grayling-galleon"
+      orbId: "grayling:grayling-galleon"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "grayling" }
+      assetDataV2: "{\"98038420-5e86-4de6-a979-025b267cd8fe\":{\"cfTunnelID\":\"ae87ebba-92cb-4276-a77b-1c8d00a57120\"}}"
+    }
+  ], upsert: true) {
+    numUids
+  }
+
+  addRack(input: [
+    {
+      name: "Rack-1"
+      orbId: "grayling:Rack-1"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "grayling" }
+      dataCenter: { orbId: "grayling:grayling-galleon" }
+    }
+    {
+      name: "Rack-2"
+      orbId: "grayling:Rack-2"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "grayling" }
+      dataCenter: { orbId: "grayling:grayling-galleon" }
+    }
+    {
+      name: "Rack-3"
+      orbId: "grayling:Rack-3"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "grayling" }
+      dataCenter: { orbId: "grayling:grayling-galleon" }
+    }
+  ], upsert: true) {
+    numUids
+  }
+
+  addIPAddress(input: [
+    { orbId: "grayling:10.64.4.50"  address: "10.64.4.50"  role: "oob" namespace: { name: "grayling" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "grayling:10.64.4.52"  address: "10.64.4.52"  role: "oob" namespace: { name: "grayling" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "grayling:10.64.4.53"  address: "10.64.4.53"  role: "oob" namespace: { name: "grayling" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "grayling:10.64.4.54"  address: "10.64.4.54"  role: "oob" namespace: { name: "grayling" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "grayling:10.64.4.55"  address: "10.64.4.55"  role: "oob" namespace: { name: "grayling" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "grayling:10.64.4.56"  address: "10.64.4.56"  role: "oob" namespace: { name: "grayling" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "grayling:10.64.4.57"  address: "10.64.4.57"  role: "oob" namespace: { name: "grayling" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "grayling:10.64.4.58"  address: "10.64.4.58"  role: "oob" namespace: { name: "grayling" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "grayling:10.64.4.59"  address: "10.64.4.59"  role: "oob" namespace: { name: "grayling" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "grayling:10.64.4.61"  address: "10.64.4.61"  role: "oob" namespace: { name: "grayling" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "grayling:10.64.4.62"  address: "10.64.4.62"  role: "oob" namespace: { name: "grayling" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "grayling:10.64.4.63"  address: "10.64.4.63"  role: "oob" namespace: { name: "grayling" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "grayling:10.64.4.64"  address: "10.64.4.64"  role: "oob" namespace: { name: "grayling" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+  ], upsert: true) {
+    numUids
+  }
+
+  addServer(input: [
+    {
+      serviceTag: "505CK74"
+      orbId: "grayling:505CK74"
+      name: "r02-u03.grayling-galleon"
+      hostname: "r02-u03.grayling-galleon"
+      model: "Dell XE8640"
+      rackPosition: 3
+      oobIP: { orbId: "grayling:10.64.4.64" }
+      oobMAC: "c4:cb:e1:db:0f:d4"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "grayling" }
+      dataCenter: { orbId: "grayling:grayling-galleon" }
+      rack: { orbId: "grayling:Rack-2" }
+    }
+    {
+      serviceTag: "B5WVM34"
+      orbId: "grayling:B5WVM34"
+      name: "r02-u06.grayling-galleon"
+      hostname: "r02-u06.grayling-galleon"
+      model: "Dell XE8640"
+      rackPosition: 6
+      oobIP: { orbId: "grayling:10.64.4.63" }
+      oobMAC: "c4:cb:e1:ba:37:96"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "grayling" }
+      dataCenter: { orbId: "grayling:grayling-galleon" }
+      rack: { orbId: "grayling:Rack-2" }
+    }
+    {
+      serviceTag: "JY69K74"
+      orbId: "grayling:JY69K74"
+      name: "r02-u08.grayling-galleon"
+      hostname: "r02-u08.grayling-galleon"
+      model: "Dell R650"
+      rackPosition: 8
+      oobIP: { orbId: "grayling:10.64.4.61" }
+      oobMAC: "c0:47:0e:c6:1e:8b"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "grayling" }
+      dataCenter: { orbId: "grayling:grayling-galleon" }
+      rack: { orbId: "grayling:Rack-2" }
+    }
+    {
+      serviceTag: "BLP6K74"
+      orbId: "grayling:BLP6K74"
+      name: "r02-u12.grayling-galleon"
+      hostname: "r02-u12.grayling-galleon"
+      model: "Dell R450"
+      rackPosition: 12
+      oobIP: { orbId: "grayling:10.64.4.52" }
+      oobMAC: "e8:cf:83:27:a8:c3"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "grayling" }
+      dataCenter: { orbId: "grayling:grayling-galleon" }
+      rack: { orbId: "grayling:Rack-2" }
+    }
+    {
+      serviceTag: "CLP6K74"
+      orbId: "grayling:CLP6K74"
+      name: "r02-u13.grayling-galleon"
+      hostname: "r02-u13.grayling-galleon"
+      model: "Dell R450"
+      rackPosition: 13
+      oobIP: { orbId: "grayling:10.64.4.53" }
+      oobMAC: "ac:b4:80:29:f2:8b"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "grayling" }
+      dataCenter: { orbId: "grayling:grayling-galleon" }
+      rack: { orbId: "grayling:Rack-2" }
+    }
+    {
+      serviceTag: "8LP6K74"
+      orbId: "grayling:8LP6K74"
+      name: "r02-u14.grayling-galleon"
+      hostname: "r02-u14.grayling-galleon"
+      model: "Dell R450"
+      rackPosition: 14
+      oobIP: { orbId: "grayling:10.64.4.54" }
+      oobMAC: "e8:cf:83:27:b5:eb"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "grayling" }
+      dataCenter: { orbId: "grayling:grayling-galleon" }
+      rack: { orbId: "grayling:Rack-2" }
+    }
+    {
+      serviceTag: "3LP6K74"
+      orbId: "grayling:3LP6K74"
+      name: "r02-u15.grayling-galleon"
+      hostname: "r02-u15.grayling-galleon"
+      model: "Dell R450"
+      rackPosition: 15
+      oobIP: { orbId: "grayling:10.64.4.55" }
+      oobMAC: "ac:b4:80:29:fa:d3"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "grayling" }
+      dataCenter: { orbId: "grayling:grayling-galleon" }
+      rack: { orbId: "grayling:Rack-2" }
+    }
+    {
+      serviceTag: "9LP6K74"
+      orbId: "grayling:9LP6K74"
+      name: "r02-u16.grayling-galleon"
+      hostname: "r02-u16.grayling-galleon"
+      model: "Dell R450"
+      rackPosition: 16
+      oobIP: { orbId: "grayling:10.64.4.56" }
+      oobMAC: "e8:cf:83:27:b2:73"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "grayling" }
+      dataCenter: { orbId: "grayling:grayling-galleon" }
+      rack: { orbId: "grayling:Rack-2" }
+    }
+    {
+      serviceTag: "6LP6K74"
+      orbId: "grayling:6LP6K74"
+      name: "r02-u17.grayling-galleon"
+      hostname: "r02-u17.grayling-galleon"
+      model: "Dell R450"
+      rackPosition: 17
+      oobIP: { orbId: "grayling:10.64.4.57" }
+      oobMAC: "e8:cf:83:27:b2:6b"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "grayling" }
+      dataCenter: { orbId: "grayling:grayling-galleon" }
+      rack: { orbId: "grayling:Rack-2" }
+    }
+    {
+      serviceTag: "7LP6K74"
+      orbId: "grayling:7LP6K74"
+      name: "r02-u18.grayling-galleon"
+      hostname: "r02-u18.grayling-galleon"
+      model: "Dell R450"
+      rackPosition: 18
+      oobIP: { orbId: "grayling:10.64.4.58" }
+      oobMAC: "e8:cf:83:27:a9:db"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "grayling" }
+      dataCenter: { orbId: "grayling:grayling-galleon" }
+      rack: { orbId: "grayling:Rack-2" }
+    }
+    {
+      serviceTag: "5LP6K74"
+      orbId: "grayling:5LP6K74"
+      name: "r02-u19.grayling-galleon"
+      hostname: "r02-u19.grayling-galleon"
+      model: "Dell R450"
+      rackPosition: 19
+      oobIP: { orbId: "grayling:10.64.4.59" }
+      oobMAC: "ac:b4:80:29:fb:0b"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "grayling" }
+      dataCenter: { orbId: "grayling:grayling-galleon" }
+      rack: { orbId: "grayling:Rack-2" }
+    }
+    {
+      serviceTag: "4LP6K74"
+      orbId: "grayling:4LP6K74"
+      name: "r02-u20.grayling-galleon"
+      hostname: "r02-u20.grayling-galleon"
+      model: "Dell R450"
+      rackPosition: 20
+      oobIP: { orbId: "grayling:10.64.4.62" }
+      oobMAC: "ac:b4:80:29:f8:bb"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "grayling" }
+      dataCenter: { orbId: "grayling:grayling-galleon" }
+      rack: { orbId: "grayling:Rack-2" }
+    }
+    {
+      serviceTag: "D5MP6K74"
+      orbId: "grayling:D5MP6K74"
+      name: "r02-u25.grayling-galleon"
+      hostname: "r02-u25.grayling-galleon"
+      model: "Dell R450"
+      rackPosition: 25
+      oobIP: { orbId: "grayling:10.64.4.50" }
+      oobMAC: "d0:c1:b5:0c:b9:b0"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-11T00:00:00Z"
+      namespace: { name: "grayling" }
+      dataCenter: { orbId: "grayling:grayling-galleon" }
+      rack: { orbId: "grayling:Rack-2" }
+    }
+  ], upsert: true) {
+    numUids
+  }
+}

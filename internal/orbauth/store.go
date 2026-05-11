@@ -7,6 +7,16 @@ import (
 	"path/filepath"
 )
 
+// keychainData is the subset of Credentials stored in the OS keychain.
+// Only the refresh token and identity fields are stored — the access token
+// is large (~6 KB for Azure AD JWTs) and may exceed keychain limits on some
+// platforms. A fresh access token is obtained via refresh on every load.
+type keychainData struct {
+	RefreshToken string `json:"refresh_token"`
+	Name         string `json:"name"`
+	Email        string `json:"email"`
+}
+
 // Store persists and loads credentials.
 type Store interface {
 	Load() (*Credentials, error)

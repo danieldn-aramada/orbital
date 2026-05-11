@@ -72,6 +72,25 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	if cfg.OIDCIssuerURL != "" && cfg.OIDCClientSecret == "" {
 		logger.Warn("ORBITAL_OIDC_CLIENT_SECRET is not set — SSO login disabled")
 	}
+
+	var bearerMiddleware echo.MiddlewareFunc
+	if cfg.OIDCIssuerURL != "" {
+		bv, err := auth.NewBearerVerifier(context.Background(), cfg.OIDCIssuerURL, cfg.OIDCClientID)
+		if err != nil {
+			logger.Warn("bearer verifier init failed — API bearer auth disabled", "err", err)
+		} else {
+			bearerMiddleware = bv.Middleware()
+		}
+	} else {
+		logger.Warn("ORBITAL_OIDC_ISSUER_URL is not set — API bearer auth disabled")
+	}
+
+	var api *echo.Group
+	if bearerMiddleware != nil {
+		api = e.Group("/api/v1", bearerMiddleware)
+	} else {
+		api = e.Group("/api/v1")
+	}
 	s3Configured := cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != ""
 	ociConfigured := cfg.OCIConfigured()
 	if !ociConfigured {
@@ -117,10 +136,10 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 
 	if db != nil {
 		exp := handler.NewExport(db, cfg.DGraphURL, cfg.DGraphScratchURL, cfg.DGraphScratchAdminURL, cfg.ExportDir, cfg.DGraphScratchExportDir, cfg.SchemaPath, logger)
-		e.POST("/api/v1/datacenters/:id/export", exp.Trigger)
-		e.GET("/api/v1/export/jobs", exp.List)
-		e.GET("/api/v1/export/jobs/:jobId", exp.Status)
-		e.GET("/api/v1/export/jobs/:jobId/download", exp.Download)
+		api.POST("/datacenters/:id/export", exp.Trigger)
+		api.GET("/export/jobs", exp.List)
+		api.GET("/export/jobs/:jobId", exp.Status)
+		api.GET("/export/jobs/:jobId/download", exp.Download)
 
 		ociCfg := oci.Config{
 			Registry:      cfg.OCIRegistry,
@@ -130,12 +149,12 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 			SigningKeyPath: cfg.OCISigningKeyPath,
 		}
 		ociH := handler.NewOCI(db, ociCfg, cfg.DGraphScratchExportDir, logger)
-		e.POST("/api/v1/export/jobs/:jobId/publish", ociH.Publish)
-		e.DELETE("/api/v1/export/jobs/:jobId", ociH.DeleteJob)
-		e.GET("/api/v1/oci/artifacts", ociH.ListArtifacts)
-		e.GET("/api/v1/oci/artifacts/:id", ociH.GetArtifact)
-		e.GET("/api/v1/oci/public-key", ociH.PublicKey)
-		e.POST("/api/v1/oci/test-connection", ociH.TestConnection)
+		api.POST("/export/jobs/:jobId/publish", ociH.Publish)
+		api.DELETE("/export/jobs/:jobId", ociH.DeleteJob)
+		api.GET("/oci/artifacts", ociH.ListArtifacts)
+		api.GET("/oci/artifacts/:id", ociH.GetArtifact)
+		api.GET("/oci/public-key", ociH.PublicKey)
+		api.POST("/oci/test-connection", ociH.TestConnection)
 		e.GET("/edge-delivery", ui.EdgeDelivery)
 
 		if !s3Configured {
@@ -157,18 +176,19 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 			if err != nil {
 				logger.Error("backup handler init failed", "err", err)
 			} else {
-				e.POST("/api/v1/backups", bk.Trigger)
-				e.GET("/api/v1/backups", bk.List)
-				e.GET("/api/v1/backups/:id", bk.Status)
-				e.GET("/api/v1/backups/:id/download", bk.Download)
-				e.DELETE("/api/v1/backups/:id", bk.Delete)
-				e.POST("/api/v1/backups/test-connection", bk.TestConnection)
+				api.POST("/backups", bk.Trigger)
+				api.GET("/backups", bk.List)
+				api.GET("/backups/:id", bk.Status)
+				api.GET("/backups/:id/download", bk.Download)
+				api.DELETE("/backups/:id", bk.Delete)
+				api.POST("/backups/test-connection", bk.TestConnection)
 			}
 		}
 	}
 
 	gql := handler.NewGraphQL(cfg.DGraphURL)
 	e.Any("/graphql", gql.Handle)
+	api.Any("/graphql", gql.Handle)
 	e.GET("/swagger/*", echoswagger.WrapHandler)
 
 	return &Server{
