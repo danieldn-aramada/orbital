@@ -9,8 +9,8 @@ type Namespace {
 }
 
 type User {
-  id: ID!
-  email: String! @id @search(by: [hash])
+    id: ID!
+    email: String! @id @search(by: [hash])
 }
 
 ########################
@@ -39,6 +39,7 @@ type DataCenter implements ConfigItem {
 
     servers: [Server] @hasInverse(field: dataCenter)
     racks: [Rack] @hasInverse(field: dataCenter)
+    kubernetesClusters: [KubernetesCluster] @hasInverse(field: dataCenter)
 }
 
 type Rack implements ConfigItem {
@@ -52,7 +53,6 @@ type Server implements ConfigItem {
     manufacturer: String @search(by: [hash]) 
     serviceTag: String @search(by: [hash])
     rackPosition: Int
-    oobIP: String @search(by: [hash])
     oobMAC: String
 
     dataCenter: DataCenter!
@@ -60,7 +60,10 @@ type Server implements ConfigItem {
     idracSettings: IdracSettings @hasInverse(field: server)
     serverConfigurationProfile: ServerConfigurationProfile @hasInverse(field: server)
     storageControllers: [StorageController] @hasInverse(field: server)
+
+    oobIP: IPAddress @hasInverse(field: serverOobIP)
 }
+
 
 type IdracSettings implements ConfigItem {
     firmwareVersion: String
@@ -78,7 +81,6 @@ type ServerConfigurationProfile implements ConfigItem {
 }
 
 type StorageController implements ConfigItem {
-    id: ID!
 
     server: Server!
     storageDevices: [StorageDevice] @hasInverse(field: storageController)
@@ -104,4 +106,31 @@ type StorageVolume implements ConfigItem {
 
     storageController: StorageController!
     storageDevices: [StorageDevice] @hasInverse(field: storageVolumes)
+}
+
+type KubernetesCluster implements ConfigItem {
+    provider: String # eksa
+
+    dataCenter: DataCenter!
+    eksaConfig: EksaConfig @hasInverse(field: kubernetesCluster)
+}
+
+type EksaConfig implements ConfigItem {
+    clusterType: String # management, workload
+
+    kubernetesCluster: KubernetesCluster!
+
+    tinkerbellIP: IPAddress 
+    controlPlaneIP: IPAddress
+}
+
+
+type IPAddress implements ConfigItem {
+    type: String # ipv4, ipv6
+    address: String! @search(by: [hash])
+    role: String @search(by: [term]) # oob, tinkerbell, k8s_api, k8s_node
+
+    serverOobIP: Server
+    eksaConfigTinkerbellIP: EksaConfig
+    eksaControlPlaneIP: EksaConfig 
 }

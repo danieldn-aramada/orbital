@@ -276,17 +276,43 @@ These have been explicitly decided. Do not re-suggest them.
 - **Backup zip naming** — `orbital-<version>-<timestamp>.zip` (e.g. `orbital-v0.1.0-20260509T135041Z.zip`). Version comes from `internal/version.Version` injected at build time via ldflags.
 - **Swagger docs regenerated via `make docs`** — runs `swag init -g cmd/orbital/main.go -o docs`. Both `make build-orbital` and `make run-orbital` depend on this target, so docs are always up to date. Swagger tag names: `backup graph`, `export subgraph`, `oci`.
 - **`registry_artifact.datacenter_name` stores DC name at publish time** — denormalized for display; avoids a DGraph lookup on every artifact list. Default `""` allows migration on existing rows.
+- **`IPAddress` uses typed back-refs (hub pattern), not a generic interface field** — `@hasInverse` in DGraph requires both sides to be the same **concrete type**. A generic back-ref like `assignedTo: [ConfigItem]` cannot be wired with `@hasInverse` because `ConfigItem` is an interface, not a concrete type. The solution: explicit named back-ref fields on `IPAddress` for each concrete type that references it (`serverOobIP: Server`, `eksaConfigTinkerbellIP: EksaConfig`, `eksaControlPlaneIP: EksaConfig`). Adding a new type connected to an `IPAddress` requires adding a new back-ref field to `IPAddress` — this is a deliberate, versioned schema change.
+- **Use DQL to query "all items connected to an IP"** — GraphQL cannot traverse typed back-refs polymorphically. For queries like "is 10.0.1.15 already assigned anywhere?" use DQL via the `/query` endpoint with tilde (`~`) predicates to follow edges in reverse:
+  ```
+  { ip(func: eq(IPAddress.address, "10.0.1.15")) {
+      uid IPAddress.address
+      ~Server.oobIP { uid Server.hostname }
+      ~EksaConfig.tinkerbellIP { uid EksaConfig.clusterType }
+      ~EksaConfig.controlPlaneIP { uid EksaConfig.clusterType }
+  } }
+  ```
+  This is the same pattern used for `~ConfigItem.namespace` to find all nodes in a namespace. DQL can traverse any predicate by UID regardless of GraphQL type boundaries.
+- **`id: ID` must be declared on `ConfigItem` interface** — DGraph does not auto-expose the internal UID via GraphQL unless `id: ID` is explicitly present on the type or interface. Without it, `getDataCenter(id: $id)` queries fail. Always keep `id: ID` on the `ConfigItem` interface.
+- **DC detail tab state uses localStorage, cleared on tab close** — the active panel (Servers/Racks/Divergence) is persisted per datacenter ID under key `dc-detail-tab-{id}`. It is cleared when the tab is closed so reopening always defaults to Servers. Do not persist tab state across tab close/reopen.
+- **Go embedded struct field shadowing** — if a `page.*` struct embeds `layout.Base` and also declares the same field name (e.g. `AppVersion`), the outer field shadows the embedded one and template `{{.AppVersion}}` resolves to the outer (zero) value. Never redeclare fields that already exist on embedded types.
 
 ## Example Data / Seeding
 
-Example GraphQL mutation files live in `examples/`. Each file seeds one data center (namespace + DC + racks + servers) into DGraph via the GraphQL playground at `http://localhost:8080`.
+Example GraphQL mutation files live in `examples/`. Each file seeds one data center (namespace + DC + racks + servers) into DGraph. Run with `make seed` (requires orbital running with migrations applied).
 
 **Seeding rules — learned from practice:**
 - `addNamespace` takes a single object (not array): `addNamespace(input: { name: "..." }, upsert: true)`
 - Cross-type references must use `orbId`, not `name`, since `orbId` is the `@id` field. Example: `dataCenter: { orbId: "ns:dc-name" }`, `rack: { orbId: "ns:rack-name" }`. Using `{ name: "..." }` fails with "field orbId cannot be empty" because DGraph treats it as a new object with no orbId.
-- `orbId` format convention: `"<namespace>:<entity-name>"` — e.g. `"alaska-dot:alaska-dot-galleon"`, `"alaska-dot:Rack-5"`, `"alaska-dot:GRTLY24"`
+- `orbId` format convention: `"<namespace>:<entity-name>"` — e.g. `"alaska-dot:alaska-dot-galleon"`, `"alaska-dot:Rack-1"`, `"alaska-dot:GRTLY24"`
 - All ConfigItem nodes require `orbId`, `name`, `namespace`, and `createdBy`/`createdAt`
 - Run `addNamespace` → `addDataCenter` → `addRack` → `addServer` in that order within a single mutation batch
+- DGraph upsert never deletes stale nodes — if a node is removed from seed data (e.g. rack renamed), add an explicit `deleteRack`/`deleteServer` mutation to `seed.sh` before seeding
+- `hostname` and `rackPosition` on `Server` are **design intent** fields set by the admin (not populated by orb scan). Hostname convention: `r{rack:02d}-u{position:02d}.{datacenter}` — e.g. `r01-u17.alaska-dot-cruiser`
+
+## E2E Tests (Playwright)
+
+Tests live in `e2e/`. Run with `make test-e2e` (requires orbital running on `:8001`).
+
+**Auth setup:** `e2e/global-setup.ts` logs in as `admin@armada.ai` / `admin` once via the browser UI, saves the session cookie to `e2e/.auth.json`. All tests reuse this state via `storageState` in `playwright.config.ts`. The `.auth.json` file is gitignored and regenerated automatically on each test run.
+
+**Test conventions:**
+- Use `data-testid` attributes on elements that need stable selectors — not CSS utility classes or layout-driven selectors, which break when styling changes
+- Assert against values read from the page rather than hardcoded seed data (e.g. read server count from the summary table, then assert row count matches) — hardcoded counts break when seed data changes
 
 ## Go Conventions
 

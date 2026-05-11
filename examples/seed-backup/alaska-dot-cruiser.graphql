@@ -1,0 +1,231 @@
+mutation {
+  addNamespace(input: { name: "alaska-dot-cruiser" }, upsert: true) {
+    numUids
+  }
+
+  addDataCenter(input: [
+    {
+      name: "alaska-dot-cruiser"
+      orbId: "alaska-dot-cruiser:alaska-dot-cruiser"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "alaska-dot-cruiser" }
+      assetDataV2: "{\"59c0168d-f56e-4df9-9b88-672cf2a3bf09\":{\"kvmURL\":\"\",\"cfTunnelID\":\"81c68154-d768-46b9-9883-31616abb9f53\"}}"
+    }
+  ], upsert: true) {
+    numUids
+  }
+
+  addRack(input: [
+    {
+      name: "Rack-1"
+      orbId: "alaska-dot-cruiser:Rack-1"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "alaska-dot-cruiser" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
+    }
+  ], upsert: true) {
+    numUids
+  }
+
+  addServer(input: [
+    {
+      serviceTag: "2V36XB4"
+      orbId: "alaska-dot-cruiser:2V36XB4"
+      name: "R450-8"
+      model: "PowerEdge R450"
+      oobIP: "10.64.12.50"
+      oobMAC: "b4:e9:b8:c0:83:f3"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "alaska-dot-cruiser" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
+      rack: { orbId: "alaska-dot-cruiser:Rack-1" }
+    }
+    {
+      serviceTag: "DT36XB4"
+      orbId: "alaska-dot-cruiser:DT36XB4"
+      name: "R450-7"
+      model: "PowerEdge R450"
+      oobIP: "10.64.12.51"
+      oobMAC: "b4:e9:b8:c0:48:a3"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "alaska-dot-cruiser" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
+      rack: { orbId: "alaska-dot-cruiser:Rack-1" }
+    }
+    {
+      serviceTag: "1V36XB4"
+      orbId: "alaska-dot-cruiser:1V36XB4"
+      name: "R450-6"
+      model: "PowerEdge R450"
+      oobIP: "10.64.12.52"
+      oobMAC: "b4:e9:b8:c0:05:13"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "alaska-dot-cruiser" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
+      rack: { orbId: "alaska-dot-cruiser:Rack-1" }
+    }
+    {
+      serviceTag: "JT36XB4"
+      orbId: "alaska-dot-cruiser:JT36XB4"
+      name: "R450-5"
+      model: "PowerEdge R450"
+      oobIP: "10.64.12.53"
+      oobMAC: "b4:e9:b8:c0:45:83"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "alaska-dot-cruiser" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
+      rack: { orbId: "alaska-dot-cruiser:Rack-1" }
+    }
+    {
+      serviceTag: "FT36XB4"
+      orbId: "alaska-dot-cruiser:FT36XB4"
+      name: "R450-4"
+      model: "PowerEdge R450"
+      oobIP: "10.64.12.54"
+      oobMAC: "b4:e9:b8:c0:7e:93"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "alaska-dot-cruiser" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
+      rack: { orbId: "alaska-dot-cruiser:Rack-1" }
+    }
+    {
+      serviceTag: "HT36XB4"
+      orbId: "alaska-dot-cruiser:HT36XB4"
+      name: "R450-3"
+      model: "PowerEdge R450"
+      oobIP: "10.64.12.55"
+      oobMAC: "b4:e9:b8:c0:83:eb"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "alaska-dot-cruiser" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
+      rack: { orbId: "alaska-dot-cruiser:Rack-1" }
+    }
+    {
+      serviceTag: "GT36XB4"
+      orbId: "alaska-dot-cruiser:GT36XB4"
+      name: "R450-2"
+      model: "PowerEdge R450"
+      oobIP: "10.64.12.56"
+      oobMAC: "b4:e9:b8:c0:47:b3"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "alaska-dot-cruiser" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
+      rack: { orbId: "alaska-dot-cruiser:Rack-1" }
+    }
+    {
+      serviceTag: "3V36XB4"
+      orbId: "alaska-dot-cruiser:3V36XB4"
+      name: "R450-1"
+      model: "PowerEdge R450"
+      oobIP: "10.64.12.57"
+      oobMAC: "b4:e9:b8:c0:31:bb"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "alaska-dot-cruiser" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
+      rack: { orbId: "alaska-dot-cruiser:Rack-1" }
+    }
+    {
+      serviceTag: "C8R6XB4"
+      orbId: "alaska-dot-cruiser:C8R6XB4"
+      name: "R660-1"
+      model: "PowerEdge R660"
+      oobIP: "10.64.12.58"
+      oobMAC: "d0:c1:b5:12:2e:04"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "alaska-dot-cruiser" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
+      rack: { orbId: "alaska-dot-cruiser:Rack-1" }
+    }
+    {
+      serviceTag: "F8R6XB4"
+      orbId: "alaska-dot-cruiser:F8R6XB4"
+      name: "R660-2"
+      model: "PowerEdge R660"
+      oobIP: "10.64.12.59"
+      oobMAC: "d0:c1:b5:12:32:ae"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "alaska-dot-cruiser" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
+      rack: { orbId: "alaska-dot-cruiser:Rack-1" }
+    }
+    {
+      serviceTag: "B9V6XB4"
+      orbId: "alaska-dot-cruiser:B9V6XB4"
+      name: "R660-3"
+      model: "PowerEdge R660"
+      oobIP: "10.64.12.60"
+      oobMAC: "d0:c1:b5:12:32:4e"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "alaska-dot-cruiser" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
+      rack: { orbId: "alaska-dot-cruiser:Rack-1" }
+    }
+    {
+      serviceTag: "D8R6XB4"
+      orbId: "alaska-dot-cruiser:D8R6XB4"
+      name: "R660-4"
+      model: "PowerEdge R660"
+      oobIP: "10.64.12.61"
+      oobMAC: "d0:c1:b5:12:31:2e"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "alaska-dot-cruiser" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
+      rack: { orbId: "alaska-dot-cruiser:Rack-1" }
+    }
+    {
+      serviceTag: "7FF6XB4"
+      orbId: "alaska-dot-cruiser:7FF6XB4"
+      name: "R760-1"
+      model: "PowerEdge R760"
+      oobIP: "10.64.12.62"
+      oobMAC: "d0:c1:b5:18:ec:0c"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "alaska-dot-cruiser" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
+      rack: { orbId: "alaska-dot-cruiser:Rack-1" }
+    }
+    {
+      serviceTag: "2PR6YB4"
+      orbId: "alaska-dot-cruiser:2PR6YB4"
+      name: "R760-2"
+      model: "PowerEdge R760"
+      oobIP: "10.64.12.63"
+      oobMAC: "d0:c1:b5:1a:a2:66"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "alaska-dot-cruiser" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
+      rack: { orbId: "alaska-dot-cruiser:Rack-1" }
+    }
+    {
+      serviceTag: "DCT36XB4"
+      orbId: "alaska-dot-cruiser:DCT36XB4"
+      name: "R450-A"
+      model: "PowerEdge R450"
+      oobIP: "10.64.12.64"
+      oobMAC: "b4:e9:b8:c0:0e:db"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-06T00:00:00Z"
+      namespace: { name: "alaska-dot-cruiser" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
+      rack: { orbId: "alaska-dot-cruiser:Rack-1" }
+    }
+  ], upsert: true) {
+    numUids
+  }
+}

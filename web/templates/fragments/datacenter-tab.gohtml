@@ -113,21 +113,26 @@
 
         <div id="dc-panel-racks-{{.ID}}" style="display:none">
           {{if .Racks}}
-          <div style="overflow-x: auto">
-          <table class="table is-striped is-hoverable is-fullwidth is-size-7 mt-2">
+          <div style="overflow-x:auto">
+          <table class="table is-striped is-hoverable is-size-7 mt-2">
+            <colgroup>
+              <col style="width:10%">
+              <col style="width:10%">
+              <col style="width:90%">
+            </colgroup>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Orb ID</th>
-                <th>Servers</th>
+                <th style="text-align:left">Name</th>
+                <th style="text-align:left">Servers</th>
+                <th style="text-align:left">Orb ID</th>
               </tr>
             </thead>
             <tbody>
               {{range .Racks}}
               <tr>
                 <td>{{.Name}}</td>
-                <td>{{if .OrbID}}{{.OrbID}}{{else}}—{{end}}</td>
                 <td>{{.ServerCount}}</td>
+                <td>{{if .OrbID}}{{.OrbID}}{{else}}—{{end}}</td>
               </tr>
               {{end}}
             </tbody>

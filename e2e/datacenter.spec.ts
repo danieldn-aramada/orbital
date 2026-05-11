@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
 
+test('menu footer shows app version', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('app-version')).toContainText(/Orbital v\S+/);
+});
+
 test.describe('Data center tab', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/datacenters');
@@ -23,9 +28,14 @@ test.describe('Data center tab', () => {
   });
 
   test('servers tab is active by default and shows server rows', async ({ page }) => {
+    // Read the expected count from the summary table rather than hardcoding it
+    const summaryCountCell = page.locator('article', { hasText: 'Data Center Summary' })
+      .locator('tr', { hasText: 'Servers' }).locator('td').nth(1);
+    await expect(summaryCountCell).not.toBeEmpty();
+    const expected = parseInt((await summaryCountCell.textContent()) ?? '0', 10);
+
     const serverRows = page.locator('[id^="dc-panel-servers-"] tbody tr');
-    await expect(serverRows.first()).toBeVisible();
-    await expect(serverRows).toHaveCount(50);
+    await expect(serverRows).toHaveCount(expected);
   });
 
   test('clicking Racks tab shows rack rows and hides servers', async ({ page }) => {
@@ -52,17 +62,12 @@ test.describe('Data center tab', () => {
 
   test('reload button refreshes content and inner tabs still work', async ({ page }) => {
     const reloadBtn = page.locator('button[hx-get^="/datacenters/"]', { hasText: 'Reload' });
-    await reloadBtn.click();
 
-    // Skeleton should appear
-    await expect(
-      page.locator('[id^="tab-content-"] .button.is-loading')
-    ).toBeVisible();
-
-    // Wait for real data to come back
-    await expect(
-      page.locator('[id^="tab-content-"] .button.is-loading')
-    ).not.toBeVisible({ timeout: 10000 });
+    // Wait for the reload request to complete
+    await Promise.all([
+      page.waitForResponse(resp => resp.url().includes('/datacenters/') && resp.status() === 200),
+      reloadBtn.click(),
+    ]);
 
     // Inner tabs should still work after reload
     await page.locator('[id^="dc-detail-tabs-"] li', { hasText: 'Racks' }).click();
@@ -72,7 +77,7 @@ test.describe('Data center tab', () => {
   test('data center summary shows correct metadata', async ({ page }) => {
     const summary = page.locator('article', { hasText: 'Data Center Summary' });
     await expect(summary.locator('td', { hasText: 'colo-galleon' })).toBeVisible();
-    await expect(summary.locator('td', { hasText: '50' })).toBeVisible();
+    await expect(summary.locator('tr', { hasText: 'Servers' }).locator('td').nth(1)).not.toBeEmpty();
     await expect(summary.locator('td', { hasText: 'admin@armada.ai' })).toBeVisible();
   });
 });

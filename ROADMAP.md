@@ -88,8 +88,9 @@ Goal of prototyping is learning, not shipping. Each spike below is a question to
 - Pages: datacenter management, backups, operations (export jobs + edge delivery), audit log, divergence reports, schema
 - Shared layout components: navbar, sidebar menu, delete/edit modals, table partials
 - All page JS in `web/static/app.js` — no inline scripts
-- Playwright E2E test suite (`e2e/`) covering datacenter and namespace flows
-- Example GraphQL seed files (`examples/seed/`) for 5 data centers (Alaska DOT, Houston, Seattle, Colo, Alaska Unit 2)
+- Playwright E2E test suite (`e2e/`) with global auth setup (`e2e/global-setup.ts`), `make test-e2e` target, `data-testid` conventions
+- Example GraphQL seed files (`examples/seed/`) for 5 data centers (Alaska DOT Cruiser, Alaska DOT Galleon, Houston, Seattle, Colo) with real rack names, hostnames, and rack positions sourced from Netbox
+- Schema additions: `KubernetesCluster`, `EksaConfig`, `IPAddress` types; `id: ID` on `ConfigItem` interface; `oobIP: IPAddress` on `Server` (was string). IP address modeling settled as GraphQL-only hub pattern with typed back-refs; DQL `~predicate` for cross-type IP queries.
 
 **Success criteria:**
 - ✅ Server-rendered UI with HTMX for dynamic updates (no full SPA)

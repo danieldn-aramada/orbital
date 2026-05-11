@@ -9,7 +9,6 @@ type Home struct {
 	layout.Base
 	component.Menu
 
-	AppVersion string `json:"appVersion"`
-	PageTitle  string `json:"pageTile"`
-	Url        string
+	PageTitle string `json:"pageTile"`
+	Url       string
 }

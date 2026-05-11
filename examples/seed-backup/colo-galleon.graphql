@@ -50,403 +50,6 @@ mutation UpsertAll {
   ], upsert: true) {
     numUids
   }
-  addIPAddress(input: [
-    {
-      orbId: "colo:10.20.21.41"
-      address: "10.20.21.41"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.42"
-      address: "10.20.21.42"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.43"
-      address: "10.20.21.43"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.44"
-      address: "10.20.21.44"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.45"
-      address: "10.20.21.45"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.46"
-      address: "10.20.21.46"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.47"
-      address: "10.20.21.47"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.48"
-      address: "10.20.21.48"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.49"
-      address: "10.20.21.49"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.50"
-      address: "10.20.21.50"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.51"
-      address: "10.20.21.51"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.52"
-      address: "10.20.21.52"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.100"
-      address: "10.20.21.100"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.54"
-      address: "10.20.21.54"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.55"
-      address: "10.20.21.55"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.56"
-      address: "10.20.21.56"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.57"
-      address: "10.20.21.57"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.68"
-      address: "10.20.21.68"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.69"
-      address: "10.20.21.69"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.70"
-      address: "10.20.21.70"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.73"
-      address: "10.20.21.73"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.72"
-      address: "10.20.21.72"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.71"
-      address: "10.20.21.71"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.74"
-      address: "10.20.21.74"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.58"
-      address: "10.20.21.58"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.59"
-      address: "10.20.21.59"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.60"
-      address: "10.20.21.60"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.61"
-      address: "10.20.21.61"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.62"
-      address: "10.20.21.62"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.63"
-      address: "10.20.21.63"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.64"
-      address: "10.20.21.64"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.65"
-      address: "10.20.21.65"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.66"
-      address: "10.20.21.66"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.67"
-      address: "10.20.21.67"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.79"
-      address: "10.20.21.79"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.78"
-      address: "10.20.21.78"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.77"
-      address: "10.20.21.77"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.76"
-      address: "10.20.21.76"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.75"
-      address: "10.20.21.75"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.80"
-      address: "10.20.21.80"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.81"
-      address: "10.20.21.81"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.82"
-      address: "10.20.21.82"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.83"
-      address: "10.20.21.83"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.84"
-      address: "10.20.21.84"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.85"
-      address: "10.20.21.85"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.86"
-      address: "10.20.21.86"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.87"
-      address: "10.20.21.87"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.88"
-      address: "10.20.21.88"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "colo:10.20.21.89"
-      address: "10.20.21.89"
-      role: "oob"
-      namespace: { name: "colo" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    }
-  ], upsert: true) {
-    numUids
-  }
-
   addServer(input: [
     {
       serviceTag: "CWJHDX3"
@@ -455,7 +58,7 @@ mutation UpsertAll {
       hostname: "r09-u02.colo-galleon"
       model: "PowerEdge R750"
       rackPosition: 2
-      oobIP: { orbId: "colo:10.20.21.41" }
+      oobIP: "10.20.21.41"
       oobMAC: "c8:4b:d6:9c:87:74"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -470,7 +73,7 @@ mutation UpsertAll {
       hostname: "r09-u04.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 4
-      oobIP: { orbId: "colo:10.20.21.42" }
+      oobIP: "10.20.21.42"
       oobMAC: "c8:4b:d6:9d:d7:04"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -485,7 +88,7 @@ mutation UpsertAll {
       hostname: "r09-u05.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 5
-      oobIP: { orbId: "colo:10.20.21.43" }
+      oobIP: "10.20.21.43"
       oobMAC: "c8:4b:d6:9d:d7:4c"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -500,7 +103,7 @@ mutation UpsertAll {
       hostname: "r09-u06.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 6
-      oobIP: { orbId: "colo:10.20.21.44" }
+      oobIP: "10.20.21.44"
       oobMAC: "c8:4b:d6:9d:d7:0a"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -515,7 +118,7 @@ mutation UpsertAll {
       hostname: "r09-u07.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 7
-      oobIP: { orbId: "colo:10.20.21.45" }
+      oobIP: "10.20.21.45"
       oobMAC: "c8:4b:d6:a6:75:9b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -530,7 +133,7 @@ mutation UpsertAll {
       hostname: "r09-u08.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 8
-      oobIP: { orbId: "colo:10.20.21.46" }
+      oobIP: "10.20.21.46"
       oobMAC: "c8:4b:d6:a6:75:41"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -545,7 +148,7 @@ mutation UpsertAll {
       hostname: "r10-u02.colo-galleon"
       model: "PowerEdge R750"
       rackPosition: 2
-      oobIP: { orbId: "colo:10.20.21.47" }
+      oobIP: "10.20.21.47"
       oobMAC: "c8:4b:d6:a5:39:d3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -560,7 +163,7 @@ mutation UpsertAll {
       hostname: "r10-u04.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 4
-      oobIP: { orbId: "colo:10.20.21.48" }
+      oobIP: "10.20.21.48"
       oobMAC: "ec:2a:72:ee:39:f4"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -575,7 +178,7 @@ mutation UpsertAll {
       hostname: "r10-u05.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 5
-      oobIP: { orbId: "colo:10.20.21.49" }
+      oobIP: "10.20.21.49"
       oobMAC: "c8:4b:d6:a6:75:6b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -590,7 +193,7 @@ mutation UpsertAll {
       hostname: "r10-u06.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 6
-      oobIP: { orbId: "colo:10.20.21.50" }
+      oobIP: "10.20.21.50"
       oobMAC: "c8:4b:d6:a6:76:a3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -605,7 +208,7 @@ mutation UpsertAll {
       hostname: "r10-u07.colo-galleon"
       model: "PowerEdge R750"
       rackPosition: 7
-      oobIP: { orbId: "colo:10.20.21.51" }
+      oobIP: "10.20.21.51"
       oobMAC: "c8:4b:d6:a7:07:9b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -620,7 +223,7 @@ mutation UpsertAll {
       hostname: "r10-u09.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 9
-      oobIP: { orbId: "colo:10.20.21.52" }
+      oobIP: "10.20.21.52"
       oobMAC: "c8:4b:d6:a6:d4:03"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -635,7 +238,7 @@ mutation UpsertAll {
       hostname: "r10-u10.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 10
-      oobIP: { orbId: "colo:10.20.21.100" }
+      oobIP: "10.20.21.100"
       oobMAC: "c8:4b:d6:a6:ee:9d"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -650,7 +253,7 @@ mutation UpsertAll {
       hostname: "r10-u11.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 11
-      oobIP: { orbId: "colo:10.20.21.54" }
+      oobIP: "10.20.21.54"
       oobMAC: "c8:4b:d6:a6:ee:6d"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -665,7 +268,7 @@ mutation UpsertAll {
       hostname: "r10-u13.colo-galleon"
       model: "PowerEdge R760"
       rackPosition: 13
-      oobIP: { orbId: "colo:10.20.21.55" }
+      oobIP: "10.20.21.55"
       oobMAC: "d0:c1:b5:07:87:6f"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -680,7 +283,7 @@ mutation UpsertAll {
       hostname: "r10-u15.colo-galleon"
       model: "PowerEdge R760"
       rackPosition: 15
-      oobIP: { orbId: "colo:10.20.21.56" }
+      oobIP: "10.20.21.56"
       oobMAC: "d0:c1:b5:07:89:3d"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -695,7 +298,7 @@ mutation UpsertAll {
       hostname: "r10-u17.colo-galleon"
       model: "PowerEdge R760"
       rackPosition: 17
-      oobIP: { orbId: "colo:10.20.21.57" }
+      oobIP: "10.20.21.57"
       oobMAC: "d0:c1:b5:07:8a:2d"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -710,7 +313,7 @@ mutation UpsertAll {
       hostname: "r10-u20.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 20
-      oobIP: { orbId: "colo:10.20.21.68" }
+      oobIP: "10.20.21.68"
       oobMAC: "e8:cf:83:27:9f:73"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -725,7 +328,7 @@ mutation UpsertAll {
       hostname: "r10-u21.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 21
-      oobIP: { orbId: "colo:10.20.21.69" }
+      oobIP: "10.20.21.69"
       oobMAC: "e8:cf:83:27:a0:6b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -740,7 +343,7 @@ mutation UpsertAll {
       hostname: "r10-u22.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 22
-      oobIP: { orbId: "colo:10.20.21.70" }
+      oobIP: "10.20.21.70"
       oobMAC: "e8:cf:83:27:a3:f3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -755,7 +358,7 @@ mutation UpsertAll {
       hostname: "r10-u23.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 23
-      oobIP: { orbId: "colo:10.20.21.73" }
+      oobIP: "10.20.21.73"
       oobMAC: "e8:cf:83:27:a9:cb"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -770,7 +373,7 @@ mutation UpsertAll {
       hostname: "r10-u24.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 24
-      oobIP: { orbId: "colo:10.20.21.72" }
+      oobIP: "10.20.21.72"
       oobMAC: "e8:cf:83:27:b2:63"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -785,7 +388,7 @@ mutation UpsertAll {
       hostname: "r10-u25.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 25
-      oobIP: { orbId: "colo:10.20.21.71" }
+      oobIP: "10.20.21.71"
       oobMAC: "ac:b4:80:29:f9:23"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -800,7 +403,7 @@ mutation UpsertAll {
       hostname: "r10-u26.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 26
-      oobIP: { orbId: "colo:10.20.21.74" }
+      oobIP: "10.20.21.74"
       oobMAC: "d0:c1:b5:0c:b2:00"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -815,7 +418,7 @@ mutation UpsertAll {
       hostname: "r09-u15.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 15
-      oobIP: { orbId: "colo:10.20.21.58" }
+      oobIP: "10.20.21.58"
       oobMAC: "d0:c1:b5:0c:00:66"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -830,7 +433,7 @@ mutation UpsertAll {
       hostname: "r09-u16.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 16
-      oobIP: { orbId: "colo:10.20.21.59" }
+      oobIP: "10.20.21.59"
       oobMAC: "d0:c1:b5:0c:00:06"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -845,7 +448,7 @@ mutation UpsertAll {
       hostname: "r09-u17.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 17
-      oobIP: { orbId: "colo:10.20.21.60" }
+      oobIP: "10.20.21.60"
       oobMAC: "d0:c1:b5:0a:77:85"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -860,7 +463,7 @@ mutation UpsertAll {
       hostname: "r09-u18.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 18
-      oobIP: { orbId: "colo:10.20.21.61" }
+      oobIP: "10.20.21.61"
       oobMAC: "d0:c1:b5:0a:6a:35"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -875,7 +478,7 @@ mutation UpsertAll {
       hostname: "r09-u19.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 19
-      oobIP: { orbId: "colo:10.20.21.62" }
+      oobIP: "10.20.21.62"
       oobMAC: "d0:c1:b5:0a:6a:95"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -890,7 +493,7 @@ mutation UpsertAll {
       hostname: "r09-u20.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 20
-      oobIP: { orbId: "colo:10.20.21.63" }
+      oobIP: "10.20.21.63"
       oobMAC: "d0:c1:b5:0a:69:fd"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -905,7 +508,7 @@ mutation UpsertAll {
       hostname: "r09-u21.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 21
-      oobIP: { orbId: "colo:10.20.21.64" }
+      oobIP: "10.20.21.64"
       oobMAC: "d0:c1:b5:0a:68:f5"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -920,7 +523,7 @@ mutation UpsertAll {
       hostname: "r09-u22.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 22
-      oobIP: { orbId: "colo:10.20.21.65" }
+      oobIP: "10.20.21.65"
       oobMAC: "d0:c1:b5:0a:7b:35"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -935,7 +538,7 @@ mutation UpsertAll {
       hostname: "r09-u23.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 23
-      oobIP: { orbId: "colo:10.20.21.66" }
+      oobIP: "10.20.21.66"
       oobMAC: "d0:c1:b5:0a:68:45"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -950,7 +553,7 @@ mutation UpsertAll {
       hostname: "r09-u24.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 24
-      oobIP: { orbId: "colo:10.20.21.67" }
+      oobIP: "10.20.21.67"
       oobMAC: "d0:c1:b5:0a:7b:7d"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -965,7 +568,7 @@ mutation UpsertAll {
       hostname: "r09-u30.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 30
-      oobIP: { orbId: "colo:10.20.21.79" }
+      oobIP: "10.20.21.79"
       oobMAC: "b4:e9:b8:c3:c7:6b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -980,7 +583,7 @@ mutation UpsertAll {
       hostname: "r09-u29.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 29
-      oobIP: { orbId: "colo:10.20.21.78" }
+      oobIP: "10.20.21.78"
       oobMAC: "b4:e9:b8:c3:af:fb"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -995,7 +598,7 @@ mutation UpsertAll {
       hostname: "r09-u28.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 28
-      oobIP: { orbId: "colo:10.20.21.77" }
+      oobIP: "10.20.21.77"
       oobMAC: "b4:e9:b8:c3:9e:7b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -1010,7 +613,7 @@ mutation UpsertAll {
       hostname: "r09-u27.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 27
-      oobIP: { orbId: "colo:10.20.21.76" }
+      oobIP: "10.20.21.76"
       oobMAC: "fc:4c:ea:68:a0:23"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -1025,7 +628,7 @@ mutation UpsertAll {
       hostname: "r09-u26.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 26
-      oobIP: { orbId: "colo:10.20.21.75" }
+      oobIP: "10.20.21.75"
       oobMAC: "b4:e9:b8:c3:b0:53"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -1040,7 +643,7 @@ mutation UpsertAll {
       hostname: "r12-u03.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 3
-      oobIP: { orbId: "colo:10.20.21.80" }
+      oobIP: "10.20.21.80"
       oobMAC: "84:5c:31:f0:ee:c9"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -1055,7 +658,7 @@ mutation UpsertAll {
       hostname: "r12-u04.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 4
-      oobIP: { orbId: "colo:10.20.21.81" }
+      oobIP: "10.20.21.81"
       oobMAC: "84:5c:31:f0:d8:f9"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -1070,7 +673,7 @@ mutation UpsertAll {
       hostname: "r12-u05.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 5
-      oobIP: { orbId: "colo:10.20.21.82" }
+      oobIP: "10.20.21.82"
       oobMAC: "84:5c:31:f0:dc:81"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -1085,7 +688,7 @@ mutation UpsertAll {
       hostname: "r12-u06.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 6
-      oobIP: { orbId: "colo:10.20.21.83" }
+      oobIP: "10.20.21.83"
       oobMAC: "84:5c:31:f0:dc:79"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -1100,7 +703,7 @@ mutation UpsertAll {
       hostname: "r12-u07.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 7
-      oobIP: { orbId: "colo:10.20.21.84" }
+      oobIP: "10.20.21.84"
       oobMAC: "84:5c:31:f0:eb:29"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -1115,7 +718,7 @@ mutation UpsertAll {
       hostname: "r11-u05.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 5
-      oobIP: { orbId: "colo:10.20.21.85" }
+      oobIP: "10.20.21.85"
       oobMAC: "84:5c:31:f0:df:e9"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -1130,7 +733,7 @@ mutation UpsertAll {
       hostname: "r11-u06.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 6
-      oobIP: { orbId: "colo:10.20.21.86" }
+      oobIP: "10.20.21.86"
       oobMAC: "84:5c:31:f0:eb:59"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -1145,7 +748,7 @@ mutation UpsertAll {
       hostname: "r11-u07.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 7
-      oobIP: { orbId: "colo:10.20.21.87" }
+      oobIP: "10.20.21.87"
       oobMAC: "84:5c:31:f0:f0:39"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -1160,7 +763,7 @@ mutation UpsertAll {
       hostname: "r11-u08.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 8
-      oobIP: { orbId: "colo:10.20.21.88" }
+      oobIP: "10.20.21.88"
       oobMAC: "84:5c:31:f0:de:29"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -1175,7 +778,7 @@ mutation UpsertAll {
       hostname: "r11-u09.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 9
-      oobIP: { orbId: "colo:10.20.21.89" }
+      oobIP: "10.20.21.89"
       oobMAC: "84:5c:31:f0:db:b9"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"

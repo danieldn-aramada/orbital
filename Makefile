@@ -10,7 +10,7 @@ ORB_BIN      := $(BIN_DIR)/orb
 
 COMPOSE_FILE := deploy/local/docker-compose.yml
 
-.PHONY: help build build-orbital build-orb run-orbital test lint up down seed docs
+.PHONY: help build build-orbital build-orb run-orbital test test-e2e lint up down seed docs
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -30,8 +30,11 @@ build-orb: ## Build the orb edge binary → bin/orb
 run-orbital: ## Run orbital server
 	go run $(LDFLAGS) ./cmd/orbital
 
-test: ## Run all tests
+test: ## Run all Go tests
 	go test ./...
+
+test-e2e: ## Run Playwright e2e tests (requires orbital running on :8001)
+	npx playwright test
 
 lint: ## Run go vet
 	go vet ./...

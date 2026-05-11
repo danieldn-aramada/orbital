@@ -45,275 +45,6 @@ mutation {
     numUids
   }
 
-  addIPAddress(input: [
-    {
-      orbId: "houston:10.10.7.72"
-      address: "10.10.7.72"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.64"
-      address: "10.10.7.64"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.65"
-      address: "10.10.7.65"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.66"
-      address: "10.10.7.66"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.67"
-      address: "10.10.7.67"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.68"
-      address: "10.10.7.68"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.98"
-      address: "10.10.7.98"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.55"
-      address: "10.10.7.55"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.56"
-      address: "10.10.7.56"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.57"
-      address: "10.10.7.57"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.58"
-      address: "10.10.7.58"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.99"
-      address: "10.10.7.99"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.70"
-      address: "10.10.7.70"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.71"
-      address: "10.10.7.71"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.69"
-      address: "10.10.7.69"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.61"
-      address: "10.10.7.61"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.62"
-      address: "10.10.7.62"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.63"
-      address: "10.10.7.63"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.50"
-      address: "10.10.7.50"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.51"
-      address: "10.10.7.51"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.52"
-      address: "10.10.7.52"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.53"
-      address: "10.10.7.53"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.7.54"
-      address: "10.10.7.54"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.22.70"
-      address: "10.10.22.70"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.22.69"
-      address: "10.10.22.69"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.22.68"
-      address: "10.10.22.68"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.22.67"
-      address: "10.10.22.67"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.22.66"
-      address: "10.10.22.66"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.22.6"
-      address: "10.10.22.6"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.22.5"
-      address: "10.10.22.5"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.22.4"
-      address: "10.10.22.4"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.22.3"
-      address: "10.10.22.3"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "houston:10.10.22.2"
-      address: "10.10.22.2"
-      role: "oob"
-      namespace: { name: "houston" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    }
-  ], upsert: true) {
-    numUids
-  }
-
   addServer(input: [
     {
       serviceTag: "6PJ1FZ3"
@@ -322,7 +53,7 @@ mutation {
       hostname: "r06-u12.houston-galleon"
       model: "Dell R750"
       rackPosition: 12
-      oobIP: { orbId: "houston:10.10.7.72" }
+      oobIP: "10.10.7.72"
       oobMAC: "c8:4b:d6:a7:07:e3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -337,7 +68,7 @@ mutation {
       hostname: "r06-u14.houston-galleon"
       model: "Dell R650"
       rackPosition: 14
-      oobIP: { orbId: "houston:10.10.7.64" }
+      oobIP: "10.10.7.64"
       oobMAC: "c8:4b:d6:a6:1b:09"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -352,7 +83,7 @@ mutation {
       hostname: "r06-u15.houston-galleon"
       model: "Dell R650"
       rackPosition: 15
-      oobIP: { orbId: "houston:10.10.7.65" }
+      oobIP: "10.10.7.65"
       oobMAC: "c8:4b:d6:a6:ef:f9"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -367,7 +98,7 @@ mutation {
       hostname: "r06-u16.houston-galleon"
       model: "Dell R650"
       rackPosition: 16
-      oobIP: { orbId: "houston:10.10.7.66" }
+      oobIP: "10.10.7.66"
       oobMAC: "c8:4b:d6:a6:ef:ff"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -382,7 +113,7 @@ mutation {
       hostname: "r06-u17.houston-galleon"
       model: "Dell R650"
       rackPosition: 17
-      oobIP: { orbId: "houston:10.10.7.67" }
+      oobIP: "10.10.7.67"
       oobMAC: "c8:4b:d6:a6:ef:09"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -397,7 +128,7 @@ mutation {
       hostname: "r06-u18.houston-galleon"
       model: "Dell R650"
       rackPosition: 18
-      oobIP: { orbId: "houston:10.10.7.68" }
+      oobIP: "10.10.7.68"
       oobMAC: "c8:4b:d6:a6:ee:5b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -412,7 +143,7 @@ mutation {
       hostname: "r06-u22.houston-galleon"
       model: "Dell R450"
       rackPosition: 22
-      oobIP: { orbId: "houston:10.10.7.98" }
+      oobIP: "10.10.7.98"
       oobMAC: "b4:45:06:fb:70:58"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -427,7 +158,7 @@ mutation {
       hostname: "r06-u23.houston-galleon"
       model: "Dell R450"
       rackPosition: 23
-      oobIP: { orbId: "houston:10.10.7.55" }
+      oobIP: "10.10.7.55"
       oobMAC: "b4:45:06:fb:7a:d0"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -442,7 +173,7 @@ mutation {
       hostname: "r06-u24.houston-galleon"
       model: "Dell R450"
       rackPosition: 24
-      oobIP: { orbId: "houston:10.10.7.56" }
+      oobIP: "10.10.7.56"
       oobMAC: "b4:45:06:fb:8d:58"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -457,7 +188,7 @@ mutation {
       hostname: "r06-u25.houston-galleon"
       model: "Dell R450"
       rackPosition: 25
-      oobIP: { orbId: "houston:10.10.7.57" }
+      oobIP: "10.10.7.57"
       oobMAC: "b4:45:06:fb:8e:00"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -472,7 +203,7 @@ mutation {
       hostname: "r06-u26.houston-galleon"
       model: "Dell R450"
       rackPosition: 26
-      oobIP: { orbId: "houston:10.10.7.58" }
+      oobIP: "10.10.7.58"
       oobMAC: "b4:45:06:fb:6a:d8"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -487,7 +218,7 @@ mutation {
       hostname: "r06-u27.houston-galleon"
       model: "Dell Camera"
       rackPosition: 27
-      oobIP: { orbId: "houston:10.10.7.99" }
+      oobIP: "10.10.7.99"
       oobMAC: "6c:3c:8c:74:cc:7e"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -502,7 +233,7 @@ mutation {
       hostname: "r05-u09.houston-galleon"
       model: "Dell R750"
       rackPosition: 9
-      oobIP: { orbId: "houston:10.10.7.70" }
+      oobIP: "10.10.7.70"
       oobMAC: "c8:4b:d6:a7:07:65"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -517,7 +248,7 @@ mutation {
       hostname: "r05-u11.houston-galleon"
       model: "Dell R750"
       rackPosition: 11
-      oobIP: { orbId: "houston:10.10.7.71" }
+      oobIP: "10.10.7.71"
       oobMAC: "c8:4b:d6:a7:07:35"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -532,7 +263,7 @@ mutation {
       hostname: "r05-u14.houston-galleon"
       model: "Dell R650"
       rackPosition: 14
-      oobIP: { orbId: "houston:10.10.7.69" }
+      oobIP: "10.10.7.69"
       oobMAC: "c8:4b:d6:a6:ef:39"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -547,7 +278,7 @@ mutation {
       hostname: "r05-u15.houston-galleon"
       model: "Dell R650"
       rackPosition: 15
-      oobIP: { orbId: "houston:10.10.7.61" }
+      oobIP: "10.10.7.61"
       oobMAC: "c8:4b:d6:a6:ee:3d"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -562,7 +293,7 @@ mutation {
       hostname: "r05-u16.houston-galleon"
       model: "Dell R650"
       rackPosition: 16
-      oobIP: { orbId: "houston:10.10.7.62" }
+      oobIP: "10.10.7.62"
       oobMAC: "c8:4b:d6:a6:ef:bd"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -577,7 +308,7 @@ mutation {
       hostname: "r05-u17.houston-galleon"
       model: "Dell R650"
       rackPosition: 17
-      oobIP: { orbId: "houston:10.10.7.63" }
+      oobIP: "10.10.7.63"
       oobMAC: "c8:4b:d6:a6:ef:e1"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -592,7 +323,7 @@ mutation {
       hostname: "r05-u21.houston-galleon"
       model: "Dell R450"
       rackPosition: 21
-      oobIP: { orbId: "houston:10.10.7.50" }
+      oobIP: "10.10.7.50"
       oobMAC: "b4:45:06:fb:90:20"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -607,7 +338,7 @@ mutation {
       hostname: "r05-u22.houston-galleon"
       model: "Dell R450"
       rackPosition: 22
-      oobIP: { orbId: "houston:10.10.7.51" }
+      oobIP: "10.10.7.51"
       oobMAC: "b4:45:06:fb:8b:80"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -622,7 +353,7 @@ mutation {
       hostname: "r05-u23.houston-galleon"
       model: "Dell R450"
       rackPosition: 23
-      oobIP: { orbId: "houston:10.10.7.52" }
+      oobIP: "10.10.7.52"
       oobMAC: "b4:45:06:fb:8b:48"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -637,7 +368,7 @@ mutation {
       hostname: "r05-u24.houston-galleon"
       model: "Dell R450"
       rackPosition: 24
-      oobIP: { orbId: "houston:10.10.7.53" }
+      oobIP: "10.10.7.53"
       oobMAC: "b4:45:06:fb:86:98"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -652,7 +383,7 @@ mutation {
       hostname: "r05-u25.houston-galleon"
       model: "Dell R450"
       rackPosition: 25
-      oobIP: { orbId: "houston:10.10.7.54" }
+      oobIP: "10.10.7.54"
       oobMAC: "b4:45:06:fb:74:d8"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -667,7 +398,7 @@ mutation {
       hostname: "r03-u09.houston-galleon"
       model: "Dell AS760"
       rackPosition: 9
-      oobIP: { orbId: "houston:10.10.22.70" }
+      oobIP: "10.10.22.70"
       oobMAC: "d0:c1:b5:05:a9:45"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -682,7 +413,7 @@ mutation {
       hostname: "r03-u11.houston-galleon"
       model: "Dell AS760"
       rackPosition: 11
-      oobIP: { orbId: "houston:10.10.22.69" }
+      oobIP: "10.10.22.69"
       oobMAC: "d0:c1:b5:05:aa:59"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -697,7 +428,7 @@ mutation {
       hostname: "r03-u13.houston-galleon"
       model: "Dell AS760"
       rackPosition: 13
-      oobIP: { orbId: "houston:10.10.22.68" }
+      oobIP: "10.10.22.68"
       oobMAC: "d0:c1:b5:03:d4:54"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -712,7 +443,7 @@ mutation {
       hostname: "r03-u15.houston-galleon"
       model: "Dell AS760"
       rackPosition: 15
-      oobIP: { orbId: "houston:10.10.22.67" }
+      oobIP: "10.10.22.67"
       oobMAC: "d0:c1:b5:03:c5:1e"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -727,7 +458,7 @@ mutation {
       hostname: "r03-u17.houston-galleon"
       model: "Dell AS760"
       rackPosition: 17
-      oobIP: { orbId: "houston:10.10.22.66" }
+      oobIP: "10.10.22.66"
       oobMAC: "d0:c1:b5:03:d2:6e"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -742,7 +473,7 @@ mutation {
       hostname: "r03-u20.houston-galleon"
       model: "Dell AS760"
       rackPosition: 20
-      oobIP: { orbId: "houston:10.10.22.6" }
+      oobIP: "10.10.22.6"
       oobMAC: "d0:c1:b5:03:cb:24"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -757,7 +488,7 @@ mutation {
       hostname: "r03-u22.houston-galleon"
       model: "Dell AS760"
       rackPosition: 22
-      oobIP: { orbId: "houston:10.10.22.5" }
+      oobIP: "10.10.22.5"
       oobMAC: "d0:c1:b5:03:80:d2"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -772,7 +503,7 @@ mutation {
       hostname: "r03-u24.houston-galleon"
       model: "Dell AS760"
       rackPosition: 24
-      oobIP: { orbId: "houston:10.10.22.4" }
+      oobIP: "10.10.22.4"
       oobMAC: "d0:c1:b5:05:a9:93"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -787,7 +518,7 @@ mutation {
       hostname: "r03-u26.houston-galleon"
       model: "Dell AS760"
       rackPosition: 26
-      oobIP: { orbId: "houston:10.10.22.3" }
+      oobIP: "10.10.22.3"
       oobMAC: "d0:c1:b5:03:8a:14"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -802,7 +533,7 @@ mutation {
       hostname: "r03-u28.houston-galleon"
       model: "Dell AS760"
       rackPosition: 28
-      oobIP: { orbId: "houston:10.10.22.2" }
+      oobIP: "10.10.22.2"
       oobMAC: "d0:c1:b5:03:d0:70"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"

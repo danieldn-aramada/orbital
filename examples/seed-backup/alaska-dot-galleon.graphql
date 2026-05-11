@@ -18,121 +18,12 @@ mutation {
 
   addRack(input: [
     {
-      name: "Rack-1"
-      orbId: "alaska-dot:Rack-1"
+      name: "Rack-5"
+      orbId: "alaska-dot:Rack-5"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
-    }
-  ], upsert: true) {
-    numUids
-  }
-
-  addIPAddress(input: [
-    {
-      orbId: "alaska-dot:10.61.95.50"
-      address: "10.61.95.50"
-      role: "oob"
-      namespace: { name: "alaska-dot" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "alaska-dot:10.61.95.51"
-      address: "10.61.95.51"
-      role: "oob"
-      namespace: { name: "alaska-dot" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "alaska-dot:10.61.95.52"
-      address: "10.61.95.52"
-      role: "oob"
-      namespace: { name: "alaska-dot" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "alaska-dot:10.61.95.53"
-      address: "10.61.95.53"
-      role: "oob"
-      namespace: { name: "alaska-dot" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "alaska-dot:10.61.95.54"
-      address: "10.61.95.54"
-      role: "oob"
-      namespace: { name: "alaska-dot" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "alaska-dot:10.61.95.55"
-      address: "10.61.95.55"
-      role: "oob"
-      namespace: { name: "alaska-dot" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "alaska-dot:10.61.95.56"
-      address: "10.61.95.56"
-      role: "oob"
-      namespace: { name: "alaska-dot" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "alaska-dot:10.61.95.57"
-      address: "10.61.95.57"
-      role: "oob"
-      namespace: { name: "alaska-dot" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "alaska-dot:10.61.95.58"
-      address: "10.61.95.58"
-      role: "oob"
-      namespace: { name: "alaska-dot" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "alaska-dot:10.61.95.59"
-      address: "10.61.95.59"
-      role: "oob"
-      namespace: { name: "alaska-dot" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "alaska-dot:10.61.95.60"
-      address: "10.61.95.60"
-      role: "oob"
-      namespace: { name: "alaska-dot" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "alaska-dot:10.61.95.61"
-      address: "10.61.95.61"
-      role: "oob"
-      namespace: { name: "alaska-dot" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "alaska-dot:10.61.95.62"
-      address: "10.61.95.62"
-      role: "oob"
-      namespace: { name: "alaska-dot" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
     }
   ], upsert: true) {
     numUids
@@ -143,195 +34,195 @@ mutation {
       serviceTag: "GRTLY24"
       orbId: "alaska-dot:GRTLY24"
       name: "r05-u03.alaska-dot-galleon"
-      hostname: "r01-u03.alaska-dot-galleon"
+      hostname: "r05-u03.alaska-dot-galleon"
       model: "Dell XE9680"
       rackPosition: 3
-      oobIP: { orbId: "alaska-dot:10.61.95.50" }
+      oobIP: "10.61.95.50"
       oobMAC: "c4:cb:e1:c8:a0:38"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
-      rack: { orbId: "alaska-dot:Rack-1" }
+      rack: { orbId: "alaska-dot:Rack-5" }
     }
     {
       serviceTag: "55W8K44"
       orbId: "alaska-dot:55W8K44"
       name: "r05-u10.alaska-dot-galleon"
-      hostname: "r01-u10.alaska-dot-galleon"
+      hostname: "r05-u10.alaska-dot-galleon"
       model: "Dell R660"
       rackPosition: 10
-      oobIP: { orbId: "alaska-dot:10.61.95.51" }
+      oobIP: "10.61.95.51"
       oobMAC: "c4:5a:b1:cb:12:65"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
-      rack: { orbId: "alaska-dot:Rack-1" }
+      rack: { orbId: "alaska-dot:Rack-5" }
     }
     {
       serviceTag: "75W8K44"
       orbId: "alaska-dot:75W8K44"
       name: "r05-u11.alaska-dot-galleon"
-      hostname: "r01-u11.alaska-dot-galleon"
+      hostname: "r05-u11.alaska-dot-galleon"
       model: "Dell R660"
       rackPosition: 11
-      oobIP: { orbId: "alaska-dot:10.61.95.52" }
+      oobIP: "10.61.95.52"
       oobMAC: "c4:5a:b1:cb:11:0f"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
-      rack: { orbId: "alaska-dot:Rack-1" }
+      rack: { orbId: "alaska-dot:Rack-5" }
     }
     {
       serviceTag: "65W8K44"
       orbId: "alaska-dot:65W8K44"
       name: "r05-u12.alaska-dot-galleon"
-      hostname: "r01-u12.alaska-dot-galleon"
+      hostname: "r05-u12.alaska-dot-galleon"
       model: "Dell R660"
       rackPosition: 12
-      oobIP: { orbId: "alaska-dot:10.61.95.53" }
+      oobIP: "10.61.95.53"
       oobMAC: "c4:5a:b1:cb:12:59"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
-      rack: { orbId: "alaska-dot:Rack-1" }
+      rack: { orbId: "alaska-dot:Rack-5" }
     }
     {
       serviceTag: "85W8K44"
       orbId: "alaska-dot:85W8K44"
       name: "r05-u13.alaska-dot-galleon"
-      hostname: "r01-u13.alaska-dot-galleon"
+      hostname: "r05-u13.alaska-dot-galleon"
       model: "Dell R660"
       rackPosition: 13
-      oobIP: { orbId: "alaska-dot:10.61.95.54" }
+      oobIP: "10.61.95.54"
       oobMAC: "c4:5a:b1:c7:b7:0b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
-      rack: { orbId: "alaska-dot:Rack-1" }
+      rack: { orbId: "alaska-dot:Rack-5" }
     }
     {
       serviceTag: "6FK8K44"
       orbId: "alaska-dot:6FK8K44"
       name: "r05-u15.alaska-dot-galleon"
-      hostname: "r01-u15.alaska-dot-galleon"
+      hostname: "r05-u15.alaska-dot-galleon"
       model: "Dell R450"
       rackPosition: 15
-      oobIP: { orbId: "alaska-dot:10.61.95.55" }
+      oobIP: "10.61.95.55"
       oobMAC: "d0:46:0c:73:3d:90"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
-      rack: { orbId: "alaska-dot:Rack-1" }
+      rack: { orbId: "alaska-dot:Rack-5" }
     }
     {
       serviceTag: "3FK8K44"
       orbId: "alaska-dot:3FK8K44"
       name: "r05-u16.alaska-dot-galleon"
-      hostname: "r01-u16.alaska-dot-galleon"
+      hostname: "r05-u16.alaska-dot-galleon"
       model: "Dell R450"
       rackPosition: 16
-      oobIP: { orbId: "alaska-dot:10.61.95.56" }
+      oobIP: "10.61.95.56"
       oobMAC: "d0:46:0c:73:3c:80"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
-      rack: { orbId: "alaska-dot:Rack-1" }
+      rack: { orbId: "alaska-dot:Rack-5" }
     }
     {
       serviceTag: "1FK8K44"
       orbId: "alaska-dot:1FK8K44"
       name: "r05-u17.alaska-dot-galleon"
-      hostname: "r01-u17.alaska-dot-galleon"
+      hostname: "r05-u17.alaska-dot-galleon"
       model: "Dell R450"
       rackPosition: 17
-      oobIP: { orbId: "alaska-dot:10.61.95.57" }
+      oobIP: "10.61.95.57"
       oobMAC: "d0:46:0c:73:2c:98"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
-      rack: { orbId: "alaska-dot:Rack-1" }
+      rack: { orbId: "alaska-dot:Rack-5" }
     }
     {
       serviceTag: "5FK8K44"
       orbId: "alaska-dot:5FK8K44"
       name: "r05-u18.alaska-dot-galleon"
-      hostname: "r01-u18.alaska-dot-galleon"
+      hostname: "r05-u18.alaska-dot-galleon"
       model: "Dell R450"
       rackPosition: 18
-      oobIP: { orbId: "alaska-dot:10.61.95.58" }
+      oobIP: "10.61.95.58"
       oobMAC: "d0:46:0c:73:3c:90"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
-      rack: { orbId: "alaska-dot:Rack-1" }
+      rack: { orbId: "alaska-dot:Rack-5" }
     }
     {
       serviceTag: "4FK8K44"
       orbId: "alaska-dot:4FK8K44"
       name: "r05-u19.alaska-dot-galleon"
-      hostname: "r01-u19.alaska-dot-galleon"
+      hostname: "r05-u19.alaska-dot-galleon"
       model: "Dell R450"
       rackPosition: 19
-      oobIP: { orbId: "alaska-dot:10.61.95.59" }
+      oobIP: "10.61.95.59"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
-      rack: { orbId: "alaska-dot:Rack-1" }
+      rack: { orbId: "alaska-dot:Rack-5" }
     }
     {
       serviceTag: "JDK8K44"
       orbId: "alaska-dot:JDK8K44"
       name: "r05-u20.alaska-dot-galleon"
-      hostname: "r01-u20.alaska-dot-galleon"
+      hostname: "r05-u20.alaska-dot-galleon"
       model: "Dell R450"
       rackPosition: 20
-      oobIP: { orbId: "alaska-dot:10.61.95.60" }
+      oobIP: "10.61.95.60"
       oobMAC: "d0:46:0c:73:3f:38"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
-      rack: { orbId: "alaska-dot:Rack-1" }
+      rack: { orbId: "alaska-dot:Rack-5" }
     }
     {
       serviceTag: "2FK8K44"
       orbId: "alaska-dot:2FK8K44"
       name: "r05-u21.alaska-dot-galleon"
-      hostname: "r01-u21.alaska-dot-galleon"
+      hostname: "r05-u21.alaska-dot-galleon"
       model: "Dell R450"
       rackPosition: 21
-      oobIP: { orbId: "alaska-dot:10.61.95.61" }
+      oobIP: "10.61.95.61"
       oobMAC: "d0:46:0c:73:3c:98"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
-      rack: { orbId: "alaska-dot:Rack-1" }
+      rack: { orbId: "alaska-dot:Rack-5" }
     }
     {
       serviceTag: "3H3V564"
       orbId: "alaska-dot:3H3V564"
       name: "r05-u25.alaska-dot-galleon"
-      hostname: "r01-u25.alaska-dot-galleon"
+      hostname: "r05-u25.alaska-dot-galleon"
       model: "Dell R760"
       rackPosition: 25
-      oobIP: { orbId: "alaska-dot:10.61.95.62" }
+      oobIP: "10.61.95.62"
       oobMAC: "d0:c1:b5:04:6a:12"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
       namespace: { name: "alaska-dot" }
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
-      rack: { orbId: "alaska-dot:Rack-1" }
+      rack: { orbId: "alaska-dot:Rack-5" }
     }
   ], upsert: true) {
     numUids

@@ -9,16 +9,31 @@ DGRAPH="http://localhost:8080"
 PSQL="psql postgres://orbital:orbital@localhost:5432/orbital"
 
 echo "==> Applying DGraph schema..."
-curl -sf -X POST "${DGRAPH}/admin/schema" \
+schema_resp=$(curl -sf -X POST "${DGRAPH}/admin/schema" \
   -H "Content-Type: application/graphql" \
-  --data-binary @schema/schema-demo.graphql >/dev/null
+  --data-binary @schema/schema-demo.graphql)
+if echo "$schema_resp" | jq -e '.errors' >/dev/null 2>&1; then
+  echo "ERROR: schema apply failed:" >&2
+  echo "$schema_resp" | jq -r '.errors[].message' >&2
+  exit 1
+fi
+
+echo "==> Cleaning stale nodes..."
+curl -sf -X POST "${DGRAPH}/graphql" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "mutation { deleteRack(filter: { orbId: { eq: \"alaska-dot-cruiser:Rack-1\" } }) { numUids } }"}' >/dev/null
 
 echo "==> Seeding DGraph..."
 for f in examples/seed/*.graphql; do
   echo "    $(basename "$f" .graphql)"
-  curl -sf -X POST "${DGRAPH}/graphql" \
+  resp=$(curl -sf -X POST "${DGRAPH}/graphql" \
     -H "Content-Type: application/json" \
-    -d "{\"query\": $(jq -Rs . < "$f")}" >/dev/null
+    -d "{\"query\": $(jq -Rs . < "$f")}")
+  if echo "$resp" | jq -e '.errors' >/dev/null 2>&1; then
+    echo "ERROR: seed failed for $(basename "$f"):" >&2
+    echo "$resp" | jq -r '.errors[].message' >&2
+    exit 1
+  fi
 done
 
 echo "==> Creating admin user..."

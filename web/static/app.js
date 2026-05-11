@@ -554,16 +554,26 @@ function initDcDetailTabs(id) {
   if (!tabContainer) return
 
   const tabs = tabContainer.querySelectorAll('li[data-panel]')
+  const storageKey = `dc-detail-tab-${id}`
+
+  function activatePanel(panelId) {
+    tabs.forEach(t => t.classList.remove('is-active'))
+    const active = [...tabs].find(t => t.dataset.panel === panelId)
+    if (active) active.classList.add('is-active')
+    tabContainer.parentElement.querySelectorAll('[id^="dc-panel-"]').forEach(panel => {
+      panel.style.display = panel.id === panelId ? '' : 'none'
+    })
+  }
+
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
-      const panelId = tab.dataset.panel
-      tabs.forEach(t => t.classList.remove('is-active'))
-      tab.classList.add('is-active')
-      tabContainer.parentElement.querySelectorAll('[id^="dc-panel-"]').forEach(panel => {
-        panel.style.display = panel.id === panelId ? '' : 'none'
-      })
+      localStorage.setItem(storageKey, tab.dataset.panel)
+      activatePanel(tab.dataset.panel)
     })
   })
+
+  const saved = localStorage.getItem(storageKey)
+  if (saved) activatePanel(saved)
 }
 
 function loadDataCenterTab(displayName, id) {
@@ -610,6 +620,7 @@ function loadDataCenterTab(displayName, id) {
   const tabClose = document.getElementById(`tab-close-${id}`)
   tabClose.addEventListener('click', (event) => {
     event.stopPropagation()
+    localStorage.removeItem(`dc-detail-tab-${id}`)
     unloadTab(id)
     deleteTab(displayName, id)
     document.getElementById('tab-summary').click()
@@ -636,11 +647,11 @@ document.addEventListener('DOMContentLoaded', () => {
       },
       topStart: {
         buttons: [
-          { extend: 'excel', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.72rem;"><i class="fa-regular fa-file-excel"></i><span>Excel</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Excel' },
-          { extend: 'csv', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.72rem;"><i class="fa-regular fa-file-text"></i><span>CSV</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV' },
-          { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.72rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
-          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.72rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-small', titleAttr: 'Select Columns' },
-          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.72rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-datacenters' } },
+          { extend: 'excel', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-excel"></i><span>Excel</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Excel' },
+          { extend: 'csv', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-text"></i><span>CSV</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV' },
+          { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
+          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-small', titleAttr: 'Select Columns' },
+          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-datacenters' } },
         ],
       },
       topEnd: { search: { placeholder: 'Type search here' } },

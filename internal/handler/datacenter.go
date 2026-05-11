@@ -39,7 +39,7 @@ const getDataCenterQuery = `
         hostname
         serviceTag
         model
-        oobIP
+        oobIP { address }
         oobMAC
         rackPosition
         rack { name }
@@ -96,7 +96,9 @@ type dcQueryResponse struct {
 		Hostname     string `json:"hostname"`
 		ServiceTag   string `json:"serviceTag"`
 		Model        string `json:"model"`
-		OobIP        string `json:"oobIP"`
+		OobIP        struct {
+			Address string `json:"address"`
+		} `json:"oobIP"`
 		OobMAC       string `json:"oobMAC"`
 		RackPosition int    `json:"rackPosition"`
 		Rack         struct {
@@ -211,7 +213,7 @@ func (h *DataCenter) Tab(c echo.Context) error {
 			Hostname:     s.Hostname,
 			ServiceTag:   s.ServiceTag,
 			Model:        s.Model,
-			OobIP:        s.OobIP,
+			OobIP:        s.OobIP.Address,
 			OobMAC:       s.OobMAC,
 			RackPosition: s.RackPosition,
 			Rack:         struct{ Name string }{Name: s.Rack.Name},

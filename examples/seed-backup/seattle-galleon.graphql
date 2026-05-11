@@ -61,203 +61,6 @@ mutation {
     numUids
   }
 
-  addIPAddress(input: [
-    {
-      orbId: "seattle:10.20.43.7"
-      address: "10.20.43.7"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.43.4"
-      address: "10.20.43.4"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.33.49"
-      address: "10.20.33.49"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.33.51"
-      address: "10.20.33.51"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.33.52"
-      address: "10.20.33.52"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.33.53"
-      address: "10.20.33.53"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.33.54"
-      address: "10.20.33.54"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.43.2"
-      address: "10.20.43.2"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.43.3"
-      address: "10.20.43.3"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.33.61"
-      address: "10.20.33.61"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.33.62"
-      address: "10.20.33.62"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.33.63"
-      address: "10.20.33.63"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.33.64"
-      address: "10.20.33.64"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.33.65"
-      address: "10.20.33.65"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.33.66"
-      address: "10.20.33.66"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.33.67"
-      address: "10.20.33.67"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.33.68"
-      address: "10.20.33.68"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.33.69"
-      address: "10.20.33.69"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.43.5"
-      address: "10.20.43.5"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.96.87.15"
-      address: "10.96.87.15"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.43.6"
-      address: "10.20.43.6"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.96.87.17"
-      address: "10.96.87.17"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.96.87.16"
-      address: "10.96.87.16"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    },
-    {
-      orbId: "seattle:10.20.43.8"
-      address: "10.20.43.8"
-      role: "oob"
-      namespace: { name: "seattle" }
-      createdBy: "admin@armada.ai"
-      createdAt: "2026-05-06T00:00:00Z"
-    }
-  ], upsert: true) {
-    numUids
-  }
-
   addServer(input: [
     {
       serviceTag: "65WVM34"
@@ -266,7 +69,7 @@ mutation {
       hostname: "r05-u03.seattle-galleon"
       model: "XE8640"
       rackPosition: 3
-      oobIP: { orbId: "seattle:10.20.43.7" }
+      oobIP: "10.20.43.7"
       oobMAC: "c4:cb:e1:ba:37:84"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -281,7 +84,7 @@ mutation {
       hostname: "r05-u07.seattle-galleon"
       model: "XE8640"
       rackPosition: 7
-      oobIP: { orbId: "seattle:10.20.43.4" }
+      oobIP: "10.20.43.4"
       oobMAC: "c4:cb:e1:ba:37:5a"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -293,7 +96,7 @@ mutation {
       serviceTag: "JD268Y3"
       orbId: "seattle:JD268Y3"
       model: "PowerEdge R350"
-      oobIP: { orbId: "seattle:10.20.33.49" }
+      oobIP: "10.20.33.49"
       oobMAC: "c4:5a:b1:ac:62:36"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -305,7 +108,7 @@ mutation {
       serviceTag: "FZ7P7Y3"
       orbId: "seattle:FZ7P7Y3"
       model: "PowerEdge R750"
-      oobIP: { orbId: "seattle:10.20.33.51" }
+      oobIP: "10.20.33.51"
       oobMAC: "c8:4b:d6:a0:66:60"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -317,7 +120,7 @@ mutation {
       serviceTag: "5L4P7Y3"
       orbId: "seattle:5L4P7Y3"
       model: "PowerEdge R650"
-      oobIP: { orbId: "seattle:10.20.33.52" }
+      oobIP: "10.20.33.52"
       oobMAC: "c8:4b:d6:9f:8e:2a"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -329,7 +132,7 @@ mutation {
       serviceTag: "6L4P7Y3"
       orbId: "seattle:6L4P7Y3"
       model: "PowerEdge R650"
-      oobIP: { orbId: "seattle:10.20.33.53" }
+      oobIP: "10.20.33.53"
       oobMAC: "c8:4b:d6:9f:81:be"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -341,7 +144,7 @@ mutation {
       serviceTag: "7L4P7Y3"
       orbId: "seattle:7L4P7Y3"
       model: "PowerEdge R650"
-      oobIP: { orbId: "seattle:10.20.33.54" }
+      oobIP: "10.20.33.54"
       oobMAC: "c8:4b:d6:9f:81:ac"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -353,7 +156,7 @@ mutation {
       serviceTag: "GMP6K74"
       orbId: "seattle:GMP6K74"
       model: "PowerEdge R450"
-      oobIP: { orbId: "seattle:10.20.43.2" }
+      oobIP: "10.20.43.2"
       oobMAC: "d0:c1:b5:0c:b1:d8"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -365,7 +168,7 @@ mutation {
       serviceTag: "JMP6K74"
       orbId: "seattle:JMP6K74"
       model: "PowerEdge R450"
-      oobIP: { orbId: "seattle:10.20.43.3" }
+      oobIP: "10.20.43.3"
       oobMAC: "d0:c1:b5:0c:b1:c0"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -380,7 +183,7 @@ mutation {
       hostname: "r04-u13.seattle-galleon"
       model: "Dell AX650"
       rackPosition: 13
-      oobIP: { orbId: "seattle:10.20.33.61" }
+      oobIP: "10.20.33.61"
       oobMAC: "a8:3c:a5:42:42:f2"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -395,7 +198,7 @@ mutation {
       hostname: "r04-u14.seattle-galleon"
       model: "Dell AX650"
       rackPosition: 14
-      oobIP: { orbId: "seattle:10.20.33.62" }
+      oobIP: "10.20.33.62"
       oobMAC: "a8:3c:a5:43:f5:98"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -410,7 +213,7 @@ mutation {
       hostname: "r04-u15.seattle-galleon"
       model: "Dell AX650"
       rackPosition: 15
-      oobIP: { orbId: "seattle:10.20.33.63" }
+      oobIP: "10.20.33.63"
       oobMAC: "a8:3c:a5:43:e9:56"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -425,7 +228,7 @@ mutation {
       hostname: "r04-u16.seattle-galleon"
       model: "Dell AX650"
       rackPosition: 16
-      oobIP: { orbId: "seattle:10.20.33.64" }
+      oobIP: "10.20.33.64"
       oobMAC: "a8:3c:a5:43:e9:6e"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -440,7 +243,7 @@ mutation {
       hostname: "r04-u17.seattle-galleon"
       model: "Dell AX650"
       rackPosition: 17
-      oobIP: { orbId: "seattle:10.20.33.65" }
+      oobIP: "10.20.33.65"
       oobMAC: "a8:3c:a5:40:dd:07"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -455,7 +258,7 @@ mutation {
       hostname: "r04-u18.seattle-galleon"
       model: "Dell AX650"
       rackPosition: 18
-      oobIP: { orbId: "seattle:10.20.33.66" }
+      oobIP: "10.20.33.66"
       oobMAC: "a8:3c:a5:40:c5:07"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -470,7 +273,7 @@ mutation {
       hostname: "r04-u21.seattle-galleon"
       model: "Dell AX650"
       rackPosition: 21
-      oobIP: { orbId: "seattle:10.20.33.67" }
+      oobIP: "10.20.33.67"
       oobMAC: "a8:3c:a5:43:f2:50"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -485,7 +288,7 @@ mutation {
       hostname: "r04-u22.seattle-galleon"
       model: "Dell AX650"
       rackPosition: 22
-      oobIP: { orbId: "seattle:10.20.33.68" }
+      oobIP: "10.20.33.68"
       oobMAC: "a8:3c:a5:43:f4:54"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -500,7 +303,7 @@ mutation {
       hostname: "r04-u23.seattle-galleon"
       model: "Dell AX650"
       rackPosition: 23
-      oobIP: { orbId: "seattle:10.20.33.69" }
+      oobIP: "10.20.33.69"
       oobMAC: "a8:3c:a5:43:f4:fc"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -515,7 +318,7 @@ mutation {
       hostname: "r03-u01.seattle-galleon"
       model: "Dell XE8640"
       rackPosition: 1
-      oobIP: { orbId: "seattle:10.20.43.5" }
+      oobIP: "10.20.43.5"
       oobMAC: "c4:cb:e1:b6:45:48"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -530,7 +333,7 @@ mutation {
       hostname: "r02-u21.seattle-galleon"
       model: "Dell R450"
       rackPosition: 21
-      oobIP: { orbId: "seattle:10.96.87.15" }
+      oobIP: "10.96.87.15"
       oobMAC: "e8:cf:83:27:a5:73"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -545,7 +348,7 @@ mutation {
       hostname: "r03-u05.seattle-galleon"
       model: "Dell XE8640"
       rackPosition: 5
-      oobIP: { orbId: "seattle:10.20.43.6" }
+      oobIP: "10.20.43.6"
       oobMAC: "c4:cb:e1:ba:3a:90"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -560,7 +363,7 @@ mutation {
       hostname: "r01-u15.seattle-galleon"
       model: "Dell R450"
       rackPosition: 15
-      oobIP: { orbId: "seattle:10.96.87.17" }
+      oobIP: "10.96.87.17"
       oobMAC: "e8:cf:83:27:b2:9b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -575,7 +378,7 @@ mutation {
       hostname: "r01-u17.seattle-galleon"
       model: "Dell R450"
       rackPosition: 17
-      oobIP: { orbId: "seattle:10.96.87.16" }
+      oobIP: "10.96.87.16"
       oobMAC: "e8:cf:83:27:aa:2b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
@@ -590,7 +393,7 @@ mutation {
       hostname: "r04-u03.seattle-galleon"
       model: "Dell XE7745"
       rackPosition: 3
-      oobIP: { orbId: "seattle:10.20.43.8" }
+      oobIP: "10.20.43.8"
       oobMAC: "6c:3c:8c:93:bd:72"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-06T00:00:00Z"
