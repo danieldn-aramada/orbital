@@ -33,11 +33,12 @@
         <div style="overflow-x: auto">
         <table class="table is-fullwidth">
           <tbody>
-            <tr><td style="width:40%">Name</td><td>{{.Name}}</td></tr>
-            <tr><td>Servers</td><td>{{.ServerCount}}</td></tr>
-            <tr><td>Racks</td><td>{{len .Racks}}</td></tr>
-            <tr><td>Created By</td><td>{{if .CreatedBy}}{{.CreatedBy}}{{else}}—{{end}}</td></tr>
-            <tr><td>Created At</td><td>{{if .CreatedAt}}{{.CreatedAt}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap;width:1%">Name</td><td>{{.Name}}</td></tr>
+            <tr><td style="white-space:nowrap">Servers</td><td>{{.ServerCount}}</td></tr>
+            <tr><td style="white-space:nowrap">Racks</td><td>{{len .Racks}}</td></tr>
+            <tr><td style="white-space:nowrap">Created By</td><td>{{if .CreatedBy}}{{.CreatedBy}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Created At</td><td>{{if .CreatedAt}}{{.CreatedAt}}{{else}}—{{end}}</td></tr>
+            {{if .AssetDataV2}}<tr><td style="white-space:nowrap">Asset Data</td><td><pre style="margin:0;padding:0;background:transparent;font-size:0.75rem;overflow-x:auto">{{.AssetDataV2}}</pre></td></tr>{{end}}
           </tbody>
         </table>
         </div>
@@ -50,10 +51,10 @@
         <div style="overflow-x: auto">
         <table class="table mb-0">
           <tbody>
-            <tr><td style="width:40%">Namespace</td><td>{{if .Namespace.Name}}{{.Namespace.Name}}{{else}}—{{end}}</td></tr>
-            <tr><td>Orb ID</td><td>{{if .OrbID}}{{.OrbID}}{{else}}—{{end}}</td></tr>
-            <tr><td>Last Updated</td><td>{{if .UpdatedAt}}{{.UpdatedAt}}{{else}}—{{end}}</td></tr>
-            <tr><td>Last Updated By</td><td>{{if .UpdatedBy}}{{.UpdatedBy}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap;width:1%">Namespace</td><td>{{if .Namespace.Name}}{{.Namespace.Name}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Orb ID</td><td>{{if .OrbID}}{{.OrbID}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Last Updated</td><td>{{if .UpdatedAt}}{{.UpdatedAt}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Last Updated By</td><td>{{if .UpdatedBy}}{{.UpdatedBy}}{{else}}—{{end}}</td></tr>
           </tbody>
         </table>
         </div>

@@ -23,6 +23,7 @@ const getDataCenterQuery = `
       createdAt
       updatedBy
       updatedAt
+      assetDataV2
       namespace { name }
       racks(order: { asc: name }) {
         id
@@ -71,14 +72,15 @@ func parseDataCenterFragment() *template.Template {
 
 // dcQueryResponse is the raw JSON shape returned by DGraph.
 type dcQueryResponse struct {
-	ID        string `json:"id"`
-	OrbID     string `json:"orbId"`
-	Name      string `json:"name"`
-	CreatedBy string `json:"createdBy"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedBy string `json:"updatedBy"`
-	UpdatedAt string `json:"updatedAt"`
-	Namespace struct {
+	ID          string `json:"id"`
+	OrbID       string `json:"orbId"`
+	Name        string `json:"name"`
+	CreatedBy   string `json:"createdBy"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedBy   string `json:"updatedBy"`
+	UpdatedAt   string `json:"updatedAt"`
+	AssetDataV2 string `json:"assetDataV2"`
+	Namespace   struct {
 		Name string `json:"name"`
 	} `json:"namespace"`
 	Racks []struct {
@@ -139,6 +141,7 @@ type dataCenterTabData struct {
 	ServerCount int
 	Racks       []rackTabData
 	Servers     []serverTabData
+	AssetDataV2 string
 }
 
 func (h *DataCenter) Tab(c echo.Context) error {
@@ -186,6 +189,16 @@ func (h *DataCenter) Tab(c echo.Context) error {
 		serversByRack[s.Rack.Name]++
 	}
 
+	var prettyAssetData string
+	if raw.AssetDataV2 != "" {
+		var buf bytes.Buffer
+		if err := json.Indent(&buf, []byte(raw.AssetDataV2), "", "  "); err == nil {
+			prettyAssetData = buf.String()
+		} else {
+			prettyAssetData = raw.AssetDataV2
+		}
+	}
+
 	dc := dataCenterTabData{
 		ID:          raw.ID,
 		OrbID:       raw.OrbID,
@@ -196,6 +209,7 @@ func (h *DataCenter) Tab(c echo.Context) error {
 		UpdatedAt:   raw.UpdatedAt,
 		Namespace:   struct{ Name string }{Name: raw.Namespace.Name},
 		ServerCount: raw.ServersAggregate.Count,
+		AssetDataV2: prettyAssetData,
 	}
 	for _, r := range raw.Racks {
 		dc.Racks = append(dc.Racks, rackTabData{
