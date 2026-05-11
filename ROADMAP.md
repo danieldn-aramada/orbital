@@ -214,13 +214,29 @@ DGraph community has no native incremental backup. Options to evaluate once real
 - **Go middleware** — route-group-level role checks in Echo for REST endpoints. GraphQL endpoint protected at HTTP layer (role check); DGraph `@auth` is defense-in-depth.
 - **Offline JWT testing** — integration tests generate and sign JWTs locally using a test RSA key pair. DGraph's `# Dgraph.Authorization` in the test schema points to the test public key (not Azure JWKS). No network call required. This pattern allows authz integration tests to run fully offline and in CI.
 
+**What's been built (as of 5/11):**
+- Bearer token validation working end-to-end: `go-oidc/v3` validates Azure AD v2 JWT (signature, issuer, audience, expiry) via JWKS auto-discovery
+- `/api/v1/graphql` registered on the bearer-protected `api` group — all API calls to GraphQL require a valid token
+- Azure AD app manifest fix documented: `requestedAccessTokenVersion: 2` required for v2 tokens; v1 tokens (`iss: https://sts.windows.net/...`) rejected by go-oidc v2 discovery
+- Audience fix: v2 access tokens carry bare client GUID in `aud`, not `api://<guid>` — orbital now uses `cfg.OIDCClientID` directly
+- `orbital get datacenter <name|orbId|id>` and `orbital get datacenters` CLI commands — both use bearer token from `~/.orbital/credentials.json` to call `/api/v1/graphql`; validated against live Azure AD tokens
+- macOS keychain rewritten to CGo + Security framework (`SecItemAdd`/`SecItemCopyMatching`/`SecItemDelete`) without Touch ID ACL (`errSecMissingEntitlement -34018` on unsigned binaries); uses `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
+
+**Remaining:**
+- Azure AD App Roles defined in app manifest; assign `orbital-admin` and `orbital-viewer` to users/groups
+- DGraph schema updated with `@auth` directives on all mutable types; `ClosedByDefault: true`
+- Go middleware role enforcement on REST mutation endpoints
+- Offline JWT integration tests (local test RSA key pair, no Azure AD call)
+
 **Success criteria:**
-- Azure AD App Roles defined in app manifest; `orbital-admin` and `orbital-viewer` roles assignable to users/groups
-- DGraph schema updated with `@auth` directives on all mutable types; `ClosedByDefault: true` active
-- Orbital Go middleware enforces role checks on REST mutation endpoints
-- Integration tests sign JWTs with a local test key — authz enforced without hitting Azure AD
-- A user with `orbital-viewer` role cannot perform mutations via GraphQL or REST
-- A user with `orbital-admin` role can perform all operations
+- ✅ Bearer token validation end-to-end with real Azure AD tokens
+- ✅ `/api/v1/graphql` protected by bearer middleware
+- ⬜ Azure AD App Roles defined in app manifest; `orbital-admin` and `orbital-viewer` roles assignable
+- ⬜ DGraph schema updated with `@auth` directives; `ClosedByDefault: true` active
+- ⬜ Orbital Go middleware enforces role checks on REST mutation endpoints
+- ⬜ Integration tests sign JWTs with a local test key — authz enforced without hitting Azure AD
+- ⬜ A user with `orbital-viewer` role cannot perform mutations via GraphQL or REST
+- ⬜ A user with `orbital-admin` role can perform all operations
 
 ### Spike 9. DGraph performance and cost
 **Question:** Does DGraph hold up at realistic scale for graph traversal queries, and what does it cost to run on AKS?

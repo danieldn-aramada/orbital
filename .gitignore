@@ -22,6 +22,8 @@ playwright-report/
 *.out
 /dist/
 /bin/
+/orb
+/orbital
 
 # IDE
 .idea/
