@@ -620,39 +620,29 @@ function loadEntityAuditLog(panelEl, orbId) {
         const ts = ev.timestamp
           ? `<span data-timestamp="${ev.timestamp}">${ev.timestamp}</span>`
           : '—'
-        const typeTag = {
-          update: '<span class="tag is-info is-light is-small">update</span>',
-          create: '<span class="tag is-success is-light is-small">create</span>',
-          delete: '<span class="tag is-danger is-light is-small">delete</span>',
-        }[ev.type] || ev.type
-        const diffSummary = (() => {
+        const opTag = (ev.operations && ev.operations.length)
+          ? ev.operations.map(op => `<span class="tag is-info is-light is-small">${op}</span>`).join(' ')
+          : '<span class="tag is-light is-small">unknown</span>'
+        const varSummary = (() => {
           if (!ev.details) return '—'
           try {
             const d = typeof ev.details === 'string' ? JSON.parse(ev.details) : ev.details
-            const before = d.before || {}
-            const after = d.after || {}
-            const changed = Object.keys(after).filter(
-              k => JSON.stringify(before[k]) !== JSON.stringify(after[k])
-            )
-            if (!changed.length) return '—'
-            return changed.map(k => {
-              const b = before[k] ?? '—'
-              const a = after[k] ?? '—'
-              return `<span style="white-space:nowrap"><strong>${k}:</strong> ${b} → ${a}</span>`
-            }).join('<br>')
+            const vars = d.variables || {}
+            const entries = Object.entries(vars).filter(([k]) => !skipVars.has(k))
+            return entries.map(([k, v]) => `<span style="white-space:nowrap"><strong>${k}:</strong> ${v}</span>`).join('<br>') || '—'
           } catch (_) { return '—' }
         })()
         return `<tr>
           <td style="white-space:nowrap">${ts}</td>
           <td>${ev.actor || '—'}</td>
-          <td>${typeTag}</td>
-          <td style="font-size:0.7rem;color:#666">${diffSummary}</td>
+          <td>${opTag}</td>
+          <td style="font-size:0.7rem;color:#666">${varSummary}</td>
         </tr>`
       }).join('')
       panelEl.innerHTML = `<div style="overflow-x:auto">
         <table class="table is-striped is-fullwidth is-size-7 mt-2">
           <thead><tr>
-            <th>Timestamp</th><th>Actor</th><th>Type</th><th>Changed Fields</th>
+            <th>Timestamp</th><th>Actor</th><th>Operation</th><th>Variables</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
@@ -1897,50 +1887,56 @@ document.addEventListener('click', function (e) {
 
 // ─── Audit log page ───────────────────────────────────────────────────────────
 
-function renderDiff(details) {
+const skipVars = new Set(['updatedBy', 'updatedAt'])
+
+function formatGQL(query) {
+  let indent = 0
+  let out = ''
+  let i = 0
+  while (i < query.length) {
+    const ch = query[i]
+    if (ch === '{') {
+      out += ' {\n' + '  '.repeat(++indent)
+    } else if (ch === '}') {
+      out = out.trimEnd()
+      out += '\n' + '  '.repeat(--indent) + '}'
+    } else if (ch === ',' && query[i + 1] === ' ') {
+      out += ',\n' + '  '.repeat(indent)
+      i++ // skip the space after comma
+    } else {
+      out += ch
+    }
+    i++
+  }
+  return out.trim()
+}
+
+function renderPayload(details) {
   if (!details) return '<span class="has-text-grey is-size-7">No details</span>'
-  let before, after
+  let d
   try {
-    const d = typeof details === 'string' ? JSON.parse(details) : details
-    before = d.before || {}
-    after = d.after || {}
+    d = typeof details === 'string' ? JSON.parse(details) : details
   } catch (_) {
     return '<span class="has-text-grey is-size-7">Could not parse details</span>'
   }
-  const allKeys = [...new Set([...Object.keys(before), ...Object.keys(after)])]
-  if (allKeys.length === 0) return '<span class="has-text-grey is-size-7">No fields</span>'
-  let rows = ''
-  for (const k of allKeys) {
-    const bVal = before[k] ?? '—'
-    const aVal = after[k] ?? '—'
-    const changed = JSON.stringify(bVal) !== JSON.stringify(aVal)
-    const rowStyle = changed ? 'background:#fffbe6' : ''
-    rows += `<tr style="${rowStyle}">
-      <td style="white-space:nowrap;width:1%;font-size:0.75rem;padding:0.25rem 0.5rem"><strong>${k}</strong></td>
-      <td style="font-size:0.75rem;padding:0.25rem 0.5rem;color:#666">${bVal}</td>
-      <td style="font-size:0.75rem;padding:0.25rem 0.5rem">${aVal}</td>
-    </tr>`
-  }
-  return `<div style="padding:0.5rem 1rem 0.75rem">
-    <table class="table is-narrow mb-0" style="width:auto;min-width:400px">
-      <thead><tr>
-        <th style="font-size:0.7rem;padding:0.25rem 0.5rem">Field</th>
-        <th style="font-size:0.7rem;padding:0.25rem 0.5rem">Before</th>
-        <th style="font-size:0.7rem;padding:0.25rem 0.5rem">After</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </div>`
+
+  const vars = Object.fromEntries(
+    Object.entries(d.variables || {}).filter(([k]) => !skipVars.has(k))
+  )
+
+  const opName = `<p style="font-size:0.7rem;margin:0 0 0.4rem"><span style="font-weight:600">Operation:</span> ${d.operationName || '—'}</p>`
+
+  const varsBlock = `<p style="font-size:0.7rem;font-weight:600;margin:0 0 0.25rem">Input</p>
+    <pre style="font-size:0.72rem;background:#f5f5f5;padding:0.75rem;white-space:pre-wrap;margin:0 0 0.75rem">${JSON.stringify(vars, null, 2)}</pre>`
+
+  const queryBlock = `<p style="font-size:0.7rem;font-weight:600;margin:0 0 0.25rem">Query</p>
+    <pre style="font-size:0.72rem;background:#f5f5f5;padding:0.75rem;white-space:pre-wrap;word-break:break-word;margin:0;max-height:400px;overflow-y:auto">${d.query ? formatGQL(d.query) : '—'}</pre>`
+
+  return `<div style="padding:0.5rem 1rem 0.75rem">${opName}${varsBlock}${queryBlock}</div>`
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('audit-log-table')) return
-
-  const typeTag = {
-    update: '<span class="tag is-info is-light is-small">update</span>',
-    create: '<span class="tag is-success is-light is-small">create</span>',
-    delete: '<span class="tag is-danger is-light is-small">delete</span>',
-  }
 
   const auditTable = new DataTable('#audit-log-table', {
     layout: {
@@ -1964,12 +1960,12 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     initComplete: function () { dtWrapLengthSelect(this.api()) },
     columns: [
-      { data: null, orderable: false, className: 'dt-control', defaultContent: '' },
+      { data: null, orderable: false, className: 'dt-control', defaultContent: '', width: '1%' },
       { data: 'timestamp' },
       { data: 'actor' },
-      { data: 'type', render: (v) => typeTag[v] || v },
-      { data: 'resourceType' },
-      { data: 'resourceName' },
+      { data: 'operations', render: (v) => (v && v.length) ? v.map(op => `<span class="tag is-info is-light is-small">${op}</span>`).join(' ') : '<span class="tag is-light is-small">unknown</span>' },
+      { data: 'resourceTypes', render: (v) => (v && v.length) ? v.join(', ') : '—' },
+      { data: 'resourceIds', render: (v) => (v && v.length) ? v.join(', ') : '—' },
       { data: 'details', visible: false },
     ],
     ajax: {
@@ -1983,7 +1979,7 @@ document.addEventListener('DOMContentLoaded', () => {
     },
   })
 
-  // Expand/collapse diff on row click
+  // Expand/collapse payload on row click
   $('#audit-log-table tbody').on('click', 'td.dt-control', function () {
     const tr = this.closest('tr')
     const row = auditTable.row(tr)
@@ -1991,7 +1987,7 @@ document.addEventListener('DOMContentLoaded', () => {
       row.child.hide()
       tr.classList.remove('shown')
     } else {
-      row.child(renderDiff(row.data()?.details)).show()
+      row.child(renderPayload(row.data()?.details)).show()
       tr.classList.add('shown')
     }
   })
@@ -2000,5 +1996,15 @@ document.addEventListener('DOMContentLoaded', () => {
   reloadBtn.on('click', function () {
     reloadBtn.addClass('is-loading')
     auditTable.ajax.reload(() => { reloadBtn.removeClass('is-loading') }, false)
+  })
+})
+
+// Clear all tab state and localStorage on logout
+document.addEventListener('DOMContentLoaded', () => {
+  const logoutForm = document.querySelector('form[action="/user/logout"]')
+  if (!logoutForm) return
+  logoutForm.addEventListener('submit', () => {
+    localStorage.clear()
+    sessionStorage.clear()
   })
 })

@@ -3,7 +3,7 @@
   <div class="columns m-0">
     <div class="column pt-0 pl-0">
       {{if .ShowDCBack}}
-      <button class="button is-rounded is-small is-link mt-1"
+      <button class="button is-rounded is-small is-warning mt-1"
         hx-get="/datacenters/{{.DataCenterID}}"
         hx-target="#tab-content-{{.DataCenterID}}"
         hx-swap="innerHTML">

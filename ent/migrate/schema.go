@@ -35,13 +35,11 @@ var (
 	// EventsColumns holds the columns for the "events" table.
 	EventsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
-		{Name: "resource_type", Type: field.TypeString},
-		{Name: "resource_id", Type: field.TypeString},
-		{Name: "resource_name", Type: field.TypeString},
-		{Name: "type", Type: field.TypeEnum, Enums: []string{"create", "update", "delete"}},
+		{Name: "operations", Type: field.TypeJSON, Nullable: true},
+		{Name: "resource_types", Type: field.TypeJSON, Nullable: true},
+		{Name: "resource_ids", Type: field.TypeJSON, Nullable: true},
 		{Name: "actor", Type: field.TypeString},
 		{Name: "timestamp", Type: field.TypeTime},
-		{Name: "message", Type: field.TypeString, Nullable: true},
 		{Name: "details", Type: field.TypeJSON, Nullable: true},
 	}
 	// EventsTable holds the schema information for the "events" table.
@@ -51,19 +49,9 @@ var (
 		PrimaryKey: []*schema.Column{EventsColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "event_resource_id",
-				Unique:  false,
-				Columns: []*schema.Column{EventsColumns[2]},
-			},
-			{
-				Name:    "event_resource_type_timestamp",
-				Unique:  false,
-				Columns: []*schema.Column{EventsColumns[1], EventsColumns[6]},
-			},
-			{
 				Name:    "event_timestamp",
 				Unique:  false,
-				Columns: []*schema.Column{EventsColumns[6]},
+				Columns: []*schema.Column{EventsColumns[5]},
 			},
 		},
 	}

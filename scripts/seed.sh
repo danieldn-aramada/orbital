@@ -8,15 +8,23 @@ cd "$(git rev-parse --show-toplevel)"
 DGRAPH="http://localhost:8080"
 PSQL="psql postgres://orbital:orbital@localhost:5432/orbital"
 
-echo "==> Applying DGraph schema..."
-schema_resp=$(curl -sf -X POST "${DGRAPH}/admin/schema" \
-  -H "Content-Type: application/graphql" \
-  --data-binary @schema/schema-demo.graphql)
-if echo "$schema_resp" | jq -e '.errors' >/dev/null 2>&1; then
-  echo "ERROR: schema apply failed:" >&2
-  echo "$schema_resp" | jq -r '.errors[].message' >&2
-  exit 1
-fi
+apply_schema() {
+  local label="$1"
+  local url="$2"
+  echo "==> Applying DGraph schema (${label})..."
+  local resp
+  resp=$(curl -sf -X POST "${url}/admin/schema" \
+    -H "Content-Type: application/graphql" \
+    --data-binary @schema/schema-demo.graphql)
+  if echo "$resp" | jq -e '.errors' >/dev/null 2>&1; then
+    echo "ERROR: schema apply failed (${label}):" >&2
+    echo "$resp" | jq -r '.errors[].message' >&2
+    exit 1
+  fi
+}
+
+apply_schema "blue"    "http://localhost:8080"
+apply_schema "scratch" "http://localhost:8081"
 
 echo "==> Cleaning stale nodes..."
 curl -sf -X POST "${DGRAPH}/graphql" \

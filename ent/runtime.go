@@ -36,7 +36,7 @@ func init() {
 	eventFields := schema.Event{}.Fields()
 	_ = eventFields
 	// eventDescTimestamp is the schema descriptor for timestamp field.
-	eventDescTimestamp := eventFields[6].Descriptor()
+	eventDescTimestamp := eventFields[5].Descriptor()
 	// event.DefaultTimestamp holds the default value on creation for the timestamp field.
 	event.DefaultTimestamp = eventDescTimestamp.Default.(func() time.Time)
 	// eventDescID is the schema descriptor for id field.

@@ -10,29 +10,25 @@ import (
 	"github.com/google/uuid"
 )
 
-// Event records a mutation applied to a config item.
+// Event records a GraphQL mutation received by orbital.
 type Event struct {
 	ent.Schema
 }
 
 func (Event) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).Default(uuid.New).Immutable(),
-		field.String("resource_type").Immutable(),              // GraphQL type name: Server, DataCenter, etc.
-		field.String("resource_id").Immutable(),                // orbId of the affected entity
-		field.String("resource_name").Immutable(),              // denormalized name at event time
-		field.Enum("type").Values("create", "update", "delete").Immutable(),
-		field.String("actor").Immutable(),                      // user name or email
-		field.Time("timestamp").Default(time.Now).Immutable(),
-		field.String("message").Optional().Immutable(),
-		field.JSON("details", json.RawMessage{}).Optional().Immutable(), // {"before":{...},"after":{...}}
+		field.UUID("id", uuid.UUID{}).Default(uuid.New),
+		field.JSON("operations", []string{}).Optional(),     // DGraph operation names found in query, e.g. ["updateServer"]
+		field.JSON("resource_types", []string{}).Optional(), // all DGraph types touched, e.g. ["Server"]
+		field.JSON("resource_ids", []string{}).Optional(),   // all orbIds touched, extracted from variables or inline filters
+		field.String("actor"),                               // user name or email
+		field.Time("timestamp").Default(time.Now),
+		field.JSON("details", json.RawMessage{}).Optional(), // {operationName, query, variables}
 	}
 }
 
 func (Event) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("resource_id"),
-		index.Fields("resource_type", "timestamp"),
 		index.Fields("timestamp"),
 	}
 }

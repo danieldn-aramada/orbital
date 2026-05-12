@@ -4,11 +4,14 @@ package ent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/armada/orbital/ent/event"
 	"github.com/armada/orbital/ent/predicate"
@@ -24,6 +27,106 @@ type EventUpdate struct {
 // Where appends a list predicates to the EventUpdate builder.
 func (_u *EventUpdate) Where(ps ...predicate.Event) *EventUpdate {
 	_u.mutation.Where(ps...)
+	return _u
+}
+
+// SetOperations sets the "operations" field.
+func (_u *EventUpdate) SetOperations(v []string) *EventUpdate {
+	_u.mutation.SetOperations(v)
+	return _u
+}
+
+// AppendOperations appends value to the "operations" field.
+func (_u *EventUpdate) AppendOperations(v []string) *EventUpdate {
+	_u.mutation.AppendOperations(v)
+	return _u
+}
+
+// ClearOperations clears the value of the "operations" field.
+func (_u *EventUpdate) ClearOperations() *EventUpdate {
+	_u.mutation.ClearOperations()
+	return _u
+}
+
+// SetResourceTypes sets the "resource_types" field.
+func (_u *EventUpdate) SetResourceTypes(v []string) *EventUpdate {
+	_u.mutation.SetResourceTypes(v)
+	return _u
+}
+
+// AppendResourceTypes appends value to the "resource_types" field.
+func (_u *EventUpdate) AppendResourceTypes(v []string) *EventUpdate {
+	_u.mutation.AppendResourceTypes(v)
+	return _u
+}
+
+// ClearResourceTypes clears the value of the "resource_types" field.
+func (_u *EventUpdate) ClearResourceTypes() *EventUpdate {
+	_u.mutation.ClearResourceTypes()
+	return _u
+}
+
+// SetResourceIds sets the "resource_ids" field.
+func (_u *EventUpdate) SetResourceIds(v []string) *EventUpdate {
+	_u.mutation.SetResourceIds(v)
+	return _u
+}
+
+// AppendResourceIds appends value to the "resource_ids" field.
+func (_u *EventUpdate) AppendResourceIds(v []string) *EventUpdate {
+	_u.mutation.AppendResourceIds(v)
+	return _u
+}
+
+// ClearResourceIds clears the value of the "resource_ids" field.
+func (_u *EventUpdate) ClearResourceIds() *EventUpdate {
+	_u.mutation.ClearResourceIds()
+	return _u
+}
+
+// SetActor sets the "actor" field.
+func (_u *EventUpdate) SetActor(v string) *EventUpdate {
+	_u.mutation.SetActor(v)
+	return _u
+}
+
+// SetNillableActor sets the "actor" field if the given value is not nil.
+func (_u *EventUpdate) SetNillableActor(v *string) *EventUpdate {
+	if v != nil {
+		_u.SetActor(*v)
+	}
+	return _u
+}
+
+// SetTimestamp sets the "timestamp" field.
+func (_u *EventUpdate) SetTimestamp(v time.Time) *EventUpdate {
+	_u.mutation.SetTimestamp(v)
+	return _u
+}
+
+// SetNillableTimestamp sets the "timestamp" field if the given value is not nil.
+func (_u *EventUpdate) SetNillableTimestamp(v *time.Time) *EventUpdate {
+	if v != nil {
+		_u.SetTimestamp(*v)
+	}
+	return _u
+}
+
+// SetDetails sets the "details" field.
+func (_u *EventUpdate) SetDetails(v json.RawMessage) *EventUpdate {
+	_u.mutation.SetDetails(v)
+	return _u
+}
+
+// AppendDetails appends value to the "details" field.
+func (_u *EventUpdate) AppendDetails(v json.RawMessage) *EventUpdate {
+	_u.mutation.AppendDetails(v)
+	return _u
+}
+
+// ClearDetails clears the value of the "details" field.
+func (_u *EventUpdate) ClearDetails() *EventUpdate {
+	_u.mutation.ClearDetails()
 	return _u
 }
 
@@ -68,8 +171,52 @@ func (_u *EventUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
-	if _u.mutation.MessageCleared() {
-		_spec.ClearField(event.FieldMessage, field.TypeString)
+	if value, ok := _u.mutation.Operations(); ok {
+		_spec.SetField(event.FieldOperations, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedOperations(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, event.FieldOperations, value)
+		})
+	}
+	if _u.mutation.OperationsCleared() {
+		_spec.ClearField(event.FieldOperations, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ResourceTypes(); ok {
+		_spec.SetField(event.FieldResourceTypes, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedResourceTypes(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, event.FieldResourceTypes, value)
+		})
+	}
+	if _u.mutation.ResourceTypesCleared() {
+		_spec.ClearField(event.FieldResourceTypes, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ResourceIds(); ok {
+		_spec.SetField(event.FieldResourceIds, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedResourceIds(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, event.FieldResourceIds, value)
+		})
+	}
+	if _u.mutation.ResourceIdsCleared() {
+		_spec.ClearField(event.FieldResourceIds, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.Actor(); ok {
+		_spec.SetField(event.FieldActor, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Timestamp(); ok {
+		_spec.SetField(event.FieldTimestamp, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.Details(); ok {
+		_spec.SetField(event.FieldDetails, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedDetails(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, event.FieldDetails, value)
+		})
 	}
 	if _u.mutation.DetailsCleared() {
 		_spec.ClearField(event.FieldDetails, field.TypeJSON)
@@ -92,6 +239,106 @@ type EventUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *EventMutation
+}
+
+// SetOperations sets the "operations" field.
+func (_u *EventUpdateOne) SetOperations(v []string) *EventUpdateOne {
+	_u.mutation.SetOperations(v)
+	return _u
+}
+
+// AppendOperations appends value to the "operations" field.
+func (_u *EventUpdateOne) AppendOperations(v []string) *EventUpdateOne {
+	_u.mutation.AppendOperations(v)
+	return _u
+}
+
+// ClearOperations clears the value of the "operations" field.
+func (_u *EventUpdateOne) ClearOperations() *EventUpdateOne {
+	_u.mutation.ClearOperations()
+	return _u
+}
+
+// SetResourceTypes sets the "resource_types" field.
+func (_u *EventUpdateOne) SetResourceTypes(v []string) *EventUpdateOne {
+	_u.mutation.SetResourceTypes(v)
+	return _u
+}
+
+// AppendResourceTypes appends value to the "resource_types" field.
+func (_u *EventUpdateOne) AppendResourceTypes(v []string) *EventUpdateOne {
+	_u.mutation.AppendResourceTypes(v)
+	return _u
+}
+
+// ClearResourceTypes clears the value of the "resource_types" field.
+func (_u *EventUpdateOne) ClearResourceTypes() *EventUpdateOne {
+	_u.mutation.ClearResourceTypes()
+	return _u
+}
+
+// SetResourceIds sets the "resource_ids" field.
+func (_u *EventUpdateOne) SetResourceIds(v []string) *EventUpdateOne {
+	_u.mutation.SetResourceIds(v)
+	return _u
+}
+
+// AppendResourceIds appends value to the "resource_ids" field.
+func (_u *EventUpdateOne) AppendResourceIds(v []string) *EventUpdateOne {
+	_u.mutation.AppendResourceIds(v)
+	return _u
+}
+
+// ClearResourceIds clears the value of the "resource_ids" field.
+func (_u *EventUpdateOne) ClearResourceIds() *EventUpdateOne {
+	_u.mutation.ClearResourceIds()
+	return _u
+}
+
+// SetActor sets the "actor" field.
+func (_u *EventUpdateOne) SetActor(v string) *EventUpdateOne {
+	_u.mutation.SetActor(v)
+	return _u
+}
+
+// SetNillableActor sets the "actor" field if the given value is not nil.
+func (_u *EventUpdateOne) SetNillableActor(v *string) *EventUpdateOne {
+	if v != nil {
+		_u.SetActor(*v)
+	}
+	return _u
+}
+
+// SetTimestamp sets the "timestamp" field.
+func (_u *EventUpdateOne) SetTimestamp(v time.Time) *EventUpdateOne {
+	_u.mutation.SetTimestamp(v)
+	return _u
+}
+
+// SetNillableTimestamp sets the "timestamp" field if the given value is not nil.
+func (_u *EventUpdateOne) SetNillableTimestamp(v *time.Time) *EventUpdateOne {
+	if v != nil {
+		_u.SetTimestamp(*v)
+	}
+	return _u
+}
+
+// SetDetails sets the "details" field.
+func (_u *EventUpdateOne) SetDetails(v json.RawMessage) *EventUpdateOne {
+	_u.mutation.SetDetails(v)
+	return _u
+}
+
+// AppendDetails appends value to the "details" field.
+func (_u *EventUpdateOne) AppendDetails(v json.RawMessage) *EventUpdateOne {
+	_u.mutation.AppendDetails(v)
+	return _u
+}
+
+// ClearDetails clears the value of the "details" field.
+func (_u *EventUpdateOne) ClearDetails() *EventUpdateOne {
+	_u.mutation.ClearDetails()
+	return _u
 }
 
 // Mutation returns the EventMutation object of the builder.
@@ -165,8 +412,52 @@ func (_u *EventUpdateOne) sqlSave(ctx context.Context) (_node *Event, err error)
 			}
 		}
 	}
-	if _u.mutation.MessageCleared() {
-		_spec.ClearField(event.FieldMessage, field.TypeString)
+	if value, ok := _u.mutation.Operations(); ok {
+		_spec.SetField(event.FieldOperations, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedOperations(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, event.FieldOperations, value)
+		})
+	}
+	if _u.mutation.OperationsCleared() {
+		_spec.ClearField(event.FieldOperations, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ResourceTypes(); ok {
+		_spec.SetField(event.FieldResourceTypes, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedResourceTypes(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, event.FieldResourceTypes, value)
+		})
+	}
+	if _u.mutation.ResourceTypesCleared() {
+		_spec.ClearField(event.FieldResourceTypes, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ResourceIds(); ok {
+		_spec.SetField(event.FieldResourceIds, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedResourceIds(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, event.FieldResourceIds, value)
+		})
+	}
+	if _u.mutation.ResourceIdsCleared() {
+		_spec.ClearField(event.FieldResourceIds, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.Actor(); ok {
+		_spec.SetField(event.FieldActor, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Timestamp(); ok {
+		_spec.SetField(event.FieldTimestamp, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.Details(); ok {
+		_spec.SetField(event.FieldDetails, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedDetails(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, event.FieldDetails, value)
+		})
 	}
 	if _u.mutation.DetailsCleared() {
 		_spec.ClearField(event.FieldDetails, field.TypeJSON)

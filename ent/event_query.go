@@ -263,12 +263,12 @@ func (_q *EventQuery) Clone() *EventQuery {
 // Example:
 //
 //	var v []struct {
-//		ResourceType string `json:"resource_type,omitempty"`
+//		Operations []string `json:"operations,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Event.Query().
-//		GroupBy(event.FieldResourceType).
+//		GroupBy(event.FieldOperations).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *EventQuery) GroupBy(field string, fields ...string) *EventGroupBy {
@@ -286,11 +286,11 @@ func (_q *EventQuery) GroupBy(field string, fields ...string) *EventGroupBy {
 // Example:
 //
 //	var v []struct {
-//		ResourceType string `json:"resource_type,omitempty"`
+//		Operations []string `json:"operations,omitempty"`
 //	}
 //
 //	client.Event.Query().
-//		Select(event.FieldResourceType).
+//		Select(event.FieldOperations).
 //		Scan(ctx, &v)
 func (_q *EventQuery) Select(fields ...string) *EventSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

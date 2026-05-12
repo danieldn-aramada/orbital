@@ -22,27 +22,21 @@ type EventCreate struct {
 	hooks    []Hook
 }
 
-// SetResourceType sets the "resource_type" field.
-func (_c *EventCreate) SetResourceType(v string) *EventCreate {
-	_c.mutation.SetResourceType(v)
+// SetOperations sets the "operations" field.
+func (_c *EventCreate) SetOperations(v []string) *EventCreate {
+	_c.mutation.SetOperations(v)
 	return _c
 }
 
-// SetResourceID sets the "resource_id" field.
-func (_c *EventCreate) SetResourceID(v string) *EventCreate {
-	_c.mutation.SetResourceID(v)
+// SetResourceTypes sets the "resource_types" field.
+func (_c *EventCreate) SetResourceTypes(v []string) *EventCreate {
+	_c.mutation.SetResourceTypes(v)
 	return _c
 }
 
-// SetResourceName sets the "resource_name" field.
-func (_c *EventCreate) SetResourceName(v string) *EventCreate {
-	_c.mutation.SetResourceName(v)
-	return _c
-}
-
-// SetType sets the "type" field.
-func (_c *EventCreate) SetType(v event.Type) *EventCreate {
-	_c.mutation.SetType(v)
+// SetResourceIds sets the "resource_ids" field.
+func (_c *EventCreate) SetResourceIds(v []string) *EventCreate {
+	_c.mutation.SetResourceIds(v)
 	return _c
 }
 
@@ -62,20 +56,6 @@ func (_c *EventCreate) SetTimestamp(v time.Time) *EventCreate {
 func (_c *EventCreate) SetNillableTimestamp(v *time.Time) *EventCreate {
 	if v != nil {
 		_c.SetTimestamp(*v)
-	}
-	return _c
-}
-
-// SetMessage sets the "message" field.
-func (_c *EventCreate) SetMessage(v string) *EventCreate {
-	_c.mutation.SetMessage(v)
-	return _c
-}
-
-// SetNillableMessage sets the "message" field if the given value is not nil.
-func (_c *EventCreate) SetNillableMessage(v *string) *EventCreate {
-	if v != nil {
-		_c.SetMessage(*v)
 	}
 	return _c
 }
@@ -147,23 +127,6 @@ func (_c *EventCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *EventCreate) check() error {
-	if _, ok := _c.mutation.ResourceType(); !ok {
-		return &ValidationError{Name: "resource_type", err: errors.New(`ent: missing required field "Event.resource_type"`)}
-	}
-	if _, ok := _c.mutation.ResourceID(); !ok {
-		return &ValidationError{Name: "resource_id", err: errors.New(`ent: missing required field "Event.resource_id"`)}
-	}
-	if _, ok := _c.mutation.ResourceName(); !ok {
-		return &ValidationError{Name: "resource_name", err: errors.New(`ent: missing required field "Event.resource_name"`)}
-	}
-	if _, ok := _c.mutation.GetType(); !ok {
-		return &ValidationError{Name: "type", err: errors.New(`ent: missing required field "Event.type"`)}
-	}
-	if v, ok := _c.mutation.GetType(); ok {
-		if err := event.TypeValidator(v); err != nil {
-			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Event.type": %w`, err)}
-		}
-	}
 	if _, ok := _c.mutation.Actor(); !ok {
 		return &ValidationError{Name: "actor", err: errors.New(`ent: missing required field "Event.actor"`)}
 	}
@@ -205,21 +168,17 @@ func (_c *EventCreate) createSpec() (*Event, *sqlgraph.CreateSpec) {
 		_node.ID = id
 		_spec.ID.Value = &id
 	}
-	if value, ok := _c.mutation.ResourceType(); ok {
-		_spec.SetField(event.FieldResourceType, field.TypeString, value)
-		_node.ResourceType = value
+	if value, ok := _c.mutation.Operations(); ok {
+		_spec.SetField(event.FieldOperations, field.TypeJSON, value)
+		_node.Operations = value
 	}
-	if value, ok := _c.mutation.ResourceID(); ok {
-		_spec.SetField(event.FieldResourceID, field.TypeString, value)
-		_node.ResourceID = value
+	if value, ok := _c.mutation.ResourceTypes(); ok {
+		_spec.SetField(event.FieldResourceTypes, field.TypeJSON, value)
+		_node.ResourceTypes = value
 	}
-	if value, ok := _c.mutation.ResourceName(); ok {
-		_spec.SetField(event.FieldResourceName, field.TypeString, value)
-		_node.ResourceName = value
-	}
-	if value, ok := _c.mutation.GetType(); ok {
-		_spec.SetField(event.FieldType, field.TypeEnum, value)
-		_node.Type = value
+	if value, ok := _c.mutation.ResourceIds(); ok {
+		_spec.SetField(event.FieldResourceIds, field.TypeJSON, value)
+		_node.ResourceIds = value
 	}
 	if value, ok := _c.mutation.Actor(); ok {
 		_spec.SetField(event.FieldActor, field.TypeString, value)
@@ -228,10 +187,6 @@ func (_c *EventCreate) createSpec() (*Event, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Timestamp(); ok {
 		_spec.SetField(event.FieldTimestamp, field.TypeTime, value)
 		_node.Timestamp = value
-	}
-	if value, ok := _c.mutation.Message(); ok {
-		_spec.SetField(event.FieldMessage, field.TypeString, value)
-		_node.Message = value
 	}
 	if value, ok := _c.mutation.Details(); ok {
 		_spec.SetField(event.FieldDetails, field.TypeJSON, value)

@@ -13,30 +13,26 @@ import (
 	"time"
 
 	"github.com/armada/orbital/ent"
-	entevent "github.com/armada/orbital/ent/event"
 	"github.com/labstack/echo/v4"
 )
 
+// knownMutationRe matches any DGraph mutation call on a known ConfigItem type.
+// Catches addX, updateX, deleteX for all registered types regardless of operation name.
+var knownMutationRe = regexp.MustCompile(`(?i)\b(add|update|delete)(DataCenter|Server|KubernetesCluster|EksaConfig|IPAddress|Rack)\b`)
+
+// orbIdFilterRe extracts orbId values from inline GraphQL filter expressions:
+// e.g. filter: { orbId: { eq: "alaska-dot:GRTLY24" } }
+var orbIdFilterRe = regexp.MustCompile(`orbId\s*:\s*\{\s*eq\s*:\s*"([^"]+)"`)
+
 var mutationOpRe = regexp.MustCompile(`(?i)^\s*mutation\s+(\w+)`)
 
-type mutationConfig struct {
-	resourceType string
-	getter       string // getX(id: $id) — used when variables contain "id"
-	querier      string // queryX(filter: {orbId: {eq: $orbId}}) — used when variables contain "orbId"
-}
-
-// mutationRegistry maps GraphQL operation names to resource metadata.
-// Add an entry here whenever a new mutable ConfigItem type is introduced.
-var mutationRegistry = map[string]mutationConfig{
-	"UpdateDataCenter": {resourceType: "DataCenter", getter: "getDataCenter", querier: "queryDataCenter"},
-	"UpdateServer":     {resourceType: "Server", getter: "getServer", querier: "queryServer"},
-}
-
-// nonEventFields are mutation variable names that carry request metadata, not
-// user data. They are excluded from the before/after diff stored in events.
-var nonEventFields = map[string]bool{
-	"id": true, "ifVersion": true, "version": true,
-	"updatedBy": true, "updatedAt": true,
+// singleEntityTypes maps DGraph getter names to resource type labels, used for
+// best-effort resource_id extraction on single-entity mutations.
+var singleEntityTypes = map[string]string{
+	"UpdateDataCenter":      "DataCenter",
+	"UpdateServer":          "Server",
+	"UpdateKubernetesCluster": "KubernetesCluster",
+	"UpdateEksaConfig":      "EksaConfig",
 }
 
 type GraphQL struct {
@@ -56,9 +52,8 @@ type gqlRequest struct {
 }
 
 // Handle proxies GraphQL requests to DGraph and serves GraphiQL on GET.
-// For mutations that include an ifVersion variable, it performs an MVCC check
-// against the entity's current version in DGraph before forwarding, and writes
-// an audit event on success.
+// Any mutation touching a known ConfigItem type is recorded as an audit event.
+// For single-entity mutations that include ifVersion, an MVCC check is performed.
 //
 // @Summary     GraphQL endpoint
 // @Description POST: proxies GraphQL queries and mutations to DGraph. GET: serves the GraphiQL explorer UI.
@@ -84,6 +79,8 @@ func (h *GraphQL) Handle(c echo.Context) error {
 		return h.proxyRaw(c, bodyBytes)
 	}
 
+	touchesKnownType := knownMutationRe.MatchString(req.Query)
+
 	opName := req.OperationName
 	if opName == "" {
 		if m := mutationOpRe.FindStringSubmatch(req.Query); len(m) > 1 {
@@ -91,46 +88,44 @@ func (h *GraphQL) Handle(c echo.Context) error {
 		}
 	}
 
-	cfg, known := mutationRegistry[opName]
-	ifVersion, hasIfVersion := req.Variables["ifVersion"]
-
-	var (
-		beforeSnapshot map[string]any
-		resourceID     string
-		resourceName   string
-		actor          string
-	)
-
+	var actor string
 	if v, ok := req.Variables["updatedBy"]; ok {
 		actor, _ = v.(string)
 	}
+	if actor == "" {
+		actor, _ = c.Get("user_name").(string)
+	}
 
-	if known && h.db != nil {
-		var before map[string]any
-		var fetchErr error
-		dataFields := dataVarFields(req.Variables)
+	// MVCC check — single-entity mutations only, opt-in via ifVersion variable
+	ifVersion, hasIfVersion := req.Variables["ifVersion"]
+	if hasIfVersion && h.db != nil {
+		resourceType, isSingleEntity := singleEntityTypes[opName]
+		if isSingleEntity {
+			getter := "get" + resourceType
+			entityID, _ := req.Variables["id"].(string)
+			orbID, _ := req.Variables["orbId"].(string)
 
-		if entityID, _ := req.Variables["id"].(string); entityID != "" {
-			before, fetchErr = h.fetchBeforeByID(c.Request().Context(), cfg.getter, entityID, dataFields)
-		} else if orbID, _ := req.Variables["orbId"].(string); orbID != "" {
-			before, fetchErr = h.fetchBeforeByOrbID(c.Request().Context(), cfg.querier, orbID, dataFields)
-		}
-
-		if fetchErr != nil {
-			h.logger.Warn("before-fetch failed — skipping event recording", "op", opName, "err", fetchErr)
-		} else if before != nil {
-			if hasIfVersion && int(toFloat64(before["version"])) != int(toFloat64(ifVersion)) {
-				return c.JSON(http.StatusConflict, map[string]string{
-					"error": "This record was modified by someone else. Please reload and try again.",
-				})
+			var before map[string]any
+			var fetchErr error
+			if entityID != "" {
+				before, fetchErr = h.fetchBeforeByID(getter, entityID)
+			} else if orbID != "" {
+				before, fetchErr = h.fetchBeforeByOrbID("query"+resourceType, orbID)
 			}
-			beforeSnapshot = before
-			resourceID, _ = before["orbId"].(string)
-			resourceName, _ = before["name"].(string)
+
+			if fetchErr != nil {
+				h.logger.Warn("before-fetch failed — skipping MVCC", "op", opName, "err", fetchErr)
+			} else if before != nil {
+				if int(toFloat64(before["version"])) != int(toFloat64(ifVersion)) {
+					return c.JSON(http.StatusConflict, map[string]string{
+						"error": "This record was modified by someone else. Please reload and try again.",
+					})
+				}
+			}
 		}
 	}
 
-	// Strip ifVersion before forwarding — it is not a DGraph field
+	// Strip ifVersion before forwarding — not a DGraph field
 	if hasIfVersion {
 		delete(req.Variables, "ifVersion")
 		if modified, err := json.Marshal(req); err == nil {
@@ -149,8 +144,10 @@ func (h *GraphQL) Handle(c echo.Context) error {
 		return fmt.Errorf("read dgraph response: %w", err)
 	}
 
-	if known && beforeSnapshot != nil && h.db != nil && !hasGQLErrors(respBytes) {
-		go h.writeEvent(cfg.resourceType, resourceID, resourceName, actor, beforeSnapshot, dataVarValues(req.Variables))
+	if touchesKnownType && h.db != nil && !hasGQLErrors(respBytes) {
+		operations, resourceTypes := extractOperations(req.Query)
+		resourceIDs := extractResourceIDs(req.Query, req.Variables)
+		go h.writeEvent(opName, operations, resourceTypes, resourceIDs, actor, req.Query, req.Variables)
 	}
 
 	c.Response().Header().Set("Content-Type", "application/json")
@@ -169,10 +166,8 @@ func (h *GraphQL) proxyRaw(c echo.Context, body []byte) error {
 	return err
 }
 
-func (h *GraphQL) fetchBeforeByID(_ context.Context, getter, id string, dataFields []string) (map[string]any, error) {
-	fields := beforeFieldSet(dataFields)
-	query := fmt.Sprintf(`query BeforeFetch($id: ID!) { %s(id: $id) { %s } }`,
-		getter, strings.Join(fields, " "))
+func (h *GraphQL) fetchBeforeByID(getter, id string) (map[string]any, error) {
+	query := fmt.Sprintf(`query BeforeFetch($id: ID!) { %s(id: $id) { id orbId name version } }`, getter)
 	body, _ := json.Marshal(map[string]any{
 		"query":     query,
 		"variables": map[string]any{"id": id},
@@ -180,10 +175,8 @@ func (h *GraphQL) fetchBeforeByID(_ context.Context, getter, id string, dataFiel
 	return h.doFetch(getter, body)
 }
 
-func (h *GraphQL) fetchBeforeByOrbID(_ context.Context, querier, orbID string, dataFields []string) (map[string]any, error) {
-	fields := beforeFieldSet(dataFields)
-	query := fmt.Sprintf(`query BeforeFetch($orbId: String!) { %s(filter: { orbId: { eq: $orbId } }) { %s } }`,
-		querier, strings.Join(fields, " "))
+func (h *GraphQL) fetchBeforeByOrbID(querier, orbID string) (map[string]any, error) {
+	query := fmt.Sprintf(`query BeforeFetch($orbId: String!) { %s(filter: { orbId: { eq: $orbId } }) { id orbId name version } }`, querier)
 	body, _ := json.Marshal(map[string]any{
 		"query":     query,
 		"variables": map[string]any{"orbId": orbID},
@@ -206,9 +199,6 @@ func (h *GraphQL) fetchBeforeByOrbID(_ context.Context, querier, orbID string, d
 		return nil, fmt.Errorf("entity not found (querier=%s orbId=%s)", querier, orbID)
 	}
 	entity, _ := list[0].(map[string]any)
-	if entity == nil {
-		return nil, fmt.Errorf("entity not found (querier=%s orbId=%s)", querier, orbID)
-	}
 	return entity, nil
 }
 
@@ -232,65 +222,85 @@ func (h *GraphQL) doFetch(getter string, body []byte) (map[string]any, error) {
 	return entity, nil
 }
 
-func beforeFieldSet(dataFields []string) []string {
-	fieldSet := map[string]bool{"id": true, "orbId": true, "name": true, "version": true}
-	for _, f := range dataFields {
-		fieldSet[f] = true
-	}
-	all := make([]string, 0, len(fieldSet))
-	for f := range fieldSet {
-		all = append(all, f)
-	}
-	return all
-}
-
-func (h *GraphQL) writeEvent(resourceType, resourceID, resourceName, actor string, before, after map[string]any) {
-	cleanBefore := make(map[string]any, len(before))
-	for k, v := range before {
-		if !nonEventFields[k] && k != "orbId" && k != "name" {
-			cleanBefore[k] = v
-		}
-	}
-
-	details, _ := json.Marshal(map[string]any{"before": cleanBefore, "after": after})
+func (h *GraphQL) writeEvent(opName string, operations, resourceTypes, resourceIDs []string, actor, query string, variables map[string]any) {
+	details, _ := json.Marshal(map[string]any{
+		"operationName": opName,
+		"query":         query,
+		"variables":     variables,
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := h.db.Event.Create().
-		SetResourceType(resourceType).
-		SetResourceID(resourceID).
-		SetResourceName(resourceName).
-		SetType(entevent.TypeUpdate).
+	c := h.db.Event.Create().
 		SetActor(actor).
-		SetDetails(json.RawMessage(details)).
-		Exec(ctx); err != nil {
-		h.logger.Warn("failed to write event", "resource_type", resourceType, "resource_id", resourceID, "err", err)
+		SetDetails(json.RawMessage(details))
+
+	if len(operations) > 0 {
+		c = c.SetOperations(operations)
 	}
+	if len(resourceTypes) > 0 {
+		c = c.SetResourceTypes(resourceTypes)
+	}
+	if len(resourceIDs) > 0 {
+		c = c.SetResourceIds(resourceIDs)
+	}
+
+	if err := c.Exec(ctx); err != nil {
+		h.logger.Warn("failed to write event", "op", opName, "err", err)
+	}
+}
+
+// extractOperations returns deduplicated DGraph operation names and resource type
+// names from all mutation calls in the query body.
+// e.g. two updateServer calls → operations: ["updateServer"], types: ["Server"]
+func extractOperations(query string) (operations []string, resourceTypes []string) {
+	matches := knownMutationRe.FindAllStringSubmatch(query, -1)
+	seenOp := map[string]bool{}
+	seenType := map[string]bool{}
+	for _, m := range matches {
+		op := strings.ToLower(m[1]) + m[2] // e.g. "update" + "Server" → "updateServer"
+		t := m[2]                           // e.g. "Server"
+		if !seenOp[op] {
+			seenOp[op] = true
+			operations = append(operations, op)
+		}
+		if !seenType[t] {
+			seenType[t] = true
+			resourceTypes = append(resourceTypes, t)
+		}
+	}
+	return
+}
+
+// extractResourceIDs collects orbIds from mutation variables and from inline
+// filter expressions in the query body (e.g. filter: { orbId: { eq: "..." } }).
+func extractResourceIDs(query string, variables map[string]any) []string {
+	seen := map[string]bool{}
+	var ids []string
+
+	add := func(id string) {
+		if id != "" && !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+
+	// Variables: single orbId field
+	if v, ok := variables["orbId"].(string); ok {
+		add(v)
+	}
+
+	// Inline filter expressions: orbId: { eq: "..." }
+	for _, m := range orbIdFilterRe.FindAllStringSubmatch(query, -1) {
+		add(m[1])
+	}
+
+	return ids
 }
 
 func isMutation(query string) bool {
 	return strings.HasPrefix(strings.TrimSpace(strings.ToLower(query)), "mutation")
-}
-
-func dataVarFields(vars map[string]any) []string {
-	fields := make([]string, 0, len(vars))
-	for k := range vars {
-		if !nonEventFields[k] {
-			fields = append(fields, k)
-		}
-	}
-	return fields
-}
-
-func dataVarValues(vars map[string]any) map[string]any {
-	out := make(map[string]any, len(vars))
-	for k, v := range vars {
-		if !nonEventFields[k] {
-			out[k] = v
-		}
-	}
-	return out
 }
 
 func hasGQLErrors(body []byte) bool {

@@ -19,20 +19,16 @@ type Event struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID uuid.UUID `json:"id,omitempty"`
-	// ResourceType holds the value of the "resource_type" field.
-	ResourceType string `json:"resource_type,omitempty"`
-	// ResourceID holds the value of the "resource_id" field.
-	ResourceID string `json:"resource_id,omitempty"`
-	// ResourceName holds the value of the "resource_name" field.
-	ResourceName string `json:"resource_name,omitempty"`
-	// Type holds the value of the "type" field.
-	Type event.Type `json:"type,omitempty"`
+	// Operations holds the value of the "operations" field.
+	Operations []string `json:"operations,omitempty"`
+	// ResourceTypes holds the value of the "resource_types" field.
+	ResourceTypes []string `json:"resource_types,omitempty"`
+	// ResourceIds holds the value of the "resource_ids" field.
+	ResourceIds []string `json:"resource_ids,omitempty"`
 	// Actor holds the value of the "actor" field.
 	Actor string `json:"actor,omitempty"`
 	// Timestamp holds the value of the "timestamp" field.
 	Timestamp time.Time `json:"timestamp,omitempty"`
-	// Message holds the value of the "message" field.
-	Message string `json:"message,omitempty"`
 	// Details holds the value of the "details" field.
 	Details      json.RawMessage `json:"details,omitempty"`
 	selectValues sql.SelectValues
@@ -43,9 +39,9 @@ func (*Event) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case event.FieldDetails:
+		case event.FieldOperations, event.FieldResourceTypes, event.FieldResourceIds, event.FieldDetails:
 			values[i] = new([]byte)
-		case event.FieldResourceType, event.FieldResourceID, event.FieldResourceName, event.FieldType, event.FieldActor, event.FieldMessage:
+		case event.FieldActor:
 			values[i] = new(sql.NullString)
 		case event.FieldTimestamp:
 			values[i] = new(sql.NullTime)
@@ -72,29 +68,29 @@ func (_m *Event) assignValues(columns []string, values []any) error {
 			} else if value != nil {
 				_m.ID = *value
 			}
-		case event.FieldResourceType:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field resource_type", values[i])
-			} else if value.Valid {
-				_m.ResourceType = value.String
+		case event.FieldOperations:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field operations", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Operations); err != nil {
+					return fmt.Errorf("unmarshal field operations: %w", err)
+				}
 			}
-		case event.FieldResourceID:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field resource_id", values[i])
-			} else if value.Valid {
-				_m.ResourceID = value.String
+		case event.FieldResourceTypes:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field resource_types", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ResourceTypes); err != nil {
+					return fmt.Errorf("unmarshal field resource_types: %w", err)
+				}
 			}
-		case event.FieldResourceName:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field resource_name", values[i])
-			} else if value.Valid {
-				_m.ResourceName = value.String
-			}
-		case event.FieldType:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field type", values[i])
-			} else if value.Valid {
-				_m.Type = event.Type(value.String)
+		case event.FieldResourceIds:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field resource_ids", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ResourceIds); err != nil {
+					return fmt.Errorf("unmarshal field resource_ids: %w", err)
+				}
 			}
 		case event.FieldActor:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -107,12 +103,6 @@ func (_m *Event) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field timestamp", values[i])
 			} else if value.Valid {
 				_m.Timestamp = value.Time
-			}
-		case event.FieldMessage:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field message", values[i])
-			} else if value.Valid {
-				_m.Message = value.String
 			}
 		case event.FieldDetails:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -158,26 +148,20 @@ func (_m *Event) String() string {
 	var builder strings.Builder
 	builder.WriteString("Event(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	builder.WriteString("resource_type=")
-	builder.WriteString(_m.ResourceType)
+	builder.WriteString("operations=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Operations))
 	builder.WriteString(", ")
-	builder.WriteString("resource_id=")
-	builder.WriteString(_m.ResourceID)
+	builder.WriteString("resource_types=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ResourceTypes))
 	builder.WriteString(", ")
-	builder.WriteString("resource_name=")
-	builder.WriteString(_m.ResourceName)
-	builder.WriteString(", ")
-	builder.WriteString("type=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Type))
+	builder.WriteString("resource_ids=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ResourceIds))
 	builder.WriteString(", ")
 	builder.WriteString("actor=")
 	builder.WriteString(_m.Actor)
 	builder.WriteString(", ")
 	builder.WriteString("timestamp=")
 	builder.WriteString(_m.Timestamp.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("message=")
-	builder.WriteString(_m.Message)
 	builder.WriteString(", ")
 	builder.WriteString("details=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Details))

@@ -1,6 +1,6 @@
 # 001 — Mutation Audit Recording
 
-**Status:** Open — no decision reached. Design is in progress.
+**Status:** Decided — current approach accepted with known tech debt. Revisit before MVP.
 
 **Date:** 2026-05-12
 
@@ -12,34 +12,52 @@ Every config mutation in orbital should produce an audit event: who changed what
 
 ---
 
-## What We Built (Prototype)
+## What We Built
 
-The current implementation records events for UI-originated mutations only:
+### Phase 1 — Named mutation registry + before/after diff (superseded)
 
-1. The edit modal (DataCenter, Server) sends a named GraphQL mutation (`UpdateServer`, `UpdateDataCenter`) through orbital's `/graphql` proxy with an `ifVersion` token in the variables.
-2. Orbital's proxy middleware intercepts named mutations, performs an MVCC check using `ifVersion`, fetches the before-state from DGraph, forwards the mutation, and writes an event to PostgreSQL asynchronously.
-3. The `ifVersion` token is stripped before forwarding — DGraph never sees it.
+The first prototype intercepted named GraphQL mutations (`UpdateServer`, `UpdateDataCenter`) in the proxy, fetched before-state from DGraph, and stored a structured `{before, after}` diff in the `events` table. MVCC conflict detection used an `ifVersion` token stripped before forwarding to DGraph.
 
-This gives us:
-- MVCC conflict detection for concurrent UI edits
-- Before/after diff stored in the `events` table
-- Per-entity audit log tab in the DC and server detail views
+This gave us rich diffs but only covered UI-originated mutations. API clients using compound mutations (aliases), anonymous mutations, or inline filters were invisible to the audit log.
+
+### Phase 2 — Regex-based payload capture (current)
+
+Replaced the named registry with a regex scan of the query body for known DGraph type operations (`addX`, `updateX`, `deleteX` on `Server`, `DataCenter`, etc.). One event per HTTP request regardless of how many entities the mutation touches.
+
+What is recorded per event:
+- `operation_name` — GraphQL `operationName` field (may be empty for anonymous mutations)
+- `resource_types` — all DGraph types touched, extracted from the query body (e.g. `["Server"]`)
+- `resource_ids` — all orbIds touched, extracted from variables and inline `orbId: { eq: "..." }` filter patterns
+- `actor` — from `updatedBy` variable or session
+- `details` — full raw payload: `{operationName, query, variables}`
+
+MVCC (`ifVersion`) is decoupled from eventing — it remains opt-in for single-entity mutations and has no effect on whether an event is recorded.
 
 ### Why we like the current UI approach
 
-The edit modal presents the entity's mutable fields as a JSON object in a JSONEditor. The user edits the JSON directly and submits it as GraphQL mutation variables. This is clean, self-describing, and maps naturally to the GraphQL API — there is no translation layer between what the user sees and what gets sent to DGraph. Introducing typed REST endpoints for mutations would break this UX.
+The edit modal presents entity fields as a JSON object in a JSONEditor. The user edits JSON directly and submits as GraphQL mutation variables. This is clean, self-describing, and maps naturally to the GraphQL API. Introducing typed REST endpoints for mutations would break this UX.
 
 ---
 
-## The Gap
+## Known Tech Debt
 
-Any mutation that does **not** go through orbital's `/graphql` proxy with a named operation is invisible to the audit log:
+### 1. Regex parsing instead of a proper GraphQL AST
 
-- Raw DGraph filter-based mutations: `updateServer(input: { filter: { orbId: { eq: "..." } }, set: {...} })`
-- Direct DGraph admin endpoint access
-- Any future API client that constructs its own GraphQL mutation without using orbital's named operation convention
+`extractResourceTypes` and `extractResourceIDs` use regular expressions against the raw query string. This is fragile:
 
-This means the audit log is incomplete — it only reflects UI-originated changes, not API-originated ones.
+- A string literal containing a type name (e.g. a description field containing "updateServer") could produce a false positive
+- `orbId: { eq: "..." }` extraction assumes a specific filter shape — other valid filter forms (e.g. `in`, `regexp`) are missed
+- Adding a new entity type requires updating `knownMutationRe` manually
+
+**Proper fix:** use `vektah/gqlparser` (the parser underlying `gqlgen`) to parse the query into an AST and walk the selection set. This gives exact operation names, argument values, and variable usages without regex fragility. It is a new dependency — add it when the regex approach starts causing problems.
+
+### 2. No before/after diff
+
+The current approach records what was *sent* but not what changed *from*. A diff would require fetching entity state before forwarding the mutation, which adds latency and complexity. Deferred until there is a clear product need.
+
+### 3. Inline orbId extraction is best-effort
+
+OrbIds inlined in query filters (not passed as variables) are extracted via regex. If an API client uses a different filter shape or passes orbIds as a list (`in: [...]`), those IDs will be missing from `resource_ids`. The event is still recorded — the payload in `details` always contains the full query.
 
 ---
 
@@ -48,32 +66,29 @@ This means the audit log is incomplete — it only reflects UI-originated change
 ### Option A — Typed REST mutation endpoints
 `PATCH /api/v1/servers/:orbId`, `PATCH /api/v1/datacenters/:orbId`, etc.
 
-Orbital owns the full mutation path: fetch before-state, validate, apply to DGraph, record event. Every change goes through orbital regardless of client.
+**Rejected (for now)** — breaks the JSON edit modal UX. The modal submits GraphQL variables directly; a REST layer would require a translation layer and lose the direct GraphQL connection.
 
-**Rejected (for now)** because it would break the JSON edit modal UX — the modal currently submits GraphQL variables directly, which is clean and self-describing. Replacing this with REST would require a translation layer and lose the direct GraphQL connection.
+### Option B — GraphQL proxy + mutation registry
+Intercept named mutations in the proxy. Requires all API clients to use named operations.
 
-### Option B — GraphQL proxy + mutation registry (current approach)
-Intercept named mutations in the proxy. Rely on DGraph's network isolation (NetworkPolicy in AKS already restricts DGraph to orbital-only access) to ensure all mutations flow through orbital.
-
-**Partially implemented.** Works for the UI path. Does not catch unnamed or filter-based mutations. Requires all API clients to use orbital's named mutation convention.
+**Superseded by Phase 2** — too narrow; compound and anonymous mutations were invisible.
 
 ### Option C — DGraph change feed / subscription
-Use DGraph's subscription or a change data capture mechanism to detect mutations after the fact.
+Use DGraph's subscription or CDC to detect mutations after the fact.
 
 **Not evaluated.** DGraph community edition's subscription support is limited. Would not give us before-state without additional complexity.
+
+### Option D — Regex payload capture (current)
+Scan the query body for known type operations. One event per request.
+
+**Adopted.** Full coverage for any mutation through the proxy. Acknowledged tech debt around regex fragility and missing before/after diff.
 
 ---
 
 ## Open Questions
 
-1. **Can we enforce the named mutation convention for API clients?** If all legitimate mutation paths go through orbital's `/graphql` and use named operations, and DGraph is network-isolated, the audit gap is eliminated in practice. This requires clear API documentation and discipline.
+1. **Before/after diff** — worth the latency cost of a pre-mutation fetch? Deferred. Revisit when operators ask "what did it change from?"
 
-2. **Should `ifVersion` be required for API mutations too?** Currently opt-in (API clients can omit it). Making it required for all mutations would enforce optimistic locking everywhere but adds friction for scripting.
+2. **AST parsing** — when does regex fragility become a real problem? Likely when new entity types are added frequently or when API clients use non-standard filter shapes.
 
-3. **Is the GraphQL edit modal approach extensible to new entity types?** Adding a new mutable type currently requires: a new named mutation in the registry (`mutationRegistry` in `graphql.go`), adding `version` to the DGraph query and template, and adding `ifVersion`/`version` to the JS submit handler. This is a small but non-trivial amount of boilerplate per type.
-
----
-
-## Current State
-
-The prototype records events for UI mutations. The MVCC flow works end-to-end. The gap (API mutations not recorded) is understood and accepted for the prototype phase. This decision note exists so the team can revisit it with full context when building toward MVP.
+3. **DGraph network isolation** — the audit gap for direct DGraph access is mitigated by AKS NetworkPolicy restricting DGraph to orbital-only. This must remain enforced by the deployment layer.

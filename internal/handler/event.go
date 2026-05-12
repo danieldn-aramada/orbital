@@ -24,26 +24,24 @@ func NewEventHandler(db *ent.Client, logger *slog.Logger) *EventHandler {
 }
 
 type eventItem struct {
-	ID           string          `json:"id"`
-	ResourceType string          `json:"resourceType"`
-	ResourceID   string          `json:"resourceId"`
-	ResourceName string          `json:"resourceName"`
-	Type         string          `json:"type"`
-	Actor        string          `json:"actor"`
-	Timestamp    string          `json:"timestamp"`
-	Details      json.RawMessage `json:"details,omitempty"`
+	ID            string          `json:"id"`
+	Operations    []string        `json:"operations"`
+	ResourceTypes []string        `json:"resourceTypes"`
+	ResourceIDs   []string        `json:"resourceIds"`
+	Actor         string          `json:"actor"`
+	Timestamp     string          `json:"timestamp"`
+	Details       json.RawMessage `json:"details,omitempty"`
 }
 
 // ListEvents returns a paginated list of audit events ordered by timestamp desc.
 //
 // @Summary     List audit events
-// @Description Returns recorded mutation events. Supports limit/offset pagination and optional filtering by resource_type or resource_id.
+// @Description Returns recorded mutation events. Supports limit/offset pagination and optional filtering by resource_type, resource_id, or operation_name.
 // @Tags        graph
 // @Produce     json
-// @Param       limit         query int    false "Max results (default 100, max 500)"
-// @Param       offset        query int    false "Pagination offset"
-// @Param       resource_type query string false "Filter by resource type (e.g. Server)"
-// @Param       resource_id   query string false "Filter by resource orbId"
+// @Param       limit          query int    false "Max results (default 100, max 500)"
+// @Param       offset         query int    false "Pagination offset"
+// @Param       operation_name query string false "Filter by operation name (e.g. UpdateServer)"
 // @Success     200 {object} map[string]interface{}
 // @Router      /api/v1/events [get]
 func (h *EventHandler) List(c echo.Context) error {
@@ -61,11 +59,11 @@ func (h *EventHandler) List(c echo.Context) error {
 	}
 
 	q := h.db.Event.Query()
-	if rt := c.QueryParam("resource_type"); rt != "" {
-		q = q.Where(event.ResourceTypeEQ(rt))
-	}
 	if rid := c.QueryParam("resource_id"); rid != "" {
-		q = q.Where(event.ResourceIDEQ(rid))
+		encoded, _ := json.Marshal(rid)
+		q = q.Where(func(s *sql.Selector) {
+			s.Where(sql.ExprP("resource_ids::jsonb @> ?::jsonb", "["+string(encoded)+"]"))
+		})
 	}
 
 	total, err := q.Clone().Count(c.Request().Context())
@@ -85,14 +83,13 @@ func (h *EventHandler) List(c echo.Context) error {
 	items := make([]eventItem, 0, len(events))
 	for _, e := range events {
 		items = append(items, eventItem{
-			ID:           e.ID.String(),
-			ResourceType: e.ResourceType,
-			ResourceID:   e.ResourceID,
-			ResourceName: e.ResourceName,
-			Type:         string(e.Type),
-			Actor:        e.Actor,
-			Timestamp:    e.Timestamp.UTC().Format(time.RFC3339),
-			Details:      e.Details,
+			ID:            e.ID.String(),
+			Operations:    e.Operations,
+			ResourceTypes: e.ResourceTypes,
+			ResourceIDs:   e.ResourceIds,
+			Actor:         e.Actor,
+			Timestamp:     e.Timestamp.UTC().Format(time.RFC3339),
+			Details:       e.Details,
 		})
 	}
 

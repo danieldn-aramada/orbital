@@ -3,7 +3,6 @@
 package event
 
 import (
-	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -15,20 +14,16 @@ const (
 	Label = "event"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldResourceType holds the string denoting the resource_type field in the database.
-	FieldResourceType = "resource_type"
-	// FieldResourceID holds the string denoting the resource_id field in the database.
-	FieldResourceID = "resource_id"
-	// FieldResourceName holds the string denoting the resource_name field in the database.
-	FieldResourceName = "resource_name"
-	// FieldType holds the string denoting the type field in the database.
-	FieldType = "type"
+	// FieldOperations holds the string denoting the operations field in the database.
+	FieldOperations = "operations"
+	// FieldResourceTypes holds the string denoting the resource_types field in the database.
+	FieldResourceTypes = "resource_types"
+	// FieldResourceIds holds the string denoting the resource_ids field in the database.
+	FieldResourceIds = "resource_ids"
 	// FieldActor holds the string denoting the actor field in the database.
 	FieldActor = "actor"
 	// FieldTimestamp holds the string denoting the timestamp field in the database.
 	FieldTimestamp = "timestamp"
-	// FieldMessage holds the string denoting the message field in the database.
-	FieldMessage = "message"
 	// FieldDetails holds the string denoting the details field in the database.
 	FieldDetails = "details"
 	// Table holds the table name of the event in the database.
@@ -38,13 +33,11 @@ const (
 // Columns holds all SQL columns for event fields.
 var Columns = []string{
 	FieldID,
-	FieldResourceType,
-	FieldResourceID,
-	FieldResourceName,
-	FieldType,
+	FieldOperations,
+	FieldResourceTypes,
+	FieldResourceIds,
 	FieldActor,
 	FieldTimestamp,
-	FieldMessage,
 	FieldDetails,
 }
 
@@ -65,56 +58,12 @@ var (
 	DefaultID func() uuid.UUID
 )
 
-// Type defines the type for the "type" enum field.
-type Type string
-
-// Type values.
-const (
-	TypeCreate Type = "create"
-	TypeUpdate Type = "update"
-	TypeDelete Type = "delete"
-)
-
-func (_type Type) String() string {
-	return string(_type)
-}
-
-// TypeValidator is a validator for the "type" field enum values. It is called by the builders before save.
-func TypeValidator(_type Type) error {
-	switch _type {
-	case TypeCreate, TypeUpdate, TypeDelete:
-		return nil
-	default:
-		return fmt.Errorf("event: invalid enum value for type field: %q", _type)
-	}
-}
-
 // OrderOption defines the ordering options for the Event queries.
 type OrderOption func(*sql.Selector)
 
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
-}
-
-// ByResourceType orders the results by the resource_type field.
-func ByResourceType(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldResourceType, opts...).ToFunc()
-}
-
-// ByResourceID orders the results by the resource_id field.
-func ByResourceID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldResourceID, opts...).ToFunc()
-}
-
-// ByResourceName orders the results by the resource_name field.
-func ByResourceName(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldResourceName, opts...).ToFunc()
-}
-
-// ByType orders the results by the type field.
-func ByType(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldType, opts...).ToFunc()
 }
 
 // ByActor orders the results by the actor field.
@@ -125,9 +74,4 @@ func ByActor(opts ...sql.OrderTermOption) OrderOption {
 // ByTimestamp orders the results by the timestamp field.
 func ByTimestamp(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTimestamp, opts...).ToFunc()
-}
-
-// ByMessage orders the results by the message field.
-func ByMessage(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldMessage, opts...).ToFunc()
 }
