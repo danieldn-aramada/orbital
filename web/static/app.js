@@ -191,6 +191,28 @@ function formatTimestamp(iso) {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} ${tz}`;
 }
 
+function relativeTime(iso) {
+  if (!iso) return '';
+  const diff = (new Date(iso) - Date.now()) / 1000; // seconds, negative = past
+  const abs = Math.abs(diff);
+  const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+  if (abs < 60)        return rtf.format(Math.round(diff), 'second');
+  if (abs < 3600)      return rtf.format(Math.round(diff / 60), 'minute');
+  if (abs < 86400)     return rtf.format(Math.round(diff / 3600), 'hour');
+  if (abs < 86400 * 7) return rtf.format(Math.round(diff / 86400), 'day');
+  return formatTimestamp(iso);
+}
+
+function renderTimestamps(root) {
+  (root || document).querySelectorAll('[data-timestamp]').forEach(el => {
+    const iso = el.dataset.timestamp;
+    if (!iso) return;
+    el.textContent = relativeTime(iso);
+    el.title = formatTimestamp(iso);
+    el.style.cursor = 'help';
+  });
+}
+
 function loadServerTable() {
   if (serverTable) {
     serverTable.ajax.reload();
@@ -261,7 +283,8 @@ function loadServerTable() {
             1: 'server',
         },
       },
-    
+      initComplete: function () { dtWrapLengthSelect(this.api()) },
+
       columns: [
         {
           data: 'galleonName',
@@ -576,6 +599,48 @@ function initDcDetailTabs(id) {
   if (saved) activatePanel(saved)
 }
 
+// DataTables renders the page-length <select> bare, with no wrapper. Bulma's
+// select component requires a <div class="select"> wrapper to render its own
+// CSS arrow (via ::after) and apply is-small sizing. Without this, the browser's
+// native arrow overlaps the selected value and sizing is inconsistent with other
+// is-small elements. Called via initComplete on each DataTable.
+function dtWrapLengthSelect(api) {
+  $(api.table().container()).find('div.dt-length select').wrap('<div class="select is-small"></div>')
+}
+
+function initServerDetailTabs(root) {
+  const tabContainer = root.querySelector('[id^="srv-detail-tabs-"]')
+  if (!tabContainer) return
+
+  const tabs = tabContainer.querySelectorAll('li[data-panel]')
+
+  function activatePanel(panelId) {
+    tabs.forEach(t => t.classList.remove('is-active'))
+    const active = [...tabs].find(t => t.dataset.panel === panelId)
+    if (active) active.classList.add('is-active')
+    tabContainer.parentElement.querySelectorAll('[id^="srv-panel-"]').forEach(panel => {
+      panel.style.display = panel.id === panelId ? '' : 'none'
+    })
+  }
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => activatePanel(tab.dataset.panel))
+  })
+}
+
+// ── Server drill-down (dblclick row → server detail) ─────────────────────────
+
+document.addEventListener('dblclick', function (e) {
+  const row = e.target.closest('tr[data-server-id]')
+  if (!row) return
+  const serverId = row.dataset.serverId
+  const dcId = row.dataset.dcId
+  const tabContent = document.getElementById('tab-content-' + dcId)
+  if (!tabContent) return
+  tabContent.dataset.loaded = ''
+  htmx.ajax('GET', '/servers/' + serverId + '?dcCtx=1', { target: '#tab-content-' + dcId, swap: 'innerHTML' })
+})
+
 function loadDataCenterTab(displayName, id) {
   const tabHtml = `<li class="tab">
     <a id="tab-${id}" data-target="tab-content-${id}" role="tab" aria-selected="false" tabindex="-1"
@@ -613,8 +678,17 @@ function loadDataCenterTab(displayName, id) {
   })
 
   tabContent.addEventListener('htmx:after-swap', () => {
-    tabContent.dataset.loaded = 'true'
-    initDcDetailTabs(id)
+    renderTimestamps(tabContent)
+    if (tabContent.querySelector(`#dc-detail-tabs-${id}`)) {
+      tabContent.dataset.loaded = 'true'
+      initDcDetailTabs(id)
+      dcEditors.delete(id)
+      initServerDetailTabs(tabContent)
+    } else if (tabContent.querySelector(`[id^="srv-detail-tabs-"]`)) {
+      initServerDetailTabs(tabContent)
+      const srvId = tabContent.querySelector(`[id^="srv-detail-tabs-"]`).id.replace('srv-detail-tabs-', '')
+      srvEditors.delete(srvId)
+    }
   })
 
   const tabClose = document.getElementById(`tab-close-${id}`)
@@ -642,30 +716,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const datacenterTable = new DataTable('#datacenter-table', {
     layout: {
-      top2Start: {
-        pageLength: { menu: [5, 10, 25, 50] },
-      },
-      topStart: {
-        buttons: [
+      topStart: [
+        { pageLength: { menu: [5, 10, 25, 50] } },
+        { buttons: [
           { extend: 'excel', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-excel"></i><span>Excel</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Excel' },
           { extend: 'csv', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-text"></i><span>CSV</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV' },
           { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
-          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-small', titleAttr: 'Select Columns' },
+          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
           { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-datacenters' } },
-        ],
-      },
+        ] },
+      ],
       topEnd: { search: { placeholder: 'Type search here' } },
     },
     select: { style: 'os' },
     autoWidth: true,
     scrollX: true,
-    scrollY: 500,
+    scrollY: 400,
     scrollCollapse: true,
     language: {
       infoEmpty: 'No data centers to show',
       info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
       entries: { _: 'data centers', 1: 'data center' },
     },
+    initComplete: function () { dtWrapLengthSelect(this.api()) },
     columns: [
       { data: 'name' },
       { data: 'serverCount' },
@@ -716,6 +789,180 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById(`tab-${id}`).click()
     }
   })
+})
+
+// ─── Servers page ────────────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!document.getElementById('server-list-table')) return
+
+  document.querySelectorAll('li.tab a[data-target]').forEach((a) => {
+    a.addEventListener('click', () => {
+      activateTab(a.parentElement)
+      displayTabContent(a.dataset.target)
+      setCurrentTab(a.id)
+    })
+  })
+
+  const serverListTable = new DataTable('#server-list-table', {
+    layout: {
+      topStart: [
+        { pageLength: { menu: [10, 25, 50, 100] } },
+        { buttons: [
+          { extend: 'excel', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-excel"></i><span>Excel</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Excel' },
+          { extend: 'csv', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-text"></i><span>CSV</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV' },
+          { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
+          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
+          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-servers' } },
+        ] },
+      ],
+      topEnd: { search: { placeholder: 'Type search here' } },
+    },
+    select: { style: 'os' },
+    autoWidth: true,
+    scrollX: true,
+    scrollY: 400,
+    scrollCollapse: true,
+    language: {
+      infoEmpty: 'No servers to show',
+      info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
+      entries: { _: 'servers', 1: 'server' },
+    },
+    initComplete: function () { dtWrapLengthSelect(this.api()) },
+    columns: [
+      { data: 'dataCenter' },
+      { data: 'oobIP' },
+      { data: 'hostname' },
+      { data: 'serviceTag' },
+      { data: 'model' },
+      { data: 'rack' },
+      { data: 'id' },
+    ],
+    columnDefs: [
+      { targets: 6, visible: false },
+    ],
+    ajax: {
+      url: '/graphql',
+      type: 'POST',
+      contentType: 'application/json',
+      data: () => JSON.stringify({
+        query: `{ queryServer {
+          id hostname serviceTag model
+          oobIP { address }
+          rack { name }
+          dataCenter { name }
+        } }`,
+      }),
+      dataSrc: (json) => (json.data?.queryServer ?? []).map(s => ({
+        id: s.id,
+        hostname: s.hostname ?? '—',
+        serviceTag: s.serviceTag ?? '—',
+        model: s.model ?? '—',
+        oobIP: s.oobIP?.address ?? '—',
+        rack: s.rack?.name ?? '—',
+        dataCenter: s.dataCenter?.name ?? '—',
+      })),
+    },
+  })
+
+  const reloadButton = serverListTable.button('reload:name').node()
+  serverListTable.button('reload:name').node().on('click', function () {
+    serverListTable.clear().draw()
+    reloadButton.addClass('is-loading')
+    setTimeout(() => {
+      serverListTable.ajax.reload(() => { reloadButton.removeClass('is-loading') })
+    }, 250)
+  })
+
+  $('#server-list-table tbody').on('dblclick', 'tr', function () {
+    const data = serverListTable.row(this).data()
+    if (!data) return
+    const id = data.id
+    const displayName = data.hostname !== '—' ? data.hostname : data.serviceTag
+    const tab = document.getElementById(`tab-srv-${id}`)
+    if (tab) {
+      tab.click()
+    } else {
+      loadServerListTab(displayName, id)
+      saveServerTab(displayName, id)
+      document.getElementById(`tab-srv-${id}`).click()
+    }
+  })
+})
+
+function saveServerTab(displayName, id) {
+  const item = JSON.stringify(new TabItem(displayName, id))
+  const s = new Set(localStorage.serverTabs ? JSON.parse(localStorage.serverTabs) : [])
+  s.add(item)
+  localStorage.serverTabs = JSON.stringify([...s])
+}
+
+function deleteServerTab(displayName, id) {
+  const item = JSON.stringify(new TabItem(displayName, id))
+  const s = new Set(localStorage.serverTabs ? JSON.parse(localStorage.serverTabs) : [])
+  s.delete(item)
+  localStorage.serverTabs = JSON.stringify([...s])
+}
+
+function loadServerListTab(displayName, id) {
+  const tabHtml = `<li class="tab">
+    <a id="tab-srv-${id}" data-target="tab-content-srv-${id}" role="tab" aria-selected="false" tabindex="-1">
+      ${displayName}
+      <span class="pl-2">
+        <button id="tab-close-srv-${id}">
+          <i class="fa-solid fa-xmark" style="font-size: 0.8em;"></i>
+        </button>
+      </span>
+    </a>
+  </li>`
+
+  const contentHtml = `<div class="tab-content" id="tab-content-srv-${id}" role="tabpanel" style="display:none"></div>`
+
+  $('#tablist').append(tabHtml)
+  $('.app-main').append(contentHtml)
+
+  const tabLink = document.getElementById(`tab-srv-${id}`)
+  const tabContent = document.getElementById(`tab-content-srv-${id}`)
+
+  tabLink.addEventListener('click', () => {
+    activateTab(tabLink.parentElement)
+    displayTabContent(`tab-content-srv-${id}`)
+    setCurrentTab(`tab-srv-${id}`)
+    if (!tabContent.dataset.loaded) {
+      htmx.ajax('GET', '/servers/' + id, { target: '#tab-content-srv-' + id, swap: 'innerHTML' })
+    }
+  })
+
+  tabContent.addEventListener('htmx:after-swap', () => {
+    tabContent.dataset.loaded = 'true'
+    renderTimestamps(tabContent)
+    initServerDetailTabs(tabContent)
+    srvEditors.delete(id)
+  })
+
+  document.getElementById(`tab-close-srv-${id}`).addEventListener('click', (event) => {
+    event.stopPropagation()
+    deleteServerTab(displayName, id)
+    replaceCurrentTab(`tab-srv-${id}`, 'tab-summary')
+    tabLink.parentElement.remove()
+    tabContent.remove()
+    document.getElementById('tab-summary').click()
+  })
+}
+
+window.addEventListener('load', () => {
+  if (!document.getElementById('server-list-table')) return
+
+  if (!localStorage.serverTabs) return
+  const tabSet = new Set(JSON.parse(localStorage.serverTabs))
+  tabSet.forEach(tabData => {
+    const { displayName, id } = JSON.parse(tabData)
+    loadServerListTab(displayName, id)
+  })
+  const currentTabId = getCurrentTab()
+  if (currentTabId) {
+    document.getElementById(currentTabId)?.click()
+  }
 })
 
 // ─── Backups ──────────────────────────────────────────────────────────────────
@@ -1350,3 +1597,205 @@ function testBackupConnection() {
       result.innerHTML = '<span class="has-text-danger">Request failed</span>'
     })
 }
+
+// ── Timestamp rendering ───────────────────────────────────────────────────────
+
+document.addEventListener('htmx:afterSwap', (evt) => {
+  if (evt.detail && evt.detail.target) renderTimestamps(evt.detail.target)
+})
+
+// ── DataCenter edit modal ─────────────────────────────────────────────────────
+
+const dcEditors = new Map()
+
+document.addEventListener('click', function (e) {
+  const editBtn = e.target.closest('[data-dc-edit-id]')
+  if (editBtn) {
+    const id = editBtn.dataset.dcEditId
+    const modal = document.getElementById('edit-modal-dc-' + id)
+    if (!modal) return
+
+    // Initialize editor lazily so it renders into a visible container
+    if (!dcEditors.has(id)) {
+      const dataEl = document.getElementById('dc-edit-data-' + id)
+      const initialJSON = dataEl ? dataEl.textContent.trim() : '{}'
+      const editorTarget = document.getElementById('dc-json-editor-' + id)
+      const editor = new window.JSONEditor({
+        target: editorTarget,
+        props: { mode: 'text', mainMenuBar: false },
+      })
+      editor.set({ text: JSON.stringify(JSON.parse(initialJSON), null, 2) })
+      dcEditors.set(id, editor)
+
+      const errorEl = document.getElementById('dc-edit-error-' + id)
+      const showError = (msg) => { errorEl.textContent = msg; errorEl.style.display = '' }
+      const clearError = () => { errorEl.textContent = ''; errorEl.style.display = 'none' }
+
+      document.getElementById('dc-edit-submit-' + id).addEventListener('click', async () => {
+        const btn = document.getElementById('dc-edit-submit-' + id)
+        clearError()
+        btn.classList.add('is-loading')
+        btn.disabled = true
+        try {
+          let vars
+          try { vars = JSON.parse(editor.get().text) } catch (_) {
+            showError('Invalid JSON — fix the syntax and try again.')
+            return
+          }
+          if (vars.assetDataV2 !== undefined && vars.assetDataV2 !== null && typeof vars.assetDataV2 !== 'string') {
+            vars.assetDataV2 = JSON.stringify(vars.assetDataV2)
+          }
+          const resp = await fetch('/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              query: `mutation UpdateDataCenter(
+                $id: ID!, $name: String!, $assetDataV2: String,
+                $updatedBy: String!, $updatedAt: DateTime!
+              ) {
+                updateDataCenter(input: {
+                  filter: { id: [$id] }
+                  set: { name: $name, assetDataV2: $assetDataV2, updatedBy: $updatedBy, updatedAt: $updatedAt }
+                }) {
+                  dataCenter { id name }
+                }
+              }`,
+              variables: {
+                ...vars,
+                id,
+                updatedBy: modal.dataset.currentUser || '',
+                updatedAt: new Date().toISOString(),
+              },
+            }),
+          })
+          if (!resp.ok) { showError(`Server error (${resp.status}) — try again.`); return }
+          const result = await resp.json()
+          if (result.errors && result.errors.length > 0) { showError(result.errors[0].message); return }
+          modal.classList.remove('is-active')
+          document.documentElement.style.overflow = ''
+          dcEditors.delete(id)
+          htmx.ajax('GET', '/datacenters/' + id, { target: '#tab-content-' + id, swap: 'innerHTML' })
+        } catch (err) {
+          showError('Request failed — check your connection and try again.')
+        } finally {
+          btn.classList.remove('is-loading')
+          btn.disabled = false
+        }
+      })
+    }
+
+    const errorEl = document.getElementById('dc-edit-error-' + id)
+    if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none' }
+    modal.classList.add('is-active')
+    document.documentElement.style.overflow = 'hidden'
+    return
+  }
+
+  const closeBtn = e.target.closest('[data-dc-modal-close]')
+  if (closeBtn) {
+    const id = closeBtn.dataset.dcModalClose
+    const modal = document.getElementById('edit-modal-dc-' + id)
+    if (modal) {
+      modal.classList.remove('is-active')
+      document.documentElement.style.overflow = ''
+    }
+  }
+})
+
+// ── Server edit modal ─────────────────────────────────────────────────────────
+
+const srvEditors = new Map()
+
+document.addEventListener('click', function (e) {
+  const editBtn = e.target.closest('[data-srv-edit-id]')
+  if (editBtn) {
+    const id = editBtn.dataset.srvEditId
+    const modal = document.getElementById('edit-modal-srv-' + id)
+    if (!modal) return
+
+    if (!srvEditors.has(id)) {
+      const dataEl = document.getElementById('srv-edit-data-' + id)
+      const initialJSON = dataEl ? dataEl.textContent.trim() : '{}'
+      const editor = new window.JSONEditor({
+        target: document.getElementById('srv-json-editor-' + id),
+        props: { mode: 'text', mainMenuBar: false },
+      })
+      editor.set({ text: JSON.stringify(JSON.parse(initialJSON), null, 2) })
+      srvEditors.set(id, editor)
+
+      const errorEl = document.getElementById('srv-edit-error-' + id)
+      const showError = (msg) => { errorEl.textContent = msg; errorEl.style.display = '' }
+      const clearError = () => { errorEl.textContent = ''; errorEl.style.display = 'none' }
+
+      document.getElementById('srv-edit-submit-' + id).addEventListener('click', async () => {
+        const btn = document.getElementById('srv-edit-submit-' + id)
+        clearError()
+        btn.classList.add('is-loading')
+        btn.disabled = true
+        try {
+          let vars
+          try { vars = JSON.parse(editor.get().text) } catch (_) {
+            showError('Invalid JSON — fix the syntax and try again.')
+            return
+          }
+          const resp = await fetch('/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              query: `mutation UpdateServer(
+                $id: ID!, $hostname: String, $manufacturer: String, $model: String,
+                $oobMAC: String, $rackPosition: Int, $serviceTag: String,
+                $updatedBy: String!, $updatedAt: DateTime!
+              ) {
+                updateServer(input: {
+                  filter: { id: [$id] }
+                  set: {
+                    hostname: $hostname, manufacturer: $manufacturer, model: $model,
+                    oobMAC: $oobMAC, rackPosition: $rackPosition, serviceTag: $serviceTag,
+                    updatedBy: $updatedBy, updatedAt: $updatedAt
+                  }
+                }) {
+                  server { id hostname }
+                }
+              }`,
+              variables: {
+                ...vars,
+                id,
+                updatedBy: modal.dataset.currentUser || '',
+                updatedAt: new Date().toISOString(),
+              },
+            }),
+          })
+          if (!resp.ok) { showError(`Server error (${resp.status}) — try again.`); return }
+          const result = await resp.json()
+          if (result.errors && result.errors.length > 0) { showError(result.errors[0].message); return }
+          modal.classList.remove('is-active')
+          document.documentElement.style.overflow = ''
+          srvEditors.delete(id)
+          htmx.ajax('GET', modal.dataset.reloadUrl, { target: '#' + modal.dataset.reloadTarget, swap: 'innerHTML' })
+        } catch (err) {
+          showError('Request failed — check your connection and try again.')
+        } finally {
+          btn.classList.remove('is-loading')
+          btn.disabled = false
+        }
+      })
+    }
+
+    const errorEl = document.getElementById('srv-edit-error-' + id)
+    if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none' }
+    modal.classList.add('is-active')
+    document.documentElement.style.overflow = 'hidden'
+    return
+  }
+
+  const closeBtn = e.target.closest('[data-srv-modal-close]')
+  if (closeBtn) {
+    const id = closeBtn.dataset.srvModalClose
+    const modal = document.getElementById('edit-modal-srv-' + id)
+    if (modal) {
+      modal.classList.remove('is-active')
+      document.documentElement.style.overflow = ''
+    }
+  }
+})

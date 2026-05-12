@@ -93,10 +93,11 @@ mutation {
   addServer(input: [
     {
       serviceTag: "5HSC3D4"
+      manufacturer: "Dell"
       orbId: "2f-uae:5HSC3D4"
       name: "r03-u23.2f-uae"
       hostname: "r03-u23.2f-uae"
-      model: "Dell R660"
+      model: "PowerEdge R660"
       rackPosition: 23
       oobIP: { orbId: "2f-uae:10.96.127.50" }
       oobMAC: "fc:4c:ea:68:89:bb"
@@ -108,10 +109,11 @@ mutation {
     }
     {
       serviceTag: "6MLN3D4"
+      manufacturer: "Dell"
       orbId: "2f-uae:6MLN3D4"
       name: "r03-u24.2f-uae"
       hostname: "r03-u24.2f-uae"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 24
       oobIP: { orbId: "2f-uae:10.96.127.56" }
       oobMAC: "b4:e9:b8:c3:a3:33"
@@ -123,10 +125,11 @@ mutation {
     }
     {
       serviceTag: "9MLN3D4"
+      manufacturer: "Dell"
       orbId: "2f-uae:9MLN3D4"
       name: "r03-u25.2f-uae"
       hostname: "r03-u25.2f-uae"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 25
       oobIP: { orbId: "2f-uae:10.96.127.55" }
       oobMAC: "b4:e9:b8:c4:9a:2b"
@@ -138,10 +141,11 @@ mutation {
     }
     {
       serviceTag: "7MLN3D4"
+      manufacturer: "Dell"
       orbId: "2f-uae:7MLN3D4"
       name: "r04-u23.2f-uae"
       hostname: "r04-u23.2f-uae"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 23
       oobIP: { orbId: "2f-uae:10.96.127.54" }
       oobMAC: "b4:e9:b8:c3:a8:f3"
@@ -153,10 +157,11 @@ mutation {
     }
     {
       serviceTag: "3MLN3D4"
+      manufacturer: "Dell"
       orbId: "2f-uae:3MLN3D4"
       name: "r04-u24.2f-uae"
       hostname: "r04-u24.2f-uae"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 24
       oobIP: { orbId: "2f-uae:10.96.127.52" }
       oobMAC: "b4:e9:b8:c3:b0:83"
@@ -168,10 +173,11 @@ mutation {
     }
     {
       serviceTag: "2MLN3D4"
+      manufacturer: "Dell"
       orbId: "2f-uae:2MLN3D4"
       name: "r04-u25.2f-uae"
       hostname: "r04-u25.2f-uae"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 25
       oobIP: { orbId: "2f-uae:10.96.127.51" }
       oobMAC: "b4:e9:b8:c4:94:f3"

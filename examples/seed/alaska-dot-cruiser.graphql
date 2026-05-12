@@ -165,6 +165,7 @@ mutation {
   addServer(input: [
     {
       serviceTag: "2V36XB4"
+      manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:2V36XB4"
       name: "R450-8"
       model: "PowerEdge R450"
@@ -180,6 +181,7 @@ mutation {
     }
     {
       serviceTag: "DT36XB4"
+      manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:DT36XB4"
       name: "R450-7"
       model: "PowerEdge R450"
@@ -195,6 +197,7 @@ mutation {
     }
     {
       serviceTag: "1V36XB4"
+      manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:1V36XB4"
       name: "R450-6"
       model: "PowerEdge R450"
@@ -210,6 +213,7 @@ mutation {
     }
     {
       serviceTag: "JT36XB4"
+      manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:JT36XB4"
       name: "R450-5"
       model: "PowerEdge R450"
@@ -225,6 +229,7 @@ mutation {
     }
     {
       serviceTag: "FT36XB4"
+      manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:FT36XB4"
       name: "R450-4"
       model: "PowerEdge R450"
@@ -240,6 +245,7 @@ mutation {
     }
     {
       serviceTag: "HT36XB4"
+      manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:HT36XB4"
       name: "R450-3"
       model: "PowerEdge R450"
@@ -255,6 +261,7 @@ mutation {
     }
     {
       serviceTag: "GT36XB4"
+      manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:GT36XB4"
       name: "R450-2"
       model: "PowerEdge R450"
@@ -270,6 +277,7 @@ mutation {
     }
     {
       serviceTag: "3V36XB4"
+      manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:3V36XB4"
       name: "R450-1"
       model: "PowerEdge R450"
@@ -285,6 +293,7 @@ mutation {
     }
     {
       serviceTag: "C8R6XB4"
+      manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:C8R6XB4"
       name: "R660-1"
       model: "PowerEdge R660"
@@ -300,6 +309,7 @@ mutation {
     }
     {
       serviceTag: "F8R6XB4"
+      manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:F8R6XB4"
       name: "R660-2"
       model: "PowerEdge R660"
@@ -315,6 +325,7 @@ mutation {
     }
     {
       serviceTag: "B9V6XB4"
+      manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:B9V6XB4"
       name: "R660-3"
       model: "PowerEdge R660"
@@ -330,6 +341,7 @@ mutation {
     }
     {
       serviceTag: "D8R6XB4"
+      manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:D8R6XB4"
       name: "R660-4"
       model: "PowerEdge R660"
@@ -345,6 +357,7 @@ mutation {
     }
     {
       serviceTag: "7FF6XB4"
+      manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:7FF6XB4"
       name: "R760-1"
       model: "PowerEdge R760"
@@ -360,6 +373,7 @@ mutation {
     }
     {
       serviceTag: "2PR6YB4"
+      manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:2PR6YB4"
       name: "R760-2"
       model: "PowerEdge R760"
@@ -375,6 +389,7 @@ mutation {
     }
     {
       serviceTag: "DCT36XB4"
+      manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:DCT36XB4"
       name: "R450-A"
       model: "PowerEdge R450"

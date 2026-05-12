@@ -261,10 +261,11 @@ mutation {
   addServer(input: [
     {
       serviceTag: "65WVM34"
+      manufacturer: "Dell"
       orbId: "seattle:65WVM34"
       name: "r05-u03.seattle-galleon"
       hostname: "r05-u03.seattle-galleon"
-      model: "XE8640"
+      model: "PowerEdge XE8640"
       rackPosition: 3
       oobIP: { orbId: "seattle:10.20.43.7" }
       oobMAC: "c4:cb:e1:ba:37:84"
@@ -276,10 +277,11 @@ mutation {
     }
     {
       serviceTag: "95WVM34"
+      manufacturer: "Dell"
       orbId: "seattle:95WVM34"
       name: "r05-u07.seattle-galleon"
       hostname: "r05-u07.seattle-galleon"
-      model: "XE8640"
+      model: "PowerEdge XE8640"
       rackPosition: 7
       oobIP: { orbId: "seattle:10.20.43.4" }
       oobMAC: "c4:cb:e1:ba:37:5a"
@@ -291,6 +293,7 @@ mutation {
     }
     {
       serviceTag: "JD268Y3"
+      manufacturer: "Dell"
       orbId: "seattle:JD268Y3"
       model: "PowerEdge R350"
       oobIP: { orbId: "seattle:10.20.33.49" }
@@ -303,6 +306,7 @@ mutation {
     }
     {
       serviceTag: "FZ7P7Y3"
+      manufacturer: "Dell"
       orbId: "seattle:FZ7P7Y3"
       model: "PowerEdge R750"
       oobIP: { orbId: "seattle:10.20.33.51" }
@@ -315,6 +319,7 @@ mutation {
     }
     {
       serviceTag: "5L4P7Y3"
+      manufacturer: "Dell"
       orbId: "seattle:5L4P7Y3"
       model: "PowerEdge R650"
       oobIP: { orbId: "seattle:10.20.33.52" }
@@ -327,6 +332,7 @@ mutation {
     }
     {
       serviceTag: "6L4P7Y3"
+      manufacturer: "Dell"
       orbId: "seattle:6L4P7Y3"
       model: "PowerEdge R650"
       oobIP: { orbId: "seattle:10.20.33.53" }
@@ -339,6 +345,7 @@ mutation {
     }
     {
       serviceTag: "7L4P7Y3"
+      manufacturer: "Dell"
       orbId: "seattle:7L4P7Y3"
       model: "PowerEdge R650"
       oobIP: { orbId: "seattle:10.20.33.54" }
@@ -351,6 +358,7 @@ mutation {
     }
     {
       serviceTag: "GMP6K74"
+      manufacturer: "Dell"
       orbId: "seattle:GMP6K74"
       model: "PowerEdge R450"
       oobIP: { orbId: "seattle:10.20.43.2" }
@@ -363,6 +371,7 @@ mutation {
     }
     {
       serviceTag: "JMP6K74"
+      manufacturer: "Dell"
       orbId: "seattle:JMP6K74"
       model: "PowerEdge R450"
       oobIP: { orbId: "seattle:10.20.43.3" }
@@ -375,10 +384,11 @@ mutation {
     }
     {
       serviceTag: "HVZ8Z44"
+      manufacturer: "Dell"
       orbId: "seattle:HVZ8Z44"
       name: "r04-u13.seattle-galleon"
       hostname: "r04-u13.seattle-galleon"
-      model: "Dell AX650"
+      model: "PowerEdge AX650"
       rackPosition: 13
       oobIP: { orbId: "seattle:10.20.33.61" }
       oobMAC: "a8:3c:a5:42:42:f2"
@@ -390,10 +400,11 @@ mutation {
     }
     {
       serviceTag: "3WZ8Z44"
+      manufacturer: "Dell"
       orbId: "seattle:3WZ8Z44"
       name: "r04-u14.seattle-galleon"
       hostname: "r04-u14.seattle-galleon"
-      model: "Dell AX650"
+      model: "PowerEdge AX650"
       rackPosition: 14
       oobIP: { orbId: "seattle:10.20.33.62" }
       oobMAC: "a8:3c:a5:43:f5:98"
@@ -405,10 +416,11 @@ mutation {
     }
     {
       serviceTag: "2WZ8Z44"
+      manufacturer: "Dell"
       orbId: "seattle:2WZ8Z44"
       name: "r04-u15.seattle-galleon"
       hostname: "r04-u15.seattle-galleon"
-      model: "Dell AX650"
+      model: "PowerEdge AX650"
       rackPosition: 15
       oobIP: { orbId: "seattle:10.20.33.63" }
       oobMAC: "a8:3c:a5:43:e9:56"
@@ -420,10 +432,11 @@ mutation {
     }
     {
       serviceTag: "1WZ8Z44"
+      manufacturer: "Dell"
       orbId: "seattle:1WZ8Z44"
       name: "r04-u16.seattle-galleon"
       hostname: "r04-u16.seattle-galleon"
-      model: "Dell AX650"
+      model: "PowerEdge AX650"
       rackPosition: 16
       oobIP: { orbId: "seattle:10.20.33.64" }
       oobMAC: "a8:3c:a5:43:e9:6e"
@@ -435,10 +448,11 @@ mutation {
     }
     {
       serviceTag: "4WZ8Z44"
+      manufacturer: "Dell"
       orbId: "seattle:4WZ8Z44"
       name: "r04-u17.seattle-galleon"
       hostname: "r04-u17.seattle-galleon"
-      model: "Dell AX650"
+      model: "PowerEdge AX650"
       rackPosition: 17
       oobIP: { orbId: "seattle:10.20.33.65" }
       oobMAC: "a8:3c:a5:40:dd:07"
@@ -450,10 +464,11 @@ mutation {
     }
     {
       serviceTag: "JVZ8Z44"
+      manufacturer: "Dell"
       orbId: "seattle:JVZ8Z44"
       name: "r04-u18.seattle-galleon"
       hostname: "r04-u18.seattle-galleon"
-      model: "Dell AX650"
+      model: "PowerEdge AX650"
       rackPosition: 18
       oobIP: { orbId: "seattle:10.20.33.66" }
       oobMAC: "a8:3c:a5:40:c5:07"
@@ -465,10 +480,11 @@ mutation {
     }
     {
       serviceTag: "7FS1L44"
+      manufacturer: "Dell"
       orbId: "seattle:7FS1L44"
       name: "r04-u21.seattle-galleon"
       hostname: "r04-u21.seattle-galleon"
-      model: "Dell AX650"
+      model: "PowerEdge AX650"
       rackPosition: 21
       oobIP: { orbId: "seattle:10.20.33.67" }
       oobMAC: "a8:3c:a5:43:f2:50"
@@ -480,10 +496,11 @@ mutation {
     }
     {
       serviceTag: "BDP1L44"
+      manufacturer: "Dell"
       orbId: "seattle:BDP1L44"
       name: "r04-u22.seattle-galleon"
       hostname: "r04-u22.seattle-galleon"
-      model: "Dell AX650"
+      model: "PowerEdge AX650"
       rackPosition: 22
       oobIP: { orbId: "seattle:10.20.33.68" }
       oobMAC: "a8:3c:a5:43:f4:54"
@@ -495,10 +512,11 @@ mutation {
     }
     {
       serviceTag: "9DP1L44"
+      manufacturer: "Dell"
       orbId: "seattle:9DP1L44"
       name: "r04-u23.seattle-galleon"
       hostname: "r04-u23.seattle-galleon"
-      model: "Dell AX650"
+      model: "PowerEdge AX650"
       rackPosition: 23
       oobIP: { orbId: "seattle:10.20.33.69" }
       oobMAC: "a8:3c:a5:43:f4:fc"
@@ -510,10 +528,11 @@ mutation {
     }
     {
       serviceTag: "97WVM34"
+      manufacturer: "Dell"
       orbId: "seattle:97WVM34"
       name: "r03-u01.seattle-galleon"
       hostname: "r03-u01.seattle-galleon"
-      model: "Dell XE8640"
+      model: "PowerEdge XE8640"
       rackPosition: 1
       oobIP: { orbId: "seattle:10.20.43.5" }
       oobMAC: "c4:cb:e1:b6:45:48"
@@ -525,10 +544,11 @@ mutation {
     }
     {
       serviceTag: "DLP6K74"
+      manufacturer: "Dell"
       orbId: "seattle:DLP6K74"
       name: "r02-u21.seattle-galleon"
       hostname: "r02-u21.seattle-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 21
       oobIP: { orbId: "seattle:10.96.87.15" }
       oobMAC: "e8:cf:83:27:a5:73"
@@ -540,10 +560,11 @@ mutation {
     }
     {
       serviceTag: "75WVM34"
+      manufacturer: "Dell"
       orbId: "seattle:75WVM34"
       name: "r03-u05.seattle-galleon"
       hostname: "r03-u05.seattle-galleon"
-      model: "Dell XE8640"
+      model: "PowerEdge XE8640"
       rackPosition: 5
       oobIP: { orbId: "seattle:10.20.43.6" }
       oobMAC: "c4:cb:e1:ba:3a:90"
@@ -555,10 +576,11 @@ mutation {
     }
     {
       serviceTag: "GLP6K74"
+      manufacturer: "Dell"
       orbId: "seattle:GLP6K74"
       name: "r01-u15.seattle-galleon"
       hostname: "r01-u15.seattle-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 15
       oobIP: { orbId: "seattle:10.96.87.17" }
       oobMAC: "e8:cf:83:27:b2:9b"
@@ -570,10 +592,11 @@ mutation {
     }
     {
       serviceTag: "HLP6K74"
+      manufacturer: "Dell"
       orbId: "seattle:HLP6K74"
       name: "r01-u17.seattle-galleon"
       hostname: "r01-u17.seattle-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 17
       oobIP: { orbId: "seattle:10.96.87.16" }
       oobMAC: "e8:cf:83:27:aa:2b"
@@ -585,10 +608,11 @@ mutation {
     }
     {
       serviceTag: "42TD3H4"
+      manufacturer: "Dell"
       orbId: "seattle:42TD3H4"
       name: "r04-u03.seattle-galleon"
       hostname: "r04-u03.seattle-galleon"
-      model: "Dell XE7745"
+      model: "PowerEdge XE7745"
       rackPosition: 3
       oobIP: { orbId: "seattle:10.20.43.8" }
       oobMAC: "6c:3c:8c:93:bd:72"

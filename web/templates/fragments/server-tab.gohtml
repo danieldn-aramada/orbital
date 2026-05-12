@@ -1,177 +1,161 @@
 <div class="fixed-grid has-3-cols mb-0">
+
   <div class="columns m-0">
-    <div class="column pt-0 pl-0 pr-0 is-one-third">
-      <button class="button is-rounded is-small is-warning mt-1">
-          <span class="icon"><i class="fa-solid fa-link"></i></span>
-          <span>IDRAC</span>
-      </button>
-      <button class="button is-rounded is-small is-warning mt-1">
-          <span class="icon"><i class="fa-solid fa-network-wired"></i></span>
-          <span>Netbox</span>
-      </button>
-      <button class="button is-rounded is-small is-warning mt-1">
-          <span class="icon"><i class="fa-solid fa-cloud"></i></span>
-          <span>Azure Arc</span>
-      </button>
-      <button class="button is-rounded is-small is-warning mt-1">
-          <span class="icon k8s-icon">
-            <img src="/static/k8s.svg" style="width: 1.4em; height: 1.4em;">
-          </span>
-          <span>Cluster</span>
-      </button>
-    </div>
     <div class="column pt-0 pl-0">
-      <button id="reload" class="button is-rounded is-small is-link mt-1" onclick="location.reload();"      >
+      {{if .ShowDCBack}}
+      <button class="button is-rounded is-small is-link mt-1"
+        hx-get="/datacenters/{{.DataCenterID}}"
+        hx-target="#tab-content-{{.DataCenterID}}"
+        hx-swap="innerHTML">
+        <span class="icon"><i class="fa-solid fa-arrow-left"></i></span>
+        <span>{{.DataCenterName}}</span>
+      </button>
+      {{end}}
+      <button class="button is-rounded is-small is-warning mt-1 todo">
+        <span class="icon"><i class="fa-solid fa-gauge-high"></i></span>
+        <span>Grafana</span>
+      </button>
+      <button class="button is-rounded is-small is-link mt-1"
+        hx-get="/servers/{{.ID}}{{if .ShowDCBack}}?dcCtx=1{{end}}"
+        hx-target="{{if .ShowDCBack}}#tab-content-{{.DataCenterID}}{{else}}#tab-content-srv-{{.ID}}{{end}}"
+        hx-swap="innerHTML">
         <span class="icon"><i class="fa-solid fa-refresh"></i></span>
         <span>Reload</span>
       </button>
-      <button id="edit" class="button modal-button is-rounded is-small is-link js-modal-trigger mt-1" data-target="edit-modal">
+      <button class="button is-rounded is-small is-link mt-1" data-srv-edit-id="{{.ID}}">
         <span class="icon"><i class="fa-solid fa-pen-to-square"></i></span>
         <span>Edit</span>
       </button>
-      <button id="destroy" class="button is-rounded is-small is-danger mt-1">
-        <span class="icon"><i class="fa-solid fa-skull-crossbones"></i></span>
-        <span>Destroy</span>
+      <button class="button is-rounded is-small is-danger mt-1 todo">
+        <span class="icon"><i class="fa-solid fa-trash"></i></span>
+        <span>Delete</span>
       </button>
     </div>
   </div>
+
   <div class="grid">
     <div class="cell is-col-span-2 is-row-span-1">
       <article class="box">
         <p class="is-size-4 pb-4">Server Summary</p>
+        <div style="overflow-x: auto">
         <table class="table is-fullwidth">
           <tbody>
-            <tr>
-              <td style="width: 40%;">BMC IP</td>
-              <td>{{.Server.BmcIp}}</td>
-            </tr>
-            <tr>
-              <td >Galleon</td>
-              <td>{{.Server.GalleonName}}</td>
-            </tr>
-            <tr>
-              <td>Model</td>
-              <td>{{.Server.Model}}</td>
-            </tr>
-            <tr>
-              <td>Power</td>
-              <td>
-                <span class="icon has-text-warning is-size-5">
-                  <i class="fas fa-exclamation-triangle"></i>
-                </span>
-                <span>Unknown (Reload for Redfish API call)</span>
-              </td>
-            </tr>
-            <tr>
-              <td>Boot Mode</td>
-              <td>{{.Server.BootMode}}</td>
-            </tr>
-            <tr>
-              <td>Boot Sequence</td>
-              <td>{{.Server.BootSequence}}</td>
-            </tr>
-            <tr>
-              <td>PXE Device 1</td>
-              <td>{{.Server.PxeDevice1}}</td>
-            </tr>
+            <tr><td style="white-space:nowrap;width:1%">Data Center</td><td>{{if .DataCenterName}}{{.DataCenterName}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Hostname</td><td>{{if .Hostname}}{{.Hostname}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Manufacturer</td><td>{{if .Manufacturer}}{{.Manufacturer}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Model</td><td>{{if .Model}}{{.Model}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">OOB IP</td><td>{{if .OobIP}}{{.OobIP}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">OOB MAC</td><td>{{if .OobMAC}}{{.OobMAC}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Rack</td><td>{{if .Rack.Name}}{{.Rack.Name}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Rack Position</td><td>{{if .RackPosition}}{{.RackPosition}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Service Tag</td><td>{{if .ServiceTag}}{{.ServiceTag}}{{else}}—{{end}}</td></tr>
           </tbody>
-
         </table>
+        </div>
       </article>
     </div>
+
     <div class="cell is-row-span-1">
-      <article class="box" style="height: 100%";>
+      <article class="box" style="height:100%">
         <p class="is-size-4 mb-4">Metadata</p>
+        <div style="overflow-x: auto">
         <table class="table mb-0">
           <tbody>
-            <tr>
-              <td style="width: 30%">Owner</td>
-              <td><a target="_blank">Daniel Nguyen</a></td>
-            </tr>
-            <tr>
-              <td>Reserved</td>
-              <td>Oct 13, 2025</td>
-            </tr>
-            <tr>
-              <td>Cluster</td>
-              <td>Unassigned</td>
-            </tr>
+            <tr><td style="white-space:nowrap;width:1%">Namespace</td><td>{{if .Namespace.Name}}{{.Namespace.Name}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Orb ID</td><td>{{if .OrbID}}{{.OrbID}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Created By</td><td>{{if .CreatedBy}}{{.CreatedBy}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Created At</td><td>{{if .CreatedAt}}<span data-timestamp="{{.CreatedAt}}">{{.CreatedAt}}</span>{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Last Updated</td><td>{{if .UpdatedAt}}<span data-timestamp="{{.UpdatedAt}}">{{.UpdatedAt}}</span>{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Last Updated By</td><td>{{if .UpdatedBy}}{{.UpdatedBy}}{{else}}—{{end}}</td></tr>
           </tbody>
-
         </table>
-        <!-- <div class="field is-grouped"> -->
-          <button id="edit" class="button is-rounded is-small is-link is-outlined is-fullwidth mt-5">
-            <span class="icon"><i class="fa-solid fa-pen-to-square"></i></span>
-            <span>Assign Cluster</span>
-          </button>
-          <button id="edit" class="button is-rounded is-small is-link is-outlined is-fullwidth mt-3">
-            <span class="icon"><i class="fa-solid fa-hand"></i></span>
-            <span>Reserve</span>
-          </button>
-          <button id="edit" class="button is-rounded is-small is-link is-outlined is-fullwidth mt-3">
-            <span class="icon"><i class="fa-solid fa-unlock"></i></span>
-            <span>Release</span>
-          </button>
-        <!-- </div> -->
-
-        <!-- <div class="buttons">
-          <button id="edit-btn" class="button is-fullwidth is-small is-rounded is-link is-outlined js-modal-trigger" data-target="edit-modal">
-            <span class="icon is-small"><i class="fa-regular fa-pen-to-square"></i></span>
-            <span>Edit</span>
-          </button>
-          <button id="reload-btn" class="button is-fullwidth is-small is-rounded is-link is-outlined">
-            <span class="icon is-small"><i class="fa-solid fa-rotate-right"></i></span>
-            <span>Reload</span>
-          </button>
-          <button id="delete-btn" class="button is-fullwidth is-small is-rounded is-danger is-outlined js-modal-trigger" data-target="delete-modal">
-            <span class="icon is-small"><i class="fa-solid fa-trash"></i></span>
-            <span>Delete</span>
-          </button>
-        </div> -->
-
+        </div>
       </article>
     </div>
-    <div class="cell is-col-span-3 is-fullheight">
-      <article class="box pb-2">
-        <p class="is-size-4 pb-4">Server Details</p>
 
-        <div class="tabs is-boxed">
+    <div class="cell is-col-span-3">
+      <article class="box pb-2">
+        <p class="is-size-4 pb-4">Details</p>
+        <div class="tabs is-boxed" id="srv-detail-tabs-{{.ID}}">
           <ul>
-            <li id="{{.Server.Id}}-ev-detlink" class="detlinks is-active" onclick="openServerTab('{{.Server.Id}}-ev-det')">
-              <a><span class="icon is-small"><i class="fa-solid fa-bell"></i></span><span>Events</span></a>
+            <li class="is-active" data-panel="srv-panel-idrac-{{.ID}}">
+              <a><span class="icon is-small"><i class="fa-solid fa-microchip"></i></span><span>iDRAC</span></a>
             </li>
-            <li id="{{.Server.Id}}-approvals-detlink" class="detlinks" onclick="openServerTab('{{.Server.Id}}-approvals-det')">
-              <a><span class="icon is-small"><i class="fa-solid fa-stamp"></i></span><span>Approvals</span></a>
+            <li data-panel="srv-panel-storage-{{.ID}}">
+              <a><span class="icon is-small"><i class="fa-solid fa-hard-drive"></i></span><span>Storage</span></a>
             </li>
-            <li id="{{.Server.Id}}-additional-detlink" class="detlinks" onclick="openServerTab('{{.Server.Id}}-additional-det')">
-              <a><span class="icon is-small"><i class="fa-solid fa-server"></i></span><span>Additional</span></a>
+            <li data-panel="srv-panel-config-{{.ID}}">
+              <a><span class="icon is-small"><i class="fa-solid fa-file-code"></i></span><span>Config Profile</span></a>
             </li>
           </ul>
         </div>
-        
-        <div id="{{.Server.Id}}-ev-det" class="detcontent">
-            <table id="{{.Server.Id}}-ev" class="table is-striped">
-              <thead>
-                <tr>
-                  <th>Type</th>
-                  <th>Timestamp</th>
-                  <th>User</th>
-                  <th>Message</th>
-                  <th>Details</th>
-                </tr>
-              </thead>
-            </table>
-        </div>
-        
-        <div id="{{.Server.Id}}-info-det" class="detcontent is-hidden">
-          <table class="table">
-            <tr><td>BMC IP</td><td>{{.Server.BmcIp}}</td></tr>
-            <tr><td>Model</td><td>{{.Server.Model}}</td></tr>
+
+        <div style="min-height: 300px">
+
+        <div id="srv-panel-idrac-{{.ID}}">
+          {{if .IdracSettings}}
+          <table class="table is-fullwidth is-size-7 mt-2">
+            <tbody>
+              <tr><td style="white-space:nowrap;width:1%">Firmware Version</td><td>{{if .IdracSettings.FirmwareVersion}}{{.IdracSettings.FirmwareVersion}}{{else}}—{{end}}</td></tr>
+              <tr><td style="white-space:nowrap">SSH Enabled</td><td>{{.IdracSettings.SshEnabled}}</td></tr>
+              <tr><td style="white-space:nowrap">USB Mgmt Port Enabled</td><td>{{.IdracSettings.UsbManagementPortEnabled}}</td></tr>
+              <tr><td style="white-space:nowrap">OS-to-iDRAC Pass-through</td><td>{{.IdracSettings.OsToIdracPassThroughEnabled}}</td></tr>
+            </tbody>
           </table>
-        </div>        
+          {{else}}
+          <p class="is-size-7 has-text-grey p-2">No iDRAC settings discovered yet.</p>
+          {{end}}
+        </div>
+
+        <div id="srv-panel-storage-{{.ID}}" style="display:none">
+          {{if .StorageControllers}}
+          {{range .StorageControllers}}
+          <p class="is-size-7 has-text-weight-semibold mt-2 mb-1 pl-1">{{.OrbID}}</p>
+          {{if .StorageDevices}}
+          <div style="overflow-x:auto">
+          <table class="table is-striped is-hoverable is-fullwidth is-size-7">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Manufacturer</th>
+                <th>Capacity (bytes)</th>
+                <th>Serial</th>
+                <th>WWN</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .StorageDevices}}
+              <tr>
+                <td>{{if .Model}}{{.Model}}{{else}}—{{end}}</td>
+                <td>{{if .Manufacturer}}{{.Manufacturer}}{{else}}—{{end}}</td>
+                <td>{{if .CapacityBytes}}{{.CapacityBytes}}{{else}}—{{end}}</td>
+                <td>{{if .SerialNumber}}{{.SerialNumber}}{{else}}—{{end}}</td>
+                <td>{{if .WWN}}{{.WWN}}{{else}}—{{end}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+          </div>
+          {{end}}
+          {{end}}
+          {{else}}
+          <p class="is-size-7 has-text-grey p-2">No storage discovered yet.</p>
+          {{end}}
+        </div>
+
+        <div id="srv-panel-config-{{.ID}}" style="display:none">
+          {{if .ConfigProfileJSON}}
+          <pre style="font-size:0.75rem;overflow-x:auto;background:transparent;padding:0.5rem">{{.ConfigProfileJSON}}</pre>
+          {{else}}
+          <p class="is-size-7 has-text-grey p-2">No configuration profile discovered yet.</p>
+          {{end}}
+        </div>
+
+        </div>
       </article>
     </div>
   </div>
+
 </div>
-{{template "edit-modal.gohtml" .}}
-{{template "delete-modal.gohtml" .}}
+
+{{template "edit-modal-server.gohtml" .}}

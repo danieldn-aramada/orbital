@@ -100,6 +100,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	ui.SetOCIConfig(ociConfigured, cfg.OCIRegistry, cfg.OCIRepo)
 	e.GET("/", ui.Index)
 	e.GET("/datacenters", ui.Index)
+	e.GET("/servers", ui.Servers)
 	e.GET("/backups", ui.Backups)
 	e.GET("/divergence-reports", ui.DivergenceReports)
 	e.GET("/audit-log", ui.AuditLog)
@@ -133,6 +134,9 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 
 	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.Dev, logger)
 	e.GET("/datacenters/:id", dc.Tab)
+
+	srv := handler.NewServerHandler(cfg.DGraphURL, cfg.Dev, logger)
+	e.GET("/servers/:id", srv.Tab)
 
 	if db != nil {
 		exp := handler.NewExport(db, cfg.DGraphURL, cfg.DGraphScratchURL, cfg.DGraphScratchAdminURL, cfg.ExportDir, cfg.DGraphScratchExportDir, cfg.SchemaPath, logger)

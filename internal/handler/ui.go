@@ -132,6 +132,13 @@ func (h *UI) EdgeDelivery(c echo.Context) error {
 	})
 }
 
+func (h *UI) Servers(c echo.Context) error {
+	return h.render(c, "servers", page.Servers{
+		Base:      h.base(c),
+		PageTitle: "Servers",
+	})
+}
+
 func (h *UI) Schema(c echo.Context) error {
 	content, err := os.ReadFile("schema/schema-v1.graphql")
 	if err != nil {

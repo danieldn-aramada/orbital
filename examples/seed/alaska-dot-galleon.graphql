@@ -141,10 +141,11 @@ mutation {
   addServer(input: [
     {
       serviceTag: "GRTLY24"
+      manufacturer: "Dell"
       orbId: "alaska-dot:GRTLY24"
       name: "r05-u03.alaska-dot-galleon"
       hostname: "r01-u03.alaska-dot-galleon"
-      model: "Dell XE9680"
+      model: "PowerEdge XE9680"
       rackPosition: 3
       oobIP: { orbId: "alaska-dot:10.61.95.50" }
       oobMAC: "c4:cb:e1:c8:a0:38"
@@ -156,10 +157,11 @@ mutation {
     }
     {
       serviceTag: "55W8K44"
+      manufacturer: "Dell"
       orbId: "alaska-dot:55W8K44"
       name: "r05-u10.alaska-dot-galleon"
       hostname: "r01-u10.alaska-dot-galleon"
-      model: "Dell R660"
+      model: "PowerEdge R660"
       rackPosition: 10
       oobIP: { orbId: "alaska-dot:10.61.95.51" }
       oobMAC: "c4:5a:b1:cb:12:65"
@@ -171,10 +173,11 @@ mutation {
     }
     {
       serviceTag: "75W8K44"
+      manufacturer: "Dell"
       orbId: "alaska-dot:75W8K44"
       name: "r05-u11.alaska-dot-galleon"
       hostname: "r01-u11.alaska-dot-galleon"
-      model: "Dell R660"
+      model: "PowerEdge R660"
       rackPosition: 11
       oobIP: { orbId: "alaska-dot:10.61.95.52" }
       oobMAC: "c4:5a:b1:cb:11:0f"
@@ -186,10 +189,11 @@ mutation {
     }
     {
       serviceTag: "65W8K44"
+      manufacturer: "Dell"
       orbId: "alaska-dot:65W8K44"
       name: "r05-u12.alaska-dot-galleon"
       hostname: "r01-u12.alaska-dot-galleon"
-      model: "Dell R660"
+      model: "PowerEdge R660"
       rackPosition: 12
       oobIP: { orbId: "alaska-dot:10.61.95.53" }
       oobMAC: "c4:5a:b1:cb:12:59"
@@ -201,10 +205,11 @@ mutation {
     }
     {
       serviceTag: "85W8K44"
+      manufacturer: "Dell"
       orbId: "alaska-dot:85W8K44"
       name: "r05-u13.alaska-dot-galleon"
       hostname: "r01-u13.alaska-dot-galleon"
-      model: "Dell R660"
+      model: "PowerEdge R660"
       rackPosition: 13
       oobIP: { orbId: "alaska-dot:10.61.95.54" }
       oobMAC: "c4:5a:b1:c7:b7:0b"
@@ -216,10 +221,11 @@ mutation {
     }
     {
       serviceTag: "6FK8K44"
+      manufacturer: "Dell"
       orbId: "alaska-dot:6FK8K44"
       name: "r05-u15.alaska-dot-galleon"
       hostname: "r01-u15.alaska-dot-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 15
       oobIP: { orbId: "alaska-dot:10.61.95.55" }
       oobMAC: "d0:46:0c:73:3d:90"
@@ -231,10 +237,11 @@ mutation {
     }
     {
       serviceTag: "3FK8K44"
+      manufacturer: "Dell"
       orbId: "alaska-dot:3FK8K44"
       name: "r05-u16.alaska-dot-galleon"
       hostname: "r01-u16.alaska-dot-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 16
       oobIP: { orbId: "alaska-dot:10.61.95.56" }
       oobMAC: "d0:46:0c:73:3c:80"
@@ -246,10 +253,11 @@ mutation {
     }
     {
       serviceTag: "1FK8K44"
+      manufacturer: "Dell"
       orbId: "alaska-dot:1FK8K44"
       name: "r05-u17.alaska-dot-galleon"
       hostname: "r01-u17.alaska-dot-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 17
       oobIP: { orbId: "alaska-dot:10.61.95.57" }
       oobMAC: "d0:46:0c:73:2c:98"
@@ -261,10 +269,11 @@ mutation {
     }
     {
       serviceTag: "5FK8K44"
+      manufacturer: "Dell"
       orbId: "alaska-dot:5FK8K44"
       name: "r05-u18.alaska-dot-galleon"
       hostname: "r01-u18.alaska-dot-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 18
       oobIP: { orbId: "alaska-dot:10.61.95.58" }
       oobMAC: "d0:46:0c:73:3c:90"
@@ -276,10 +285,11 @@ mutation {
     }
     {
       serviceTag: "4FK8K44"
+      manufacturer: "Dell"
       orbId: "alaska-dot:4FK8K44"
       name: "r05-u19.alaska-dot-galleon"
       hostname: "r01-u19.alaska-dot-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 19
       oobIP: { orbId: "alaska-dot:10.61.95.59" }
       createdBy: "admin@armada.ai"
@@ -290,10 +300,11 @@ mutation {
     }
     {
       serviceTag: "JDK8K44"
+      manufacturer: "Dell"
       orbId: "alaska-dot:JDK8K44"
       name: "r05-u20.alaska-dot-galleon"
       hostname: "r01-u20.alaska-dot-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 20
       oobIP: { orbId: "alaska-dot:10.61.95.60" }
       oobMAC: "d0:46:0c:73:3f:38"
@@ -305,10 +316,11 @@ mutation {
     }
     {
       serviceTag: "2FK8K44"
+      manufacturer: "Dell"
       orbId: "alaska-dot:2FK8K44"
       name: "r05-u21.alaska-dot-galleon"
       hostname: "r01-u21.alaska-dot-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 21
       oobIP: { orbId: "alaska-dot:10.61.95.61" }
       oobMAC: "d0:46:0c:73:3c:98"
@@ -320,10 +332,11 @@ mutation {
     }
     {
       serviceTag: "3H3V564"
+      manufacturer: "Dell"
       orbId: "alaska-dot:3H3V564"
       name: "r05-u25.alaska-dot-galleon"
       hostname: "r01-u25.alaska-dot-galleon"
-      model: "Dell R760"
+      model: "PowerEdge R760"
       rackPosition: 25
       oobIP: { orbId: "alaska-dot:10.61.95.62" }
       oobMAC: "d0:c1:b5:04:6a:12"

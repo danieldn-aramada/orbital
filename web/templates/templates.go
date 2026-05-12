@@ -40,6 +40,7 @@ func Map() map[string]*template.Template {
 		"audit-log":          template.Must(template.ParseFiles(page("web/templates/pages/audit-log.gohtml")...)),
 		"schema":             template.Must(template.ParseFiles(page("web/templates/pages/schema.gohtml")...)),
 		"export":             template.Must(template.ParseFiles(page("web/templates/pages/export.gohtml")...)),
-		"edge-delivery":     template.Must(template.ParseFiles(page("web/templates/pages/edge-delivery.gohtml")...)),
+		"edge-delivery": template.Must(template.ParseFiles(page("web/templates/pages/edge-delivery.gohtml")...)),
+		"servers":        template.Must(template.ParseFiles(page("web/templates/pages/servers.gohtml")...)),
 	}
 }

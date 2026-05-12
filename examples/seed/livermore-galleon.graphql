@@ -72,10 +72,11 @@ mutation {
   addServer(input: [
     {
       serviceTag: "FY69K74"
+      manufacturer: "Dell"
       orbId: "livermore:FY69K74"
       name: "r01-u07.livermore-galleon"
       hostname: "r01-u07.livermore-galleon"
-      model: "Dell R650"
+      model: "PowerEdge R650"
       rackPosition: 7
       oobIP: { orbId: "livermore:10.96.149.61" }
       oobMAC: "a8:3c:a5:48:5b:4b"
@@ -87,10 +88,11 @@ mutation {
     }
     {
       serviceTag: "8Y69K74"
+      manufacturer: "Dell"
       orbId: "livermore:8Y69K74"
       name: "r01-u08.livermore-galleon"
       hostname: "r01-u08.livermore-galleon"
-      model: "Dell R650"
+      model: "PowerEdge R650"
       rackPosition: 8
       oobIP: { orbId: "livermore:10.96.149.62" }
       oobMAC: "a8:3c:a5:4c:2b:23"
@@ -102,10 +104,11 @@ mutation {
     }
     {
       serviceTag: "1Z69K74"
+      manufacturer: "Dell"
       orbId: "livermore:1Z69K74"
       name: "r01-u09.livermore-galleon"
       hostname: "r01-u09.livermore-galleon"
-      model: "Dell R650"
+      model: "PowerEdge R650"
       rackPosition: 9
       oobIP: { orbId: "livermore:10.96.149.63" }
       oobMAC: "c0:47:0e:c6:21:79"
@@ -117,10 +120,11 @@ mutation {
     }
     {
       serviceTag: "2Z69K74"
+      manufacturer: "Dell"
       orbId: "livermore:2Z69K74"
       name: "r01-u10.livermore-galleon"
       hostname: "r01-u10.livermore-galleon"
-      model: "Dell R650"
+      model: "PowerEdge R650"
       rackPosition: 10
       oobIP: { orbId: "livermore:10.96.149.64" }
       oobMAC: "c0:47:0e:c6:21:49"
@@ -132,10 +136,11 @@ mutation {
     }
     {
       serviceTag: "6Z69K74"
+      manufacturer: "Dell"
       orbId: "livermore:6Z69K74"
       name: "r01-u11.livermore-galleon"
       hostname: "r01-u11.livermore-galleon"
-      model: "Dell R650"
+      model: "PowerEdge R650"
       rackPosition: 11
       oobIP: { orbId: "livermore:10.96.149.65" }
       oobMAC: "c0:47:0e:c6:20:c5"
@@ -147,10 +152,11 @@ mutation {
     }
     {
       serviceTag: "3Z69K74"
+      manufacturer: "Dell"
       orbId: "livermore:3Z69K74"
       name: "r01-u12.livermore-galleon"
       hostname: "r01-u12.livermore-galleon"
-      model: "Dell R650"
+      model: "PowerEdge R650"
       rackPosition: 12
       oobIP: { orbId: "livermore:10.96.149.66" }
       oobMAC: "c0:47:0e:c6:1e:df"
@@ -162,10 +168,11 @@ mutation {
     }
     {
       serviceTag: "4Z69K74"
+      manufacturer: "Dell"
       orbId: "livermore:4Z69K74"
       name: "r01-u13.livermore-galleon"
       hostname: "r01-u13.livermore-galleon"
-      model: "Dell R650"
+      model: "PowerEdge R650"
       rackPosition: 13
       oobIP: { orbId: "livermore:10.96.149.67" }
       oobMAC: "c0:47:0e:c6:1f:4b"
@@ -177,10 +184,11 @@ mutation {
     }
     {
       serviceTag: "5Z69K74"
+      manufacturer: "Dell"
       orbId: "livermore:5Z69K74"
       name: "r01-u14.livermore-galleon"
       hostname: "r01-u14.livermore-galleon"
-      model: "Dell R650"
+      model: "PowerEdge R650"
       rackPosition: 14
       oobIP: { orbId: "livermore:10.96.149.68" }
       oobMAC: "c0:47:0e:c6:1e:31"
@@ -192,10 +200,11 @@ mutation {
     }
     {
       serviceTag: "9CZZ5G4"
+      manufacturer: "Dell"
       orbId: "livermore:9CZZ5G4"
       name: "r01-u19.livermore-galleon"
       hostname: "r01-u19.livermore-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 19
       oobIP: { orbId: "livermore:10.96.149.51" }
       oobMAC: "84:5c:31:f0:e5:59"
@@ -207,10 +216,11 @@ mutation {
     }
     {
       serviceTag: "BCZZ5G4"
+      manufacturer: "Dell"
       orbId: "livermore:BCZZ5G4"
       name: "r01-u20.livermore-galleon"
       hostname: "r01-u20.livermore-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 20
       oobIP: { orbId: "livermore:10.96.149.52" }
       oobMAC: "84:5c:31:f0:f0:29"
@@ -222,10 +232,11 @@ mutation {
     }
     {
       serviceTag: "6CZZ5G4"
+      manufacturer: "Dell"
       orbId: "livermore:6CZZ5G4"
       name: "r01-u21.livermore-galleon"
       hostname: "r01-u21.livermore-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 21
       oobIP: { orbId: "livermore:10.96.149.53" }
       oobMAC: "84:5c:31:f0:dc:a9"
@@ -237,10 +248,11 @@ mutation {
     }
     {
       serviceTag: "8CZZ5G4"
+      manufacturer: "Dell"
       orbId: "livermore:8CZZ5G4"
       name: "r01-u22.livermore-galleon"
       hostname: "r01-u22.livermore-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 22
       oobIP: { orbId: "livermore:10.96.149.54" }
       oobMAC: "84:5c:31:f0:d8:19"
@@ -252,10 +264,11 @@ mutation {
     }
     {
       serviceTag: "7CZZ5G4"
+      manufacturer: "Dell"
       orbId: "livermore:7CZZ5G4"
       name: "r01-u23.livermore-galleon"
       hostname: "r01-u23.livermore-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 23
       oobIP: { orbId: "livermore:10.96.149.55" }
       oobMAC: "84:5c:31:f0:f0:01"
@@ -267,10 +280,11 @@ mutation {
     }
     {
       serviceTag: "3KLN3D4"
+      manufacturer: "Dell"
       orbId: "livermore:3KLN3D4"
       name: "r01-u24.livermore-galleon"
       hostname: "r01-u24.livermore-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 24
       oobIP: { orbId: "livermore:10.96.149.56" }
       oobMAC: "fc:4c:ea:68:a4:73"
@@ -282,10 +296,11 @@ mutation {
     }
     {
       serviceTag: "HJLN3D4"
+      manufacturer: "Dell"
       orbId: "livermore:HJLN3D4"
       name: "r01-u25.livermore-galleon"
       hostname: "r01-u25.livermore-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 25
       oobIP: { orbId: "livermore:10.96.149.57" }
       oobMAC: "fc:4c:ea:69:3d:53"
@@ -297,10 +312,11 @@ mutation {
     }
     {
       serviceTag: "JJLN3D4"
+      manufacturer: "Dell"
       orbId: "livermore:JJLN3D4"
       name: "r01-u26.livermore-galleon"
       hostname: "r01-u26.livermore-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 26
       oobIP: { orbId: "livermore:10.96.149.58" }
       oobMAC: "fc:4c:ea:69:3f:93"
@@ -312,10 +328,11 @@ mutation {
     }
     {
       serviceTag: "5KLN3D4"
+      manufacturer: "Dell"
       orbId: "livermore:5KLN3D4"
       name: "r01-u27.livermore-galleon"
       hostname: "r01-u27.livermore-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 27
       oobIP: { orbId: "livermore:10.96.149.59" }
       oobMAC: "fc:4c:ea:69:3e:63"
@@ -327,10 +344,11 @@ mutation {
     }
     {
       serviceTag: "4KLN3D4"
+      manufacturer: "Dell"
       orbId: "livermore:4KLN3D4"
       name: "r01-u28.livermore-galleon"
       hostname: "r01-u28.livermore-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 28
       oobIP: { orbId: "livermore:10.96.149.60" }
       oobMAC: "fc:4c:ea:69:42:4b"
@@ -342,10 +360,11 @@ mutation {
     }
     {
       serviceTag: "3TFRMC4"
+      manufacturer: "Dell"
       orbId: "livermore:3TFRMC4"
       name: "r01-u29.livermore-galleon"
       hostname: "r01-u29.livermore-galleon"
-      model: "Dell R660"
+      model: "PowerEdge R660"
       rackPosition: 29
       oobIP: { orbId: "livermore:10.96.149.50" }
       oobMAC: "a8:3c:a5:5d:cf:72"

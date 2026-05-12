@@ -12,3 +12,8 @@ type Home struct {
 	PageTitle string `json:"pageTile"`
 	Url       string
 }
+
+type Servers struct {
+	layout.Base
+	PageTitle string
+}

@@ -66,10 +66,11 @@ mutation {
   addServer(input: [
     {
       serviceTag: "505CK74"
+      manufacturer: "Dell"
       orbId: "grayling:505CK74"
       name: "r02-u03.grayling-galleon"
       hostname: "r02-u03.grayling-galleon"
-      model: "Dell XE8640"
+      model: "PowerEdge XE8640"
       rackPosition: 3
       oobIP: { orbId: "grayling:10.64.4.64" }
       oobMAC: "c4:cb:e1:db:0f:d4"
@@ -81,10 +82,11 @@ mutation {
     }
     {
       serviceTag: "B5WVM34"
+      manufacturer: "Dell"
       orbId: "grayling:B5WVM34"
       name: "r02-u06.grayling-galleon"
       hostname: "r02-u06.grayling-galleon"
-      model: "Dell XE8640"
+      model: "PowerEdge XE8640"
       rackPosition: 6
       oobIP: { orbId: "grayling:10.64.4.63" }
       oobMAC: "c4:cb:e1:ba:37:96"
@@ -96,10 +98,11 @@ mutation {
     }
     {
       serviceTag: "JY69K74"
+      manufacturer: "Dell"
       orbId: "grayling:JY69K74"
       name: "r02-u08.grayling-galleon"
       hostname: "r02-u08.grayling-galleon"
-      model: "Dell R650"
+      model: "PowerEdge R650"
       rackPosition: 8
       oobIP: { orbId: "grayling:10.64.4.61" }
       oobMAC: "c0:47:0e:c6:1e:8b"
@@ -111,10 +114,11 @@ mutation {
     }
     {
       serviceTag: "BLP6K74"
+      manufacturer: "Dell"
       orbId: "grayling:BLP6K74"
       name: "r02-u12.grayling-galleon"
       hostname: "r02-u12.grayling-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 12
       oobIP: { orbId: "grayling:10.64.4.52" }
       oobMAC: "e8:cf:83:27:a8:c3"
@@ -126,10 +130,11 @@ mutation {
     }
     {
       serviceTag: "CLP6K74"
+      manufacturer: "Dell"
       orbId: "grayling:CLP6K74"
       name: "r02-u13.grayling-galleon"
       hostname: "r02-u13.grayling-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 13
       oobIP: { orbId: "grayling:10.64.4.53" }
       oobMAC: "ac:b4:80:29:f2:8b"
@@ -141,10 +146,11 @@ mutation {
     }
     {
       serviceTag: "8LP6K74"
+      manufacturer: "Dell"
       orbId: "grayling:8LP6K74"
       name: "r02-u14.grayling-galleon"
       hostname: "r02-u14.grayling-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 14
       oobIP: { orbId: "grayling:10.64.4.54" }
       oobMAC: "e8:cf:83:27:b5:eb"
@@ -156,10 +162,11 @@ mutation {
     }
     {
       serviceTag: "3LP6K74"
+      manufacturer: "Dell"
       orbId: "grayling:3LP6K74"
       name: "r02-u15.grayling-galleon"
       hostname: "r02-u15.grayling-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 15
       oobIP: { orbId: "grayling:10.64.4.55" }
       oobMAC: "ac:b4:80:29:fa:d3"
@@ -171,10 +178,11 @@ mutation {
     }
     {
       serviceTag: "9LP6K74"
+      manufacturer: "Dell"
       orbId: "grayling:9LP6K74"
       name: "r02-u16.grayling-galleon"
       hostname: "r02-u16.grayling-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 16
       oobIP: { orbId: "grayling:10.64.4.56" }
       oobMAC: "e8:cf:83:27:b2:73"
@@ -186,10 +194,11 @@ mutation {
     }
     {
       serviceTag: "6LP6K74"
+      manufacturer: "Dell"
       orbId: "grayling:6LP6K74"
       name: "r02-u17.grayling-galleon"
       hostname: "r02-u17.grayling-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 17
       oobIP: { orbId: "grayling:10.64.4.57" }
       oobMAC: "e8:cf:83:27:b2:6b"
@@ -201,10 +210,11 @@ mutation {
     }
     {
       serviceTag: "7LP6K74"
+      manufacturer: "Dell"
       orbId: "grayling:7LP6K74"
       name: "r02-u18.grayling-galleon"
       hostname: "r02-u18.grayling-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 18
       oobIP: { orbId: "grayling:10.64.4.58" }
       oobMAC: "e8:cf:83:27:a9:db"
@@ -216,10 +226,11 @@ mutation {
     }
     {
       serviceTag: "5LP6K74"
+      manufacturer: "Dell"
       orbId: "grayling:5LP6K74"
       name: "r02-u19.grayling-galleon"
       hostname: "r02-u19.grayling-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 19
       oobIP: { orbId: "grayling:10.64.4.59" }
       oobMAC: "ac:b4:80:29:fb:0b"
@@ -231,10 +242,11 @@ mutation {
     }
     {
       serviceTag: "4LP6K74"
+      manufacturer: "Dell"
       orbId: "grayling:4LP6K74"
       name: "r02-u20.grayling-galleon"
       hostname: "r02-u20.grayling-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 20
       oobIP: { orbId: "grayling:10.64.4.62" }
       oobMAC: "ac:b4:80:29:f8:bb"
@@ -246,10 +258,11 @@ mutation {
     }
     {
       serviceTag: "D5MP6K74"
+      manufacturer: "Dell"
       orbId: "grayling:D5MP6K74"
       name: "r02-u25.grayling-galleon"
       hostname: "r02-u25.grayling-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 25
       oobIP: { orbId: "grayling:10.64.4.50" }
       oobMAC: "d0:c1:b5:0c:b9:b0"

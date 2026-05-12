@@ -89,8 +89,14 @@ Goal of prototyping is learning, not shipping. Each spike below is a question to
 - Shared layout components: navbar, sidebar menu, delete/edit modals, table partials
 - All page JS in `web/static/app.js` — no inline scripts
 - Playwright E2E test suite (`e2e/`) with global auth setup (`e2e/global-setup.ts`), `make test-e2e` target, `data-testid` conventions
-- Example GraphQL seed files (`examples/seed/`) for 5 data centers (Alaska DOT Cruiser, Alaska DOT Galleon, Houston, Seattle, Colo) with real rack names, hostnames, and rack positions sourced from Netbox
+- Example GraphQL seed files (`examples/seed/`) for 5 data centers (Alaska DOT Cruiser, Alaska DOT Galleon, Houston, Seattle, Colo) with real rack names, hostnames, and rack positions sourced from Netbox; all servers updated with `manufacturer: "Dell"` and Redfish-standard model names (`PowerEdge R650`, `PowerEdge XE9680`, etc.)
 - Schema additions: `KubernetesCluster`, `EksaConfig`, `IPAddress` types; `id: ID` on `ConfigItem` interface; `oobIP: IPAddress` on `Server` (was string). IP address modeling settled as GraphQL-only hub pattern with typed back-refs; DQL `~predicate` for cross-type IP queries.
+- Servers page: cross-DC server list DataTable (columns: Data Center, OOB IP, Hostname, Service Tag, Model, Rack) with tab persistence (`localStorage.serverTabs`)
+- Server detail view: double-click server row in DC tab → replaces DC tab content with server detail; back button restores DC tab view (`ShowDCBack` / `dcCtx=1` pattern)
+- Server detail tabs: iDRAC settings, Storage (controllers + devices), Config Profile (formatted JSON)
+- Server edit modal: JSONEditor for all scalar fields (hostname, manufacturer, model, OOB MAC, rack position, service tag); follows same pattern as DC edit modal; post-save reload targets correct parent (DC tab or Servers page tab) via `data-reload-url`/`data-reload-target`
+- HTMX + JS library pattern settled: window bridge for ES modules (`window.JSONEditor`); lazy init on first Edit click for components requiring a visible container
+- DataTables UI: compact one-row toolbar (page length + buttons in `topStart`), Bulma-wrapped page-length select (`dtWrapLengthSelect()`), smaller pagination buttons via CSS
 
 **Success criteria:**
 - ✅ Server-rendered UI with HTMX for dynamic updates (no full SPA)

@@ -317,10 +317,11 @@ mutation {
   addServer(input: [
     {
       serviceTag: "6PJ1FZ3"
+      manufacturer: "Dell"
       orbId: "houston:6PJ1FZ3"
       name: "r06-u12.houston-galleon"
       hostname: "r06-u12.houston-galleon"
-      model: "Dell R750"
+      model: "PowerEdge R750"
       rackPosition: 12
       oobIP: { orbId: "houston:10.10.7.72" }
       oobMAC: "c8:4b:d6:a7:07:e3"
@@ -332,10 +333,11 @@ mutation {
     }
     {
       serviceTag: "9B52FZ3"
+      manufacturer: "Dell"
       orbId: "houston:9B52FZ3"
       name: "r06-u14.houston-galleon"
       hostname: "r06-u14.houston-galleon"
-      model: "Dell R650"
+      model: "PowerEdge R650"
       rackPosition: 14
       oobIP: { orbId: "houston:10.10.7.64" }
       oobMAC: "c8:4b:d6:a6:1b:09"
@@ -347,10 +349,11 @@ mutation {
     }
     {
       serviceTag: "BB52FZ3"
+      manufacturer: "Dell"
       orbId: "houston:BB52FZ3"
       name: "r06-u15.houston-galleon"
       hostname: "r06-u15.houston-galleon"
-      model: "Dell R650"
+      model: "PowerEdge R650"
       rackPosition: 15
       oobIP: { orbId: "houston:10.10.7.65" }
       oobMAC: "c8:4b:d6:a6:ef:f9"
@@ -362,10 +365,11 @@ mutation {
     }
     {
       serviceTag: "DB52FZ3"
+      manufacturer: "Dell"
       orbId: "houston:DB52FZ3"
       name: "r06-u16.houston-galleon"
       hostname: "r06-u16.houston-galleon"
-      model: "Dell R650"
+      model: "PowerEdge R650"
       rackPosition: 16
       oobIP: { orbId: "houston:10.10.7.66" }
       oobMAC: "c8:4b:d6:a6:ef:ff"
@@ -377,10 +381,11 @@ mutation {
     }
     {
       serviceTag: "6B52FZ3"
+      manufacturer: "Dell"
       orbId: "houston:6B52FZ3"
       name: "r06-u17.houston-galleon"
       hostname: "r06-u17.houston-galleon"
-      model: "Dell R650"
+      model: "PowerEdge R650"
       rackPosition: 17
       oobIP: { orbId: "houston:10.10.7.67" }
       oobMAC: "c8:4b:d6:a6:ef:09"
@@ -392,10 +397,11 @@ mutation {
     }
     {
       serviceTag: "8B52FZ3"
+      manufacturer: "Dell"
       orbId: "houston:8B52FZ3"
       name: "r06-u18.houston-galleon"
       hostname: "r06-u18.houston-galleon"
-      model: "Dell R650"
+      model: "PowerEdge R650"
       rackPosition: 18
       oobIP: { orbId: "houston:10.10.7.68" }
       oobMAC: "c8:4b:d6:a6:ee:5b"
@@ -407,10 +413,11 @@ mutation {
     }
     {
       serviceTag: "J922FZ3"
+      manufacturer: "Dell"
       orbId: "houston:J922FZ3"
       name: "r06-u22.houston-galleon"
       hostname: "r06-u22.houston-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 22
       oobIP: { orbId: "houston:10.10.7.98" }
       oobMAC: "b4:45:06:fb:70:58"
@@ -422,10 +429,11 @@ mutation {
     }
     {
       serviceTag: "J452FZ3"
+      manufacturer: "Dell"
       orbId: "houston:J452FZ3"
       name: "r06-u23.houston-galleon"
       hostname: "r06-u23.houston-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 23
       oobIP: { orbId: "houston:10.10.7.55" }
       oobMAC: "b4:45:06:fb:7a:d0"
@@ -437,10 +445,11 @@ mutation {
     }
     {
       serviceTag: "1B22FZ3"
+      manufacturer: "Dell"
       orbId: "houston:1B22FZ3"
       name: "r06-u24.houston-galleon"
       hostname: "r06-u24.houston-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 24
       oobIP: { orbId: "houston:10.10.7.56" }
       oobMAC: "b4:45:06:fb:8d:58"
@@ -452,10 +461,11 @@ mutation {
     }
     {
       serviceTag: "2B22FZ3"
+      manufacturer: "Dell"
       orbId: "houston:2B22FZ3"
       name: "r06-u25.houston-galleon"
       hostname: "r06-u25.houston-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 25
       oobIP: { orbId: "houston:10.10.7.57" }
       oobMAC: "b4:45:06:fb:8e:00"
@@ -467,10 +477,11 @@ mutation {
     }
     {
       serviceTag: "4B22FZ3"
+      manufacturer: "Dell"
       orbId: "houston:4B22FZ3"
       name: "r06-u26.houston-galleon"
       hostname: "r06-u26.houston-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 26
       oobIP: { orbId: "houston:10.10.7.58" }
       oobMAC: "b4:45:06:fb:6a:d8"
@@ -482,10 +493,11 @@ mutation {
     }
     {
       serviceTag: "53RKHZ3"
+      manufacturer: "Dell"
       orbId: "houston:53RKHZ3"
       name: "r06-u27.houston-galleon"
       hostname: "r06-u27.houston-galleon"
-      model: "Dell Camera"
+      model: "PowerEdge Camera"
       rackPosition: 27
       oobIP: { orbId: "houston:10.10.7.99" }
       oobMAC: "6c:3c:8c:74:cc:7e"
@@ -497,10 +509,11 @@ mutation {
     }
     {
       serviceTag: "7PJ1FZ3"
+      manufacturer: "Dell"
       orbId: "houston:7PJ1FZ3"
       name: "r05-u09.houston-galleon"
       hostname: "r05-u09.houston-galleon"
-      model: "Dell R750"
+      model: "PowerEdge R750"
       rackPosition: 9
       oobIP: { orbId: "houston:10.10.7.70" }
       oobMAC: "c8:4b:d6:a7:07:65"
@@ -512,10 +525,11 @@ mutation {
     }
     {
       serviceTag: "4PJ1FZ3"
+      manufacturer: "Dell"
       orbId: "houston:4PJ1FZ3"
       name: "r05-u11.houston-galleon"
       hostname: "r05-u11.houston-galleon"
-      model: "Dell R750"
+      model: "PowerEdge R750"
       rackPosition: 11
       oobIP: { orbId: "houston:10.10.7.71" }
       oobMAC: "c8:4b:d6:a7:07:35"
@@ -527,10 +541,11 @@ mutation {
     }
     {
       serviceTag: "3B52FZ3"
+      manufacturer: "Dell"
       orbId: "houston:3B52FZ3"
       name: "r05-u14.houston-galleon"
       hostname: "r05-u14.houston-galleon"
-      model: "Dell R650"
+      model: "PowerEdge R650"
       rackPosition: 14
       oobIP: { orbId: "houston:10.10.7.69" }
       oobMAC: "c8:4b:d6:a6:ef:39"
@@ -542,10 +557,11 @@ mutation {
     }
     {
       serviceTag: "CB52FZ3"
+      manufacturer: "Dell"
       orbId: "houston:CB52FZ3"
       name: "r05-u15.houston-galleon"
       hostname: "r05-u15.houston-galleon"
-      model: "Dell R650"
+      model: "PowerEdge R650"
       rackPosition: 15
       oobIP: { orbId: "houston:10.10.7.61" }
       oobMAC: "c8:4b:d6:a6:ee:3d"
@@ -557,10 +573,11 @@ mutation {
     }
     {
       serviceTag: "7B52FZ3"
+      manufacturer: "Dell"
       orbId: "houston:7B52FZ3"
       name: "r05-u16.houston-galleon"
       hostname: "r05-u16.houston-galleon"
-      model: "Dell R650"
+      model: "PowerEdge R650"
       rackPosition: 16
       oobIP: { orbId: "houston:10.10.7.62" }
       oobMAC: "c8:4b:d6:a6:ef:bd"
@@ -572,10 +589,11 @@ mutation {
     }
     {
       serviceTag: "FB52FZ3"
+      manufacturer: "Dell"
       orbId: "houston:FB52FZ3"
       name: "r05-u17.houston-galleon"
       hostname: "r05-u17.houston-galleon"
-      model: "Dell R650"
+      model: "PowerEdge R650"
       rackPosition: 17
       oobIP: { orbId: "houston:10.10.7.63" }
       oobMAC: "c8:4b:d6:a6:ef:e1"
@@ -587,10 +605,11 @@ mutation {
     }
     {
       serviceTag: "1552FZ3"
+      manufacturer: "Dell"
       orbId: "houston:1552FZ3"
       name: "r05-u21.houston-galleon"
       hostname: "r05-u21.houston-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 21
       oobIP: { orbId: "houston:10.10.7.50" }
       oobMAC: "b4:45:06:fb:90:20"
@@ -602,10 +621,11 @@ mutation {
     }
     {
       serviceTag: "6B22FZ3"
+      manufacturer: "Dell"
       orbId: "houston:6B22FZ3"
       name: "r05-u22.houston-galleon"
       hostname: "r05-u22.houston-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 22
       oobIP: { orbId: "houston:10.10.7.51" }
       oobMAC: "b4:45:06:fb:8b:80"
@@ -617,10 +637,11 @@ mutation {
     }
     {
       serviceTag: "3B22FZ3"
+      manufacturer: "Dell"
       orbId: "houston:3B22FZ3"
       name: "r05-u23.houston-galleon"
       hostname: "r05-u23.houston-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 23
       oobIP: { orbId: "houston:10.10.7.52" }
       oobMAC: "b4:45:06:fb:8b:48"
@@ -632,10 +653,11 @@ mutation {
     }
     {
       serviceTag: "7B22FZ3"
+      manufacturer: "Dell"
       orbId: "houston:7B22FZ3"
       name: "r05-u24.houston-galleon"
       hostname: "r05-u24.houston-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 24
       oobIP: { orbId: "houston:10.10.7.53" }
       oobMAC: "b4:45:06:fb:86:98"
@@ -647,10 +669,11 @@ mutation {
     }
     {
       serviceTag: "5B22FZ3"
+      manufacturer: "Dell"
       orbId: "houston:5B22FZ3"
       name: "r05-u25.houston-galleon"
       hostname: "r05-u25.houston-galleon"
-      model: "Dell R450"
+      model: "PowerEdge R450"
       rackPosition: 25
       oobIP: { orbId: "houston:10.10.7.54" }
       oobMAC: "b4:45:06:fb:74:d8"
@@ -662,10 +685,11 @@ mutation {
     }
     {
       serviceTag: "F9J1X54"
+      manufacturer: "Dell"
       orbId: "houston:F9J1X54"
       name: "r03-u09.houston-galleon"
       hostname: "r03-u09.houston-galleon"
-      model: "Dell AS760"
+      model: "PowerEdge AS760"
       rackPosition: 9
       oobIP: { orbId: "houston:10.10.22.70" }
       oobMAC: "d0:c1:b5:05:a9:45"
@@ -677,10 +701,11 @@ mutation {
     }
     {
       serviceTag: "D9J1X54"
+      manufacturer: "Dell"
       orbId: "houston:D9J1X54"
       name: "r03-u11.houston-galleon"
       hostname: "r03-u11.houston-galleon"
-      model: "Dell AS760"
+      model: "PowerEdge AS760"
       rackPosition: 11
       oobIP: { orbId: "houston:10.10.22.69" }
       oobMAC: "d0:c1:b5:05:aa:59"
@@ -692,10 +717,11 @@ mutation {
     }
     {
       serviceTag: "H9J1X54"
+      manufacturer: "Dell"
       orbId: "houston:H9J1X54"
       name: "r03-u13.houston-galleon"
       hostname: "r03-u13.houston-galleon"
-      model: "Dell AS760"
+      model: "PowerEdge AS760"
       rackPosition: 13
       oobIP: { orbId: "houston:10.10.22.68" }
       oobMAC: "d0:c1:b5:03:d4:54"
@@ -707,10 +733,11 @@ mutation {
     }
     {
       serviceTag: "G9J1X54"
+      manufacturer: "Dell"
       orbId: "houston:G9J1X54"
       name: "r03-u15.houston-galleon"
       hostname: "r03-u15.houston-galleon"
-      model: "Dell AS760"
+      model: "PowerEdge AS760"
       rackPosition: 15
       oobIP: { orbId: "houston:10.10.22.67" }
       oobMAC: "d0:c1:b5:03:c5:1e"
@@ -722,10 +749,11 @@ mutation {
     }
     {
       serviceTag: "C9J1X54"
+      manufacturer: "Dell"
       orbId: "houston:C9J1X54"
       name: "r03-u17.houston-galleon"
       hostname: "r03-u17.houston-galleon"
-      model: "Dell AS760"
+      model: "PowerEdge AS760"
       rackPosition: 17
       oobIP: { orbId: "houston:10.10.22.66" }
       oobMAC: "d0:c1:b5:03:d2:6e"
@@ -737,10 +765,11 @@ mutation {
     }
     {
       serviceTag: "8N4VW54"
+      manufacturer: "Dell"
       orbId: "houston:8N4VW54"
       name: "r03-u20.houston-galleon"
       hostname: "r03-u20.houston-galleon"
-      model: "Dell AS760"
+      model: "PowerEdge AS760"
       rackPosition: 20
       oobIP: { orbId: "houston:10.10.22.6" }
       oobMAC: "d0:c1:b5:03:cb:24"
@@ -752,10 +781,11 @@ mutation {
     }
     {
       serviceTag: "9N4VW54"
+      manufacturer: "Dell"
       orbId: "houston:9N4VW54"
       name: "r03-u22.houston-galleon"
       hostname: "r03-u22.houston-galleon"
-      model: "Dell AS760"
+      model: "PowerEdge AS760"
       rackPosition: 22
       oobIP: { orbId: "houston:10.10.22.5" }
       oobMAC: "d0:c1:b5:03:80:d2"
@@ -767,10 +797,11 @@ mutation {
     }
     {
       serviceTag: "CN4VW54"
+      manufacturer: "Dell"
       orbId: "houston:CN4VW54"
       name: "r03-u24.houston-galleon"
       hostname: "r03-u24.houston-galleon"
-      model: "Dell AS760"
+      model: "PowerEdge AS760"
       rackPosition: 24
       oobIP: { orbId: "houston:10.10.22.4" }
       oobMAC: "d0:c1:b5:05:a9:93"
@@ -782,10 +813,11 @@ mutation {
     }
     {
       serviceTag: "BN4VW54"
+      manufacturer: "Dell"
       orbId: "houston:BN4VW54"
       name: "r03-u26.houston-galleon"
       hostname: "r03-u26.houston-galleon"
-      model: "Dell AS760"
+      model: "PowerEdge AS760"
       rackPosition: 26
       oobIP: { orbId: "houston:10.10.22.3" }
       oobMAC: "d0:c1:b5:03:8a:14"
@@ -797,10 +829,11 @@ mutation {
     }
     {
       serviceTag: "J9J1X54"
+      manufacturer: "Dell"
       orbId: "houston:J9J1X54"
       name: "r03-u28.houston-galleon"
       hostname: "r03-u28.houston-galleon"
-      model: "Dell AS760"
+      model: "PowerEdge AS760"
       rackPosition: 28
       oobIP: { orbId: "houston:10.10.22.2" }
       oobMAC: "d0:c1:b5:03:d0:70"

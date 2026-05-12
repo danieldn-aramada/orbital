@@ -450,6 +450,7 @@ mutation UpsertAll {
   addServer(input: [
     {
       serviceTag: "CWJHDX3"
+      manufacturer: "Dell"
       orbId: "colo:CWJHDX3"
       name: "r09-u02.colo-galleon"
       hostname: "r09-u02.colo-galleon"
@@ -465,6 +466,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "BFRHDX3"
+      manufacturer: "Dell"
       orbId: "colo:BFRHDX3"
       name: "r09-u04.colo-galleon"
       hostname: "r09-u04.colo-galleon"
@@ -480,6 +482,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "9FRHDX3"
+      manufacturer: "Dell"
       orbId: "colo:9FRHDX3"
       name: "r09-u05.colo-galleon"
       hostname: "r09-u05.colo-galleon"
@@ -495,6 +498,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "CFRHDX3"
+      manufacturer: "Dell"
       orbId: "colo:CFRHDX3"
       name: "r09-u06.colo-galleon"
       hostname: "r09-u06.colo-galleon"
@@ -510,6 +514,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "3V5Y2Z3"
+      manufacturer: "Dell"
       orbId: "colo:3V5Y2Z3"
       name: "r09-u07.colo-galleon"
       hostname: "r09-u07.colo-galleon"
@@ -525,6 +530,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "2W8Y2Z3"
+      manufacturer: "Dell"
       orbId: "colo:2W8Y2Z3"
       name: "r09-u08.colo-galleon"
       hostname: "r09-u08.colo-galleon"
@@ -540,6 +546,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "9BQS2Z3"
+      manufacturer: "Dell"
       orbId: "colo:9BQS2Z3"
       name: "r10-u02.colo-galleon"
       hostname: "r10-u02.colo-galleon"
@@ -555,6 +562,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "B4KS2Z3"
+      manufacturer: "Dell"
       orbId: "colo:B4KS2Z3"
       name: "r10-u04.colo-galleon"
       hostname: "r10-u04.colo-galleon"
@@ -570,6 +578,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "1W8Y2Z3"
+      manufacturer: "Dell"
       orbId: "colo:1W8Y2Z3"
       name: "r10-u05.colo-galleon"
       hostname: "r10-u05.colo-galleon"
@@ -585,6 +594,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "JV8Y2Z3"
+      manufacturer: "Dell"
       orbId: "colo:JV8Y2Z3"
       name: "r10-u06.colo-galleon"
       hostname: "r10-u06.colo-galleon"
@@ -600,6 +610,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "5PJ1FZ3"
+      manufacturer: "Dell"
       orbId: "colo:5PJ1FZ3"
       name: "r10-u07.colo-galleon"
       hostname: "r10-u07.colo-galleon"
@@ -615,6 +626,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "5B52FZ3"
+      manufacturer: "Dell"
       orbId: "colo:5B52FZ3"
       name: "r10-u09.colo-galleon"
       hostname: "r10-u09.colo-galleon"
@@ -630,6 +642,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "2B52FZ3"
+      manufacturer: "Dell"
       orbId: "colo:2B52FZ3"
       name: "r10-u10.colo-galleon"
       hostname: "r10-u10.colo-galleon"
@@ -645,6 +658,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "4B52FZ3"
+      manufacturer: "Dell"
       orbId: "colo:4B52FZ3"
       name: "r10-u11.colo-galleon"
       hostname: "r10-u11.colo-galleon"
@@ -660,6 +674,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "6CVD664"
+      manufacturer: "Dell"
       orbId: "colo:6CVD664"
       name: "r10-u13.colo-galleon"
       hostname: "r10-u13.colo-galleon"
@@ -675,6 +690,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "7CVD664"
+      manufacturer: "Dell"
       orbId: "colo:7CVD664"
       name: "r10-u15.colo-galleon"
       hostname: "r10-u15.colo-galleon"
@@ -690,6 +706,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "8CVD664"
+      manufacturer: "Dell"
       orbId: "colo:8CVD664"
       name: "r10-u17.colo-galleon"
       hostname: "r10-u17.colo-galleon"
@@ -705,6 +722,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "6MP6K74"
+      manufacturer: "Dell"
       orbId: "colo:6MP6K74"
       name: "r10-u20.colo-galleon"
       hostname: "r10-u20.colo-galleon"
@@ -720,6 +738,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "DMP6K74"
+      manufacturer: "Dell"
       orbId: "colo:DMP6K74"
       name: "r10-u21.colo-galleon"
       hostname: "r10-u21.colo-galleon"
@@ -735,6 +754,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "HMP6K74"
+      manufacturer: "Dell"
       orbId: "colo:HMP6K74"
       name: "r10-u22.colo-galleon"
       hostname: "r10-u22.colo-galleon"
@@ -750,6 +770,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "BMP6K74"
+      manufacturer: "Dell"
       orbId: "colo:BMP6K74"
       name: "r10-u23.colo-galleon"
       hostname: "r10-u23.colo-galleon"
@@ -765,6 +786,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "7MP6K74"
+      manufacturer: "Dell"
       orbId: "colo:7MP6K74"
       name: "r10-u24.colo-galleon"
       hostname: "r10-u24.colo-galleon"
@@ -780,6 +802,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "8MP6K74"
+      manufacturer: "Dell"
       orbId: "colo:8MP6K74"
       name: "r10-u25.colo-galleon"
       hostname: "r10-u25.colo-galleon"
@@ -795,6 +818,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "9MP6K74"
+      manufacturer: "Dell"
       orbId: "colo:9MP6K74"
       name: "r10-u26.colo-galleon"
       hostname: "r10-u26.colo-galleon"
@@ -810,6 +834,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "FJ32V64"
+      manufacturer: "Dell"
       orbId: "colo:FJ32V64"
       name: "r09-u15.colo-galleon"
       hostname: "r09-u15.colo-galleon"
@@ -825,6 +850,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "GJ32V64"
+      manufacturer: "Dell"
       orbId: "colo:GJ32V64"
       name: "r09-u16.colo-galleon"
       hostname: "r09-u16.colo-galleon"
@@ -840,6 +866,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "2RK3V64"
+      manufacturer: "Dell"
       orbId: "colo:2RK3V64"
       name: "r09-u17.colo-galleon"
       hostname: "r09-u17.colo-galleon"
@@ -855,6 +882,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "GQK3V64"
+      manufacturer: "Dell"
       orbId: "colo:GQK3V64"
       name: "r09-u18.colo-galleon"
       hostname: "r09-u18.colo-galleon"
@@ -870,6 +898,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "HQK3V64"
+      manufacturer: "Dell"
       orbId: "colo:HQK3V64"
       name: "r09-u19.colo-galleon"
       hostname: "r09-u19.colo-galleon"
@@ -885,6 +914,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "1RK3V64"
+      manufacturer: "Dell"
       orbId: "colo:1RK3V64"
       name: "r09-u20.colo-galleon"
       hostname: "r09-u20.colo-galleon"
@@ -900,6 +930,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "FQK3V64"
+      manufacturer: "Dell"
       orbId: "colo:FQK3V64"
       name: "r09-u21.colo-galleon"
       hostname: "r09-u21.colo-galleon"
@@ -915,6 +946,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "JQK3V64"
+      manufacturer: "Dell"
       orbId: "colo:JQK3V64"
       name: "r09-u22.colo-galleon"
       hostname: "r09-u22.colo-galleon"
@@ -930,6 +962,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "3RK3V64"
+      manufacturer: "Dell"
       orbId: "colo:3RK3V64"
       name: "r09-u23.colo-galleon"
       hostname: "r09-u23.colo-galleon"
@@ -945,6 +978,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "4RK3V64"
+      manufacturer: "Dell"
       orbId: "colo:4RK3V64"
       name: "r09-u24.colo-galleon"
       hostname: "r09-u24.colo-galleon"
@@ -960,6 +994,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "FGMM3D4"
+      manufacturer: "Dell"
       orbId: "colo:FGMM3D4"
       name: "r09-u30.colo-galleon"
       hostname: "r09-u30.colo-galleon"
@@ -975,6 +1010,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "DGMM3D4"
+      manufacturer: "Dell"
       orbId: "colo:DGMM3D4"
       name: "r09-u29.colo-galleon"
       hostname: "r09-u29.colo-galleon"
@@ -990,6 +1026,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "BGMM3D4"
+      manufacturer: "Dell"
       orbId: "colo:BGMM3D4"
       name: "r09-u28.colo-galleon"
       hostname: "r09-u28.colo-galleon"
@@ -1005,6 +1042,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "9GMM3D4"
+      manufacturer: "Dell"
       orbId: "colo:9GMM3D4"
       name: "r09-u27.colo-galleon"
       hostname: "r09-u27.colo-galleon"
@@ -1020,6 +1058,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "CGMM3D4"
+      manufacturer: "Dell"
       orbId: "colo:CGMM3D4"
       name: "r09-u26.colo-galleon"
       hostname: "r09-u26.colo-galleon"
@@ -1035,6 +1074,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "6F206G4"
+      manufacturer: "Dell"
       orbId: "colo:6F206G4"
       name: "r12-u03.colo-galleon"
       hostname: "r12-u03.colo-galleon"
@@ -1050,6 +1090,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "7F206G4"
+      manufacturer: "Dell"
       orbId: "colo:7F206G4"
       name: "r12-u04.colo-galleon"
       hostname: "r12-u04.colo-galleon"
@@ -1065,6 +1106,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "HD206G4"
+      manufacturer: "Dell"
       orbId: "colo:HD206G4"
       name: "r12-u05.colo-galleon"
       hostname: "r12-u05.colo-galleon"
@@ -1080,6 +1122,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "1F206G4"
+      manufacturer: "Dell"
       orbId: "colo:1F206G4"
       name: "r12-u06.colo-galleon"
       hostname: "r12-u06.colo-galleon"
@@ -1095,6 +1138,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "JD206G4"
+      manufacturer: "Dell"
       orbId: "colo:JD206G4"
       name: "r12-u07.colo-galleon"
       hostname: "r12-u07.colo-galleon"
@@ -1110,6 +1154,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "2F206G4"
+      manufacturer: "Dell"
       orbId: "colo:2F206G4"
       name: "r11-u05.colo-galleon"
       hostname: "r11-u05.colo-galleon"
@@ -1125,6 +1170,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "4F206G4"
+      manufacturer: "Dell"
       orbId: "colo:4F206G4"
       name: "r11-u06.colo-galleon"
       hostname: "r11-u06.colo-galleon"
@@ -1140,6 +1186,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "3F206G4"
+      manufacturer: "Dell"
       orbId: "colo:3F206G4"
       name: "r11-u07.colo-galleon"
       hostname: "r11-u07.colo-galleon"
@@ -1155,6 +1202,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "GD206G4"
+      manufacturer: "Dell"
       orbId: "colo:GD206G4"
       name: "r11-u08.colo-galleon"
       hostname: "r11-u08.colo-galleon"
@@ -1170,6 +1218,7 @@ mutation UpsertAll {
     }
     {
       serviceTag: "5F206G4"
+      manufacturer: "Dell"
       orbId: "colo:5F206G4"
       name: "r11-u09.colo-galleon"
       hostname: "r11-u09.colo-galleon"

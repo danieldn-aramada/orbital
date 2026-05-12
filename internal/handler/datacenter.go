@@ -67,6 +67,7 @@ func NewDataCenter(dgraphURL string, dev bool, logger *slog.Logger) *DataCenter 
 func parseDataCenterFragment() *template.Template {
 	return template.Must(template.ParseFiles(
 		"web/templates/fragments/datacenter-tab.gohtml",
+		"web/templates/components/edit-modal-datacenter.gohtml",
 	))
 }
 
@@ -130,18 +131,20 @@ type rackTabData struct {
 }
 
 type dataCenterTabData struct {
-	ID          string
-	OrbID       string
-	Name        string
-	CreatedBy   string
-	CreatedAt   string
-	UpdatedBy   string
-	UpdatedAt   string
-	Namespace   struct{ Name string }
-	ServerCount int
-	Racks       []rackTabData
-	Servers     []serverTabData
-	AssetDataV2 string
+	ID           string
+	OrbID        string
+	Name         string
+	CreatedBy    string
+	CreatedAt    string
+	UpdatedBy    string
+	UpdatedAt    string
+	Namespace    struct{ Name string }
+	ServerCount  int
+	Racks        []rackTabData
+	Servers      []serverTabData
+	AssetDataV2  string
+	CurrentUser  string
+	EditDataJSON template.JS // pre-serialized JSON for the edit modal
 }
 
 func (h *DataCenter) Tab(c echo.Context) error {
@@ -199,17 +202,40 @@ func (h *DataCenter) Tab(c echo.Context) error {
 		}
 	}
 
+	currentUser := ""
+	if v := c.Get("user_name"); v != nil {
+		currentUser, _ = v.(string)
+	}
+	if currentUser == "" {
+		if v := c.Get("user_email"); v != nil {
+			currentUser, _ = v.(string)
+		}
+	}
+
+	editFields := map[string]any{"name": raw.Name}
+	if raw.AssetDataV2 != "" {
+		var parsed any
+		if err := json.Unmarshal([]byte(raw.AssetDataV2), &parsed); err == nil {
+			editFields["assetDataV2"] = parsed
+		} else {
+			editFields["assetDataV2"] = raw.AssetDataV2
+		}
+	}
+	editJSON, _ := json.Marshal(editFields)
+
 	dc := dataCenterTabData{
-		ID:          raw.ID,
-		OrbID:       raw.OrbID,
-		Name:        raw.Name,
-		CreatedBy:   raw.CreatedBy,
-		CreatedAt:   raw.CreatedAt,
-		UpdatedBy:   raw.UpdatedBy,
-		UpdatedAt:   raw.UpdatedAt,
-		Namespace:   struct{ Name string }{Name: raw.Namespace.Name},
-		ServerCount: raw.ServersAggregate.Count,
-		AssetDataV2: prettyAssetData,
+		ID:           raw.ID,
+		OrbID:        raw.OrbID,
+		Name:         raw.Name,
+		CreatedBy:    raw.CreatedBy,
+		CreatedAt:    raw.CreatedAt,
+		UpdatedBy:    raw.UpdatedBy,
+		UpdatedAt:    raw.UpdatedAt,
+		Namespace:    struct{ Name string }{Name: raw.Namespace.Name},
+		ServerCount:  raw.ServersAggregate.Count,
+		AssetDataV2:  prettyAssetData,
+		CurrentUser:  currentUser,
+		EditDataJSON: template.JS(editJSON),
 	}
 	for _, r := range raw.Racks {
 		dc.Racks = append(dc.Racks, rackTabData{
@@ -242,3 +268,4 @@ func (h *DataCenter) Tab(c echo.Context) error {
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	return tmpl.Execute(c.Response().Writer, dc)
 }
+
