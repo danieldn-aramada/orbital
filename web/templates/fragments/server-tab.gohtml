@@ -87,6 +87,9 @@
             <li data-panel="srv-panel-config-{{.ID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-file-code"></i></span><span>Config Profile</span></a>
             </li>
+            <li data-panel="srv-panel-audit-{{.ID}}">
+              <a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a>
+            </li>
           </ul>
         </div>
 
@@ -150,6 +153,8 @@
           <p class="is-size-7 has-text-grey p-2">No configuration profile discovered yet.</p>
           {{end}}
         </div>
+
+        <div id="srv-panel-audit-{{.ID}}" style="display:none" data-orb-id="{{.OrbID}}"></div>
 
         </div>
       </article>

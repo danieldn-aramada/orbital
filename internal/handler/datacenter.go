@@ -23,6 +23,7 @@ const getDataCenterQuery = `
       createdAt
       updatedBy
       updatedAt
+      version
       assetDataV2
       namespace { name }
       racks(order: { asc: name }) {
@@ -80,6 +81,7 @@ type dcQueryResponse struct {
 	CreatedAt   string `json:"createdAt"`
 	UpdatedBy   string `json:"updatedBy"`
 	UpdatedAt   string `json:"updatedAt"`
+	Version     int    `json:"version"`
 	AssetDataV2 string `json:"assetDataV2"`
 	Namespace   struct {
 		Name string `json:"name"`
@@ -142,6 +144,7 @@ type dataCenterTabData struct {
 	ServerCount  int
 	Racks        []rackTabData
 	Servers      []serverTabData
+	Version      int
 	AssetDataV2  string
 	CurrentUser  string
 	EditDataJSON template.JS // pre-serialized JSON for the edit modal
@@ -233,6 +236,7 @@ func (h *DataCenter) Tab(c echo.Context) error {
 		UpdatedAt:    raw.UpdatedAt,
 		Namespace:    struct{ Name string }{Name: raw.Namespace.Name},
 		ServerCount:  raw.ServersAggregate.Count,
+		Version:      raw.Version,
 		AssetDataV2:  prettyAssetData,
 		CurrentUser:  currentUser,
 		EditDataJSON: template.JS(editJSON),

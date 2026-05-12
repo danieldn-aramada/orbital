@@ -32,6 +32,41 @@ var (
 		Columns:    BackupsColumns,
 		PrimaryKey: []*schema.Column{BackupsColumns[0]},
 	}
+	// EventsColumns holds the columns for the "events" table.
+	EventsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "resource_type", Type: field.TypeString},
+		{Name: "resource_id", Type: field.TypeString},
+		{Name: "resource_name", Type: field.TypeString},
+		{Name: "type", Type: field.TypeEnum, Enums: []string{"create", "update", "delete"}},
+		{Name: "actor", Type: field.TypeString},
+		{Name: "timestamp", Type: field.TypeTime},
+		{Name: "message", Type: field.TypeString, Nullable: true},
+		{Name: "details", Type: field.TypeJSON, Nullable: true},
+	}
+	// EventsTable holds the schema information for the "events" table.
+	EventsTable = &schema.Table{
+		Name:       "events",
+		Columns:    EventsColumns,
+		PrimaryKey: []*schema.Column{EventsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "event_resource_id",
+				Unique:  false,
+				Columns: []*schema.Column{EventsColumns[2]},
+			},
+			{
+				Name:    "event_resource_type_timestamp",
+				Unique:  false,
+				Columns: []*schema.Column{EventsColumns[1], EventsColumns[6]},
+			},
+			{
+				Name:    "event_timestamp",
+				Unique:  false,
+				Columns: []*schema.Column{EventsColumns[6]},
+			},
+		},
+	}
 	// ExportJobsColumns holds the columns for the "export_jobs" table.
 	ExportJobsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -130,6 +165,7 @@ var (
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		BackupsTable,
+		EventsTable,
 		ExportJobsTable,
 		NamespacesTable,
 		OrbsTable,

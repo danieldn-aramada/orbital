@@ -14,7 +14,7 @@
         <ul id="tablist" role="tablist">
           <li class="tab is-active">
             <a id="tab-summary" data-target="tab-content-audit-log" role="tab" aria-selected="true" tabindex="0">
-              Summary
+              Events
             </a>
           </li>
         </ul>
@@ -24,9 +24,11 @@
         <table id="audit-log-table" class="table is-striped is-hoverable is-fullwidth">
           <thead>
             <tr>
+              <th></th>
               <th>Timestamp</th>
-              <th>User</th>
-              <th>Action</th>
+              <th>Actor</th>
+              <th>Type</th>
+              <th>Resource Type</th>
               <th>Resource</th>
             </tr>
           </thead>

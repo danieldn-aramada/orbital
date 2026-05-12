@@ -75,6 +75,9 @@
             <li data-panel="dc-panel-divergence-{{.ID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-triangle-exclamation"></i></span><span>Divergence Reports</span></a>
             </li>
+            <li data-panel="dc-panel-audit-{{.ID}}">
+              <a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a>
+            </li>
           </ul>
         </div>
 
@@ -147,6 +150,8 @@
         <div id="dc-panel-divergence-{{.ID}}" style="display:none">
           <p class="is-size-7 has-text-grey p-2">No divergence reports.</p>
         </div>
+
+        <div id="dc-panel-audit-{{.ID}}" style="display:none" data-orb-id="{{.OrbID}}"></div>
         </div>
 
       </article>

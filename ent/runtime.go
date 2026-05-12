@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/armada/orbital/ent/backup"
+	"github.com/armada/orbital/ent/event"
 	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/namespace"
 	"github.com/armada/orbital/ent/orb"
@@ -32,6 +33,16 @@ func init() {
 	backupDescID := backupFields[0].Descriptor()
 	// backup.DefaultID holds the default value on creation for the id field.
 	backup.DefaultID = backupDescID.Default.(func() uuid.UUID)
+	eventFields := schema.Event{}.Fields()
+	_ = eventFields
+	// eventDescTimestamp is the schema descriptor for timestamp field.
+	eventDescTimestamp := eventFields[6].Descriptor()
+	// event.DefaultTimestamp holds the default value on creation for the timestamp field.
+	event.DefaultTimestamp = eventDescTimestamp.Default.(func() time.Time)
+	// eventDescID is the schema descriptor for id field.
+	eventDescID := eventFields[0].Descriptor()
+	// event.DefaultID holds the default value on creation for the id field.
+	event.DefaultID = eventDescID.Default.(func() uuid.UUID)
 	exportjobMixin := schema.ExportJob{}.Mixin()
 	exportjobMixinFields0 := exportjobMixin[0].Fields()
 	_ = exportjobMixinFields0

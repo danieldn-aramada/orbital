@@ -592,11 +592,76 @@ function initDcDetailTabs(id) {
     tab.addEventListener('click', () => {
       localStorage.setItem(storageKey, tab.dataset.panel)
       activatePanel(tab.dataset.panel)
+      if (tab.dataset.panel === `dc-panel-audit-${id}`) {
+        const panel = document.getElementById(`dc-panel-audit-${id}`)
+        if (panel) loadEntityAuditLog(panel, panel.dataset.orbId)
+      }
     })
   })
 
   const saved = localStorage.getItem(storageKey)
   if (saved) activatePanel(saved)
+}
+
+// Lazy-loads audit events for a specific entity into a panel div.
+// Called when the Audit Log tab is first activated on a DC or server detail view.
+function loadEntityAuditLog(panelEl, orbId) {
+  panelEl.innerHTML = '<p class="is-size-7 has-text-grey p-2">Loading…</p>'
+
+  fetch(`/api/v1/events?resource_id=${encodeURIComponent(orbId)}&limit=50`)
+    .then(r => r.json())
+    .then(json => {
+      const events = json.events ?? []
+      if (events.length === 0) {
+        panelEl.innerHTML = '<p class="is-size-7 has-text-grey p-2">No audit events recorded yet.</p>'
+        return
+      }
+      const rows = events.map(ev => {
+        const ts = ev.timestamp
+          ? `<span data-timestamp="${ev.timestamp}">${ev.timestamp}</span>`
+          : '—'
+        const typeTag = {
+          update: '<span class="tag is-info is-light is-small">update</span>',
+          create: '<span class="tag is-success is-light is-small">create</span>',
+          delete: '<span class="tag is-danger is-light is-small">delete</span>',
+        }[ev.type] || ev.type
+        const diffSummary = (() => {
+          if (!ev.details) return '—'
+          try {
+            const d = typeof ev.details === 'string' ? JSON.parse(ev.details) : ev.details
+            const before = d.before || {}
+            const after = d.after || {}
+            const changed = Object.keys(after).filter(
+              k => JSON.stringify(before[k]) !== JSON.stringify(after[k])
+            )
+            if (!changed.length) return '—'
+            return changed.map(k => {
+              const b = before[k] ?? '—'
+              const a = after[k] ?? '—'
+              return `<span style="white-space:nowrap"><strong>${k}:</strong> ${b} → ${a}</span>`
+            }).join('<br>')
+          } catch (_) { return '—' }
+        })()
+        return `<tr>
+          <td style="white-space:nowrap">${ts}</td>
+          <td>${ev.actor || '—'}</td>
+          <td>${typeTag}</td>
+          <td style="font-size:0.7rem;color:#666">${diffSummary}</td>
+        </tr>`
+      }).join('')
+      panelEl.innerHTML = `<div style="overflow-x:auto">
+        <table class="table is-striped is-fullwidth is-size-7 mt-2">
+          <thead><tr>
+            <th>Timestamp</th><th>Actor</th><th>Type</th><th>Changed Fields</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`
+      renderTimestamps(panelEl)
+    })
+    .catch(() => {
+      panelEl.innerHTML = '<p class="is-size-7 has-text-danger p-2">Failed to load audit log.</p>'
+    })
 }
 
 // DataTables renders the page-length <select> bare, with no wrapper. Bulma's
@@ -623,8 +688,16 @@ function initServerDetailTabs(root) {
     })
   }
 
+  const srvId = tabContainer.id.replace('srv-detail-tabs-', '')
+
   tabs.forEach(tab => {
-    tab.addEventListener('click', () => activatePanel(tab.dataset.panel))
+    tab.addEventListener('click', () => {
+      activatePanel(tab.dataset.panel)
+      if (tab.dataset.panel === `srv-panel-audit-${srvId}`) {
+        const panel = document.getElementById(`srv-panel-audit-${srvId}`)
+        if (panel) loadEntityAuditLog(panel, panel.dataset.orbId)
+      }
+    })
   })
 }
 
@@ -1645,17 +1718,18 @@ document.addEventListener('click', function (e) {
           if (vars.assetDataV2 !== undefined && vars.assetDataV2 !== null && typeof vars.assetDataV2 !== 'string') {
             vars.assetDataV2 = JSON.stringify(vars.assetDataV2)
           }
+          const currentVersion = parseInt(modal.dataset.version, 10) || 0
           const resp = await fetch('/graphql', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               query: `mutation UpdateDataCenter(
                 $id: ID!, $name: String!, $assetDataV2: String,
-                $updatedBy: String!, $updatedAt: DateTime!
+                $version: Int, $updatedBy: String!, $updatedAt: DateTime!
               ) {
                 updateDataCenter(input: {
                   filter: { id: [$id] }
-                  set: { name: $name, assetDataV2: $assetDataV2, updatedBy: $updatedBy, updatedAt: $updatedAt }
+                  set: { name: $name, assetDataV2: $assetDataV2, version: $version, updatedBy: $updatedBy, updatedAt: $updatedAt }
                 }) {
                   dataCenter { id name }
                 }
@@ -1663,12 +1737,22 @@ document.addEventListener('click', function (e) {
               variables: {
                 ...vars,
                 id,
+                ifVersion: currentVersion,
+                version: currentVersion + 1,
                 updatedBy: modal.dataset.currentUser || '',
                 updatedAt: new Date().toISOString(),
               },
             }),
           })
-          if (!resp.ok) { showError(`Server error (${resp.status}) — try again.`); return }
+          if (!resp.ok) {
+            if (resp.status === 409) {
+              const body = await resp.json().catch(() => ({}))
+              showError(body.error || 'Conflict — please reload and try again.')
+            } else {
+              showError(`Server error (${resp.status}) — try again.`)
+            }
+            return
+          }
           const result = await resp.json()
           if (result.errors && result.errors.length > 0) { showError(result.errors[0].message); return }
           modal.classList.remove('is-active')
@@ -1738,6 +1822,7 @@ document.addEventListener('click', function (e) {
             showError('Invalid JSON — fix the syntax and try again.')
             return
           }
+          const currentVersion = parseInt(modal.dataset.version, 10) || 0
           const resp = await fetch('/graphql', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1745,14 +1830,14 @@ document.addEventListener('click', function (e) {
               query: `mutation UpdateServer(
                 $id: ID!, $hostname: String, $manufacturer: String, $model: String,
                 $oobMAC: String, $rackPosition: Int, $serviceTag: String,
-                $updatedBy: String!, $updatedAt: DateTime!
+                $version: Int, $updatedBy: String!, $updatedAt: DateTime!
               ) {
                 updateServer(input: {
                   filter: { id: [$id] }
                   set: {
                     hostname: $hostname, manufacturer: $manufacturer, model: $model,
                     oobMAC: $oobMAC, rackPosition: $rackPosition, serviceTag: $serviceTag,
-                    updatedBy: $updatedBy, updatedAt: $updatedAt
+                    version: $version, updatedBy: $updatedBy, updatedAt: $updatedAt
                   }
                 }) {
                   server { id hostname }
@@ -1761,12 +1846,22 @@ document.addEventListener('click', function (e) {
               variables: {
                 ...vars,
                 id,
+                ifVersion: currentVersion,
+                version: currentVersion + 1,
                 updatedBy: modal.dataset.currentUser || '',
                 updatedAt: new Date().toISOString(),
               },
             }),
           })
-          if (!resp.ok) { showError(`Server error (${resp.status}) — try again.`); return }
+          if (!resp.ok) {
+            if (resp.status === 409) {
+              const body = await resp.json().catch(() => ({}))
+              showError(body.error || 'Conflict — please reload and try again.')
+            } else {
+              showError(`Server error (${resp.status}) — try again.`)
+            }
+            return
+          }
           const result = await resp.json()
           if (result.errors && result.errors.length > 0) { showError(result.errors[0].message); return }
           modal.classList.remove('is-active')
@@ -1798,4 +1893,112 @@ document.addEventListener('click', function (e) {
       document.documentElement.style.overflow = ''
     }
   }
+})
+
+// ─── Audit log page ───────────────────────────────────────────────────────────
+
+function renderDiff(details) {
+  if (!details) return '<span class="has-text-grey is-size-7">No details</span>'
+  let before, after
+  try {
+    const d = typeof details === 'string' ? JSON.parse(details) : details
+    before = d.before || {}
+    after = d.after || {}
+  } catch (_) {
+    return '<span class="has-text-grey is-size-7">Could not parse details</span>'
+  }
+  const allKeys = [...new Set([...Object.keys(before), ...Object.keys(after)])]
+  if (allKeys.length === 0) return '<span class="has-text-grey is-size-7">No fields</span>'
+  let rows = ''
+  for (const k of allKeys) {
+    const bVal = before[k] ?? '—'
+    const aVal = after[k] ?? '—'
+    const changed = JSON.stringify(bVal) !== JSON.stringify(aVal)
+    const rowStyle = changed ? 'background:#fffbe6' : ''
+    rows += `<tr style="${rowStyle}">
+      <td style="white-space:nowrap;width:1%;font-size:0.75rem;padding:0.25rem 0.5rem"><strong>${k}</strong></td>
+      <td style="font-size:0.75rem;padding:0.25rem 0.5rem;color:#666">${bVal}</td>
+      <td style="font-size:0.75rem;padding:0.25rem 0.5rem">${aVal}</td>
+    </tr>`
+  }
+  return `<div style="padding:0.5rem 1rem 0.75rem">
+    <table class="table is-narrow mb-0" style="width:auto;min-width:400px">
+      <thead><tr>
+        <th style="font-size:0.7rem;padding:0.25rem 0.5rem">Field</th>
+        <th style="font-size:0.7rem;padding:0.25rem 0.5rem">Before</th>
+        <th style="font-size:0.7rem;padding:0.25rem 0.5rem">After</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!document.getElementById('audit-log-table')) return
+
+  const typeTag = {
+    update: '<span class="tag is-info is-light is-small">update</span>',
+    create: '<span class="tag is-success is-light is-small">create</span>',
+    delete: '<span class="tag is-danger is-light is-small">delete</span>',
+  }
+
+  const auditTable = new DataTable('#audit-log-table', {
+    layout: {
+      topStart: [
+        { pageLength: { menu: [25, 50, 100, 200] } },
+        { buttons: [
+          { extend: 'excel', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-excel"></i><span>Excel</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Excel' },
+          { extend: 'csv', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-text"></i><span>CSV</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV' },
+          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-audit' } },
+        ] },
+      ],
+      topEnd: { search: { placeholder: 'Search events…' } },
+    },
+    order: [[1, 'desc']],
+    autoWidth: true,
+    scrollX: true,
+    language: {
+      infoEmpty: 'No events recorded yet',
+      info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
+      entries: { _: 'events', 1: 'event' },
+    },
+    initComplete: function () { dtWrapLengthSelect(this.api()) },
+    columns: [
+      { data: null, orderable: false, className: 'dt-control', defaultContent: '' },
+      { data: 'timestamp' },
+      { data: 'actor' },
+      { data: 'type', render: (v) => typeTag[v] || v },
+      { data: 'resourceType' },
+      { data: 'resourceName' },
+      { data: 'details', visible: false },
+    ],
+    ajax: {
+      url: '/api/v1/events?limit=200',
+      dataSrc: (json) => json.events ?? [],
+    },
+    createdRow: function (row, data) {
+      row.dataset.details = typeof data.details === 'string'
+        ? data.details
+        : JSON.stringify(data.details)
+    },
+  })
+
+  // Expand/collapse diff on row click
+  $('#audit-log-table tbody').on('click', 'td.dt-control', function () {
+    const tr = this.closest('tr')
+    const row = auditTable.row(tr)
+    if (row.child.isShown()) {
+      row.child.hide()
+      tr.classList.remove('shown')
+    } else {
+      row.child(renderDiff(row.data()?.details)).show()
+      tr.classList.add('shown')
+    }
+  })
+
+  const reloadBtn = auditTable.button('reload:name').node()
+  reloadBtn.on('click', function () {
+    reloadBtn.addClass('is-loading')
+    auditTable.ajax.reload(() => { reloadBtn.removeClass('is-loading') }, false)
+  })
 })

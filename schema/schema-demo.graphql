@@ -28,7 +28,7 @@ interface ConfigItem {
     createdAt: DateTime @search
     updatedBy: String @search(by: [hash])
     updatedAt: DateTime @search
-    version: Float
+    version: Int
 }
 
 ########################

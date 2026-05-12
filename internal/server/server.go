@@ -188,9 +188,12 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 				api.POST("/backups/test-connection", bk.TestConnection)
 			}
 		}
+
+		evh := handler.NewEventHandler(db, logger)
+		e.GET("/api/v1/events", evh.List)
 	}
 
-	gql := handler.NewGraphQL(cfg.DGraphURL)
+	gql := handler.NewGraphQL(cfg.DGraphURL, db, logger)
 	e.Any("/graphql", gql.Handle)
 	api.Any("/graphql", gql.Handle)
 	e.GET("/swagger/*", echoswagger.WrapHandler)

@@ -29,6 +29,7 @@ const getServerQuery = `
       createdAt
       updatedBy
       updatedAt
+      version
       namespace { name }
       rack { id name }
       dataCenter { id name }
@@ -90,6 +91,7 @@ type serverQueryResponse struct {
 	CreatedAt    string `json:"createdAt"`
 	UpdatedBy    string `json:"updatedBy"`
 	UpdatedAt    string `json:"updatedAt"`
+	Version      int    `json:"version"`
 	Namespace    struct {
 		Name string `json:"name"`
 	} `json:"namespace"`
@@ -163,6 +165,7 @@ type serverTabDetailData struct {
 	UpdatedAt          string
 	Namespace          struct{ Name string }
 	Rack               struct{ ID, Name string }
+	Version            int
 	DataCenterID       string
 	DataCenterName     string
 	ShowDCBack         bool // true when drilled from a DC tab
@@ -249,6 +252,7 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 		UpdatedAt:      raw.UpdatedAt,
 		Namespace:      struct{ Name string }{Name: raw.Namespace.Name},
 		Rack:           struct{ ID, Name string }{ID: raw.Rack.ID, Name: raw.Rack.Name},
+		Version:        raw.Version,
 		DataCenterID:   raw.DataCenter.ID,
 		DataCenterName: raw.DataCenter.Name,
 		ShowDCBack:     c.QueryParam("dcCtx") == "1",
