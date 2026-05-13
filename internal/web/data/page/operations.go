@@ -17,7 +17,5 @@ type Schema struct {
 	PageTitle string
 	Version   string
 	Checksum  string
-	AppliedAt string
-	AppliedBy string
 	SDL       string
 }

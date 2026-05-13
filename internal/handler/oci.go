@@ -259,6 +259,7 @@ func (h *OCI) PublicKey(c echo.Context) error {
 	if err != nil {
 		return fmt.Errorf("load public key: %w", err)
 	}
+	c.Response().Header().Set("Content-Disposition", `attachment; filename="cosign.pub"`)
 	return c.Blob(http.StatusOK, "application/x-pem-file", pubPEM)
 }
 

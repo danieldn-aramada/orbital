@@ -294,6 +294,13 @@ func (h *BackupHandler) Trigger(c echo.Context) error {
 
 	go h.runBackup(job.ID)
 
+	writeAuditEvent(h.db, h.logger, initiatedBy, "triggerBackup",
+		[]string{"triggerBackup"},
+		nil,
+		nil,
+		map[string]any{"jobId": job.ID.String()},
+	)
+
 	return c.JSON(http.StatusAccepted, triggerResponse{
 		JobID:  job.ID.String(),
 		Status: string(job.Status),

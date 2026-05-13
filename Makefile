@@ -33,7 +33,7 @@ build-orb: ## Build the orb edge binary → bin/orb
 	go build $(LDFLAGS) -o $(ORB_BIN) ./cmd/orb
 
 run-orbital: ## Run orbital server
-	go run $(LDFLAGS) ./cmd/orbital
+	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orbital
 
 test: ## Run all Go tests
 	go test ./...

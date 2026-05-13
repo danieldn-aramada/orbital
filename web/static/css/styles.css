@@ -14,6 +14,18 @@ div.dt-container div.dt-length .select select {
     font-size: 0.75rem;
 }
 
+/* Override vertical-align:top set by Bulma's .table td rule */
+#export-jobs-table td,
+#artifacts-table td {
+    vertical-align: middle;
+}
+
+/* Shrink DataTables info and length label text */
+div.dt-container div.dt-info,
+div.dt-container div.dt-length label {
+    font-size: 0.75rem;
+}
+
 /* Shrink DataTables pagination buttons to match is-small sizing */
 div.dt-container div.dt-paging .pagination-link,
 div.dt-container div.dt-paging .pagination-previous,

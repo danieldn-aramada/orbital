@@ -2,7 +2,6 @@ package handler
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,7 +9,6 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/armada/orbital/ent"
 	"github.com/labstack/echo/v4"
@@ -223,32 +221,11 @@ func (h *GraphQL) doFetch(getter string, body []byte) (map[string]any, error) {
 }
 
 func (h *GraphQL) writeEvent(opName string, operations, resourceTypes, resourceIDs []string, actor, query string, variables map[string]any) {
-	details, _ := json.Marshal(map[string]any{
+	writeAuditEvent(h.db, h.logger, actor, opName, operations, resourceTypes, resourceIDs, map[string]any{
 		"operationName": opName,
 		"query":         query,
 		"variables":     variables,
 	})
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	c := h.db.Event.Create().
-		SetActor(actor).
-		SetDetails(json.RawMessage(details))
-
-	if len(operations) > 0 {
-		c = c.SetOperations(operations)
-	}
-	if len(resourceTypes) > 0 {
-		c = c.SetResourceTypes(resourceTypes)
-	}
-	if len(resourceIDs) > 0 {
-		c = c.SetResourceIds(resourceIDs)
-	}
-
-	if err := c.Exec(ctx); err != nil {
-		h.logger.Warn("failed to write event", "op", opName, "err", err)
-	}
 }
 
 // extractOperations returns deduplicated DGraph operation names and resource type

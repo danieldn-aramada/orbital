@@ -48,6 +48,7 @@ Goal of prototyping is learning, not shipping. Each spike below is a question to
 | 11 | Schema migration — build vs runbook | Do we need automation or is a runbook sufficient? | — | ❌ Out of scope (MVP) | Spike 10 |
 | 12 | Orb import API | What is the right API contract for orb's local config import endpoint? | — | Not started | — |
 | 13 | Report intake API | What is the right transport-agnostic API for orbital to receive drift and divergence reports? | — | Not started | — |
+| 16 | Seed iDRAC settings and storage devices | What does real iDRAC and storage data look like, and does the schema cover all fields we need to seed it for representative data centers? | — | Not started | — |
 
 ---
 
@@ -352,6 +353,24 @@ DGraph community has no native incremental backup. Options to evaluate once real
 - ⬜ `kubectl apply -f deploy/dev/` brings up a working orbital in a clean namespace
 - ⬜ OIDC login works end-to-end via port-forward
 - ⬜ DGraph schema applied automatically on first boot (orbital startup applies schema via admin API)
+
+### Spike 16. Seed iDRAC settings and storage devices
+**Question:** What does real iDRAC and storage data look like for our modular data center servers, and does the current schema cover everything we need?
+
+**Context:** The `IdracSettings`, `StorageController`, `StorageDevice`, and `StorageVolume` types exist in the schema and the server detail UI already renders iDRAC and Storage tabs — but no seed data exists for these types. Without representative data, the tabs are always empty in dev, which makes UI and export validation unreliable. We also want to confirm the `IdracSettings` fields (`firmwareVersion`, `sshEnabled`, `osToIdracPassThroughEnabled`, `usbManagementPortEnabled`) are sufficient, or if we need to add more (e.g. `ipAddress`, `networkProtocols`, `activeSessions`).
+
+**Scope:**
+- Gather real or realistic iDRAC settings for the seed servers (at minimum one per data center — alaska-dot-cruiser and alaska-dot-galleon have real hardware data available from BMC discovery)
+- Identify any missing schema fields on `IdracSettings` and add them (safe schema change — new nullable fields only)
+- Gather storage controller and device data (model, serial number, capacity, WWN) for the same servers
+- Add `addIdracSettings`, `addStorageController`, and `addStorageDevice` mutations to the existing seed files
+- Confirm the server detail Storage and iDRAC tabs render correctly after seeding
+
+**Success criteria:**
+- ⬜ At least one data center seed file includes iDRAC settings and storage devices for all seeded servers
+- ⬜ `IdracSettings` schema covers the fields needed — any additions are documented as a versioned schema change
+- ⬜ `make seed` and `make seed-aks` both apply the updated seed data cleanly (upsert safe)
+- ⬜ Server detail iDRAC and Storage tabs render the seeded data correctly in dev
 
 ### Spike 13. Report intake API
 **Question:** What is the right API for orbital to receive drift and divergence reports?

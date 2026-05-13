@@ -17,15 +17,6 @@
 
       <div style="max-width: 480px;" class="mb-6">
         <div class="field">
-          <label class="label">Export Directory</label>
-          <div class="control has-icons-right">
-            <input class="input is-small has-background-light has-text-grey-dark" type="text" value="{{.ExportDir}}" readonly style="cursor: default;">
-            <span class="icon is-small is-right has-text-grey-light"><i class="fas fa-lock"></i></span>
-          </div>
-          <p class="help has-text-grey-light">Configurable via ORBITAL_EXPORT_DIR</p>
-        </div>
-
-        <div class="field mt-4">
           <label class="label">OCI Registry</label>
           <div class="control has-icons-right">
             {{if .OCIConfigured}}

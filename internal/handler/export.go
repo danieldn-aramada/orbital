@@ -113,6 +113,18 @@ func (h *Export) Trigger(c echo.Context) error {
 
 	go h.runExport(job.ID)
 
+	actor, _ := c.Get("user_email").(string)
+	writeAuditEvent(h.db, h.logger, actor, "exportSubgraph",
+		[]string{"exportSubgraph"},
+		[]string{"DataCenter"},
+		[]string{dcName},
+		map[string]any{
+			"jobId":          job.ID.String(),
+			"datacenterId":   datacenterID,
+			"datacenterName": dcName,
+		},
+	)
+
 	return c.JSON(http.StatusAccepted, triggerResponse{
 		JobID:  job.ID.String(),
 		Status: string(job.Status),

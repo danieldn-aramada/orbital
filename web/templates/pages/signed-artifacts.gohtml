@@ -10,7 +10,7 @@
         </div>
       {{else}}
 
-      <p class="is-size-4 mb-2">Edge Delivery</p>
+      <p class="is-size-4 mb-2">Signed Artifacts</p>
       <p class="has-text-grey mb-5" style="font-size: 0.875rem;">
         OCI artifacts published from subgraph exports. Each artifact is a signed, versioned snapshot of a data center's configuration — ready to be pulled by orbs.
       </p>
@@ -32,24 +32,50 @@
 
         {{if .OCIConfigured}}
         <div class="field mt-4">
-          <div class="control is-flex is-align-items-center" style="gap: 0.75rem;">
-            <button id="btn-test-connection" class="button is-light is-small" onclick="testOCIConnection()">
-              <span class="icon"><i class="fa-solid fa-plug"></i></span>
-              <span>Test Connection</span>
-            </button>
-            <span id="test-connection-result" class="is-size-7"></span>
+          <label class="label">Signing Public Key</label>
+          <div class="control">
+            <div class="is-flex is-align-items-center" style="gap: 0.5rem;">
+              <button id="btn-show-pubkey" class="button is-light is-small" onclick="togglePublicKey()">
+                <span class="icon"><i class="fa-solid fa-key"></i></span>
+                <span>Show</span>
+              </button>
+              <button id="btn-copy-pubkey" class="button is-light is-small" style="display:none;" onclick="copyPublicKey()">
+                <span class="icon"><i class="fas fa-copy"></i></span>
+                <span>Copy</span>
+              </button>
+              <button id="btn-download-pubkey" class="button is-light is-small" style="display:none;" onclick="downloadPublicKey()">
+                <span class="icon"><i class="fas fa-download"></i></span>
+                <span>Download</span>
+              </button>
+            </div>
+            <pre id="pubkey-display" class="is-family-monospace is-size-7 mt-2" style="display:none;background:#f5f5f5;padding:0.75rem;white-space:pre-wrap;word-break:break-all;"></pre>
+            <div id="pubkey-verify-cmd" style="display:none;" class="mt-3">
+              <p class="is-size-7 has-text-grey mb-1">Verify an artifact signature:</p>
+              <div class="is-flex is-align-items-center" style="gap:0.5rem;">
+                <pre id="pubkey-verify-cmd-text" class="is-family-monospace is-size-7" style="background:#f5f5f5;padding:0.5rem 0.75rem;margin:0;flex:1;white-space:pre-wrap;word-break:break-all;"></pre>
+                <button class="button is-small is-white" title="Copy command" onclick="copyVerifyCmd()">
+                  <span class="icon"><i class="fas fa-copy"></i></span>
+                </button>
+              </div>
+            </div>
           </div>
+          <p class="help has-text-grey-light">Distribute to orbs for artifact signature verification</p>
         </div>
         {{end}}
       </section>
 
       <div class="mt-4">
-        <p class="is-size-5 mb-3">Published Artifacts</p>
+        <div class="is-flex is-align-items-center mb-3" style="gap: 0.75rem;">
+          <p class="is-size-5">Published Artifacts</p>
+          <button class="button is-small is-link" onclick="loadArtifactsTable(true)" title="Reload">
+            <span class="icon"><i class="fa-solid fa-rotate-right"></i></span>
+            <span>Reload</span>
+          </button>
+        </div>
         <div style="overflow-x: auto">
           <table id="artifacts-table" class="table is-striped is-hoverable is-fullwidth is-size-7">
             <thead>
               <tr>
-                <th>ID</th>
                 <th>Data Center</th>
                 <th>Repository</th>
                 <th>Tag</th>

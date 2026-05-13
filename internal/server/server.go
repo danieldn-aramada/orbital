@@ -94,6 +94,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, s3Configured, cfg.S3Endpoint, cfg.S3Bucket)
 	ui.SetOCIConfig(ociConfigured, cfg.OCIRegistry, cfg.OCIRepo)
 	ui.SetExportDir(cfg.ExportDir)
+	ui.SetSchemaPath(cfg.SchemaPath)
 	e.GET("/", ui.Index)
 	e.GET("/datacenters", ui.Index)
 	e.GET("/servers", ui.Servers)
@@ -155,7 +156,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		api.GET("/oci/artifacts/:id", ociH.GetArtifact)
 		api.GET("/oci/public-key", ociH.PublicKey)
 		api.POST("/oci/test-connection", ociH.TestConnection)
-		e.GET("/edge-delivery", ui.EdgeDelivery)
+		e.GET("/signed-artifacts", ui.EdgeDelivery)
 
 		if !s3Configured {
 			logger.Warn("S3 not configured (ORBITAL_S3_BUCKET, ORBITAL_S3_ACCESS_KEY, ORBITAL_S3_SECRET_KEY) — backup disabled")

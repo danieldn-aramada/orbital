@@ -26,6 +26,7 @@ type UI struct {
 	ociRegistry     string
 	ociRepo         string
 	exportDir       string
+	schemaPath      string
 	version         string
 	templates       map[string]*template.Template
 }
@@ -53,6 +54,10 @@ func (h *UI) SetOCIConfig(configured bool, registry, repo string) {
 
 func (h *UI) SetExportDir(dir string) {
 	h.exportDir = dir
+}
+
+func (h *UI) SetSchemaPath(path string) {
+	h.schemaPath = path
 }
 
 func (h *UI) render(c echo.Context, name string, data any) error {
@@ -131,9 +136,9 @@ func (h *UI) Export(c echo.Context) error {
 }
 
 func (h *UI) EdgeDelivery(c echo.Context) error {
-	return h.render(c, "edge-delivery", page.EdgeDelivery{
+	return h.render(c, "signed-artifacts", page.EdgeDelivery{
 		Base:          h.base(c),
-		PageTitle:     "Edge Delivery",
+		PageTitle:     "Signed Artifacts",
 		OCIConfigured: h.ociConfigured,
 		OCIRegistry:   h.ociRegistry,
 		OCIRepo:       h.ociRepo,
@@ -148,7 +153,7 @@ func (h *UI) Servers(c echo.Context) error {
 }
 
 func (h *UI) Schema(c echo.Context) error {
-	content, err := os.ReadFile("schema/schema-v1.graphql")
+	content, err := os.ReadFile(h.schemaPath)
 	if err != nil {
 		return fmt.Errorf("read schema: %w", err)
 	}
@@ -158,8 +163,6 @@ func (h *UI) Schema(c echo.Context) error {
 		PageTitle: "Schema",
 		Version:   "v1",
 		Checksum:  fmt.Sprintf("%x", sum[:6]),
-		AppliedAt: "—",
-		AppliedBy: "—",
 		SDL:       string(content),
 	})
 }

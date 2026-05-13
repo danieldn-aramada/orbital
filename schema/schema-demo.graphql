@@ -1,6 +1,22 @@
-########################
-# Top Level
-########################
+# Orbital DGraph Schema - v1
+#
+# Rules:
+#   - Schema changes must be backwards compatible. Orbs may be on older versions.
+#   - New types and nullable fields are safe. Removing or renaming fields is not.
+#   - Schema is managed by orbital and applied via the DGraph admin API on startup.
+#   - Do not apply this manually — orbital tracks the active version in PostgreSQL.
+#
+# DGraph directives used:
+#   @search     — enables filtering/querying on a field
+#   @hasInverse — declares the reverse edge of a relationship
+#   @id         — marks a field as a unique identifier (like a unique index)
+#
+# Namespace/DataCenter convention:
+#   Namespace is a pure tenancy boundary — not a config item, no config fields.
+#   DataCenter implements ConfigItem and holds all data center config fields.
+#   Convention: exactly one Namespace per DataCenter, enforced by orbital's app layer.
+#   The namespace field on ConfigItem is a direct reference (not traversed via DataCenter)
+#   kept for query performance when scoping by namespace boundary.
 type Namespace {
     id: ID!
     name: String! @id @search(by: [term])
@@ -15,9 +31,6 @@ type User {
 
 ########################
 # Interfaces
-#
-# types implementing this interface should consider UPSERT support with the @id
-# directive
 ########################
 interface ConfigItem {
     id: ID!

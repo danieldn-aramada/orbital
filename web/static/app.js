@@ -1056,7 +1056,9 @@ function renderBackups(jobs) {
   }
   tbody.innerHTML = jobs.map(j => {
     const tag = backupStatusColors[j.status] || 'is-light'
-    const checksum = j.checksum ? j.checksum.substring(0, 12) + '…' : '—'
+    const checksumDisplay = j.checksum
+      ? `<span class="is-family-monospace is-size-7" style="word-break:break-all;">${j.checksum}</span> <button class="button is-small is-white" title="Copy checksum" onclick="navigator.clipboard.writeText('${j.checksum}').then(()=>{this.innerHTML='<span class=\\'icon\\'><i class=\\'fas fa-check\\'></i></span>';setTimeout(()=>{this.innerHTML='<span class=\\'icon\\'><i class=\\'fas fa-copy\\'></i></span>';},1200)})"><span class="icon"><i class="fas fa-copy"></i></span></button>`
+      : '—'
     const statusCell = j.status === 'failed' && j.error
       ? `<span class="tag ${tag}">${j.status} ⚠</span><br><span class="has-text-danger is-size-7" style="display:block;max-width:400px;white-space:normal;word-break:break-word;margin-top:4px;">${j.error}</span>`
       : `<span class="tag ${tag}">${j.status}</span>`
@@ -1074,7 +1076,7 @@ function renderBackups(jobs) {
       <td>${statusCell}</td>
       <td>${j.initiatedBy || '—'}</td>
       <td>${formatBytes(j.sizeBytes)}</td>
-      <td title="${j.checksum || ''}">${checksum}</td>
+      <td style="max-width:340px;">${checksumDisplay}</td>
       <td><div class="buttons is-right" style="gap: 0.25rem; flex-wrap: nowrap;">${actions}</div></td>
     </tr>`
   }).join('')
@@ -1499,20 +1501,20 @@ function loadExportJobsTable() {
               actions.push(`<a class="button is-small is-link is-outlined" href="/api/v1/export/jobs/${job.jobId}/download"><span class="icon"><i class="fa-solid fa-download"></i></span><span>Download</span></a>`)
               if (ociConfigured) {
                 const publishLabel = job.published ? 'Publish Again' : 'Publish'
-                actions.push(`<button class="button is-small is-warning is-outlined ml-1" onclick="publishExportJob('${job.jobId}')"><span class="icon"><i class="fa-solid fa-box-archive"></i></span><span>${publishLabel}</span></button>`)
+                actions.push(`<button class="button is-small is-warning is-outlined" onclick="publishExportJob('${job.jobId}')"><span class="icon"><i class="fa-solid fa-box-archive"></i></span><span>${publishLabel}</span></button>`)
               }
             }
-            actions.push(`<button class="button is-small is-danger is-outlined ml-1" title="Delete" onclick="deleteExportJob('${job.jobId}')"><span class="icon"><i class="fa-solid fa-trash"></i></span></button>`)
+            actions.push(`<button class="button is-small is-danger is-outlined" title="Delete" onclick="deleteExportJob('${job.jobId}')"><span class="icon"><i class="fa-solid fa-trash"></i></span></button>`)
 
             const statusCell = exportJobStatusBadge(job.status, job.published)
             return `<tr>
-              <td style="font-family:monospace;font-size:0.7rem">${job.jobId}</td>
+              <td style="font-family:monospace;font-size:0.7rem;">${job.jobId}</td>
               <td>${job.dataCenter ?? '—'}</td>
               <td>${statusCell}</td>
               <td>${fmtTime(job.createdAt)}</td>
               <td>${fmtTime(job.startedAt)}</td>
               <td>${fmtTime(job.completedAt)}</td>
-              <td class="is-flex" style="gap:0.25rem">${actions.join('')}</td>
+              <td style="white-space:nowrap;"><div style="display:flex;gap:0.25rem;align-items:center;">${actions.join('')}</div></td>
             </tr>`
           }).join('')
     })
@@ -1581,23 +1583,24 @@ function fmtTime(iso) {
 document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('artifacts-tbody')) return
   loadArtifactsTable()
-  setInterval(loadArtifactsTable, 5000)
 })
 
-function loadArtifactsTable() {
+function loadArtifactsTable(showSpinner = false) {
   const tbody = document.getElementById('artifacts-tbody')
   if (!tbody) return
+  const btn = document.querySelector('button[onclick="loadArtifactsTable(true)"]')
+  if (showSpinner && btn) btn.classList.add('is-loading')
+  const minDelay = new Promise(resolve => setTimeout(resolve, showSpinner ? 200 : 0))
   fetch('/api/v1/oci/artifacts')
     .then(r => r.json())
     .then(artifacts => {
       tbody.innerHTML = artifacts.length === 0
-        ? '<tr><td colspan="9" class="has-text-grey">No artifacts yet.</td></tr>'
+        ? '<tr><td colspan="8" class="has-text-grey">No artifacts yet.</td></tr>'
         : artifacts.map(a => `<tr>
-            <td>${a.id}</td>
             <td>${a.datacenterName}</td>
             <td style="font-family:monospace;font-size:0.7rem">${a.repository}</td>
             <td><span class="tag is-light">${a.tag}</span></td>
-            <td style="font-family:monospace;font-size:0.65rem">${a.digest ? a.digest.substring(0, 19) + '…' : '—'}</td>
+            <td style="white-space:nowrap;">${a.digest ? `<div style="display:flex;align-items:center;gap:0.25rem;"><span class="is-family-monospace is-size-7">${a.digest.substring(0, 19)}…</span><button class="button is-small is-white" title="Copy digest" onclick="navigator.clipboard.writeText('${a.digest}').then(()=>{this.innerHTML='<span class=\\'icon\\'><i class=\\'fas fa-check\\'></i></span>';setTimeout(()=>{this.innerHTML='<span class=\\'icon\\'><i class=\\'fas fa-copy\\'></i></span>';},1200)})"><span class="icon"><i class="fas fa-copy"></i></span></button></div>` : '—'}</td>
             <td>${a.signed ? '<span class="tag is-success is-light">signed</span>' : '<span class="tag is-light">unsigned</span>'}</td>
             <td>${artifactStatusBadge(a.status)}</td>
             <td>${fmtTime(a.initiatedAt)}</td>
@@ -1605,6 +1608,7 @@ function loadArtifactsTable() {
           </tr>`).join('')
     })
     .catch(() => {})
+    .finally(() => { minDelay.then(() => { if (btn) btn.classList.remove('is-loading') }) })
 }
 
 function artifactStatusBadge(status) {
@@ -1636,6 +1640,96 @@ function testOCIConnection() {
       btn.classList.remove('is-loading')
       result.innerHTML = '<span class="has-text-danger">Request failed</span>'
     })
+}
+
+let _cachedPublicKey = null
+
+function _showPublicKey(key) {
+  const display = document.getElementById('pubkey-display')
+  const copyBtn = document.getElementById('btn-copy-pubkey')
+  const dlBtn = document.getElementById('btn-download-pubkey')
+  const verifyBlock = document.getElementById('pubkey-verify-cmd')
+  const verifyText = document.getElementById('pubkey-verify-cmd-text')
+  const showBtn = document.getElementById('btn-show-pubkey')
+
+  display.textContent = key
+  display.style.display = ''
+  copyBtn.style.display = ''
+  dlBtn.style.display = ''
+  showBtn.querySelector('span:last-child').textContent = 'Hide'
+
+  if (verifyText) {
+    verifyText.textContent = `cosign verify --key cosign.pub <repository>:<tag>`
+    verifyBlock.style.display = ''
+  }
+}
+
+function togglePublicKey() {
+  const btn = document.getElementById('btn-show-pubkey')
+  const display = document.getElementById('pubkey-display')
+  const copyBtn = document.getElementById('btn-copy-pubkey')
+  const dlBtn = document.getElementById('btn-download-pubkey')
+  const verifyBlock = document.getElementById('pubkey-verify-cmd')
+
+  if (display.style.display !== 'none') {
+    display.style.display = 'none'
+    copyBtn.style.display = 'none'
+    dlBtn.style.display = 'none'
+    verifyBlock.style.display = 'none'
+    btn.querySelector('span:last-child').textContent = 'Show'
+    return
+  }
+
+  if (_cachedPublicKey) {
+    _showPublicKey(_cachedPublicKey)
+    return
+  }
+
+  btn.classList.add('is-loading')
+  fetch('/api/v1/oci/public-key')
+    .then(r => { if (!r.ok) throw new Error('Failed'); return r.text() })
+    .then(key => {
+      _cachedPublicKey = key
+      _showPublicKey(key)
+    })
+    .catch(() => {
+      const display = document.getElementById('pubkey-display')
+      display.textContent = 'Could not load public key.'
+      display.style.display = ''
+    })
+    .finally(() => btn.classList.remove('is-loading'))
+}
+
+function copyPublicKey() {
+  if (!_cachedPublicKey) return
+  const btn = document.getElementById('btn-copy-pubkey')
+  navigator.clipboard.writeText(_cachedPublicKey).then(() => {
+    btn.querySelector('span:last-child').textContent = 'Copied!'
+    setTimeout(() => { btn.querySelector('span:last-child').textContent = 'Copy' }, 1500)
+  })
+}
+
+function downloadPublicKey() {
+  if (!_cachedPublicKey) return
+  const blob = new Blob([_cachedPublicKey], { type: 'application/x-pem-file' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'cosign.pub'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function copyVerifyCmd() {
+  const text = document.getElementById('pubkey-verify-cmd-text')?.textContent
+  if (!text) return
+  const btn = text.parentElement?.querySelector('button')
+  navigator.clipboard.writeText(text).then(() => {
+    if (btn) {
+      btn.innerHTML = '<span class="icon"><i class="fas fa-check"></i></span>'
+      setTimeout(() => { btn.innerHTML = '<span class="icon"><i class="fas fa-copy"></i></span>' }, 1500)
+    }
+  })
 }
 
 // ── Backups page ──────────────────────────────────────────────────────────────
@@ -1912,13 +2006,15 @@ function formatGQL(query) {
 }
 
 function renderPayload(details) {
-  if (!details) return '<span class="has-text-grey is-size-7">No details</span>'
+  if (!details) return null
   let d
   try {
     d = typeof details === 'string' ? JSON.parse(details) : details
   } catch (_) {
-    return '<span class="has-text-grey is-size-7">Could not parse details</span>'
+    return null
   }
+
+  if (!d.query) return null
 
   const vars = Object.fromEntries(
     Object.entries(d.variables || {}).filter(([k]) => !skipVars.has(k))
@@ -1930,7 +2026,7 @@ function renderPayload(details) {
     <pre style="font-size:0.72rem;background:#f5f5f5;padding:0.75rem;white-space:pre-wrap;margin:0 0 0.75rem">${JSON.stringify(vars, null, 2)}</pre>`
 
   const queryBlock = `<p style="font-size:0.7rem;font-weight:600;margin:0 0 0.25rem">Query</p>
-    <pre style="font-size:0.72rem;background:#f5f5f5;padding:0.75rem;white-space:pre-wrap;word-break:break-word;margin:0;max-height:400px;overflow-y:auto">${d.query ? formatGQL(d.query) : '—'}</pre>`
+    <pre style="font-size:0.72rem;background:#f5f5f5;padding:0.75rem;white-space:pre-wrap;word-break:break-word;margin:0;max-height:400px;overflow-y:auto">${formatGQL(d.query)}</pre>`
 
   return `<div style="padding:0.5rem 1rem 0.75rem">${opName}${varsBlock}${queryBlock}</div>`
 }
@@ -1976,6 +2072,10 @@ document.addEventListener('DOMContentLoaded', () => {
       row.dataset.details = typeof data.details === 'string'
         ? data.details
         : JSON.stringify(data.details)
+      // Hide the expand arrow for events with no expandable payload (e.g. REST-triggered events)
+      if (!renderPayload(data.details)) {
+        row.querySelector('td.dt-control')?.classList.remove('dt-control')
+      }
     },
   })
 
@@ -1983,11 +2083,13 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#audit-log-table tbody').on('click', 'td.dt-control', function () {
     const tr = this.closest('tr')
     const row = auditTable.row(tr)
+    const payload = renderPayload(row.data()?.details)
+    if (!payload) return
     if (row.child.isShown()) {
       row.child.hide()
       tr.classList.remove('shown')
     } else {
-      row.child(renderPayload(row.data()?.details)).show()
+      row.child(payload).show()
       tr.classList.add('shown')
     }
   })

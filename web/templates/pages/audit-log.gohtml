@@ -10,18 +10,11 @@
         </div>
       {{else}}
 
-      <nav class="tabs is-boxed has-text-weight-medium" style="font-size: 14px;">
-        <ul id="tablist" role="tablist">
-          <li class="tab is-active">
-            <a id="tab-summary" data-target="tab-content-audit-log" role="tab" aria-selected="true" tabindex="0">
-              Events
-            </a>
-          </li>
-        </ul>
-      </nav>
+      <p class="is-size-4 mb-2">Audit Log</p>
+      <p class="has-text-grey mb-5" style="font-size: 0.875rem;">All configuration mutations and operations recorded</p>
 
-      <div class="tab-content" role="tabpanel" id="tab-content-audit-log">
-        <table id="audit-log-table" class="table is-striped is-hoverable is-fullwidth">
+      <div>
+        <table id="audit-log-table" class="table is-striped is-hoverable is-fullwidth is-size-7">
           <thead>
             <tr>
               <th></th>

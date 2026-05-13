@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -97,4 +98,31 @@ func (h *EventHandler) List(c echo.Context) error {
 		"events": items,
 		"total":  total,
 	})
+}
+
+// writeAuditEvent persists a single audit event row. Failures are logged and
+// swallowed — audit writes must never block or fail a request.
+func writeAuditEvent(db *ent.Client, logger *slog.Logger, actor, opName string, operations, resourceTypes, resourceIDs []string, details map[string]any) {
+	raw, _ := json.Marshal(details)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	c := db.Event.Create().
+		SetActor(actor).
+		SetDetails(json.RawMessage(raw))
+
+	if len(operations) > 0 {
+		c = c.SetOperations(operations)
+	}
+	if len(resourceTypes) > 0 {
+		c = c.SetResourceTypes(resourceTypes)
+	}
+	if len(resourceIDs) > 0 {
+		c = c.SetResourceIds(resourceIDs)
+	}
+
+	if err := c.Exec(ctx); err != nil {
+		logger.Warn("failed to write audit event", "op", opName, "err", err)
+	}
 }
