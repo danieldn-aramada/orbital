@@ -13,6 +13,7 @@ type Base struct {
 	OIDCEnabled bool
 	CsrfToken  string
 	AppVersion string
+	BasePath   string
 
 	User
 }

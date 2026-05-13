@@ -28,10 +28,11 @@ type UI struct {
 	exportDir       string
 	schemaPath      string
 	version         string
+	basePath        string
 	templates       map[string]*template.Template
 }
 
-func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, backupEnabled bool, s3Endpoint, s3Bucket string) *UI {
+func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, backupEnabled bool, s3Endpoint, s3Bucket string, basePath string) *UI {
 	return &UI{
 		dev:             dev,
 		ratelURL:        ratelURL,
@@ -40,6 +41,7 @@ func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, backupEnable
 		backupEnabled:   backupEnabled,
 		s3Endpoint:      s3Endpoint,
 		s3Bucket:        s3Bucket,
+		basePath:        basePath,
 		version:         fmt.Sprintf("%d", time.Now().Unix()),
 		templates:       webtemplates.Map(),
 	}
@@ -90,6 +92,7 @@ func (h *UI) base(c echo.Context) layout.Base {
 		User:        layout.User{Id: userID, Name: userName, Email: userEmail},
 		CsrfToken:   csrfToken,
 		AppVersion:  appversion.Version,
+		BasePath:    h.basePath,
 	}
 }
 

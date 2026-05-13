@@ -1,4 +1,4 @@
-<form id="form-login" hx-post="/user/login" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type='submit']">
+<form id="form-login" hx-post="{{.BasePath}}/user/login" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type='submit']">
 
   {{if .ErrorMsg}}
   <div class="notification is-danger is-light" style="font-size: 0.875rem;">

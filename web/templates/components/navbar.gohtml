@@ -1,8 +1,8 @@
 <nav class="navbar is-dark" role="navigation" aria-label="main navigation">
 
   <div class="navbar-brand">
-    <a class="navbar-item" href="/" style="gap: 0.1rem;">
-      <img src="/static/logo/logo-armada.png" alt="Orbital logo">
+    <a class="navbar-item" href="{{.BasePath}}/" style="gap: 0.1rem;">
+      <img src="{{.BasePath}}/static/logo/logo-armada.png" alt="Orbital logo">
       <span class="varela-round-regular has-text-white is-size-4"><strong>Orbital</strong></span>
     </a>
 
@@ -22,7 +22,7 @@
           <div>for modular data centers</div>
         </div>
       </div>
-      <a class="navbar-item" href="/swagger/index.html">
+      <a class="navbar-item" href="{{.BasePath}}/swagger/index.html">
         <span class="icon-text">
           <span class="icon has-text-info">
             <i class="fa-solid fa-code"></i>
@@ -31,7 +31,7 @@
         </span>
       </a>
 
-      <a class="navbar-item" href="/graphql" target="_blank" rel="noopener">
+      <a class="navbar-item" href="{{.BasePath}}/graphql" target="_blank" rel="noopener">
         <span class="icon-text">
           <span class="icon has-text-primary">
             <i class="fa-solid fa-diagram-project"></i>
@@ -62,7 +62,7 @@
           <a class="navbar-item" href="https://github.com/danieldn-aramada/demo" target="_blank" rel="noopener">
             <strong>GitHub</strong>
           </a>
-          <a class="navbar-item" href="/docs/design">
+          <a class="navbar-item" href="{{.BasePath}}/docs/design">
             <strong>Design</strong>
           </a>
           <hr class="navbar-divider">
@@ -82,7 +82,7 @@
           </div>
         </div>
         <div class="navbar-item">
-          <form action="/user/logout" method="POST">
+          <form action="{{.BasePath}}/user/logout" method="POST">
             <input type="hidden" name="csrf" value="{{.CsrfToken}}">
             <button class="button is-primary is-outlined theme-dark" type="submit">Logout</button>
           </form>

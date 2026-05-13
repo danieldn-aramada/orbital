@@ -23,9 +23,10 @@ type OIDC struct {
 	oauth2Cfg   oauth2.Config
 	verifier    *gooidc.IDTokenVerifier
 	logger      *slog.Logger
+	basePath    string
 }
 
-func NewOIDC(ctx context.Context, db *ent.Client, sessionKeys auth.SessionKeys, issuerURL, clientID, clientSecret, redirectURL string, logger *slog.Logger) (*OIDC, error) {
+func NewOIDC(ctx context.Context, db *ent.Client, sessionKeys auth.SessionKeys, issuerURL, clientID, clientSecret, redirectURL, basePath string, logger *slog.Logger) (*OIDC, error) {
 	provider, err := gooidc.NewProvider(ctx, issuerURL)
 	if err != nil {
 		return nil, fmt.Errorf("oidc provider discovery: %w", err)
@@ -42,6 +43,7 @@ func NewOIDC(ctx context.Context, db *ent.Client, sessionKeys auth.SessionKeys, 
 		},
 		verifier: provider.Verifier(&gooidc.Config{ClientID: clientID}),
 		logger:   logger,
+		basePath: basePath,
 	}, nil
 }
 
@@ -126,5 +128,5 @@ func (h *OIDC) Callback(c echo.Context) error {
 		return fmt.Errorf("set session: %w", err)
 	}
 
-	return c.Redirect(http.StatusSeeOther, "/?fresh=1")
+	return c.Redirect(http.StatusSeeOther, h.basePath+"/?fresh=1")
 }

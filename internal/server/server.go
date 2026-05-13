@@ -34,7 +34,6 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
-	e.Static("/static", "web/static")
 
 	e.Use(metrics.Middleware())
 	e.GET("/metrics", metrics.Handler())
@@ -73,41 +72,47 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		logger.Warn("ORBITAL_OIDC_CLIENT_SECRET is not set — SSO login disabled")
 	}
 
+	root := e.Group(cfg.BasePath)
+
 	var api *echo.Group
 	if cfg.OIDCIssuerURL != "" {
 		bv, err := auth.NewBearerVerifier(context.Background(), cfg.OIDCIssuerURL, cfg.OIDCClientID)
 		if err != nil {
 			logger.Warn("bearer verifier init failed — API auth disabled", "err", err)
-			api = e.Group("/api/v1")
+			api = root.Group("/api/v1")
 		} else {
-			api = e.Group("/api/v1", bv.RequireAuth())
+			api = root.Group("/api/v1", bv.RequireAuth())
 		}
 	} else {
 		logger.Warn("ORBITAL_OIDC_ISSUER_URL is not set — API auth disabled")
-		api = e.Group("/api/v1")
+		api = root.Group("/api/v1")
 	}
 	s3Configured := cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != ""
 	ociConfigured := cfg.OCIConfigured()
 	if !ociConfigured {
 		logger.Warn("OCI publishing not configured (ORBITAL_OCI_REGISTRY and ORBITAL_OCI_SIGNING_KEY_PATH) — publish disabled")
 	}
-	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, s3Configured, cfg.S3Endpoint, cfg.S3Bucket)
+	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, s3Configured, cfg.S3Endpoint, cfg.S3Bucket, cfg.BasePath)
 	ui.SetOCIConfig(ociConfigured, cfg.OCIRegistry, cfg.OCIRepo)
 	ui.SetExportDir(cfg.ExportDir)
 	ui.SetSchemaPath(cfg.SchemaPath)
-	e.GET("/", ui.Index)
-	e.GET("/datacenters", ui.Index)
-	e.GET("/servers", ui.Servers)
-	e.GET("/backups", ui.Backups)
-	e.GET("/divergence-reports", ui.DivergenceReports)
-	e.GET("/audit-log", ui.AuditLog)
-	e.GET("/schema", ui.Schema)
-	e.GET("/export", ui.Export)
+	root.Static("/static", "web/static")
+	if cfg.BasePath != "" {
+		root.GET("", ui.Index)
+	}
+	root.GET("/", ui.Index)
+	root.GET("/datacenters", ui.Index)
+	root.GET("/servers", ui.Servers)
+	root.GET("/backups", ui.Backups)
+	root.GET("/divergence-reports", ui.DivergenceReports)
+	root.GET("/audit-log", ui.AuditLog)
+	root.GET("/schema", ui.Schema)
+	root.GET("/export", ui.Export)
 
 	if db != nil {
-		login := handler.NewLogin(db, cfg.SessionKeys(), webtemplates.LoginForm())
-		e.POST("/user/login", login.Post)
-		e.POST("/user/logout", login.Logout)
+		login := handler.NewLogin(db, cfg.SessionKeys(), webtemplates.LoginForm(), cfg.BasePath)
+		root.POST("/user/login", login.Post)
+		root.POST("/user/logout", login.Logout)
 
 		if oidcEnabled {
 			oidc, err := handler.NewOIDC(
@@ -118,22 +123,23 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 				cfg.OIDCClientID,
 				cfg.OIDCClientSecret,
 				cfg.OIDCRedirectURL,
+				cfg.BasePath,
 				logger,
 			)
 			if err != nil {
 				logger.Error("oidc provider init failed", "err", err)
 			} else {
-				e.GET("/auth/login", oidc.Login)
-				e.GET("/auth/callback", oidc.Callback)
+				root.GET("/auth/login", oidc.Login)
+				root.GET("/auth/callback", oidc.Callback)
 			}
 		}
 	}
 
-	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.Dev, logger)
-	e.GET("/datacenters/:id", dc.Tab)
+	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath)
+	root.GET("/datacenters/:id", dc.Tab)
 
-	srv := handler.NewServerHandler(cfg.DGraphURL, cfg.Dev, logger)
-	e.GET("/servers/:id", srv.Tab)
+	srv := handler.NewServerHandler(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath)
+	root.GET("/servers/:id", srv.Tab)
 
 	if db != nil {
 		exp := handler.NewExport(db, cfg.DGraphURL, cfg.DGraphScratchURL, cfg.DGraphScratchAdminURL, cfg.ExportDir, cfg.DGraphScratchExportDir, cfg.SchemaPath, logger)
@@ -156,7 +162,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		api.GET("/oci/artifacts/:id", ociH.GetArtifact)
 		api.GET("/oci/public-key", ociH.PublicKey)
 		api.POST("/oci/test-connection", ociH.TestConnection)
-		e.GET("/signed-artifacts", ui.EdgeDelivery)
+		root.GET("/signed-artifacts", ui.EdgeDelivery)
 
 		if !s3Configured {
 			logger.Warn("S3 not configured (ORBITAL_S3_BUCKET, ORBITAL_S3_ACCESS_KEY, ORBITAL_S3_SECRET_KEY) — backup disabled")
@@ -187,13 +193,13 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		}
 
 		evh := handler.NewEventHandler(db, logger)
-		e.GET("/api/v1/events", evh.List)
+		root.GET("/api/v1/events", evh.List)
 	}
 
 	gql := handler.NewGraphQL(cfg.DGraphURL, db, logger)
-	e.Any("/graphql", gql.Handle)
+	root.Any("/graphql", gql.Handle)
 	api.Any("/graphql", gql.Handle)
-	e.GET("/swagger/*", echoswagger.WrapHandler)
+	root.GET("/swagger/*", echoswagger.WrapHandler)
 
 	return &Server{
 		cfg:    cfg,

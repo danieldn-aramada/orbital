@@ -10,16 +10,16 @@
       </p>
 
     {{if .OIDCEnabled}}
-    <a href="/auth/login" class="button is-fullwidth mb-4" style="gap: 0.5rem;">
+    <a href="{{.BasePath}}/auth/login" class="button is-fullwidth mb-4" style="gap: 0.5rem;">
       <span class="icon">
-        <img src="/static/logo/microsoft.svg" alt="Microsoft" style="width:18px;height:18px;">
+        <img src="{{.BasePath}}/static/logo/microsoft.svg" alt="Microsoft" style="width:18px;height:18px;">
       </span>
       <span>Sign in with Microsoft</span>
     </a>
     <div class="is-divider" data-content="OR"></div>
     {{end}}
 
-    <form id="form-login" hx-post="/user/login" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type='submit']">
+    <form id="form-login" hx-post="{{.BasePath}}/user/login" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type='submit']">
 
       <div class="field">
         <label class="label">Email</label>

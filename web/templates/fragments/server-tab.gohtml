@@ -4,7 +4,7 @@
     <div class="column pt-0 pl-0">
       {{if .ShowDCBack}}
       <button class="button is-rounded is-small is-warning mt-1"
-        hx-get="/datacenters/{{.DataCenterID}}"
+        hx-get="{{.BasePath}}/datacenters/{{.DataCenterID}}"
         hx-target="#tab-content-{{.DataCenterID}}"
         hx-swap="innerHTML">
         <span class="icon"><i class="fa-solid fa-arrow-left"></i></span>
@@ -16,7 +16,7 @@
         <span>Grafana</span>
       </button>
       <button class="button is-rounded is-small is-link mt-1"
-        hx-get="/servers/{{.ID}}{{if .ShowDCBack}}?dcCtx=1{{end}}"
+        hx-get="{{.BasePath}}/servers/{{.ID}}{{if .ShowDCBack}}?dcCtx=1{{end}}"
         hx-target="{{if .ShowDCBack}}#tab-content-{{.DataCenterID}}{{else}}#tab-content-srv-{{.ID}}{{end}}"
         hx-swap="innerHTML">
         <span class="icon"><i class="fa-solid fa-refresh"></i></span>
@@ -87,7 +87,7 @@
             <li data-panel="srv-panel-config-{{.ID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-file-code"></i></span><span>Config Profile</span></a>
             </li>
-            <li data-panel="srv-panel-audit-{{.ID}}">
+            <li data-panel="srv-panel-audit-{{.ID}}" data-orb-id="{{.OrbID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a>
             </li>
           </ul>
@@ -154,7 +154,7 @@
           {{end}}
         </div>
 
-        <div id="srv-panel-audit-{{.ID}}" style="display:none" data-orb-id="{{.OrbID}}"></div>
+        <div id="srv-panel-audit-{{.ID}}" style="display:none"></div>
 
         </div>
       </article>

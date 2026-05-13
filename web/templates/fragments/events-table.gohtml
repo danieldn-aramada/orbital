@@ -1,0 +1,26 @@
+{{if .Items}}
+<div style="overflow-x:auto">
+<table class="table is-striped is-hoverable is-fullwidth is-size-7 mt-2">
+  <thead>
+    <tr>
+      <th>Timestamp</th>
+      <th>Actor</th>
+      <th>Operations</th>
+      <th>Variables</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Items}}
+    <tr>
+      <td style="white-space:nowrap"><span data-timestamp="{{.Timestamp}}">{{.Timestamp}}</span></td>
+      <td>{{if .Actor}}{{.Actor}}{{else}}—{{end}}</td>
+      <td>{{range .Operations}}<span class="tag is-info is-light is-small">{{.}}</span> {{end}}</td>
+      <td style="font-size:0.7rem;color:#666">{{.VarSummary}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p class="is-size-7 has-text-grey p-2">No audit events recorded yet.</p>
+{{end}}

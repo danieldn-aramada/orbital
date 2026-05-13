@@ -1,0 +1,19 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: orbital
+  namespace: netbox
+spec:
+  gateways:
+    - istio-system/istio-ingressgateway-internal
+  hosts:
+    - ilb.devnew.armada.internal
+  http:
+    - match:
+        - uri:
+            prefix: /orbital
+      route:
+        - destination:
+            host: orbital
+            port:
+              number: 8001

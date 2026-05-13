@@ -14,7 +14,7 @@ ratel:
     tag: latest
 backups:
   full:
-    enabled: true
+    enabled: false
   volume:
     enabled: true
     mountPath: /dgraph/export

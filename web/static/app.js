@@ -1,3 +1,5 @@
+const BASE = window.ORBITAL_BASE || '';
+
 let serverTable = null;
 
 class TabItem {
@@ -16,7 +18,7 @@ function loadTab(displayName, itemId) {
   // add tab to tablist
   var html = `<li class="tab">
     <a id="tab-${itemId}" data-target="tab-content-${itemId}" role="tab" aria-selected="false" tabindex="-1" 
-      hx-get="/servers/${itemId}" hx-trigger="click" hx-target="#tab-content-${itemId}" hx-swap="innerHTML">
+      hx-get="${BASE}/servers/${itemId}" hx-trigger="click" hx-target="#tab-content-${itemId}" hx-swap="innerHTML">
       ${displayName}
       <span class="pl-2">
         <button id="tab-close-${itemId}">
@@ -332,7 +334,7 @@ function loadServerTable() {
         }
       ],
       ajax: {
-        url: '/api/v1/servers',
+        url: BASE + '/api/v1/servers',
         dataSrc: ''
       },
     });
@@ -360,7 +362,7 @@ function loadServerTable() {
     serverTable.clear().draw()
     reloadButton.addClass('is-loading')
     setTimeout(() => {
-      taserverTableble.ajax.url('/api/v1/servers').load(()=>{
+      taserverTableble.ajax.url(BASE + '/api/v1/servers').load(()=>{
           reloadButton.removeClass('is-loading')
       })
     }, 250);
@@ -400,7 +402,7 @@ function initServerEventsTable(serverId) {
     autoWidth: true,
     order: [[0, 'desc']],
     ajax: {
-      url: `/api/v1/servers/${serverId}/events`,
+      url: BASE + `/api/v1/servers/${serverId}/events`,
       method: "GET",
       dataSrc: "",
       deferRender: true,
@@ -578,6 +580,17 @@ function initDcDetailTabs(id) {
 
   const tabs = tabContainer.querySelectorAll('li[data-panel]')
   const storageKey = `dc-detail-tab-${id}`
+  const auditPanelId = `dc-panel-audit-${id}`
+
+  function loadAuditPanel() {
+    const tab = [...tabs].find(t => t.dataset.panel === auditPanelId)
+    const orbId = tab && tab.dataset.orbId
+    if (!orbId) return
+    htmx.ajax('GET', BASE + `/api/v1/events?orbId=${encodeURIComponent(orbId)}&limit=50`, {
+      target: `#${auditPanelId}`,
+      swap: 'innerHTML',
+    })
+  }
 
   function activatePanel(panelId) {
     tabs.forEach(t => t.classList.remove('is-active'))
@@ -586,72 +599,18 @@ function initDcDetailTabs(id) {
     tabContainer.parentElement.querySelectorAll('[id^="dc-panel-"]').forEach(panel => {
       panel.style.display = panel.id === panelId ? '' : 'none'
     })
+    if (panelId === auditPanelId) loadAuditPanel()
   }
 
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
       localStorage.setItem(storageKey, tab.dataset.panel)
       activatePanel(tab.dataset.panel)
-      if (tab.dataset.panel === `dc-panel-audit-${id}`) {
-        const panel = document.getElementById(`dc-panel-audit-${id}`)
-        if (panel) loadEntityAuditLog(panel, panel.dataset.orbId)
-      }
     })
   })
 
   const saved = localStorage.getItem(storageKey)
   if (saved) activatePanel(saved)
-}
-
-// Lazy-loads audit events for a specific entity into a panel div.
-// Called when the Audit Log tab is first activated on a DC or server detail view.
-function loadEntityAuditLog(panelEl, orbId) {
-  panelEl.innerHTML = '<p class="is-size-7 has-text-grey p-2">Loading…</p>'
-
-  fetch(`/api/v1/events?resource_id=${encodeURIComponent(orbId)}&limit=50`)
-    .then(r => r.json())
-    .then(json => {
-      const events = json.events ?? []
-      if (events.length === 0) {
-        panelEl.innerHTML = '<p class="is-size-7 has-text-grey p-2">No audit events recorded yet.</p>'
-        return
-      }
-      const rows = events.map(ev => {
-        const ts = ev.timestamp
-          ? `<span data-timestamp="${ev.timestamp}">${ev.timestamp}</span>`
-          : '—'
-        const opTag = (ev.operations && ev.operations.length)
-          ? ev.operations.map(op => `<span class="tag is-info is-light is-small">${op}</span>`).join(' ')
-          : '<span class="tag is-light is-small">unknown</span>'
-        const varSummary = (() => {
-          if (!ev.details) return '—'
-          try {
-            const d = typeof ev.details === 'string' ? JSON.parse(ev.details) : ev.details
-            const vars = d.variables || {}
-            const entries = Object.entries(vars).filter(([k]) => !skipVars.has(k))
-            return entries.map(([k, v]) => `<span style="white-space:nowrap"><strong>${k}:</strong> ${v}</span>`).join('<br>') || '—'
-          } catch (_) { return '—' }
-        })()
-        return `<tr>
-          <td style="white-space:nowrap">${ts}</td>
-          <td>${ev.actor || '—'}</td>
-          <td>${opTag}</td>
-          <td style="font-size:0.7rem;color:#666">${varSummary}</td>
-        </tr>`
-      }).join('')
-      panelEl.innerHTML = `<div style="overflow-x:auto">
-        <table class="table is-striped is-fullwidth is-size-7 mt-2">
-          <thead><tr>
-            <th>Timestamp</th><th>Actor</th><th>Operation</th><th>Variables</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>`
-      renderTimestamps(panelEl)
-    })
-    .catch(() => {
-      panelEl.innerHTML = '<p class="is-size-7 has-text-danger p-2">Failed to load audit log.</p>'
-    })
 }
 
 // DataTables renders the page-length <select> bare, with no wrapper. Bulma's
@@ -668,6 +627,18 @@ function initServerDetailTabs(root) {
   if (!tabContainer) return
 
   const tabs = tabContainer.querySelectorAll('li[data-panel]')
+  const srvId = tabContainer.id.replace('srv-detail-tabs-', '')
+  const auditPanelId = `srv-panel-audit-${srvId}`
+
+  function loadAuditPanel() {
+    const tab = [...tabs].find(t => t.dataset.panel === auditPanelId)
+    const orbId = tab && tab.dataset.orbId
+    if (!orbId) return
+    htmx.ajax('GET', BASE + `/api/v1/events?orbId=${encodeURIComponent(orbId)}&limit=50`, {
+      target: `#${auditPanelId}`,
+      swap: 'innerHTML',
+    })
+  }
 
   function activatePanel(panelId) {
     tabs.forEach(t => t.classList.remove('is-active'))
@@ -676,17 +647,12 @@ function initServerDetailTabs(root) {
     tabContainer.parentElement.querySelectorAll('[id^="srv-panel-"]').forEach(panel => {
       panel.style.display = panel.id === panelId ? '' : 'none'
     })
+    if (panelId === auditPanelId) loadAuditPanel()
   }
-
-  const srvId = tabContainer.id.replace('srv-detail-tabs-', '')
 
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
       activatePanel(tab.dataset.panel)
-      if (tab.dataset.panel === `srv-panel-audit-${srvId}`) {
-        const panel = document.getElementById(`srv-panel-audit-${srvId}`)
-        if (panel) loadEntityAuditLog(panel, panel.dataset.orbId)
-      }
     })
   })
 }
@@ -701,13 +667,13 @@ document.addEventListener('dblclick', function (e) {
   const tabContent = document.getElementById('tab-content-' + dcId)
   if (!tabContent) return
   tabContent.dataset.loaded = ''
-  htmx.ajax('GET', '/servers/' + serverId + '?dcCtx=1', { target: '#tab-content-' + dcId, swap: 'innerHTML' })
+  htmx.ajax('GET', BASE + '/servers/' + serverId + '?dcCtx=1', { target: '#tab-content-' + dcId, swap: 'innerHTML' })
 })
 
 function loadDataCenterTab(displayName, id) {
   const tabHtml = `<li class="tab">
     <a id="tab-${id}" data-target="tab-content-${id}" role="tab" aria-selected="false" tabindex="-1"
-      hx-get="/datacenters/${id}" hx-trigger="click" hx-target="#tab-content-${id}" hx-swap="innerHTML">
+      hx-get="${BASE}/datacenters/${id}" hx-trigger="click" hx-target="#tab-content-${id}" hx-swap="innerHTML">
       ${displayName}
       <span class="pl-2">
         <button id="tab-close-${id}">
@@ -732,26 +698,12 @@ function loadDataCenterTab(displayName, id) {
   })
   const tabContent = document.getElementById(`tab-content-${id}`)
 
-  tabLink.addEventListener('htmx:before-request', (e) => {
+  tabLink.addEventListener('htmx:beforeRequest', (e) => {
     if (tabContent.dataset.loaded) {
       e.preventDefault()
       return
     }
     showDatacenterSkeleton(id)
-  })
-
-  tabContent.addEventListener('htmx:after-swap', () => {
-    renderTimestamps(tabContent)
-    if (tabContent.querySelector(`#dc-detail-tabs-${id}`)) {
-      tabContent.dataset.loaded = 'true'
-      initDcDetailTabs(id)
-      dcEditors.delete(id)
-      initServerDetailTabs(tabContent)
-    } else if (tabContent.querySelector(`[id^="srv-detail-tabs-"]`)) {
-      initServerDetailTabs(tabContent)
-      const srvId = tabContent.querySelector(`[id^="srv-detail-tabs-"]`).id.replace('srv-detail-tabs-', '')
-      srvEditors.delete(srvId)
-    }
   })
 
   const tabClose = document.getElementById(`tab-close-${id}`)
@@ -817,7 +769,7 @@ document.addEventListener('DOMContentLoaded', () => {
       { targets: 4, visible: false },
     ],
     ajax: {
-      url: '/graphql',
+      url: BASE + '/graphql',
       type: 'POST',
       contentType: 'application/json',
       data: () => JSON.stringify({ query: `{ queryDataCenter { id name createdBy createdAt serversAggregate { count } } }` }),
@@ -905,7 +857,7 @@ document.addEventListener('DOMContentLoaded', () => {
       { targets: 6, visible: false },
     ],
     ajax: {
-      url: '/graphql',
+      url: BASE + '/graphql',
       type: 'POST',
       contentType: 'application/json',
       data: () => JSON.stringify({
@@ -992,16 +944,10 @@ function loadServerListTab(displayName, id) {
     displayTabContent(`tab-content-srv-${id}`)
     setCurrentTab(`tab-srv-${id}`)
     if (!tabContent.dataset.loaded) {
-      htmx.ajax('GET', '/servers/' + id, { target: '#tab-content-srv-' + id, swap: 'innerHTML' })
+      htmx.ajax('GET', BASE + '/servers/' + id, { target: '#tab-content-srv-' + id, swap: 'innerHTML' })
     }
   })
 
-  tabContent.addEventListener('htmx:after-swap', () => {
-    tabContent.dataset.loaded = 'true'
-    renderTimestamps(tabContent)
-    initServerDetailTabs(tabContent)
-    srvEditors.delete(id)
-  })
 
   document.getElementById(`tab-close-srv-${id}`).addEventListener('click', (event) => {
     event.stopPropagation()
@@ -1083,7 +1029,7 @@ function renderBackups(jobs) {
 }
 
 function loadBackups() {
-  fetch('/api/v1/backups')
+  fetch(BASE + '/api/v1/backups')
     .then(r => r.json())
     .then(renderBackups)
     .catch(() => {})
@@ -1096,7 +1042,7 @@ function triggerBackup() {
   btn.disabled = true
   msg.style.display = 'none'
 
-  fetch('/api/v1/backups', { method: 'POST' })
+  fetch(BASE + '/api/v1/backups', { method: 'POST' })
     .then(r => r.json())
     .then(data => {
       if (data.error) {
@@ -1120,7 +1066,7 @@ function triggerBackup() {
 function pollBackup(jobId) {
   const btn = document.getElementById('btn-backup')
   const interval = setInterval(() => {
-    fetch('/api/v1/backups/' + jobId)
+    fetch(BASE + '/api/v1/backups/' + jobId)
       .then(r => r.json())
       .then(data => {
         loadBackups()
@@ -1135,7 +1081,7 @@ function pollBackup(jobId) {
 }
 
 function downloadBackup(id) {
-  fetch('/api/v1/backups/' + id + '/download')
+  fetch(BASE + '/api/v1/backups/' + id + '/download')
     .then(r => r.json())
     .then(data => { if (data.url) window.open(data.url, '_blank') })
     .catch(() => {})
@@ -1161,7 +1107,7 @@ function confirmDelete() {
   btn.classList.add('is-loading')
   btn.disabled = true
 
-  fetch('/api/v1/backups/' + pendingDeleteId, { method: 'DELETE' })
+  fetch(BASE + '/api/v1/backups/' + pendingDeleteId, { method: 'DELETE' })
     .then(r => {
       if (r.status === 204 || r.ok) {
         closeDeleteModal()
@@ -1387,7 +1333,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const select = document.getElementById('export-datacenter-select')
   const submitBtn = document.getElementById('export-submit-btn')
 
-  fetch('/graphql', {
+  fetch(BASE + '/graphql', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query: '{ queryDataCenter { id name } }' }),
@@ -1422,7 +1368,7 @@ function handleExportSubmit() {
   submitBtn.classList.add('is-loading')
   submitBtn.disabled = true
 
-  fetch(`/api/v1/datacenters/${id}/export`, { method: 'POST' })
+  fetch(BASE + `/api/v1/datacenters/${id}/export`, { method: 'POST' })
     .then(r => r.json())
     .then(json => {
       submitBtn.classList.remove('is-loading')
@@ -1444,7 +1390,7 @@ function handleExportSubmit() {
 
 function pollExportStatus(jobId) {
   clearTimeout(exportPollTimer)
-  fetch(`/api/v1/export/jobs/${jobId}`)
+  fetch(BASE + `/api/v1/export/jobs/${jobId}`)
     .then(r => r.json())
     .then(job => {
       loadExportJobsTable()
@@ -1477,7 +1423,7 @@ function showExportStatus(colorClass, iconClass, text, downloadJobId) {
   box.style.display = ''
 
   if (downloadJobId) {
-    dlAnchor.href = `/api/v1/export/jobs/${downloadJobId}/download`
+    dlAnchor.href = BASE + `/api/v1/export/jobs/${downloadJobId}/download`
     dlWrap.style.display = ''
   } else {
     dlWrap.style.display = 'none'
@@ -1490,7 +1436,7 @@ function loadExportJobsTable() {
   const table = document.getElementById('export-jobs-table')
   const ociConfigured = table && table.dataset.ociConfigured === 'true'
 
-  fetch('/api/v1/export/jobs')
+  fetch(BASE + '/api/v1/export/jobs')
     .then(r => r.json())
     .then(jobs => {
       tbody.innerHTML = jobs.length === 0
@@ -1498,7 +1444,7 @@ function loadExportJobsTable() {
         : jobs.map(job => {
             const actions = []
             if (job.status === 'completed') {
-              actions.push(`<a class="button is-small is-link is-outlined" href="/api/v1/export/jobs/${job.jobId}/download"><span class="icon"><i class="fa-solid fa-download"></i></span><span>Download</span></a>`)
+              actions.push(`<a class="button is-small is-link is-outlined" href="${BASE}/api/v1/export/jobs/${job.jobId}/download"><span class="icon"><i class="fa-solid fa-download"></i></span><span>Download</span></a>`)
               if (ociConfigured) {
                 const publishLabel = job.published ? 'Publish Again' : 'Publish'
                 actions.push(`<button class="button is-small is-warning is-outlined" onclick="publishExportJob('${job.jobId}')"><span class="icon"><i class="fa-solid fa-box-archive"></i></span><span>${publishLabel}</span></button>`)
@@ -1537,7 +1483,7 @@ function exportJobStatusBadge(status, published) {
 }
 
 function publishExportJob(jobId) {
-  fetch(`/api/v1/export/jobs/${jobId}/publish`, { method: 'POST' })
+  fetch(BASE + `/api/v1/export/jobs/${jobId}/publish`, { method: 'POST' })
     .then(r => r.json())
     .then(res => {
       if (res.error) {
@@ -1551,7 +1497,7 @@ function publishExportJob(jobId) {
 }
 
 function pollPublishJob(artifactId) {
-  fetch(`/api/v1/oci/artifacts/${artifactId}`)
+  fetch(BASE + `/api/v1/oci/artifacts/${artifactId}`)
     .then(r => r.json())
     .then(a => {
       if (a.status === 'completed' || a.status === 'failed') {
@@ -1565,7 +1511,7 @@ function pollPublishJob(artifactId) {
 
 function deleteExportJob(jobId) {
   if (!confirm('Delete this export job and its local artifact file?\n\nThis does not remove any published OCI artifacts from the registry.')) return
-  fetch(`/api/v1/export/jobs/${jobId}`, { method: 'DELETE' })
+  fetch(BASE + `/api/v1/export/jobs/${jobId}`, { method: 'DELETE' })
     .then(r => {
       if (r.ok) loadExportJobsTable()
       else r.json().then(j => alert(`Delete failed: ${j.error ?? 'unknown'}`))
@@ -1591,7 +1537,7 @@ function loadArtifactsTable(showSpinner = false) {
   const btn = document.querySelector('button[onclick="loadArtifactsTable(true)"]')
   if (showSpinner && btn) btn.classList.add('is-loading')
   const minDelay = new Promise(resolve => setTimeout(resolve, showSpinner ? 200 : 0))
-  fetch('/api/v1/oci/artifacts')
+  fetch(BASE + '/api/v1/oci/artifacts')
     .then(r => r.json())
     .then(artifacts => {
       tbody.innerHTML = artifacts.length === 0
@@ -1626,7 +1572,7 @@ function testOCIConnection() {
   const result = document.getElementById('test-connection-result')
   btn.classList.add('is-loading')
   result.textContent = ''
-  fetch('/api/v1/oci/test-connection', { method: 'POST' })
+  fetch(BASE + '/api/v1/oci/test-connection', { method: 'POST' })
     .then(r => r.json())
     .then(res => {
       btn.classList.remove('is-loading')
@@ -1686,7 +1632,7 @@ function togglePublicKey() {
   }
 
   btn.classList.add('is-loading')
-  fetch('/api/v1/oci/public-key')
+  fetch(BASE + '/api/v1/oci/public-key')
     .then(r => { if (!r.ok) throw new Error('Failed'); return r.text() })
     .then(key => {
       _cachedPublicKey = key
@@ -1739,7 +1685,7 @@ function testBackupConnection() {
   const result = document.getElementById('backup-connection-result')
   btn.classList.add('is-loading')
   result.textContent = ''
-  fetch('/api/v1/backups/test-connection', { method: 'POST' })
+  fetch(BASE + '/api/v1/backups/test-connection', { method: 'POST' })
     .then(r => r.json())
     .then(res => {
       btn.classList.remove('is-loading')
@@ -1758,7 +1704,27 @@ function testBackupConnection() {
 // ── Timestamp rendering ───────────────────────────────────────────────────────
 
 document.addEventListener('htmx:afterSwap', (evt) => {
-  if (evt.detail && evt.detail.target) renderTimestamps(evt.detail.target)
+  const target = evt.detail && evt.detail.target
+  if (!target) return
+  renderTimestamps(target)
+
+  const dcDetailTabs = target.querySelector('[id^="dc-detail-tabs-"]')
+  if (dcDetailTabs) {
+    const id = dcDetailTabs.id.replace('dc-detail-tabs-', '')
+    target.dataset.loaded = 'true'
+    initDcDetailTabs(id)
+    dcEditors.delete(id)
+    initServerDetailTabs(target)
+    return
+  }
+
+  const srvDetailTabs = target.querySelector('[id^="srv-detail-tabs-"]')
+  if (srvDetailTabs) {
+    target.dataset.loaded = 'true'
+    initServerDetailTabs(target)
+    const srvId = srvDetailTabs.id.replace('srv-detail-tabs-', '')
+    srvEditors.delete(srvId)
+  }
 })
 
 // ── DataCenter edit modal ─────────────────────────────────────────────────────
@@ -1803,7 +1769,7 @@ document.addEventListener('click', function (e) {
             vars.assetDataV2 = JSON.stringify(vars.assetDataV2)
           }
           const currentVersion = parseInt(modal.dataset.version, 10) || 0
-          const resp = await fetch('/graphql', {
+          const resp = await fetch(BASE + '/graphql', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1821,6 +1787,7 @@ document.addEventListener('click', function (e) {
               variables: {
                 ...vars,
                 id,
+                orbId: modal.dataset.orbId || '',
                 ifVersion: currentVersion,
                 version: currentVersion + 1,
                 updatedBy: modal.dataset.currentUser || '',
@@ -1842,7 +1809,7 @@ document.addEventListener('click', function (e) {
           modal.classList.remove('is-active')
           document.documentElement.style.overflow = ''
           dcEditors.delete(id)
-          htmx.ajax('GET', '/datacenters/' + id, { target: '#tab-content-' + id, swap: 'innerHTML' })
+          htmx.ajax('GET', BASE + '/datacenters/' + id, { target: '#tab-content-' + id, swap: 'innerHTML' })
         } catch (err) {
           showError('Request failed — check your connection and try again.')
         } finally {
@@ -1907,7 +1874,7 @@ document.addEventListener('click', function (e) {
             return
           }
           const currentVersion = parseInt(modal.dataset.version, 10) || 0
-          const resp = await fetch('/graphql', {
+          const resp = await fetch(BASE + '/graphql', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1930,6 +1897,7 @@ document.addEventListener('click', function (e) {
               variables: {
                 ...vars,
                 id,
+                orbId: modal.dataset.orbId || '',
                 ifVersion: currentVersion,
                 version: currentVersion + 1,
                 updatedBy: modal.dataset.currentUser || '',
@@ -2065,7 +2033,7 @@ document.addEventListener('DOMContentLoaded', () => {
       { data: 'details', visible: false },
     ],
     ajax: {
-      url: '/api/v1/events?limit=200',
+      url: BASE + '/api/v1/events?limit=200',
       dataSrc: (json) => json.events ?? [],
     },
     createdRow: function (row, data) {
@@ -2103,7 +2071,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Clear all tab state and localStorage on logout
 document.addEventListener('DOMContentLoaded', () => {
-  const logoutForm = document.querySelector('form[action="/user/logout"]')
+  const logoutForm = document.querySelector('form[action$="/user/logout"]')
   if (!logoutForm) return
   logoutForm.addEventListener('submit', () => {
     localStorage.clear()

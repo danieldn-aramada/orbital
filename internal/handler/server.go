@@ -59,14 +59,16 @@ type ServerHandler struct {
 	dgraphURL string
 	fragment  *template.Template
 	logger    *slog.Logger
+	basePath  string
 }
 
-func NewServerHandler(dgraphURL string, dev bool, logger *slog.Logger) *ServerHandler {
+func NewServerHandler(dgraphURL string, dev bool, logger *slog.Logger, basePath string) *ServerHandler {
 	return &ServerHandler{
 		dgraphURL: dgraphURL,
 		dev:       dev,
 		fragment:  parseServerFragment(),
 		logger:    logger,
+		basePath:  basePath,
 	}
 }
 
@@ -174,11 +176,12 @@ type serverTabDetailData struct {
 	IdracSettings      *idracSettingsTabData
 	ConfigProfileJSON  string
 	StorageControllers []storageControllerTabData
+	BasePath           string
 }
 
 func (h *ServerHandler) Tab(c echo.Context) error {
 	if c.Request().Header.Get("HX-Request") != "true" {
-		return c.Redirect(http.StatusFound, "/")
+		return c.Redirect(http.StatusFound, h.basePath+"/")
 	}
 
 	if h.dev {
@@ -258,6 +261,7 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 		ShowDCBack:     c.QueryParam("dcCtx") == "1",
 		CurrentUser:    currentUser,
 		EditDataJSON:   template.JS(editJSON),
+		BasePath:       h.basePath,
 	}
 
 	if raw.IdracSettings != nil {
