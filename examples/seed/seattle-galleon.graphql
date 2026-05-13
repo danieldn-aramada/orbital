@@ -65,6 +65,7 @@ mutation {
     {
       orbId: "seattle:10.20.43.7"
       address: "10.20.43.7"
+      name: "10.20.43.7"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -73,6 +74,7 @@ mutation {
     {
       orbId: "seattle:10.20.43.4"
       address: "10.20.43.4"
+      name: "10.20.43.4"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -81,6 +83,7 @@ mutation {
     {
       orbId: "seattle:10.20.33.49"
       address: "10.20.33.49"
+      name: "10.20.33.49"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -89,6 +92,7 @@ mutation {
     {
       orbId: "seattle:10.20.33.51"
       address: "10.20.33.51"
+      name: "10.20.33.51"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -97,6 +101,7 @@ mutation {
     {
       orbId: "seattle:10.20.33.52"
       address: "10.20.33.52"
+      name: "10.20.33.52"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -105,6 +110,7 @@ mutation {
     {
       orbId: "seattle:10.20.33.53"
       address: "10.20.33.53"
+      name: "10.20.33.53"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -113,6 +119,7 @@ mutation {
     {
       orbId: "seattle:10.20.33.54"
       address: "10.20.33.54"
+      name: "10.20.33.54"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -121,6 +128,7 @@ mutation {
     {
       orbId: "seattle:10.20.43.2"
       address: "10.20.43.2"
+      name: "10.20.43.2"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -129,6 +137,7 @@ mutation {
     {
       orbId: "seattle:10.20.43.3"
       address: "10.20.43.3"
+      name: "10.20.43.3"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -137,6 +146,7 @@ mutation {
     {
       orbId: "seattle:10.20.33.61"
       address: "10.20.33.61"
+      name: "10.20.33.61"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -145,6 +155,7 @@ mutation {
     {
       orbId: "seattle:10.20.33.62"
       address: "10.20.33.62"
+      name: "10.20.33.62"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -153,6 +164,7 @@ mutation {
     {
       orbId: "seattle:10.20.33.63"
       address: "10.20.33.63"
+      name: "10.20.33.63"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -161,6 +173,7 @@ mutation {
     {
       orbId: "seattle:10.20.33.64"
       address: "10.20.33.64"
+      name: "10.20.33.64"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -169,6 +182,7 @@ mutation {
     {
       orbId: "seattle:10.20.33.65"
       address: "10.20.33.65"
+      name: "10.20.33.65"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -177,6 +191,7 @@ mutation {
     {
       orbId: "seattle:10.20.33.66"
       address: "10.20.33.66"
+      name: "10.20.33.66"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -185,6 +200,7 @@ mutation {
     {
       orbId: "seattle:10.20.33.67"
       address: "10.20.33.67"
+      name: "10.20.33.67"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -193,6 +209,7 @@ mutation {
     {
       orbId: "seattle:10.20.33.68"
       address: "10.20.33.68"
+      name: "10.20.33.68"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -201,6 +218,7 @@ mutation {
     {
       orbId: "seattle:10.20.33.69"
       address: "10.20.33.69"
+      name: "10.20.33.69"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -209,6 +227,7 @@ mutation {
     {
       orbId: "seattle:10.20.43.5"
       address: "10.20.43.5"
+      name: "10.20.43.5"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -217,6 +236,7 @@ mutation {
     {
       orbId: "seattle:10.96.87.15"
       address: "10.96.87.15"
+      name: "10.96.87.15"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -225,6 +245,7 @@ mutation {
     {
       orbId: "seattle:10.20.43.6"
       address: "10.20.43.6"
+      name: "10.20.43.6"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -233,6 +254,7 @@ mutation {
     {
       orbId: "seattle:10.96.87.17"
       address: "10.96.87.17"
+      name: "10.96.87.17"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -241,6 +263,7 @@ mutation {
     {
       orbId: "seattle:10.96.87.16"
       address: "10.96.87.16"
+      name: "10.96.87.16"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"
@@ -249,6 +272,7 @@ mutation {
     {
       orbId: "seattle:10.20.43.8"
       address: "10.20.43.8"
+      name: "10.20.43.8"
       role: "oob"
       namespace: { name: "seattle" }
       createdBy: "admin@armada.ai"

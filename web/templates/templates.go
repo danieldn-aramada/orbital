@@ -35,6 +35,7 @@ func LoginForm() *template.Template {
 func Map() map[string]*template.Template {
 	return map[string]*template.Template{
 		"home":               template.Must(template.ParseFiles(page("web/templates/pages/home.gohtml")...)),
+		"datacenters":        template.Must(template.ParseFiles(page("web/templates/pages/datacenters.gohtml")...)),
 		"backups":            template.Must(template.ParseFiles(page("web/templates/pages/backups.gohtml")...)),
 		"divergence-reports": template.Must(template.ParseFiles(page("web/templates/pages/divergence-reports.gohtml")...)),
 		"audit-log":          template.Must(template.ParseFiles(page("web/templates/pages/audit-log.gohtml")...)),

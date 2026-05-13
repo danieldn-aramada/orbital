@@ -10,22 +10,19 @@
         </div>
       {{else}}
 
-      <nav class="tabs is-boxed has-text-weight-medium" style="font-size: 14px;">
-        <ul id="tablist" role="tablist">
-          <li class="tab is-active">
-            <a id="tab-summary" data-target="tab-content-datacenters" role="tab" aria-selected="true" tabindex="0">
-              Summary
-            </a>
-          </li>
-        </ul>
-      </nav>
+      <p class="is-size-4 mb-2">Config Items</p>
+      <p class="has-text-grey mb-5" style="font-size: 0.875rem;">
+        Every node in the graph that implements the <code>ConfigItem</code> interface — physical and logical resources across all namespaces.
+        Config items are the authoritative representation of design intent. Each config item has an <code>OrbId</code> which is a unique identifier <code>&lt;namespace&gt;:&lt;name&gt;</code> in the graph.
+      </p>
 
-      <div class="tab-content" role="tabpanel" id="tab-content-datacenters">
-        <table id="datacenter-table" class="table is-striped is-hoverable is-fullwidth">
+      <div style="overflow-x: auto">
+        <table id="inventory-table" class="table is-striped is-hoverable is-fullwidth is-size-7">
           <thead>
             <tr>
+              <th>Type</th>
+              <th>Orb ID</th>
               <th>Name</th>
-              <th>Servers</th>
               <th>Created By</th>
               <th>Created At</th>
             </tr>

@@ -93,6 +93,7 @@ func (h *UI) base(c echo.Context) layout.Base {
 		CsrfToken:   csrfToken,
 		AppVersion:  appversion.Version,
 		BasePath:    h.basePath,
+		CurrentPath: c.Request().URL.Path,
 	}
 }
 
@@ -100,6 +101,13 @@ func (h *UI) Index(c echo.Context) error {
 	return h.render(c, "home", page.Home{
 		Base:      h.base(c),
 		PageTitle: "Orbital",
+	})
+}
+
+func (h *UI) DataCenters(c echo.Context) error {
+	return h.render(c, "datacenters", page.Home{
+		Base:      h.base(c),
+		PageTitle: "Data Centers",
 	})
 }
 

@@ -12,7 +12,7 @@ COMPOSE_FILE := deploy/local/docker-compose.yml
 ACR          := armadaeksatest.azurecr.io
 IMAGE        := $(ACR)/orbital:$(VERSION)
 
-.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-e2e lint up down seed docs
+.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-e2e lint up down seed docs build-css watch-css
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -22,6 +22,12 @@ build: build-orbital build-orb ## Build all binaries
 
 docs: ## Regenerate Swagger docs (requires swag: go install github.com/swaggo/swag/cmd/swag@latest)
 	swag init -g cmd/orbital/main.go -o docs
+
+build-css: ## Compile web/sass/main.scss → web/static/css/main.css (requires: npm install)
+	npm run build-css
+
+watch-css: ## Watch and recompile SCSS on change (requires: npm install)
+	npm run build-css-dev
 
 build-orbital: docs ## Build the orbital server binary → bin/orbital
 	go build $(LDFLAGS) -o $(ORBITAL_BIN) ./cmd/orbital

@@ -101,7 +101,8 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		root.GET("", ui.Index)
 	}
 	root.GET("/", ui.Index)
-	root.GET("/datacenters", ui.Index)
+	root.GET("/inventory", ui.Index)
+	root.GET("/datacenters", ui.DataCenters)
 	root.GET("/servers", ui.Servers)
 	root.GET("/backups", ui.Backups)
 	root.GET("/divergence-reports", ui.DivergenceReports)
@@ -134,6 +135,9 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 			}
 		}
 	}
+
+	inv := handler.NewInventory(cfg.DGraphURL)
+	api.GET("/inventory", inv.List)
 
 	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath)
 	root.GET("/datacenters/:id", dc.Tab)
