@@ -33,6 +33,7 @@ mutation {
     {
       orbId: "alaska-dot:10.61.95.50"
       address: "10.61.95.50"
+      name: "10.61.95.50"
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
@@ -41,6 +42,7 @@ mutation {
     {
       orbId: "alaska-dot:10.61.95.51"
       address: "10.61.95.51"
+      name: "10.61.95.51"
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
@@ -49,6 +51,7 @@ mutation {
     {
       orbId: "alaska-dot:10.61.95.52"
       address: "10.61.95.52"
+      name: "10.61.95.52"
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
@@ -57,6 +60,7 @@ mutation {
     {
       orbId: "alaska-dot:10.61.95.53"
       address: "10.61.95.53"
+      name: "10.61.95.53"
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
@@ -65,6 +69,7 @@ mutation {
     {
       orbId: "alaska-dot:10.61.95.54"
       address: "10.61.95.54"
+      name: "10.61.95.54"
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
@@ -73,6 +78,7 @@ mutation {
     {
       orbId: "alaska-dot:10.61.95.55"
       address: "10.61.95.55"
+      name: "10.61.95.55"
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
@@ -81,6 +87,7 @@ mutation {
     {
       orbId: "alaska-dot:10.61.95.56"
       address: "10.61.95.56"
+      name: "10.61.95.56"
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
@@ -89,6 +96,7 @@ mutation {
     {
       orbId: "alaska-dot:10.61.95.57"
       address: "10.61.95.57"
+      name: "10.61.95.57"
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
@@ -97,6 +105,7 @@ mutation {
     {
       orbId: "alaska-dot:10.61.95.58"
       address: "10.61.95.58"
+      name: "10.61.95.58"
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
@@ -105,6 +114,7 @@ mutation {
     {
       orbId: "alaska-dot:10.61.95.59"
       address: "10.61.95.59"
+      name: "10.61.95.59"
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
@@ -113,6 +123,7 @@ mutation {
     {
       orbId: "alaska-dot:10.61.95.60"
       address: "10.61.95.60"
+      name: "10.61.95.60"
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
@@ -121,6 +132,7 @@ mutation {
     {
       orbId: "alaska-dot:10.61.95.61"
       address: "10.61.95.61"
+      name: "10.61.95.61"
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"
@@ -129,6 +141,7 @@ mutation {
     {
       orbId: "alaska-dot:10.61.95.62"
       address: "10.61.95.62"
+      name: "10.61.95.62"
       role: "oob"
       namespace: { name: "alaska-dot" }
       createdBy: "admin@armada.ai"

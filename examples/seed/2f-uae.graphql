@@ -41,6 +41,7 @@ mutation {
     {
       orbId: "2f-uae:10.96.127.50"
       address: "10.96.127.50"
+      name: "10.96.127.50"
       role: "oob"
       namespace: { name: "2f-uae" }
       createdBy: "admin@armada.ai"
@@ -49,6 +50,7 @@ mutation {
     {
       orbId: "2f-uae:10.96.127.51"
       address: "10.96.127.51"
+      name: "10.96.127.51"
       role: "oob"
       namespace: { name: "2f-uae" }
       createdBy: "admin@armada.ai"
@@ -57,6 +59,7 @@ mutation {
     {
       orbId: "2f-uae:10.96.127.52"
       address: "10.96.127.52"
+      name: "10.96.127.52"
       role: "oob"
       namespace: { name: "2f-uae" }
       createdBy: "admin@armada.ai"
@@ -65,6 +68,7 @@ mutation {
     {
       orbId: "2f-uae:10.96.127.54"
       address: "10.96.127.54"
+      name: "10.96.127.54"
       role: "oob"
       namespace: { name: "2f-uae" }
       createdBy: "admin@armada.ai"
@@ -73,6 +77,7 @@ mutation {
     {
       orbId: "2f-uae:10.96.127.55"
       address: "10.96.127.55"
+      name: "10.96.127.55"
       role: "oob"
       namespace: { name: "2f-uae" }
       createdBy: "admin@armada.ai"
@@ -81,6 +86,7 @@ mutation {
     {
       orbId: "2f-uae:10.96.127.56"
       address: "10.96.127.56"
+      name: "10.96.127.56"
       role: "oob"
       namespace: { name: "2f-uae" }
       createdBy: "admin@armada.ai"

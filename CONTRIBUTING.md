@@ -48,6 +48,19 @@ E2E tests use [Playwright](https://playwright.dev/) and run against a live local
 
 Tests assume the `colo-galleon` data center is seeded and orbital is running on `http://localhost:8001`.
 
+## Editing styles (CSS)
+
+Orbital uses [Bulma](https://bulma.io/) compiled from SASS. **Do not edit `web/static/css/main.css` directly** — it is generated and will be overwritten.
+
+Edit `web/sass/main.scss` instead, then rebuild:
+
+```bash
+make build-css       # one-time compile
+make watch-css       # watch mode — recompiles on every save
+```
+
+Requires `npm install` once to install the `sass` compiler.
+
 ## Development workflow
 
 - Branch from `main`, PR back to `main`

@@ -240,6 +240,8 @@ html {
       padding: 1.5em;
       // box-shadow: 0 0.5em 1em -0.125em hsla(var(--bulma-shadow-h), var(--bulma-shadow-s), var(--bulma-shadow-l), 0.1), 0 0px 0 1px hsla(var(--bulma-shadow-h), var(--bulma-shadow-s), var(--bulma-shadow-l), 0.02);
       box-shadow: 0 0.1em 0.2em hsla(var(--bulma-scheme-h), var(--bulma-scheme-s), var(--bulma-scheme-invert-l), 0.1);
+      border-top: 1px solid hsl(var(--bulma-scheme-h), var(--bulma-scheme-s), calc(var(--bulma-scheme-main-l) - 6%));
+      background-color: hsl(var(--bulma-scheme-h), var(--bulma-scheme-s), calc(var(--bulma-scheme-main-l) - 1%));
     }
   }
 }
@@ -669,6 +671,28 @@ html {
     &:focus {
       box-shadow: none;
     }
+  }
+}
+
+// DataTables + Bulma toolbar alignment
+// .field on dt-buttons adds margin-bottom: 0.75rem (Bulma form spacing) which breaks flex alignment.
+// dt-length uses vertical-align (inline-block era) which is ignored inside flex containers.
+div.dt-container {
+  .dt-buttons.field {
+    margin-bottom: 0 !important;
+  }
+  div.dt-length {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+}
+
+// Active menu link
+.app-menu .app-menu-link {
+  &.is-active {
+    background-color: hsla(var(--bulma-text-h), var(--bulma-text-s), var(--bulma-text-l), 0.1);
+    font-weight: 600;
   }
 }
 

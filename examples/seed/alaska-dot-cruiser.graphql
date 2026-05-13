@@ -41,6 +41,7 @@ mutation {
     {
       orbId: "alaska-dot-cruiser:10.64.12.50"
       address: "10.64.12.50"
+      name: "10.64.12.50"
       role: "oob"
       namespace: { name: "alaska-dot-cruiser" }
       createdBy: "admin@armada.ai"
@@ -49,6 +50,7 @@ mutation {
     {
       orbId: "alaska-dot-cruiser:10.64.12.51"
       address: "10.64.12.51"
+      name: "10.64.12.51"
       role: "oob"
       namespace: { name: "alaska-dot-cruiser" }
       createdBy: "admin@armada.ai"
@@ -57,6 +59,7 @@ mutation {
     {
       orbId: "alaska-dot-cruiser:10.64.12.52"
       address: "10.64.12.52"
+      name: "10.64.12.52"
       role: "oob"
       namespace: { name: "alaska-dot-cruiser" }
       createdBy: "admin@armada.ai"
@@ -65,6 +68,7 @@ mutation {
     {
       orbId: "alaska-dot-cruiser:10.64.12.53"
       address: "10.64.12.53"
+      name: "10.64.12.53"
       role: "oob"
       namespace: { name: "alaska-dot-cruiser" }
       createdBy: "admin@armada.ai"
@@ -73,6 +77,7 @@ mutation {
     {
       orbId: "alaska-dot-cruiser:10.64.12.54"
       address: "10.64.12.54"
+      name: "10.64.12.54"
       role: "oob"
       namespace: { name: "alaska-dot-cruiser" }
       createdBy: "admin@armada.ai"
@@ -81,6 +86,7 @@ mutation {
     {
       orbId: "alaska-dot-cruiser:10.64.12.55"
       address: "10.64.12.55"
+      name: "10.64.12.55"
       role: "oob"
       namespace: { name: "alaska-dot-cruiser" }
       createdBy: "admin@armada.ai"
@@ -89,6 +95,7 @@ mutation {
     {
       orbId: "alaska-dot-cruiser:10.64.12.56"
       address: "10.64.12.56"
+      name: "10.64.12.56"
       role: "oob"
       namespace: { name: "alaska-dot-cruiser" }
       createdBy: "admin@armada.ai"
@@ -97,6 +104,7 @@ mutation {
     {
       orbId: "alaska-dot-cruiser:10.64.12.57"
       address: "10.64.12.57"
+      name: "10.64.12.57"
       role: "oob"
       namespace: { name: "alaska-dot-cruiser" }
       createdBy: "admin@armada.ai"
@@ -105,6 +113,7 @@ mutation {
     {
       orbId: "alaska-dot-cruiser:10.64.12.58"
       address: "10.64.12.58"
+      name: "10.64.12.58"
       role: "oob"
       namespace: { name: "alaska-dot-cruiser" }
       createdBy: "admin@armada.ai"
@@ -113,6 +122,7 @@ mutation {
     {
       orbId: "alaska-dot-cruiser:10.64.12.59"
       address: "10.64.12.59"
+      name: "10.64.12.59"
       role: "oob"
       namespace: { name: "alaska-dot-cruiser" }
       createdBy: "admin@armada.ai"
@@ -121,6 +131,7 @@ mutation {
     {
       orbId: "alaska-dot-cruiser:10.64.12.60"
       address: "10.64.12.60"
+      name: "10.64.12.60"
       role: "oob"
       namespace: { name: "alaska-dot-cruiser" }
       createdBy: "admin@armada.ai"
@@ -129,6 +140,7 @@ mutation {
     {
       orbId: "alaska-dot-cruiser:10.64.12.61"
       address: "10.64.12.61"
+      name: "10.64.12.61"
       role: "oob"
       namespace: { name: "alaska-dot-cruiser" }
       createdBy: "admin@armada.ai"
@@ -137,6 +149,7 @@ mutation {
     {
       orbId: "alaska-dot-cruiser:10.64.12.62"
       address: "10.64.12.62"
+      name: "10.64.12.62"
       role: "oob"
       namespace: { name: "alaska-dot-cruiser" }
       createdBy: "admin@armada.ai"
@@ -145,6 +158,7 @@ mutation {
     {
       orbId: "alaska-dot-cruiser:10.64.12.63"
       address: "10.64.12.63"
+      name: "10.64.12.63"
       role: "oob"
       namespace: { name: "alaska-dot-cruiser" }
       createdBy: "admin@armada.ai"
@@ -153,6 +167,7 @@ mutation {
     {
       orbId: "alaska-dot-cruiser:10.64.12.64"
       address: "10.64.12.64"
+      name: "10.64.12.64"
       role: "oob"
       namespace: { name: "alaska-dot-cruiser" }
       createdBy: "admin@armada.ai"
@@ -167,7 +182,7 @@ mutation {
       serviceTag: "2V36XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:2V36XB4"
-      name: "R450-8"
+      name: "r02-u20.alaska-dot-cruiser"
       model: "PowerEdge R450"
       hostname: "r02-u20.alaska-dot-cruiser"
       rackPosition: 20
@@ -183,7 +198,7 @@ mutation {
       serviceTag: "DT36XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:DT36XB4"
-      name: "R450-7"
+      name: "r02-u19.alaska-dot-cruiser"
       model: "PowerEdge R450"
       hostname: "r02-u19.alaska-dot-cruiser"
       rackPosition: 19
@@ -199,7 +214,7 @@ mutation {
       serviceTag: "1V36XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:1V36XB4"
-      name: "R450-6"
+      name: "r02-u18.alaska-dot-cruiser"
       model: "PowerEdge R450"
       hostname: "r02-u18.alaska-dot-cruiser"
       rackPosition: 18
@@ -215,7 +230,7 @@ mutation {
       serviceTag: "JT36XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:JT36XB4"
-      name: "R450-5"
+      name: "r02-u17.alaska-dot-cruiser"
       model: "PowerEdge R450"
       hostname: "r02-u17.alaska-dot-cruiser"
       rackPosition: 17
@@ -231,7 +246,7 @@ mutation {
       serviceTag: "FT36XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:FT36XB4"
-      name: "R450-4"
+      name: "r01-u20.alaska-dot-cruiser"
       model: "PowerEdge R450"
       hostname: "r01-u20.alaska-dot-cruiser"
       rackPosition: 20
@@ -247,7 +262,7 @@ mutation {
       serviceTag: "HT36XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:HT36XB4"
-      name: "R450-3"
+      name: "r01-u19.alaska-dot-cruiser"
       model: "PowerEdge R450"
       hostname: "r01-u19.alaska-dot-cruiser"
       rackPosition: 19
@@ -263,7 +278,7 @@ mutation {
       serviceTag: "GT36XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:GT36XB4"
-      name: "R450-2"
+      name: "r01-u18.alaska-dot-cruiser"
       model: "PowerEdge R450"
       hostname: "r01-u18.alaska-dot-cruiser"
       rackPosition: 18
@@ -279,7 +294,7 @@ mutation {
       serviceTag: "3V36XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:3V36XB4"
-      name: "R450-1"
+      name: "r01-u17.alaska-dot-cruiser"
       model: "PowerEdge R450"
       hostname: "r01-u17.alaska-dot-cruiser"
       rackPosition: 17
@@ -295,7 +310,7 @@ mutation {
       serviceTag: "C8R6XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:C8R6XB4"
-      name: "R660-1"
+      name: "r01-u13.alaska-dot-cruiser"
       model: "PowerEdge R660"
       hostname: "r01-u13.alaska-dot-cruiser"
       rackPosition: 13
@@ -311,7 +326,7 @@ mutation {
       serviceTag: "F8R6XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:F8R6XB4"
-      name: "R660-2"
+      name: "r01-u14.alaska-dot-cruiser"
       model: "PowerEdge R660"
       hostname: "r01-u14.alaska-dot-cruiser"
       rackPosition: 14
@@ -327,7 +342,7 @@ mutation {
       serviceTag: "B9V6XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:B9V6XB4"
-      name: "R660-3"
+      name: "r02-u13.alaska-dot-cruiser"
       model: "PowerEdge R660"
       hostname: "r02-u13.alaska-dot-cruiser"
       rackPosition: 13
@@ -343,7 +358,7 @@ mutation {
       serviceTag: "D8R6XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:D8R6XB4"
-      name: "R660-4"
+      name: "r02-u14.alaska-dot-cruiser"
       model: "PowerEdge R660"
       hostname: "r02-u14.alaska-dot-cruiser"
       rackPosition: 14
@@ -359,7 +374,7 @@ mutation {
       serviceTag: "7FF6XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:7FF6XB4"
-      name: "R760-1"
+      name: "r01-u07.alaska-dot-cruiser"
       model: "PowerEdge R760"
       hostname: "r01-u07.alaska-dot-cruiser"
       rackPosition: 7
@@ -375,7 +390,7 @@ mutation {
       serviceTag: "2PR6YB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:2PR6YB4"
-      name: "R760-2"
+      name: "r02-u07.alaska-dot-cruiser"
       model: "PowerEdge R760"
       hostname: "r02-u07.alaska-dot-cruiser"
       rackPosition: 7
@@ -391,7 +406,7 @@ mutation {
       serviceTag: "DCT36XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:DCT36XB4"
-      name: "R450-A"
+      name: "r02-u24.alaska-dot-cruiser"
       model: "PowerEdge R450"
       hostname: "r02-u24.alaska-dot-cruiser"
       rackPosition: 24

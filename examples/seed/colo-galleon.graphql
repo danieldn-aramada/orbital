@@ -54,6 +54,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.41"
       address: "10.20.21.41"
+      name: "10.20.21.41"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -62,6 +63,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.42"
       address: "10.20.21.42"
+      name: "10.20.21.42"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -70,6 +72,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.43"
       address: "10.20.21.43"
+      name: "10.20.21.43"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -78,6 +81,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.44"
       address: "10.20.21.44"
+      name: "10.20.21.44"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -86,6 +90,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.45"
       address: "10.20.21.45"
+      name: "10.20.21.45"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -94,6 +99,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.46"
       address: "10.20.21.46"
+      name: "10.20.21.46"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -102,6 +108,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.47"
       address: "10.20.21.47"
+      name: "10.20.21.47"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -110,6 +117,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.48"
       address: "10.20.21.48"
+      name: "10.20.21.48"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -118,6 +126,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.49"
       address: "10.20.21.49"
+      name: "10.20.21.49"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -126,6 +135,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.50"
       address: "10.20.21.50"
+      name: "10.20.21.50"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -134,6 +144,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.51"
       address: "10.20.21.51"
+      name: "10.20.21.51"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -142,6 +153,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.52"
       address: "10.20.21.52"
+      name: "10.20.21.52"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -150,6 +162,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.100"
       address: "10.20.21.100"
+      name: "10.20.21.100"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -158,6 +171,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.54"
       address: "10.20.21.54"
+      name: "10.20.21.54"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -166,6 +180,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.55"
       address: "10.20.21.55"
+      name: "10.20.21.55"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -174,6 +189,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.56"
       address: "10.20.21.56"
+      name: "10.20.21.56"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -182,6 +198,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.57"
       address: "10.20.21.57"
+      name: "10.20.21.57"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -190,6 +207,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.68"
       address: "10.20.21.68"
+      name: "10.20.21.68"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -198,6 +216,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.69"
       address: "10.20.21.69"
+      name: "10.20.21.69"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -206,6 +225,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.70"
       address: "10.20.21.70"
+      name: "10.20.21.70"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -214,6 +234,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.73"
       address: "10.20.21.73"
+      name: "10.20.21.73"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -222,6 +243,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.72"
       address: "10.20.21.72"
+      name: "10.20.21.72"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -230,6 +252,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.71"
       address: "10.20.21.71"
+      name: "10.20.21.71"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -238,6 +261,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.74"
       address: "10.20.21.74"
+      name: "10.20.21.74"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -246,6 +270,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.58"
       address: "10.20.21.58"
+      name: "10.20.21.58"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -254,6 +279,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.59"
       address: "10.20.21.59"
+      name: "10.20.21.59"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -262,6 +288,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.60"
       address: "10.20.21.60"
+      name: "10.20.21.60"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -270,6 +297,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.61"
       address: "10.20.21.61"
+      name: "10.20.21.61"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -278,6 +306,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.62"
       address: "10.20.21.62"
+      name: "10.20.21.62"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -286,6 +315,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.63"
       address: "10.20.21.63"
+      name: "10.20.21.63"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -294,6 +324,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.64"
       address: "10.20.21.64"
+      name: "10.20.21.64"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -302,6 +333,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.65"
       address: "10.20.21.65"
+      name: "10.20.21.65"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -310,6 +342,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.66"
       address: "10.20.21.66"
+      name: "10.20.21.66"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -318,6 +351,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.67"
       address: "10.20.21.67"
+      name: "10.20.21.67"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -326,6 +360,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.79"
       address: "10.20.21.79"
+      name: "10.20.21.79"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -334,6 +369,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.78"
       address: "10.20.21.78"
+      name: "10.20.21.78"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -342,6 +378,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.77"
       address: "10.20.21.77"
+      name: "10.20.21.77"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -350,6 +387,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.76"
       address: "10.20.21.76"
+      name: "10.20.21.76"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -358,6 +396,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.75"
       address: "10.20.21.75"
+      name: "10.20.21.75"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -366,6 +405,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.80"
       address: "10.20.21.80"
+      name: "10.20.21.80"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -374,6 +414,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.81"
       address: "10.20.21.81"
+      name: "10.20.21.81"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -382,6 +423,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.82"
       address: "10.20.21.82"
+      name: "10.20.21.82"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -390,6 +432,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.83"
       address: "10.20.21.83"
+      name: "10.20.21.83"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -398,6 +441,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.84"
       address: "10.20.21.84"
+      name: "10.20.21.84"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -406,6 +450,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.85"
       address: "10.20.21.85"
+      name: "10.20.21.85"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -414,6 +459,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.86"
       address: "10.20.21.86"
+      name: "10.20.21.86"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -422,6 +468,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.87"
       address: "10.20.21.87"
+      name: "10.20.21.87"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -430,6 +477,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.88"
       address: "10.20.21.88"
+      name: "10.20.21.88"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"
@@ -438,6 +486,7 @@ mutation UpsertAll {
     {
       orbId: "colo:10.20.21.89"
       address: "10.20.21.89"
+      name: "10.20.21.89"
       role: "oob"
       namespace: { name: "colo" }
       createdBy: "admin@armada.ai"

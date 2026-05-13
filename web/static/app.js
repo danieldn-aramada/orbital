@@ -725,6 +725,81 @@ function loadDataCenterTab(displayName, id) {
   })
 }
 
+// ─── Inventory page (/inventory, /) ──────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!document.getElementById('inventory-table')) return
+
+  const typeFilterEl = $('<div class="select is-small" style="margin-right:0.25rem"><select id="inventory-type-select"><option value="">All Types</option></select></div>')
+
+  const inventoryTable = new DataTable('#inventory-table', {
+    layout: {
+      topStart: [
+        typeFilterEl,
+        { buttons: [
+          { extend: 'excel', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-excel"></i><span>Excel</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Excel', title: '', filename: 'config-items' },
+          { extend: 'csv', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-text"></i><span>CSV</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV', title: '', filename: 'config-items' },
+          { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
+          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
+          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-inventory' } },
+        ] },
+        { pageLength: { menu: [25, 50, 100, 250] } },
+      ],
+      topEnd: { search: { placeholder: 'Search inventory' } },
+    },
+    select: { style: 'os' },
+    autoWidth: true,
+    scrollX: true,
+    scrollY: 400,
+    scrollCollapse: true,
+    pageLength: 50,
+    language: {
+      infoEmpty: 'No config items to show',
+      info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
+      entries: { _: 'items', 1: 'item' },
+    },
+    initComplete: function () {
+      dtWrapLengthSelect(this.api())
+
+      const typeCol = this.api().column(0)
+      typeCol.data().unique().sort().each(function (type) {
+        document.getElementById('inventory-type-select').add(new Option(type, type))
+      })
+      document.getElementById('inventory-type-select').addEventListener('change', function () {
+        typeCol.search(this.value, { exact: !!this.value }).draw()
+      })
+    },
+    columns: [
+      { data: 'type' },
+      { data: 'orbId' },
+      { data: 'name' },
+      { data: 'createdBy' },
+      { data: 'createdAt', render: (val) => val ? val.replace('T', ' ').replace('Z', '') : '' },
+      { data: 'uid' },
+    ],
+    columnDefs: [
+      { targets: 4, className: 'dt-left' },
+      { targets: 5, visible: false },
+    ],
+    ajax: {
+      url: BASE + '/api/v1/inventory',
+      type: 'GET',
+      dataSrc: (json) => json.items ?? [],
+    },
+  })
+
+  const reloadButton = inventoryTable.button('reload:name').node()
+  inventoryTable.button('reload:name').node().on('click', function () {
+    inventoryTable.clear().draw()
+    reloadButton.addClass('is-loading')
+    setTimeout(() => {
+      inventoryTable.ajax.reload(() => { reloadButton.removeClass('is-loading') })
+    }, 250)
+  })
+})
+
+// ─── Data Centers page (/datacenters) ────────────────────────────────────────
+
 document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('datacenter-table')) return
 

@@ -238,6 +238,7 @@ web/
 - Don't clean up unrelated code while working on something else
 - Don't add TODOs or placeholder comments
 - All page JavaScript goes in `web/static/app.js` — never inline `<script>` blocks in templates
+- All styles go in `web/sass/main.scss` — never edit `web/static/css/main.css` directly, it is generated. Rebuild with `make build-css` (one-time) or `make watch-css` (watch mode)
 - Before marking a task as done: check whether any architectural decisions, conventions, or settled rules from this session should be added to CLAUDE.md
 
 ### Conversation conventions
@@ -312,7 +313,7 @@ These have been explicitly decided. Do not re-suggest them.
 - **Logout clears all localStorage and sessionStorage** — the logout form submit handler calls `localStorage.clear()` and `sessionStorage.clear()` before POSTing. Next login starts with no tab state.
 - **`writeAuditEvent` is a package-level helper in `internal/handler/event.go`** — shared by `GraphQL.writeEvent`, `Export.Trigger`, and `BackupHandler.Trigger`. Accepts `*ent.Client`, `*slog.Logger`, actor, opName, operations, resourceTypes, resourceIDs, and a details map. Failures are logged and swallowed — audit writes must never block or fail a request.
 - **REST-triggered audit events have no child row in the audit log UI** — `renderPayload` in `app.js` returns `null` when `details.query` is absent. The expand arrow is also hidden via `createdRow`. Export and backup events carry `{jobId, datacenterId, datacenterName}` or `{jobId}` in details — no GraphQL query/variables.
-- **Single-tab pages use title+subtitle heading, not tab nav** — pages with only one tab (audit log, schema, divergence reports, signed artifacts) use `<p class="is-size-4">` + `<p class="has-text-grey">` instead of `<nav class="tabs is-boxed">`. Keep the `<div class="tab-content">` wrapper if the page contains `.box` elements — `.app-main .tab-content .box` applies a custom shadow in `main.css`.
+- **Single-tab pages use title+subtitle heading, not tab nav** — pages with only one tab (audit log, schema, divergence reports, signed artifacts) use `<p class="is-size-4">` + `<p class="has-text-grey">` instead of `<nav class="tabs is-boxed">`. Keep the `<div class="tab-content">` wrapper if the page contains `.box` elements — `.app-main .tab-content .box` applies a custom shadow in `main.scss`.
 - **`make run-orbital` uses version `dev`** — avoids noisy git-describe strings (`v0.0.3-1-gcd4b553-dirty`) in local dev. `make build-orbital` and `make push` still use full git-describe version via `$(VERSION)`.
 - **`cfg.SchemaPath` is the authoritative schema file path** — default `schema/schema-demo.graphql`. All handlers (export, backup, schema UI) read from this env-configurable path. Never hardcode `schema/schema-v1.graphql`.
 - **Edge delivery page is now Signed Artifacts** — route `/signed-artifacts`, template `signed-artifacts.gohtml`, template key `"signed-artifacts"`. No auto-poll on that page — manual reload button only.
@@ -323,6 +324,8 @@ These have been explicitly decided. Do not re-suggest them.
 - **`make seed` applies schema to both DGraph instances** — blue (`:8080`) and scratch (`:8081`) both receive the schema on every `make seed` run via the `apply_schema` function in `scripts/seed.sh`.
 - **`updatedBy` and `updatedAt` are filtered from audit event variable display** — these are metadata fields set by the system, not user-supplied input. They are excluded from the Variables section in the audit log child row (`skipVars` set in `app.js`). They remain in `details.variables` in the database.
 - **DC-to-server back button uses `is-warning` not `is-link`** — matches the Grafana button style. Do not change it back to `is-link`.
+- **Use plain `fetch()` for programmatic tab reloads, never `htmx.ajax()`** — `htmx.ajax()` carries hidden request context (triggering element, OOB swap hints, lifecycle state) that was designed for declarative attribute-driven flows. When called imperatively from an async JS handler, it can route responses to the wrong target. Pattern: `fetch(url, { headers: { 'HX-Request': 'true' } }).then(r => r.text()).then(html => { el.innerHTML = html; htmx.process(el); initXxx(...) })`. Always send `HX-Request: true` so Go handlers return fragments, not full pages.
+- **Startup log must use slog, not `log.Printf`** — `cmd/orbital/main.go` calls `slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))` before anything else so the startup line emits JSON consistent with all other log output. Never use `log.Printf` / `log.Fatalf` for the startup message.
 
 ## Example Data / Seeding
 

@@ -3,17 +3,20 @@
     <span class="icon">
       <i class="fa-solid fa-diagram-project"></i>
     </span>
-    <strong>Graph</strong>
+    <strong>Config Items</strong>
   </h3>
   <ul class="app-menu-section-list">
     <li class="app-menu-item">
-      <a class="app-menu-link" href="{{.BasePath}}/">Data Centers</a>
+      <a class="app-menu-link{{if or (eq .CurrentPath (printf "%s/" .BasePath)) (eq .CurrentPath (printf "%s/inventory" .BasePath))}} is-active{{end}}" href="{{.BasePath}}/">Inventory</a>
     </li>
     <li class="app-menu-item">
-      <a class="app-menu-link" href="{{.BasePath}}/servers">Servers</a>
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/datacenters" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/datacenters">Data Centers</a>
     </li>
     <li class="app-menu-item">
-      <a class="app-menu-link" href="{{.BasePath}}/schema">Schema Version</a>
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/servers" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/servers">Servers</a>
+    </li>
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/schema" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/schema">Schema Version</a>
     </li>
   </ul>
 </div>
@@ -27,10 +30,10 @@
   </h3>
   <ul class="app-menu-section-list">
     <li class="app-menu-item">
-      <a class="app-menu-link" href="{{.BasePath}}/export">Export Subgraph</a>
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/export" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/export">Export Subgraph</a>
     </li>
     <li class="app-menu-item">
-      <a class="app-menu-link" href="{{.BasePath}}/signed-artifacts">Signed Artifacts</a>
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/signed-artifacts" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/signed-artifacts">Signed Artifacts</a>
     </li>
   </ul>
 </div>
@@ -44,13 +47,13 @@
   </h3>
   <ul class="app-menu-section-list">
     <li class="app-menu-item">
-      <a class="app-menu-link" href="{{.BasePath}}/audit-log">Audit Log</a>
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/audit-log" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/audit-log">Audit Log</a>
     </li>
     <li class="app-menu-item">
-      <a class="app-menu-link" href="{{.BasePath}}/backups">Backup Graph</a>
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/backups" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/backups">Backup Graph</a>
     </li>
     <li class="app-menu-item">
-      <a class="app-menu-link" href="{{.BasePath}}/divergence-reports">Divergence Reports</a>
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/divergence-reports" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/divergence-reports">Divergence Reports</a>
     </li>
   </ul>
 </div>

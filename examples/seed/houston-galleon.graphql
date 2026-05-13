@@ -49,6 +49,7 @@ mutation {
     {
       orbId: "houston:10.10.7.72"
       address: "10.10.7.72"
+      name: "10.10.7.72"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -57,6 +58,7 @@ mutation {
     {
       orbId: "houston:10.10.7.64"
       address: "10.10.7.64"
+      name: "10.10.7.64"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -65,6 +67,7 @@ mutation {
     {
       orbId: "houston:10.10.7.65"
       address: "10.10.7.65"
+      name: "10.10.7.65"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -73,6 +76,7 @@ mutation {
     {
       orbId: "houston:10.10.7.66"
       address: "10.10.7.66"
+      name: "10.10.7.66"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -81,6 +85,7 @@ mutation {
     {
       orbId: "houston:10.10.7.67"
       address: "10.10.7.67"
+      name: "10.10.7.67"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -89,6 +94,7 @@ mutation {
     {
       orbId: "houston:10.10.7.68"
       address: "10.10.7.68"
+      name: "10.10.7.68"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -97,6 +103,7 @@ mutation {
     {
       orbId: "houston:10.10.7.98"
       address: "10.10.7.98"
+      name: "10.10.7.98"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -105,6 +112,7 @@ mutation {
     {
       orbId: "houston:10.10.7.55"
       address: "10.10.7.55"
+      name: "10.10.7.55"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -113,6 +121,7 @@ mutation {
     {
       orbId: "houston:10.10.7.56"
       address: "10.10.7.56"
+      name: "10.10.7.56"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -121,6 +130,7 @@ mutation {
     {
       orbId: "houston:10.10.7.57"
       address: "10.10.7.57"
+      name: "10.10.7.57"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -129,6 +139,7 @@ mutation {
     {
       orbId: "houston:10.10.7.58"
       address: "10.10.7.58"
+      name: "10.10.7.58"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -137,6 +148,7 @@ mutation {
     {
       orbId: "houston:10.10.7.99"
       address: "10.10.7.99"
+      name: "10.10.7.99"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -145,6 +157,7 @@ mutation {
     {
       orbId: "houston:10.10.7.70"
       address: "10.10.7.70"
+      name: "10.10.7.70"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -153,6 +166,7 @@ mutation {
     {
       orbId: "houston:10.10.7.71"
       address: "10.10.7.71"
+      name: "10.10.7.71"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -161,6 +175,7 @@ mutation {
     {
       orbId: "houston:10.10.7.69"
       address: "10.10.7.69"
+      name: "10.10.7.69"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -169,6 +184,7 @@ mutation {
     {
       orbId: "houston:10.10.7.61"
       address: "10.10.7.61"
+      name: "10.10.7.61"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -177,6 +193,7 @@ mutation {
     {
       orbId: "houston:10.10.7.62"
       address: "10.10.7.62"
+      name: "10.10.7.62"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -185,6 +202,7 @@ mutation {
     {
       orbId: "houston:10.10.7.63"
       address: "10.10.7.63"
+      name: "10.10.7.63"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -193,6 +211,7 @@ mutation {
     {
       orbId: "houston:10.10.7.50"
       address: "10.10.7.50"
+      name: "10.10.7.50"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -201,6 +220,7 @@ mutation {
     {
       orbId: "houston:10.10.7.51"
       address: "10.10.7.51"
+      name: "10.10.7.51"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -209,6 +229,7 @@ mutation {
     {
       orbId: "houston:10.10.7.52"
       address: "10.10.7.52"
+      name: "10.10.7.52"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -217,6 +238,7 @@ mutation {
     {
       orbId: "houston:10.10.7.53"
       address: "10.10.7.53"
+      name: "10.10.7.53"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -225,6 +247,7 @@ mutation {
     {
       orbId: "houston:10.10.7.54"
       address: "10.10.7.54"
+      name: "10.10.7.54"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -233,6 +256,7 @@ mutation {
     {
       orbId: "houston:10.10.22.70"
       address: "10.10.22.70"
+      name: "10.10.22.70"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -241,6 +265,7 @@ mutation {
     {
       orbId: "houston:10.10.22.69"
       address: "10.10.22.69"
+      name: "10.10.22.69"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -249,6 +274,7 @@ mutation {
     {
       orbId: "houston:10.10.22.68"
       address: "10.10.22.68"
+      name: "10.10.22.68"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -257,6 +283,7 @@ mutation {
     {
       orbId: "houston:10.10.22.67"
       address: "10.10.22.67"
+      name: "10.10.22.67"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -265,6 +292,7 @@ mutation {
     {
       orbId: "houston:10.10.22.66"
       address: "10.10.22.66"
+      name: "10.10.22.66"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -273,6 +301,7 @@ mutation {
     {
       orbId: "houston:10.10.22.6"
       address: "10.10.22.6"
+      name: "10.10.22.6"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -281,6 +310,7 @@ mutation {
     {
       orbId: "houston:10.10.22.5"
       address: "10.10.22.5"
+      name: "10.10.22.5"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -289,6 +319,7 @@ mutation {
     {
       orbId: "houston:10.10.22.4"
       address: "10.10.22.4"
+      name: "10.10.22.4"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -297,6 +328,7 @@ mutation {
     {
       orbId: "houston:10.10.22.3"
       address: "10.10.22.3"
+      name: "10.10.22.3"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
@@ -305,6 +337,7 @@ mutation {
     {
       orbId: "houston:10.10.22.2"
       address: "10.10.22.2"
+      name: "10.10.22.2"
       role: "oob"
       namespace: { name: "houston" }
       createdBy: "admin@armada.ai"
