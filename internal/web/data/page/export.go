@@ -6,4 +6,7 @@ type Export struct {
 	layout.Base
 	PageTitle     string
 	OCIConfigured bool
+	OCIRegistry   string
+	OCIRepo       string
+	ExportDir     string
 }

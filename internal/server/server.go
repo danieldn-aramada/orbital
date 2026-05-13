@@ -73,22 +73,17 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		logger.Warn("ORBITAL_OIDC_CLIENT_SECRET is not set — SSO login disabled")
 	}
 
-	var bearerMiddleware echo.MiddlewareFunc
+	var api *echo.Group
 	if cfg.OIDCIssuerURL != "" {
 		bv, err := auth.NewBearerVerifier(context.Background(), cfg.OIDCIssuerURL, cfg.OIDCClientID)
 		if err != nil {
-			logger.Warn("bearer verifier init failed — API bearer auth disabled", "err", err)
+			logger.Warn("bearer verifier init failed — API auth disabled", "err", err)
+			api = e.Group("/api/v1")
 		} else {
-			bearerMiddleware = bv.Middleware()
+			api = e.Group("/api/v1", bv.RequireAuth())
 		}
 	} else {
-		logger.Warn("ORBITAL_OIDC_ISSUER_URL is not set — API bearer auth disabled")
-	}
-
-	var api *echo.Group
-	if bearerMiddleware != nil {
-		api = e.Group("/api/v1", bearerMiddleware)
-	} else {
+		logger.Warn("ORBITAL_OIDC_ISSUER_URL is not set — API auth disabled")
 		api = e.Group("/api/v1")
 	}
 	s3Configured := cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != ""
@@ -98,6 +93,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	}
 	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, s3Configured, cfg.S3Endpoint, cfg.S3Bucket)
 	ui.SetOCIConfig(ociConfigured, cfg.OCIRegistry, cfg.OCIRepo)
+	ui.SetExportDir(cfg.ExportDir)
 	e.GET("/", ui.Index)
 	e.GET("/datacenters", ui.Index)
 	e.GET("/servers", ui.Servers)

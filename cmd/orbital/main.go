@@ -19,10 +19,13 @@ import (
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/internal/config"
 	"github.com/armada/orbital/internal/server"
+	"github.com/armada/orbital/internal/version"
 	_ "github.com/lib/pq"
 )
 
 func main() {
+	log.Printf("orbital %s starting", version.Version)
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 

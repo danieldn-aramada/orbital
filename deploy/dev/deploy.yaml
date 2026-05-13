@@ -14,20 +14,114 @@ spec:
     spec:
       containers:
         - name: orbital
-          image: armadaeksatest.azurecr.io/orbital:v0.0.1
-          imagePullPolicy: IfNotPresent
+          image: armadaeksatest.azurecr.io/orbital:v0.0.4
+          imagePullPolicy: Always
           ports:
             - containerPort: 8001
           env:
+            - name: ORBITAL_PORT
+              value: "8001"
+            - name: ORBITAL_DEV
+              value: "false"
+            - name: ORBITAL_LOG_LEVEL
+              value: "info"
+            # DGraph — blue (live) and scratch (export)
             - name: DGRAPH_URL
-              value: http://dgraph-dgraph-alpha:8080/graphql
+              value: http://dgraph-blue-dgraph-alpha:8080/graphql
+            - name: DGRAPH_ADMIN_URL
+              value: http://dgraph-blue-dgraph-alpha:8080/admin
+            - name: DGRAPH_SCRATCH_URL
+              value: http://dgraph-scratch-dgraph-alpha:8080/graphql
+            - name: DGRAPH_SCRATCH_ADMIN_URL
+              value: http://dgraph-scratch-dgraph-alpha:8080/admin
+            # PostgreSQL
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: orbital-secrets
+                  key: DATABASE_URL
+            # Session
+            - name: ORBITAL_SESSION_HMAC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: orbital-secrets
+                  key: ORBITAL_SESSION_HMAC_KEY
+            - name: ORBITAL_SESSION_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: orbital-secrets
+                  key: ORBITAL_SESSION_ENCRYPTION_KEY
+            # OIDC
+            - name: ORBITAL_OIDC_ISSUER_URL
+              value: https://login.microsoftonline.com/8f231c2a-9551-4b40-be17-5b24afe5e890/v2.0
+            - name: ORBITAL_OIDC_CLIENT_ID
+              value: 5fc832f6-843e-4207-93dd-b3c3a77c06f2
+            - name: ORBITAL_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: orbital-secrets
+                  key: ORBITAL_OIDC_CLIENT_SECRET
+            - name: ORBITAL_OIDC_REDIRECT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: orbital-secrets
+                  key: ORBITAL_OIDC_REDIRECT_URL
+            # Backup (Azure Blob)
+            - name: ORBITAL_S3_ENDPOINT
+              value: https://armadagalleonbackups.blob.core.windows.net
+            - name: ORBITAL_S3_BUCKET
+              value: cmdb
+            - name: ORBITAL_S3_ACCESS_KEY
+              value: armadagalleonbackups
+            - name: ORBITAL_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: orbital-secrets
+                  key: ORBITAL_S3_SECRET_KEY
+            # OCI
+            - name: ORBITAL_OCI_REGISTRY
+              value: armadaeksatest.azurecr.io
+            - name: ORBITAL_OCI_USERNAME
+              value: armadaeksatest
+            - name: ORBITAL_OCI_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: orbital-secrets
+                  key: ORBITAL_OCI_PASSWORD
+            - name: ORBITAL_OCI_SIGNING_KEY_PATH
+              value: /secrets/cosign.key
+            - name: DGRAPH_EXPORT_DIR
+              value: /dgraph-exports
+            - name: DGRAPH_SCRATCH_EXPORT_DIR
+              value: /scratch-exports
+          volumeMounts:
+            - name: cosign-key
+              mountPath: /secrets
+              readOnly: true
+            - name: scratch-exports
+              mountPath: /scratch-exports
+            - name: dgraph-exports
+              mountPath: /dgraph-exports
           resources:
             requests:
-              cpu: "100m"
-              memory: "128Mi"
-            limits:
-              cpu: "500m"
+              cpu: "200m"
               memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+      volumes:
+        - name: cosign-key
+          secret:
+            secretName: orbital-secrets
+            items:
+              - key: cosign.key
+                path: cosign.key
+        - name: scratch-exports
+          persistentVolumeClaim:
+            claimName: orbital-scratch-exports
+        - name: dgraph-exports
+          persistentVolumeClaim:
+            claimName: orbital-dgraph-exports
 ---
 apiVersion: v1
 kind: Service
@@ -37,6 +131,6 @@ spec:
   selector:
     app: orbital
   ports:
-    - port: 80
+    - port: 8001
       targetPort: 8001
   type: ClusterIP

@@ -25,6 +25,7 @@ type UI struct {
 	ociConfigured   bool
 	ociRegistry     string
 	ociRepo         string
+	exportDir       string
 	version         string
 	templates       map[string]*template.Template
 }
@@ -48,6 +49,10 @@ func (h *UI) SetOCIConfig(configured bool, registry, repo string) {
 	h.ociConfigured = configured
 	h.ociRegistry = registry
 	h.ociRepo = repo
+}
+
+func (h *UI) SetExportDir(dir string) {
+	h.exportDir = dir
 }
 
 func (h *UI) render(c echo.Context, name string, data any) error {
@@ -119,6 +124,9 @@ func (h *UI) Export(c echo.Context) error {
 		Base:          h.base(c),
 		PageTitle:     "Export Subgraph",
 		OCIConfigured: h.ociConfigured,
+		OCIRegistry:   h.ociRegistry,
+		OCIRepo:       h.ociRepo,
+		ExportDir:     h.exportDir,
 	})
 }
 

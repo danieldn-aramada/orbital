@@ -5,17 +5,14 @@ zero:
 alpha:
   replicaCount: 1
   persistence:
-    size: 25Gi
+    size: 10Gi
   extraFlags: "--graphql extensions=false"
 ratel:
-  enabled: true
-  image:
-    # repository: dgraph/ratel
-    tag: latest
+  enabled: false
 backups:
   full:
     enabled: true
   volume:
     enabled: true
     mountPath: /dgraph/export
-    claim: orbital-dgraph-exports
+    claim: orbital-scratch-exports

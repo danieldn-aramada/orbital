@@ -38,6 +38,9 @@ dgraph-exports/
 # Cosign keys — private key must never be committed
 cosign.key
 
+# Secrets — never commit filled-in secret manifests
+deploy/dev/secrets.yaml
+
 # OS
 .DS_Store
 Thumbs.db

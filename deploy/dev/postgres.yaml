@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: orbital-postgres
+spec:
+  serviceName: orbital-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orbital-postgres
+  template:
+    metadata:
+      labels:
+        app: orbital-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          env:
+            - name: POSTGRES_USER
+              value: orbital
+            - name: POSTGRES_PASSWORD
+              value: orbital
+            - name: POSTGRES_DB
+              value: orbital
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orbital-postgres
+spec:
+  selector:
+    app: orbital-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+  type: ClusterIP

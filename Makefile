@@ -9,8 +9,10 @@ ORBITAL_BIN  := $(BIN_DIR)/orbital
 ORB_BIN      := $(BIN_DIR)/orb
 
 COMPOSE_FILE := deploy/local/docker-compose.yml
+ACR          := armadaeksatest.azurecr.io
+IMAGE        := $(ACR)/orbital:$(VERSION)
 
-.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital test test-e2e lint up down seed docs
+.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-e2e lint up down seed docs
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -48,5 +50,14 @@ up: ## Start local stack (DGraph + PostgreSQL)
 down: ## Stop local stack
 	docker compose -f $(COMPOSE_FILE) down -v
 
-seed: ## Seed DGraph with example data
+push: ## Build and push image to ACR (requires: az acr login --name armadaeksatest)
+	docker buildx build --platform linux/amd64 --build-arg VERSION=$(VERSION) -t $(IMAGE) --push .
+
+seed: ## Seed DGraph with example data (local)
 	bash scripts/seed.sh
+
+seed-aks: ## Seed AKS dev environment (port-forwards, seeds, cleans up)
+	bash scripts/seed-aks.sh
+
+smoke-aks: ## Run smoke tests against AKS (requires: kubectl port-forward svc/orbital 8001:8001 -n netbox)
+	npx playwright test --config=playwright.smoke.config.ts

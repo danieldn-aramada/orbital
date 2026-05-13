@@ -42,8 +42,10 @@ Goal of prototyping is learning, not shipping. Each spike below is a question to
 | 7 | Air-gap sync round-trip | Does orbital's config export work reliably as a complete, importable payload for orb? | — | 🔄 In progress | — |
 | 8 | Authorization | How do we restrict mutations to authorized roles using Azure AD App Roles + DGraph @auth, and how do we test authz offline? | — | 🔄 In progress | Spike 5 |
 | 9 | DGraph performance and cost | Does DGraph hold up at scale, and what does it cost on AKS? | — | Not started | — |
+| 14 | Production deployment | What does a repeatable, production-ready AKS deployment look like — image build pipeline, secrets management, in-cluster PostgreSQL, embedded assets, and port-forward vs ingress for dev? | Daniel | 🔄 In progress | — |
+| 15 | AKS smoke test suite | How do we validate critical user flows after each AKS dev deployment? | — | Not started | 14 |
 | 10 | DGraph operations | Can our team operate DGraph on AKS without prior experience? | — | Not started | — |
-| 11 | Schema migration — build vs runbook | Do we need automation or is a runbook sufficient? | — | Not started | Spike 10 |
+| 11 | Schema migration — build vs runbook | Do we need automation or is a runbook sufficient? | — | ❌ Out of scope (MVP) | Spike 10 |
 | 12 | Orb import API | What is the right API contract for orb's local config import endpoint? | — | Not started | — |
 | 13 | Report intake API | What is the right transport-agnostic API for orbital to receive drift and divergence reports? | — | Not started | — |
 
@@ -262,11 +264,11 @@ DGraph community has no native incremental backup. Options to evaluate once real
 **Context:** The team has strong Go/Java and PostgreSQL experience but no DGraph operational background. Schema migrations, backup/restore, and cluster behavior during restarts are all unknowns. This spike must be completed before building any automation around these processes.
 
 **Success criteria:**
-- Perform a full backup and restore cycle on AKS — validate data integrity after restore
-- Apply a schema change to a live DGraph instance — document the process, failure modes, and rollback steps
-- Test DGraph behavior during a rolling restart on AKS (pod eviction, zero downtime feasibility)
-- Evaluate blue/green deployment viability — determine if DGraph cluster state makes this practical or prohibitively complex
-- Produce a runbook: what the on-call engineer does for each of the above scenarios
+- ⬜ Perform a full backup and restore cycle on AKS — validate data integrity after restore
+- ~~Apply a schema change to a live DGraph instance~~ — out of scope for MVP; schema changes require a redeployment (same model as PostgreSQL migrations via ent)
+- ✅ DGraph pod recovery on AKS — pod deletion + StatefulSet recreation validated today (2026-05-12)
+- ~~Evaluate blue/green deployment viability~~ — deferred, not a blocker for MVP
+- ⬜ Produce a runbook covering restore and schema change
 
 ### Spike 11. Schema migration — build vs runbook
 **Question:** Do we need a built-in schema migration tool in orbital, or is a well-maintained runbook sufficient?
@@ -293,6 +295,64 @@ DGraph community has no native incremental backup. Options to evaluate once real
 - Confirm behaviour on a stale or older payload (should orb reject, warn, or accept?)
 - Produce an API design doc covering the endpoint contract
 
+### Spike 15. AKS smoke test suite
+**Question:** How do we validate critical user flows work after each AKS dev deployment?
+
+**Context:** Local Playwright tests (`e2e/`) run against `localhost:8001` with email/password auth. AKS deployments need a separate post-deploy smoke test that can run from any machine with `kubectl` access — no public URL required, no SSO complexity.
+
+**Approach:**
+- `e2e/smoke/` directory — separate from the main e2e suite, purpose-built for AKS validation
+- Port-forward orbital to `localhost:8001` before running (same pattern as `make seed-aks`)
+- Authenticate via local login (`admin@armada.ai / admin`) — same `global-setup.ts` pattern, avoids Azure AD redirect interception
+- `make smoke-aks` target: port-forwards orbital, runs smoke suite, tears down
+
+**Flows to cover:**
+- Login (local)
+- Export subgraph end-to-end (trigger → poll until completed → download)
+- Edit a data center field and verify it saves
+- Trigger a backup and verify it appears in the backup list
+- OCI test connection
+
+**Success criteria:**
+- ⬜ `make smoke-aks` runs from any machine with `kubectl` access to the dev cluster
+- ⬜ Tests use `data-testid` selectors — not CSS classes or layout-driven selectors
+- ⬜ Suite completes in under 2 minutes
+- ⬜ Clear pass/fail output — usable as a manual post-deploy gate
+
+**Not in scope:**
+- SSO / Azure AD login automation
+- CI pipeline integration (can be added later once suite is stable)
+- Full regression coverage — smoke only, critical paths only
+
+### Spike 14. Production deployment 🔄
+**Question:** What does a repeatable, production-ready AKS deployment look like?
+
+**Context:** Spike 1 validated that the stack can run on AKS at all. This spike makes it repeatable and production-grade — image build pipeline, proper secrets management, self-contained binary, and a clear deploy sequence.
+
+**What's been built (as of 2026-05-12):**
+- `deploy/dev/deploy.yaml` — full Deployment + Service with all env vars wired from `orbital-secrets`
+- `deploy/dev/secrets.yaml` (gitignored) — single K8s Secret covering all orbital secrets including cosign key
+- `deploy/dev/postgres.yaml` — in-cluster PostgreSQL StatefulSet with 5Gi PVC (Azure managed PostgreSQL `pg_hba.conf` blocks unencrypted connections from pod CIDR without admin credentials)
+- `deploy/dev/ingress.yaml` — nginx Ingress placeholder (skipped for now — using port-forward)
+- `deploy/charts/values-dev-scratch.yaml` — DGraph scratch instance (no Ratel, smaller disk)
+- Two DGraph helm releases: `dgraph-blue` (live) and `dgraph-scratch` (export only); scratch uses `--set serviceAccount.create=false` to avoid SA conflict
+- `deploy/README.md` — step-by-step AKS dev deploy guide
+
+**Remaining:**
+- Switch Go templates from `template.ParseFiles` (runtime disk reads) to `//go:embed` (binary-embedded) — removes `COPY web/` from Dockerfile, makes binary self-contained
+- Dockerfile currently copies `web/` and `schema/` at runtime; embed eliminates this
+- CI/CD pipeline: GitHub Actions (or Azure DevOps) to build, tag, and push image on merge to main
+- Decide on image tagging strategy (semver vs git SHA)
+- Validate port-forward workflow for OIDC login end-to-end in AKS dev
+- Seed DGraph schema on first deploy (currently requires `make seed` pointed at cluster)
+
+**Success criteria:**
+- ⬜ `//go:embed` replaces all `template.ParseFiles` calls — Dockerfile has no `web/` or `schema/` COPY
+- ⬜ CI pipeline builds and pushes image on merge; version injected via ldflags
+- ⬜ `kubectl apply -f deploy/dev/` brings up a working orbital in a clean namespace
+- ⬜ OIDC login works end-to-end via port-forward
+- ⬜ DGraph schema applied automatically on first boot (orbital startup applies schema via admin API)
+
 ### Spike 13. Report intake API
 **Question:** What is the right API for orbital to receive drift and divergence reports?
 
@@ -318,7 +378,7 @@ Orbital must receive these reports and expose divergence to cloud administrators
 - Schema management — versioned schema apply with backwards compatibility validation on startup
 - Export API — `POST /api/v1/datacenters/{id}/export` returning scoped `json.gz` + `schema.gz`
 - Orb registry — register, authenticate, and revoke orbs
-- Audit log — record all config mutations with actor and timestamp
+- Audit log — record all config mutations with actor and timestamp ✅
 - Backup — DGraph and PostgreSQL backup to Azure Blob with tracked records
 
 ### Orb (edge)
@@ -338,7 +398,9 @@ Orbital must receive these reports and expose divergence to cloud administrators
 
 | Item | Notes |
 |---|---|
+| Switch templates + schema to `//go:embed` | `web/templates/templates.go` and `config.go` (`ORBITAL_SCHEMA_PATH`) read from disk at runtime. Replace with `//go:embed` so the binary is self-contained. Tracked in Spike 14. |
 | Switch DGraph DQL calls to `dgo` client | `internal/handler/export.go` uses raw HTTP calls to `/query`, `/mutate`, `/alter`. Replace with `dgraph-io/dgo` (gRPC-based official Go client) for idiomatic usage and proper transaction management. |
+| Audit mutation detection: regex → `vektah/gqlparser` AST | `extractOperations` and `extractResourceIDs` in `internal/handler/graphql.go` use regex on the raw query string. Fragile for edge cases (string literals containing type names, non-standard filter shapes). Replace with `vektah/gqlparser` (the parser underlying gqlgen) for proper AST walking. New dependency — add when regex causes real problems. |
 
 ---
 

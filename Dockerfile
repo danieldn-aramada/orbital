@@ -13,16 +13,18 @@ RUN go mod download
 COPY . .
 
 # Build binary
-RUN go build -o orbital ./cmd/orbital/main.go
+ARG VERSION=dev
+RUN go build -ldflags="-X github.com/armada/orbital/internal/version.Version=${VERSION}" -o orbital ./cmd/orbital/main.go
 
 # ---- Runtime stage ----
 FROM alpine:3.19
 
 WORKDIR /app
 
-# Copy binary + static assets
+# Copy binary + assets
 COPY --from=builder /app/orbital .
-COPY --from=builder /app/internal/static ./internal/static
+COPY --from=builder /app/web ./web
+COPY --from=builder /app/schema ./schema
 
 EXPOSE 8001
 

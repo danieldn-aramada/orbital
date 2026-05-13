@@ -15,6 +15,43 @@
         Export a data center's configuration subgraph as a portable archive (<code>json.gz</code> + <code>schema.gz</code>).
       </p>
 
+      <div style="max-width: 480px;" class="mb-6">
+        <div class="field">
+          <label class="label">Export Directory</label>
+          <div class="control has-icons-right">
+            <input class="input is-small has-background-light has-text-grey-dark" type="text" value="{{.ExportDir}}" readonly style="cursor: default;">
+            <span class="icon is-small is-right has-text-grey-light"><i class="fas fa-lock"></i></span>
+          </div>
+          <p class="help has-text-grey-light">Configurable via ORBITAL_EXPORT_DIR</p>
+        </div>
+
+        <div class="field mt-4">
+          <label class="label">OCI Registry</label>
+          <div class="control has-icons-right">
+            {{if .OCIConfigured}}
+              <input class="input is-small has-background-light has-text-grey-dark" type="text" value="{{.OCIRegistry}}/{{.OCIRepo}}" readonly style="cursor: default;">
+              <span class="icon is-small is-right has-text-grey-light"><i class="fas fa-lock"></i></span>
+            {{else}}
+              <input class="input is-small is-danger" type="text" value="OCI not configured" readonly style="cursor: default;">
+              <p class="help is-danger">Set ORBITAL_OCI_REGISTRY and ORBITAL_OCI_SIGNING_KEY_PATH</p>
+            {{end}}
+          </div>
+          {{if .OCIConfigured}}<p class="help has-text-grey-light">Configurable only via environment variable</p>{{end}}
+        </div>
+
+        {{if .OCIConfigured}}
+        <div class="field mt-4">
+          <div class="control is-flex is-align-items-center" style="gap: 0.75rem;">
+            <button id="btn-test-connection" class="button is-light is-small" onclick="testOCIConnection()">
+              <span class="icon"><i class="fa-solid fa-plug"></i></span>
+              <span>Test Connection</span>
+            </button>
+            <span id="test-connection-result" class="is-size-7"></span>
+          </div>
+        </div>
+        {{end}}
+      </div>
+
       <form id="form-export-subgraph">
         <div class="field">
           <label class="label">
