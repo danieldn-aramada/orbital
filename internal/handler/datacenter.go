@@ -54,14 +54,16 @@ type DataCenter struct {
 	dgraphURL string
 	fragment  *template.Template
 	logger    *slog.Logger
+	basePath  string
 }
 
-func NewDataCenter(dgraphURL string, dev bool, logger *slog.Logger) *DataCenter {
+func NewDataCenter(dgraphURL string, dev bool, logger *slog.Logger, basePath string) *DataCenter {
 	return &DataCenter{
 		dgraphURL: dgraphURL,
 		dev:       dev,
 		fragment:  parseDataCenterFragment(),
 		logger:    logger,
+		basePath:  basePath,
 	}
 }
 
@@ -148,11 +150,12 @@ type dataCenterTabData struct {
 	AssetDataV2  string
 	CurrentUser  string
 	EditDataJSON template.JS // pre-serialized JSON for the edit modal
+	BasePath     string
 }
 
 func (h *DataCenter) Tab(c echo.Context) error {
 	if c.Request().Header.Get("HX-Request") != "true" {
-		return c.Redirect(http.StatusFound, "/")
+		return c.Redirect(http.StatusFound, h.basePath+"/")
 	}
 
 	if h.dev {
@@ -240,6 +243,7 @@ func (h *DataCenter) Tab(c echo.Context) error {
 		AssetDataV2:  prettyAssetData,
 		CurrentUser:  currentUser,
 		EditDataJSON: template.JS(editJSON),
+		BasePath:     h.basePath,
 	}
 	for _, r := range raw.Racks {
 		dc.Racks = append(dc.Racks, rackTabData{

@@ -245,7 +245,9 @@ paths:
   /api/v1/events:
     get:
       description: Returns recorded mutation events. Supports limit/offset pagination
-        and optional filtering by resource_type, resource_id, or operation_name.
+        and optional filtering by orbId, resource_type, resource_id, or operation_name.
+        Returns JSON by default; returns an HTML table fragment when the HX-Request
+        header is present.
       parameters:
       - description: Max results (default 100, max 500)
         in: query
@@ -255,6 +257,18 @@ paths:
         in: query
         name: offset
         type: integer
+      - description: Filter by resource orbId (e.g. alaska-dot:GRTLY24)
+        in: query
+        name: orbId
+        type: string
+      - description: Filter by resource type (e.g. DataCenter, Server)
+        in: query
+        name: resource_type
+        type: string
+      - description: Filter by resource ID
+        in: query
+        name: resource_id
+        type: string
       - description: Filter by operation name (e.g. UpdateServer)
         in: query
         name: operation_name
@@ -269,7 +283,7 @@ paths:
             type: object
       summary: List audit events
       tags:
-      - graph
+      - events
   /api/v1/export/jobs:
     get:
       description: Returns the 50 most recent export jobs ordered by creation time.
@@ -497,4 +511,5 @@ swagger: "2.0"
 tags:
 - name: backup graph
 - name: export subgraph
+- name: events
 - name: oci

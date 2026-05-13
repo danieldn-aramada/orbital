@@ -22,7 +22,7 @@ type Config struct {
 	DGraphScratchAdminURL  string        `envconfig:"DGRAPH_SCRATCH_ADMIN_URL"        default:"http://localhost:8081/admin"`
 	DatabaseURL            string        `envconfig:"DATABASE_URL"                    default:"postgres://orbital:orbital@localhost:5432/orbital?sslmode=disable"`
 	ExportDir              string        `envconfig:"ORBITAL_EXPORT_DIR"              default:"./subgraph-exports"`
-	DGraphScratchExportDir string        `envconfig:"DGRAPH_SCRATCH_EXPORT_DIR" 	  default:"./subgraph-exports/scratch"`
+	DGraphScratchExportDir string        `envconfig:"DGRAPH_SCRATCH_EXPORT_DIR"       default:"./subgraph-exports/scratch"`
 	SchemaPath             string        `envconfig:"ORBITAL_SCHEMA_PATH"             default:"schema/schema-demo.graphql"`
 	SessionHMACKey         string        `envconfig:"ORBITAL_SESSION_HMAC_KEY"        default:"local-dev-hmac-key-change-in-prod"` // must be changed in prod
 	SessionEncryptionKey   string        `envconfig:"ORBITAL_SESSION_ENCRYPTION_KEY"  default:"local-dev-enc-key-32-bytes-pad!!"`  // must be exactly 32 bytes for AES-256; empty disables cookie encryption
@@ -43,6 +43,7 @@ type Config struct {
 	OCIUsername            string        `envconfig:"ORBITAL_OCI_USERNAME"            default:"armadaeksatest"` // ACR admin username = registry name
 	OCIPassword            string        `envconfig:"ORBITAL_OCI_PASSWORD"            default:""`               // ACR admin password — set via env
 	OCISigningKeyPath      string        `envconfig:"ORBITAL_OCI_SIGNING_KEY_PATH"    default:"cosign.key"`     // run: cosign generate-key-pair
+	BasePath               string        `envconfig:"ORBITAL_BASE_PATH"               default:""`
 }
 
 func New() (*Config, error) {

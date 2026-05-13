@@ -226,12 +226,12 @@ const docTemplate = `{
         },
         "/api/v1/events": {
             "get": {
-                "description": "Returns recorded mutation events. Supports limit/offset pagination and optional filtering by resource_type, resource_id, or operation_name.",
+                "description": "Returns recorded mutation events. Supports limit/offset pagination and optional filtering by orbId, resource_type, resource_id, or operation_name. Returns JSON by default; returns an HTML table fragment when the HX-Request header is present.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "graph"
+                    "events"
                 ],
                 "summary": "List audit events",
                 "parameters": [
@@ -245,6 +245,24 @@ const docTemplate = `{
                         "type": "integer",
                         "description": "Pagination offset",
                         "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by resource orbId (e.g. alaska-dot:GRTLY24)",
+                        "name": "orbId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by resource type (e.g. DataCenter, Server)",
+                        "name": "resource_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by resource ID",
+                        "name": "resource_id",
                         "in": "query"
                     },
                     {
@@ -739,6 +757,9 @@ const docTemplate = `{
         },
         {
             "name": "export subgraph"
+        },
+        {
+            "name": "events"
         },
         {
             "name": "oci"

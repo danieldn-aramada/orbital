@@ -5,6 +5,7 @@
 //
 // @tag.name         backup graph
 // @tag.name         export subgraph
+// @tag.name         events
 // @tag.name         oci
 
 package main

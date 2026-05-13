@@ -7,7 +7,7 @@
         <span>Grafana</span>
       </button>
       <button class="button is-rounded is-small is-link mt-1"
-        hx-get="/datacenters/{{.ID}}"
+        hx-get="{{.BasePath}}/datacenters/{{.ID}}"
         hx-target="#tab-content-{{.ID}}"
         hx-swap="innerHTML"
         hx-on:htmx:before-request="showDatacenterSkeleton('{{.ID}}')">
@@ -75,7 +75,7 @@
             <li data-panel="dc-panel-divergence-{{.ID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-triangle-exclamation"></i></span><span>Divergence Reports</span></a>
             </li>
-            <li data-panel="dc-panel-audit-{{.ID}}">
+            <li data-panel="dc-panel-audit-{{.ID}}" data-orb-id="{{.OrbID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a>
             </li>
           </ul>
@@ -151,7 +151,7 @@
           <p class="is-size-7 has-text-grey p-2">No divergence reports.</p>
         </div>
 
-        <div id="dc-panel-audit-{{.ID}}" style="display:none" data-orb-id="{{.OrbID}}"></div>
+        <div id="dc-panel-audit-{{.ID}}" style="display:none"></div>
         </div>
 
       </article>

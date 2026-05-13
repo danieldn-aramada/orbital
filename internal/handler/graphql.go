@@ -123,11 +123,22 @@ func (h *GraphQL) Handle(c echo.Context) error {
 		}
 	}
 
-	// Strip ifVersion before forwarding — not a DGraph field
+	// Strip non-DGraph variables before forwarding
+	auditOrbID, _ := req.Variables["orbId"].(string)
+	needsReMarshal := hasIfVersion || auditOrbID != ""
 	if hasIfVersion {
 		delete(req.Variables, "ifVersion")
+	}
+	if auditOrbID != "" {
+		delete(req.Variables, "orbId")
+	}
+	if needsReMarshal {
 		if modified, err := json.Marshal(req); err == nil {
 			bodyBytes = modified
+		}
+		// Restore orbId so extractResourceIDs can find it after the DGraph call
+		if auditOrbID != "" {
+			req.Variables["orbId"] = auditOrbID
 		}
 	}
 

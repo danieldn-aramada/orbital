@@ -18,10 +18,11 @@ type Login struct {
 	db          *ent.Client
 	sessionKeys auth.SessionKeys
 	formTmpl    *template.Template
+	basePath    string
 }
 
-func NewLogin(db *ent.Client, sessionKeys auth.SessionKeys, formTmpl *template.Template) *Login {
-	return &Login{db: db, sessionKeys: sessionKeys, formTmpl: formTmpl}
+func NewLogin(db *ent.Client, sessionKeys auth.SessionKeys, formTmpl *template.Template, basePath string) *Login {
+	return &Login{db: db, sessionKeys: sessionKeys, formTmpl: formTmpl, basePath: basePath}
 }
 
 func (h *Login) renderForm(c echo.Context, errMsg string) error {
@@ -30,6 +31,7 @@ func (h *Login) renderForm(c echo.Context, errMsg string) error {
 	return h.formTmpl.ExecuteTemplate(c.Response().Writer, "login-form.gohtml", fragment.LoginForm{
 		CsrfToken: csrfToken,
 		ErrorMsg:  errMsg,
+		BasePath:  h.basePath,
 	})
 }
 
@@ -61,7 +63,7 @@ func (h *Login) Post(c echo.Context) error {
 		return fmt.Errorf("set session: %w", err)
 	}
 
-	c.Response().Header().Set("HX-Redirect", "/?fresh=1")
+	c.Response().Header().Set("HX-Redirect", h.basePath+"/?fresh=1")
 	return c.NoContent(http.StatusOK)
 }
 
@@ -69,10 +71,10 @@ func (h *Login) Post(c echo.Context) error {
 func (h *Login) Logout(c echo.Context) error {
 	csrf := c.FormValue("csrf")
 	if !auth.ValidateCSRF(h.sessionKeys, c.Request(), csrf) {
-		return c.Redirect(http.StatusSeeOther, "/")
+		return c.Redirect(http.StatusSeeOther, h.basePath+"/")
 	}
 	if err := auth.ClearSession(h.sessionKeys, c.Request(), c.Response().Writer); err != nil {
 		return fmt.Errorf("clear session: %w", err)
 	}
-	return c.Redirect(http.StatusSeeOther, "/")
+	return c.Redirect(http.StatusSeeOther, h.basePath+"/")
 }
