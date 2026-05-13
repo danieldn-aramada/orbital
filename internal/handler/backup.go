@@ -251,13 +251,6 @@ type backupResponse struct {
 }
 
 // TestConnection handles POST /api/v1/backups/test-connection
-//
-// @Summary     Test backup storage connection
-// @Description Pings the configured S3-compatible or Azure Blob storage to verify credentials and reachability. Returns {"ok": true} on success or {"ok": false, "error": "..."} on failure.
-// @Tags        backup graph
-// @Produce     json
-// @Success     200 {object} map[string]any
-// @Router      /api/v1/backups/test-connection [post]
 func (h *BackupHandler) TestConnection(c echo.Context) error {
 	ctx, cancel := context.WithTimeout(c.Request().Context(), 10*time.Second)
 	defer cancel()
@@ -268,6 +261,14 @@ func (h *BackupHandler) TestConnection(c echo.Context) error {
 }
 
 // Trigger handles POST /api/v1/backups
+//
+// @Summary     Trigger backup
+// @Description Triggers an async DGraph backup to configured S3-compatible or Azure Blob storage. Returns immediately with a job ID. Returns 409 if a backup is already in progress.
+// @Tags        backup graph
+// @Produce     json
+// @Success     202 {object} triggerResponse
+// @Failure     409 {object} map[string]string
+// @Router      /api/v1/backups [post]
 func (h *BackupHandler) Trigger(c echo.Context) error {
 	existing, err := h.db.Backup.Query().
 		Where(backup.StatusIn(backup.StatusPending, backup.StatusRunning)).
@@ -308,6 +309,13 @@ func (h *BackupHandler) Trigger(c echo.Context) error {
 }
 
 // List handles GET /api/v1/backups
+//
+// @Summary     List backups
+// @Description Returns up to 50 backup records ordered by most recent first.
+// @Tags        backup graph
+// @Produce     json
+// @Success     200 {array}  backupResponse
+// @Router      /api/v1/backups [get]
 func (h *BackupHandler) List(c echo.Context) error {
 	jobs, err := h.db.Backup.Query().
 		Order(backup.ByCreatedAt(sql.OrderDesc())).
@@ -324,6 +332,15 @@ func (h *BackupHandler) List(c echo.Context) error {
 }
 
 // Status handles GET /api/v1/backups/:id
+//
+// @Summary     Get backup status
+// @Description Returns the current status and metadata for a single backup job.
+// @Tags        backup graph
+// @Produce     json
+// @Param       id path string true "Backup job ID"
+// @Success     200 {object} backupResponse
+// @Failure     404 {object} map[string]string
+// @Router      /api/v1/backups/{id} [get]
 func (h *BackupHandler) Status(c echo.Context) error {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -340,6 +357,15 @@ func (h *BackupHandler) Status(c echo.Context) error {
 }
 
 // Download handles GET /api/v1/backups/:id/download
+//
+// @Summary     Download backup
+// @Description Returns a presigned URL (valid 15 minutes) to download the completed backup archive. Returns 404 if the job is not completed or has no archive.
+// @Tags        backup graph
+// @Produce     json
+// @Param       id path string true "Backup job ID"
+// @Success     200 {object} map[string]string
+// @Failure     404 {object} map[string]string
+// @Router      /api/v1/backups/{id}/download [get]
 func (h *BackupHandler) Download(c echo.Context) error {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -367,6 +393,16 @@ func (h *BackupHandler) Download(c echo.Context) error {
 }
 
 // Delete handles DELETE /api/v1/backups/:id
+//
+// @Summary     Delete backup
+// @Description Deletes the backup record and its archive from storage. Returns 409 if the backup is still running.
+// @Tags        backup graph
+// @Produce     json
+// @Param       id path string true "Backup job ID"
+// @Success     204
+// @Failure     404 {object} map[string]string
+// @Failure     409 {object} map[string]string
+// @Router      /api/v1/backups/{id} [delete]
 func (h *BackupHandler) Delete(c echo.Context) error {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {

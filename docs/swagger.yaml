@@ -33,6 +33,27 @@ definitions:
       tag:
         type: string
     type: object
+  handler.backupResponse:
+    properties:
+      checksum:
+        type: string
+      completedAt:
+        type: string
+      error:
+        type: string
+      id:
+        type: string
+      initiatedAt:
+        type: string
+      initiatedBy:
+        type: string
+      s3Key:
+        type: string
+      sizeBytes:
+        type: integer
+      status:
+        type: string
+    type: object
   handler.publishResponse:
     properties:
       artifactId:
@@ -77,20 +98,121 @@ info:
   title: Orbital API
   version: 0.1.0
 paths:
-  /api/v1/backups/test-connection:
-    post:
-      description: 'Pings the configured S3-compatible or Azure Blob storage to verify
-        credentials and reachability. Returns {"ok": true} on success or {"ok": false,
-        "error": "..."} on failure.'
+  /api/v1/backups:
+    get:
+      description: Returns up to 50 backup records ordered by most recent first.
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            additionalProperties: true
+            items:
+              $ref: '#/definitions/handler.backupResponse'
+            type: array
+      summary: List backups
+      tags:
+      - backup graph
+    post:
+      description: Triggers an async DGraph backup to configured S3-compatible or
+        Azure Blob storage. Returns immediately with a job ID. Returns 409 if a backup
+        is already in progress.
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/handler.triggerResponse'
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
             type: object
-      summary: Test backup storage connection
+      summary: Trigger backup
+      tags:
+      - backup graph
+  /api/v1/backups/{id}:
+    delete:
+      description: Deletes the backup record and its archive from storage. Returns
+        409 if the backup is still running.
+      parameters:
+      - description: Backup job ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Delete backup
+      tags:
+      - backup graph
+    get:
+      description: Returns the current status and metadata for a single backup job.
+      parameters:
+      - description: Backup job ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.backupResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get backup status
+      tags:
+      - backup graph
+  /api/v1/backups/{id}/download:
+    get:
+      description: Returns a presigned URL (valid 15 minutes) to download the completed
+        backup archive. Returns 404 if the job is not completed or has no archive.
+      parameters:
+      - description: Backup job ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Download backup
       tags:
       - backup graph
   /api/v1/datacenters/{id}/export:
@@ -120,6 +242,34 @@ paths:
       summary: Trigger subgraph export
       tags:
       - export subgraph
+  /api/v1/events:
+    get:
+      description: Returns recorded mutation events. Supports limit/offset pagination
+        and optional filtering by resource_type, resource_id, or operation_name.
+      parameters:
+      - description: Max results (default 100, max 500)
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination offset
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by operation name (e.g. UpdateServer)
+        in: query
+        name: operation_name
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List audit events
+      tags:
+      - graph
   /api/v1/export/jobs:
     get:
       description: Returns the 50 most recent export jobs ordered by creation time.

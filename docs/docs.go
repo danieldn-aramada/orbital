@@ -15,22 +15,172 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/api/v1/backups/test-connection": {
-            "post": {
-                "description": "Pings the configured S3-compatible or Azure Blob storage to verify credentials and reachability. Returns {\"ok\": true} on success or {\"ok\": false, \"error\": \"...\"} on failure.",
+        "/api/v1/backups": {
+            "get": {
+                "description": "Returns up to 50 backup records ordered by most recent first.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "backup graph"
                 ],
-                "summary": "Test backup storage connection",
+                "summary": "List backups",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handler.backupResponse"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Triggers an async DGraph backup to configured S3-compatible or Azure Blob storage. Returns immediately with a job ID. Returns 409 if a backup is already in progress.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "backup graph"
+                ],
+                "summary": "Trigger backup",
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/handler.triggerResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/backups/{id}": {
+            "get": {
+                "description": "Returns the current status and metadata for a single backup job.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "backup graph"
+                ],
+                "summary": "Get backup status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Backup job ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.backupResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Deletes the backup record and its archive from storage. Returns 409 if the backup is still running.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "backup graph"
+                ],
+                "summary": "Delete backup",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Backup job ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/backups/{id}/download": {
+            "get": {
+                "description": "Returns a presigned URL (valid 15 minutes) to download the completed backup archive. Returns 404 if the job is not completed or has no archive.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "backup graph"
+                ],
+                "summary": "Download backup",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Backup job ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "type": "object",
-                            "additionalProperties": true
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -69,6 +219,47 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "string"
                             }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/events": {
+            "get": {
+                "description": "Returns recorded mutation events. Supports limit/offset pagination and optional filtering by resource_type, resource_id, or operation_name.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "graph"
+                ],
+                "summary": "List audit events",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Max results (default 100, max 500)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination offset",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by operation name (e.g. UpdateServer)",
+                        "name": "operation_name",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -448,6 +639,38 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "tag": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.backupResponse": {
+            "type": "object",
+            "properties": {
+                "checksum": {
+                    "type": "string"
+                },
+                "completedAt": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "initiatedAt": {
+                    "type": "string"
+                },
+                "initiatedBy": {
+                    "type": "string"
+                },
+                "s3Key": {
+                    "type": "string"
+                },
+                "sizeBytes": {
+                    "type": "integer"
+                },
+                "status": {
                     "type": "string"
                 }
             }
