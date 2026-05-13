@@ -13,6 +13,8 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
+	"os"
 	"os/signal"
 	"syscall"
 
@@ -25,7 +27,8 @@ import (
 )
 
 func main() {
-	log.Printf("orbital %s starting", version.Version)
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+	slog.Info("orbital starting", "version", version.Version)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()

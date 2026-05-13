@@ -27,10 +27,18 @@ var mutationOpRe = regexp.MustCompile(`(?i)^\s*mutation\s+(\w+)`)
 // singleEntityTypes maps DGraph getter names to resource type labels, used for
 // best-effort resource_id extraction on single-entity mutations.
 var singleEntityTypes = map[string]string{
-	"UpdateDataCenter":      "DataCenter",
-	"UpdateServer":          "Server",
+	"UpdateDataCenter":        "DataCenter",
+	"UpdateServer":            "Server",
 	"UpdateKubernetesCluster": "KubernetesCluster",
-	"UpdateEksaConfig":      "EksaConfig",
+	"UpdateEksaConfig":        "EksaConfig",
+}
+
+// typeBeforeFields lists the DGraph fields to fetch in before-snapshots per type.
+var typeBeforeFields = map[string]string{
+	"DataCenter":        "id orbId name version assetDataV2",
+	"Server":            "id orbId name version hostname model manufacturer serviceTag rackPosition oobMAC",
+	"KubernetesCluster": "id orbId name version provider",
+	"EksaConfig":        "id orbId name version clusterType",
 }
 
 type GraphQL struct {
@@ -94,32 +102,33 @@ func (h *GraphQL) Handle(c echo.Context) error {
 		actor, _ = c.Get("user_name").(string)
 	}
 
-	// MVCC check — single-entity mutations only, opt-in via ifVersion variable
+	// Fetch before-state for all known single-entity mutations (used for MVCC and audit diff).
+	var before map[string]any
+	resourceType, isSingleEntity := singleEntityTypes[opName]
+	if isSingleEntity {
+		getter := "get" + resourceType
+		entityID, _ := req.Variables["id"].(string)
+		orbID, _ := req.Variables["orbId"].(string)
+
+		var fetchErr error
+		if entityID != "" {
+			before, fetchErr = h.fetchBeforeByID(getter, resourceType, entityID)
+		} else if orbID != "" {
+			before, fetchErr = h.fetchBeforeByOrbID("query"+resourceType, resourceType, orbID)
+		}
+		if fetchErr != nil {
+			h.logger.Warn("before-fetch failed", "op", opName, "err", fetchErr)
+			before = nil
+		}
+	}
+
+	// MVCC check — opt-in via ifVersion variable
 	ifVersion, hasIfVersion := req.Variables["ifVersion"]
-	if hasIfVersion && h.db != nil {
-		resourceType, isSingleEntity := singleEntityTypes[opName]
-		if isSingleEntity {
-			getter := "get" + resourceType
-			entityID, _ := req.Variables["id"].(string)
-			orbID, _ := req.Variables["orbId"].(string)
-
-			var before map[string]any
-			var fetchErr error
-			if entityID != "" {
-				before, fetchErr = h.fetchBeforeByID(getter, entityID)
-			} else if orbID != "" {
-				before, fetchErr = h.fetchBeforeByOrbID("query"+resourceType, orbID)
-			}
-
-			if fetchErr != nil {
-				h.logger.Warn("before-fetch failed — skipping MVCC", "op", opName, "err", fetchErr)
-			} else if before != nil {
-				if int(toFloat64(before["version"])) != int(toFloat64(ifVersion)) {
-					return c.JSON(http.StatusConflict, map[string]string{
-						"error": "This record was modified by someone else. Please reload and try again.",
-					})
-				}
-			}
+	if hasIfVersion && before != nil {
+		if int(toFloat64(before["version"])) != int(toFloat64(ifVersion)) {
+			return c.JSON(http.StatusConflict, map[string]string{
+				"error": "This record was modified by someone else. Please reload and try again.",
+			})
 		}
 	}
 
@@ -156,7 +165,7 @@ func (h *GraphQL) Handle(c echo.Context) error {
 	if touchesKnownType && h.db != nil && !hasGQLErrors(respBytes) {
 		operations, resourceTypes := extractOperations(req.Query)
 		resourceIDs := extractResourceIDs(req.Query, req.Variables)
-		go h.writeEvent(opName, operations, resourceTypes, resourceIDs, actor, req.Query, req.Variables)
+		go h.writeEvent(opName, operations, resourceTypes, resourceIDs, actor, req.Query, req.Variables, before)
 	}
 
 	c.Response().Header().Set("Content-Type", "application/json")
@@ -175,8 +184,12 @@ func (h *GraphQL) proxyRaw(c echo.Context, body []byte) error {
 	return err
 }
 
-func (h *GraphQL) fetchBeforeByID(getter, id string) (map[string]any, error) {
-	query := fmt.Sprintf(`query BeforeFetch($id: ID!) { %s(id: $id) { id orbId name version } }`, getter)
+func (h *GraphQL) fetchBeforeByID(getter, resourceType, id string) (map[string]any, error) {
+	fields := typeBeforeFields[resourceType]
+	if fields == "" {
+		fields = "id orbId name version"
+	}
+	query := fmt.Sprintf(`query BeforeFetch($id: ID!) { %s(id: $id) { %s } }`, getter, fields)
 	body, _ := json.Marshal(map[string]any{
 		"query":     query,
 		"variables": map[string]any{"id": id},
@@ -184,8 +197,12 @@ func (h *GraphQL) fetchBeforeByID(getter, id string) (map[string]any, error) {
 	return h.doFetch(getter, body)
 }
 
-func (h *GraphQL) fetchBeforeByOrbID(querier, orbID string) (map[string]any, error) {
-	query := fmt.Sprintf(`query BeforeFetch($orbId: String!) { %s(filter: { orbId: { eq: $orbId } }) { id orbId name version } }`, querier)
+func (h *GraphQL) fetchBeforeByOrbID(querier, resourceType, orbID string) (map[string]any, error) {
+	fields := typeBeforeFields[resourceType]
+	if fields == "" {
+		fields = "id orbId name version"
+	}
+	query := fmt.Sprintf(`query BeforeFetch($orbId: String!) { %s(filter: { orbId: { eq: $orbId } }) { %s } }`, querier, fields)
 	body, _ := json.Marshal(map[string]any{
 		"query":     query,
 		"variables": map[string]any{"orbId": orbID},
@@ -195,7 +212,7 @@ func (h *GraphQL) fetchBeforeByOrbID(querier, orbID string) (map[string]any, err
 	if err != nil {
 		return nil, fmt.Errorf("dgraph fetch: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { io.Copy(io.Discard, resp.Body); resp.Body.Close() }() //nolint:errcheck
 
 	var result map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -216,7 +233,7 @@ func (h *GraphQL) doFetch(getter string, body []byte) (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("dgraph fetch: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { io.Copy(io.Discard, resp.Body); resp.Body.Close() }() //nolint:errcheck
 
 	var result map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -231,12 +248,16 @@ func (h *GraphQL) doFetch(getter string, body []byte) (map[string]any, error) {
 	return entity, nil
 }
 
-func (h *GraphQL) writeEvent(opName string, operations, resourceTypes, resourceIDs []string, actor, query string, variables map[string]any) {
-	writeAuditEvent(h.db, h.logger, actor, opName, operations, resourceTypes, resourceIDs, map[string]any{
+func (h *GraphQL) writeEvent(opName string, operations, resourceTypes, resourceIDs []string, actor, query string, variables map[string]any, before map[string]any) {
+	details := map[string]any{
 		"operationName": opName,
 		"query":         query,
 		"variables":     variables,
-	})
+	}
+	if before != nil {
+		details["before"] = before
+	}
+	writeAuditEvent(h.db, h.logger, actor, opName, operations, resourceTypes, resourceIDs, details)
 }
 
 // extractOperations returns deduplicated DGraph operation names and resource type

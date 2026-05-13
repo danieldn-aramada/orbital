@@ -586,10 +586,14 @@ function initDcDetailTabs(id) {
     const tab = [...tabs].find(t => t.dataset.panel === auditPanelId)
     const orbId = tab && tab.dataset.orbId
     if (!orbId) return
-    htmx.ajax('GET', BASE + `/api/v1/events?orbId=${encodeURIComponent(orbId)}&limit=50`, {
-      target: `#${auditPanelId}`,
-      swap: 'innerHTML',
+    const panel = document.getElementById(auditPanelId)
+    if (!panel) return
+    fetch(BASE + `/api/v1/events?orbId=${encodeURIComponent(orbId)}&limit=50`, {
+      headers: { 'HX-Request': 'true' },
     })
+      .then(r => r.text())
+      .then(html => { panel.innerHTML = html; renderTimestamps(panel) })
+      .catch(() => {})
   }
 
   function activatePanel(panelId) {
@@ -634,10 +638,14 @@ function initServerDetailTabs(root) {
     const tab = [...tabs].find(t => t.dataset.panel === auditPanelId)
     const orbId = tab && tab.dataset.orbId
     if (!orbId) return
-    htmx.ajax('GET', BASE + `/api/v1/events?orbId=${encodeURIComponent(orbId)}&limit=50`, {
-      target: `#${auditPanelId}`,
-      swap: 'innerHTML',
+    const panel = document.getElementById(auditPanelId)
+    if (!panel) return
+    fetch(BASE + `/api/v1/events?orbId=${encodeURIComponent(orbId)}&limit=50`, {
+      headers: { 'HX-Request': 'true' },
     })
+      .then(r => r.text())
+      .then(html => { panel.innerHTML = html; renderTimestamps(panel) })
+      .catch(() => {})
   }
 
   function activatePanel(panelId) {
@@ -1809,7 +1817,19 @@ document.addEventListener('click', function (e) {
           modal.classList.remove('is-active')
           document.documentElement.style.overflow = ''
           dcEditors.delete(id)
-          htmx.ajax('GET', BASE + '/datacenters/' + id, { target: '#tab-content-' + id, swap: 'innerHTML' })
+          const _tabContent = document.getElementById('tab-content-' + id)
+          if (_tabContent) {
+            fetch(BASE + '/datacenters/' + id, { headers: { 'HX-Request': 'true' } })
+              .then(r => r.text())
+              .then(html => {
+                _tabContent.innerHTML = html
+                htmx.process(_tabContent)
+                renderTimestamps(_tabContent)
+                initDcDetailTabs(id)
+                initServerDetailTabs(_tabContent)
+              })
+              .catch(() => {})
+          }
         } catch (err) {
           showError('Request failed — check your connection and try again.')
         } finally {

@@ -40,6 +40,21 @@ type eventItem struct {
 	Timestamp     string          `json:"timestamp"`
 	Details       json.RawMessage `json:"details,omitempty"`
 	VarSummary    template.HTML   `json:"-"`
+	DiffHTML      template.HTML   `json:"-"`
+}
+
+type eventDetails struct {
+	OperationName string         `json:"operationName"`
+	Variables     map[string]any `json:"variables"`
+	Before        map[string]any `json:"before"`
+}
+
+// diffableFields lists the fields to include in the before/after diff per resource type.
+var diffableFields = map[string][]string{
+	"DataCenter":        {"name", "assetDataV2"},
+	"Server":            {"name", "hostname", "model", "manufacturer", "serviceTag", "rackPosition", "oobMAC"},
+	"KubernetesCluster": {"name", "provider"},
+	"EksaConfig":        {"name", "clusterType"},
 }
 
 type eventsFragmentData struct {
@@ -135,7 +150,16 @@ func (h *EventHandler) List(c echo.Context) error {
 			Details:       e.Details,
 		}
 		if c.Request().Header.Get("HX-Request") == "true" {
-			item.VarSummary = buildVarSummary(e.Details)
+			var d eventDetails
+			if len(e.Details) > 0 {
+				json.Unmarshal(e.Details, &d) //nolint:errcheck
+			}
+			if d.Before != nil && len(e.ResourceTypes) > 0 {
+				item.DiffHTML = buildDiffHTML(d.Before, d.Variables, e.ResourceTypes[0])
+			}
+			if item.DiffHTML == "" {
+				item.VarSummary = buildVarSummary(e.Details)
+			}
 		}
 		items = append(items, item)
 	}
@@ -173,6 +197,110 @@ func buildVarSummary(raw json.RawMessage) template.HTML {
 		return "—"
 	}
 	return template.HTML(strings.Join(parts, "<br>"))
+}
+
+// buildDiffHTML computes a before/after line diff for diffable fields of the given
+// resource type and returns colored HTML. Returns "" when nothing changed or no
+// diffable fields are present.
+func buildDiffHTML(before, variables map[string]any, resourceType string) template.HTML {
+	fields := diffableFields[resourceType]
+	if len(fields) == 0 {
+		return ""
+	}
+
+	var sections strings.Builder
+	for _, field := range fields {
+		bv, inBefore := before[field]
+		av, inVars := variables[field]
+		if !inBefore || !inVars {
+			continue
+		}
+		beforeStr := fmt.Sprintf("%v", bv)
+		afterStr := fmt.Sprintf("%v", av)
+		if beforeStr == afterStr {
+			continue
+		}
+		beforeLines := prettyLines(beforeStr)
+		afterLines := prettyLines(afterStr)
+		diffLines := lineDiff(beforeLines, afterLines)
+
+		sections.WriteString(`<div style="margin-bottom:0.5rem">`)
+		sections.WriteString(`<strong style="font-size:0.7rem">` + template.HTMLEscapeString(field) + `</strong>`)
+		sections.WriteString(`<pre style="font-size:0.7rem;margin:0.2rem 0 0;background:#fafafa;padding:0.4rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all">`)
+		for _, line := range diffLines {
+			if len(line) == 0 {
+				sections.WriteString("\n")
+				continue
+			}
+			switch line[0] {
+			case '+':
+				sections.WriteString(`<span style="color:#1a7f37">` + template.HTMLEscapeString(line) + `</span>` + "\n")
+			case '-':
+				sections.WriteString(`<span style="color:#cf222e;font-style:italic">` + template.HTMLEscapeString(line) + `</span>` + "\n")
+			default:
+				sections.WriteString(template.HTMLEscapeString(line) + "\n")
+			}
+		}
+		sections.WriteString(`</pre></div>`)
+	}
+
+	result := sections.String()
+	if result == "" {
+		return ""
+	}
+	return template.HTML(result)
+}
+
+// prettyLines attempts JSON pretty-printing then splits on newlines.
+func prettyLines(s string) []string {
+	var v any
+	if err := json.Unmarshal([]byte(s), &v); err == nil {
+		if pretty, err := json.MarshalIndent(v, "", "  "); err == nil {
+			return strings.Split(string(pretty), "\n")
+		}
+	}
+	return strings.Split(s, "\n")
+}
+
+// lineDiff computes a simple LCS-based line diff.
+// Lines are prefixed with ' ' (context), '+' (added), or '-' (removed).
+func lineDiff(before, after []string) []string {
+	m, n := len(before), len(after)
+	dp := make([][]int, m+1)
+	for i := range dp {
+		dp[i] = make([]int, n+1)
+	}
+	for i := 1; i <= m; i++ {
+		for j := 1; j <= n; j++ {
+			if before[i-1] == after[j-1] {
+				dp[i][j] = dp[i-1][j-1] + 1
+			} else if dp[i-1][j] >= dp[i][j-1] {
+				dp[i][j] = dp[i-1][j]
+			} else {
+				dp[i][j] = dp[i][j-1]
+			}
+		}
+	}
+	var out []string
+	i, j := m, n
+	for i > 0 || j > 0 {
+		switch {
+		case i > 0 && j > 0 && before[i-1] == after[j-1]:
+			out = append(out, " "+before[i-1])
+			i--
+			j--
+		case j > 0 && (i == 0 || dp[i][j-1] >= dp[i-1][j]):
+			out = append(out, "+"+after[j-1])
+			j--
+		default:
+			out = append(out, "-"+before[i-1])
+			i--
+		}
+	}
+	for l, r := 0, len(out)-1; l < r; l, r = l+1, r-1 {
+		out[l], out[r] = out[r], out[l]
+	}
+	return out
 }
 
 // writeAuditEvent persists a single audit event row. Failures are logged and
