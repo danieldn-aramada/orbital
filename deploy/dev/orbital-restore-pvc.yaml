@@ -1,0 +1,15 @@
+---
+# Shared PVC used by orbital (to download/extract backup) and dgraph-live (to run dgraph live).
+# Both pods must be in the same namespace (orbital) for RWO access.
+# orbital writes the backup files here; dgraph-live reads them via exec.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: orbital-restore-pvc
+  namespace: netbox
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

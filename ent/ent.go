@@ -18,6 +18,7 @@ import (
 	"github.com/armada/orbital/ent/namespace"
 	"github.com/armada/orbital/ent/orb"
 	"github.com/armada/orbital/ent/registryartifact"
+	"github.com/armada/orbital/ent/restorejob"
 	"github.com/armada/orbital/ent/user"
 )
 
@@ -85,6 +86,7 @@ func checkColumn(t, c string) error {
 			namespace.Table:        namespace.ValidColumn,
 			orb.Table:              orb.ValidColumn,
 			registryartifact.Table: registryartifact.ValidColumn,
+			restorejob.Table:       restorejob.ValidColumn,
 			user.Table:             user.ValidColumn,
 		})
 	})

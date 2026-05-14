@@ -20,7 +20,7 @@
           <label class="label">Registry</label>
           <div class="control has-icons-right">
             {{if .OCIConfigured}}
-              <input class="input is-small has-background-light has-text-grey-dark" type="text" value="{{.OCIRegistry}}/{{.OCIRepo}}" readonly style="cursor: default;">
+              <input class="input is-small has-background-light has-text-grey-dark" type="text" value="{{.OCIRegistry}}/{{.OCIRepo}}/{datacenter-name}" readonly style="cursor: default;">
               <span class="icon is-small is-right has-text-grey-light"><i class="fas fa-lock"></i></span>
             {{else}}
               <input class="input is-small is-danger" type="text" value="OCI not configured" readonly style="cursor: default;">

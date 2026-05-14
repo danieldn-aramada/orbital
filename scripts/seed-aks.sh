@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Seed an AKS dev environment.
-# Port-forwards DGraph blue, DGraph scratch, and PostgreSQL, runs seed, then cleans up.
+# Port-forwards DGraph blue and scratch, runs seed-dgraph.sh, then cleans up.
 #
 # Usage: ./scripts/seed-aks.sh [--namespace <ns>]
 #   Default namespace: netbox
@@ -51,14 +51,9 @@ PIDS+=($!)
 kubectl port-forward svc/dgraph-scratch-dgraph-alpha 8081:8080 -n "$NAMESPACE" >/dev/null 2>&1 &
 PIDS+=($!)
 
-kubectl port-forward svc/orbital-postgres 5432:5432 -n "$NAMESPACE" >/dev/null 2>&1 &
-PIDS+=($!)
-
 wait_for_port 8080 "dgraph-blue"
 wait_for_port 8081 "dgraph-scratch"
-wait_for_port 5432 "postgres"
 
-echo "==> Running seed..."
-bash scripts/seed.sh
+bash scripts/seed-dgraph.sh
 
 echo "==> Done."

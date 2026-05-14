@@ -53,6 +53,9 @@
       <a class="app-menu-link{{if eq .CurrentPath (printf "%s/backups" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/backups">Backup Graph</a>
     </li>
     <li class="app-menu-item">
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/restore" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/restore">Restore Graph</a>
+    </li>
+    <li class="app-menu-item">
       <a class="app-menu-link{{if eq .CurrentPath (printf "%s/divergence-reports" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/divergence-reports">Divergence Reports</a>
     </li>
   </ul>

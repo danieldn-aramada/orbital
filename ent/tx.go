@@ -24,6 +24,8 @@ type Tx struct {
 	Orb *OrbClient
 	// RegistryArtifact is the client for interacting with the RegistryArtifact builders.
 	RegistryArtifact *RegistryArtifactClient
+	// RestoreJob is the client for interacting with the RestoreJob builders.
+	RestoreJob *RestoreJobClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 
@@ -163,6 +165,7 @@ func (tx *Tx) init() {
 	tx.Namespace = NewNamespaceClient(tx.config)
 	tx.Orb = NewOrbClient(tx.config)
 	tx.RegistryArtifact = NewRegistryArtifactClient(tx.config)
+	tx.RestoreJob = NewRestoreJobClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 }
 

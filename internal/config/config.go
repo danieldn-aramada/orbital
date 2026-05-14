@@ -44,6 +44,11 @@ type Config struct {
 	OCIPassword            string        `envconfig:"ORBITAL_OCI_PASSWORD"            default:""`               // ACR admin password — set via env
 	OCISigningKeyPath      string        `envconfig:"ORBITAL_OCI_SIGNING_KEY_PATH"    default:"cosign.key"`     // run: cosign generate-key-pair
 	BasePath               string        `envconfig:"ORBITAL_BASE_PATH"               default:""`
+	RestoreTimeout         time.Duration `envconfig:"ORBITAL_RESTORE_TIMEOUT"         default:"10m"`
+	DGraphNamespace        string        `envconfig:"ORBITAL_DGRAPH_NAMESPACE"        default:"dgraph"`
+	DGraphAlphaGRPC        string        `envconfig:"ORBITAL_DGRAPH_ALPHA_GRPC"       default:"localhost:9080"`
+	DGraphZeroGRPC         string        `envconfig:"ORBITAL_DGRAPH_ZERO_GRPC"        default:"localhost:5080"`
+	RestoreDir             string        `envconfig:"ORBITAL_RESTORE_DIR"             default:"/restore"`
 }
 
 func New() (*Config, error) {

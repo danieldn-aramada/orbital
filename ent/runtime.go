@@ -11,6 +11,7 @@ import (
 	"github.com/armada/orbital/ent/namespace"
 	"github.com/armada/orbital/ent/orb"
 	"github.com/armada/orbital/ent/registryartifact"
+	"github.com/armada/orbital/ent/restorejob"
 	"github.com/armada/orbital/ent/schema"
 	"github.com/armada/orbital/ent/user"
 	"github.com/google/uuid"
@@ -100,6 +101,19 @@ func init() {
 	registryartifactDescSigned := registryartifactFields[8].Descriptor()
 	// registryartifact.DefaultSigned holds the default value on creation for the signed field.
 	registryartifact.DefaultSigned = registryartifactDescSigned.Default.(bool)
+	restorejobMixin := schema.RestoreJob{}.Mixin()
+	restorejobMixinFields0 := restorejobMixin[0].Fields()
+	_ = restorejobMixinFields0
+	restorejobFields := schema.RestoreJob{}.Fields()
+	_ = restorejobFields
+	// restorejobDescCreatedAt is the schema descriptor for created_at field.
+	restorejobDescCreatedAt := restorejobMixinFields0[0].Descriptor()
+	// restorejob.DefaultCreatedAt holds the default value on creation for the created_at field.
+	restorejob.DefaultCreatedAt = restorejobDescCreatedAt.Default.(func() time.Time)
+	// restorejobDescID is the schema descriptor for id field.
+	restorejobDescID := restorejobFields[0].Descriptor()
+	// restorejob.DefaultID holds the default value on creation for the id field.
+	restorejob.DefaultID = restorejobDescID.Default.(func() uuid.UUID)
 	userFields := schema.User{}.Fields()
 	_ = userFields
 	// userDescEmail is the schema descriptor for email field.

@@ -20,6 +20,8 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	echoswagger "github.com/swaggo/echo-swagger"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 type Server struct {
@@ -92,10 +94,28 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	if !ociConfigured {
 		logger.Warn("OCI publishing not configured (ORBITAL_OCI_REGISTRY and ORBITAL_OCI_SIGNING_KEY_PATH) — publish disabled")
 	}
+
+	// Detect in-cluster k8s — restore via kubectl exec requires this.
+	var k8sCfg *rest.Config
+	var k8sClient kubernetes.Interface
+	k8sAvailable := false
+	if inClusterCfg, err := rest.InClusterConfig(); err == nil {
+		if kc, err := kubernetes.NewForConfig(inClusterCfg); err == nil {
+			k8sCfg = inClusterCfg
+			k8sClient = kc
+			k8sAvailable = true
+		} else {
+			logger.Warn("k8s client init failed — restore from stored backup disabled", "err", err)
+		}
+	} else {
+		logger.Warn("not running in-cluster — restore from stored backup disabled")
+	}
+
 	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, s3Configured, cfg.S3Endpoint, cfg.S3Bucket, cfg.BasePath)
 	ui.SetOCIConfig(ociConfigured, cfg.OCIRegistry, cfg.OCIRepo)
 	ui.SetExportDir(cfg.ExportDir)
 	ui.SetSchemaPath(cfg.SchemaPath)
+	ui.SetK8sAvailable(k8sAvailable)
 	root.Static("/static", "web/static")
 	if cfg.BasePath != "" {
 		root.GET("", ui.Index)
@@ -107,6 +127,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	root.GET("/backups", ui.Backups)
 	root.GET("/divergence-reports", ui.DivergenceReports)
 	root.GET("/audit-log", ui.AuditLog)
+	root.GET("/restore", ui.Restore)
 	root.GET("/schema", ui.Schema)
 	root.GET("/export", ui.Export)
 
@@ -193,6 +214,30 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 				api.GET("/backups/:id/download", bk.Download)
 				api.DELETE("/backups/:id", bk.Delete)
 				api.POST("/backups/test-connection", bk.TestConnection)
+			}
+
+			rh, err := handler.NewRestoreHandler(context.Background(), db, handler.RestoreConfig{
+				S3Endpoint:      cfg.S3Endpoint,
+				S3Region:        cfg.S3Region,
+				S3Bucket:        cfg.S3Bucket,
+				S3AccessKey:     cfg.S3AccessKey,
+				S3SecretKey:     cfg.S3SecretKey,
+				DGraphAdminURL:  cfg.DGraphAdminURL,
+				DGraphNamespace: cfg.DGraphNamespace,
+				DGraphAlphaGRPC: cfg.DGraphAlphaGRPC,
+				DGraphZeroGRPC:  cfg.DGraphZeroGRPC,
+				SchemaPath:      cfg.SchemaPath,
+				RestoreDir:      cfg.RestoreDir,
+				RestoreTimeout:  cfg.RestoreTimeout,
+			}, k8sClient, k8sCfg, logger)
+			if err != nil {
+				logger.Error("restore handler init failed", "err", err)
+			} else {
+				api.GET("/restore", rh.List)
+				api.GET("/restore/:id", rh.Status)
+				if k8sAvailable {
+					api.POST("/restore", rh.Trigger)
+				}
 			}
 		}
 

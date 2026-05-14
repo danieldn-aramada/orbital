@@ -1,0 +1,40 @@
+---
+# Permanent pod that mounts the restore PVC and runs dgraph live on demand.
+# orbital execs into this pod to run: dgraph live --files /restore/data.json.gz --schema /restore/schema.gz --alpha <dgraph-alpha-grpc>
+# The pod runs sleep infinity when idle so it stays ready for exec.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dgraph-live
+  namespace: netbox
+  labels:
+    app.kubernetes.io/name: dgraph-live
+spec:
+  affinity:
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app: orbital
+          topologyKey: kubernetes.io/hostname
+          namespaces:
+            - netbox
+  containers:
+    - name: dgraph-live
+      image: dgraph/dgraph:v24.1.4  # must match dgraph alpha version
+      command: ["sleep", "infinity"]
+      volumeMounts:
+        - name: restore
+          mountPath: /restore
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "256Mi"
+        limits:
+          cpu: "2"
+          memory: "2Gi"
+  volumes:
+    - name: restore
+      persistentVolumeClaim:
+        claimName: orbital-restore-pvc
+  restartPolicy: Always

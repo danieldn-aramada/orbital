@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: orbital
-          image: armadaeksatest.azurecr.io/orbital:v0.0.6
+          image: armadaeksatest.azurecr.io/orbital:v0.0.8
           imagePullPolicy: Always
           ports:
             - containerPort: 8001
@@ -96,6 +96,15 @@ spec:
               value: /dgraph-exports
             - name: DGRAPH_SCRATCH_EXPORT_DIR
               value: /scratch-exports
+            # Restore
+            - name: ORBITAL_DGRAPH_NAMESPACE
+              value: netbox
+            - name: ORBITAL_DGRAPH_ALPHA_GRPC
+              value: dgraph-blue-dgraph-alpha:9080
+            - name: ORBITAL_DGRAPH_ZERO_GRPC
+              value: dgraph-blue-dgraph-zero:5080
+            - name: ORBITAL_RESTORE_DIR
+              value: /restore
           volumeMounts:
             - name: cosign-key
               mountPath: /secrets
@@ -104,6 +113,8 @@ spec:
               mountPath: /scratch-exports
             - name: dgraph-exports
               mountPath: /dgraph-exports
+            - name: restore
+              mountPath: /restore
           resources:
             requests:
               cpu: "200m"
@@ -124,6 +135,9 @@ spec:
         - name: dgraph-exports
           persistentVolumeClaim:
             claimName: orbital-dgraph-exports
+        - name: restore
+          persistentVolumeClaim:
+            claimName: orbital-restore-pvc
 ---
 apiVersion: v1
 kind: Service

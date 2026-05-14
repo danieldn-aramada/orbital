@@ -19,6 +19,7 @@ import (
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/registryartifact"
+	"github.com/armada/orbital/ent/restorejob"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
@@ -99,6 +100,18 @@ func (h *Export) Trigger(c echo.Context) error {
 		return c.JSON(http.StatusConflict, map[string]string{
 			"error": fmt.Sprintf("export already in progress (jobId: %s)", existing.ID),
 			"jobId": existing.ID.String(),
+		})
+	}
+
+	existingRestore, err := h.db.RestoreJob.Query().
+		Where(restorejob.StatusIn(restorejob.StatusPending, restorejob.StatusRunning)).
+		First(c.Request().Context())
+	if err != nil && !ent.IsNotFound(err) {
+		return fmt.Errorf("check restore jobs: %w", err)
+	}
+	if existingRestore != nil {
+		return c.JSON(http.StatusConflict, map[string]string{
+			"error": fmt.Sprintf("restore in progress (id: %s)", existingRestore.ID),
 		})
 	}
 
@@ -395,7 +408,7 @@ func (h *Export) doExport(ctx context.Context, jobID uuid.UUID, log *slog.Logger
 
 	// 11. Write zip archive
 	zipPath := filepath.Join(h.exportDir, fmt.Sprintf("orbital-export-%s.zip", jobID))
-	if err := writeZip(zipPath, dataGZ, schemaGZ); err != nil {
+	if err := writeZip(zipPath, dataGZ, schemaGZ, nil); err != nil {
 		return fmt.Errorf("write zip: %w", err)
 	}
 	log.Info("artifact written", "path", zipPath)
@@ -705,7 +718,7 @@ func gzipBytes(data []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func writeZip(path string, dataGZ, schemaGZ []byte) error {
+func writeZip(path string, dataGZ, dqlSchemaGZ, gqlSchemaGZ []byte) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -720,8 +733,12 @@ func writeZip(path string, dataGZ, schemaGZ []byte) error {
 		data []byte
 	}{
 		{"data.json.gz", dataGZ},
-		{"schema.gz", schemaGZ},
+		{"schema.gz", dqlSchemaGZ},
+		{"gql_schema.gz", gqlSchemaGZ},
 	} {
+		if entry.data == nil {
+			continue
+		}
 		w, err := zw.Create(entry.name)
 		if err != nil {
 			return err

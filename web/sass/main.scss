@@ -359,6 +359,8 @@ html {
 
 .app-menu {
   --offset: 2rem; // for icon + gap alignment
+  display: flex;
+  flex-direction: column;
   padding: 1em 0.5em 1em 1em;
   border-right: 1px solid hsl(
     var(--bulma-scheme-h),
@@ -686,6 +688,28 @@ div.dt-container {
     align-items: center;
     gap: 0.4rem;
   }
+}
+
+// Inventory table — match pagination/info/length size to the is-size-7 table content
+div.dt-container:has(#inventory-table) {
+  .dt-paging .pagination-link,
+  .dt-paging .pagination-previous,
+  .dt-paging .pagination-next,
+  .dt-paging .pagination-ellipsis {
+    font-size: 0.75rem;
+    min-width: 2em;
+    height: 2em;
+  }
+  div.dt-info,
+  div.dt-length label {
+    font-size: 0.75rem;
+  }
+}
+
+// Override vertical-align:top set by Bulma's .table td rule on specific tables
+#export-jobs-table td,
+#artifacts-table td {
+  vertical-align: middle;
 }
 
 // Active menu link

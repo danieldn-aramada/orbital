@@ -14,7 +14,8 @@ ratel:
     tag: latest
 backups:
   full:
-    enabled: false
+    enabled: true
+    schedule: "0 0 31 2 *"  # Feb 31 = never fires; only here to enable the volume mount on alpha
   volume:
     enabled: true
     mountPath: /dgraph/export

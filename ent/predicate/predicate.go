@@ -24,5 +24,8 @@ type Orb func(*sql.Selector)
 // RegistryArtifact is the predicate function for registryartifact builders.
 type RegistryArtifact func(*sql.Selector)
 
+// RestoreJob is the predicate function for restorejob builders.
+type RestoreJob func(*sql.Selector)
+
 // User is the predicate function for user builders.
 type User func(*sql.Selector)

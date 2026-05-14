@@ -43,5 +43,6 @@ func Map() map[string]*template.Template {
 		"export":             template.Must(template.ParseFiles(page("web/templates/pages/export.gohtml")...)),
 		"signed-artifacts": template.Must(template.ParseFiles(page("web/templates/pages/signed-artifacts.gohtml")...)),
 		"servers":        template.Must(template.ParseFiles(page("web/templates/pages/servers.gohtml")...)),
+		"restore":        template.Must(template.ParseFiles(page("web/templates/pages/restore.gohtml")...)),
 	}
 }

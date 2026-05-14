@@ -9,11 +9,9 @@
   })
 </script>
 
-<script type="module">
-  import * as bulmaToast from "/static/bulma-toast.js";
-
+<script>
   function displayTodoToast() {
-    bulmaToast.toast({
+    window.bulmaToast.toast({
       message: "Hang tight!</br>We are currently building this feature 🚧", 
       closeOnClick: false,
       type: "is-danger is-light", 
