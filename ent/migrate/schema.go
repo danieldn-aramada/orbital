@@ -134,6 +134,27 @@ var (
 		Columns:    RegistryArtifactsColumns,
 		PrimaryKey: []*schema.Column{RegistryArtifactsColumns[0]},
 	}
+	// RestoreJobsColumns holds the columns for the "restore_jobs" table.
+	RestoreJobsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_at", Type: field.TypeTime, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "running", "completed", "failed"}},
+		{Name: "backup_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "backup_key", Type: field.TypeString, Nullable: true},
+		{Name: "log", Type: field.TypeString, Nullable: true},
+		{Name: "error", Type: field.TypeString, Nullable: true},
+		{Name: "started_at", Type: field.TypeTime, Nullable: true},
+		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
+	}
+	// RestoreJobsTable holds the schema information for the "restore_jobs" table.
+	RestoreJobsTable = &schema.Table{
+		Name:       "restore_jobs",
+		Columns:    RestoreJobsColumns,
+		PrimaryKey: []*schema.Column{RestoreJobsColumns[0]},
+	}
 	// UsersColumns holds the columns for the "users" table.
 	UsersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -158,6 +179,7 @@ var (
 		NamespacesTable,
 		OrbsTable,
 		RegistryArtifactsTable,
+		RestoreJobsTable,
 		UsersTable,
 	}
 )

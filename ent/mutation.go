@@ -19,6 +19,7 @@ import (
 	"github.com/armada/orbital/ent/orb"
 	"github.com/armada/orbital/ent/predicate"
 	"github.com/armada/orbital/ent/registryartifact"
+	"github.com/armada/orbital/ent/restorejob"
 	"github.com/armada/orbital/ent/user"
 	"github.com/google/uuid"
 )
@@ -38,6 +39,7 @@ const (
 	TypeNamespace        = "Namespace"
 	TypeOrb              = "Orb"
 	TypeRegistryArtifact = "RegistryArtifact"
+	TypeRestoreJob       = "RestoreJob"
 	TypeUser             = "User"
 )
 
@@ -5784,6 +5786,1052 @@ func (m *RegistryArtifactMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *RegistryArtifactMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown RegistryArtifact edge %s", name)
+}
+
+// RestoreJobMutation represents an operation that mutates the RestoreJob nodes in the graph.
+type RestoreJobMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *uuid.UUID
+	created_at    *time.Time
+	created_by    *string
+	updated_at    *time.Time
+	updated_by    *string
+	status        *restorejob.Status
+	backup_id     *uuid.UUID
+	backup_key    *string
+	log           *string
+	error         *string
+	started_at    *time.Time
+	completed_at  *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*RestoreJob, error)
+	predicates    []predicate.RestoreJob
+}
+
+var _ ent.Mutation = (*RestoreJobMutation)(nil)
+
+// restorejobOption allows management of the mutation configuration using functional options.
+type restorejobOption func(*RestoreJobMutation)
+
+// newRestoreJobMutation creates new mutation for the RestoreJob entity.
+func newRestoreJobMutation(c config, op Op, opts ...restorejobOption) *RestoreJobMutation {
+	m := &RestoreJobMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeRestoreJob,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withRestoreJobID sets the ID field of the mutation.
+func withRestoreJobID(id uuid.UUID) restorejobOption {
+	return func(m *RestoreJobMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *RestoreJob
+		)
+		m.oldValue = func(ctx context.Context) (*RestoreJob, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().RestoreJob.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withRestoreJob sets the old RestoreJob of the mutation.
+func withRestoreJob(node *RestoreJob) restorejobOption {
+	return func(m *RestoreJobMutation) {
+		m.oldValue = func(context.Context) (*RestoreJob, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m RestoreJobMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m RestoreJobMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of RestoreJob entities.
+func (m *RestoreJobMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *RestoreJobMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *RestoreJobMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().RestoreJob.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *RestoreJobMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *RestoreJobMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the RestoreJob entity.
+// If the RestoreJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RestoreJobMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *RestoreJobMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *RestoreJobMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *RestoreJobMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the RestoreJob entity.
+// If the RestoreJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RestoreJobMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *RestoreJobMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[restorejob.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *RestoreJobMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[restorejob.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *RestoreJobMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, restorejob.FieldCreatedBy)
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *RestoreJobMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *RestoreJobMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the RestoreJob entity.
+// If the RestoreJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RestoreJobMutation) OldUpdatedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ClearUpdatedAt clears the value of the "updated_at" field.
+func (m *RestoreJobMutation) ClearUpdatedAt() {
+	m.updated_at = nil
+	m.clearedFields[restorejob.FieldUpdatedAt] = struct{}{}
+}
+
+// UpdatedAtCleared returns if the "updated_at" field was cleared in this mutation.
+func (m *RestoreJobMutation) UpdatedAtCleared() bool {
+	_, ok := m.clearedFields[restorejob.FieldUpdatedAt]
+	return ok
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *RestoreJobMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+	delete(m.clearedFields, restorejob.FieldUpdatedAt)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *RestoreJobMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *RestoreJobMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the RestoreJob entity.
+// If the RestoreJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RestoreJobMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *RestoreJobMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[restorejob.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *RestoreJobMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[restorejob.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *RestoreJobMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, restorejob.FieldUpdatedBy)
+}
+
+// SetStatus sets the "status" field.
+func (m *RestoreJobMutation) SetStatus(r restorejob.Status) {
+	m.status = &r
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *RestoreJobMutation) Status() (r restorejob.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the RestoreJob entity.
+// If the RestoreJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RestoreJobMutation) OldStatus(ctx context.Context) (v restorejob.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *RestoreJobMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetBackupID sets the "backup_id" field.
+func (m *RestoreJobMutation) SetBackupID(u uuid.UUID) {
+	m.backup_id = &u
+}
+
+// BackupID returns the value of the "backup_id" field in the mutation.
+func (m *RestoreJobMutation) BackupID() (r uuid.UUID, exists bool) {
+	v := m.backup_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBackupID returns the old "backup_id" field's value of the RestoreJob entity.
+// If the RestoreJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RestoreJobMutation) OldBackupID(ctx context.Context) (v *uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBackupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBackupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBackupID: %w", err)
+	}
+	return oldValue.BackupID, nil
+}
+
+// ClearBackupID clears the value of the "backup_id" field.
+func (m *RestoreJobMutation) ClearBackupID() {
+	m.backup_id = nil
+	m.clearedFields[restorejob.FieldBackupID] = struct{}{}
+}
+
+// BackupIDCleared returns if the "backup_id" field was cleared in this mutation.
+func (m *RestoreJobMutation) BackupIDCleared() bool {
+	_, ok := m.clearedFields[restorejob.FieldBackupID]
+	return ok
+}
+
+// ResetBackupID resets all changes to the "backup_id" field.
+func (m *RestoreJobMutation) ResetBackupID() {
+	m.backup_id = nil
+	delete(m.clearedFields, restorejob.FieldBackupID)
+}
+
+// SetBackupKey sets the "backup_key" field.
+func (m *RestoreJobMutation) SetBackupKey(s string) {
+	m.backup_key = &s
+}
+
+// BackupKey returns the value of the "backup_key" field in the mutation.
+func (m *RestoreJobMutation) BackupKey() (r string, exists bool) {
+	v := m.backup_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBackupKey returns the old "backup_key" field's value of the RestoreJob entity.
+// If the RestoreJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RestoreJobMutation) OldBackupKey(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBackupKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBackupKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBackupKey: %w", err)
+	}
+	return oldValue.BackupKey, nil
+}
+
+// ClearBackupKey clears the value of the "backup_key" field.
+func (m *RestoreJobMutation) ClearBackupKey() {
+	m.backup_key = nil
+	m.clearedFields[restorejob.FieldBackupKey] = struct{}{}
+}
+
+// BackupKeyCleared returns if the "backup_key" field was cleared in this mutation.
+func (m *RestoreJobMutation) BackupKeyCleared() bool {
+	_, ok := m.clearedFields[restorejob.FieldBackupKey]
+	return ok
+}
+
+// ResetBackupKey resets all changes to the "backup_key" field.
+func (m *RestoreJobMutation) ResetBackupKey() {
+	m.backup_key = nil
+	delete(m.clearedFields, restorejob.FieldBackupKey)
+}
+
+// SetLog sets the "log" field.
+func (m *RestoreJobMutation) SetLog(s string) {
+	m.log = &s
+}
+
+// Log returns the value of the "log" field in the mutation.
+func (m *RestoreJobMutation) Log() (r string, exists bool) {
+	v := m.log
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLog returns the old "log" field's value of the RestoreJob entity.
+// If the RestoreJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RestoreJobMutation) OldLog(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLog is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLog requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLog: %w", err)
+	}
+	return oldValue.Log, nil
+}
+
+// ClearLog clears the value of the "log" field.
+func (m *RestoreJobMutation) ClearLog() {
+	m.log = nil
+	m.clearedFields[restorejob.FieldLog] = struct{}{}
+}
+
+// LogCleared returns if the "log" field was cleared in this mutation.
+func (m *RestoreJobMutation) LogCleared() bool {
+	_, ok := m.clearedFields[restorejob.FieldLog]
+	return ok
+}
+
+// ResetLog resets all changes to the "log" field.
+func (m *RestoreJobMutation) ResetLog() {
+	m.log = nil
+	delete(m.clearedFields, restorejob.FieldLog)
+}
+
+// SetError sets the "error" field.
+func (m *RestoreJobMutation) SetError(s string) {
+	m.error = &s
+}
+
+// Error returns the value of the "error" field in the mutation.
+func (m *RestoreJobMutation) Error() (r string, exists bool) {
+	v := m.error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldError returns the old "error" field's value of the RestoreJob entity.
+// If the RestoreJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RestoreJobMutation) OldError(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldError: %w", err)
+	}
+	return oldValue.Error, nil
+}
+
+// ClearError clears the value of the "error" field.
+func (m *RestoreJobMutation) ClearError() {
+	m.error = nil
+	m.clearedFields[restorejob.FieldError] = struct{}{}
+}
+
+// ErrorCleared returns if the "error" field was cleared in this mutation.
+func (m *RestoreJobMutation) ErrorCleared() bool {
+	_, ok := m.clearedFields[restorejob.FieldError]
+	return ok
+}
+
+// ResetError resets all changes to the "error" field.
+func (m *RestoreJobMutation) ResetError() {
+	m.error = nil
+	delete(m.clearedFields, restorejob.FieldError)
+}
+
+// SetStartedAt sets the "started_at" field.
+func (m *RestoreJobMutation) SetStartedAt(t time.Time) {
+	m.started_at = &t
+}
+
+// StartedAt returns the value of the "started_at" field in the mutation.
+func (m *RestoreJobMutation) StartedAt() (r time.Time, exists bool) {
+	v := m.started_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartedAt returns the old "started_at" field's value of the RestoreJob entity.
+// If the RestoreJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RestoreJobMutation) OldStartedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartedAt: %w", err)
+	}
+	return oldValue.StartedAt, nil
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (m *RestoreJobMutation) ClearStartedAt() {
+	m.started_at = nil
+	m.clearedFields[restorejob.FieldStartedAt] = struct{}{}
+}
+
+// StartedAtCleared returns if the "started_at" field was cleared in this mutation.
+func (m *RestoreJobMutation) StartedAtCleared() bool {
+	_, ok := m.clearedFields[restorejob.FieldStartedAt]
+	return ok
+}
+
+// ResetStartedAt resets all changes to the "started_at" field.
+func (m *RestoreJobMutation) ResetStartedAt() {
+	m.started_at = nil
+	delete(m.clearedFields, restorejob.FieldStartedAt)
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (m *RestoreJobMutation) SetCompletedAt(t time.Time) {
+	m.completed_at = &t
+}
+
+// CompletedAt returns the value of the "completed_at" field in the mutation.
+func (m *RestoreJobMutation) CompletedAt() (r time.Time, exists bool) {
+	v := m.completed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompletedAt returns the old "completed_at" field's value of the RestoreJob entity.
+// If the RestoreJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RestoreJobMutation) OldCompletedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompletedAt: %w", err)
+	}
+	return oldValue.CompletedAt, nil
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (m *RestoreJobMutation) ClearCompletedAt() {
+	m.completed_at = nil
+	m.clearedFields[restorejob.FieldCompletedAt] = struct{}{}
+}
+
+// CompletedAtCleared returns if the "completed_at" field was cleared in this mutation.
+func (m *RestoreJobMutation) CompletedAtCleared() bool {
+	_, ok := m.clearedFields[restorejob.FieldCompletedAt]
+	return ok
+}
+
+// ResetCompletedAt resets all changes to the "completed_at" field.
+func (m *RestoreJobMutation) ResetCompletedAt() {
+	m.completed_at = nil
+	delete(m.clearedFields, restorejob.FieldCompletedAt)
+}
+
+// Where appends a list predicates to the RestoreJobMutation builder.
+func (m *RestoreJobMutation) Where(ps ...predicate.RestoreJob) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the RestoreJobMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *RestoreJobMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.RestoreJob, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *RestoreJobMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *RestoreJobMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (RestoreJob).
+func (m *RestoreJobMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *RestoreJobMutation) Fields() []string {
+	fields := make([]string, 0, 11)
+	if m.created_at != nil {
+		fields = append(fields, restorejob.FieldCreatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, restorejob.FieldCreatedBy)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, restorejob.FieldUpdatedAt)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, restorejob.FieldUpdatedBy)
+	}
+	if m.status != nil {
+		fields = append(fields, restorejob.FieldStatus)
+	}
+	if m.backup_id != nil {
+		fields = append(fields, restorejob.FieldBackupID)
+	}
+	if m.backup_key != nil {
+		fields = append(fields, restorejob.FieldBackupKey)
+	}
+	if m.log != nil {
+		fields = append(fields, restorejob.FieldLog)
+	}
+	if m.error != nil {
+		fields = append(fields, restorejob.FieldError)
+	}
+	if m.started_at != nil {
+		fields = append(fields, restorejob.FieldStartedAt)
+	}
+	if m.completed_at != nil {
+		fields = append(fields, restorejob.FieldCompletedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *RestoreJobMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case restorejob.FieldCreatedAt:
+		return m.CreatedAt()
+	case restorejob.FieldCreatedBy:
+		return m.CreatedBy()
+	case restorejob.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case restorejob.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case restorejob.FieldStatus:
+		return m.Status()
+	case restorejob.FieldBackupID:
+		return m.BackupID()
+	case restorejob.FieldBackupKey:
+		return m.BackupKey()
+	case restorejob.FieldLog:
+		return m.Log()
+	case restorejob.FieldError:
+		return m.Error()
+	case restorejob.FieldStartedAt:
+		return m.StartedAt()
+	case restorejob.FieldCompletedAt:
+		return m.CompletedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *RestoreJobMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case restorejob.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case restorejob.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case restorejob.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case restorejob.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case restorejob.FieldStatus:
+		return m.OldStatus(ctx)
+	case restorejob.FieldBackupID:
+		return m.OldBackupID(ctx)
+	case restorejob.FieldBackupKey:
+		return m.OldBackupKey(ctx)
+	case restorejob.FieldLog:
+		return m.OldLog(ctx)
+	case restorejob.FieldError:
+		return m.OldError(ctx)
+	case restorejob.FieldStartedAt:
+		return m.OldStartedAt(ctx)
+	case restorejob.FieldCompletedAt:
+		return m.OldCompletedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown RestoreJob field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *RestoreJobMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case restorejob.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case restorejob.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case restorejob.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case restorejob.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case restorejob.FieldStatus:
+		v, ok := value.(restorejob.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case restorejob.FieldBackupID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBackupID(v)
+		return nil
+	case restorejob.FieldBackupKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBackupKey(v)
+		return nil
+	case restorejob.FieldLog:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLog(v)
+		return nil
+	case restorejob.FieldError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetError(v)
+		return nil
+	case restorejob.FieldStartedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartedAt(v)
+		return nil
+	case restorejob.FieldCompletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompletedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown RestoreJob field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *RestoreJobMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *RestoreJobMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *RestoreJobMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown RestoreJob numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *RestoreJobMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(restorejob.FieldCreatedBy) {
+		fields = append(fields, restorejob.FieldCreatedBy)
+	}
+	if m.FieldCleared(restorejob.FieldUpdatedAt) {
+		fields = append(fields, restorejob.FieldUpdatedAt)
+	}
+	if m.FieldCleared(restorejob.FieldUpdatedBy) {
+		fields = append(fields, restorejob.FieldUpdatedBy)
+	}
+	if m.FieldCleared(restorejob.FieldBackupID) {
+		fields = append(fields, restorejob.FieldBackupID)
+	}
+	if m.FieldCleared(restorejob.FieldBackupKey) {
+		fields = append(fields, restorejob.FieldBackupKey)
+	}
+	if m.FieldCleared(restorejob.FieldLog) {
+		fields = append(fields, restorejob.FieldLog)
+	}
+	if m.FieldCleared(restorejob.FieldError) {
+		fields = append(fields, restorejob.FieldError)
+	}
+	if m.FieldCleared(restorejob.FieldStartedAt) {
+		fields = append(fields, restorejob.FieldStartedAt)
+	}
+	if m.FieldCleared(restorejob.FieldCompletedAt) {
+		fields = append(fields, restorejob.FieldCompletedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *RestoreJobMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *RestoreJobMutation) ClearField(name string) error {
+	switch name {
+	case restorejob.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case restorejob.FieldUpdatedAt:
+		m.ClearUpdatedAt()
+		return nil
+	case restorejob.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case restorejob.FieldBackupID:
+		m.ClearBackupID()
+		return nil
+	case restorejob.FieldBackupKey:
+		m.ClearBackupKey()
+		return nil
+	case restorejob.FieldLog:
+		m.ClearLog()
+		return nil
+	case restorejob.FieldError:
+		m.ClearError()
+		return nil
+	case restorejob.FieldStartedAt:
+		m.ClearStartedAt()
+		return nil
+	case restorejob.FieldCompletedAt:
+		m.ClearCompletedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown RestoreJob nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *RestoreJobMutation) ResetField(name string) error {
+	switch name {
+	case restorejob.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case restorejob.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case restorejob.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case restorejob.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case restorejob.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case restorejob.FieldBackupID:
+		m.ResetBackupID()
+		return nil
+	case restorejob.FieldBackupKey:
+		m.ResetBackupKey()
+		return nil
+	case restorejob.FieldLog:
+		m.ResetLog()
+		return nil
+	case restorejob.FieldError:
+		m.ResetError()
+		return nil
+	case restorejob.FieldStartedAt:
+		m.ResetStartedAt()
+		return nil
+	case restorejob.FieldCompletedAt:
+		m.ResetCompletedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown RestoreJob field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *RestoreJobMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *RestoreJobMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *RestoreJobMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *RestoreJobMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *RestoreJobMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *RestoreJobMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *RestoreJobMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown RestoreJob unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *RestoreJobMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown RestoreJob edge %s", name)
 }
 
 // UserMutation represents an operation that mutates the User nodes in the graph.

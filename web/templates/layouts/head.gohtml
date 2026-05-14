@@ -7,10 +7,12 @@
 
 <script type="text/javascript" src="{{.BasePath}}/static/v2/core/jquery-3.7.1.js"></script>
 <script src="{{.BasePath}}/static/htmx-2.0.2.min.js"></script>
-<link rel="stylesheet" href="{{.BasePath}}/static/css/styles.css?v={{.Version}}">
 <link rel="stylesheet" href="{{.BasePath}}/static/font-awesome-6.6.0/css/all.min.css">
 
-<script type="module" src="{{.BasePath}}/static/bulma-toast.js"></script>
+<script type="module">
+  import * as bulmaToast from '{{.BasePath}}/static/bulma-toast.js'
+  window.bulmaToast = bulmaToast
+</script>
 <script type="text/javascript" src="{{.BasePath}}/static/modal-fx.min.js"></script>
 
 <script src="{{.BasePath}}/static/v2/dataTables-2.3.4.js"></script>

@@ -47,8 +47,10 @@ Goal of prototyping is learning, not shipping. Each spike below is a question to
 | 10 | DGraph operations | Can our team operate DGraph on AKS without prior experience? | — | Not started | — |
 | 11 | Schema migration — build vs runbook | Do we need automation or is a runbook sufficient? | — | ❌ Out of scope (MVP) | Spike 10 |
 | 12 | Orb import API | What is the right API contract for orb's local config import endpoint? | — | Not started | — |
-| 13 | Report intake API | What is the right transport-agnostic API for orbital to receive drift and divergence reports? | — | Not started | — |
+| 13 | Divergence reports | How does orbital surface real divergence between intended and actual state, and how does an admin resolve it? | — | Not started | 17 |
+| 17 | DGraph blue restore from backup | How do we restore DGraph blue from a known-good backup, and how does orbital coordinate the sequence safely? | — | Not started | 6 |
 | 16 | Seed iDRAC settings and storage devices | What does real iDRAC and storage data look like, and does the schema cover all fields we need to seed it for representative data centers? | — | Not started | — |
+| 18 | Observability | What does useful monitoring look like for orbital and DGraph in AKS — metrics, dashboards, and alerts for API latency, DGraph query performance, and job health? | — | Not started | 1 |
 
 ---
 
@@ -372,19 +374,107 @@ DGraph community has no native incremental backup. Options to evaluate once real
 - ⬜ `make seed` and `make seed-aks` both apply the updated seed data cleanly (upsert safe)
 - ⬜ Server detail iDRAC and Storage tabs render the seeded data correctly in dev
 
-### Spike 13. Report intake API
-**Question:** What is the right API for orbital to receive drift and divergence reports?
+### Spike 17. DGraph blue restore from backup
+**Question:** How do we restore DGraph blue from a known-good backup, and how does orbital coordinate the sequence safely?
 
-**Context:** Orbital exposes a transport-agnostic report intake API. The edge writes signed reports to a shared external location (deployment layer concern); a delivery agent reads from that location and calls orbital's intake API. Orbital never knows or cares about the transport — it just receives and verifies structured reports.
+**Context:** DGraph community edition has no native restore API — only an export mutation. Restore requires `drop_all` + `dgraph live` loader. Orbital cannot invoke `dgraph live` directly via HTTP. This spike builds the mechanism and validates it end-to-end. Restore is a prerequisite for any risky write to blue DGraph (import subgraph, bulk upsert) — the safety net is: backup blue → perform risky write → if bad, restore from that backup.
 
-Orbital must receive these reports and expose divergence to cloud administrators, who resolve field-level conflicts by publishing a new ConfigBundle with one of three directives: **Force** (cloud intent wins), **Accept overrides** (incorporate local values), or **Ignore** (acknowledge divergence, leave as-is).
+**Settled design decisions:**
+
+**Two restore paths:**
+
+**Path 1 — From a local file (manual, kubectl):** Admin has a backup zip on their machine and `kubectl` access. They copy files into the DGraph Alpha pod and run `dgraph live` directly. The DGraph Alpha pod already has the `dgraph` binary — no extra tooling needed. Documented as a runbook on the `/restore` page in the orbital UI.
+
+**Path 2 — From a stored backup (automated, orbital):** Admin clicks Restore on a completed backup record in the Backups UI. Orbital uses `client-go` to exec into the DGraph Alpha pod — no sidecar, no Kubernetes Job, no extra image. The DGraph Alpha pod's existing `dgraph` binary handles the live import. Orbital:
+1. Generates a presigned S3 URL (or Azure SAS URL) for the backup zip — same `blobStorage.presignURL()` used by the download endpoint, 15 min TTL, validated by the storage backend
+2. Execs into the DGraph Alpha pod: `curl <presigned-url> -o /tmp/backup.zip && unzip /tmp/backup.zip -d /tmp/restore`
+3. Execs: `curl -s -X POST localhost:8080/alter -d '{"drop_all": true}'`
+4. Execs: `dgraph live --files /tmp/restore/data.json.gz --schema /tmp/restore/schema.gz --alpha localhost:9080`
+5. Streams stdout/stderr, tracks status in PostgreSQL as a restore record
+
+**client-go in-cluster auth:** `rest.InClusterConfig()` reads the service account token Kubernetes automatically mounts into every pod. No extra credentials needed. Orbital's ServiceAccount needs a `Role` + `RoleBinding` in the DGraph namespace granting `get`/`list` on `pods` and `create` on `pods/exec`. DGraph Alpha pod discovered at runtime by label selector (`app.kubernetes.io/component=alpha,app.kubernetes.io/instance=dgraph-blue`) — no hardcoded pod name.
+
+**Local dev fallback:** `InClusterConfig()` fails outside Kubernetes. Orbital detects this at startup (`k8sAvailable` flag). The Restore page always shows the manual runbook; the stored-backup restore section shows a message explaining it requires in-cluster deployment.
+
+**Partial failure:** Non-atomic — `drop_all` wipes blue before `dgraph live` loads data. If `dgraph live` fails, blue is left empty. No automatic rollback. Admin must trigger another restore. Warning displayed prominently on the Restore page.
+
+**Blocking:** Restore is blocked if any backup job or export job is `pending` or `running`. Backup and export jobs are blocked if any restore job is `pending` or `running`. All three job types check each other before starting — reject immediately with a clear error.
+
+**Exec timeout:** Configurable via `ORBITAL_RESTORE_TIMEOUT` env var, default 10 minutes. Chosen to give quick failure feedback on a small dataset while leaving headroom for larger graphs. If timeout is exceeded, the exec is cancelled and the restore job is marked `failed`.
+
+**Downtime window:** `drop_all` is instantaneous and irreversible; blue is empty until live load completes. Acceptable for a break-glass operation — not zero-downtime.
+
+**Orbital responsibility:** Coordinates the sequence. Before any risky write to blue (import subgraph, divergence apply), orbital: (1) triggers a backup, (2) waits for completion, (3) proceeds. If the write goes wrong, admin triggers restore from the Restore page.
 
 **Success criteria:**
-- Define the intake API: endpoint(s), payload schema, and signature verification behavior — verify Ed25519 signature when a public key is registered for the orb; accept without verification when no key is registered
-- Validate that reports are actionable — orbital can surface which modular data centers have diverged, on which fields, by whom, since when
-- Define how orbital stores report state and orb public keys in PostgreSQL and how they are queried by admins
-- Confirm orbital imposes no constraints on how the report reached the intake API — transport is the caller's concern
-- Produce an API design doc covering the endpoint contract, data model, and the three resolution modes
+- ✅ Manual restore runbook documented on `/restore` page — local file path
+- ⬜ `client-go` added as dependency; `rest.InClusterConfig()` attempted at startup; `k8sAvailable` flag set
+- ⬜ Orbital ServiceAccount `Role` + `RoleBinding` in DGraph namespace: `get`/`list` pods, `create` pods/exec — added to `deploy/dev/`
+- ⬜ `ORBITAL_RESTORE_TIMEOUT` env var in config (default 10m)
+- ⬜ `restore_jobs` ent table: `id`, `status` (`pending`/`running`/`completed`/`failed`), `backup_id` (FK → backups), `initiated_by`, `started_at`, `completed_at`, `log` (stdout/stderr), `error`
+- ⬜ `POST /api/v1/restore` — creates restore job; blocked if any backup/export/restore job is pending or running
+- ⬜ Restore job runner: generates presigned URL → execs curl+unzip into DGraph Alpha pod (discovered by label selector) → execs drop_all → execs dgraph live; respects `ORBITAL_RESTORE_TIMEOUT`
+- ⬜ `GET /api/v1/restore` — list all restore jobs (permanent, never deleted)
+- ⬜ `GET /api/v1/restore/:id` — restore job status
+- ⬜ Restore page (`/restore`) — restore jobs table + backup selector dropdown + trigger button (stored backup section hidden when `k8sAvailable` is false); manual kubectl runbook always shown
+- ⬜ Backup and export job triggers reject with 409 if any restore job is pending or running
+- ⬜ End-to-end validated on AKS: trigger backup → wipe blue manually → restore via UI → confirm data intact
+
+### Spike 13. Divergence reports
+**Question:** How does orbital surface real divergence between intended state (orbital blue DGraph) and actual state (orb's local graph), and how does an admin resolve it?
+
+**Context:** Orbital is transport-agnostic — it does not know or care how a divergence payload arrives. For the prototype we showcase S3 as the concrete transport (same pattern as OCI for subgraph export). Orb writes a full graph snapshot (`json.gz` + `schema.gz`) to a known S3 location. An admin manually triggers orbital to fetch and process the snapshot.
+
+**Settled design decisions:**
+
+**Payload format:** Orb writes a full graph snapshot — the same `json.gz` + `schema.gz` format used by the subgraph export. No separate report format. Reuses the existing scratch DGraph mechanism.
+
+**Fetch model:** On-demand only (no polling). Admin clicks "Fetch" in the UI. Orbital downloads the snapshot, loads it into scratch DGraph, diffs each node by `orbId` against blue DGraph, and stores the diff in PostgreSQL as a divergence report.
+
+**Diff direction:** Blue DGraph = intended state, orb snapshot = actual state. Every diff entry records both values explicitly ("intended: X, actual: Y"). Three diff categories: field value changed, node exists in orb but not in orbital (discovered resource), node exists in orbital but not in orb (missing/decommissioned).
+
+**Resolution:** A human admin must resolve every divergence report before any changes are written to orbital. The admin reviews field-level diffs and chooses: accept individual fields (orb's value adopted into orbital), accept all, or reject all. Accepted changes are written as GraphQL mutations against blue DGraph. Resolved reports are marked `resolved` in PostgreSQL — orbital never auto-applies changes from orb.
+
+**Scratch DGraph contention:** Importing an orb snapshot uses scratch DGraph. An import is blocked if an export job is pending or running, and vice versa. Serialized via the same global lock mechanism as export jobs.
+
+**Orb registration:** New PostgreSQL table `orb_registrations` — one row per orb deployment. Stores the orb's namespace, name, and S3 location where it writes snapshots (key prefix). Future: public key for snapshot signature verification (not in scope for this spike).
+
+**S3 key convention:** `divergence/{namespace}/{orb-name}/{timestamp}.zip` — same bucket as backups, separate prefix. Orbital reads from the S3 location registered for the orb.
+
+**Transport agnosticism preserved:** S3 is one concrete transport, not the only one. The fetch-and-diff logic is independent of how the snapshot arrived — a future intake API or file upload would feed the same pipeline.
+
+**Success criteria:**
+- ⬜ `orb_registrations` ent table: namespace, orb name, S3 snapshot prefix, created/updated timestamps
+- ⬜ Orb registration UI — admin registers an orb's S3 location
+- ⬜ `POST /api/v1/orbs/:id/fetch-snapshot` — downloads snapshot from S3, loads into scratch DGraph, diffs against blue, stores result in PostgreSQL; blocked if export in progress
+- ⬜ Divergence report stored in PostgreSQL: status (`pending_review`, `resolved`), per-node diffs (field name, intended value, actual value, diff type)
+- ⬜ Divergence reports UI — list reports, show field-level diffs, accept/reject controls
+- ⬜ Accept writes GraphQL mutations against blue DGraph; report marked `resolved`
+- ⬜ Scratch DGraph wiped after import (same as export)
+
+### Spike 18. Observability
+**Question:** What does useful monitoring look like for orbital and DGraph in AKS — what metrics matter, how do we expose them, and what do we alert on?
+
+**Context:** We are seeing DGraph performance unknowns (Spike 9) and want ongoing visibility into API latency, DGraph query times, and job health (backup/export/restore) — not just a one-time benchmark. Orbital runs in AKS alongside DGraph; the cluster already has Prometheus available via Azure Monitor.
+
+**Scope:**
+- **Orbital API metrics** — request latency (p50/p95/p99), error rate, and request count per endpoint; expose via `/metrics` (Prometheus format) using Echo middleware
+- **DGraph metrics** — DGraph alpha already exposes Prometheus metrics at `:8080/debug/prometheus_metrics`; scrape it via a ServiceMonitor or annotation
+- **Job health metrics** — counters for backup/export/restore job completions and failures; expose from orbital's `/metrics` endpoint
+- **Dashboards** — Grafana dashboards (or Azure Monitor workbooks) for: API latency by endpoint, DGraph query latency, job success/failure rate
+- **Alerts** — API error rate > threshold, DGraph memory > 80%, restore job failure
+
+**Key questions to answer:**
+- Does Echo's default Prometheus middleware give enough granularity, or do we need custom histograms?
+- Does DGraph's built-in `/debug/prometheus_metrics` cover query latency, or do we need application-level timing around our GraphQL proxy calls?
+- What is the right scrape interval and retention for this workload?
+
+**Success criteria:**
+- ⬜ `GET /metrics` on orbital returns Prometheus-format metrics (request latency histogram, error counter, job counters)
+- ⬜ DGraph alpha metrics scraped by Prometheus (via annotation or ServiceMonitor)
+- ⬜ At least one Grafana dashboard covers: orbital API p95 latency, DGraph query latency, job health
+- ⬜ At least one alert defined: high error rate or DGraph memory pressure
+- ⬜ Validated end-to-end: trigger a backup and a restore; confirm job metrics appear in the dashboard
 
 ---
 

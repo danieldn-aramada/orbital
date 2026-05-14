@@ -22,6 +22,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/backup"
+	"github.com/armada/orbital/ent/restorejob"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
@@ -283,6 +284,18 @@ func (h *BackupHandler) Trigger(c echo.Context) error {
 		})
 	}
 
+	existingRestore, err := h.db.RestoreJob.Query().
+		Where(restorejob.StatusIn(restorejob.StatusPending, restorejob.StatusRunning)).
+		First(c.Request().Context())
+	if err != nil && !ent.IsNotFound(err) {
+		return fmt.Errorf("check restore jobs: %w", err)
+	}
+	if existingRestore != nil {
+		return c.JSON(http.StatusConflict, map[string]string{
+			"error": fmt.Sprintf("restore in progress (id: %s)", existingRestore.ID),
+		})
+	}
+
 	initiatedBy, _ := c.Get("user_email").(string)
 
 	job, err := h.db.Backup.Create().
@@ -497,19 +510,28 @@ func (h *BackupHandler) doBackup(ctx context.Context, jobID uuid.UUID, log *slog
 		return err
 	}
 
-	schemaBytes, err := os.ReadFile(h.schemaPath)
+	dqlSchemaGZPath, err := h.findExportFile(dataGZPath, ".schema.gz")
 	if err != nil {
-		return fmt.Errorf("read schema: %w", err)
+		return fmt.Errorf("find dql schema export: %w", err)
 	}
-	schemaGZ, err := gzipBytes(schemaBytes)
+	dqlSchemaGZ, err := os.ReadFile(dqlSchemaGZPath)
 	if err != nil {
-		return fmt.Errorf("gzip schema: %w", err)
+		return fmt.Errorf("read schema.gz: %w", err)
+	}
+
+	gqlSchemaGZPath, err := h.findExportFile(dataGZPath, ".gql_schema.gz")
+	if err != nil {
+		return fmt.Errorf("find gql schema export: %w", err)
+	}
+	gqlSchemaGZ, err := os.ReadFile(gqlSchemaGZPath)
+	if err != nil {
+		return fmt.Errorf("read gql_schema.gz: %w", err)
 	}
 
 	ts := time.Now().UTC().Format("20060102T150405Z")
 	zipName := fmt.Sprintf("orbital-%s-%s.zip", h.version, ts)
 	zipPath := filepath.Join(os.TempDir(), zipName)
-	if err := writeZip(zipPath, dataGZ, schemaGZ); err != nil {
+	if err := writeZip(zipPath, dataGZ, dqlSchemaGZ, gqlSchemaGZ); err != nil {
 		return fmt.Errorf("write zip: %w", err)
 	}
 	defer os.Remove(zipPath)
@@ -594,6 +616,23 @@ func (h *BackupHandler) findExport() (string, error) {
 		time.Sleep(1 * time.Second)
 	}
 	return "", fmt.Errorf("no json.gz found in %s after export", h.dgraphExportDir)
+}
+
+// findExportFile finds a file with the given suffix in the same directory as dataGZPath.
+func (h *BackupHandler) findExportFile(dataGZPath, suffix string) (string, error) {
+	dir := filepath.Dir(dataGZPath)
+	var found string
+	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error { //nolint:errcheck
+		if err == nil && !info.IsDir() && strings.HasSuffix(path, suffix) {
+			found = path
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	if found == "" {
+		return "", fmt.Errorf("no *%s found in %s after export", suffix, dir)
+	}
+	return found, nil
 }
 
 func (h *BackupHandler) enforceRetention(ctx context.Context, log *slog.Logger) error {

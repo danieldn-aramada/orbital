@@ -10,9 +10,15 @@ alpha:
 ratel:
   enabled: false
 backups:
+  # full.enabled must be true for backups.volume to mount on the alpha pod (chart gates the volumeMount on $backupsEnabled).
+  # Schedule set to Feb 30 (never fires) so no actual backup jobs run.
   full:
-    enabled: false
+    enabled: true
+    schedule: "0 0 30 2 *"
   volume:
     enabled: true
     mountPath: /dgraph/export
     claim: orbital-scratch-exports
+serviceAccount:
+  create: false
+  name: dgraph

@@ -21726,6 +21726,8 @@ has-background-danger.is-hoverable:active {
 
 .app-menu {
   --offset: 2rem;
+  display: flex;
+  flex-direction: column;
   padding: 1em 0.5em 1em 1em;
   border-right: 1px solid hsl(var(--bulma-scheme-h), var(--bulma-scheme-s), calc(var(--bulma-scheme-main-l) - 6%));
   font-size: 14px;
@@ -21857,6 +21859,24 @@ div.dt-container div.dt-length {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+}
+
+div.dt-container:has(#inventory-table) .dt-paging .pagination-link,
+div.dt-container:has(#inventory-table) .dt-paging .pagination-previous,
+div.dt-container:has(#inventory-table) .dt-paging .pagination-next,
+div.dt-container:has(#inventory-table) .dt-paging .pagination-ellipsis {
+  font-size: 0.75rem;
+  min-width: 2em;
+  height: 2em;
+}
+div.dt-container:has(#inventory-table) div.dt-info,
+div.dt-container:has(#inventory-table) div.dt-length label {
+  font-size: 0.75rem;
+}
+
+#export-jobs-table td,
+#artifacts-table td {
+  vertical-align: middle;
 }
 
 .app-menu .app-menu-link.is-active {

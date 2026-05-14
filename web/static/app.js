@@ -222,18 +222,6 @@ function loadServerTable() {
     serverTable = new DataTable('#server-table', {
       pageLength: 15, 
       lengthMenu: [[15, 20, 50, -1], [15, 20, 50, "All"]],
-      initComplete: function () {
-        let pagination = document.querySelector('nav.pagination')
-        if (pagination) {
-          pagination.classList.add('is-small')
-        }
-      },
-      drawCallback: function () {
-        let pagination = document.querySelector('nav.pagination')
-        if (pagination) {
-          pagination.classList.add('is-small')
-        }
-      },
       layout: {
         topStart: {
           pageLength: {},
@@ -843,21 +831,23 @@ document.addEventListener('DOMContentLoaded', () => {
       { data: 'createdBy' },
       { data: 'createdAt' },
       { data: 'id' },
+      { data: 'orbId' },
     ],
     columnDefs: [
       { targets: 0 },
       { targets: 1, className: 'dt-body-left dt-head-left' },
       { targets: 2 },
       { targets: 3 },
-      { targets: 4, visible: false },
+      { targets: [4, 5], visible: false, searchable: true },
     ],
     ajax: {
       url: BASE + '/graphql',
       type: 'POST',
       contentType: 'application/json',
-      data: () => JSON.stringify({ query: `{ queryDataCenter { id name createdBy createdAt serversAggregate { count } } }` }),
+      data: () => JSON.stringify({ query: `{ queryDataCenter { id orbId name createdBy createdAt serversAggregate { count } } }` }),
       dataSrc: (json) => (json.data?.queryDataCenter ?? []).map(dc => ({
         id: dc.id,
+        orbId: dc.orbId ?? '—',
         name: dc.name,
         createdBy: dc.createdBy ?? '',
         createdAt: dc.createdAt ?? '',
@@ -935,9 +925,10 @@ document.addEventListener('DOMContentLoaded', () => {
       { data: 'model' },
       { data: 'rack' },
       { data: 'id' },
+      { data: 'orbId' },
     ],
     columnDefs: [
-      { targets: 6, visible: false },
+      { targets: [6, 7], visible: false, searchable: true },
     ],
     ajax: {
       url: BASE + '/graphql',
@@ -945,7 +936,7 @@ document.addEventListener('DOMContentLoaded', () => {
       contentType: 'application/json',
       data: () => JSON.stringify({
         query: `{ queryServer {
-          id hostname serviceTag model
+          id orbId hostname serviceTag model
           oobIP { address }
           rack { name }
           dataCenter { name }
@@ -953,6 +944,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }),
       dataSrc: (json) => (json.data?.queryServer ?? []).map(s => ({
         id: s.id,
+        orbId: s.orbId ?? '—',
         hostname: s.hostname ?? '—',
         serviceTag: s.serviceTag ?? '—',
         model: s.model ?? '—',
@@ -2047,17 +2039,19 @@ document.addEventListener('click', function (e) {
 const skipVars = new Set(['updatedBy', 'updatedAt'])
 
 function formatGQL(query) {
+  // Collapse all existing whitespace so the formatter starts from a clean single-line input
+  const flat = query.replace(/\s+/g, ' ').trim()
   let indent = 0
   let out = ''
   let i = 0
-  while (i < query.length) {
-    const ch = query[i]
+  while (i < flat.length) {
+    const ch = flat[i]
     if (ch === '{') {
       out += ' {\n' + '  '.repeat(++indent)
     } else if (ch === '}') {
       out = out.trimEnd()
       out += '\n' + '  '.repeat(--indent) + '}'
-    } else if (ch === ',' && query[i + 1] === ' ') {
+    } else if (ch === ',' && flat[i + 1] === ' ') {
       out += ',\n' + '  '.repeat(indent)
       i++ // skip the space after comma
     } else {
@@ -2162,6 +2156,140 @@ document.addEventListener('DOMContentLoaded', () => {
     reloadBtn.addClass('is-loading')
     auditTable.ajax.reload(() => { reloadBtn.removeClass('is-loading') }, false)
   })
+})
+
+// ─── Restore ─────────────────────────────────────────────────────────────────
+
+const restoreJobLogStore = {}
+
+function loadRestoreJobs() {
+  const tbody = document.getElementById('restore-tbody')
+  if (!tbody) return
+  fetch(BASE + '/api/v1/restore')
+    .then(r => r.json())
+    .then(jobs => {
+      if (!jobs.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="has-text-grey has-text-centered">No restore jobs yet.</td></tr>'
+        return
+      }
+      tbody.innerHTML = jobs.map(j => {
+        const startedAt = j.startedAt ? new Date(j.startedAt).toLocaleString() : (j.createdAt ? new Date(j.createdAt).toLocaleString() : '—')
+        const statusClass = { completed: 'is-success', failed: 'is-danger', running: 'is-warning', pending: 'is-light' }[j.status] || 'is-light'
+        const duration = (j.startedAt && j.completedAt)
+          ? Math.round((new Date(j.completedAt) - new Date(j.startedAt)) / 1000) + 's'
+          : (j.status === 'running' ? 'Running...' : '—')
+        const backupLabel = j.backupKey ? j.backupKey.split('/').pop() : (j.backupId ? j.backupId.substring(0, 8) + '...' : '—')
+        let logBtn = ''
+        if (j.log || j.error) {
+          restoreJobLogStore[j.id] = { log: j.log || '', error: j.error || '' }
+          logBtn = `<button class="button is-small is-light" onclick="openRestoreLogModal('${j.id}')">Log</button>`
+        }
+        return `<tr>
+          <td>${startedAt}</td>
+          <td><span class="tag ${statusClass}">${j.status}</span></td>
+          <td style="font-size:0.8rem;">${backupLabel}</td>
+          <td>${j.createdBy || '—'}</td>
+          <td>${duration}</td>
+          <td>${logBtn}</td>
+        </tr>`
+      }).join('')
+    })
+    .catch(() => {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="has-text-grey has-text-centered">Failed to load.</td></tr>'
+    })
+}
+
+function loadRestoreBackupSelect() {
+  const sel = document.getElementById('restore-backup-select')
+  if (!sel) return
+  fetch(BASE + '/api/v1/backups')
+    .then(r => r.json())
+    .then(backups => {
+      const completed = backups.filter(b => b.status === 'completed')
+      if (!completed.length) {
+        sel.innerHTML = '<option value="">No completed backups available</option>'
+        return
+      }
+      sel.innerHTML = completed.map(b => {
+        const label = b.s3Key ? b.s3Key.split('/').pop() : b.id.substring(0, 8) + '...'
+        const date = b.initiatedAt ? new Date(b.initiatedAt).toLocaleString() : ''
+        return `<option value="${b.id}">${label} (${date})</option>`
+      }).join('')
+    })
+    .catch(() => { sel.innerHTML = '<option value="">Failed to load backups</option>' })
+}
+
+function triggerRestore() {
+  const btn = document.getElementById('btn-restore')
+  const msg = document.getElementById('restore-status-msg')
+  const sel = document.getElementById('restore-backup-select')
+  if (!sel || !sel.value) {
+    msg.textContent = 'Select a backup first.'
+    msg.style.display = ''
+    return
+  }
+  btn.classList.add('is-loading')
+  btn.disabled = true
+  msg.style.display = 'none'
+
+  fetch(BASE + '/api/v1/restore', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ backupId: sel.value }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        msg.textContent = data.error
+        msg.style.display = ''
+        btn.classList.remove('is-loading')
+        btn.disabled = false
+      } else {
+        loadRestoreJobs()
+        pollRestore(data.jobId)
+      }
+    })
+    .catch(() => {
+      msg.textContent = 'Request failed.'
+      msg.style.display = ''
+      btn.classList.remove('is-loading')
+      btn.disabled = false
+    })
+}
+
+function pollRestore(jobId) {
+  const btn = document.getElementById('btn-restore')
+  const interval = setInterval(() => {
+    fetch(BASE + '/api/v1/restore/' + jobId)
+      .then(r => r.json())
+      .then(data => {
+        loadRestoreJobs()
+        if (data.status === 'completed' || data.status === 'failed') {
+          clearInterval(interval)
+          if (btn) { btn.classList.remove('is-loading'); btn.disabled = false }
+        }
+      })
+      .catch(() => { clearInterval(interval); if (btn) { btn.classList.remove('is-loading'); btn.disabled = false } })
+  }, 3000)
+}
+
+function openRestoreLogModal(jobId) {
+  const entry = restoreJobLogStore[jobId] || {}
+  const parts = []
+  if (entry.log) parts.push(entry.log)
+  if (entry.error) parts.push('Error: ' + entry.error)
+  document.getElementById('restore-log-content').textContent = parts.join('\n') || '(no output)'
+  document.getElementById('restore-log-modal').classList.add('is-active')
+}
+
+function closeRestoreLogModal() {
+  document.getElementById('restore-log-modal').classList.remove('is-active')
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!document.getElementById('restore-tbody')) return
+  loadRestoreJobs()
+  loadRestoreBackupSelect()
 })
 
 // Clear all tab state and localStorage on logout

@@ -1,0 +1,30 @@
+---
+# Role: allow orbital to list and exec into dgraph-live pod for restore operations.
+# Must be in the same namespace as the dgraph-live pod (netbox).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: orbital-dgraph-restore
+  namespace: netbox
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+# RoleBinding: bind the role to orbital's service account.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: orbital-dgraph-restore
+  namespace: netbox
+subjects:
+  - kind: ServiceAccount
+    name: default          # orbital runs as the default service account in netbox
+    namespace: netbox
+roleRef:
+  kind: Role
+  apiGroup: rbac.authorization.k8s.io
+  name: orbital-dgraph-restore
