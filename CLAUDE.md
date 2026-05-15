@@ -176,8 +176,8 @@ One shared blue DGraph instance serves all modular data centers. `DataCenter` is
 ### Caching (Valkey)
 Orbital must operate correctly without Valkey — cache is an optimization, not a dependency. Use cache-aside: check Valkey first, fall back to DGraph on miss, populate cache on response. Cache DGraph GraphQL query responses. Invalidate on config changes.
 
-### Drift reporting
-Orb observes actual state, compares it to intended state, and reports the gap. Orbital exposes a transport-agnostic report intake API to receive these reports — it does not act on them, does not trigger reconciliation, and is not in the reconciliation path.
+### Divergence reporting
+Divergence reports are generated when a local edge admin overrides the intended configuration on-site. Orb records the override and sends a report to a shared location (e.g. S3) that orbital polls. Orbital surfaces these reports to cloud admins, who can accept, reject, or ignore each change. Accepting updates the intent in orbital; rejecting or ignoring leaves intent unchanged. Orbital is never in the reconciliation path — it only surfaces the divergence for human decision.
 
 ### GraphQL middleware
 Clients never query DGraph directly. All queries go through the Go server, which handles rate limiting, caching, auth, and other cross-cutting concerns.
@@ -326,6 +326,10 @@ These have been explicitly decided. Do not re-suggest them.
 - **DC-to-server back button uses `is-warning` not `is-link`** — matches the Grafana button style. Do not change it back to `is-link`.
 - **Use plain `fetch()` for programmatic tab reloads, never `htmx.ajax()`** — `htmx.ajax()` carries hidden request context (triggering element, OOB swap hints, lifecycle state) that was designed for declarative attribute-driven flows. When called imperatively from an async JS handler, it can route responses to the wrong target. Pattern: `fetch(url, { headers: { 'HX-Request': 'true' } }).then(r => r.text()).then(html => { el.innerHTML = html; htmx.process(el); initXxx(...) })`. Always send `HX-Request: true` so Go handlers return fragments, not full pages.
 - **Startup log must use slog, not `log.Printf`** — `cmd/orbital/main.go` calls `slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))` before anything else so the startup line emits JSON consistent with all other log output. Never use `log.Printf` / `log.Fatalf` for the startup message.
+- **Restore uses a dedicated `dgraph-live` idle pod, not exec into DGraph Alpha** — a permanent pod (`deploy/dev/dgraph-live.yaml`) runs `sleep infinity` with the `dgraph/dgraph` image and mounts `orbital-restore-pvc`. Orbital execs into it (by label selector `app.kubernetes.io/name=dgraph-live`) to run `dgraph live`. The Alpha pod is not exec'd into — it is only hit via HTTP (`/alter` for `drop_all`, `/admin/schema` to re-apply schema). The idle pod stays resident so exec is instant; no Kubernetes Job startup delay.
+- **Restore job lifecycle** — `pending → running → completed → failed`. Jobs are permanent (never deleted). Restore is blocked if any backup or export job is pending/running; backup and export are blocked if any restore job is pending/running — all three job types check each other before starting (409 on conflict).
+- **`k8sAvailable` flag gates in-cluster restore** — `rest.InClusterConfig()` is attempted at startup; `k8sAvailable = true` only if it succeeds. The Restore page always shows the manual kubectl runbook; the stored-backup restore section is hidden when `k8sAvailable` is false.
+- **Helm chart `backups.full.enabled` gates PVC mount on scratch DGraph** — the DGraph Helm chart only mounts a `backups.volume` PVC when `backups.full.enabled || backups.incremental.enabled` is true. To keep `orbital-scratch-exports` mounted without running actual backup jobs, set `backups.full.enabled: true` with a never-firing cron schedule (`"0 0 31 2 *"`). Do not set it to `false` or the PVC silently disappears and exports fail with "no json.gz found".
 
 ## Example Data / Seeding
 

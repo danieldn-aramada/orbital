@@ -7149,7 +7149,7 @@ button.dropdown-item.is-selected {
 }
 
 :root {
-  --bulma-navbar-height: 3.25rem;
+  --bulma-navbar-height: 4.5rem;
 }
 
 .navbar {
@@ -21864,13 +21864,19 @@ div.dt-container div.dt-length {
 div.dt-container:has(#inventory-table) .dt-paging .pagination-link,
 div.dt-container:has(#inventory-table) .dt-paging .pagination-previous,
 div.dt-container:has(#inventory-table) .dt-paging .pagination-next,
-div.dt-container:has(#inventory-table) .dt-paging .pagination-ellipsis {
+div.dt-container:has(#inventory-table) .dt-paging .pagination-ellipsis,
+div.dt-container:has(#server-list-table) .dt-paging .pagination-link,
+div.dt-container:has(#server-list-table) .dt-paging .pagination-previous,
+div.dt-container:has(#server-list-table) .dt-paging .pagination-next,
+div.dt-container:has(#server-list-table) .dt-paging .pagination-ellipsis {
   font-size: 0.75rem;
   min-width: 2em;
   height: 2em;
 }
 div.dt-container:has(#inventory-table) div.dt-info,
-div.dt-container:has(#inventory-table) div.dt-length label {
+div.dt-container:has(#inventory-table) div.dt-length label,
+div.dt-container:has(#server-list-table) div.dt-info,
+div.dt-container:has(#server-list-table) div.dt-length label {
   font-size: 0.75rem;
 }
 

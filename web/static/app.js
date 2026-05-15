@@ -1,6 +1,5 @@
 const BASE = window.ORBITAL_BASE || '';
 
-let serverTable = null;
 
 class TabItem {
   constructor(displayName, id) {
@@ -215,147 +214,6 @@ function renderTimestamps(root) {
   });
 }
 
-function loadServerTable() {
-  if (serverTable) {
-    serverTable.ajax.reload();
-  } else {
-    serverTable = new DataTable('#server-table', {
-      pageLength: 15, 
-      lengthMenu: [[15, 20, 50, -1], [15, 20, 50, "All"]],
-      layout: {
-        topStart: {
-          pageLength: {},
-          buttons: [
-            {
-              extend: 'excel',
-              text: '<span><i class="fa-regular fa-file-excel"></i></span>\n<span>Excel</span>',
-              className: 'is-link is-small',
-              titleAttr: 'Excel',
-              title: '',
-              filename: 'assets-servers'
-            }, 
-            {
-              extend:'copy',
-              className: 'is-link is-small',
-              text: '<span><i class="fa-regular fa-copy"></i></span>\n<span>Copy</span>',
-              titleAttr: 'Copy',
-              title: null
-            },
-            {
-              text: '<span><i class="fa-solid fa-rotate-right"></i></span>\n<span>Reload</span>',
-              className: 'is-link is-small',
-              titleAttr: 'Reload',
-              name: 'reload',
-              attr: {
-                id: 'btn-reload-servers'
-              }
-            }
-          ],
-        },
-        topEnd: {
-          search: {
-            placeholder: 'Type search here',
-          }
-        },
-      },
-      select: {
-          style: 'os',
-      },
-      autoWidth: true,
-      scrollX: false,
-      scrollY: 700,
-      scrollCollapse: true,
-      language: {
-        infoEmpty: 'No servers to show',
-        info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
-        entries: {
-            _: 'servers',
-            1: 'server',
-        },
-      },
-      initComplete: function () { dtWrapLengthSelect(this.api()) },
-
-      columns: [
-        {
-          data: 'galleonName',
-          width: '10%'
-        },
-        {
-          data: 'bmcIp',
-          width: '12%'
-        },
-        {
-          data: 'model',
-          width: '10%'
-        },
-        {
-          data: 'bootMode',
-          width: '12%'
-        },
-        {
-          data: 'bootSequence'
-        },
-        {
-          data: 'pxeDevice1'
-        },
-      ],
-      columnDefs: [
-        {
-          targets: 0,
-        },
-        {
-          targets: 1,
-        },
-        {
-          targets: 2,
-          className: 'dt-head-left dt-body-left',
-        },
-        {
-          targets: 3,
-        },
-        {
-          targets: 4,
-        },
-        {
-          targets: 5,
-          className: 'dt-head-left dt-body-left',
-        }
-      ],
-      ajax: {
-        url: BASE + '/api/v1/servers',
-        dataSrc: ''
-      },
-    });
-  }
-  serverTable.columns.adjust();
-
-  $('#server-table').on('dblclick', 'tr', function () {
-    // use object name as tab name 
-    var displayName = this.cells[1].innerText   // bmcIP
-    var id = serverTable.row(this).data().id
-    console.log('tabId:', id)
-    var tab = document.getElementById(`tab-${id}`)
-    if (tab) {
-      console.log('tab already opened so clicking it...')
-      tab.click()
-    } else {
-      loadTab(displayName, id)
-      saveTab(displayName, id)
-      document.getElementById(`tab-${id}`).click()
-    }
-  });
-
-  const reloadButton = serverTable.button('reload:name').node()
-  serverTable.button('reload:name').node().on('click', function (e) {
-    serverTable.clear().draw()
-    reloadButton.addClass('is-loading')
-    setTimeout(() => {
-      taserverTableble.ajax.url(BASE + '/api/v1/servers').load(()=>{
-          reloadButton.removeClass('is-loading')
-      })
-    }, 250);
-  }); 
-}
 
 /**
  * Initialize or refresh a server events DataTable.
@@ -736,8 +594,7 @@ document.addEventListener('DOMContentLoaded', () => {
       topEnd: { search: { placeholder: 'Search inventory' } },
     },
     select: { style: 'os' },
-    autoWidth: true,
-    scrollX: true,
+    autoWidth: false,
     scrollY: 400,
     scrollCollapse: true,
     pageLength: 50,
@@ -766,7 +623,11 @@ document.addEventListener('DOMContentLoaded', () => {
       { data: 'uid' },
     ],
     columnDefs: [
-      { targets: 4, className: 'dt-left' },
+      { targets: 0, width: '10%' },
+      { targets: 1, width: '20%' },
+      { targets: 2, width: '20%' },
+      { targets: 3, width: '15%' },
+      { targets: 4, width: '15%', className: 'dt-left' },
       { targets: 5, visible: false },
     ],
     ajax: {
@@ -893,9 +754,10 @@ document.addEventListener('DOMContentLoaded', () => {
   })
 
   const serverListTable = new DataTable('#server-list-table', {
+    pageLength: 50,
     layout: {
       topStart: [
-        { pageLength: { menu: [10, 25, 50, 100] } },
+        { pageLength: { menu: [25, 50, 100, 250] } },
         { buttons: [
           { extend: 'excel', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-excel"></i><span>Excel</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Excel' },
           { extend: 'csv', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-text"></i><span>CSV</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV' },
@@ -904,12 +766,12 @@ document.addEventListener('DOMContentLoaded', () => {
           { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-servers' } },
         ] },
       ],
-      topEnd: { search: { placeholder: 'Type search here' } },
+      topEnd: { search: { placeholder: 'Search servers' } },
     },
     select: { style: 'os' },
     autoWidth: true,
     scrollX: true,
-    scrollY: 400,
+    scrollY: 'calc(100vh - 340px)',
     scrollCollapse: true,
     language: {
       infoEmpty: 'No servers to show',

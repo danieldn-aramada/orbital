@@ -48,7 +48,7 @@ Goal of prototyping is learning, not shipping. Each spike below is a question to
 | 11 | Schema migration — build vs runbook | Do we need automation or is a runbook sufficient? | — | ❌ Out of scope (MVP) | Spike 10 |
 | 12 | Orb import API | What is the right API contract for orb's local config import endpoint? | — | Not started | — |
 | 13 | Divergence reports | How does orbital surface real divergence between intended and actual state, and how does an admin resolve it? | — | Not started | 17 |
-| 17 | DGraph blue restore from backup | How do we restore DGraph blue from a known-good backup, and how does orbital coordinate the sequence safely? | — | Not started | 6 |
+| 17 | DGraph blue restore from backup | How do we restore DGraph blue from a known-good backup, and how does orbital coordinate the sequence safely? | Daniel | ✅ Done (5/14) | 6 |
 | 16 | Seed iDRAC settings and storage devices | What does real iDRAC and storage data look like, and does the schema cover all fields we need to seed it for representative data centers? | — | Not started | — |
 | 18 | Observability | What does useful monitoring look like for orbital and DGraph in AKS — metrics, dashboards, and alerts for API latency, DGraph query performance, and job health? | — | Not started | 1 |
 
@@ -385,14 +385,16 @@ DGraph community has no native incremental backup. Options to evaluate once real
 
 **Path 1 — From a local file (manual, kubectl):** Admin has a backup zip on their machine and `kubectl` access. They copy files into the DGraph Alpha pod and run `dgraph live` directly. The DGraph Alpha pod already has the `dgraph` binary — no extra tooling needed. Documented as a runbook on the `/restore` page in the orbital UI.
 
-**Path 2 — From a stored backup (automated, orbital):** Admin clicks Restore on a completed backup record in the Backups UI. Orbital uses `client-go` to exec into the DGraph Alpha pod — no sidecar, no Kubernetes Job, no extra image. The DGraph Alpha pod's existing `dgraph` binary handles the live import. Orbital:
-1. Generates a presigned S3 URL (or Azure SAS URL) for the backup zip — same `blobStorage.presignURL()` used by the download endpoint, 15 min TTL, validated by the storage backend
-2. Execs into the DGraph Alpha pod: `curl <presigned-url> -o /tmp/backup.zip && unzip /tmp/backup.zip -d /tmp/restore`
-3. Execs: `curl -s -X POST localhost:8080/alter -d '{"drop_all": true}'`
-4. Execs: `dgraph live --files /tmp/restore/data.json.gz --schema /tmp/restore/schema.gz --alpha localhost:9080`
+**Path 2 — From a stored backup (automated, orbital):** Admin clicks Restore on a completed backup record in the Backups UI. Orbital downloads the backup zip from S3 to the shared restore PVC, then uses `client-go` to exec into the `dgraph-live` idle pod. Orbital:
+1. Generates a presigned S3 URL for the backup zip (15 min TTL)
+2. Downloads zip to the shared PVC mount (`/restore/`) — orbital writes files directly since it also mounts the PVC
+3. Execs into the `dgraph-live` pod: `dgraph live --files /restore/data.json.gz --schema /restore/schema.gz --alpha <dgraph-alpha-grpc>`
+4. Before live load: execs `curl -s -X POST localhost:8080/alter -d '{"drop_all": true}'` against DGraph Alpha
 5. Streams stdout/stderr, tracks status in PostgreSQL as a restore record
 
-**client-go in-cluster auth:** `rest.InClusterConfig()` reads the service account token Kubernetes automatically mounts into every pod. No extra credentials needed. Orbital's ServiceAccount needs a `Role` + `RoleBinding` in the DGraph namespace granting `get`/`list` on `pods` and `create` on `pods/exec`. DGraph Alpha pod discovered at runtime by label selector (`app.kubernetes.io/component=alpha,app.kubernetes.io/instance=dgraph-blue`) — no hardcoded pod name.
+**`dgraph-live` idle pod:** A dedicated pod (`deploy/dev/dgraph-live.yaml`) runs `sleep infinity` and mounts the shared restore PVC. It uses the `dgraph/dgraph` image so the `dgraph live` binary is available without modifying the Alpha pod. Stays resident so exec is instant — no Job startup latency. Orbital execs into it by label selector `app.kubernetes.io/name=dgraph-live`.
+
+**client-go in-cluster auth:** `rest.InClusterConfig()` reads the service account token automatically mounted into every pod. Orbital's ServiceAccount needs a `Role` + `RoleBinding` granting `get`/`list` on `pods` and `create` on `pods/exec` in the DGraph namespace (`deploy/dev/rbac.yaml`).
 
 **Local dev fallback:** `InClusterConfig()` fails outside Kubernetes. Orbital detects this at startup (`k8sAvailable` flag). The Restore page always shows the manual runbook; the stored-backup restore section shows a message explaining it requires in-cluster deployment.
 
@@ -408,17 +410,17 @@ DGraph community has no native incremental backup. Options to evaluate once real
 
 **Success criteria:**
 - ✅ Manual restore runbook documented on `/restore` page — local file path
-- ⬜ `client-go` added as dependency; `rest.InClusterConfig()` attempted at startup; `k8sAvailable` flag set
-- ⬜ Orbital ServiceAccount `Role` + `RoleBinding` in DGraph namespace: `get`/`list` pods, `create` pods/exec — added to `deploy/dev/`
-- ⬜ `ORBITAL_RESTORE_TIMEOUT` env var in config (default 10m)
-- ⬜ `restore_jobs` ent table: `id`, `status` (`pending`/`running`/`completed`/`failed`), `backup_id` (FK → backups), `initiated_by`, `started_at`, `completed_at`, `log` (stdout/stderr), `error`
-- ⬜ `POST /api/v1/restore` — creates restore job; blocked if any backup/export/restore job is pending or running
-- ⬜ Restore job runner: generates presigned URL → execs curl+unzip into DGraph Alpha pod (discovered by label selector) → execs drop_all → execs dgraph live; respects `ORBITAL_RESTORE_TIMEOUT`
-- ⬜ `GET /api/v1/restore` — list all restore jobs (permanent, never deleted)
-- ⬜ `GET /api/v1/restore/:id` — restore job status
-- ⬜ Restore page (`/restore`) — restore jobs table + backup selector dropdown + trigger button (stored backup section hidden when `k8sAvailable` is false); manual kubectl runbook always shown
-- ⬜ Backup and export job triggers reject with 409 if any restore job is pending or running
-- ⬜ End-to-end validated on AKS: trigger backup → wipe blue manually → restore via UI → confirm data intact
+- ✅ `client-go` added as dependency; `rest.InClusterConfig()` attempted at startup; `k8sAvailable` flag set
+- ✅ Orbital ServiceAccount `Role` + `RoleBinding` in DGraph namespace: `get`/`list` pods, `create` pods/exec — added to `deploy/dev/rbac.yaml`
+- ✅ `ORBITAL_RESTORE_TIMEOUT` env var in config (default 10m)
+- ✅ `restore_jobs` ent table: `id`, `status` (`pending`/`running`/`completed`/`failed`), `backup_id` (FK → backups), `initiated_by`, `started_at`, `completed_at`, `log` (stdout/stderr), `error`
+- ✅ `POST /api/v1/restore` — creates restore job; blocked if any backup/export/restore job is pending or running
+- ✅ Restore job runner: downloads backup from S3 to shared PVC → execs `drop_all` against DGraph Alpha → execs `dgraph live` in `dgraph-live` pod; respects `ORBITAL_RESTORE_TIMEOUT`
+- ✅ `GET /api/v1/restore` — list all restore jobs (permanent, never deleted)
+- ✅ `GET /api/v1/restore/:id` — restore job status
+- ✅ Restore page (`/restore`) — restore jobs table + backup selector dropdown + trigger button (stored backup section hidden when `k8sAvailable` is false); manual kubectl runbook always shown
+- ✅ Backup and export job triggers reject with 409 if any restore job is pending or running
+- ✅ End-to-end validated on AKS: trigger backup → wipe blue manually → restore via UI → confirm data intact
 
 ### Spike 13. Divergence reports
 **Question:** How does orbital surface real divergence between intended state (orbital blue DGraph) and actual state (orb's local graph), and how does an admin resolve it?
