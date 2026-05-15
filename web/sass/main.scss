@@ -692,20 +692,24 @@ div.dt-container {
   }
 }
 
-// Inventory and server-list tables — match pagination/info/length size to the is-size-7 table content
+// Inventory, server-list, and audit-log tables — match all toolbar controls to is-size-7 table content
 div.dt-container:has(#inventory-table),
-div.dt-container:has(#server-list-table) {
-  .dt-paging .pagination-link,
-  .dt-paging .pagination-previous,
-  .dt-paging .pagination-next,
-  .dt-paging .pagination-ellipsis {
+div.dt-container:has(#server-list-table),
+div.dt-container:has(#audit-log-table) {
+  font-size: 0.75rem;
+
+  .dt-search .input,
+  .dt-paging .pagination-link {
     font-size: 0.75rem;
+  }
+
+  .dt-search .input {
+    width: 16rem;
+  }
+
+  .dt-paging .pagination-link {
     min-width: 2em;
     height: 2em;
-  }
-  div.dt-info,
-  div.dt-length label {
-    font-size: 0.75rem;
   }
 }
 

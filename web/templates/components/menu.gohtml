@@ -24,9 +24,9 @@
 <div class="app-menu-section">
   <h3 class="app-menu-section-heading has-text-warning">
     <span class="icon">
-      <i class="fa-solid fa-paper-plane"></i>
+      <i class="fa-solid fa-tower-broadcast"></i>
     </span>
-    <strong>Edge Delivery</strong>
+    <strong>Edge</strong>
   </h3>
   <ul class="app-menu-section-list">
     <li class="app-menu-item">
@@ -34,6 +34,9 @@
     </li>
     <li class="app-menu-item">
       <a class="app-menu-link{{if eq .CurrentPath (printf "%s/signed-artifacts" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/signed-artifacts">Signed Artifacts</a>
+    </li>
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/divergence-reports" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/divergence-reports">Divergence Reports</a>
     </li>
   </ul>
 </div>
@@ -54,9 +57,6 @@
     </li>
     <li class="app-menu-item">
       <a class="app-menu-link{{if eq .CurrentPath (printf "%s/restore" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/restore">Restore Graph</a>
-    </li>
-    <li class="app-menu-item">
-      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/divergence-reports" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/divergence-reports">Divergence Reports</a>
     </li>
   </ul>
 </div>

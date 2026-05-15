@@ -1,7 +1,7 @@
 // @title           Orbital API
 // @version         0.1.0
-// @description     API-first, graph-native configuration management system for modular data centers.
-// @BasePath        /
+// @description     API-first, graph-native source of truth for modular data centers.
+// @BasePath        /api/v1
 //
 // @tag.name         backup graph
 // @tag.name         export subgraph
@@ -18,7 +18,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	_ "github.com/armada/orbital/docs"
+	"github.com/armada/orbital/docs"
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/internal/config"
 	"github.com/armada/orbital/internal/server"
@@ -37,6 +37,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
+
+	docs.SwaggerInfo.BasePath = cfg.BasePath + "/api/v1"
 
 	db, err := ent.Open("postgres", cfg.DatabaseURL)
 	if err != nil {

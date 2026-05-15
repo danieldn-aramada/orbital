@@ -7,8 +7,8 @@
     "sass": "^1.77.8"
   },
   "scripts": {
-    "build-css": "sass --load-path=node_modules web/sass/main.scss web/static/css/main.css",
-    "build-css-dev": "sass --watch --load-path=node_modules web/sass/main.scss:web/static/css/main.css",
+    "build-css": "sass -q --load-path=node_modules web/sass/main.scss web/static/css/main.css",
+    "build-css-dev": "sass -q --watch --load-path=node_modules web/sass/main.scss:web/static/css/main.css",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },

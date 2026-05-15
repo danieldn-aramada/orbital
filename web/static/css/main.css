@@ -21861,23 +21861,29 @@ div.dt-container div.dt-length {
   gap: 0.4rem;
 }
 
-div.dt-container:has(#inventory-table) .dt-paging .pagination-link,
-div.dt-container:has(#inventory-table) .dt-paging .pagination-previous,
-div.dt-container:has(#inventory-table) .dt-paging .pagination-next,
-div.dt-container:has(#inventory-table) .dt-paging .pagination-ellipsis,
-div.dt-container:has(#server-list-table) .dt-paging .pagination-link,
-div.dt-container:has(#server-list-table) .dt-paging .pagination-previous,
-div.dt-container:has(#server-list-table) .dt-paging .pagination-next,
-div.dt-container:has(#server-list-table) .dt-paging .pagination-ellipsis {
+div.dt-container:has(#inventory-table),
+div.dt-container:has(#server-list-table),
+div.dt-container:has(#audit-log-table) {
   font-size: 0.75rem;
+}
+div.dt-container:has(#inventory-table) .dt-search .input,
+div.dt-container:has(#inventory-table) .dt-paging .pagination-link,
+div.dt-container:has(#server-list-table) .dt-search .input,
+div.dt-container:has(#server-list-table) .dt-paging .pagination-link,
+div.dt-container:has(#audit-log-table) .dt-search .input,
+div.dt-container:has(#audit-log-table) .dt-paging .pagination-link {
+  font-size: 0.75rem;
+}
+div.dt-container:has(#inventory-table) .dt-search .input,
+div.dt-container:has(#server-list-table) .dt-search .input,
+div.dt-container:has(#audit-log-table) .dt-search .input {
+  width: 16rem;
+}
+div.dt-container:has(#inventory-table) .dt-paging .pagination-link,
+div.dt-container:has(#server-list-table) .dt-paging .pagination-link,
+div.dt-container:has(#audit-log-table) .dt-paging .pagination-link {
   min-width: 2em;
   height: 2em;
-}
-div.dt-container:has(#inventory-table) div.dt-info,
-div.dt-container:has(#inventory-table) div.dt-length label,
-div.dt-container:has(#server-list-table) div.dt-info,
-div.dt-container:has(#server-list-table) div.dt-length label {
-  font-size: 0.75rem;
 }
 
 #export-jobs-table td,
