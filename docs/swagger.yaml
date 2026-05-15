@@ -1,4 +1,4 @@
-basePath: /
+basePath: /api/v1
 definitions:
   handler.artifactResponse:
     properties:
@@ -65,6 +65,29 @@ definitions:
       tag:
         type: string
     type: object
+  handler.restoreJobResponse:
+    properties:
+      backupId:
+        type: string
+      backupKey:
+        type: string
+      completedAt:
+        type: string
+      createdAt:
+        type: string
+      createdBy:
+        type: string
+      error:
+        type: string
+      id:
+        type: string
+      log:
+        type: string
+      startedAt:
+        type: string
+      status:
+        type: string
+    type: object
   handler.statusResponse:
     properties:
       completedAt:
@@ -93,8 +116,7 @@ definitions:
     type: object
 info:
   contact: {}
-  description: API-first, graph-native configuration management system for modular
-    data centers.
+  description: API-first, graph-native source of truth for modular data centers.
   title: Orbital API
   version: 0.1.0
 paths:
@@ -402,6 +424,20 @@ paths:
       summary: Publish export as OCI artifact
       tags:
       - oci
+  /api/v1/inventory:
+    get:
+      description: Returns every node implementing ConfigItem, across all namespaces.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List all config items
+      tags:
+      - graph
   /api/v1/oci/artifacts:
     get:
       description: Returns the 100 most recent OCI artifacts ordered by publish time
@@ -482,6 +518,80 @@ paths:
       summary: Test OCI registry connection
       tags:
       - oci
+  /api/v1/restore:
+    get:
+      description: Returns up to 50 restore jobs ordered by most recent first.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.restoreJobResponse'
+            type: array
+      summary: List restore jobs
+      tags:
+      - backup graph
+    post:
+      consumes:
+      - application/json
+      description: Restores DGraph blue from a stored backup. Blocked if any backup,
+        export, or restore job is in progress.
+      parameters:
+      - description: backupId (UUID)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/handler.triggerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Trigger a DGraph restore
+      tags:
+      - backup graph
+  /api/v1/restore/{id}:
+    get:
+      description: Returns the status of a specific restore job.
+      parameters:
+      - description: Restore job ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.restoreJobResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get restore job status
+      tags:
+      - backup graph
   /graphql:
     post:
       consumes:

@@ -85,7 +85,7 @@
         <div id="dc-panel-servers-{{.ID}}">
           {{if .Servers}}
           <div style="overflow-x: auto">
-          <table class="table is-striped is-hoverable is-fullwidth is-size-7 mt-2">
+          <table id="dc-servers-table-{{$.ID}}" class="table is-striped is-hoverable is-fullwidth is-size-7 mt-2">
             <thead>
               <tr>
                 <th>OOB IP</th>
@@ -98,7 +98,7 @@
             </thead>
             <tbody>
               {{range .Servers}}
-              <tr data-server-id="{{.ID}}" data-dc-id="{{$.ID}}" style="cursor:pointer">
+              <tr data-server-id="{{.ID}}" data-display-name="{{if .Hostname}}{{.Hostname}}{{else}}{{.ServiceTag}}{{end}}" style="cursor:pointer">
                 <td>{{if .OobIP}}{{.OobIP}}{{else}}—{{end}}</td>
                 <td>{{if .Model}}{{.Model}}{{else}}—{{end}}</td>
                 <td>{{.ServiceTag}}</td>

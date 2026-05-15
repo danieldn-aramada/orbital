@@ -67,13 +67,13 @@ function getLastTab() {
 function deleteTab(displayName, itemId) {
   let tabToDelete = new TabItem(displayName, itemId)
 
-  if (localStorage.tabs) {
+  if (localStorage.datacenterTabs) {
     console.log('looking in existing entry')
-    let s = new Set(JSON.parse(localStorage.tabs))
+    let s = new Set(JSON.parse(localStorage.datacenterTabs))
     if (s.has(JSON.stringify(tabToDelete))) {
       console.log('removing from existing entry')
       s.delete(JSON.stringify(tabToDelete))
-    localStorage.tabs = JSON.stringify([...s])
+    localStorage.datacenterTabs = JSON.stringify([...s])
     }
   } else {
     console.log('no entry.. error?')
@@ -83,18 +83,18 @@ function deleteTab(displayName, itemId) {
 function saveTab(displayName, itemId) {
   let tabToAdd = new TabItem(displayName, itemId)
 
-  if (localStorage.tabs) {
+  if (localStorage.datacenterTabs) {
     console.log('existing entry')
-    let s = new Set(JSON.parse(localStorage.tabs))
+    let s = new Set(JSON.parse(localStorage.datacenterTabs))
     if (!s.has(JSON.stringify(tabToAdd))) {
       console.log('adding to existing entry')
       s.add(JSON.stringify(tabToAdd))
-    localStorage.tabs = JSON.stringify([...s])
+    localStorage.datacenterTabs = JSON.stringify([...s])
     }
   } else {
     console.log('new entry')
     let s = new Set([JSON.stringify(tabToAdd)])
-    localStorage.tabs = JSON.stringify([...s])
+    localStorage.datacenterTabs = JSON.stringify([...s])
   }
 }
 
@@ -594,7 +594,8 @@ document.addEventListener('DOMContentLoaded', () => {
       topEnd: { search: { placeholder: 'Search inventory' } },
     },
     select: { style: 'os' },
-    autoWidth: false,
+    autoWidth: true,
+    scrollX: true,
     scrollY: 400,
     scrollCollapse: true,
     pageLength: 50,
@@ -645,6 +646,7 @@ document.addEventListener('DOMContentLoaded', () => {
       inventoryTable.ajax.reload(() => { reloadButton.removeClass('is-loading') })
     }, 250)
   })
+
 })
 
 // ─── Data Centers page (/datacenters) ────────────────────────────────────────
@@ -899,16 +901,41 @@ function loadServerListTab(displayName, id) {
 window.addEventListener('load', () => {
   if (!document.getElementById('server-list-table')) return
 
-  if (!localStorage.serverTabs) return
-  const tabSet = new Set(JSON.parse(localStorage.serverTabs))
-  tabSet.forEach(tabData => {
-    const { displayName, id } = JSON.parse(tabData)
-    loadServerListTab(displayName, id)
-  })
+  if (localStorage.serverTabs) {
+    const tabSet = new Set(JSON.parse(localStorage.serverTabs))
+    tabSet.forEach(tabData => {
+      const { displayName, id } = JSON.parse(tabData)
+      loadServerListTab(displayName, id)
+    })
+  }
+
+  const params = new URLSearchParams(window.location.search)
+  const openId = params.get('open')
+  const openLabel = params.get('label')
+  if (openId) {
+    const displayName = openLabel || openId
+    if (!document.getElementById(`tab-srv-${openId}`)) {
+      loadServerListTab(displayName, openId)
+      saveServerTab(displayName, openId)
+    }
+    document.getElementById(`tab-srv-${openId}`)?.click()
+    history.replaceState(null, '', BASE + '/servers')
+    return
+  }
+
   const currentTabId = getCurrentTab()
   if (currentTabId) {
     document.getElementById(currentTabId)?.click()
   }
+})
+
+// Double-click on server row in DC detail panel → navigate to /servers?open=<id>
+document.addEventListener('dblclick', (e) => {
+  const row = e.target.closest('tr[data-server-id]')
+  if (!row) return
+  const id = row.dataset.serverId
+  const label = row.dataset.displayName || id
+  window.location.href = BASE + '/servers?open=' + encodeURIComponent(id) + '&label=' + encodeURIComponent(label)
 })
 
 // ─── Backups ──────────────────────────────────────────────────────────────────
@@ -1069,13 +1096,13 @@ window.addEventListener('load', () => {
   if (!document.getElementById('datacenter-table')) return
 
   if (new URLSearchParams(window.location.search).get('fresh') === '1') {
-    localStorage.removeItem('tabs')
+    localStorage.removeItem('datacenterTabs')
     localStorage.removeItem('tabCurrent')
     history.replaceState(null, '', '/')
   }
 
-  if (!localStorage.tabs) return
-  const tabSet = new Set(JSON.parse(localStorage.tabs))
+  if (!localStorage.datacenterTabs) return
+  const tabSet = new Set(JSON.parse(localStorage.datacenterTabs))
   tabSet.forEach(tabData => {
     const { displayName, id } = JSON.parse(tabData)
     loadDataCenterTab(displayName, id)
@@ -1257,6 +1284,7 @@ function addEventListeners() {
             initServerEventsTable(serverId);
         }, 100);
     });
+
   });
 }
 
@@ -1652,6 +1680,18 @@ document.addEventListener('htmx:afterSwap', (evt) => {
     initDcDetailTabs(id)
     dcEditors.delete(id)
     initServerDetailTabs(target)
+
+    const dcServersTable = target.querySelector('[id^="dc-servers-table-"]')
+    if (dcServersTable && !$.fn.DataTable.isDataTable(dcServersTable)) {
+      new DataTable(dcServersTable, {
+        paging: false,
+        searching: false,
+        info: false,
+        ordering: true,
+        select: { style: 'os' },
+        autoWidth: true,
+      })
+    }
     return
   }
 
@@ -1966,6 +2006,7 @@ document.addEventListener('DOMContentLoaded', () => {
       topEnd: { search: { placeholder: 'Search events…' } },
     },
     order: [[1, 'desc']],
+    pageLength: 25,
     autoWidth: true,
     scrollX: true,
     language: {

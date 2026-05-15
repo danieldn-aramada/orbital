@@ -456,6 +456,27 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/inventory": {
+            "get": {
+                "description": "Returns every node implementing ConfigItem, across all namespaces.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "graph"
+                ],
+                "summary": "List all config items",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/oci/artifacts": {
             "get": {
                 "description": "Returns the 100 most recent OCI artifacts ordered by publish time descending.",
@@ -563,6 +584,117 @@ const docTemplate = `{
                     },
                     "503": {
                         "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/restore": {
+            "get": {
+                "description": "Returns up to 50 restore jobs ordered by most recent first.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "backup graph"
+                ],
+                "summary": "List restore jobs",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handler.restoreJobResponse"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Restores DGraph blue from a stored backup. Blocked if any backup, export, or restore job is in progress.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "backup graph"
+                ],
+                "summary": "Trigger a DGraph restore",
+                "parameters": [
+                    {
+                        "description": "backupId (UUID)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/handler.triggerResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/restore/{id}": {
+            "get": {
+                "description": "Returns the status of a specific restore job.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "backup graph"
+                ],
+                "summary": "Get restore job status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Restore job ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.restoreJobResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -710,6 +842,41 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.restoreJobResponse": {
+            "type": "object",
+            "properties": {
+                "backupId": {
+                    "type": "string"
+                },
+                "backupKey": {
+                    "type": "string"
+                },
+                "completedAt": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "createdBy": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "log": {
+                    "type": "string"
+                },
+                "startedAt": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
         "handler.statusResponse": {
             "type": "object",
             "properties": {
@@ -771,10 +938,10 @@ const docTemplate = `{
 var SwaggerInfo = &swag.Spec{
 	Version:          "0.1.0",
 	Host:             "",
-	BasePath:         "/",
+	BasePath:         "/api/v1",
 	Schemes:          []string{},
 	Title:            "Orbital API",
-	Description:      "API-first, graph-native configuration management system for modular data centers.",
+	Description:      "API-first, graph-native source of truth for modular data centers.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",
