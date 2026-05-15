@@ -85,7 +85,9 @@
   // $navbar-item-img-max-height: 1.75rem,
   $navbar-item-img-max-height: 2.5rem,
   $navbar-dropdown-radius: 0.4rem,
+  $navbar-height: 4.5rem,
   // $notification-padding: 0.75em 1.25em,
+
 
   // $size-small: 14px
   $size-normal: 14px,
@@ -690,8 +692,9 @@ div.dt-container {
   }
 }
 
-// Inventory table — match pagination/info/length size to the is-size-7 table content
-div.dt-container:has(#inventory-table) {
+// Inventory and server-list tables — match pagination/info/length size to the is-size-7 table content
+div.dt-container:has(#inventory-table),
+div.dt-container:has(#server-list-table) {
   .dt-paging .pagination-link,
   .dt-paging .pagination-previous,
   .dt-paging .pagination-next,

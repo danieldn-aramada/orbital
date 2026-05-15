@@ -1,60 +1,23 @@
-# Orbital
+# 📡 Orbital
 
 Orbital is an API-first, graph-native configuration management system for
 modular data centers.
 
 For project status, see [ROADMAP.md](./ROADMAP.md)
 
-## Quick Start
-
-Clone this repo and run dependencies
-```bash
-docker-compose -f deploy/local/docker-compose.yml up -d
-```
-
-Load graphql schema
-```bash
-curl -s --data-binary '@./schema/schema-v1.graphql' --header 'content-type: application/octet-stream'  http://localhost:8080/admin/schema
-```
-
-Run orbital server
-```bash
-source deploy/local/.env
-go run ./cmd/orbital
-```
-
-Browse API docs
-
-http://localhost:8001/swagger/index.html
-
-http://localhost:8001/graphql
-
-Load example data (optional — paste into GraphQL playground at `http://localhost:8080`):
-
-```
-examples/colo-galleon.graphql    # colo namespace, 50 servers
-examples/seattle-galleon.graphql # seattle namespace, 24 servers
-examples/houston-galleon.graphql # houston namespace, 32 servers
-examples/alaska-dot-galleon.graphql     # alaska-dot namespace, 13 servers
-examples/alaska-dot-cruiser.graphql     # alaska-dot-cruiser namespace, 15 servers
-```
-
-Cleanup
-```bash
-docker-compose -f deploy/local/docker-compose.yml down
-```
 ## Motivation
 
-Many solutions exist in the IT asset and data center infrastructure
-management space (e.g. ITAM, DCIM).
+Many solutions exist in the IT asset and data center infrastructure management
+space (DCIM) and configuration management database (CMDB).
 
-Open source solutions such as [GLPI](https://www.glpi-project.org/en/), and
-[Ralph](https://ralph-ng.readthedocs.io/en/stable/) are mature and solve the
-common problem of tracking infrastructure, configuration, and asset lifecycle.
+Open source solutions such as [GLPI](https://www.glpi-project.org/en/),
+[Ralph](https://ralph-ng.readthedocs.io/en/stable/), and
+[Netbox](https://netboxlabs.com/) are mature and solve the problem of
+infrastructure configuration, asset lifecycle, and IP address management.
 
-Commercial platforms like [Device42](https://www.device42.com/) and [Sunbird
-DCIM](https://www.sunbirddcim.com/) extend many of these capabilities and even
-offer compliance-ready deployments.
+Commercial platforms like [Device42](https://www.device42.com/) and
+[SunbirdDCIM](https://www.sunbirddcim.com/) extend many of these capabilities
+and even offer compliance-ready deployments.
 
 However, for the edge and modular data centers, all fall short in these areas:
 - **Not built for disconnected environments** — most platforms assume
@@ -158,9 +121,44 @@ Config flows **orbital → orb**. For reporting, orb writes drift and divergence
 
 For detailed architecture decisions see [CLAUDE.md](CLAUDE.md).
 
-## Examples
+## Quick Start
 
-TODO
+Clone this repo and run dependencies
+```bash
+docker-compose -f deploy/local/docker-compose.yml up -d
+```
+
+Load graphql schema
+```bash
+curl -s --data-binary '@./schema/schema-v1.graphql' --header 'content-type: application/octet-stream'  http://localhost:8080/admin/schema
+```
+
+Run orbital server
+```bash
+source deploy/local/.env
+go run ./cmd/orbital
+```
+
+Browse API docs
+
+http://localhost:8001/swagger/index.html
+
+http://localhost:8001/graphql
+
+Load example data (optional — paste into GraphQL playground at `http://localhost:8080`):
+
+```
+examples/colo-galleon.graphql    # colo namespace, 50 servers
+examples/seattle-galleon.graphql # seattle namespace, 24 servers
+examples/houston-galleon.graphql # houston namespace, 32 servers
+examples/alaska-dot-galleon.graphql     # alaska-dot namespace, 13 servers
+examples/alaska-dot-cruiser.graphql     # alaska-dot-cruiser namespace, 15 servers
+```
+
+Cleanup
+```bash
+docker-compose -f deploy/local/docker-compose.yml down
+```
 
 ## Deploy
 

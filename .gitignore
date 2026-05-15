@@ -31,6 +31,10 @@ playwright-report/
 *.swp
 *.swo
 
+# Styling
+*.css.map
+*.js.map
+
 # Export artifacts
 subgraph-exports/
 dgraph-exports/
