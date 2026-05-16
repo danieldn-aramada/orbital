@@ -165,7 +165,7 @@ func (h *GraphQL) Handle(c echo.Context) error {
 
 	if touchesKnownType && h.db != nil && !hasGQLErrors(respBytes) {
 		operations, resourceTypes := extractOperations(req.Query)
-		resourceIDs := extractResourceIDs(req.Query, req.Variables)
+		resourceIDs := extractResourceIDs(req.Query, req.Variables, respBytes)
 		go h.writeEvent(opName, operations, resourceTypes, resourceIDs, actor, req.Query, req.Variables, before)
 	}
 
@@ -283,9 +283,13 @@ func extractOperations(query string) (operations []string, resourceTypes []strin
 	return
 }
 
-// extractResourceIDs collects orbIds from mutation variables and from inline
-// filter expressions in the query body (e.g. filter: { orbId: { eq: "..." } }).
-func extractResourceIDs(query string, variables map[string]any) []string {
+// extractResourceIDs collects orbIds from three sources, merged and deduplicated:
+//  1. mutation variables (single orbId field, or input array for bulk adds)
+//  2. inline filter expressions in the query body (orbId: { eq: "..." })
+//  3. the DGraph mutation response body — every "orbId" value found anywhere in
+//     the returned JSON tree (covers nested creates and any entity the client
+//     selected orbId for in the response selection set)
+func extractResourceIDs(query string, variables map[string]any, respBody []byte) []string {
 	seen := map[string]bool{}
 	var ids []string
 
@@ -296,9 +300,28 @@ func extractResourceIDs(query string, variables map[string]any) []string {
 		}
 	}
 
-	// Variables: single orbId field
+	// Variables: single orbId field (update/delete by orbId)
 	if v, ok := variables["orbId"].(string); ok {
 		add(v)
+	}
+
+	// Variables: input array (bulk add mutations)
+	// Each element may carry an orbId field.
+	if input, ok := variables["input"]; ok {
+		switch v := input.(type) {
+		case []any:
+			for _, item := range v {
+				if m, ok := item.(map[string]any); ok {
+					if id, ok := m["orbId"].(string); ok {
+						add(id)
+					}
+				}
+			}
+		case map[string]any:
+			if id, ok := v["orbId"].(string); ok {
+				add(id)
+			}
+		}
 	}
 
 	// Inline filter expressions: orbId: { eq: "..." }
@@ -306,7 +329,37 @@ func extractResourceIDs(query string, variables map[string]any) []string {
 		add(m[1])
 	}
 
+	// Response body: recursively collect every orbId value in the returned JSON.
+	// Covers nested creates and any entity the client selected orbId for.
+	if len(respBody) > 0 {
+		var respJSON any
+		if json.Unmarshal(respBody, &respJSON) == nil {
+			collectOrbIDs(respJSON, add)
+		}
+	}
+
 	return ids
+}
+
+// collectOrbIDs recursively walks an arbitrary JSON value and calls add for
+// every string value found under an "orbId" key.
+func collectOrbIDs(v any, add func(string)) {
+	switch node := v.(type) {
+	case map[string]any:
+		for k, val := range node {
+			if k == "orbId" {
+				if s, ok := val.(string); ok {
+					add(s)
+				}
+			} else {
+				collectOrbIDs(val, add)
+			}
+		}
+	case []any:
+		for _, item := range node {
+			collectOrbIDs(item, add)
+		}
+	}
 }
 
 func isMutation(query string) bool {

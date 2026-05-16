@@ -151,14 +151,15 @@ This is irreversible. The migration tool must treat field removals as explicit, 
 Orbital exposes a data center-scoped export endpoint (`POST /api/v1/datacenters/{id}/export`) that returns a `json.gz` + `schema.gz` pair representing the intended state for that data center's subgraph.
 
 **Export mechanism — blue-green DGraph:** Orbital runs two DGraph instances (blue and green). Blue is live and serves the Topology API. Green is idle-warm and used exclusively for export and validation. The export workflow:
-1. Query blue for the target data center's subgraph (GraphQL, scoped to DC)
-2. Load subgraph into green via `addDataCenter(upsert: true)` mutation
-3. Run native DGraph export mutation on green → `json.gz`
-4. Validate green is queryable (sanity check)
-5. Ship `json.gz` + `schema.gz`
-6. Wipe green for next use (or preserve on failure for debugging)
+1. Query blue for the target namespace subgraph via DQL (`has(ConfigItem.namespace)` + `uid_in`) — fetches all scalar and edge predicates separately, merged by UID in Go
+2. Wipe scratch (`drop_all`) at the START of each export — prevents stale data from a previous export bleeding in
+3. Apply schema to scratch
+4. Bump scratch Zero's UID lease to cover the highest UID in the subgraph
+5. Load subgraph into scratch via DQL mutate (preserves original UIDs from blue)
+6. Trigger native DGraph export mutation on scratch → `json.gz`
+7. Package `json.gz` + `schema.gz` into a zip artifact
 
-Only one export may run at a time per data center.
+Only one export may run at a time across all data centers (scratch is shared state).
 
 DGraph's export mutation does not support subgraph filtering — it is a full-graph dump. The blue-green approach scopes the export by loading only the target DC's subgraph into green before exporting.
 
@@ -272,6 +273,7 @@ These have been explicitly decided. Do not re-suggest them.
 - **Export job lifecycle** — `pending → running → completed → stale`. Stale detection: on export job list page load, orbital checks scratch file existence for each completed job and marks stale if missing. Delete removes the PostgreSQL record, the export zip, and the job's scratch directory.
 - **Export and publish are separate actions** — publish never happens automatically on export. Publish button appears on completed jobs. Re-publishing is allowed (creates new `registry_artifacts` row).
 - **Export jobs are globally serialized** — scratch DGraph is shared state; only one export job may be pending or running at a time across all data centers. Trigger returns 409 if any export is already in progress.
+- **Scratch DGraph is wiped at the START of each export, not the end** — `wipeScratch` (`drop_all`) runs before loading new data. If a previous job failed and left data, the next export starts clean. A wipe-at-end-only approach caused stale data from prior exports to bleed into subsequent ones.
 - **Per-job scratch export directories** — each export job writes DGraph output to `/dgraph/export/<jobID>/` inside the scratch container (host-side: `DGRAPH_SCRATCH_EXPORT_DIR/<jobID>/`). The container-side base path `/dgraph/export` is hardcoded; only the host-side mount path is configurable. The directory persists until the user deletes the job — never auto-cleaned.
 - **DGraph export `destination` parameter** — DGraph's export mutation accepts `destination` to route output to a specific path. Used to isolate per-job output. DGraph writes a timestamped subdirectory (`dgraph.r<raft>.u<date>.<time>/`) inside the destination.
 - **Backup zip naming** — `orbital-<version>-<timestamp>.zip` (e.g. `orbital-v0.1.0-20260509T135041Z.zip`). Version comes from `internal/version.Version` injected at build time via ldflags.
@@ -318,6 +320,7 @@ These have been explicitly decided. Do not re-suggest them.
 - **`cfg.SchemaPath` is the authoritative schema file path** — default `schema/schema-demo.graphql`. All handlers (export, backup, schema UI) read from this env-configurable path. Never hardcode `schema/schema-v1.graphql`.
 - **Edge delivery page is now Signed Artifacts** — route `/signed-artifacts`, template `signed-artifacts.gohtml`, template key `"signed-artifacts"`. No auto-poll on that page — manual reload button only.
 - **Audit events are one-per-HTTP-request, not one-per-entity** — a compound GraphQL mutation touching multiple entities produces a single event row. `operations` (JSON array) lists all DGraph operation names found in the query body (e.g. `["updateDataCenter","updateServer"]`). `resource_types` and `resource_ids` are JSON arrays of all types and orbIds touched. The full raw payload (`{operationName, query, variables}`) is stored in `details`.
+- **Audit `resource_ids` extraction uses three sources** — `extractResourceIDs` merges: (1) single `variables["orbId"]`; (2) bulk `input` array walk; (3) recursive walk of the DGraph response JSON for every `"orbId"` value (covers nested creates, any entity the client selected orbId for). Only remaining gap: mutations filtered by a non-orbId field where the client also selects no orbId in the response (e.g. `filter: { hostname: {...} }` + `{ numUids }`) — these record an empty resource_ids list.
 - **Audit event detection uses regex on query body** — `knownMutationRe` matches `(add|update|delete)(DataCenter|Server|...)` in the query string. Adding a new mutable type requires updating the regex. This is acknowledged tech debt — `vektah/gqlparser` AST parsing is the right long-term fix but not worth adding yet.
 - **`ifVersion` MVCC is decoupled from event recording** — MVCC check is opt-in (presence of `ifVersion` variable). Events are always recorded for mutations touching known types regardless of whether `ifVersion` is present.
 - **ent schema fields should not use `Immutable()`** — immutability enforced at the application layer (never call `.Update()` on event records). `Immutable()` on ent fields causes migration pain: changing a field requires drop/recreate rather than ALTER. Use plain fields; immutability is a code convention, not a schema constraint.
@@ -351,6 +354,8 @@ Example GraphQL mutation files live in `examples/`. Each file seeds one data cen
 - Run `addNamespace` → `addDataCenter` → `addRack` → `addServer` in that order within a single mutation batch
 - DGraph upsert never deletes stale nodes — if a node is removed from seed data (e.g. rack renamed), add an explicit `deleteRack`/`deleteServer` mutation to `seed.sh` before seeding
 - `hostname` and `rackPosition` on `Server` are **design intent** fields set by the admin (not populated by orb scan). Hostname convention: `r{rack:02d}-u{position:02d}.{datacenter}` — e.g. `r01-u17.alaska-dot-cruiser`
+- **`make seed-aks-clean` for clean-slate AKS seeding** — runs `drop_all` on DGraph blue before seeding. Use when AKS has stale/accumulated nodes from previous seeds. `make seed-aks` does NOT drop first. `seed-dgraph.sh --clean` accepts the flag directly.
+- **Full seed produces 1,351 config items** — 9 DC + 24 Rack + 188 Server + 155 IdracSettings + 106 StorageController + 313 StorageVolume + 368 StorageDevice + 188 IPAddress. This is the expected count after a clean seed with all current files in `examples/seed/`.
 
 ## E2E Tests (Playwright)
 

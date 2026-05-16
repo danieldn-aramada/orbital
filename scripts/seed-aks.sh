@@ -9,9 +9,11 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 NAMESPACE="netbox"
+CLEAN_FLAG=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --namespace|-n) NAMESPACE="$2"; shift 2 ;;
+    --clean)        CLEAN_FLAG="--clean"; shift ;;
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
@@ -58,6 +60,6 @@ wait_for_port 8080 "dgraph-blue"
 wait_for_port 8081 "dgraph-scratch"
 wait_for_port 6081 "dgraph-scratch-zero"
 
-bash scripts/seed-dgraph.sh
+bash scripts/seed-dgraph.sh $CLEAN_FLAG
 
 echo "==> Done."
