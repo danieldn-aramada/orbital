@@ -1,0 +1,440 @@
+mutation {
+  addNamespace(input: { name: "navy-cruiser" }, upsert: true) {
+    numUids
+  }
+
+  addDataCenter(input: [
+    {
+      name: "navy-cruiser"
+      orbId: "navy-cruiser:navy-cruiser"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      namespace: { name: "navy-cruiser" }
+    }
+  ], upsert: true) {
+    numUids
+  }
+
+  addRack(input: [
+    {
+      name: "Rack-3"
+      orbId: "navy-cruiser:Rack-3"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      namespace: { name: "navy-cruiser" }
+      dataCenter: { orbId: "navy-cruiser:navy-cruiser" }
+    }
+  ], upsert: true) {
+    numUids
+  }
+
+  addIPAddress(input: [
+    {
+      orbId: "navy-cruiser:10.0.87.50"
+      address: "10.0.87.50"
+      name: "10.0.87.50"
+      role: "oob"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+    }
+    {
+      orbId: "navy-cruiser:10.0.87.51"
+      address: "10.0.87.51"
+      name: "10.0.87.51"
+      role: "oob"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+    }
+    {
+      orbId: "navy-cruiser:10.0.87.52"
+      address: "10.0.87.52"
+      name: "10.0.87.52"
+      role: "oob"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+    }
+    {
+      orbId: "navy-cruiser:10.0.87.53"
+      address: "10.0.87.53"
+      name: "10.0.87.53"
+      role: "oob"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+    }
+    {
+      orbId: "navy-cruiser:10.0.87.54"
+      address: "10.0.87.54"
+      name: "10.0.87.54"
+      role: "oob"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+    }
+    {
+      orbId: "navy-cruiser:10.0.87.55"
+      address: "10.0.87.55"
+      name: "10.0.87.55"
+      role: "oob"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+    }
+    {
+      orbId: "navy-cruiser:10.0.87.56"
+      address: "10.0.87.56"
+      name: "10.0.87.56"
+      role: "oob"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+    }
+    {
+      orbId: "navy-cruiser:10.0.87.57"
+      address: "10.0.87.57"
+      name: "10.0.87.57"
+      role: "oob"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+    }
+    {
+      orbId: "navy-cruiser:10.0.87.58"
+      address: "10.0.87.58"
+      name: "10.0.87.58"
+      role: "oob"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+    }
+    {
+      orbId: "navy-cruiser:10.0.87.59"
+      address: "10.0.87.59"
+      name: "10.0.87.59"
+      role: "oob"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+    }
+    {
+      orbId: "navy-cruiser:10.0.87.60"
+      address: "10.0.87.60"
+      name: "10.0.87.60"
+      role: "oob"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+    }
+    {
+      orbId: "navy-cruiser:10.0.87.61"
+      address: "10.0.87.61"
+      name: "10.0.87.61"
+      role: "oob"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+    }
+    {
+      orbId: "navy-cruiser:10.0.87.62"
+      address: "10.0.87.62"
+      name: "10.0.87.62"
+      role: "oob"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+    }
+    {
+      orbId: "navy-cruiser:10.0.87.63"
+      address: "10.0.87.63"
+      name: "10.0.87.63"
+      role: "oob"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+    }
+    {
+      orbId: "navy-cruiser:10.0.87.64"
+      address: "10.0.87.64"
+      name: "10.0.87.64"
+      role: "oob"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+    }
+    {
+      orbId: "navy-cruiser:10.0.87.65"
+      address: "10.0.87.65"
+      name: "10.0.87.65"
+      role: "oob"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+    }
+  ], upsert: true) {
+    numUids
+  }
+
+  addServer(input: [
+    {
+      serviceTag: "2XQKQ54"
+      manufacturer: "Dell"
+      orbId: "navy-cruiser:2XQKQ54"
+      name: "r03-u05.navy-cruiser"
+      model: "PowerEdge R650"
+      hostname: "r03-u05.navy-cruiser"
+      rackPosition: 5
+      oobIP: { orbId: "navy-cruiser:10.0.87.58" }
+      oobMAC: "a8:3c:a5:4c:69:bf"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      namespace: { name: "navy-cruiser" }
+      dataCenter: { orbId: "navy-cruiser:navy-cruiser" }
+      rack: { orbId: "navy-cruiser:Rack-3" }
+    }
+    {
+      serviceTag: "1XQKQ54"
+      manufacturer: "Dell"
+      orbId: "navy-cruiser:1XQKQ54"
+      name: "r03-u06.navy-cruiser"
+      model: "PowerEdge R650"
+      hostname: "r03-u06.navy-cruiser"
+      rackPosition: 6
+      oobIP: { orbId: "navy-cruiser:10.0.87.59" }
+      oobMAC: "a8:3c:a5:4c:69:a1"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      namespace: { name: "navy-cruiser" }
+      dataCenter: { orbId: "navy-cruiser:navy-cruiser" }
+      rack: { orbId: "navy-cruiser:Rack-3" }
+    }
+    {
+      serviceTag: "3XQKQ54"
+      manufacturer: "Dell"
+      orbId: "navy-cruiser:3XQKQ54"
+      name: "r03-u07.navy-cruiser"
+      model: "PowerEdge R650"
+      hostname: "r03-u07.navy-cruiser"
+      rackPosition: 7
+      oobIP: { orbId: "navy-cruiser:10.0.87.60" }
+      oobMAC: "a8:3c:a5:4c:66:53"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      namespace: { name: "navy-cruiser" }
+      dataCenter: { orbId: "navy-cruiser:navy-cruiser" }
+      rack: { orbId: "navy-cruiser:Rack-3" }
+    }
+    {
+      serviceTag: "GWQKQ54"
+      manufacturer: "Dell"
+      orbId: "navy-cruiser:GWQKQ54"
+      name: "r03-u08.navy-cruiser"
+      model: "PowerEdge R650"
+      hostname: "r03-u08.navy-cruiser"
+      rackPosition: 8
+      oobIP: { orbId: "navy-cruiser:10.0.87.50" }
+      oobMAC: "a8:3c:a5:4c:69:a7"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      namespace: { name: "navy-cruiser" }
+      dataCenter: { orbId: "navy-cruiser:navy-cruiser" }
+      rack: { orbId: "navy-cruiser:Rack-3" }
+    }
+    {
+      serviceTag: "HWQKQ54"
+      manufacturer: "Dell"
+      orbId: "navy-cruiser:HWQKQ54"
+      name: "r03-u09.navy-cruiser"
+      model: "PowerEdge R650"
+      hostname: "r03-u09.navy-cruiser"
+      rackPosition: 9
+      oobIP: { orbId: "navy-cruiser:10.0.87.51" }
+      oobMAC: "a8:3c:a5:4c:64:af"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      namespace: { name: "navy-cruiser" }
+      dataCenter: { orbId: "navy-cruiser:navy-cruiser" }
+      rack: { orbId: "navy-cruiser:Rack-3" }
+    }
+    {
+      serviceTag: "JWQKQ54"
+      manufacturer: "Dell"
+      orbId: "navy-cruiser:JWQKQ54"
+      name: "r03-u10.navy-cruiser"
+      model: "PowerEdge R650"
+      hostname: "r03-u10.navy-cruiser"
+      rackPosition: 10
+      oobIP: { orbId: "navy-cruiser:10.0.87.52" }
+      oobMAC: "a8:3c:a5:4c:60:89"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      namespace: { name: "navy-cruiser" }
+      dataCenter: { orbId: "navy-cruiser:navy-cruiser" }
+      rack: { orbId: "navy-cruiser:Rack-3" }
+    }
+    {
+      serviceTag: "44KPW54"
+      manufacturer: "Dell"
+      orbId: "navy-cruiser:44KPW54"
+      name: "r03-u17.navy-cruiser"
+      model: "PowerEdge R450"
+      hostname: "r03-u17.navy-cruiser"
+      rackPosition: 17
+      oobIP: { orbId: "navy-cruiser:10.0.87.61" }
+      oobMAC: "d0:c1:b5:07:47:67"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      namespace: { name: "navy-cruiser" }
+      dataCenter: { orbId: "navy-cruiser:navy-cruiser" }
+      rack: { orbId: "navy-cruiser:Rack-3" }
+    }
+    {
+      serviceTag: "84KPW54"
+      manufacturer: "Dell"
+      orbId: "navy-cruiser:84KPW54"
+      name: "r03-u18.navy-cruiser"
+      model: "PowerEdge R450"
+      hostname: "r03-u18.navy-cruiser"
+      rackPosition: 18
+      oobIP: { orbId: "navy-cruiser:10.0.87.62" }
+      oobMAC: "d0:c1:b5:07:4a:df"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      namespace: { name: "navy-cruiser" }
+      dataCenter: { orbId: "navy-cruiser:navy-cruiser" }
+      rack: { orbId: "navy-cruiser:Rack-3" }
+    }
+    {
+      serviceTag: "94KPW54"
+      manufacturer: "Dell"
+      orbId: "navy-cruiser:94KPW54"
+      name: "r03-u19.navy-cruiser"
+      model: "PowerEdge R450"
+      hostname: "r03-u19.navy-cruiser"
+      rackPosition: 19
+      oobIP: { orbId: "navy-cruiser:10.0.87.63" }
+      oobMAC: "d0:c1:b5:07:4f:cf"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      namespace: { name: "navy-cruiser" }
+      dataCenter: { orbId: "navy-cruiser:navy-cruiser" }
+      rack: { orbId: "navy-cruiser:Rack-3" }
+    }
+    {
+      serviceTag: "B4KPW54"
+      manufacturer: "Dell"
+      orbId: "navy-cruiser:B4KPW54"
+      name: "r03-u20.navy-cruiser"
+      model: "PowerEdge R450"
+      hostname: "r03-u20.navy-cruiser"
+      rackPosition: 20
+      oobIP: { orbId: "navy-cruiser:10.0.87.64" }
+      oobMAC: "d0:c1:b5:07:4a:77"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      namespace: { name: "navy-cruiser" }
+      dataCenter: { orbId: "navy-cruiser:navy-cruiser" }
+      rack: { orbId: "navy-cruiser:Rack-3" }
+    }
+    {
+      serviceTag: "14KPW54"
+      manufacturer: "Dell"
+      orbId: "navy-cruiser:14KPW54"
+      name: "r03-u21.navy-cruiser"
+      model: "PowerEdge R450"
+      hostname: "r03-u21.navy-cruiser"
+      rackPosition: 21
+      oobIP: { orbId: "navy-cruiser:10.0.87.65" }
+      oobMAC: "d0:c1:b5:07:50:4f"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      namespace: { name: "navy-cruiser" }
+      dataCenter: { orbId: "navy-cruiser:navy-cruiser" }
+      rack: { orbId: "navy-cruiser:Rack-3" }
+    }
+    {
+      serviceTag: "54KPW54"
+      manufacturer: "Dell"
+      orbId: "navy-cruiser:54KPW54"
+      name: "r03-u22.navy-cruiser"
+      model: "PowerEdge R450"
+      hostname: "r03-u22.navy-cruiser"
+      rackPosition: 22
+      oobIP: { orbId: "navy-cruiser:10.0.87.53" }
+      oobMAC: "d0:c1:b5:07:47:f7"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      namespace: { name: "navy-cruiser" }
+      dataCenter: { orbId: "navy-cruiser:navy-cruiser" }
+      rack: { orbId: "navy-cruiser:Rack-3" }
+    }
+    {
+      serviceTag: "64KPW54"
+      manufacturer: "Dell"
+      orbId: "navy-cruiser:64KPW54"
+      name: "r03-u23.navy-cruiser"
+      model: "PowerEdge R450"
+      hostname: "r03-u23.navy-cruiser"
+      rackPosition: 23
+      oobIP: { orbId: "navy-cruiser:10.0.87.54" }
+      oobMAC: "d0:c1:b5:07:48:57"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      namespace: { name: "navy-cruiser" }
+      dataCenter: { orbId: "navy-cruiser:navy-cruiser" }
+      rack: { orbId: "navy-cruiser:Rack-3" }
+    }
+    {
+      serviceTag: "24KPW54"
+      manufacturer: "Dell"
+      orbId: "navy-cruiser:24KPW54"
+      name: "r03-u24.navy-cruiser"
+      model: "PowerEdge R450"
+      hostname: "r03-u24.navy-cruiser"
+      rackPosition: 24
+      oobIP: { orbId: "navy-cruiser:10.0.87.55" }
+      oobMAC: "d0:c1:b5:07:47:77"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      namespace: { name: "navy-cruiser" }
+      dataCenter: { orbId: "navy-cruiser:navy-cruiser" }
+      rack: { orbId: "navy-cruiser:Rack-3" }
+    }
+    {
+      serviceTag: "34KPW54"
+      manufacturer: "Dell"
+      orbId: "navy-cruiser:34KPW54"
+      name: "r03-u25.navy-cruiser"
+      model: "PowerEdge R450"
+      hostname: "r03-u25.navy-cruiser"
+      rackPosition: 25
+      oobIP: { orbId: "navy-cruiser:10.0.87.56" }
+      oobMAC: "d0:c1:b5:07:48:27"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      namespace: { name: "navy-cruiser" }
+      dataCenter: { orbId: "navy-cruiser:navy-cruiser" }
+      rack: { orbId: "navy-cruiser:Rack-3" }
+    }
+    {
+      serviceTag: "74KPW54"
+      manufacturer: "Dell"
+      orbId: "navy-cruiser:74KPW54"
+      name: "r03-u26.navy-cruiser"
+      model: "PowerEdge R450"
+      hostname: "r03-u26.navy-cruiser"
+      rackPosition: 26
+      oobIP: { orbId: "navy-cruiser:10.0.87.57" }
+      oobMAC: "d0:c1:b5:07:46:6f"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      namespace: { name: "navy-cruiser" }
+      dataCenter: { orbId: "navy-cruiser:navy-cruiser" }
+      rack: { orbId: "navy-cruiser:Rack-3" }
+    }
+  ], upsert: true) {
+    numUids
+  }
+}

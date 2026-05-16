@@ -36,9 +36,10 @@ curl -sf -X POST "${DGRAPH}/graphql" \
   -H "Content-Type: application/json" \
   -d '{"query": "mutation { deleteIPAddress(filter: { has: orbId }) { numUids } }"}' >/dev/null
 
-echo "==> Seeding DGraph..."
-for f in examples/seed/*.graphql; do
+seed_file() {
+  local f="$1"
   echo "    $(basename "$f" .graphql)"
+  local resp
   resp=$(curl -sf -X POST "${DGRAPH}/graphql" \
     -H "Content-Type: application/json" \
     -d "{\"query\": $(jq -Rs . < "$f")}")
@@ -47,6 +48,20 @@ for f in examples/seed/*.graphql; do
     echo "$resp" | jq -r '.errors[].message' >&2
     exit 1
   fi
+}
+
+echo "==> Seeding DGraph (base)..."
+for f in examples/seed/*.graphql; do
+  case "$(basename "$f" .graphql)" in
+    *-idrac|*-storage) continue ;;
+  esac
+  seed_file "$f"
+done
+
+echo "==> Seeding DGraph (supplementary)..."
+for f in examples/seed/*-idrac.graphql examples/seed/*-storage.graphql; do
+  [ -f "$f" ] || continue
+  seed_file "$f"
 done
 
 echo "==> Done."

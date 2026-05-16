@@ -39,14 +39,19 @@ const getServerQuery = `
         osToIdracPassThroughEnabled
         sshEnabled
         usbManagementPortEnabled
+        ipmiEnabled
+        lockdownModeEnabled
+        dhcpEnabled
+        racadmEnabled
       }
       serverConfigurationProfile { json }
       storageControllers {
         orbId
+        name
         storageDevices {
+          name
           capacityBytes
           manufacturer
-          model
           serialNumber
           wwn
         }
@@ -114,16 +119,21 @@ type serverQueryResponse struct {
 		OsToIdracPassThroughEnabled bool   `json:"osToIdracPassThroughEnabled"`
 		SshEnabled                  bool   `json:"sshEnabled"`
 		UsbManagementPortEnabled    bool   `json:"usbManagementPortEnabled"`
+		IpmiEnabled                 bool   `json:"ipmiEnabled"`
+		LockdownModeEnabled         bool   `json:"lockdownModeEnabled"`
+		DhcpEnabled                 bool   `json:"dhcpEnabled"`
+		RacadmEnabled               bool   `json:"racadmEnabled"`
 	} `json:"idracSettings"`
 	ServerConfigurationProfile *struct {
 		JSON string `json:"json"`
 	} `json:"serverConfigurationProfile"`
 	StorageControllers []struct {
 		OrbID          string `json:"orbId"`
+		Name           string `json:"name"`
 		StorageDevices []struct {
+			Name          string `json:"name"`
 			CapacityBytes int    `json:"capacityBytes"`
 			Manufacturer  string `json:"manufacturer"`
-			Model         string `json:"model"`
 			SerialNumber  string `json:"serialNumber"`
 			WWN           string `json:"wwn"`
 		} `json:"storageDevices"`
@@ -135,18 +145,23 @@ type idracSettingsTabData struct {
 	OsToIdracPassThroughEnabled bool
 	SshEnabled                  bool
 	UsbManagementPortEnabled    bool
+	IpmiEnabled                 bool
+	LockdownModeEnabled         bool
+	DhcpEnabled                 bool
+	RacadmEnabled               bool
 }
 
 type storageDeviceTabData struct {
+	Name          string
 	CapacityBytes int
 	Manufacturer  string
-	Model         string
 	SerialNumber  string
 	WWN           string
 }
 
 type storageControllerTabData struct {
 	OrbID          string
+	Name           string
 	StorageDevices []storageDeviceTabData
 }
 
@@ -228,13 +243,34 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 		}
 	}
 
+	idracFields := map[string]any{
+		"firmwareVersion":             "",
+		"sshEnabled":                  false,
+		"ipmiEnabled":                 false,
+		"lockdownModeEnabled":         false,
+		"osToIdracPassThroughEnabled": false,
+		"usbManagementPortEnabled":    false,
+		"dhcpEnabled":                 false,
+		"racadmEnabled":               false,
+	}
+	if raw.IdracSettings != nil {
+		idracFields["firmwareVersion"] = raw.IdracSettings.FirmwareVersion
+		idracFields["sshEnabled"] = raw.IdracSettings.SshEnabled
+		idracFields["ipmiEnabled"] = raw.IdracSettings.IpmiEnabled
+		idracFields["lockdownModeEnabled"] = raw.IdracSettings.LockdownModeEnabled
+		idracFields["osToIdracPassThroughEnabled"] = raw.IdracSettings.OsToIdracPassThroughEnabled
+		idracFields["usbManagementPortEnabled"] = raw.IdracSettings.UsbManagementPortEnabled
+		idracFields["dhcpEnabled"] = raw.IdracSettings.DhcpEnabled
+		idracFields["racadmEnabled"] = raw.IdracSettings.RacadmEnabled
+	}
 	editFields := map[string]any{
-		"hostname":     raw.Hostname,
-		"manufacturer": raw.Manufacturer,
-		"model":        raw.Model,
-		"oobMAC":       raw.OobMAC,
-		"rackPosition": raw.RackPosition,
-		"serviceTag":   raw.ServiceTag,
+		"hostname":        raw.Hostname,
+		"manufacturer":    raw.Manufacturer,
+		"model":           raw.Model,
+		"oobMAC":          raw.OobMAC,
+		"rackPosition":    raw.RackPosition,
+		"serviceTag":      raw.ServiceTag,
+		"idracSettings":   idracFields,
 	}
 	editJSON, _ := json.Marshal(editFields)
 
@@ -270,6 +306,10 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 			OsToIdracPassThroughEnabled: raw.IdracSettings.OsToIdracPassThroughEnabled,
 			SshEnabled:                  raw.IdracSettings.SshEnabled,
 			UsbManagementPortEnabled:    raw.IdracSettings.UsbManagementPortEnabled,
+			IpmiEnabled:                 raw.IdracSettings.IpmiEnabled,
+			LockdownModeEnabled:         raw.IdracSettings.LockdownModeEnabled,
+			DhcpEnabled:                 raw.IdracSettings.DhcpEnabled,
+			RacadmEnabled:               raw.IdracSettings.RacadmEnabled,
 		}
 	}
 
@@ -283,12 +323,12 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 	}
 
 	for _, sc := range raw.StorageControllers {
-		ctrl := storageControllerTabData{OrbID: sc.OrbID}
+		ctrl := storageControllerTabData{OrbID: sc.OrbID, Name: sc.Name}
 		for _, d := range sc.StorageDevices {
 			ctrl.StorageDevices = append(ctrl.StorageDevices, storageDeviceTabData{
+				Name:          d.Name,
 				CapacityBytes: d.CapacityBytes,
 				Manufacturer:  d.Manufacturer,
-				Model:         d.Model,
 				SerialNumber:  d.SerialNumber,
 				WWN:           d.WWN,
 			})

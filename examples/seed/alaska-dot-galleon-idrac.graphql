@@ -1,0 +1,198 @@
+mutation UpsertIdracSettings {
+  addIdracSettings(input: [
+    {
+      orbId: "alaska-dot:GRTLY24-idrac"
+      name: "idrac"
+      namespace: { name: "alaska-dot" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "alaska-dot:GRTLY24" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: false
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "alaska-dot:55W8K44-idrac"
+      name: "idrac"
+      namespace: { name: "alaska-dot" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "alaska-dot:55W8K44" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: false
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "alaska-dot:75W8K44-idrac"
+      name: "idrac"
+      namespace: { name: "alaska-dot" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "alaska-dot:75W8K44" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: false
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "alaska-dot:65W8K44-idrac"
+      name: "idrac"
+      namespace: { name: "alaska-dot" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "alaska-dot:65W8K44" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: false
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "alaska-dot:85W8K44-idrac"
+      name: "idrac"
+      namespace: { name: "alaska-dot" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "alaska-dot:85W8K44" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: false
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "alaska-dot:6FK8K44-idrac"
+      name: "idrac"
+      namespace: { name: "alaska-dot" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "alaska-dot:6FK8K44" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: false
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "alaska-dot:3FK8K44-idrac"
+      name: "idrac"
+      namespace: { name: "alaska-dot" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "alaska-dot:3FK8K44" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: false
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "alaska-dot:1FK8K44-idrac"
+      name: "idrac"
+      namespace: { name: "alaska-dot" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "alaska-dot:1FK8K44" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: false
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "alaska-dot:5FK8K44-idrac"
+      name: "idrac"
+      namespace: { name: "alaska-dot" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "alaska-dot:5FK8K44" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: false
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "alaska-dot:4FK8K44-idrac"
+      name: "idrac"
+      namespace: { name: "alaska-dot" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "alaska-dot:4FK8K44" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: false
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "alaska-dot:JDK8K44-idrac"
+      name: "idrac"
+      namespace: { name: "alaska-dot" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "alaska-dot:JDK8K44" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: false
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "alaska-dot:3H3V564-idrac"
+      name: "idrac"
+      namespace: { name: "alaska-dot" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "alaska-dot:3H3V564" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: false
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+  ], upsert: true) {
+    numUids
+  }
+}

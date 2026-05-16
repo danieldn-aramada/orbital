@@ -65,6 +65,7 @@ type eventsFragmentData struct {
 var skipVarsSet = map[string]bool{
 	"updatedBy": true,
 	"updatedAt": true,
+	"id":        true,
 }
 
 // List returns a paginated list of audit events ordered by timestamp desc.
@@ -191,7 +192,18 @@ func buildVarSummary(raw json.RawMessage) template.HTML {
 		if skipVarsSet[k] {
 			continue
 		}
-		parts = append(parts, fmt.Sprintf("<span style=\"white-space:nowrap\"><strong>%s:</strong> %v</span>", template.HTMLEscapeString(k), template.HTMLEscapeString(fmt.Sprintf("%v", v))))
+		var valStr string
+		switch v.(type) {
+		case string, float64, bool, int, int64:
+			valStr = fmt.Sprintf("%v", v)
+		default:
+			if b, err := json.Marshal(v); err == nil {
+				valStr = string(b)
+			} else {
+				valStr = fmt.Sprintf("%v", v)
+			}
+		}
+		parts = append(parts, fmt.Sprintf("<span style=\"white-space:nowrap\"><strong>%s:</strong> %s</span>", template.HTMLEscapeString(k), template.HTMLEscapeString(valStr)))
 	}
 	if len(parts) == 0 {
 		return "—"
@@ -215,8 +227,8 @@ func buildDiffHTML(before, variables map[string]any, resourceType string) templa
 		if !inBefore || !inVars {
 			continue
 		}
-		beforeStr := fmt.Sprintf("%v", bv)
-		afterStr := fmt.Sprintf("%v", av)
+		beforeStr := valStr(bv, av)
+		afterStr := valStr(av, av)
 		if beforeStr == afterStr {
 			continue
 		}
@@ -242,6 +254,44 @@ func buildDiffHTML(before, variables map[string]any, resourceType string) templa
 			}
 		}
 		sections.WriteString(`</pre></div>`)
+	}
+
+	// iDRAC diff — when the before-snapshot includes idracSettings and the mutation included idracInput
+	if resourceType == "Server" {
+		beforeIdrac, hasBefore := before["idracSettings"].(map[string]any)
+		afterIdracArr, _ := variables["idracInput"].([]any)
+		if hasBefore && len(afterIdracArr) > 0 {
+			afterIdrac, _ := afterIdracArr[0].(map[string]any)
+			for _, field := range []string{
+				"firmwareVersion", "sshEnabled", "ipmiEnabled", "lockdownModeEnabled",
+				"osToIdracPassThroughEnabled", "usbManagementPortEnabled", "dhcpEnabled", "racadmEnabled",
+			} {
+				beforeStr := valStr(beforeIdrac[field], afterIdrac[field])
+				afterStr := valStr(afterIdrac[field], afterIdrac[field])
+				if beforeStr == afterStr {
+					continue
+				}
+				diffLines := lineDiff(prettyLines(beforeStr), prettyLines(afterStr))
+				sections.WriteString(`<div style="margin-bottom:0.5rem">`)
+				sections.WriteString(`<strong style="font-size:0.7rem">idrac: ` + template.HTMLEscapeString(field) + `</strong>`)
+				sections.WriteString(`<pre style="font-size:0.7rem;margin:0.2rem 0 0;background:#fafafa;padding:0.4rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all">`)
+				for _, line := range diffLines {
+					if len(line) == 0 {
+						sections.WriteString("\n")
+						continue
+					}
+					switch line[0] {
+					case '+':
+						sections.WriteString(`<span style="color:#1a7f37">` + template.HTMLEscapeString(line) + `</span>` + "\n")
+					case '-':
+						sections.WriteString(`<span style="color:#cf222e;font-style:italic">` + template.HTMLEscapeString(line) + `</span>` + "\n")
+					default:
+						sections.WriteString(template.HTMLEscapeString(line) + "\n")
+					}
+				}
+				sections.WriteString(`</pre></div>`)
+			}
+		}
 	}
 
 	result := sections.String()
@@ -301,6 +351,23 @@ func lineDiff(before, after []string) []string {
 		out[l], out[r] = out[r], out[l]
 	}
 	return out
+}
+
+// valStr converts v to a string for diff comparison. When v is nil it returns
+// the zero-value string for the type of ref (the after-value), so that an
+// unset DGraph field (nil) compares equal to the form's default zero value.
+func valStr(v, ref any) string {
+	if v == nil {
+		switch ref.(type) {
+		case float64, int, int64, json.Number:
+			return "0"
+		case bool:
+			return "false"
+		default:
+			return ""
+		}
+	}
+	return fmt.Sprintf("%v", v)
 }
 
 // writeAuditEvent persists a single audit event row. Failures are logged and

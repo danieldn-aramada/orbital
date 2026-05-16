@@ -1,0 +1,214 @@
+mutation UpsertIdracSettings {
+  addIdracSettings(input: [
+    {
+      orbId: "grayling:505CK74-idrac"
+      name: "idrac"
+      namespace: { name: "grayling" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "grayling:505CK74" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "grayling:B5WVM34-idrac"
+      name: "idrac"
+      namespace: { name: "grayling" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "grayling:B5WVM34" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "grayling:JY69K74-idrac"
+      name: "idrac"
+      namespace: { name: "grayling" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "grayling:JY69K74" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "grayling:BLP6K74-idrac"
+      name: "idrac"
+      namespace: { name: "grayling" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "grayling:BLP6K74" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "grayling:CLP6K74-idrac"
+      name: "idrac"
+      namespace: { name: "grayling" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "grayling:CLP6K74" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "grayling:8LP6K74-idrac"
+      name: "idrac"
+      namespace: { name: "grayling" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "grayling:8LP6K74" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "grayling:3LP6K74-idrac"
+      name: "idrac"
+      namespace: { name: "grayling" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "grayling:3LP6K74" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "grayling:9LP6K74-idrac"
+      name: "idrac"
+      namespace: { name: "grayling" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "grayling:9LP6K74" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "grayling:6LP6K74-idrac"
+      name: "idrac"
+      namespace: { name: "grayling" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "grayling:6LP6K74" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "grayling:7LP6K74-idrac"
+      name: "idrac"
+      namespace: { name: "grayling" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "grayling:7LP6K74" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "grayling:5LP6K74-idrac"
+      name: "idrac"
+      namespace: { name: "grayling" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "grayling:5LP6K74" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "grayling:4LP6K74-idrac"
+      name: "idrac"
+      namespace: { name: "grayling" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "grayling:4LP6K74" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "grayling:D5MP6K74-idrac"
+      name: "idrac"
+      namespace: { name: "grayling" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "grayling:D5MP6K74" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+  ], upsert: true) {
+    numUids
+  }
+}

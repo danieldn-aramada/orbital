@@ -45,14 +45,18 @@ wait_for_port() {
 
 echo "==> Starting port-forwards (namespace: ${NAMESPACE})..."
 
-kubectl port-forward svc/dgraph-blue-dgraph-alpha   8080:8080 -n "$NAMESPACE" >/dev/null 2>&1 &
+kubectl port-forward svc/dgraph-blue-dgraph-alpha    8080:8080 -n "$NAMESPACE" >/dev/null 2>&1 &
 PIDS+=($!)
 
 kubectl port-forward svc/dgraph-scratch-dgraph-alpha 8081:8080 -n "$NAMESPACE" >/dev/null 2>&1 &
 PIDS+=($!)
 
+kubectl port-forward svc/dgraph-scratch-dgraph-zero  6081:6080 -n "$NAMESPACE" >/dev/null 2>&1 &
+PIDS+=($!)
+
 wait_for_port 8080 "dgraph-blue"
 wait_for_port 8081 "dgraph-scratch"
+wait_for_port 6081 "dgraph-scratch-zero"
 
 bash scripts/seed-dgraph.sh
 

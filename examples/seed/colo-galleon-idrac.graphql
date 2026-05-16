@@ -1,0 +1,710 @@
+mutation UpsertIdracSettings {
+  addIdracSettings(input: [
+    {
+      orbId: "colo:3RK3V64-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:3RK3V64" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:FQK3V64-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:FQK3V64" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:8MP6K74-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:8MP6K74" }
+      firmwareVersion: "7.10.90.00"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:GJ32V64-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:GJ32V64" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:CWJHDX3-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:CWJHDX3" }
+      firmwareVersion: "7.10.70.00"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:CFRHDX3-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:CFRHDX3" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:3V5Y2Z3-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:3V5Y2Z3" }
+      firmwareVersion: "7.10.70.00"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:5PJ1FZ3-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:5PJ1FZ3" }
+      firmwareVersion: "7.10.70.00"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:FJ32V64-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:FJ32V64" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:5B52FZ3-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:5B52FZ3" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:2RK3V64-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:2RK3V64" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:1W8Y2Z3-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:1W8Y2Z3" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:HQK3V64-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:HQK3V64" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:B4KS2Z3-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:B4KS2Z3" }
+      firmwareVersion: "7.10.90.00"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:2W8Y2Z3-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:2W8Y2Z3" }
+      firmwareVersion: "7.10.90.00"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:6CVD664-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:6CVD664" }
+      firmwareVersion: "7.10.90.00"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:1RK3V64-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:1RK3V64" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:JV8Y2Z3-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:JV8Y2Z3" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:9FRHDX3-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:9FRHDX3" }
+      firmwareVersion: "7.10.90.00"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:BFRHDX3-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:BFRHDX3" }
+      firmwareVersion: "7.10.50.00"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: true
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:6F206G4-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:6F206G4" }
+      firmwareVersion: "7.20.80.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:7F206G4-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:7F206G4" }
+      firmwareVersion: "7.20.80.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:HD206G4-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:HD206G4" }
+      firmwareVersion: "7.20.80.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:1F206G4-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:1F206G4" }
+      firmwareVersion: "7.20.80.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:2F206G4-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:2F206G4" }
+      firmwareVersion: "7.20.80.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:4F206G4-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:4F206G4" }
+      firmwareVersion: "7.20.80.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:5F206G4-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:5F206G4" }
+      firmwareVersion: "7.20.80.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:JD206G4-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:JD206G4" }
+      firmwareVersion: "7.20.80.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:JQK3V64-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:JQK3V64" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:BGMM3D4-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:BGMM3D4" }
+      firmwareVersion: "7.20.70.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:9GMM3D4-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:9GMM3D4" }
+      firmwareVersion: "7.20.70.50"
+      sshEnabled: false
+      ipmiEnabled: true
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:CGMM3D4-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:CGMM3D4" }
+      firmwareVersion: "7.20.70.50"
+      sshEnabled: false
+      ipmiEnabled: true
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:BMP6K74-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:BMP6K74" }
+      firmwareVersion: "7.20.80.50"
+      sshEnabled: false
+      ipmiEnabled: true
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:GQK3V64-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:GQK3V64" }
+      firmwareVersion: "7.20.80.50"
+      sshEnabled: false
+      ipmiEnabled: true
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:FGMM3D4-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:FGMM3D4" }
+      firmwareVersion: "7.30.10.50"
+      sshEnabled: false
+      ipmiEnabled: true
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:9BQS2Z3-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:9BQS2Z3" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: true
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:DGMM3D4-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:DGMM3D4" }
+      firmwareVersion: "7.20.70.50"
+      sshEnabled: true
+      ipmiEnabled: true
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:7CVD664-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:7CVD664" }
+      firmwareVersion: "7.20.10.05"
+      sshEnabled: false
+      ipmiEnabled: true
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:HMP6K74-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:HMP6K74" }
+      firmwareVersion: "7.10.90.00"
+      sshEnabled: false
+      ipmiEnabled: true
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:4RK3V64-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:4RK3V64" }
+      firmwareVersion: "7.20.80.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:GD206G4-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:GD206G4" }
+      firmwareVersion: "7.20.80.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:9MP6K74-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:9MP6K74" }
+      firmwareVersion: "7.20.80.50"
+      sshEnabled: false
+      ipmiEnabled: true
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:7MP6K74-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:7MP6K74" }
+      firmwareVersion: "7.10.90.00"
+      sshEnabled: false
+      ipmiEnabled: true
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: true
+      racadmEnabled: true
+    }
+    {
+      orbId: "colo:8CVD664-idrac"
+      name: "idrac"
+      namespace: { name: "colo" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:8CVD664" }
+      firmwareVersion: "7.30.10.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+  ], upsert: true) {
+    numUids
+  }
+}

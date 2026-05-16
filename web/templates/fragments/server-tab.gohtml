@@ -15,10 +15,9 @@
         <span class="icon"><i class="fa-solid fa-gauge-high"></i></span>
         <span>Grafana</span>
       </button>
-      <button class="button is-rounded is-small is-link mt-1"
-        hx-get="{{.BasePath}}/servers/{{.ID}}{{if .ShowDCBack}}?dcCtx=1{{end}}"
-        hx-target="{{if .ShowDCBack}}#tab-content-{{.DataCenterID}}{{else}}#tab-content-srv-{{.ID}}{{end}}"
-        hx-swap="innerHTML">
+      <button class="button is-rounded is-small is-link mt-1 js-srv-reload"
+        data-srv-url="/servers/{{.ID}}{{if .ShowDCBack}}?dcCtx=1{{end}}"
+        data-srv-target="{{if .ShowDCBack}}tab-content-{{.DataCenterID}}{{else}}tab-content-srv-{{.ID}}{{end}}">
         <span class="icon"><i class="fa-solid fa-refresh"></i></span>
         <span>Reload</span>
       </button>
@@ -79,13 +78,10 @@
         <div class="tabs is-boxed" id="srv-detail-tabs-{{.ID}}">
           <ul>
             <li class="is-active" data-panel="srv-panel-idrac-{{.ID}}">
-              <a><span class="icon is-small"><i class="fa-solid fa-microchip"></i></span><span>iDRAC</span></a>
+              <a><span class="icon is-small"><i class="fa-solid fa-microchip"></i></span><span>iDRAC Settings</span></a>
             </li>
             <li data-panel="srv-panel-storage-{{.ID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-hard-drive"></i></span><span>Storage</span></a>
-            </li>
-            <li data-panel="srv-panel-config-{{.ID}}">
-              <a><span class="icon is-small"><i class="fa-solid fa-file-code"></i></span><span>Config Profile</span></a>
             </li>
             <li data-panel="srv-panel-audit-{{.ID}}" data-orb-id="{{.OrbID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a>
@@ -97,60 +93,56 @@
 
         <div id="srv-panel-idrac-{{.ID}}">
           {{if .IdracSettings}}
-          <table class="table is-fullwidth is-size-7 mt-2">
+          <table class="table is-fullwidth mt-2">
             <tbody>
               <tr><td style="white-space:nowrap;width:1%">Firmware Version</td><td>{{if .IdracSettings.FirmwareVersion}}{{.IdracSettings.FirmwareVersion}}{{else}}—{{end}}</td></tr>
               <tr><td style="white-space:nowrap">SSH Enabled</td><td>{{.IdracSettings.SshEnabled}}</td></tr>
               <tr><td style="white-space:nowrap">USB Mgmt Port Enabled</td><td>{{.IdracSettings.UsbManagementPortEnabled}}</td></tr>
               <tr><td style="white-space:nowrap">OS-to-iDRAC Pass-through</td><td>{{.IdracSettings.OsToIdracPassThroughEnabled}}</td></tr>
+              <tr><td style="white-space:nowrap">IPMI Enabled</td><td>{{.IdracSettings.IpmiEnabled}}</td></tr>
+              <tr><td style="white-space:nowrap">Lockdown Mode</td><td>{{.IdracSettings.LockdownModeEnabled}}</td></tr>
+              <tr><td style="white-space:nowrap">DHCP Enabled</td><td>{{.IdracSettings.DhcpEnabled}}</td></tr>
+              <tr><td style="white-space:nowrap">RACADM Enabled</td><td>{{.IdracSettings.RacadmEnabled}}</td></tr>
             </tbody>
           </table>
           {{else}}
-          <p class="is-size-7 has-text-grey p-2">No iDRAC settings discovered yet.</p>
+          <p class="has-text-grey p-2">No iDRAC settings discovered yet.</p>
           {{end}}
         </div>
 
         <div id="srv-panel-storage-{{.ID}}" style="display:none">
           {{if .StorageControllers}}
-          {{range .StorageControllers}}
-          <p class="is-size-7 has-text-weight-semibold mt-2 mb-1 pl-1">{{.OrbID}}</p>
-          {{if .StorageDevices}}
           <div style="overflow-x:auto">
-          <table class="table is-striped is-hoverable is-fullwidth is-size-7">
+          <table class="table is-striped is-hoverable is-fullwidth">
             <thead>
               <tr>
-                <th>Model</th>
+                <th>Controller</th>
+                <th>Name</th>
                 <th>Manufacturer</th>
-                <th>Capacity (bytes)</th>
+                <th>Capacity (GiB)</th>
                 <th>Serial</th>
                 <th>WWN</th>
               </tr>
             </thead>
             <tbody>
+              {{range .StorageControllers}}
+              {{$ctrl := .Name}}
               {{range .StorageDevices}}
               <tr>
-                <td>{{if .Model}}{{.Model}}{{else}}—{{end}}</td>
+                <td>{{$ctrl}}</td>
+                <td>{{if .Name}}{{.Name}}{{else}}—{{end}}</td>
                 <td>{{if .Manufacturer}}{{.Manufacturer}}{{else}}—{{end}}</td>
                 <td>{{if .CapacityBytes}}{{.CapacityBytes}}{{else}}—{{end}}</td>
                 <td>{{if .SerialNumber}}{{.SerialNumber}}{{else}}—{{end}}</td>
                 <td>{{if .WWN}}{{.WWN}}{{else}}—{{end}}</td>
               </tr>
               {{end}}
+              {{end}}
             </tbody>
           </table>
           </div>
-          {{end}}
-          {{end}}
           {{else}}
-          <p class="is-size-7 has-text-grey p-2">No storage discovered yet.</p>
-          {{end}}
-        </div>
-
-        <div id="srv-panel-config-{{.ID}}" style="display:none">
-          {{if .ConfigProfileJSON}}
-          <pre style="font-size:0.75rem;overflow-x:auto;background:transparent;padding:0.5rem">{{.ConfigProfileJSON}}</pre>
-          {{else}}
-          <p class="is-size-7 has-text-grey p-2">No configuration profile discovered yet.</p>
+          <p class="has-text-grey p-2">No storage discovered yet.</p>
           {{end}}
         </div>
 

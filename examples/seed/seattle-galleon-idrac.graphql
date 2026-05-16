@@ -1,0 +1,54 @@
+mutation UpsertIdracSettings {
+  addIdracSettings(input: [
+    {
+      orbId: "seattle:FZ7P7Y3-idrac"
+      name: "idrac"
+      namespace: { name: "seattle" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "seattle:FZ7P7Y3" }
+      firmwareVersion: "7.10.70.00"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "seattle:5L4P7Y3-idrac"
+      name: "idrac"
+      namespace: { name: "seattle" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "seattle:5L4P7Y3" }
+      firmwareVersion: "7.10.70.00"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "seattle:7L4P7Y3-idrac"
+      name: "idrac"
+      namespace: { name: "seattle" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "seattle:7L4P7Y3" }
+      firmwareVersion: "7.10.70.00"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+  ], upsert: true) {
+    numUids
+  }
+}

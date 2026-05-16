@@ -28,6 +28,8 @@ services:
   dgraph-zero-scratch:
     image: dgraph/dgraph:v25.3.1
     command: dgraph zero --my=dgraph-zero-scratch:5080
+    ports:
+      - "6081:6080"
 
   dgraph-alpha-scratch:
     image: dgraph/dgraph:v25.3.1
