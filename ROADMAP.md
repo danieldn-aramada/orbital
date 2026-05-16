@@ -47,7 +47,7 @@ Goal: learning, not shipping. Each spike is a question to answer. Results define
 | 12 | Orb import API | What is the right API contract for orb's local config import endpoint? | — | Not started | — |
 | 13 | Divergence reports | How does orbital surface divergence and let an admin resolve it? | — | Not started | 17 |
 | 15 | AKS smoke test suite | How do we validate critical user flows after each AKS dev deployment? | — | Not started | 14 |
-| 16 | Seed iDRAC and storage devices | Does the schema cover all iDRAC and storage fields we need? | — | Not started | — |
+| 16 | Seed iDRAC and storage devices | Does the schema cover all iDRAC and storage fields we need? | Daniel | ✅ Done (5/15) | — |
 | 18 | Observability | What does useful monitoring look like for orbital and DGraph in AKS? | — | Not started | 1 |
 
 ---
@@ -193,6 +193,10 @@ Goal: learning, not shipping. Each spike is a question to answer. Results define
 - ✅ `deploy/charts/values-dev-scratch.yaml` — DGraph scratch Helm values
 - ✅ Two DGraph helm releases: `dgraph-blue` (live) and `dgraph-scratch` (export only)
 - ✅ `deploy/README.md` — step-by-step AKS dev deploy guide
+- ✅ `scripts/seed-aks.sh` — port-forwards DGraph blue + scratch + zero, runs seed-dgraph.sh
+- ✅ `scripts/seed-aks-postgres.sh` — port-forwards orbital-postgres, creates admin user
+- ✅ `ORBITAL_EXPORT_DIR` set to PVC-backed `/scratch-exports/zips` — fixes export zips lost on pod restart
+- ✅ AKS dev end-to-end validated: seed, export, backup, restore
 - ⬜ `//go:embed` replaces `template.ParseFiles` — binary self-contained, no `COPY web/` in Dockerfile
 - ⬜ CI pipeline: build, tag, push on merge to main
 - ⬜ `kubectl apply -f deploy/dev/` brings up working orbital in a clean namespace
@@ -240,11 +244,13 @@ Goal: learning, not shipping. Each spike is a question to answer. Results define
 
 ---
 
-### Spike 16. Seed iDRAC and storage devices
-- ⬜ Gather real iDRAC settings for alaska-dot-cruiser and alaska-dot-galleon seed servers
-- ⬜ Identify and add any missing `IdracSettings` schema fields (nullable only)
-- ⬜ Add `addIdracSettings`, `addStorageController`, `addStorageDevice` to seed files
-- ⬜ Server detail iDRAC and Storage tabs render seeded data correctly
+### Spike 16. Seed iDRAC and storage devices ✅
+**Completed:** May 15, 2026
+
+- ✅ 4 new `IdracSettings` fields added to schema: `ipmiEnabled`, `lockdownModeEnabled`, `dhcpEnabled`, `racadmEnabled`
+- ✅ iDRAC seed files added for all data centers (Alaska DOT Cruiser, Galleon, Seattle, Houston, Grayling, Livermore, 2F UAE, Colo, Navy Cruiser)
+- ✅ Server detail iDRAC tab renders all 8 fields correctly
+- ✅ Navy Cruiser data center seeded (Rack-3, 16 servers, 16 OOB IPs)
 
 ---
 
@@ -280,6 +286,7 @@ Goal: learning, not shipping. Each spike is a question to answer. Results define
 - Network infrastructure config items (owned externally)
 - PLM and ITSM integrations — vendor selection in progress
 - Multi-DGraph instance per data center
+- PostgreSQL backup and restore — handled out-of-band by managed PostgreSQL service (Azure). Post-MVP: coordinate DGraph and PostgreSQL backups into a consistent point-in-time snapshot.
 
 ---
 

@@ -98,6 +98,8 @@ spec:
               value: /dgraph-exports
             - name: DGRAPH_SCRATCH_EXPORT_DIR
               value: /scratch-exports
+            - name: ORBITAL_EXPORT_DIR
+              value: /scratch-exports/zips
             # Restore
             - name: ORBITAL_DGRAPH_NAMESPACE
               value: netbox
