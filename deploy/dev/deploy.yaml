@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: orbital
-          image: armadaeksatest.azurecr.io/orbital:v0.0.9
+          image: armadaeksatest.azurecr.io/orbital:v0.0.10
           imagePullPolicy: Always
           ports:
             - containerPort: 8001
