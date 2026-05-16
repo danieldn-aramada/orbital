@@ -354,14 +354,20 @@ func (h *Export) doExport(ctx context.Context, jobID uuid.UUID, log *slog.Logger
 		return fmt.Errorf("namespace %q has no nodes in blue DGraph — nothing to export", namespaceName)
 	}
 
-	// 3. Apply schema to scratch so GraphQL layer is aware of all types before
+	// 3. Wipe scratch so stale data from a previous export cannot bleed into this one.
+	log.Info("wiping scratch DGraph")
+	if err := h.wipeScratch(ctx); err != nil {
+		return fmt.Errorf("wipe scratch: %w", err)
+	}
+
+	// 4. Apply schema to scratch so GraphQL layer is aware of all types before
 	// loading data. Safe to run after a manual wipe.
 	log.Info("applying schema to scratch DGraph")
 	if err := h.applyScratchSchema(ctx); err != nil {
 		return fmt.Errorf("apply scratch schema: %w", err)
 	}
 
-	// 4. Bump scratch Zero's UID lease to cover the highest UID in the subgraph,
+	// 5. Bump scratch Zero's UID lease to cover the highest UID in the subgraph,
 	// then load the subgraph into scratch preserving original UIDs from blue.
 	log.Info("loading subgraph into scratch DGraph")
 	if err := h.bumpScratchUIDLease(ctx, nodes); err != nil {

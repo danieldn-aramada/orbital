@@ -15,15 +15,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - Air-gap ready design — operates in disconnected and edge environments without external dependencies
 - Graph-first infrastructure model — represent data centers as relationships between physical and logical resources
-- Multi-source infrastructure discovery — ingest from bare metal systems (BMC) and external inventory systems via API integrations
-- Topology API (digital twin) — build and query a live, traversable graph of infrastructure design intent
+- Topology API (digital twin) — build and query a live, traversable graph of infrastructure design intent; consumers define their own query shape
+- Intent-only CMDB — mutations update authoritative design intent only; orbital is never in the reconciliation path
 
 ### Non-Goals
 
 - Full DCIM system with dashboards, alerting, and observability
 - End-to-end infrastructure control plane or management suite
 - Reconciling configuration drift — orbital surfaces divergence to administrators but never auto-resolves it and is never in the reconciliation path
-- Packaging, signing, or transporting config payloads — orbital's contract ends at the export API (`json.gz` + `schema.gz`); how that is packaged into a ConfigBundle, signed, and delivered to the edge is the deployment layer's concern (e.g. the [`configbundle`](https://github.com/armada/configbundle) project)
+- Packaging, signing, or transporting config payloads — orbital's contract ends at the export API (`json.gz` + `schema.gz`); how that is packaged into a ConfigBundle, signed, and delivered to the edge is the deployment layer's concern (implemented in a separate repository)
 
 ## Stack
 
@@ -62,7 +62,7 @@ Orbital provides the APIs — consumers wire the transport. Orbital does not pre
 - **Report intake API** — receives drift and divergence reports. How those reports travel from the edge to orbital is the caller's concern. Orbital never initiates contact with the edge.
 - **Topology API** — proxies DGraph's GraphQL API for digital twin consumers. No transport concern.
 
-The [`configbundle`](https://github.com/armada/configbundle) project is one example of a deployment layer built on top of orbital: its Bundle Generator calls the export API, packages the result as a signed OCI artifact, and its edge agent delivers it to orb. This is a reference implementation, not a requirement.
+The configbundle project (separate repository) is one example of a deployment layer built on top of orbital: its Bundle Generator calls the export API, packages the result as a signed OCI artifact, and its edge agent delivers it to orb. This is a reference implementation, not a requirement.
 
 The exception to the one-way config flow is onboarding: orb discovers existing infrastructure, exports a graph, and an admin manually carries it to orbital (USB/file upload) to seed the cloud control plane. After import, orbital becomes the source of truth going forward.
 
