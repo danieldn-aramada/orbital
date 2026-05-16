@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: orbital
-          image: armadaeksatest.azurecr.io/orbital:v0.0.8
+          image: armadaeksatest.azurecr.io/orbital:v0.0.9
           imagePullPolicy: Always
           ports:
             - containerPort: 8001
@@ -36,6 +36,8 @@ spec:
               value: http://dgraph-scratch-dgraph-alpha:8080/graphql
             - name: DGRAPH_SCRATCH_ADMIN_URL
               value: http://dgraph-scratch-dgraph-alpha:8080/admin
+            - name: DGRAPH_SCRATCH_ZERO_URL
+              value: http://dgraph-scratch-dgraph-zero:6080
             # PostgreSQL
             - name: DATABASE_URL
               valueFrom:

@@ -106,26 +106,27 @@ function closeTab(id){
   document.querySelector(`#btn-reload-servers`).click()
 }
 
-// save current tab
+function getTabStorageKey() {
+  if (document.getElementById('server-list-table')) return 'srvTabCurrent'
+  return 'dcTabCurrent'
+}
+
 function setCurrentTab(id) {
-  localStorage.tabCurrent = id
+  localStorage[getTabStorageKey()] = id
 }
 
 function removeCurrentTab(id) {
-  if (localStorage?.tabCurrent == id) {
-    localStorage.removeItem(tabCurrent)
-  }
+  const key = getTabStorageKey()
+  if (localStorage[key] == id) localStorage.removeItem(key)
 }
 
 function replaceCurrentTab(currentId, targetId) {
-  if (localStorage?.tabCurrent == currentId) {
-    localStorage.setItem('tabCurrent', targetId)
-  }
+  const key = getTabStorageKey()
+  if (localStorage[key] == currentId) localStorage.setItem(key, targetId)
 }
 
-// get current tab
 function getCurrentTab() {
-  return localStorage.tabCurrent
+  return localStorage[getTabStorageKey()]
 }
 
 // places is-active on tab element, removes is-active on others
@@ -342,82 +343,140 @@ document.addEventListener('click', (e) => {
 function showDatacenterSkeleton(id) {
   const target = document.getElementById(`tab-content-${id}`)
   if (!target) return
-
-  const skeletonRows = Array.from({ length: 10 }, () => `
-    <tr>
-      <td><span class="is-skeleton">10.20.21.00</span></td>
-      <td><span class="is-skeleton">PowerEdge R750</span></td>
-      <td><span class="is-skeleton">XXXXXXXXX</span></td>
-      <td><span class="is-skeleton">r03-u14.houston-galleon</span></td>
-      <td><span class="is-skeleton">A.OF.C.09</span></td>
-      <td><span class="is-skeleton">00</span></td>
-    </tr>`).join('')
-
+  const s = () => `<span class="is-skeleton" style="display:block">&nbsp;</span>`
+  const summary = [
+    'Name', 'Servers', 'Racks', 'Asset Data',
+  ].map(l => `<tr><td style="white-space:nowrap;width:1%">${l}</td><td>${s()}</td></tr>`).join('')
+  const meta = [
+    'Namespace', 'Orb ID', 'Created By', 'Created At', 'Last Updated', 'Last Updated By',
+  ].map(l => `<tr><td style="white-space:nowrap;width:1%">${l}</td><td>${s()}</td></tr>`).join('')
+  const srvRows = Array.from({ length: 10 }, () =>
+    `<tr>${['','','','','',''].map(() => `<td>${s()}</td>`).join('')}</tr>`
+  ).join('')
   target.innerHTML = `
     <div class="fixed-grid has-3-cols mb-0">
       <div class="columns m-0">
         <div class="column pt-0 pl-0">
           <button class="button is-rounded is-small is-warning mt-1" disabled>
-            <span class="icon"><i class="fa-solid fa-gauge-high"></i></span>
-            <span>Grafana</span>
+            <span class="icon"><i class="fa-solid fa-gauge-high"></i></span><span>Grafana</span>
+          </button>
+          <button class="button is-rounded is-small is-link mt-1 is-loading" disabled>
+            <span class="icon"><i class="fa-solid fa-refresh"></i></span><span>Reload</span>
           </button>
           <button class="button is-rounded is-small is-link mt-1" disabled>
-            <span class="icon"><i class="fa-solid fa-refresh"></i></span>
-            <span>Reload</span>
-          </button>
-          <button class="button is-rounded is-small is-link mt-1" disabled>
-            <span class="icon"><i class="fa-solid fa-pen-to-square"></i></span>
-            <span>Edit</span>
+            <span class="icon"><i class="fa-solid fa-pen-to-square"></i></span><span>Edit</span>
           </button>
           <button class="button is-rounded is-small is-danger mt-1" disabled>
-            <span class="icon"><i class="fa-solid fa-trash"></i></span>
-            <span>Delete</span>
+            <span class="icon"><i class="fa-solid fa-trash"></i></span><span>Delete</span>
           </button>
         </div>
       </div>
-
-      <div class="grid mt-2">
-        <div class="cell is-col-span-2">
+      <div class="grid">
+        <div class="cell is-col-span-2 is-row-span-1">
           <article class="box">
             <p class="is-size-4 pb-4">Data Center Summary</p>
-            <table class="table is-fullwidth">
-              <tbody>
-                <tr><td style="width:40%">Name</td><td><span class="is-skeleton">colo-galleon</span></td></tr>
-                <tr><td>Servers</td><td><span class="is-skeleton">00</span></td></tr>
-                <tr><td>Created By</td><td><span class="is-skeleton">admin@example.com</span></td></tr>
-                <tr><td>Created At</td><td><span class="is-skeleton">2024-01-01 00:00:00</span></td></tr>
-              </tbody>
-            </table>
+            <div style="overflow-x:auto"><table class="table is-fullwidth"><tbody>${summary}</tbody></table></div>
           </article>
         </div>
-        <div class="cell">
+        <div class="cell is-row-span-1">
           <article class="box" style="height:100%">
             <p class="is-size-4 mb-4">Metadata</p>
-            <table class="table mb-0">
-              <tbody>
-                <tr><td style="width:40%">Namespace</td><td><span class="is-skeleton">colo</span></td></tr>
-                <tr><td>Orb ID</td><td><span class="is-skeleton">colo:colo-galleon</span></td></tr>
-              </tbody>
-            </table>
+            <div style="overflow-x:auto"><table class="table mb-0"><tbody>${meta}</tbody></table></div>
           </article>
         </div>
         <div class="cell is-col-span-3">
           <article class="box pb-2">
             <p class="is-size-4 pb-4">Details</p>
-            <table class="table is-striped is-fullwidth is-size-7 mt-2">
-              <thead>
-                <tr>
-                  <th>OOB IP</th><th>Model</th><th>Service Tag</th><th>Hostname</th><th>Rack</th>
-                  <th>Rack Position</th>
-                </tr>
-              </thead>
-              <tbody>${skeletonRows}</tbody>
-            </table>
+            <div class="tabs is-boxed">
+              <ul>
+                <li class="is-active"><a><span class="icon is-small"><i class="fa-solid fa-server"></i></span><span>Servers</span></a></li>
+                <li><a><span class="icon is-small"><i class="fa-solid fa-table-cells"></i></span><span>Racks</span></a></li>
+                <li><a><span class="icon is-small"><i class="fa-solid fa-triangle-exclamation"></i></span><span>Divergence Reports</span></a></li>
+                <li><a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a></li>
+              </ul>
+            </div>
+            <div style="min-height:400px">
+              <table class="table is-striped is-fullwidth is-size-7 mt-2">
+                <thead><tr><th>OOB IP</th><th>Model</th><th>Service Tag</th><th>Hostname</th><th>Rack</th><th>Rack Position</th></tr></thead>
+                <tbody>${srvRows}</tbody>
+              </table>
+            </div>
           </article>
         </div>
       </div>
-    </div>
-  </div>`
+    </div>`
+}
+
+function showServerSkeleton(targetId) {
+  const target = document.getElementById(targetId)
+  if (!target) return
+  const s = () => `<span class="is-skeleton" style="display:block">&nbsp;</span>`
+  const rows = [
+    'Data Center', 'Hostname', 'Manufacturer', 'Model',
+    'OOB IP', 'OOB MAC', 'Rack', 'Rack Position', 'Service Tag',
+  ].map(l => `<tr><td style="white-space:nowrap;width:1%">${l}</td><td>${s()}</td></tr>`).join('')
+  const meta = [
+    'Namespace', 'Orb ID', 'Created By', 'Created At', 'Last Updated', 'Last Updated By',
+  ].map(l => `<tr><td style="white-space:nowrap;width:1%">${l}</td><td>${s()}</td></tr>`).join('')
+  target.innerHTML = `
+    <div class="fixed-grid has-3-cols mb-0">
+      <div class="columns m-0">
+        <div class="column pt-0 pl-0">
+          <button class="button is-rounded is-small is-warning mt-1" disabled>
+            <span class="icon"><i class="fa-solid fa-gauge-high"></i></span><span>Grafana</span>
+          </button>
+          <button class="button is-rounded is-small is-link mt-1 is-loading" disabled>
+            <span class="icon"><i class="fa-solid fa-refresh"></i></span><span>Reload</span>
+          </button>
+          <button class="button is-rounded is-small is-link mt-1" disabled>
+            <span class="icon"><i class="fa-solid fa-pen-to-square"></i></span><span>Edit</span>
+          </button>
+          <button class="button is-rounded is-small is-danger mt-1" disabled>
+            <span class="icon"><i class="fa-solid fa-trash"></i></span><span>Delete</span>
+          </button>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="cell is-col-span-2 is-row-span-1">
+          <article class="box">
+            <p class="is-size-4 pb-4">Server Summary</p>
+            <div style="overflow-x:auto"><table class="table is-fullwidth"><tbody>${rows}</tbody></table></div>
+          </article>
+        </div>
+        <div class="cell is-row-span-1">
+          <article class="box" style="height:100%">
+            <p class="is-size-4 mb-4">Metadata</p>
+            <div style="overflow-x:auto"><table class="table mb-0"><tbody>${meta}</tbody></table></div>
+          </article>
+        </div>
+        <div class="cell is-col-span-3">
+          <article class="box pb-2">
+            <p class="is-size-4 pb-4">Details</p>
+            <div class="tabs is-boxed">
+              <ul>
+                <li class="is-active"><a><span class="icon is-small"><i class="fa-solid fa-microchip"></i></span><span>iDRAC Settings</span></a></li>
+                <li><a><span class="icon is-small"><i class="fa-solid fa-hard-drive"></i></span><span>Storage</span></a></li>
+                <li><a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a></li>
+              </ul>
+            </div>
+            <div style="min-height:300px">
+              <table class="table is-fullwidth mt-2"><tbody>${[
+                'Firmware Version','SSH Enabled','USB Mgmt Port Enabled',
+                'OS-to-iDRAC Pass-through','IPMI Enabled','Lockdown Mode',
+                'DHCP Enabled','RACADM Enabled',
+              ].map(l => `<tr><td style="white-space:nowrap;width:1%">${l}</td><td>${s()}</td></tr>`).join('')}</tbody></table>
+            </div>
+          </article>
+        </div>
+      </div>
+    </div>`
+}
+
+function fetchWithMinDelay(url, minMs = 500) {
+  return Promise.all([
+    fetch(BASE + url, { headers: { 'HX-Request': 'true' } }).then(r => r.text()),
+    new Promise(resolve => setTimeout(resolve, minMs)),
+  ]).then(([html]) => html)
 }
 
 function initDcDetailTabs(id) {
@@ -526,8 +585,7 @@ document.addEventListener('dblclick', function (e) {
 
 function loadDataCenterTab(displayName, id) {
   const tabHtml = `<li class="tab">
-    <a id="tab-${id}" data-target="tab-content-${id}" role="tab" aria-selected="false" tabindex="-1"
-      hx-get="${BASE}/datacenters/${id}" hx-trigger="click" hx-target="#tab-content-${id}" hx-swap="innerHTML">
+    <a id="tab-${id}" data-target="tab-content-${id}" role="tab" aria-selected="false" tabindex="-1">
       ${displayName}
       <span class="pl-2">
         <button id="tab-close-${id}">
@@ -542,22 +600,16 @@ function loadDataCenterTab(displayName, id) {
   $('#tablist').append(tabHtml)
   $('.app-main').append(contentHtml)
 
-  htmx.process(document.querySelector(`#tab-${id}`))
-
   const tabLink = document.getElementById(`tab-${id}`)
+  const tabContent = document.getElementById(`tab-content-${id}`)
+
   tabLink.addEventListener('click', () => {
     activateTab(tabLink.parentElement)
     displayTabContent(`tab-content-${id}`)
     setCurrentTab(`tab-${id}`)
-  })
-  const tabContent = document.getElementById(`tab-content-${id}`)
-
-  tabLink.addEventListener('htmx:beforeRequest', (e) => {
-    if (tabContent.dataset.loaded) {
-      e.preventDefault()
-      return
+    if (!tabContent.dataset.loaded) {
+      htmx.ajax('GET', BASE + '/datacenters/' + id, { target: '#tab-content-' + id, swap: 'innerHTML' })
     }
-    showDatacenterSkeleton(id)
   })
 
   const tabClose = document.getElementById(`tab-close-${id}`)
@@ -589,7 +641,7 @@ document.addEventListener('DOMContentLoaded', () => {
           { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
           { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-inventory' } },
         ] },
-        { pageLength: { menu: [25, 50, 100, 250] } },
+        { pageLength: { menu: [50, 100, 250] } },
       ],
       topEnd: { search: { placeholder: 'Search inventory' } },
     },
@@ -599,6 +651,7 @@ document.addEventListener('DOMContentLoaded', () => {
     scrollY: 400,
     scrollCollapse: true,
     pageLength: 50,
+    stateSave: true,
     language: {
       infoEmpty: 'No config items to show',
       info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
@@ -608,10 +661,17 @@ document.addEventListener('DOMContentLoaded', () => {
       dtWrapLengthSelect(this.api())
 
       const typeCol = this.api().column(0)
+      const typeSelect = document.getElementById('inventory-type-select')
       typeCol.data().unique().sort().each(function (type) {
-        document.getElementById('inventory-type-select').add(new Option(type, type))
+        typeSelect.add(new Option(type, type))
       })
-      document.getElementById('inventory-type-select').addEventListener('change', function () {
+      const savedType = localStorage.getItem('inventoryTypeFilter') || ''
+      if (savedType) {
+        typeSelect.value = savedType
+        typeCol.search(savedType, { exact: true }).draw()
+      }
+      typeSelect.addEventListener('change', function () {
+        localStorage.setItem('inventoryTypeFilter', this.value)
         typeCol.search(this.value, { exact: !!this.value }).draw()
       })
     },
@@ -682,12 +742,14 @@ document.addEventListener('DOMContentLoaded', () => {
     scrollX: true,
     scrollY: 400,
     scrollCollapse: true,
+    stateSave: true,
     language: {
       infoEmpty: 'No data centers to show',
       info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
       entries: { _: 'data centers', 1: 'data center' },
     },
     initComplete: function () { dtWrapLengthSelect(this.api()) },
+    createdRow: function (row) { row.style.cursor = 'pointer'; row.title = 'Double-click to open' },
     columns: [
       { data: 'name' },
       { data: 'serverCount' },
@@ -755,11 +817,13 @@ document.addEventListener('DOMContentLoaded', () => {
     })
   })
 
+  const dcFilterEl = $('<div class="select is-small" style="margin-right:0.25rem"><select id="server-dc-select"><option value="">All Data Centers</option></select></div>')
+
   const serverListTable = new DataTable('#server-list-table', {
     pageLength: 50,
     layout: {
       topStart: [
-        { pageLength: { menu: [25, 50, 100, 250] } },
+        dcFilterEl,
         { buttons: [
           { extend: 'excel', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-excel"></i><span>Excel</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Excel' },
           { extend: 'csv', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-text"></i><span>CSV</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV' },
@@ -767,6 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
           { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
           { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-servers' } },
         ] },
+        { pageLength: { menu: [25, 50, 100, 250] } },
       ],
       topEnd: { search: { placeholder: 'Search servers' } },
     },
@@ -775,12 +840,34 @@ document.addEventListener('DOMContentLoaded', () => {
     scrollX: true,
     scrollY: 'calc(100vh - 340px)',
     scrollCollapse: true,
+    stateSave: true,
     language: {
       infoEmpty: 'No servers to show',
       info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
       entries: { _: 'servers', 1: 'server' },
     },
-    initComplete: function () { dtWrapLengthSelect(this.api()) },
+    initComplete: function () {
+      dtWrapLengthSelect(this.api())
+
+      const dcCol = this.api().column(0)
+      dcCol.data().unique().sort().each(function (dc) {
+        document.getElementById('server-dc-select').add(new Option(dc, dc))
+      })
+      const saved = localStorage.getItem('server-dc-filter')
+      if (saved) {
+        const el = document.getElementById('server-dc-select')
+        el.value = saved
+        dcCol.search(saved, { exact: true }).draw()
+      }
+      document.getElementById('server-dc-select').addEventListener('change', function () {
+        if (this.value) {
+          localStorage.setItem('server-dc-filter', this.value)
+        } else {
+          localStorage.removeItem('server-dc-filter')
+        }
+        dcCol.search(this.value, { exact: !!this.value }).draw()
+      })
+    },
     columns: [
       { data: 'dataCenter' },
       { data: 'oobIP' },
@@ -817,6 +904,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dataCenter: s.dataCenter?.name ?? '—',
       })),
     },
+    createdRow: function (row) { row.style.cursor = 'pointer'; row.title = 'Double-click to open' },
   })
 
   const reloadButton = serverListTable.button('reload:name').node()
@@ -1690,6 +1778,7 @@ document.addEventListener('htmx:afterSwap', (evt) => {
         ordering: true,
         select: { style: 'os' },
         autoWidth: true,
+        createdRow: function (row) { row.style.cursor = 'pointer'; row.title = 'Double-click to open' },
       })
     }
     return
@@ -1826,6 +1915,69 @@ document.addEventListener('click', function (e) {
   }
 })
 
+// ── Tab reloads ───────────────────────────────────────────────────────────────
+
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest('.js-dc-reload')
+  if (!btn) return
+  const id = btn.dataset.dcId
+  const target = document.getElementById('tab-content-' + id)
+  if (!target) return
+  showDatacenterSkeleton(id)
+  fetchWithMinDelay('/datacenters/' + id)
+    .then(html => {
+      target.innerHTML = html
+      htmx.process(target)
+      renderTimestamps(target)
+      initDcDetailTabs(id)
+      initServerDetailTabs(target)
+    })
+    .catch(() => {})
+})
+
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest('.js-srv-reload')
+  if (!btn) return
+  const url = btn.dataset.srvUrl
+  const targetId = btn.dataset.srvTarget
+  const target = document.getElementById(targetId)
+  if (!target) return
+  showServerSkeleton(targetId)
+  fetchWithMinDelay(url)
+    .then(html => {
+      target.innerHTML = html
+      htmx.process(target)
+      renderTimestamps(target)
+      const srvDetailTabs = target.querySelector('[id^="srv-detail-tabs-"]')
+      if (srvDetailTabs) {
+        target.dataset.loaded = 'true'
+        initServerDetailTabs(target)
+        srvEditors.delete(srvDetailTabs.id.replace('srv-detail-tabs-', ''))
+      }
+      const dcDetailTabs = target.querySelector('[id^="dc-detail-tabs-"]')
+      if (dcDetailTabs) {
+        const id = dcDetailTabs.id.replace('dc-detail-tabs-', '')
+        target.dataset.loaded = 'true'
+        initDcDetailTabs(id)
+        dcEditors.delete(id)
+        initServerDetailTabs(target)
+        const dcServersTable = target.querySelector('[id^="dc-servers-table-"]')
+        if (dcServersTable && !$.fn.DataTable.isDataTable(dcServersTable)) {
+          new DataTable(dcServersTable, { paging: false, searching: false, info: false, ordering: true, select: { style: 'os' }, autoWidth: true })
+        }
+      }
+      const defaultTabLink = target.querySelector('.detlinks.is-active')
+      if (defaultTabLink) {
+        openServerTab(defaultTabLink.id.replace(/-detlink$/, '-det'))
+      }
+      target.querySelectorAll('[id$="-ev"]').forEach(el => {
+        const serverId = el.id.split('-')[0]
+        setTimeout(() => initServerEventsTable(serverId), 100)
+      })
+    })
+    .catch(() => {})
+})
+
 // ── Server edit modal ─────────────────────────────────────────────────────────
 
 const srvEditors = new Map()
@@ -1863,14 +2015,21 @@ document.addEventListener('click', function (e) {
             return
           }
           const currentVersion = parseInt(modal.dataset.version, 10) || 0
+          const idracSettings = vars.idracSettings ?? {}
+          delete vars.idracSettings
+          const idracOrbId = (modal.dataset.orbId || '') + '-idrac'
+          const idracNamespace = (modal.dataset.orbId || '').split(':')[0]
+          const now = new Date().toISOString()
+          const currentUser = modal.dataset.currentUser || ''
           const resp = await fetch(BASE + '/graphql', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              query: `mutation UpdateServer(
+              query: `mutation UpdateServerAndIdrac(
                 $id: ID!, $hostname: String, $manufacturer: String, $model: String,
                 $oobMAC: String, $rackPosition: Int, $serviceTag: String,
-                $version: Int, $updatedBy: String!, $updatedAt: DateTime!
+                $version: Int, $updatedBy: String!, $updatedAt: DateTime!,
+                $idracInput: [AddIdracSettingsInput!]!
               ) {
                 updateServer(input: {
                   filter: { id: [$id] }
@@ -1882,6 +2041,9 @@ document.addEventListener('click', function (e) {
                 }) {
                   server { id hostname }
                 }
+                addIdracSettings(input: $idracInput, upsert: true) {
+                  numUids
+                }
               }`,
               variables: {
                 ...vars,
@@ -1889,8 +2051,26 @@ document.addEventListener('click', function (e) {
                 orbId: modal.dataset.orbId || '',
                 ifVersion: currentVersion,
                 version: currentVersion + 1,
-                updatedBy: modal.dataset.currentUser || '',
-                updatedAt: new Date().toISOString(),
+                updatedBy: currentUser,
+                updatedAt: now,
+                idracInput: [{
+                  orbId: idracOrbId,
+                  name: 'idrac',
+                  namespace: { name: idracNamespace },
+                  createdBy: currentUser,
+                  createdAt: now,
+                  updatedBy: currentUser,
+                  updatedAt: now,
+                  server: { id },
+                  firmwareVersion: idracSettings.firmwareVersion ?? null,
+                  sshEnabled: idracSettings.sshEnabled ?? null,
+                  ipmiEnabled: idracSettings.ipmiEnabled ?? null,
+                  lockdownModeEnabled: idracSettings.lockdownModeEnabled ?? null,
+                  osToIdracPassThroughEnabled: idracSettings.osToIdracPassThroughEnabled ?? null,
+                  usbManagementPortEnabled: idracSettings.usbManagementPortEnabled ?? null,
+                  dhcpEnabled: idracSettings.dhcpEnabled ?? null,
+                  racadmEnabled: idracSettings.racadmEnabled ?? null,
+                }],
               },
             }),
           })
@@ -1908,7 +2088,7 @@ document.addEventListener('click', function (e) {
           modal.classList.remove('is-active')
           document.documentElement.style.overflow = ''
           srvEditors.delete(id)
-          htmx.ajax('GET', modal.dataset.reloadUrl, { target: '#' + modal.dataset.reloadTarget, swap: 'innerHTML' })
+          htmx.ajax('GET', BASE + modal.dataset.reloadUrl, { target: '#' + modal.dataset.reloadTarget, swap: 'innerHTML' })
         } catch (err) {
           showError('Request failed — check your connection and try again.')
         } finally {
@@ -1938,7 +2118,7 @@ document.addEventListener('click', function (e) {
 
 // ─── Audit log page ───────────────────────────────────────────────────────────
 
-const skipVars = new Set(['updatedBy', 'updatedAt'])
+const skipVars = new Set(['updatedBy', 'updatedAt', 'id'])
 
 function formatGQL(query) {
   // Collapse all existing whitespace so the formatter starts from a clean single-line input
@@ -2009,6 +2189,7 @@ document.addEventListener('DOMContentLoaded', () => {
     pageLength: 25,
     autoWidth: true,
     scrollX: true,
+    stateSave: true,
     language: {
       infoEmpty: 'No events recorded yet',
       info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',

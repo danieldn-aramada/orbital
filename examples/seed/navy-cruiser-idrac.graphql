@@ -1,0 +1,262 @@
+mutation UpsertIdracSettings {
+  addIdracSettings(input: [
+    {
+      orbId: "navy-cruiser:2XQKQ54-idrac"
+      name: "idrac"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "navy-cruiser:2XQKQ54" }
+      firmwareVersion: "7.30.10.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "navy-cruiser:1XQKQ54-idrac"
+      name: "idrac"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "navy-cruiser:1XQKQ54" }
+      firmwareVersion: "7.30.10.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "navy-cruiser:3XQKQ54-idrac"
+      name: "idrac"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "navy-cruiser:3XQKQ54" }
+      firmwareVersion: "7.30.10.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "navy-cruiser:GWQKQ54-idrac"
+      name: "idrac"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "navy-cruiser:GWQKQ54" }
+      firmwareVersion: "7.30.10.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "navy-cruiser:HWQKQ54-idrac"
+      name: "idrac"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "navy-cruiser:HWQKQ54" }
+      firmwareVersion: "7.30.10.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "navy-cruiser:JWQKQ54-idrac"
+      name: "idrac"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "navy-cruiser:JWQKQ54" }
+      firmwareVersion: "7.30.10.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "navy-cruiser:44KPW54-idrac"
+      name: "idrac"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "navy-cruiser:44KPW54" }
+      firmwareVersion: "7.30.10.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "navy-cruiser:84KPW54-idrac"
+      name: "idrac"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "navy-cruiser:84KPW54" }
+      firmwareVersion: "7.30.10.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "navy-cruiser:94KPW54-idrac"
+      name: "idrac"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "navy-cruiser:94KPW54" }
+      firmwareVersion: "7.30.10.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "navy-cruiser:B4KPW54-idrac"
+      name: "idrac"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "navy-cruiser:B4KPW54" }
+      firmwareVersion: "7.30.10.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "navy-cruiser:14KPW54-idrac"
+      name: "idrac"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "navy-cruiser:14KPW54" }
+      firmwareVersion: "7.30.10.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "navy-cruiser:54KPW54-idrac"
+      name: "idrac"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "navy-cruiser:54KPW54" }
+      firmwareVersion: "7.30.10.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "navy-cruiser:64KPW54-idrac"
+      name: "idrac"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "navy-cruiser:64KPW54" }
+      firmwareVersion: "7.30.10.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "navy-cruiser:24KPW54-idrac"
+      name: "idrac"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "navy-cruiser:24KPW54" }
+      firmwareVersion: "7.30.10.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "navy-cruiser:34KPW54-idrac"
+      name: "idrac"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "navy-cruiser:34KPW54" }
+      firmwareVersion: "7.30.10.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+    {
+      orbId: "navy-cruiser:74KPW54-idrac"
+      name: "idrac"
+      namespace: { name: "navy-cruiser" }
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "navy-cruiser:74KPW54" }
+      firmwareVersion: "7.30.10.50"
+      sshEnabled: false
+      ipmiEnabled: false
+      lockdownModeEnabled: false
+      osToIdracPassThroughEnabled: false
+      usbManagementPortEnabled: true
+      dhcpEnabled: false
+      racadmEnabled: true
+    }
+  ], upsert: true) {
+    numUids
+  }
+}

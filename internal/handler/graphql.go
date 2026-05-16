@@ -16,7 +16,7 @@ import (
 
 // knownMutationRe matches any DGraph mutation call on a known ConfigItem type.
 // Catches addX, updateX, deleteX for all registered types regardless of operation name.
-var knownMutationRe = regexp.MustCompile(`(?i)\b(add|update|delete)(DataCenter|Server|KubernetesCluster|EksaConfig|IPAddress|Rack)\b`)
+var knownMutationRe = regexp.MustCompile(`(?i)\b(add|update|delete)(DataCenter|Server|IdracSettings|KubernetesCluster|EksaConfig|IPAddress|Rack)\b`)
 
 // orbIdFilterRe extracts orbId values from inline GraphQL filter expressions:
 // e.g. filter: { orbId: { eq: "alaska-dot:GRTLY24" } }
@@ -29,6 +29,7 @@ var mutationOpRe = regexp.MustCompile(`(?i)^\s*mutation\s+(\w+)`)
 var singleEntityTypes = map[string]string{
 	"UpdateDataCenter":        "DataCenter",
 	"UpdateServer":            "Server",
+	"UpdateServerAndIdrac":    "Server",
 	"UpdateKubernetesCluster": "KubernetesCluster",
 	"UpdateEksaConfig":        "EksaConfig",
 }
@@ -36,7 +37,7 @@ var singleEntityTypes = map[string]string{
 // typeBeforeFields lists the DGraph fields to fetch in before-snapshots per type.
 var typeBeforeFields = map[string]string{
 	"DataCenter":        "id orbId name version assetDataV2",
-	"Server":            "id orbId name version hostname model manufacturer serviceTag rackPosition oobMAC",
+	"Server":            "id orbId name version hostname model manufacturer serviceTag rackPosition oobMAC idracSettings { firmwareVersion sshEnabled ipmiEnabled lockdownModeEnabled osToIdracPassThroughEnabled usbManagementPortEnabled dhcpEnabled racadmEnabled }",
 	"KubernetesCluster": "id orbId name version provider",
 	"EksaConfig":        "id orbId name version clusterType",
 }

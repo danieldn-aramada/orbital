@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,13 +30,14 @@ type Export struct {
 	dgraphURL             string // blue GraphQL
 	dgraphScratchURL      string // scratch GraphQL
 	dgraphScratchAdminURL string // scratch admin
+	dgraphScratchZeroURL  string // scratch Zero HTTP (for UID lease bump)
 	exportDir             string // where final zips are written
 	scratchExportDir      string // host-side mount of /dgraph/export in scratch container
 	schemaPath            string // path to the GraphQL schema file
 	logger                *slog.Logger
 }
 
-func NewExport(db *ent.Client, dgraphURL, dgraphScratchURL, dgraphScratchAdminURL, exportDir, scratchExportDir, schemaPath string, logger *slog.Logger) *Export {
+func NewExport(db *ent.Client, dgraphURL, dgraphScratchURL, dgraphScratchAdminURL, dgraphScratchZeroURL, exportDir, scratchExportDir, schemaPath string, logger *slog.Logger) *Export {
 	if err := os.MkdirAll(exportDir, 0o755); err != nil {
 		logger.Warn("could not create export dir", "dir", exportDir, "err", err)
 	}
@@ -47,6 +49,7 @@ func NewExport(db *ent.Client, dgraphURL, dgraphScratchURL, dgraphScratchAdminUR
 		dgraphURL:             dgraphURL,
 		dgraphScratchURL:      dgraphScratchURL,
 		dgraphScratchAdminURL: dgraphScratchAdminURL,
+		dgraphScratchZeroURL:  dgraphScratchZeroURL,
 		exportDir:             exportDir,
 		scratchExportDir:      scratchExportDir,
 		schemaPath:            schemaPath,
@@ -358,9 +361,12 @@ func (h *Export) doExport(ctx context.Context, jobID uuid.UUID, log *slog.Logger
 		return fmt.Errorf("apply scratch schema: %w", err)
 	}
 
-	// 4. Load subgraph into scratch via DQL mutation, preserving original UIDs
-	// from blue so the resulting export has consistent, stable UIDs for orb import.
+	// 4. Bump scratch Zero's UID lease to cover the highest UID in the subgraph,
+	// then load the subgraph into scratch preserving original UIDs from blue.
 	log.Info("loading subgraph into scratch DGraph")
+	if err := h.bumpScratchUIDLease(ctx, nodes); err != nil {
+		return fmt.Errorf("bump scratch UID lease: %w", err)
+	}
 	if err := h.loadSubgraphIntoScratch(ctx, nodes); err != nil {
 		return fmt.Errorf("load subgraph into scratch: %w", err)
 	}
@@ -620,6 +626,40 @@ func (h *Export) loadSubgraphIntoScratch(ctx context.Context, nodes []map[string
 	}
 	if err := json.Unmarshal(b, &mutResp); err == nil && len(mutResp.Errors) > 0 {
 		return fmt.Errorf("dql mutate error: %s", mutResp.Errors[0].Message)
+	}
+	return nil
+}
+
+// bumpScratchUIDLease advances the scratch Zero's UID lease to be at least as
+// large as the highest UID present in the subgraph. Without this, DGraph rejects
+// mutations that use UIDs higher than the current lease.
+func (h *Export) bumpScratchUIDLease(ctx context.Context, nodes []map[string]any) error {
+	var maxUID uint64
+	for _, node := range nodes {
+		if uid, ok := node["uid"].(string); ok {
+			v, err := strconv.ParseUint(strings.TrimPrefix(uid, "0x"), 16, 64)
+			if err == nil && v > maxUID {
+				maxUID = v
+			}
+		}
+	}
+	if maxUID == 0 {
+		return nil
+	}
+	assignURL := fmt.Sprintf("%s/assign?what=uids&num=%d", strings.TrimSuffix(h.dgraphScratchZeroURL, "/"), maxUID+1000)
+	h.logger.Info("bumping scratch UID lease", "maxUID", maxUID, "url", assignURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, assignURL, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("assign uids: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		b, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("assign uids failed (%d): %s", resp.StatusCode, b)
 	}
 	return nil
 }

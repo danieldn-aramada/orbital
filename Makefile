@@ -62,8 +62,11 @@ push: ## Build and push image to ACR (requires: az acr login --name armadaeksate
 seed: ## Seed DGraph with example data (local)
 	bash scripts/seed.sh
 
-seed-aks: ## Seed AKS dev environment (port-forwards, seeds, cleans up)
+seed-aks: ## Seed AKS dev DGraph (port-forwards, seeds, cleans up)
 	bash scripts/seed-aks.sh
+
+seed-aks-postgres: ## Seed AKS dev PostgreSQL admin user (port-forwards, seeds, cleans up)
+	bash scripts/seed-aks-postgres.sh
 
 smoke-aks: ## Run smoke tests against AKS (requires: kubectl port-forward svc/orbital 8001:8001 -n netbox)
 	npx playwright test --config=playwright.smoke.config.ts

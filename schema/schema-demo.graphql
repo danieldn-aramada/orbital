@@ -83,6 +83,10 @@ type IdracSettings implements ConfigItem {
     osToIdracPassThroughEnabled: Boolean
     sshEnabled: Boolean
     usbManagementPortEnabled: Boolean
+    ipmiEnabled: Boolean
+    lockdownModeEnabled: Boolean
+    dhcpEnabled: Boolean
+    racadmEnabled: Boolean
 
     server: Server!
 }
