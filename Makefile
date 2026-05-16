@@ -12,7 +12,7 @@ COMPOSE_FILE := deploy/local/docker-compose.yml
 ACR          := armadaeksatest.azurecr.io
 IMAGE        := $(ACR)/orbital:$(VERSION)
 
-.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-e2e lint up down seed docs build-css watch-css
+.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-e2e lint up down seed seed-aks-clean docs build-css watch-css
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -61,6 +61,9 @@ push: ## Build and push image to ACR (requires: az acr login --name armadaeksate
 
 seed: ## Seed DGraph with example data (local)
 	bash scripts/seed.sh
+
+seed-aks-clean: ## Seed AKS dev DGraph — drop all first then reseed (clean slate)
+	bash scripts/seed-aks.sh --clean
 
 seed-aks: ## Seed AKS dev DGraph (port-forwards, seeds, cleans up)
 	bash scripts/seed-aks.sh

@@ -297,6 +297,7 @@ Goal: learning, not shipping. Each spike is a question to answer. Results define
 | `//go:embed` for templates and schema | Currently read from disk at runtime. Replace with `//go:embed` — self-contained binary, no `COPY web/` in Dockerfile. Tracked in Spike 14. |
 | DQL calls: raw HTTP → `dgo` client | `internal/handler/export.go` uses raw HTTP to `/query`, `/mutate`, `/alter`. Replace with `dgraph-io/dgo` gRPC client. |
 | Audit mutation detection: regex → AST | `extractOperations` in `internal/handler/graphql.go` uses regex on raw query string. Replace with `vektah/gqlparser` AST walking when regex causes real problems. |
+| Audit resource ID completeness | `extractResourceIDs` walks variables, input array, and recursively the DGraph response JSON. Remaining gap: mutations filtered by a non-orbId field where the client selects only `{ numUids }` in the response — these record an empty resource_ids list. These are rare and would require post-mutation DGraph UID lookup to fill completely. |
 
 ---
 

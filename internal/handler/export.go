@@ -86,10 +86,11 @@ type statusResponse struct {
 func (h *Export) Trigger(c echo.Context) error {
 	datacenterID := c.Param("id")
 
-	dcName, _, err := h.fetchDCInfo(c.Request().Context(), datacenterID)
+	dcName, dcOrbID, _, err := h.fetchDCInfo(c.Request().Context(), datacenterID)
 	if err != nil {
 		h.logger.Warn("could not fetch DC info", "id", datacenterID, "err", err)
 		dcName = datacenterID
+		dcOrbID = datacenterID
 	}
 
 	// Scratch DGraph is shared — only one export can run at a time across all data centers.
@@ -129,11 +130,14 @@ func (h *Export) Trigger(c echo.Context) error {
 
 	go h.runExport(job.ID)
 
-	actor, _ := c.Get("user_email").(string)
+	actor, _ := c.Get("user_name").(string)
+	if actor == "" {
+		actor, _ = c.Get("user_email").(string)
+	}
 	writeAuditEvent(h.db, h.logger, actor, "exportSubgraph",
 		[]string{"exportSubgraph"},
 		[]string{"DataCenter"},
-		[]string{dcName},
+		[]string{dcOrbID},
 		map[string]any{
 			"jobId":          job.ID.String(),
 			"datacenterId":   datacenterID,
@@ -335,7 +339,7 @@ func (h *Export) doExport(ctx context.Context, jobID uuid.UUID, log *slog.Logger
 
 	// 1. Resolve namespace name from DC ID
 	log.Info("resolving DC namespace")
-	_, namespaceName, err := h.fetchDCInfo(ctx, job.DatacenterID)
+	_, _, namespaceName, err := h.fetchDCInfo(ctx, job.DatacenterID)
 	if err != nil {
 		return fmt.Errorf("fetch DC info: %w", err)
 	}
@@ -442,19 +446,20 @@ func dqlBase(graphqlURL string) string {
 	return strings.TrimSuffix(graphqlURL, "/graphql")
 }
 
-// fetchDCInfo queries blue GraphQL for the DC name and its namespace name.
-func (h *Export) fetchDCInfo(ctx context.Context, datacenterID string) (name, namespaceName string, err error) {
-	query := fmt.Sprintf(`{ getDataCenter(id: %q) { name namespace { name } } }`, datacenterID)
+// fetchDCInfo queries blue GraphQL for the DC name, orbId, and its namespace name.
+func (h *Export) fetchDCInfo(ctx context.Context, datacenterID string) (name, orbID, namespaceName string, err error) {
+	query := fmt.Sprintf(`{ getDataCenter(id: %q) { name orbId namespace { name } } }`, datacenterID)
 	body, _ := json.Marshal(map[string]string{"query": query})
 	resp, err := http.Post(h.dgraphURL, "application/json", bytes.NewReader(body))
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	defer resp.Body.Close()
 	var result struct {
 		Data struct {
 			GetDataCenter struct {
 				Name      string `json:"name"`
+				OrbID     string `json:"orbId"`
 				Namespace struct {
 					Name string `json:"name"`
 				} `json:"namespace"`
@@ -462,10 +467,14 @@ func (h *Export) fetchDCInfo(ctx context.Context, datacenterID string) (name, na
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	dc := result.Data.GetDataCenter
-	return dc.Name, dc.Namespace.Name, nil
+	id := dc.OrbID
+	if id == "" {
+		id = dc.Name
+	}
+	return dc.Name, id, dc.Namespace.Name, nil
 }
 
 // fetchUIDPredicates queries the DGraph schema and returns all predicate names

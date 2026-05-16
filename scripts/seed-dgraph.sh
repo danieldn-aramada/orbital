@@ -2,13 +2,23 @@
 # Seed DGraph with schema and example data.
 # Expects DGraph blue on :8080 and scratch on :8081.
 #
-# Usage: ./scripts/seed-dgraph.sh [--dgraph <url>]
+# Usage: ./scripts/seed-dgraph.sh [--dgraph <url>] [--clean]
 #   Default: http://localhost:8080
+#   --clean: drop all data from DGraph blue before seeding (clean slate)
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
 DGRAPH="${DGRAPH_URL:-http://localhost:8080}"
+CLEAN=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dgraph) DGRAPH="$2"; shift 2 ;;
+    --clean)  CLEAN=true; shift ;;
+    *) echo "Unknown arg: $1"; exit 1 ;;
+  esac
+done
 
 apply_schema() {
   local label="$1"
@@ -24,6 +34,20 @@ apply_schema() {
     exit 1
   fi
 }
+
+if [ "$CLEAN" = "true" ]; then
+  echo "==> Dropping all data from DGraph blue (--clean)..."
+  drop_resp=$(curl -sf -X POST "${DGRAPH}/alter" \
+    -H "Content-Type: application/json" \
+    -d '{"drop_all": true}')
+  echo "    Response: ${drop_resp}"
+  if echo "$drop_resp" | jq -e '.errors' >/dev/null 2>&1; then
+    echo "ERROR: drop_all failed:" >&2
+    echo "$drop_resp" | jq -r '.errors[].message' >&2
+    exit 1
+  fi
+  echo "    Done."
+fi
 
 apply_schema "blue"    "http://localhost:8080"
 apply_schema "scratch" "http://localhost:8081"
