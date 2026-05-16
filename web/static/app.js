@@ -625,8 +625,24 @@ function loadDataCenterTab(displayName, id) {
 
 // ─── Inventory page (/inventory, /) ──────────────────────────────────────────
 
+const INVENTORY_CACHE_KEY = 'inventoryCache'
+
+function inventoryFetch(onData) {
+  fetch(BASE + '/api/v1/inventory')
+    .then(r => r.json())
+    .then(json => {
+      const items = json.items ?? []
+      sessionStorage.setItem(INVENTORY_CACHE_KEY, JSON.stringify(items))
+      onData(items)
+    })
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('inventory-table')) return
+
+  const savedType = localStorage.getItem('inventoryTypeFilter') || ''
+  const cached = sessionStorage.getItem(INVENTORY_CACHE_KEY)
+  const initialData = cached ? JSON.parse(cached) : []
 
   const typeFilterEl = $('<div class="select is-small" style="margin-right:0.25rem"><select id="inventory-type-select"><option value="">All Types</option></select></div>')
 
@@ -657,22 +673,17 @@ document.addEventListener('DOMContentLoaded', () => {
       info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
       entries: { _: 'items', 1: 'item' },
     },
+    searchCols: [
+      savedType ? { search: savedType } : null,
+      null, null, null, null, null,
+    ],
     initComplete: function () {
       dtWrapLengthSelect(this.api())
 
-      const typeCol = this.api().column(0)
       const typeSelect = document.getElementById('inventory-type-select')
-      typeCol.data().unique().sort().each(function (type) {
-        typeSelect.add(new Option(type, type))
-      })
-      const savedType = localStorage.getItem('inventoryTypeFilter') || ''
-      if (savedType) {
-        typeSelect.value = savedType
-        typeCol.search(savedType, { exact: true }).draw()
-      }
       typeSelect.addEventListener('change', function () {
         localStorage.setItem('inventoryTypeFilter', this.value)
-        typeCol.search(this.value, { exact: !!this.value }).draw()
+        inventoryTable.column(0).search(this.value, { exact: !!this.value }).draw()
       })
     },
     columns: [
@@ -691,19 +702,39 @@ document.addEventListener('DOMContentLoaded', () => {
       { targets: 4, width: '15%', className: 'dt-left' },
       { targets: 5, visible: false },
     ],
-    ajax: {
-      url: BASE + '/api/v1/inventory',
-      type: 'GET',
-      dataSrc: (json) => json.items ?? [],
-    },
+    data: initialData,
   })
+
+  function populateTypeDropdown() {
+    const typeSelect = document.getElementById('inventory-type-select')
+    typeSelect.options.length = 1 // keep "All Types"
+    inventoryTable.column(0).data().unique().sort().each(type => {
+      typeSelect.add(new Option(type, type))
+    })
+    if (savedType) typeSelect.value = savedType
+  }
+
+  // If no cache, fetch now and populate
+  if (!cached) {
+    inventoryFetch(items => {
+      inventoryTable.clear().rows.add(items).draw()
+      populateTypeDropdown()
+    })
+  } else {
+    populateTypeDropdown()
+  }
 
   const reloadButton = inventoryTable.button('reload:name').node()
   inventoryTable.button('reload:name').node().on('click', function () {
     inventoryTable.clear().draw()
     reloadButton.addClass('is-loading')
+    sessionStorage.removeItem(INVENTORY_CACHE_KEY)
     setTimeout(() => {
-      inventoryTable.ajax.reload(() => { reloadButton.removeClass('is-loading') })
+      inventoryFetch(items => {
+        inventoryTable.rows.add(items).draw()
+        populateTypeDropdown()
+        reloadButton.removeClass('is-loading')
+      })
     }, 250)
   })
 
