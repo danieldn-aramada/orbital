@@ -740,6 +740,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
 })
 
+// ─── Hint banners ────────────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  const banner = document.getElementById('hint-banner-dblclick')
+  if (!banner) return
+  const KEY = document.getElementById('server-list-table')
+    ? 'hint-dblclick-dismissed-srv'
+    : 'hint-dblclick-dismissed-dc'
+  if (!sessionStorage.getItem(KEY)) {
+    banner.style.display = ''
+  }
+  document.getElementById('hint-banner-dblclick-dismiss').addEventListener('click', () => {
+    sessionStorage.setItem(KEY, '1')
+    banner.style.display = 'none'
+  })
+})
+
 // ─── Data Centers page (/datacenters) ────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {

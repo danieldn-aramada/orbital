@@ -14,6 +14,7 @@ var base = []string{
 	"web/templates/components/todo-toast.gohtml",
 	"web/templates/components/report-issue-modal.gohtml",
 	"web/templates/components/login-modal.gohtml",
+	"web/templates/components/hint-banner.gohtml",
 }
 
 func page(path string) []string {
