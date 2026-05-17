@@ -1,0 +1,27 @@
+{
+  "version": "0.2",
+  "ignorePaths": ["node_modules/**", "web/static/vanilla-jsoneditor/**"],
+  "words": [
+    "armada", "orbital", "orb", "orbauth", "orbId",
+    "dgraph", "dgo", "DGraph", "ratel", "DCIM", "CMDB",
+    "Valkey", "valkey",
+    "HTMX", "htmx", "gohtml",
+    "oras", "cosign", "sigstore",
+    "envconfig", "gorilla", "labstack", "cobra",
+    "schollz", "briandowns",
+    "ent", "entgo",
+    "Errorf", "Fatalf", "Printf",
+    "kubectl", "kubeconfig", "kSecAttrAccessibleWhenUnlockedThisDeviceOnly",
+    "ldflags", "swag", "swaggo",
+    "PKCE", "OIDC", "oidc", "JWKS", "jwks",
+    "bcrypt",
+    "gqlparser", "gqlgen", "vektah",
+    "StatefulSet", "ConfigItem",
+    "subgraph", "orbId",
+    "AKS", "PVC",
+    "presigned",
+    "idrac", "iDRAC",
+    "EksaConfig", "eksa",
+    "Galleon", "galleon"
+  ]
+}
