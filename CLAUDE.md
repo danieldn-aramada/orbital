@@ -93,17 +93,16 @@ See `docs/claude/DGRAPH.md` for schema gotchas, DQL patterns, and blue-green exp
 **Phase:** Prototyping → MVP (target June 2026)
 
 **Active spikes:**
-- **Spike 8 (Authorization)** ← blocks MVP — bearer validation done; remaining: Azure AD App Roles, DGraph `@auth` directives, Echo middleware role enforcement, offline JWT integration tests
-- **Spike 14 (Production deployment)** — core done; remaining: `//go:embed` for templates, CI pipeline, OIDC login via port-forward validation
-- **Spike 7 (Air-gap sync)** — orbital side complete; remaining: orb import API (Spike 12)
+- **Spike 11 (Authorization)** ← blocks MVP — bearer validation done; remaining: Azure AD App Roles, DGraph `@auth` directives, Echo middleware role enforcement, offline JWT integration tests
+- **Spike 10 (Air-gap sync)** — orbital side complete; remaining: orb import API (Spike 13)
 
 **MVP gaps remaining:**
-- Authorization (Spike 8)
+- Authorization (Spike 11)
 - Schema management — versioned apply with backwards compat check on startup
 - Orb registry — register, authenticate, and revoke orbs
-- Orb: local DGraph, config import (Spike 12), divergence reporting (Spike 13)
+- Orb: local DGraph, config import (Spike 13), divergence reporting (Spike 14)
 
-**Next priority:** Start Spike 8 App Roles → DGraph `@auth` directives.
+**Next priority:** Start Spike 11 App Roles → DGraph `@auth` directives.
 
 *Update this section at each session wrap-up.*
 
@@ -241,7 +240,8 @@ These have been explicitly decided. Do not re-suggest them.
 - **Do not use `schollz/progressbar` alone for spinners** — indeterminate mode causes terminal jitter; use `briandowns/spinner` for spinners and `schollz/progressbar` for determinate progress bars
 - **Do not prescribe a data transport mechanism** — orbital's contract ends at the export API (`json.gz` + `schema.gz`). How that payload is transported, packaged, or stored is the consumer's concern.
 - **Report intake API is transport-agnostic** — how reports travel from edge to orbital is the deployment layer's concern. Do not couple the intake API to any specific transport.
-- **Schema migration automation is out of MVP scope** (Spike 11 = ❌ out of scope). A runbook is sufficient for MVP. Do not build a custom migration tool until explicitly scoped.
+- **Schema migration automation is out of MVP scope** — a runbook is sufficient for MVP. Do not build a custom migration tool until explicitly scoped.
+- **Do not proxy Ratel through orbital** — Ratel is a React SPA with `PUBLIC_URL=/`; webpack bakes absolute paths (`/3rdpartystatic/`, `/static/js/`) that bypass any sub-path reverse proxy. Correct solution: dedicated DNS hostname (`ratel.devnew.armada.internal`) with its own Istio VirtualService. Until infra provisioning, show a todo toast when the link is clicked.
 - **PLM and ITSM integrations are out of v1 scope** — vendor selection in progress. Design behind Go interfaces when the time comes; do not couple to any specific vendor now.
 - **Network infrastructure config items are out of v1 scope** — VLANs and general network IPs are owned by an external system. Functional IPs tied to specific workloads (Tinkerbell, K8s control plane) are in scope as properties or dedicated nodes — discuss before adding.
 
