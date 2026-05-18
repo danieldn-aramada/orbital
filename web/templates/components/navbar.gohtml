@@ -40,7 +40,12 @@
         </span>
       </a>
 
+      {{if .RatelURL}}
+      {{if eq .RatelURL "#"}}
+      <a class="navbar-item todo" href="#">
+      {{else}}
       <a class="navbar-item" href="{{.RatelURL}}" target="_blank" rel="noopener">
+      {{end}}
         <span class="icon-text">
           <span class="icon has-text-warning">
             <i class="fa-solid fa-bolt"></i>
@@ -48,6 +53,7 @@
           <strong>DGraph</strong>
         </span>
       </a>
+      {{end}}
 
       <div class="navbar-item has-dropdown is-hoverable">
         <a class="navbar-link">

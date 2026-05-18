@@ -14,13 +14,15 @@ spec:
     spec:
       containers:
         - name: orbital
-          image: armadaeksatest.azurecr.io/orbital:v0.0.10
+          image: armadaeksatest.azurecr.io/orbital:v0.0.12
           imagePullPolicy: Always
           ports:
             - containerPort: 8001
           env:
             - name: ORBITAL_PORT
               value: "8001"
+            - name: RATEL_URL
+              value: "#"
             - name: ORBITAL_BASE_PATH
               value: "/orbital"
             - name: ORBITAL_DEV

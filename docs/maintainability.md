@@ -107,35 +107,15 @@ A step-by-step technical debt and improvement roadmap based on a full codebase a
 
 ## Phase 2: Testing Foundations
 
-> The single highest-leverage investment. None of the backend is currently testable because DGraph calls are raw `http.Post` with no injectable seam. Fix that first, then write tests.
+> The single highest-leverage investment. See `docs/testing-strategy.md` for the full strategy, test pyramid, infrastructure design, and Playwright conventions. The items below are the structural prerequisites — do them in order.
 
-### 2.1 DGraph HTTP client abstraction ← do this first
+### 2.1 Design DGraph client interface — **Opus required first**
 
-**Problem:** 22+ `http.Post` / `http.DefaultClient.Do` calls are scattered across the handler package, each constructing its own JSON payload, posting to a URL derived from `h.dgraphURL`, and parsing the response independently. No shared client means:
-- No injectable mock for tests
-- No timeouts (`http.DefaultClient` has none)
-- No connection pooling (new TCP connection per call)
-- No retry logic
+The DGraph client abstraction is the key enabler for all integration testing. The interface shape is a design decision (transport-level vs. semantic-level) with long-term consequences — get it wrong and tests are shallow; get it right and integration tests meaningfully verify behavior.
 
-**Fix:** Create a `dgraph.Client` interface in `internal/dgraph/client.go`:
+**Do a short Opus session (15–20 min) to design and commit the interface before Sonnet implements it.** See `docs/maintainability.md` — "What Needs Opus vs. Sonnet" section.
 
-```go
-type Client interface {
-    Query(ctx context.Context, query string, vars map[string]any) ([]byte, error)
-    Mutate(ctx context.Context, mutation string) ([]byte, error)
-    GraphQL(ctx context.Context, query string, vars map[string]any) ([]byte, error)
-    Alter(ctx context.Context, schema string) error
-    // ... etc
-}
-```
-
-Provide a concrete `HTTPClient` implementation with a configurable `*http.Client` (with timeout), then wire it into all handler constructors that currently hold `dgraphURL`.
-
-**Files to create:**
-- `internal/dgraph/client.go`
-- `internal/dgraph/client_test.go` (uses `httptest.Server`)
-
-**Files to modify (inject `dgraph.Client`):**
+Once designed, Sonnet implements `internal/dgraph/client.go` and wires it into the seven handler files that currently hold a raw `dgraphURL`:
 - `internal/handler/export.go`
 - `internal/handler/backup.go`
 - `internal/handler/restore.go`
@@ -144,53 +124,66 @@ Provide a concrete `HTTPClient` implementation with a configurable `*http.Client
 - `internal/handler/server.go`
 - `internal/handler/inventory.go`
 
-**Effort:** 4-6 hr
+This also fixes: no timeouts on DGraph calls, no connection pooling, 22+ duplicated `http.Post` call sites.
+
+**Effort:** 15–20 min Opus (design) + 4–6 hr Sonnet (implementation + wiring)
 
 ---
 
-### 2.2 OCI publisher unit tests
+### 2.2 Test infrastructure — Docker Compose + helpers
 
-**Problem:** The OCI publish pipeline (extract zip → push manifest → cosign sign) has zero test coverage. Tag generation and zip extraction are pure logic that doesn't need a registry.
-
-**Fix:** Write tests for the pure-logic functions:
-- `RepoForDC` (DC name → OCI repo slug)
-- `NextTag` (artifact count → version tag)
-- `extractZip` (zip archive → extracted files)
-- `PublicKeyFingerprint`
-
-**File to create:** `internal/oci/publisher_test.go`
-**Effort:** 2-3 hr
-
----
-
-### 2.3 Backup and restore unit tests
-
-**Problem:** The async backup/restore pipeline — checksum computation, dedup logic, zip creation, retention enforcement — has zero coverage.
-
-**Fix:** Use `ent/enttest` for in-memory DB tests. Write table-driven tests for:
-- `writeZip` (creates valid zip with expected entries)
-- Checksum dedup (identical content → `skipped` status)
-- `enforceRetention` (with a mock `blobStorage` interface — the interface already exists)
-- Restore checksum verification (once 1.7 is implemented)
+Before writing any tests, the test stack needs to exist. See `docs/testing-strategy.md` for the full service list and port assignments.
 
 **Files to create:**
-- `internal/handler/backup_test.go`
-- `internal/handler/restore_test.go`
+- `deploy/test/docker-compose.yml` — DGraph, PostgreSQL, Valkey, MinIO, OCI registry (CNCF Distribution)
+- `internal/testutil/dgraph.go` — `ResetDGraph`, `SeedMinimal`
+- `internal/testutil/db.go` — `NewTestDB`
+- `internal/testutil/jobs.go` — `WaitForJob`
+- `Makefile` — add `test-stack-up`, `test-stack-down`, `test-unit`, `test-integration`, `test-e2e`, `test` targets
 
-**Note:** `blobStorage` is already an interface (`backup.go:33-38`) with `upload`, `presignURL`, `deleteObject`, `ping`. Write a simple in-memory mock for tests.
-
-**Effort:** 3-4 hr
+**Effort:** 2–3 hr
 
 ---
 
-### 2.4 CI pipeline
+### 2.3 Unit tests — pure logic (no Docker required)
 
-**Problem:** `make test` runs `go test ./...` but there are currently no tests, so CI does nothing useful. Once tests exist, they must run automatically.
+Write table-driven unit tests for pure functions first — these need nothing running and give immediate value.
 
-**Fix:** Add a GitHub Actions workflow that runs `make test` and `make lint` on every push and pull request.
+| File | Covers |
+|------|--------|
+| `internal/oci/publisher_test.go` | `RepoForDC`, `NextTag`, `extractZip`, `PublicKeyFingerprint` |
+| `internal/handler/backup_test.go` | `writeZip`, checksum, `enforceRetention` (mock `blobStorage`) |
+| `internal/handler/restore_test.go` | Checksum verification (after additional-findings.md A.4) |
+| `internal/handler/graphql_test.go` | `toFloat64` edge cases, `extractResourceIDs` |
+| `internal/config/config_test.go` | Prod-safety validation |
 
-**File to create:** `.github/workflows/ci.yml`
-**Effort:** 30 min
+**Note:** `blobStorage` is already an interface (`backup.go:33-38`). Write a simple in-memory mock for the backup/restore tests.
+
+**Effort:** 4–6 hr
+
+---
+
+### 2.4 Integration tests — DGraph, export, backup, OCI, restore
+
+See `docs/testing-strategy.md` steps T.6 and T.7 for the full scope. Requires 2.1 (client) and 2.2 (infrastructure) first.
+
+Key flows to cover:
+- Export pipeline end-to-end: seed → export → verify zip contents
+- Backup: trigger → verify MinIO object + PostgreSQL record + checksum
+- OCI publish: export → publish → verify manifest + cosign signature in local registry
+- Restore: backup → restore → verify DGraph state (isolated DGraph instance)
+
+**Run with:** `go test -tags integration ./...`
+**Effort:** 6–8 hr
+
+---
+
+### 2.5 CI pipeline
+
+Add GitHub Actions workflow with four jobs: `lint`, `unit-tests`, `integration-tests`, `e2e-tests`. Integration and e2e jobs spin up the test Docker Compose stack. Playwright HTML report uploaded as artifact on failure.
+
+**File:** `.github/workflows/ci.yml`
+**Effort:** 1–2 hr
 
 ---
 
@@ -490,10 +483,10 @@ Items 1.1, 1.6, 3.5, 3.6, 3.7, 4.4
 Items 1.2 (+ fold in job_id logging), 1.3, 1.4, 1.7, 3.1
 
 **Opus design session — before Sessions 3-4:**
-DGraph client interface shape (15-20 min). Also: Spike 8 authorization design (separate session).
+DGraph client interface shape (item 2.1, 15–20 min). See `docs/testing-strategy.md` for full context. Also: Spike 8 authorization design (separate session).
 
-**Sessions 3-4 — Testing foundation (~8-10 hr combined):**
-Items 2.1 first (unlocks all test writing), then 2.2, 2.3, 2.4
+**Sessions 3-4 — Testing foundation (~12-14 hr combined):**
+Item 2.2 (infrastructure) in parallel with 2.3 (unit tests, no Docker needed) → then 2.1 Sonnet implementation → then 2.4 (integration tests) → then 2.5 (CI). Full detail in `docs/testing-strategy.md`.
 
 **Ongoing alongside feature work:**
 Items 1.5, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3
