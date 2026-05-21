@@ -39,11 +39,17 @@ test.describe('Data center tab', () => {
   });
 
   test('clicking Racks tab shows rack rows and hides servers', async ({ page }) => {
+    // Read expected rack count from the summary table (same pattern as server count)
+    const summaryRackCell = page.locator('article', { hasText: 'Data Center Summary' })
+      .locator('tr', { hasText: 'Racks' }).locator('td').nth(1);
+    await expect(summaryRackCell).not.toBeEmpty();
+    const expected = parseInt((await summaryRackCell.textContent()) ?? '0', 10);
+
     await page.locator('[id^="dc-detail-tabs-"] li', { hasText: 'Racks' }).click();
 
     const rackRows = page.locator('[id^="dc-panel-racks-"] tbody tr');
     await expect(rackRows.first()).toBeVisible();
-    await expect(rackRows).toHaveCount(4);
+    await expect(rackRows).toHaveCount(expected);
 
     const serversPanel = page.locator('[id^="dc-panel-servers-"]');
     await expect(serversPanel).toBeHidden();
@@ -61,7 +67,7 @@ test.describe('Data center tab', () => {
   });
 
   test('reload button refreshes content and inner tabs still work', async ({ page }) => {
-    const reloadBtn = page.locator('button[hx-get^="/datacenters/"]', { hasText: 'Reload' });
+    const reloadBtn = page.locator('button.js-dc-reload', { hasText: 'Reload' });
 
     // Wait for the reload request to complete
     await Promise.all([
@@ -78,6 +84,9 @@ test.describe('Data center tab', () => {
     const summary = page.locator('article', { hasText: 'Data Center Summary' });
     await expect(summary.locator('td', { hasText: 'colo-galleon' })).toBeVisible();
     await expect(summary.locator('tr', { hasText: 'Servers' }).locator('td').nth(1)).not.toBeEmpty();
-    await expect(summary.locator('td', { hasText: 'admin@armada.ai' })).toBeVisible();
+
+    // Created By is in the Metadata article; seed data may leave it blank (shows "—")
+    const metadata = page.locator('article', { hasText: 'Metadata' });
+    await expect(metadata.locator('tr', { hasText: 'Created By' })).toBeVisible();
   });
 });

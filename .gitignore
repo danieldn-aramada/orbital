@@ -49,3 +49,4 @@ deploy/dev/secrets.yaml
 .DS_Store
 Thumbs.db
 e2e/.auth.json
+coverage.html

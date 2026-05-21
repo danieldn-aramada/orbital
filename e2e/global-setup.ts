@@ -14,9 +14,9 @@ export default async function globalSetup() {
   await page.locator('#form-login input[name="password"]').fill('admin');
   await page.locator('#form-login button[type="submit"]').click();
 
-  // HTMX handles HX-Redirect — wait for the page to settle after redirect
+  // HTMX handles HX-Redirect — wait for the home page to settle after redirect
   await page.waitForURL('**/\?fresh=1');
-  await page.waitForSelector('#datacenter-table');
+  await page.waitForSelector('#inventory-table');
 
   await page.context().storageState({ path: 'e2e/.auth.json' });
   await browser.close();

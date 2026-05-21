@@ -66,6 +66,21 @@ func (s *KeychainStore) Save(creds *Credentials) error {
 	return nil
 }
 
+// Delete removes the keychain entry. Safe to call when not logged in.
+func (s *KeychainStore) Delete() error {
+	err := keyring.Delete(keychainService, keychainAccount)
+	if err != nil && err != keyring.ErrNotFound {
+		if s.Fallback != nil {
+			return s.Fallback.Delete()
+		}
+		return fmt.Errorf("keychain delete: %w", err)
+	}
+	if s.Fallback != nil {
+		_ = s.Fallback.Delete()
+	}
+	return nil
+}
+
 // NewKeychainStore returns a KeychainStore with the given fallback.
 func NewKeychainStore(fallback *FileStore) Store {
 	return &KeychainStore{Fallback: fallback}

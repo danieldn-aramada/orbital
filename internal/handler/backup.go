@@ -39,32 +39,34 @@ type blobStorage interface {
 
 // BackupHandler handles async DGraph backup operations.
 type BackupHandler struct {
-	db              *ent.Client
-	dgraphAdminURL  string
-	dgraphExportDir string
-	schemaPath      string
-	storage         blobStorage
-	s3Bucket        string
-	s3Prefix        string
-	s3Endpoint      string
-	retentionCount  int
-	version         string
-	logger          *slog.Logger
+	db                       *ent.Client
+	dgraphAdminURL           string
+	dgraphExportDir          string
+	dgraphContainerExportDir string
+	schemaPath               string
+	storage                  blobStorage
+	s3Bucket                 string
+	s3Prefix                 string
+	s3Endpoint               string
+	retentionCount           int
+	version                  string
+	logger                   *slog.Logger
 }
 
 // BackupConfig holds all storage and DGraph configuration for the backup handler.
 type BackupConfig struct {
-	DGraphAdminURL  string
-	DGraphExportDir string
-	SchemaPath      string
-	S3Endpoint      string
-	S3Region        string
-	S3Bucket        string
-	S3AccessKey     string
-	S3SecretKey     string
-	S3Prefix        string
-	RetentionCount  int
-	Version         string
+	DGraphAdminURL           string
+	DGraphExportDir          string // host-side path mounted to DGraphContainerExportDir inside DGraph
+	DGraphContainerExportDir string // container-side export path; defaults to /dgraph/export
+	SchemaPath               string
+	S3Endpoint               string
+	S3Region                 string
+	S3Bucket                 string
+	S3AccessKey              string
+	S3SecretKey              string
+	S3Prefix                 string
+	RetentionCount           int
+	Version                  string
 }
 
 func NewBackupHandler(ctx context.Context, db *ent.Client, cfg BackupConfig, logger *slog.Logger) (*BackupHandler, error) {
@@ -85,18 +87,24 @@ func NewBackupHandler(ctx context.Context, db *ent.Client, cfg BackupConfig, log
 		prefix += "/"
 	}
 
+	containerExportDir := cfg.DGraphContainerExportDir
+	if containerExportDir == "" {
+		containerExportDir = "/dgraph/export"
+	}
+
 	return &BackupHandler{
-		db:              db,
-		dgraphAdminURL:  cfg.DGraphAdminURL,
-		dgraphExportDir: cfg.DGraphExportDir,
-		schemaPath:      cfg.SchemaPath,
-		storage:         store,
-		s3Bucket:        cfg.S3Bucket,
-		s3Prefix:        prefix,
-		s3Endpoint:      cfg.S3Endpoint,
-		retentionCount:  cfg.RetentionCount,
-		version:         cfg.Version,
-		logger:          logger,
+		db:                       db,
+		dgraphAdminURL:           cfg.DGraphAdminURL,
+		dgraphExportDir:          cfg.DGraphExportDir,
+		dgraphContainerExportDir: containerExportDir,
+		schemaPath:               cfg.SchemaPath,
+		storage:                  store,
+		s3Bucket:                 cfg.S3Bucket,
+		s3Prefix:                 prefix,
+		s3Endpoint:               cfg.S3Endpoint,
+		retentionCount:           cfg.RetentionCount,
+		version:                  cfg.Version,
+		logger:                   logger,
 	}, nil
 }
 
@@ -471,17 +479,19 @@ func (h *BackupHandler) runBackup(jobID uuid.UUID) {
 }
 
 func (h *BackupHandler) doBackup(ctx context.Context, jobID uuid.UUID, log *slog.Logger) error {
-	if err := h.cleanExportDir(); err != nil {
-		return fmt.Errorf("clean export dir: %w", err)
-	}
+	// Use a job-specific export destination so consecutive backups never collide
+	// on the same DGraph raft-index + minute combination.
+	containerDest := h.dgraphContainerExportDir + "/" + jobID.String()
+	hostDest := filepath.Join(h.dgraphExportDir, jobID.String())
+	defer os.RemoveAll(hostDest) //nolint:errcheck
 
 	log.Info("triggering DGraph export on blue")
-	if err := h.triggerBlueExport(ctx); err != nil {
+	if err := h.triggerBlueExport(containerDest); err != nil {
 		return fmt.Errorf("trigger blue export: %w", err)
 	}
 
 	log.Info("locating exported file")
-	dataGZPath, err := h.findExport()
+	dataGZPath, err := h.findExport(hostDest)
 	if err != nil {
 		return fmt.Errorf("find export: %w", err)
 	}
@@ -545,7 +555,6 @@ func (h *BackupHandler) doBackup(ctx context.Context, jobID uuid.UUID, log *slog
 		return fmt.Errorf("upload: %w", err)
 	}
 	log.Info("upload complete")
-	h.cleanExportDir() //nolint:errcheck
 
 	zipInfo, _ := os.Stat(zipPath)
 	var sizeBytes int64
@@ -574,8 +583,8 @@ func (h *BackupHandler) doBackup(ctx context.Context, jobID uuid.UUID, log *slog
 	return nil
 }
 
-func (h *BackupHandler) triggerBlueExport(ctx context.Context) error {
-	const mutation = `{"query": "mutation { export(input: { format: \"json\" }) { response { code message } } }"}`
+func (h *BackupHandler) triggerBlueExport(destPath string) error {
+	mutation := fmt.Sprintf(`{"query": "mutation { export(input: { format: \"json\", destination: \"%s\" }) { response { code message } } }"}`, destPath)
 	resp, err := http.Post(h.dgraphAdminURL, "application/json", strings.NewReader(mutation))
 	if err != nil {
 		return err
@@ -588,25 +597,11 @@ func (h *BackupHandler) triggerBlueExport(ctx context.Context) error {
 	return nil
 }
 
-func (h *BackupHandler) cleanExportDir() error {
-	entries, err := os.ReadDir(h.dgraphExportDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	for _, e := range entries {
-		os.RemoveAll(filepath.Join(h.dgraphExportDir, e.Name())) //nolint:errcheck
-	}
-	return nil
-}
-
-func (h *BackupHandler) findExport() (string, error) {
+func (h *BackupHandler) findExport(dir string) (string, error) {
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		var found string
-		filepath.Walk(h.dgraphExportDir, func(path string, info os.FileInfo, err error) error { //nolint:errcheck
+		filepath.Walk(dir, func(path string, info os.FileInfo, err error) error { //nolint:errcheck
 			if err == nil && !info.IsDir() && strings.HasSuffix(path, ".json.gz") {
 				found = path
 				return filepath.SkipAll
@@ -618,7 +613,7 @@ func (h *BackupHandler) findExport() (string, error) {
 		}
 		time.Sleep(1 * time.Second)
 	}
-	return "", fmt.Errorf("no json.gz found in %s after export", h.dgraphExportDir)
+	return "", fmt.Errorf("no json.gz found in %s after export", dir)
 }
 
 // findExportFile finds a file with the given suffix in the same directory as dataGZPath.

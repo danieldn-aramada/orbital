@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/armada/orbital/ent"
@@ -338,6 +339,7 @@ func extractResourceIDs(query string, variables map[string]any, respBody []byte)
 		}
 	}
 
+	sort.Strings(ids)
 	return ids
 }
 

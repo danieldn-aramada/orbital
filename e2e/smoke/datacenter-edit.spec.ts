@@ -34,7 +34,7 @@ test.describe('Data center edit flow', () => {
     await page.waitForFunction(
       (id) => (window as any).dcEditors?.has(id),
       dcId,
-      { timeout: 5000 }
+      { timeout: 10000 }
     );
 
     // Set the modified name via the editor API

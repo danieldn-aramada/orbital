@@ -1111,7 +1111,7 @@ function renderBackups(jobs) {
     const canDelete = j.status !== 'running' && j.status !== 'pending'
     const actions = [
       j.status === 'completed' && j.s3Key
-        ? `<a class="button is-small is-light" onclick="downloadBackup('${j.id}')" title="Download"><span class="icon"><i class="fas fa-download"></i></span></a>`
+        ? `<a data-testid="backup-download-btn" class="button is-small is-light" onclick="downloadBackup('${j.id}')" title="Download"><span class="icon"><i class="fas fa-download"></i></span></a>`
         : '',
       canDelete
         ? `<a class="button is-small is-light has-text-danger" onclick="openDeleteModal('${j.id}', '${new Date(j.initiatedAt).toLocaleString()}')" title="Delete"><span class="icon"><i class="fas fa-trash"></i></span></a>`
@@ -1119,7 +1119,7 @@ function renderBackups(jobs) {
     ].join('')
     return `<tr>
       <td>${new Date(j.initiatedAt).toLocaleString()}</td>
-      <td>${statusCell}</td>
+      <td data-testid="backup-job-status">${statusCell}</td>
       <td>${j.initiatedBy || '—'}</td>
       <td>${formatBytes(j.sizeBytes)}</td>
       <td style="max-width:340px;">${checksumDisplay}</td>
@@ -1545,7 +1545,7 @@ function loadExportJobsTable() {
         : jobs.map(job => {
             const actions = []
             if (job.status === 'completed') {
-              actions.push(`<a class="button is-small is-link is-outlined" href="${BASE}/api/v1/export/jobs/${job.jobId}/download"><span class="icon"><i class="fa-solid fa-download"></i></span><span>Download</span></a>`)
+              actions.push(`<a data-testid="export-download-btn" class="button is-small is-link is-outlined" href="${BASE}/api/v1/export/jobs/${job.jobId}/download"><span class="icon"><i class="fa-solid fa-download"></i></span><span>Download</span></a>`)
               if (ociConfigured) {
                 const publishLabel = job.published ? 'Publish Again' : 'Publish'
                 actions.push(`<button class="button is-small is-warning is-outlined" onclick="publishExportJob('${job.jobId}')"><span class="icon"><i class="fa-solid fa-box-archive"></i></span><span>${publishLabel}</span></button>`)
@@ -1557,7 +1557,7 @@ function loadExportJobsTable() {
             return `<tr>
               <td style="font-family:monospace;font-size:0.7rem;">${job.jobId}</td>
               <td>${job.dataCenter ?? '—'}</td>
-              <td>${statusCell}</td>
+              <td data-testid="export-job-status">${statusCell}</td>
               <td>${fmtTime(job.createdAt)}</td>
               <td>${fmtTime(job.startedAt)}</td>
               <td>${fmtTime(job.completedAt)}</td>
@@ -1843,7 +1843,8 @@ document.addEventListener('htmx:afterSwap', (evt) => {
 
 // ── DataCenter edit modal ─────────────────────────────────────────────────────
 
-const dcEditors = new Map()
+window.dcEditors = new Map()
+const dcEditors = window.dcEditors
 
 document.addEventListener('click', function (e) {
   const editBtn = e.target.closest('[data-dc-edit-id]')
