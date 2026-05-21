@@ -90,17 +90,26 @@ See `docs/claude/DGRAPH.md` for schema gotchas, DQL patterns, and blue-green exp
 
 ## Current State
 
-**Phase:** Prototyping → MVP (target June 2026)
+**Phase:** Prototyping → MVP (target July 2026; GA August 2026)
 
 **Active spikes:**
-- **Spike 11 (Authorization)** ← blocks MVP — bearer validation done; remaining: Azure AD App Roles, DGraph `@auth` directives, Echo middleware role enforcement, offline JWT integration tests
+- **Spike 11 (Authorization)** ← blocks MVP — bearer validation done; remaining: Azure AD App Roles, DGraph `@auth` directives, Echo middleware role enforcement, offline JWT integration tests ⚠️ Opus design session first
 - **Spike 10 (Air-gap sync)** — orbital side complete; remaining: orb import API (Spike 13)
 
+**Planned (design complete, not started):**
+- **Spike 13 (Orb import API)** — OCI puller from Zot, cosign verify, dgraph live import, polling loop. See `docs/claude/SPIKE_13_17_PLAN.md`
+- **Spike 17 (Orb UI)** — shared template infrastructure (web/shared + web/orbital + web/orb), UIConfig + ReadOnly mode, orb web server, status/import/DC/servers/divergence pages. Depends on Spike 13. See `docs/claude/SPIKE_13_17_PLAN.md`
+
 **MVP gaps remaining:**
-- Authorization (Spike 11)
+- Authorization (Spike 11) ← next priority
+- Orb end-to-end demo (Spikes 13 + 17) — import subgraph from Zot, browse config offline, publish divergence
+- Valkey cache-aside (Spike 9b) — not yet implemented
 - Schema management — versioned apply with backwards compat check on startup
 - Orb registry — register, authenticate, and revoke orbs
-- Orb: local DGraph, config import (Spike 13), divergence reporting (Spike 14)
+- Orb: deployment model (Spike 15), API surface & authN/Z (Spike 16), divergence reporting (Spike 14)
+- Testing foundations — unit, integration, code coverage, CI pipeline, AKS smoke suite
+- Security hardening — critical/high findings before any prod exposure
+- Production deployment — AKS prod, ingress, TLS, CI/CD
 
 **Next priority:** Start Spike 11 App Roles → DGraph `@auth` directives.
 

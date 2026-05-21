@@ -23,11 +23,11 @@ type Config struct {
 	DGraphScratchZeroURL   string        `envconfig:"DGRAPH_SCRATCH_ZERO_URL"         default:"http://localhost:6081"`
 	DatabaseURL            string        `envconfig:"DATABASE_URL"                    default:"postgres://orbital:orbital@localhost:5432/orbital?sslmode=disable"`
 	ExportDir              string        `envconfig:"ORBITAL_EXPORT_DIR"              default:"./subgraph-exports"`
-	DGraphScratchExportDir string        `envconfig:"DGRAPH_SCRATCH_EXPORT_DIR"       default:"./subgraph-exports/scratch"`
+	DGraphScratchExportDir string        `envconfig:"DGRAPH_SCRATCH_EXPORT_DIR"       default:"/tmp/orbital-test-scratch"`
 	SchemaPath             string        `envconfig:"ORBITAL_SCHEMA_PATH"             default:"schema/schema-demo.graphql"`
 	SessionHMACKey         string        `envconfig:"ORBITAL_SESSION_HMAC_KEY"        default:"local-dev-hmac-key-change-in-prod"` // must be changed in prod
 	SessionEncryptionKey   string        `envconfig:"ORBITAL_SESSION_ENCRYPTION_KEY"  default:"local-dev-enc-key-32-bytes-pad!!"`  // must be exactly 32 bytes for AES-256; empty disables cookie encryption
-	DGraphExportDir        string        `envconfig:"DGRAPH_EXPORT_DIR"               default:"./dgraph-exports"`                  // host-side mount of /dgraph/export on blue alpha
+	DGraphExportDir        string        `envconfig:"DGRAPH_EXPORT_DIR"               default:"/tmp/orbital-test-blue"`            // host-side mount of /dgraph/export on blue alpha
 	S3Endpoint             string        `envconfig:"ORBITAL_S3_ENDPOINT"             default:"https://armadagalleonbackups.blob.core.windows.net"`
 	S3Region               string        `envconfig:"ORBITAL_S3_REGION"               default:"us-east-1"`
 	S3Bucket               string        `envconfig:"ORBITAL_S3_BUCKET"               default:"cmdb"`

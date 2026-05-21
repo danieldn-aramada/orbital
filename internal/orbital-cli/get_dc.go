@@ -114,23 +114,23 @@ func queryByOrbID(cmd *cobra.Command, base, token, orbID string) (*dcSummary, er
 }
 
 func queryByName(cmd *cobra.Command, base, token, name string) (*dcSummary, error) {
-	const q = `query QueryDataCenterByName($name: String!) {
-  queryDataCenter(filter: { name: { eq: $name } }) { ` + dcFields + ` }
-}`
+	const q = `{ queryDataCenter { ` + dcFields + ` } }`
 	var result struct {
 		Data   struct{ QueryDataCenter []*dcSummary } `json:"data"`
 		Errors []struct{ Message string }             `json:"errors"`
 	}
-	if err := gqlRequest(cmd, base, token, q, map[string]any{"name": name}, &result); err != nil {
+	if err := gqlRequest(cmd, base, token, q, nil, &result); err != nil {
 		return nil, err
 	}
 	if len(result.Errors) > 0 {
 		return nil, fmt.Errorf("graphql: %s", result.Errors[0].Message)
 	}
-	if len(result.Data.QueryDataCenter) == 0 {
-		return nil, nil
+	for _, dc := range result.Data.QueryDataCenter {
+		if dc.Name == name {
+			return dc, nil
+		}
 	}
-	return result.Data.QueryDataCenter[0], nil
+	return nil, nil
 }
 
 func gqlRequest(cmd *cobra.Command, base, token, query string, vars map[string]any, dest any) error {

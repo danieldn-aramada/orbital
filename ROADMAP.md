@@ -18,8 +18,8 @@ gantt
     Prototyping                   :active, 2026-04-14, 2026-05-27
 
     Section Upcoming
-    MVP                           :2026-05-27, 2026-06-27
-    General Availability          :2026-06-27, 2026-07-27
+    MVP                           :2026-05-27, 2026-07-27
+    General Availability          :2026-07-27, 2026-08-28
 ```
 
 **Note:** All future dates are subject to change.
@@ -45,10 +45,11 @@ Each spike is a question to answer. Results define the MVP.
 | 10 | Air-gap sync round-trip | Does orbital's config export work as a complete, importable payload for orb? | — | 🔄 In progress | Orb loads `json.gz` into local DGraph and serves offline; validate export sizes |
 | 11 | Authorization | How do we restrict mutations to authorized roles and test authz offline? | — | 🔄 In progress | App Roles, DGraph `@auth` directives, middleware enforcement, offline JWT tests, AKS OIDC validation |
 | 12 | DGraph operations | Can our team operate DGraph on AKS without prior experience? | — | Not started | Runbook: schema change apply, validate, rollback |
-| 13 | Orb import API | What is the right API contract for orb's local config import endpoint? | — | Not started | |
+| 13 | Orb import API | What is the right mechanism for orb to pull a signed OCI subgraph from a local Zot registry and load it into local DGraph? | — | Not started | OCI puller (oras-go v2), cosign verify (air-gap safe), `dgraph live` subprocess, polling loop, Zot ACR upstream sync config, docker-compose DGraph for orb |
 | 14 | Divergence reports | How does orbital surface divergence and let an admin resolve it? | — | Not started | |
 | 15 | Orb deployment model | What does orb look like deployed at the edge — topology, runtime deps, air-gap constraints? | — | Not started | |
 | 16 | Orb API surface & authN/Z | What endpoints does orb expose locally, who calls them, and what is the consumer auth model? | — | Not started | |
+| 17 | Orb UI | Can orbital and orb share a template infrastructure while serving different nav and capability surfaces? End-to-end demo: import → browse config offline → divergence → publish report. | — | Not started | web/ restructure (shared/orbital/orb), UIConfig + ReadOnly mode, orb Echo server, status/dashboard, import subgraph page, DC + servers (read-only), divergence + publish, import history |
 | — | Schema migration | Do we need automation or is a runbook sufficient? | — | ❌ Out of scope | |
 
 ---
@@ -63,9 +64,11 @@ Each spike is a question to answer. Results define the MVP.
 | 4 · Web UI | Apr 20 – May 14 | Data Centers tab (HTMX, inline edit, audit diff); Servers cross-DC DataTable + drill-down (iDRAC, Storage, Config Profile); Export, Backup, Restore, Audit Log, Signed Artifacts, Schema, Divergence pages; Playwright E2E suite |
 | 5 · Authentication | May 8 | OIDC + local auth, CLI keychain, bearer token validation end-to-end |
 | 6 · DGraph backup | May 9 | Async backup to Azure Blob/S3, SHA-256 dedup, retention, presigned download |
+| Config Export + OCI Pipeline | May 9 – May 18 | 8 endpoints, blue-green DGraph export topology, per-job scratch dirs, oras-go v2 + cosign signing, air-gap safe OCI publish — orbital side complete |
 | 7 · DGraph restore | May 14 | Full restore from backup via dgraph-live pod, validated on AKS |
+| Audit Log System | May 5 – May 13 | GraphQL mutation interceptor, before-state capture, LCS line diff, three-source orbId extraction, per-entity audit tabs on DC and server views, ADR (`docs/decisions/001-mutation-audit-recording.md`) |
 | 8 · AKS dev environment | May 18 | Deploy manifests, Helm charts, seed scripts, step-by-step deploy guide |
-| 9 · iDRAC & storage seed | May 15 | 4 new iDRAC fields, 9 data centers seeded with real hardware data |
+| 9 · Hardware Data Modeling | May 15 | 4 new iDRAC schema fields; 9 data centers modeled from real Netbox hostnames and rack topology; schema validated against live hardware |
 | orbital-cli | May 11 | `orbital get datacenter/datacenters`; bearer auth; macOS keychain; kubectl-style output |
 
 *Full implementation detail, API contracts, and what was validated: [CHANGELOG.md](CHANGELOG.md)*
@@ -106,8 +109,9 @@ Benchmark DGraph query latency under realistic load, validate Valkey caching mit
 - ✅ OCI publish — signed artifacts to configured registry
 - ⬜ Authorization — App Roles + DGraph `@auth` (Spike 11)
 - ⬜ Schema management — versioned apply with backwards compatibility on startup
-- ⬜ Orb registry — register, authenticate, and revoke orbs
+- 🔲 Orb registry — register, authenticate, and revoke orbs *(post-MVP: revisit when orb onboarding is scoped)*
 - ⬜ Security hardening — critical/high items (MVP Planning)
+- ⬜ `namespaceID` index on `ConfigItem` — add `namespaceID: String! @search(by: [exact])` to the interface, backfill existing nodes, enforce at application layer on all add mutations. Enables pure GraphQL namespace-scoped queries for external Topology API consumers; required before any external team consumes the API.
 
 ### Orb (edge)
 - ✅ CLI structure — `orb start`, `orb scan`, `orb export`, `orb import`

@@ -21,6 +21,7 @@ type keychainData struct {
 type Store interface {
 	Load() (*Credentials, error)
 	Save(creds *Credentials) error
+	Delete() error
 }
 
 // FileStore persists credentials as JSON at a local file path.
@@ -38,6 +39,14 @@ func (s *FileStore) Load() (*Credentials, error) {
 		return nil, err
 	}
 	return &creds, nil
+}
+
+func (s *FileStore) Delete() error {
+	err := os.Remove(s.Path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
 }
 
 func (s *FileStore) Save(creds *Credentials) error {
@@ -68,6 +77,28 @@ func OrbitalFileStore() (*FileStore, error) {
 		return nil, err
 	}
 	return &FileStore{Path: filepath.Join(home, ".orbital", "credentials.json")}, nil
+}
+
+// ClearOrbitalCredentials removes the access token file and keychain entry,
+// signing the user out completely. Safe to call when already logged out.
+func ClearOrbitalCredentials() error {
+	fileStore, err := OrbitalFileStore()
+	if err != nil {
+		return err
+	}
+	if err := fileStore.Delete(); err != nil {
+		return fmt.Errorf("remove credentials file: %w", err)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	fallbackPath := filepath.Join(home, ".orbital", ".keychain-fallback.json")
+	kcStore := NewKeychainStore(&FileStore{Path: fallbackPath})
+	if err := kcStore.Delete(); err != nil {
+		return fmt.Errorf("remove keychain entry: %w", err)
+	}
+	return nil
 }
 
 // GetToken returns a valid access token from ~/.orbital/credentials.json.

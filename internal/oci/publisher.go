@@ -53,6 +53,8 @@ type Config struct {
 	SigningKeyPath string
 	// Host is the orbital server's external hostname for the public key hint annotation (optional).
 	Host string
+	// AllowHTTP enables plain-HTTP (non-TLS) registry connections. For local testing only.
+	AllowHTTP bool
 }
 
 // Publisher pushes subgraph exports as signed OCI artifacts.
@@ -198,6 +200,8 @@ func (p *Publisher) sign(ctx context.Context, repoName, digestStr string, log *s
 		TlogUpload:       false,
 		SkipConfirmation: true,
 		Registry: cosignopt.RegistryOptions{
+			AllowInsecure:     p.cfg.AllowHTTP,
+			AllowHTTPRegistry: p.cfg.AllowHTTP,
 			AuthConfig: authn.AuthConfig{
 				Username: p.cfg.Username,
 				Password: p.cfg.Password,
@@ -239,6 +243,7 @@ func (p *Publisher) newRepo(repoName string) (*remote.Repository, error) {
 	if err != nil {
 		return nil, err
 	}
+	repo.PlainHTTP = p.cfg.AllowHTTP
 	cred := orasauth.Credential{
 		Username: p.cfg.Username,
 		Password: p.cfg.Password,

@@ -76,6 +76,21 @@ func (s *KeychainStore) Load() (*Credentials, error) {
 	}, nil
 }
 
+// Delete removes the keychain entry. Safe to call when not logged in.
+func (s *KeychainStore) Delete() error {
+	status := deleteKeychainItem(keychainService, keychainAccount)
+	if status != 0 && !osStatusIsNotFound(status) {
+		if s.Fallback != nil {
+			return s.Fallback.Delete()
+		}
+		return fmt.Errorf("keychain delete: OSStatus %d", int(status))
+	}
+	if s.Fallback != nil {
+		_ = s.Fallback.Delete()
+	}
+	return nil
+}
+
 // NewKeychainStore returns a KeychainStore with the given fallback.
 func NewKeychainStore(fallback *FileStore) Store {
 	return &KeychainStore{Fallback: fallback}

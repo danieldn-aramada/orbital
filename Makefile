@@ -9,10 +9,14 @@ ORBITAL_BIN  := $(BIN_DIR)/orbital
 ORB_BIN      := $(BIN_DIR)/orb
 
 COMPOSE_FILE := deploy/local/docker-compose.yml
+
+# Packages included in unit test runs and coverage reports.
+# Excludes generated code (ent/*) and the Swagger docs stub.
+TEST_PKGS := $(shell go list ./... | grep -vE '(/ent$$|/ent/|/docs$$)')
 ACR          := armadaeksatest.azurecr.io
 IMAGE        := $(ACR)/orbital:$(VERSION)
 
-.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-e2e lint up down seed seed-aks-clean docs build-css watch-css
+.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-unit test-integration test-e2e test-stack-up cover cover-html lint up down seed seed-aks-clean docs build-css watch-css
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -41,11 +45,34 @@ build-orb: ## Build the orb edge binary → bin/orb
 run-orbital: ## Run orbital server
 	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orbital
 
-test: ## Run all Go tests
-	go test ./...
+test-stack-up: ## Ensure local stack is up and healthy (used by test-integration)
+	@docker compose -f $(COMPOSE_FILE) up -d --wait
+	@docker compose -f $(COMPOSE_FILE) exec -T postgres psql -U orbital -c "CREATE DATABASE orbital_test;" 2>/dev/null || true
+
+test-unit: ## Run unit tests with coverage summary (no external services required)
+	@echo "Running unit tests..."
+	@go test -short -coverprofile=coverage.out -covermode=atomic $(TEST_PKGS)
+	@go tool cover -func=coverage.out | tail -1
+
+test-integration: ## Run integration tests against real services (requires: make up)
+	@echo "Running integration tests..."
+	@go test -v -count=1 -tags integration -timeout 10m $(TEST_PKGS)
+	@echo "Reseeding DGraph for E2E tests..."
+	@bash scripts/seed.sh
 
 test-e2e: ## Run Playwright e2e tests (requires orbital running on :8001)
 	npx playwright test
+
+test: test-unit test-integration test-e2e ## Run full test suite (unit + integration + e2e)
+
+cover: test-stack-up ## Run tests with coverage and print summary to terminal
+	@echo "Running tests with coverage..."
+	@go test -short -coverprofile=coverage.out -covermode=atomic $(TEST_PKGS)
+	@go tool cover -func=coverage.out | tail -1
+
+cover-html: cover ## Open interactive HTML coverage report in browser
+	go tool cover -html=coverage.out -o coverage.html
+	open coverage.html
 
 lint: ## Run go vet
 	go vet ./...
