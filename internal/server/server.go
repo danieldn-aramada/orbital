@@ -17,6 +17,7 @@ import (
 	"github.com/armada/orbital/internal/oci"
 	appversion "github.com/armada/orbital/internal/version"
 	webtemplates "github.com/armada/orbital/web/templates"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	echoswagger "github.com/swaggo/echo-swagger"
@@ -116,7 +117,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	ui.SetExportDir(cfg.ExportDir)
 	ui.SetSchemaPath(cfg.SchemaPath)
 	ui.SetK8sAvailable(k8sAvailable)
-	root.Static("/static", "web/static")
+	root.Static("/static", "web/shared/static")
 	if cfg.BasePath != "" {
 		root.GET("", ui.Index)
 	}
@@ -249,6 +250,16 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	root.Any("/graphql", gql.Handle)
 	api.Any("/graphql", gql.Handle)
 	root.GET("/swagger/*", echoswagger.WrapHandler)
+
+	// Stub: divergence report intake (Spike 14 will implement full handling).
+	api.POST("/reports", func(c echo.Context) error {
+		var payload map[string]any
+		if err := c.Bind(&payload); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid payload"})
+		}
+		logger.Info("divergence report received", "payload", payload)
+		return c.JSON(http.StatusOK, map[string]string{"reportId": uuid.New().String()})
+	})
 
 	return &Server{
 		cfg:    cfg,

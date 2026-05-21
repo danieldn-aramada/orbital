@@ -69,8 +69,8 @@ func NewDataCenter(dgraphURL string, dev bool, logger *slog.Logger, basePath str
 
 func parseDataCenterFragment() *template.Template {
 	return template.Must(template.ParseFiles(
-		"web/templates/fragments/datacenter-tab.gohtml",
-		"web/templates/components/edit-modal-datacenter.gohtml",
+		"web/shared/templates/partials/datacenter-tab.gohtml",
+		"web/shared/templates/components/edit-modal-datacenter.gohtml",
 	))
 }
 

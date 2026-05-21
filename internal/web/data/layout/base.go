@@ -7,6 +7,8 @@ type Base struct {
 	RegisterModal
 	Footer
 
+	UI UIConfig
+
 	Domain      string // default localhost:8080, production console.com
 	Links       []string
 	IsAuthn     bool

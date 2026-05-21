@@ -74,7 +74,7 @@ type gqlRequest struct {
 func (h *GraphQL) Handle(c echo.Context) error {
 	if c.Request().Method != http.MethodPost {
 		slog.Info("GET /graphql")
-		return c.File("web/static/graphiql.html")
+		return c.File("web/shared/static/graphiql.html")
 	}
 
 	bodyBytes, err := io.ReadAll(c.Request().Body)

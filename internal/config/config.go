@@ -76,8 +76,14 @@ func (c *Config) OCIConfigured() bool {
 }
 
 func (c *Config) SlogLevel() slog.Level {
-	if c.LogLevel == "debug" {
+	switch c.LogLevel {
+	case "debug":
 		return slog.LevelDebug
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
 	}
-	return slog.LevelInfo
 }

@@ -27,7 +27,7 @@ func NewEventHandler(db *ent.Client, logger *slog.Logger) *EventHandler {
 	return &EventHandler{
 		db:       db,
 		logger:   logger,
-		fragment: template.Must(template.ParseFiles("web/templates/fragments/events-table.gohtml")),
+		fragment: template.Must(template.ParseFiles("web/orbital/templates/partials/events-table.gohtml")),
 	}
 }
 

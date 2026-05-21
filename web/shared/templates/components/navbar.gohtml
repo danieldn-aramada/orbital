@@ -2,8 +2,8 @@
 
   <div class="navbar-brand">
     <a class="navbar-item" href="{{.BasePath}}/" style="gap: 0.1rem;">
-      <img src="{{.BasePath}}/static/logo/logo-armada.png" alt="Orbital logo">
-      <span class="varela-round-regular has-text-white is-size-4"><strong>Orbital</strong></span>
+      <img src="{{.BasePath}}/static/logo/logo-armada.png" alt="{{.UI.AppName}} logo">
+      <span class="varela-round-regular has-text-white is-size-4"><strong>{{.UI.AppName}}</strong></span>
     </a>
 
     <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbar-menu">
@@ -22,7 +22,8 @@
           <div>for modular data centers</div>
         </div>
       </div>
-      <a class="navbar-item" href="{{.BasePath}}/swagger/index.html">
+      {{if .UI.APIDocPath}}
+      <a class="navbar-item" href="{{.UI.APIDocPath}}" target="_blank" rel="noopener">
         <span class="icon-text">
           <span class="icon has-text-info">
             <i class="fa-solid fa-code"></i>
@@ -30,6 +31,7 @@
           <strong>API</strong>
         </span>
       </a>
+      {{end}}
 
       <a class="navbar-item" href="{{.BasePath}}/graphql" target="_blank" rel="noopener">
         <span class="icon-text">
@@ -55,6 +57,7 @@
       </a>
       {{end}}
 
+      {{if .UI.MoreLinks}}
       <div class="navbar-item has-dropdown is-hoverable">
         <a class="navbar-link">
           <span class="icon-text">
@@ -65,17 +68,23 @@
           </span>
         </a>
         <div class="navbar-dropdown">
-          <a class="navbar-item" href="https://github.com/danieldn-aramada/demo" target="_blank" rel="noopener">
-            <strong>GitHub</strong>
+          {{range .UI.MoreLinks}}
+          {{if .URL}}
+          <a class="navbar-item{{if .IsTodo}} todo{{end}}" href="{{.URL}}" target="_blank" rel="noopener">
+            <strong>{{.Label}}</strong>
           </a>
-          <hr class="navbar-divider">
-<a class="navbar-item" onclick="openReportIssueModal()">
-            <strong>Report Issue</strong>
+          {{else}}
+          <a class="navbar-item" onclick="openReportIssueModal()">
+            <strong>{{.Label}}</strong>
           </a>
+          {{end}}
+          {{end}}
         </div>
       </div>
+      {{end}}
     </div>
 
+    {{if .UI.ShowAuth}}
     <div class="navbar-end">
       {{if .IsAuthn}}
         <div class="navbar-item">
@@ -96,10 +105,11 @@
         </div>
       {{end}}
     </div>
+    {{end}}
   </div>
 
 </nav>
 
 {{template "todo-toast.gohtml" .}}
-{{template "report-issue-modal.gohtml" .}}
-{{template "login-modal.gohtml" .}}
+{{if .UI.ShowAuth}}{{template "report-issue-modal.gohtml" .}}{{end}}
+{{if .UI.ShowAuth}}{{template "login-modal.gohtml" .}}{{end}}

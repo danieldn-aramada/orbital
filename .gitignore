@@ -42,6 +42,12 @@ dgraph-exports/
 # Cosign keys — private key must never be committed
 cosign.key
 
+# Zot registry credentials — contains ACR password
+deploy/local/zot-credentials.json
+
+# Orb local data
+orb-data/
+
 # Secrets — never commit filled-in secret manifests
 deploy/dev/secrets.yaml
 

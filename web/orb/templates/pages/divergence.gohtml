@@ -1,0 +1,62 @@
+{{define "page"}}
+<main class="app-main-grid">
+  <div class="app-menu">
+    {{template "menu.gohtml" .}}
+  </div>
+  <div class="app-main p-5">
+<section>
+
+    <div class="columns is-vcentered m-0 mb-3">
+      <div class="column pt-0 pl-0">
+        <p class="title is-4">Divergence Report</p>
+        <p class="subtitle is-6 has-text-grey">Local overrides from imported subgraph intent.</p>
+      </div>
+      <div class="column is-narrow pt-0">
+        <button class="button is-danger" id="orb-publish-report-btn" {{if not .Overrides}}disabled{{end}}>
+          <span class="icon"><i class="fa-solid fa-paper-plane"></i></span>
+          <span>Publish Report</span>
+        </button>
+      </div>
+    </div>
+
+    <div id="orb-publish-result" class="notification" style="display:none"></div>
+
+    {{if .Overrides}}
+    <div style="overflow-x:auto">
+    <table class="table is-striped is-hoverable is-fullwidth">
+      <thead>
+        <tr>
+          <th>Resource</th>
+          <th>Type</th>
+          <th>Field</th>
+          <th>Intent Value</th>
+          <th>Local Value</th>
+          <th>Overridden At</th>
+          <th>Overridden By</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Overrides}}
+        <tr>
+          <td><span class="is-size-7 has-text-grey">{{.ResourceOrbID}}</span></td>
+          <td>{{.ResourceType}}</td>
+          <td><code>{{.Field}}</code></td>
+          <td>{{if .IntentValue}}{{.IntentValue}}{{else}}<span class="has-text-grey">—</span>{{end}}</td>
+          <td><strong>{{if .LocalValue}}{{.LocalValue}}{{else}}<span class="has-text-grey">—</span>{{end}}</strong></td>
+          <td><span data-timestamp="{{.OverriddenAt}}">{{.OverriddenAt}}</span></td>
+          <td>{{if .OverriddenBy}}{{.OverriddenBy}}{{else}}—{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    </div>
+    {{else}}
+    <article class="box">
+      <p class="has-text-grey">No local overrides. Configuration matches imported intent.</p>
+    </article>
+    {{end}}
+
+</section>
+  </div>
+</main>
+{{end}}

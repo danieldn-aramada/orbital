@@ -81,7 +81,8 @@ func TestSlogLevel(t *testing.T) {
 		{logLevel: "debug", want: slog.LevelDebug},
 		{logLevel: "info", want: slog.LevelInfo},
 		{logLevel: "", want: slog.LevelInfo},
-		{logLevel: "warn", want: slog.LevelInfo},
+		{logLevel: "warn", want: slog.LevelWarn},
+		{logLevel: "error", want: slog.LevelError},
 	}
 
 	for _, tt := range tests {

@@ -42,14 +42,15 @@ Each spike is a question to answer. Results define the MVP.
 | 8 | AKS dev environment | Do we have a working, repeatable AKS dev deployment to prototype against? | Daniel | ✅ Done (5/18) | |
 | 9 | Seed iDRAC and storage devices | Does the schema cover all iDRAC and storage fields we need? | Daniel | ✅ Done (5/15) | |
 | 9b | Valkey cache-aside | What is the right caching strategy for read-heavy graph queries, and does orbital degrade correctly without it? | Daniel | Not started | |
-| 10 | Air-gap sync round-trip | Does orbital's config export work as a complete, importable payload for orb? | — | 🔄 In progress | Orb loads `json.gz` into local DGraph and serves offline; validate export sizes |
+| 10 | Air-gap sync round-trip | Does orbital's config export work as a complete, importable payload for orb? | — | ✅ Done | Orb loads `json.gz` into local DGraph and serves offline; validate export sizes |
 | 11 | Authorization | How do we restrict mutations to authorized roles and test authz offline? | — | 🔄 In progress | App Roles, DGraph `@auth` directives, middleware enforcement, offline JWT tests, AKS OIDC validation |
 | 12 | DGraph operations | Can our team operate DGraph on AKS without prior experience? | — | Not started | Runbook: schema change apply, validate, rollback |
-| 13 | Orb import API | What is the right mechanism for orb to pull a signed OCI subgraph from a local Zot registry and load it into local DGraph? | — | Not started | OCI puller (oras-go v2), cosign verify (air-gap safe), `dgraph live` subprocess, polling loop, Zot ACR upstream sync config, docker-compose DGraph for orb |
+| 13 | Orb import API | What is the right mechanism for orb to pull a signed OCI subgraph from a local Zot registry and load it into local DGraph? | — | ✅ Done | OCI puller (oras-go v2), cosign verify (air-gap safe), `dgraph live` subprocess, polling loop, Zot ACR upstream sync config, docker-compose DGraph for orb |
 | 14 | Divergence reports | How does orbital surface divergence and let an admin resolve it? | — | Not started | |
 | 15 | Orb deployment model | What does orb look like deployed at the edge — topology, runtime deps, air-gap constraints? | — | Not started | |
 | 16 | Orb API surface & authN/Z | What endpoints does orb expose locally, who calls them, and what is the consumer auth model? | — | Not started | |
-| 17 | Orb UI | Can orbital and orb share a template infrastructure while serving different nav and capability surfaces? End-to-end demo: import → browse config offline → divergence → publish report. | — | Not started | web/ restructure (shared/orbital/orb), UIConfig + ReadOnly mode, orb Echo server, status/dashboard, import subgraph page, DC + servers (read-only), divergence + publish, import history |
+| 17 | Orb UI | Can orbital and orb share a template infrastructure while serving different nav and capability surfaces? End-to-end demo: import → browse config offline → divergence → publish report. | — | ✅ Done | web/ restructure (shared/orbital/orb), UIConfig + ReadOnly mode, orb Echo server, status/dashboard, import subgraph page, DC + servers (read-only), import history, override system (Server + iDRAC field-level overrides, badges, import warning, Divergence Report page); S3 divergence publish transport pending |
+| 18 | ES module split of app.js | Can we split the 2,529-line JS monolith into per-feature ES modules with zero build step? | — | Not started | shared.js + orbital.js + orb.js; conditional loading via UIConfig; window.* bridge for onclick handlers |
 | — | Schema migration | Do we need automation or is a runbook sufficient? | — | ❌ Out of scope | |
 
 ---
@@ -134,7 +135,7 @@ Benchmark DGraph query latency under realistic load, validate Valkey caching mit
 | `//go:embed` for templates and schema | Read from disk at runtime. Replace with `//go:embed` — self-contained binary. Addressed in MVP Planning. |
 | DGraph client abstraction | 22+ raw `http.Post` calls across 7 handler files, no timeouts, no pooling. Extract `internal/dgraph/client.go`. Prerequisite for testing. See `docs/maintainability.md` item 2.1. |
 | `internal/handler/` god package | 3,560 lines mixing HTTP, business logic, DGraph calls, file I/O. Decompose post-MVP. See `docs/maintainability.md` item 5.4. |
-| `web/static/app.js` monolith | 2,400+ lines, no module system, duplicate event listeners. Split post-MVP. See `docs/maintainability.md` item 5.2. |
+| `web/static/app.js` monolith | 2,400+ lines, no module system, duplicate event listeners. Spike 18 planned. See `docs/claude/SPIKE_18_EXECUTION.md`. |
 | Quick wins (independent, any time) | `docs/maintainability.md` items 3.1–3.7, 4.1, 4.2, 4.4 — none are blocking, all improve correctness or reduce duplication. |
 
 ---

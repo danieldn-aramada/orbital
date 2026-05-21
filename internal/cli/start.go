@@ -6,8 +6,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/armada/orbital/internal/config"
-	"github.com/armada/orbital/internal/server"
+	"github.com/armada/orbital/internal/orbconfig"
+	"github.com/armada/orbital/internal/orbserver"
 	"github.com/spf13/cobra"
 )
 
@@ -21,12 +21,11 @@ func runStart(cmd *cobra.Command, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	cfg, err := config.New()
+	cfg, err := orbconfig.New()
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
-	// orb is the edge binary — no PostgreSQL dependency.
-	srv := server.New(cfg, nil)
 
+	srv := orbserver.New(cfg)
 	return srv.Start(ctx)
 }

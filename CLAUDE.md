@@ -94,15 +94,20 @@ See `docs/claude/DGRAPH.md` for schema gotchas, DQL patterns, and blue-green exp
 
 **Active spikes:**
 - **Spike 11 (Authorization)** ← blocks MVP — bearer validation done; remaining: Azure AD App Roles, DGraph `@auth` directives, Echo middleware role enforcement, offline JWT integration tests ⚠️ Opus design session first
-- **Spike 10 (Air-gap sync)** — orbital side complete; remaining: orb import API (Spike 13)
 
-**Planned (design complete, not started):**
-- **Spike 13 (Orb import API)** — OCI puller from Zot, cosign verify, dgraph live import, polling loop. See `docs/claude/SPIKE_13_17_PLAN.md`
-- **Spike 17 (Orb UI)** — shared template infrastructure (web/shared + web/orbital + web/orb), UIConfig + ReadOnly mode, orb web server, status/import/DC/servers/divergence pages. Depends on Spike 13. See `docs/claude/SPIKE_13_17_PLAN.md`
+**Recently completed:**
+- **Spike 13 (Orb import API)** — done: OCI puller, cosign verify, dgraph live import, polling loop
+- **Spike 17 (Orb UI)** — done: shared template infrastructure, UIConfig + ReadOnly mode, orb web server, status/dashboard, import, DC + servers (read-only DataTables + HTMX tabs), import history
+- **Orb override system** — done: field-level overrides to `overrides.json`, Server + iDRAC fields, override badges, import warning, Divergence Report page with Publish button
+
+**Open override items:**
+- S3 divergence publish transport (divergence report POST to S3) — deferred
+- "Restore to intent" per-row revert — deferred to Spike 14
+- Override modal sustainability — data-attribute pattern is a known debt; switch to HTMX server-rendered form before adding storage/NIC overrides
+- Naming decision: Divergence Report page vs Overrides (page title vs published artifact) — unresolved
 
 **MVP gaps remaining:**
 - Authorization (Spike 11) ← next priority
-- Orb end-to-end demo (Spikes 13 + 17) — import subgraph from Zot, browse config offline, publish divergence
 - Valkey cache-aside (Spike 9b) — not yet implemented
 - Schema management — versioned apply with backwards compat check on startup
 - Orb registry — register, authenticate, and revoke orbs
@@ -237,6 +242,8 @@ web/
 
 - Messages starting with **"thoughts:"** or **"discuss:"** — do not write any code or files, respond conversationally only.
 - Messages starting with **"propose:"** — produce a written design proposal for review, do not write any code.
+- Messages starting with **"challenge:"** — no code. User will lead with a thesis ("I believe X because Y"). Respond by: (1) verifying you understood the design correctly, (2) comparing it to standard/best practices from your knowledge base, (3) surfacing gaps or risks in the reasoning. Be adversarial — the goal is to stress-test the design, not validate it. Read relevant design docs before responding.
+- Messages starting with **"validate:"** — no code. Check the user's reasoning against the design docs and your knowledge base. Confirm what holds, flag what doesn't. Less adversarial than `challenge:` — the user believes this is correct and wants exceptions surfaced.
 - Use `/plan` mode for architecture and schema design discussions before any implementation begins.
 - Run `/wrap-up` at the end of a session to update CLAUDE.md, save memories, and update Current State.
 
@@ -253,6 +260,12 @@ These have been explicitly decided. Do not re-suggest them.
 - **Do not proxy Ratel through orbital** — Ratel is a React SPA with `PUBLIC_URL=/`; webpack bakes absolute paths (`/3rdpartystatic/`, `/static/js/`) that bypass any sub-path reverse proxy. Correct solution: dedicated DNS hostname (`ratel.devnew.armada.internal`) with its own Istio VirtualService. Until infra provisioning, show a todo toast when the link is clicked.
 - **PLM and ITSM integrations are out of v1 scope** — vendor selection in progress. Design behind Go interfaces when the time comes; do not couple to any specific vendor now.
 - **Network infrastructure config items are out of v1 scope** — VLANs and general network IPs are owned by an external system. Functional IPs tied to specific workloads (Tinkerbell, K8s control plane) are in scope as properties or dedicated nodes — discuss before adding.
+- **Orb DGraph is a read-only intent mirror** — `override_handlers.go` must never mutate DGraph. Local overrides write only to `overrides.json`. DGraph retains orbital's authoritative intent verbatim.
+- **"Import is sudo"** — `orb import` always runs `drop_all` + live load, overwriting all local DGraph state. `overrides.json` is cleared on successful import. Local overrides do not survive an import.
+- **Orb divergence transport is not direct HTTP** — orb never sends divergence reports directly to orbital over HTTP. Transport is S3/OCI (deployment layer concern). Direct HTTP between orb and orbital violates the air-gap invariant.
+- **Orb UI pages mirror orbital client-side patterns** — orb pages use the same interaction model as orbital: GraphQL proxy fetch, DataTables, HTMX tab swap. Not simplified server-rendered alternatives.
+- **Do not extend orb override modal with new resource types via data attributes** — the data-attribute pattern (button carries all field values) does not scale to nested/array resource types (storage devices, NICs). Switch to HTMX server-rendered modal form first.
+- **Product naming: "Orbital" (cloud) / "Orb" (edge) — this is the north star.** The project is called Orbital. The cloud component UI shows "Orbital." The edge component UI shows "Orb." Do not use "Orbital Edge" or conflate the two. Orb is a purpose-built edge agent — not a deployment variant of Orbital. `AppName: "Orbital"` in orbital handlers; `AppName: "Orb"` in orb handlers.
 
 *Domain-specific settled decisions live in `docs/claude/DGRAPH.md`, `docs/claude/UI.md`, `docs/claude/AUTH.md`, `docs/claude/AUDIT.md`, `docs/claude/OCI.md`.*
 

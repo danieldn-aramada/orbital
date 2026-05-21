@@ -79,8 +79,8 @@ func NewServerHandler(dgraphURL string, dev bool, logger *slog.Logger, basePath 
 
 func parseServerFragment() *template.Template {
 	return template.Must(template.ParseFiles(
-		"web/templates/fragments/server-tab.gohtml",
-		"web/templates/components/edit-modal-server.gohtml",
+		"web/shared/templates/partials/server-tab.gohtml",
+		"web/shared/templates/components/edit-modal-server.gohtml",
 	))
 }
 

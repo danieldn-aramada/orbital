@@ -40,4 +40,4 @@
   window.JSONEditor = JSONEditor
 </script>
 
-<title>{{if and .PageTitle (ne .PageTitle "Orbital")}}{{.PageTitle}} | Orbital{{else}}Orbital{{end}}</title>
+<title>{{if and .PageTitle (ne .PageTitle .UI.AppName)}}{{.PageTitle}} | {{.UI.AppName}}{{else}}{{.UI.AppName}}{{end}}</title>

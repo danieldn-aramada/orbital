@@ -407,7 +407,7 @@ function showDatacenterSkeleton(id) {
     </div>`
 }
 
-function showServerSkeleton(targetId) {
+function showServerSkeleton(targetId, variant) {
   const target = document.getElementById(targetId)
   if (!target) return
   const s = () => `<span class="is-skeleton" style="display:block">&nbsp;</span>`
@@ -418,10 +418,15 @@ function showServerSkeleton(targetId) {
   const meta = [
     'Namespace', 'Orb ID', 'Created By', 'Created At', 'Last Updated', 'Last Updated By',
   ].map(l => `<tr><td style="white-space:nowrap;width:1%">${l}</td><td>${s()}</td></tr>`).join('')
-  target.innerHTML = `
-    <div class="fixed-grid has-3-cols mb-0">
-      <div class="columns m-0">
-        <div class="column pt-0 pl-0">
+
+  const isOrb = variant === 'orb'
+  const buttons = isOrb ? `
+          <button class="button is-rounded is-small is-link mt-1 is-loading" disabled>
+            <span class="icon"><i class="fa-solid fa-refresh"></i></span><span>Reload</span>
+          </button>
+          <button class="button is-rounded is-small is-warning mt-1" disabled>
+            <span class="icon"><i class="fa-solid fa-pen-to-square"></i></span><span>Override</span>
+          </button>` : `
           <button class="button is-rounded is-small is-warning mt-1" disabled>
             <span class="icon"><i class="fa-solid fa-gauge-high"></i></span><span>Grafana</span>
           </button>
@@ -433,7 +438,18 @@ function showServerSkeleton(targetId) {
           </button>
           <button class="button is-rounded is-small is-danger mt-1" disabled>
             <span class="icon"><i class="fa-solid fa-trash"></i></span><span>Delete</span>
-          </button>
+          </button>`
+  const detailTabs = isOrb ? `
+                <li class="is-active"><a><span class="icon is-small"><i class="fa-solid fa-microchip"></i></span><span>iDRAC Settings</span></a></li>
+                <li><a><span class="icon is-small"><i class="fa-solid fa-hard-drive"></i></span><span>Storage</span></a></li>` : `
+                <li class="is-active"><a><span class="icon is-small"><i class="fa-solid fa-microchip"></i></span><span>iDRAC Settings</span></a></li>
+                <li><a><span class="icon is-small"><i class="fa-solid fa-hard-drive"></i></span><span>Storage</span></a></li>
+                <li><a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a></li>`
+
+  target.innerHTML = `
+    <div class="fixed-grid has-3-cols mb-0">
+      <div class="columns m-0">
+        <div class="column pt-0 pl-0">${buttons}
         </div>
       </div>
       <div class="grid">
@@ -453,10 +469,7 @@ function showServerSkeleton(targetId) {
           <article class="box pb-2">
             <p class="is-size-4 pb-4">Details</p>
             <div class="tabs is-boxed">
-              <ul>
-                <li class="is-active"><a><span class="icon is-small"><i class="fa-solid fa-microchip"></i></span><span>iDRAC Settings</span></a></li>
-                <li><a><span class="icon is-small"><i class="fa-solid fa-hard-drive"></i></span><span>Storage</span></a></li>
-                <li><a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a></li>
+              <ul>${detailTabs}
               </ul>
             </div>
             <div style="min-height:300px">
@@ -1991,7 +2004,7 @@ document.addEventListener('click', function (e) {
   const targetId = btn.dataset.srvTarget
   const target = document.getElementById(targetId)
   if (!target) return
-  showServerSkeleton(targetId)
+  showServerSkeleton(targetId, btn.dataset.srvSkeleton)
   fetchWithMinDelay(url)
     .then(html => {
       target.innerHTML = html
@@ -2434,3 +2447,505 @@ document.addEventListener('DOMContentLoaded', () => {
     sessionStorage.clear()
   })
 })
+
+// ── Orb import ──────────────────────────────────────────────────────────────
+
+let orbImportPollTimer = null
+
+async function handleOrbImport(tag) {
+  try {
+    const r = await fetch(BASE + '/api/v1/overrides')
+    const overrides = await r.json()
+    if (Array.isArray(overrides) && overrides.length > 0) {
+      const n = overrides.length
+      const ok = confirm(`You have ${n} pending local override${n === 1 ? '' : 's'}. Importing will clear them and restore orbital's intent. Continue?`)
+      if (!ok) return
+    }
+  } catch (_) { /* proceed if check fails */ }
+
+  orbShowImportStatus('is-info', 'fa-spinner fa-spin', `Importing ${tag}…`)
+  fetch(BASE + '/api/v1/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tag }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        orbShowImportStatus('is-warning', 'fa-triangle-exclamation', data.error)
+        return
+      }
+      pollOrbImport()
+    })
+    .catch(() => orbShowImportStatus('is-danger', 'fa-circle-xmark', 'Failed to start import.'))
+}
+
+function handleOrbImportLatest() {
+  const firstRow = document.querySelector('#orb-tags-tbody tr[data-tag]')
+  if (!firstRow) return
+  handleOrbImport(firstRow.dataset.tag)
+}
+
+function pollOrbImport() {
+  clearTimeout(orbImportPollTimer)
+  fetch(BASE + '/api/v1/import/status')
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'done') {
+        orbShowImportStatus('is-success', 'fa-circle-check', `Imported ${data.currentVersion} successfully.`)
+      } else if (data.status === 'failed') {
+        orbShowImportStatus('is-danger', 'fa-circle-xmark', `Import failed: ${data.lastError || 'unknown error'}`)
+      } else {
+        const label = data.status === 'running' ? 'Importing…' : 'Pending…'
+        orbShowImportStatus('is-info', 'fa-spinner fa-spin', label)
+        orbImportPollTimer = setTimeout(pollOrbImport, 2000)
+      }
+    })
+    .catch(() => { orbImportPollTimer = setTimeout(pollOrbImport, 3000) })
+}
+
+function orbShowImportStatus(colorClass, iconClass, text) {
+  const box = document.getElementById('orb-import-status-box')
+  const article = document.getElementById('orb-import-status-article')
+  const icon = document.getElementById('orb-import-status-icon')
+  const textEl = document.getElementById('orb-import-status-text')
+  if (!box) return
+  article.className = `message ${colorClass}`
+  icon.innerHTML = `<i class="fa-solid ${iconClass}"></i>`
+  textEl.textContent = text
+  box.style.display = ''
+}
+
+function loadOrbTags() {
+  const tbody = document.getElementById('orb-tags-tbody')
+  if (!tbody) return
+  fetch(BASE + '/api/v1/import/tags')
+    .then(r => r.json())
+    .then(data => {
+      const tags = data.tags || []
+      if (tags.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="has-text-grey">No versions available.</td></tr>'
+        return
+      }
+      // Newest first (tags arrive oldest-first from the registry)
+      tbody.innerHTML = [...tags].reverse().map(t => `
+        <tr data-tag="${t}">
+          <td><strong>${t}</strong></td>
+          <td class="has-text-grey">${BASE.includes(t) ? '—' : ''}</td>
+          <td>
+            <button class="button is-info is-small" onclick="handleOrbImport('${t}')">
+              <span class="icon"><i class="fa-solid fa-download"></i></span>
+              <span>Import</span>
+            </button>
+          </td>
+        </tr>`).join('')
+    })
+    .catch(() => {
+      const tbody = document.getElementById('orb-tags-tbody')
+      if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="has-text-danger">Failed to load tags.</td></tr>'
+    })
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!document.getElementById('orb-tags-tbody')) return
+  loadOrbTags()
+
+  const fileInput = document.getElementById('orb-courier-file')
+  if (fileInput) {
+    fileInput.addEventListener('change', () => {
+      const name = fileInput.files[0]?.name || 'No file selected'
+      document.getElementById('orb-courier-filename').textContent = name
+      document.getElementById('orb-courier-upload-btn').disabled = !fileInput.files[0]
+    })
+  }
+})
+
+async function handleOrbCourierUpload() {
+  try {
+    const r = await fetch(BASE + '/api/v1/overrides')
+    const overrides = await r.json()
+    if (Array.isArray(overrides) && overrides.length > 0) {
+      const n = overrides.length
+      const ok = confirm(`You have ${n} pending local override${n === 1 ? '' : 's'}. Importing will clear them and restore orbital's intent. Continue?`)
+      if (!ok) return
+    }
+  } catch (_) { /* proceed if check fails */ }
+
+  const fileInput = document.getElementById('orb-courier-file')
+  if (!fileInput?.files[0]) return
+  const fd = new FormData()
+  fd.append('bundle', fileInput.files[0])
+  orbShowImportStatus('is-info', 'fa-spinner fa-spin', 'Uploading bundle…')
+  fetch(BASE + '/api/v1/import/upload', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        orbShowImportStatus('is-warning', 'fa-triangle-exclamation', data.error)
+        return
+      }
+      orbShowImportStatus('is-info', 'fa-spinner fa-spin', `Importing ${data.tag}…`)
+      pollOrbImport()
+    })
+    .catch(() => orbShowImportStatus('is-danger', 'fa-circle-xmark', 'Upload failed.'))
+}
+
+// --- Orb DC override modal ---
+
+function openOrbDCOverrideModal() {
+  document.getElementById('orb-dc-override-modal').classList.add('is-active')
+}
+
+function closeOrbDCOverrideModal() {
+  document.getElementById('orb-dc-override-modal').classList.remove('is-active')
+  const err = document.getElementById('orb-dc-override-error')
+  if (err) { err.style.display = 'none'; err.textContent = '' }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('orb-dc-override-btn') || document.querySelector('[data-dc-override-id]')
+  if (!btn) return
+  btn.addEventListener('click', openOrbDCOverrideModal)
+
+  const submit = document.getElementById('orb-dc-override-submit')
+  if (!submit) return
+  submit.addEventListener('click', () => {
+    const dcID = submit.dataset.dcId
+    const dcOrbID = submit.dataset.dcOrbId
+    const nameVal = document.getElementById('orb-dc-override-name').value.trim()
+    const err = document.getElementById('orb-dc-override-error')
+    if (!nameVal) {
+      err.textContent = 'Name is required.'
+      err.style.display = ''
+      return
+    }
+    submit.classList.add('is-loading')
+    fetch(BASE + '/api/v1/overrides', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resourceType: 'DataCenter', resourceId: dcID, resourceOrbId: dcOrbID, field: 'name', localValue: nameVal })
+    })
+      .then(r => r.json())
+      .then(data => {
+        submit.classList.remove('is-loading')
+        if (data.error) { err.textContent = data.error; err.style.display = ''; return }
+        closeOrbDCOverrideModal()
+      })
+      .catch(() => { submit.classList.remove('is-loading'); err.textContent = 'Request failed.'; err.style.display = '' })
+  })
+})
+
+// --- Orb server override modal ---
+
+function openOrbSrvOverrideModal(btn) {
+  const initial = {
+    hostname:     btn.dataset.srvHostname || '',
+    model:        btn.dataset.srvModel || '',
+    manufacturer: btn.dataset.srvManufacturer || '',
+    serviceTag:   btn.dataset.srvServiceTag || '',
+    oobMAC:       btn.dataset.srvOobMac || '',
+  }
+  document.getElementById('orb-srv-override-hostname').value = initial.hostname
+  document.getElementById('orb-srv-override-model').value = initial.model
+  document.getElementById('orb-srv-override-manufacturer').value = initial.manufacturer
+  document.getElementById('orb-srv-override-serviceTag').value = initial.serviceTag
+  document.getElementById('orb-srv-override-oobMAC').value = initial.oobMAC
+
+  const hasIdrac = btn.dataset.hasIdrac === 'true'
+  const idracSection = document.getElementById('orb-srv-override-idrac-section')
+  if (idracSection) idracSection.style.display = hasIdrac ? '' : 'none'
+  if (hasIdrac) {
+    initial.idracFirmwareVersion             = btn.dataset.idracFirmwareVersion || ''
+    initial.idracSshEnabled                  = btn.dataset.idracSshEnabled === 'true'
+    initial.idracIpmiEnabled                 = btn.dataset.idracIpmiEnabled === 'true'
+    initial.idracLockdownModeEnabled         = btn.dataset.idracLockdownModeEnabled === 'true'
+    initial.idracUsbManagementPortEnabled    = btn.dataset.idracUsbManagementPortEnabled === 'true'
+    initial.idracOsToIdracPassThroughEnabled = btn.dataset.idracOsToIdracPassThroughEnabled === 'true'
+    initial.idracDhcpEnabled                 = btn.dataset.idracDhcpEnabled === 'true'
+    initial.idracRacadmEnabled               = btn.dataset.idracRacadmEnabled === 'true'
+    document.getElementById('orb-srv-override-idrac-firmwareVersion').value       = initial.idracFirmwareVersion
+    document.getElementById('orb-srv-override-idrac-sshEnabled').checked          = initial.idracSshEnabled
+    document.getElementById('orb-srv-override-idrac-ipmiEnabled').checked         = initial.idracIpmiEnabled
+    document.getElementById('orb-srv-override-idrac-lockdownModeEnabled').checked = initial.idracLockdownModeEnabled
+    document.getElementById('orb-srv-override-idrac-usbManagementPortEnabled').checked    = initial.idracUsbManagementPortEnabled
+    document.getElementById('orb-srv-override-idrac-osToIdracPassThroughEnabled').checked = initial.idracOsToIdracPassThroughEnabled
+    document.getElementById('orb-srv-override-idrac-dhcpEnabled').checked         = initial.idracDhcpEnabled
+    document.getElementById('orb-srv-override-idrac-racadmEnabled').checked       = initial.idracRacadmEnabled
+  }
+
+  const submit = document.getElementById('orb-srv-override-submit')
+  if (submit) {
+    submit.dataset.srvId = btn.dataset.srvOverrideId || ''
+    submit.dataset.srvOrbId = btn.dataset.srvOverrideOrbId || ''
+    submit.dataset.hasIdrac = hasIdrac ? 'true' : 'false'
+    submit._orbInitial = initial
+  }
+  document.getElementById('orb-srv-override-modal').classList.add('is-active')
+}
+
+function closeOrbSrvOverrideModal() {
+  document.getElementById('orb-srv-override-modal').classList.remove('is-active')
+  const err = document.getElementById('orb-srv-override-error')
+  if (err) { err.style.display = 'none'; err.textContent = '' }
+}
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-srv-override-id]')
+  if (btn) openOrbSrvOverrideModal(btn)
+})
+
+document.addEventListener('DOMContentLoaded', () => {
+  const submit = document.getElementById('orb-srv-override-submit')
+  if (!submit) return
+  submit.addEventListener('click', async () => {
+    const srvID = submit.dataset.srvId
+    const srvOrbID = submit.dataset.srvOrbId
+    const hasIdrac = submit.dataset.hasIdrac === 'true'
+    const initial = submit._orbInitial || {}
+    const err = document.getElementById('orb-srv-override-error')
+    submit.classList.add('is-loading')
+    try {
+      const postOverride = async (resourceType, resourceOrbId, field, localValue) => {
+        const resp = await fetch(BASE + '/api/v1/overrides', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resourceType, resourceId: srvID, resourceOrbId, field, localValue })
+        })
+        const data = await resp.json()
+        if (data.error) throw new Error(data.error)
+      }
+
+      // Server fields — only send if value changed
+      const srvFields = [
+        { field: 'hostname',     id: 'orb-srv-override-hostname',     initKey: 'hostname' },
+        { field: 'model',        id: 'orb-srv-override-model',        initKey: 'model' },
+        { field: 'manufacturer', id: 'orb-srv-override-manufacturer', initKey: 'manufacturer' },
+        { field: 'serviceTag',   id: 'orb-srv-override-serviceTag',   initKey: 'serviceTag' },
+        { field: 'oobMAC',       id: 'orb-srv-override-oobMAC',       initKey: 'oobMAC' },
+      ]
+      for (const f of srvFields) {
+        const val = document.getElementById(f.id).value.trim()
+        if (!val || val === (initial[f.initKey] || '')) continue
+        await postOverride('Server', srvOrbID, f.field, val)
+      }
+
+      // iDRAC fields — only send if value changed
+      if (hasIdrac) {
+        const idracOrbID = srvOrbID + '-idrac'
+        const fw = document.getElementById('orb-srv-override-idrac-firmwareVersion').value.trim()
+        if (fw && fw !== (initial.idracFirmwareVersion || '')) {
+          await postOverride('IdracSettings', idracOrbID, 'firmwareVersion', fw)
+        }
+        const idracBoolFields = [
+          { field: 'sshEnabled',                  id: 'orb-srv-override-idrac-sshEnabled',                  initKey: 'idracSshEnabled' },
+          { field: 'ipmiEnabled',                  id: 'orb-srv-override-idrac-ipmiEnabled',                  initKey: 'idracIpmiEnabled' },
+          { field: 'lockdownModeEnabled',          id: 'orb-srv-override-idrac-lockdownModeEnabled',          initKey: 'idracLockdownModeEnabled' },
+          { field: 'usbManagementPortEnabled',     id: 'orb-srv-override-idrac-usbManagementPortEnabled',     initKey: 'idracUsbManagementPortEnabled' },
+          { field: 'osToIdracPassThroughEnabled',  id: 'orb-srv-override-idrac-osToIdracPassThroughEnabled',  initKey: 'idracOsToIdracPassThroughEnabled' },
+          { field: 'dhcpEnabled',                  id: 'orb-srv-override-idrac-dhcpEnabled',                  initKey: 'idracDhcpEnabled' },
+          { field: 'racadmEnabled',                id: 'orb-srv-override-idrac-racadmEnabled',                initKey: 'idracRacadmEnabled' },
+        ]
+        for (const f of idracBoolFields) {
+          const val = document.getElementById(f.id).checked
+          if (val === initial[f.initKey]) continue
+          await postOverride('IdracSettings', idracOrbID, f.field, String(val))
+        }
+      }
+
+      submit.classList.remove('is-loading')
+      closeOrbSrvOverrideModal()
+      htmx.ajax('GET', BASE + '/servers/' + srvID, { target: '#tab-content-srv-' + srvID, swap: 'innerHTML' })
+    } catch (e) {
+      submit.classList.remove('is-loading')
+      err.textContent = e.message || 'Request failed.'
+      err.style.display = ''
+    }
+  })
+})
+
+// --- Orb divergence publish ---
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('orb-publish-report-btn')
+  if (!btn) return
+  btn.addEventListener('click', () => {
+    const result = document.getElementById('orb-publish-result')
+    btn.classList.add('is-loading')
+    fetch(BASE + '/api/v1/divergence/publish', { method: 'POST' })
+      .then(r => r.json())
+      .then(data => {
+        btn.classList.remove('is-loading')
+        result.className = 'notification is-success is-light'
+        result.style.display = ''
+        if (data.reportId) {
+          result.textContent = `Report published. ID: ${data.reportId}`
+        } else if (data.status === 'skipped') {
+          result.className = 'notification is-warning is-light'
+          result.textContent = `Skipped: ${data.reason}`
+        } else {
+          result.textContent = 'Report published.'
+        }
+      })
+      .catch(() => {
+        btn.classList.remove('is-loading')
+        result.className = 'notification is-danger is-light'
+        result.style.display = ''
+        result.textContent = 'Failed to publish report.'
+      })
+  })
+})
+
+// --- Orb servers DataTable ---
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!document.getElementById('orb-servers-table')) return
+
+  const orbServersTable = $('#orb-servers-table').DataTable({
+    pageLength: 25,
+    order: [[0, 'asc']],
+    columns: [
+      { data: 'hostname' },
+      { data: 'serviceTag' },
+      { data: 'model' },
+      { data: 'manufacturer' },
+      { data: 'oobIP' },
+      { data: 'rack' },
+      { data: 'rackPosition' },
+    ],
+    ajax: {
+      url: BASE + '/graphql',
+      type: 'POST',
+      contentType: 'application/json',
+      data: () => JSON.stringify({
+        query: `{ queryServer {
+          id orbId hostname serviceTag model manufacturer oobMAC rackPosition
+          oobIP { address }
+          rack { name }
+        } }`,
+      }),
+      dataSrc: (json) => (json.data?.queryServer ?? []).map(s => ({
+        id: s.id,
+        orbId: s.orbId ?? '—',
+        hostname: s.hostname ?? '—',
+        serviceTag: s.serviceTag ?? '—',
+        model: s.model ?? '—',
+        manufacturer: s.manufacturer ?? '—',
+        oobIP: s.oobIP?.address ?? '—',
+        rack: s.rack?.name ?? '—',
+        rackPosition: s.rackPosition || '—',
+      })),
+    },
+    createdRow: function (row) { row.style.cursor = 'pointer' },
+  })
+
+  $('#orb-servers-table tbody').on('click', 'tr', function () {
+    const data = orbServersTable.row(this).data()
+    if (data && data.id) {
+      window.location = BASE + '/servers/' + data.id
+    }
+  })
+})
+
+// --- Orb DC page ---
+
+document.addEventListener('DOMContentLoaded', () => {
+  const page = document.getElementById('orb-dc-page')
+  if (!page) return
+
+  const dcSlug = page.dataset.dcSlug
+  const loading = document.getElementById('orb-dc-loading')
+  const content = document.getElementById('orb-dc-content')
+  const empty = document.getElementById('orb-dc-empty')
+
+  fetch(BASE + '/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: `{
+        queryDataCenter {
+          id orbId name createdAt updatedAt
+          namespace { name }
+          racks(order: { asc: name }) { id name }
+          serversAggregate { count }
+          servers(order: { asc: rackPosition }) {
+            id orbId hostname serviceTag model manufacturer
+            oobIP { address }
+            rackPosition
+            rack { name }
+          }
+        }
+      }`,
+    }),
+  })
+    .then(r => r.json())
+    .then(json => {
+      loading.style.display = 'none'
+      const list = json.data?.queryDataCenter ?? []
+      if (list.length === 0) {
+        empty.style.display = ''
+        return
+      }
+      const dc = list[0]
+
+      document.getElementById('orb-dc-name').textContent = dc.name ?? '—'
+      document.getElementById('orb-dc-server-count').textContent = dc.serversAggregate?.count ?? '—'
+      document.getElementById('orb-dc-rack-count').textContent = dc.racks?.length ?? '—'
+      document.getElementById('orb-dc-orb-id').textContent = dc.orbId || '—'
+      document.getElementById('orb-dc-namespace').textContent = dc.namespace?.name || '—'
+      document.getElementById('orb-dc-created-at').textContent = dc.createdAt || '—'
+      document.getElementById('orb-dc-updated-at').textContent = dc.updatedAt || '—'
+
+      const overrideBtn = document.getElementById('orb-dc-override-btn')
+      if (overrideBtn) {
+        overrideBtn.dataset.dcOverrideId = dc.id
+        overrideBtn.dataset.dcOverrideOrbId = dc.orbId || ''
+      }
+      const submit = document.getElementById('orb-dc-override-submit')
+      if (submit) {
+        submit.dataset.dcId = dc.id
+        submit.dataset.dcOrbId = dc.orbId || ''
+      }
+      const nameInput = document.getElementById('orb-dc-override-name')
+      if (nameInput) nameInput.value = dc.name ?? ''
+      const intentName = document.getElementById('orb-dc-intent-name')
+      if (intentName) intentName.textContent = dc.name ?? ''
+
+      const servers = dc.servers ?? []
+      $('#orb-dc-servers-table').DataTable({
+        pageLength: 25,
+        order: [[4, 'asc'], [5, 'asc']],
+        data: servers.map(s => ({
+          id: s.id,
+          hostname: s.hostname ?? '—',
+          serviceTag: s.serviceTag ?? '—',
+          model: s.model ?? '—',
+          oobIP: s.oobIP?.address ?? '—',
+          rack: s.rack?.name ?? '—',
+          rackPosition: s.rackPosition || '—',
+        })),
+        columns: [
+          { data: 'hostname' },
+          { data: 'serviceTag' },
+          { data: 'model' },
+          { data: 'oobIP' },
+          { data: 'rack' },
+          { data: 'rackPosition' },
+        ],
+        createdRow: function (row) { row.style.cursor = 'pointer' },
+      })
+
+      $('#orb-dc-servers-table tbody').on('click', 'tr', function () {
+        const table = $('#orb-dc-servers-table').DataTable()
+        const data = table.row(this).data()
+        if (data && data.id) {
+          window.location = BASE + '/servers/' + data.id
+        }
+      })
+
+      content.style.display = ''
+    })
+    .catch(() => {
+      loading.style.display = 'none'
+      empty.style.display = ''
+    })
+})
+

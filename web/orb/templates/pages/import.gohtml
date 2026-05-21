@@ -1,0 +1,85 @@
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div>
+    <div class="app-main p-5">
+
+      <p class="is-size-4 mb-2" data-testid="page-heading">Import Subgraph</p>
+      <p class="has-text-grey mb-5" style="font-size: 0.875rem;">
+        Pull a config artifact from the registry, or upload one directly from your machine.
+      </p>
+
+      <div id="orb-import-status-box" style="display:none" class="mb-5">
+        <article id="orb-import-status-article" class="message is-info">
+          <div class="message-body" style="font-size: 0.875rem;">
+            <span id="orb-import-status-icon" class="icon"><i class="fa-solid fa-spinner fa-spin"></i></span>
+            <span id="orb-import-status-text">Starting import…</span>
+          </div>
+        </article>
+      </div>
+
+      <p class="is-size-5 mb-3">Upload from File <span class="tag is-warning is-light ml-2">Courier</span></p>
+      <p class="has-text-grey mb-4" style="font-size: 0.875rem;">
+        Upload a subgraph zip exported from orbital. Use this when delivering via USB or manual transfer.
+        The zip must contain <code>data.json.gz</code> and <code>schema.gz</code>.
+      </p>
+
+      <div class="field is-grouped mb-6">
+        <div class="control">
+          <div class="file has-name is-small">
+            <label class="file-label">
+              <input class="file-input" type="file" id="orb-courier-file" accept=".zip">
+              <span class="file-cta">
+                <span class="file-icon"><i class="fa-solid fa-upload"></i></span>
+                <span class="file-label">Choose zip…</span>
+              </span>
+              <span class="file-name" id="orb-courier-filename">No file selected</span>
+            </label>
+          </div>
+        </div>
+        <div class="control">
+          <button id="orb-courier-upload-btn" class="button is-warning is-small" disabled onclick="handleOrbCourierUpload()">
+            <span class="icon"><i class="fa-solid fa-file-import"></i></span>
+            <span>Import File</span>
+          </button>
+        </div>
+      </div>
+
+      <hr class="mb-5">
+
+      <p class="is-size-5 mb-3">Pull from Registry</p>
+
+      <div class="field is-grouped mb-4">
+        <div class="control">
+          <button class="button is-light is-small" onclick="loadOrbTags()">
+            <span class="icon"><i class="fa-solid fa-rotate"></i></span>
+            <span>Refresh</span>
+          </button>
+        </div>
+        <div class="control">
+          <button id="btn-import-latest" class="button is-info is-small" onclick="handleOrbImportLatest()">
+            <span class="icon"><i class="fa-solid fa-download"></i></span>
+            <span>Import Latest</span>
+          </button>
+        </div>
+      </div>
+
+      <div style="overflow-x: auto">
+        <table id="orb-tags-table" class="table is-striped is-hoverable is-fullwidth is-size-7">
+          <thead>
+            <tr>
+              <th>Tag</th>
+              <th>DC</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="orb-tags-tbody">
+            <tr><td colspan="3" class="has-text-grey">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </main>
+{{end}}
