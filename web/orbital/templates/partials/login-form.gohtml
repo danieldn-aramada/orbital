@@ -1,0 +1,49 @@
+<form id="form-login" hx-post="{{.BasePath}}/user/login" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type='submit']">
+
+  {{if .ErrorMsg}}
+  <div class="notification is-danger is-light" style="font-size: 0.875rem;">
+    {{.ErrorMsg}}
+  </div>
+  {{end}}
+
+  <div class="field">
+    <label class="label">Email</label>
+    <div class="control has-icons-left">
+      <input
+        type="email"
+        class="input{{if .ErrorMsg}} is-danger{{end}}"
+        name="email"
+        placeholder="user@example.com"
+        autocomplete="on"
+      />
+      <span class="icon is-small is-left">
+        <i class="fas fa-envelope"></i>
+      </span>
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label">Password</label>
+    <div class="control has-icons-left">
+      <input
+        type="password"
+        class="input{{if .ErrorMsg}} is-danger{{end}}"
+        name="password"
+        placeholder="password"
+        autocomplete="on"
+      />
+      <span class="icon is-small is-left">
+        <i class="fas fa-lock"></i>
+      </span>
+    </div>
+  </div>
+
+  <input type="hidden" name="csrf" value="{{.CsrfToken}}"/>
+
+  <div class="field">
+    <div class="control">
+      <button class="button is-link" type="submit">Sign in</button>
+    </div>
+  </div>
+
+</form>

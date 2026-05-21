@@ -99,6 +99,18 @@ func (h *UI) base(c echo.Context) layout.Base {
 		AppVersion:  appversion.Version,
 		BasePath:    h.basePath,
 		CurrentPath: c.Request().URL.Path,
+		UI: layout.UIConfig{
+			AppName:  "Orbital",
+			BasePath: h.basePath,
+			Version:  version,
+			EditMode:   "intent",
+			ShowAuth:   true,
+			APIDocPath: h.basePath + "/swagger/index.html",
+			MoreLinks: []layout.NavItem{
+				{Label: "GitHub", URL: "https://github.com/danieldn-aramada/demo"},
+				{Label: "Report Issue"},
+			},
+		},
 	}
 }
 

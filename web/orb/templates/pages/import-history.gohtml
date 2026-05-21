@@ -1,0 +1,53 @@
+{{define "page"}}
+<main class="app-main-grid">
+  <div class="app-menu">
+    {{template "menu.gohtml" .}}
+  </div>
+  <div class="app-main p-5">
+
+    <p class="is-size-4 mb-4">Import History</p>
+
+    {{if .History}}
+    <div style="overflow-x:auto">
+    <table class="table is-striped is-hoverable is-fullwidth">
+      <thead>
+        <tr>
+          <th>Tag</th>
+          <th>Status</th>
+          <th>Imported At</th>
+          <th>DC Orb ID</th>
+          <th>Error</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .History}}
+        <tr>
+          <td><code>{{.Tag}}</code></td>
+          <td>
+            {{if eq .Status "done"}}
+            <span class="tag is-success is-light">done</span>
+            {{else if eq .Status "failed"}}
+            <span class="tag is-danger is-light">failed</span>
+            {{else if eq .Status "running"}}
+            <span class="tag is-warning is-light">running</span>
+            {{else}}
+            <span class="tag is-light">{{.Status}}</span>
+            {{end}}
+          </td>
+          <td>{{if not .ImportedAt.IsZero}}<span data-timestamp="{{.ImportedAt}}">{{.ImportedAt}}</span>{{else}}—{{end}}</td>
+          <td><span class="is-size-7 has-text-grey">{{if .DCOrbID}}{{.DCOrbID}}{{else}}—{{end}}</span></td>
+          <td>{{if .Error}}<span class="is-size-7 has-text-danger">{{.Error}}</span>{{else}}—{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    </div>
+    {{else}}
+    <article class="box">
+      <p class="has-text-grey">No import history yet.</p>
+    </article>
+    {{end}}
+
+  </div>
+</main>
+{{end}}

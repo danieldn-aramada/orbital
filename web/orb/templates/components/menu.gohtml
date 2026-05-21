@@ -1,0 +1,65 @@
+<div class="app-menu-section">
+  <h3 class="app-menu-section-heading has-text-info">
+    <span class="icon">
+      <i class="fa-solid fa-satellite-dish"></i>
+    </span>
+    <strong>Status</strong>
+  </h3>
+  <ul class="app-menu-section-list">
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if or (eq .CurrentPath "/") (eq .CurrentPath "/status")}} is-active{{end}}" href="{{.BasePath}}/">Dashboard</a>
+    </li>
+  </ul>
+</div>
+
+<div class="app-menu-section">
+  <h3 class="app-menu-section-heading has-text-primary">
+    <span class="icon">
+      <i class="fa-solid fa-diagram-project"></i>
+    </span>
+    <strong>Config Items</strong>
+  </h3>
+  <ul class="app-menu-section-list">
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if eq .CurrentPath "/datacenter"}} is-active{{end}}" href="{{.BasePath}}/datacenter">Data Center</a>
+    </li>
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if eq .CurrentPath "/servers"}} is-active{{end}}" href="{{.BasePath}}/servers">Servers</a>
+    </li>
+  </ul>
+</div>
+
+<div class="app-menu-section">
+  <h3 class="app-menu-section-heading has-text-warning">
+    <span class="icon">
+      <i class="fa-solid fa-download"></i>
+    </span>
+    <strong>Sync</strong>
+  </h3>
+  <ul class="app-menu-section-list">
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if eq .CurrentPath "/import"}} is-active{{end}}" href="{{.BasePath}}/import">Import Subgraph</a>
+    </li>
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if eq .CurrentPath "/import-history"}} is-active{{end}}" href="{{.BasePath}}/import-history">Import History</a>
+    </li>
+  </ul>
+</div>
+
+<div class="app-menu-section">
+  <h3 class="app-menu-section-heading has-text-danger">
+    <span class="icon">
+      <i class="fa-solid fa-code-branch"></i>
+    </span>
+    <strong>Overrides</strong>
+  </h3>
+  <ul class="app-menu-section-list">
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if eq .CurrentPath "/divergence"}} is-active{{end}}" href="{{.BasePath}}/divergence">Divergence Report</a>
+    </li>
+  </ul>
+</div>
+
+<div class="is-size-7 has-text-grey has-text-centered" data-testid="app-version" style="margin-top: auto; padding-top: 1rem;">
+  Orb {{.AppVersion}}
+</div>

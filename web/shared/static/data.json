@@ -1,0 +1,69 @@
+{
+    "data": [
+        {
+            "name": "clusterA",
+            "account": "123456789",
+            "region": "us-east-1"
+        },
+        {
+            "name": "clusterB",
+            "account": "123456789",
+            "region": "us-west-1"
+        },
+        {
+            "name": "clusterB",
+            "account": "123456789",
+            "region": "us-west-1"
+        },
+        {
+            "name": "clusterB",
+            "account": "123456789",
+            "region": "us-west-1"
+        },
+        {
+            "name": "clusterB",
+            "account": "123456789",
+            "region": "us-west-1"
+        },
+        {
+            "name": "clusterB",
+            "account": "123456789",
+            "region": "us-west-1"
+        },
+        {
+            "name": "clusterB",
+            "account": "123456789",
+            "region": "us-west-1"
+        },
+        {
+            "name": "clusterC",
+            "account": "111111111",
+            "region": "us-west-2"
+        },
+        {
+            "name": "clusterC",
+            "account": "111111111",
+            "region": "us-west-2"
+        },
+        {
+            "name": "clusterC",
+            "account": "111111111",
+            "region": "us-west-2"
+        },
+        {
+            "name": "clusterC",
+            "account": "111111111",
+            "region": "us-west-2"
+        },
+        {
+            "name": "clusterC",
+            "account": "111111111",
+            "region": "us-west-2"
+        },
+        {
+            "name": "clusterC",
+            "account": "111111111",
+            "region": "us-west-2"
+        }
+    ]
+}

@@ -1,0 +1,23 @@
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div> 
+    <div class="app-main">
+      {{if not .IsAuthn}}
+        <div class="notification is-danger is-light">
+          <button class="delete is-small"></button>
+          <a class="js-modal-trigger" data-target="login-modal">Login</a> to view this page
+        </div>
+      {{else}}
+        <p class="is-size-4 mb-4">New Cluster</p>
+        {{if .Form.IsSuccess}}
+          <p class>Create cluster requested! You can view its progress on the cluster <a href="/cluster">summary</a> page</div>
+        {{else}}
+          <p class="mb-4">All requests require approval from the admin owner on the cloud account.</p>
+          {{template "form-cluster-create.gohtml" .}}
+        {{end}}
+      {{end}} 
+    </div> 
+  </main>
+{{end}}

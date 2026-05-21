@@ -336,9 +336,9 @@ Replace all 7+ instances.
 
 ### 4.3 Add `data-testid` attributes to key UI elements
 
-**Problem:** Only one `data-testid` exists in the entire UI (`data-testid="app-version"` in `menu.gohtml:64`). All Playwright selectors rely on fragile structural/CSS selectors that break when layout changes.
+**Problem:** Only a handful of `data-testid` attributes exist. The e2e suite mixes `data-testid` with CSS class selectors and order-dependent `first()` locators inconsistently — `navigation.spec.ts:35` uses `a.app-menu-link:has-text("Data Centers")` (breaks on CSS rename), `backups.spec.ts:15` uses `page.locator('input[type="text"]').first()` (breaks if element order changes).
 
-**Fix:** Add `data-testid` attributes to elements that Playwright tests need stable hooks for. Prioritize in this order:
+**Fix:** Add `data-testid` attributes to elements that Playwright tests need stable hooks for, then migrate existing selectors to use them. Prioritize in this order:
 1. `web/templates/fragments/datacenter-tab.gohtml` — summary table, server rows, edit button, reload button
 2. `web/templates/fragments/server-tab.gohtml` — server detail table, edit button
 3. `web/templates/components/navbar.gohtml` — nav items, user menu
@@ -367,17 +367,32 @@ Replace all 7+ instances.
 
 ### 5.1 Expand E2E test coverage
 
-Currently only the data center tab and data center edit flow are covered (~10% of UI). Add Playwright specs for:
-- Servers page (table load, drill-down to server tab)
-- Inventory/home page (DataTable, type filter)
-- Backups page (trigger, poll, download link, delete)
-- Restore page (backup select, trigger, poll, log modal)
-- Export page (trigger, poll, download, publish flow)
-- Signed Artifacts / Edge Delivery page
-- Audit Log page (expandable rows)
-- Schema page
+**Current state (May 2026 audit):** 36 tests across 6 spec files — Chromium only, no retries, no negative paths. Reliable smoke guard for the happy path; not a regression guard.
 
-Prerequisite: Phase 4.3 `data-testid` attributes on each page before writing that page's spec.
+**Coverage gaps — pages with no meaningful tests:**
+- Servers page: detail/edit flow (only heading load covered)
+- Signed Artifacts / Edge Delivery page
+- Divergence Reports page
+- Audit Log page (only heading covered — expandable rows, filtering, pagination untested)
+- Schema page
+- User management (create, edit, delete user)
+- OIDC/SSO login flow
+
+**Coverage gaps — behaviors:**
+- Negative/error paths: invalid login, unauthorized access, form validation errors, API failure responses
+- Server edit flow (analog to the existing `smoke/datacenter-edit.spec.ts`)
+- Backup delete flow
+- Restore log modal
+- OCI publish flow after export
+- Divergence report detail
+
+**Add tests in this order** (each requires Phase 4.3 `data-testid` attributes on that page first):
+1. Server detail/edit (mirrors existing DC edit smoke)
+2. Backup delete + error path
+3. Signed Artifacts table load
+4. Audit Log expandable rows
+5. Negative auth paths (invalid login, logout, unauthorized page access)
+6. Export → publish OCI flow
 
 **Directory:** `e2e/`
 
@@ -427,6 +442,58 @@ The `internal/handler/` package at 3,560 lines is the long-term target for decom
 **Step 3 (extract backup domain logic):** Same for `doBackup`, `writeZip`, `enforceRetention` → `internal/backup/`.
 
 After each step, the handler file becomes a thin HTTP adapter; the extracted package becomes independently testable.
+
+---
+
+### 5.5 Playwright suite hardening
+
+The current suite has several structural issues that cause flaky failures in CI and let real regressions through silently.
+
+**1. Add retries and CI reporter** (`playwright.config.ts`):
+```ts
+retries: process.env.CI ? 2 : 0,
+reporter: process.env.CI ? [['html', { outputFolder: 'playwright-report' }], ['github']] : 'list',
+```
+Upload `playwright-report/` as a GitHub Actions artifact on failure so broken tests are diagnosable without SSH.
+
+**2. Serialize state-mutating tests.** Tests that mutate shared data (DC name edit in `smoke/datacenter-edit.spec.ts`, backup trigger in `backups.spec.ts`) currently run concurrently with read-only tests. A mutating test can invalidate another test's assertion mid-run. Fix with `test.describe.serial` blocks or dedicated worker groups in the config.
+
+**3. Extend the backup workflow timeout.** `backups.spec.ts:75` polls for a terminal state with a 60-second timeout but no retry. Slow S3 causes intermittent failures. Increase to 120s and add `test.setTimeout`.
+
+**4. Add Firefox to the project list.** One additional browser (Firefox) catches ~80% of cross-browser rendering bugs at low cost. WebKit is optional for now.
+
+```ts
+projects: [
+  { name: 'chromium', use: devices['Desktop Chrome'] },
+  { name: 'firefox',  use: devices['Desktop Firefox'] },
+]
+```
+
+**File:** `playwright.config.ts`
+**Effort:** 1 hr
+
+---
+
+### 5.6 Orb Playwright project
+
+Orb's UI (Spike 17) has no automated tests. When the UI ships, add a second Playwright project targeting orb's port.
+
+**Setup differences from orbital:**
+- `baseURL`: `http://localhost:8010`
+- No login required (auth deferred to Spike 16) — no `globalSetup` needed until auth ships
+- Separate spec directory: `e2e/orb/`
+
+**Pages to cover (after Spike 17 E):**
+- Status/Dashboard: DC slug, version, "New version available" notification
+- Import Subgraph: tags table loads, import button triggers polling, progress reaches terminal state
+- DC detail: fields render correctly from local DGraph
+- Servers: table loads, server detail opens
+- Divergence: override appears in table after field edit, publish report button
+
+**Note:** The existing orbital test patterns (`navigation.spec.ts` page-loop, workflow polling in `export.spec.ts`) are a good template to copy. Orb's polling endpoint is `GET /api/v1/import/status`; the pattern is identical to orbital's job polling.
+
+**Directory:** `e2e/orb/`
+**Effort:** 3-4 hr (after all Spike 17 pages are built)
 
 ---
 
@@ -492,4 +559,4 @@ Item 2.2 (infrastructure) in parallel with 2.3 (unit tests, no Docker needed) �
 Items 1.5, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3
 
 **Post-MVP:**
-Items 5.1-5.4 (5.4 strictly post-MVP)
+Items 5.1-5.6 (5.4 strictly post-MVP; 5.5 Playwright hardening can move earlier if CI flakiness becomes a problem; 5.6 after Spike 17 is complete)

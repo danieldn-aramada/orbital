@@ -16,7 +16,7 @@ TEST_PKGS := $(shell go list ./... | grep -vE '(/ent$$|/ent/|/docs$$)')
 ACR          := armadaeksatest.azurecr.io
 IMAGE        := $(ACR)/orbital:$(VERSION)
 
-.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-unit test-integration test-e2e test-stack-up cover cover-html lint up down seed seed-aks-clean docs build-css watch-css
+.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-unit test-integration test-e2e test-stack-up cover cover-html lint up up-orb-deps up-orb down seed seed-aks-clean docs orb-docs build-css watch-css
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -26,6 +26,9 @@ build: build-orbital build-orb ## Build all binaries
 
 docs: ## Regenerate Swagger docs (requires swag: go install github.com/swaggo/swag/cmd/swag@latest)
 	swag init -g cmd/orbital/main.go -o docs
+
+orb-docs: ## Regenerate Swagger docs for orb (requires swag: go install github.com/swaggo/swag/cmd/swag@latest)
+	swag init -g doc.go -o docs/orb --dir cmd/orb,internal/orbserver,internal/orb
 
 build-css: ## Compile web/sass/main.scss → web/static/css/main.css (requires: npm install)
 	npm run build-css
@@ -39,11 +42,18 @@ build-orbital: docs ## Build the orbital server binary → bin/orbital
 build-orbital-cli: ## Build the orbital admin CLI (experimental) → bin/orbital-cli
 	CGO_ENABLED=1 go build $(LDFLAGS) -o $(BIN_DIR)/orbital-cli ./cmd/orbital-cli
 
-build-orb: ## Build the orb edge binary → bin/orb
+build-orb: orb-docs ## Build the orb edge binary → bin/orb
 	go build $(LDFLAGS) -o $(ORB_BIN) ./cmd/orb
 
 run-orbital: ## Run orbital server
 	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orbital
+
+run-orb: ## Run orb edge service (requires: make up-orb-deps)
+	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orb start
+
+seed-orb-schema: ## Apply DGraph schema to orb's local DGraph (empty — data comes from import)
+	@echo "Applying schema to orb DGraph (localhost:8082)..."
+	@curl -s -X POST localhost:8082/admin/schema --data-binary @schema/schema-demo.graphql | jq .
 
 test-stack-up: ## Ensure local stack is up and healthy (used by test-integration)
 	@docker compose -f $(COMPOSE_FILE) up -d --wait
@@ -77,8 +87,14 @@ cover-html: cover ## Open interactive HTML coverage report in browser
 lint: ## Run go vet
 	go vet ./...
 
-up: ## Start local stack (DGraph + PostgreSQL)
-	docker compose -f $(COMPOSE_FILE) up -d
+up: ## Start orbital dependencies (DGraph, PostgreSQL, Zot) — no builds
+	docker compose -f $(COMPOSE_FILE) up -d dgraph-zero dgraph-alpha dgraph-zero-scratch dgraph-alpha-scratch dgraph-ratel postgres minio oci-registry
+
+up-orb-deps: ## Start orb dependencies (orb DGraph instances) — no builds
+	docker compose -f $(COMPOSE_FILE) up -d dgraph-orb-zero dgraph-orb-alpha
+
+up-orb: ## Start orb container (builds orb image)
+	docker compose -f $(COMPOSE_FILE) up -d orb
 
 down: ## Stop local stack
 	docker compose -f $(COMPOSE_FILE) down -v

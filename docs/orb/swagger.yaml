@@ -1,0 +1,293 @@
+basePath: /api/v1
+definitions:
+  orb.ImportRecord:
+    properties:
+      dcOrbId:
+        type: string
+      digest:
+        type: string
+      error:
+        type: string
+      exportJobId:
+        type: string
+      importedAt:
+        type: string
+      status:
+        description: '"done" | "failed"'
+        type: string
+      tag:
+        type: string
+    type: object
+  orb.Override:
+    properties:
+      field:
+        type: string
+      intentValue:
+        type: string
+      localValue:
+        type: string
+      overriddenAt:
+        type: string
+      overriddenBy:
+        type: string
+      resourceId:
+        description: DGraph ID
+        type: string
+      resourceOrbId:
+        type: string
+      resourceType:
+        type: string
+    type: object
+  orbserver.importSnapshot:
+    properties:
+      availableVersion:
+        type: string
+      currentVersion:
+        type: string
+      lastChecked:
+        type: string
+      lastError:
+        type: string
+      lastImport:
+        $ref: '#/definitions/orb.ImportRecord'
+      status:
+        type: string
+    type: object
+  orbserver.overrideRequest:
+    properties:
+      field:
+        type: string
+      localValue:
+        type: string
+      resourceId:
+        type: string
+      resourceOrbId:
+        type: string
+      resourceType:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: Edge service API for orb — air-gap ready config serving and divergence
+    reporting.
+  title: Orb API
+  version: 0.1.0
+paths:
+  /divergence/publish:
+    post:
+      description: Sends a divergence report containing local overrides to orbital's
+        report intake API. Returns 502 if orbital is unreachable.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "502":
+          description: Bad Gateway
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Publish divergence report
+      tags:
+      - divergence
+  /graphql:
+    post:
+      consumes:
+      - application/json
+      description: 'POST: proxies GraphQL queries to orb''s local DGraph instance.
+        GET: serves the GraphiQL explorer UI.'
+      parameters:
+      - description: GraphQL request body
+        example: '"{\"query\": \"{ queryServer { id hostname } }\"}"'
+        in: body
+        name: body
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: GraphQL endpoint
+      tags:
+      - graphql
+  /import:
+    post:
+      consumes:
+      - application/json
+      description: Starts an async OCI artifact pull and DGraph import for the requested
+        tag. Returns 409 if an import is already running.
+      parameters:
+      - description: Import request
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Trigger import
+      tags:
+      - import
+  /import/history:
+    get:
+      description: Returns the rolling history of completed and failed imports from
+        disk.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/orb.ImportRecord'
+            type: array
+      summary: Import history
+      tags:
+      - import
+  /import/status:
+    get:
+      description: Returns the current import state snapshot including status, current
+        version, and last import record.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/orbserver.importSnapshot'
+      summary: Import status
+      tags:
+      - import
+  /import/tags:
+    get:
+      description: Lists available OCI artifact tags from the configured registry
+        for this data center.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              items:
+                type: string
+              type: array
+            type: object
+      summary: List import tags
+      tags:
+      - import
+  /import/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Accepts a zip bundle (data.json.gz + schema.gz) exported from orbital
+        and imports it directly — no registry required. Use this when delivering a
+        subgraph via physical media or manual transfer.
+      parameters:
+      - description: Zip archive containing data.json.gz and schema.gz
+        in: formData
+        name: bundle
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Upload subgraph bundle (courier)
+      tags:
+      - import
+  /overrides:
+    get:
+      description: Returns all current local field overrides from overrides.json.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/orb.Override'
+            type: array
+      summary: List overrides
+      tags:
+      - overrides
+    post:
+      consumes:
+      - application/json
+      description: Records a local field override for a Server or DataCenter resource.
+        Writes the local value to DGraph and persists to overrides.json.
+      parameters:
+      - description: Override request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/orbserver.overrideRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Record local override
+      tags:
+      - overrides
+swagger: "2.0"
+tags:
+- name: import
+- name: overrides
+- name: divergence

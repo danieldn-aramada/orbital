@@ -1,0 +1,16 @@
+<script>
+  function displayTodoToast() {
+    window.bulmaToast.toast({
+      message: "🚧 Hang tight! We are currently building this feature.",
+      closeOnClick: true,
+      type: "is-warning is-light",
+      position: "top-right",
+      dismissible: false,
+      duration: 4000,
+      offsetTop: "4em",
+      pauseOnHover: true,
+      animate: { in: 'fadeInRight', out: 'fadeOutRight' },
+    })
+  }
+  window.displayTodoToast = displayTodoToast
+</script>

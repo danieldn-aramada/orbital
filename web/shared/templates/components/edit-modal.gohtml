@@ -1,0 +1,103 @@
+<div id="edit-modal" class="modal modal-fx-3dRotateFromBottom">  
+  <div class="modal-background"></div>  
+  <div class="modal-content modal-card is-large">  
+    <header class="modal-card-head">
+      <p class="modal-card-title">Edit {{.Entity.SingularName}}</p>
+      <button id="json-editor-close" class="delete js-modal-close" aria-label="close"></button>
+    </header>
+    <section class="modal-card-body">
+      <div id="json-editor"></div>
+    </section>
+    <footer class="modal-card-foot">
+      <div class="buttons">
+        <button id="json-editor-submit" class="button is-success">Submit</button>
+        <button class="button js-modal-close">Cancel</button>
+      </div>
+    </footer>
+  </div>  
+</div> 
+<script type="module">
+  import {JSONEditor} from '/static/vanilla-jsoneditor/standalone.js'
+
+  let jsonEditor = new JSONEditor({
+    target: document.getElementById('json-editor'),
+    props: {
+      mode: 'text',
+      mainMenuBar: false,
+    },
+  })
+
+  // populate editor
+  try {
+    console.log('fetching...')
+    const resp = await fetch("/api/v1/{{.Entity.ResourceName}}/{{.Entity.ID}}?mode=edit")
+    console.log('resp', resp)
+    if (!resp.ok) {
+      throw new Error(`Response status: ${resp.status}, body: ${await resp.text()}`);
+    }
+    let data = await resp.text();
+    console.log('got before', data)
+
+    let dataObj = JSON.parse(data);   // Convert JSON string -> JS object
+    delete dataObj.version;           // Remove version so user doesn’t see it
+
+    console.log('got after', dataObj)
+
+    const formatted = JSON.stringify(dataObj, null, 2)
+    console.log('formatted', formatted)
+    jsonEditor.set({text: formatted}) 
+  } catch (e) {
+    console.error(e)
+  }
+
+  // save button
+  let submitButton = document.querySelector('#json-editor-submit')
+  submitButton.addEventListener('click', async () => {
+    console.log(jsonEditor.get().text) // text because editor is in 'text' mode 
+
+    let payloadObj = JSON.parse(jsonEditor.get().text)
+    payloadObj.version = {{ .Server.Version }};  // injected server side 
+
+    let payload = JSON.stringify(payloadObj)
+    console.log('payload', payload)
+
+
+    console.log('payload', payload)
+    submitButton.classList.toggle('is-loading')
+
+    // allow loading indicator to run
+    setTimeout(async () => {
+      try {
+
+        const resp = await fetch("/api/v1/{{.Entity.ResourceName}}/{{.Entity.ID}}", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: payload
+        });
+
+        if (!resp.ok) {
+          // Read the body to get the actual error message
+          let errMsg;
+          try {
+            const text = await resp.text();
+            const json = JSON.parse(text);
+            errMsg = json.error || text;
+          } catch (_) {
+            errMsg = await resp.text(); // fallback if not JSON
+          }
+          alert("Update failed: " + errMsg);
+          return;
+        }
+
+        alert('Entity updated successfully');
+        location.reload();
+
+      } catch (e) {
+        console.error("Fetch failed:", e);
+        alert("Update failed: " + e.message);
+      } finally {
+        submitButton.classList.remove('is-loading');
+      }
+      }, 500);
+  })
+</script>

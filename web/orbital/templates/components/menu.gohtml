@@ -1,0 +1,66 @@
+<div class="app-menu-section">
+  <h3 class="app-menu-section-heading has-text-primary">
+    <span class="icon">
+      <i class="fa-solid fa-diagram-project"></i>
+    </span>
+    <strong>Config Items</strong>
+  </h3>
+  <ul class="app-menu-section-list">
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if or (eq .CurrentPath (printf "%s/" .BasePath)) (eq .CurrentPath (printf "%s/inventory" .BasePath))}} is-active{{end}}" href="{{.BasePath}}/">Inventory</a>
+    </li>
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/datacenters" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/datacenters">Data Centers</a>
+    </li>
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/servers" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/servers">Servers</a>
+    </li>
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/schema" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/schema">Schema Version</a>
+    </li>
+  </ul>
+</div>
+
+<div class="app-menu-section">
+  <h3 class="app-menu-section-heading has-text-warning">
+    <span class="icon">
+      <i class="fa-solid fa-tower-broadcast"></i>
+    </span>
+    <strong>Edge</strong>
+  </h3>
+  <ul class="app-menu-section-list">
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/export" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/export">Export Subgraph</a>
+    </li>
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/signed-artifacts" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/signed-artifacts">Signed Artifacts</a>
+    </li>
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/divergence-reports" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/divergence-reports">Divergence Reports</a>
+    </li>
+  </ul>
+</div>
+
+<div class="app-menu-section">
+  <h3 class="app-menu-section-heading has-text-danger">
+    <span class="icon">
+      <i class="fa-solid fa-clock-rotate-left"></i>
+    </span>
+    <strong>Operations</strong>
+  </h3>
+  <ul class="app-menu-section-list">
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/audit-log" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/audit-log">Audit Log</a>
+    </li>
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/backups" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/backups">Backup Graph</a>
+    </li>
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if eq .CurrentPath (printf "%s/restore" .BasePath)}} is-active{{end}}" href="{{.BasePath}}/restore">Restore Graph</a>
+    </li>
+  </ul>
+</div>
+
+<div class="is-size-7 has-text-grey has-text-centered" data-testid="app-version" style="margin-top: auto; padding-top: 1rem;">
+  Orbital {{.AppVersion}}
+</div>

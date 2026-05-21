@@ -1,0 +1,51 @@
+<div id="report-issue-modal" class="modal">
+  <div class="modal-background" onclick="closeReportIssueModal()"></div>
+  <div class="modal-card">
+    <header class="modal-card-head">
+      <p class="modal-card-title">Report an Issue</p>
+      <button class="delete" aria-label="close" onclick="closeReportIssueModal()"></button>
+    </header>
+    <section class="modal-card-body">
+      <p class="mb-4">Before filing, please include the following so we can reproduce and fix quickly:</p>
+      <div class="content is-size-7">
+        <ol>
+          <li><strong>What were you trying to do?</strong> — describe the action or workflow</li>
+          <li><strong>What did you expect to happen?</strong> — the intended outcome</li>
+          <li><strong>What actually happened?</strong> — the observed behavior, error message, or unexpected result</li>
+          <li><strong>Steps to reproduce</strong> — the exact sequence of clicks or inputs</li>
+          <li><strong>Screenshots</strong> — attach if possible, especially for UI issues</li>
+        </ol>
+      </div>
+      <div class="notification is-info is-light is-size-7 mt-4 mb-0">
+        <strong>Search first.</strong> Check if an existing ticket already covers the issue before filing a new one.
+      </div>
+    </section>
+    <footer class="modal-card-foot">
+      <div class="buttons">
+        {{if .NavBar.IssueTrackerURL}}
+        <a class="button is-link"
+          href="{{.NavBar.IssueTrackerURL}}"
+          target="_blank"
+          rel="noopener"
+          onclick="closeReportIssueModal()">
+          <span class="icon"><i class="fa-solid fa-arrow-up-right-from-square"></i></span>
+          <span>Open Issue Tracker</span>
+        </a>
+        {{end}}
+        <button class="button" onclick="closeReportIssueModal()">Cancel</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<script>
+  function openReportIssueModal() {
+    document.getElementById('report-issue-modal').classList.add('is-active')
+  }
+  function closeReportIssueModal() {
+    document.getElementById('report-issue-modal').classList.remove('is-active')
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeReportIssueModal()
+  })
+</script>

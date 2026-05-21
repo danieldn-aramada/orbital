@@ -1,0 +1,219 @@
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div> 
+    <div class="app-main">
+
+      {{if not .IsAuthn}}
+      <div class="notification is-danger is-light">
+        <button class="delete is-small"></button>
+        <a class="js-modal-trigger" data-target="login-modal">Login</a> to view this page
+      </div>
+      {{else}}
+
+      <nav class="tabs is-boxed has-text-weight-medium" style="font-size: 14px;">
+        <ul id="tablist" role="tablist">
+          <li class="tab is-active">
+              <a id="tab-summary" data-target="tab-content-clusters" role="tab" aria-selected="true" tabindex="0">
+                Summary
+              </a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="tab-content" role="tabpanel" id="tab-content-clusters">
+          <table id="myTable" class="table is-striped is-hoverable is-fullwidth">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Account</th>
+                <th>Region</th>
+              </tr>
+            </thead>
+          </table>
+      </div>
+
+      {{end}} 
+
+    </div> 
+  </main>
+  <script type="module" src="/static/data-table.js"></script> 
+  <script>
+    // HTMX Listener
+    //
+    // HTML fragments returned from htmx requests might need event listners
+    // applied. For exmaple, model triggers from cluster.gohtml
+    document.addEventListener('htmx:afterRequest', (evt) => {
+
+      // Modal trigger
+      (document.querySelectorAll('.js-modal-trigger') || []).forEach((trigger) => {
+        const modalId = trigger.dataset.target; // dataset-target attribute
+        const $target = document.getElementById(modalId);
+        trigger.addEventListener('click', () => {
+          console.log('clicked open modal')
+          openModal($target);
+        });
+      });
+
+      // Modal close
+      (document.querySelectorAll('.js-modal-close') || []).forEach((close) => {
+        const target = close.closest('.modal');
+        close.addEventListener('click', () => {
+          closeModal(target);
+        });
+      });
+    });
+
+    // save current tab
+    function setCurrentTab(id) {
+      localStorage.tabCurrent = id
+    }
+
+    function removeCurrentTab(id) {
+      if (localStorage?.tabCurrent == id) {
+        localStorage.removeItem(tabCurrent)
+      }
+    }
+
+    function replaceCurrentTab(currentId, targetId) {
+      if (localStorage?.tabCurrent == currentId) {
+        localStorage.setItem('tabCurrent', targetId)
+      }
+    }
+
+    // get current tab
+    function getCurrentTab() {
+      return localStorage.tabCurrent
+    }
+
+    // places is-active on tab element, removes is-active on others
+    function activateTab(selected) {
+      (document.querySelectorAll('li.tab') || []).forEach((tab) => {
+        if (tab == selected) {
+          tab.classList.add('is-active')
+        } else {
+          tab.classList.remove('is-active')
+        }
+      })
+    }
+
+    // displays tab-content element with matching id, closes other tab-content elements
+    function displayTabContent(id) {
+      (document.querySelectorAll('.tab-content') || []).forEach((tabContent) => {
+        if (tabContent.id === id) {
+          tabContent.style.display = 'block';
+        } else {
+          tabContent.style.display = 'none';
+        }
+      })
+    }
+
+    // listeners
+    document.addEventListener('DOMContentLoaded', () => {
+      // Listener on tab anchor elements
+      (document.querySelectorAll('li.tab a') || []).forEach((a) => {
+        const tabContentId = a.dataset.target; // data-target attribute
+        a.addEventListener('click', () => {
+          activateTab(a.parentElement)
+          displayTabContent(tabContentId);
+          setCurrentTab(a.id)
+        });
+      });
+
+      // Listener on login notification delete button
+      (document.querySelectorAll('.notification .delete') || []).forEach(($delete) => {
+        const $notification = $delete.parentNode;
+        $delete.addEventListener('click', () => {
+          $notification.parentNode.removeChild($notification);
+        });
+      });
+
+
+      // Add a keyboard event to close all modals
+      document.addEventListener('keydown', (event) => {
+        if(event.key === "Escape") {
+          closeAllModals();
+        }
+      });
+
+      // Submit button
+      $("#button-submit").click(function(event) {
+        event.preventDefault(); // disables default validation box so we need to handle
+        $(this).toggleClass('is-link');
+      });
+    });
+
+    window.addEventListener("DOMContentLoaded", () => {
+      // Only handle one particular tablist; if you have multiple tab
+      // lists (might even be nested), you have to apply this code for each one
+      const tabList = document.querySelector('[role="tablist"]');
+      if (!tabList) {
+        return
+      }
+      const tabs = tabList.querySelectorAll(':scope [role="tab"]');
+
+      // // Add a click event handler to each tab
+      // tabs.forEach((tab) => {
+      //   tab.addEventListener("click", changeTabs);
+      // });
+
+      // Enable arrow navigation between tabs in the tab list
+      let tabFocus = 0;
+
+      tabList.addEventListener("keydown", (e) => {
+        // Move right
+        if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+          tabs[tabFocus].setAttribute("tabindex", -1);
+          if (e.key === "ArrowRight") {
+            tabFocus++;
+            // If we're at the end, go to the start
+            if (tabFocus >= tabs.length) {
+              tabFocus = 0;
+            }
+            // Move left
+          } else if (e.key === "ArrowLeft") {
+            tabFocus--;
+            // If we're at the start, move to the end
+            if (tabFocus < 0) {
+              tabFocus = tabs.length - 1;
+            }
+          }
+
+          tabs[tabFocus].setAttribute("tabindex", 0);
+          tabs[tabFocus].focus();
+        }
+
+        else if (e.key === "Enter") {
+          console.log('enter')
+          console.dir(tabs[tabFocus])
+          tabs[tabFocus].click()
+        }
+      });
+    });
+
+    function changeTabs(e) {
+      const targetTab = e.target;
+      const tabList = targetTab.parentNode;
+      const tabGroup = tabList.parentNode;
+
+      // Remove all current selected tabs
+      tabList
+        .querySelectorAll(':scope > [aria-selected="true"]')
+        .forEach((t) => t.setAttribute("aria-selected", false));
+
+      // Set this tab as selected
+      targetTab.setAttribute("aria-selected", true);
+
+      // Hide all tab panels
+      // tabGroup
+      //   .querySelectorAll(':scope > [role="tabpanel"]')
+      //   .forEach((p) => p.setAttribute("hidden", true));
+
+      // Show the selected panel
+      // tabGroup
+      //   .querySelector(`#${targetTab.getAttribute("aria-controls")}`)
+      //   .removeAttribute("hidden");
+    }
+  </script>
+{{end}}

@@ -1,0 +1,72 @@
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div>
+    <div class="app-main p-5">
+
+      <p class="is-size-4 mb-2" data-testid="page-heading">Status</p>
+      <p class="has-text-grey mb-5" style="font-size: 0.875rem;">
+        Edge service status for data center <strong>{{.DCSlug}}</strong>.
+      </p>
+
+      <div class="columns is-multiline" style="max-width: 620px;" id="status-panel">
+        <div class="column is-half">
+          <div class="box" style="height: 100%;">
+            <p class="heading">Data Center</p>
+            <p class="title is-5">{{.DCSlug}}</p>
+          </div>
+        </div>
+        <div class="column is-half">
+          <div class="box" style="height: 100%;">
+            <p class="heading">Registry</p>
+            <p class="title is-6 has-text-weight-semibold">{{.OCIRegistry}}/{{.OCIRepo}}</p>
+          </div>
+        </div>
+        <div class="column is-half">
+          <div class="box" style="height: 100%;">
+            <p class="heading">Current Version</p>
+            <p class="title is-5" id="status-current-version">
+              {{if .CurrentVersion}}{{.CurrentVersion}}{{else}}<span class="has-text-grey">—</span>{{end}}
+            </p>
+          </div>
+        </div>
+        <div class="column is-half">
+          <div class="box" style="height: 100%;">
+            <p class="heading">Last Import</p>
+            <p class="title is-5">
+              {{if .HasLastImport}}
+                <span class="is-size-6">{{.LastImportAt.UTC.Format "2006-01-02 15:04 UTC"}}</span>
+              {{else}}
+                <span class="has-text-grey">—</span>
+              {{end}}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {{if .AvailableVersion}}
+      <div class="notification is-info is-light mt-2" style="max-width: 620px;">
+        <span class="icon-text">
+          <span class="icon has-text-info"><i class="fa-solid fa-circle-up"></i></span>
+          <span>New version available: <strong>{{.AvailableVersion}}</strong></span>
+        </span>
+        <button class="button is-info is-small ml-4" onclick="handleOrbImport('{{.AvailableVersion}}')">
+          <span class="icon"><i class="fa-solid fa-download"></i></span>
+          <span>Import now</span>
+        </button>
+      </div>
+      {{end}}
+
+      <div id="orb-import-status-box" style="display:none; max-width: 620px;" class="mt-4">
+        <article id="orb-import-status-article" class="message is-info">
+          <div class="message-body" style="font-size: 0.875rem;">
+            <span id="orb-import-status-icon" class="icon"><i class="fa-solid fa-spinner fa-spin"></i></span>
+            <span id="orb-import-status-text">Starting import…</span>
+          </div>
+        </article>
+      </div>
+
+    </div>
+  </main>
+{{end}}

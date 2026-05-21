@@ -1,0 +1,195 @@
+{{define "page"}}
+<main class="app-main-grid">
+  <div class="app-menu">
+    {{template "menu.gohtml" .}}
+  </div>
+  <div class="app-main p-5">
+<section>
+
+    <div class="columns m-0 mb-3">
+      <div class="column pt-0 pl-0">
+        <a class="button is-small is-link is-light mb-2" href="/servers">
+          <span class="icon"><i class="fa-solid fa-arrow-left"></i></span>
+          <span>All Servers</span>
+        </a>
+        <p class="title is-4 mt-2">{{if .Srv}}{{if .Srv.Hostname}}{{.Srv.Hostname}}{{else}}{{.Srv.ServiceTag}}{{end}}{{else}}Server{{end}}</p>
+      </div>
+    </div>
+
+    {{if .Srv}}
+
+    <div class="fixed-grid has-3-cols mb-0">
+      <div class="grid">
+
+        <div class="cell is-col-span-2">
+          <article class="box">
+            <p class="is-size-5 pb-3">Server Summary</p>
+            <table class="table is-fullwidth">
+              <tbody>
+                <tr><td style="white-space:nowrap;width:1%">Hostname</td><td>{{if .Srv.Hostname}}{{.Srv.Hostname}}{{else}}—{{end}}{{if index .OverridesByField "hostname"}} <span class="tag is-warning is-light is-small">overridden</span>{{end}}</td></tr>
+                <tr><td style="white-space:nowrap">Manufacturer</td><td>{{if .Srv.Manufacturer}}{{.Srv.Manufacturer}}{{else}}—{{end}}{{if index .OverridesByField "manufacturer"}} <span class="tag is-warning is-light is-small">overridden</span>{{end}}</td></tr>
+                <tr><td style="white-space:nowrap">Model</td><td>{{if .Srv.Model}}{{.Srv.Model}}{{else}}—{{end}}{{if index .OverridesByField "model"}} <span class="tag is-warning is-light is-small">overridden</span>{{end}}</td></tr>
+                <tr><td style="white-space:nowrap">Service Tag</td><td>{{if .Srv.ServiceTag}}{{.Srv.ServiceTag}}{{else}}—{{end}}{{if index .OverridesByField "serviceTag"}} <span class="tag is-warning is-light is-small">overridden</span>{{end}}</td></tr>
+                <tr><td style="white-space:nowrap">OOB IP</td><td>{{if .Srv.OobIP}}{{.Srv.OobIP}}{{else}}—{{end}}</td></tr>
+                <tr><td style="white-space:nowrap">OOB MAC</td><td>{{if .Srv.OobMAC}}{{.Srv.OobMAC}}{{else}}—{{end}}{{if index .OverridesByField "oobMAC"}} <span class="tag is-warning is-light is-small">overridden</span>{{end}}</td></tr>
+                <tr><td style="white-space:nowrap">Rack</td><td>{{if .Srv.Rack.Name}}{{.Srv.Rack.Name}}{{else}}—{{end}}</td></tr>
+                <tr><td style="white-space:nowrap">Rack Position</td><td>{{if .Srv.RackPosition}}{{.Srv.RackPosition}}{{else}}—{{end}}</td></tr>
+              </tbody>
+            </table>
+            <div class="buttons mt-2">
+              <button class="button is-small is-link"
+                data-srv-override-id="{{.Srv.ID}}"
+                data-srv-override-orb-id="{{.Srv.OrbID}}"
+                data-srv-hostname="{{.Srv.Hostname}}"
+                data-srv-manufacturer="{{.Srv.Manufacturer}}"
+                data-srv-model="{{.Srv.Model}}"
+                data-srv-service-tag="{{.Srv.ServiceTag}}"
+                data-srv-oob-mac="{{.Srv.OobMAC}}">
+                <span class="icon"><i class="fa-solid fa-pen-to-square"></i></span>
+                <span>Override</span>
+              </button>
+            </div>
+          </article>
+        </div>
+
+        <div class="cell">
+          <article class="box" style="height:100%">
+            <p class="is-size-5 pb-3">Metadata</p>
+            <table class="table mb-0">
+              <tbody>
+                <tr><td style="white-space:nowrap;width:1%">Orb ID</td><td>{{if .Srv.OrbID}}{{.Srv.OrbID}}{{else}}—{{end}}</td></tr>
+                <tr><td style="white-space:nowrap">Namespace</td><td>{{if .Srv.Namespace}}{{.Srv.Namespace}}{{else}}—{{end}}</td></tr>
+                <tr><td style="white-space:nowrap">Data Center</td><td>{{if .Srv.DataCenterName}}{{.Srv.DataCenterName}}{{else}}—{{end}}</td></tr>
+                <tr><td style="white-space:nowrap">Created At</td><td>{{if .Srv.CreatedAt}}<span data-timestamp="{{.Srv.CreatedAt}}">{{.Srv.CreatedAt}}</span>{{else}}—{{end}}</td></tr>
+                <tr><td style="white-space:nowrap">Updated At</td><td>{{if .Srv.UpdatedAt}}<span data-timestamp="{{.Srv.UpdatedAt}}">{{.Srv.UpdatedAt}}</span>{{else}}—{{end}}</td></tr>
+              </tbody>
+            </table>
+          </article>
+        </div>
+
+        {{if .Srv.IdracSettings}}
+        <div class="cell is-col-span-3">
+          <article class="box">
+            <p class="is-size-5 pb-3">iDRAC Settings</p>
+            <table class="table is-fullwidth">
+              <tbody>
+                <tr><td style="white-space:nowrap;width:1%">Firmware Version</td><td>{{if .Srv.IdracSettings.FirmwareVersion}}{{.Srv.IdracSettings.FirmwareVersion}}{{else}}—{{end}}</td></tr>
+                <tr><td style="white-space:nowrap">SSH Enabled</td><td>{{.Srv.IdracSettings.SshEnabled}}</td></tr>
+                <tr><td style="white-space:nowrap">IPMI Enabled</td><td>{{.Srv.IdracSettings.IpmiEnabled}}</td></tr>
+                <tr><td style="white-space:nowrap">Lockdown Mode</td><td>{{.Srv.IdracSettings.LockdownModeEnabled}}</td></tr>
+                <tr><td style="white-space:nowrap">USB Mgmt Port</td><td>{{.Srv.IdracSettings.UsbManagementPortEnabled}}</td></tr>
+                <tr><td style="white-space:nowrap">OS-to-iDRAC Pass-through</td><td>{{.Srv.IdracSettings.OsToIdracPassThroughEnabled}}</td></tr>
+                <tr><td style="white-space:nowrap">DHCP Enabled</td><td>{{.Srv.IdracSettings.DhcpEnabled}}</td></tr>
+                <tr><td style="white-space:nowrap">RACADM Enabled</td><td>{{.Srv.IdracSettings.RacadmEnabled}}</td></tr>
+              </tbody>
+            </table>
+          </article>
+        </div>
+        {{end}}
+
+        {{if .Srv.StorageControllers}}
+        <div class="cell is-col-span-3">
+          <article class="box">
+            <p class="is-size-5 pb-3">Storage</p>
+            <div style="overflow-x:auto">
+            <table class="table is-striped is-hoverable is-fullwidth is-size-7">
+              <thead>
+                <tr>
+                  <th>Controller</th>
+                  <th>Name</th>
+                  <th>Manufacturer</th>
+                  <th>Capacity (GiB)</th>
+                  <th>Serial</th>
+                  <th>WWN</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{range .Srv.StorageControllers}}
+                {{$ctrl := .Name}}
+                {{range .StorageDevices}}
+                <tr>
+                  <td>{{$ctrl}}</td>
+                  <td>{{if .Name}}{{.Name}}{{else}}—{{end}}</td>
+                  <td>{{if .Manufacturer}}{{.Manufacturer}}{{else}}—{{end}}</td>
+                  <td>{{if .CapacityBytes}}{{.CapacityBytes}}{{else}}—{{end}}</td>
+                  <td>{{if .SerialNumber}}{{.SerialNumber}}{{else}}—{{end}}</td>
+                  <td>{{if .WWN}}{{.WWN}}{{else}}—{{end}}</td>
+                </tr>
+                {{end}}
+                {{end}}
+              </tbody>
+            </table>
+            </div>
+          </article>
+        </div>
+        {{end}}
+
+      </div>
+    </div>
+
+    {{else}}
+    <article class="box">
+      <p class="has-text-grey">Server not found.</p>
+    </article>
+    {{end}}
+
+</section>
+  </div>
+</main>
+
+{{if .Srv}}
+<!-- Server Override Modal -->
+<div id="orb-srv-override-modal" class="modal modal-fx-3dRotateFromBottom">
+  <div class="modal-background"></div>
+  <div class="modal-content modal-card">
+    <header class="modal-card-head">
+      <p class="modal-card-title">Override Server</p>
+      <button class="delete" aria-label="close" onclick="closeOrbSrvOverrideModal()"></button>
+    </header>
+    <section class="modal-card-body">
+      <div class="field">
+        <label class="label is-small">Hostname</label>
+        <div class="control">
+          <input class="input is-small" type="text" id="orb-srv-override-hostname">
+        </div>
+      </div>
+      <div class="field">
+        <label class="label is-small">Model</label>
+        <div class="control">
+          <input class="input is-small" type="text" id="orb-srv-override-model">
+        </div>
+      </div>
+      <div class="field">
+        <label class="label is-small">Manufacturer</label>
+        <div class="control">
+          <input class="input is-small" type="text" id="orb-srv-override-manufacturer">
+        </div>
+      </div>
+      <div class="field">
+        <label class="label is-small">Service Tag</label>
+        <div class="control">
+          <input class="input is-small" type="text" id="orb-srv-override-serviceTag">
+        </div>
+      </div>
+      <div class="field">
+        <label class="label is-small">OOB MAC</label>
+        <div class="control">
+          <input class="input is-small" type="text" id="orb-srv-override-oobMAC">
+        </div>
+      </div>
+      <p id="orb-srv-override-error" class="help is-danger mt-2" style="display:none"></p>
+    </section>
+    <footer class="modal-card-foot">
+      <div class="buttons">
+        <button class="button is-warning" id="orb-srv-override-submit"
+          data-srv-id="{{.Srv.ID}}" data-srv-orb-id="{{.Srv.OrbID}}">
+          Save Overrides
+        </button>
+        <button class="button" onclick="closeOrbSrvOverrideModal()">Cancel</button>
+      </div>
+    </footer>
+  </div>
+</div>
+{{end}}
+
+{{end}}

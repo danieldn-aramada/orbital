@@ -1,0 +1,91 @@
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div> 
+    <div class="app-main p-5">
+      {{if not .IsAuthn}}
+        <div class="notification is-danger is-light">
+          <button class="delete is-small"></button>
+          <a class="js-modal-trigger" data-target="login-modal">Login</a> to view this page
+        </div>
+      {{else}}
+        <p class="is-size-4 mb-4">New Server</p>
+        {{if .Form.IsSuccess}}
+          <p class>Create server requested! You can view its progress on the server <a href="/servers">summary</a> page</div>
+        {{else}}
+          <p class="mb-4">All requests require approval from the admin owner on the cloud account.</p>
+          {{template "form-server-create.gohtml" .}}
+        {{end}}
+      {{end}} 
+    </div> 
+  </main>
+  <script>
+    // HTMX Listener
+    //
+    // HTML fragments returned from htmx requests might need event listners
+    // applied. For exmaple, model triggers from server.gohtml
+    document.addEventListener('htmx:afterRequest', (evt) => {
+      console.log('event here');
+      console.dir(evt);
+
+      // Modal trigger
+      (document.querySelectorAll('.js-modal-trigger') || []).forEach((trigger) => {
+        const modalId = trigger.dataset.target; // dataset-target attribute
+        const target = document.getElementById(modalId);
+        trigger.addEventListener('click', () => {
+          console.log('clicked open modal for server')
+          console.log(target)
+          openModal(target);
+        });
+      });
+
+      // Modal close
+      (document.querySelectorAll('.js-modal-close') || []).forEach((close) => {
+        const target = close.closest('.modal');
+        close.addEventListener('click', () => {
+          closeModal(target);
+        });
+      });
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const menuLinks = document.querySelectorAll('.app-menu-link');
+
+      menuLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          const section = link.dataset.section;
+          const sublist = document.querySelector(`.app-menu-section-sublist[data-sublist="${section}"]`);
+          const isOpen = link.classList.contains('is-open');
+
+          // Close all
+          document.querySelectorAll('.app-menu-link.is-open').forEach(l => l.classList.remove('is-open'));
+          document.querySelectorAll('.app-menu-section-sublist.is-open').forEach(s => s.classList.remove('is-open'));
+
+          // Open the one clicked (if not already open)
+          if (!isOpen) {
+            link.classList.add('is-open');
+            sublist.classList.add('is-open');
+          }
+        });
+      });
+
+      // Highlight the active link based on current URL
+      const currentPath = window.location.pathname;
+
+      document.querySelectorAll('.app-menu-sublink.is-active').forEach(el => el.classList.remove('is-active'));
+      const activeLink = document.querySelector(`.app-menu-sublink[href="${currentPath}"]`);
+      if (activeLink) {
+        activeLink.classList.add('is-active');
+        const parentSublist = activeLink.closest('.app-menu-section-sublist');
+        if (parentSublist) {
+          parentSublist.classList.add('is-open');
+          parentSublist.previousElementSibling.classList.add('is-open');
+        }
+      }
+    });
+
+   
+  </script>
+{{end}}

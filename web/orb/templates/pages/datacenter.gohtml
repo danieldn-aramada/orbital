@@ -1,0 +1,37 @@
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div>
+    <div class="app-main p-5">
+
+      {{template "hint-banner.gohtml" .}}
+
+      <nav class="tabs is-boxed has-text-weight-medium" style="font-size: 14px;">
+        <ul id="tablist" role="tablist">
+          <li class="tab is-active">
+            <a id="tab-summary" data-target="tab-content-datacenters" role="tab" aria-selected="true" tabindex="0">
+              Summary
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="tab-content" role="tabpanel" id="tab-content-datacenters">
+        <table id="datacenter-table" class="table is-striped is-hoverable is-fullwidth">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Servers</th>
+              <th>Created By</th>
+              <th>Created At</th>
+              <th>ID</th>
+              <th>Orb ID</th>
+            </tr>
+          </thead>
+        </table>
+      </div>
+
+    </div>
+  </main>
+{{end}}

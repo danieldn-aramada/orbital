@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+  <head>
+    {{template "head.gohtml" . }}
+  </head>
+  <body>
+    <script>
+      window.ORBITAL_CONFIG = {
+        editMode: "{{.UI.EditMode}}",
+        basePath: "{{.UI.BasePath}}"
+      };
+    </script>
+    <header>
+      {{template "navbar.gohtml" .}}
+    </header>
+    {{template "page" .}}
+    <footer class="footer" style="padding: 0.75rem 1.5rem; border-top: 1px solid hsl(var(--bulma-scheme-h), var(--bulma-scheme-s), calc(var(--bulma-scheme-main-l) - 6%))">
+      {{template "footer.gohtml" .}}
+    </footer>
+  </body>
+</html>

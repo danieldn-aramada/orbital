@@ -1,0 +1,127 @@
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div>
+    <div class="app-main pr-5 pl-5 pt-5 pb-1">
+
+      {{template "hint-banner.gohtml" .}}
+
+      <nav class="tabs is-boxed has-text-weight-medium" style="font-size: 14px;">
+        <ul id="tablist" role="tablist">
+          <li class="tab is-active">
+            <a id="tab-summary" data-target="tab-content-servers" role="tab" aria-selected="true" tabindex="0">
+              Summary
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="tab-content" role="tabpanel" id="tab-content-servers">
+        <table id="server-list-table" class="table is-striped is-hoverable is-fullwidth is-size-7">
+          <thead>
+            <tr>
+              <th>Data Center</th>
+              <th>OOB IP</th>
+              <th>Hostname</th>
+              <th>Service Tag</th>
+              <th>Model</th>
+              <th>Rack</th>
+              <th>ID</th>
+              <th>Orb ID</th>
+            </tr>
+          </thead>
+        </table>
+      </div>
+
+    </div>
+  </main>
+
+<!-- Server Override Modal — populated by JS from button data attributes -->
+<div id="orb-srv-override-modal" class="modal modal-fx-3dRotateFromBottom">
+  <div class="modal-background"></div>
+  <div class="modal-content modal-card">
+    <header class="modal-card-head">
+      <p class="modal-card-title">Override Server</p>
+      <button class="delete" aria-label="close" onclick="closeOrbSrvOverrideModal()"></button>
+    </header>
+    <section class="modal-card-body">
+      <p class="is-size-6 has-text-weight-semibold mb-3">Server</p>
+      <div class="field">
+        <label class="label is-small">Hostname</label>
+        <div class="control"><input class="input is-small" type="text" id="orb-srv-override-hostname"></div>
+      </div>
+      <div class="field">
+        <label class="label is-small">Manufacturer</label>
+        <div class="control"><input class="input is-small" type="text" id="orb-srv-override-manufacturer"></div>
+      </div>
+      <div class="field">
+        <label class="label is-small">Model</label>
+        <div class="control"><input class="input is-small" type="text" id="orb-srv-override-model"></div>
+      </div>
+      <div class="field">
+        <label class="label is-small">Service Tag</label>
+        <div class="control"><input class="input is-small" type="text" id="orb-srv-override-serviceTag"></div>
+      </div>
+      <div class="field">
+        <label class="label is-small">OOB MAC</label>
+        <div class="control"><input class="input is-small" type="text" id="orb-srv-override-oobMAC"></div>
+      </div>
+
+      <div id="orb-srv-override-idrac-section" style="display:none">
+        <hr class="my-3">
+        <p class="is-size-6 has-text-weight-semibold mb-3">iDRAC Settings</p>
+        <div class="field">
+          <label class="label is-small">Firmware Version</label>
+          <div class="control"><input class="input is-small" type="text" id="orb-srv-override-idrac-firmwareVersion"></div>
+        </div>
+        <div class="columns is-multiline is-mobile mt-1">
+          <div class="column is-half py-1">
+            <label class="checkbox is-size-7">
+              <input type="checkbox" id="orb-srv-override-idrac-sshEnabled"> SSH Enabled
+            </label>
+          </div>
+          <div class="column is-half py-1">
+            <label class="checkbox is-size-7">
+              <input type="checkbox" id="orb-srv-override-idrac-ipmiEnabled"> IPMI Enabled
+            </label>
+          </div>
+          <div class="column is-half py-1">
+            <label class="checkbox is-size-7">
+              <input type="checkbox" id="orb-srv-override-idrac-lockdownModeEnabled"> Lockdown Mode
+            </label>
+          </div>
+          <div class="column is-half py-1">
+            <label class="checkbox is-size-7">
+              <input type="checkbox" id="orb-srv-override-idrac-usbManagementPortEnabled"> USB Mgmt Port
+            </label>
+          </div>
+          <div class="column is-half py-1">
+            <label class="checkbox is-size-7">
+              <input type="checkbox" id="orb-srv-override-idrac-osToIdracPassThroughEnabled"> OS-to-iDRAC Pass-through
+            </label>
+          </div>
+          <div class="column is-half py-1">
+            <label class="checkbox is-size-7">
+              <input type="checkbox" id="orb-srv-override-idrac-dhcpEnabled"> DHCP Enabled
+            </label>
+          </div>
+          <div class="column is-half py-1">
+            <label class="checkbox is-size-7">
+              <input type="checkbox" id="orb-srv-override-idrac-racadmEnabled"> RACADM Enabled
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <p id="orb-srv-override-error" class="help is-danger mt-2" style="display:none"></p>
+    </section>
+    <footer class="modal-card-foot">
+      <div class="buttons">
+        <button class="button is-warning" id="orb-srv-override-submit">Save Overrides</button>
+        <button class="button" onclick="closeOrbSrvOverrideModal()">Cancel</button>
+      </div>
+    </footer>
+  </div>
+</div>
+{{end}}

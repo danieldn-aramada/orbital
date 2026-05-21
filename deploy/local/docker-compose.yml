@@ -115,8 +115,77 @@ services:
       - "5001:5000"
     volumes:
       - ./zot-config.json:/etc/zot/config.json
+      - ./zot-credentials.json:/etc/zot/credentials.json
     healthcheck:
       test: ["CMD", "/usr/local/bin/zot-linux-amd64", "verify", "/etc/zot/config.json"]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # Orb DGraph — isolated from orbital's blue/scratch instances
+  dgraph-orb-zero:
+    image: dgraph/dgraph:v25.3.1
+    command: dgraph zero --my=dgraph-orb-zero:5080
+    ports:
+      - "5082:5080"
+      - "6082:6080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6080/state"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  dgraph-orb-alpha:
+    image: dgraph/dgraph:v25.3.1
+    command: >
+      dgraph alpha
+      --my=dgraph-orb-alpha:7080
+      --zero=dgraph-orb-zero:5080
+      --graphql extensions=false
+      --security whitelist=0.0.0.0/0
+    ports:
+      - "7082:7080"
+      - "8082:8080"
+      - "9082:9080"
+    volumes:
+      - orb-import-scratch:/tmp/orb-import
+    depends_on:
+      dgraph-orb-zero:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  orb:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      ORB_DC_SLUG: colo-galleon
+      ORB_OCI_REGISTRY: oci-registry:5000
+      ORB_OCI_REPO: orbital
+      ORB_OCI_ALLOW_HTTP: "true"
+      ORB_DGRAPH_URL: http://dgraph-orb-alpha:8080/graphql
+      ORB_DGRAPH_ADMIN_URL: http://dgraph-orb-alpha:8080/admin
+      ORB_DGRAPH_ALPHA_GRPC: dgraph-orb-alpha:9080
+      ORB_DGRAPH_CONTAINER: orbital-dgraph-orb-alpha-1
+      ORB_DATA_DIR: /orb-data
+      ORB_POLL_INTERVAL: 30s
+      ORB_LOG_LEVEL: info
+    ports:
+      - "8010:8010"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - orb-import-scratch:/tmp/orb-import
+      - orb-data:/orb-data
+    depends_on:
+      dgraph-orb-alpha:
+        condition: service_healthy
+      oci-registry:
+        condition: service_healthy
+
+volumes:
+  orb-import-scratch:
+  orb-data:

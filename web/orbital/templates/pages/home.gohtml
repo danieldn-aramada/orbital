@@ -1,0 +1,34 @@
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div>
+    <div class="app-main p-5">
+      {{if not .IsAuthn}}
+        <div class="notification is-warning is-light">
+          <a class="js-modal-trigger" data-target="login-modal">Login</a> to view this page.
+        </div>
+      {{else}}
+
+      <p class="is-size-4 mb-2">Config Items</p>
+      <p class="has-text-grey mb-5" style="font-size: 0.875rem;">
+        Every node in the graph that implements the <code>ConfigItem</code> interface — physical and logical resources across all namespaces.
+        Config items are the authoritative representation of design intent. Each config item has an <code>OrbId</code> which is a unique identifier <code>&lt;namespace&gt;:&lt;name&gt;</code> in the graph.
+      </p>
+
+      <table id="inventory-table" class="table is-striped is-hoverable is-fullwidth is-size-7">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Orb ID</th>
+            <th>Name</th>
+            <th>Created By</th>
+            <th>Created At</th>
+          </tr>
+        </thead>
+      </table>
+
+      {{end}}
+    </div>
+  </main>
+{{end}}

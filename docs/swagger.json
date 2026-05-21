@@ -698,6 +698,36 @@
                 }
             }
         },
+        "/divergence/publish": {
+            "post": {
+                "description": "Sends a divergence report containing local overrides to orbital's report intake API. Returns 502 if orbital is unreachable.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "divergence"
+                ],
+                "summary": "Publish divergence report",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/graphql": {
             "post": {
                 "description": "POST: proxies GraphQL queries and mutations to DGraph. GET: serves the GraphiQL explorer UI.",
@@ -729,6 +759,197 @@
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/import": {
+            "post": {
+                "description": "Starts an async OCI artifact pull and DGraph import for the requested tag. Returns 409 if an import is already running.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "import"
+                ],
+                "summary": "Trigger import",
+                "parameters": [
+                    {
+                        "description": "Import request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/import/history": {
+            "get": {
+                "description": "Returns the rolling history of completed and failed imports from disk.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "import"
+                ],
+                "summary": "Import history",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/orb.ImportRecord"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/import/status": {
+            "get": {
+                "description": "Returns the current import state snapshot including status, current version, and last import record.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "import"
+                ],
+                "summary": "Import status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/orbserver.importSnapshot"
+                        }
+                    }
+                }
+            }
+        },
+        "/import/tags": {
+            "get": {
+                "description": "Lists available OCI artifact tags from the configured registry for this data center.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "import"
+                ],
+                "summary": "List import tags",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/overrides": {
+            "get": {
+                "description": "Returns all current local field overrides from overrides.json.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "overrides"
+                ],
+                "summary": "List overrides",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/orb.Override"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Records a local field override for a Server or DataCenter resource. Writes the local value to DGraph and persists to overrides.json.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "overrides"
+                ],
+                "summary": "Record local override",
+                "parameters": [
+                    {
+                        "description": "Override request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/orbserver.overrideRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -906,6 +1127,106 @@
                     "type": "string"
                 },
                 "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "orb.ImportRecord": {
+            "type": "object",
+            "properties": {
+                "dcOrbId": {
+                    "type": "string"
+                },
+                "digest": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "exportJobId": {
+                    "type": "string"
+                },
+                "importedAt": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "\"done\" | \"failed\"",
+                    "type": "string"
+                },
+                "tag": {
+                    "type": "string"
+                }
+            }
+        },
+        "orb.Override": {
+            "type": "object",
+            "properties": {
+                "field": {
+                    "type": "string"
+                },
+                "intentValue": {
+                    "type": "string"
+                },
+                "localValue": {
+                    "type": "string"
+                },
+                "overriddenAt": {
+                    "type": "string"
+                },
+                "overriddenBy": {
+                    "type": "string"
+                },
+                "resourceId": {
+                    "description": "DGraph ID",
+                    "type": "string"
+                },
+                "resourceOrbId": {
+                    "type": "string"
+                },
+                "resourceType": {
+                    "type": "string"
+                }
+            }
+        },
+        "orbserver.importSnapshot": {
+            "type": "object",
+            "properties": {
+                "availableVersion": {
+                    "type": "string"
+                },
+                "currentVersion": {
+                    "type": "string"
+                },
+                "lastChecked": {
+                    "type": "string"
+                },
+                "lastError": {
+                    "type": "string"
+                },
+                "lastImport": {
+                    "$ref": "#/definitions/orb.ImportRecord"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "orbserver.overrideRequest": {
+            "type": "object",
+            "properties": {
+                "field": {
+                    "type": "string"
+                },
+                "localValue": {
+                    "type": "string"
+                },
+                "resourceId": {
+                    "type": "string"
+                },
+                "resourceOrbId": {
+                    "type": "string"
+                },
+                "resourceType": {
                     "type": "string"
                 }
             }

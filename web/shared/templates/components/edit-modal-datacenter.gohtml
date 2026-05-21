@@ -1,0 +1,20 @@
+<div id="edit-modal-dc-{{.ID}}" class="modal modal-fx-3dRotateFromBottom" data-current-user="{{.CurrentUser}}" data-version="{{.Version}}" data-orb-id="{{.OrbID}}">
+  <div class="modal-background"></div>
+  <div class="modal-content modal-card is-large">
+    <header class="modal-card-head">
+      <p class="modal-card-title">Edit Data Center</p>
+      <button class="delete" aria-label="close" data-dc-modal-close="{{.ID}}"></button>
+    </header>
+    <section class="modal-card-body">
+      <div id="dc-json-editor-{{.ID}}" style="min-height:200px"></div>
+      <p id="dc-edit-error-{{.ID}}" class="help is-danger mt-2" style="display:none"></p>
+    </section>
+    <footer class="modal-card-foot">
+      <div class="buttons">
+        <button class="button is-success" id="dc-edit-submit-{{.ID}}">Save</button>
+        <button class="button" data-dc-modal-close="{{.ID}}">Cancel</button>
+      </div>
+    </footer>
+  </div>
+</div>
+<script type="application/json" id="dc-edit-data-{{.ID}}">{{.EditDataJSON}}</script>
