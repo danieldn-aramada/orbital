@@ -6,15 +6,18 @@
     <div class="app-main p-5">
 
       <p class="is-size-4 mb-2" data-testid="page-heading">Status</p>
+
+      {{if .HasData}}
+
       <p class="has-text-grey mb-5" style="font-size: 0.875rem;">
-        Edge service status for data center <strong>{{.DCSlug}}</strong>.
+        Edge service status for data center <strong>{{.DCName}}</strong>.
       </p>
 
       <div class="columns is-multiline" style="max-width: 620px;" id="status-panel">
         <div class="column is-half">
           <div class="box" style="height: 100%;">
             <p class="heading">Data Center</p>
-            <p class="title is-5">{{.DCSlug}}</p>
+            <p class="title is-5">{{.DCName}}</p>
           </div>
         </div>
         <div class="column is-half">
@@ -56,6 +59,18 @@
           <span>Import now</span>
         </button>
       </div>
+      {{end}}
+
+      {{else}}
+
+      <div class="notification is-light mt-4" style="max-width: 560px;">
+        <p class="mb-3">No subgraph has been imported yet. Import a subgraph for a data center to view status and configuration.</p>
+        <a class="button is-primary is-small" href="/import">
+          <span class="icon"><i class="fa-solid fa-upload"></i></span>
+          <span>Import Subgraph</span>
+        </a>
+      </div>
+
       {{end}}
 
       <div id="orb-import-status-box" style="display:none; max-width: 620px;" class="mt-4">

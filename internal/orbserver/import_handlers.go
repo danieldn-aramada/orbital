@@ -45,7 +45,6 @@ func (s *Server) triggerImport(c echo.Context) error {
 		pullCfg := oci.PullConfig{
 			Registry:  s.cfg.OCIRegistry,
 			Repo:      s.cfg.OCIRepo,
-			DCSlug:    s.cfg.DCSlug,
 			Username:  s.cfg.OCIUsername,
 			Password:  s.cfg.OCIPassword,
 			AllowHTTP: s.cfg.OCIAllowHTTP,
@@ -61,7 +60,7 @@ func (s *Server) triggerImport(c echo.Context) error {
 			PublicKeyPath: s.cfg.OCIPublicKeyPath,
 			AllowHTTP:     s.cfg.OCIAllowHTTP,
 		}
-		repoRef := s.cfg.OCIRegistry + "/" + s.cfg.OCIRepo + "/" + s.cfg.DCSlug
+		repoRef := s.cfg.OCIRegistry + "/" + s.cfg.OCIRepo
 		result, err := oci.Verify(ctx, verifyCfg, repoRef, artifact.Digest, s.logger)
 		if err != nil {
 			s.state.setFailed("verify: " + err.Error())
@@ -115,7 +114,6 @@ func (s *Server) importTags(c echo.Context) error {
 	tags, err := oci.ListTags(c.Request().Context(), oci.PullConfig{
 		Registry:  s.cfg.OCIRegistry,
 		Repo:      s.cfg.OCIRepo,
-		DCSlug:    s.cfg.DCSlug,
 		Username:  s.cfg.OCIUsername,
 		Password:  s.cfg.OCIPassword,
 		AllowHTTP: s.cfg.OCIAllowHTTP,

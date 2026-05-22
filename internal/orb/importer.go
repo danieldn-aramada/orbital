@@ -22,6 +22,7 @@ const (
 	overridesFile     = "overrides.json"
 	historyMaxRecords = 25
 	scratchFile       = "data.json.gz"
+	SchemaFile        = "schema.graphql"
 )
 
 // ImportMeta carries metadata from OCI manifest annotations for a pulled artifact.
@@ -128,7 +129,8 @@ func (i *Importer) dropAll(ctx context.Context) error {
 	return nil
 }
 
-// applySchema decompresses schemaGZ and posts it to DGraph's admin schema endpoint.
+// applySchema decompresses schemaGZ, posts it to DGraph's admin schema endpoint,
+// and saves the decompressed SDL to {DataDir}/schema.graphql for the schema page.
 func (i *Importer) applySchema(ctx context.Context, schemaGZ []byte) error {
 	i.logger.Info("applying schema to local DGraph")
 	gr, err := gzip.NewReader(bytes.NewReader(schemaGZ))
@@ -155,6 +157,12 @@ func (i *Importer) applySchema(ctx context.Context, schemaGZ []byte) error {
 		b, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("schema apply returned %d: %s", resp.StatusCode, b)
 	}
+
+	schemaPath := filepath.Join(i.cfg.DataDir, SchemaFile)
+	if err := os.WriteFile(schemaPath, schema, 0o644); err != nil {
+		i.logger.Warn("failed to save schema to disk", "err", err)
+	}
+
 	return nil
 }
 

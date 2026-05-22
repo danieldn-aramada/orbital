@@ -12,7 +12,8 @@ import (
 type statusPageData struct {
 	layout.Base
 	PageTitle        string
-	DCSlug           string
+	HasData          bool
+	DCName           string
 	OCIRegistry      string
 	OCIRepo          string
 	CurrentVersion   string
@@ -42,15 +43,15 @@ func main() {
 			BasePath:    "",
 			CurrentPath: "/status",
 			UI: layout.UIConfig{
-				AppName:  "colo-galleon",
+				AppName:  "Orb",
 				BasePath: "",
 				Version:  "123",
-				EditMode: "intent",
 				ShowAuth: false,
 			},
 		},
 		PageTitle: "Status",
-		DCSlug:    "colo-galleon",
+		HasData:   true,
+		DCName:    "colo-galleon",
 	}
 	var buf bytes.Buffer
 	err := tmpl.ExecuteTemplate(&buf, "base.gohtml", data)

@@ -10,7 +10,7 @@ var base = []string{
 	"web/shared/templates/layouts/head.gohtml",
 	"web/shared/templates/layouts/footer.gohtml",
 	"web/shared/templates/components/navbar.gohtml",
-	"web/orbital/templates/components/menu.gohtml",
+	"web/shared/templates/components/menu.gohtml",
 	"web/shared/templates/components/todo-toast.gohtml",
 	"web/orbital/templates/components/report-issue-modal.gohtml",
 	"web/orbital/templates/components/login-modal.gohtml",

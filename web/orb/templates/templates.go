@@ -11,9 +11,10 @@ var base = []string{
 	"web/shared/templates/layouts/head.gohtml",
 	"web/shared/templates/layouts/footer.gohtml",
 	"web/shared/templates/components/navbar.gohtml",
-	"web/orb/templates/components/menu.gohtml",
+	"web/shared/templates/components/menu.gohtml",
 	"web/shared/templates/components/todo-toast.gohtml",
 	"web/shared/templates/components/hint-banner.gohtml",
+	// Stub definitions required by navbar.gohtml references; orb has no auth UI.
 	"web/orb/templates/components/login-modal.gohtml",
 	"web/orb/templates/components/report-issue-modal.gohtml",
 }
@@ -31,15 +32,22 @@ func Map() map[string]*template.Template {
 	return map[string]*template.Template{
 		"status":         template.Must(template.ParseFiles(page("web/orb/templates/pages/status.gohtml")...)),
 		"import":         template.Must(template.ParseFiles(page("web/orb/templates/pages/import.gohtml")...)),
+		"inventory":      template.Must(template.ParseFiles(page("web/orb/templates/pages/inventory.gohtml")...)),
+		"schema":         template.Must(template.ParseFiles(page("web/orb/templates/pages/schema.gohtml")...)),
 		"datacenter":     template.Must(template.ParseFiles(page("web/orb/templates/pages/datacenter.gohtml")...)),
 		"servers":        template.Must(template.ParseFiles(page("web/orb/templates/pages/servers.gohtml")...)),
-		"server-detail":  template.Must(template.ParseFiles(page("web/orb/templates/pages/server-detail.gohtml")...)),
 		"divergence":     template.Must(template.ParseFiles(page("web/orb/templates/pages/divergence.gohtml")...)),
 		"import-history": template.Must(template.ParseFiles(page("web/orb/templates/pages/import-history.gohtml")...)),
 
 		// Standalone fragments — rendered directly (no base layout).
-		"datacenter-tab": template.Must(template.ParseFiles("web/orb/templates/partials/datacenter-tab.gohtml")),
-		"server-tab":     template.Must(template.ParseFiles("web/orb/templates/partials/server-tab.gohtml")),
+		"datacenter-tab": template.Must(template.ParseFiles(
+			"web/shared/templates/partials/datacenter-tab.gohtml",
+			"web/shared/templates/components/edit-modal-datacenter.gohtml",
+		)),
+		"server-tab": template.Must(template.ParseFiles(
+			"web/shared/templates/partials/server-tab.gohtml",
+			"web/shared/templates/components/edit-modal-server.gohtml",
+		)),
 	}
 }
 

@@ -654,6 +654,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('inventory-table')) return
 
   const savedType = localStorage.getItem('inventoryTypeFilter') || ''
+  const savedNamespace = localStorage.getItem('inventoryNamespaceFilter') || ''
   const cached = sessionStorage.getItem(INVENTORY_CACHE_KEY)
   const initialData = cached ? JSON.parse(cached) : []
 
@@ -698,6 +699,14 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('inventoryTypeFilter', this.value)
         inventoryTable.column(0).search(this.value, { exact: !!this.value }).draw()
       })
+
+      const nsSelect = document.getElementById('inventory-namespace-select')
+      nsSelect.addEventListener('change', function () {
+        localStorage.setItem('inventoryNamespaceFilter', this.value)
+        applyNamespaceFilter(this.value)
+      })
+
+      if (savedNamespace) applyNamespaceFilter(savedNamespace)
     },
     columns: [
       { data: 'type' },
@@ -718,23 +727,38 @@ document.addEventListener('DOMContentLoaded', () => {
     data: initialData,
   })
 
-  function populateTypeDropdown() {
+  function applyNamespaceFilter(ns) {
+    inventoryTable.column(1).search(ns ? '^' + ns + ':' : '', { regex: true }).draw()
+  }
+
+  function populateDropdowns() {
     const typeSelect = document.getElementById('inventory-type-select')
-    typeSelect.options.length = 1 // keep "All Types"
+    typeSelect.options.length = 1
     inventoryTable.column(0).data().unique().sort().each(type => {
       typeSelect.add(new Option(type, type))
     })
     if (savedType) typeSelect.value = savedType
+
+    const nsSelect = document.getElementById('inventory-namespace-select')
+    nsSelect.options.length = 1
+    const seen = new Set()
+    inventoryTable.column(1).data().each(orbId => {
+      const ns = orbId ? orbId.split(':')[0] : ''
+      if (ns && !seen.has(ns)) seen.add(ns)
+    })
+    Array.from(seen).sort().forEach(ns => nsSelect.add(new Option(ns, ns)))
+    if (savedNamespace) nsSelect.value = savedNamespace
   }
 
   // If no cache, fetch now and populate
   if (!cached) {
     inventoryFetch(items => {
       inventoryTable.clear().rows.add(items).draw()
-      populateTypeDropdown()
+      populateDropdowns()
+      if (savedNamespace) applyNamespaceFilter(savedNamespace)
     })
   } else {
-    populateTypeDropdown()
+    populateDropdowns()
   }
 
   const reloadButton = inventoryTable.button('reload:name').node()
@@ -745,7 +769,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       inventoryFetch(items => {
         inventoryTable.rows.add(items).draw()
-        populateTypeDropdown()
+        populateDropdowns()
+        const currentNs = document.getElementById('inventory-namespace-select').value
+        if (currentNs) applyNamespaceFilter(currentNs)
         reloadButton.removeClass('is-loading')
       })
     }, 250)
@@ -2453,16 +2479,6 @@ document.addEventListener('DOMContentLoaded', () => {
 let orbImportPollTimer = null
 
 async function handleOrbImport(tag) {
-  try {
-    const r = await fetch(BASE + '/api/v1/overrides')
-    const overrides = await r.json()
-    if (Array.isArray(overrides) && overrides.length > 0) {
-      const n = overrides.length
-      const ok = confirm(`You have ${n} pending local override${n === 1 ? '' : 's'}. Importing will clear them and restore orbital's intent. Continue?`)
-      if (!ok) return
-    }
-  } catch (_) { /* proceed if check fails */ }
-
   orbShowImportStatus('is-info', 'fa-spinner fa-spin', `Importing ${tag}…`)
   fetch(BASE + '/api/v1/import', {
     method: 'POST',
@@ -2561,16 +2577,6 @@ document.addEventListener('DOMContentLoaded', () => {
 })
 
 async function handleOrbCourierUpload() {
-  try {
-    const r = await fetch(BASE + '/api/v1/overrides')
-    const overrides = await r.json()
-    if (Array.isArray(overrides) && overrides.length > 0) {
-      const n = overrides.length
-      const ok = confirm(`You have ${n} pending local override${n === 1 ? '' : 's'}. Importing will clear them and restore orbital's intent. Continue?`)
-      if (!ok) return
-    }
-  } catch (_) { /* proceed if check fails */ }
-
   const fileInput = document.getElementById('orb-courier-file')
   if (!fileInput?.files[0]) return
   const fd = new FormData()
@@ -2588,211 +2594,6 @@ async function handleOrbCourierUpload() {
     })
     .catch(() => orbShowImportStatus('is-danger', 'fa-circle-xmark', 'Upload failed.'))
 }
-
-// --- Orb DC override modal ---
-
-function openOrbDCOverrideModal() {
-  document.getElementById('orb-dc-override-modal').classList.add('is-active')
-}
-
-function closeOrbDCOverrideModal() {
-  document.getElementById('orb-dc-override-modal').classList.remove('is-active')
-  const err = document.getElementById('orb-dc-override-error')
-  if (err) { err.style.display = 'none'; err.textContent = '' }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  const btn = document.getElementById('orb-dc-override-btn') || document.querySelector('[data-dc-override-id]')
-  if (!btn) return
-  btn.addEventListener('click', openOrbDCOverrideModal)
-
-  const submit = document.getElementById('orb-dc-override-submit')
-  if (!submit) return
-  submit.addEventListener('click', () => {
-    const dcID = submit.dataset.dcId
-    const dcOrbID = submit.dataset.dcOrbId
-    const nameVal = document.getElementById('orb-dc-override-name').value.trim()
-    const err = document.getElementById('orb-dc-override-error')
-    if (!nameVal) {
-      err.textContent = 'Name is required.'
-      err.style.display = ''
-      return
-    }
-    submit.classList.add('is-loading')
-    fetch(BASE + '/api/v1/overrides', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ resourceType: 'DataCenter', resourceId: dcID, resourceOrbId: dcOrbID, field: 'name', localValue: nameVal })
-    })
-      .then(r => r.json())
-      .then(data => {
-        submit.classList.remove('is-loading')
-        if (data.error) { err.textContent = data.error; err.style.display = ''; return }
-        closeOrbDCOverrideModal()
-      })
-      .catch(() => { submit.classList.remove('is-loading'); err.textContent = 'Request failed.'; err.style.display = '' })
-  })
-})
-
-// --- Orb server override modal ---
-
-function openOrbSrvOverrideModal(btn) {
-  const initial = {
-    hostname:     btn.dataset.srvHostname || '',
-    model:        btn.dataset.srvModel || '',
-    manufacturer: btn.dataset.srvManufacturer || '',
-    serviceTag:   btn.dataset.srvServiceTag || '',
-    oobMAC:       btn.dataset.srvOobMac || '',
-  }
-  document.getElementById('orb-srv-override-hostname').value = initial.hostname
-  document.getElementById('orb-srv-override-model').value = initial.model
-  document.getElementById('orb-srv-override-manufacturer').value = initial.manufacturer
-  document.getElementById('orb-srv-override-serviceTag').value = initial.serviceTag
-  document.getElementById('orb-srv-override-oobMAC').value = initial.oobMAC
-
-  const hasIdrac = btn.dataset.hasIdrac === 'true'
-  const idracSection = document.getElementById('orb-srv-override-idrac-section')
-  if (idracSection) idracSection.style.display = hasIdrac ? '' : 'none'
-  if (hasIdrac) {
-    initial.idracFirmwareVersion             = btn.dataset.idracFirmwareVersion || ''
-    initial.idracSshEnabled                  = btn.dataset.idracSshEnabled === 'true'
-    initial.idracIpmiEnabled                 = btn.dataset.idracIpmiEnabled === 'true'
-    initial.idracLockdownModeEnabled         = btn.dataset.idracLockdownModeEnabled === 'true'
-    initial.idracUsbManagementPortEnabled    = btn.dataset.idracUsbManagementPortEnabled === 'true'
-    initial.idracOsToIdracPassThroughEnabled = btn.dataset.idracOsToIdracPassThroughEnabled === 'true'
-    initial.idracDhcpEnabled                 = btn.dataset.idracDhcpEnabled === 'true'
-    initial.idracRacadmEnabled               = btn.dataset.idracRacadmEnabled === 'true'
-    document.getElementById('orb-srv-override-idrac-firmwareVersion').value       = initial.idracFirmwareVersion
-    document.getElementById('orb-srv-override-idrac-sshEnabled').checked          = initial.idracSshEnabled
-    document.getElementById('orb-srv-override-idrac-ipmiEnabled').checked         = initial.idracIpmiEnabled
-    document.getElementById('orb-srv-override-idrac-lockdownModeEnabled').checked = initial.idracLockdownModeEnabled
-    document.getElementById('orb-srv-override-idrac-usbManagementPortEnabled').checked    = initial.idracUsbManagementPortEnabled
-    document.getElementById('orb-srv-override-idrac-osToIdracPassThroughEnabled').checked = initial.idracOsToIdracPassThroughEnabled
-    document.getElementById('orb-srv-override-idrac-dhcpEnabled').checked         = initial.idracDhcpEnabled
-    document.getElementById('orb-srv-override-idrac-racadmEnabled').checked       = initial.idracRacadmEnabled
-  }
-
-  const submit = document.getElementById('orb-srv-override-submit')
-  if (submit) {
-    submit.dataset.srvId = btn.dataset.srvOverrideId || ''
-    submit.dataset.srvOrbId = btn.dataset.srvOverrideOrbId || ''
-    submit.dataset.hasIdrac = hasIdrac ? 'true' : 'false'
-    submit._orbInitial = initial
-  }
-  document.getElementById('orb-srv-override-modal').classList.add('is-active')
-}
-
-function closeOrbSrvOverrideModal() {
-  document.getElementById('orb-srv-override-modal').classList.remove('is-active')
-  const err = document.getElementById('orb-srv-override-error')
-  if (err) { err.style.display = 'none'; err.textContent = '' }
-}
-
-document.addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-srv-override-id]')
-  if (btn) openOrbSrvOverrideModal(btn)
-})
-
-document.addEventListener('DOMContentLoaded', () => {
-  const submit = document.getElementById('orb-srv-override-submit')
-  if (!submit) return
-  submit.addEventListener('click', async () => {
-    const srvID = submit.dataset.srvId
-    const srvOrbID = submit.dataset.srvOrbId
-    const hasIdrac = submit.dataset.hasIdrac === 'true'
-    const initial = submit._orbInitial || {}
-    const err = document.getElementById('orb-srv-override-error')
-    submit.classList.add('is-loading')
-    try {
-      const postOverride = async (resourceType, resourceOrbId, field, localValue) => {
-        const resp = await fetch(BASE + '/api/v1/overrides', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ resourceType, resourceId: srvID, resourceOrbId, field, localValue })
-        })
-        const data = await resp.json()
-        if (data.error) throw new Error(data.error)
-      }
-
-      // Server fields — only send if value changed
-      const srvFields = [
-        { field: 'hostname',     id: 'orb-srv-override-hostname',     initKey: 'hostname' },
-        { field: 'model',        id: 'orb-srv-override-model',        initKey: 'model' },
-        { field: 'manufacturer', id: 'orb-srv-override-manufacturer', initKey: 'manufacturer' },
-        { field: 'serviceTag',   id: 'orb-srv-override-serviceTag',   initKey: 'serviceTag' },
-        { field: 'oobMAC',       id: 'orb-srv-override-oobMAC',       initKey: 'oobMAC' },
-      ]
-      for (const f of srvFields) {
-        const val = document.getElementById(f.id).value.trim()
-        if (!val || val === (initial[f.initKey] || '')) continue
-        await postOverride('Server', srvOrbID, f.field, val)
-      }
-
-      // iDRAC fields — only send if value changed
-      if (hasIdrac) {
-        const idracOrbID = srvOrbID + '-idrac'
-        const fw = document.getElementById('orb-srv-override-idrac-firmwareVersion').value.trim()
-        if (fw && fw !== (initial.idracFirmwareVersion || '')) {
-          await postOverride('IdracSettings', idracOrbID, 'firmwareVersion', fw)
-        }
-        const idracBoolFields = [
-          { field: 'sshEnabled',                  id: 'orb-srv-override-idrac-sshEnabled',                  initKey: 'idracSshEnabled' },
-          { field: 'ipmiEnabled',                  id: 'orb-srv-override-idrac-ipmiEnabled',                  initKey: 'idracIpmiEnabled' },
-          { field: 'lockdownModeEnabled',          id: 'orb-srv-override-idrac-lockdownModeEnabled',          initKey: 'idracLockdownModeEnabled' },
-          { field: 'usbManagementPortEnabled',     id: 'orb-srv-override-idrac-usbManagementPortEnabled',     initKey: 'idracUsbManagementPortEnabled' },
-          { field: 'osToIdracPassThroughEnabled',  id: 'orb-srv-override-idrac-osToIdracPassThroughEnabled',  initKey: 'idracOsToIdracPassThroughEnabled' },
-          { field: 'dhcpEnabled',                  id: 'orb-srv-override-idrac-dhcpEnabled',                  initKey: 'idracDhcpEnabled' },
-          { field: 'racadmEnabled',                id: 'orb-srv-override-idrac-racadmEnabled',                initKey: 'idracRacadmEnabled' },
-        ]
-        for (const f of idracBoolFields) {
-          const val = document.getElementById(f.id).checked
-          if (val === initial[f.initKey]) continue
-          await postOverride('IdracSettings', idracOrbID, f.field, String(val))
-        }
-      }
-
-      submit.classList.remove('is-loading')
-      closeOrbSrvOverrideModal()
-      htmx.ajax('GET', BASE + '/servers/' + srvID, { target: '#tab-content-srv-' + srvID, swap: 'innerHTML' })
-    } catch (e) {
-      submit.classList.remove('is-loading')
-      err.textContent = e.message || 'Request failed.'
-      err.style.display = ''
-    }
-  })
-})
-
-// --- Orb divergence publish ---
-
-document.addEventListener('DOMContentLoaded', () => {
-  const btn = document.getElementById('orb-publish-report-btn')
-  if (!btn) return
-  btn.addEventListener('click', () => {
-    const result = document.getElementById('orb-publish-result')
-    btn.classList.add('is-loading')
-    fetch(BASE + '/api/v1/divergence/publish', { method: 'POST' })
-      .then(r => r.json())
-      .then(data => {
-        btn.classList.remove('is-loading')
-        result.className = 'notification is-success is-light'
-        result.style.display = ''
-        if (data.reportId) {
-          result.textContent = `Report published. ID: ${data.reportId}`
-        } else if (data.status === 'skipped') {
-          result.className = 'notification is-warning is-light'
-          result.textContent = `Skipped: ${data.reason}`
-        } else {
-          result.textContent = 'Report published.'
-        }
-      })
-      .catch(() => {
-        btn.classList.remove('is-loading')
-        result.className = 'notification is-danger is-light'
-        result.style.display = ''
-        result.textContent = 'Failed to publish report.'
-      })
-  })
-})
 
 // --- Orb servers DataTable ---
 

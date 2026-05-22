@@ -11,7 +11,7 @@ import (
 // Every PollInterval it checks Zot for the latest tag and sets availableVersion
 // if a newer artifact exists. The operator triggers the actual import manually.
 func (s *Server) pollLoop(ctx context.Context) {
-	s.logger.Info("poller started", "interval", s.cfg.PollInterval, "dc_slug", s.cfg.DCSlug)
+	s.logger.Info("poller started", "interval", s.cfg.PollInterval)
 	ticker := time.NewTicker(s.cfg.PollInterval)
 	defer ticker.Stop()
 
@@ -33,7 +33,6 @@ func (s *Server) poll(ctx context.Context) {
 	tags, err := oci.ListTags(ctx, oci.PullConfig{
 		Registry:  s.cfg.OCIRegistry,
 		Repo:      s.cfg.OCIRepo,
-		DCSlug:    s.cfg.DCSlug,
 		Username:  s.cfg.OCIUsername,
 		Password:  s.cfg.OCIPassword,
 		AllowHTTP: s.cfg.OCIAllowHTTP,

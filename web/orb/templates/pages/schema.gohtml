@@ -1,0 +1,24 @@
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div>
+    <div class="app-main p-5">
+
+      <p class="is-size-4 mb-2" data-testid="page-heading">Schema</p>
+      <p class="has-text-grey mb-5" style="font-size: 0.875rem;">Active DGraph GraphQL schema applied on last import.</p>
+
+      {{if .SDL}}
+      <article class="box">
+        <p class="is-size-6 has-text-weight-semibold mb-3">Schema Definition Language (SDL)</p>
+        <pre style="font-size: 0.78rem; max-height: 600px; overflow-y: auto;">{{.SDL}}</pre>
+      </article>
+      {{else}}
+      <div class="notification is-light mt-4" style="max-width: 560px;">
+        <p>No schema available. Import a subgraph to populate the schema.</p>
+      </div>
+      {{end}}
+
+    </div>
+  </main>
+{{end}}

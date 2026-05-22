@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/armada/orbital/internal/orb"
 	"github.com/armada/orbital/internal/web/data/layout"
 	orbtemplates "github.com/armada/orbital/web/orb/templates"
 	"github.com/labstack/echo/v4"
@@ -109,7 +108,8 @@ type orbStorageControllerData struct {
 	StorageDevices []orbStorageDeviceData
 }
 
-type orbSrvDetailData struct {
+// orbSrvTabData is the data model for the orb server-tab fragment.
+type orbSrvTabData struct {
 	ID                 string
 	OrbID              string
 	Hostname           string
@@ -121,132 +121,17 @@ type orbSrvDetailData struct {
 	OobMAC             string
 	CreatedAt          string
 	UpdatedAt          string
-	Namespace          string
-	DataCenterName     string
+	CreatedBy          string
+	UpdatedBy          string
+	Namespace          struct{ Name string }
 	Rack               struct{ Name string }
+	DataCenterID       string
+	DataCenterName     string
+	ShowDCBack         bool
 	IdracSettings      *orbIdracData
 	StorageControllers []orbStorageControllerData
-}
-
-type serverDetailPageData struct {
-	layout.Base
-	PageTitle        string
-	Srv              *orbSrvDetailData
-	OverridesByField map[string]string
-}
-
-// orbSrvTabData is the data model for the orb server-tab fragment.
-type orbSrvTabData struct {
-	ID                   string
-	OrbID                string
-	Hostname             string
-	Model                string
-	Manufacturer         string
-	ServiceTag           string
-	RackPosition         int
-	OobIP                string
-	OobMAC               string
-	CreatedAt            string
-	UpdatedAt            string
-	Namespace            struct{ Name string }
-	Rack                 struct{ Name string }
-	DataCenterID         string
-	DataCenterName       string
-	ShowDCBack           bool
-	IdracSettings        *orbIdracData
-	StorageControllers   []orbStorageControllerData
-	OverridesByField     map[string]string
-	IdracOverridesByField map[string]string
-}
-
-// --- Handler ---
-
-func (s *Server) serverDetailPage(c echo.Context) error {
-	id := c.Param("id")
-
-	raw, err := s.dgraphQuery(queryServerByIDFmt, map[string]any{"id": id})
-	if err != nil {
-		s.logger.Warn("dgraph server query failed", "err", err)
-	}
-
-	b := s.orbBase(c)
-	b.UI.EditMode = "override"
-	data := serverDetailPageData{Base: b, PageTitle: "Server"}
-
-	if raw != nil {
-		var result struct {
-			Data struct {
-				GetServer orbServerQueryResponse `json:"getServer"`
-			} `json:"data"`
-		}
-		if err := json.Unmarshal(raw, &result); err == nil {
-			r := result.Data.GetServer
-			if r.ID != "" {
-				srv := &orbSrvDetailData{
-					ID:             r.ID,
-					OrbID:          r.OrbID,
-					Hostname:       r.Hostname,
-					Model:          r.Model,
-					Manufacturer:   r.Manufacturer,
-					ServiceTag:     r.ServiceTag,
-					RackPosition:   r.RackPosition,
-					OobIP:          r.OobIP.Address,
-					OobMAC:         r.OobMAC,
-					CreatedAt:      r.CreatedAt,
-					UpdatedAt:      r.UpdatedAt,
-					Namespace:      r.Namespace.Name,
-					DataCenterName: r.DataCenter.Name,
-					Rack:           struct{ Name string }{Name: r.Rack.Name},
-				}
-				if r.IdracSettings != nil {
-					srv.IdracSettings = &orbIdracData{
-						FirmwareVersion:             r.IdracSettings.FirmwareVersion,
-						OsToIdracPassThroughEnabled: r.IdracSettings.OsToIdracPassThroughEnabled,
-						SshEnabled:                  r.IdracSettings.SshEnabled,
-						UsbManagementPortEnabled:    r.IdracSettings.UsbManagementPortEnabled,
-						IpmiEnabled:                 r.IdracSettings.IpmiEnabled,
-						LockdownModeEnabled:         r.IdracSettings.LockdownModeEnabled,
-						DhcpEnabled:                 r.IdracSettings.DhcpEnabled,
-						RacadmEnabled:               r.IdracSettings.RacadmEnabled,
-					}
-				}
-				for _, ctrl := range r.StorageControllers {
-					sc := orbStorageControllerData{Name: ctrl.Name}
-					for _, dev := range ctrl.StorageDevices {
-						sc.StorageDevices = append(sc.StorageDevices, orbStorageDeviceData{
-							Name:          dev.Name,
-							CapacityBytes: dev.CapacityBytes,
-							Manufacturer:  dev.Manufacturer,
-							SerialNumber:  dev.SerialNumber,
-							WWN:           dev.WWN,
-						})
-					}
-					srv.StorageControllers = append(srv.StorageControllers, sc)
-				}
-				data.Srv = srv
-				if r.Hostname != "" {
-					data.PageTitle = r.Hostname
-				} else if r.ServiceTag != "" {
-					data.PageTitle = r.ServiceTag
-				}
-			}
-		}
-	}
-
-	// Build per-field override map for this server so the template can show badges.
-	if data.Srv != nil {
-		if overrides, err := orb.LoadOverrides(s.cfg.DataDir); err == nil {
-			m := make(map[string]string)
-			for _, o := range overrides {
-				if o.ResourceOrbID == data.Srv.OrbID {
-					m[o.Field] = o.LocalValue
-				}
-			}
-			data.OverridesByField = m
-		}
-	}
-
-	return s.render(c, "server-detail", data)
+	BasePath           string
+	Actions            layout.PageActions
 }
 
 // srvTab renders the server detail fragment for the given id.
@@ -290,6 +175,8 @@ func (s *Server) srvTab(c echo.Context) error {
 				DataCenterID:   r.DataCenter.ID,
 				DataCenterName: r.DataCenter.Name,
 				ShowDCBack:     dcCtx,
+				BasePath:       "",
+				Actions:        layout.OrbActions,
 			}
 			if r.IdracSettings != nil {
 				srv.IdracSettings = &orbIdracData{
@@ -319,25 +206,10 @@ func (s *Server) srvTab(c echo.Context) error {
 		}
 	}
 
-	if overrides, err := orb.LoadOverrides(s.cfg.DataDir); err == nil {
-		m := make(map[string]string)
-		im := make(map[string]string)
-		idracOrbID := srv.OrbID + "-idrac"
-		for _, o := range overrides {
-			if o.ResourceOrbID == srv.OrbID {
-				m[o.Field] = o.LocalValue
-			} else if o.ResourceOrbID == idracOrbID {
-				im[o.Field] = o.LocalValue
-			}
-		}
-		srv.OverridesByField = m
-		srv.IdracOverridesByField = im
-	}
-
 	tmpl := s.templates["server-tab"]
 	if s.devMode {
 		var err error
-		tmpl, err = orbtemplates.ParseFragment("web/orb/templates/partials/server-tab.gohtml")
+		tmpl, err = orbtemplates.ParseFragment("web/shared/templates/partials/server-tab.gohtml")
 		if err != nil {
 			return fmt.Errorf("parse fragment: %w", err)
 		}

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/labstack/echo/v4"
 )
 
@@ -151,6 +152,7 @@ type dataCenterTabData struct {
 	CurrentUser  string
 	EditDataJSON template.JS // pre-serialized JSON for the edit modal
 	BasePath     string
+	Actions      layout.PageActions
 }
 
 func (h *DataCenter) Tab(c echo.Context) error {
@@ -244,6 +246,7 @@ func (h *DataCenter) Tab(c echo.Context) error {
 		CurrentUser:  currentUser,
 		EditDataJSON: template.JS(editJSON),
 		BasePath:     h.basePath,
+		Actions:      layout.OrbitalActions,
 	}
 	for _, r := range raw.Racks {
 		dc.Racks = append(dc.Racks, rackTabData{

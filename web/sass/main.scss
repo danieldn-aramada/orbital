@@ -300,7 +300,7 @@ html {
   letter-spacing: normal !important;
 }
 .navbar-brand {
-  // padding-right: 2.7em; // align with main's grid better
+  min-width: 10.5rem; // holds "Orbital" width so shorter names (e.g. "Orb") don't shrink the brand area
   .navbar-item {
     // @extend #{bulma}.navbar-item, bulma.navbar-link;
     padding-right: 1.5em; // align with main's grid better

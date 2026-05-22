@@ -2,51 +2,39 @@
 
 ## Setup
 
-Start the local stack (DGraph + PostgreSQL):
-
 ```bash
-docker compose -f deploy/local/docker-compose.yml up -d
+# Terminal 1 — start all dependencies (orbital + orb DGraph, PostgreSQL, registry) then start orbital
+make up
+make run-orbital
+
+# Terminal 2 — start orb
+make run-orb
+
+# Terminal 3 - Seed example data (once, after orbital is up)
+make seed
 ```
 
-See the README for service ports and details.
+Both UIs should open without errors:
+- Orbital: http://localhost:8001
+- Orb: http://localhost:8010
 
-## Local environment variables
+No `.env` sourcing required — all local defaults are baked into `config.go` and `orbconfig/config.go`.
 
-A `.env` file with local defaults is provided. Source it before running orbital:
+## Running tests
 
 ```bash
-source deploy/local/.env
-go run ./cmd/orbital
+make test-unit          # no services required
+make test-integration   # requires: make up
+make test-e2e           # requires: make run-orbital running in another terminal
+make test-e2e-orb       # requires: make run-orb running in another terminal
 ```
 
-This sets `ORBITAL_DEV=true`, `ORBITAL_LOG_LEVEL=debug`, and all local service URLs. Production deployments set these via their own environment (K8s secrets, Azure App Configuration, etc.).
+`test-integration` re-seeds DGraph after running so `test-e2e` always starts from a known state.
 
-## Running end-to-end tests
-
-E2E tests use [Playwright](https://playwright.dev/) and run against a live local stack. Before running:
-
-1. Start the local stack and the orbital server:
-   ```bash
-   docker compose -f deploy/local/docker-compose.yml up -d
-   go run ./cmd/orbital
-   ```
-
-2. Seed test data into DGraph (via the GraphiQL UI at `http://localhost:8080` or any GraphQL client):
-   ```
-   examples/colo-galleon.graphql
-   ```
-
-3. Run the tests:
-   ```bash
-   npm run test:e2e
-   ```
-
-   Or open the interactive Playwright UI:
-   ```bash
-   npm run test:e2e:ui
-   ```
-
-Tests assume the `colo-galleon` data center is seeded and orbital is running on `http://localhost:8001`.
+To open the interactive Playwright UI for orbital e2e tests:
+```bash
+npx playwright test --ui
+```
 
 ## Editing styles (CSS)
 

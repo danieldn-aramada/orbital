@@ -4,13 +4,8 @@
       {{template "menu.gohtml" .}}
     </div>
     <div class="app-main p-5">
-      {{if not .IsAuthn}}
-        <div class="notification is-warning is-light">
-          <a class="js-modal-trigger" data-target="login-modal">Login</a> to view this page.
-        </div>
-      {{else}}
 
-      <p class="is-size-4 mb-2">Config Items</p>
+      <p class="is-size-4 mb-2" data-testid="page-heading">Config Items</p>
       <div class="is-flex is-align-items-center mb-5" style="gap: 0.5rem; font-size: 0.875rem;">
         <span class="has-text-grey">Namespace:</span>
         <div class="select is-small">
@@ -32,7 +27,6 @@
         </thead>
       </table>
 
-      {{end}}
     </div>
   </main>
 {{end}}

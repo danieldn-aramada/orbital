@@ -96,20 +96,28 @@ short in four areas:
 ## Quick Start
 
 ```bash
-# Start dependencies (DGraph + PostgreSQL)
-docker compose -f deploy/local/docker-compose.yml up -d
+# Terminal 1 — start all dependencies
+make up
 
-# Run orbital
+# Terminal 2 — orbital (cloud)
 make run-orbital
 
-# Seed example data (9 data centers)
+# Terminal 3 — orb (edge)
+make run-orb
+
+# Seed example data (run once, after orbital is up)
 make seed
 ```
 
+Open both UIs side by side:
+- **Orbital** — http://localhost:8001
+- **Orb** — http://localhost:8010
+
+Other endpoints:
 - GraphQL playground: http://localhost:8001/graphql
 - Swagger API docs: http://localhost:8001/swagger/index.html
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for seeding example data and running tests.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for running tests and editing styles.
 
 ## Deploy
 
