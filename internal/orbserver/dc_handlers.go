@@ -18,7 +18,6 @@ import (
 type dcPageData struct {
 	layout.Base
 	PageTitle string
-	DCSlug    string
 }
 
 // dcTabData is the data model for the orb datacenter-tab fragment.
@@ -35,6 +34,7 @@ type dcTabData struct {
 	Racks       []orbRackTabData
 	Servers     []orbServerTabData
 	AssetDataV2 string
+	Actions     layout.PageActions
 }
 
 type orbRackTabData struct {
@@ -140,8 +140,7 @@ type serversPageData struct {
 
 func (s *Server) dcPage(c echo.Context) error {
 	b := s.orbBase(c)
-	b.UI.EditMode = "override"
-	return s.render(c, "datacenter", dcPageData{Base: b, PageTitle: "Data Center", DCSlug: s.cfg.DCSlug})
+	return s.render(c, "datacenter", dcPageData{Base: b, PageTitle: "Data Center"})
 }
 
 // dcTab renders the datacenter detail fragment for the given id.
@@ -206,6 +205,7 @@ func (s *Server) dcTab(c echo.Context) error {
 		Namespace:   struct{ Name string }{Name: raw.Namespace.Name},
 		ServerCount: raw.ServersAggregate.Count,
 		AssetDataV2: prettyAssetData,
+		Actions:     layout.OrbActions,
 	}
 	for _, r := range raw.Racks {
 		dc.Racks = append(dc.Racks, orbRackTabData{
@@ -233,7 +233,7 @@ func (s *Server) dcTab(c echo.Context) error {
 	tmpl := s.templates["datacenter-tab"]
 	if s.devMode {
 		var err error
-		tmpl, err = orbtemplates.ParseFragment("web/orb/templates/partials/datacenter-tab.gohtml")
+		tmpl, err = orbtemplates.ParseFragment("web/shared/templates/partials/datacenter-tab.gohtml")
 		if err != nil {
 			return fmt.Errorf("parse fragment: %w", err)
 		}
@@ -245,7 +245,6 @@ func (s *Server) dcTab(c echo.Context) error {
 
 func (s *Server) serversPage(c echo.Context) error {
 	b := s.orbBase(c)
-	b.UI.EditMode = "override"
 	return s.render(c, "servers", serversPageData{Base: b, PageTitle: "Servers"})
 }
 
@@ -254,20 +253,12 @@ func (s *Server) serversPage(c echo.Context) error {
 type divergencePageData struct {
 	layout.Base
 	PageTitle string
-	Overrides []orb.Override
 }
 
 func (s *Server) divergencePage(c echo.Context) error {
-	overrides, err := orb.LoadOverrides(s.cfg.DataDir)
-	if err != nil {
-		s.logger.Warn("failed to load overrides", "err", err)
-		overrides = nil
-	}
-	b := s.orbBase(c)
 	return s.render(c, "divergence", divergencePageData{
-		Base:      b,
-		PageTitle: "Divergence",
-		Overrides: overrides,
+		Base:      s.orbBase(c),
+		PageTitle: "Divergence Report",
 	})
 }
 

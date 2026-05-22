@@ -49,7 +49,7 @@ Each spike is a question to answer. Results define the MVP.
 | 14 | Divergence reports | How does orbital surface divergence and let an admin resolve it? | — | Not started | |
 | 15 | Orb deployment model | What does orb look like deployed at the edge — topology, runtime deps, air-gap constraints? | — | Not started | |
 | 16 | Orb API surface & authN/Z | What endpoints does orb expose locally, who calls them, and what is the consumer auth model? | — | Not started | |
-| 17 | Orb UI | Can orbital and orb share a template infrastructure while serving different nav and capability surfaces? End-to-end demo: import → browse config offline → divergence → publish report. | — | ✅ Done | web/ restructure (shared/orbital/orb), UIConfig + ReadOnly mode, orb Echo server, status/dashboard, import subgraph page, DC + servers (read-only), import history, override system (Server + iDRAC field-level overrides, badges, import warning, Divergence Report page); S3 divergence publish transport pending |
+| 17 | Orb UI | Can orbital and orb share a template infrastructure while serving different nav and capability surfaces? End-to-end demo: import → browse config offline → divergence → publish report. | — | ✅ Done | |
 | 18 | ES module split of app.js | Can we split the 2,529-line JS monolith into per-feature ES modules with zero build step? | — | Not started | shared.js + orbital.js + orb.js; conditional loading via UIConfig; window.* bridge for onclick handlers |
 | — | Schema migration | Do we need automation or is a runbook sufficient? | — | ❌ Out of scope | |
 

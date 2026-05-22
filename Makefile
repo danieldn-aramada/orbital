@@ -16,10 +16,10 @@ TEST_PKGS := $(shell go list ./... | grep -vE '(/ent$$|/ent/|/docs$$)')
 ACR          := armadaeksatest.azurecr.io
 IMAGE        := $(ACR)/orbital:$(VERSION)
 
-.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-unit test-integration test-e2e test-stack-up cover cover-html lint up up-orb-deps up-orb down seed seed-aks-clean docs orb-docs build-css watch-css
+.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-unit test-integration test-e2e test-e2e-orb test-stack-up cover cover-html lint up up-orb-deps up-orb down seed seed-aks-clean docs orb-docs build-css watch-css
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
 build: build-orbital build-orb ## Build all binaries
@@ -48,7 +48,7 @@ build-orb: orb-docs ## Build the orb edge binary → bin/orb
 run-orbital: ## Run orbital server
 	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orbital
 
-run-orb: ## Run orb edge service (requires: make up-orb-deps)
+run-orb: ## Run orb edge service (requires: make up)
 	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orb start
 
 seed-orb-schema: ## Apply DGraph schema to orb's local DGraph (empty — data comes from import)
@@ -73,6 +73,9 @@ test-integration: ## Run integration tests against real services (requires: make
 test-e2e: ## Run Playwright e2e tests (requires orbital running on :8001)
 	npx playwright test
 
+test-e2e-orb: ## Run Playwright orb UI tests (requires orb running on :8010)
+	npx playwright test --config=playwright.orb.config.ts
+
 test: test-unit test-integration test-e2e ## Run full test suite (unit + integration + e2e)
 
 cover: test-stack-up ## Run tests with coverage and print summary to terminal
@@ -87,11 +90,11 @@ cover-html: cover ## Open interactive HTML coverage report in browser
 lint: ## Run go vet
 	go vet ./...
 
-up: ## Start orbital dependencies (DGraph, PostgreSQL, Zot) — no builds
-	docker compose -f $(COMPOSE_FILE) up -d dgraph-zero dgraph-alpha dgraph-zero-scratch dgraph-alpha-scratch dgraph-ratel postgres minio oci-registry
+up: ## Start all local dependencies (orbital + orb DGraph, PostgreSQL, Zot) — no builds
+	docker compose -f $(COMPOSE_FILE) up -d dgraph-zero dgraph-alpha dgraph-zero-scratch dgraph-alpha-scratch dgraph-ratel postgres minio oci-registry dgraph-orb-zero dgraph-orb-alpha
 
-up-orb-deps: ## Start orb dependencies (orb DGraph instances) — no builds
-	docker compose -f $(COMPOSE_FILE) up -d dgraph-orb-zero dgraph-orb-alpha
+up-orb-deps: up ## Alias for make up (orb deps are now included)
+	@true
 
 up-orb: ## Start orb container (builds orb image)
 	docker compose -f $(COMPOSE_FILE) up -d orb

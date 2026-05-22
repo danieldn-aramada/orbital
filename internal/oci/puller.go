@@ -15,10 +15,11 @@ import (
 )
 
 // PullConfig holds configuration for pulling artifacts from an OCI registry.
+// Repo is the full repository path, e.g. "orbital/colo-galleon". DC identity
+// is encoded in Repo by the operator — not as a separate field.
 type PullConfig struct {
 	Registry  string
 	Repo      string
-	DCSlug    string // already a slug — used directly, no slugification
 	Username  string
 	Password  string
 	AllowHTTP bool
@@ -119,9 +120,9 @@ func Pull(ctx context.Context, cfg PullConfig, tag string) (*PulledArtifact, err
 	return artifact, nil
 }
 
-// repoRef builds the full repository reference for a DC: "<registry>/<repo>/<dc-slug>"
+// repoRef builds the full repository reference: "<registry>/<repo>"
 func repoRef(cfg PullConfig) string {
-	return cfg.Registry + "/" + cfg.Repo + "/" + cfg.DCSlug
+	return cfg.Registry + "/" + cfg.Repo
 }
 
 func newPullRepo(ref string) (*remote.Repository, error) {

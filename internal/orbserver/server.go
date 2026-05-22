@@ -99,6 +99,8 @@ func New(cfg *orbconfig.Config) *Server {
 	e.GET("/", s.statusPage)
 	e.GET("/status", s.statusPage)
 	e.GET("/import", s.importPage)
+	e.GET("/inventory", s.inventoryPage)
+	e.GET("/schema", s.schemaPage)
 	e.GET("/datacenter", s.dcPage)
 	e.GET("/datacenters/:id", s.dcTab)
 	e.GET("/servers", s.serversPage)
@@ -113,9 +115,8 @@ func New(cfg *orbconfig.Config) *Server {
 	api.GET("/import/status", s.importStatus)
 	api.GET("/import/tags", s.importTags)
 	api.GET("/import/history", s.importHistory)
-	api.POST("/overrides", s.postOverride)
-	api.GET("/overrides", s.getOverrides)
-	api.POST("/divergence/publish", s.postPublishReport)
+	inv := handler.NewInventory(cfg.DGraphURL)
+	api.GET("/inventory", inv.List)
 
 	return s
 }
@@ -124,7 +125,7 @@ func New(cfg *orbconfig.Config) *Server {
 func (s *Server) Start(ctx context.Context) error {
 	go s.pollLoop(ctx)
 
-	s.logger.Info("starting orb", "port", s.cfg.Port, "dc_slug", s.cfg.DCSlug)
+	s.logger.Info("starting orb", "port", s.cfg.Port)
 	srv := &http.Server{
 		Addr:    ":" + s.cfg.Port,
 		Handler: s.echo,

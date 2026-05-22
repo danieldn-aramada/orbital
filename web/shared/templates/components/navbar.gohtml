@@ -16,12 +16,11 @@
 
   <div id="navbar-menu" class="navbar-menu">
     <div class="navbar-start">
+      {{if .UI.Tagline}}
       <div class="navbar-item">
-        <div class="is-size-7 has-text-grey-light">
-          <div>Graph-native source of truth</div>
-          <div>for modular data centers</div>
-        </div>
+        <div class="is-size-7 has-text-grey-light">{{.UI.Tagline}}</div>
       </div>
+      {{end}}
       {{if .UI.APIDocPath}}
       <a class="navbar-item" href="{{.UI.APIDocPath}}" target="_blank" rel="noopener">
         <span class="icon-text">

@@ -15,20 +15,26 @@
         <span class="icon"><i class="fa-solid fa-gauge-high"></i></span>
         <span>Grafana</span>
       </button>
+      {{if .Actions.Reload}}
       <button class="button is-rounded is-small is-link mt-1 js-srv-reload"
-        data-srv-url="/servers/{{.ID}}{{if .ShowDCBack}}?dcCtx=1{{end}}"
+        data-srv-url="{{.BasePath}}/servers/{{.ID}}{{if .ShowDCBack}}?dcCtx=1{{end}}"
         data-srv-target="{{if .ShowDCBack}}tab-content-{{.DataCenterID}}{{else}}tab-content-srv-{{.ID}}{{end}}">
         <span class="icon"><i class="fa-solid fa-refresh"></i></span>
         <span>Reload</span>
       </button>
+      {{end}}
+      {{if .Actions.Edit}}
       <button class="button is-rounded is-small is-link mt-1" data-srv-edit-id="{{.ID}}">
         <span class="icon"><i class="fa-solid fa-pen-to-square"></i></span>
         <span>Edit</span>
       </button>
+      {{end}}
+      {{if .Actions.Delete}}
       <button class="button is-rounded is-small is-danger mt-1 todo">
         <span class="icon"><i class="fa-solid fa-trash"></i></span>
         <span>Delete</span>
       </button>
+      {{end}}
     </div>
   </div>
 
@@ -83,9 +89,11 @@
             <li data-panel="srv-panel-storage-{{.ID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-hard-drive"></i></span><span>Storage</span></a>
             </li>
+            {{if .Actions.ShowAuditTab}}
             <li data-panel="srv-panel-audit-{{.ID}}" data-orb-id="{{.OrbID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a>
             </li>
+            {{end}}
           </ul>
         </div>
 
@@ -155,4 +163,4 @@
 
 </div>
 
-{{template "edit-modal-server.gohtml" .}}
+{{if .Actions.Edit}}{{template "edit-modal-server.gohtml" .}}{{end}}

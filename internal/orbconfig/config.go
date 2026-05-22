@@ -19,17 +19,15 @@ type Config struct {
 	DGraphAlphaGRPC string `envconfig:"ORB_DGRAPH_ALPHA_GRPC"  default:"localhost:9082"`
 
 	// OCI registry (Zot — never ACR directly)
+	// OCIRepo is the full repository path for this orb's artifact stream,
+	// e.g. "orbital/colo-galleon". The DC identity is encoded here — not
+	// as a separate config field. Orb derives who it is from imported data.
 	OCIRegistry      string `envconfig:"ORB_OCI_REGISTRY"       default:"localhost:5001"`
 	OCIRepo          string `envconfig:"ORB_OCI_REPO"           default:"orbital"`
 	OCIUsername      string `envconfig:"ORB_OCI_USERNAME"       default:""`
 	OCIPassword      string `envconfig:"ORB_OCI_PASSWORD"       default:""`
 	OCIAllowHTTP     bool   `envconfig:"ORB_OCI_ALLOW_HTTP"     default:"true"`
 	OCIPublicKeyPath string `envconfig:"ORB_OCI_PUBLIC_KEY_PATH" default:"cosign.pub"`
-
-	// Identity — which data center this orb serves (slug format, e.g. "colo-galleon")
-	// Must match the slug used by orbital when publishing to the OCI registry.
-	// No default — must be set explicitly.
-	DCSlug string `envconfig:"ORB_DC_SLUG" default:"colo-galleon"` // must be set in production
 
 	// Orbital upstream — for publishing divergence reports
 	OrbitalURL string `envconfig:"ORB_ORBITAL_URL" default:"http://localhost:8001"`

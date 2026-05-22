@@ -6,6 +6,8 @@ import { test, expect } from '@playwright/test';
 const pages: Array<{ path: string; heading?: string; testid?: boolean; tableId?: string }> = [
   { path: '/datacenters',        tableId: 'datacenter-table' },
   { path: '/servers',            tableId: 'server-list-table' },
+  { path: '/inventory',          tableId: 'inventory-table' },
+  { path: '/schema',             heading: 'Schema',             testid: true  },
   { path: '/export',             heading: 'Export Subgraph',    testid: true  },
   { path: '/signed-artifacts',   heading: 'Signed Artifacts',   testid: true  },
   { path: '/divergence-reports', heading: 'Divergence Reports', testid: true  },
@@ -47,3 +49,22 @@ test('active menu link matches current page', async ({ page }) => {
   const activeLink = page.locator('a.app-menu-link.is-active');
   await expect(activeLink).toHaveText('Backup Graph');
 });
+
+// Regression: these menu items were incorrectly marked as todo after the shared-menu refactor.
+// They must navigate to real pages, not show the todo toast.
+const realMenuLinks = [
+  { label: 'Inventory',          url: /\// },
+  { label: 'Schema Version',     url: /\/schema/ },
+  { label: 'Audit Log',          url: /\/audit-log/ },
+  { label: 'Backup Graph',       url: /\/backups/ },
+  { label: 'Restore Graph',      url: /\/restore/ },
+];
+
+for (const { label, url } of realMenuLinks) {
+  test(`menu item "${label}" navigates (not todo)`, async ({ page }) => {
+    await page.goto('/');
+    await page.click(`a.app-menu-link:has-text("${label}")`);
+    // If the link were a todo (href="#"), the URL would stay at "/".
+    await expect(page).toHaveURL(url);
+  });
+}

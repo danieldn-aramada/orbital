@@ -100,15 +100,52 @@ func (h *UI) base(c echo.Context) layout.Base {
 		BasePath:    h.basePath,
 		CurrentPath: c.Request().URL.Path,
 		UI: layout.UIConfig{
-			AppName:  "Orbital",
-			BasePath: h.basePath,
-			Version:  version,
-			EditMode:   "intent",
-			ShowAuth:   true,
-			APIDocPath: h.basePath + "/swagger/index.html",
+			AppName:      "Orbital",
+			BasePath:     h.basePath,
+			Version:      version,
+			ShowAuth:     true,
+			APIDocPath:   h.basePath + "/swagger/index.html",
 			MoreLinks: []layout.NavItem{
 				{Label: "GitHub", URL: "https://github.com/danieldn-aramada/demo"},
 				{Label: "Report Issue"},
+			},
+			MenuSections: h.buildMenuSections(c.Request().URL.Path),
+		},
+	}
+}
+
+func (h *UI) buildMenuSections(path string) []layout.MenuSection {
+	bp := h.basePath
+	return []layout.MenuSection{
+		{
+			Title: "Config Items",
+			Icon:  "fa-solid fa-diagram-project",
+			Color: "has-text-primary",
+			Items: []layout.MenuItem{
+				{Label: "Inventory", Href: bp + "/", Active: path == bp+"/" || path == bp+"/inventory"},
+				{Label: "Data Centers", Href: bp + "/datacenters", Active: path == bp+"/datacenters"},
+				{Label: "Servers", Href: bp + "/servers", Active: path == bp+"/servers"},
+				{Label: "Schema Version", Href: bp + "/schema", Active: path == bp+"/schema"},
+			},
+		},
+		{
+			Title: "Edge",
+			Icon:  "fa-solid fa-tower-broadcast",
+			Color: "has-text-warning",
+			Items: []layout.MenuItem{
+				{Label: "Export Subgraph", Href: bp + "/export", Active: path == bp+"/export"},
+				{Label: "Signed Artifacts", Href: bp + "/signed-artifacts", Active: path == bp+"/signed-artifacts"},
+				{Label: "Divergence Reports", Href: bp + "/divergence-reports", Active: path == bp+"/divergence-reports"},
+			},
+		},
+		{
+			Title: "Operations",
+			Icon:  "fa-solid fa-clock-rotate-left",
+			Color: "has-text-danger",
+			Items: []layout.MenuItem{
+				{Label: "Audit Log", Href: bp + "/audit-log", Active: path == bp+"/audit-log"},
+				{Label: "Backup Graph", Href: bp + "/backups", Active: path == bp+"/backups"},
+				{Label: "Restore Graph", Href: bp + "/restore", Active: path == bp+"/restore"},
 			},
 		},
 	}

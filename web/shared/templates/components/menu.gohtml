@@ -1,0 +1,18 @@
+{{range .UI.MenuSections}}
+<div class="app-menu-section">
+  <h3 class="app-menu-section-heading {{.Color}}">
+    <span class="icon"><i class="{{.Icon}}"></i></span>
+    <strong>{{.Title}}</strong>
+  </h3>
+  <ul class="app-menu-section-list">
+    {{range .Items}}
+    <li class="app-menu-item">
+      <a class="app-menu-link{{if .Active}} is-active{{end}}{{if .IsTodo}} todo{{end}}" href="{{.Href}}">{{.Label}}</a>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+<div class="is-size-7 has-text-grey has-text-centered" data-testid="app-version" style="margin-top: auto; padding-top: 1rem;">
+  {{.UI.AppName}} {{.AppVersion}}
+</div>

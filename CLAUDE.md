@@ -97,14 +97,8 @@ See `docs/claude/DGRAPH.md` for schema gotchas, DQL patterns, and blue-green exp
 
 **Recently completed:**
 - **Spike 13 (Orb import API)** — done: OCI puller, cosign verify, dgraph live import, polling loop
-- **Spike 17 (Orb UI)** — done: shared template infrastructure, UIConfig + ReadOnly mode, orb web server, status/dashboard, import, DC + servers (read-only DataTables + HTMX tabs), import history
-- **Orb override system** — done: field-level overrides to `overrides.json`, Server + iDRAC fields, override badges, import warning, Divergence Report page with Publish button
-
-**Open override items:**
-- S3 divergence publish transport (divergence report POST to S3) — deferred
-- "Restore to intent" per-row revert — deferred to Spike 14
-- Override modal sustainability — data-attribute pattern is a known debt; switch to HTMX server-rendered form before adding storage/NIC overrides
-- Naming decision: Divergence Report page vs Overrides (page title vs published artifact) — unresolved
+- **Spike 17 (Orb UI)** — done: shared template infrastructure, `UIConfig` + `PageActions` (read-only mode), orb Echo server, status page (pre/post import states), import subgraph, inventory (Config Items), schema version, DC + servers (read-only DataTables + HTMX tabs), import history, divergence report; `DCSlug` removed — orb is stateless re: DC identity, DC name derived from imported DGraph data
+- **Orbital inventory namespace filter** — page-level namespace selector above the table; derived from orbId prefix; regex column search; persisted to localStorage
 
 **MVP gaps remaining:**
 - Authorization (Spike 11) ← next priority
@@ -112,6 +106,7 @@ See `docs/claude/DGRAPH.md` for schema gotchas, DQL patterns, and blue-green exp
 - Schema management — versioned apply with backwards compat check on startup
 - Orb registry — register, authenticate, and revoke orbs
 - Orb: deployment model (Spike 15), API surface & authN/Z (Spike 16), divergence reporting (Spike 14)
+- Orb local overrides / config actuation abstraction — belongs to ConfigBundle domain + Spike 14; orb needs abstractions for how users handle config actuation and local overrides, not a hard-coded override system
 - Testing foundations — unit, integration, code coverage, CI pipeline, AKS smoke suite
 - Security hardening — critical/high findings before any prod exposure
 - Production deployment — AKS prod, ingress, TLS, CI/CD
@@ -178,24 +173,50 @@ Before starting work in a specific area, read the relevant file. These contain a
 
 ## Local Development
 
-Start the local stack (DGraph + PostgreSQL) with:
+### Dev invariant
+
+Every developer on this project must be able to run the following without any extra setup:
 
 ```bash
-docker compose -f deploy/local/docker-compose.yml up -d
+make up           # terminal 1 — start all dependencies
+make run-orbital  # terminal 2 — orbital on :8001
+make run-orb      # terminal 3 — orb on :8010
 ```
+
+Then open both UIs side by side:
+- Orbital: http://localhost:8001
+- Orb: http://localhost:8010
+
+**Nothing we commit should break this flow.** Before merging any change that touches templates, handlers, routes, or the template loader, verify both UIs load without 500 errors.
+
+### Services started by `make up`
 
 | Service | Port(s) | Notes |
 |---|---|---|
-| DGraph Zero | 5080, 6080 | Cluster coordinator |
+| DGraph Zero | 5080, 6080 | Orbital cluster coordinator |
 | DGraph Alpha | 8080 (HTTP/GraphQL), 9080 (gRPC) | GraphQL playground at http://localhost:8080 |
 | DGraph Ratel | 8000 | DGraph UI |
 | PostgreSQL | 5432 | user/password/db: `orbital` |
+| Orb DGraph Zero | 5082, 6082 | Orb cluster coordinator |
+| Orb DGraph Alpha | 8082 (HTTP/GraphQL), 9082 (gRPC) | Orb local graph |
+| MinIO / OCI registry | various | S3-compatible storage + artifact registry |
 
-Run orbital:
+No env sourcing required — all local dev defaults are in `config.go` / `orbconfig/config.go`.
+
+### Seeding
+
 ```bash
-make run-orbital
+make seed   # seed DGraph with example data (run after make run-orbital is up)
 ```
-No env sourcing required — all local dev defaults are in `config.go`.
+
+### Running tests
+
+```bash
+make test-unit         # no services required
+make test-integration  # requires: make up
+make test-e2e          # requires: make run-orbital
+make test-e2e-orb      # requires: make run-orb
+```
 
 ## Repository Structure
 
@@ -264,7 +285,8 @@ These have been explicitly decided. Do not re-suggest them.
 - **"Import is sudo"** — `orb import` always runs `drop_all` + live load, overwriting all local DGraph state. `overrides.json` is cleared on successful import. Local overrides do not survive an import.
 - **Orb divergence transport is not direct HTTP** — orb never sends divergence reports directly to orbital over HTTP. Transport is S3/OCI (deployment layer concern). Direct HTTP between orb and orbital violates the air-gap invariant.
 - **Orb UI pages mirror orbital client-side patterns** — orb pages use the same interaction model as orbital: GraphQL proxy fetch, DataTables, HTMX tab swap. Not simplified server-rendered alternatives.
-- **Do not extend orb override modal with new resource types via data attributes** — the data-attribute pattern (button carries all field values) does not scale to nested/array resource types (storage devices, NICs). Switch to HTMX server-rendered modal form first.
+- **Orb is stateless re: DC identity** — `DCSlug` was removed from `orbconfig.Config`. Orb derives which data center it serves from the imported DGraph data (one `DataCenter` node after `drop_all` + live load). `ORB_OCI_REPO` carries the full DC-specific path (e.g. `orbital/colo-galleon`). Do not re-add a `DCSlug` field.
+- **Inventory namespace filter is page-level, not a DataTable column filter** — the namespace selector lives in the page header (above the table) and uses regex search on the orbId column (`^namespace:`). Do not move it into the DataTable toolbar — namespace is a scope, type is a column filter; they are different cognitive categories.
 - **Product naming: "Orbital" (cloud) / "Orb" (edge) — this is the north star.** The project is called Orbital. The cloud component UI shows "Orbital." The edge component UI shows "Orb." Do not use "Orbital Edge" or conflate the two. Orb is a purpose-built edge agent — not a deployment variant of Orbital. `AppName: "Orbital"` in orbital handlers; `AppName: "Orb"` in orb handlers.
 
 *Domain-specific settled decisions live in `docs/claude/DGRAPH.md`, `docs/claude/UI.md`, `docs/claude/AUTH.md`, `docs/claude/AUDIT.md`, `docs/claude/OCI.md`.*

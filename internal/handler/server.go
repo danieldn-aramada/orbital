@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/labstack/echo/v4"
 )
 
@@ -192,6 +193,7 @@ type serverTabDetailData struct {
 	ConfigProfileJSON  string
 	StorageControllers []storageControllerTabData
 	BasePath           string
+	Actions            layout.PageActions
 }
 
 func (h *ServerHandler) Tab(c echo.Context) error {
@@ -298,6 +300,7 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 		CurrentUser:    currentUser,
 		EditDataJSON:   template.JS(editJSON),
 		BasePath:       h.basePath,
+		Actions:        layout.OrbitalActions,
 	}
 
 	if raw.IdracSettings != nil {
