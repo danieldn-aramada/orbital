@@ -6,10 +6,67 @@
   <div class="app-main p-5">
     <section class="section">
       <div class="container">
-        <h1 class="title">Divergence Report</h1>
-        <p class="has-text-grey">Divergence reporting is coming in a future release.</p>
+
+        <div class="is-flex is-align-items-center mb-5" style="gap: 1rem;">
+          <h1 class="title mb-0">Divergence Report</h1>
+          {{if .S3Configured}}
+          <button class="button is-danger is-small" id="publish-btn" onclick="publishDivergence()">
+            <span class="icon"><i class="fa-solid fa-upload"></i></span>
+            <span>Publish to S3</span>
+          </button>
+          {{else}}
+          <span class="tag is-warning is-light">S3 not configured — publish disabled</span>
+          {{end}}
+        </div>
+
+        {{if .LastPublish}}
+        <p class="has-text-grey is-size-7 mb-4">
+          Last published: {{.LastPublish.PublishedAt.Format "2006-01-02 15:04:05 UTC"}}
+          &nbsp;·&nbsp; <code class="is-size-7">{{.LastPublish.S3Key}}</code>
+        </p>
+        {{end}}
+
+        {{if not .Entries}}
+        <div class="notification is-light">
+          <span class="icon-text">
+            <span class="icon has-text-success"><i class="fa-solid fa-circle-check"></i></span>
+            <span>No divergence reports received. All fields match orbital intent.</span>
+          </span>
+        </div>
+        {{else}}
+        <p class="has-text-grey is-size-7 mb-3">{{len .Entries}} override{{if gt (len .Entries) 1}}s{{end}} pending</p>
+        <div class="table-container">
+          <table class="table is-fullwidth is-hoverable is-size-7" id="divergence-table">
+            <thead>
+              <tr>
+                <th>Orb ID</th>
+                <th>Field</th>
+                <th>Intended</th>
+                <th>Override</th>
+                <th>Who</th>
+                <th>When</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .Entries}}
+              <tr>
+                <td><code>{{.OrbID}}</code></td>
+                <td><code>{{.Field}}</code></td>
+                <td class="has-text-success">{{.IntendedValue}}</td>
+                <td class="has-text-danger">{{.OverrideValue}}</td>
+                <td>{{.Who}}</td>
+                <td>{{.When}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+        {{end}}
+
       </div>
     </section>
   </div>
 </main>
+
+<div id="publish-toast" class="notification is-hidden" style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;min-width:20rem;"></div>
 {{end}}

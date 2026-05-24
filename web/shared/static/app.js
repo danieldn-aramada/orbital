@@ -2750,3 +2750,30 @@ document.addEventListener('DOMContentLoaded', () => {
     })
 })
 
+// ── Orb divergence publish ────────────────────────────────────────────────────
+
+function publishDivergence() {
+  const btn = document.getElementById('publish-btn')
+  const toast = document.getElementById('publish-toast')
+  if (btn) btn.classList.add('is-loading')
+
+  fetch(BASE + '/api/v1/divergence/publish', { method: 'POST' })
+    .then(r => r.json().then(body => ({ ok: r.ok, body })))
+    .then(({ ok, body }) => {
+      if (!ok) throw new Error(body.message || 'publish failed')
+      showPublishToast('Divergence report published: ' + body.key, 'is-success')
+      setTimeout(() => location.reload(), 1500)
+    })
+    .catch(err => showPublishToast(err.message, 'is-danger'))
+    .finally(() => { if (btn) btn.classList.remove('is-loading') })
+}
+
+function showPublishToast(msg, cls) {
+  const toast = document.getElementById('publish-toast')
+  if (!toast) return
+  toast.className = 'notification ' + cls
+  toast.textContent = msg
+  toast.classList.remove('is-hidden')
+  setTimeout(() => toast.classList.add('is-hidden'), 4000)
+}
+

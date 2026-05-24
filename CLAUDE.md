@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Key Concepts
 
 - **`orbital`** — Server running in cloud. Central configuration hub — holds design intent (configuration items) for all modular data centers, serves the Topology API for digital twin building, and exposes a config export API for orbs to consume.
-- **`orb`** — Self-contained edge service running inside a modular data center. Serves configuration, reports drift, suitable for air-gapped deployments.
+- **`orb`** — Self-contained edge service running inside a modular data center. Stores and serves orbital's intended state offline. Exposes an API for other edge components (e.g., cb-agent) to submit divergence reports, which orb publishes to external storage (S3/OCI) for orbital to consume. Suitable for air-gapped deployments.
 
 ### Goals
 
@@ -78,15 +78,15 @@ See `docs/claude/DGRAPH.md` for schema gotchas, DQL patterns, and blue-green exp
 - **Export + OCI publish:** blue-green DGraph export flow, signed OCI artifacts via oras-go v2 + cosign. See `docs/claude/OCI.md`.
 - **Audit log:** one event per HTTP request, three-source orbId extraction. See `docs/claude/AUDIT.md`.
 - **Caching:** Valkey cache-aside. Orbital must operate correctly without Valkey — cache is an optimization, not a dependency.
-- **Divergence reporting:** orb records local overrides, orbital surfaces them for human decision (accept/reject/ignore). Orbital is never in the reconciliation path.
+- **Divergence reporting:** orb does not detect divergence itself. Other edge components (e.g., cb-agent) detect divergence and POST reports to orb's intake API. Orb publishes reports to external storage (S3/OCI) for orbital to consume. Orbital surfaces divergence to administrators for human decision (accept/reject/ignore). Orbital is never in the reconciliation path.
 - **GraphQL middleware:** all queries go through the Go server (rate limiting, caching, auth). Clients never query DGraph directly.
 - **Topology API:** proxies DGraph's auto-generated GraphQL as-is. Orbital adds auth, rate limiting, caching — does not transform the schema.
 
 ### Orb
 
-- **CLI vs server:** `orb` is a single binary (`cmd/orb/`). `orb start` is the long-running edge service. `orb scan`, `orb export`, `orb import` are admin operations.
-- **Identity:** per-orb Ed25519 key pair generated at bootstrap. Public key registered with orbital by admin, stored in `orbs` table. Private key never leaves the orb. Orbital verifies signatures on incoming reports when key is registered.
-- **Onboarding:** orb scans locally → exports graph to file → admin carries to orbital (USB/upload) → orbital becomes source of truth. Discovered reality flows from orb into orbital, not the other way.
+- **CLI vs server:** `orb` is a single binary (`cmd/orb/`). `orb start` is the long-running edge service. `orb export`, `orb import` are admin operations. `orb scan` is a stub and its scope is not yet designed.
+- **Role:** passive cache + local UI. Orb imports orbital's intended state, stores it in a local DGraph instance, and serves it offline via the orb UI. Orb does not scan hardware, does not execute against K8s, and is not a K8s controller.
+- **Divergence intake:** `POST /api/v1/divergence` accepts a JSON array of `{orbId, field, intendedValue, overrideValue, who, when}` entries (replaces current set). `POST /api/v1/divergence/publish` aggregates into a snapshot and writes to S3. S3 key: `divergence/{OCIRepo}/{timestamp}.json`. Publish is on-demand via UI or API. S3 disabled gracefully if `ORB_S3_ENDPOINT` or `ORB_S3_BUCKET` are unset.
 
 ## Current State
 
@@ -106,7 +106,7 @@ See `docs/claude/DGRAPH.md` for schema gotchas, DQL patterns, and blue-green exp
 - Schema management — versioned apply with backwards compat check on startup
 - Orb registry — register, authenticate, and revoke orbs
 - Orb: deployment model (Spike 15), API surface & authN/Z (Spike 16), divergence reporting (Spike 14)
-- Orb local overrides / config actuation abstraction — belongs to ConfigBundle domain + Spike 14; orb needs abstractions for how users handle config actuation and local overrides, not a hard-coded override system
+- Orb divergence intake API — orb accepts POST from edge components (cb-agent, etc.), publishes report to S3/OCI for orbital to consume (Spike 14)
 - Testing foundations — unit, integration, code coverage, CI pipeline, AKS smoke suite
 - Security hardening — critical/high findings before any prod exposure
 - Production deployment — AKS prod, ingress, TLS, CI/CD
@@ -234,9 +234,9 @@ docs/
 internal/
   auth/               # Session management, CSRF, OIDC state, bearer validation
   config/             # Config struct with envconfig defaults
-  discovery/          # Discovery orchestration (used by orb — runs at the edge, not in orbital)
-    bmc/              # BMC/bare metal discovery
-  drift/              # Drift reporting (used by orb)
+  discovery/          # Aspirational scaffold — BMC discovery stub; not part of current orb design
+    bmc/              # BMC stub (not implemented)
+  drift/              # Aspirational scaffold — not part of current orb design
   graph/              # DGraph client, schema loading, topology operations
   handler/            # HTTP handlers (GraphQL proxy, backup, export, UI, login, OIDC)
   server/             # Echo server setup and lifecycle
@@ -281,9 +281,12 @@ These have been explicitly decided. Do not re-suggest them.
 - **Do not proxy Ratel through orbital** — Ratel is a React SPA with `PUBLIC_URL=/`; webpack bakes absolute paths (`/3rdpartystatic/`, `/static/js/`) that bypass any sub-path reverse proxy. Correct solution: dedicated DNS hostname (`ratel.devnew.armada.internal`) with its own Istio VirtualService. Until infra provisioning, show a todo toast when the link is clicked.
 - **PLM and ITSM integrations are out of v1 scope** — vendor selection in progress. Design behind Go interfaces when the time comes; do not couple to any specific vendor now.
 - **Network infrastructure config items are out of v1 scope** — VLANs and general network IPs are owned by an external system. Functional IPs tied to specific workloads (Tinkerbell, K8s control plane) are in scope as properties or dedicated nodes — discuss before adding.
-- **Orb DGraph is a read-only intent mirror** — `override_handlers.go` must never mutate DGraph. Local overrides write only to `overrides.json`. DGraph retains orbital's authoritative intent verbatim.
-- **"Import is sudo"** — `orb import` always runs `drop_all` + live load, overwriting all local DGraph state. `overrides.json` is cleared on successful import. Local overrides do not survive an import.
+- **Orb DGraph is a read-only intent mirror** — orb never mutates DGraph. DGraph retains orbital's authoritative intent verbatim. Orb has no local override mechanism.
+- **"Import is sudo"** — `orb import` always runs `drop_all` + live load, overwriting all local DGraph state.
 - **Orb divergence transport is not direct HTTP** — orb never sends divergence reports directly to orbital over HTTP. Transport is S3/OCI (deployment layer concern). Direct HTTP between orb and orbital violates the air-gap invariant.
+- **Orb does not detect divergence and has no K8s awareness** — orb does not scan hardware, does not read K8s CRs, and is not a K8s controller. Divergence detection is other edge components' responsibility (e.g., ConfigBundle controller reads its own CRs' managedFields). Those components POST divergence reports to orb's intake API; orb publishes to S3/OCI for orbital to consume.
+- **Canonical divergence report format** — `{orbId, field, intendedValue, overrideValue, who, when}`. This is the format orb's intake API accepts and orbital displays. Source of the report (cb-controller SSA translation, orb UI button, manual API call) is irrelevant to the format. ConfigBundle controller must translate SSA field ownership into this format before posting to orb. Field names must match DGraph schema field names (cb-generator uses orbital's field names — settled).
+- **ConfigBundle is a separate project, built after orbital** — user owns both projects. Orbital's APIs (export, divergence intake) are the contract. ConfigBundle is designed around orbital's APIs, not the inverse. Do not add ConfigBundle awareness to orbital. Plan ConfigBundle separately after orbital MVP.
 - **Orb UI pages mirror orbital client-side patterns** — orb pages use the same interaction model as orbital: GraphQL proxy fetch, DataTables, HTMX tab swap. Not simplified server-rendered alternatives.
 - **Orb is stateless re: DC identity** — `DCSlug` was removed from `orbconfig.Config`. Orb derives which data center it serves from the imported DGraph data (one `DataCenter` node after `drop_all` + live load). `ORB_OCI_REPO` carries the full DC-specific path (e.g. `orbital/colo-galleon`). Do not re-add a `DCSlug` field.
 - **Inventory namespace filter is page-level, not a DataTable column filter** — the namespace selector lives in the page header (above the table) and uses regex search on the orbId column (`^namespace:`). Do not move it into the DataTable toolbar — namespace is a scope, type is a column filter; they are different cognitive categories.
