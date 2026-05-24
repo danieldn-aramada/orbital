@@ -10,6 +10,7 @@ import (
 	"time"
 
 	_ "github.com/armada/orbital/docs/orb"
+	"github.com/armada/orbital/internal/divergence"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/orb"
 	"github.com/armada/orbital/internal/orbconfig"
@@ -21,13 +22,15 @@ import (
 
 // Server is the orb edge web server.
 type Server struct {
-	cfg       *orbconfig.Config
-	echo      *echo.Echo
-	logger    *slog.Logger
-	state     *importState
-	imp       *orb.Importer
-	templates map[string]*template.Template
-	devMode   bool
+	cfg          *orbconfig.Config
+	echo         *echo.Echo
+	logger       *slog.Logger
+	state        *importState
+	imp          *orb.Importer
+	divStore     *divergence.Store
+	divPublisher *divergence.Publisher // nil if S3 not configured
+	templates    map[string]*template.Template
+	devMode      bool
 }
 
 // templateMap rebuilds the template map from disk — used in dev mode for hot reload.
@@ -61,15 +64,34 @@ func New(cfg *orbconfig.Config) *Server {
 
 	state := newImportState()
 	imp := orb.NewImporter(*cfg, logger)
+	divStore := divergence.NewStore(cfg.DataDir)
+
+	var divPublisher *divergence.Publisher
+	if cfg.S3Endpoint != "" && cfg.S3Bucket != "" {
+		var err error
+		divPublisher, err = divergence.NewPublisher(context.Background(), divergence.PublisherConfig{
+			Endpoint:  cfg.S3Endpoint,
+			Region:    cfg.S3Region,
+			Bucket:    cfg.S3Bucket,
+			AccessKey: cfg.S3AccessKey,
+			SecretKey: cfg.S3SecretKey,
+			OCIRepo:   cfg.OCIRepo,
+		})
+		if err != nil {
+			logger.Warn("divergence S3 publisher init failed — publish disabled", "err", err)
+		}
+	}
 
 	s := &Server{
-		cfg:       cfg,
-		echo:      e,
-		logger:    logger,
-		state:     state,
-		imp:       imp,
-		templates: orbtemplates.Map(),
-		devMode:   cfg.LogLevel == "debug",
+		cfg:          cfg,
+		echo:         e,
+		logger:       logger,
+		state:        state,
+		imp:          imp,
+		divStore:     divStore,
+		divPublisher: divPublisher,
+		templates:    orbtemplates.Map(),
+		devMode:      cfg.LogLevel == "debug",
 	}
 
 	// Seed currentVersion from history on startup.
@@ -117,6 +139,9 @@ func New(cfg *orbconfig.Config) *Server {
 	api.GET("/import/history", s.importHistory)
 	inv := handler.NewInventory(cfg.DGraphURL)
 	api.GET("/inventory", inv.List)
+	api.POST("/divergence", s.receiveDivergence)
+	api.GET("/divergence", s.getDivergence)
+	api.POST("/divergence/publish", s.publishDivergence)
 
 	return s
 }

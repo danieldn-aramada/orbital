@@ -29,13 +29,17 @@ type Config struct {
 	OCIAllowHTTP     bool   `envconfig:"ORB_OCI_ALLOW_HTTP"     default:"true"`
 	OCIPublicKeyPath string `envconfig:"ORB_OCI_PUBLIC_KEY_PATH" default:"cosign.pub"`
 
-	// Orbital upstream — for publishing divergence reports
-	OrbitalURL string `envconfig:"ORB_ORBITAL_URL" default:"http://localhost:8001"`
+	// S3 — divergence report publishing
+	S3Endpoint  string `envconfig:"ORB_S3_ENDPOINT"   default:""`
+	S3Region    string `envconfig:"ORB_S3_REGION"     default:"us-east-1"`
+	S3Bucket    string `envconfig:"ORB_S3_BUCKET"     default:""`
+	S3AccessKey string `envconfig:"ORB_S3_ACCESS_KEY" default:""`
+	S3SecretKey string `envconfig:"ORB_S3_SECRET_KEY" default:""`
 
 	// Polling — how often orb checks Zot for a newer artifact version
 	PollInterval time.Duration `envconfig:"ORB_POLL_INTERVAL" default:"60s"`
 
-	// Data directory — holds import history and local overrides
+	// Data directory — holds import history and divergence reports
 	DataDir string `envconfig:"ORB_DATA_DIR" default:"./orb-data"`
 
 	// Docker container name for dgraph live import exec

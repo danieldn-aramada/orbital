@@ -248,20 +248,6 @@ func (s *Server) serversPage(c echo.Context) error {
 	return s.render(c, "servers", serversPageData{Base: b, PageTitle: "Servers"})
 }
 
-// --- Divergence page ---
-
-type divergencePageData struct {
-	layout.Base
-	PageTitle string
-}
-
-func (s *Server) divergencePage(c echo.Context) error {
-	return s.render(c, "divergence", divergencePageData{
-		Base:      s.orbBase(c),
-		PageTitle: "Divergence Report",
-	})
-}
-
 // --- Import history page ---
 
 type importHistoryPageData struct {

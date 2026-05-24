@@ -4,6 +4,8 @@ metadata:
   name: orbital
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: orbital
@@ -14,7 +16,7 @@ spec:
     spec:
       containers:
         - name: orbital
-          image: armadaeksatest.azurecr.io/orbital:v0.0.12
+          image: armadaeksatest.azurecr.io/orbital:v0.0.13
           imagePullPolicy: Always
           ports:
             - containerPort: 8001
