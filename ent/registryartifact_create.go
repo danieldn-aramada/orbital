@@ -175,6 +175,34 @@ func (_c *RegistryArtifactCreate) SetNillableError(v *string) *RegistryArtifactC
 	return _c
 }
 
+// SetEnriched sets the "enriched" field.
+func (_c *RegistryArtifactCreate) SetEnriched(v bool) *RegistryArtifactCreate {
+	_c.mutation.SetEnriched(v)
+	return _c
+}
+
+// SetNillableEnriched sets the "enriched" field if the given value is not nil.
+func (_c *RegistryArtifactCreate) SetNillableEnriched(v *bool) *RegistryArtifactCreate {
+	if v != nil {
+		_c.SetEnriched(*v)
+	}
+	return _c
+}
+
+// SetEnricherError sets the "enricher_error" field.
+func (_c *RegistryArtifactCreate) SetEnricherError(v string) *RegistryArtifactCreate {
+	_c.mutation.SetEnricherError(v)
+	return _c
+}
+
+// SetNillableEnricherError sets the "enricher_error" field if the given value is not nil.
+func (_c *RegistryArtifactCreate) SetNillableEnricherError(v *string) *RegistryArtifactCreate {
+	if v != nil {
+		_c.SetEnricherError(*v)
+	}
+	return _c
+}
+
 // Mutation returns the RegistryArtifactMutation object of the builder.
 func (_c *RegistryArtifactCreate) Mutation() *RegistryArtifactMutation {
 	return _c.mutation
@@ -218,6 +246,10 @@ func (_c *RegistryArtifactCreate) defaults() {
 		v := registryartifact.DefaultSigned
 		_c.mutation.SetSigned(v)
 	}
+	if _, ok := _c.mutation.Enriched(); !ok {
+		v := registryartifact.DefaultEnriched
+		_c.mutation.SetEnriched(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -253,6 +285,9 @@ func (_c *RegistryArtifactCreate) check() error {
 	}
 	if _, ok := _c.mutation.InitiatedAt(); !ok {
 		return &ValidationError{Name: "initiated_at", err: errors.New(`ent: missing required field "RegistryArtifact.initiated_at"`)}
+	}
+	if _, ok := _c.mutation.Enriched(); !ok {
+		return &ValidationError{Name: "enriched", err: errors.New(`ent: missing required field "RegistryArtifact.enriched"`)}
 	}
 	return nil
 }
@@ -339,6 +374,14 @@ func (_c *RegistryArtifactCreate) createSpec() (*RegistryArtifact, *sqlgraph.Cre
 	if value, ok := _c.mutation.Error(); ok {
 		_spec.SetField(registryartifact.FieldError, field.TypeString, value)
 		_node.Error = &value
+	}
+	if value, ok := _c.mutation.Enriched(); ok {
+		_spec.SetField(registryartifact.FieldEnriched, field.TypeBool, value)
+		_node.Enriched = value
+	}
+	if value, ok := _c.mutation.EnricherError(); ok {
+		_spec.SetField(registryartifact.FieldEnricherError, field.TypeString, value)
+		_node.EnricherError = &value
 	}
 	return _node, _spec
 }

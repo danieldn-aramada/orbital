@@ -15,7 +15,7 @@ func TestDockerExec_Hello(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	out, err := dockerExec(ctx, "orbital-dgraph-orb-alpha-1", []string{"echo", "hello from dgraph-orb-alpha"})
+	out, err := dockerExec(ctx, "local-dgraph-orb-alpha-1", []string{"echo", "hello from dgraph-orb-alpha"})
 	if err != nil {
 		t.Fatalf("dockerExec: %v", err)
 	}

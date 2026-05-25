@@ -125,6 +125,16 @@ func Error(v string) predicate.RegistryArtifact {
 	return predicate.RegistryArtifact(sql.FieldEQ(FieldError, v))
 }
 
+// Enriched applies equality check predicate on the "enriched" field. It's identical to EnrichedEQ.
+func Enriched(v bool) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldEQ(FieldEnriched, v))
+}
+
+// EnricherError applies equality check predicate on the "enricher_error" field. It's identical to EnricherErrorEQ.
+func EnricherError(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldEQ(FieldEnricherError, v))
+}
+
 // ExportJobIDEQ applies the EQ predicate on the "export_job_id" field.
 func ExportJobIDEQ(v uuid.UUID) predicate.RegistryArtifact {
 	return predicate.RegistryArtifact(sql.FieldEQ(FieldExportJobID, v))
@@ -933,6 +943,91 @@ func ErrorEqualFold(v string) predicate.RegistryArtifact {
 // ErrorContainsFold applies the ContainsFold predicate on the "error" field.
 func ErrorContainsFold(v string) predicate.RegistryArtifact {
 	return predicate.RegistryArtifact(sql.FieldContainsFold(FieldError, v))
+}
+
+// EnrichedEQ applies the EQ predicate on the "enriched" field.
+func EnrichedEQ(v bool) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldEQ(FieldEnriched, v))
+}
+
+// EnrichedNEQ applies the NEQ predicate on the "enriched" field.
+func EnrichedNEQ(v bool) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldNEQ(FieldEnriched, v))
+}
+
+// EnricherErrorEQ applies the EQ predicate on the "enricher_error" field.
+func EnricherErrorEQ(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldEQ(FieldEnricherError, v))
+}
+
+// EnricherErrorNEQ applies the NEQ predicate on the "enricher_error" field.
+func EnricherErrorNEQ(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldNEQ(FieldEnricherError, v))
+}
+
+// EnricherErrorIn applies the In predicate on the "enricher_error" field.
+func EnricherErrorIn(vs ...string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldIn(FieldEnricherError, vs...))
+}
+
+// EnricherErrorNotIn applies the NotIn predicate on the "enricher_error" field.
+func EnricherErrorNotIn(vs ...string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldNotIn(FieldEnricherError, vs...))
+}
+
+// EnricherErrorGT applies the GT predicate on the "enricher_error" field.
+func EnricherErrorGT(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldGT(FieldEnricherError, v))
+}
+
+// EnricherErrorGTE applies the GTE predicate on the "enricher_error" field.
+func EnricherErrorGTE(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldGTE(FieldEnricherError, v))
+}
+
+// EnricherErrorLT applies the LT predicate on the "enricher_error" field.
+func EnricherErrorLT(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldLT(FieldEnricherError, v))
+}
+
+// EnricherErrorLTE applies the LTE predicate on the "enricher_error" field.
+func EnricherErrorLTE(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldLTE(FieldEnricherError, v))
+}
+
+// EnricherErrorContains applies the Contains predicate on the "enricher_error" field.
+func EnricherErrorContains(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldContains(FieldEnricherError, v))
+}
+
+// EnricherErrorHasPrefix applies the HasPrefix predicate on the "enricher_error" field.
+func EnricherErrorHasPrefix(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldHasPrefix(FieldEnricherError, v))
+}
+
+// EnricherErrorHasSuffix applies the HasSuffix predicate on the "enricher_error" field.
+func EnricherErrorHasSuffix(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldHasSuffix(FieldEnricherError, v))
+}
+
+// EnricherErrorIsNil applies the IsNil predicate on the "enricher_error" field.
+func EnricherErrorIsNil() predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldIsNull(FieldEnricherError))
+}
+
+// EnricherErrorNotNil applies the NotNil predicate on the "enricher_error" field.
+func EnricherErrorNotNil() predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldNotNull(FieldEnricherError))
+}
+
+// EnricherErrorEqualFold applies the EqualFold predicate on the "enricher_error" field.
+func EnricherErrorEqualFold(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldEqualFold(FieldEnricherError, v))
+}
+
+// EnricherErrorContainsFold applies the ContainsFold predicate on the "enricher_error" field.
+func EnricherErrorContainsFold(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldContainsFold(FieldEnricherError, v))
 }
 
 // And groups predicates with the AND operator between them.

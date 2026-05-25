@@ -4541,6 +4541,8 @@ type RegistryArtifactMutation struct {
 	initiated_at            *time.Time
 	completed_at            *time.Time
 	error                   *string
+	enriched                *bool
+	enricher_error          *string
 	clearedFields           map[string]struct{}
 	done                    bool
 	oldValue                func(context.Context) (*RegistryArtifact, error)
@@ -5305,6 +5307,91 @@ func (m *RegistryArtifactMutation) ResetError() {
 	delete(m.clearedFields, registryartifact.FieldError)
 }
 
+// SetEnriched sets the "enriched" field.
+func (m *RegistryArtifactMutation) SetEnriched(b bool) {
+	m.enriched = &b
+}
+
+// Enriched returns the value of the "enriched" field in the mutation.
+func (m *RegistryArtifactMutation) Enriched() (r bool, exists bool) {
+	v := m.enriched
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnriched returns the old "enriched" field's value of the RegistryArtifact entity.
+// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistryArtifactMutation) OldEnriched(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnriched is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnriched requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnriched: %w", err)
+	}
+	return oldValue.Enriched, nil
+}
+
+// ResetEnriched resets all changes to the "enriched" field.
+func (m *RegistryArtifactMutation) ResetEnriched() {
+	m.enriched = nil
+}
+
+// SetEnricherError sets the "enricher_error" field.
+func (m *RegistryArtifactMutation) SetEnricherError(s string) {
+	m.enricher_error = &s
+}
+
+// EnricherError returns the value of the "enricher_error" field in the mutation.
+func (m *RegistryArtifactMutation) EnricherError() (r string, exists bool) {
+	v := m.enricher_error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnricherError returns the old "enricher_error" field's value of the RegistryArtifact entity.
+// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistryArtifactMutation) OldEnricherError(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnricherError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnricherError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnricherError: %w", err)
+	}
+	return oldValue.EnricherError, nil
+}
+
+// ClearEnricherError clears the value of the "enricher_error" field.
+func (m *RegistryArtifactMutation) ClearEnricherError() {
+	m.enricher_error = nil
+	m.clearedFields[registryartifact.FieldEnricherError] = struct{}{}
+}
+
+// EnricherErrorCleared returns if the "enricher_error" field was cleared in this mutation.
+func (m *RegistryArtifactMutation) EnricherErrorCleared() bool {
+	_, ok := m.clearedFields[registryartifact.FieldEnricherError]
+	return ok
+}
+
+// ResetEnricherError resets all changes to the "enricher_error" field.
+func (m *RegistryArtifactMutation) ResetEnricherError() {
+	m.enricher_error = nil
+	delete(m.clearedFields, registryartifact.FieldEnricherError)
+}
+
 // Where appends a list predicates to the RegistryArtifactMutation builder.
 func (m *RegistryArtifactMutation) Where(ps ...predicate.RegistryArtifact) {
 	m.predicates = append(m.predicates, ps...)
@@ -5339,7 +5426,7 @@ func (m *RegistryArtifactMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *RegistryArtifactMutation) Fields() []string {
-	fields := make([]string, 0, 15)
+	fields := make([]string, 0, 17)
 	if m.export_job_id != nil {
 		fields = append(fields, registryartifact.FieldExportJobID)
 	}
@@ -5385,6 +5472,12 @@ func (m *RegistryArtifactMutation) Fields() []string {
 	if m.error != nil {
 		fields = append(fields, registryartifact.FieldError)
 	}
+	if m.enriched != nil {
+		fields = append(fields, registryartifact.FieldEnriched)
+	}
+	if m.enricher_error != nil {
+		fields = append(fields, registryartifact.FieldEnricherError)
+	}
 	return fields
 }
 
@@ -5423,6 +5516,10 @@ func (m *RegistryArtifactMutation) Field(name string) (ent.Value, bool) {
 		return m.CompletedAt()
 	case registryartifact.FieldError:
 		return m.Error()
+	case registryartifact.FieldEnriched:
+		return m.Enriched()
+	case registryartifact.FieldEnricherError:
+		return m.EnricherError()
 	}
 	return nil, false
 }
@@ -5462,6 +5559,10 @@ func (m *RegistryArtifactMutation) OldField(ctx context.Context, name string) (e
 		return m.OldCompletedAt(ctx)
 	case registryartifact.FieldError:
 		return m.OldError(ctx)
+	case registryartifact.FieldEnriched:
+		return m.OldEnriched(ctx)
+	case registryartifact.FieldEnricherError:
+		return m.OldEnricherError(ctx)
 	}
 	return nil, fmt.Errorf("unknown RegistryArtifact field %s", name)
 }
@@ -5576,6 +5677,20 @@ func (m *RegistryArtifactMutation) SetField(name string, value ent.Value) error 
 		}
 		m.SetError(v)
 		return nil
+	case registryartifact.FieldEnriched:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnriched(v)
+		return nil
+	case registryartifact.FieldEnricherError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnricherError(v)
+		return nil
 	}
 	return fmt.Errorf("unknown RegistryArtifact field %s", name)
 }
@@ -5651,6 +5766,9 @@ func (m *RegistryArtifactMutation) ClearedFields() []string {
 	if m.FieldCleared(registryartifact.FieldError) {
 		fields = append(fields, registryartifact.FieldError)
 	}
+	if m.FieldCleared(registryartifact.FieldEnricherError) {
+		fields = append(fields, registryartifact.FieldEnricherError)
+	}
 	return fields
 }
 
@@ -5682,6 +5800,9 @@ func (m *RegistryArtifactMutation) ClearField(name string) error {
 		return nil
 	case registryartifact.FieldError:
 		m.ClearError()
+		return nil
+	case registryartifact.FieldEnricherError:
+		m.ClearEnricherError()
 		return nil
 	}
 	return fmt.Errorf("unknown RegistryArtifact nullable field %s", name)
@@ -5735,6 +5856,12 @@ func (m *RegistryArtifactMutation) ResetField(name string) error {
 		return nil
 	case registryartifact.FieldError:
 		m.ResetError()
+		return nil
+	case registryartifact.FieldEnriched:
+		m.ResetEnriched()
+		return nil
+	case registryartifact.FieldEnricherError:
+		m.ResetEnricherError()
 		return nil
 	}
 	return fmt.Errorf("unknown RegistryArtifact field %s", name)

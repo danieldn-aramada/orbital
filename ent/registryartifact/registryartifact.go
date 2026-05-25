@@ -43,6 +43,10 @@ const (
 	FieldCompletedAt = "completed_at"
 	// FieldError holds the string denoting the error field in the database.
 	FieldError = "error"
+	// FieldEnriched holds the string denoting the enriched field in the database.
+	FieldEnriched = "enriched"
+	// FieldEnricherError holds the string denoting the enricher_error field in the database.
+	FieldEnricherError = "enricher_error"
 	// Table holds the table name of the registryartifact in the database.
 	Table = "registry_artifacts"
 )
@@ -65,6 +69,8 @@ var Columns = []string{
 	FieldInitiatedAt,
 	FieldCompletedAt,
 	FieldError,
+	FieldEnriched,
+	FieldEnricherError,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -82,6 +88,8 @@ var (
 	DefaultDatacenterName string
 	// DefaultSigned holds the default value on creation for the "signed" field.
 	DefaultSigned bool
+	// DefaultEnriched holds the default value on creation for the "enriched" field.
+	DefaultEnriched bool
 )
 
 // Status defines the type for the "status" enum field.
@@ -190,4 +198,14 @@ func ByCompletedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByError orders the results by the error field.
 func ByError(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldError, opts...).ToFunc()
+}
+
+// ByEnriched orders the results by the enriched field.
+func ByEnriched(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEnriched, opts...).ToFunc()
+}
+
+// ByEnricherError orders the results by the enricher_error field.
+func ByEnricherError(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEnricherError, opts...).ToFunc()
 }

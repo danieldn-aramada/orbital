@@ -28,6 +28,8 @@ func (RegistryArtifact) Fields() []ent.Field {
 		field.Time("initiated_at"),
 		field.Time("completed_at").Optional().Nillable(),
 		field.String("error").Optional().Nillable(),
+		field.Bool("enriched").Default(false),                   // true if all enrichers ran and their layers are included
+		field.String("enricher_error").Optional().Nillable(),   // set if any enricher failed (job will also be failed)
 	}
 }
 

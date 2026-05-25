@@ -18,8 +18,8 @@ gantt
     Prototyping                   :active, 2026-04-14, 2026-05-27
 
     Section Upcoming
-    MVP                           :2026-05-27, 2026-07-27
-    General Availability          :2026-07-27, 2026-08-28
+    MVP                           :2026-05-27, 2026-07-15
+    General Availability          :2026-07-15, 2026-08-15
 ```
 
 **Note:** All future dates are subject to change.
@@ -42,15 +42,16 @@ Each spike is a question to answer. Results define the MVP.
 | 8 | AKS dev environment | Do we have a working, repeatable AKS dev deployment to prototype against? | Daniel | ✅ Done (5/18) | |
 | 9 | Seed iDRAC and storage devices | Does the schema cover all iDRAC and storage fields we need? | Daniel | ✅ Done (5/15) | |
 | 9b | Valkey cache-aside | What is the right caching strategy for read-heavy graph queries, and does orbital degrade correctly without it? | Daniel | Not started | |
-| 10 | Air-gap sync round-trip | Does orbital's config export work as a complete, importable payload for orb? | — | ✅ Done | Orb loads `json.gz` into local DGraph and serves offline; validate export sizes |
+| 10 | Air-gap sync round-trip | Does orbital's config export work as a complete, importable payload for orb? | — | ✅ Done | Orb loads `json.gz` into local DGraph and serves offline |
 | 11 | Authorization | How do we restrict mutations to authorized roles and test authz offline? | — | 🔄 In progress | App Roles, DGraph `@auth` directives, middleware enforcement, offline JWT tests, AKS OIDC validation |
 | 12 | DGraph operations | Can our team operate DGraph on AKS without prior experience? | — | Not started | Runbook: schema change apply, validate, rollback |
-| 13 | Orb import API | What is the right mechanism for orb to pull a signed OCI subgraph from a local Zot registry and load it into local DGraph? | — | ✅ Done | OCI puller (oras-go v2), cosign verify (air-gap safe), `dgraph live` subprocess, polling loop, Zot ACR upstream sync config, docker-compose DGraph for orb |
-| 14 | Divergence reports | How does orbital surface divergence and let an admin resolve it? | — | Not started | |
+| 13 | Orb import API | What is the right mechanism for orb to pull a signed OCI subgraph from a registry and load it into local DGraph? | — | ✅ Done | OCI puller (oras-go v2), cosign verify, `dgraph live` subprocess, polling loop |
+| 14 | Divergence reports (orb intake) | How does orb accept and relay divergence reports from edge components? | Daniel | ✅ Done (5/24) | `POST /api/v1/divergence` replaces pending set; `POST /api/v1/divergence/publish` writes snapshot to S3 |
 | 15 | Orb deployment model | What does orb look like deployed at the edge — topology, runtime deps, air-gap constraints? | — | Not started | |
 | 16 | Orb API surface & authN/Z | What endpoints does orb expose locally, who calls them, and what is the consumer auth model? | — | Not started | |
-| 17 | Orb UI | Can orbital and orb share a template infrastructure while serving different nav and capability surfaces? End-to-end demo: import → browse config offline → divergence → publish report. | — | ✅ Done | |
-| 18 | ES module split of app.js | Can we split the 2,529-line JS monolith into per-feature ES modules with zero build step? | — | Not started | shared.js + orbital.js + orb.js; conditional loading via UIConfig; window.* bridge for onclick handlers |
+| 17 | Orb UI | Can orbital and orb share a template infrastructure while serving different nav and capability surfaces? | — | ✅ Done (5/24) | |
+| 18 | ES module split of app.js | Can we split the JS monolith into per-feature ES modules with zero build step? | — | Not started | shared.js + orbital.js + orb.js; conditional loading via UIConfig; window.* bridge for onclick handlers |
+| 19 | ConfigBundle enricher integration | How does orbital support downstream consumers adding layers to its OCI artifact before publish? | Daniel | ✅ Done (5/26) | Per-request enricher URLs in publish body; all-or-nothing before push; `enriched`/`enricher_error` on RegistryArtifact; retryable HTTP + size cap; Enriched column in UI; enricher unit tests; integration contract: `docs/configbundle-integration.md` — ConfigBundle implementation is in its own repo |
 | — | Schema migration | Do we need automation or is a runbook sufficient? | — | ❌ Out of scope | |
 
 ---

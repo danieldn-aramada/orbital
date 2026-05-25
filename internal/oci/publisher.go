@@ -19,6 +19,7 @@ import (
 
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/registryartifact"
+	"github.com/armada/orbital/internal/enricher"
 	"github.com/google/go-containerregistry/pkg/authn"
 	godigest "github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -69,9 +70,16 @@ func New(db *ent.Client, cfg Config, logger *slog.Logger) *Publisher {
 	return &Publisher{db: db, cfg: cfg, logger: logger}
 }
 
-// Publish executes an async publish for the given registry_artifact row.
+// Publish executes a publish for the given registry_artifact row.
+// enrichers are caller-supplied per-request enricher clients (may be nil/empty).
+// All enrichers must succeed before the OCI push — partial pushes are never produced.
+// If any enricher fails, the job is marked failed and nothing is pushed.
 // Intended to be called as a goroutine; updates the row in PostgreSQL as it progresses.
-func (p *Publisher) Publish(artifactID int, job *ent.ExportJob, tag string) {
+//
+// TODO(future): consider switching to named server-side enrichers for stricter governance
+// (operator controls the allowed enricher URL list). Per-request URLs are acceptable today
+// because the API requires Azure AD authn/authz and runs inside AKS on VPN.
+func (p *Publisher) Publish(artifactID int, job *ent.ExportJob, tag string, enrichers []*enricher.Client) {
 	ctx := context.Background()
 	log := p.logger.With("artifactId", artifactID, "jobId", job.ID, "tag", tag)
 
@@ -82,7 +90,28 @@ func (p *Publisher) Publish(artifactID int, job *ent.ExportJob, tag string) {
 		return
 	}
 
-	digest, sizeBytes, fingerprint, err := p.doPush(ctx, job, tag, log)
+	// Call enrichers before pushing. All must succeed — partial push is not allowed.
+	var extraLayers []enricher.Layer
+	if len(enrichers) > 0 {
+		req := enricher.Request{JobID: job.ID.String(), Datacenter: job.DatacenterName}
+		for _, e := range enrichers {
+			layers, err := e.Enrich(ctx, req)
+			if err != nil {
+				log.Error("enricher failed — aborting publish", "err", err)
+				errStr := fmt.Sprintf("enricher failed: %s", err.Error())
+				p.db.RegistryArtifact.UpdateOneID(artifactID). //nolint:errcheck
+					SetStatus(registryartifact.StatusFailed).
+					SetEnricherError(errStr).
+					SetCompletedAt(time.Now()).
+					Save(ctx)
+				return
+			}
+			extraLayers = append(extraLayers, layers...)
+		}
+		log.Info("enrichers produced layers", "count", len(extraLayers))
+	}
+
+	digest, sizeBytes, fingerprint, err := p.doPush(ctx, job, tag, extraLayers, log)
 	if err != nil {
 		log.Error("publish failed", "err", err)
 		errStr := err.Error()
@@ -99,6 +128,7 @@ func (p *Publisher) Publish(artifactID int, job *ent.ExportJob, tag string) {
 		SetDigest(digest).
 		SetSizeBytes(sizeBytes).
 		SetSigned(true).
+		SetEnriched(len(extraLayers) > 0).
 		SetCompletedAt(time.Now())
 	if fingerprint != "" {
 		update = update.SetSigningKeyFingerprint(fingerprint)
@@ -108,7 +138,7 @@ func (p *Publisher) Publish(artifactID int, job *ent.ExportJob, tag string) {
 	}
 }
 
-func (p *Publisher) doPush(ctx context.Context, job *ent.ExportJob, tag string, log *slog.Logger) (digest string, sizeBytes int64, fingerprint string, err error) {
+func (p *Publisher) doPush(ctx context.Context, job *ent.ExportJob, tag string, extraLayers []enricher.Layer, log *slog.Logger) (digest string, sizeBytes int64, fingerprint string, err error) {
 	if job.ArtifactPath == nil {
 		return "", 0, "", fmt.Errorf("export job has no artifact path")
 	}
@@ -122,7 +152,7 @@ func (p *Publisher) doPush(ctx context.Context, job *ent.ExportJob, tag string, 
 	repoName := RepoForDC(p.cfg.Registry, p.cfg.Repo, job.DatacenterName)
 	log.Info("target repository", "repo", repoName)
 
-	manifestDesc, err := p.pushArtifact(ctx, repoName, tag, dataGZ, schemaGZ, job, log)
+	manifestDesc, err := p.pushArtifact(ctx, repoName, tag, dataGZ, schemaGZ, extraLayers, job, log)
 	if err != nil {
 		return "", 0, "", fmt.Errorf("push artifact: %w", err)
 	}
@@ -138,7 +168,7 @@ func (p *Publisher) doPush(ctx context.Context, job *ent.ExportJob, tag string, 
 	return digestStr, manifestDesc.Size, fingerprint, nil
 }
 
-func (p *Publisher) pushArtifact(ctx context.Context, repoName, tag string, dataGZ, schemaGZ []byte, job *ent.ExportJob, log *slog.Logger) (ocispec.Descriptor, error) {
+func (p *Publisher) pushArtifact(ctx context.Context, repoName, tag string, dataGZ, schemaGZ []byte, extraLayers []enricher.Layer, job *ent.ExportJob, log *slog.Logger) (ocispec.Descriptor, error) {
 	store := memory.New()
 
 	dataDesc, err := pushBlob(ctx, store, mediaTypeDataGZ, dataGZ)
@@ -148,6 +178,15 @@ func (p *Publisher) pushArtifact(ctx context.Context, repoName, tag string, data
 	schemaDesc, err := pushBlob(ctx, store, mediaTypeSchemaGZ, schemaGZ)
 	if err != nil {
 		return ocispec.Descriptor{}, fmt.Errorf("push schema blob: %w", err)
+	}
+
+	layers := []ocispec.Descriptor{dataDesc, schemaDesc}
+	for _, el := range extraLayers {
+		desc, err := pushBlob(ctx, store, el.MediaType, el.Data)
+		if err != nil {
+			return ocispec.Descriptor{}, fmt.Errorf("push enricher layer (%s): %w", el.MediaType, err)
+		}
+		layers = append(layers, desc)
 	}
 
 	annotations := map[string]string{
@@ -161,7 +200,7 @@ func (p *Publisher) pushArtifact(ctx context.Context, repoName, tag string, data
 	}
 
 	manifestDesc, err := oras.PackManifest(ctx, store, oras.PackManifestVersion1_1, artifactType, oras.PackManifestOptions{
-		Layers:              []ocispec.Descriptor{dataDesc, schemaDesc},
+		Layers:              layers,
 		ManifestAnnotations: annotations,
 	})
 	if err != nil {

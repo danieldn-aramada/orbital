@@ -1681,13 +1681,14 @@ function loadArtifactsTable(showSpinner = false) {
     .then(r => r.json())
     .then(artifacts => {
       tbody.innerHTML = artifacts.length === 0
-        ? '<tr><td colspan="8" class="has-text-grey">No artifacts yet.</td></tr>'
+        ? '<tr><td colspan="9" class="has-text-grey">No artifacts yet.</td></tr>'
         : artifacts.map(a => `<tr>
             <td>${a.datacenterName}</td>
             <td style="font-family:monospace;font-size:0.7rem">${a.repository}</td>
             <td><span class="tag is-light">${a.tag}</span></td>
             <td style="white-space:nowrap;">${a.digest ? `<div style="display:flex;align-items:center;gap:0.25rem;"><span class="is-family-monospace is-size-7">${a.digest.substring(0, 19)}…</span><button class="button is-small is-white" title="Copy digest" onclick="navigator.clipboard.writeText('${a.digest}').then(()=>{this.innerHTML='<span class=\\'icon\\'><i class=\\'fas fa-check\\'></i></span>';setTimeout(()=>{this.innerHTML='<span class=\\'icon\\'><i class=\\'fas fa-copy\\'></i></span>';},1200)})"><span class="icon"><i class="fas fa-copy"></i></span></button></div>` : '—'}</td>
             <td>${a.signed ? '<span class="tag is-success is-light">signed</span>' : '<span class="tag is-light">unsigned</span>'}</td>
+            <td>${a.enriched ? '<span class="tag is-info is-light">enriched</span>' : '—'}${a.enricherError ? `<p class="has-text-danger is-size-7 mt-1">${a.enricherError}</p>` : ''}</td>
             <td>${artifactStatusBadge(a.status)}</td>
             <td>${fmtTime(a.initiatedAt)}</td>
             <td class="has-text-danger is-size-7">${a.error ?? ''}</td>

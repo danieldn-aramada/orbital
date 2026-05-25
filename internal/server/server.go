@@ -12,9 +12,11 @@ import (
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/internal/auth"
 	"github.com/armada/orbital/internal/config"
+	"github.com/armada/orbital/internal/enricher"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/metrics"
 	"github.com/armada/orbital/internal/oci"
+	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	appversion "github.com/armada/orbital/internal/version"
 	webtemplates "github.com/armada/orbital/web/templates"
 	"github.com/google/uuid"
@@ -181,7 +183,16 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 			Password:      cfg.OCIPassword,
 			SigningKeyPath: cfg.OCISigningKeyPath,
 		}
-		ociH := handler.NewOCI(db, ociCfg, cfg.DGraphScratchExportDir, logger)
+		retryClient := retryablehttp.NewClient()
+		retryClient.RetryMax = cfg.EnricherMaxAttempts - 1
+		retryClient.RetryWaitMin = time.Second
+		retryClient.RetryWaitMax = 10 * time.Second
+		retryClient.Logger = nil // silence default logger; errors surface via publisher logging
+		enricherOpts := []enricher.ClientOption{
+			enricher.WithHTTPClient(retryClient.StandardClient()),
+			enricher.WithMaxResponseBytes(cfg.EnricherMaxResponseBytes),
+		}
+		ociH := handler.NewOCI(db, ociCfg, cfg.DGraphScratchExportDir, logger, cfg.EnricherTimeout, enricherOpts...)
 		api.POST("/export/jobs/:jobId/publish", ociH.Publish)
 		api.DELETE("/export/jobs/:jobId", ociH.DeleteJob)
 		api.GET("/oci/artifacts", ociH.ListArtifacts)

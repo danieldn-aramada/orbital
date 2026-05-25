@@ -44,7 +44,10 @@ type Config struct {
 	OCIUsername            string        `envconfig:"ORBITAL_OCI_USERNAME"            default:"armadaeksatest"` // ACR admin username = registry name
 	OCIPassword            string        `envconfig:"ORBITAL_OCI_PASSWORD"            default:""`               // ACR admin password — set via env
 	OCISigningKeyPath      string        `envconfig:"ORBITAL_OCI_SIGNING_KEY_PATH"    default:"cosign.key"`     // run: cosign generate-key-pair
-	BasePath               string        `envconfig:"ORBITAL_BASE_PATH"               default:""`
+	BasePath                  string        `envconfig:"ORBITAL_BASE_PATH"                    default:""`
+	EnricherTimeout           time.Duration `envconfig:"ORBITAL_ENRICHER_TIMEOUT"             default:"30s"`  // per-attempt HTTP timeout; per-request URLs supplied in publish body
+	EnricherMaxAttempts       int           `envconfig:"ORBITAL_ENRICHER_MAX_ATTEMPTS"        default:"3"`    // total attempts (1 initial + N-1 retries)
+	EnricherMaxResponseBytes  int64         `envconfig:"ORBITAL_ENRICHER_MAX_RESPONSE_BYTES"  default:"10485760"` // 10 MB
 	RestoreTimeout         time.Duration `envconfig:"ORBITAL_RESTORE_TIMEOUT"         default:"10m"`
 	DGraphNamespace        string        `envconfig:"ORBITAL_DGRAPH_NAMESPACE"        default:"dgraph"`
 	DGraphAlphaGRPC        string        `envconfig:"ORBITAL_DGRAPH_ALPHA_GRPC"       default:"localhost:9080"`
