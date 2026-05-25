@@ -75,7 +75,7 @@ See `docs/claude/DGRAPH.md` for schema gotchas, DQL patterns, and blue-green exp
 
 - **Authentication:** local email/password + OIDC/SSO via Azure AD. See `docs/claude/AUTH.md`.
 - **Backup/Restore:** DGraph backup to S3-compatible storage; restore via idle `dgraph-live` pod. See `docs/claude/OCI.md`.
-- **Export + OCI publish:** blue-green DGraph export flow, signed OCI artifacts via oras-go v2 + cosign. See `docs/claude/OCI.md`.
+- **Export + OCI publish:** blue-green DGraph export flow, signed OCI artifacts via oras-go v2 + cosign. Optional enrichment step: before pushing, Orbital calls per-request enricher URLs (supplied in publish body), collects additional OCI layers, bundles all layers, signs once, pushes once — all-or-nothing. See `docs/claude/OCI.md` and `docs/configbundle-integration.md`.
 - **Audit log:** one event per HTTP request, three-source orbId extraction. See `docs/claude/AUDIT.md`.
 - **Caching:** Valkey cache-aside. Orbital must operate correctly without Valkey — cache is an optimization, not a dependency.
 - **Divergence reporting:** orb does not detect divergence itself. Other edge components (e.g., cb-agent) detect divergence and POST reports to orb's intake API. Orb publishes reports to external storage (S3/OCI) for orbital to consume. Orbital surfaces divergence to administrators for human decision (accept/reject/ignore). Orbital is never in the reconciliation path.
@@ -96,17 +96,18 @@ See `docs/claude/DGRAPH.md` for schema gotchas, DQL patterns, and blue-green exp
 - **Spike 11 (Authorization)** ← blocks MVP — bearer validation done; remaining: Azure AD App Roles, DGraph `@auth` directives, Echo middleware role enforcement, offline JWT integration tests ⚠️ Opus design session first
 
 **Recently completed:**
+- **Spike 19 (ConfigBundle enricher integration)** — Orbital is now the sole OCI producer; per-request enricher URLs in publish body; all-or-nothing enrichment before push; `enriched`/`enricher_error` fields on `RegistryArtifact`; retryable HTTP client (`go-retryablehttp`) with size cap; UI Enriched column on Signed Artifacts page; enricher unit tests; `docs/configbundle-integration.md` full integration plan
+- **Spike 14 (Orb divergence intake)** — done: `POST /api/v1/divergence` replaces pending set; `POST /api/v1/divergence/publish` writes snapshot to S3
 - **Spike 13 (Orb import API)** — done: OCI puller, cosign verify, dgraph live import, polling loop
-- **Spike 17 (Orb UI)** — done: shared template infrastructure, `UIConfig` + `PageActions` (read-only mode), orb Echo server, status page (pre/post import states), import subgraph, inventory (Config Items), schema version, DC + servers (read-only DataTables + HTMX tabs), import history, divergence report; `DCSlug` removed — orb is stateless re: DC identity, DC name derived from imported DGraph data
-- **Orbital inventory namespace filter** — page-level namespace selector above the table; derived from orbId prefix; regex column search; persisted to localStorage
+- **Spike 17 (Orb UI)** — done: shared template infrastructure, `UIConfig` + `PageActions` (read-only mode), orb Echo server, status page, import subgraph, inventory, schema version, DC + servers, import history, divergence report
+- **Orbital inventory namespace filter** — page-level namespace selector; regex column search; persisted to localStorage
 
 **MVP gaps remaining:**
 - Authorization (Spike 11) ← next priority
 - Valkey cache-aside (Spike 9b) — not yet implemented
 - Schema management — versioned apply with backwards compat check on startup
 - Orb registry — register, authenticate, and revoke orbs
-- Orb: deployment model (Spike 15), API surface & authN/Z (Spike 16), divergence reporting (Spike 14)
-- Orb divergence intake API — orb accepts POST from edge components (cb-agent, etc.), publishes report to S3/OCI for orbital to consume (Spike 14)
+- Orb: deployment model (Spike 15), API surface & authN/Z (Spike 16)
 - Testing foundations — unit, integration, code coverage, CI pipeline, AKS smoke suite
 - Security hardening — critical/high findings before any prod exposure
 - Production deployment — AKS prod, ingress, TLS, CI/CD
@@ -287,6 +288,10 @@ These have been explicitly decided. Do not re-suggest them.
 - **Orb does not detect divergence and has no K8s awareness** — orb does not scan hardware, does not read K8s CRs, and is not a K8s controller. Divergence detection is other edge components' responsibility (e.g., ConfigBundle controller reads its own CRs' managedFields). Those components POST divergence reports to orb's intake API; orb publishes to S3/OCI for orbital to consume.
 - **Canonical divergence report format** — `{orbId, field, intendedValue, overrideValue, who, when}`. This is the format orb's intake API accepts and orbital displays. Source of the report (cb-controller SSA translation, orb UI button, manual API call) is irrelevant to the format. ConfigBundle controller must translate SSA field ownership into this format before posting to orb. Field names must match DGraph schema field names (cb-generator uses orbital's field names — settled).
 - **ConfigBundle is a separate project, built after orbital** — user owns both projects. Orbital's APIs (export, divergence intake) are the contract. ConfigBundle is designed around orbital's APIs, not the inverse. Do not add ConfigBundle awareness to orbital. Plan ConfigBundle separately after orbital MVP.
+- **Orbital is the sole OCI producer** — no downstream system needs OCI registry write credentials. Orbital calls enrichers before pushing, bundles all layers, signs once, pushes once. ConfigBundle bundler is an enricher — it queries Orbital's GraphQL, returns layers, never pushes directly to ACR.
+- **Enricher URLs are per-request, not server-side config** — callers supply `{"enrichers": ["url"]}` in the publish request body. Acceptable because the publish API requires Azure AD authn/authz and runs in AKS on VPN. A future migration to named server-side enrichers is tracked in a code comment in `publisher.go`. Do not pre-emptively add server-side enricher config.
+- **Enrichment is all-or-nothing** — if any enricher fails (non-2xx, timeout, size exceeded), the publish job fails and nothing is pushed to ACR. There are no partial pushes. Clients can retry without enrichers to get a raw-export-only artifact.
+- **`orb.spec.ts` is excluded from the default Playwright config** — it runs only via `make test-e2e-orb` (`playwright.orb.config.ts`). The default `playwright.config.ts` has `testIgnore: '**/orb.spec.ts'` to prevent orb tests running against the orbital server on `:8001`.
 - **Orb UI pages mirror orbital client-side patterns** — orb pages use the same interaction model as orbital: GraphQL proxy fetch, DataTables, HTMX tab swap. Not simplified server-rendered alternatives.
 - **Orb is stateless re: DC identity** — `DCSlug` was removed from `orbconfig.Config`. Orb derives which data center it serves from the imported DGraph data (one `DataCenter` node after `drop_all` + live load). `ORB_OCI_REPO` carries the full DC-specific path (e.g. `orbital/colo-galleon`). Do not re-add a `DCSlug` field.
 - **Inventory namespace filter is page-level, not a DataTable column filter** — the namespace selector lives in the page header (above the table) and uses regex search on the orbId column (`^namespace:`). Do not move it into the DataTable toolbar — namespace is a scope, type is a column filter; they are different cognitive categories.

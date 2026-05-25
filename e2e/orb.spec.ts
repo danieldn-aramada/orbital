@@ -43,7 +43,7 @@ test('orb sidebar shows Orb menu section, not orbital sections', async ({ page }
 
 test('orb navbar shows "Orb" brand', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.navbar-brand span')).toContainText('Orb');
+  await expect(page.locator('.navbar-brand span').first()).toContainText('Orb');
 });
 
 test('orb pages have no edit or delete buttons', async ({ page }) => {

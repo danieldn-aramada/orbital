@@ -127,6 +127,8 @@ var (
 		{Name: "initiated_at", Type: field.TypeTime},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "error", Type: field.TypeString, Nullable: true},
+		{Name: "enriched", Type: field.TypeBool, Default: false},
+		{Name: "enricher_error", Type: field.TypeString, Nullable: true},
 	}
 	// RegistryArtifactsTable holds the schema information for the "registry_artifacts" table.
 	RegistryArtifactsTable = &schema.Table{

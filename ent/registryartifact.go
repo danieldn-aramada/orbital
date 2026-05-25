@@ -47,8 +47,12 @@ type RegistryArtifact struct {
 	// CompletedAt holds the value of the "completed_at" field.
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
 	// Error holds the value of the "error" field.
-	Error        *string `json:"error,omitempty"`
-	selectValues sql.SelectValues
+	Error *string `json:"error,omitempty"`
+	// Enriched holds the value of the "enriched" field.
+	Enriched bool `json:"enriched,omitempty"`
+	// EnricherError holds the value of the "enricher_error" field.
+	EnricherError *string `json:"enricher_error,omitempty"`
+	selectValues  sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -56,11 +60,11 @@ func (*RegistryArtifact) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case registryartifact.FieldSigned:
+		case registryartifact.FieldSigned, registryartifact.FieldEnriched:
 			values[i] = new(sql.NullBool)
 		case registryartifact.FieldID, registryartifact.FieldSizeBytes, registryartifact.FieldInitiatedBy:
 			values[i] = new(sql.NullInt64)
-		case registryartifact.FieldDatacenterID, registryartifact.FieldDatacenterName, registryartifact.FieldRegistry, registryartifact.FieldRepository, registryartifact.FieldTag, registryartifact.FieldDigest, registryartifact.FieldSigningKeyFingerprint, registryartifact.FieldStatus, registryartifact.FieldError:
+		case registryartifact.FieldDatacenterID, registryartifact.FieldDatacenterName, registryartifact.FieldRegistry, registryartifact.FieldRepository, registryartifact.FieldTag, registryartifact.FieldDigest, registryartifact.FieldSigningKeyFingerprint, registryartifact.FieldStatus, registryartifact.FieldError, registryartifact.FieldEnricherError:
 			values[i] = new(sql.NullString)
 		case registryartifact.FieldInitiatedAt, registryartifact.FieldCompletedAt:
 			values[i] = new(sql.NullTime)
@@ -183,6 +187,19 @@ func (_m *RegistryArtifact) assignValues(columns []string, values []any) error {
 				_m.Error = new(string)
 				*_m.Error = value.String
 			}
+		case registryartifact.FieldEnriched:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field enriched", values[i])
+			} else if value.Valid {
+				_m.Enriched = value.Bool
+			}
+		case registryartifact.FieldEnricherError:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field enricher_error", values[i])
+			} else if value.Valid {
+				_m.EnricherError = new(string)
+				*_m.EnricherError = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -273,6 +290,14 @@ func (_m *RegistryArtifact) String() string {
 	builder.WriteString(", ")
 	if v := _m.Error; v != nil {
 		builder.WriteString("error=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("enriched=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Enriched))
+	builder.WriteString(", ")
+	if v := _m.EnricherError; v != nil {
+		builder.WriteString("enricher_error=")
 		builder.WriteString(*v)
 	}
 	builder.WriteByte(')')

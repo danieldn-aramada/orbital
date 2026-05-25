@@ -289,6 +289,40 @@ func (_u *RegistryArtifactUpdate) ClearError() *RegistryArtifactUpdate {
 	return _u
 }
 
+// SetEnriched sets the "enriched" field.
+func (_u *RegistryArtifactUpdate) SetEnriched(v bool) *RegistryArtifactUpdate {
+	_u.mutation.SetEnriched(v)
+	return _u
+}
+
+// SetNillableEnriched sets the "enriched" field if the given value is not nil.
+func (_u *RegistryArtifactUpdate) SetNillableEnriched(v *bool) *RegistryArtifactUpdate {
+	if v != nil {
+		_u.SetEnriched(*v)
+	}
+	return _u
+}
+
+// SetEnricherError sets the "enricher_error" field.
+func (_u *RegistryArtifactUpdate) SetEnricherError(v string) *RegistryArtifactUpdate {
+	_u.mutation.SetEnricherError(v)
+	return _u
+}
+
+// SetNillableEnricherError sets the "enricher_error" field if the given value is not nil.
+func (_u *RegistryArtifactUpdate) SetNillableEnricherError(v *string) *RegistryArtifactUpdate {
+	if v != nil {
+		_u.SetEnricherError(*v)
+	}
+	return _u
+}
+
+// ClearEnricherError clears the value of the "enricher_error" field.
+func (_u *RegistryArtifactUpdate) ClearEnricherError() *RegistryArtifactUpdate {
+	_u.mutation.ClearEnricherError()
+	return _u
+}
+
 // Mutation returns the RegistryArtifactMutation object of the builder.
 func (_u *RegistryArtifactUpdate) Mutation() *RegistryArtifactMutation {
 	return _u.mutation
@@ -411,6 +445,15 @@ func (_u *RegistryArtifactUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if _u.mutation.ErrorCleared() {
 		_spec.ClearField(registryartifact.FieldError, field.TypeString)
+	}
+	if value, ok := _u.mutation.Enriched(); ok {
+		_spec.SetField(registryartifact.FieldEnriched, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.EnricherError(); ok {
+		_spec.SetField(registryartifact.FieldEnricherError, field.TypeString, value)
+	}
+	if _u.mutation.EnricherErrorCleared() {
+		_spec.ClearField(registryartifact.FieldEnricherError, field.TypeString)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -692,6 +735,40 @@ func (_u *RegistryArtifactUpdateOne) ClearError() *RegistryArtifactUpdateOne {
 	return _u
 }
 
+// SetEnriched sets the "enriched" field.
+func (_u *RegistryArtifactUpdateOne) SetEnriched(v bool) *RegistryArtifactUpdateOne {
+	_u.mutation.SetEnriched(v)
+	return _u
+}
+
+// SetNillableEnriched sets the "enriched" field if the given value is not nil.
+func (_u *RegistryArtifactUpdateOne) SetNillableEnriched(v *bool) *RegistryArtifactUpdateOne {
+	if v != nil {
+		_u.SetEnriched(*v)
+	}
+	return _u
+}
+
+// SetEnricherError sets the "enricher_error" field.
+func (_u *RegistryArtifactUpdateOne) SetEnricherError(v string) *RegistryArtifactUpdateOne {
+	_u.mutation.SetEnricherError(v)
+	return _u
+}
+
+// SetNillableEnricherError sets the "enricher_error" field if the given value is not nil.
+func (_u *RegistryArtifactUpdateOne) SetNillableEnricherError(v *string) *RegistryArtifactUpdateOne {
+	if v != nil {
+		_u.SetEnricherError(*v)
+	}
+	return _u
+}
+
+// ClearEnricherError clears the value of the "enricher_error" field.
+func (_u *RegistryArtifactUpdateOne) ClearEnricherError() *RegistryArtifactUpdateOne {
+	_u.mutation.ClearEnricherError()
+	return _u
+}
+
 // Mutation returns the RegistryArtifactMutation object of the builder.
 func (_u *RegistryArtifactUpdateOne) Mutation() *RegistryArtifactMutation {
 	return _u.mutation
@@ -844,6 +921,15 @@ func (_u *RegistryArtifactUpdateOne) sqlSave(ctx context.Context) (_node *Regist
 	}
 	if _u.mutation.ErrorCleared() {
 		_spec.ClearField(registryartifact.FieldError, field.TypeString)
+	}
+	if value, ok := _u.mutation.Enriched(); ok {
+		_spec.SetField(registryartifact.FieldEnriched, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.EnricherError(); ok {
+		_spec.SetField(registryartifact.FieldEnricherError, field.TypeString, value)
+	}
+	if _u.mutation.EnricherErrorCleared() {
+		_spec.ClearField(registryartifact.FieldEnricherError, field.TypeString)
 	}
 	_node = &RegistryArtifact{config: _u.config}
 	_spec.Assign = _node.assignValues

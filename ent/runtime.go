@@ -101,6 +101,10 @@ func init() {
 	registryartifactDescSigned := registryartifactFields[8].Descriptor()
 	// registryartifact.DefaultSigned holds the default value on creation for the signed field.
 	registryartifact.DefaultSigned = registryartifactDescSigned.Default.(bool)
+	// registryartifactDescEnriched is the schema descriptor for enriched field.
+	registryartifactDescEnriched := registryartifactFields[15].Descriptor()
+	// registryartifact.DefaultEnriched holds the default value on creation for the enriched field.
+	registryartifact.DefaultEnriched = registryartifactDescEnriched.Default.(bool)
 	restorejobMixin := schema.RestoreJob{}.Mixin()
 	restorejobMixinFields0 := restorejobMixin[0].Fields()
 	_ = restorejobMixinFields0

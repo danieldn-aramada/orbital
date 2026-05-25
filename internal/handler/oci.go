@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/registryartifact"
+	"github.com/armada/orbital/internal/enricher"
 	"github.com/armada/orbital/internal/oci"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -28,15 +30,18 @@ type OCI struct {
 	cfg              oci.Config
 	scratchExportDir string
 	logger           *slog.Logger
+	enricherTimeout  time.Duration
+	enricherOpts     []enricher.ClientOption
 }
 
 // NewOCI creates an OCI handler. publisher may be nil when OCI is not configured.
-func NewOCI(db *ent.Client, cfg oci.Config, scratchExportDir string, logger *slog.Logger) *OCI {
+// enricherTimeout and enricherOpts are applied when constructing per-request enricher clients.
+func NewOCI(db *ent.Client, cfg oci.Config, scratchExportDir string, logger *slog.Logger, enricherTimeout time.Duration, enricherOpts ...enricher.ClientOption) *OCI {
 	var pub *oci.Publisher
 	if cfg.Registry != "" && cfg.SigningKeyPath != "" {
 		pub = oci.New(db, cfg, logger)
 	}
-	return &OCI{db: db, publisher: pub, cfg: cfg, scratchExportDir: scratchExportDir, logger: logger}
+	return &OCI{db: db, publisher: pub, cfg: cfg, scratchExportDir: scratchExportDir, logger: logger, enricherTimeout: enricherTimeout, enricherOpts: enricherOpts}
 }
 
 type publishResponse struct {
@@ -47,21 +52,23 @@ type publishResponse struct {
 }
 
 type artifactResponse struct {
-	ID                  int     `json:"id"`
-	ExportJobID         string  `json:"exportJobId"`
-	DatacenterID        string  `json:"datacenterId"`
-	DatacenterName      string  `json:"datacenterName"`
-	Registry            string  `json:"registry"`
-	Repository          string  `json:"repository"`
-	Tag                 string  `json:"tag"`
-	Digest              *string `json:"digest,omitempty"`
-	SizeBytes           *int64  `json:"sizeBytes,omitempty"`
-	Signed              bool    `json:"signed"`
+	ID                   int     `json:"id"`
+	ExportJobID          string  `json:"exportJobId"`
+	DatacenterID         string  `json:"datacenterId"`
+	DatacenterName       string  `json:"datacenterName"`
+	Registry             string  `json:"registry"`
+	Repository           string  `json:"repository"`
+	Tag                  string  `json:"tag"`
+	Digest               *string `json:"digest,omitempty"`
+	SizeBytes            *int64  `json:"sizeBytes,omitempty"`
+	Signed               bool    `json:"signed"`
 	SigningKeyFingerprint *string `json:"signingKeyFingerprint,omitempty"`
-	Status              string  `json:"status"`
-	InitiatedAt         string  `json:"initiatedAt"`
-	CompletedAt         *string `json:"completedAt,omitempty"`
-	Error               *string `json:"error,omitempty"`
+	Status               string  `json:"status"`
+	InitiatedAt          string  `json:"initiatedAt"`
+	CompletedAt          *string `json:"completedAt,omitempty"`
+	Error          *string `json:"error,omitempty"`
+	Enriched       bool    `json:"enriched"`
+	EnricherError  *string `json:"enricherError,omitempty"`
 }
 
 // Publish handles POST /api/v1/export/jobs/:jobId/publish
@@ -136,7 +143,22 @@ func (h *OCI) Publish(c echo.Context) error {
 		return fmt.Errorf("create artifact record: %w", err)
 	}
 
-	go h.publisher.Publish(artifact.ID, job, tag)
+	// Parse optional enricher URLs from the request body.
+	// Enricher URLs are supplied per-request by the caller — no server-side URL config required.
+	// The API is protected by Azure AD authn/authz and runs inside AKS on VPN, so per-request
+	// URLs are acceptable. TODO(future): consider named server-side enrichers for stricter
+	// governance if the threat model changes.
+	var req struct {
+		Enrichers []string `json:"enrichers"`
+	}
+	_ = json.NewDecoder(c.Request().Body).Decode(&req) // empty body is valid
+
+	var enricherClients []*enricher.Client
+	for _, url := range req.Enrichers {
+		enricherClients = append(enricherClients, enricher.New(url, h.enricherTimeout))
+	}
+
+	go h.publisher.Publish(artifact.ID, job, tag, enricherClients)
 
 	return c.JSON(http.StatusAccepted, publishResponse{
 		ArtifactID: artifact.ID,
@@ -315,6 +337,10 @@ func toArtifactResponse(a *ent.RegistryArtifact) artifactResponse {
 	}
 	if a.Error != nil {
 		r.Error = a.Error
+	}
+	r.Enriched = a.Enriched
+	if a.EnricherError != nil {
+		r.EnricherError = a.EnricherError
 	}
 	return r
 }

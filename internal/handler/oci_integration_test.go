@@ -43,7 +43,7 @@ func newOCIHandler(t *testing.T, keyPath string) *handler.OCI {
 		SigningKeyPath: keyPath,
 		AllowHTTP:     true,
 	}
-	return handler.NewOCI(testDB, cfg, scratchExportDir, slog.Default())
+	return handler.NewOCI(testDB, cfg, scratchExportDir, slog.Default(), 30*time.Second)
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
@@ -116,7 +116,7 @@ func TestOCIPublish_EndToEnd(t *testing.T) {
 
 func TestOCIPublish_UnconfiguredReturns503(t *testing.T) {
 	// OCI handler with no registry configured — publisher will be nil.
-	h := handler.NewOCI(testDB, oci.Config{}, scratchExportDir, slog.Default())
+	h := handler.NewOCI(testDB, oci.Config{}, scratchExportDir, slog.Default(), 30*time.Second)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
