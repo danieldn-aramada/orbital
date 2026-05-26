@@ -254,7 +254,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		}
 
 		evh := handler.NewEventHandler(db, logger)
-		root.GET("/api/v1/events", evh.List)
+		root.GET("/api/v1/audit-log", evh.List)
 	}
 
 	gql := handler.NewGraphQL(cfg.DGraphURL, db, logger)
