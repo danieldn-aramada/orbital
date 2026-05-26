@@ -72,7 +72,7 @@ var skipVarsSet = map[string]bool{
 //
 // @Summary     List audit events
 // @Description Returns recorded mutation events. Supports limit/offset pagination and optional filtering by orbId, resource_type, resource_id, or operation_name. Returns JSON by default; returns an HTML table fragment when the HX-Request header is present.
-// @Tags        events
+// @Tags        audit
 // @Produce     json
 // @Param       limit          query int    false "Max results (default 100, max 500)"
 // @Param       offset         query int    false "Pagination offset"
@@ -81,7 +81,7 @@ var skipVarsSet = map[string]bool{
 // @Param       resource_id    query string false "Filter by resource ID"
 // @Param       operation_name query string false "Filter by operation name (e.g. UpdateServer)"
 // @Success     200 {object} map[string]interface{}
-// @Router      /api/v1/events [get]
+// @Router      /api/v1/audit-log [get]
 func (h *EventHandler) List(c echo.Context) error {
 	limit := 100
 	offset := 0

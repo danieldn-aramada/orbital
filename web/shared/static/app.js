@@ -506,7 +506,7 @@ function initDcDetailTabs(id) {
     if (!orbId) return
     const panel = document.getElementById(auditPanelId)
     if (!panel) return
-    fetch(BASE + `/api/v1/events?orbId=${encodeURIComponent(orbId)}&limit=50`, {
+    fetch(BASE + `/api/v1/audit-log?orbId=${encodeURIComponent(orbId)}&limit=50`, {
       headers: { 'HX-Request': 'true' },
     })
       .then(r => r.text())
@@ -558,7 +558,7 @@ function initServerDetailTabs(root) {
     if (!orbId) return
     const panel = document.getElementById(auditPanelId)
     if (!panel) return
-    fetch(BASE + `/api/v1/events?orbId=${encodeURIComponent(orbId)}&limit=50`, {
+    fetch(BASE + `/api/v1/audit-log?orbId=${encodeURIComponent(orbId)}&limit=50`, {
       headers: { 'HX-Request': 'true' },
     })
       .then(r => r.text())
@@ -2295,7 +2295,7 @@ document.addEventListener('DOMContentLoaded', () => {
       { data: 'details', visible: false },
     ],
     ajax: {
-      url: BASE + '/api/v1/events?limit=200',
+      url: BASE + '/api/v1/audit-log?limit=200',
       dataSrc: (json) => json.events ?? [],
     },
     createdRow: function (row, data) {

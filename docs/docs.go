@@ -15,6 +15,65 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/v1/audit-log": {
+            "get": {
+                "description": "Returns recorded mutation events. Supports limit/offset pagination and optional filtering by orbId, resource_type, resource_id, or operation_name. Returns JSON by default; returns an HTML table fragment when the HX-Request header is present.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "audit"
+                ],
+                "summary": "List audit events",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Max results (default 100, max 500)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination offset",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by resource orbId (e.g. alaska-dot:GRTLY24)",
+                        "name": "orbId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by resource type (e.g. DataCenter, Server)",
+                        "name": "resource_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by resource ID",
+                        "name": "resource_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by operation name (e.g. UpdateServer)",
+                        "name": "operation_name",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/backups": {
             "get": {
                 "description": "Returns up to 50 backup records ordered by most recent first.",
@@ -219,65 +278,6 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "string"
                             }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/events": {
-            "get": {
-                "description": "Returns recorded mutation events. Supports limit/offset pagination and optional filtering by orbId, resource_type, resource_id, or operation_name. Returns JSON by default; returns an HTML table fragment when the HX-Request header is present.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "events"
-                ],
-                "summary": "List audit events",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Max results (default 100, max 500)",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Pagination offset",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by resource orbId (e.g. alaska-dot:GRTLY24)",
-                        "name": "orbId",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by resource type (e.g. DataCenter, Server)",
-                        "name": "resource_type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by resource ID",
-                        "name": "resource_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by operation name (e.g. UpdateServer)",
-                        "name": "operation_name",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
                         }
                     }
                 }
@@ -705,39 +705,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/divergence/publish": {
-            "post": {
-                "description": "Sends a divergence report containing local overrides to orbital's report intake API. Returns 502 if orbital is unreachable.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "divergence"
-                ],
-                "summary": "Publish divergence report",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "502": {
-                        "description": "Bad Gateway",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/graphql": {
             "post": {
-                "description": "POST: proxies GraphQL queries and mutations to DGraph. GET: serves the GraphiQL explorer UI.",
+                "description": "POST: proxies GraphQL queries to orb's local DGraph instance. GET: serves the GraphiQL explorer UI.",
                 "consumes": [
                     "application/json"
                 ],
@@ -750,7 +720,7 @@ const docTemplate = `{
                 "summary": "GraphQL endpoint",
                 "parameters": [
                     {
-                        "example": "\"{\\\"query\\\": \\\"{ queryDataCenter { id name } }\\\"}\"",
+                        "example": "\"{\\\"query\\\": \\\"{ queryServer { id hostname } }\\\"}\"",
                         "description": "GraphQL request body",
                         "name": "body",
                         "in": "body",
@@ -895,54 +865,31 @@ const docTemplate = `{
                 }
             }
         },
-        "/overrides": {
-            "get": {
-                "description": "Returns all current local field overrides from overrides.json.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "overrides"
-                ],
-                "summary": "List overrides",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/orb.Override"
-                            }
-                        }
-                    }
-                }
-            },
+        "/import/upload": {
             "post": {
-                "description": "Records a local field override for a Server or DataCenter resource. Writes the local value to DGraph and persists to overrides.json.",
+                "description": "Accepts a zip bundle (data.json.gz + schema.gz) exported from orbital and imports it directly — no registry required. Use this when delivering a subgraph via physical media or manual transfer.",
                 "consumes": [
-                    "application/json"
+                    "multipart/form-data"
                 ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "overrides"
+                    "import"
                 ],
-                "summary": "Record local override",
+                "summary": "Upload subgraph bundle (courier)",
                 "parameters": [
                     {
-                        "description": "Override request",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/orbserver.overrideRequest"
-                        }
+                        "type": "file",
+                        "description": "Zip archive containing data.json.gz and schema.gz",
+                        "name": "bundle",
+                        "in": "formData",
+                        "required": true
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
+                    "202": {
+                        "description": "Accepted",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -952,6 +899,15 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -977,6 +933,12 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "digest": {
+                    "type": "string"
+                },
+                "enriched": {
+                    "type": "boolean"
+                },
+                "enricherError": {
                     "type": "string"
                 },
                 "error": {
@@ -1165,36 +1127,6 @@ const docTemplate = `{
                 }
             }
         },
-        "orb.Override": {
-            "type": "object",
-            "properties": {
-                "field": {
-                    "type": "string"
-                },
-                "intentValue": {
-                    "type": "string"
-                },
-                "localValue": {
-                    "type": "string"
-                },
-                "overriddenAt": {
-                    "type": "string"
-                },
-                "overriddenBy": {
-                    "type": "string"
-                },
-                "resourceId": {
-                    "description": "DGraph ID",
-                    "type": "string"
-                },
-                "resourceOrbId": {
-                    "type": "string"
-                },
-                "resourceType": {
-                    "type": "string"
-                }
-            }
-        },
         "orbserver.importSnapshot": {
             "type": "object",
             "properties": {
@@ -1214,26 +1146,6 @@ const docTemplate = `{
                     "$ref": "#/definitions/orb.ImportRecord"
                 },
                 "status": {
-                    "type": "string"
-                }
-            }
-        },
-        "orbserver.overrideRequest": {
-            "type": "object",
-            "properties": {
-                "field": {
-                    "type": "string"
-                },
-                "localValue": {
-                    "type": "string"
-                },
-                "resourceId": {
-                    "type": "string"
-                },
-                "resourceOrbId": {
-                    "type": "string"
-                },
-                "resourceType": {
                     "type": "string"
                 }
             }
