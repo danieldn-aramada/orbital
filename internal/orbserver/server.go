@@ -39,7 +39,7 @@ func (s *Server) templateMap() map[string]*template.Template {
 }
 
 // New creates an orb Server. All routes are registered here.
-func New(cfg *orbconfig.Config) *Server {
+func New(cfg *orbconfig.Config) (*Server, error) {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.SlogLevel()}))
 
 	e := echo.New()
@@ -63,7 +63,19 @@ func New(cfg *orbconfig.Config) *Server {
 	}))
 
 	state := newImportState()
-	imp := orb.NewImporter(*cfg, logger)
+
+	var backend orb.DGraphBackend
+	if cfg.Backend == "k8s" {
+		b, err := orb.NewK8sBackend(cfg.K8sNamespace, cfg.DGraphAlphaGRPC, cfg.DGraphZeroGRPC)
+		if err != nil {
+			return nil, fmt.Errorf("k8s backend: %w", err)
+		}
+		backend = b
+	} else {
+		backend = &orb.DockerBackend{ContainerName: cfg.DGraphContainerName}
+	}
+
+	imp := orb.NewImporter(*cfg, logger, backend)
 	divStore := divergence.NewStore(cfg.DataDir)
 
 	var divPublisher *divergence.Publisher
@@ -143,7 +155,7 @@ func New(cfg *orbconfig.Config) *Server {
 	api.GET("/divergence", s.getDivergence)
 	api.POST("/divergence/publish", s.publishDivergence)
 
-	return s
+	return s, nil
 }
 
 // Start begins the polling loop then starts the HTTP server.

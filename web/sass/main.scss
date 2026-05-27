@@ -252,7 +252,7 @@ html {
     &:hover {
         background-color: hsl(var(--bulma-notification-h), var(--bulma-notification-s), calc(var(--bulma-notification-background-l) + var(--bulma-hover-background-l-delta)));
     }
-    a {
+    a:not(.button) {
         color: blue !important;
         text-decoration: none !important;
     }

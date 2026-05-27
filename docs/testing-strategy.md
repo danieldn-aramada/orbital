@@ -497,3 +497,195 @@ Fill in the remaining export and event handler coverage. `Trigger` has conflict 
 Set up GitHub Actions with three jobs: unit tests (no Docker), integration tests (Docker Compose services), E2E tests (full stack + Playwright). This is already designed in the CI Pipeline section above -- just needs implementation.
 
 **Files:** `.github/workflows/test.yml` (new)
+
+---
+
+## Orb Coverage Gaps (T.21–T.27)
+
+These steps target the orb-specific packages introduced during Spike 13–19, which have 0% unit coverage.
+
+**Current state (2026-05-27):**
+
+| Package | Coverage | Target |
+|---------|---------|--------|
+| `internal/orbserver` | 0% | ≥ 50% |
+| `internal/divergence` | 0% | ≥ 80% |
+| `internal/oci` (Pull/ListTags/ResolveTag) | ~0% | ≥ 40% |
+
+### DAG
+
+```
+T.21 Divergence Store (unit)                T.22 Import state machine (unit)
+     │                                            │
+     └──────────────┐                            └──────────────┐
+                    ↓                                            ↓
+             T.24 Divergence                            T.23 Import
+             handler unit tests                         handler unit tests
+                    │                                            │
+                    └────────────────────┬───────────────────────┘
+                                         ↓
+T.25 Divergence publisher (integration)  T.26 OCI puller (unit)
+     [MinIO, no code deps]                    [no deps]
+                    │                            │
+                    └────────────────────┬───────┘
+                                         ↓
+                                    T.27 Coverage gate
+                                    (update score)
+```
+
+T.21, T.22, T.25, T.26 have no dependencies on each other — implement in any order or in parallel.
+T.23 depends on T.22 (state machine must be understood before mocking it in handler tests).
+T.24 depends on T.21 (Store must work before testing the handler layer that wraps it).
+T.27 is a verification pass once T.21–T.26 are complete.
+
+---
+
+### T.21 -- Divergence Store unit tests (Sonnet, ~30 min)
+
+Pure file I/O — no external services, no mocks needed. Use `t.TempDir()` as `dataDir`.
+
+**File:** `internal/divergence/divergence_test.go` (new)
+
+| Test | What it asserts |
+|------|----------------|
+| `TestStore_SaveLoad_RoundTrip` | `Save(entries)` + `Load()` returns identical entries |
+| `TestStore_Load_Empty` | `Load()` before any save returns `[]OverrideEntry{}`, nil error |
+| `TestStore_Save_Replace` | Second `Save` overwrites first — old entries gone |
+| `TestStore_PublishRecord_RoundTrip` | `SavePublishRecord(rec)` + `LoadPublishRecord()` returns same record |
+| `TestStore_LoadPublishRecord_Empty` | `LoadPublishRecord()` before any save returns nil, nil |
+
+**Run:** `go test -short ./internal/divergence/...`
+
+---
+
+### T.22 -- Import state machine unit tests (Sonnet, ~20 min)
+
+`internal/orbserver/state.go` is the concurrency core of the import pipeline — zero coverage for a mutex-protected state machine is a data-race risk.
+
+**File:** `internal/orbserver/state_test.go` (new)
+
+| Test | What it asserts |
+|------|----------------|
+| `TestState_InitialSnapshot` | Fresh state: `Status="available"`, `Tag=""`, `Err=""` |
+| `TestState_RunningTransition` | `setRunning()` → `snapshot().Status == "running"` |
+| `TestState_DoneTransition` | `setDone("v3")` → Status="available", Tag="v3", Err="" |
+| `TestState_FailedTransition` | `setFailed("pull: err")` → Status="failed", Err set |
+| `TestState_ConcurrentAccess` | 10 goroutines calling `snapshot()` while `setRunning`/`setDone` are called — no data race under `go test -race` |
+
+**Run:** `go test -short -race ./internal/orbserver/...`
+
+---
+
+### T.23 -- Import handler unit tests (Sonnet, ~1 session)
+
+Echo httptest tests. The handlers call `oci.ListTags`, `oci.ResolveTag`, and `oci.Verify` as package-level functions — these need to be injectable (function fields or a small interface on Server) to avoid requiring a real registry. Add the injection point as part of this task; keep it minimal (don't redesign the handler package).
+
+**File:** `internal/orbserver/import_handlers_test.go` (new)
+
+| Test | Handler | What it asserts |
+|------|---------|----------------|
+| `TestTriggerImport_MissingTag` | `triggerImport` | 400, `{"error":"tag is required"}` |
+| `TestTriggerImport_AlreadyRunning` | `triggerImport` | 409 when `state.Status == "running"` |
+| `TestTriggerImport_AcceptsTag` | `triggerImport` | 202 returned synchronously (goroutine not awaited) |
+| `TestImportStatus_Shape` | `importStatus` | 200, body has `status`, `tag`, `err` keys |
+| `TestImportTags_SigFiltered` | `importTags` | Tags ending in `.sig` absent from response `tags` array |
+| `TestImportTags_ListError` | `importTags` | `ListTags` returns error → 200 with `{"tags":[]}` |
+| `TestImportHistory_Empty` | `importHistory` | 200, body is `[]` not null |
+| `TestImportHistory_Records` | `importHistory` | 200, returns records written to DataDir by `orb.LoadHistory` |
+
+**Prerequisite:** T.22 (state transitions must be stable before mocking them in handler tests).
+
+**Run:** `go test -short -race ./internal/orbserver/...`
+
+---
+
+### T.24 -- Divergence handler unit tests (Sonnet, ~30 min)
+
+**File:** `internal/orbserver/divergence_handlers_test.go` (new)
+
+The handlers use `divergence.Store` directly via `s.divStore`. Construct a real Store backed by `t.TempDir()`.
+
+| Test | Handler | What it asserts |
+|------|---------|----------------|
+| `TestReceiveDivergence_Valid` | `receiveDivergence` | 200, entries persisted (verify via `store.Load`) |
+| `TestReceiveDivergence_InvalidJSON` | `receiveDivergence` | 400 |
+| `TestReceiveDivergence_Replace` | `receiveDivergence` | Second POST body replaces first — old entries gone |
+| `TestGetDivergence_Empty` | `getDivergence` | 200, body `{"overrides":[]}` |
+| `TestGetDivergence_WithEntries` | `getDivergence` | 200, entries round-trip from store |
+| `TestPublishDivergence_NoPublisher` | `publishDivergence` | 200 or graceful error when `s.divPublisher == nil` (S3 not configured) |
+
+**Prerequisite:** T.21 (Store must be functional and tested).
+
+**Run:** `go test -short ./internal/orbserver/...`
+
+---
+
+### T.25 -- Divergence publisher integration test (Sonnet, ~30 min)
+
+Uses the existing MinIO container at `localhost:9000`, bucket `orbital-test` — same infrastructure as `handler/backup_integration_test.go`.
+
+**File:** `internal/divergence/publisher_integration_test.go` (new, `//go:build integration`)
+
+| Test | What it asserts |
+|------|----------------|
+| `TestPublisher_Publish_WritesToMinIO` | `Publish(entries)` puts object; key matches `divergence/{ociRepo}/{timestamp}.json`; body is valid JSON `Snapshot` |
+| `TestPublisher_Publish_EmptyEntries` | `Publish(nil)` succeeds; body has `"overrides":[]` |
+
+**Run:** `go test -tags integration ./internal/divergence/...`
+
+---
+
+### T.26 -- OCI puller unit tests (Sonnet, ~1 session)
+
+`oci.ListTags`, `oci.ResolveTag`, and `oci.Pull` call a real OCI registry and have 0% unit coverage. Use `httptest.NewServer` speaking OCI Distribution Spec v1 (only the two endpoints needed: `GET /v2/{name}/tags/list` and `GET /v2/{name}/manifests/{ref}`).
+
+**File:** `internal/oci/puller_test.go` (new)
+
+Helper: `newOCIServer(tags []string, manifest string) *httptest.Server` — serves a well-formed tags-list response and a manifest with known digest.
+
+| Test | What it asserts |
+|------|----------------|
+| `TestListTags_Returns` | Returns tag list from server |
+| `TestListTags_Empty` | Server returns `{"tags":null}` → `[]string{}`, nil error |
+| `TestListTags_ServerError` | Non-200 response → non-nil error |
+| `TestResolveTag_ReturnsDigestAndSize` | `TagMeta.Digest` and `TagMeta.TotalSize` populated from manifest |
+| `TestResolveTag_NotFound` | 404 from server → error |
+
+Note: `.sig` filtering is done in `importTags` handler, not in `ListTags` — test `.sig` filtering in T.23, not here.
+
+**Run:** `go test -short ./internal/oci/...`
+
+---
+
+### T.27 -- Coverage gate and score update (Sonnet, ~15 min)
+
+After T.21–T.26 complete:
+
+1. Run `make test-unit`, confirm coverage floors are met.
+2. Run `make test-integration`, confirm T.25 passes.
+3. Update the Evaluation Report section in this document with the new coverage numbers and score.
+
+**Target floors:**
+
+| Package | Current | Target after T.21–T.26 |
+|---------|---------|------------------------|
+| `internal/divergence` | 0% | ≥ 80% |
+| `internal/orbserver` | 0% | ≥ 50% |
+| `internal/oci` | 12.6% | ≥ 40% |
+
+---
+
+## Summary (updated T.18–T.27)
+
+| Step | Status | Who | Notes |
+|------|--------|-----|-------|
+| T.18 DataCenter + Server handler tests | Not started | Sonnet | handler-level unit tests for DC/server CRUD |
+| T.19 Export Trigger/Download + Event List | Not started | Sonnet | conflict detection, file streaming, pagination |
+| T.20 CI pipeline | Not started | Sonnet | pre-MVP blocker |
+| T.21 Divergence Store unit | Not started | Sonnet | pure file I/O, trivial to add |
+| T.22 Import state machine unit | Not started | Sonnet | mutex-protected state, race-tested |
+| T.23 Import handler unit | Not started | Sonnet | requires injectable ListTags/ResolveTag |
+| T.24 Divergence handler unit | Not started | Sonnet | depends on T.21 |
+| T.25 Divergence publisher integration | Not started | Sonnet | uses existing MinIO |
+| T.26 OCI puller unit | Not started | Sonnet | httptest OCI server |
+| T.27 Coverage gate | Not started | Sonnet | verify floors, update score |

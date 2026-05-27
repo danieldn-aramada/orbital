@@ -65,6 +65,7 @@ test-unit: ## Run unit tests with coverage summary (no external services require
 	@go tool cover -func=coverage.out | tail -1
 
 test-integration: ## Run integration tests against real services (requires: make up)
+	@docker compose -f $(COMPOSE_FILE) exec -T postgres psql -U orbital -c "CREATE DATABASE orbital_test;" 2>/dev/null || true
 	@echo "Running integration tests..."
 	@go test -v -count=1 -tags integration -timeout 10m $(TEST_PKGS)
 	@echo "Reseeding DGraph for E2E tests..."
@@ -76,7 +77,7 @@ test-e2e: ## Run Playwright e2e tests (requires orbital running on :8001)
 test-e2e-orb: ## Run Playwright orb UI tests (requires orb running on :8010)
 	npx playwright test --config=playwright.orb.config.ts
 
-test: test-unit test-integration test-e2e ## Run full test suite (unit + integration + e2e)
+test: test-unit test-integration test-e2e test-e2e-orb ## Run full test suite (unit + integration + e2e + e2e-orb)
 
 cover: test-stack-up ## Run tests with coverage and print summary to terminal
 	@echo "Running tests with coverage..."
@@ -90,14 +91,8 @@ cover-html: cover ## Open interactive HTML coverage report in browser
 lint: ## Run go vet
 	go vet ./...
 
-up: ## Start all local dependencies (orbital + orb DGraph, PostgreSQL, Zot) — no builds
-	docker compose -f $(COMPOSE_FILE) up -d dgraph-zero dgraph-alpha dgraph-zero-scratch dgraph-alpha-scratch dgraph-ratel postgres minio oci-registry dgraph-orb-zero dgraph-orb-alpha
-
-up-orb-deps: up ## Alias for make up (orb deps are now included)
-	@true
-
-up-orb: ## Start orb container (builds orb image)
-	docker compose -f $(COMPOSE_FILE) up -d orb
+up: ## Start all local dependencies (DGraph, PostgreSQL, MinIO, Zot, orb DGraph)
+	docker compose -f $(COMPOSE_FILE) up -d
 
 down: ## Stop local stack
 	docker compose -f $(COMPOSE_FILE) down -v

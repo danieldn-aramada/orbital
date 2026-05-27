@@ -96,6 +96,7 @@ See `docs/claude/DGRAPH.md` for schema gotchas, DQL patterns, and blue-green exp
 - **Spike 11 (Authorization)** ← blocks MVP — bearer validation done; remaining: Azure AD App Roles, DGraph `@auth` directives, Echo middleware role enforcement, offline JWT integration tests ⚠️ Opus design session first
 
 **Recently completed:**
+- **Orb import hardening + DGraphBackend abstraction** — `oci.Verify` now hard-errors when key not configured (no skip path); `ResolveTag()` added for lightweight manifest inspection; import tags UI enriched with verified badge, digest, size; `Verified` field added to `ImportRecord` and persisted to history file via `ImportMeta.Verified`; `DGraphBackend` interface with `DockerBackend` (docker cp + exec) and `K8sBackend` (idle pod + shared PVC, mirrors orbital restore); `ORB_BACKEND` env var; `orbserver.New` returns error; 22 new tests (unit + e2e); `make test-integration` creates `orbital_test` DB inline
 - **Spike 19 (ConfigBundle enricher integration)** — Orbital is now the sole OCI producer; per-request enricher URLs in publish body; all-or-nothing enrichment before push; `enriched`/`enricher_error` fields on `RegistryArtifact`; retryable HTTP client (`go-retryablehttp`) with size cap; UI Enriched column on Signed Artifacts page; enricher unit tests; `docs/configbundle-integration.md` full integration plan
 - **Spike 14 (Orb divergence intake)** — done: `POST /api/v1/divergence` replaces pending set; `POST /api/v1/divergence/publish` writes snapshot to S3
 - **Spike 13 (Orb import API)** — done: OCI puller, cosign verify, dgraph live import, polling loop
@@ -258,6 +259,11 @@ web/
 - Don't add TODOs or placeholder comments
 - All page JavaScript goes in `web/static/app.js` — never inline `<script>` blocks in templates
 - All styles go in `web/sass/main.scss` — never edit `web/static/css/main.css` directly
+- **Write tests alongside every behavioral change** — when you add a field, persist data, change an API response, or introduce an interface, include tests asserting the new behavior in the same response. Do not wait to be asked. Exception: CSS/template presentation changes covered implicitly by e2e do not need dedicated unit tests unless the logic is non-trivial.
+- **Run tests after writing them** — always run the relevant test command after writing new tests. If tests fail, diagnose and fix before reporting done. Do not hand back failing tests.
+- **Test at the lowest isolatable level** — don't write an e2e test when a unit test can cover the same behavior. Level order: unit (no services) → integration (real services) → e2e (browser). Choose the lowest level where the behavior is fully exercised.
+- **Any persistence requires a round-trip test** — if data is written to disk, PostgreSQL, or any file: write a test that writes, reads back, and asserts. Persistence bugs are invisible without this. E.g., a new `bool` field on a struct written to JSON must be verified to survive encode+decode.
+- **Handler logic must be tested at unit level** — use `httptest.NewRecorder` (net/http) or Echo's `httptest` equivalent. Do not rely solely on e2e to validate HTTP handler behavior. This applies to: status codes on error, request validation, response body shape.
 - Before marking a task as done: check whether any architectural decisions, conventions, or settled rules from this session should be added to CLAUDE.md or the relevant domain file
 
 ### Conversation conventions
@@ -296,6 +302,11 @@ These have been explicitly decided. Do not re-suggest them.
 - **Orb is stateless re: DC identity** — `DCSlug` was removed from `orbconfig.Config`. Orb derives which data center it serves from the imported DGraph data (one `DataCenter` node after `drop_all` + live load). `ORB_OCI_REPO` carries the full DC-specific path (e.g. `orbital/colo-galleon`). Do not re-add a `DCSlug` field.
 - **Inventory namespace filter is page-level, not a DataTable column filter** — the namespace selector lives in the page header (above the table) and uses regex search on the orbId column (`^namespace:`). Do not move it into the DataTable toolbar — namespace is a scope, type is a column filter; they are different cognitive categories.
 - **Product naming: "Orbital" (cloud) / "Orb" (edge) — this is the north star.** The project is called Orbital. The cloud component UI shows "Orbital." The edge component UI shows "Orb." Do not use "Orbital Edge" or conflate the two. Orb is a purpose-built edge agent — not a deployment variant of Orbital. `AppName: "Orbital"` in orbital handlers; `AppName: "Orb"` in orb handlers.
+- **Cosign verification is required — no skip path.** `oci.Verify` returns a hard error when `ORB_OCI_PUBLIC_KEY_PATH` is not configured. Do not re-add a skip/warn path. `cosign.pub` exists in the repo root so local dev is unaffected.
+- **`DGraphBackend` interface abstracts orb's dgraph live execution.** `DockerBackend` (default, `ORB_BACKEND=docker`): `docker cp` + `docker exec` into the alpha container — correct for local dev where Docker SDK is available. `K8sBackend` (`ORB_BACKEND=k8s`): finds an idle `app.kubernetes.io/name=dgraph-live` pod and execs via SPDY; `ORB_DATA_DIR` must be the shared PVC mount path. Same pattern and rationale as orbital's `restore.go`. Do not collapse the two backends — they serve genuinely different deployment contexts.
+- **Orb's K8s backend uses an idle `dgraph-live` pod, not exec into alpha.** Reasons: (1) `dgraph live` is a gRPC client — it doesn't need to run inside alpha; (2) RBAC: `pods/exec` on a serving pod is a broader attack surface than on an idle utility pod; (3) PVC topology: the shared PVC is mounted on `dgraph-live`, not alpha. Mirror orbital's deployment pattern exactly.
+- **`orbserver.New` returns `(*Server, error)`.** K8s backend init failure is a hard startup error, not a warn-and-fallback. Do not change this to a panic or silent fallback.
+- **`ImportMeta.Verified` carries the verification result into the history file.** `Import()` calls `recordHistory(meta, ...)` and `meta.Verified` must be set by the caller before calling `Import()`. Do not add a separate `verified` argument to `recordHistory` — keep it as part of meta.
 
 *Domain-specific settled decisions live in `docs/claude/DGRAPH.md`, `docs/claude/UI.md`, `docs/claude/AUTH.md`, `docs/claude/AUDIT.md`, `docs/claude/OCI.md`.*
 

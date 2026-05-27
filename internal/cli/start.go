@@ -26,6 +26,9 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("config: %w", err)
 	}
 
-	srv := orbserver.New(cfg)
+	srv, err := orbserver.New(cfg)
+	if err != nil {
+		return fmt.Errorf("server init: %w", err)
+	}
 	return srv.Start(ctx)
 }

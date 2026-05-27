@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/armada/orbital/internal/oci"
@@ -40,7 +41,7 @@ func (s *Server) triggerImport(c echo.Context) error {
 	s.state.setRunning()
 
 	go func() {
-		ctx := c.Request().Context()
+		ctx := context.Background()
 
 		pullCfg := oci.PullConfig{
 			Registry:  s.cfg.OCIRegistry,
@@ -74,6 +75,7 @@ func (s *Server) triggerImport(c echo.Context) error {
 			DCOrbID:     artifact.Annotations["com.armada.orbital.datacenter-id"],
 			ExportJobID: artifact.Annotations["com.armada.orbital.export-job-id"],
 			CreatedAt:   time.Now().UTC(),
+			Verified:    result.Verified,
 		}
 
 		if err := s.imp.Import(ctx, artifact.DataGZ, artifact.SchemaGZ, meta); err != nil {
@@ -88,6 +90,7 @@ func (s *Server) triggerImport(c echo.Context) error {
 			ExportJobID: meta.ExportJobID,
 			ImportedAt:  time.Now().UTC(),
 			Status:      "done",
+			Verified:    result.Verified,
 		})
 	}()
 
@@ -104,25 +107,62 @@ func (s *Server) importStatus(c echo.Context) error {
 	return c.JSON(http.StatusOK, s.state.snapshot())
 }
 
+type tagInfo struct {
+	Name      string `json:"name"`
+	Verified  bool   `json:"verified"`
+	SizeBytes int64  `json:"sizeBytes"`
+	Digest    string `json:"digest"`
+}
+
 // @Summary     List import tags
-// @Description Lists available OCI artifact tags from the configured registry for this data center.
+// @Description Lists available OCI artifact tags from the configured registry for this data center, enriched with signature verification status and artifact size.
 // @Tags        import
 // @Produce     json
-// @Success     200 {object} map[string][]string
+// @Success     200 {object} map[string][]tagInfo
 // @Router      /import/tags [get]
 func (s *Server) importTags(c echo.Context) error {
-	tags, err := oci.ListTags(c.Request().Context(), oci.PullConfig{
+	ctx := c.Request().Context()
+	pullCfg := oci.PullConfig{
 		Registry:  s.cfg.OCIRegistry,
 		Repo:      s.cfg.OCIRepo,
 		Username:  s.cfg.OCIUsername,
 		Password:  s.cfg.OCIPassword,
 		AllowHTTP: s.cfg.OCIAllowHTTP,
-	})
+	}
+	allTags, err := oci.ListTags(ctx, pullCfg)
 	if err != nil {
 		s.logger.Warn("list tags failed", "err", err)
-		return c.JSON(http.StatusOK, map[string][]string{"tags": {}})
+		return c.JSON(http.StatusOK, map[string][]tagInfo{"tags": {}})
 	}
-	return c.JSON(http.StatusOK, map[string][]string{"tags": tags})
+
+	verifyCfg := oci.VerifyConfig{
+		PublicKeyPath: s.cfg.OCIPublicKeyPath,
+		AllowHTTP:     s.cfg.OCIAllowHTTP,
+	}
+	repoRef := s.cfg.OCIRegistry + "/" + s.cfg.OCIRepo
+
+	var infos []tagInfo
+	for _, t := range allTags {
+		// Skip cosign signature tags — not importable artifacts.
+		if strings.HasSuffix(t, ".sig") {
+			continue
+		}
+		info := tagInfo{Name: t}
+		meta, err := oci.ResolveTag(ctx, pullCfg, t)
+		if err != nil {
+			s.logger.Warn("resolve tag failed", "tag", t, "err", err)
+			infos = append(infos, info)
+			continue
+		}
+		info.SizeBytes = meta.TotalSize
+		info.Digest = meta.Digest
+		result, err := oci.Verify(ctx, verifyCfg, repoRef, meta.Digest, s.logger)
+		if err == nil {
+			info.Verified = result.Verified
+		}
+		infos = append(infos, info)
+	}
+	return c.JSON(http.StatusOK, map[string][]tagInfo{"tags": infos})
 }
 
 // @Summary     Import history

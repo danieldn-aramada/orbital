@@ -52,7 +52,7 @@
 
       <div class="field is-grouped mb-4">
         <div class="control">
-          <button class="button is-light is-small" onclick="loadOrbTags()">
+          <button id="btn-refresh-tags" class="button is-light is-small" onclick="loadOrbTags()">
             <span class="icon"><i class="fa-solid fa-rotate"></i></span>
             <span>Refresh</span>
           </button>
@@ -70,7 +70,9 @@
           <thead>
             <tr>
               <th>Tag</th>
-              <th>DC</th>
+              <th>Signature</th>
+              <th>Digest</th>
+              <th>Size</th>
               <th></th>
             </tr>
           </thead>
