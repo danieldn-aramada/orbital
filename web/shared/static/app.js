@@ -2535,31 +2535,52 @@ function orbShowImportStatus(colorClass, iconClass, text) {
 
 function loadOrbTags() {
   const tbody = document.getElementById('orb-tags-tbody')
+  const btn = document.getElementById('btn-refresh-tags')
   if (!tbody) return
-  fetch(BASE + '/api/v1/import/tags')
-    .then(r => r.json())
-    .then(data => {
+  if (btn) btn.classList.add('is-loading')
+  const s = () => `<span class="is-skeleton" style="display:block">&nbsp;</span>`
+  tbody.innerHTML = [1,2,3].map(() => `<tr><td style="width:8%">${s()}</td><td style="width:12%">${s()}</td><td style="width:60%">${s()}</td><td style="width:8%">${s()}</td><td style="width:10%">${s()}</td></tr>`).join('')
+  Promise.all([
+    fetch(BASE + '/api/v1/import/tags').then(r => r.json()),
+    new Promise(resolve => setTimeout(resolve, 500)),
+  ]).then(([data]) => {
       const tags = data.tags || []
       if (tags.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="has-text-grey">No versions available.</td></tr>'
+        tbody.innerHTML = '<tr><td colspan="5" class="has-text-grey">No versions available.</td></tr>'
         return
       }
       // Newest first (tags arrive oldest-first from the registry)
-      tbody.innerHTML = [...tags].reverse().map(t => `
-        <tr data-tag="${t}">
-          <td><strong>${t}</strong></td>
-          <td class="has-text-grey">${BASE.includes(t) ? '—' : ''}</td>
+      tbody.innerHTML = [...tags].reverse().map(t => {
+        const verifiedBadge = t.verified
+          ? `<span class="tag is-success is-light"><i class="fa-solid fa-shield-check"></i>&nbsp;verified</span>`
+          : `<span class="tag is-light has-text-grey">unverified</span>`
+        const size = t.sizeBytes > 0
+          ? (t.sizeBytes < 1024 * 1024
+            ? (t.sizeBytes / 1024).toFixed(1) + ' KB'
+            : (t.sizeBytes / (1024 * 1024)).toFixed(1) + ' MB')
+          : '—'
+        const digestCell = t.digest
+          ? `<div style="display:flex;align-items:center;gap:0.25rem;"><span class="is-family-monospace is-size-7">${t.digest}</span><button class="button is-small is-white" title="Copy digest" onclick="navigator.clipboard.writeText('${t.digest}').then(()=>{this.innerHTML='<span class=\\'icon\\'><i class=\\'fas fa-check\\'></i></span>';setTimeout(()=>{this.innerHTML='<span class=\\'icon\\'><i class=\\'fas fa-copy\\'></i></span>';},1200)})"><span class="icon"><i class="fas fa-copy"></i></span></button></div>`
+          : '—'
+        return `
+        <tr data-tag="${t.name}">
+          <td><strong>${t.name}</strong></td>
+          <td>${verifiedBadge}</td>
+          <td>${digestCell}</td>
+          <td class="has-text-grey is-size-7">${size}</td>
           <td>
-            <button class="button is-info is-small" onclick="handleOrbImport('${t}')">
+            <button class="button is-info is-small" onclick="handleOrbImport('${t.name}')">
               <span class="icon"><i class="fa-solid fa-download"></i></span>
               <span>Import</span>
             </button>
           </td>
-        </tr>`).join('')
+        </tr>`}).join('')
     })
     .catch(() => {
-      const tbody = document.getElementById('orb-tags-tbody')
-      if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="has-text-danger">Failed to load tags.</td></tr>'
+      if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="has-text-danger">Failed to load tags.</td></tr>'
+    })
+    .finally(() => {
+      if (btn) btn.classList.remove('is-loading')
     })
 }
 

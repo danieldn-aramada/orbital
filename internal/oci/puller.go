@@ -53,6 +53,50 @@ func ListTags(ctx context.Context, cfg PullConfig) ([]string, error) {
 	return tags, nil
 }
 
+// TagMeta holds lightweight metadata for a tag resolved from the registry.
+type TagMeta struct {
+	Digest    string
+	TotalSize int64 // sum of all layer sizes in bytes
+}
+
+// ResolveTag fetches only the manifest descriptor for a tag — no blobs downloaded.
+// Returns digest and total layer size.
+func ResolveTag(ctx context.Context, cfg PullConfig, tag string) (*TagMeta, error) {
+	repo, err := newPullRepo(repoRef(cfg))
+	if err != nil {
+		return nil, fmt.Errorf("new repo: %w", err)
+	}
+	repo.PlainHTTP = cfg.AllowHTTP
+	setCredentials(repo, cfg.Registry, cfg.Username, cfg.Password)
+
+	desc, err := repo.Resolve(ctx, tag)
+	if err != nil {
+		return nil, fmt.Errorf("resolve tag: %w", err)
+	}
+
+	rc, err := repo.Fetch(ctx, desc)
+	if err != nil {
+		return nil, fmt.Errorf("fetch manifest: %w", err)
+	}
+	manifestBytes, err := io.ReadAll(rc)
+	rc.Close()
+	if err != nil {
+		return nil, fmt.Errorf("read manifest: %w", err)
+	}
+
+	var manifest ocispec.Manifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return nil, fmt.Errorf("parse manifest: %w", err)
+	}
+
+	var total int64
+	for _, layer := range manifest.Layers {
+		total += layer.Size
+	}
+
+	return &TagMeta{Digest: desc.Digest.String(), TotalSize: total}, nil
+}
+
 // Pull downloads a specific tag's artifact from the registry and returns its contents.
 func Pull(ctx context.Context, cfg PullConfig, tag string) (*PulledArtifact, error) {
 	ref := repoRef(cfg)

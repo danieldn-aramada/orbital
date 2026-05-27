@@ -23,7 +23,7 @@ type Config struct {
 	// e.g. "orbital/colo-galleon". The DC identity is encoded here — not
 	// as a separate config field. Orb derives who it is from imported data.
 	OCIRegistry      string `envconfig:"ORB_OCI_REGISTRY"       default:"localhost:5001"`
-	OCIRepo          string `envconfig:"ORB_OCI_REPO"           default:"orbital"`
+	OCIRepo          string `envconfig:"ORB_OCI_REPO"           default:"orbital/colo-galleon"`
 	OCIUsername      string `envconfig:"ORB_OCI_USERNAME"       default:""`
 	OCIPassword      string `envconfig:"ORB_OCI_PASSWORD"       default:""`
 	OCIAllowHTTP     bool   `envconfig:"ORB_OCI_ALLOW_HTTP"     default:"true"`
@@ -42,8 +42,17 @@ type Config struct {
 	// Data directory — holds import history and divergence reports
 	DataDir string `envconfig:"ORB_DATA_DIR" default:"./orb-data"`
 
-	// Docker container name for dgraph live import exec
+	// Backend selects the dgraph live execution strategy: "docker" (local dev) or "k8s" (production).
+	// docker: uses docker cp + docker exec into the DGraph alpha container.
+	// k8s: execs into an idle dgraph-live pod; ORB_DATA_DIR must be the shared PVC mount path.
+	Backend string `envconfig:"ORB_BACKEND" default:"docker"`
+
+	// Docker container name — used only when ORB_BACKEND=docker.
 	DGraphContainerName string `envconfig:"ORB_DGRAPH_CONTAINER" default:"local-dgraph-orb-alpha-1"`
+
+	// K8s backend fields — used only when ORB_BACKEND=k8s.
+	DGraphZeroGRPC string `envconfig:"ORB_DGRAPH_ZERO_GRPC"  default:"localhost:5082"`
+	K8sNamespace   string `envconfig:"ORB_K8S_NAMESPACE"     default:""`
 
 	LogLevel string `envconfig:"ORB_LOG_LEVEL" default:"info"`
 }

@@ -16,8 +16,7 @@ import (
 
 // VerifyConfig holds parameters for cosign signature verification.
 type VerifyConfig struct {
-	// PublicKeyPath is the path to cosign.pub (PEM-encoded ECDSA public key).
-	// If empty, verification is skipped with a warning.
+	// PublicKeyPath is the path to cosign.pub (PEM-encoded ECDSA public key). Required.
 	PublicKeyPath string
 	AllowHTTP     bool
 }
@@ -25,7 +24,6 @@ type VerifyConfig struct {
 // VerifyResult summarises the outcome of a signature verification attempt.
 type VerifyResult struct {
 	Verified    bool
-	Skipped     bool   // true when PublicKeyPath is empty
 	Fingerprint string // key fingerprint, if verified
 	Message     string // human-readable summary for UI display
 }
@@ -34,8 +32,7 @@ type VerifyResult struct {
 // repoRef is "<registry>/<repo>/<dc-slug>"; digest is the manifest digest string.
 func Verify(ctx context.Context, cfg VerifyConfig, repoRef, digest string, logger *slog.Logger) (*VerifyResult, error) {
 	if cfg.PublicKeyPath == "" {
-		logger.Warn("cosign verification skipped: ORB_OCI_PUBLIC_KEY_PATH not set")
-		return &VerifyResult{Skipped: true, Message: "Skipped — no public key configured"}, nil
+		return nil, fmt.Errorf("ORB_OCI_PUBLIC_KEY_PATH is not configured — signature verification is required")
 	}
 
 	// Load the public key verifier directly from the PEM file.

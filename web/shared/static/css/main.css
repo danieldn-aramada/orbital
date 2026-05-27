@@ -21665,7 +21665,7 @@ has-background-danger.is-hoverable:active {
 .notification:hover {
   background-color: hsl(var(--bulma-notification-h), var(--bulma-notification-s), calc(var(--bulma-notification-background-l) + var(--bulma-hover-background-l-delta)));
 }
-.notification a {
+.notification a:not(.button) {
   color: blue !important;
   text-decoration: none !important;
 }

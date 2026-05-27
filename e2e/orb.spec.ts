@@ -70,3 +70,73 @@ test('orb app version badge is visible', async ({ page }) => {
   await expect(page.getByTestId('app-version')).toBeVisible();
   await expect(page.getByTestId('app-version')).toContainText('Orb');
 });
+
+// --- Import page ---
+
+test('import page › tags table has correct column headers', async ({ page }) => {
+  await page.goto('/import');
+  const ths = page.locator('#orb-tags-table thead th');
+  await expect(ths.nth(0)).toHaveText('Tag');
+  await expect(ths.nth(1)).toHaveText('Signature');
+  await expect(ths.nth(2)).toHaveText('Digest');
+  await expect(ths.nth(3)).toHaveText('Size');
+});
+
+test('import page › courier section has file input and disabled upload button', async ({ page }) => {
+  await page.goto('/import');
+  await expect(page.locator('#orb-courier-file')).toBeAttached();
+  await expect(page.locator('#orb-courier-upload-btn')).toBeVisible();
+  await expect(page.locator('#orb-courier-upload-btn')).toBeDisabled();
+});
+
+test('import page › refresh and import latest buttons are present', async ({ page }) => {
+  await page.goto('/import');
+  await expect(page.locator('#btn-refresh-tags')).toBeVisible();
+  await expect(page.locator('#btn-import-latest')).toBeVisible();
+});
+
+// --- Import tags API ---
+
+test('import tags API › response has tags array', async ({ request }) => {
+  const resp = await request.get('/api/v1/import/tags');
+  expect(resp.ok()).toBeTruthy();
+  const body = await resp.json();
+  expect(Array.isArray(body.tags)).toBeTruthy();
+});
+
+test('import tags API › does not return .sig tags', async ({ request }) => {
+  const resp = await request.get('/api/v1/import/tags');
+  const body = await resp.json();
+  const tags: Array<{ name: string }> = body.tags ?? [];
+  const sigTags = tags.filter(t => t.name.endsWith('.sig'));
+  expect(sigTags).toHaveLength(0);
+});
+
+test('import tags API › tag objects have expected shape', async ({ request }) => {
+  const resp = await request.get('/api/v1/import/tags');
+  const body = await resp.json();
+  const tags: Array<Record<string, unknown>> = body.tags ?? [];
+  for (const tag of tags) {
+    expect(typeof tag.name).toBe('string');
+    expect(typeof tag.verified).toBe('boolean');
+    expect(typeof tag.sizeBytes).toBe('number');
+    expect(typeof tag.digest).toBe('string');
+  }
+});
+
+// --- Import history API ---
+
+test('import history API › response is an array', async ({ request }) => {
+  const resp = await request.get('/api/v1/import/history');
+  expect(resp.ok()).toBeTruthy();
+  const records = await resp.json();
+  expect(Array.isArray(records)).toBeTruthy();
+});
+
+test('import history API › records include verified field', async ({ request }) => {
+  const resp = await request.get('/api/v1/import/history');
+  const records: Array<Record<string, unknown>> = await resp.json();
+  for (const r of records) {
+    expect(typeof r.verified).toBe('boolean');
+  }
+});

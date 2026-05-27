@@ -3,15 +3,10 @@
 ## Setup
 
 ```bash
-# Terminal 1 — start all dependencies (orbital + orb DGraph, PostgreSQL, registry) then start orbital
-make up
-make run-orbital
-
-# Terminal 2 — start orb
-make run-orb
-
-# Terminal 3 - Seed example data (once, after orbital is up)
-make seed
+make up           # Terminal 1 — start all dependencies
+make run-orbital  # Terminal 2 — orbital on :8001
+make run-orb      # Terminal 3 — orb on :8010
+make seed         # once, after orbital is up
 ```
 
 Both UIs should open without errors:
@@ -23,17 +18,7 @@ No `.env` sourcing required — all local defaults are baked into `config.go` an
 ## Running tests
 
 ```bash
-make test-unit          # no services required
-make test-integration   # requires: make up
-make test-e2e           # requires: make run-orbital running in another terminal
-make test-e2e-orb       # requires: make run-orb running in another terminal
-```
-
-`test-integration` re-seeds DGraph after running so `test-e2e` always starts from a known state.
-
-To open the interactive Playwright UI for orbital e2e tests:
-```bash
-npx playwright test --ui
+make test  # run all tests (requires: make up + make run-orbital + make run-orb)
 ```
 
 ## Editing styles (CSS)

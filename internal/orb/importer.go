@@ -32,6 +32,7 @@ type ImportMeta struct {
 	DCOrbID     string
 	ExportJobID string
 	CreatedAt   time.Time
+	Verified    bool
 }
 
 // ImportRecord is one entry in the import history log.
@@ -42,18 +43,20 @@ type ImportRecord struct {
 	ExportJobID string    `json:"exportJobId"`
 	ImportedAt  time.Time `json:"importedAt"`
 	Status      string    `json:"status"` // "done" | "failed"
+	Verified    bool      `json:"verified"`
 	Error       string    `json:"error,omitempty"`
 }
 
 // Importer executes the full import pipeline: pull → verify → drop_all → schema → dgraph live.
 type Importer struct {
-	cfg    orbconfig.Config
-	logger *slog.Logger
+	cfg     orbconfig.Config
+	logger  *slog.Logger
+	backend DGraphBackend
 }
 
-// NewImporter creates an Importer with the given config and logger.
-func NewImporter(cfg orbconfig.Config, logger *slog.Logger) *Importer {
-	return &Importer{cfg: cfg, logger: logger}
+// NewImporter creates an Importer with the given config, logger, and DGraph backend.
+func NewImporter(cfg orbconfig.Config, logger *slog.Logger, backend DGraphBackend) *Importer {
+	return &Importer{cfg: cfg, logger: logger, backend: backend}
 }
 
 // Import executes the full import sequence for a pulled artifact:
@@ -86,9 +89,13 @@ func (i *Importer) Import(ctx context.Context, dataGZ, schemaGZ []byte, meta Imp
 		return fmt.Errorf("write scratch file: %w", err)
 	}
 
-	if err := i.dgraphLive(ctx); err != nil {
+	i.logger.Info("running dgraph live", "path", scratchPath)
+	out, err := i.backend.RunLive(ctx, scratchPath)
+	if err != nil {
+		i.logger.Error("dgraph live failed", "output", out, "err", err)
 		return fmt.Errorf("dgraph live: %w", err)
 	}
+	i.logger.Info("dgraph live completed", "output_len", len(out))
 
 	// New import resets all local overrides — the imported intent is now authoritative.
 	overridesPath := filepath.Join(i.cfg.DataDir, overridesFile)
@@ -166,31 +173,6 @@ func (i *Importer) applySchema(ctx context.Context, schemaGZ []byte) error {
 	return nil
 }
 
-// dgraphLive copies the scratch file into the container then execs `dgraph live`.
-// Using docker cp rather than a shared volume so orb works correctly when running
-// outside Docker (local dev via make run-orb) as well as inside Docker.
-func (i *Importer) dgraphLive(ctx context.Context) error {
-	scratchPath := filepath.Join(i.cfg.DataDir, scratchFile)
-	i.logger.Info("copying scratch file into container", "container", i.cfg.DGraphContainerName)
-	if err := dockerCopy(ctx, i.cfg.DGraphContainerName, scratchPath, "/tmp/orb-import/"); err != nil {
-		return fmt.Errorf("docker cp: %w", err)
-	}
-
-	i.logger.Info("running dgraph live inside container", "container", i.cfg.DGraphContainerName)
-	cmd := []string{
-		"dgraph", "live",
-		"-f", "/tmp/orb-import/" + scratchFile,
-		"-a", "localhost:9080",
-		"-z", "localhost:5080",
-	}
-	out, err := dockerExec(ctx, i.cfg.DGraphContainerName, cmd)
-	if err != nil {
-		i.logger.Error("dgraph live failed", "output", out, "err", err)
-		return err
-	}
-	i.logger.Info("dgraph live completed", "output_len", len(out))
-	return nil
-}
 
 // recordHistory appends an ImportRecord to the rolling history file.
 func (i *Importer) recordHistory(meta ImportMeta, status, errMsg string) error {
@@ -208,6 +190,7 @@ func (i *Importer) recordHistory(meta ImportMeta, status, errMsg string) error {
 		ExportJobID: meta.ExportJobID,
 		ImportedAt:  time.Now().UTC(),
 		Status:      status,
+		Verified:    meta.Verified,
 		Error:       errMsg,
 	})
 

@@ -37,6 +37,23 @@ Read this before: Go template changes, HTMX interactions, JavaScript in `app.js`
 
 - **GraphQL always returns HTTP 200, even for errors** — check `resp.ok` first (transport failure), then `result.errors` in the body (GraphQL-layer errors). Both checks are required. DGraph returns errors in `{ "errors": [...] }` with HTTP 200.
 
+## Recurring display patterns
+
+These patterns are used in both orbital and orb. Always use them — never invent a one-off variant.
+
+- **Digest display** — `digest.substring(0, 19) + '…'` (keeps `sha256:` prefix + 12 hex chars). Wrap in a flex div with a copy button:
+  ```js
+  `<div style="display:flex;align-items:center;gap:0.25rem;">
+    <span class="is-family-monospace is-size-7">${digest.substring(0, 19)}…</span>
+    <button class="button is-small is-white" title="Copy digest"
+      onclick="navigator.clipboard.writeText('${digest}').then(...)">
+      <span class="icon"><i class="fas fa-copy"></i></span>
+    </button>
+  </div>`
+  ```
+- **Skeleton + min-delay on refresh** — show skeleton rows immediately, enforce 500ms minimum display with `Promise.all([fetch(...), new Promise(r => setTimeout(r, 500))])`. Add `is-loading` to the refresh button for the same duration. See `loadOrbTags()` and `fetchWithMinDelay()` in `app.js`.
+- **Refresh button loading state** — add `id="btn-refresh-*"` to the button; JS adds/removes `is-loading` class around the fetch.
+
 ## DataTables + Bulma
 
 - **Page length `<select>` needs a Bulma wrapper** — DataTables renders a bare `<select>`; Bulma needs `<div class="select is-small">` for the custom arrow. Wrap after init: `initComplete: function() { dtWrapLengthSelect(this.api()) }`.
