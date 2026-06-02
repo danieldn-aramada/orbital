@@ -189,10 +189,14 @@ func (p *Publisher) pushArtifact(ctx context.Context, repoName, tag string, data
 		layers = append(layers, desc)
 	}
 
+	dcOrbID := ""
+	if job.DatacenterOrbID != nil {
+		dcOrbID = *job.DatacenterOrbID
+	}
 	annotations := map[string]string{
 		annotationCreated:     time.Now().UTC().Format(time.RFC3339),
 		annotationVersion:     tag,
-		annotationDCID:        job.DatacenterID,
+		annotationDCID:        dcOrbID,
 		annotationExportJobID: job.ID.String(),
 	}
 	if p.cfg.Host != "" {

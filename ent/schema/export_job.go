@@ -16,6 +16,7 @@ func (ExportJob) Fields() []ent.Field {
 		field.UUID("id", uuid.UUID{}).Default(uuid.New),
 		field.String("datacenter_id"),              // DGraph internal ID
 		field.String("datacenter_name"),             // for display
+		field.String("datacenter_orb_id").Optional().Nillable(), // canonical orbId
 		field.Enum("status").Values("pending", "running", "completed", "failed", "stale"),
 		field.String("artifact_path").Optional().Nillable(), // local zip path on completion
 		field.String("error").Optional().Nillable(),

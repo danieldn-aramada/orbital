@@ -1,6 +1,7 @@
 package orbconfig
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -8,10 +9,29 @@ import (
 	"github.com/kelseyhightower/envconfig"
 )
 
+// ConsumerConfig registers an external layer consumer for orb dispatch.
+type ConsumerConfig struct {
+	MediaType string `json:"mediaType"`
+	URL       string `json:"url"`
+}
+
+// ConsumersConfig is a []ConsumerConfig that decodes from a JSON-array env var.
+type ConsumersConfig []ConsumerConfig
+
+// Decode implements envconfig.Decoder for ORB_CONSUMERS JSON array values.
+func (c *ConsumersConfig) Decode(value string) error {
+	if value == "" {
+		*c = nil
+		return nil
+	}
+	return json.Unmarshal([]byte(value), c)
+}
+
 // Config holds all configuration for the orb edge service, loaded from environment variables.
 type Config struct {
 	// Web server
 	Port string `envconfig:"ORB_PORT" default:"8010"`
+	Dev  bool   `envconfig:"ORB_DEV"  default:"true"`
 
 	// Local DGraph (orb's own instance, separate from orbital)
 	DGraphURL       string `envconfig:"ORB_DGRAPH_URL"        default:"http://localhost:8082/graphql"`
@@ -36,7 +56,16 @@ type Config struct {
 	S3AccessKey string `envconfig:"ORB_S3_ACCESS_KEY" default:""`
 	S3SecretKey string `envconfig:"ORB_S3_SECRET_KEY" default:""`
 
-	// Polling — how often orb checks Zot for a newer artifact version
+	// EnableOCIRegistry activates the OCI import source: registry polling, /import/tags route,
+	// and the "Pull from Registry" UI section. When false, only /import/subgraph (courier/API)
+	// is available. Set ORB_ENABLE_OCI_REGISTRY=false when using ConfigBundle Controller.
+	EnableOCIRegistry bool `envconfig:"ORB_ENABLE_OCI_REGISTRY" default:"true"`
+
+	// Consumers holds registered layer consumers for dispatch via /import/artifact.
+	// Set via: ORB_CONSUMERS='[{"mediaType":"...","url":"..."}]'
+	Consumers ConsumersConfig `envconfig:"ORB_CONSUMERS" default:""`
+
+	// Polling — how often orb checks Zot for a newer artifact version (OCI source only)
 	PollInterval time.Duration `envconfig:"ORB_POLL_INTERVAL" default:"60s"`
 
 	// Data directory — holds import history and divergence reports

@@ -41,23 +41,12 @@ Requires `npm install` once to install the `sass` compiler.
 
 ## Using Claude Code
 
-This project uses [Claude Code](https://claude.ai/code) for AI-assisted development. If you haven't used it before:
+Run `claude` in the repo root. `CLAUDE.md` is loaded automatically — architecture, conventions, and settled decisions are already in context.
 
-**Install:**
-```bash
-npm install -g @anthropic-ai/claude-code
-```
+- **`CLAUDE.md`** — the source of truth for AI behavior in this repo. Update it when architectural decisions or conventions change.
+- **`AI.md`** — append a row when AI assistance was used in a PR.
 
-See [claude.ai/code](https://claude.ai/code) for full setup and documentation.
-
-**Start a session:**
-Run `claude` in the repo root. Claude automatically reads `CLAUDE.md` at session start — it already knows the architecture, conventions, and settled decisions. You don't need to re-explain the project each session.
-
-**Two files to know:**
-- **`CLAUDE.md`** — conventions, architecture decisions, and settled rules that Claude follows. Update it when any of these change.
-- **`AI.md`** — minimal audit log. Append a row to the table when AI assistance was used in a PR.
-
-**Tip:** If Claude suggests something that conflicts with an established decision, point it to the Settled Decisions section in `CLAUDE.md`.
+See [claude.ai/code](https://claude.ai/code) for install and setup.
 
 ## PR checklist
 

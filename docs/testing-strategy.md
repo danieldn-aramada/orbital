@@ -689,3 +689,4 @@ After T.21–T.26 complete:
 | T.25 Divergence publisher integration | Not started | Sonnet | uses existing MinIO |
 | T.26 OCI puller unit | Not started | Sonnet | httptest OCI server |
 | T.27 Coverage gate | Not started | Sonnet | verify floors, update score |
+| T.28 Import artifact integration test | Not started | Sonnet | full pipeline: zip → DGraph → consumer dispatch; depends on Steps 1–6 of IMPORT_ARTIFACT_PLAN.md |

@@ -116,6 +116,26 @@ func (_u *ExportJobUpdate) SetNillableDatacenterName(v *string) *ExportJobUpdate
 	return _u
 }
 
+// SetDatacenterOrbID sets the "datacenter_orb_id" field.
+func (_u *ExportJobUpdate) SetDatacenterOrbID(v string) *ExportJobUpdate {
+	_u.mutation.SetDatacenterOrbID(v)
+	return _u
+}
+
+// SetNillableDatacenterOrbID sets the "datacenter_orb_id" field if the given value is not nil.
+func (_u *ExportJobUpdate) SetNillableDatacenterOrbID(v *string) *ExportJobUpdate {
+	if v != nil {
+		_u.SetDatacenterOrbID(*v)
+	}
+	return _u
+}
+
+// ClearDatacenterOrbID clears the value of the "datacenter_orb_id" field.
+func (_u *ExportJobUpdate) ClearDatacenterOrbID() *ExportJobUpdate {
+	_u.mutation.ClearDatacenterOrbID()
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *ExportJobUpdate) SetStatus(v exportjob.Status) *ExportJobUpdate {
 	_u.mutation.SetStatus(v)
@@ -288,6 +308,12 @@ func (_u *ExportJobUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.DatacenterName(); ok {
 		_spec.SetField(exportjob.FieldDatacenterName, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.DatacenterOrbID(); ok {
+		_spec.SetField(exportjob.FieldDatacenterOrbID, field.TypeString, value)
+	}
+	if _u.mutation.DatacenterOrbIDCleared() {
+		_spec.ClearField(exportjob.FieldDatacenterOrbID, field.TypeString)
+	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(exportjob.FieldStatus, field.TypeEnum, value)
 	}
@@ -420,6 +446,26 @@ func (_u *ExportJobUpdateOne) SetNillableDatacenterName(v *string) *ExportJobUpd
 	if v != nil {
 		_u.SetDatacenterName(*v)
 	}
+	return _u
+}
+
+// SetDatacenterOrbID sets the "datacenter_orb_id" field.
+func (_u *ExportJobUpdateOne) SetDatacenterOrbID(v string) *ExportJobUpdateOne {
+	_u.mutation.SetDatacenterOrbID(v)
+	return _u
+}
+
+// SetNillableDatacenterOrbID sets the "datacenter_orb_id" field if the given value is not nil.
+func (_u *ExportJobUpdateOne) SetNillableDatacenterOrbID(v *string) *ExportJobUpdateOne {
+	if v != nil {
+		_u.SetDatacenterOrbID(*v)
+	}
+	return _u
+}
+
+// ClearDatacenterOrbID clears the value of the "datacenter_orb_id" field.
+func (_u *ExportJobUpdateOne) ClearDatacenterOrbID() *ExportJobUpdateOne {
+	_u.mutation.ClearDatacenterOrbID()
 	return _u
 }
 
@@ -624,6 +670,12 @@ func (_u *ExportJobUpdateOne) sqlSave(ctx context.Context) (_node *ExportJob, er
 	}
 	if value, ok := _u.mutation.DatacenterName(); ok {
 		_spec.SetField(exportjob.FieldDatacenterName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DatacenterOrbID(); ok {
+		_spec.SetField(exportjob.FieldDatacenterOrbID, field.TypeString, value)
+	}
+	if _u.mutation.DatacenterOrbIDCleared() {
+		_spec.ClearField(exportjob.FieldDatacenterOrbID, field.TypeString)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(exportjob.FieldStatus, field.TypeEnum, value)

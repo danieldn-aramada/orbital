@@ -20,25 +20,6 @@
     "trust": {
       "enable": true,
       "cosign": true
-    },
-    "sync": {
-      "credentialsFile": "/etc/zot/sync-credentials.json",
-      "registries": [
-        {
-          "urls": ["https://armadaeksatest.azurecr.io"],
-          "tlsVerify": true,
-          "onDemand": false,
-          "pollInterval": "1m",
-          "content": [
-            {
-              "prefix": "orbital/colo-galleon",
-              "tags": {
-                "regex": ".*"
-              }
-            }
-          ]
-        }
-      ]
     }
   }
 }

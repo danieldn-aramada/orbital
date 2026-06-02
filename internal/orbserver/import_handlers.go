@@ -4,6 +4,8 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -69,13 +71,17 @@ func (s *Server) triggerImport(c echo.Context) error {
 		}
 		s.logger.Info("cosign verification", "result", result.Message)
 
+		verification := orb.VerificationUnverified
+		if result.Verified {
+			verification = orb.VerificationVerified
+		}
 		meta := orb.ImportMeta{
-			Tag:         artifact.Tag,
-			Digest:      artifact.Digest,
-			DCOrbID:     artifact.Annotations["com.armada.orbital.datacenter-id"],
-			ExportJobID: artifact.Annotations["com.armada.orbital.export-job-id"],
-			CreatedAt:   time.Now().UTC(),
-			Verified:    result.Verified,
+			Tag:          artifact.Tag,
+			Digest:       artifact.Digest,
+			DCOrbID:      artifact.Annotations["com.armada.orbital.datacenter-id"],
+			ExportJobID:  artifact.Annotations["com.armada.orbital.export-job-id"],
+			CreatedAt:    time.Now().UTC(),
+			Verification: verification,
 		}
 
 		if err := s.imp.Import(ctx, artifact.DataGZ, artifact.SchemaGZ, meta); err != nil {
@@ -83,14 +89,42 @@ func (s *Server) triggerImport(c echo.Context) error {
 			return
 		}
 
+		// Best-effort consumer dispatch for extra (non-graph) layers.
+		importID := newImportID()
+		if len(artifact.ExtraLayers) > 0 && s.dispatcher != nil {
+			results := s.dispatcher.Dispatch(ctx, artifact.ExtraLayers, meta.Tag, meta.Digest, importID)
+			var layerRecords []orb.LayerRecord
+			dispatched := make(map[string]bool, len(results))
+			for i := range results {
+				dr := results[i]
+				layerRecords = append(layerRecords, orb.LayerRecord{
+					MediaType: dr.MediaType,
+					Role:      orb.LayerRoleDispatched,
+					Dispatch:  &dr,
+				})
+				dispatched[dr.MediaType] = true
+			}
+			for mt := range artifact.ExtraLayers {
+				if !dispatched[mt] {
+					layerRecords = append(layerRecords, orb.LayerRecord{
+						MediaType: mt,
+						Role:      orb.LayerRoleUnknown,
+					})
+				}
+			}
+			if err := orb.AppendLayersToLastHistory(s.cfg.DataDir, layerRecords); err != nil {
+				s.logger.Warn("append layers to history failed", "err", err)
+			}
+		}
+
 		s.state.setDone(orb.ImportRecord{
-			Tag:         meta.Tag,
-			Digest:      meta.Digest,
-			DCOrbID:     meta.DCOrbID,
-			ExportJobID: meta.ExportJobID,
-			ImportedAt:  time.Now().UTC(),
-			Status:      "done",
-			Verified:    result.Verified,
+			Tag:          meta.Tag,
+			Digest:       meta.Digest,
+			DCOrbID:      meta.DCOrbID,
+			ExportJobID:  meta.ExportJobID,
+			ImportedAt:   time.Now().UTC(),
+			Status:       "done",
+			Verification: verification,
 		})
 	}()
 
@@ -182,8 +216,166 @@ func (s *Server) importHistory(c echo.Context) error {
 	return c.JSON(http.StatusOK, records)
 }
 
-// @Summary     Upload subgraph bundle (courier)
-// @Description Accepts a zip bundle (data.json.gz + schema.gz) exported from orbital and imports it directly — no registry required. Use this when delivering a subgraph via physical media or manual transfer.
+// newImportID generates a random UUID-format string for import correlation.
+func newImportID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
+
+// @Summary     Import OCI artifact bundle
+// @Description Accepts a zip bundle (data.json.gz + schema.gz + optional layers.json + layer blobs)
+//
+//	and runs the full import pipeline: DGraph import followed by best-effort consumer dispatch.
+//	Always registered regardless of ORB_ENABLE_OCI_REGISTRY. Consumer dispatch only occurs
+//	if ORB_CONSUMERS is configured and layers.json is present in the zip.
+//
+// @Tags        import
+// @Accept      multipart/form-data
+// @Produce     json
+// @Param       bundle formData file true "Zip archive containing data.json.gz, schema.gz, and optionally layers.json + layer blobs"
+// @Success     202 {object} map[string]string
+// @Failure     400 {object} map[string]string
+// @Failure     409 {object} map[string]string
+// @Router      /import/artifact [post]
+func (s *Server) importArtifact(c echo.Context) error {
+	if snap := s.state.snapshot(); snap.Status == "running" {
+		return c.JSON(http.StatusConflict, map[string]string{"error": "import already running"})
+	}
+
+	fh, err := c.FormFile("bundle")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "bundle file is required"})
+	}
+	f, err := fh.Open()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "could not open upload"})
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(f)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "could not read upload"})
+	}
+	zr, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "not a valid zip archive"})
+	}
+
+	type layerEntry struct {
+		MediaType string `json:"mediaType"`
+		Filename  string `json:"filename"`
+	}
+	var layerManifest []layerEntry
+
+	// First pass: parse layers.json if present.
+	for _, zf := range zr.File {
+		if zf.Name != "layers.json" {
+			continue
+		}
+		rc, err := zf.Open()
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "could not read layers.json"})
+		}
+		b, _ := io.ReadAll(rc)
+		rc.Close()
+		if err := json.Unmarshal(b, &layerManifest); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid layers.json: " + err.Error()})
+		}
+		break
+	}
+
+	// Build filename → mediaType lookup from layers.json.
+	filenameToMediaType := make(map[string]string, len(layerManifest))
+	for _, e := range layerManifest {
+		filenameToMediaType[e.Filename] = e.MediaType
+	}
+
+	// Second pass: extract all files.
+	var dataGZ, schemaGZ []byte
+	extraLayers := make(map[string][]byte)
+	for _, zf := range zr.File {
+		rc, err := zf.Open()
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "could not read " + zf.Name})
+		}
+		data, _ := io.ReadAll(rc)
+		rc.Close()
+		switch zf.Name {
+		case "data.json.gz":
+			dataGZ = data
+		case "schema.gz":
+			schemaGZ = data
+		case "layers.json":
+			// already processed
+		default:
+			if mt, ok := filenameToMediaType[zf.Name]; ok {
+				extraLayers[mt] = data
+			}
+		}
+	}
+
+	if len(dataGZ) == 0 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "zip must contain data.json.gz"})
+	}
+	if len(schemaGZ) == 0 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "zip must contain schema.gz"})
+	}
+
+	tag := fmt.Sprintf("artifact-%s", time.Now().UTC().Format("20060102-150405"))
+	importID := newImportID()
+	s.state.setRunning()
+
+	go func() {
+		ctx := context.Background()
+		meta := orb.ImportMeta{
+			Tag:          tag,
+			CreatedAt:    time.Now().UTC(),
+			Verification: orb.VerificationNotApplicable,
+		}
+		if err := s.imp.Import(ctx, dataGZ, schemaGZ, meta); err != nil {
+			s.state.setFailed("artifact import: " + err.Error())
+			return
+		}
+
+		// Best-effort consumer dispatch for extra layers.
+		var layerRecords []orb.LayerRecord
+		if len(extraLayers) > 0 && s.dispatcher != nil {
+			results := s.dispatcher.Dispatch(ctx, extraLayers, tag, "", importID)
+			dispatched := make(map[string]bool, len(results))
+			for i := range results {
+				dr := results[i]
+				layerRecords = append(layerRecords, orb.LayerRecord{
+					MediaType: dr.MediaType,
+					Role:      orb.LayerRoleDispatched,
+					Dispatch:  &dr,
+				})
+				dispatched[dr.MediaType] = true
+			}
+			for mt := range extraLayers {
+				if !dispatched[mt] {
+					layerRecords = append(layerRecords, orb.LayerRecord{
+						MediaType: mt,
+						Role:      orb.LayerRoleUnknown,
+					})
+				}
+			}
+			if err := orb.AppendLayersToLastHistory(s.cfg.DataDir, layerRecords); err != nil {
+				s.logger.Warn("failed to append layer records to history", "err", err)
+			}
+		}
+
+		s.state.setDone(orb.ImportRecord{
+			Tag:        tag,
+			ImportedAt: time.Now().UTC(),
+			Status:     "done",
+		})
+	}()
+
+	return c.JSON(http.StatusAccepted, map[string]string{"status": "started", "tag": tag, "importId": importID})
+}
+
+// @Summary     Import subgraph bundle
+// @Description Accepts a zip bundle (data.json.gz + schema.gz) and imports it into local DGraph. Source-agnostic: use for courier (direct upload), ConfigBundle Controller delivery, or any caller with a subgraph zip.
 // @Tags        import
 // @Accept      multipart/form-data
 // @Produce     json
@@ -191,13 +383,13 @@ func (s *Server) importHistory(c echo.Context) error {
 // @Success     202 {object} map[string]string
 // @Failure     400 {object} map[string]string
 // @Failure     409 {object} map[string]string
-// @Router      /import/upload [post]
-// uploadImport reads the entire zip into memory before extracting. At peak it holds
+// @Router      /import/subgraph [post]
+// importSubgraph reads the entire zip into memory before extracting. At peak it holds
 // the raw zip + the extracted data.json.gz simultaneously (~2× zip size). This is
 // acceptable for typical single-DC subgraphs (1–10 MB compressed). If subgraph size
 // grows significantly, rework to: save upload to a temp file, use zip.OpenReader, and
 // stream data.json.gz directly to the scratch path — eliminating the double-copy.
-func (s *Server) uploadImport(c echo.Context) error {
+func (s *Server) importSubgraph(c echo.Context) error {
 	if snap := s.state.snapshot(); snap.Status == "running" {
 		return c.JSON(http.StatusConflict, map[string]string{"error": "import already running"})
 	}
@@ -255,17 +447,20 @@ func (s *Server) uploadImport(c echo.Context) error {
 
 	go func() {
 		meta := orb.ImportMeta{
-			Tag:       tag,
-			CreatedAt: time.Now().UTC(),
+			Tag:          tag,
+			CreatedAt:    time.Now().UTC(),
+			Verification: orb.VerificationNotApplicable,
 		}
 		if err := s.imp.Import(context.Background(), dataGZ, schemaGZ, meta); err != nil {
 			s.state.setFailed("courier import: " + err.Error())
 			return
 		}
+
 		s.state.setDone(orb.ImportRecord{
-			Tag:        meta.Tag,
-			ImportedAt: time.Now().UTC(),
-			Status:     "done",
+			Tag:          meta.Tag,
+			ImportedAt:   time.Now().UTC(),
+			Status:       "done",
+			Verification: orb.VerificationNotApplicable,
 		})
 	}()
 

@@ -211,10 +211,10 @@ function renderTimestamps(root) {
     if (!iso) return;
     el.textContent = relativeTime(iso);
     el.title = formatTimestamp(iso);
-    el.style.cursor = 'help';
   });
 }
 
+document.addEventListener('DOMContentLoaded', () => renderTimestamps(document));
 
 /**
  * Initialize or refresh a server events DataTable.
@@ -2604,7 +2604,7 @@ async function handleOrbCourierUpload() {
   const fd = new FormData()
   fd.append('bundle', fileInput.files[0])
   orbShowImportStatus('is-info', 'fa-spinner fa-spin', 'Uploading bundle…')
-  fetch(BASE + '/api/v1/import/upload', { method: 'POST', body: fd })
+  fetch(BASE + '/api/v1/import/artifact', { method: 'POST', body: fd })
     .then(r => r.json())
     .then(data => {
       if (data.error) {

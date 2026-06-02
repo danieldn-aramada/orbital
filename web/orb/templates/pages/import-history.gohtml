@@ -8,23 +8,23 @@
     <p class="is-size-4 mb-4">Import History</p>
 
     {{if .History}}
-    <div style="overflow-x:auto">
-    <table class="table is-striped is-hoverable is-fullwidth">
+    <table class="table is-striped is-hoverable" style="table-layout:auto;width:100%;--bulma-table-cell-padding:0.5em 1.5em">
       <thead>
         <tr>
-          <th>Tag</th>
-          <th>Status</th>
-          <th>Signature</th>
-          <th>Imported At</th>
-          <th>DC Orb ID</th>
-          <th>Error</th>
+          <th style="white-space:nowrap;padding-left:0">Tag</th>
+          <th style="white-space:nowrap">Status</th>
+          <th style="white-space:nowrap">Signature</th>
+          <th style="white-space:nowrap">Layers</th>
+          <th style="white-space:nowrap">Imported At</th>
+          <th style="white-space:nowrap">DC Orb ID</th>
+          <th style="width:100%">Error</th>
         </tr>
       </thead>
       <tbody>
         {{range .History}}
         <tr>
-          <td><code>{{.Tag}}</code></td>
-          <td>
+          <td style="white-space:nowrap;padding-left:0"><code>{{.Tag}}</code></td>
+          <td style="white-space:nowrap">
             {{if eq .Status "done"}}
             <span class="tag is-success is-light">done</span>
             {{else if eq .Status "failed"}}
@@ -35,21 +35,82 @@
             <span class="tag is-light">{{.Status}}</span>
             {{end}}
           </td>
-          <td>
-            {{if .Verified}}
-            <span class="tag is-success is-light"><span class="icon"><i class="fa-solid fa-shield-check"></i></span>&nbsp;verified</span>
+          <td style="white-space:nowrap">
+            {{if eq .Verification "verified"}}
+            <span class="tag is-success is-light"><span class="icon is-small"><i class="fa-solid fa-circle-check"></i></span><span>verified</span></span>
+            {{else if eq .Verification "unverified"}}
+            <span class="tag is-warning is-light"><span class="icon is-small"><i class="fa-solid fa-circle-xmark"></i></span><span>unverified</span></span>
             {{else}}
             <span class="tag is-light has-text-grey">—</span>
             {{end}}
           </td>
-          <td>{{if not .ImportedAt.IsZero}}<span data-timestamp="{{.ImportedAt}}">{{.ImportedAt}}</span>{{else}}—{{end}}</td>
-          <td><span class="is-size-7 has-text-grey">{{if .DCOrbID}}{{.DCOrbID}}{{else}}—{{end}}</span></td>
-          <td>{{if .Error}}<span class="is-size-7 has-text-danger">{{.Error}}</span>{{else}}—{{end}}</td>
+          <td style="white-space:nowrap">
+            {{if .Layers}}
+              {{$graph := 0}}
+              {{range .Layers}}{{if eq .Role "graph"}}{{$graph = add $graph 1}}{{end}}{{end}}
+              <details style="position:relative;cursor:pointer">
+                <summary style="font-size:0.75rem;white-space:nowrap">
+                  <span class="tag is-light is-small">{{$graph}} graph</span>
+                  {{range .Layers}}
+                    {{if eq .Role "dispatched"}}
+                      {{if and .Dispatch (gt .Dispatch.StatusCode 0) (lt .Dispatch.StatusCode 300)}}
+                      <span class="tag is-success is-light is-small ml-1">{{mediaTypeLabel .MediaType}} ✓</span>
+                      {{else}}
+                      <span class="tag is-danger is-light is-small ml-1">{{mediaTypeLabel .MediaType}} ✗</span>
+                      {{end}}
+                    {{else if eq .Role "unknown"}}
+                    <span class="tag is-warning is-light is-small ml-1">{{mediaTypeLabel .MediaType}}</span>
+                    {{end}}
+                  {{end}}
+                </summary>
+                <div style="position:absolute;top:100%;left:0;z-index:20;background:var(--bulma-scheme-main);border:1px solid var(--bulma-border);border-radius:4px;padding:0.25rem 0.5rem;box-shadow:0 4px 12px rgba(0,0,0,0.12);white-space:nowrap">
+                <table class="table is-narrow is-size-7 mb-0" style="background:transparent;--bulma-table-cell-padding:0.2em 0.5em">
+                  <tbody>
+                    {{range .Layers}}
+                    <tr>
+                      <td style="white-space:nowrap;vertical-align:middle">
+                        {{if eq .Role "graph"}}
+                        <span class="tag is-light is-small">graph</span>
+                        {{else if eq .Role "dispatched"}}
+                        <span class="tag is-info is-light is-small">{{mediaTypeLabel .MediaType}}</span>
+                        {{else}}
+                        <span class="tag is-warning is-light is-small">{{mediaTypeLabel .MediaType}}</span>
+                        {{end}}
+                      </td>
+                      <td style="vertical-align:middle"><code style="font-size:0.7rem">{{.MediaType}}</code></td>
+                      <td style="vertical-align:middle">
+                        {{if .Dispatch}}
+                          {{if and (gt .Dispatch.StatusCode 0) (lt .Dispatch.StatusCode 300)}}
+                          <span class="tag is-success is-light is-small">{{.Dispatch.StatusCode}}</span>
+                          {{else if gt .Dispatch.StatusCode 0}}
+                          <span class="tag is-danger is-light is-small">{{.Dispatch.StatusCode}}</span>
+                          {{end}}
+                        {{else if eq .Role "unknown"}}
+                        <span class="has-text-grey" style="font-size:0.7rem">no consumer registered</span>
+                        {{end}}
+                      </td>
+                    </tr>
+                    {{end}}
+                  </tbody>
+                </table>
+                </div>
+              </details>
+            {{else}}
+            —
+            {{end}}
+          </td>
+          <td style="white-space:nowrap"><span class="is-size-7">{{if not .ImportedAt.IsZero}}<span data-timestamp="{{.ImportedAt.Format "2006-01-02T15:04:05Z07:00"}}">{{.ImportedAt.Format "2006-01-02 15:04"}}</span>{{else}}—{{end}}</span></td>
+          <td style="white-space:nowrap"><span class="is-size-7">{{if .DCOrbID}}{{.DCOrbID}}{{else}}—{{end}}</span></td>
+          <td>
+            {{if or .Error .DispatchErrors}}
+              {{if .Error}}<span class="is-size-7 has-text-danger" style="display:block">{{.Error}}</span>{{end}}
+              {{range .DispatchErrors}}<span class="is-size-7 has-text-danger" style="display:block">{{.}}</span>{{end}}
+            {{else}}—{{end}}
+          </td>
         </tr>
         {{end}}
       </tbody>
     </table>
-    </div>
     {{else}}
     <article class="box">
       <p class="has-text-grey">No import history yet.</p>

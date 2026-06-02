@@ -1,20 +1,28 @@
 # ConfigBundle Integration Design
 
-This document defines the integration contract between **Orbital** (cloud CMDB) and **ConfigBundle** — the first downstream consumer of Orbital's enrichment pipeline. It is the source of truth for both repositories.
+This document defines the integration contract between **Orbital** (cloud CMDB), **Orb** (edge service), and **ConfigBundle** — the first downstream consumer of Orbital's enrichment pipeline. It is the source of truth for both repositories.
 
 ---
 
 ## Design Principle
 
-**Orbital is the sole OCI producer.** All consumers — orb, ConfigBundle controller, other teams — pull from Orbital's artifacts. No downstream system needs OCI registry write credentials.
+**Orbital is the sole OCI producer.** No downstream system needs OCI registry write credentials.
 
-Orbital's publish pipeline supports an optional **enrichment step**: before pushing, Orbital calls configured enrichers to collect additional OCI artifact layers. Each enricher is a stateless HTTP service. Orbital bundles all layers into a single OCI artifact, signs once, and pushes once.
+**Orb is the single artifact ingress at the edge.** Orb pulls or receives the full multi-layer artifact, decomposes it, imports graph layers to DGraph, and dispatches other layers to registered consumers. ConfigBundle Controller is one such consumer — it receives its manifest layer from orb and applies it. CB Controller does not pull from ACR.
 
-If no enrichers are configured, Orbital behaves exactly as before: raw export only, one push.
+The two pipelines are symmetric:
+
+```
+Orbital publish (cloud):         Orb import (edge):
+────────────────────────         ──────────────────
+DGraph → base export layers      receive full artifact
+enrichers ADD layers         ↔   consumers CONSUME layers
+sign once, push once             verify, decompose, dispatch
+```
 
 ---
 
-## Architecture
+## Full Architecture
 
 ```
 Admin clicks Publish
@@ -33,16 +41,27 @@ Orbital publish pipeline
         │         └─ all enrichers must succeed (all-or-nothing)
         │
         ├── bundle layers:
-        │     data.json.gz                                   ← orb consumes
-        │     schema.gz                                      ← orb consumes
-        │     application/vnd.armada.configbundle.manifest.v1+yaml  ← cb-controller
+        │     data.json.gz                                    ← orb: DGraph import
+        │     schema.gz                                       ← orb: DGraph import
+        │     application/vnd.armada.configbundle.manifest.v1+yaml  ← orb: dispatched to cb-controller
         │
         ├── sign (cosign, once)
         └── push to ACR (once)
-
-Downstream consumers pull from ACR:
-  - orb: reads data.json.gz + schema.gz layers (dgraph live import)
-  - cb-controller: reads its own layer by media type, applies to cluster
+                │
+                ▼
+            ACR / Zot
+                │
+                ▼
+        Orb import pipeline  (POST /import/artifact)
+                │
+                ├── cosign verify
+                ├── decompose layers by media type
+                ├── data.json.gz + schema.gz → DGraph (dgraph live, always)
+                └── application/vnd.armada.configbundle.manifest.v1+yaml
+                          │
+                          └── POST cb-controller /consume  (best-effort dispatch)
+                                    │
+                                    └── apply manifest to cluster
 ```
 
 ---
@@ -57,7 +76,7 @@ Downstream consumers pull from ACR:
 - Records `enricher_error` when enrichment failed
 - Treats enricher layers as opaque bytes identified by media type — no awareness of contents
 
-### ConfigBundle Bundler (enricher)
+### ConfigBundle Bundler (enricher — runs in cloud)
 
 - Exposes `POST /enrich`
 - Receives `{jobId, datacenter}` from Orbital
@@ -66,19 +85,29 @@ Downstream consumers pull from ACR:
 - Returns `[{mediaType, data}]` where `data` is base64-encoded
 - Stateless — no push credentials, no registry access required
 
-### ConfigBundle Controller
+### Orb (edge)
 
-- Pulls Orbital's OCI artifact from ACR (read-only credentials only)
-- Identifies its layer by media type `application/vnd.armada.configbundle.manifest.v1+yaml`
+- Pulls full artifact from registry (OCI source mode) or receives via `POST /import/artifact`
+- **Cosign-verifies** the artifact using `ORB_OCI_PUBLIC_KEY_PATH` before decomposing — verification failure rejects the import. CB Controller never sees unverified bytes.
+- Decomposes layers by media type
+- Always imports `data.json.gz` + `schema.gz` into local DGraph
+- Dispatches other layers to registered consumers (`ORB_CONSUMERS` config)
+- **Dispatch is best-effort** — DGraph import succeeds regardless of consumer failures
+- Records per-consumer dispatch result in the import history entry
+
+### ConfigBundle Controller (consumer — runs at edge)
+
+- **Does not pull from ACR.** Receives its layer from orb's dispatch.
+- Exposes `POST /consume` — receives raw manifest bytes from orb
 - Applies the manifest to the cluster (or hands off to GitOps)
-- Ignores all other layers (unknown layers are safe to ignore)
-- Never pushes to ACR
+- Depends on orb being available to receive updates — this is intentional
+- Never needs OCI registry credentials
 
 ---
 
-## Enricher API Contract
+## Enricher API Contract (Orbital → bundler)
 
-### Request (Orbital → bundler)
+### Request
 
 ```
 POST /enrich
@@ -92,7 +121,7 @@ Content-Type: application/json
 
 `datacenter` matches the `DataCenter.name` field in Orbital's DGraph schema.
 
-### Response (bundler → Orbital)
+### Response
 
 ```json
 [
@@ -106,26 +135,36 @@ Content-Type: application/json
 - `data` is standard base64 (not URL-safe)
 - An empty array `[]` is valid — enricher ran but produced no layers
 - Non-2xx → Orbital retries up to `ORBITAL_ENRICHER_MAX_ATTEMPTS` times (default 3) with exponential backoff (1s–10s). If all attempts fail, the publish job is marked failed, `enricher_error` is recorded, nothing is pushed to ACR.
-- Timeout per attempt (default 30s via `ORBITAL_ENRICHER_TIMEOUT`) → counts as a failed attempt; same retry logic applies.
-- Response body exceeding `ORBITAL_ENRICHER_MAX_RESPONSE_BYTES` (default 10 MB) → immediate failure, no retry.
+- Timeout per attempt (default 30s) → counts as a failed attempt
+- Response body exceeding `ORBITAL_ENRICHER_MAX_RESPONSE_BYTES` (default 10 MB) → immediate failure, no retry
 
-### GraphQL query pattern
+---
 
-The bundler should query Orbital's GraphQL to fetch whatever fields it needs:
+## Consumer API Contract (Orb → cb-controller)
 
-```graphql
-query ConfigBundleFields($dc: String!) {
-  queryDataCenter(filter: { name: { eq: $dc } }) {
-    name
-    orbId
-    # ... whatever config fields cb-controller needs
-  }
-}
+### Request
+
+```
+POST /consume
+Content-Type: application/vnd.armada.configbundle.manifest.v1+yaml
+X-Orb-Tag: v5
+X-Orb-Digest: sha256:abc123...
+X-Orb-Import-ID: <uuid>
+
+<raw manifest bytes>
 ```
 
-Orbital's GraphQL endpoint: `http://orbital/graphql` (or configured `ORBITAL_URL` in the bundler).
+- Body is the raw layer bytes exactly as the bundler produced them — no base64, no envelope
+- `X-Orb-Tag` — the OCI tag that was imported (e.g. `v5`, `latest`)
+- `X-Orb-Digest` — the artifact manifest digest
+- `X-Orb-Import-ID` — orb's internal import ID for correlation
 
-**Authentication:** The GraphQL endpoint is currently open (pre-Spike 11). Once Spike 11 Authorization lands, the bundler will need a service account bearer token: `Authorization: Bearer <token>`. This is the bundler's operational concern — Orbital does not issue it.
+### Response
+
+- **200** — layer received and accepted for processing
+- **4xx / 5xx** — dispatch failed; orb records the error in the import history entry and continues (DGraph import already complete)
+
+Dispatch is **best-effort from orb's perspective**. CB Controller should respond quickly (accept for async processing if needed) rather than block on slow cluster operations.
 
 ---
 
@@ -133,15 +172,33 @@ Orbital's GraphQL endpoint: `http://orbital/graphql` (or configured `ORBITAL_URL
 
 | Layer media type | Producer | Consumer |
 |---|---|---|
-| `application/vnd.orbital.subgraph.data.v1+gzip` | Orbital (always) | orb — `dgraph live` import |
-| `application/vnd.orbital.subgraph.schema.v1+gzip` | Orbital (always) | orb — schema version check |
-| `application/vnd.armada.configbundle.manifest.v1+yaml` | ConfigBundle bundler | cb-controller |
+| `application/vnd.orbital.subgraph.data.v1+gzip` | Orbital (always) | Orb — DGraph live import (built-in) |
+| `application/vnd.orbital.subgraph.schema.v1+gzip` | Orbital (always) | Orb — schema apply (built-in) |
+| `application/vnd.armada.configbundle.manifest.v1+yaml` | ConfigBundle bundler | CB Controller via orb dispatch |
 
-Consumers identify their layer by media type. Unknown layers are ignored.
+Layers with no registered consumer are silently ignored — forward compatibility.
 
 ---
 
-## Publish Request (how to trigger)
+## Orb Consumer Configuration
+
+```
+ORB_CONSUMERS='[{"mediaType":"application/vnd.armada.configbundle.manifest.v1+yaml","url":"http://cb-controller:8080/consume"}]'
+```
+
+Port is configurable via `CB_CONTROLLER_PORT` in CB Controller. `:8080` is the conventional default. Multiple consumers:
+```
+ORB_CONSUMERS='[
+  {"mediaType":"application/vnd.armada.configbundle.manifest.v1+yaml","url":"http://cb-controller:8080/consume"},
+  {"mediaType":"application/vnd.example.other.v1","url":"http://other-service:9000/consume"}
+]'
+```
+
+Parsed at orb startup. Dispatch failures do not affect DGraph import.
+
+---
+
+## Publish Request (how to trigger enriched publish)
 
 `POST /api/v1/export/jobs/:jobId/publish` with bundler URL in the body:
 
@@ -153,7 +210,7 @@ Consumers identify their layer by media type. Unknown layers are ignored.
 }
 ```
 
-If `enrichers` is omitted or empty, only the raw export layers are pushed (orb-only artifact).
+If `enrichers` is omitted or empty, only the raw export layers are pushed (orb-only artifact, no ConfigBundle layer).
 
 ---
 
@@ -165,166 +222,61 @@ If `enrichers` is omitted or empty, only the raw export layers are pushed (orb-o
 | `ORBITAL_ENRICHER_MAX_ATTEMPTS` | `3` | Total attempts (1 initial + 2 retries) |
 | `ORBITAL_ENRICHER_MAX_RESPONSE_BYTES` | `10485760` | Max enricher response size (10 MB) |
 
-Enricher URLs are per-request — not configured server-side. The caller supplies them in the publish request body.
-
----
-
-## Implementation Plan — ConfigBundle Bundler
-
-### What to build
-
-A standalone HTTP service (Go binary recommended for consistency) exposing `POST /enrich`.
-
-### 1. HTTP server
-
-```go
-package main
-
-import (
-    "encoding/base64"
-    "encoding/json"
-    "net/http"
-)
-
-type enrichRequest struct {
-    JobID      string `json:"jobId"`
-    Datacenter string `json:"datacenter"`
-}
-
-type layer struct {
-    MediaType string `json:"mediaType"`
-    Data      string `json:"data"` // base64-encoded
-}
-
-func handleEnrich(w http.ResponseWriter, r *http.Request) {
-    var req enrichRequest
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        http.Error(w, "bad request", http.StatusBadRequest)
-        return
-    }
-
-    manifest, err := buildManifest(r.Context(), req.Datacenter)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
-
-    layers := []layer{
-        {
-            MediaType: "application/vnd.armada.configbundle.manifest.v1+yaml",
-            Data:      base64.StdEncoding.EncodeToString(manifest),
-        },
-    }
-
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(layers)
-}
-```
-
-### 2. GraphQL query to Orbital
-
-```go
-func buildManifest(ctx context.Context, datacenter string) ([]byte, error) {
-    // Query Orbital GraphQL for config fields needed for this DC
-    // Use ORBITAL_URL env var (default: http://orbital/graphql)
-    // Return YAML-encoded manifest bytes
-}
-```
-
-### 3. Environment variables (bundler)
-
-| Variable | Description |
-|---|---|
-| `BUNDLER_PORT` | HTTP listen port (default: `8020`) |
-| `ORBITAL_GRAPHQL_URL` | Orbital GraphQL endpoint (default: `http://orbital/graphql`) |
-| `ORBITAL_BEARER_TOKEN` | Bearer token for Orbital API (empty = no auth; required after Spike 11) |
+Enricher URLs are per-request — not configured server-side.
 
 ---
 
 ## Local End-to-End Test Flow
 
-This is the recommended flow for testing the full pipeline locally before deploying to AKS.
-
 ### Prerequisites
 
-- `make up` running (Orbital stack + MinIO OCI registry at `localhost:5000`)
-- `make run-orbital` running (Orbital on `:8001`)
+- `make up` running (orbital stack + local OCI registry)
+- `make run-orbital` running on `:8001`
+- `make run-orb` running on `:8010` with `ORB_CONSUMERS` set
 - ConfigBundle bundler running on `:8020`
+- CB Controller running on `:8030` (exposing `POST /consume`)
 
-### Step 1 — Trigger an export
+### Step 1 — Trigger export + publish with enricher
 
 ```bash
-# Get a datacenter ID from Orbital
-curl http://localhost:8001/api/v1/inventory
+# Get a datacenter ID
+curl -s http://localhost:8001/api/v1/inventory | jq '.[0].id'
 
-# Trigger export for a DC
+# Trigger export
 curl -s -X POST http://localhost:8001/api/v1/datacenters/<dcId>/export | jq .
-# Note the jobId
-```
-
-### Step 2 — Poll until completed
-
-```bash
+# Note the jobId. Poll until "completed":
 curl -s http://localhost:8001/api/v1/export/jobs/<jobId> | jq .status
-# Wait for "completed"
-```
 
-### Step 3 — Publish with enricher
-
-```bash
-# Write request body to file (curl best practice for JSON payloads)
+# Publish with enricher
 cat > /tmp/publish.json <<'EOF'
-{
-  "enrichers": ["http://localhost:8020/enrich"]
-}
+{"enrichers": ["http://localhost:8020/enrich"]}
 EOF
+curl -s -X POST http://localhost:8001/api/v1/export/jobs/<jobId>/publish \
+  -H "Content-Type: application/json" -d @/tmp/publish.json | jq .
+```
 
-curl -s -X POST \
-  http://localhost:8001/api/v1/export/jobs/<jobId>/publish \
+### Step 2 — Trigger orb import
+
+```bash
+# Via OCI source (if ORB_ENABLE_OCI_REGISTRY=true):
+curl -s -X POST http://localhost:8010/api/v1/import \
   -H "Content-Type: application/json" \
-  -d @/tmp/publish.json | jq .
-# Note the artifactId
+  -d '{"tag":"latest"}' | jq .
+
+# Poll import status
+curl -s http://localhost:8010/api/v1/import/status | jq .
+
+# Check import history — should show dispatch results per consumer
+curl -s http://localhost:8010/api/v1/import/history | jq '.[0]'
 ```
 
-### Step 4 — Poll artifact until completed
+### Step 3 — Verify CB Controller received its layer
 
-```bash
-curl -s http://localhost:8001/api/v1/oci/artifacts/<artifactId> | jq '{status, enriched, enricherError}'
-# Expect: {"status": "completed", "enriched": true, "enricherError": null}
-```
+Check CB Controller logs / status — it should have received the manifest bytes via `POST /consume` and applied them.
 
-### Step 5 — Pull and inspect the artifact
+### Step 4 — Verify failure path
 
-```bash
-# List layers in the OCI manifest
-oras manifest fetch localhost:5000/orbital/<dc-slug>:v1 | jq '.layers[].mediaType'
-# Should include: application/vnd.armada.configbundle.manifest.v1+yaml
-
-# Pull the configbundle layer
-oras blob fetch \
-  --output /tmp/cb-manifest.yaml \
-  localhost:5000/orbital/<dc-slug>@<layer-digest>
-
-cat /tmp/cb-manifest.yaml
-```
-
-### Step 6 — Verify the failure path
-
-```bash
-# Publish with a bad enricher URL — should fail cleanly
-cat > /tmp/publish-bad.json <<'EOF'
-{"enrichers": ["http://localhost:19999/does-not-exist"]}
-EOF
-
-curl -s -X POST \
-  http://localhost:8001/api/v1/export/jobs/<jobId>/publish \
-  -H "Content-Type: application/json" \
-  -d @/tmp/publish-bad.json | jq .
-
-# Check artifact status
-curl -s http://localhost:8001/api/v1/oci/artifacts/<newArtifactId> | jq '{status, enricherError}'
-# Expect: {"status": "failed", "enricherError": "enricher failed: ..."}
-```
+Stop CB Controller, trigger another import. Orb should complete DGraph import successfully. Import history should show CB Controller dispatch as failed with error, graph import as succeeded.
 
 ---
 
@@ -335,5 +287,11 @@ curl -s http://localhost:8001/api/v1/oci/artifacts/<newArtifactId> | jq '{status
 - Orbital's raw export layers (`data.json.gz`, `schema.gz`) are always present regardless of enrichment
 - No downstream system needs OCI registry write credentials
 - Enrichment is all-or-nothing: partial pushes are never produced
-- If `enrichers` is omitted in the publish request, behavior is identical to pre-enrichment
-- Enricher URLs are per-request (not server-side config); acceptable because the publish API requires Azure AD authn/authz and runs in AKS on VPN. Named server-side enrichers are a future option if governance requirements change.
+- Orb's DGraph import always completes regardless of consumer dispatch results
+- CB Controller never pulls from ACR and never needs registry credentials
+- Dependency direction: CB Controller is a consumer of orb's dispatch; orb never calls CB Controller proactively
+- Unknown layer media types with no registered consumer are silently ignored
+- Orb's import history records dispatch receipt (HTTP response from consumer), not apply result. Whether the ConfigBundle CR was applied is CB Controller's observability concern — CR conditions, controller events, controller logs.
+- CB Controller apply logic must be idempotent — orb may dispatch the same layer multiple times if imports are re-run
+- `ArtifactFetched` and `SignatureVerified` CR conditions are now orb's territory — CB Controller did not fetch or verify. These conditions should be removed or repurposed to reflect what CB Controller actually did. Surfacing `X-Orb-Digest` and `X-Orb-Import-ID` in CR status is recommended for traceability — exact condition design is CB Controller's decision (spike in that repo).
+- Same-digest skip optimization (comparing incoming `X-Orb-Digest` to `status.lastAppliedDigest` before running the apply pipeline) is a CB Controller internal concern — not specified here. Design in a CB Controller spike once status condition shape is settled.

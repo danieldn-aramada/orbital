@@ -89,6 +89,20 @@ func (_c *ExportJobCreate) SetDatacenterName(v string) *ExportJobCreate {
 	return _c
 }
 
+// SetDatacenterOrbID sets the "datacenter_orb_id" field.
+func (_c *ExportJobCreate) SetDatacenterOrbID(v string) *ExportJobCreate {
+	_c.mutation.SetDatacenterOrbID(v)
+	return _c
+}
+
+// SetNillableDatacenterOrbID sets the "datacenter_orb_id" field if the given value is not nil.
+func (_c *ExportJobCreate) SetNillableDatacenterOrbID(v *string) *ExportJobCreate {
+	if v != nil {
+		_c.SetDatacenterOrbID(*v)
+	}
+	return _c
+}
+
 // SetStatus sets the "status" field.
 func (_c *ExportJobCreate) SetStatus(v exportjob.Status) *ExportJobCreate {
 	_c.mutation.SetStatus(v)
@@ -287,6 +301,10 @@ func (_c *ExportJobCreate) createSpec() (*ExportJob, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DatacenterName(); ok {
 		_spec.SetField(exportjob.FieldDatacenterName, field.TypeString, value)
 		_node.DatacenterName = value
+	}
+	if value, ok := _c.mutation.DatacenterOrbID(); ok {
+		_spec.SetField(exportjob.FieldDatacenterOrbID, field.TypeString, value)
+		_node.DatacenterOrbID = &value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(exportjob.FieldStatus, field.TypeEnum, value)

@@ -80,7 +80,7 @@ func TestImporter_Import_Success(t *testing.T) {
 	backend := &mockBackend{}
 	imp := newTestImporter(t, ts, backend)
 
-	meta := ImportMeta{Tag: "v1", Digest: "sha256:abc", Verified: true}
+	meta := ImportMeta{Tag: "v1", Digest: "sha256:abc", Verification: VerificationVerified}
 	if err := imp.Import(context.Background(), fakeDataGZ(t), fakeSchemaGZ(t), meta); err != nil {
 		t.Fatalf("Import: %v", err)
 	}
@@ -106,8 +106,8 @@ func TestImporter_Import_Success(t *testing.T) {
 	if r.Status != "done" {
 		t.Errorf("expected status %q, got %q", "done", r.Status)
 	}
-	if !r.Verified {
-		t.Error("expected Verified=true in history record")
+	if r.Verification != VerificationVerified {
+		t.Errorf("expected Verification=%q, got %q", VerificationVerified, r.Verification)
 	}
 }
 
@@ -165,7 +165,146 @@ func TestImporter_Import_BackendError(t *testing.T) {
 	}
 }
 
-func TestImporter_LoadHistory_VerifiedRoundtrip(t *testing.T) {
+func TestImportRecord_Layers_RoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orbconfig.Config{DataDir: dir}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+	defer ts.Close()
+	cfg.DGraphAdminURL = ts.URL + "/admin"
+
+	imp := NewImporter(cfg, logger, &mockBackend{})
+	meta := ImportMeta{Tag: "v1", Digest: "sha256:abc", Verification: VerificationVerified}
+	if err := imp.Import(context.Background(), fakeDataGZ(t), fakeSchemaGZ(t), meta); err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+
+	dr1 := DispatchResult{MediaType: "application/vnd.test", URL: "http://x", StatusCode: 200}
+	dr2 := DispatchResult{MediaType: "application/vnd.other", URL: "http://y", StatusCode: 500, Error: "consumer returned 500"}
+	extra := []LayerRecord{
+		{MediaType: dr1.MediaType, Role: LayerRoleDispatched, Dispatch: &dr1},
+		{MediaType: dr2.MediaType, Role: LayerRoleDispatched, Dispatch: &dr2},
+	}
+	if err := AppendLayersToLastHistory(dir, extra); err != nil {
+		t.Fatalf("AppendLayersToLastHistory: %v", err)
+	}
+
+	got, err := LoadHistory(dir)
+	if err != nil {
+		t.Fatalf("LoadHistory: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(got))
+	}
+	// 2 graph layers + 2 dispatched layers
+	if len(got[0].Layers) != 4 {
+		t.Fatalf("expected 4 layers, got %d", len(got[0].Layers))
+	}
+	dispatched := got[0].Layers[2:]
+	if dispatched[0].Dispatch == nil || dispatched[0].Dispatch.StatusCode != 200 {
+		t.Errorf("first dispatch layer: got %+v", dispatched[0])
+	}
+	if dispatched[1].Dispatch == nil || dispatched[1].Dispatch.Error != "consumer returned 500" {
+		t.Errorf("second dispatch layer: got %+v", dispatched[1])
+	}
+}
+
+func TestAppendLayersToLastHistory_UpdatesLast(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orbconfig.Config{DataDir: dir}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+	defer ts.Close()
+	cfg.DGraphAdminURL = ts.URL + "/admin"
+
+	imp := NewImporter(cfg, logger, &mockBackend{})
+	for _, tag := range []string{"v1", "v2"} {
+		if err := imp.Import(context.Background(), fakeDataGZ(t), fakeSchemaGZ(t), ImportMeta{Tag: tag}); err != nil {
+			t.Fatalf("Import %s: %v", tag, err)
+		}
+	}
+
+	dr := DispatchResult{MediaType: "a/b", URL: "http://x", StatusCode: 200}
+	extra := []LayerRecord{{MediaType: "a/b", Role: LayerRoleDispatched, Dispatch: &dr}}
+	if err := AppendLayersToLastHistory(dir, extra); err != nil {
+		t.Fatalf("AppendLayersToLastHistory: %v", err)
+	}
+
+	got, _ := LoadHistory(dir)
+	// First record: only the 2 base graph layers
+	for _, l := range got[0].Layers {
+		if l.Role != LayerRoleGraph {
+			t.Errorf("first record should only have graph layers, got role=%q", l.Role)
+		}
+	}
+	// Last record: 2 graph + 1 dispatched
+	if len(got[1].Layers) != 3 {
+		t.Errorf("last record: expected 3 layers (2 graph + 1 dispatched), got %d", len(got[1].Layers))
+	}
+}
+
+func TestAppendLayersToLastHistory_EmptyLayers_NoOp(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orbconfig.Config{DataDir: dir}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+	defer ts.Close()
+	cfg.DGraphAdminURL = ts.URL + "/admin"
+
+	imp := NewImporter(cfg, logger, &mockBackend{})
+	if err := imp.Import(context.Background(), fakeDataGZ(t), fakeSchemaGZ(t), ImportMeta{Tag: "v1"}); err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+
+	if err := AppendLayersToLastHistory(dir, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got, _ := LoadHistory(dir)
+	// Should still have only the 2 base graph layers
+	if len(got[0].Layers) != 2 {
+		t.Errorf("expected 2 base graph layers, got %d", len(got[0].Layers))
+	}
+}
+
+func TestAppendLayersToLastHistory_PreservesOtherFields(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orbconfig.Config{DataDir: dir}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+	defer ts.Close()
+	cfg.DGraphAdminURL = ts.URL + "/admin"
+
+	imp := NewImporter(cfg, logger, &mockBackend{})
+	meta := ImportMeta{Tag: "v5", Digest: "sha256:abc", Verification: VerificationVerified}
+	if err := imp.Import(context.Background(), fakeDataGZ(t), fakeSchemaGZ(t), meta); err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+
+	dr := DispatchResult{MediaType: "a/b", URL: "http://x", StatusCode: 200}
+	AppendLayersToLastHistory(dir, []LayerRecord{{MediaType: "a/b", Role: LayerRoleDispatched, Dispatch: &dr}})
+
+	got, _ := LoadHistory(dir)
+	if got[0].Tag != "v5" {
+		t.Errorf("Tag changed: got %q", got[0].Tag)
+	}
+	if got[0].Digest != "sha256:abc" {
+		t.Errorf("Digest changed: got %q", got[0].Digest)
+	}
+	if got[0].Verification != VerificationVerified {
+		t.Errorf("Verification changed: got %q", got[0].Verification)
+	}
+	dispatched := 0
+	for _, l := range got[0].Layers {
+		if l.Role == LayerRoleDispatched {
+			dispatched++
+		}
+	}
+	if dispatched != 1 {
+		t.Errorf("expected 1 dispatched layer, got %d", dispatched)
+	}
+}
+
+func TestImporter_LoadHistory_VerificationRoundtrip(t *testing.T) {
 	dir := t.TempDir()
 	cfg := orbconfig.Config{DataDir: dir}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -178,7 +317,7 @@ func TestImporter_LoadHistory_VerifiedRoundtrip(t *testing.T) {
 
 	imp := NewImporter(cfg, logger, &mockBackend{})
 
-	meta := ImportMeta{Tag: "v2", Digest: "sha256:deadbeef", Verified: true}
+	meta := ImportMeta{Tag: "v2", Digest: "sha256:deadbeef", Verification: VerificationVerified}
 	if err := imp.Import(context.Background(), fakeDataGZ(t), fakeSchemaGZ(t), meta); err != nil {
 		t.Fatalf("Import: %v", err)
 	}
@@ -190,13 +329,12 @@ func TestImporter_LoadHistory_VerifiedRoundtrip(t *testing.T) {
 	if len(records) == 0 {
 		t.Fatal("expected at least one record")
 	}
-	if !records[0].Verified {
-		t.Errorf("Verified field not persisted: got false, want true")
+	if records[0].Verification != VerificationVerified {
+		t.Errorf("Verification not persisted: got %q, want %q", records[0].Verification, VerificationVerified)
 	}
 
-	// Verify the file is valid JSON with the verified field.
 	data, _ := os.ReadFile(filepath.Join(dir, importHistoryFile))
-	if !strings.Contains(string(data), `"verified": true`) {
-		t.Errorf("expected verified:true in history JSON, got: %s", data)
+	if !strings.Contains(string(data), `"verification": "verified"`) {
+		t.Errorf("expected verification:verified in history JSON, got: %s", data)
 	}
 }

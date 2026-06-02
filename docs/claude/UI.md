@@ -84,3 +84,11 @@ These patterns are used in both orbital and orb. Always use them — never inven
 - **`updatedBy` and `updatedAt` excluded from audit log variable display** (`skipVars` in `app.js`) — system metadata, not user-supplied input. They remain in `details.variables` in the database.
 - **REST-triggered audit events have no child row** — `renderPayload` returns `null` when `details.query` absent. Expand arrow also hidden via `createdRow`.
 - **Startup log must use slog, not `log.Printf`** — `cmd/orbital/main.go` calls `slog.SetDefault` before anything else so startup line emits JSON consistent with all other output.
+
+## Timestamp rendering
+
+- **`data-timestamp` must use RFC3339 format** — Go's `time.Time.String()` output (`2026-06-01 19:20:52.935848 +0000 UTC`) is NOT parseable by `new Date()` in JS. Always use `.Format "2006-01-02T15:04:05Z07:00"` for the `data-timestamp` attribute. Use a short human format (`.Format "2006-01-02 15:04"`) as the visible text fallback so columns stay narrow even before JS runs.
+  ```gohtml
+  <span data-timestamp="{{.SomeTime.Format "2006-01-02T15:04:05Z07:00"}}">{{.SomeTime.Format "2006-01-02 15:04"}}</span>
+  ```
+- **`renderTimestamps(document)` runs globally at DOMContentLoaded** — a single handler in `app.js` calls `renderTimestamps(document)` on every page load. This covers full-page renders (e.g. import history). HTMX-swapped content calls `renderTimestamps(panel)` explicitly after swap — both paths are handled.

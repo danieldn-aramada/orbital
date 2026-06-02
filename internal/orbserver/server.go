@@ -27,6 +27,7 @@ type Server struct {
 	logger       *slog.Logger
 	state        *importState
 	imp          *orb.Importer
+	dispatcher   *orb.Dispatcher        // nil if no consumers configured
 	divStore     *divergence.Store
 	divPublisher *divergence.Publisher // nil if S3 not configured
 	templates    map[string]*template.Template
@@ -76,6 +77,7 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	}
 
 	imp := orb.NewImporter(*cfg, logger, backend)
+	dispatcher := orb.NewDispatcher(cfg.Consumers)
 	divStore := divergence.NewStore(cfg.DataDir)
 
 	var divPublisher *divergence.Publisher
@@ -100,10 +102,11 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 		logger:       logger,
 		state:        state,
 		imp:          imp,
+		dispatcher:   dispatcher,
 		divStore:     divStore,
 		divPublisher: divPublisher,
 		templates:    orbtemplates.Map(),
-		devMode:      cfg.LogLevel == "debug",
+		devMode:      cfg.Dev,
 	}
 
 	// Seed currentVersion from history on startup.
@@ -144,11 +147,14 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 
 	// API.
 	api := e.Group("/api/v1")
-	api.POST("/import", s.triggerImport)
-	api.POST("/import/upload", s.uploadImport)
+	api.POST("/import/subgraph", s.importSubgraph)
+	api.POST("/import/artifact", s.importArtifact)
 	api.GET("/import/status", s.importStatus)
-	api.GET("/import/tags", s.importTags)
 	api.GET("/import/history", s.importHistory)
+	if cfg.EnableOCIRegistry {
+		api.POST("/import", s.triggerImport)
+		api.GET("/import/tags", s.importTags)
+	}
 	inv := handler.NewInventory(cfg.DGraphURL)
 	api.GET("/inventory", inv.List)
 	api.POST("/divergence", s.receiveDivergence)
@@ -158,9 +164,11 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	return s, nil
 }
 
-// Start begins the polling loop then starts the HTTP server.
+// Start begins the polling loop (OCI source only) then starts the HTTP server.
 func (s *Server) Start(ctx context.Context) error {
-	go s.pollLoop(ctx)
+	if s.cfg.EnableOCIRegistry {
+		go s.pollLoop(ctx)
+	}
 
 	s.logger.Info("starting orb", "port", s.cfg.Port)
 	srv := &http.Server{

@@ -88,9 +88,7 @@ func (h *Export) Trigger(c echo.Context) error {
 
 	dcName, dcOrbID, _, err := h.fetchDCInfo(c.Request().Context(), datacenterID)
 	if err != nil {
-		h.logger.Warn("could not fetch DC info", "id", datacenterID, "err", err)
-		dcName = datacenterID
-		dcOrbID = datacenterID
+		return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "could not resolve datacenter: " + err.Error()})
 	}
 
 	// Scratch DGraph is shared — only one export can run at a time across all data centers.
@@ -122,6 +120,7 @@ func (h *Export) Trigger(c echo.Context) error {
 	job, err := h.db.ExportJob.Create().
 		SetDatacenterID(datacenterID).
 		SetDatacenterName(dcName).
+		SetDatacenterOrbID(dcOrbID).
 		SetStatus(exportjob.StatusPending).
 		Save(c.Request().Context())
 	if err != nil {

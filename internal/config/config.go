@@ -28,22 +28,23 @@ type Config struct {
 	SessionHMACKey         string        `envconfig:"ORBITAL_SESSION_HMAC_KEY"        default:"local-dev-hmac-key-change-in-prod"` // must be changed in prod
 	SessionEncryptionKey   string        `envconfig:"ORBITAL_SESSION_ENCRYPTION_KEY"  default:"local-dev-enc-key-32-bytes-pad!!"`  // must be exactly 32 bytes for AES-256; empty disables cookie encryption
 	DGraphExportDir        string        `envconfig:"DGRAPH_EXPORT_DIR"               default:"/tmp/orbital-test-blue"`            // host-side mount of /dgraph/export on blue alpha
-	S3Endpoint             string        `envconfig:"ORBITAL_S3_ENDPOINT"             default:"https://armadagalleonbackups.blob.core.windows.net"`
+	S3Endpoint             string        `envconfig:"ORBITAL_S3_ENDPOINT"             default:"http://localhost:9000"`
 	S3Region               string        `envconfig:"ORBITAL_S3_REGION"               default:"us-east-1"`
-	S3Bucket               string        `envconfig:"ORBITAL_S3_BUCKET"               default:"cmdb"`
-	S3AccessKey            string        `envconfig:"ORBITAL_S3_ACCESS_KEY"           default:"armadagalleonbackups"`
-	S3SecretKey            string        `envconfig:"ORBITAL_S3_SECRET_KEY"           default:""`
+	S3Bucket               string        `envconfig:"ORBITAL_S3_BUCKET"               default:"orbital"`
+	S3AccessKey            string        `envconfig:"ORBITAL_S3_ACCESS_KEY"           default:"minioadmin"`
+	S3SecretKey            string        `envconfig:"ORBITAL_S3_SECRET_KEY"           default:"minioadmin"`
 	S3Prefix               string        `envconfig:"ORBITAL_S3_PREFIX"               default:"backups/"` // optional path prefix within the bucket
 	S3RetentionCount       int           `envconfig:"ORBITAL_S3_RETENTION_COUNT"      default:"30"`       // max backups to retain; 0 = unlimited
 	OIDCIssuerURL          string        `envconfig:"ORBITAL_OIDC_ISSUER_URL"         default:"https://login.microsoftonline.com/8f231c2a-9551-4b40-be17-5b24afe5e890/v2.0"`
 	OIDCClientID           string        `envconfig:"ORBITAL_OIDC_CLIENT_ID"          default:"5fc832f6-843e-4207-93dd-b3c3a77c06f2"`
 	OIDCClientSecret       string        `envconfig:"ORBITAL_OIDC_CLIENT_SECRET"      default:""`
 	OIDCRedirectURL        string        `envconfig:"ORBITAL_OIDC_REDIRECT_URL"       default:"http://localhost:8001/auth/callback"`
-	OCIRegistry            string        `envconfig:"ORBITAL_OCI_REGISTRY"            default:"armadaeksatest.azurecr.io"`
+	OCIRegistry            string        `envconfig:"ORBITAL_OCI_REGISTRY"            default:"localhost:5001"`
 	OCIRepo                string        `envconfig:"ORBITAL_OCI_REPO"                default:"orbital"`
-	OCIUsername            string        `envconfig:"ORBITAL_OCI_USERNAME"            default:"armadaeksatest"` // ACR admin username = registry name
-	OCIPassword            string        `envconfig:"ORBITAL_OCI_PASSWORD"            default:""`               // ACR admin password — set via env
-	OCISigningKeyPath      string        `envconfig:"ORBITAL_OCI_SIGNING_KEY_PATH"    default:"cosign.key"`     // run: cosign generate-key-pair
+	OCIUsername            string        `envconfig:"ORBITAL_OCI_USERNAME"            default:""`
+	OCIPassword            string        `envconfig:"ORBITAL_OCI_PASSWORD"            default:""`
+	OCIAllowHTTP           bool          `envconfig:"ORBITAL_OCI_ALLOW_HTTP"          default:"true"`              // set false in prod (TLS registry)
+	OCISigningKeyPath      string        `envconfig:"ORBITAL_OCI_SIGNING_KEY_PATH"    default:"cosign.key"`        // run: cosign generate-key-pair
 	BasePath                  string        `envconfig:"ORBITAL_BASE_PATH"                    default:""`
 	EnricherTimeout           time.Duration `envconfig:"ORBITAL_ENRICHER_TIMEOUT"             default:"30s"`  // per-attempt HTTP timeout; per-request URLs supplied in publish body
 	EnricherMaxAttempts       int           `envconfig:"ORBITAL_ENRICHER_MAX_ATTEMPTS"        default:"3"`    // total attempts (1 initial + N-1 retries)

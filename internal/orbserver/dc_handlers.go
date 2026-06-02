@@ -262,6 +262,10 @@ func (s *Server) importHistoryPage(c echo.Context) error {
 		s.logger.Warn("failed to load import history", "err", err)
 		history = nil
 	}
+	// Reverse to show newest first.
+	for i, j := 0, len(history)-1; i < j; i, j = i+1, j-1 {
+		history[i], history[j] = history[j], history[i]
+	}
 	b := s.orbBase(c)
 	return s.render(c, "import-history", importHistoryPageData{
 		Base:      b,

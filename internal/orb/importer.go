@@ -23,28 +23,61 @@ const (
 	historyMaxRecords = 25
 	scratchFile       = "data.json.gz"
 	SchemaFile        = "schema.graphql"
+
+	// Verification states for ImportRecord.Verification.
+	VerificationVerified      = "verified"       // cosign-verified via OCI pull
+	VerificationUnverified    = "unverified"      // OCI pull but verification failed
+	VerificationNotApplicable = "not-applicable"  // courier/API upload — no signature available
+
+	// Layer roles for LayerRecord.Role.
+	LayerRoleGraph      = "graph"      // consumed by DGraph (always)
+	LayerRoleDispatched = "dispatched" // dispatched to a registered consumer
+	LayerRoleUnknown    = "unknown"    // no registered consumer — silently skipped
+
+	// graph layer media types — used when recording history entries.
+	layerMediaTypeData   = "application/vnd.orbital.subgraph.data.v1+gzip"
+	layerMediaTypeSchema = "application/vnd.orbital.subgraph.schema.v1+gzip"
 )
 
-// ImportMeta carries metadata from OCI manifest annotations for a pulled artifact.
+// ImportMeta carries metadata for a pulled or uploaded artifact.
 type ImportMeta struct {
-	Tag         string
-	Digest      string
-	DCOrbID     string
-	ExportJobID string
-	CreatedAt   time.Time
-	Verified    bool
+	Tag          string
+	Digest       string
+	DCOrbID      string
+	ExportJobID  string
+	CreatedAt    time.Time
+	Verification string // one of the Verification* constants
+}
+
+// LayerRecord describes one layer in an imported artifact.
+type LayerRecord struct {
+	MediaType string          `json:"mediaType"`
+	Role      string          `json:"role"`               // LayerRole* constant
+	Dispatch  *DispatchResult `json:"dispatch,omitempty"` // set when Role == LayerRoleDispatched
 }
 
 // ImportRecord is one entry in the import history log.
 type ImportRecord struct {
-	Tag         string    `json:"tag"`
-	Digest      string    `json:"digest"`
-	DCOrbID     string    `json:"dcOrbId"`
-	ExportJobID string    `json:"exportJobId"`
-	ImportedAt  time.Time `json:"importedAt"`
-	Status      string    `json:"status"` // "done" | "failed"
-	Verified    bool      `json:"verified"`
-	Error       string    `json:"error,omitempty"`
+	Tag          string        `json:"tag"`
+	Digest       string        `json:"digest"`
+	DCOrbID      string        `json:"dcOrbId"`
+	ExportJobID  string        `json:"exportJobId"`
+	ImportedAt   time.Time     `json:"importedAt"`
+	Status       string        `json:"status"`       // "done" | "failed"
+	Verification string        `json:"verification"` // Verification* constant
+	Error        string        `json:"error,omitempty"`
+	Layers       []LayerRecord `json:"layers,omitempty"`
+}
+
+// DispatchErrors returns all dispatch error strings across layers, for use in templates.
+func (r ImportRecord) DispatchErrors() []string {
+	var errs []string
+	for _, l := range r.Layers {
+		if l.Role == LayerRoleDispatched && l.Dispatch != nil && l.Dispatch.Error != "" {
+			errs = append(errs, l.Dispatch.Error)
+		}
+	}
+	return errs
 }
 
 // Importer executes the full import pipeline: pull → verify → drop_all → schema → dgraph live.
@@ -190,8 +223,12 @@ func (i *Importer) recordHistory(meta ImportMeta, status, errMsg string) error {
 		ExportJobID: meta.ExportJobID,
 		ImportedAt:  time.Now().UTC(),
 		Status:      status,
-		Verified:    meta.Verified,
+		Verification: meta.Verification,
 		Error:       errMsg,
+		Layers: []LayerRecord{
+			{MediaType: layerMediaTypeData, Role: LayerRoleGraph},
+			{MediaType: layerMediaTypeSchema, Role: LayerRoleGraph},
+		},
 	})
 
 	// Rolling window — keep newest historyMaxRecords entries.
@@ -204,6 +241,34 @@ func (i *Importer) recordHistory(meta ImportMeta, status, errMsg string) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0o644)
+}
+
+// AppendLayersToLastHistory appends extra layer records (dispatched + unknown) to the most
+// recent history entry. Called by the importArtifact handler after Import() writes the base
+// record (containing the two graph layers) and Dispatcher.Dispatch() completes.
+// Safe to call because the import state machine prevents concurrent imports (409 if running).
+func AppendLayersToLastHistory(dataDir string, layers []LayerRecord) error {
+	if len(layers) == 0 {
+		return nil
+	}
+	path := filepath.Join(dataDir, importHistoryFile)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read history: %w", err)
+	}
+	var records []ImportRecord
+	if err := json.Unmarshal(data, &records); err != nil {
+		return fmt.Errorf("unmarshal history: %w", err)
+	}
+	if len(records) == 0 {
+		return nil
+	}
+	records[len(records)-1].Layers = append(records[len(records)-1].Layers, layers...)
+	out, err := json.MarshalIndent(records, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0o644)
 }
 
 // LoadHistory reads the import history from disk. Returns empty slice if none exists.

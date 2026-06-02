@@ -45,7 +45,7 @@ Each spike is a question to answer. Results define the MVP.
 | 10 | Air-gap sync round-trip | Does orbital's config export work as a complete, importable payload for orb? | — | ✅ Done | Orb loads `json.gz` into local DGraph and serves offline |
 | 11 | Authorization | How do we restrict mutations to authorized roles and test authz offline? | — | 🔄 In progress | App Roles, DGraph `@auth` directives, middleware enforcement, offline JWT tests, AKS OIDC validation |
 | 12 | DGraph operations | Can our team operate DGraph on AKS without prior experience? | — | Not started | Runbook: schema change apply, validate, rollback |
-| 13 | Orb import API | What is the right mechanism for orb to pull a signed OCI subgraph from a registry and load it into local DGraph? | — | ✅ Done | OCI puller (oras-go v2), cosign verify, `dgraph live` subprocess, polling loop |
+| 13 | Orb import API | What is the right mechanism for orb to pull a signed OCI subgraph from a registry and load it into local DGraph? | — | ✅ Done | OCI puller (oras-go v2), cosign verify, `dgraph live` subprocess, polling loop; full consumer dispatch pipeline on both `triggerImport` (OCI tag path) and `importArtifact` (direct upload) — both dispatch `ExtraLayers` to `ORB_CONSUMERS`; import history: reverse-chronological, friendly layer labels (`mediaTypeLabel`), dispatch errors in Error column, `ORB_DEV` hot-reload |
 | 14 | Divergence reports (orb intake) | How does orb accept and relay divergence reports from edge components? | Daniel | ✅ Done (5/24) | `POST /api/v1/divergence` replaces pending set; `POST /api/v1/divergence/publish` writes snapshot to S3 |
 | 15 | Orb deployment model | What does orb look like deployed at the edge — topology, runtime deps, air-gap constraints? | — | Not started | `K8sBackend` interface + pod-selection logic done; needs: `dgraph-live` idle pod manifest, Helm chart, PVC wiring, `ORB_BACKEND=k8s` config |
 | 16 | Orb API surface & authN/Z | What endpoints does orb expose locally, who calls them, and what is the consumer auth model? | — | Not started | |
@@ -137,6 +137,8 @@ Benchmark DGraph query latency under realistic load, validate Valkey caching mit
 | DGraph client abstraction | 22+ raw `http.Post` calls across 7 handler files, no timeouts, no pooling. Extract `internal/dgraph/client.go`. Prerequisite for testing. See `docs/maintainability.md` item 2.1. |
 | `internal/handler/` god package | 3,560 lines mixing HTTP, business logic, DGraph calls, file I/O. Decompose post-MVP. See `docs/maintainability.md` item 5.4. |
 | `web/static/app.js` monolith | 2,400+ lines, no module system, duplicate event listeners. Spike 18 planned. See `docs/claude/SPIKE_18_EXECUTION.md`. |
+| Export API uses DGraph UID instead of orbId | `POST /api/v1/datacenters/:id/export` takes a DGraph UID (`0x...`). Should use orbId — it's the canonical DC identifier. Fix: change `fetchDCInfo` to query by `filter: {orbId: {eq: "..."}}`, update export select to use `dc.orbId` as option value. Orbital UI DC detail page URLs also use DGraph UIDs — same fix applies. |
+| No delete button for export jobs in UI | `DELETE /api/v1/export/jobs/:jobId` exists but is API-only. Add a delete (trash) button to each row in the export jobs table on the Export page. |
 | Quick wins (independent, any time) | `docs/maintainability.md` items 3.1–3.7, 4.1, 4.2, 4.4 — none are blocking, all improve correctness or reduce duplication. |
 
 ---

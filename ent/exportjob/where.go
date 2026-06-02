@@ -85,6 +85,11 @@ func DatacenterName(v string) predicate.ExportJob {
 	return predicate.ExportJob(sql.FieldEQ(FieldDatacenterName, v))
 }
 
+// DatacenterOrbID applies equality check predicate on the "datacenter_orb_id" field. It's identical to DatacenterOrbIDEQ.
+func DatacenterOrbID(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldEQ(FieldDatacenterOrbID, v))
+}
+
 // ArtifactPath applies equality check predicate on the "artifact_path" field. It's identical to ArtifactPathEQ.
 func ArtifactPath(v string) predicate.ExportJob {
 	return predicate.ExportJob(sql.FieldEQ(FieldArtifactPath, v))
@@ -473,6 +478,81 @@ func DatacenterNameEqualFold(v string) predicate.ExportJob {
 // DatacenterNameContainsFold applies the ContainsFold predicate on the "datacenter_name" field.
 func DatacenterNameContainsFold(v string) predicate.ExportJob {
 	return predicate.ExportJob(sql.FieldContainsFold(FieldDatacenterName, v))
+}
+
+// DatacenterOrbIDEQ applies the EQ predicate on the "datacenter_orb_id" field.
+func DatacenterOrbIDEQ(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldEQ(FieldDatacenterOrbID, v))
+}
+
+// DatacenterOrbIDNEQ applies the NEQ predicate on the "datacenter_orb_id" field.
+func DatacenterOrbIDNEQ(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldNEQ(FieldDatacenterOrbID, v))
+}
+
+// DatacenterOrbIDIn applies the In predicate on the "datacenter_orb_id" field.
+func DatacenterOrbIDIn(vs ...string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldIn(FieldDatacenterOrbID, vs...))
+}
+
+// DatacenterOrbIDNotIn applies the NotIn predicate on the "datacenter_orb_id" field.
+func DatacenterOrbIDNotIn(vs ...string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldNotIn(FieldDatacenterOrbID, vs...))
+}
+
+// DatacenterOrbIDGT applies the GT predicate on the "datacenter_orb_id" field.
+func DatacenterOrbIDGT(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldGT(FieldDatacenterOrbID, v))
+}
+
+// DatacenterOrbIDGTE applies the GTE predicate on the "datacenter_orb_id" field.
+func DatacenterOrbIDGTE(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldGTE(FieldDatacenterOrbID, v))
+}
+
+// DatacenterOrbIDLT applies the LT predicate on the "datacenter_orb_id" field.
+func DatacenterOrbIDLT(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldLT(FieldDatacenterOrbID, v))
+}
+
+// DatacenterOrbIDLTE applies the LTE predicate on the "datacenter_orb_id" field.
+func DatacenterOrbIDLTE(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldLTE(FieldDatacenterOrbID, v))
+}
+
+// DatacenterOrbIDContains applies the Contains predicate on the "datacenter_orb_id" field.
+func DatacenterOrbIDContains(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldContains(FieldDatacenterOrbID, v))
+}
+
+// DatacenterOrbIDHasPrefix applies the HasPrefix predicate on the "datacenter_orb_id" field.
+func DatacenterOrbIDHasPrefix(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldHasPrefix(FieldDatacenterOrbID, v))
+}
+
+// DatacenterOrbIDHasSuffix applies the HasSuffix predicate on the "datacenter_orb_id" field.
+func DatacenterOrbIDHasSuffix(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldHasSuffix(FieldDatacenterOrbID, v))
+}
+
+// DatacenterOrbIDIsNil applies the IsNil predicate on the "datacenter_orb_id" field.
+func DatacenterOrbIDIsNil() predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldIsNull(FieldDatacenterOrbID))
+}
+
+// DatacenterOrbIDNotNil applies the NotNil predicate on the "datacenter_orb_id" field.
+func DatacenterOrbIDNotNil() predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldNotNull(FieldDatacenterOrbID))
+}
+
+// DatacenterOrbIDEqualFold applies the EqualFold predicate on the "datacenter_orb_id" field.
+func DatacenterOrbIDEqualFold(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldEqualFold(FieldDatacenterOrbID, v))
+}
+
+// DatacenterOrbIDContainsFold applies the ContainsFold predicate on the "datacenter_orb_id" field.
+func DatacenterOrbIDContainsFold(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldContainsFold(FieldDatacenterOrbID, v))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.

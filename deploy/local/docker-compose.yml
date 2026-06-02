@@ -107,6 +107,18 @@ services:
       timeout: 5s
       retries: 10
 
+  minio-setup:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 minioadmin minioadmin &&
+        mc mb local/orbital --ignore-existing
+      "
+    restart: "no"
+
   oci-registry:
     image: ghcr.io/project-zot/zot-linux-arm64:v2.1.9
     command: serve /etc/zot/config.json
@@ -114,7 +126,6 @@ services:
       - "5001:5000"
     volumes:
       - ./zot-config.json:/etc/zot/config.json
-      - ./zot-credentials.json:/etc/zot/credentials.json
     healthcheck:
       test: ["CMD", "/usr/local/bin/zot-linux-arm64", "verify", "/etc/zot/config.json"]
       interval: 5s

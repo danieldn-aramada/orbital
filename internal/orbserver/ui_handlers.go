@@ -31,7 +31,8 @@ const queryActiveDC = `{ queryDataCenter { name } }`
 
 type importPageData struct {
 	layout.Base
-	PageTitle string
+	PageTitle  string
+	OCIEnabled bool
 }
 
 type inventoryPageData struct {
@@ -158,8 +159,9 @@ func (s *Server) statusPage(c echo.Context) error {
 
 func (s *Server) importPage(c echo.Context) error {
 	return s.render(c, "import", importPageData{
-		Base:      s.orbBase(c),
-		PageTitle: "Import Subgraph",
+		Base:       s.orbBase(c),
+		PageTitle:  "Import Subgraph",
+		OCIEnabled: s.cfg.EnableOCIRegistry,
 	})
 }
 

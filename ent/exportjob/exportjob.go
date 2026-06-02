@@ -27,6 +27,8 @@ const (
 	FieldDatacenterID = "datacenter_id"
 	// FieldDatacenterName holds the string denoting the datacenter_name field in the database.
 	FieldDatacenterName = "datacenter_name"
+	// FieldDatacenterOrbID holds the string denoting the datacenter_orb_id field in the database.
+	FieldDatacenterOrbID = "datacenter_orb_id"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldArtifactPath holds the string denoting the artifact_path field in the database.
@@ -50,6 +52,7 @@ var Columns = []string{
 	FieldUpdatedBy,
 	FieldDatacenterID,
 	FieldDatacenterName,
+	FieldDatacenterOrbID,
 	FieldStatus,
 	FieldArtifactPath,
 	FieldError,
@@ -136,6 +139,11 @@ func ByDatacenterID(opts ...sql.OrderTermOption) OrderOption {
 // ByDatacenterName orders the results by the datacenter_name field.
 func ByDatacenterName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDatacenterName, opts...).ToFunc()
+}
+
+// ByDatacenterOrbID orders the results by the datacenter_orb_id field.
+func ByDatacenterOrbID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDatacenterOrbID, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

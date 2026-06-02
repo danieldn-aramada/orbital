@@ -64,6 +64,7 @@ var (
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "datacenter_id", Type: field.TypeString},
 		{Name: "datacenter_name", Type: field.TypeString},
+		{Name: "datacenter_orb_id", Type: field.TypeString, Nullable: true},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "running", "completed", "failed", "stale"}},
 		{Name: "artifact_path", Type: field.TypeString, Nullable: true},
 		{Name: "error", Type: field.TypeString, Nullable: true},

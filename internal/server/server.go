@@ -182,6 +182,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 			Username:      cfg.OCIUsername,
 			Password:      cfg.OCIPassword,
 			SigningKeyPath: cfg.OCISigningKeyPath,
+			AllowHTTP:     cfg.OCIAllowHTTP,
 		}
 		retryClient := retryablehttp.NewClient()
 		retryClient.RetryMax = cfg.EnricherMaxAttempts - 1

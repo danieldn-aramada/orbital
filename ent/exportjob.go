@@ -30,6 +30,8 @@ type ExportJob struct {
 	DatacenterID string `json:"datacenter_id,omitempty"`
 	// DatacenterName holds the value of the "datacenter_name" field.
 	DatacenterName string `json:"datacenter_name,omitempty"`
+	// DatacenterOrbID holds the value of the "datacenter_orb_id" field.
+	DatacenterOrbID *string `json:"datacenter_orb_id,omitempty"`
 	// Status holds the value of the "status" field.
 	Status exportjob.Status `json:"status,omitempty"`
 	// ArtifactPath holds the value of the "artifact_path" field.
@@ -48,7 +50,7 @@ func (*ExportJob) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case exportjob.FieldCreatedBy, exportjob.FieldUpdatedBy, exportjob.FieldDatacenterID, exportjob.FieldDatacenterName, exportjob.FieldStatus, exportjob.FieldArtifactPath, exportjob.FieldError:
+		case exportjob.FieldCreatedBy, exportjob.FieldUpdatedBy, exportjob.FieldDatacenterID, exportjob.FieldDatacenterName, exportjob.FieldDatacenterOrbID, exportjob.FieldStatus, exportjob.FieldArtifactPath, exportjob.FieldError:
 			values[i] = new(sql.NullString)
 		case exportjob.FieldCreatedAt, exportjob.FieldUpdatedAt, exportjob.FieldStartedAt, exportjob.FieldCompletedAt:
 			values[i] = new(sql.NullTime)
@@ -111,6 +113,13 @@ func (_m *ExportJob) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field datacenter_name", values[i])
 			} else if value.Valid {
 				_m.DatacenterName = value.String
+			}
+		case exportjob.FieldDatacenterOrbID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field datacenter_orb_id", values[i])
+			} else if value.Valid {
+				_m.DatacenterOrbID = new(string)
+				*_m.DatacenterOrbID = value.String
 			}
 		case exportjob.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -201,6 +210,11 @@ func (_m *ExportJob) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("datacenter_name=")
 	builder.WriteString(_m.DatacenterName)
+	builder.WriteString(", ")
+	if v := _m.DatacenterOrbID; v != nil {
+		builder.WriteString("datacenter_orb_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Status))

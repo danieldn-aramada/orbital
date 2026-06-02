@@ -300,7 +300,7 @@ func (h *OCI) TestConnection(c echo.Context) error {
 	}
 	// Attempt a simple registry ping via oras registry resolution.
 	// This is intentionally minimal — just validates credentials/reachability.
-	err := testRegistryConnection(h.cfg.Registry, h.cfg.Username, h.cfg.Password)
+	err := testRegistryConnection(h.cfg.Registry, h.cfg.Username, h.cfg.Password, h.cfg.AllowHTTP)
 	if err != nil {
 		return c.JSON(http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
 	}
@@ -352,11 +352,12 @@ func nillableInt(v int) *int {
 	return &v
 }
 
-func testRegistryConnection(registry, username, password string) error {
+func testRegistryConnection(registry, username, password string, allowHTTP bool) error {
 	reg, err := remote.NewRegistry(registry)
 	if err != nil {
 		return err
 	}
+	reg.PlainHTTP = allowHTTP
 	cred := orasauth.Credential{Username: username, Password: password}
 	reg.Client = &orasauth.Client{
 		Client:     retry.DefaultClient,

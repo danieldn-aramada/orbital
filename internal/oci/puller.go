@@ -29,6 +29,7 @@ type PullConfig struct {
 type PulledArtifact struct {
 	DataGZ      []byte
 	SchemaGZ    []byte
+	ExtraLayers map[string][]byte // mediaType → bytes; non-graph layers for consumer dispatch
 	Annotations map[string]string
 	Digest      string // manifest digest, used for cosign verification
 	Tag         string
@@ -151,6 +152,11 @@ func Pull(ctx context.Context, cfg PullConfig, tag string) (*PulledArtifact, err
 			artifact.DataGZ = data
 		case mediaTypeSchemaGZ:
 			artifact.SchemaGZ = data
+		default:
+			if artifact.ExtraLayers == nil {
+				artifact.ExtraLayers = make(map[string][]byte)
+			}
+			artifact.ExtraLayers[layer.MediaType] = data
 		}
 	}
 

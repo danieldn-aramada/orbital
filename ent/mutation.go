@@ -2097,24 +2097,25 @@ func (m *EventMutation) ResetEdge(name string) error {
 // ExportJobMutation represents an operation that mutates the ExportJob nodes in the graph.
 type ExportJobMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *uuid.UUID
-	created_at      *time.Time
-	created_by      *string
-	updated_at      *time.Time
-	updated_by      *string
-	datacenter_id   *string
-	datacenter_name *string
-	status          *exportjob.Status
-	artifact_path   *string
-	error           *string
-	started_at      *time.Time
-	completed_at    *time.Time
-	clearedFields   map[string]struct{}
-	done            bool
-	oldValue        func(context.Context) (*ExportJob, error)
-	predicates      []predicate.ExportJob
+	op                Op
+	typ               string
+	id                *uuid.UUID
+	created_at        *time.Time
+	created_by        *string
+	updated_at        *time.Time
+	updated_by        *string
+	datacenter_id     *string
+	datacenter_name   *string
+	datacenter_orb_id *string
+	status            *exportjob.Status
+	artifact_path     *string
+	error             *string
+	started_at        *time.Time
+	completed_at      *time.Time
+	clearedFields     map[string]struct{}
+	done              bool
+	oldValue          func(context.Context) (*ExportJob, error)
+	predicates        []predicate.ExportJob
 }
 
 var _ ent.Mutation = (*ExportJobMutation)(nil)
@@ -2476,6 +2477,55 @@ func (m *ExportJobMutation) ResetDatacenterName() {
 	m.datacenter_name = nil
 }
 
+// SetDatacenterOrbID sets the "datacenter_orb_id" field.
+func (m *ExportJobMutation) SetDatacenterOrbID(s string) {
+	m.datacenter_orb_id = &s
+}
+
+// DatacenterOrbID returns the value of the "datacenter_orb_id" field in the mutation.
+func (m *ExportJobMutation) DatacenterOrbID() (r string, exists bool) {
+	v := m.datacenter_orb_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDatacenterOrbID returns the old "datacenter_orb_id" field's value of the ExportJob entity.
+// If the ExportJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExportJobMutation) OldDatacenterOrbID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDatacenterOrbID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDatacenterOrbID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDatacenterOrbID: %w", err)
+	}
+	return oldValue.DatacenterOrbID, nil
+}
+
+// ClearDatacenterOrbID clears the value of the "datacenter_orb_id" field.
+func (m *ExportJobMutation) ClearDatacenterOrbID() {
+	m.datacenter_orb_id = nil
+	m.clearedFields[exportjob.FieldDatacenterOrbID] = struct{}{}
+}
+
+// DatacenterOrbIDCleared returns if the "datacenter_orb_id" field was cleared in this mutation.
+func (m *ExportJobMutation) DatacenterOrbIDCleared() bool {
+	_, ok := m.clearedFields[exportjob.FieldDatacenterOrbID]
+	return ok
+}
+
+// ResetDatacenterOrbID resets all changes to the "datacenter_orb_id" field.
+func (m *ExportJobMutation) ResetDatacenterOrbID() {
+	m.datacenter_orb_id = nil
+	delete(m.clearedFields, exportjob.FieldDatacenterOrbID)
+}
+
 // SetStatus sets the "status" field.
 func (m *ExportJobMutation) SetStatus(e exportjob.Status) {
 	m.status = &e
@@ -2742,7 +2792,7 @@ func (m *ExportJobMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ExportJobMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 12)
 	if m.created_at != nil {
 		fields = append(fields, exportjob.FieldCreatedAt)
 	}
@@ -2760,6 +2810,9 @@ func (m *ExportJobMutation) Fields() []string {
 	}
 	if m.datacenter_name != nil {
 		fields = append(fields, exportjob.FieldDatacenterName)
+	}
+	if m.datacenter_orb_id != nil {
+		fields = append(fields, exportjob.FieldDatacenterOrbID)
 	}
 	if m.status != nil {
 		fields = append(fields, exportjob.FieldStatus)
@@ -2796,6 +2849,8 @@ func (m *ExportJobMutation) Field(name string) (ent.Value, bool) {
 		return m.DatacenterID()
 	case exportjob.FieldDatacenterName:
 		return m.DatacenterName()
+	case exportjob.FieldDatacenterOrbID:
+		return m.DatacenterOrbID()
 	case exportjob.FieldStatus:
 		return m.Status()
 	case exportjob.FieldArtifactPath:
@@ -2827,6 +2882,8 @@ func (m *ExportJobMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldDatacenterID(ctx)
 	case exportjob.FieldDatacenterName:
 		return m.OldDatacenterName(ctx)
+	case exportjob.FieldDatacenterOrbID:
+		return m.OldDatacenterOrbID(ctx)
 	case exportjob.FieldStatus:
 		return m.OldStatus(ctx)
 	case exportjob.FieldArtifactPath:
@@ -2887,6 +2944,13 @@ func (m *ExportJobMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDatacenterName(v)
+		return nil
+	case exportjob.FieldDatacenterOrbID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDatacenterOrbID(v)
 		return nil
 	case exportjob.FieldStatus:
 		v, ok := value.(exportjob.Status)
@@ -2962,6 +3026,9 @@ func (m *ExportJobMutation) ClearedFields() []string {
 	if m.FieldCleared(exportjob.FieldUpdatedBy) {
 		fields = append(fields, exportjob.FieldUpdatedBy)
 	}
+	if m.FieldCleared(exportjob.FieldDatacenterOrbID) {
+		fields = append(fields, exportjob.FieldDatacenterOrbID)
+	}
 	if m.FieldCleared(exportjob.FieldArtifactPath) {
 		fields = append(fields, exportjob.FieldArtifactPath)
 	}
@@ -2996,6 +3063,9 @@ func (m *ExportJobMutation) ClearField(name string) error {
 		return nil
 	case exportjob.FieldUpdatedBy:
 		m.ClearUpdatedBy()
+		return nil
+	case exportjob.FieldDatacenterOrbID:
+		m.ClearDatacenterOrbID()
 		return nil
 	case exportjob.FieldArtifactPath:
 		m.ClearArtifactPath()
@@ -3034,6 +3104,9 @@ func (m *ExportJobMutation) ResetField(name string) error {
 		return nil
 	case exportjob.FieldDatacenterName:
 		m.ResetDatacenterName()
+		return nil
+	case exportjob.FieldDatacenterOrbID:
+		m.ResetDatacenterOrbID()
 		return nil
 	case exportjob.FieldStatus:
 		m.ResetStatus()
