@@ -217,10 +217,7 @@ func (h *RestoreHandler) Trigger(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "backup has no stored file"})
 	}
 
-	actor, _ := c.Get("user_name").(string)
-	if actor == "" {
-		actor, _ = c.Get("user_email").(string)
-	}
+	actor := actorFromContext(c)
 	job, err := h.db.RestoreJob.Create().
 		SetStatus(restorejob.StatusPending).
 		SetBackupID(backupUUID).

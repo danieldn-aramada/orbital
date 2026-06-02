@@ -52,7 +52,7 @@ The following invariants apply to Kubernetes-based deployments of orbital. Orbit
 
 Orbital provides the APIs — consumers wire the transport. Orbital does not prescribe how its APIs are called or how payloads move between systems.
 
-- **Export API** (`POST /api/v1/datacenters/{id}/export`) — produces a scoped `json.gz` + `schema.gz` for a data center's subgraph.
+- **Export API** (`POST /api/v1/export`, body: `{"orbId":"..."}`) — produces a scoped `json.gz` + `schema.gz` for a data center's subgraph.
 - **Publish API** (`POST /api/v1/export/jobs/:jobId/publish`) — pushes a completed export as a signed OCI artifact to the configured registry. Requires `ORBITAL_OCI_REGISTRY` and `ORBITAL_OCI_SIGNING_KEY_PATH`.
 - **Report intake API** — receives drift and divergence reports. Transport is the deployment layer's concern. Orbital never initiates contact with the edge.
 - **Topology API** — proxies DGraph's GraphQL API for digital twin consumers.
@@ -331,6 +331,11 @@ These have been explicitly decided. Do not re-suggest them.
 - **Go template `range` does not propagate variable assignments outward.** `$x = true` inside `{{range}}` does not affect `$x` after the range ends. Compute aggregates server-side (method on the struct) rather than accumulating in template variables. Example: `ImportRecord.DispatchErrors()` instead of a `$hasError` flag inside range.
 - **Import history layer label derivation** — `mediaTypeLabel` template func: strip `application/vnd.`, split by `.`, take second segment (the product name). `application/vnd.armada.configbundle.manifest.v1+yaml` → `configbundle`. Used in both summary tags and expanded detail rows.
 - **Import history UX conventions** — summary shows per-layer friendly name + ✓/✗ (not aggregate "N dispatched"); expanded detail shows status code badge for HTTP-level failures only (>= 300), nothing for network failures (status 0); dispatch errors belong in the Error column, not inline in the expanded layer table.
+
+- **`actorFromContext(c echo.Context) string` is the canonical identity helper** — in `internal/handler/actor.go`. Prefers email over display name: email is stable across Azure AD profile changes; display name is not. All handlers that record "created by" or "actor" fields must call this function. Never inline `c.Get("user_name")` / `c.Get("user_email")` in new handlers. `ui.go` is the only legitimate exception — it reads both fields separately for template rendering (`layout.User{Name, Email}`).
+- **Export trigger is `POST /api/v1/export` with `{"orbId":"..."}` in the request body** — not a path segment. `fetchDCInfo` queries DGraph by orbId (`getDataCenter(orbId: $orbId)`), never by DGraph UID. The UID is internal and unstable; orbId is the canonical DC identifier.
+- **REST API convention: operation-centric triggers, resource-centric jobs** — orbital is GraphQL-first for CRUD; REST endpoints exist only for async operational workflows. Trigger endpoints (`POST /api/v1/export`, `POST /api/v1/backup`, `POST /api/v1/restore`) create a job resource and return a job ID. Job endpoints follow standard collection/instance patterns (`GET /namespace/jobs`, `GET /namespace/jobs/:jobId`). Do not create resource-centric paths (`/datacenters/:id/export`) for operations that have no corresponding GET/PUT/DELETE — this implies a REST hierarchy that doesn't exist. Full rationale: `docs/decisions/002-api-design-philosophy.md`.
+- **Export jobs show `createdBy` (email), not `startedAt`** — `createdBy` is populated from `actorFromContext` at job creation. `startedAt` was removed from the API response and UI; it remains on the ent schema for internal tracking only.
 
 *Domain-specific settled decisions live in `docs/claude/DGRAPH.md`, `docs/claude/UI.md`, `docs/claude/AUTH.md`, `docs/claude/AUDIT.md`, `docs/claude/OCI.md`.*
 

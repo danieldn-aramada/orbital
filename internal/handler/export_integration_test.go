@@ -120,16 +120,16 @@ func newExportHandler(t *testing.T) *handler.Export {
 	)
 }
 
-// triggerExport calls the Trigger handler with the given DC ID and returns the job ID.
-func triggerExport(t *testing.T, h *handler.Export, dcID string) uuid.UUID {
+// triggerExport calls the Trigger handler with the given datacenter orbId and returns the job ID.
+func triggerExport(t *testing.T, h *handler.Export, orbID string) uuid.UUID {
 	t.Helper()
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	bodyBytes, _ := json.Marshal(map[string]string{"orbId": orbID})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/export", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(dcID)
 
 	if err := h.Trigger(c); err != nil {
 		t.Fatalf("Trigger: %v", err)
@@ -184,11 +184,11 @@ func TestExportTrigger_ConflictWhenJobInProgress(t *testing.T) {
 
 	// Trigger first export.
 	e := echo.New()
-	req1 := httptest.NewRequest(http.MethodPost, "/", nil)
+	body1, _ := json.Marshal(map[string]string{"orbId": testDcID})
+	req1 := httptest.NewRequest(http.MethodPost, "/api/v1/export", bytes.NewReader(body1))
+	req1.Header.Set("Content-Type", "application/json")
 	rec1 := httptest.NewRecorder()
 	c1 := e.NewContext(req1, rec1)
-	c1.SetParamNames("id")
-	c1.SetParamValues(testDcID)
 	if err := h.Trigger(c1); err != nil {
 		t.Fatalf("first Trigger: %v", err)
 	}
@@ -197,11 +197,11 @@ func TestExportTrigger_ConflictWhenJobInProgress(t *testing.T) {
 	}
 
 	// Immediately trigger a second — should 409.
-	req2 := httptest.NewRequest(http.MethodPost, "/", nil)
+	body2, _ := json.Marshal(map[string]string{"orbId": testDcID})
+	req2 := httptest.NewRequest(http.MethodPost, "/api/v1/export", bytes.NewReader(body2))
+	req2.Header.Set("Content-Type", "application/json")
 	rec2 := httptest.NewRecorder()
 	c2 := e.NewContext(req2, rec2)
-	c2.SetParamNames("id")
-	c2.SetParamValues(testDcID)
 	if err := h.Trigger(c2); err != nil {
 		t.Fatalf("second Trigger: %v", err)
 	}

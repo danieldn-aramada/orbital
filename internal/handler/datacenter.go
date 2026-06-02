@@ -210,15 +210,7 @@ func (h *DataCenter) Tab(c echo.Context) error {
 		}
 	}
 
-	currentUser := ""
-	if v := c.Get("user_name"); v != nil {
-		currentUser, _ = v.(string)
-	}
-	if currentUser == "" {
-		if v := c.Get("user_email"); v != nil {
-			currentUser, _ = v.(string)
-		}
-	}
+	currentUser := actorFromContext(c)
 
 	editFields := map[string]any{"name": raw.Name}
 	if raw.AssetDataV2 != "" {

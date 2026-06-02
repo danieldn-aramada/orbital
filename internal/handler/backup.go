@@ -304,10 +304,7 @@ func (h *BackupHandler) Trigger(c echo.Context) error {
 		})
 	}
 
-	initiatedBy, _ := c.Get("user_name").(string)
-	if initiatedBy == "" {
-		initiatedBy, _ = c.Get("user_email").(string)
-	}
+	initiatedBy := actorFromContext(c)
 
 	job, err := h.db.Backup.Create().
 		SetStatus(backup.StatusPending).

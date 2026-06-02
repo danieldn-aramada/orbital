@@ -94,19 +94,21 @@ func ResetDGraphE(adminURL, schemaPath string) error {
 	return nil
 }
 
-// SeedMinimal creates one Namespace and DataCenter in DGraph and returns their IDs.
+// SeedMinimal creates one Namespace and DataCenter in DGraph and returns the
+// namespace DGraph ID and the data center orbId.
 // Use as the known starting state for integration tests that need graph data.
-func SeedMinimal(t *testing.T, graphqlURL string) (namespaceID, dcID string) {
+func SeedMinimal(t *testing.T, graphqlURL string) (namespaceID, dcOrbID string) {
 	t.Helper()
-	namespaceID, dcID, err := SeedMinimalE(graphqlURL)
+	namespaceID, dcOrbID, err := SeedMinimalE(graphqlURL)
 	if err != nil {
 		t.Fatalf("SeedMinimal: %v", err)
 	}
-	return namespaceID, dcID
+	return namespaceID, dcOrbID
 }
 
 // SeedMinimalE is the error-returning variant of SeedMinimal for use in TestMain.
-func SeedMinimalE(graphqlURL string) (namespaceID, dcID string, err error) {
+// Returns the namespace DGraph ID and the data center orbId.
+func SeedMinimalE(graphqlURL string) (namespaceID, dcOrbID string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
@@ -136,6 +138,7 @@ func SeedMinimalE(graphqlURL string) (namespaceID, dcID string, err error) {
 	}
 	namespaceID = nsResult.Data.AddNamespace.Namespace[0].ID
 
+	const seedDCOrbID = "test-dc"
 	dcMutation := `
 	mutation($nsId: ID!) {
 		addDataCenter(input: [{
@@ -162,9 +165,8 @@ func SeedMinimalE(graphqlURL string) (namespaceID, dcID string, err error) {
 	if len(dcResult.Data.AddDataCenter.DataCenter) == 0 {
 		return "", "", fmt.Errorf("addDataCenter returned no results")
 	}
-	dcID = dcResult.Data.AddDataCenter.DataCenter[0].ID
 
-	return namespaceID, dcID, nil
+	return namespaceID, seedDCOrbID, nil
 }
 
 func dgraphGQL(ctx context.Context, url, query string, variables map[string]any, out any) error {

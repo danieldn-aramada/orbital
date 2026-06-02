@@ -87,7 +87,7 @@ Ingress architecture, dedicated hostnames, TLS, internal vs external load balanc
 *These decisions depend on infra team input and are coupled to auth/authz and ingress architecture — not resolvable in prototype spikes alone.*
 
 ### Security & correctness hardening
-Fix all critical and high security findings before any staging or production exposure. Full findings and fix order: `docs/security-and-deployment-findings.md` (S.1–S.18), `docs/additional-findings.md` (A.1–A.7), implementation plan: `docs/maintainability.md` Phase 1.
+Fix all critical and high security findings before any staging or production exposure. Full findings and fix order: `docs/findings/security-and-deployment-findings.md` (S.1–S.18), `docs/findings/additional-findings.md` (A.1–A.7), implementation plan: `docs/findings/maintainability.md` Phase 1.
 
 Key items: unauthenticated `/graphql` root route, no K8s liveness/readiness probes, no CSRF on GraphQL mutations, audit actor forged by client, raw JWT logged at INFO, missing `Secure` cookie flag.
 
@@ -134,12 +134,13 @@ Benchmark DGraph query latency under realistic load, validate Valkey caching mit
 | Item | Notes |
 |---|---|
 | `//go:embed` for templates and schema | Read from disk at runtime. Replace with `//go:embed` — self-contained binary. Addressed in MVP Planning. |
-| DGraph client abstraction | 22+ raw `http.Post` calls across 7 handler files, no timeouts, no pooling. Extract `internal/dgraph/client.go`. Prerequisite for testing. See `docs/maintainability.md` item 2.1. |
-| `internal/handler/` god package | 3,560 lines mixing HTTP, business logic, DGraph calls, file I/O. Decompose post-MVP. See `docs/maintainability.md` item 5.4. |
+| DGraph client abstraction | 22+ raw `http.Post` calls across 7 handler files, no timeouts, no pooling. Extract `internal/dgraph/client.go`. Prerequisite for testing. See `docs/findings/maintainability.md` item 2.1. |
+| `internal/handler/` god package | 3,560 lines mixing HTTP, business logic, DGraph calls, file I/O. Decompose post-MVP. See `docs/findings/maintainability.md` item 5.4. |
 | `web/static/app.js` monolith | 2,400+ lines, no module system, duplicate event listeners. Spike 18 planned. See `docs/claude/SPIKE_18_EXECUTION.md`. |
-| Export API uses DGraph UID instead of orbId | `POST /api/v1/datacenters/:id/export` takes a DGraph UID (`0x...`). Should use orbId — it's the canonical DC identifier. Fix: change `fetchDCInfo` to query by `filter: {orbId: {eq: "..."}}`, update export select to use `dc.orbId` as option value. Orbital UI DC detail page URLs also use DGraph UIDs — same fix applies. |
+| ~~Export API uses DGraph UID instead of orbId~~ | ✅ Fixed 2026-06-02. `POST /api/v1/export` now accepts `{"orbId": "..."}` in the body. `fetchDCInfo` queries by orbId. UI select uses `dc.orbId`. |
+| Backup/restore API alignment | Backup and restore routes are inconsistent with the settled convention (see `docs/decisions/002-api-design-philosophy.md`). **Plan:** rename routes in `internal/server/server.go`; update all JS fetch calls in `web/shared/static/app.js`; update any `hx-*` HTMX attributes in templates; update tests. No handler logic changes — paths only. Target: `GET/POST /api/v1/backup`, `GET /api/v1/backup/jobs`, `GET /api/v1/backup/jobs/:jobId`, `GET /api/v1/backup/jobs/:jobId/download`, `DELETE /api/v1/backup/jobs/:jobId`, `POST /api/v1/backup/test-connection`, `POST /api/v1/restore`, `GET /api/v1/restore/jobs`, `GET /api/v1/restore/jobs/:jobId`. Update `002-api-design-philosophy.md` to reflect resolved state. |
 | No delete button for export jobs in UI | `DELETE /api/v1/export/jobs/:jobId` exists but is API-only. Add a delete (trash) button to each row in the export jobs table on the Export page. |
-| Quick wins (independent, any time) | `docs/maintainability.md` items 3.1–3.7, 4.1, 4.2, 4.4 — none are blocking, all improve correctness or reduce duplication. |
+| Quick wins (independent, any time) | `docs/findings/maintainability.md` items 3.1–3.7, 4.1, 4.2, 4.4 — none are blocking, all improve correctness or reduce duplication. |
 
 ---
 

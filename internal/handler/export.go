@@ -63,28 +63,38 @@ type triggerResponse struct {
 }
 
 type statusResponse struct {
-	JobID        string  `json:"jobId"`
-	DataCenter   string  `json:"dataCenter"`
-	Status       string  `json:"status"`
-	Published    bool    `json:"published"`
-	Error        *string `json:"error,omitempty"`
-	StartedAt    *string `json:"startedAt,omitempty"`
-	CompletedAt  *string `json:"completedAt,omitempty"`
-	CreatedAt    string  `json:"createdAt"`
+	JobID       string  `json:"jobId"`
+	DataCenter  string  `json:"dataCenter"`
+	Status      string  `json:"status"`
+	Published   bool    `json:"published"`
+	CreatedBy   string  `json:"createdBy"`
+	Error       *string `json:"error,omitempty"`
+	CompletedAt *string `json:"completedAt,omitempty"`
+	CreatedAt   string  `json:"createdAt"`
 }
 
-// Trigger handles POST /api/v1/datacenters/:id/export
+// Trigger handles POST /api/v1/export
 //
 // @Summary     Trigger subgraph export
 // @Description Triggers an async export of the data center's configuration subgraph. Returns immediately with a job ID. Returns 409 if an export is already in progress for this data center.
 // @Tags        export subgraph
+// @Accept      json
 // @Produce     json
-// @Param       id path string true "Data center ID"
+// @Param       body body object true "Export request" SchemaExample({"orbId":"alaska:dc-01"})
 // @Success     202 {object} triggerResponse
 // @Failure     409 {object} map[string]string
-// @Router      /api/v1/datacenters/{id}/export [post]
+// @Router      /api/v1/export [post]
 func (h *Export) Trigger(c echo.Context) error {
-	datacenterID := c.Param("id")
+	var req struct {
+		OrbID string `json:"orbId"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if req.OrbID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "orbId is required")
+	}
+	datacenterID := req.OrbID
 
 	dcName, dcOrbID, _, err := h.fetchDCInfo(c.Request().Context(), datacenterID)
 	if err != nil {
@@ -117,22 +127,24 @@ func (h *Export) Trigger(c echo.Context) error {
 		})
 	}
 
+	actor := actorFromContext(c)
+	var actorPtr *string
+	if actor != "" {
+		actorPtr = &actor
+	}
+
 	job, err := h.db.ExportJob.Create().
 		SetDatacenterID(datacenterID).
 		SetDatacenterName(dcName).
 		SetDatacenterOrbID(dcOrbID).
 		SetStatus(exportjob.StatusPending).
+		SetNillableCreatedBy(actorPtr).
 		Save(c.Request().Context())
 	if err != nil {
 		return fmt.Errorf("create export job: %w", err)
 	}
 
 	go h.runExport(job.ID)
-
-	actor, _ := c.Get("user_name").(string)
-	if actor == "" {
-		actor, _ = c.Get("user_email").(string)
-	}
 	writeAuditEvent(h.db, h.logger, actor, "exportSubgraph",
 		[]string{"exportSubgraph"},
 		[]string{"DataCenter"},
@@ -206,12 +218,9 @@ func (h *Export) List(c echo.Context) error {
 			Published:  publishedJobIDs[job.ID],
 			CreatedAt:  job.CreatedAt.Format(time.RFC3339),
 		}
+		r.CreatedBy = job.CreatedBy
 		if job.Error != nil {
 			r.Error = job.Error
-		}
-		if job.StartedAt != nil {
-			s := job.StartedAt.Format(time.RFC3339)
-			r.StartedAt = &s
 		}
 		if job.CompletedAt != nil {
 			s := job.CompletedAt.Format(time.RFC3339)
@@ -250,14 +259,11 @@ func (h *Export) Status(c echo.Context) error {
 		JobID:      job.ID.String(),
 		DataCenter: job.DatacenterName,
 		Status:     string(job.Status),
+		CreatedBy:  job.CreatedBy,
 		CreatedAt:  job.CreatedAt.Format(time.RFC3339),
 	}
 	if job.Error != nil {
 		resp.Error = job.Error
-	}
-	if job.StartedAt != nil {
-		s := job.StartedAt.Format(time.RFC3339)
-		resp.StartedAt = &s
 	}
 	if job.CompletedAt != nil {
 		s := job.CompletedAt.Format(time.RFC3339)
@@ -446,8 +452,9 @@ func dqlBase(graphqlURL string) string {
 }
 
 // fetchDCInfo queries blue GraphQL for the DC name, orbId, and its namespace name.
-func (h *Export) fetchDCInfo(ctx context.Context, datacenterID string) (name, orbID, namespaceName string, err error) {
-	query := fmt.Sprintf(`{ getDataCenter(id: %q) { name orbId namespace { name } } }`, datacenterID)
+// datacenterOrbID must be the orbId of the data center (e.g. "alaska:dc-01").
+func (h *Export) fetchDCInfo(ctx context.Context, datacenterOrbID string) (name, orbID, namespaceName string, err error) {
+	query := fmt.Sprintf(`{ getDataCenter(orbId: %q) { name orbId namespace { name } } }`, datacenterOrbID)
 	body, _ := json.Marshal(map[string]string{"query": query})
 	resp, err := http.Post(h.dgraphURL, "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -469,11 +476,10 @@ func (h *Export) fetchDCInfo(ctx context.Context, datacenterID string) (name, or
 		return "", "", "", err
 	}
 	dc := result.Data.GetDataCenter
-	id := dc.OrbID
-	if id == "" {
-		id = dc.Name
+	if dc.Name == "" {
+		return "", "", "", fmt.Errorf("data center %q not found in DGraph", datacenterOrbID)
 	}
-	return dc.Name, id, dc.Namespace.Name, nil
+	return dc.Name, dc.OrbID, dc.Namespace.Name, nil
 }
 
 // fetchUIDPredicates queries the DGraph schema and returns all predicate names

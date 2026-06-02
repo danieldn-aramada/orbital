@@ -182,3 +182,100 @@ func TestImportArtifact_ValidZipReturns202(t *testing.T) {
 		t.Error("tag should be set in response")
 	}
 }
+
+func TestTriggerImport_MissingTag(t *testing.T) {
+	t.Chdir("../..")
+	cfg := testCfg(t)
+	cfg.EnableOCIRegistry = true
+	srv, _ := New(cfg)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/import", bytes.NewReader([]byte(`{}`)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.echo.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestTriggerImport_AlreadyRunning(t *testing.T) {
+	t.Chdir("../..")
+	cfg := testCfg(t)
+	cfg.EnableOCIRegistry = true
+	srv, _ := New(cfg)
+	srv.state.setRunning()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/import", bytes.NewReader([]byte(`{"tag":"v1"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.echo.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Errorf("expected 409, got %d", rec.Code)
+	}
+}
+
+func TestTriggerImport_AcceptsTag(t *testing.T) {
+	// Asserts the synchronous part returns 202. The goroutine will fail (no real
+	// registry) but the HTTP response is sent before the goroutine completes.
+	t.Chdir("../..")
+	cfg := testCfg(t)
+	cfg.EnableOCIRegistry = true
+	srv, _ := New(cfg)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/import", bytes.NewReader([]byte(`{"tag":"v1"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.echo.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Errorf("expected 202, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestImportStatus_Shape(t *testing.T) {
+	t.Chdir("../..")
+	cfg := testCfg(t)
+	srv, _ := New(cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/import/status", nil)
+	rec := httptest.NewRecorder()
+	srv.echo.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if _, ok := body["status"]; !ok {
+		t.Error("response missing 'status' key")
+	}
+}
+
+func TestImportHistory_Empty(t *testing.T) {
+	t.Chdir("../..")
+	cfg := testCfg(t)
+	srv, _ := New(cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/import/history", nil)
+	rec := httptest.NewRecorder()
+	srv.echo.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	// Must decode as array, not null.
+	var records []json.RawMessage
+	if err := json.NewDecoder(rec.Body).Decode(&records); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if records == nil {
+		t.Error("body should decode as empty array, not null")
+	}
+	if len(records) != 0 {
+		t.Errorf("expected 0 records, got %d", len(records))
+	}
+}

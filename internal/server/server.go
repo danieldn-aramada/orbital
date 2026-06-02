@@ -171,7 +171,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 
 	if db != nil {
 		exp := handler.NewExport(db, cfg.DGraphURL, cfg.DGraphScratchURL, cfg.DGraphScratchAdminURL, cfg.DGraphScratchZeroURL, cfg.ExportDir, cfg.DGraphScratchExportDir, cfg.SchemaPath, logger)
-		api.POST("/datacenters/:id/export", exp.Trigger)
+		api.POST("/export", exp.Trigger)
 		api.GET("/export/jobs", exp.List)
 		api.GET("/export/jobs/:jobId", exp.Status)
 		api.GET("/export/jobs/:jobId/download", exp.Download)

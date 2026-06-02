@@ -113,7 +113,7 @@ A step-by-step technical debt and improvement roadmap based on a full codebase a
 
 The DGraph client abstraction is the key enabler for all integration testing. The interface shape is a design decision (transport-level vs. semantic-level) with long-term consequences — get it wrong and tests are shallow; get it right and integration tests meaningfully verify behavior.
 
-**Do a short Opus session (15–20 min) to design and commit the interface before Sonnet implements it.** See `docs/maintainability.md` — "What Needs Opus vs. Sonnet" section.
+**Do a short Opus session (15–20 min) to design and commit the interface before Sonnet implements it.** See `docs/findings/maintainability.md` — "What Needs Opus vs. Sonnet" section.
 
 Once designed, Sonnet implements `internal/dgraph/client.go` and wires it into the seven handler files that currently hold a raw `dgraphURL`:
 - `internal/handler/export.go`

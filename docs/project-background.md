@@ -327,21 +327,9 @@ Path A: local admin patches ConfigBundle CR via `kubectl` SSA → cb-controller 
 
 ---
 
-## Current State (as of 2026-05-22)
+## Current State
 
-**Phase:** Prototyping → MVP (target July 27, 2026; GA August 28, 2026)
-
-**Active:**
-- **Spike 11 (Authorization)** ← blocks MVP — bearer validation done; remaining: Azure AD App Roles, DGraph `@auth` directives, Echo middleware role enforcement, offline JWT integration tests ⚠️ Opus design session first
-
-**MVP gaps remaining:**
-- Authorization (Spike 11) ← next priority
-- Valkey cache-aside (Spike 9b)
-- Schema management — versioned apply with backwards compat check on startup
-- Orb registry — register, authenticate, revoke orbs
-- Orb deployment model (Spike 15), API surface & authN/Z (Spike 16), divergence reporting (Spike 14)
-- Orb local overrides / config actuation abstraction — belongs to ConfigBundle domain + Spike 14
-- Testing foundations, security hardening, production deployment
+See `CLAUDE.md` (project root) for up-to-date active spikes, recently completed work, and MVP gaps. This document holds stable project context only and is not updated with sprint state.
 
 ---
 
@@ -366,7 +354,7 @@ Path A: local admin patches ConfigBundle CR via `kubectl` SSA → cb-controller 
 |---|---|---|
 | Requirements | `~/Documents/Data Center Inventory and Configuration Management Requirements – FY27 Q2.docx` | Formal requirements per stakeholder and config domain |
 | Digital Twin Notes | `~/Downloads/Notes on Digital Twin for Modular Data Centers.docx` | Meeting notes from 3/2/26; Atlas integration scope |
-| SDD (v0.3) | `~/Downloads/SDD DCIM & CMBD for Galleon Digital Twin in Atlas (3).pdf` | Formal design doc — 5 key decisions, full architecture, GraphQL schema, ConfigBundle CRD, local overrides, data transport. **Read CMDB_CONTEXT.md instead — all key content is distilled here.** |
+| SDD (v0.3) | `~/Downloads/SDD DCIM & CMBD for Galleon Digital Twin in Atlas (3).pdf` | Formal design doc — 5 key decisions, full architecture, GraphQL schema, ConfigBundle CRD, local overrides, data transport. **Read `docs/project-background.md` instead — all key content is distilled here.** |
 | Architectural Proposal | `~/Downloads/CMDB_Architectural_Proposal.docx` | Sedar's CCP-authored/edge-enforced proposal. **Key content distilled into this file.** |
 | Orbital CHANGELOG | `CHANGELOG.md` | Completed spike detail — API contracts, what was validated, key decisions |
 | Orbital ROADMAP | `ROADMAP.md` | Gantt chart; spike table; What We've Built; MVP Planning; MVP Definition; Technical Debt |

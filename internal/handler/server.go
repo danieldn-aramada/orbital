@@ -235,15 +235,7 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 
 	raw := result.Data.GetServer
 
-	currentUser := ""
-	if v := c.Get("user_name"); v != nil {
-		currentUser, _ = v.(string)
-	}
-	if currentUser == "" {
-		if v := c.Get("user_email"); v != nil {
-			currentUser, _ = v.(string)
-		}
-	}
+	currentUser := actorFromContext(c)
 
 	idracFields := map[string]any{
 		"firmwareVersion":             "",

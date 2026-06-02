@@ -1,7 +1,5 @@
 # Authentication
 
-> **WIP** — Not yet implemented 
-
 Orbital has three distinct authentication flows depending on the caller:
 
 | Flow | Caller | Mechanism |

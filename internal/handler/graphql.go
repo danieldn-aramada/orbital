@@ -101,7 +101,7 @@ func (h *GraphQL) Handle(c echo.Context) error {
 		actor, _ = v.(string)
 	}
 	if actor == "" {
-		actor, _ = c.Get("user_name").(string)
+		actor = actorFromContext(c)
 	}
 
 	// Fetch before-state for all known single-entity mutations (used for MVCC and audit diff).

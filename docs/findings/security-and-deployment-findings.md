@@ -1,6 +1,6 @@
 # Security and Deployment Findings
 
-Findings from the May 2026 codebase audit covering authentication, session security, API exposure, deployment correctness, and operational gaps. Ordered by severity within each section. Cross-references to `docs/maintainability.md` and `docs/additional-findings.md` are noted where relevant.
+Findings from the May 2026 codebase audit covering authentication, session security, API exposure, deployment correctness, and operational gaps. Ordered by severity within each section. Cross-references to `docs/findings/maintainability.md` and `docs/findings/additional-findings.md` are noted where relevant.
 
 ---
 
@@ -307,7 +307,7 @@ For the login endpoint specifically, a tighter limit should be applied separatel
 
 This is the known Spike 8 gap. It is documented here for completeness because it is a live security gap in any staging/production deployment, not just a feature-in-progress. Until role enforcement is added, the auth system provides only authentication (who you are), not authorization (what you can do).
 
-**Fix:** Spike 8 — requires an Opus design session first (see `docs/maintainability.md`).
+**Fix:** Spike 8 — requires an Opus design session first (see `docs/findings/maintainability.md`).
 
 ---
 

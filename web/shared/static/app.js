@@ -1476,7 +1476,7 @@ document.addEventListener('DOMContentLoaded', () => {
   fetch(BASE + '/graphql', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: '{ queryDataCenter { id name } }' }),
+    body: JSON.stringify({ query: '{ queryDataCenter { orbId name } }' }),
   })
     .then(r => r.json())
     .then(json => {
@@ -1484,7 +1484,7 @@ document.addEventListener('DOMContentLoaded', () => {
       select.innerHTML = '<option value="" disabled selected>— select a data center —</option>'
       dcs.forEach(dc => {
         const opt = document.createElement('option')
-        opt.value = dc.id
+        opt.value = dc.orbId
         opt.textContent = dc.name
         select.appendChild(opt)
       })
@@ -1508,7 +1508,11 @@ function handleExportSubmit() {
   submitBtn.classList.add('is-loading')
   submitBtn.disabled = true
 
-  fetch(BASE + `/api/v1/datacenters/${id}/export`, { method: 'POST' })
+  fetch(BASE + '/api/v1/export', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orbId: id }),
+  })
     .then(r => r.json())
     .then(json => {
       submitBtn.classList.remove('is-loading')
@@ -1598,7 +1602,7 @@ function loadExportJobsTable() {
               <td>${job.dataCenter ?? '—'}</td>
               <td data-testid="export-job-status">${statusCell}</td>
               <td>${fmtTime(job.createdAt)}</td>
-              <td>${fmtTime(job.startedAt)}</td>
+              <td>${job.createdBy || '—'}</td>
               <td>${fmtTime(job.completedAt)}</td>
               <td style="white-space:nowrap;"><div style="display:flex;gap:0.25rem;align-items:center;">${actions.join('')}</div></td>
             </tr>`

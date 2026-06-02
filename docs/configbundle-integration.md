@@ -66,6 +66,76 @@ Orbital publish pipeline
 
 ---
 
+## End-to-End Sequence
+
+```mermaid
+sequenceDiagram
+    actor Admin
+    participant O as Orbital
+    participant DG as DGraph (orbital)
+    participant CBB as CB Bundler
+    participant OCI as OCI Registry
+    participant Orb as Orb (edge)
+    participant ODG as DGraph (orb)
+    participant CBC as CB Controller
+
+    %% ── 1. Export ──────────────────────────────────────────────────────────
+    Admin->>O: POST /api/v1/datacenters/:id/export
+    O-->>Admin: 202 {jobId}
+
+    Note over O,DG: async — blue-green DGraph export
+    O->>DG: GraphQL namespace subgraph query
+    DG-->>O: subgraph JSON
+    O->>O: write data.json.gz + schema.gz
+    O->>O: mark job completed
+
+    %% ── 2. Publish with enricher ────────────────────────────────────────────
+    Admin->>O: POST /api/v1/export/jobs/:jobId/publish\n{"enrichers":["http://cb-bundler/enrich"]}
+    O-->>Admin: 202 {artifactId, tag}
+
+    Note over O,CBB: async — enrichment (all-or-nothing)
+    O->>CBB: POST /enrich  {jobId, datacenter}
+    CBB->>O: GET /graphql  (fetch config fields)
+    O-->>CBB: config data
+    CBB-->>O: [{mediaType, data (base64)}]
+
+    Note over O,OCI: bundle → sign → push
+    O->>O: assemble layers:\n  data.json.gz\n  schema.gz\n  configbundle manifest
+    O->>O: cosign sign (once)
+    O->>OCI: push manifest + layers  (tag: vN)
+    OCI-->>O: sha256 digest
+    O->>O: record RegistryArtifact  (enriched: true)
+
+    %% ── 3. Orb import ───────────────────────────────────────────────────────
+    Note over Orb,OCI: poll (ORB_ENABLE_OCI_REGISTRY=true) or triggered via API
+    Orb->>OCI: pull artifact  (tag: vN)
+    OCI-->>Orb: manifest + layer blobs
+    Orb->>Orb: cosign verify  (ORB_OCI_PUBLIC_KEY_PATH)
+
+    Note over Orb,ODG: graph import — always runs
+    Orb->>ODG: drop_all
+    Orb->>ODG: dgraph live  (data.json.gz + schema.gz)
+    ODG-->>Orb: ok
+
+    %% ── 4. Consumer dispatch ────────────────────────────────────────────────
+    Note over Orb,CBC: best-effort dispatch — DGraph import already complete
+    Orb->>CBC: POST /consume\nContent-Type: application/vnd.armada.configbundle.manifest.v1+yaml\nX-Orb-Tag: vN\nX-Orb-Digest: sha256:...\nX-Orb-Import-ID: <uuid>\n<raw manifest bytes>
+    CBC-->>Orb: 200
+    CBC->>CBC: apply manifest to cluster  (async, idempotent)
+
+    Orb->>Orb: write import history\n(2 graph ✓  configbundle ✓)
+```
+
+**Key invariants visible in this flow:**
+
+- Orbital signs and pushes once — no downstream system needs registry credentials
+- Enrichment is all-or-nothing: if CB Bundler fails, nothing is pushed
+- Orb verifies the signature before decomposing any layer — CBC never sees unverified bytes
+- DGraph import always completes regardless of dispatch outcome
+- CBC receives bytes from orb only — it never pulls from OCI
+
+---
+
 ## Roles
 
 ### Orbital

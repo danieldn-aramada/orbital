@@ -1,6 +1,6 @@
 # Additional Audit Findings
 
-Findings from the May 2026 codebase audit that are not covered in `docs/maintainability.md`. These are correctness bugs, security risks, and operational gaps discovered alongside the items in that plan. Each is actionable independently.
+Findings from the May 2026 codebase audit that are not covered in `docs/findings/maintainability.md`. These are correctness bugs, security risks, and operational gaps discovered alongside the items in that plan. Each is actionable independently.
 
 ---
 
@@ -161,7 +161,7 @@ Then run `go generate ./ent`.
 
 ---
 
-## Relationship to `docs/maintainability.md`
+## Relationship to `docs/findings/maintainability.md`
 
 These findings extend the maintainability plan but are kept separate because they are distinct in character — mostly correctness bugs and security risks rather than structural debt. The maintainability plan should be worked through in its stated order. The items here can be slotted in alongside the relevant phases:
 
