@@ -53,7 +53,10 @@ type Config struct {
 	DGraphNamespace        string        `envconfig:"ORBITAL_DGRAPH_NAMESPACE"        default:"dgraph"`
 	DGraphAlphaGRPC        string        `envconfig:"ORBITAL_DGRAPH_ALPHA_GRPC"       default:"localhost:9080"`
 	DGraphZeroGRPC         string        `envconfig:"ORBITAL_DGRAPH_ZERO_GRPC"        default:"localhost:5080"`
-	RestoreDir             string        `envconfig:"ORBITAL_RESTORE_DIR"             default:"/restore"`
+	RestoreDir             string        `envconfig:"ORBITAL_RESTORE_DIR"             default:"/tmp/orbital-test-blue"` // host-side staging dir; matches DGraphExportDir volume mount
+	RestoreExecDataDir     string        `envconfig:"ORBITAL_RESTORE_EXEC_DATA_DIR"   default:"/dgraph/export"`         // container/pod-internal view of RestoreDir
+	RestoreBackend         string        `envconfig:"ORBITAL_RESTORE_BACKEND"         default:"docker"`                  // "docker" or "k8s"
+	DGraphContainer        string        `envconfig:"ORBITAL_DGRAPH_CONTAINER"        default:"local-dgraph-alpha-1"`   // Docker container name for RestoreBackend=docker
 }
 
 func New() (*Config, error) {

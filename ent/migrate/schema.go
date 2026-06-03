@@ -41,6 +41,7 @@ var (
 		{Name: "actor", Type: field.TypeString},
 		{Name: "timestamp", Type: field.TypeTime},
 		{Name: "details", Type: field.TypeJSON, Nullable: true},
+		{Name: "event_category", Type: field.TypeString, Default: "data"},
 	}
 	// EventsTable holds the schema information for the "events" table.
 	EventsTable = &schema.Table{

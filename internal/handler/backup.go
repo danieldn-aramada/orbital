@@ -259,7 +259,7 @@ type backupResponse struct {
 	Error       *string `json:"error,omitempty"`
 }
 
-// TestConnection handles POST /api/v1/backups/test-connection
+// TestConnection handles POST /api/v1/backup/test-connection
 func (h *BackupHandler) TestConnection(c echo.Context) error {
 	ctx, cancel := context.WithTimeout(c.Request().Context(), 10*time.Second)
 	defer cancel()
@@ -269,7 +269,7 @@ func (h *BackupHandler) TestConnection(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"ok": true})
 }
 
-// Trigger handles POST /api/v1/backups
+// Trigger handles POST /api/v1/backup
 //
 // @Summary     Trigger backup
 // @Description Triggers an async DGraph backup to configured S3-compatible or Azure Blob storage. Returns immediately with a job ID. Returns 409 if a backup is already in progress.
@@ -277,7 +277,7 @@ func (h *BackupHandler) TestConnection(c echo.Context) error {
 // @Produce     json
 // @Success     202 {object} triggerResponse
 // @Failure     409 {object} map[string]string
-// @Router      /api/v1/backups [post]
+// @Router      /api/v1/backup [post]
 func (h *BackupHandler) Trigger(c echo.Context) error {
 	existing, err := h.db.Backup.Query().
 		Where(backup.StatusIn(backup.StatusPending, backup.StatusRunning)).
@@ -316,8 +316,8 @@ func (h *BackupHandler) Trigger(c echo.Context) error {
 
 	go h.runBackup(job.ID)
 
-	writeAuditEvent(h.db, h.logger, initiatedBy, "triggerBackup",
-		[]string{"triggerBackup"},
+	writeAuditEvent(h.db, h.logger, "management", initiatedBy, "createBackup",
+		[]string{"createBackup"},
 		nil,
 		nil,
 		map[string]any{"jobId": job.ID.String()},
@@ -329,14 +329,14 @@ func (h *BackupHandler) Trigger(c echo.Context) error {
 	})
 }
 
-// List handles GET /api/v1/backups
+// List handles GET /api/v1/backup/jobs
 //
 // @Summary     List backups
 // @Description Returns up to 50 backup records ordered by most recent first.
 // @Tags        backup graph
 // @Produce     json
 // @Success     200 {array}  backupResponse
-// @Router      /api/v1/backups [get]
+// @Router      /api/v1/backup/jobs [get]
 func (h *BackupHandler) List(c echo.Context) error {
 	jobs, err := h.db.Backup.Query().
 		Order(backup.ByCreatedAt(sql.OrderDesc())).
@@ -352,18 +352,18 @@ func (h *BackupHandler) List(c echo.Context) error {
 	return c.JSON(http.StatusOK, out)
 }
 
-// Status handles GET /api/v1/backups/:id
+// Status handles GET /api/v1/backup/jobs/:jobId
 //
 // @Summary     Get backup status
 // @Description Returns the current status and metadata for a single backup job.
 // @Tags        backup graph
 // @Produce     json
-// @Param       id path string true "Backup job ID"
+// @Param       jobId path string true "Backup job ID"
 // @Success     200 {object} backupResponse
 // @Failure     404 {object} map[string]string
-// @Router      /api/v1/backups/{id} [get]
+// @Router      /api/v1/backup/jobs/{jobId} [get]
 func (h *BackupHandler) Status(c echo.Context) error {
-	id, err := uuid.Parse(c.Param("id"))
+	id, err := uuid.Parse(c.Param("jobId"))
 	if err != nil {
 		return echo.ErrBadRequest
 	}
@@ -377,18 +377,18 @@ func (h *BackupHandler) Status(c echo.Context) error {
 	return c.JSON(http.StatusOK, toBackupResponse(j))
 }
 
-// Download handles GET /api/v1/backups/:id/download
+// Download handles GET /api/v1/backup/jobs/:jobId/download
 //
 // @Summary     Download backup
 // @Description Returns a presigned URL (valid 15 minutes) to download the completed backup archive. Returns 404 if the job is not completed or has no archive.
 // @Tags        backup graph
 // @Produce     json
-// @Param       id path string true "Backup job ID"
+// @Param       jobId path string true "Backup job ID"
 // @Success     200 {object} map[string]string
 // @Failure     404 {object} map[string]string
-// @Router      /api/v1/backups/{id}/download [get]
+// @Router      /api/v1/backup/jobs/{jobId}/download [get]
 func (h *BackupHandler) Download(c echo.Context) error {
-	id, err := uuid.Parse(c.Param("id"))
+	id, err := uuid.Parse(c.Param("jobId"))
 	if err != nil {
 		return echo.ErrBadRequest
 	}
@@ -413,19 +413,19 @@ func (h *BackupHandler) Download(c echo.Context) error {
 	})
 }
 
-// Delete handles DELETE /api/v1/backups/:id
+// Delete handles DELETE /api/v1/backup/jobs/:jobId
 //
 // @Summary     Delete backup
 // @Description Deletes the backup record and its archive from storage. Returns 409 if the backup is still running.
 // @Tags        backup graph
 // @Produce     json
-// @Param       id path string true "Backup job ID"
+// @Param       jobId path string true "Backup job ID"
 // @Success     204
 // @Failure     404 {object} map[string]string
 // @Failure     409 {object} map[string]string
-// @Router      /api/v1/backups/{id} [delete]
+// @Router      /api/v1/backup/jobs/{jobId} [delete]
 func (h *BackupHandler) Delete(c echo.Context) error {
-	id, err := uuid.Parse(c.Param("id"))
+	id, err := uuid.Parse(c.Param("jobId"))
 	if err != nil {
 		return echo.ErrBadRequest
 	}
@@ -502,23 +502,6 @@ func (h *BackupHandler) doBackup(ctx context.Context, jobID uuid.UUID, log *slog
 	sum := sha256.Sum256(dataGZ)
 	checksum := hex.EncodeToString(sum[:])
 	log.Info("computed checksum", "sha256", checksum)
-
-	last, err := h.db.Backup.Query().
-		Where(backup.StatusIn(backup.StatusCompleted, backup.StatusSkipped)).
-		Order(backup.ByCreatedAt(sql.OrderDesc())).
-		First(ctx)
-	if err != nil && !ent.IsNotFound(err) {
-		return fmt.Errorf("query last backup: %w", err)
-	}
-	if last != nil && last.Checksum == checksum {
-		log.Info("graph unchanged since last backup — skipping upload")
-		_, err = h.db.Backup.UpdateOneID(jobID).
-			SetStatus(backup.StatusSkipped).
-			SetChecksum(checksum).
-			SetCompletedAt(time.Now()).
-			Save(ctx)
-		return err
-	}
 
 	dqlSchemaGZPath, err := h.findExportFile(dataGZPath, ".schema.gz")
 	if err != nil {

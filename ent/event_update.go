@@ -130,6 +130,20 @@ func (_u *EventUpdate) ClearDetails() *EventUpdate {
 	return _u
 }
 
+// SetEventCategory sets the "event_category" field.
+func (_u *EventUpdate) SetEventCategory(v string) *EventUpdate {
+	_u.mutation.SetEventCategory(v)
+	return _u
+}
+
+// SetNillableEventCategory sets the "event_category" field if the given value is not nil.
+func (_u *EventUpdate) SetNillableEventCategory(v *string) *EventUpdate {
+	if v != nil {
+		_u.SetEventCategory(*v)
+	}
+	return _u
+}
+
 // Mutation returns the EventMutation object of the builder.
 func (_u *EventUpdate) Mutation() *EventMutation {
 	return _u.mutation
@@ -220,6 +234,9 @@ func (_u *EventUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.DetailsCleared() {
 		_spec.ClearField(event.FieldDetails, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.EventCategory(); ok {
+		_spec.SetField(event.FieldEventCategory, field.TypeString, value)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -338,6 +355,20 @@ func (_u *EventUpdateOne) AppendDetails(v json.RawMessage) *EventUpdateOne {
 // ClearDetails clears the value of the "details" field.
 func (_u *EventUpdateOne) ClearDetails() *EventUpdateOne {
 	_u.mutation.ClearDetails()
+	return _u
+}
+
+// SetEventCategory sets the "event_category" field.
+func (_u *EventUpdateOne) SetEventCategory(v string) *EventUpdateOne {
+	_u.mutation.SetEventCategory(v)
+	return _u
+}
+
+// SetNillableEventCategory sets the "event_category" field if the given value is not nil.
+func (_u *EventUpdateOne) SetNillableEventCategory(v *string) *EventUpdateOne {
+	if v != nil {
+		_u.SetEventCategory(*v)
+	}
 	return _u
 }
 
@@ -461,6 +492,9 @@ func (_u *EventUpdateOne) sqlSave(ctx context.Context) (_node *Event, err error)
 	}
 	if _u.mutation.DetailsCleared() {
 		_spec.ClearField(event.FieldDetails, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.EventCategory(); ok {
+		_spec.SetField(event.FieldEventCategory, field.TypeString, value)
 	}
 	_node = &Event{config: _u.config}
 	_spec.Assign = _node.assignValues

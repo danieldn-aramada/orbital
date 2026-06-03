@@ -66,6 +66,20 @@ func (_c *EventCreate) SetDetails(v json.RawMessage) *EventCreate {
 	return _c
 }
 
+// SetEventCategory sets the "event_category" field.
+func (_c *EventCreate) SetEventCategory(v string) *EventCreate {
+	_c.mutation.SetEventCategory(v)
+	return _c
+}
+
+// SetNillableEventCategory sets the "event_category" field if the given value is not nil.
+func (_c *EventCreate) SetNillableEventCategory(v *string) *EventCreate {
+	if v != nil {
+		_c.SetEventCategory(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *EventCreate) SetID(v uuid.UUID) *EventCreate {
 	_c.mutation.SetID(v)
@@ -119,6 +133,10 @@ func (_c *EventCreate) defaults() {
 		v := event.DefaultTimestamp()
 		_c.mutation.SetTimestamp(v)
 	}
+	if _, ok := _c.mutation.EventCategory(); !ok {
+		v := event.DefaultEventCategory
+		_c.mutation.SetEventCategory(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := event.DefaultID()
 		_c.mutation.SetID(v)
@@ -132,6 +150,9 @@ func (_c *EventCreate) check() error {
 	}
 	if _, ok := _c.mutation.Timestamp(); !ok {
 		return &ValidationError{Name: "timestamp", err: errors.New(`ent: missing required field "Event.timestamp"`)}
+	}
+	if _, ok := _c.mutation.EventCategory(); !ok {
+		return &ValidationError{Name: "event_category", err: errors.New(`ent: missing required field "Event.event_category"`)}
 	}
 	return nil
 }
@@ -191,6 +212,10 @@ func (_c *EventCreate) createSpec() (*Event, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Details(); ok {
 		_spec.SetField(event.FieldDetails, field.TypeJSON, value)
 		_node.Details = value
+	}
+	if value, ok := _c.mutation.EventCategory(); ok {
+		_spec.SetField(event.FieldEventCategory, field.TypeString, value)
+		_node.EventCategory = value
 	}
 	return _node, _spec
 }

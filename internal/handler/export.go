@@ -145,7 +145,7 @@ func (h *Export) Trigger(c echo.Context) error {
 	}
 
 	go h.runExport(job.ID)
-	writeAuditEvent(h.db, h.logger, actor, "exportSubgraph",
+	writeAuditEvent(h.db, h.logger, "management", actor, "exportSubgraph",
 		[]string{"exportSubgraph"},
 		[]string{"DataCenter"},
 		[]string{dcOrbID},

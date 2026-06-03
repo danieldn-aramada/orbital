@@ -6,6 +6,54 @@ import (
 	"testing"
 )
 
+// ── event_category ────────────────────────────────────────────────────────────
+
+// TestEventItem_HasEventCategoryField asserts that the eventItem response struct
+// carries the EventCategory field and serialises it under the expected JSON key.
+func TestEventItem_HasEventCategoryField(t *testing.T) {
+	item := eventItem{
+		ID:            "test-id",
+		Actor:         "user@example.com",
+		EventCategory: "management",
+	}
+	b, err := json.Marshal(item)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	cat, ok := m["eventCategory"]
+	if !ok {
+		t.Fatal("eventCategory key missing from JSON output")
+	}
+	if cat != "management" {
+		t.Errorf("eventCategory: got %q, want %q", cat, "management")
+	}
+}
+
+// TestEventItem_DataCategoryDefault asserts that a zero-value eventItem without
+// an explicit EventCategory serialises to "data" when the field is set.
+func TestEventItem_DataCategoryValue(t *testing.T) {
+	item := eventItem{
+		ID:            "test-id",
+		Actor:         "user@example.com",
+		EventCategory: "data",
+	}
+	b, err := json.Marshal(item)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if m["eventCategory"] != "data" {
+		t.Errorf("eventCategory: got %q, want %q", m["eventCategory"], "data")
+	}
+}
+
 // ── buildVarSummary ──────────────────────────────────────────────────────────
 
 func TestBuildVarSummary_NilInput(t *testing.T) {
@@ -159,5 +207,43 @@ func TestValStr_NilWithBoolRef(t *testing.T) {
 func TestValStr_NonNil(t *testing.T) {
 	if got := valStr("hello", ""); got != "hello" {
 		t.Errorf("non-nil: got %q, want hello", got)
+	}
+}
+
+func TestValStr_MapMarshalledToJSON(t *testing.T) {
+	m := map[string]any{"key": "value"}
+	got := valStr(m, m)
+	if got != `{"key":"value"}` {
+		t.Errorf("map: got %q, want {\"key\":\"value\"}", got)
+	}
+}
+
+func TestValStr_JSONStringNormalized(t *testing.T) {
+	// Raw JSON string from DGraph before-snapshot should normalize to same
+	// form as a parsed map from mutation variables.
+	jsonStr := `{"key":"value"}`
+	parsedMap := map[string]any{"key": "value"}
+	if valStr(jsonStr, jsonStr) != valStr(parsedMap, parsedMap) {
+		t.Errorf("JSON string and equivalent map should normalize to same value")
+	}
+}
+
+func TestBuildDiffHTML_UnchangedJSONFieldSuppressed(t *testing.T) {
+	// assetDataV2 arrives as a raw JSON string in the before-snapshot (from
+	// DGraph) but as a parsed map in mutation variables. They are logically
+	// equal — the diff must not show assetDataV2 when only name changed.
+	assetJSON := `{"id1":{"cfTunnelID":"abc","kvmURL":"https://example.com"}}`
+	var assetMap any
+	_ = json.Unmarshal([]byte(assetJSON), &assetMap)
+
+	before := map[string]any{"name": "old-name", "assetDataV2": assetJSON}
+	variables := map[string]any{"name": "new-name", "assetDataV2": assetMap}
+
+	got := string(buildDiffHTML(before, variables, "DataCenter"))
+	if strings.Contains(got, "assetDataV2") {
+		t.Errorf("unchanged assetDataV2 should not appear in diff, got: %s", got)
+	}
+	if !strings.Contains(got, "-old-name") || !strings.Contains(got, "+new-name") {
+		t.Errorf("name change should appear in diff, got: %s", got)
 	}
 }

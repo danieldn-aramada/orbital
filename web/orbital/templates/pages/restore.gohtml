@@ -38,8 +38,8 @@
             </div>
           {{else if not .K8sAvailable}}
             <div class="notification is-warning is-light" style="font-size: 0.875rem;">
-              Orbital is not running in-cluster — automated restore is only available in Kubernetes deployments.
-              Use the local file runbook below.
+              Restore is not available — set <code>ORBITAL_RESTORE_BACKEND=docker</code> for local dev
+              or <code>ORBITAL_RESTORE_BACKEND=k8s</code> when running in-cluster.
             </div>
           {{else}}
             <div class="field" style="max-width: 480px;">
@@ -65,7 +65,7 @@
           {{end}}
 
           <p class="is-size-7 has-text-weight-semibold mb-2 mt-5">Restore history</p>
-          <table class="table is-striped is-hoverable is-fullwidth" style="font-size: 14px;">
+          <table class="table is-striped is-hoverable is-fullwidth" style="font-size: 12px;">
             <thead>
               <tr>
                 <th>Started At</th>

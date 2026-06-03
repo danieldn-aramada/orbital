@@ -80,3 +80,4 @@ When adding a new operational REST endpoint:
 2. **Jobs = standard resource/collection.** `GET /namespace/jobs`, `GET /namespace/jobs/:jobId`.
 3. **Do not create resource-centric paths for operations that have no corresponding GET/PUT/DELETE.** A path like `/datacenters/:id/something` implies a full REST hierarchy. Only use it if the hierarchy actually exists.
 4. **The job is the resource.** The thing being operated on (a datacenter, a backup) is a parameter, not the addressable resource.
+5. **Sub-resource actions on jobs are valid.** When an action operates on an existing job resource rather than triggering an independent workflow, use `POST /namespace/jobs/:jobId/action`. This is the Kubernetes sub-resource pattern (`POST /pods/{name}/eviction`). The URL encodes the prerequisite (a specific job must exist) for free. Example: `POST /api/v1/export/jobs/:jobId/publish` — publish acts on a completed export job and has no independent lifecycle.

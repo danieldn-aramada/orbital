@@ -118,7 +118,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	ui.SetOCIConfig(ociConfigured, cfg.OCIRegistry, cfg.OCIRepo)
 	ui.SetExportDir(cfg.ExportDir)
 	ui.SetSchemaPath(cfg.SchemaPath)
-	ui.SetK8sAvailable(k8sAvailable)
+	ui.SetRestoreAvailable(cfg.RestoreBackend == "docker" || k8sAvailable)
 	root.Static("/static", "web/shared/static")
 	if cfg.BasePath != "" {
 		root.GET("", ui.Index)
@@ -221,12 +221,24 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 			if err != nil {
 				logger.Error("backup handler init failed", "err", err)
 			} else {
-				api.POST("/backups", bk.Trigger)
-				api.GET("/backups", bk.List)
-				api.GET("/backups/:id", bk.Status)
-				api.GET("/backups/:id/download", bk.Download)
-				api.DELETE("/backups/:id", bk.Delete)
-				api.POST("/backups/test-connection", bk.TestConnection)
+				api.POST("/backup", bk.Trigger)
+				api.GET("/backup/jobs", bk.List)
+				api.GET("/backup/jobs/:jobId", bk.Status)
+				api.GET("/backup/jobs/:jobId/download", bk.Download)
+				api.DELETE("/backup/jobs/:jobId", bk.Delete)
+				api.POST("/backup/test-connection", bk.TestConnection)
+			}
+
+			var restoreBackend handler.RestoreBackend
+			switch cfg.RestoreBackend {
+			case "k8s":
+				if k8sAvailable {
+					restoreBackend = handler.NewK8sRestoreBackend(k8sClient, k8sCfg, cfg.DGraphNamespace)
+				} else {
+					logger.Warn("ORBITAL_RESTORE_BACKEND=k8s but not in-cluster — restore trigger disabled")
+				}
+			default: // "docker"
+				restoreBackend = handler.NewDockerRestoreBackend(cfg.DGraphContainer)
 			}
 
 			rh, err := handler.NewRestoreHandler(context.Background(), db, handler.RestoreConfig{
@@ -236,19 +248,19 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 				S3AccessKey:     cfg.S3AccessKey,
 				S3SecretKey:     cfg.S3SecretKey,
 				DGraphAdminURL:  cfg.DGraphAdminURL,
-				DGraphNamespace: cfg.DGraphNamespace,
 				DGraphAlphaGRPC: cfg.DGraphAlphaGRPC,
 				DGraphZeroGRPC:  cfg.DGraphZeroGRPC,
 				SchemaPath:      cfg.SchemaPath,
 				RestoreDir:      cfg.RestoreDir,
+				ExecDataDir:     cfg.RestoreExecDataDir,
 				RestoreTimeout:  cfg.RestoreTimeout,
-			}, k8sClient, k8sCfg, logger)
+			}, restoreBackend, logger)
 			if err != nil {
 				logger.Error("restore handler init failed", "err", err)
 			} else {
-				api.GET("/restore", rh.List)
-				api.GET("/restore/:id", rh.Status)
-				if k8sAvailable {
+				api.GET("/restore/jobs", rh.List)
+				api.GET("/restore/jobs/:jobId", rh.Status)
+				if restoreBackend != nil {
 					api.POST("/restore", rh.Trigger)
 				}
 			}

@@ -39,6 +39,7 @@ type eventItem struct {
 	Actor         string          `json:"actor"`
 	Timestamp     string          `json:"timestamp"`
 	Details       json.RawMessage `json:"details,omitempty"`
+	EventCategory string          `json:"eventCategory"`
 	VarSummary    template.HTML   `json:"-"`
 	DiffHTML      template.HTML   `json:"-"`
 }
@@ -101,8 +102,11 @@ func (h *EventHandler) List(c echo.Context) error {
 		pattern := `%"` + oid + `"%`
 		q = q.Where(func(s *sql.Selector) {
 			s.Where(sql.P(func(b *sql.Builder) {
-				b.WriteString("resource_ids::text LIKE ")
+				b.WriteString("(resource_ids::text LIKE ")
 				b.Arg(pattern)
+				b.WriteString(" OR event_category = ")
+				b.Arg("management")
+				b.WriteString(")")
 			}))
 		})
 	}
@@ -149,6 +153,7 @@ func (h *EventHandler) List(c echo.Context) error {
 			Actor:         e.Actor,
 			Timestamp:     e.Timestamp.UTC().Format(time.RFC3339),
 			Details:       e.Details,
+			EventCategory: e.EventCategory,
 		}
 		if c.Request().Header.Get("HX-Request") == "true" {
 			var d eventDetails
@@ -356,6 +361,11 @@ func lineDiff(before, after []string) []string {
 // valStr converts v to a string for diff comparison. When v is nil it returns
 // the zero-value string for the type of ref (the after-value), so that an
 // unset DGraph field (nil) compares equal to the form's default zero value.
+//
+// Complex values (maps, slices) are marshalled to JSON so that a raw JSON
+// string from a DGraph before-snapshot and a parsed map[string]any from
+// mutation variables compare equal when the underlying data is the same.
+// Go's json.Marshal sorts map keys, so the output is stable.
 func valStr(v, ref any) string {
 	if v == nil {
 		switch ref.(type) {
@@ -367,12 +377,30 @@ func valStr(v, ref any) string {
 			return ""
 		}
 	}
+	switch v.(type) {
+	case map[string]any, []any:
+		if b, err := json.Marshal(v); err == nil {
+			return string(b)
+		}
+	case string:
+		// Normalize JSON strings so a raw string from DGraph and a parsed
+		// map[string]any from mutation variables compare equal.
+		s := v.(string)
+		var parsed any
+		if err := json.Unmarshal([]byte(s), &parsed); err == nil {
+			if b, err := json.Marshal(parsed); err == nil {
+				return string(b)
+			}
+		}
+		return s
+	}
 	return fmt.Sprintf("%v", v)
 }
 
 // writeAuditEvent persists a single audit event row. Failures are logged and
 // swallowed — audit writes must never block or fail a request.
-func writeAuditEvent(db *ent.Client, logger *slog.Logger, actor, opName string, operations, resourceTypes, resourceIDs []string, details map[string]any) {
+// eventCategory must be "data" (entity mutations) or "management" (system operations).
+func writeAuditEvent(db *ent.Client, logger *slog.Logger, eventCategory, actor, opName string, operations, resourceTypes, resourceIDs []string, details map[string]any) {
 	raw, _ := json.Marshal(details)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -380,6 +408,7 @@ func writeAuditEvent(db *ent.Client, logger *slog.Logger, actor, opName string, 
 
 	c := db.Event.Create().
 		SetActor(actor).
+		SetEventCategory(eventCategory).
 		SetDetails(json.RawMessage(raw))
 
 	if len(operations) > 0 {

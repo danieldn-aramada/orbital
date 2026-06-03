@@ -65,6 +65,11 @@ func Timestamp(v time.Time) predicate.Event {
 	return predicate.Event(sql.FieldEQ(FieldTimestamp, v))
 }
 
+// EventCategory applies equality check predicate on the "event_category" field. It's identical to EventCategoryEQ.
+func EventCategory(v string) predicate.Event {
+	return predicate.Event(sql.FieldEQ(FieldEventCategory, v))
+}
+
 // OperationsIsNil applies the IsNil predicate on the "operations" field.
 func OperationsIsNil() predicate.Event {
 	return predicate.Event(sql.FieldIsNull(FieldOperations))
@@ -208,6 +213,71 @@ func DetailsIsNil() predicate.Event {
 // DetailsNotNil applies the NotNil predicate on the "details" field.
 func DetailsNotNil() predicate.Event {
 	return predicate.Event(sql.FieldNotNull(FieldDetails))
+}
+
+// EventCategoryEQ applies the EQ predicate on the "event_category" field.
+func EventCategoryEQ(v string) predicate.Event {
+	return predicate.Event(sql.FieldEQ(FieldEventCategory, v))
+}
+
+// EventCategoryNEQ applies the NEQ predicate on the "event_category" field.
+func EventCategoryNEQ(v string) predicate.Event {
+	return predicate.Event(sql.FieldNEQ(FieldEventCategory, v))
+}
+
+// EventCategoryIn applies the In predicate on the "event_category" field.
+func EventCategoryIn(vs ...string) predicate.Event {
+	return predicate.Event(sql.FieldIn(FieldEventCategory, vs...))
+}
+
+// EventCategoryNotIn applies the NotIn predicate on the "event_category" field.
+func EventCategoryNotIn(vs ...string) predicate.Event {
+	return predicate.Event(sql.FieldNotIn(FieldEventCategory, vs...))
+}
+
+// EventCategoryGT applies the GT predicate on the "event_category" field.
+func EventCategoryGT(v string) predicate.Event {
+	return predicate.Event(sql.FieldGT(FieldEventCategory, v))
+}
+
+// EventCategoryGTE applies the GTE predicate on the "event_category" field.
+func EventCategoryGTE(v string) predicate.Event {
+	return predicate.Event(sql.FieldGTE(FieldEventCategory, v))
+}
+
+// EventCategoryLT applies the LT predicate on the "event_category" field.
+func EventCategoryLT(v string) predicate.Event {
+	return predicate.Event(sql.FieldLT(FieldEventCategory, v))
+}
+
+// EventCategoryLTE applies the LTE predicate on the "event_category" field.
+func EventCategoryLTE(v string) predicate.Event {
+	return predicate.Event(sql.FieldLTE(FieldEventCategory, v))
+}
+
+// EventCategoryContains applies the Contains predicate on the "event_category" field.
+func EventCategoryContains(v string) predicate.Event {
+	return predicate.Event(sql.FieldContains(FieldEventCategory, v))
+}
+
+// EventCategoryHasPrefix applies the HasPrefix predicate on the "event_category" field.
+func EventCategoryHasPrefix(v string) predicate.Event {
+	return predicate.Event(sql.FieldHasPrefix(FieldEventCategory, v))
+}
+
+// EventCategoryHasSuffix applies the HasSuffix predicate on the "event_category" field.
+func EventCategoryHasSuffix(v string) predicate.Event {
+	return predicate.Event(sql.FieldHasSuffix(FieldEventCategory, v))
+}
+
+// EventCategoryEqualFold applies the EqualFold predicate on the "event_category" field.
+func EventCategoryEqualFold(v string) predicate.Event {
+	return predicate.Event(sql.FieldEqualFold(FieldEventCategory, v))
+}
+
+// EventCategoryContainsFold applies the ContainsFold predicate on the "event_category" field.
+func EventCategoryContainsFold(v string) predicate.Event {
+	return predicate.Event(sql.FieldContainsFold(FieldEventCategory, v))
 }
 
 // And groups predicates with the AND operator between them.

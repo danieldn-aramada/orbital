@@ -74,28 +74,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/backups": {
-            "get": {
-                "description": "Returns up to 50 backup records ordered by most recent first.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "backup graph"
-                ],
-                "summary": "List backups",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handler.backupResponse"
-                            }
-                        }
-                    }
-                }
-            },
+        "/api/v1/backup": {
             "post": {
                 "description": "Triggers an async DGraph backup to configured S3-compatible or Azure Blob storage. Returns immediately with a job ID. Returns 409 if a backup is already in progress.",
                 "produces": [
@@ -124,7 +103,30 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/backups/{id}": {
+        "/api/v1/backup/jobs": {
+            "get": {
+                "description": "Returns up to 50 backup records ordered by most recent first.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "backup graph"
+                ],
+                "summary": "List backups",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handler.backupResponse"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/backup/jobs/{jobId}": {
             "get": {
                 "description": "Returns the current status and metadata for a single backup job.",
                 "produces": [
@@ -138,7 +140,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Backup job ID",
-                        "name": "id",
+                        "name": "jobId",
                         "in": "path",
                         "required": true
                     }
@@ -174,7 +176,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Backup job ID",
-                        "name": "id",
+                        "name": "jobId",
                         "in": "path",
                         "required": true
                     }
@@ -204,7 +206,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/backups/{id}/download": {
+        "/api/v1/backup/jobs/{jobId}/download": {
             "get": {
                 "description": "Returns a presigned URL (valid 15 minutes) to download the completed backup archive. Returns 404 if the job is not completed or has no archive.",
                 "produces": [
@@ -218,7 +220,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Backup job ID",
-                        "name": "id",
+                        "name": "jobId",
                         "in": "path",
                         "required": true
                     }
@@ -245,9 +247,12 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/datacenters/{id}/export": {
+        "/api/v1/export": {
             "post": {
                 "description": "Triggers an async export of the data center's configuration subgraph. Returns immediately with a job ID. Returns 409 if an export is already in progress for this data center.",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -257,11 +262,13 @@ const docTemplate = `{
                 "summary": "Trigger subgraph export",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "Data center ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
+                        "description": "Export request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
                     }
                 ],
                 "responses": {
@@ -595,27 +602,6 @@ const docTemplate = `{
             }
         },
         "/api/v1/restore": {
-            "get": {
-                "description": "Returns up to 50 restore jobs ordered by most recent first.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "backup graph"
-                ],
-                "summary": "List restore jobs",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handler.restoreJobResponse"
-                            }
-                        }
-                    }
-                }
-            },
             "post": {
                 "description": "Restores DGraph blue from a stored backup. Blocked if any backup, export, or restore job is in progress.",
                 "consumes": [
@@ -667,7 +653,30 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/restore/{id}": {
+        "/api/v1/restore/jobs": {
+            "get": {
+                "description": "Returns up to 50 restore jobs ordered by most recent first.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "backup graph"
+                ],
+                "summary": "List restore jobs",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handler.restoreJobResponse"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/restore/jobs/{jobId}": {
             "get": {
                 "description": "Returns the status of a specific restore job.",
                 "produces": [
@@ -681,7 +690,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Restore job ID",
-                        "name": "id",
+                        "name": "jobId",
                         "in": "path",
                         "required": true
                     }
@@ -796,6 +805,59 @@ const docTemplate = `{
                 }
             }
         },
+        "/import/artifact": {
+            "post": {
+                "description": "Accepts a zip bundle (data.json.gz + schema.gz + optional layers.json + layer blobs)",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "import"
+                ],
+                "summary": "Import OCI artifact bundle",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "Zip archive containing data.json.gz, schema.gz, and optionally layers.json + layer blobs",
+                        "name": "bundle",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/import/history": {
             "get": {
                 "description": "Returns the rolling history of completed and failed imports from disk.",
@@ -839,35 +901,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/import/tags": {
-            "get": {
-                "description": "Lists available OCI artifact tags from the configured registry for this data center.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "import"
-                ],
-                "summary": "List import tags",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/import/upload": {
+        "/import/subgraph": {
             "post": {
-                "description": "Accepts a zip bundle (data.json.gz + schema.gz) exported from orbital and imports it directly — no registry required. Use this when delivering a subgraph via physical media or manual transfer.",
+                "description": "Accepts a zip bundle (data.json.gz + schema.gz) and imports it into local DGraph. Source-agnostic: use for courier (direct upload), ConfigBundle Controller delivery, or any caller with a subgraph zip.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -877,7 +913,7 @@ const docTemplate = `{
                 "tags": [
                     "import"
                 ],
-                "summary": "Upload subgraph bundle (courier)",
+                "summary": "Import subgraph bundle",
                 "parameters": [
                     {
                         "type": "file",
@@ -912,6 +948,32 @@ const docTemplate = `{
                             "type": "object",
                             "additionalProperties": {
                                 "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/import/tags": {
+            "get": {
+                "description": "Lists available OCI artifact tags from the configured registry for this data center, enriched with signature verification status and artifact size.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "import"
+                ],
+                "summary": "List import tags",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/orbserver.tagInfo"
+                                }
                             }
                         }
                     }
@@ -1069,6 +1131,9 @@ const docTemplate = `{
                 "createdAt": {
                     "type": "string"
                 },
+                "createdBy": {
+                    "type": "string"
+                },
                 "dataCenter": {
                     "type": "string"
                 },
@@ -1080,9 +1145,6 @@ const docTemplate = `{
                 },
                 "published": {
                     "type": "boolean"
-                },
-                "startedAt": {
-                    "type": "string"
                 },
                 "status": {
                     "type": "string"
@@ -1096,6 +1158,23 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "orb.DispatchResult": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "mediaType": {
+                    "type": "string"
+                },
+                "statusCode": {
+                    "type": "integer"
+                },
+                "url": {
                     "type": "string"
                 }
             }
@@ -1118,11 +1197,41 @@ const docTemplate = `{
                 "importedAt": {
                     "type": "string"
                 },
+                "layers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/orb.LayerRecord"
+                    }
+                },
                 "status": {
                     "description": "\"done\" | \"failed\"",
                     "type": "string"
                 },
                 "tag": {
+                    "type": "string"
+                },
+                "verification": {
+                    "description": "Verification* constant",
+                    "type": "string"
+                }
+            }
+        },
+        "orb.LayerRecord": {
+            "type": "object",
+            "properties": {
+                "dispatch": {
+                    "description": "set when Role == LayerRoleDispatched",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/orb.DispatchResult"
+                        }
+                    ]
+                },
+                "mediaType": {
+                    "type": "string"
+                },
+                "role": {
+                    "description": "LayerRole* constant",
                     "type": "string"
                 }
             }
@@ -1147,6 +1256,23 @@ const docTemplate = `{
                 },
                 "status": {
                     "type": "string"
+                }
+            }
+        },
+        "orbserver.tagInfo": {
+            "type": "object",
+            "properties": {
+                "digest": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sizeBytes": {
+                    "type": "integer"
+                },
+                "verified": {
+                    "type": "boolean"
                 }
             }
         }

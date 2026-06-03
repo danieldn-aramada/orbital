@@ -26,6 +26,8 @@ const (
 	FieldTimestamp = "timestamp"
 	// FieldDetails holds the string denoting the details field in the database.
 	FieldDetails = "details"
+	// FieldEventCategory holds the string denoting the event_category field in the database.
+	FieldEventCategory = "event_category"
 	// Table holds the table name of the event in the database.
 	Table = "events"
 )
@@ -39,6 +41,7 @@ var Columns = []string{
 	FieldActor,
 	FieldTimestamp,
 	FieldDetails,
+	FieldEventCategory,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -54,6 +57,8 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultTimestamp holds the default value on creation for the "timestamp" field.
 	DefaultTimestamp func() time.Time
+	// DefaultEventCategory holds the default value on creation for the "event_category" field.
+	DefaultEventCategory string
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -74,4 +79,9 @@ func ByActor(opts ...sql.OrderTermOption) OrderOption {
 // ByTimestamp orders the results by the timestamp field.
 func ByTimestamp(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTimestamp, opts...).ToFunc()
+}
+
+// ByEventCategory orders the results by the event_category field.
+func ByEventCategory(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEventCategory, opts...).ToFunc()
 }

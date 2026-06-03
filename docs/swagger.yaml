@@ -98,6 +98,8 @@ definitions:
         type: string
       createdAt:
         type: string
+      createdBy:
+        type: string
       dataCenter:
         type: string
       error:
@@ -106,8 +108,6 @@ definitions:
         type: string
       published:
         type: boolean
-      startedAt:
-        type: string
       status:
         type: string
     type: object
@@ -116,6 +116,17 @@ definitions:
       jobId:
         type: string
       status:
+        type: string
+    type: object
+  orb.DispatchResult:
+    properties:
+      error:
+        type: string
+      mediaType:
+        type: string
+      statusCode:
+        type: integer
+      url:
         type: string
     type: object
   orb.ImportRecord:
@@ -130,10 +141,29 @@ definitions:
         type: string
       importedAt:
         type: string
+      layers:
+        items:
+          $ref: '#/definitions/orb.LayerRecord'
+        type: array
       status:
         description: '"done" | "failed"'
         type: string
       tag:
+        type: string
+      verification:
+        description: Verification* constant
+        type: string
+    type: object
+  orb.LayerRecord:
+    properties:
+      dispatch:
+        allOf:
+        - $ref: '#/definitions/orb.DispatchResult'
+        description: set when Role == LayerRoleDispatched
+      mediaType:
+        type: string
+      role:
+        description: LayerRole* constant
         type: string
     type: object
   orbserver.importSnapshot:
@@ -150,6 +180,17 @@ definitions:
         $ref: '#/definitions/orb.ImportRecord'
       status:
         type: string
+    type: object
+  orbserver.tagInfo:
+    properties:
+      digest:
+        type: string
+      name:
+        type: string
+      sizeBytes:
+        type: integer
+      verified:
+        type: boolean
     type: object
 info:
   contact: {}
@@ -199,21 +240,7 @@ paths:
       summary: List audit events
       tags:
       - audit
-  /api/v1/backups:
-    get:
-      description: Returns up to 50 backup records ordered by most recent first.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/handler.backupResponse'
-            type: array
-      summary: List backups
-      tags:
-      - backup graph
+  /api/v1/backup:
     post:
       description: Triggers an async DGraph backup to configured S3-compatible or
         Azure Blob storage. Returns immediately with a job ID. Returns 409 if a backup
@@ -234,14 +261,29 @@ paths:
       summary: Trigger backup
       tags:
       - backup graph
-  /api/v1/backups/{id}:
+  /api/v1/backup/jobs:
+    get:
+      description: Returns up to 50 backup records ordered by most recent first.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.backupResponse'
+            type: array
+      summary: List backups
+      tags:
+      - backup graph
+  /api/v1/backup/jobs/{jobId}:
     delete:
       description: Deletes the backup record and its archive from storage. Returns
         409 if the backup is still running.
       parameters:
       - description: Backup job ID
         in: path
-        name: id
+        name: jobId
         required: true
         type: string
       produces:
@@ -269,7 +311,7 @@ paths:
       parameters:
       - description: Backup job ID
         in: path
-        name: id
+        name: jobId
         required: true
         type: string
       produces:
@@ -288,14 +330,14 @@ paths:
       summary: Get backup status
       tags:
       - backup graph
-  /api/v1/backups/{id}/download:
+  /api/v1/backup/jobs/{jobId}/download:
     get:
       description: Returns a presigned URL (valid 15 minutes) to download the completed
         backup archive. Returns 404 if the job is not completed or has no archive.
       parameters:
       - description: Backup job ID
         in: path
-        name: id
+        name: jobId
         required: true
         type: string
       produces:
@@ -316,17 +358,20 @@ paths:
       summary: Download backup
       tags:
       - backup graph
-  /api/v1/datacenters/{id}/export:
+  /api/v1/export:
     post:
+      consumes:
+      - application/json
       description: Triggers an async export of the data center's configuration subgraph.
         Returns immediately with a job ID. Returns 409 if an export is already in
         progress for this data center.
       parameters:
-      - description: Data center ID
-        in: path
-        name: id
+      - description: Export request
+        in: body
+        name: body
         required: true
-        type: string
+        schema:
+          type: object
       produces:
       - application/json
       responses:
@@ -556,20 +601,6 @@ paths:
       tags:
       - oci
   /api/v1/restore:
-    get:
-      description: Returns up to 50 restore jobs ordered by most recent first.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/handler.restoreJobResponse'
-            type: array
-      summary: List restore jobs
-      tags:
-      - backup graph
     post:
       consumes:
       - application/json
@@ -604,13 +635,28 @@ paths:
       summary: Trigger a DGraph restore
       tags:
       - backup graph
-  /api/v1/restore/{id}:
+  /api/v1/restore/jobs:
+    get:
+      description: Returns up to 50 restore jobs ordered by most recent first.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.restoreJobResponse'
+            type: array
+      summary: List restore jobs
+      tags:
+      - backup graph
+  /api/v1/restore/jobs/{jobId}:
     get:
       description: Returns the status of a specific restore job.
       parameters:
       - description: Restore job ID
         in: path
-        name: id
+        name: jobId
         required: true
         type: string
       produces:
@@ -691,6 +737,43 @@ paths:
       summary: Trigger import
       tags:
       - import
+  /import/artifact:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Accepts a zip bundle (data.json.gz + schema.gz + optional layers.json
+        + layer blobs)
+      parameters:
+      - description: Zip archive containing data.json.gz, schema.gz, and optionally
+          layers.json + layer blobs
+        in: formData
+        name: bundle
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Import OCI artifact bundle
+      tags:
+      - import
   /import/history:
     get:
       description: Returns the rolling history of completed and failed imports from
@@ -721,31 +804,13 @@ paths:
       summary: Import status
       tags:
       - import
-  /import/tags:
-    get:
-      description: Lists available OCI artifact tags from the configured registry
-        for this data center.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              items:
-                type: string
-              type: array
-            type: object
-      summary: List import tags
-      tags:
-      - import
-  /import/upload:
+  /import/subgraph:
     post:
       consumes:
       - multipart/form-data
-      description: Accepts a zip bundle (data.json.gz + schema.gz) exported from orbital
-        and imports it directly — no registry required. Use this when delivering a
-        subgraph via physical media or manual transfer.
+      description: 'Accepts a zip bundle (data.json.gz + schema.gz) and imports it
+        into local DGraph. Source-agnostic: use for courier (direct upload), ConfigBundle
+        Controller delivery, or any caller with a subgraph zip.'
       parameters:
       - description: Zip archive containing data.json.gz and schema.gz
         in: formData
@@ -773,7 +838,26 @@ paths:
             additionalProperties:
               type: string
             type: object
-      summary: Upload subgraph bundle (courier)
+      summary: Import subgraph bundle
+      tags:
+      - import
+  /import/tags:
+    get:
+      description: Lists available OCI artifact tags from the configured registry
+        for this data center, enriched with signature verification status and artifact
+        size.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/orbserver.tagInfo'
+              type: array
+            type: object
+      summary: List import tags
       tags:
       - import
 swagger: "2.0"

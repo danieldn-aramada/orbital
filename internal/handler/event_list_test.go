@@ -247,6 +247,118 @@ func TestEventList_LimitAndOffset(t *testing.T) {
 	}
 }
 
+func TestEventList_EventCategoryInResponse(t *testing.T) {
+	ctx := context.Background()
+	testDB.Event.Delete().ExecX(ctx)
+
+	dataEv := testDB.Event.Create().
+		SetActor("cat-test").
+		SetEventCategory("data").
+		SetOperations([]string{"updateServer"}).
+		SetResourceTypes([]string{"Server"}).
+		SetResourceIds([]string{"test:srv-cat"}).
+		SaveX(ctx)
+	mgmtEv := testDB.Event.Create().
+		SetActor("cat-test").
+		SetEventCategory("management").
+		SetOperations([]string{"restoreBackup"}).
+		SaveX(ctx)
+	t.Cleanup(func() {
+		testDB.Event.DeleteOne(dataEv).ExecX(ctx)
+		testDB.Event.DeleteOne(mgmtEv).ExecX(ctx)
+	})
+
+	h := newEventHandler(t)
+	c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", nil)
+	if err := h.List(c); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	events, _ := body["events"].([]any)
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+	// Both events must have eventCategory set.
+	cats := map[string]bool{}
+	for _, ev := range events {
+		m := ev.(map[string]any)
+		cat, ok := m["eventCategory"].(string)
+		if !ok || cat == "" {
+			t.Errorf("eventCategory missing or empty in event: %v", m)
+		}
+		cats[cat] = true
+	}
+	if !cats["data"] {
+		t.Error("expected at least one data event")
+	}
+	if !cats["management"] {
+		t.Error("expected at least one management event")
+	}
+}
+
+func TestEventList_OrbIdFilterIncludesManagementEvents(t *testing.T) {
+	ctx := context.Background()
+	testDB.Event.Delete().ExecX(ctx)
+
+	// A data event matching the orbId.
+	dataEv := testDB.Event.Create().
+		SetActor("mgmt-filter-test").
+		SetEventCategory("data").
+		SetOperations([]string{"updateServer"}).
+		SetResourceTypes([]string{"Server"}).
+		SetResourceIds([]string{"alaska:SRV-MGMT"}).
+		SaveX(ctx)
+	// A management event with no matching orbId — should still be returned.
+	mgmtEv := testDB.Event.Create().
+		SetActor("mgmt-filter-test").
+		SetEventCategory("management").
+		SetOperations([]string{"restoreBackup"}).
+		SaveX(ctx)
+	// A data event with a different orbId — should not be returned.
+	otherEv := testDB.Event.Create().
+		SetActor("mgmt-filter-test").
+		SetEventCategory("data").
+		SetOperations([]string{"updateServer"}).
+		SetResourceIds([]string{"alaska:SRV-OTHER"}).
+		SaveX(ctx)
+	t.Cleanup(func() {
+		testDB.Event.DeleteOne(dataEv).ExecX(ctx)
+		testDB.Event.DeleteOne(mgmtEv).ExecX(ctx)
+		testDB.Event.DeleteOne(otherEv).ExecX(ctx)
+	})
+
+	h := newEventHandler(t)
+	c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", map[string]string{"orbId": "alaska:SRV-MGMT"})
+	if err := h.List(c); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	events, _ := body["events"].([]any)
+	// Should return: the matching data event + the management event = 2.
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events (1 data + 1 management), got %d: %v", len(events), body)
+	}
+	cats := map[string]bool{}
+	for _, ev := range events {
+		m := ev.(map[string]any)
+		cats[m["eventCategory"].(string)] = true
+	}
+	if !cats["data"] {
+		t.Error("expected data event in results")
+	}
+	if !cats["management"] {
+		t.Error("expected management event in results")
+	}
+}
+
 func TestEventList_OrderedByTimestampDesc(t *testing.T) {
 	ctx := context.Background()
 	testDB.Event.Delete().ExecX(ctx)

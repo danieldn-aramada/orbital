@@ -20,31 +20,24 @@ import (
 	"github.com/armada/orbital/ent/restorejob"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/remotecommand"
 )
 
 const dgraphLiveLabelSelector = "app.kubernetes.io/name=dgraph-live"
 
 // RestoreHandler handles async DGraph restore operations.
 type RestoreHandler struct {
-	db               *ent.Client
-	storage          blobStorage
-	k8sClient        kubernetes.Interface
-	restCfg          *rest.Config
-	dgraphAlterURL   string // e.g. http://dgraph-blue:8080/alter
-	dgraphSchemaURL  string // e.g. http://dgraph-blue:8080/admin/schema
-	dgraphAlphaGRPC  string // e.g. dgraph-blue-dgraph-alpha:9080
-	dgraphZeroGRPC   string // e.g. dgraph-blue-dgraph-zero:5080
-	dgraphNamespace  string
-	schemaPath       string // path to the GraphQL SDL schema file
-	restoreDir       string // PVC mount path shared with dgraph-live pod, e.g. /restore
-	restoreTimeout   time.Duration
-	logger           *slog.Logger
+	db              *ent.Client
+	storage         blobStorage
+	backend         RestoreBackend
+	dgraphAlterURL  string // e.g. http://dgraph-blue:8080/alter
+	dgraphSchemaURL string // e.g. http://dgraph-blue:8080/admin/schema
+	dgraphAlphaGRPC string // e.g. dgraph-blue-dgraph-alpha:9080
+	dgraphZeroGRPC  string // e.g. dgraph-blue-dgraph-zero:5080
+	schemaPath      string // path to the GraphQL SDL schema file
+	restoreDir      string // host-side directory where backup files are staged
+	execDataDir     string // same directory as seen from inside the execution environment
+	restoreTimeout  time.Duration
+	logger          *slog.Logger
 }
 
 // RestoreConfig holds configuration for the restore handler.
@@ -57,13 +50,13 @@ type RestoreConfig struct {
 	DGraphAdminURL  string // e.g. http://dgraph-blue:8080/admin
 	DGraphAlphaGRPC string // gRPC address of DGraph alpha, e.g. dgraph-blue-dgraph-alpha:9080
 	DGraphZeroGRPC  string // gRPC address of DGraph zero, e.g. dgraph-blue-dgraph-zero:5080
-	DGraphNamespace string
 	SchemaPath      string // path to the GraphQL SDL schema file
-	RestoreDir      string // PVC mount path shared with dgraph-live pod
+	RestoreDir      string // host-side path where backup files are staged
+	ExecDataDir     string // path to staged files as seen inside the execution environment
 	RestoreTimeout  time.Duration
 }
 
-func NewRestoreHandler(ctx context.Context, db *ent.Client, cfg RestoreConfig, k8sClient kubernetes.Interface, restCfg *rest.Config, logger *slog.Logger) (*RestoreHandler, error) {
+func NewRestoreHandler(ctx context.Context, db *ent.Client, cfg RestoreConfig, backend RestoreBackend, logger *slog.Logger) (*RestoreHandler, error) {
 	var store blobStorage
 	var err error
 	if strings.Contains(cfg.S3Endpoint, ".blob.core.windows.net") {
@@ -76,21 +69,22 @@ func NewRestoreHandler(ctx context.Context, db *ent.Client, cfg RestoreConfig, k
 	}
 
 	base := strings.TrimSuffix(cfg.DGraphAdminURL, "/admin")
-	alterURL := base + "/alter"
-	schemaURL := base + "/admin/schema"
+	execDataDir := cfg.ExecDataDir
+	if execDataDir == "" {
+		execDataDir = cfg.RestoreDir
+	}
 
 	return &RestoreHandler{
 		db:              db,
 		storage:         store,
-		k8sClient:       k8sClient,
-		restCfg:         restCfg,
-		dgraphAlterURL:  alterURL,
-		dgraphSchemaURL: schemaURL,
+		backend:         backend,
+		dgraphAlterURL:  base + "/alter",
+		dgraphSchemaURL: base + "/admin/schema",
 		dgraphAlphaGRPC: cfg.DGraphAlphaGRPC,
 		dgraphZeroGRPC:  cfg.DGraphZeroGRPC,
-		dgraphNamespace: cfg.DGraphNamespace,
 		schemaPath:      cfg.SchemaPath,
 		restoreDir:      cfg.RestoreDir,
+		execDataDir:     execDataDir,
 		restoreTimeout:  cfg.RestoreTimeout,
 		logger:          logger,
 	}, nil
@@ -236,14 +230,14 @@ func (h *RestoreHandler) Trigger(c echo.Context) error {
 	})
 }
 
-// List handles GET /api/v1/restore
+// List handles GET /api/v1/restore/jobs
 //
 // @Summary     List restore jobs
 // @Description Returns up to 50 restore jobs ordered by most recent first.
 // @Tags        backup graph
 // @Produce     json
 // @Success     200 {array} restoreJobResponse
-// @Router      /api/v1/restore [get]
+// @Router      /api/v1/restore/jobs [get]
 func (h *RestoreHandler) List(c echo.Context) error {
 	jobs, err := h.db.RestoreJob.Query().
 		Order(restorejob.ByCreatedAt(sql.OrderDesc())).
@@ -259,18 +253,18 @@ func (h *RestoreHandler) List(c echo.Context) error {
 	return c.JSON(http.StatusOK, out)
 }
 
-// Status handles GET /api/v1/restore/:id
+// Status handles GET /api/v1/restore/jobs/:jobId
 //
 // @Summary     Get restore job status
 // @Description Returns the status of a specific restore job.
 // @Tags        backup graph
 // @Produce     json
-// @Param       id path string true "Restore job ID"
+// @Param       jobId path string true "Restore job ID"
 // @Success     200 {object} restoreJobResponse
 // @Failure     404 {object} map[string]string
-// @Router      /api/v1/restore/{id} [get]
+// @Router      /api/v1/restore/jobs/{jobId} [get]
 func (h *RestoreHandler) Status(c echo.Context) error {
-	id, err := uuid.Parse(c.Param("id"))
+	id, err := uuid.Parse(c.Param("jobId"))
 	if err != nil {
 		return echo.ErrBadRequest
 	}
@@ -334,14 +328,6 @@ func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 		return
 	}
 
-	// Fail fast: find the dgraph-live pod before touching anything
-	podName, err := h.findDgraphLivePod(ctx)
-	if err != nil {
-		fail("find dgraph-live pod", err)
-		return
-	}
-	log(fmt.Sprintf("Found dgraph-live pod: %s", podName))
-
 	// Clean up any leftover files from a previous failed restore
 	zipPath := filepath.Join(h.restoreDir, "backup.zip")
 	dataGzPath := filepath.Join(h.restoreDir, "data.json.gz")
@@ -384,14 +370,7 @@ func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 
 	// Run dgraph live with the DQL schema — loads data with correct predicate types.
 	log("Running dgraph live...")
-	cmd := fmt.Sprintf(
-		"dgraph live --files %s --schema %s --alpha %s --zero %s",
-		filepath.Join(h.restoreDir, "data.json.gz"),
-		filepath.Join(h.restoreDir, "schema.gz"),
-		h.dgraphAlphaGRPC,
-		h.dgraphZeroGRPC,
-	)
-	out, err := h.execInPod(ctx, podName, cmd)
+	out, err := h.backend.RunLive(ctx, h.execDataDir, h.dgraphAlphaGRPC, h.dgraphZeroGRPC)
 	fmt.Fprintln(&logBuf, out)
 	if err != nil {
 		fail("dgraph live", err)
@@ -406,6 +385,12 @@ func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 	}
 
 	log("Restore completed.")
+	writeAuditEvent(h.db, h.logger, "management", job.CreatedBy, "restoreBackup",
+		[]string{"restoreBackup"},
+		[]string{},
+		[]string{},
+		map[string]any{"jobId": jobID.String(), "backupKey": bk.S3Key},
+	)
 	h.db.RestoreJob.UpdateOneID(jobID). //nolint:errcheck
 		SetStatus(restorejob.StatusCompleted).
 		SetLog(logBuf.String()).
@@ -529,46 +514,3 @@ func (h *RestoreHandler) applyBlueSchema(ctx context.Context) error {
 	return nil
 }
 
-func (h *RestoreHandler) findDgraphLivePod(ctx context.Context) (string, error) {
-	pods, err := h.k8sClient.CoreV1().Pods(h.dgraphNamespace).List(ctx, metav1.ListOptions{
-		LabelSelector: dgraphLiveLabelSelector,
-	})
-	if err != nil {
-		return "", fmt.Errorf("list pods: %w", err)
-	}
-	for _, pod := range pods.Items {
-		if pod.Status.Phase == corev1.PodRunning {
-			return pod.Name, nil
-		}
-	}
-	return "", fmt.Errorf("no running dgraph-live pod found in namespace %q (selector: %s)", h.dgraphNamespace, dgraphLiveLabelSelector)
-}
-
-func (h *RestoreHandler) execInPod(ctx context.Context, podName, cmd string) (string, error) {
-	req := h.k8sClient.CoreV1().RESTClient().Post().
-		Resource("pods").
-		Name(podName).
-		Namespace(h.dgraphNamespace).
-		SubResource("exec").
-		VersionedParams(&corev1.PodExecOptions{
-			Command: []string{"/bin/sh", "-c", cmd},
-			Stdout:  true,
-			Stderr:  true,
-		}, scheme.ParameterCodec)
-
-	executor, err := remotecommand.NewSPDYExecutor(h.restCfg, "POST", req.URL())
-	if err != nil {
-		return "", fmt.Errorf("create executor: %w", err)
-	}
-
-	var stdout, stderr bytes.Buffer
-	err = executor.StreamWithContext(ctx, remotecommand.StreamOptions{
-		Stdout: &stdout,
-		Stderr: &stderr,
-	})
-	output := stdout.String()
-	if stderr.Len() > 0 {
-		output += "\nstderr: " + stderr.String()
-	}
-	return output, err
-}

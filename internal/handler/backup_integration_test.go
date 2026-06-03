@@ -75,7 +75,7 @@ func TestBackupPipeline_EndToEnd(t *testing.T) {
 
 	status := testutil.WaitForBackupJob(t, testDB, jobID, 90*time.Second)
 
-	if string(status) != "completed" && string(status) != "skipped" {
+	if string(status) != "completed" {
 		job, _ := testDB.Backup.Get(context.Background(), jobID)
 		errMsg := ""
 		if job != nil && job.Error != nil {
@@ -88,27 +88,32 @@ func TestBackupPipeline_EndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get completed job: %v", err)
 	}
-	if string(status) == "completed" && job.S3Key == "" {
+	if job.S3Key == "" {
 		t.Error("completed backup has no S3 key")
 	}
 }
 
-func TestBackupPipeline_SkipsWhenUnchanged(t *testing.T) {
+func TestBackupPipeline_MultipleBackupsEachUpload(t *testing.T) {
 	h := newBackupHandler(t)
 
-	// First backup: may be "completed" or "skipped" depending on whether a prior
-	// test already uploaded a backup with the same checksum. Both are acceptable.
 	jobID1 := triggerBackup(t, h)
 	status1 := testutil.WaitForBackupJob(t, testDB, jobID1, 90*time.Second)
-	if string(status1) != "completed" && string(status1) != "skipped" {
-		t.Fatalf("first backup ended with %q, want completed or skipped", status1)
+	if string(status1) != "completed" {
+		t.Fatalf("first backup ended with %q, want completed", status1)
 	}
 
-	// Second backup against unchanged graph must be skipped.
 	jobID2 := triggerBackup(t, h)
 	status2 := testutil.WaitForBackupJob(t, testDB, jobID2, 90*time.Second)
-	if string(status2) != "skipped" {
-		t.Errorf("second backup: expected skipped, got %q", status2)
+	if string(status2) != "completed" {
+		t.Fatalf("second backup ended with %q, want completed", status2)
+	}
+
+	job2, err := testDB.Backup.Get(context.Background(), jobID2)
+	if err != nil {
+		t.Fatalf("get second backup: %v", err)
+	}
+	if job2.S3Key == "" {
+		t.Error("second backup has no S3 key")
 	}
 }
 

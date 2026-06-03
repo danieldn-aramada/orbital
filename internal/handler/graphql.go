@@ -259,7 +259,7 @@ func (h *GraphQL) writeEvent(opName string, operations, resourceTypes, resourceI
 	if before != nil {
 		details["before"] = before
 	}
-	writeAuditEvent(h.db, h.logger, actor, opName, operations, resourceTypes, resourceIDs, details)
+	writeAuditEvent(h.db, h.logger, "data", actor, opName, operations, resourceTypes, resourceIDs, details)
 }
 
 // extractOperations returns deduplicated DGraph operation names and resource type

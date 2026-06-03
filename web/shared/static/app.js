@@ -1117,7 +1117,6 @@ document.addEventListener('dblclick', (e) => {
 
 const backupStatusColors = {
   completed: 'is-success',
-  skipped:   'is-info',
   running:   'is-warning',
   pending:   'is-warning',
   failed:    'is-danger',
@@ -1142,10 +1141,10 @@ function renderBackups(jobs) {
   tbody.innerHTML = jobs.map(j => {
     const tag = backupStatusColors[j.status] || 'is-light'
     const checksumDisplay = j.checksum
-      ? `<span class="is-family-monospace is-size-7" style="word-break:break-all;">${j.checksum}</span> <button class="button is-small is-white" title="Copy checksum" onclick="navigator.clipboard.writeText('${j.checksum}').then(()=>{this.innerHTML='<span class=\\'icon\\'><i class=\\'fas fa-check\\'></i></span>';setTimeout(()=>{this.innerHTML='<span class=\\'icon\\'><i class=\\'fas fa-copy\\'></i></span>';},1200)})"><span class="icon"><i class="fas fa-copy"></i></span></button>`
+      ? `<span class="is-family-monospace" style="word-break:break-all;">${j.checksum}</span> <button class="button is-small is-white" title="Copy checksum" onclick="navigator.clipboard.writeText('${j.checksum}').then(()=>{this.innerHTML='<span class=\\'icon\\'><i class=\\'fas fa-check\\'></i></span>';setTimeout(()=>{this.innerHTML='<span class=\\'icon\\'><i class=\\'fas fa-copy\\'></i></span>';},1200)})"><span class="icon"><i class="fas fa-copy"></i></span></button>`
       : '—'
     const statusCell = j.status === 'failed' && j.error
-      ? `<span class="tag ${tag}">${j.status} ⚠</span><br><span class="has-text-danger is-size-7" style="display:block;max-width:400px;white-space:normal;word-break:break-word;margin-top:4px;">${j.error}</span>`
+      ? `<span class="tag ${tag}">${j.status} ⚠</span><br><span class="has-text-danger" style="display:block;max-width:400px;white-space:normal;word-break:break-word;margin-top:4px;">${j.error}</span>`
       : `<span class="tag ${tag}">${j.status}</span>`
     const canDelete = j.status !== 'running' && j.status !== 'pending'
     const actions = [
@@ -1168,7 +1167,7 @@ function renderBackups(jobs) {
 }
 
 function loadBackups() {
-  fetch(BASE + '/api/v1/backups')
+  fetch(BASE + '/api/v1/backup/jobs')
     .then(r => r.json())
     .then(renderBackups)
     .catch(() => {})
@@ -1181,7 +1180,7 @@ function triggerBackup() {
   btn.disabled = true
   msg.style.display = 'none'
 
-  fetch(BASE + '/api/v1/backups', { method: 'POST' })
+  fetch(BASE + '/api/v1/backup', { method: 'POST' })
     .then(r => r.json())
     .then(data => {
       if (data.error) {
@@ -1205,11 +1204,11 @@ function triggerBackup() {
 function pollBackup(jobId) {
   const btn = document.getElementById('btn-backup')
   const interval = setInterval(() => {
-    fetch(BASE + '/api/v1/backups/' + jobId)
+    fetch(BASE + '/api/v1/backup/jobs/' + jobId)
       .then(r => r.json())
       .then(data => {
         loadBackups()
-        if (data.status === 'completed' || data.status === 'skipped' || data.status === 'failed') {
+        if (data.status === 'completed' || data.status === 'failed') {
           clearInterval(interval)
           btn.classList.remove('is-loading')
           btn.disabled = false
@@ -1220,7 +1219,7 @@ function pollBackup(jobId) {
 }
 
 function downloadBackup(id) {
-  fetch(BASE + '/api/v1/backups/' + id + '/download')
+  fetch(BASE + '/api/v1/backup/jobs/' + id + '/download')
     .then(r => r.json())
     .then(data => { if (data.url) window.open(data.url, '_blank') })
     .catch(() => {})
@@ -1246,7 +1245,7 @@ function confirmDelete() {
   btn.classList.add('is-loading')
   btn.disabled = true
 
-  fetch(BASE + '/api/v1/backups/' + pendingDeleteId, { method: 'DELETE' })
+  fetch(BASE + '/api/v1/backup/jobs/' + pendingDeleteId, { method: 'DELETE' })
     .then(r => {
       if (r.status === 204 || r.ok) {
         closeDeleteModal()
@@ -1830,7 +1829,7 @@ function testBackupConnection() {
   const result = document.getElementById('backup-connection-result')
   btn.classList.add('is-loading')
   result.textContent = ''
-  fetch(BASE + '/api/v1/backups/test-connection', { method: 'POST' })
+  fetch(BASE + '/api/v1/backup/test-connection', { method: 'POST' })
     .then(r => r.json())
     .then(res => {
       btn.classList.remove('is-loading')
@@ -2342,7 +2341,7 @@ const restoreJobLogStore = {}
 function loadRestoreJobs() {
   const tbody = document.getElementById('restore-tbody')
   if (!tbody) return
-  fetch(BASE + '/api/v1/restore')
+  fetch(BASE + '/api/v1/restore/jobs')
     .then(r => r.json())
     .then(jobs => {
       if (!jobs.length) {
@@ -2364,7 +2363,7 @@ function loadRestoreJobs() {
         return `<tr>
           <td>${startedAt}</td>
           <td><span class="tag ${statusClass}">${j.status}</span></td>
-          <td style="font-size:0.8rem;">${backupLabel}</td>
+          <td>${backupLabel}</td>
           <td>${j.createdBy || '—'}</td>
           <td>${duration}</td>
           <td>${logBtn}</td>
@@ -2379,7 +2378,7 @@ function loadRestoreJobs() {
 function loadRestoreBackupSelect() {
   const sel = document.getElementById('restore-backup-select')
   if (!sel) return
-  fetch(BASE + '/api/v1/backups')
+  fetch(BASE + '/api/v1/backup/jobs')
     .then(r => r.json())
     .then(backups => {
       const completed = backups.filter(b => b.status === 'completed')
@@ -2437,7 +2436,7 @@ function triggerRestore() {
 function pollRestore(jobId) {
   const btn = document.getElementById('btn-restore')
   const interval = setInterval(() => {
-    fetch(BASE + '/api/v1/restore/' + jobId)
+    fetch(BASE + '/api/v1/restore/jobs/' + jobId)
       .then(r => r.json())
       .then(data => {
         loadRestoreJobs()

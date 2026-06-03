@@ -30,8 +30,10 @@ type Event struct {
 	// Timestamp holds the value of the "timestamp" field.
 	Timestamp time.Time `json:"timestamp,omitempty"`
 	// Details holds the value of the "details" field.
-	Details      json.RawMessage `json:"details,omitempty"`
-	selectValues sql.SelectValues
+	Details json.RawMessage `json:"details,omitempty"`
+	// EventCategory holds the value of the "event_category" field.
+	EventCategory string `json:"event_category,omitempty"`
+	selectValues  sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -41,7 +43,7 @@ func (*Event) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case event.FieldOperations, event.FieldResourceTypes, event.FieldResourceIds, event.FieldDetails:
 			values[i] = new([]byte)
-		case event.FieldActor:
+		case event.FieldActor, event.FieldEventCategory:
 			values[i] = new(sql.NullString)
 		case event.FieldTimestamp:
 			values[i] = new(sql.NullTime)
@@ -112,6 +114,12 @@ func (_m *Event) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field details: %w", err)
 				}
 			}
+		case event.FieldEventCategory:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field event_category", values[i])
+			} else if value.Valid {
+				_m.EventCategory = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -165,6 +173,9 @@ func (_m *Event) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("details=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Details))
+	builder.WriteString(", ")
+	builder.WriteString("event_category=")
+	builder.WriteString(_m.EventCategory)
 	builder.WriteByte(')')
 	return builder.String()
 }

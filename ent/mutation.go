@@ -1361,6 +1361,7 @@ type EventMutation struct {
 	timestamp            *time.Time
 	details              *json.RawMessage
 	appenddetails        json.RawMessage
+	event_category       *string
 	clearedFields        map[string]struct{}
 	done                 bool
 	oldValue             func(context.Context) (*Event, error)
@@ -1803,6 +1804,42 @@ func (m *EventMutation) ResetDetails() {
 	delete(m.clearedFields, event.FieldDetails)
 }
 
+// SetEventCategory sets the "event_category" field.
+func (m *EventMutation) SetEventCategory(s string) {
+	m.event_category = &s
+}
+
+// EventCategory returns the value of the "event_category" field in the mutation.
+func (m *EventMutation) EventCategory() (r string, exists bool) {
+	v := m.event_category
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEventCategory returns the old "event_category" field's value of the Event entity.
+// If the Event object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventMutation) OldEventCategory(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEventCategory is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEventCategory requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEventCategory: %w", err)
+	}
+	return oldValue.EventCategory, nil
+}
+
+// ResetEventCategory resets all changes to the "event_category" field.
+func (m *EventMutation) ResetEventCategory() {
+	m.event_category = nil
+}
+
 // Where appends a list predicates to the EventMutation builder.
 func (m *EventMutation) Where(ps ...predicate.Event) {
 	m.predicates = append(m.predicates, ps...)
@@ -1837,7 +1874,7 @@ func (m *EventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EventMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.operations != nil {
 		fields = append(fields, event.FieldOperations)
 	}
@@ -1855,6 +1892,9 @@ func (m *EventMutation) Fields() []string {
 	}
 	if m.details != nil {
 		fields = append(fields, event.FieldDetails)
+	}
+	if m.event_category != nil {
+		fields = append(fields, event.FieldEventCategory)
 	}
 	return fields
 }
@@ -1876,6 +1916,8 @@ func (m *EventMutation) Field(name string) (ent.Value, bool) {
 		return m.Timestamp()
 	case event.FieldDetails:
 		return m.Details()
+	case event.FieldEventCategory:
+		return m.EventCategory()
 	}
 	return nil, false
 }
@@ -1897,6 +1939,8 @@ func (m *EventMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldTimestamp(ctx)
 	case event.FieldDetails:
 		return m.OldDetails(ctx)
+	case event.FieldEventCategory:
+		return m.OldEventCategory(ctx)
 	}
 	return nil, fmt.Errorf("unknown Event field %s", name)
 }
@@ -1947,6 +1991,13 @@ func (m *EventMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDetails(v)
+		return nil
+	case event.FieldEventCategory:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEventCategory(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Event field %s", name)
@@ -2041,6 +2092,9 @@ func (m *EventMutation) ResetField(name string) error {
 		return nil
 	case event.FieldDetails:
 		m.ResetDetails()
+		return nil
+	case event.FieldEventCategory:
+		m.ResetEventCategory()
 		return nil
 	}
 	return fmt.Errorf("unknown Event field %s", name)

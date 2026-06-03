@@ -24,6 +24,7 @@ func (Event) Fields() []ent.Field {
 		field.String("actor"),                               // user name or email
 		field.Time("timestamp").Default(time.Now),
 		field.JSON("details", json.RawMessage{}).Optional(), // {operationName, query, variables}
+		field.String("event_category").Default("data"),      // "data" for entity mutations, "management" for system operations
 	}
 }
 
