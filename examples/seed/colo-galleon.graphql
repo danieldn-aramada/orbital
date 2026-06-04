@@ -8,7 +8,7 @@ mutation UpsertAll {
       orbId: "colo:colo-galleon"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       assetDataV2: "{\"11a99112-64e4-4f47-826d-53215d2ba1ee\":{\"kvmURL\":\"https://kubevirt.colo.armada.ai/vmlist\",\"cfTunnelID\":\"3465442a-711f-40d6-a7f3-6dc20e271daa\"},\"3312586d-348c-4109-9814-86324ef8cd32\":{\"kvmURL\":\"https://kubevirt.colo.armada.ai/vmlist\",\"cfTunnelID\":\"bf4fbebe-2d0d-4850-876e-56027855ddc6\"},\"7bb1fb9e-1b57-4f83-9347-e439ae221688\":{\"kvmURL\":\"https://kubevirt.colo.armada.ai/vmlist\",\"cfTunnelID\":\"de866b3e-d253-4924-b8b2-747f053f8c5e\",\"metricsAPIURL\":\"https://metrics-api-colo.dev.armadaapps.io\"},\"7f7bc3e8-08e4-44ed-871b-69da884a8e43\":{\"kvmURL\":\"https://kubevirt.colo.armada.ai/vmlist\",\"cfTunnelID\":\"d9d40917-56e4-4eff-82de-046b398bb244\"},\"cc89c954-89dd-43da-a2c0-48777abca71d\":{\"kvmURL\":\"https://kubevirt.colo.armada.ai/vmlist\",\"cfTunnelID\":\"\"}}"
     }
   ], upsert: true) {
@@ -20,7 +20,7 @@ mutation UpsertAll {
       orbId: "colo:A.OF.C.09"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
     }
     {
@@ -28,7 +28,7 @@ mutation UpsertAll {
       orbId: "colo:A.OF.C.10"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
     }
     {
@@ -36,7 +36,7 @@ mutation UpsertAll {
       orbId: "colo:A.OF.C.11"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
     }
     {
@@ -44,7 +44,7 @@ mutation UpsertAll {
       orbId: "colo:A.OF.C.12"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
     }
   ], upsert: true) {
@@ -56,7 +56,7 @@ mutation UpsertAll {
       address: "10.20.21.41"
       name: "10.20.21.41"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -65,7 +65,7 @@ mutation UpsertAll {
       address: "10.20.21.42"
       name: "10.20.21.42"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -74,7 +74,7 @@ mutation UpsertAll {
       address: "10.20.21.43"
       name: "10.20.21.43"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -83,7 +83,7 @@ mutation UpsertAll {
       address: "10.20.21.44"
       name: "10.20.21.44"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -92,7 +92,7 @@ mutation UpsertAll {
       address: "10.20.21.45"
       name: "10.20.21.45"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -101,7 +101,7 @@ mutation UpsertAll {
       address: "10.20.21.46"
       name: "10.20.21.46"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -110,7 +110,7 @@ mutation UpsertAll {
       address: "10.20.21.47"
       name: "10.20.21.47"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -119,7 +119,7 @@ mutation UpsertAll {
       address: "10.20.21.48"
       name: "10.20.21.48"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -128,7 +128,7 @@ mutation UpsertAll {
       address: "10.20.21.49"
       name: "10.20.21.49"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -137,7 +137,7 @@ mutation UpsertAll {
       address: "10.20.21.50"
       name: "10.20.21.50"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -146,7 +146,7 @@ mutation UpsertAll {
       address: "10.20.21.51"
       name: "10.20.21.51"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -155,7 +155,7 @@ mutation UpsertAll {
       address: "10.20.21.52"
       name: "10.20.21.52"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -164,7 +164,7 @@ mutation UpsertAll {
       address: "10.20.21.100"
       name: "10.20.21.100"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -173,7 +173,7 @@ mutation UpsertAll {
       address: "10.20.21.54"
       name: "10.20.21.54"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -182,7 +182,7 @@ mutation UpsertAll {
       address: "10.20.21.55"
       name: "10.20.21.55"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -191,7 +191,7 @@ mutation UpsertAll {
       address: "10.20.21.56"
       name: "10.20.21.56"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -200,7 +200,7 @@ mutation UpsertAll {
       address: "10.20.21.57"
       name: "10.20.21.57"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -209,7 +209,7 @@ mutation UpsertAll {
       address: "10.20.21.68"
       name: "10.20.21.68"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -218,7 +218,7 @@ mutation UpsertAll {
       address: "10.20.21.69"
       name: "10.20.21.69"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -227,7 +227,7 @@ mutation UpsertAll {
       address: "10.20.21.70"
       name: "10.20.21.70"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -236,7 +236,7 @@ mutation UpsertAll {
       address: "10.20.21.73"
       name: "10.20.21.73"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -245,7 +245,7 @@ mutation UpsertAll {
       address: "10.20.21.72"
       name: "10.20.21.72"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -254,7 +254,7 @@ mutation UpsertAll {
       address: "10.20.21.71"
       name: "10.20.21.71"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -263,7 +263,7 @@ mutation UpsertAll {
       address: "10.20.21.74"
       name: "10.20.21.74"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -272,7 +272,7 @@ mutation UpsertAll {
       address: "10.20.21.58"
       name: "10.20.21.58"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -281,7 +281,7 @@ mutation UpsertAll {
       address: "10.20.21.59"
       name: "10.20.21.59"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -290,7 +290,7 @@ mutation UpsertAll {
       address: "10.20.21.60"
       name: "10.20.21.60"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -299,7 +299,7 @@ mutation UpsertAll {
       address: "10.20.21.61"
       name: "10.20.21.61"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -308,7 +308,7 @@ mutation UpsertAll {
       address: "10.20.21.62"
       name: "10.20.21.62"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -317,7 +317,7 @@ mutation UpsertAll {
       address: "10.20.21.63"
       name: "10.20.21.63"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -326,7 +326,7 @@ mutation UpsertAll {
       address: "10.20.21.64"
       name: "10.20.21.64"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -335,7 +335,7 @@ mutation UpsertAll {
       address: "10.20.21.65"
       name: "10.20.21.65"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -344,7 +344,7 @@ mutation UpsertAll {
       address: "10.20.21.66"
       name: "10.20.21.66"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -353,7 +353,7 @@ mutation UpsertAll {
       address: "10.20.21.67"
       name: "10.20.21.67"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -362,7 +362,7 @@ mutation UpsertAll {
       address: "10.20.21.79"
       name: "10.20.21.79"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -371,7 +371,7 @@ mutation UpsertAll {
       address: "10.20.21.78"
       name: "10.20.21.78"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -380,7 +380,7 @@ mutation UpsertAll {
       address: "10.20.21.77"
       name: "10.20.21.77"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -389,7 +389,7 @@ mutation UpsertAll {
       address: "10.20.21.76"
       name: "10.20.21.76"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -398,7 +398,7 @@ mutation UpsertAll {
       address: "10.20.21.75"
       name: "10.20.21.75"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -407,7 +407,7 @@ mutation UpsertAll {
       address: "10.20.21.80"
       name: "10.20.21.80"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -416,7 +416,7 @@ mutation UpsertAll {
       address: "10.20.21.81"
       name: "10.20.21.81"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -425,7 +425,7 @@ mutation UpsertAll {
       address: "10.20.21.82"
       name: "10.20.21.82"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -434,7 +434,7 @@ mutation UpsertAll {
       address: "10.20.21.83"
       name: "10.20.21.83"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -443,7 +443,7 @@ mutation UpsertAll {
       address: "10.20.21.84"
       name: "10.20.21.84"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -452,7 +452,7 @@ mutation UpsertAll {
       address: "10.20.21.85"
       name: "10.20.21.85"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -461,7 +461,7 @@ mutation UpsertAll {
       address: "10.20.21.86"
       name: "10.20.21.86"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -470,7 +470,7 @@ mutation UpsertAll {
       address: "10.20.21.87"
       name: "10.20.21.87"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -479,7 +479,7 @@ mutation UpsertAll {
       address: "10.20.21.88"
       name: "10.20.21.88"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -488,7 +488,7 @@ mutation UpsertAll {
       address: "10.20.21.89"
       name: "10.20.21.89"
       role: "oob"
-      namespace: { name: "colo" }
+      namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     }
@@ -509,7 +509,7 @@ mutation UpsertAll {
       oobMAC: "c8:4b:d6:9c:87:74"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -525,7 +525,7 @@ mutation UpsertAll {
       oobMAC: "c8:4b:d6:9d:d7:04"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -541,7 +541,7 @@ mutation UpsertAll {
       oobMAC: "c8:4b:d6:9d:d7:4c"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -557,7 +557,7 @@ mutation UpsertAll {
       oobMAC: "c8:4b:d6:9d:d7:0a"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -573,7 +573,7 @@ mutation UpsertAll {
       oobMAC: "c8:4b:d6:a6:75:9b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -589,7 +589,7 @@ mutation UpsertAll {
       oobMAC: "c8:4b:d6:a6:75:41"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -605,7 +605,7 @@ mutation UpsertAll {
       oobMAC: "c8:4b:d6:a5:39:d3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.10" }
     }
@@ -621,7 +621,7 @@ mutation UpsertAll {
       oobMAC: "ec:2a:72:ee:39:f4"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.10" }
     }
@@ -637,7 +637,7 @@ mutation UpsertAll {
       oobMAC: "c8:4b:d6:a6:75:6b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.10" }
     }
@@ -653,7 +653,7 @@ mutation UpsertAll {
       oobMAC: "c8:4b:d6:a6:76:a3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.10" }
     }
@@ -669,7 +669,7 @@ mutation UpsertAll {
       oobMAC: "c8:4b:d6:a7:07:9b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.10" }
     }
@@ -685,7 +685,7 @@ mutation UpsertAll {
       oobMAC: "c8:4b:d6:a6:d4:03"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.10" }
     }
@@ -701,7 +701,7 @@ mutation UpsertAll {
       oobMAC: "c8:4b:d6:a6:ee:9d"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.10" }
     }
@@ -717,7 +717,7 @@ mutation UpsertAll {
       oobMAC: "c8:4b:d6:a6:ee:6d"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.10" }
     }
@@ -733,7 +733,7 @@ mutation UpsertAll {
       oobMAC: "d0:c1:b5:07:87:6f"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.10" }
     }
@@ -749,7 +749,7 @@ mutation UpsertAll {
       oobMAC: "d0:c1:b5:07:89:3d"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.10" }
     }
@@ -765,7 +765,7 @@ mutation UpsertAll {
       oobMAC: "d0:c1:b5:07:8a:2d"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.10" }
     }
@@ -781,7 +781,7 @@ mutation UpsertAll {
       oobMAC: "e8:cf:83:27:9f:73"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.10" }
     }
@@ -797,7 +797,7 @@ mutation UpsertAll {
       oobMAC: "e8:cf:83:27:a0:6b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.10" }
     }
@@ -813,7 +813,7 @@ mutation UpsertAll {
       oobMAC: "e8:cf:83:27:a3:f3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.10" }
     }
@@ -829,7 +829,7 @@ mutation UpsertAll {
       oobMAC: "e8:cf:83:27:a9:cb"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.10" }
     }
@@ -845,7 +845,7 @@ mutation UpsertAll {
       oobMAC: "e8:cf:83:27:b2:63"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.10" }
     }
@@ -861,7 +861,7 @@ mutation UpsertAll {
       oobMAC: "ac:b4:80:29:f9:23"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.10" }
     }
@@ -877,7 +877,7 @@ mutation UpsertAll {
       oobMAC: "d0:c1:b5:0c:b2:00"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.10" }
     }
@@ -893,7 +893,7 @@ mutation UpsertAll {
       oobMAC: "d0:c1:b5:0c:00:66"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -909,7 +909,7 @@ mutation UpsertAll {
       oobMAC: "d0:c1:b5:0c:00:06"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -925,7 +925,7 @@ mutation UpsertAll {
       oobMAC: "d0:c1:b5:0a:77:85"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -941,7 +941,7 @@ mutation UpsertAll {
       oobMAC: "d0:c1:b5:0a:6a:35"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -957,7 +957,7 @@ mutation UpsertAll {
       oobMAC: "d0:c1:b5:0a:6a:95"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -973,7 +973,7 @@ mutation UpsertAll {
       oobMAC: "d0:c1:b5:0a:69:fd"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -989,7 +989,7 @@ mutation UpsertAll {
       oobMAC: "d0:c1:b5:0a:68:f5"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -1005,7 +1005,7 @@ mutation UpsertAll {
       oobMAC: "d0:c1:b5:0a:7b:35"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -1021,7 +1021,7 @@ mutation UpsertAll {
       oobMAC: "d0:c1:b5:0a:68:45"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -1037,7 +1037,7 @@ mutation UpsertAll {
       oobMAC: "d0:c1:b5:0a:7b:7d"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -1053,7 +1053,7 @@ mutation UpsertAll {
       oobMAC: "b4:e9:b8:c3:c7:6b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -1069,7 +1069,7 @@ mutation UpsertAll {
       oobMAC: "b4:e9:b8:c3:af:fb"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -1085,7 +1085,7 @@ mutation UpsertAll {
       oobMAC: "b4:e9:b8:c3:9e:7b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -1101,7 +1101,7 @@ mutation UpsertAll {
       oobMAC: "fc:4c:ea:68:a0:23"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -1117,7 +1117,7 @@ mutation UpsertAll {
       oobMAC: "b4:e9:b8:c3:b0:53"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.09" }
     }
@@ -1133,7 +1133,7 @@ mutation UpsertAll {
       oobMAC: "84:5c:31:f0:ee:c9"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.12" }
     }
@@ -1149,7 +1149,7 @@ mutation UpsertAll {
       oobMAC: "84:5c:31:f0:d8:f9"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.12" }
     }
@@ -1165,7 +1165,7 @@ mutation UpsertAll {
       oobMAC: "84:5c:31:f0:dc:81"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.12" }
     }
@@ -1181,7 +1181,7 @@ mutation UpsertAll {
       oobMAC: "84:5c:31:f0:dc:79"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.12" }
     }
@@ -1197,7 +1197,7 @@ mutation UpsertAll {
       oobMAC: "84:5c:31:f0:eb:29"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.12" }
     }
@@ -1213,7 +1213,7 @@ mutation UpsertAll {
       oobMAC: "84:5c:31:f0:df:e9"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.11" }
     }
@@ -1229,7 +1229,7 @@ mutation UpsertAll {
       oobMAC: "84:5c:31:f0:eb:59"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.11" }
     }
@@ -1245,7 +1245,7 @@ mutation UpsertAll {
       oobMAC: "84:5c:31:f0:f0:39"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.11" }
     }
@@ -1261,7 +1261,7 @@ mutation UpsertAll {
       oobMAC: "84:5c:31:f0:de:29"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.11" }
     }
@@ -1277,7 +1277,7 @@ mutation UpsertAll {
       oobMAC: "84:5c:31:f0:db:b9"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "colo" }
+      namespace: "colo"
       dataCenter: { orbId: "colo:colo-galleon" }
       rack: { orbId: "colo:A.OF.C.11" }
     }

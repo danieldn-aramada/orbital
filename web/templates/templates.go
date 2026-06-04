@@ -30,6 +30,11 @@ func LoginForm() *template.Template {
 	return template.Must(template.ParseFiles("web/orbital/templates/partials/login-form.gohtml"))
 }
 
+// DeviceCodePage returns a parsed template for the standalone device code auth page.
+func DeviceCodePage() *template.Template {
+	return template.Must(template.ParseFiles("web/orbital/templates/partials/device-code-page.gohtml"))
+}
+
 // Map builds the full template map at startup. Each entry is an isolated
 // parse set — base layout/components plus one page — so {{define "page"}}
 // is unambiguous per route.

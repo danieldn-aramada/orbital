@@ -2802,3 +2802,44 @@ function showPublishToast(msg, cls) {
   setTimeout(() => toast.classList.add('is-hidden'), 4000)
 }
 
+// ── Device code SSO poller ────────────────────────────────────────────────────
+
+function initDeviceCodePoller() {
+  const el = document.getElementById('device-code-poller')
+  if (!el) return
+
+  const deviceCode = el.dataset.deviceCode
+  const basePath = el.dataset.basePath || ''
+  let interval = (parseInt(el.dataset.interval) || 5) * 1000
+
+  const statusEl = document.getElementById('device-code-status')
+
+  async function poll() {
+    try {
+      const resp = await fetch(`${basePath}/auth/device/poll?device_code=${encodeURIComponent(deviceCode)}`)
+      const data = await resp.json()
+
+      if (data.status === 'complete') {
+        if (statusEl) statusEl.textContent = 'Authenticated — redirecting…'
+        window.location.href = basePath + '/'
+        return
+      }
+      if (data.status === 'expired') {
+        if (statusEl) statusEl.innerHTML = 'Code expired — <a href="">try again</a>.'
+        return
+      }
+      if (data.interval) {
+        interval = data.interval * 1000 // slow_down: back off
+      }
+    } catch (_) {
+      // network hiccup — keep polling
+    }
+    setTimeout(poll, interval)
+  }
+
+  setTimeout(poll, interval)
+}
+
+document.addEventListener('DOMContentLoaded', initDeviceCodePoller)
+
+

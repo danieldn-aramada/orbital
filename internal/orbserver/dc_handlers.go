@@ -29,7 +29,7 @@ type dcTabData struct {
 	CreatedAt   string
 	UpdatedBy   string
 	UpdatedAt   string
-	Namespace   struct{ Name string }
+	Namespace string
 	ServerCount int
 	Racks       []orbRackTabData
 	Servers     []orbServerTabData
@@ -68,7 +68,7 @@ const orbGetDataCenterQuery = `
       updatedBy
       updatedAt
       assetDataV2
-      namespace { name }
+      namespace
       racks(order: { asc: name }) {
         id
         orbId
@@ -102,10 +102,8 @@ type orbDCQueryResponse struct {
 	UpdatedBy   string `json:"updatedBy"`
 	UpdatedAt   string `json:"updatedAt"`
 	AssetDataV2 string `json:"assetDataV2"`
-	Namespace   struct {
-		Name string `json:"name"`
-	} `json:"namespace"`
-	Racks []struct {
+	Namespace string `json:"namespace"`
+	Racks       []struct {
 		ID    string `json:"id"`
 		OrbID string `json:"orbId"`
 		Name  string `json:"name"`
@@ -202,7 +200,7 @@ func (s *Server) dcTab(c echo.Context) error {
 		CreatedAt:   raw.CreatedAt,
 		UpdatedBy:   raw.UpdatedBy,
 		UpdatedAt:   raw.UpdatedAt,
-		Namespace:   struct{ Name string }{Name: raw.Namespace.Name},
+		Namespace: raw.Namespace,
 		ServerCount: raw.ServersAggregate.Count,
 		AssetDataV2: prettyAssetData,
 		Actions:     layout.OrbActions,

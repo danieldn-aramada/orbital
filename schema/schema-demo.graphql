@@ -34,7 +34,7 @@ type User {
 ########################
 interface ConfigItem {
     id: ID!
-    namespace: Namespace!
+    namespace: String! @search(by: [exact])
     orbId: String! @id @search(by: [hash]) # unique key for upsert
     name: String @search(by: [term])
     createdBy: String @search(by: [hash])

@@ -63,7 +63,7 @@ test.describe('Backup workflow', () => {
     // Trigger the backup and wait for the API call to return
     await Promise.all([
       page.waitForResponse(
-        resp => resp.url().includes('/api/v1/backups') && resp.request().method() === 'POST' && resp.status() === 202,
+        resp => resp.url().includes('/api/v1/backup') && !resp.url().includes('/jobs') && resp.request().method() === 'POST' && resp.status() === 202,
       ),
       backupBtn.click(),
     ]);

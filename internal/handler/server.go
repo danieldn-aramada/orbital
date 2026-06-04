@@ -31,7 +31,7 @@ const getServerQuery = `
       updatedBy
       updatedAt
       version
-      namespace { name }
+      namespace
       rack { id name }
       dataCenter { id name }
       oobIP { address role }
@@ -100,10 +100,8 @@ type serverQueryResponse struct {
 	UpdatedBy    string `json:"updatedBy"`
 	UpdatedAt    string `json:"updatedAt"`
 	Version      int    `json:"version"`
-	Namespace    struct {
-		Name string `json:"name"`
-	} `json:"namespace"`
-	Rack struct {
+	Namespace string `json:"namespace"`
+	Rack      struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
 	} `json:"rack"`
@@ -181,7 +179,7 @@ type serverTabDetailData struct {
 	CreatedAt          string
 	UpdatedBy          string
 	UpdatedAt          string
-	Namespace          struct{ Name string }
+	Namespace          string
 	Rack               struct{ ID, Name string }
 	Version            int
 	DataCenterID       string
@@ -283,7 +281,7 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 		CreatedAt:      raw.CreatedAt,
 		UpdatedBy:      raw.UpdatedBy,
 		UpdatedAt:      raw.UpdatedAt,
-		Namespace:      struct{ Name string }{Name: raw.Namespace.Name},
+		Namespace:      raw.Namespace,
 		Rack:           struct{ ID, Name string }{ID: raw.Rack.ID, Name: raw.Rack.Name},
 		Version:        raw.Version,
 		DataCenterID:   raw.DataCenter.ID,

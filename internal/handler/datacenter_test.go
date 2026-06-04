@@ -96,7 +96,7 @@ func TestDataCenterTab_Success(t *testing.T) {
 				"id":    "0x1",
 				"name":  "Test DC",
 				"orbId": "test:dc01",
-				"namespace":        map[string]any{"name": "test-ns"},
+				"namespace":        "test-ns",
 				"racks":            []any{},
 				"servers":          []any{},
 				"serversAggregate": map[string]any{"count": 0},

@@ -9,7 +9,7 @@ mutation {
       orbId: "alaska-dot:alaska-dot-galleon"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       assetDataV2: "{\"dbb2ad03-60c4-465b-9700-7fc7d0c1dd3d\":{\"kvmURL\":\"https://guacamole.adot.armada.ai/guacamole\",\"cfTunnelID\":\"16500101-de46-4f51-b347-fd241c467dd8\"}}"
     }
   ], upsert: true) {
@@ -22,7 +22,7 @@ mutation {
       orbId: "alaska-dot:Rack-1"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
     }
   ], upsert: true) {
@@ -35,7 +35,7 @@ mutation {
       address: "10.61.95.50"
       name: "10.61.95.50"
       role: "oob"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -44,7 +44,7 @@ mutation {
       address: "10.61.95.51"
       name: "10.61.95.51"
       role: "oob"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -53,7 +53,7 @@ mutation {
       address: "10.61.95.52"
       name: "10.61.95.52"
       role: "oob"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -62,7 +62,7 @@ mutation {
       address: "10.61.95.53"
       name: "10.61.95.53"
       role: "oob"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -71,7 +71,7 @@ mutation {
       address: "10.61.95.54"
       name: "10.61.95.54"
       role: "oob"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -80,7 +80,7 @@ mutation {
       address: "10.61.95.55"
       name: "10.61.95.55"
       role: "oob"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -89,7 +89,7 @@ mutation {
       address: "10.61.95.56"
       name: "10.61.95.56"
       role: "oob"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -98,7 +98,7 @@ mutation {
       address: "10.61.95.57"
       name: "10.61.95.57"
       role: "oob"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -107,7 +107,7 @@ mutation {
       address: "10.61.95.58"
       name: "10.61.95.58"
       role: "oob"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -116,7 +116,7 @@ mutation {
       address: "10.61.95.59"
       name: "10.61.95.59"
       role: "oob"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -125,7 +125,7 @@ mutation {
       address: "10.61.95.60"
       name: "10.61.95.60"
       role: "oob"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -134,7 +134,7 @@ mutation {
       address: "10.61.95.61"
       name: "10.61.95.61"
       role: "oob"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -143,7 +143,7 @@ mutation {
       address: "10.61.95.62"
       name: "10.61.95.62"
       role: "oob"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     }
@@ -164,7 +164,7 @@ mutation {
       oobMAC: "c4:cb:e1:c8:a0:38"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
     }
@@ -180,7 +180,7 @@ mutation {
       oobMAC: "c4:5a:b1:cb:12:65"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
     }
@@ -196,7 +196,7 @@ mutation {
       oobMAC: "c4:5a:b1:cb:11:0f"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
     }
@@ -212,7 +212,7 @@ mutation {
       oobMAC: "c4:5a:b1:cb:12:59"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
     }
@@ -228,7 +228,7 @@ mutation {
       oobMAC: "c4:5a:b1:c7:b7:0b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
     }
@@ -244,7 +244,7 @@ mutation {
       oobMAC: "d0:46:0c:73:3d:90"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
     }
@@ -260,7 +260,7 @@ mutation {
       oobMAC: "d0:46:0c:73:3c:80"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
     }
@@ -276,7 +276,7 @@ mutation {
       oobMAC: "d0:46:0c:73:2c:98"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
     }
@@ -292,7 +292,7 @@ mutation {
       oobMAC: "d0:46:0c:73:3c:90"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
     }
@@ -307,7 +307,7 @@ mutation {
       oobIP: { orbId: "alaska-dot:10.61.95.59" }
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
     }
@@ -323,7 +323,7 @@ mutation {
       oobMAC: "d0:46:0c:73:3f:38"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
     }
@@ -339,7 +339,7 @@ mutation {
       oobMAC: "d0:46:0c:73:3c:98"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
     }
@@ -355,7 +355,7 @@ mutation {
       oobMAC: "d0:c1:b5:04:6a:12"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       dataCenter: { orbId: "alaska-dot:alaska-dot-galleon" }
       rack: { orbId: "alaska-dot:Rack-1" }
     }

@@ -1,0 +1,53 @@
+{{define "device-code-page.gohtml"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in — Orbital</title>
+  <script>window.ORBITAL_BASE = '{{.BasePath}}';</script>
+  <link rel="stylesheet" href="{{.BasePath}}/static/css/main.css">
+</head>
+<body class="has-background-light" style="min-height:100vh;display:flex;align-items:center;justify-content:center;">
+  <div class="box" style="max-width:440px;width:100%;margin:2rem auto;">
+    <p class="has-text-weight-semibold is-size-5 mb-5">
+      <span class="icon-text">
+        <span class="icon"><i class="fa-solid fa-satellite-dish"></i></span>
+        <span>Sign in with Microsoft</span>
+      </span>
+    </p>
+
+    <p class="mb-4 has-text-grey">
+      Open the link below and enter the code to authenticate. You can close this tab once done.
+    </p>
+
+    <div class="mb-4">
+      <a href="{{.VerificationURI}}" target="_blank" rel="noopener" class="button is-link is-fullwidth">
+        <span class="icon"><i class="fa-solid fa-arrow-up-right-from-square"></i></span>
+        <span>Open microsoft.com/devicelogin</span>
+      </a>
+    </div>
+
+    <div class="has-text-centered mb-5 p-4" style="background:#f5f5f5;border-radius:6px;">
+      <p class="is-size-7 has-text-grey mb-1">Enter this code</p>
+      <p class="is-family-monospace is-size-2 has-text-weight-bold has-text-primary" style="letter-spacing:0.15em;">
+        {{.UserCode}}
+      </p>
+    </div>
+
+    <div class="has-text-centered">
+      <span id="device-code-status" class="has-text-grey is-size-7">
+        <span class="icon is-small"><i class="fa-solid fa-circle-notch fa-spin"></i></span>
+        Waiting for authentication…
+      </span>
+    </div>
+
+    <div id="device-code-poller"
+      data-device-code="{{.DeviceCode}}"
+      data-interval="{{.Interval}}"
+      data-base-path="{{.BasePath}}">
+    </div>
+  </div>
+  <script src="{{.BasePath}}/static/app.js" type="module"></script>
+</body>
+</html>
+{{end}}

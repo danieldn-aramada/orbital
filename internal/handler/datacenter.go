@@ -26,7 +26,7 @@ const getDataCenterQuery = `
       updatedAt
       version
       assetDataV2
-      namespace { name }
+      namespace
       racks(order: { asc: name }) {
         id
         orbId
@@ -86,10 +86,8 @@ type dcQueryResponse struct {
 	UpdatedAt   string `json:"updatedAt"`
 	Version     int    `json:"version"`
 	AssetDataV2 string `json:"assetDataV2"`
-	Namespace   struct {
-		Name string `json:"name"`
-	} `json:"namespace"`
-	Racks []struct {
+	Namespace string `json:"namespace"`
+	Racks     []struct {
 		ID    string `json:"id"`
 		OrbID string `json:"orbId"`
 		Name  string `json:"name"`
@@ -143,8 +141,8 @@ type dataCenterTabData struct {
 	CreatedAt    string
 	UpdatedBy    string
 	UpdatedAt    string
-	Namespace    struct{ Name string }
-	ServerCount  int
+	Namespace   string
+	ServerCount int
 	Racks        []rackTabData
 	Servers      []serverTabData
 	Version      int
@@ -231,7 +229,7 @@ func (h *DataCenter) Tab(c echo.Context) error {
 		CreatedAt:    raw.CreatedAt,
 		UpdatedBy:    raw.UpdatedBy,
 		UpdatedAt:    raw.UpdatedAt,
-		Namespace:    struct{ Name string }{Name: raw.Namespace.Name},
+		Namespace:   raw.Namespace,
 		ServerCount:  raw.ServersAggregate.Count,
 		Version:      raw.Version,
 		AssetDataV2:  prettyAssetData,

@@ -163,7 +163,7 @@ func gqlRequest(cmd *cobra.Command, base, token, query string, vars map[string]a
 
 const dcFields = `
   id name orbId createdBy createdAt updatedBy updatedAt assetDataV2
-  namespace { name }
+  namespace
   racks(order: { asc: name }) { id orbId name }
   serversAggregate { count }
   servers(order: { asc: rackPosition }) {
@@ -182,10 +182,8 @@ type dcSummary struct {
 	UpdatedBy   string `json:"updatedBy"`
 	UpdatedAt   string `json:"updatedAt"`
 	AssetDataV2 string `json:"assetDataV2"`
-	Namespace   struct {
-		Name string `json:"name"`
-	} `json:"namespace"`
-	Racks []struct {
+	Namespace string `json:"namespace"`
+	Racks     []struct {
 		ID    string `json:"id"`
 		OrbID string `json:"orbId"`
 		Name  string `json:"name"`
@@ -211,7 +209,7 @@ func printDcSummary(dc *dcSummary) {
 	fmt.Printf("Name:       %s\n", dc.Name)
 	fmt.Printf("ID:         %s\n", dc.ID)
 	fmt.Printf("OrbID:      %s\n", dc.OrbID)
-	fmt.Printf("Namespace:  %s\n", dc.Namespace.Name)
+	fmt.Printf("Namespace:  %s\n", dc.Namespace)
 	fmt.Printf("Created:    %s (by %s)\n", dc.CreatedAt, dc.CreatedBy)
 	if dc.UpdatedAt != "" {
 		fmt.Printf("Updated:    %s (by %s)\n", dc.UpdatedAt, dc.UpdatedBy)
@@ -261,9 +259,6 @@ func runGetDatacenters(cmd *cobra.Command, args []string) error {
 				ID        string `json:"id"`
 				Name      string `json:"name"`
 				OrbID     string `json:"orbId"`
-				Namespace struct {
-					Name string `json:"name"`
-				} `json:"namespace"`
 				ServersAggregate struct {
 					Count int `json:"count"`
 				} `json:"serversAggregate"`

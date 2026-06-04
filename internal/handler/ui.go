@@ -15,10 +15,11 @@ import (
 )
 
 type UI struct {
-	dev             bool
-	ratelURL        string
-	issueTrackerURL string
-	oidcEnabled     bool
+	dev               bool
+	ratelURL          string
+	issueTrackerURL   string
+	oidcEnabled       bool
+	deviceCodeEnabled bool
 	backupEnabled   bool
 	s3Endpoint      string
 	s3Bucket        string
@@ -33,12 +34,13 @@ type UI struct {
 	templates       map[string]*template.Template
 }
 
-func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, backupEnabled bool, s3Endpoint, s3Bucket string, basePath string) *UI {
+func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, deviceCodeEnabled, backupEnabled bool, s3Endpoint, s3Bucket string, basePath string) *UI {
 	return &UI{
-		dev:             dev,
-		ratelURL:        ratelURL,
-		issueTrackerURL: issueTrackerURL,
-		oidcEnabled:     oidcEnabled,
+		dev:               dev,
+		ratelURL:          ratelURL,
+		issueTrackerURL:   issueTrackerURL,
+		oidcEnabled:       oidcEnabled,
+		deviceCodeEnabled: deviceCodeEnabled,
 		backupEnabled:   backupEnabled,
 		s3Endpoint:      s3Endpoint,
 		s3Bucket:        s3Bucket,
@@ -92,8 +94,9 @@ func (h *UI) base(c echo.Context) layout.Base {
 	return layout.Base{
 		Head:        layout.Head{Version: version},
 		NavBar:      layout.NavBar{RatelURL: h.ratelURL, IssueTrackerURL: h.issueTrackerURL},
-		IsAuthn:     isAuthn,
-		OIDCEnabled: h.oidcEnabled,
+		IsAuthn:           isAuthn,
+		OIDCEnabled:       h.oidcEnabled,
+		DeviceCodeEnabled: h.deviceCodeEnabled,
 		User:        layout.User{Id: userID, Name: userName, Email: userEmail},
 		CsrfToken:   csrfToken,
 		AppVersion:  appversion.Version,

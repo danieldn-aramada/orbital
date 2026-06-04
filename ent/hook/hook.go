@@ -45,18 +45,6 @@ func (f ExportJobFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, e
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ExportJobMutation", m)
 }
 
-// The NamespaceFunc type is an adapter to allow the use of ordinary
-// function as Namespace mutator.
-type NamespaceFunc func(context.Context, *ent.NamespaceMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f NamespaceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.NamespaceMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.NamespaceMutation", m)
-}
-
 // The OrbFunc type is an adapter to allow the use of ordinary
 // function as Orb mutator.
 type OrbFunc func(context.Context, *ent.OrbMutation) (ent.Value, error)

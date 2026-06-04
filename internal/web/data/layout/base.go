@@ -11,8 +11,9 @@ type Base struct {
 
 	Domain      string // default localhost:8080, production console.com
 	Links       []string
-	IsAuthn     bool
-	OIDCEnabled bool
+	IsAuthn           bool
+	OIDCEnabled       bool
+	DeviceCodeEnabled bool
 	CsrfToken   string
 	AppVersion  string
 	BasePath    string

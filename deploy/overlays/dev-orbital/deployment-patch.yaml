@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orbital
+spec:
+  template:
+    spec:
+      containers:
+        - name: orbital
+          env:
+            - name: ORBITAL_DGRAPH_NAMESPACE
+              value: orbital
+            - name: DATABASE_URL
+              value: postgres://orbital:orbital@orbital-postgres:5432/orbital?sslmode=disable
+            - name: DGRAPH_URL
+              value: http://dgraph-blue-dgraph-alpha:8080/graphql
+            - name: DGRAPH_ADMIN_URL
+              value: http://dgraph-blue-dgraph-alpha:8080/admin
+            - name: DGRAPH_SCRATCH_URL
+              value: http://dgraph-scratch-dgraph-alpha:8080/graphql
+            - name: DGRAPH_SCRATCH_ADMIN_URL
+              value: http://dgraph-scratch-dgraph-alpha:8080/admin
+            - name: DGRAPH_SCRATCH_ZERO_URL
+              value: http://dgraph-scratch-dgraph-zero:6080
+            - name: ORBITAL_DGRAPH_ALPHA_GRPC
+              value: dgraph-blue-dgraph-alpha:9080
+            - name: ORBITAL_DGRAPH_ZERO_GRPC
+              value: dgraph-blue-dgraph-zero:5080
+            - name: ORBITAL_OIDC_DEVICE_CODE
+              value: "true"

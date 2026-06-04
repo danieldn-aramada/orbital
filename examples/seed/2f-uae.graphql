@@ -9,7 +9,7 @@ mutation {
       orbId: "2f-uae:2f-uae"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       assetDataV2: "{\"b6115ecb-4f51-4280-911d-d64c5c2ee975\":{\"kvmURL\":\"\",\"cfTunnelID\":\"128d0ec0-12b5-41ad-b57d-2c1ac481292e\"}}"
     }
   ], upsert: true) {
@@ -22,7 +22,7 @@ mutation {
       orbId: "2f-uae:Rack-3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       dataCenter: { orbId: "2f-uae:2f-uae" }
     }
     {
@@ -30,7 +30,7 @@ mutation {
       orbId: "2f-uae:Rack-4"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       dataCenter: { orbId: "2f-uae:2f-uae" }
     }
   ], upsert: true) {
@@ -43,7 +43,7 @@ mutation {
       address: "10.96.127.50"
       name: "10.96.127.50"
       role: "oob"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     }
@@ -52,7 +52,7 @@ mutation {
       address: "10.96.127.51"
       name: "10.96.127.51"
       role: "oob"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     }
@@ -61,7 +61,7 @@ mutation {
       address: "10.96.127.52"
       name: "10.96.127.52"
       role: "oob"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     }
@@ -70,7 +70,7 @@ mutation {
       address: "10.96.127.54"
       name: "10.96.127.54"
       role: "oob"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     }
@@ -79,7 +79,7 @@ mutation {
       address: "10.96.127.55"
       name: "10.96.127.55"
       role: "oob"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     }
@@ -88,7 +88,7 @@ mutation {
       address: "10.96.127.56"
       name: "10.96.127.56"
       role: "oob"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     }
@@ -109,7 +109,7 @@ mutation {
       oobMAC: "fc:4c:ea:68:89:bb"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       dataCenter: { orbId: "2f-uae:2f-uae" }
       rack: { orbId: "2f-uae:Rack-3" }
     }
@@ -125,7 +125,7 @@ mutation {
       oobMAC: "b4:e9:b8:c3:a3:33"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       dataCenter: { orbId: "2f-uae:2f-uae" }
       rack: { orbId: "2f-uae:Rack-3" }
     }
@@ -141,7 +141,7 @@ mutation {
       oobMAC: "b4:e9:b8:c4:9a:2b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       dataCenter: { orbId: "2f-uae:2f-uae" }
       rack: { orbId: "2f-uae:Rack-3" }
     }
@@ -157,7 +157,7 @@ mutation {
       oobMAC: "b4:e9:b8:c3:a8:f3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       dataCenter: { orbId: "2f-uae:2f-uae" }
       rack: { orbId: "2f-uae:Rack-4" }
     }
@@ -173,7 +173,7 @@ mutation {
       oobMAC: "b4:e9:b8:c3:b0:83"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       dataCenter: { orbId: "2f-uae:2f-uae" }
       rack: { orbId: "2f-uae:Rack-4" }
     }
@@ -189,7 +189,7 @@ mutation {
       oobMAC: "b4:e9:b8:c4:94:f3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       dataCenter: { orbId: "2f-uae:2f-uae" }
       rack: { orbId: "2f-uae:Rack-4" }
     }

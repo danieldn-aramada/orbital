@@ -3,7 +3,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "navy-cruiser:2XQKQ54-idrac"
       name: "idrac"
-      namespace: { name: "navy-cruiser" }
+      namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "navy-cruiser:2XQKQ54" }
@@ -19,7 +19,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "navy-cruiser:1XQKQ54-idrac"
       name: "idrac"
-      namespace: { name: "navy-cruiser" }
+      namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "navy-cruiser:1XQKQ54" }
@@ -35,7 +35,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "navy-cruiser:3XQKQ54-idrac"
       name: "idrac"
-      namespace: { name: "navy-cruiser" }
+      namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "navy-cruiser:3XQKQ54" }
@@ -51,7 +51,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "navy-cruiser:GWQKQ54-idrac"
       name: "idrac"
-      namespace: { name: "navy-cruiser" }
+      namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "navy-cruiser:GWQKQ54" }
@@ -67,7 +67,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "navy-cruiser:HWQKQ54-idrac"
       name: "idrac"
-      namespace: { name: "navy-cruiser" }
+      namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "navy-cruiser:HWQKQ54" }
@@ -83,7 +83,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "navy-cruiser:JWQKQ54-idrac"
       name: "idrac"
-      namespace: { name: "navy-cruiser" }
+      namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "navy-cruiser:JWQKQ54" }
@@ -99,7 +99,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "navy-cruiser:44KPW54-idrac"
       name: "idrac"
-      namespace: { name: "navy-cruiser" }
+      namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "navy-cruiser:44KPW54" }
@@ -115,7 +115,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "navy-cruiser:84KPW54-idrac"
       name: "idrac"
-      namespace: { name: "navy-cruiser" }
+      namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "navy-cruiser:84KPW54" }
@@ -131,7 +131,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "navy-cruiser:94KPW54-idrac"
       name: "idrac"
-      namespace: { name: "navy-cruiser" }
+      namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "navy-cruiser:94KPW54" }
@@ -147,7 +147,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "navy-cruiser:B4KPW54-idrac"
       name: "idrac"
-      namespace: { name: "navy-cruiser" }
+      namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "navy-cruiser:B4KPW54" }
@@ -163,7 +163,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "navy-cruiser:14KPW54-idrac"
       name: "idrac"
-      namespace: { name: "navy-cruiser" }
+      namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "navy-cruiser:14KPW54" }
@@ -179,7 +179,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "navy-cruiser:54KPW54-idrac"
       name: "idrac"
-      namespace: { name: "navy-cruiser" }
+      namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "navy-cruiser:54KPW54" }
@@ -195,7 +195,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "navy-cruiser:64KPW54-idrac"
       name: "idrac"
-      namespace: { name: "navy-cruiser" }
+      namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "navy-cruiser:64KPW54" }
@@ -211,7 +211,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "navy-cruiser:24KPW54-idrac"
       name: "idrac"
-      namespace: { name: "navy-cruiser" }
+      namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "navy-cruiser:24KPW54" }
@@ -227,7 +227,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "navy-cruiser:34KPW54-idrac"
       name: "idrac"
-      namespace: { name: "navy-cruiser" }
+      namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "navy-cruiser:34KPW54" }
@@ -243,7 +243,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "navy-cruiser:74KPW54-idrac"
       name: "idrac"
-      namespace: { name: "navy-cruiser" }
+      namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "navy-cruiser:74KPW54" }

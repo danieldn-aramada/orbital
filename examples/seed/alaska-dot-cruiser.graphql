@@ -9,7 +9,7 @@ mutation {
       orbId: "alaska-dot-cruiser:alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       assetDataV2: "{\"59c0168d-f56e-4df9-9b88-672cf2a3bf09\":{\"kvmURL\":\"\",\"cfTunnelID\":\"81c68154-d768-46b9-9883-31616abb9f53\"}}"
     }
   ], upsert: true) {
@@ -22,7 +22,7 @@ mutation {
       orbId: "alaska-dot-cruiser:G8-Rack1"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
     }
     {
@@ -30,7 +30,7 @@ mutation {
       orbId: "alaska-dot-cruiser:G8-Rack2"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
     }
   ], upsert: true) {
@@ -43,7 +43,7 @@ mutation {
       address: "10.64.12.50"
       name: "10.64.12.50"
       role: "oob"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -52,7 +52,7 @@ mutation {
       address: "10.64.12.51"
       name: "10.64.12.51"
       role: "oob"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -61,7 +61,7 @@ mutation {
       address: "10.64.12.52"
       name: "10.64.12.52"
       role: "oob"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -70,7 +70,7 @@ mutation {
       address: "10.64.12.53"
       name: "10.64.12.53"
       role: "oob"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -79,7 +79,7 @@ mutation {
       address: "10.64.12.54"
       name: "10.64.12.54"
       role: "oob"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -88,7 +88,7 @@ mutation {
       address: "10.64.12.55"
       name: "10.64.12.55"
       role: "oob"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -97,7 +97,7 @@ mutation {
       address: "10.64.12.56"
       name: "10.64.12.56"
       role: "oob"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -106,7 +106,7 @@ mutation {
       address: "10.64.12.57"
       name: "10.64.12.57"
       role: "oob"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -115,7 +115,7 @@ mutation {
       address: "10.64.12.58"
       name: "10.64.12.58"
       role: "oob"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -124,7 +124,7 @@ mutation {
       address: "10.64.12.59"
       name: "10.64.12.59"
       role: "oob"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -133,7 +133,7 @@ mutation {
       address: "10.64.12.60"
       name: "10.64.12.60"
       role: "oob"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -142,7 +142,7 @@ mutation {
       address: "10.64.12.61"
       name: "10.64.12.61"
       role: "oob"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -151,7 +151,7 @@ mutation {
       address: "10.64.12.62"
       name: "10.64.12.62"
       role: "oob"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -160,7 +160,7 @@ mutation {
       address: "10.64.12.63"
       name: "10.64.12.63"
       role: "oob"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -169,7 +169,7 @@ mutation {
       address: "10.64.12.64"
       name: "10.64.12.64"
       role: "oob"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     }
@@ -190,7 +190,7 @@ mutation {
       oobMAC: "b4:e9:b8:c0:83:f3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
       rack: { orbId: "alaska-dot-cruiser:G8-Rack2" }
     }
@@ -206,7 +206,7 @@ mutation {
       oobMAC: "b4:e9:b8:c0:48:a3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
       rack: { orbId: "alaska-dot-cruiser:G8-Rack2" }
     }
@@ -222,7 +222,7 @@ mutation {
       oobMAC: "b4:e9:b8:c0:05:13"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
       rack: { orbId: "alaska-dot-cruiser:G8-Rack2" }
     }
@@ -238,7 +238,7 @@ mutation {
       oobMAC: "b4:e9:b8:c0:45:83"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
       rack: { orbId: "alaska-dot-cruiser:G8-Rack2" }
     }
@@ -254,7 +254,7 @@ mutation {
       oobMAC: "b4:e9:b8:c0:7e:93"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
       rack: { orbId: "alaska-dot-cruiser:G8-Rack1" }
     }
@@ -270,7 +270,7 @@ mutation {
       oobMAC: "b4:e9:b8:c0:83:eb"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
       rack: { orbId: "alaska-dot-cruiser:G8-Rack1" }
     }
@@ -286,7 +286,7 @@ mutation {
       oobMAC: "b4:e9:b8:c0:47:b3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
       rack: { orbId: "alaska-dot-cruiser:G8-Rack1" }
     }
@@ -302,7 +302,7 @@ mutation {
       oobMAC: "b4:e9:b8:c0:31:bb"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
       rack: { orbId: "alaska-dot-cruiser:G8-Rack1" }
     }
@@ -318,7 +318,7 @@ mutation {
       oobMAC: "d0:c1:b5:12:2e:04"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
       rack: { orbId: "alaska-dot-cruiser:G8-Rack1" }
     }
@@ -334,7 +334,7 @@ mutation {
       oobMAC: "d0:c1:b5:12:32:ae"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
       rack: { orbId: "alaska-dot-cruiser:G8-Rack1" }
     }
@@ -350,7 +350,7 @@ mutation {
       oobMAC: "d0:c1:b5:12:32:4e"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
       rack: { orbId: "alaska-dot-cruiser:G8-Rack2" }
     }
@@ -366,7 +366,7 @@ mutation {
       oobMAC: "d0:c1:b5:12:31:2e"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
       rack: { orbId: "alaska-dot-cruiser:G8-Rack2" }
     }
@@ -382,7 +382,7 @@ mutation {
       oobMAC: "d0:c1:b5:18:ec:0c"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
       rack: { orbId: "alaska-dot-cruiser:G8-Rack1" }
     }
@@ -398,7 +398,7 @@ mutation {
       oobMAC: "d0:c1:b5:1a:a2:66"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
       rack: { orbId: "alaska-dot-cruiser:G8-Rack2" }
     }
@@ -414,7 +414,7 @@ mutation {
       oobMAC: "b4:e9:b8:c0:0e:db"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "alaska-dot-cruiser" }
+      namespace: "alaska-dot-cruiser"
       dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
       rack: { orbId: "alaska-dot-cruiser:G8-Rack2" }
     }

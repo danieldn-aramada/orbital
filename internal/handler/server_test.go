@@ -82,7 +82,7 @@ func TestServerTab_Success(t *testing.T) {
 				"orbId":        "test:srv-01",
 				"hostname":     "srv-01.example.com",
 				"rackPosition": 1,
-				"namespace":    map[string]any{"name": "test-ns"},
+				"namespace":    "test-ns",
 				"rack":         map[string]any{"id": "0x3", "name": "rack-a"},
 				"dataCenter":   map[string]any{"id": "0x1", "name": "Test DC"},
 				"oobIP":        map[string]any{"address": "10.0.0.1", "role": "oob"},

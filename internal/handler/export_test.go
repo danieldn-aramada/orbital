@@ -3,7 +3,14 @@ package handler
 import (
 	"archive/zip"
 	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -115,6 +122,125 @@ func assertZipEntry(t *testing.T, contents map[string][]byte, name string, want 
 	}
 	if !bytes.Equal(got, want) {
 		t.Errorf("zip entry %q: got %q, want %q", name, got, want)
+	}
+}
+
+// newTestExport creates an Export handler pointing at the given mock DGraph URL.
+func newTestExport(dgraphURL string) *Export {
+	return NewExport(
+		nil, // db not needed for DQL/fetch tests
+		dgraphURL, dgraphURL, dgraphURL, dgraphURL,
+		"/tmp", "/tmp", "",
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+}
+
+func TestFetchDCInfo_ReadsNamespaceScalar(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"getDataCenter": map[string]any{
+					"name":      "colo-galleon",
+					"orbId":     "colo:colo-galleon",
+					"namespace": "colo",
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	h := newTestExport(srv.URL + "/graphql")
+	name, orbID, ns, err := h.fetchDCInfo(context.Background(), "colo:colo-galleon")
+	if err != nil {
+		t.Fatalf("fetchDCInfo: %v", err)
+	}
+	if name != "colo-galleon" {
+		t.Errorf("name: got %q, want %q", name, "colo-galleon")
+	}
+	if orbID != "colo:colo-galleon" {
+		t.Errorf("orbID: got %q, want %q", orbID, "colo:colo-galleon")
+	}
+	if ns != "colo" {
+		t.Errorf("namespace: got %q, want %q", ns, "colo")
+	}
+}
+
+func TestFetchDCInfo_NotFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{"getDataCenter": nil},
+		})
+	}))
+	defer srv.Close()
+
+	h := newTestExport(srv.URL + "/graphql")
+	_, _, _, err := h.fetchDCInfo(context.Background(), "missing:dc")
+	if err == nil {
+		t.Fatal("expected error for missing DC, got nil")
+	}
+}
+
+func TestFetchDCInfo_QueryUsesNamespaceScalarField(t *testing.T) {
+	var capturedBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		capturedBody = string(b)
+		json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"getDataCenter": map[string]any{
+					"name": "dc", "orbId": "ns:dc", "namespace": "ns",
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	h := newTestExport(srv.URL + "/graphql")
+	h.fetchDCInfo(context.Background(), "ns:dc") //nolint:errcheck
+
+	if strings.Contains(capturedBody, "namespace {") {
+		t.Error("fetchDCInfo query must not use namespace edge traversal — use namespace scalar")
+	}
+	if !strings.Contains(capturedBody, "namespace") {
+		t.Error("fetchDCInfo query must request namespace scalar field")
+	}
+}
+
+func TestFetchNamespaceSubgraph_DQLUsesNamespaceScalar(t *testing.T) {
+	var capturedDQL string
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		body := string(b)
+		callCount++
+
+		if callCount == 1 {
+			// First call: fetchUIDPredicates — return empty schema
+			json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{"schema": []any{}},
+			})
+			return
+		}
+		// Second call: the DQL subgraph query
+		capturedDQL = body
+		json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"ns":    []any{map[string]any{"uid": "0x1", "dgraph.type": []string{"Namespace"}}},
+				"items": []any{},
+				"edges": []any{},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	h := newTestExport(srv.URL + "/graphql")
+	h.fetchNamespaceSubgraph(context.Background(), "colo") //nolint:errcheck
+
+	if strings.Contains(capturedDQL, "uid_in") {
+		t.Error("subgraph DQL must not use uid_in (edge-based) — use eq(ConfigItem.namespace, ...) scalar filter")
+	}
+	if !strings.Contains(capturedDQL, "eq(ConfigItem.namespace") {
+		t.Error("subgraph DQL must use eq(ConfigItem.namespace, ...) scalar filter")
 	}
 }
 

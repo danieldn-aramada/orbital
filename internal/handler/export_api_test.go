@@ -257,9 +257,9 @@ func TestExportTrigger_ConflictWhenJobRunning(t *testing.T) {
 	dcResp, _ := json.Marshal(map[string]any{
 		"data": map[string]any{
 			"getDataCenter": map[string]any{
-				"name":      "Test DC",
-				"orbId":     "test:dc01",
-				"namespace": map[string]any{"name": "test-ns"},
+				"name":        "Test DC",
+				"orbId":       "test:dc01",
+				"namespace": "test-ns",
 			},
 		},
 	})

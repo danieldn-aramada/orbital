@@ -32,7 +32,7 @@ Orbital publish pipeline
         │
         ├── [if enrichers in request body]
         │         │
-        │         ├─ POST configbundle-bundler /enrich: {jobId, datacenter}
+        │         ├─ POST configbundle-bundler /bundle: {jobId, datacenter}
         │         │         │
         │         │         └─ bundler queries Orbital GraphQL
         │         │             for config fields it needs
@@ -90,11 +90,11 @@ sequenceDiagram
     O->>O: mark job completed
 
     %% ── 2. Publish with enricher ────────────────────────────────────────────
-    Admin->>O: POST /api/v1/export/jobs/:jobId/publish\n{"enrichers":["http://cb-bundler/enrich"]}
+    Admin->>O: POST /api/v1/export/jobs/:jobId/publish\n{"enrichers":["http://cb-bundler/bundle"]}
     O-->>Admin: 202 {artifactId, tag}
 
     Note over O,CBB: async — enrichment (all-or-nothing)
-    O->>CBB: POST /enrich  {jobId, datacenter}
+    O->>CBB: POST /bundle  {jobId, datacenter}
     CBB->>O: GET /graphql  (fetch config fields)
     O-->>CBB: config data
     CBB-->>O: [{mediaType, data (base64)}]
@@ -148,7 +148,7 @@ sequenceDiagram
 
 ### ConfigBundle Bundler (enricher — runs in cloud)
 
-- Exposes `POST /enrich`
+- Exposes `POST /bundle`
 - Receives `{jobId, datacenter}` from Orbital
 - Queries Orbital's GraphQL API to fetch the config fields it needs
 - Builds the ConfigBundle manifest (YAML or any format)
@@ -180,7 +180,7 @@ sequenceDiagram
 ### Request
 
 ```
-POST /enrich
+POST /bundle
 Content-Type: application/json
 
 {
@@ -275,7 +275,7 @@ Parsed at orb startup. Dispatch failures do not affect DGraph import.
 ```json
 {
   "enrichers": [
-    "https://configbundle-bundler.internal/enrich"
+    "https://configbundle-bundler.internal/bundle"
   ]
 }
 ```
@@ -319,7 +319,7 @@ curl -s http://localhost:8001/api/v1/export/jobs/<jobId> | jq .status
 
 # Publish with enricher
 cat > /tmp/publish.json <<'EOF'
-{"enrichers": ["http://localhost:8020/enrich"]}
+{"enrichers": ["http://localhost:8020/bundle"]}
 EOF
 curl -s -X POST http://localhost:8001/api/v1/export/jobs/<jobId>/publish \
   -H "Content-Type: application/json" -d @/tmp/publish.json | jq .

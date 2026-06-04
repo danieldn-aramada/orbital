@@ -3,7 +3,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "grayling:505CK74-idrac"
       name: "idrac"
-      namespace: { name: "grayling" }
+      namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "grayling:505CK74" }
@@ -19,7 +19,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "grayling:B5WVM34-idrac"
       name: "idrac"
-      namespace: { name: "grayling" }
+      namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "grayling:B5WVM34" }
@@ -35,7 +35,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "grayling:JY69K74-idrac"
       name: "idrac"
-      namespace: { name: "grayling" }
+      namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "grayling:JY69K74" }
@@ -51,7 +51,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "grayling:BLP6K74-idrac"
       name: "idrac"
-      namespace: { name: "grayling" }
+      namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "grayling:BLP6K74" }
@@ -67,7 +67,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "grayling:CLP6K74-idrac"
       name: "idrac"
-      namespace: { name: "grayling" }
+      namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "grayling:CLP6K74" }
@@ -83,7 +83,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "grayling:8LP6K74-idrac"
       name: "idrac"
-      namespace: { name: "grayling" }
+      namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "grayling:8LP6K74" }
@@ -99,7 +99,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "grayling:3LP6K74-idrac"
       name: "idrac"
-      namespace: { name: "grayling" }
+      namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "grayling:3LP6K74" }
@@ -115,7 +115,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "grayling:9LP6K74-idrac"
       name: "idrac"
-      namespace: { name: "grayling" }
+      namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "grayling:9LP6K74" }
@@ -131,7 +131,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "grayling:6LP6K74-idrac"
       name: "idrac"
-      namespace: { name: "grayling" }
+      namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "grayling:6LP6K74" }
@@ -147,7 +147,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "grayling:7LP6K74-idrac"
       name: "idrac"
-      namespace: { name: "grayling" }
+      namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "grayling:7LP6K74" }
@@ -163,7 +163,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "grayling:5LP6K74-idrac"
       name: "idrac"
-      namespace: { name: "grayling" }
+      namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "grayling:5LP6K74" }
@@ -179,7 +179,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "grayling:4LP6K74-idrac"
       name: "idrac"
-      namespace: { name: "grayling" }
+      namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "grayling:4LP6K74" }
@@ -195,7 +195,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "grayling:D5MP6K74-idrac"
       name: "idrac"
-      namespace: { name: "grayling" }
+      namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "grayling:D5MP6K74" }

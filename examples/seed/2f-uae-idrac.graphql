@@ -3,7 +3,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "2f-uae:5HSC3D4-idrac"
       name: "idrac"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "2f-uae:5HSC3D4" }
@@ -19,7 +19,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "2f-uae:6MLN3D4-idrac"
       name: "idrac"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "2f-uae:6MLN3D4" }
@@ -35,7 +35,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "2f-uae:9MLN3D4-idrac"
       name: "idrac"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "2f-uae:9MLN3D4" }
@@ -51,7 +51,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "2f-uae:7MLN3D4-idrac"
       name: "idrac"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "2f-uae:7MLN3D4" }
@@ -67,7 +67,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "2f-uae:3MLN3D4-idrac"
       name: "idrac"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "2f-uae:3MLN3D4" }
@@ -83,7 +83,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "2f-uae:2MLN3D4-idrac"
       name: "idrac"
-      namespace: { name: "2f-uae" }
+      namespace: "2f-uae"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "2f-uae:2MLN3D4" }

@@ -3,7 +3,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:FY69K74-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:FY69K74" }
@@ -19,7 +19,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:8Y69K74-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:8Y69K74" }
@@ -35,7 +35,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:1Z69K74-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:1Z69K74" }
@@ -51,7 +51,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:2Z69K74-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:2Z69K74" }
@@ -67,7 +67,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:6Z69K74-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:6Z69K74" }
@@ -83,7 +83,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:3Z69K74-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:3Z69K74" }
@@ -99,7 +99,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:4Z69K74-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:4Z69K74" }
@@ -115,7 +115,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:5Z69K74-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:5Z69K74" }
@@ -131,7 +131,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:9CZZ5G4-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:9CZZ5G4" }
@@ -147,7 +147,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:BCZZ5G4-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:BCZZ5G4" }
@@ -163,7 +163,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:6CZZ5G4-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:6CZZ5G4" }
@@ -179,7 +179,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:8CZZ5G4-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:8CZZ5G4" }
@@ -195,7 +195,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:7CZZ5G4-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:7CZZ5G4" }
@@ -211,7 +211,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:3KLN3D4-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:3KLN3D4" }
@@ -227,7 +227,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:HJLN3D4-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:HJLN3D4" }
@@ -243,7 +243,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:JJLN3D4-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:JJLN3D4" }
@@ -259,7 +259,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:5KLN3D4-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:5KLN3D4" }
@@ -275,7 +275,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:4KLN3D4-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:4KLN3D4" }
@@ -291,7 +291,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "livermore:3TFRMC4-idrac"
       name: "idrac"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "livermore:3TFRMC4" }

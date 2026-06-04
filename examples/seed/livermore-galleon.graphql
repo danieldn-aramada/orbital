@@ -9,7 +9,7 @@ mutation {
       orbId: "livermore:livermore-galleon"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       assetDataV2: "{\"6cd2a964-e00b-45ff-b91f-906f61733713\":{\"kvmURL\":\"\",\"cfTunnelID\":\"07b06125-8fcc-4a99-9937-0290276adcdc\"}}"
     }
   ], upsert: true) {
@@ -22,7 +22,7 @@ mutation {
       orbId: "livermore:Rack-1"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
     }
     {
@@ -30,7 +30,7 @@ mutation {
       orbId: "livermore:Rack-2"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
     }
     {
@@ -38,7 +38,7 @@ mutation {
       orbId: "livermore:Rack-3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
     }
   ], upsert: true) {
@@ -46,25 +46,25 @@ mutation {
   }
 
   addIPAddress(input: [
-    { orbId: "livermore:10.96.149.50" name: "10.96.149.50" address: "10.96.149.50" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
-    { orbId: "livermore:10.96.149.51" name: "10.96.149.51" address: "10.96.149.51" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
-    { orbId: "livermore:10.96.149.52" name: "10.96.149.52" address: "10.96.149.52" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
-    { orbId: "livermore:10.96.149.53" name: "10.96.149.53" address: "10.96.149.53" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
-    { orbId: "livermore:10.96.149.54" name: "10.96.149.54" address: "10.96.149.54" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
-    { orbId: "livermore:10.96.149.55" name: "10.96.149.55" address: "10.96.149.55" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
-    { orbId: "livermore:10.96.149.56" name: "10.96.149.56" address: "10.96.149.56" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
-    { orbId: "livermore:10.96.149.57" name: "10.96.149.57" address: "10.96.149.57" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
-    { orbId: "livermore:10.96.149.58" name: "10.96.149.58" address: "10.96.149.58" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
-    { orbId: "livermore:10.96.149.59" name: "10.96.149.59" address: "10.96.149.59" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
-    { orbId: "livermore:10.96.149.60" name: "10.96.149.60" address: "10.96.149.60" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
-    { orbId: "livermore:10.96.149.61" name: "10.96.149.61" address: "10.96.149.61" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
-    { orbId: "livermore:10.96.149.62" name: "10.96.149.62" address: "10.96.149.62" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
-    { orbId: "livermore:10.96.149.63" name: "10.96.149.63" address: "10.96.149.63" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
-    { orbId: "livermore:10.96.149.64" name: "10.96.149.64" address: "10.96.149.64" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
-    { orbId: "livermore:10.96.149.65" name: "10.96.149.65" address: "10.96.149.65" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
-    { orbId: "livermore:10.96.149.66" name: "10.96.149.66" address: "10.96.149.66" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
-    { orbId: "livermore:10.96.149.67" name: "10.96.149.67" address: "10.96.149.67" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
-    { orbId: "livermore:10.96.149.68" name: "10.96.149.68" address: "10.96.149.68" role: "oob" namespace: { name: "livermore" } createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.50" name: "10.96.149.50" address: "10.96.149.50" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.51" name: "10.96.149.51" address: "10.96.149.51" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.52" name: "10.96.149.52" address: "10.96.149.52" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.53" name: "10.96.149.53" address: "10.96.149.53" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.54" name: "10.96.149.54" address: "10.96.149.54" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.55" name: "10.96.149.55" address: "10.96.149.55" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.56" name: "10.96.149.56" address: "10.96.149.56" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.57" name: "10.96.149.57" address: "10.96.149.57" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.58" name: "10.96.149.58" address: "10.96.149.58" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.59" name: "10.96.149.59" address: "10.96.149.59" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.60" name: "10.96.149.60" address: "10.96.149.60" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.61" name: "10.96.149.61" address: "10.96.149.61" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.62" name: "10.96.149.62" address: "10.96.149.62" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.63" name: "10.96.149.63" address: "10.96.149.63" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.64" name: "10.96.149.64" address: "10.96.149.64" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.65" name: "10.96.149.65" address: "10.96.149.65" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.66" name: "10.96.149.66" address: "10.96.149.66" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.67" name: "10.96.149.67" address: "10.96.149.67" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
+    { orbId: "livermore:10.96.149.68" name: "10.96.149.68" address: "10.96.149.68" role: "oob" namespace: "livermore" createdBy: "admin@armada.ai" createdAt: "2026-05-11T00:00:00Z" }
   ], upsert: true) {
     numUids
   }
@@ -82,7 +82,7 @@ mutation {
       oobMAC: "a8:3c:a5:48:5b:4b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }
@@ -98,7 +98,7 @@ mutation {
       oobMAC: "a8:3c:a5:4c:2b:23"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }
@@ -114,7 +114,7 @@ mutation {
       oobMAC: "c0:47:0e:c6:21:79"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }
@@ -130,7 +130,7 @@ mutation {
       oobMAC: "c0:47:0e:c6:21:49"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }
@@ -146,7 +146,7 @@ mutation {
       oobMAC: "c0:47:0e:c6:20:c5"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }
@@ -162,7 +162,7 @@ mutation {
       oobMAC: "c0:47:0e:c6:1e:df"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }
@@ -178,7 +178,7 @@ mutation {
       oobMAC: "c0:47:0e:c6:1f:4b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }
@@ -194,7 +194,7 @@ mutation {
       oobMAC: "c0:47:0e:c6:1e:31"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }
@@ -210,7 +210,7 @@ mutation {
       oobMAC: "84:5c:31:f0:e5:59"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }
@@ -226,7 +226,7 @@ mutation {
       oobMAC: "84:5c:31:f0:f0:29"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }
@@ -242,7 +242,7 @@ mutation {
       oobMAC: "84:5c:31:f0:dc:a9"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }
@@ -258,7 +258,7 @@ mutation {
       oobMAC: "84:5c:31:f0:d8:19"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }
@@ -274,7 +274,7 @@ mutation {
       oobMAC: "84:5c:31:f0:f0:01"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }
@@ -290,7 +290,7 @@ mutation {
       oobMAC: "fc:4c:ea:68:a4:73"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }
@@ -306,7 +306,7 @@ mutation {
       oobMAC: "fc:4c:ea:69:3d:53"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }
@@ -322,7 +322,7 @@ mutation {
       oobMAC: "fc:4c:ea:69:3f:93"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }
@@ -338,7 +338,7 @@ mutation {
       oobMAC: "fc:4c:ea:69:3e:63"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }
@@ -354,7 +354,7 @@ mutation {
       oobMAC: "fc:4c:ea:69:42:4b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }
@@ -370,7 +370,7 @@ mutation {
       oobMAC: "a8:3c:a5:5d:cf:72"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "livermore" }
+      namespace: "livermore"
       dataCenter: { orbId: "livermore:livermore-galleon" }
       rack: { orbId: "livermore:Rack-1" }
     }

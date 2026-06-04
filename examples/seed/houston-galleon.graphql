@@ -9,7 +9,7 @@ mutation {
       orbId: "houston:houston-galleon"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       assetDataV2: "{\"5606b1a5-5d07-49b6-b718-83ebeaf6f712\":{\"kvmURL\":\"https://kubevirt-tx.armada.ai/vmlist\",\"cfTunnelID\":\"b6ecfe68-be44-490d-a9cf-65a9a04b450a\",\"metricsAPIURL\":\"https://metrics-api-g2.armadaapps.io\"}}"
     }
   ], upsert: true) {
@@ -22,7 +22,7 @@ mutation {
       orbId: "houston:Rack-3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
     }
     {
@@ -30,7 +30,7 @@ mutation {
       orbId: "houston:Rack-5"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
     }
     {
@@ -38,7 +38,7 @@ mutation {
       orbId: "houston:Rack-6"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
     }
   ], upsert: true) {
@@ -51,7 +51,7 @@ mutation {
       address: "10.10.7.72"
       name: "10.10.7.72"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -60,7 +60,7 @@ mutation {
       address: "10.10.7.64"
       name: "10.10.7.64"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -69,7 +69,7 @@ mutation {
       address: "10.10.7.65"
       name: "10.10.7.65"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -78,7 +78,7 @@ mutation {
       address: "10.10.7.66"
       name: "10.10.7.66"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -87,7 +87,7 @@ mutation {
       address: "10.10.7.67"
       name: "10.10.7.67"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -96,7 +96,7 @@ mutation {
       address: "10.10.7.68"
       name: "10.10.7.68"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -105,7 +105,7 @@ mutation {
       address: "10.10.7.98"
       name: "10.10.7.98"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -114,7 +114,7 @@ mutation {
       address: "10.10.7.55"
       name: "10.10.7.55"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -123,7 +123,7 @@ mutation {
       address: "10.10.7.56"
       name: "10.10.7.56"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -132,7 +132,7 @@ mutation {
       address: "10.10.7.57"
       name: "10.10.7.57"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -141,7 +141,7 @@ mutation {
       address: "10.10.7.58"
       name: "10.10.7.58"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -150,7 +150,7 @@ mutation {
       address: "10.10.7.99"
       name: "10.10.7.99"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -159,7 +159,7 @@ mutation {
       address: "10.10.7.70"
       name: "10.10.7.70"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -168,7 +168,7 @@ mutation {
       address: "10.10.7.71"
       name: "10.10.7.71"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -177,7 +177,7 @@ mutation {
       address: "10.10.7.69"
       name: "10.10.7.69"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -186,7 +186,7 @@ mutation {
       address: "10.10.7.61"
       name: "10.10.7.61"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -195,7 +195,7 @@ mutation {
       address: "10.10.7.62"
       name: "10.10.7.62"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -204,7 +204,7 @@ mutation {
       address: "10.10.7.63"
       name: "10.10.7.63"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -213,7 +213,7 @@ mutation {
       address: "10.10.7.50"
       name: "10.10.7.50"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -222,7 +222,7 @@ mutation {
       address: "10.10.7.51"
       name: "10.10.7.51"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -231,7 +231,7 @@ mutation {
       address: "10.10.7.52"
       name: "10.10.7.52"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -240,7 +240,7 @@ mutation {
       address: "10.10.7.53"
       name: "10.10.7.53"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -249,7 +249,7 @@ mutation {
       address: "10.10.7.54"
       name: "10.10.7.54"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -258,7 +258,7 @@ mutation {
       address: "10.10.22.70"
       name: "10.10.22.70"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -267,7 +267,7 @@ mutation {
       address: "10.10.22.69"
       name: "10.10.22.69"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -276,7 +276,7 @@ mutation {
       address: "10.10.22.68"
       name: "10.10.22.68"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -285,7 +285,7 @@ mutation {
       address: "10.10.22.67"
       name: "10.10.22.67"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -294,7 +294,7 @@ mutation {
       address: "10.10.22.66"
       name: "10.10.22.66"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -303,7 +303,7 @@ mutation {
       address: "10.10.22.6"
       name: "10.10.22.6"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -312,7 +312,7 @@ mutation {
       address: "10.10.22.5"
       name: "10.10.22.5"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -321,7 +321,7 @@ mutation {
       address: "10.10.22.4"
       name: "10.10.22.4"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -330,7 +330,7 @@ mutation {
       address: "10.10.22.3"
       name: "10.10.22.3"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     },
@@ -339,7 +339,7 @@ mutation {
       address: "10.10.22.2"
       name: "10.10.22.2"
       role: "oob"
-      namespace: { name: "houston" }
+      namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
     }
@@ -360,7 +360,7 @@ mutation {
       oobMAC: "c8:4b:d6:a7:07:e3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-6" }
     }
@@ -376,7 +376,7 @@ mutation {
       oobMAC: "c8:4b:d6:a6:1b:09"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-6" }
     }
@@ -392,7 +392,7 @@ mutation {
       oobMAC: "c8:4b:d6:a6:ef:f9"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-6" }
     }
@@ -408,7 +408,7 @@ mutation {
       oobMAC: "c8:4b:d6:a6:ef:ff"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-6" }
     }
@@ -424,7 +424,7 @@ mutation {
       oobMAC: "c8:4b:d6:a6:ef:09"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-6" }
     }
@@ -440,7 +440,7 @@ mutation {
       oobMAC: "c8:4b:d6:a6:ee:5b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-6" }
     }
@@ -456,7 +456,7 @@ mutation {
       oobMAC: "b4:45:06:fb:70:58"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-6" }
     }
@@ -472,7 +472,7 @@ mutation {
       oobMAC: "b4:45:06:fb:7a:d0"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-6" }
     }
@@ -488,7 +488,7 @@ mutation {
       oobMAC: "b4:45:06:fb:8d:58"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-6" }
     }
@@ -504,7 +504,7 @@ mutation {
       oobMAC: "b4:45:06:fb:8e:00"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-6" }
     }
@@ -520,7 +520,7 @@ mutation {
       oobMAC: "b4:45:06:fb:6a:d8"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-6" }
     }
@@ -536,7 +536,7 @@ mutation {
       oobMAC: "6c:3c:8c:74:cc:7e"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-6" }
     }
@@ -552,7 +552,7 @@ mutation {
       oobMAC: "c8:4b:d6:a7:07:65"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-5" }
     }
@@ -568,7 +568,7 @@ mutation {
       oobMAC: "c8:4b:d6:a7:07:35"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-5" }
     }
@@ -584,7 +584,7 @@ mutation {
       oobMAC: "c8:4b:d6:a6:ef:39"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-5" }
     }
@@ -600,7 +600,7 @@ mutation {
       oobMAC: "c8:4b:d6:a6:ee:3d"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-5" }
     }
@@ -616,7 +616,7 @@ mutation {
       oobMAC: "c8:4b:d6:a6:ef:bd"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-5" }
     }
@@ -632,7 +632,7 @@ mutation {
       oobMAC: "c8:4b:d6:a6:ef:e1"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-5" }
     }
@@ -648,7 +648,7 @@ mutation {
       oobMAC: "b4:45:06:fb:90:20"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-5" }
     }
@@ -664,7 +664,7 @@ mutation {
       oobMAC: "b4:45:06:fb:8b:80"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-5" }
     }
@@ -680,7 +680,7 @@ mutation {
       oobMAC: "b4:45:06:fb:8b:48"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-5" }
     }
@@ -696,7 +696,7 @@ mutation {
       oobMAC: "b4:45:06:fb:86:98"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-5" }
     }
@@ -712,7 +712,7 @@ mutation {
       oobMAC: "b4:45:06:fb:74:d8"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-5" }
     }
@@ -728,7 +728,7 @@ mutation {
       oobMAC: "d0:c1:b5:05:a9:45"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-3" }
     }
@@ -744,7 +744,7 @@ mutation {
       oobMAC: "d0:c1:b5:05:aa:59"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-3" }
     }
@@ -760,7 +760,7 @@ mutation {
       oobMAC: "d0:c1:b5:03:d4:54"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-3" }
     }
@@ -776,7 +776,7 @@ mutation {
       oobMAC: "d0:c1:b5:03:c5:1e"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-3" }
     }
@@ -792,7 +792,7 @@ mutation {
       oobMAC: "d0:c1:b5:03:d2:6e"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-3" }
     }
@@ -808,7 +808,7 @@ mutation {
       oobMAC: "d0:c1:b5:03:cb:24"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-3" }
     }
@@ -824,7 +824,7 @@ mutation {
       oobMAC: "d0:c1:b5:03:80:d2"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-3" }
     }
@@ -840,7 +840,7 @@ mutation {
       oobMAC: "d0:c1:b5:05:a9:93"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-3" }
     }
@@ -856,7 +856,7 @@ mutation {
       oobMAC: "d0:c1:b5:03:8a:14"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-3" }
     }
@@ -872,7 +872,7 @@ mutation {
       oobMAC: "d0:c1:b5:03:d0:70"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
-      namespace: { name: "houston" }
+      namespace: "houston"
       dataCenter: { orbId: "houston:houston-galleon" }
       rack: { orbId: "houston:Rack-3" }
     }

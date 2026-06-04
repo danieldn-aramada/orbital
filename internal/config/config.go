@@ -39,6 +39,7 @@ type Config struct {
 	OIDCClientID           string        `envconfig:"ORBITAL_OIDC_CLIENT_ID"          default:"5fc832f6-843e-4207-93dd-b3c3a77c06f2"`
 	OIDCClientSecret       string        `envconfig:"ORBITAL_OIDC_CLIENT_SECRET"      default:""`
 	OIDCRedirectURL        string        `envconfig:"ORBITAL_OIDC_REDIRECT_URL"       default:"http://localhost:8001/auth/callback"`
+	OIDCDeviceCode         bool          `envconfig:"ORBITAL_OIDC_DEVICE_CODE"        default:"false"` // enables device code flow for browser SSO — dev only, no HTTPS required
 	OCIRegistry            string        `envconfig:"ORBITAL_OCI_REGISTRY"            default:"localhost:5001"`
 	OCIRepo                string        `envconfig:"ORBITAL_OCI_REPO"                default:"orbital"`
 	OCIUsername            string        `envconfig:"ORBITAL_OCI_USERNAME"            default:""`

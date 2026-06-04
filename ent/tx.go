@@ -18,8 +18,6 @@ type Tx struct {
 	Event *EventClient
 	// ExportJob is the client for interacting with the ExportJob builders.
 	ExportJob *ExportJobClient
-	// Namespace is the client for interacting with the Namespace builders.
-	Namespace *NamespaceClient
 	// Orb is the client for interacting with the Orb builders.
 	Orb *OrbClient
 	// RegistryArtifact is the client for interacting with the RegistryArtifact builders.
@@ -162,7 +160,6 @@ func (tx *Tx) init() {
 	tx.Backup = NewBackupClient(tx.config)
 	tx.Event = NewEventClient(tx.config)
 	tx.ExportJob = NewExportJobClient(tx.config)
-	tx.Namespace = NewNamespaceClient(tx.config)
 	tx.Orb = NewOrbClient(tx.config)
 	tx.RegistryArtifact = NewRegistryArtifactClient(tx.config)
 	tx.RestoreJob = NewRestoreJobClient(tx.config)

@@ -140,11 +140,11 @@ func SeedMinimalE(graphqlURL string) (namespaceID, dcOrbID string, err error) {
 
 	const seedDCOrbID = "test-dc"
 	dcMutation := `
-	mutation($nsId: ID!) {
+	mutation {
 		addDataCenter(input: [{
 			orbId:     "test-dc"
 			name:      "Test DC"
-			namespace: { id: $nsId }
+			namespace: "test-namespace"
 		}]) {
 			dataCenter { id }
 		}
@@ -159,7 +159,7 @@ func SeedMinimalE(graphqlURL string) (namespaceID, dcOrbID string, err error) {
 			} `json:"addDataCenter"`
 		} `json:"data"`
 	}
-	if err := dgraphGQL(ctx, graphqlURL, dcMutation, map[string]any{"nsId": namespaceID}, &dcResult); err != nil {
+	if err := dgraphGQL(ctx, graphqlURL, dcMutation, nil, &dcResult); err != nil {
 		return "", "", fmt.Errorf("create datacenter: %w", err)
 	}
 	if len(dcResult.Data.AddDataCenter.DataCenter) == 0 {

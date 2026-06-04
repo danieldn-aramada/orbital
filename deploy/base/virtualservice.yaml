@@ -1,0 +1,19 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: orbital
+spec:
+  gateways:
+    - istio-system/istio-ingressgateway-internal
+  hosts:
+    - ilb.devnew.armada.internal
+  http:
+    - match:
+        - uri:
+            prefix: /orbital
+      route:
+        - destination:
+            # Short name resolves to orbital.<namespace>.svc.cluster.local in Istio
+            host: orbital
+            port:
+              number: 8001

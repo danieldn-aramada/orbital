@@ -451,10 +451,10 @@ func dqlBase(graphqlURL string) string {
 	return strings.TrimSuffix(graphqlURL, "/graphql")
 }
 
-// fetchDCInfo queries blue GraphQL for the DC name, orbId, and its namespace name.
+// fetchDCInfo queries blue GraphQL for the DC name, orbId, and its namespace.
 // datacenterOrbID must be the orbId of the data center (e.g. "alaska:dc-01").
 func (h *Export) fetchDCInfo(ctx context.Context, datacenterOrbID string) (name, orbID, namespaceName string, err error) {
-	query := fmt.Sprintf(`{ getDataCenter(orbId: %q) { name orbId namespace { name } } }`, datacenterOrbID)
+	query := fmt.Sprintf(`{ getDataCenter(orbId: %q) { name orbId namespace } }`, datacenterOrbID)
 	body, _ := json.Marshal(map[string]string{"query": query})
 	resp, err := http.Post(h.dgraphURL, "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -466,9 +466,7 @@ func (h *Export) fetchDCInfo(ctx context.Context, datacenterOrbID string) (name,
 			GetDataCenter struct {
 				Name      string `json:"name"`
 				OrbID     string `json:"orbId"`
-				Namespace struct {
-					Name string `json:"name"`
-				} `json:"namespace"`
+				Namespace string `json:"namespace"`
 			} `json:"getDataCenter"`
 		} `json:"data"`
 	}
@@ -479,7 +477,7 @@ func (h *Export) fetchDCInfo(ctx context.Context, datacenterOrbID string) (name,
 	if dc.Name == "" {
 		return "", "", "", fmt.Errorf("data center %q not found in DGraph", datacenterOrbID)
 	}
-	return dc.Name, dc.OrbID, dc.Namespace.Name, nil
+	return dc.Name, dc.OrbID, dc.Namespace, nil
 }
 
 // fetchUIDPredicates queries the DGraph schema and returns all predicate names
@@ -543,18 +541,17 @@ func (h *Export) fetchNamespaceSubgraph(ctx context.Context, namespaceName strin
 	}
 
 	dql := fmt.Sprintf(`{
-		var(func: type(Namespace)) @filter(eq(Namespace.name, %q)) { NS as uid }
-		ns(func: uid(NS)) { uid dgraph.type expand(_all_) }
-		items(func: has(ConfigItem.namespace)) @filter(uid_in(ConfigItem.namespace, uid(NS))) {
+		ns(func: type(Namespace)) @filter(eq(Namespace.name, %q)) { uid dgraph.type expand(_all_) }
+		items(func: eq(ConfigItem.namespace, %q)) {
 			uid
 			dgraph.type
 			expand(_all_)
 		}
-		edges(func: has(ConfigItem.namespace)) @filter(uid_in(ConfigItem.namespace, uid(NS))) {
+		edges(func: eq(ConfigItem.namespace, %q)) {
 			uid
 			%s
 		}
-	}`, namespaceName, edgeLines.String())
+	}`, namespaceName, namespaceName, namespaceName, edgeLines.String())
 
 	payload := map[string]string{"query": dql}
 	body, err := json.Marshal(payload)

@@ -73,7 +73,7 @@ test.describe('Export workflow', () => {
     await expect(submitBtn).toBeEnabled();
     await Promise.all([
       page.waitForResponse(
-        resp => resp.url().includes('/api/v1/datacenters/') && resp.url().includes('/export') && resp.status() === 202,
+        resp => resp.url().includes('/api/v1/export') && !resp.url().includes('/jobs') && resp.status() === 202,
       ),
       submitBtn.click(),
     ]);

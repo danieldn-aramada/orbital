@@ -19,7 +19,7 @@ const queryServerByIDFmt = `
     getServer(id: $id) {
       id orbId hostname model manufacturer serviceTag rackPosition oobMAC
       createdAt updatedAt
-      namespace { name }
+      namespace
       rack { name }
       dataCenter { id name }
       oobIP { address }
@@ -47,10 +47,8 @@ type orbServerQueryResponse struct {
 	OobMAC       string `json:"oobMAC"`
 	CreatedAt    string `json:"createdAt"`
 	UpdatedAt    string `json:"updatedAt"`
-	Namespace    struct {
-		Name string `json:"name"`
-	} `json:"namespace"`
-	Rack struct {
+	Namespace string `json:"namespace"`
+	Rack        struct {
 		Name string `json:"name"`
 	} `json:"rack"`
 	DataCenter struct {
@@ -123,7 +121,7 @@ type orbSrvTabData struct {
 	UpdatedAt          string
 	CreatedBy          string
 	UpdatedBy          string
-	Namespace          struct{ Name string }
+	Namespace          string
 	Rack               struct{ Name string }
 	DataCenterID       string
 	DataCenterName     string
@@ -170,7 +168,7 @@ func (s *Server) srvTab(c echo.Context) error {
 				OobMAC:         r.OobMAC,
 				CreatedAt:      r.CreatedAt,
 				UpdatedAt:      r.UpdatedAt,
-				Namespace:      struct{ Name string }{Name: r.Namespace.Name},
+				Namespace:    r.Namespace,
 				Rack:           struct{ Name string }{Name: r.Rack.Name},
 				DataCenterID:   r.DataCenter.ID,
 				DataCenterName: r.DataCenter.Name,

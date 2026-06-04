@@ -114,7 +114,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		logger.Warn("not running in-cluster — restore from stored backup disabled")
 	}
 
-	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, s3Configured, cfg.S3Endpoint, cfg.S3Bucket, cfg.BasePath)
+	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, cfg.OIDCDeviceCode, s3Configured, cfg.S3Endpoint, cfg.S3Bucket, cfg.BasePath)
 	ui.SetOCIConfig(ociConfigured, cfg.OCIRegistry, cfg.OCIRepo)
 	ui.SetExportDir(cfg.ExportDir)
 	ui.SetSchemaPath(cfg.SchemaPath)
@@ -150,12 +150,17 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 				cfg.OIDCRedirectURL,
 				cfg.BasePath,
 				logger,
+				cfg.OIDCDeviceCode,
 			)
 			if err != nil {
 				logger.Error("oidc provider init failed", "err", err)
 			} else {
 				root.GET("/auth/login", oidc.Login)
 				root.GET("/auth/callback", oidc.Callback)
+				if cfg.OIDCDeviceCode {
+					root.GET("/auth/device", oidc.DeviceCodeStart)
+					root.GET("/auth/device/poll", oidc.DeviceCodePoll)
+				}
 			}
 		}
 	}

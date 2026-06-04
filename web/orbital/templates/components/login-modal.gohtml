@@ -10,12 +10,21 @@
       </p>
 
     {{if .OIDCEnabled}}
+    {{if .DeviceCodeEnabled}}
+    <a href="{{.BasePath}}/auth/device" class="button is-fullwidth mb-4" style="gap: 0.5rem;">
+      <span class="icon">
+        <img src="{{.BasePath}}/static/logo/microsoft.svg" alt="Microsoft" style="width:18px;height:18px;">
+      </span>
+      <span>Sign in with Microsoft</span>
+    </a>
+    {{else}}
     <a href="{{.BasePath}}/auth/login" class="button is-fullwidth mb-4" style="gap: 0.5rem;">
       <span class="icon">
         <img src="{{.BasePath}}/static/logo/microsoft.svg" alt="Microsoft" style="width:18px;height:18px;">
       </span>
       <span>Sign in with Microsoft</span>
     </a>
+    {{end}}
     <div class="is-divider" data-content="OR"></div>
     {{end}}
 

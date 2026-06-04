@@ -15,9 +15,6 @@ type Event func(*sql.Selector)
 // ExportJob is the predicate function for exportjob builders.
 type ExportJob func(*sql.Selector)
 
-// Namespace is the predicate function for namespace builders.
-type Namespace func(*sql.Selector)
-
 // Orb is the predicate function for orb builders.
 type Orb func(*sql.Selector)
 

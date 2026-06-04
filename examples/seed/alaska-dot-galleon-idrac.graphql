@@ -3,7 +3,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "alaska-dot:GRTLY24-idrac"
       name: "idrac"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "alaska-dot:GRTLY24" }
@@ -19,7 +19,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "alaska-dot:55W8K44-idrac"
       name: "idrac"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "alaska-dot:55W8K44" }
@@ -35,7 +35,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "alaska-dot:75W8K44-idrac"
       name: "idrac"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "alaska-dot:75W8K44" }
@@ -51,7 +51,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "alaska-dot:65W8K44-idrac"
       name: "idrac"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "alaska-dot:65W8K44" }
@@ -67,7 +67,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "alaska-dot:85W8K44-idrac"
       name: "idrac"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "alaska-dot:85W8K44" }
@@ -83,7 +83,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "alaska-dot:6FK8K44-idrac"
       name: "idrac"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "alaska-dot:6FK8K44" }
@@ -99,7 +99,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "alaska-dot:3FK8K44-idrac"
       name: "idrac"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "alaska-dot:3FK8K44" }
@@ -115,7 +115,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "alaska-dot:1FK8K44-idrac"
       name: "idrac"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "alaska-dot:1FK8K44" }
@@ -131,7 +131,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "alaska-dot:5FK8K44-idrac"
       name: "idrac"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "alaska-dot:5FK8K44" }
@@ -147,7 +147,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "alaska-dot:4FK8K44-idrac"
       name: "idrac"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "alaska-dot:4FK8K44" }
@@ -163,7 +163,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "alaska-dot:JDK8K44-idrac"
       name: "idrac"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "alaska-dot:JDK8K44" }
@@ -179,7 +179,7 @@ mutation UpsertIdracSettings {
     {
       orbId: "alaska-dot:3H3V564-idrac"
       name: "idrac"
-      namespace: { name: "alaska-dot" }
+      namespace: "alaska-dot"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
       server: { orbId: "alaska-dot:3H3V564" }

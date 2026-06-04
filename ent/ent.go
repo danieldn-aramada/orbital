@@ -15,7 +15,6 @@ import (
 	"github.com/armada/orbital/ent/backup"
 	"github.com/armada/orbital/ent/event"
 	"github.com/armada/orbital/ent/exportjob"
-	"github.com/armada/orbital/ent/namespace"
 	"github.com/armada/orbital/ent/orb"
 	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/ent/restorejob"
@@ -83,7 +82,6 @@ func checkColumn(t, c string) error {
 			backup.Table:           backup.ValidColumn,
 			event.Table:            event.ValidColumn,
 			exportjob.Table:        exportjob.ValidColumn,
-			namespace.Table:        namespace.ValidColumn,
 			orb.Table:              orb.ValidColumn,
 			registryartifact.Table: registryartifact.ValidColumn,
 			restorejob.Table:       restorejob.ValidColumn,

@@ -287,12 +287,14 @@ func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 	fail := func(step string, err error) {
 		h.logger.Error("restore failed", "jobId", jobID, "step", step, "err", err)
 		errStr := fmt.Sprintf("%s: %v", step, err)
-		h.db.RestoreJob.UpdateOneID(jobID). //nolint:errcheck
+		if _, saveErr := h.db.RestoreJob.UpdateOneID(jobID).
 			SetStatus(restorejob.StatusFailed).
 			SetError(errStr).
 			SetLog(logBuf.String()).
 			SetCompletedAt(time.Now()).
-			Save(context.Background())
+			Save(context.Background()); saveErr != nil {
+			h.logger.Error("failed to mark restore job failed", "jobId", jobID, "err", saveErr)
+		}
 	}
 
 	log := func(msg string) {
@@ -391,11 +393,13 @@ func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 		[]string{},
 		map[string]any{"jobId": jobID.String(), "backupKey": bk.S3Key},
 	)
-	h.db.RestoreJob.UpdateOneID(jobID). //nolint:errcheck
+	if _, err := h.db.RestoreJob.UpdateOneID(jobID).
 		SetStatus(restorejob.StatusCompleted).
 		SetLog(logBuf.String()).
 		SetCompletedAt(time.Now()).
-		Save(context.Background())
+		Save(context.Background()); err != nil {
+		h.logger.Error("failed to mark restore job completed", "jobId", jobID, "err", err)
+	}
 }
 
 // downloadToFile downloads the S3 object at s3Key to destPath on disk via a presigned URL.

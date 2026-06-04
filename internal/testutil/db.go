@@ -61,7 +61,6 @@ func truncateAll(dsn string) error {
 		"events",
 		"orbs",
 		"users",
-		"namespaces",
 	}
 
 	ctx := context.Background()

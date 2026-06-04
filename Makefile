@@ -16,7 +16,7 @@ TEST_PKGS := $(shell go list ./... | grep -vE '(/ent$$|/ent/|/docs$$)')
 ACR          := armadaeksatest.azurecr.io
 IMAGE        := $(ACR)/orbital:$(VERSION)
 
-.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-unit test-integration test-e2e test-e2e-orb test-stack-up cover cover-html lint up up-orb-deps up-orb down seed seed-aks-clean docs orb-docs build-css watch-css
+.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-unit test-integration test-e2e test-e2e-orb test-e2e-smoke test-stack-up cover cover-html lint up up-orb-deps up-orb down seed seed-aks-clean docs orb-docs build-css watch-css
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -76,6 +76,9 @@ test-e2e: ## Run Playwright e2e tests (requires orbital running on :8001)
 
 test-e2e-orb: ## Run Playwright orb UI tests (requires orb running on :8010)
 	npx playwright test --config=playwright.orb.config.ts
+
+test-e2e-smoke: ## Run pre-release smoke checklist (requires: make up, make run-orbital, make run-orb with ORB_ENABLE_OCI_REGISTRY=true, make seed)
+	npx playwright test --config=playwright.smoke.config.ts
 
 test: test-unit test-integration test-e2e test-e2e-orb ## Run full test suite (unit + integration + e2e + e2e-orb)
 
