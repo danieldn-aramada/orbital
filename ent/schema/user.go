@@ -20,6 +20,7 @@ func (User) Fields() []ent.Field {
 		field.String("preferred_username").NotEmpty(),
 		field.String("password_hash").Sensitive().Optional().Nillable(),
 		field.Bool("verified").Default(false),
+		field.Enum("role").Values("readonly", "dev", "admin").Default("readonly"),
 		field.Time("created_at").Default(time.Now).Immutable(),
 	}
 }

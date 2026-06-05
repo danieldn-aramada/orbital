@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/armada/orbital/ent"
+	"github.com/armada/orbital/ent/user"
 	"github.com/labstack/echo/v4"
 )
 
@@ -87,6 +88,18 @@ func (h *GraphQL) Handle(c echo.Context) error {
 		return h.proxyRaw(c, bodyBytes)
 	}
 
+	// Enforce dev-or-admin role for all GraphQL mutations.
+	if h.db != nil {
+		userID, _ := c.Get("user_id").(int)
+		if userID == 0 {
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "dev or admin role required for mutations"})
+		}
+		u, err := h.db.User.Get(c.Request().Context(), userID)
+		if err != nil || !RoleAtLeast(u.Role, user.RoleDev) {
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "dev or admin role required for mutations"})
+		}
+	}
+
 	touchesKnownType := knownMutationRe.MatchString(req.Query)
 
 	opName := req.OperationName
@@ -134,13 +147,17 @@ func (h *GraphQL) Handle(c echo.Context) error {
 		}
 	}
 
-	// Strip non-DGraph variables before forwarding
+	// Strip orbital-meta variables before forwarding to DGraph.
+	// ifVersion is always orbital-only (MVCC). orbId is orbital-only unless the
+	// query itself declares $orbId as a variable — in that case DGraph needs it.
 	auditOrbID, _ := req.Variables["orbId"].(string)
-	needsReMarshal := hasIfVersion || auditOrbID != ""
+	orbIdIsQueryVar := strings.Contains(req.Query, "$orbId")
+	shouldStripOrbID := auditOrbID != "" && !orbIdIsQueryVar
+	needsReMarshal := hasIfVersion || shouldStripOrbID
 	if hasIfVersion {
 		delete(req.Variables, "ifVersion")
 	}
-	if auditOrbID != "" {
+	if shouldStripOrbID {
 		delete(req.Variables, "orbId")
 	}
 	if needsReMarshal {
@@ -148,7 +165,7 @@ func (h *GraphQL) Handle(c echo.Context) error {
 			bodyBytes = modified
 		}
 		// Restore orbId so extractResourceIDs can find it after the DGraph call
-		if auditOrbID != "" {
+		if shouldStripOrbID {
 			req.Variables["orbId"] = auditOrbID
 		}
 	}

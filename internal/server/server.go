@@ -2,14 +2,18 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
+	_ "github.com/lib/pq" // postgres driver for database/sql
 	"github.com/armada/orbital/ent"
+	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/auth"
 	"github.com/armada/orbital/internal/config"
 	"github.com/armada/orbital/internal/enricher"
@@ -28,13 +32,15 @@ import (
 )
 
 type Server struct {
-	cfg    *config.Config
-	echo   *echo.Echo
-	logger *slog.Logger
+	cfg           *config.Config
+	echo          *echo.Echo
+	logger        *slog.Logger
+	backupHandler *handler.BackupHandler // non-nil when S3 is configured; started in Start()
 }
 
 func New(cfg *config.Config, db *ent.Client) *Server {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.SlogLevel()}))
+	var backupHandler *handler.BackupHandler
 
 	e := echo.New()
 	e.HideBanner = true
@@ -57,16 +63,22 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	})
 
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+		Skipper: func(c echo.Context) bool {
+			p := c.Request().URL.Path
+			return strings.HasPrefix(p, "/static/") || p == "/favicon.ico" || strings.HasSuffix(p, "/auth/device/poll")
+		},
 		LogMethod:  true,
 		LogURI:     true,
 		LogStatus:  true,
 		LogLatency: true,
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+			actor, _ := c.Get("user_email").(string)
 			logger.Info("request",
 				"method", v.Method,
 				"uri", v.URI,
 				"status", v.Status,
 				"latency_ms", v.Latency.Milliseconds(),
+				"actor", actor,
 			)
 			return nil
 		},
@@ -84,13 +96,13 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		bv, err := auth.NewBearerVerifier(context.Background(), cfg.OIDCIssuerURL, cfg.OIDCClientID)
 		if err != nil {
 			logger.Warn("bearer verifier init failed — API auth disabled", "err", err)
-			api = root.Group("/api/v1")
+			api = root.Group("/api/v1", handler.RequireRole(db, user.RoleDev))
 		} else {
-			api = root.Group("/api/v1", bv.RequireAuth())
+			api = root.Group("/api/v1", bv.RequireAuth(), handler.ResolveUser(db, cfg.AdminEmailSet()), handler.RequireRole(db, user.RoleDev))
 		}
 	} else {
 		logger.Warn("ORBITAL_OIDC_ISSUER_URL is not set — API auth disabled")
-		api = root.Group("/api/v1")
+		api = root.Group("/api/v1", handler.RequireRole(db, user.RoleDev))
 	}
 	s3Configured := cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != ""
 	ociConfigured := cfg.OCIConfigured()
@@ -114,7 +126,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		logger.Warn("not running in-cluster — restore from stored backup disabled")
 	}
 
-	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, cfg.OIDCDeviceCode, s3Configured, cfg.S3Endpoint, cfg.S3Bucket, cfg.BasePath)
+	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, cfg.OIDCDeviceCode, s3Configured, cfg.S3Endpoint, cfg.S3Bucket, cfg.BasePath, db)
 	ui.SetOCIConfig(ociConfigured, cfg.OCIRegistry, cfg.OCIRepo)
 	ui.SetExportDir(cfg.ExportDir)
 	ui.SetSchemaPath(cfg.SchemaPath)
@@ -135,7 +147,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	root.GET("/export", ui.Export)
 
 	if db != nil {
-		login := handler.NewLogin(db, cfg.SessionKeys(), webtemplates.LoginForm(), cfg.BasePath)
+		login := handler.NewLogin(db, cfg.SessionKeys(), webtemplates.LoginForm(), cfg.BasePath, logger)
 		root.POST("/user/login", login.Post)
 		root.POST("/user/logout", login.Logout)
 
@@ -150,6 +162,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 				cfg.OIDCRedirectURL,
 				cfg.BasePath,
 				logger,
+				cfg.AdminEmailSet(),
 				cfg.OIDCDeviceCode,
 			)
 			if err != nil {
@@ -159,7 +172,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 				root.GET("/auth/callback", oidc.Callback)
 				if cfg.OIDCDeviceCode {
 					root.GET("/auth/device", oidc.DeviceCodeStart)
-					root.GET("/auth/device/poll", oidc.DeviceCodePoll)
+					root.POST("/auth/device/poll", oidc.DeviceCodePoll)
 				}
 			}
 		}
@@ -210,18 +223,28 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		if !s3Configured {
 			logger.Warn("S3 not configured (ORBITAL_S3_BUCKET, ORBITAL_S3_ACCESS_KEY, ORBITAL_S3_SECRET_KEY) — backup disabled")
 		} else {
+			var rawDB *sql.DB
+			if rdb, err := sql.Open("postgres", cfg.DatabaseURL); err != nil {
+				logger.Warn("raw sql.DB open failed — advisory lock disabled", "err", err)
+			} else {
+				rawDB = rdb
+			}
+
 			bk, err := handler.NewBackupHandler(context.Background(), db, handler.BackupConfig{
-				DGraphAdminURL:  cfg.DGraphAdminURL,
-				DGraphExportDir: cfg.DGraphExportDir,
-				SchemaPath:      cfg.SchemaPath,
-				S3Endpoint:      cfg.S3Endpoint,
-				S3Region:        cfg.S3Region,
-				S3Bucket:        cfg.S3Bucket,
-				S3AccessKey:     cfg.S3AccessKey,
-				S3SecretKey:     cfg.S3SecretKey,
-				S3Prefix:        cfg.S3Prefix,
-				RetentionCount:  cfg.S3RetentionCount,
-				Version:         appversion.Version,
+				DGraphAdminURL:    cfg.DGraphAdminURL,
+				DGraphExportDir:   cfg.DGraphExportDir,
+				SchemaPath:        cfg.SchemaPath,
+				S3Endpoint:        cfg.S3Endpoint,
+				S3Region:          cfg.S3Region,
+				S3Bucket:          cfg.S3Bucket,
+				S3AccessKey:       cfg.S3AccessKey,
+				S3SecretKey:       cfg.S3SecretKey,
+				S3Prefix:          cfg.S3Prefix,
+				RetentionDays:     cfg.BackupRetentionDays,
+				RetentionMinCount: cfg.BackupRetentionMinCount,
+				Version:           appversion.Version,
+				RawDB:             rawDB,
+				BootstrapCronSpec: cfg.BackupSchedule,
 			}, logger)
 			if err != nil {
 				logger.Error("backup handler init failed", "err", err)
@@ -232,6 +255,9 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 				api.GET("/backup/jobs/:jobId/download", bk.Download)
 				api.DELETE("/backup/jobs/:jobId", bk.Delete)
 				api.POST("/backup/test-connection", bk.TestConnection)
+				api.GET("/backup/schedule", bk.GetSchedule)
+				api.PUT("/backup/schedule", bk.UpdateSchedule)
+				backupHandler = bk
 			}
 
 			var restoreBackend handler.RestoreBackend
@@ -273,6 +299,11 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 
 		evh := handler.NewEventHandler(db, logger)
 		root.GET("/api/v1/audit-log", evh.List)
+
+		uh := handler.NewUsersHandler(db, logger)
+		api.GET("/users", uh.List)
+		api.PUT("/users/:id/role", uh.UpdateRole)
+		root.GET("/users", ui.Users)
 	}
 
 	gql := handler.NewGraphQL(cfg.DGraphURL, db, logger)
@@ -291,9 +322,10 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	})
 
 	return &Server{
-		cfg:    cfg,
-		echo:   e,
-		logger: logger,
+		cfg:           cfg,
+		echo:          e,
+		logger:        logger,
+		backupHandler: backupHandler,
 	}
 }
 
@@ -315,6 +347,10 @@ func (s *Server) Start(ctx context.Context) error {
 		return fmt.Errorf("server error: %w", err)
 	default:
 		s.logger.Info("orbital ready", "addr", ":"+s.cfg.Port)
+	}
+
+	if s.backupHandler != nil {
+		go s.backupHandler.StartScheduler(ctx)
 	}
 
 	select {

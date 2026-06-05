@@ -18,6 +18,8 @@ type Base struct {
 	AppVersion  string
 	BasePath    string
 	CurrentPath string
+	CanMutate   bool
+	AdminEmails []string
 
 	User
 }
@@ -51,4 +53,5 @@ type User struct {
 	Id    int
 	Name  string
 	Email string
+	Role  string
 }

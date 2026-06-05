@@ -1,5 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
+const headed = !!process.env.HEADED;
+
 export default defineConfig({
   testDir: './e2e',
   testIgnore: ['**/orb.spec.ts', '**/smoke/**'],
@@ -8,9 +10,9 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:8001',
     storageState: 'e2e/.auth.json',
-    headless: false,
+    headless: !headed,
     launchOptions: {
-      slowMo: 500,
+      slowMo: headed ? 500 : 0,
     },
   },
   projects: [

@@ -1,0 +1,13 @@
+{{define "access-required"}}
+<div class="notification is-warning is-light">
+  <p><strong>Elevated access required.</strong> Your current role is <strong>readonly</strong>.</p>
+  {{if .AdminEmails}}
+  <p style="margin-top: 0.5rem; font-size: 0.875rem;">
+    Contact an Orbital administrator:
+    {{range $i, $e := .AdminEmails}}{{if $i}}, {{end}}<a href="mailto:{{$e}}">{{$e}}</a>{{end}}
+  </p>
+  {{else}}
+  <p style="margin-top: 0.5rem; font-size: 0.875rem;">Contact your Orbital administrator for a role change.</p>
+  {{end}}
+</div>
+{{end}}

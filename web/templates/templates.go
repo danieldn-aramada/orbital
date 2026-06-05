@@ -15,6 +15,7 @@ var base = []string{
 	"web/orbital/templates/components/report-issue-modal.gohtml",
 	"web/orbital/templates/components/login-modal.gohtml",
 	"web/shared/templates/components/hint-banner.gohtml",
+	"web/orbital/templates/partials/access-required.gohtml",
 }
 
 func page(path string) []string {
@@ -50,5 +51,6 @@ func Map() map[string]*template.Template {
 		"signed-artifacts":   template.Must(template.ParseFiles(page("web/orbital/templates/pages/signed-artifacts.gohtml")...)),
 		"servers":            template.Must(template.ParseFiles(page("web/orbital/templates/pages/servers.gohtml")...)),
 		"restore":            template.Must(template.ParseFiles(page("web/orbital/templates/pages/restore.gohtml")...)),
+		"users":              template.Must(template.ParseFiles(page("web/orbital/templates/pages/users.gohtml")...)),
 	}
 }

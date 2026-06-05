@@ -152,7 +152,8 @@ func newOIDCHandler(t *testing.T, p *oidcProvider) *handler.OIDC {
 		p.Server.URL+"/callback",
 		"",
 		slog.Default(),
-		false,
+		nil,   // adminEmails
+		false, // deviceCodeEnabled
 	)
 	if err != nil {
 		t.Fatalf("NewOIDC: %v", err)

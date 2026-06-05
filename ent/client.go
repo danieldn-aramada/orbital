@@ -16,6 +16,7 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent/backup"
+	"github.com/armada/orbital/ent/backupschedule"
 	"github.com/armada/orbital/ent/event"
 	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/orb"
@@ -31,6 +32,8 @@ type Client struct {
 	Schema *migrate.Schema
 	// Backup is the client for interacting with the Backup builders.
 	Backup *BackupClient
+	// BackupSchedule is the client for interacting with the BackupSchedule builders.
+	BackupSchedule *BackupScheduleClient
 	// Event is the client for interacting with the Event builders.
 	Event *EventClient
 	// ExportJob is the client for interacting with the ExportJob builders.
@@ -55,6 +58,7 @@ func NewClient(opts ...Option) *Client {
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.Backup = NewBackupClient(c.config)
+	c.BackupSchedule = NewBackupScheduleClient(c.config)
 	c.Event = NewEventClient(c.config)
 	c.ExportJob = NewExportJobClient(c.config)
 	c.Orb = NewOrbClient(c.config)
@@ -154,6 +158,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ctx:              ctx,
 		config:           cfg,
 		Backup:           NewBackupClient(cfg),
+		BackupSchedule:   NewBackupScheduleClient(cfg),
 		Event:            NewEventClient(cfg),
 		ExportJob:        NewExportJobClient(cfg),
 		Orb:              NewOrbClient(cfg),
@@ -180,6 +185,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ctx:              ctx,
 		config:           cfg,
 		Backup:           NewBackupClient(cfg),
+		BackupSchedule:   NewBackupScheduleClient(cfg),
 		Event:            NewEventClient(cfg),
 		ExportJob:        NewExportJobClient(cfg),
 		Orb:              NewOrbClient(cfg),
@@ -215,7 +221,8 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Backup, c.Event, c.ExportJob, c.Orb, c.RegistryArtifact, c.RestoreJob, c.User,
+		c.Backup, c.BackupSchedule, c.Event, c.ExportJob, c.Orb, c.RegistryArtifact,
+		c.RestoreJob, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -225,7 +232,8 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Backup, c.Event, c.ExportJob, c.Orb, c.RegistryArtifact, c.RestoreJob, c.User,
+		c.Backup, c.BackupSchedule, c.Event, c.ExportJob, c.Orb, c.RegistryArtifact,
+		c.RestoreJob, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -236,6 +244,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
 	case *BackupMutation:
 		return c.Backup.mutate(ctx, m)
+	case *BackupScheduleMutation:
+		return c.BackupSchedule.mutate(ctx, m)
 	case *EventMutation:
 		return c.Event.mutate(ctx, m)
 	case *ExportJobMutation:
@@ -383,6 +393,139 @@ func (c *BackupClient) mutate(ctx context.Context, m *BackupMutation) (Value, er
 		return (&BackupDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Backup mutation op: %q", m.Op())
+	}
+}
+
+// BackupScheduleClient is a client for the BackupSchedule schema.
+type BackupScheduleClient struct {
+	config
+}
+
+// NewBackupScheduleClient returns a client for the BackupSchedule from the given config.
+func NewBackupScheduleClient(c config) *BackupScheduleClient {
+	return &BackupScheduleClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `backupschedule.Hooks(f(g(h())))`.
+func (c *BackupScheduleClient) Use(hooks ...Hook) {
+	c.hooks.BackupSchedule = append(c.hooks.BackupSchedule, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `backupschedule.Intercept(f(g(h())))`.
+func (c *BackupScheduleClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BackupSchedule = append(c.inters.BackupSchedule, interceptors...)
+}
+
+// Create returns a builder for creating a BackupSchedule entity.
+func (c *BackupScheduleClient) Create() *BackupScheduleCreate {
+	mutation := newBackupScheduleMutation(c.config, OpCreate)
+	return &BackupScheduleCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BackupSchedule entities.
+func (c *BackupScheduleClient) CreateBulk(builders ...*BackupScheduleCreate) *BackupScheduleCreateBulk {
+	return &BackupScheduleCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BackupScheduleClient) MapCreateBulk(slice any, setFunc func(*BackupScheduleCreate, int)) *BackupScheduleCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BackupScheduleCreateBulk{err: fmt.Errorf("calling to BackupScheduleClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BackupScheduleCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BackupScheduleCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BackupSchedule.
+func (c *BackupScheduleClient) Update() *BackupScheduleUpdate {
+	mutation := newBackupScheduleMutation(c.config, OpUpdate)
+	return &BackupScheduleUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BackupScheduleClient) UpdateOne(_m *BackupSchedule) *BackupScheduleUpdateOne {
+	mutation := newBackupScheduleMutation(c.config, OpUpdateOne, withBackupSchedule(_m))
+	return &BackupScheduleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BackupScheduleClient) UpdateOneID(id int) *BackupScheduleUpdateOne {
+	mutation := newBackupScheduleMutation(c.config, OpUpdateOne, withBackupScheduleID(id))
+	return &BackupScheduleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BackupSchedule.
+func (c *BackupScheduleClient) Delete() *BackupScheduleDelete {
+	mutation := newBackupScheduleMutation(c.config, OpDelete)
+	return &BackupScheduleDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BackupScheduleClient) DeleteOne(_m *BackupSchedule) *BackupScheduleDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BackupScheduleClient) DeleteOneID(id int) *BackupScheduleDeleteOne {
+	builder := c.Delete().Where(backupschedule.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BackupScheduleDeleteOne{builder}
+}
+
+// Query returns a query builder for BackupSchedule.
+func (c *BackupScheduleClient) Query() *BackupScheduleQuery {
+	return &BackupScheduleQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBackupSchedule},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BackupSchedule entity by its id.
+func (c *BackupScheduleClient) Get(ctx context.Context, id int) (*BackupSchedule, error) {
+	return c.Query().Where(backupschedule.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BackupScheduleClient) GetX(ctx context.Context, id int) *BackupSchedule {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *BackupScheduleClient) Hooks() []Hook {
+	return c.hooks.BackupSchedule
+}
+
+// Interceptors returns the client interceptors.
+func (c *BackupScheduleClient) Interceptors() []Interceptor {
+	return c.inters.BackupSchedule
+}
+
+func (c *BackupScheduleClient) mutate(ctx context.Context, m *BackupScheduleMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BackupScheduleCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BackupScheduleUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BackupScheduleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BackupScheduleDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown BackupSchedule mutation op: %q", m.Op())
 	}
 }
 
@@ -1187,10 +1330,11 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Backup, Event, ExportJob, Orb, RegistryArtifact, RestoreJob, User []ent.Hook
+		Backup, BackupSchedule, Event, ExportJob, Orb, RegistryArtifact, RestoreJob,
+		User []ent.Hook
 	}
 	inters struct {
-		Backup, Event, ExportJob, Orb, RegistryArtifact, RestoreJob,
+		Backup, BackupSchedule, Event, ExportJob, Orb, RegistryArtifact, RestoreJob,
 		User []ent.Interceptor
 	}
 )

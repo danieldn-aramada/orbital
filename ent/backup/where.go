@@ -380,6 +380,26 @@ func StatusNotIn(vs ...Status) predicate.Backup {
 	return predicate.Backup(sql.FieldNotIn(FieldStatus, vs...))
 }
 
+// TriggerEQ applies the EQ predicate on the "trigger" field.
+func TriggerEQ(v Trigger) predicate.Backup {
+	return predicate.Backup(sql.FieldEQ(FieldTrigger, v))
+}
+
+// TriggerNEQ applies the NEQ predicate on the "trigger" field.
+func TriggerNEQ(v Trigger) predicate.Backup {
+	return predicate.Backup(sql.FieldNEQ(FieldTrigger, v))
+}
+
+// TriggerIn applies the In predicate on the "trigger" field.
+func TriggerIn(vs ...Trigger) predicate.Backup {
+	return predicate.Backup(sql.FieldIn(FieldTrigger, vs...))
+}
+
+// TriggerNotIn applies the NotIn predicate on the "trigger" field.
+func TriggerNotIn(vs ...Trigger) predicate.Backup {
+	return predicate.Backup(sql.FieldNotIn(FieldTrigger, vs...))
+}
+
 // S3BucketEQ applies the EQ predicate on the "s3_bucket" field.
 func S3BucketEQ(v string) predicate.Backup {
 	return predicate.Backup(sql.FieldEQ(FieldS3Bucket, v))

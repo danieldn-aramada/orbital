@@ -283,10 +283,11 @@ test('pre-release checklist: backup → export → publish → orb import → mu
     revertedValue,
     'assetDataV2 must NOT contain sentinel after restore — restore did not revert the mutation',
   ).not.toBe(SENTINEL);
+  // Compare as parsed JSON — DGraph does not guarantee key order in string fields.
   expect(
-    revertedValue,
+    JSON.parse(revertedValue ?? 'null'),
     `assetDataV2 must equal the original pre-mutation value after restore`,
-  ).toBe(originalAssetData);
+  ).toEqual(JSON.parse(originalAssetData ?? 'null'));
   console.log(`[smoke] PASS — assetDataV2 correctly reverted to original value`);
   console.log('\n[smoke] ── All steps passed ────────────────────────────────\n');
 });

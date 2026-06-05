@@ -16,7 +16,7 @@ TEST_PKGS := $(shell go list ./... | grep -vE '(/ent$$|/ent/|/docs$$)')
 ACR          := armadaeksatest.azurecr.io
 IMAGE        := $(ACR)/orbital:$(VERSION)
 
-.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-unit test-integration test-e2e test-e2e-orb test-e2e-smoke test-stack-up cover cover-html lint up up-orb-deps up-orb down seed seed-aks-clean docs orb-docs build-css watch-css
+.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-unit test-integration test-e2e test-e2e-ui test-e2e-orb test-e2e-smoke cover cover-html lint up up-orb-deps up-orb down seed seed-aks-clean docs orb-docs build-css watch-css
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -55,9 +55,6 @@ seed-orb-schema: ## Apply DGraph schema to orb's local DGraph (empty — data co
 	@echo "Applying schema to orb DGraph (localhost:8082)..."
 	@curl -s -X POST localhost:8082/admin/schema --data-binary @schema/schema-demo.graphql | jq .
 
-test-stack-up: ## Ensure local stack is up and healthy (used by test-integration)
-	@docker compose -f $(COMPOSE_FILE) up -d --wait
-	@docker compose -f $(COMPOSE_FILE) exec -T postgres psql -U orbital -c "CREATE DATABASE orbital_test;" 2>/dev/null || true
 
 test-unit: ## Run unit tests with coverage summary (no external services required)
 	@echo "Running unit tests..."
@@ -71,8 +68,11 @@ test-integration: ## Run integration tests against real services (requires: make
 	@echo "Reseeding DGraph for E2E tests..."
 	@bash scripts/seed.sh
 
-test-e2e: ## Run Playwright e2e tests (requires orbital running on :8001)
+test-e2e: ## Run Playwright e2e tests headless (requires orbital on :8001); HEADED=true make test-e2e to watch
 	npx playwright test
+
+test-e2e-ui: ## Open Playwright UI mode for interactive local test watching (requires orbital on :8001)
+	npx playwright test --ui
 
 test-e2e-orb: ## Run Playwright orb UI tests (requires orb running on :8010)
 	npx playwright test --config=playwright.orb.config.ts
@@ -82,7 +82,7 @@ test-e2e-smoke: ## Run pre-release smoke checklist (requires: make up, make run-
 
 test: test-unit test-integration test-e2e test-e2e-orb ## Run full test suite (unit + integration + e2e + e2e-orb)
 
-cover: test-stack-up ## Run tests with coverage and print summary to terminal
+cover: ## Run tests with coverage and print summary to terminal
 	@echo "Running tests with coverage..."
 	@go test -short -coverprofile=coverage.out -covermode=atomic $(TEST_PKGS)
 	@go tool cover -func=coverage.out | tail -1

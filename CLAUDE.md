@@ -99,12 +99,18 @@ See `docs/claude/DGRAPH.md` for schema gotchas, DQL patterns, and blue-green exp
 **Phase:** Prototyping → MVP (target July 2026; GA August 2026)
 
 **Active spikes:**
-- **Spike 11 (Authorization)** ← blocks MVP — design settled: local `role` column (`admin`/`readonly`, default `readonly`), `ORBITAL_ADMIN_EMAILS` bootstrap, Echo middleware reads role from DB, enforces on mutating routes. Azure AD App Roles deferred (no Azure AD admin access). Ready to implement.
+- None.
 
 **Recently completed:**
-- **Device code flow (browser SSO)** — `ORBITAL_OIDC_DEVICE_CODE=true` feature flag; `GET /auth/device` initiates flow, `GET /auth/device/poll` polls token endpoint; standalone page with user_code + JS poller; no HTTPS required (no redirect URI); works behind ILB in AKS; 7 integration tests in `oidc_device_test.go`; login modal conditionally shows device vs standard OIDC button
+- **Backup scheduler cron refactor** — `ORBITAL_BACKUP_SCHEDULE` is now a 5-field cron expression (was duration + hour + TZ triple); `BackupSchedule` ent schema has `cron_spec` field (old `interval_seconds`/`run_at_hour`/`run_at_minute` dropped); `isMissedRun` simplified to one cron parser call; `ORBITAL_BACKUP_RETENTION_DAYS` default 14; schedule UI shows cron spec + timezone
+- **Bearer auth fix** — `ResolveUser` middleware on API group bridges JWT→user table for bearer token callers; without it all API bearer requests were 403
+- **GraphQL proxy orbId fix** — only strips `orbId` from variables when query doesn't declare `$orbId`; previously always-stripping broke idiomatic GraphQL mutations
+- **Smoke test hardened** — Step 7 mutation passes through proxy correctly; Step 9 restore verification uses `JSON.parse`+`toEqual` (DGraph key order non-determinism)
+- **Playwright headless by default** — `HEADED=true make test-e2e` for headed; `make test-e2e-ui` for interactive Playwright UI mode
+- **Spike 11 (Authorization)** — three-role system (`readonly < dev < admin`); `RoleAtLeast` helper; `RequireRole(db, minRole)` middleware + `RequireAdmin` wrapper; GraphQL mutations require `dev` (not admin); `/api/v1/users` list + role update endpoints (admin-only, last-admin guard 409); `/users` admin UI (server-side rendered, button group R/D/A per row, self-row disabled); `ORBITAL_ADMIN_EMAILS` bootstrap on first OIDC login; readonly UI gating (`CanMutate bool` + `AdminEmails []string` on `layout.Base`; `access-required.gohtml` partial on restore/export/backups/signed-artifacts); `user@armada.ai`/`user` readonly seed user added; unit + integration tests for users and authz handlers
+- **Device code hardening** — `POST /auth/device/poll` (was GET) sends `device_code` in JSON body to keep it out of all log surfaces (app logs, Istio access logs, proxy logs, browser history); static asset requests (`/static/*`, `/favicon.ico`) suppressed from Echo request logger (noisy with zero signal value); `ORBITAL_OIDC_DEVICE_CODE` default changed to `true`; AUTH.md updated with full rationale; 7 integration tests updated to POST + JSON body
+- **Device code flow (browser SSO)** — `ORBITAL_OIDC_DEVICE_CODE=true` feature flag; `GET /auth/device` initiates flow, `POST /auth/device/poll` polls token endpoint; standalone page with user_code + JS poller; no HTTPS required; works behind ILB in AKS; login modal conditionally shows device vs standard OIDC button
 - **Kustomize deployment structure** — `deploy/base/` (namespace-agnostic); `deploy/overlays/dev-netbox/` (netbox namespace, v0.0.13) and `deploy/overlays/dev-orbital/` (orbital namespace, v0.0.14, in-cluster PostgreSQL, own DGraph clusters, `ORBITAL_OIDC_DEVICE_CODE=true`); image tag pinned per overlay via `images:` transformer; `deploy/charts/dgraph/` Helm charts for DGraph blue + scratch
-- **Spike 11 authz design (Opus session)** — local role table approach settled; Azure AD App Roles deferred; ROADMAP and CLAUDE.md settled decisions updated
 - **Import history UX polish + triggerImport dispatch bug** — `triggerImport` (OCI tag import path) was pulling `artifact.ExtraLayers` but never dispatching them — fixed to run same dispatch pipeline as `importArtifact`; `DispatchErrors()` method on `ImportRecord` for template use (Go template `range` doesn't propagate variable assignments outward); `mediaTypeLabel` template func derives friendly name from vendor media type (`application/vnd.armada.configbundle.manifest.v1+yaml` → `configbundle`); summary line shows per-layer friendly names (`configbundle ✓`) not aggregate counts; dispatch errors surfaced in Error column; status 0 (no response) shows no badge; import history page now reverse-chronological; `ORB_DEV` env var for template hot-reload
 - **Orb import history schema + DC Orb ID fix** — `ImportRecord.Verification` three-state string (`"verified"/"unverified"/"not-applicable"`) replaces `Verified bool`; `Layers []LayerRecord` (with `Role`: `"graph"/"dispatched"/"unknown"`) replaces `DispatchResults`; import history UI: collapsible layers sub-table with dispatch status codes + errors; three-state verification badge; DC Orb ID column now shows real orbId — orbital's OCI annotation (`com.armada.orbital.datacenter-id`) now set from `export_jobs.datacenter_orb_id` (real orbId, not DGraph UID); `datacenter_orb_id` ent field added to export jobs; local dev OCI/S3 defaults point to local Docker Compose services (was production ACR/Azure Blob); Zot sync extension removed; `minio-setup` bucket creation service added
 - **Orb import hardening + DGraphBackend abstraction** — `oci.Verify` now hard-errors when key not configured (no skip path); `ResolveTag()` added for lightweight manifest inspection; `DGraphBackend` interface with `DockerBackend` (docker cp + exec) and `K8sBackend` (idle pod + shared PVC, mirrors orbital restore); `ORB_BACKEND` env var; `orbserver.New` returns error; 22 new tests (unit + e2e); `make test-integration` creates `orbital_test` DB inline
@@ -115,16 +121,15 @@ See `docs/claude/DGRAPH.md` for schema gotchas, DQL patterns, and blue-green exp
 - **Orbital inventory namespace filter** — page-level namespace selector; regex column search; persisted to localStorage
 
 **MVP gaps remaining:**
-- Authorization (Spike 11) ← next priority
 - Valkey cache-aside (Spike 9b) — not yet implemented
 - Schema management — versioned apply with backwards compat check on startup
 - Orb registry — register, authenticate, and revoke orbs
 - Orb: deployment model (Spike 15), API surface & authN/Z (Spike 16)
-- Testing foundations — unit, integration, code coverage, CI pipeline, AKS smoke suite
+- CI pipeline — GitHub Actions workflow (test pyramid itself is done: 222 Go tests + 45 Playwright e2e)
 - Security hardening — critical/high findings before any prod exposure
 - Production deployment — AKS prod, ingress, TLS, CI/CD
 
-**Next priority:** Start Spike 11 — Azure AD App Roles + Echo middleware role enforcement.
+**Next priority:** Testing foundations or Spike 15 (orb deployment model).
 
 *Update this section at each session wrap-up.*
 
@@ -350,7 +355,14 @@ These have been explicitly decided. Do not re-suggest them.
 - **Backup retention is count-based only for MVP; `skipped` status is reserved** — `skipped` remains in the enum for future use cases where a backup is deliberately not attempted (maintenance windows, rate limiting, policy suppression). Do not repurpose `skipped` for dedup. The `enforceRetention` prune is safe without dedup: each completed backup has a unique S3 key, so deleting the DB record and the S3 object together never orphans another record.
 
 - **DGraph `@auth` directives are out of scope for authorization** — all queries go through the Go server; clients never reach DGraph directly (settled). Authorization is enforced entirely at the Go middleware layer. DGraph `@auth` is redundant and adds no security value given the network topology. Do not re-add it.
-- **Authorization model: local role table, not Azure AD App Roles** — `role` column on the `users` ent schema, enum `admin`/`readonly`, default `readonly`. `ORBITAL_ADMIN_EMAILS` env var (comma-separated): on first OIDC/device-code login, if the email matches, the user is promoted to admin. All other users get readonly. Echo middleware reads the role from DB on each authenticated request and rejects mutating routes for readonly users. Azure AD App Roles require Application Administrator permissions not currently available — deferred as a future enhancement. If App Roles become available later, extract `roles` claim at login and override the local role. The local table stays as source of truth. Do not implement App Roles ahead of this.
+- **Authorization model: three-role local table (`readonly < dev < admin`)** — `role` enum on `users` ent schema: `readonly` (default), `dev`, `admin`. `ORBITAL_ADMIN_EMAILS` (comma-separated): on first OIDC/device-code login, matching emails get promoted to `admin`. `RoleAtLeast(actual, minimum user.Role) bool` in `authz.go` is the canonical comparison helper. `RequireRole(db, minRole)` is the Echo middleware — checks mutating methods (POST/PUT/PATCH/DELETE), passes GET through; `RequireAdmin` is a wrapper for `RequireRole(db, admin)`. GraphQL mutations require `dev` minimum (not admin). Azure AD App Roles deferred — requires Azure AD Application Administrator permissions not currently available. If App Roles become available later, extract `roles` claim at login and override the local role; local table stays as source of truth.
+- **Admin role management UI at `/users`** — server-side rendered Go template (not DataTables — small static list). Button group per row (R/D/A), active role highlighted+disabled. Self-row fully disabled (can't change your own role). Last-admin guard: `PUT /api/v1/users/:id/role` returns 409 if demoting the last admin. Operation is idempotent (same role → 200 with no DB write).
+- **Readonly UI gating: `CanMutate bool` on `layout.Base`** — `true` for dev and admin (`RoleAtLeast(role, dev)`). `AdminEmails []string` queried from DB on each page render. Pages gate action forms behind `{{if .CanMutate}}...{{else}}{{template "access-required" .}}{{end}}`. Pure-action pages (Restore): entire content gated. Mixed pages (Export, Backup, Signed Artifacts): list/table always visible, action form gated. Banner partial: `access-required.gohtml` — amber warning with mailto links to admin emails.
+- **`ORBITAL_OIDC_DEVICE_CODE` defaults to `true`** — device code is the only viable browser SSO for this deployment (private DNS/ILB + Istio TLS termination + no publicly resolvable redirect URI). Set `false` only if deploying on a public URL with a registered redirect URI in Azure AD. Browser device code page shows `user_code` and a manual link to `microsoft.com/devicelogin` — user opens the link and types the code. No auto-open: Azure AD returns a v1 `deviceauth` endpoint URL which doesn't support `?otc=` pre-fill. The UX improvement (Auth Code + PKCE, no copy/paste) requires registering the orbital URL as a redirect URI in Azure AD — blocked until Application Administrator access is available.
+- **`POST /auth/device/poll` sends `device_code` in the JSON body** — not as a query parameter. Query params appear in application logs, Istio access logs, proxy logs, and browser history. `device_code` is a short-lived credential; body keeps it out of all log surfaces. Handler uses `c.Bind()` to parse `{"device_code":"..."}`. Route is `POST`, not `GET`.
+- **`ResolveUser` middleware on the API group bridges bearer token auth to the user table** — wired after `RequireAuth()` and before `RequireRole()` in `server.go`. When `user_id` is 0 (bearer path: JWT validated but no session), it finds or provisions the user by email from JWT claims, then sets `user_id` on the context so `RequireRole` can enforce correctly. Without this, all bearer token requests were always-403. Do not remove or reorder it.
+- **`ORBITAL_BACKUP_SCHEDULE` is a cron expression** — standard 5-field cron spec (e.g. `"0 0 * * *"`). Empty = no schedule bootstrap on startup (local dev default). Validated via `robfig/cron/v3`. Replaces the old duration + hour + timezone triple (`ORBITAL_BACKUP_SCHEDULE` as duration, `ORBITAL_BACKUP_SCHEDULE_HOUR`, `ORBITAL_BACKUP_SCHEDULE_TZ`). AKS dev overlay sets `"0 0 * * *"`. `ORBITAL_BACKUP_RETENTION_DAYS` default is 14 (not 30).
+- **GraphQL proxy strips `orbId` from variables only when the query doesn't declare `$orbId`** — `orbIdIsQueryVar := strings.Contains(req.Query, "$orbId")` controls this. If the query declares `$orbId` as a DGraph variable, stripping it causes a "must be defined" error from DGraph. The UI convention is inline literals (no declared `$orbId`); API clients writing idiomatic GraphQL may declare it. Both patterns must work.
 
 *Domain-specific settled decisions live in `docs/claude/DGRAPH.md`, `docs/claude/UI.md`, `docs/claude/AUTH.md`, `docs/claude/AUDIT.md`, `docs/claude/OCI.md`.*
 
@@ -360,9 +372,12 @@ Tests live in `e2e/`. Run with `make test-e2e` (requires orbital running on `:80
 
 **Auth setup:** `e2e/global-setup.ts` logs in as `admin@armada.ai` / `admin` once, saves session cookie to `e2e/.auth.json`. All tests reuse this state. The `.auth.json` file is gitignored and regenerated automatically.
 
+**Headed mode:** `make test-e2e` runs headless by default. Use `HEADED=true make test-e2e` to watch in a browser. For interactive local development use `make test-e2e-ui` (Playwright UI mode — no flashing, better experience than `--headed`).
+
 **Test conventions:**
 - Use `data-testid` attributes on elements that need stable selectors
 - Assert against values read from the page rather than hardcoded seed data — hardcoded counts break when seed data changes
+- Compare JSON string fields with `JSON.parse` + `toEqual`, not `.toBe` — DGraph does not guarantee key order in string fields
 
 ## Go Conventions
 

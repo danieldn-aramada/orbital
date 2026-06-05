@@ -1,0 +1,78 @@
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div>
+    <div class="app-main p-5">
+      {{if not .IsAuthn}}
+        <div class="notification is-warning is-light">
+          <a class="js-modal-trigger" data-target="login-modal">Login</a> to view this page.
+        </div>
+      {{else if ne .User.Role "admin"}}
+        <div class="notification is-danger is-light">
+          Admin access required.
+        </div>
+      {{else}}
+
+      <p class="is-size-4 mb-2" data-testid="page-heading">Users</p>
+      <p class="has-text-grey mb-5" style="font-size: 0.875rem;">
+        Manage user roles.
+        <strong>Readonly</strong> — view only.
+        <strong>Dev</strong> — full config access (mutations, export, backup).
+        <strong>Admin</strong> — dev access + role management.
+      </p>
+
+      <div id="users-error" class="notification is-danger is-light" style="display:none;"></div>
+
+      <table class="table is-striped is-hoverable is-fullwidth is-size-7">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Created At</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Users}}
+          {{$self := eq .ID $.User.Id}}
+          <tr data-user-id="{{.ID}}">
+            <td>{{.Email}}</td>
+            <td>{{if .Name}}{{.Name}}{{else}}—{{end}}</td>
+            <td>
+              <div class="buttons has-addons" style="margin-bottom:0; flex-wrap:nowrap;">
+                <button
+                  class="button is-small{{if eq .Role "readonly"}} is-primary is-selected{{end}}"
+                  onclick="setUserRole({{.ID}}, 'readonly', this)"
+                  {{if or $self (eq .Role "readonly")}}disabled{{end}}
+                  title="Readonly — view only"
+                  style="width:5rem;"
+                >Readonly</button>
+                <button
+                  class="button is-small{{if eq .Role "dev"}} is-warning is-selected{{end}}"
+                  onclick="setUserRole({{.ID}}, 'dev', this)"
+                  {{if or $self (eq .Role "dev")}}disabled{{end}}
+                  title="Dev — config access"
+                  style="width:5rem;"
+                >Dev</button>
+                <button
+                  class="button is-small{{if eq .Role "admin"}} is-danger is-selected{{end}}"
+                  onclick="setUserRole({{.ID}}, 'admin', this)"
+                  {{if or $self (eq .Role "admin")}}disabled{{end}}
+                  title="Admin — role management"
+                  style="width:5rem;"
+                >Admin</button>
+              </div>
+            </td>
+            <td><span data-timestamp="{{.CreatedAt}}">{{.CreatedAt}}</span></td>
+          </tr>
+          {{else}}
+          <tr><td colspan="4" class="has-text-grey">No users found.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+
+      {{end}}
+    </div>
+  </main>
+{{end}}

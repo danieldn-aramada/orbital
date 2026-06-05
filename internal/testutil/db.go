@@ -58,6 +58,7 @@ func truncateAll(dsn string) error {
 		"restore_jobs",
 		"export_jobs",
 		"backups",
+		"backup_schedules",
 		"events",
 		"orbs",
 		"users",

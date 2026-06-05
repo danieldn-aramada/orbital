@@ -102,6 +102,20 @@ func (_u *BackupUpdate) SetNillableStatus(v *backup.Status) *BackupUpdate {
 	return _u
 }
 
+// SetTrigger sets the "trigger" field.
+func (_u *BackupUpdate) SetTrigger(v backup.Trigger) *BackupUpdate {
+	_u.mutation.SetTrigger(v)
+	return _u
+}
+
+// SetNillableTrigger sets the "trigger" field if the given value is not nil.
+func (_u *BackupUpdate) SetNillableTrigger(v *backup.Trigger) *BackupUpdate {
+	if v != nil {
+		_u.SetTrigger(*v)
+	}
+	return _u
+}
+
 // SetS3Bucket sets the "s3_bucket" field.
 func (_u *BackupUpdate) SetS3Bucket(v string) *BackupUpdate {
 	_u.mutation.SetS3Bucket(v)
@@ -328,6 +342,11 @@ func (_u *BackupUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Backup.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Trigger(); ok {
+		if err := backup.TriggerValidator(v); err != nil {
+			return &ValidationError{Name: "trigger", err: fmt.Errorf(`ent: validator failed for field "Backup.trigger": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -363,6 +382,9 @@ func (_u *BackupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(backup.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.Trigger(); ok {
+		_spec.SetField(backup.FieldTrigger, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.S3Bucket(); ok {
 		_spec.SetField(backup.FieldS3Bucket, field.TypeString, value)
@@ -511,6 +533,20 @@ func (_u *BackupUpdateOne) SetStatus(v backup.Status) *BackupUpdateOne {
 func (_u *BackupUpdateOne) SetNillableStatus(v *backup.Status) *BackupUpdateOne {
 	if v != nil {
 		_u.SetStatus(*v)
+	}
+	return _u
+}
+
+// SetTrigger sets the "trigger" field.
+func (_u *BackupUpdateOne) SetTrigger(v backup.Trigger) *BackupUpdateOne {
+	_u.mutation.SetTrigger(v)
+	return _u
+}
+
+// SetNillableTrigger sets the "trigger" field if the given value is not nil.
+func (_u *BackupUpdateOne) SetNillableTrigger(v *backup.Trigger) *BackupUpdateOne {
+	if v != nil {
+		_u.SetTrigger(*v)
 	}
 	return _u
 }
@@ -754,6 +790,11 @@ func (_u *BackupUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Backup.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Trigger(); ok {
+		if err := backup.TriggerValidator(v); err != nil {
+			return &ValidationError{Name: "trigger", err: fmt.Errorf(`ent: validator failed for field "Backup.trigger": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -806,6 +847,9 @@ func (_u *BackupUpdateOne) sqlSave(ctx context.Context) (_node *Backup, err erro
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(backup.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.Trigger(); ok {
+		_spec.SetField(backup.FieldTrigger, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.S3Bucket(); ok {
 		_spec.SetField(backup.FieldS3Bucket, field.TypeString, value)

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/armada/orbital/ent"
+	"github.com/armada/orbital/ent/migrate"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/testutil"
 	"github.com/google/uuid"
@@ -53,7 +54,7 @@ func setupExportSuite() error {
 	if err != nil {
 		return fmt.Errorf("open db: %w", err)
 	}
-	if err := testDB.Schema.Create(context.Background()); err != nil {
+	if err := testDB.Schema.Create(context.Background(), migrate.WithDropColumn(true)); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
 

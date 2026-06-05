@@ -3,6 +3,7 @@
 package user
 
 import (
+	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -23,6 +24,8 @@ const (
 	FieldPasswordHash = "password_hash"
 	// FieldVerified holds the string denoting the verified field in the database.
 	FieldVerified = "verified"
+	// FieldRole holds the string denoting the role field in the database.
+	FieldRole = "role"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// Table holds the table name of the user in the database.
@@ -37,6 +40,7 @@ var Columns = []string{
 	FieldPreferredUsername,
 	FieldPasswordHash,
 	FieldVerified,
+	FieldRole,
 	FieldCreatedAt,
 }
 
@@ -62,6 +66,33 @@ var (
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 )
+
+// Role defines the type for the "role" enum field.
+type Role string
+
+// RoleReadonly is the default value of the Role enum.
+const DefaultRole = RoleReadonly
+
+// Role values.
+const (
+	RoleReadonly Role = "readonly"
+	RoleDev      Role = "dev"
+	RoleAdmin    Role = "admin"
+)
+
+func (r Role) String() string {
+	return string(r)
+}
+
+// RoleValidator is a validator for the "role" field enum values. It is called by the builders before save.
+func RoleValidator(r Role) error {
+	switch r {
+	case RoleReadonly, RoleDev, RoleAdmin:
+		return nil
+	default:
+		return fmt.Errorf("user: invalid enum value for role field: %q", r)
+	}
+}
 
 // OrderOption defines the ordering options for the User queries.
 type OrderOption func(*sql.Selector)
@@ -94,6 +125,11 @@ func ByPasswordHash(opts ...sql.OrderTermOption) OrderOption {
 // ByVerified orders the results by the verified field.
 func ByVerified(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldVerified, opts...).ToFunc()
+}
+
+// ByRole orders the results by the role field.
+func ByRole(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRole, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

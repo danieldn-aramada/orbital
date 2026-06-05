@@ -83,6 +83,20 @@ func (_c *BackupCreate) SetStatus(v backup.Status) *BackupCreate {
 	return _c
 }
 
+// SetTrigger sets the "trigger" field.
+func (_c *BackupCreate) SetTrigger(v backup.Trigger) *BackupCreate {
+	_c.mutation.SetTrigger(v)
+	return _c
+}
+
+// SetNillableTrigger sets the "trigger" field if the given value is not nil.
+func (_c *BackupCreate) SetNillableTrigger(v *backup.Trigger) *BackupCreate {
+	if v != nil {
+		_c.SetTrigger(*v)
+	}
+	return _c
+}
+
 // SetS3Bucket sets the "s3_bucket" field.
 func (_c *BackupCreate) SetS3Bucket(v string) *BackupCreate {
 	_c.mutation.SetS3Bucket(v)
@@ -262,6 +276,10 @@ func (_c *BackupCreate) defaults() {
 		v := backup.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
+	if _, ok := _c.mutation.Trigger(); !ok {
+		v := backup.DefaultTrigger
+		_c.mutation.SetTrigger(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := backup.DefaultID()
 		_c.mutation.SetID(v)
@@ -279,6 +297,14 @@ func (_c *BackupCreate) check() error {
 	if v, ok := _c.mutation.Status(); ok {
 		if err := backup.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Backup.status": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Trigger(); !ok {
+		return &ValidationError{Name: "trigger", err: errors.New(`ent: missing required field "Backup.trigger"`)}
+	}
+	if v, ok := _c.mutation.Trigger(); ok {
+		if err := backup.TriggerValidator(v); err != nil {
+			return &ValidationError{Name: "trigger", err: fmt.Errorf(`ent: validator failed for field "Backup.trigger": %w`, err)}
 		}
 	}
 	return nil
@@ -335,6 +361,10 @@ func (_c *BackupCreate) createSpec() (*Backup, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(backup.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
+	}
+	if value, ok := _c.mutation.Trigger(); ok {
+		_spec.SetField(backup.FieldTrigger, field.TypeEnum, value)
+		_node.Trigger = value
 	}
 	if value, ok := _c.mutation.S3Bucket(); ok {
 		_spec.SetField(backup.FieldS3Bucket, field.TypeString, value)

@@ -1135,17 +1135,20 @@ function renderBackups(jobs) {
   const tbody = document.getElementById('backup-tbody')
   if (!tbody) return
   if (!jobs || jobs.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="has-text-grey has-text-centered">No backups yet.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="7" class="has-text-grey has-text-centered">No backups yet.</td></tr>'
     return
   }
   tbody.innerHTML = jobs.map(j => {
     const tag = backupStatusColors[j.status] || 'is-light'
     const checksumDisplay = j.checksum
-      ? `<span class="is-family-monospace" style="word-break:break-all;">${j.checksum}</span> <button class="button is-small is-white" title="Copy checksum" onclick="navigator.clipboard.writeText('${j.checksum}').then(()=>{this.innerHTML='<span class=\\'icon\\'><i class=\\'fas fa-check\\'></i></span>';setTimeout(()=>{this.innerHTML='<span class=\\'icon\\'><i class=\\'fas fa-copy\\'></i></span>';},1200)})"><span class="icon"><i class="fas fa-copy"></i></span></button>`
+      ? `<span class="is-family-monospace" title="${j.checksum}">${j.checksum.substring(0, 36)}…</span> <button class="button is-small is-white" title="Copy checksum" onclick="navigator.clipboard.writeText('${j.checksum}').then(()=>{this.innerHTML='<span class=\\'icon\\'><i class=\\'fas fa-check\\'></i></span>';setTimeout(()=>{this.innerHTML='<span class=\\'icon\\'><i class=\\'fas fa-copy\\'></i></span>';},1200)})"><span class="icon"><i class="fas fa-copy"></i></span></button>`
       : '—'
     const statusCell = j.status === 'failed' && j.error
       ? `<span class="tag ${tag}">${j.status} ⚠</span><br><span class="has-text-danger" style="display:block;max-width:400px;white-space:normal;word-break:break-word;margin-top:4px;">${j.error}</span>`
       : `<span class="tag ${tag}">${j.status}</span>`
+    const triggerTag = j.trigger === 'scheduled'
+      ? '<span class="tag is-info is-light">scheduled</span>'
+      : '<span class="tag is-light">manual</span>'
     const canDelete = j.status !== 'running' && j.status !== 'pending'
     const actions = [
       j.status === 'completed' && j.s3Key
@@ -1158,9 +1161,10 @@ function renderBackups(jobs) {
     return `<tr>
       <td>${new Date(j.initiatedAt).toLocaleString()}</td>
       <td data-testid="backup-job-status">${statusCell}</td>
+      <td>${triggerTag}</td>
       <td>${j.initiatedBy || '—'}</td>
       <td>${formatBytes(j.sizeBytes)}</td>
-      <td style="max-width:340px;">${checksumDisplay}</td>
+      <td>${checksumDisplay}</td>
       <td><div class="buttons is-right" style="gap: 0.25rem; flex-wrap: nowrap;">${actions}</div></td>
     </tr>`
   }).join('')
@@ -1842,6 +1846,21 @@ function testBackupConnection() {
     .catch(() => {
       btn.classList.remove('is-loading')
       result.innerHTML = '<span class="has-text-danger">Request failed</span>'
+    })
+}
+
+function toggleSchedule(enable) {
+  const btn = document.getElementById('btn-toggle-schedule')
+  if (btn) { btn.classList.add('is-loading'); btn.disabled = true }
+  fetch(BASE + '/api/v1/backup/schedule', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled: enable }),
+  })
+    .then(r => r.json())
+    .then(() => { window.location.reload() })
+    .catch(() => {
+      if (btn) { btn.classList.remove('is-loading'); btn.disabled = false }
     })
 }
 
@@ -2816,7 +2835,11 @@ function initDeviceCodePoller() {
 
   async function poll() {
     try {
-      const resp = await fetch(`${basePath}/auth/device/poll?device_code=${encodeURIComponent(deviceCode)}`)
+      const resp = await fetch(`${basePath}/auth/device/poll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_code: deviceCode }),
+      })
       const data = await resp.json()
 
       if (data.status === 'complete') {
@@ -2842,4 +2865,30 @@ function initDeviceCodePoller() {
 
 document.addEventListener('DOMContentLoaded', initDeviceCodePoller)
 
+// ── Users page ────────────────────────────────────────────────────────────────
+
+function setUserRole(userId, role, btn) {
+  btn.classList.add('is-loading')
+  btn.disabled = true
+
+  fetch(BASE + `/api/v1/users/${userId}/role`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role }),
+  })
+    .then(r => {
+      if (!r.ok) return r.json().then(j => Promise.reject(j.message || 'Request failed'))
+      window.location.reload()
+    })
+    .catch(msg => {
+      btn.classList.remove('is-loading')
+      btn.disabled = false
+      const errEl = document.getElementById('users-error')
+      if (errEl) {
+        errEl.textContent = typeof msg === 'string' ? msg : 'Failed to update role.'
+        errEl.style.display = ''
+        setTimeout(() => { errEl.style.display = 'none' }, 5000)
+      }
+    })
+}
 

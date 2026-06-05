@@ -28,6 +28,8 @@ type Backup struct {
 	UpdatedBy string `json:"updated_by,omitempty"`
 	// Status holds the value of the "status" field.
 	Status backup.Status `json:"status,omitempty"`
+	// Trigger holds the value of the "trigger" field.
+	Trigger backup.Trigger `json:"trigger,omitempty"`
 	// S3Bucket holds the value of the "s3_bucket" field.
 	S3Bucket string `json:"s3_bucket,omitempty"`
 	// S3Key holds the value of the "s3_key" field.
@@ -56,7 +58,7 @@ func (*Backup) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case backup.FieldSizeBytes:
 			values[i] = new(sql.NullInt64)
-		case backup.FieldCreatedBy, backup.FieldUpdatedBy, backup.FieldStatus, backup.FieldS3Bucket, backup.FieldS3Key, backup.FieldS3Endpoint, backup.FieldChecksum, backup.FieldSchemaVersion, backup.FieldError:
+		case backup.FieldCreatedBy, backup.FieldUpdatedBy, backup.FieldStatus, backup.FieldTrigger, backup.FieldS3Bucket, backup.FieldS3Key, backup.FieldS3Endpoint, backup.FieldChecksum, backup.FieldSchemaVersion, backup.FieldError:
 			values[i] = new(sql.NullString)
 		case backup.FieldCreatedAt, backup.FieldUpdatedAt, backup.FieldStartedAt, backup.FieldCompletedAt:
 			values[i] = new(sql.NullTime)
@@ -113,6 +115,12 @@ func (_m *Backup) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				_m.Status = backup.Status(value.String)
+			}
+		case backup.FieldTrigger:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field trigger", values[i])
+			} else if value.Valid {
+				_m.Trigger = backup.Trigger(value.String)
 			}
 		case backup.FieldS3Bucket:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -224,6 +232,9 @@ func (_m *Backup) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Status))
+	builder.WriteString(", ")
+	builder.WriteString("trigger=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Trigger))
 	builder.WriteString(", ")
 	builder.WriteString("s3_bucket=")
 	builder.WriteString(_m.S3Bucket)

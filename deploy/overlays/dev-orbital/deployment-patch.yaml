@@ -28,3 +28,5 @@ spec:
               value: dgraph-blue-dgraph-zero:5080
             - name: ORBITAL_OIDC_DEVICE_CODE
               value: "true"
+            - name: ORBITAL_BACKUP_SCHEDULE
+              value: "0 8 * * *"

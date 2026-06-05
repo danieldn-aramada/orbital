@@ -16,6 +16,7 @@ var (
 		{Name: "updated_at", Type: field.TypeTime, Nullable: true},
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "running", "completed", "skipped", "failed"}},
+		{Name: "trigger", Type: field.TypeEnum, Enums: []string{"manual", "scheduled"}, Default: "manual"},
 		{Name: "s3_bucket", Type: field.TypeString, Nullable: true},
 		{Name: "s3_key", Type: field.TypeString, Nullable: true},
 		{Name: "s3_endpoint", Type: field.TypeString, Nullable: true},
@@ -31,6 +32,24 @@ var (
 		Name:       "backups",
 		Columns:    BackupsColumns,
 		PrimaryKey: []*schema.Column{BackupsColumns[0]},
+	}
+	// BackupSchedulesColumns holds the columns for the "backup_schedules" table.
+	BackupSchedulesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_at", Type: field.TypeTime, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "cron_spec", Type: field.TypeString},
+		{Name: "timezone", Type: field.TypeString, Default: "UTC"},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "last_triggered_at", Type: field.TypeTime, Nullable: true},
+	}
+	// BackupSchedulesTable holds the schema information for the "backup_schedules" table.
+	BackupSchedulesTable = &schema.Table{
+		Name:       "backup_schedules",
+		Columns:    BackupSchedulesColumns,
+		PrimaryKey: []*schema.Column{BackupSchedulesColumns[0]},
 	}
 	// EventsColumns holds the columns for the "events" table.
 	EventsColumns = []*schema.Column{
@@ -151,6 +170,7 @@ var (
 		{Name: "preferred_username", Type: field.TypeString},
 		{Name: "password_hash", Type: field.TypeString, Nullable: true},
 		{Name: "verified", Type: field.TypeBool, Default: false},
+		{Name: "role", Type: field.TypeEnum, Enums: []string{"readonly", "dev", "admin"}, Default: "readonly"},
 		{Name: "created_at", Type: field.TypeTime},
 	}
 	// UsersTable holds the schema information for the "users" table.
@@ -162,6 +182,7 @@ var (
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		BackupsTable,
+		BackupSchedulesTable,
 		EventsTable,
 		ExportJobsTable,
 		OrbsTable,

@@ -9,6 +9,9 @@ import (
 // Backup is the predicate function for backup builders.
 type Backup func(*sql.Selector)
 
+// BackupSchedule is the predicate function for backupschedule builders.
+type BackupSchedule func(*sql.Selector)
+
 // Event is the predicate function for event builders.
 type Event func(*sql.Selector)
 

@@ -10,6 +10,9 @@
         </div>
       {{else}}
 
+      {{if not .CanMutate}}{{template "access-required" .}}{{end}}
+
+      {{if .CanMutate}}
       <section class="mb-6">
         <h1 class="title is-5 mb-1">Backup Graph</h1>
         <p class="subtitle is-6 has-text-grey mb-5">Exports entire configuration graph to S3-compatible storage.</p>
@@ -53,6 +56,33 @@
         </div>
       </section>
 
+      {{if .HasSchedule}}
+      <section class="mb-6">
+        <h2 class="title is-6 mb-2">Automatic Schedule</h2>
+        <div style="max-width: 560px;">
+          <div class="box" style="padding: 1rem;">
+            <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
+              <div>
+                <span class="tag {{if .ScheduleEnabled}}is-success is-light{{else}}is-light{{end}} mr-2">
+                  {{if .ScheduleEnabled}}Enabled{{else}}Disabled{{end}}
+                </span>
+                <span class="is-size-7 has-text-grey">{{.ScheduleSummary}}</span>
+              </div>
+              <button class="button is-small is-light" id="btn-toggle-schedule"
+                onclick="toggleSchedule({{if .ScheduleEnabled}}false{{else}}true{{end}})">
+                {{if .ScheduleEnabled}}Disable{{else}}Enable{{end}}
+              </button>
+            </div>
+            <div class="is-size-7 has-text-grey">
+              {{if .LastTriggeredAt}}<div>Last run: {{.LastTriggeredAt}}</div>{{end}}
+              {{if .NextRunApprox}}<div id="next-run-approx">Next run (approx): {{.NextRunApprox}}</div>{{end}}
+            </div>
+          </div>
+        </div>
+      </section>
+      {{end}}
+      {{end}}
+
       <div>
 
         <table class="table is-striped is-hoverable is-fullwidth" style="font-size: 12px;">
@@ -60,6 +90,7 @@
             <tr>
               <th>Initiated At</th>
               <th>Status</th>
+              <th>Trigger</th>
               <th>Initiated By</th>
               <th>Size</th>
               <th>Checksum</th>
@@ -67,7 +98,7 @@
             </tr>
           </thead>
           <tbody id="backup-tbody">
-            <tr><td colspan="6" class="has-text-grey has-text-centered">Loading...</td></tr>
+            <tr><td colspan="7" class="has-text-grey has-text-centered">Loading...</td></tr>
           </tbody>
         </table>
 

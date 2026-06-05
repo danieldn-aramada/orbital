@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/armada/orbital/internal/auth"
@@ -33,13 +34,17 @@ type Config struct {
 	S3Bucket               string        `envconfig:"ORBITAL_S3_BUCKET"               default:"orbital"`
 	S3AccessKey            string        `envconfig:"ORBITAL_S3_ACCESS_KEY"           default:"minioadmin"`
 	S3SecretKey            string        `envconfig:"ORBITAL_S3_SECRET_KEY"           default:"minioadmin"`
-	S3Prefix               string        `envconfig:"ORBITAL_S3_PREFIX"               default:"backups/"` // optional path prefix within the bucket
-	S3RetentionCount       int           `envconfig:"ORBITAL_S3_RETENTION_COUNT"      default:"30"`       // max backups to retain; 0 = unlimited
+	S3Prefix                string        `envconfig:"ORBITAL_S3_PREFIX"                default:"backups/"` // optional path prefix within the bucket
+	S3RetentionCount        int           `envconfig:"ORBITAL_S3_RETENTION_COUNT"       default:"0"`        // deprecated: use ORBITAL_BACKUP_RETENTION_MIN_COUNT
+	BackupRetentionDays     int           `envconfig:"ORBITAL_BACKUP_RETENTION_DAYS"    default:"14"`       // delete backups older than N days; 0 = no time-based pruning
+	BackupRetentionMinCount int           `envconfig:"ORBITAL_BACKUP_RETENTION_MIN_COUNT" default:"3"`     // always keep at least N backups regardless of age
+	BackupSchedule   string `envconfig:"ORBITAL_BACKUP_SCHEDULE"    default:""`    // cron expression for in-process scheduler (e.g. "0 8 * * *" = midnight PT); empty = disabled
 	OIDCIssuerURL          string        `envconfig:"ORBITAL_OIDC_ISSUER_URL"         default:"https://login.microsoftonline.com/8f231c2a-9551-4b40-be17-5b24afe5e890/v2.0"`
 	OIDCClientID           string        `envconfig:"ORBITAL_OIDC_CLIENT_ID"          default:"5fc832f6-843e-4207-93dd-b3c3a77c06f2"`
 	OIDCClientSecret       string        `envconfig:"ORBITAL_OIDC_CLIENT_SECRET"      default:""`
 	OIDCRedirectURL        string        `envconfig:"ORBITAL_OIDC_REDIRECT_URL"       default:"http://localhost:8001/auth/callback"`
-	OIDCDeviceCode         bool          `envconfig:"ORBITAL_OIDC_DEVICE_CODE"        default:"false"` // enables device code flow for browser SSO — dev only, no HTTPS required
+	OIDCDeviceCode         bool          `envconfig:"ORBITAL_OIDC_DEVICE_CODE"        default:"true"`   // enables device code flow for browser SSO; set false to use Authorization Code + PKCE (requires publicly resolvable redirect URI)
+	AdminEmails            string        `envconfig:"ORBITAL_ADMIN_EMAILS"            default:"admin@armada.ai"` // comma-separated emails promoted to admin on first OIDC login
 	OCIRegistry            string        `envconfig:"ORBITAL_OCI_REGISTRY"            default:"localhost:5001"`
 	OCIRepo                string        `envconfig:"ORBITAL_OCI_REPO"                default:"orbital"`
 	OCIUsername            string        `envconfig:"ORBITAL_OCI_USERNAME"            default:""`
@@ -76,6 +81,18 @@ func (c *Config) SessionKeys() auth.SessionKeys {
 		HMACKey:       c.SessionHMACKey,
 		EncryptionKey: c.SessionEncryptionKey,
 	}
+}
+
+// AdminEmailSet parses ORBITAL_ADMIN_EMAILS into a lowercase set for O(1) lookup.
+func (c *Config) AdminEmailSet() map[string]struct{} {
+	m := make(map[string]struct{})
+	for _, e := range strings.Split(c.AdminEmails, ",") {
+		e = strings.TrimSpace(strings.ToLower(e))
+		if e != "" {
+			m[e] = struct{}{}
+		}
+	}
+	return m
 }
 
 // OCIConfigured returns true when the minimum OCI fields are set to enable publishing.

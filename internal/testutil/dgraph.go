@@ -115,7 +115,7 @@ func SeedMinimalE(graphqlURL string) (namespaceID, dcOrbID string, err error) {
 	nsMutation := `
 	mutation {
 		addNamespace(input: [{
-			name: "Test Namespace"
+			name: "test-namespace"
 		}]) {
 			namespace { id }
 		}

@@ -14,6 +14,8 @@ type Tx struct {
 	config
 	// Backup is the client for interacting with the Backup builders.
 	Backup *BackupClient
+	// BackupSchedule is the client for interacting with the BackupSchedule builders.
+	BackupSchedule *BackupScheduleClient
 	// Event is the client for interacting with the Event builders.
 	Event *EventClient
 	// ExportJob is the client for interacting with the ExportJob builders.
@@ -158,6 +160,7 @@ func (tx *Tx) Client() *Client {
 
 func (tx *Tx) init() {
 	tx.Backup = NewBackupClient(tx.config)
+	tx.BackupSchedule = NewBackupScheduleClient(tx.config)
 	tx.Event = NewEventClient(tx.config)
 	tx.ExportJob = NewExportJobClient(tx.config)
 	tx.Orb = NewOrbClient(tx.config)

@@ -5,12 +5,15 @@ package handler_test
 import (
 	"context"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/armada/orbital/ent/event"
 	"github.com/armada/orbital/internal/auth"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/labstack/echo/v4"
@@ -25,7 +28,7 @@ var loginFormTmpl = template.Must(
 )
 
 func newLoginHandler() *handler.Login {
-	return handler.NewLogin(testDB, loginTestKeys, loginFormTmpl, "")
+	return handler.NewLogin(testDB, loginTestKeys, loginFormTmpl, "", slog.Default())
 }
 
 // sessionWithCSRF creates a fresh CSRF token in a session cookie and returns
@@ -241,5 +244,79 @@ func TestLogout_InvalidCSRF(t *testing.T) {
 	// Invalid CSRF still redirects (graceful degradation)
 	if rec.Code != http.StatusSeeOther {
 		t.Errorf("expected 303, got %d", rec.Code)
+	}
+}
+
+// ── Audit event tests ─────────────────────────────────────────────────────────
+
+func TestLogin_Success_WritesAuditEvent(t *testing.T) {
+	ctx := context.Background()
+	const email = "audit-login-success@example.com"
+	hash := hashPassword(t, "pass")
+	u := testDB.User.Create().
+		SetEmail(email).
+		SetName("Audit User").
+		SetPreferredUsername(email).
+		SetPasswordHash(hash).
+		SaveX(ctx)
+	t.Cleanup(func() {
+		testDB.User.DeleteOne(u).ExecX(ctx)
+		testDB.Event.Delete().Where(event.Actor(email)).ExecX(ctx)
+	})
+
+	h := newLoginHandler()
+	cookies, csrf := sessionWithCSRF(t)
+	c, _ := postLogin(t, cookies, url.Values{"email": {email}, "password": {"pass"}, "csrf": {csrf}})
+
+	if err := h.Post(c); err != nil {
+		t.Fatalf("Post: %v", err)
+	}
+
+	// Give writeAuditEvent (async-ish via goroutine-free path) time to commit.
+	time.Sleep(50 * time.Millisecond)
+
+	ev, err := testDB.Event.Query().Where(event.Actor(email)).Only(ctx)
+	if err != nil {
+		t.Fatalf("audit event not found: %v", err)
+	}
+	if len(ev.Operations) == 0 || ev.Operations[0] != "loginSuccess" {
+		t.Errorf("expected operation loginSuccess, got %v", ev.Operations)
+	}
+	if ev.EventCategory != "management" {
+		t.Errorf("expected category management, got %q", ev.EventCategory)
+	}
+}
+
+func TestLogin_WrongPassword_WritesAuditEvent(t *testing.T) {
+	ctx := context.Background()
+	const email = "audit-login-fail@example.com"
+	hash := hashPassword(t, "correct")
+	u := testDB.User.Create().
+		SetEmail(email).
+		SetName("Audit Fail User").
+		SetPreferredUsername(email).
+		SetPasswordHash(hash).
+		SaveX(ctx)
+	t.Cleanup(func() {
+		testDB.User.DeleteOne(u).ExecX(ctx)
+		testDB.Event.Delete().Where(event.Actor(email)).ExecX(ctx)
+	})
+
+	h := newLoginHandler()
+	cookies, csrf := sessionWithCSRF(t)
+	c, _ := postLogin(t, cookies, url.Values{"email": {email}, "password": {"wrong"}, "csrf": {csrf}})
+
+	if err := h.Post(c); err != nil {
+		t.Fatalf("Post: %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	ev, err := testDB.Event.Query().Where(event.Actor(email)).Only(ctx)
+	if err != nil {
+		t.Fatalf("audit event not found: %v", err)
+	}
+	if len(ev.Operations) == 0 || ev.Operations[0] != "loginFailed" {
+		t.Errorf("expected operation loginFailed, got %v", ev.Operations)
 	}
 }

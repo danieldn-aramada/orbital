@@ -10,11 +10,14 @@
         </div>
       {{else}}
 
+      {{if not .CanMutate}}{{template "access-required" .}}{{end}}
+
       <p class="is-size-4 mb-2" data-testid="page-heading">Export Subgraph</p>
       <p class="has-text-grey mb-5" style="font-size: 0.875rem;">
         Export a data center's configuration subgraph as a portable archive (<code>json.gz</code> + <code>schema.gz</code>).
       </p>
 
+      {{if .CanMutate}}
       <div style="max-width: 480px;" class="mb-6">
         <div class="field">
           <label class="label">OCI Registry</label>
@@ -83,6 +86,7 @@
           </div>
         </article>
       </div>
+      {{end}}
 
       <div class="mt-6">
         <p class="is-size-5 mb-3">Export Jobs</p>

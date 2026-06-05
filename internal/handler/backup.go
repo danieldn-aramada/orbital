@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -11,9 +12,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
-	"entgo.io/ent/dialect/sql"
+	entsql "entgo.io/ent/dialect/sql"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/service"
@@ -25,6 +27,7 @@ import (
 	"github.com/armada/orbital/ent/restorejob"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	cron "github.com/robfig/cron/v3"
 )
 
 const presignTTL = 15 * time.Minute
@@ -37,9 +40,14 @@ type blobStorage interface {
 	ping(ctx context.Context) error
 }
 
+// schedulerAdvisoryLockKey is the PostgreSQL advisory lock key for the backup scheduler.
+// Transaction-scoped: auto-releases if the process crashes.
+const schedulerAdvisoryLockKey int64 = 5555100001
+
 // BackupHandler handles async DGraph backup operations.
 type BackupHandler struct {
 	db                       *ent.Client
+	rawDB                    *sql.DB // underlying *sql.DB for advisory locks; nil skips locking
 	dgraphAdminURL           string
 	dgraphExportDir          string
 	dgraphContainerExportDir string
@@ -48,9 +56,13 @@ type BackupHandler struct {
 	s3Bucket                 string
 	s3Prefix                 string
 	s3Endpoint               string
-	retentionCount           int
+	retentionDays            int
+	retentionMinCount        int
+	bootstrapCronSpec        string // value of ORBITAL_BACKUP_SCHEDULE; cron expression to seed first schedule row
 	version                  string
 	logger                   *slog.Logger
+	cronJob                  *cron.Cron // nil when scheduler is stopped or disabled
+	cronMu                   sync.Mutex
 }
 
 // BackupConfig holds all storage and DGraph configuration for the backup handler.
@@ -65,7 +77,10 @@ type BackupConfig struct {
 	S3AccessKey              string
 	S3SecretKey              string
 	S3Prefix                 string
-	RetentionCount           int
+	RetentionDays            int     // delete backups older than N days; 0 = no time-based pruning
+	RetentionMinCount        int     // always keep at least N backups regardless of age
+	BootstrapCronSpec        string  // cron expression; seeds the backup_schedules row if none exists; e.g. "0 8 * * *" = midnight PT
+	RawDB                    *sql.DB // optional: underlying *sql.DB for pg_try_advisory_xact_lock
 	Version                  string
 }
 
@@ -94,6 +109,7 @@ func NewBackupHandler(ctx context.Context, db *ent.Client, cfg BackupConfig, log
 
 	return &BackupHandler{
 		db:                       db,
+		rawDB:                    cfg.RawDB,
 		dgraphAdminURL:           cfg.DGraphAdminURL,
 		dgraphExportDir:          cfg.DGraphExportDir,
 		dgraphContainerExportDir: containerExportDir,
@@ -102,10 +118,243 @@ func NewBackupHandler(ctx context.Context, db *ent.Client, cfg BackupConfig, log
 		s3Bucket:                 cfg.S3Bucket,
 		s3Prefix:                 prefix,
 		s3Endpoint:               cfg.S3Endpoint,
-		retentionCount:           cfg.RetentionCount,
+		retentionDays:            cfg.RetentionDays,
+		retentionMinCount:        cfg.RetentionMinCount,
+		bootstrapCronSpec:        cfg.BootstrapCronSpec,
 		version:                  cfg.Version,
 		logger:                   logger,
 	}, nil
+}
+
+// ── Scheduler ─────────────────────────────────────────────────────────────────
+
+// tryAdvisoryLock attempts a PostgreSQL transaction-scoped advisory lock.
+// Returns (acquired=true, unlock) or (acquired=false, nil, nil).
+// The unlock func rolls back the transaction, releasing the lock.
+// Using pg_try_advisory_xact_lock: auto-releases on transaction end (crash-safe).
+// If rawDB is nil, locking is skipped and acquired=true is returned (single-replica safe).
+func tryAdvisoryLock(ctx context.Context, rawDB *sql.DB) (bool, func(), error) {
+	if rawDB == nil {
+		return true, func() {}, nil
+	}
+	tx, err := rawDB.BeginTx(ctx, nil)
+	if err != nil {
+		return false, nil, fmt.Errorf("advisory lock begin tx: %w", err)
+	}
+	var acquired bool
+	if err := tx.QueryRowContext(ctx, "SELECT pg_try_advisory_xact_lock($1)", schedulerAdvisoryLockKey).Scan(&acquired); err != nil {
+		tx.Rollback() //nolint:errcheck
+		return false, nil, fmt.Errorf("advisory lock query: %w", err)
+	}
+	if !acquired {
+		tx.Rollback() //nolint:errcheck
+		return false, nil, nil
+	}
+	return true, func() { tx.Rollback() }, nil //nolint:errcheck
+}
+
+// cronParser is the robfig/cron parser used for validation and scheduling.
+var cronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+
+// BootstrapSchedule creates the initial backup_schedules row from env vars
+// (ORBITAL_BACKUP_SCHEDULE, ORBITAL_BACKUP_SCHEDULE_TZ) if no row exists yet.
+// Once a row is in the DB, env vars are ignored.
+func (h *BackupHandler) BootstrapSchedule(ctx context.Context) error {
+	if h.db == nil || h.bootstrapCronSpec == "" {
+		return nil
+	}
+	_, err := h.db.BackupSchedule.Query().First(ctx)
+	if err == nil {
+		return nil // row exists; DB owns the schedule
+	}
+	if !ent.IsNotFound(err) {
+		return fmt.Errorf("bootstrap schedule query: %w", err)
+	}
+	if _, err := cronParser.Parse(h.bootstrapCronSpec); err != nil {
+		return fmt.Errorf("invalid ORBITAL_BACKUP_SCHEDULE %q: %w", h.bootstrapCronSpec, err)
+	}
+	_, err = h.db.BackupSchedule.Create().
+		SetCronSpec(h.bootstrapCronSpec).
+		SetTimezone("UTC").
+		SetEnabled(true).
+		SetCreatedBy("system").
+		SetUpdatedBy("system").
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("create backup schedule: %w", err)
+	}
+	h.logger.Info("bootstrapped backup schedule from env", "spec", h.bootstrapCronSpec)
+	return nil
+}
+
+// schedLocation parses the schedule's timezone string into a *time.Location.
+// Falls back to UTC on error.
+func schedLocation(sched *ent.BackupSchedule) *time.Location {
+	if sched.Timezone == "" {
+		return time.UTC
+	}
+	loc, err := time.LoadLocation(sched.Timezone)
+	if err != nil {
+		return time.UTC
+	}
+	return loc
+}
+
+// buildCronSpec returns the cron spec and location for the schedule.
+func buildCronSpec(sched *ent.BackupSchedule) (spec string, loc *time.Location) {
+	return sched.CronSpec, schedLocation(sched)
+}
+
+// isMissedRun returns true when the schedule is enabled and a scheduled run
+// should have occurred since last_triggered_at but didn't (e.g. downtime).
+func isMissedRun(sched *ent.BackupSchedule) bool {
+	if !sched.Enabled {
+		return false
+	}
+	schedule, err := cronParser.Parse(sched.CronSpec)
+	if err != nil {
+		return false
+	}
+	ref := sched.CreatedAt
+	if sched.LastTriggeredAt != nil {
+		ref = *sched.LastTriggeredAt
+	}
+	return schedule.Next(ref).Before(time.Now())
+}
+
+// fireCatchUp fires a backup immediately if a run was missed during downtime.
+func (h *BackupHandler) fireCatchUp(ctx context.Context) {
+	sched, err := h.db.BackupSchedule.Query().First(ctx)
+	if ent.IsNotFound(err) || err != nil {
+		return
+	}
+	if isMissedRun(sched) {
+		h.logger.Info("scheduler: catch-up firing missed backup run")
+		h.fire(ctx)
+	}
+}
+
+// fire creates a scheduled backup job and launches it. Acquires the advisory
+// lock so concurrent replicas don't double-fire.
+func (h *BackupHandler) fire(ctx context.Context) {
+	acquired, unlock, err := tryAdvisoryLock(ctx, h.rawDB)
+	if err != nil {
+		h.logger.Warn("scheduler advisory lock error", "err", err)
+		return
+	}
+	if !acquired {
+		return // another replica is handling this
+	}
+	defer unlock()
+
+	schedule, err := h.db.BackupSchedule.Query().First(ctx)
+	if ent.IsNotFound(err) {
+		return
+	}
+	if err != nil {
+		h.logger.Warn("scheduler: error reading schedule", "err", err)
+		return
+	}
+	if !schedule.Enabled {
+		return
+	}
+
+	// Don't stack scheduled backups on top of an already-running one.
+	existing, err := h.db.Backup.Query().
+		Where(backup.StatusIn(backup.StatusPending, backup.StatusRunning)).
+		First(ctx)
+	if err != nil && !ent.IsNotFound(err) {
+		h.logger.Warn("scheduler: error checking in-progress backups", "err", err)
+		return
+	}
+	if existing != nil {
+		h.logger.Info("scheduler: backup already in progress, skipping", "existingId", existing.ID)
+		return
+	}
+
+	job, err := h.db.Backup.Create().
+		SetStatus(backup.StatusPending).
+		SetTrigger(backup.TriggerScheduled).
+		SetCreatedBy("scheduler").
+		Save(ctx)
+	if err != nil {
+		h.logger.Error("scheduler: failed to create backup job", "err", err)
+		return
+	}
+
+	// Update last_triggered_at BEFORE launching the goroutine so a crash
+	// during the backup doesn't cause a re-trigger on restart.
+	_, err = h.db.BackupSchedule.UpdateOne(schedule).
+		SetLastTriggeredAt(time.Now().UTC()).
+		SetUpdatedBy("scheduler").
+		Save(ctx)
+	if err != nil {
+		h.logger.Warn("scheduler: failed to update last_triggered_at", "err", err)
+	}
+
+	go h.runBackup(job.ID)
+
+	writeAuditEvent(h.db, h.logger, "management", "scheduler", "createBackup",
+		[]string{"createBackup"}, nil, nil,
+		map[string]any{"jobId": job.ID.String(), "trigger": "scheduled"},
+	)
+	h.logger.Info("scheduled backup triggered", "jobId", job.ID)
+}
+
+// restartCron stops any running cron, reads the current schedule from the DB,
+// and starts a new cron if the schedule is enabled. Safe to call from any goroutine.
+func (h *BackupHandler) restartCron(ctx context.Context) {
+	h.cronMu.Lock()
+	defer h.cronMu.Unlock()
+
+	if h.cronJob != nil {
+		h.cronJob.Stop()
+		h.cronJob = nil
+	}
+
+	if h.db == nil {
+		return
+	}
+	sched, err := h.db.BackupSchedule.Query().First(ctx)
+	if err != nil || !sched.Enabled {
+		return
+	}
+
+	spec, loc := buildCronSpec(sched)
+	c := cron.New(cron.WithLocation(loc))
+	if _, err := c.AddFunc(spec, func() { h.fire(context.Background()) }); err != nil {
+		h.logger.Warn("scheduler: invalid cron spec", "spec", spec, "err", err)
+		return
+	}
+	c.Start()
+	h.cronJob = c
+	h.logger.Info("backup scheduler started", "spec", spec, "tz", sched.Timezone)
+}
+
+// StartScheduler bootstraps the schedule, fires any missed run, then runs the
+// cron scheduler until ctx is cancelled. Call as a goroutine.
+func (h *BackupHandler) StartScheduler(ctx context.Context) {
+	if h.db == nil {
+		return
+	}
+	if err := h.BootstrapSchedule(ctx); err != nil {
+		h.logger.Warn("backup schedule bootstrap failed", "err", err)
+	}
+
+	// Catch-up: fire once immediately if a run was missed during downtime.
+	h.fireCatchUp(ctx)
+
+	// Start the cron scheduler.
+	h.restartCron(ctx)
+
+	<-ctx.Done()
+
+	h.cronMu.Lock()
+	if h.cronJob != nil {
+		h.cronJob.Stop()
+		h.cronJob = nil
+	}
+	h.cronMu.Unlock()
 }
 
 // ── Azure Blob Storage backend ─────────────────────────────────────────────────
@@ -250,6 +499,7 @@ func (s *s3Storage) ping(ctx context.Context) error {
 type backupResponse struct {
 	ID          string  `json:"id"`
 	Status      string  `json:"status"`
+	Trigger     string  `json:"trigger,omitempty"`
 	InitiatedBy string  `json:"initiatedBy,omitempty"`
 	InitiatedAt string  `json:"initiatedAt"`
 	CompletedAt *string `json:"completedAt,omitempty"`
@@ -306,8 +556,19 @@ func (h *BackupHandler) Trigger(c echo.Context) error {
 
 	initiatedBy := actorFromContext(c)
 
+	// Optional body: {"trigger":"scheduled"} — defaults to "manual".
+	var body struct {
+		Trigger string `json:"trigger"`
+	}
+	_ = c.Bind(&body)
+	triggerVal := backup.TriggerManual
+	if body.Trigger == string(backup.TriggerScheduled) {
+		triggerVal = backup.TriggerScheduled
+	}
+
 	job, err := h.db.Backup.Create().
 		SetStatus(backup.StatusPending).
+		SetTrigger(triggerVal).
 		SetCreatedBy(initiatedBy).
 		Save(c.Request().Context())
 	if err != nil {
@@ -320,7 +581,7 @@ func (h *BackupHandler) Trigger(c echo.Context) error {
 		[]string{"createBackup"},
 		nil,
 		nil,
-		map[string]any{"jobId": job.ID.String()},
+		map[string]any{"jobId": job.ID.String(), "trigger": string(triggerVal)},
 	)
 
 	return c.JSON(http.StatusAccepted, triggerResponse{
@@ -339,7 +600,7 @@ func (h *BackupHandler) Trigger(c echo.Context) error {
 // @Router      /api/v1/backup/jobs [get]
 func (h *BackupHandler) List(c echo.Context) error {
 	jobs, err := h.db.Backup.Query().
-		Order(backup.ByCreatedAt(sql.OrderDesc())).
+		Order(backup.ByCreatedAt(entsql.OrderDesc())).
 		Limit(50).
 		All(c.Request().Context())
 	if err != nil {
@@ -555,7 +816,7 @@ func (h *BackupHandler) doBackup(ctx context.Context, jobID uuid.UUID, log *slog
 		return fmt.Errorf("mark completed: %w", err)
 	}
 
-	if h.retentionCount > 0 {
+	if h.retentionMinCount > 0 || h.retentionDays > 0 {
 		if err := h.enforceRetention(ctx, log); err != nil {
 			log.Warn("retention enforcement failed", "err", err)
 		}
@@ -616,15 +877,36 @@ func (h *BackupHandler) findExportFile(dataGZPath, suffix string) (string, error
 func (h *BackupHandler) enforceRetention(ctx context.Context, log *slog.Logger) error {
 	completed, err := h.db.Backup.Query().
 		Where(backup.StatusEQ(backup.StatusCompleted)).
-		Order(backup.ByCreatedAt(sql.OrderDesc())).
+		Order(backup.ByCreatedAt(entsql.OrderDesc())).
 		All(ctx)
 	if err != nil {
 		return fmt.Errorf("query completed backups: %w", err)
 	}
-	if len(completed) <= h.retentionCount {
-		return nil
+
+	// Determine which records are candidates for deletion:
+	// - older than retentionDays (if set)
+	// - but always keep at least retentionMinCount records
+	cutoff := time.Time{}
+	if h.retentionDays > 0 {
+		cutoff = time.Now().UTC().AddDate(0, 0, -h.retentionDays)
 	}
-	for _, old := range completed[h.retentionCount:] {
+
+	minKeep := h.retentionMinCount
+	if minKeep <= 0 {
+		minKeep = 3
+	}
+
+	var toDelete []*ent.Backup
+	for i, b := range completed {
+		if i < minKeep {
+			continue // always keep the newest minKeep
+		}
+		if !cutoff.IsZero() && b.CreatedAt.Before(cutoff) {
+			toDelete = append(toDelete, b)
+		}
+	}
+
+	for _, old := range toDelete {
 		if old.S3Key != "" {
 			if err := h.storage.deleteObject(ctx, old.S3Key); err != nil {
 				log.Warn("failed to delete old backup from storage", "key", old.S3Key, "err", err)
@@ -641,6 +923,7 @@ func toBackupResponse(j *ent.Backup) backupResponse {
 	r := backupResponse{
 		ID:          j.ID.String(),
 		Status:      string(j.Status),
+		Trigger:     string(j.Trigger),
 		InitiatedBy: j.CreatedBy,
 		InitiatedAt: j.CreatedAt.Format(time.RFC3339),
 		S3Key:       j.S3Key,
@@ -653,4 +936,129 @@ func toBackupResponse(j *ent.Backup) backupResponse {
 		r.CompletedAt = &s
 	}
 	return r
+}
+
+// ── Schedule REST endpoints ────────────────────────────────────────────────────
+
+type scheduleResponse struct {
+	CronSpec        string `json:"cronSpec"`
+	Timezone        string `json:"timezone"`
+	Enabled         bool   `json:"enabled"`
+	LastTriggeredAt string `json:"lastTriggeredAt,omitempty"`
+	NextRunApprox   string `json:"nextRunApprox,omitempty"`
+	CreatedAt       string `json:"createdAt"`
+	UpdatedAt       string `json:"updatedAt,omitempty"`
+}
+
+func toScheduleResponse(s *ent.BackupSchedule) scheduleResponse {
+	r := scheduleResponse{
+		CronSpec:  s.CronSpec,
+		Timezone:  s.Timezone,
+		Enabled:   s.Enabled,
+		CreatedAt: s.CreatedAt.Format(time.RFC3339),
+	}
+	if s.UpdatedAt != nil && !s.UpdatedAt.IsZero() {
+		r.UpdatedAt = s.UpdatedAt.Format(time.RFC3339)
+	}
+	if s.LastTriggeredAt != nil {
+		r.LastTriggeredAt = s.LastTriggeredAt.Format(time.RFC3339)
+	}
+	spec, loc := buildCronSpec(s)
+	if parsed, err := cronParser.Parse(spec); err == nil {
+		r.NextRunApprox = parsed.Next(time.Now().In(loc)).Format(time.RFC3339)
+	}
+	return r
+}
+
+// GetSchedule handles GET /api/v1/backup/schedule
+func (h *BackupHandler) GetSchedule(c echo.Context) error {
+	s, err := h.db.BackupSchedule.Query().First(c.Request().Context())
+	if ent.IsNotFound(err) {
+		return c.JSON(http.StatusOK, nil)
+	}
+	if err != nil {
+		return fmt.Errorf("get schedule: %w", err)
+	}
+	return c.JSON(http.StatusOK, toScheduleResponse(s))
+}
+
+// UpdateSchedule handles PUT /api/v1/backup/schedule
+func (h *BackupHandler) UpdateSchedule(c echo.Context) error {
+	var body struct {
+		CronSpec *string `json:"cronSpec"`
+		Timezone *string `json:"timezone"`
+		Enabled  *bool   `json:"enabled"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.ErrBadRequest
+	}
+
+	// Validate cron spec if provided.
+	if body.CronSpec != nil {
+		if _, err := cronParser.Parse(*body.CronSpec); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid cron expression: " + err.Error()})
+		}
+	}
+	// Validate timezone if provided.
+	if body.Timezone != nil && *body.Timezone != "" {
+		if _, err := time.LoadLocation(*body.Timezone); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid timezone: " + *body.Timezone})
+		}
+	}
+
+	ctx := c.Request().Context()
+	actor := actorFromContext(c)
+
+	existing, err := h.db.BackupSchedule.Query().First(ctx)
+	if err != nil && !ent.IsNotFound(err) {
+		return fmt.Errorf("query schedule: %w", err)
+	}
+
+	if existing == nil {
+		if body.CronSpec == nil || *body.CronSpec == "" {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "cronSpec is required"})
+		}
+		create := h.db.BackupSchedule.Create().
+			SetCronSpec(*body.CronSpec).
+			SetCreatedBy(actor).
+			SetUpdatedBy(actor)
+		if body.Timezone != nil {
+			create = create.SetTimezone(*body.Timezone)
+		}
+		if body.Enabled != nil {
+			create = create.SetEnabled(*body.Enabled)
+		}
+		s, err := create.Save(ctx)
+		if err != nil {
+			return fmt.Errorf("create schedule: %w", err)
+		}
+		writeAuditEvent(h.db, h.logger, "management", actor, "updateBackupSchedule",
+			[]string{"updateBackupSchedule"}, nil, nil,
+			map[string]any{"cronSpec": s.CronSpec, "enabled": s.Enabled, "timezone": s.Timezone},
+		)
+		h.restartCron(ctx)
+		return c.JSON(http.StatusOK, toScheduleResponse(s))
+	}
+
+	// Update existing row — only fields present in the request body are changed.
+	update := h.db.BackupSchedule.UpdateOne(existing).SetUpdatedBy(actor)
+	if body.CronSpec != nil {
+		update = update.SetCronSpec(*body.CronSpec)
+	}
+	if body.Timezone != nil {
+		update = update.SetTimezone(*body.Timezone)
+	}
+	if body.Enabled != nil {
+		update = update.SetEnabled(*body.Enabled)
+	}
+	s, err := update.Save(ctx)
+	if err != nil {
+		return fmt.Errorf("update schedule: %w", err)
+	}
+	writeAuditEvent(h.db, h.logger, "management", actor, "updateBackupSchedule",
+		[]string{"updateBackupSchedule"}, nil, nil,
+		map[string]any{"cronSpec": s.CronSpec, "enabled": s.Enabled, "timezone": s.Timezone},
+	)
+	h.restartCron(ctx)
+	return c.JSON(http.StatusOK, toScheduleResponse(s))
 }

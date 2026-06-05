@@ -29,7 +29,8 @@ func newBackupHandler(t *testing.T) *handler.BackupHandler {
 		S3Bucket:        testutil.TestS3Bucket,
 		S3AccessKey:     testutil.TestS3AccessKey,
 		S3SecretKey:     testutil.TestS3SecretKey,
-		RetentionCount:  3,
+		RetentionDays:     30,
+		RetentionMinCount: 3,
 		Version:         "test",
 	}, slog.Default())
 	if err != nil {

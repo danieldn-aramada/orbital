@@ -15,6 +15,7 @@ func (Backup) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).Default(uuid.New),
 		field.Enum("status").Values("pending", "running", "completed", "skipped", "failed"),
+		field.Enum("trigger").Values("manual", "scheduled").Default("manual"),
 		field.String("s3_bucket").Optional(),
 		field.String("s3_key").Optional(),        // object key within the bucket
 		field.String("s3_endpoint").Optional(),   // custom endpoint; empty = AWS S3

@@ -20,6 +20,7 @@ import (
 
 	"github.com/armada/orbital/docs"
 	"github.com/armada/orbital/ent"
+	"github.com/armada/orbital/ent/migrate"
 	"github.com/armada/orbital/internal/config"
 	"github.com/armada/orbital/internal/server"
 	"github.com/armada/orbital/internal/version"
@@ -46,7 +47,7 @@ func main() {
 	}
 	defer db.Close()
 
-	if err := db.Schema.Create(ctx); err != nil {
+	if err := db.Schema.Create(ctx, migrate.WithDropColumn(true)); err != nil {
 		log.Fatalf("migrate: %v", err)
 	}
 

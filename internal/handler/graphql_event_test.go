@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/armada/orbital/ent/event"
+	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/labstack/echo/v4"
 )
@@ -48,6 +49,9 @@ func TestGraphQL_MutationWritesAuditEvent(t *testing.T) {
 	const actor = "audit-test-actor"
 	ctx := context.Background()
 
+	// Create an admin user so the mutation role check passes.
+	adminUser := createTestUser(t, "graphql-audit-admin@test.com", user.RoleAdmin)
+
 	// Clean up any pre-existing events for this actor (from prior runs).
 	testDB.Event.Delete().Where(event.Actor(actor)).ExecX(ctx)
 	t.Cleanup(func() {
@@ -69,6 +73,7 @@ func TestGraphQL_MutationWritesAuditEvent(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
+	c.Set("user_id", adminUser) // role enforcement requires an authenticated admin
 
 	if err := h.Handle(c); err != nil {
 		t.Fatalf("Handle: %v", err)

@@ -10,11 +10,14 @@
         </div>
       {{else}}
 
+      {{if not .CanMutate}}{{template "access-required" .}}{{end}}
+
       <p class="is-size-4 mb-2" data-testid="page-heading">Signed Artifacts</p>
       <p class="has-text-grey mb-5" style="font-size: 0.875rem;">
         OCI artifacts published from subgraph exports. Each artifact is a signed, versioned snapshot of a data center's configuration — ready to be pulled by orbs.
       </p>
 
+      {{if .CanMutate}}
       <section class="mb-6" style="max-width: 520px;">
         <div class="field">
           <label class="label">Registry</label>
@@ -63,6 +66,7 @@
         </div>
         {{end}}
       </section>
+      {{end}}
 
       <div class="mt-4">
         <div class="is-flex is-align-items-center mb-3" style="gap: 0.75rem;">

@@ -25,6 +25,8 @@ const (
 	FieldUpdatedBy = "updated_by"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldTrigger holds the string denoting the trigger field in the database.
+	FieldTrigger = "trigger"
 	// FieldS3Bucket holds the string denoting the s3_bucket field in the database.
 	FieldS3Bucket = "s3_bucket"
 	// FieldS3Key holds the string denoting the s3_key field in the database.
@@ -55,6 +57,7 @@ var Columns = []string{
 	FieldUpdatedAt,
 	FieldUpdatedBy,
 	FieldStatus,
+	FieldTrigger,
 	FieldS3Bucket,
 	FieldS3Key,
 	FieldS3Endpoint,
@@ -109,6 +112,32 @@ func StatusValidator(s Status) error {
 	}
 }
 
+// Trigger defines the type for the "trigger" enum field.
+type Trigger string
+
+// TriggerManual is the default value of the Trigger enum.
+const DefaultTrigger = TriggerManual
+
+// Trigger values.
+const (
+	TriggerManual    Trigger = "manual"
+	TriggerScheduled Trigger = "scheduled"
+)
+
+func (t Trigger) String() string {
+	return string(t)
+}
+
+// TriggerValidator is a validator for the "trigger" field enum values. It is called by the builders before save.
+func TriggerValidator(t Trigger) error {
+	switch t {
+	case TriggerManual, TriggerScheduled:
+		return nil
+	default:
+		return fmt.Errorf("backup: invalid enum value for trigger field: %q", t)
+	}
+}
+
 // OrderOption defines the ordering options for the Backup queries.
 type OrderOption func(*sql.Selector)
 
@@ -140,6 +169,11 @@ func ByUpdatedBy(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByTrigger orders the results by the trigger field.
+func ByTrigger(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTrigger, opts...).ToFunc()
 }
 
 // ByS3Bucket orders the results by the s3_bucket field.

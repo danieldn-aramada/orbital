@@ -17,6 +17,7 @@ import (
 
 func newDeviceOIDCHandler(t *testing.T, p *oidcProvider) *handler.OIDC {
 	t.Helper()
+	t.Chdir("../..") // template paths are relative to the repo root
 	h, err := handler.NewOIDC(
 		context.Background(),
 		testDB,
@@ -26,7 +27,8 @@ func newDeviceOIDCHandler(t *testing.T, p *oidcProvider) *handler.OIDC {
 		"test-client-secret",
 		p.Server.URL+"/callback",
 		"",
-		nil,
+		nil,  // logger
+		nil,  // adminEmails
 		true, // deviceCodeEnabled
 	)
 	if err != nil {
@@ -69,7 +71,8 @@ func TestDeviceCodePoll_Pending(t *testing.T) {
 	h := newDeviceOIDCHandler(t, p)
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/auth/device/poll?device_code=test-device-code", nil)
+	req := httptest.NewRequest(http.MethodPost, "/auth/device/poll", strings.NewReader(`{"device_code":"test-device-code"}`))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -94,7 +97,8 @@ func TestDeviceCodePoll_Expired(t *testing.T) {
 	h := newDeviceOIDCHandler(t, p)
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/auth/device/poll?device_code=test-device-code", nil)
+	req := httptest.NewRequest(http.MethodPost, "/auth/device/poll", strings.NewReader(`{"device_code":"test-device-code"}`))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -115,7 +119,8 @@ func TestDeviceCodePoll_MissingDeviceCode_ReturnsExpired(t *testing.T) {
 	h := newDeviceOIDCHandler(t, p)
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/auth/device/poll", nil)
+	req := httptest.NewRequest(http.MethodPost, "/auth/device/poll", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -151,7 +156,8 @@ func TestDeviceCodePoll_Complete_NewUser(t *testing.T) {
 	})
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/auth/device/poll?device_code=test-device-code", nil)
+	req := httptest.NewRequest(http.MethodPost, "/auth/device/poll", strings.NewReader(`{"device_code":"test-device-code"}`))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -212,7 +218,8 @@ func TestDeviceCodePoll_Complete_ExistingUser(t *testing.T) {
 	h := newDeviceOIDCHandler(t, p)
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/auth/device/poll?device_code=test-device-code", nil)
+	req := httptest.NewRequest(http.MethodPost, "/auth/device/poll", strings.NewReader(`{"device_code":"test-device-code"}`))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 

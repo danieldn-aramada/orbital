@@ -7,6 +7,9 @@ import (
 	"os"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
+	"github.com/armada/orbital/ent"
+	"github.com/armada/orbital/ent/user"
 	appversion "github.com/armada/orbital/internal/version"
 	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/armada/orbital/internal/web/data/page"
@@ -20,33 +23,35 @@ type UI struct {
 	issueTrackerURL   string
 	oidcEnabled       bool
 	deviceCodeEnabled bool
-	backupEnabled   bool
-	s3Endpoint      string
-	s3Bucket        string
-	ociConfigured   bool
-	ociRegistry     string
-	ociRepo         string
-	exportDir       string
-	schemaPath      string
+	backupEnabled    bool
+	s3Endpoint       string
+	s3Bucket         string
+	ociConfigured    bool
+	ociRegistry      string
+	ociRepo          string
+	exportDir        string
+	schemaPath       string
 	restoreAvailable bool
-	version         string
-	basePath        string
-	templates       map[string]*template.Template
+	version          string
+	basePath         string
+	db               *ent.Client
+	templates        map[string]*template.Template
 }
 
-func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, deviceCodeEnabled, backupEnabled bool, s3Endpoint, s3Bucket string, basePath string) *UI {
+func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, deviceCodeEnabled, backupEnabled bool, s3Endpoint, s3Bucket string, basePath string, db *ent.Client) *UI {
 	return &UI{
 		dev:               dev,
 		ratelURL:          ratelURL,
 		issueTrackerURL:   issueTrackerURL,
 		oidcEnabled:       oidcEnabled,
 		deviceCodeEnabled: deviceCodeEnabled,
-		backupEnabled:   backupEnabled,
-		s3Endpoint:      s3Endpoint,
-		s3Bucket:        s3Bucket,
-		basePath:        basePath,
-		version:         fmt.Sprintf("%d", time.Now().Unix()),
-		templates:       webtemplates.Map(),
+		backupEnabled:    backupEnabled,
+		s3Endpoint:       s3Endpoint,
+		s3Bucket:         s3Bucket,
+		basePath:         basePath,
+		db:               db,
+		version:          fmt.Sprintf("%d", time.Now().Unix()),
+		templates:        webtemplates.Map(),
 	}
 }
 
@@ -91,35 +96,54 @@ func (h *UI) base(c echo.Context) layout.Base {
 	if h.dev {
 		version = fmt.Sprintf("%d", time.Now().UnixNano())
 	}
+
+	var userRole string
+	var canMutate bool
+	var adminEmails []string
+	if h.db != nil && isAuthn && userID > 0 {
+		if u, err := h.db.User.Get(c.Request().Context(), userID); err == nil {
+			userRole = string(u.Role)
+			canMutate = RoleAtLeast(u.Role, user.RoleDev)
+		}
+		if admins, err := h.db.User.Query().Where(user.RoleEQ(user.RoleAdmin)).All(c.Request().Context()); err == nil {
+			adminEmails = make([]string, len(admins))
+			for i, a := range admins {
+				adminEmails[i] = a.Email
+			}
+		}
+	}
+
 	return layout.Base{
-		Head:        layout.Head{Version: version},
-		NavBar:      layout.NavBar{RatelURL: h.ratelURL, IssueTrackerURL: h.issueTrackerURL},
+		Head:              layout.Head{Version: version},
+		NavBar:            layout.NavBar{RatelURL: h.ratelURL, IssueTrackerURL: h.issueTrackerURL},
 		IsAuthn:           isAuthn,
 		OIDCEnabled:       h.oidcEnabled,
 		DeviceCodeEnabled: h.deviceCodeEnabled,
-		User:        layout.User{Id: userID, Name: userName, Email: userEmail},
-		CsrfToken:   csrfToken,
-		AppVersion:  appversion.Version,
-		BasePath:    h.basePath,
-		CurrentPath: c.Request().URL.Path,
+		User:              layout.User{Id: userID, Name: userName, Email: userEmail, Role: userRole},
+		CanMutate:         canMutate,
+		AdminEmails:       adminEmails,
+		CsrfToken:         csrfToken,
+		AppVersion:        appversion.Version,
+		BasePath:          h.basePath,
+		CurrentPath:       c.Request().URL.Path,
 		UI: layout.UIConfig{
-			AppName:      "Orbital",
-			BasePath:     h.basePath,
-			Version:      version,
-			ShowAuth:     true,
-			APIDocPath:   h.basePath + "/swagger/index.html",
+			AppName:    "Orbital",
+			BasePath:   h.basePath,
+			Version:    version,
+			ShowAuth:   true,
+			APIDocPath: h.basePath + "/swagger/index.html",
 			MoreLinks: []layout.NavItem{
 				{Label: "GitHub", URL: "https://github.com/danieldn-aramada/demo"},
 				{Label: "Report Issue"},
 			},
-			MenuSections: h.buildMenuSections(c.Request().URL.Path),
+			MenuSections: h.buildMenuSections(c.Request().URL.Path, userRole),
 		},
 	}
 }
 
-func (h *UI) buildMenuSections(path string) []layout.MenuSection {
+func (h *UI) buildMenuSections(path, userRole string) []layout.MenuSection {
 	bp := h.basePath
-	return []layout.MenuSection{
+	sections := []layout.MenuSection{
 		{
 			Title: "Config Items",
 			Icon:  "fa-solid fa-diagram-project",
@@ -141,17 +165,28 @@ func (h *UI) buildMenuSections(path string) []layout.MenuSection {
 				{Label: "Divergence Reports", Href: bp + "/divergence-reports", Active: path == bp+"/divergence-reports"},
 			},
 		},
-		{
-			Title: "Operations",
-			Icon:  "fa-solid fa-clock-rotate-left",
-			Color: "has-text-danger",
-			Items: []layout.MenuItem{
-				{Label: "Audit Log", Href: bp + "/audit-log", Active: path == bp+"/audit-log"},
-				{Label: "Backup Graph", Href: bp + "/backups", Active: path == bp+"/backups"},
-				{Label: "Restore Graph", Href: bp + "/restore", Active: path == bp+"/restore"},
-			},
-		},
 	}
+
+	opsItems := []layout.MenuItem{
+		{Label: "Audit Log", Href: bp + "/audit-log", Active: path == bp+"/audit-log"},
+		{Label: "Backup Graph", Href: bp + "/backups", Active: path == bp+"/backups"},
+		{Label: "Restore Graph", Href: bp + "/restore", Active: path == bp+"/restore"},
+	}
+	if userRole == "admin" {
+		opsItems = append(opsItems, layout.MenuItem{
+			Label:  "Users",
+			Href:   bp + "/users",
+			Active: path == bp+"/users",
+		})
+	}
+	sections = append(sections, layout.MenuSection{
+		Title: "Operations",
+		Icon:  "fa-solid fa-clock-rotate-left",
+		Color: "has-text-danger",
+		Items: opsItems,
+	})
+
+	return sections
 }
 
 func (h *UI) Index(c echo.Context) error {
@@ -169,13 +204,35 @@ func (h *UI) DataCenters(c echo.Context) error {
 }
 
 func (h *UI) Backups(c echo.Context) error {
-	return h.render(c, "backups", page.Backups{
+	p := page.Backups{
 		Base:          h.base(c),
 		PageTitle:     "Backups",
 		BackupEnabled: h.backupEnabled,
 		S3Endpoint:    h.s3Endpoint,
 		S3Bucket:      h.s3Bucket,
-	})
+	}
+	if h.db != nil {
+		if sched, err := h.db.BackupSchedule.Query().First(c.Request().Context()); err == nil {
+			p.HasSchedule = true
+			p.ScheduleEnabled = sched.Enabled
+			tz := sched.Timezone
+			if tz == "" {
+				tz = "UTC"
+			}
+			p.ScheduleSummary = sched.CronSpec + " (" + tz + ")"
+			if sched.LastTriggeredAt != nil {
+				p.LastTriggeredAt = sched.LastTriggeredAt.UTC().Format("2006-01-02 15:04 UTC")
+			}
+			if parsed, err := cronParser.Parse(sched.CronSpec); err == nil {
+				loc, _ := time.LoadLocation(tz)
+				if loc == nil {
+					loc = time.UTC
+				}
+				p.NextRunApprox = parsed.Next(time.Now().In(loc)).UTC().Format("2006-01-02 15:04 UTC")
+			}
+		}
+	}
+	return h.render(c, "backups", p)
 }
 
 func (h *UI) DivergenceReports(c echo.Context) error {
@@ -242,4 +299,51 @@ func (h *UI) Schema(c echo.Context) error {
 		Checksum:  fmt.Sprintf("%x", sum[:6]),
 		SDL:       string(content),
 	})
+}
+
+func (h *UI) Users(c echo.Context) error {
+	base := h.base(c)
+	var rows []page.UserRow
+	if h.db != nil {
+		users, err := h.db.User.Query().Order(user.ByCreatedAt(sql.OrderAsc())).All(c.Request().Context())
+		if err != nil {
+			return fmt.Errorf("query users: %w", err)
+		}
+		rows = make([]page.UserRow, len(users))
+		for i, u := range users {
+			rows[i] = page.UserRow{
+				ID:        u.ID,
+				Email:     u.Email,
+				Name:      u.Name,
+				Role:      string(u.Role),
+				CreatedAt: u.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+			}
+		}
+	}
+	return h.render(c, "users", page.Users{
+		Base:      base,
+		PageTitle: "Users",
+		Users:     rows,
+	})
+}
+
+// formatDuration converts a duration to a concise human-readable string.
+// e.g. 24h → "24h", 168h → "7d", 30m → "30m".
+func formatDuration(d time.Duration) string {
+	if d == 0 {
+		return "0s"
+	}
+	days := int(d.Hours()) / 24
+	if days > 0 && d == time.Duration(days)*24*time.Hour {
+		return fmt.Sprintf("%dd", days)
+	}
+	hours := int(d.Hours())
+	if hours > 0 && d == time.Duration(hours)*time.Hour {
+		return fmt.Sprintf("%dh", hours)
+	}
+	minutes := int(d.Minutes())
+	if minutes > 0 && d == time.Duration(minutes)*time.Minute {
+		return fmt.Sprintf("%dm", minutes)
+	}
+	return d.String()
 }

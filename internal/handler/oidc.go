@@ -29,12 +29,13 @@ type OIDC struct {
 	verifier          *gooidc.IDTokenVerifier
 	logger            *slog.Logger
 	basePath          string
+	adminEmails       map[string]struct{}
 	deviceCodeEnabled bool
 	deviceCodeURL     string // POST endpoint to initiate device code flow
 	deviceCodeTmpl    *template.Template
 }
 
-func NewOIDC(ctx context.Context, db *ent.Client, sessionKeys auth.SessionKeys, issuerURL, clientID, clientSecret, redirectURL, basePath string, logger *slog.Logger, deviceCodeEnabled bool) (*OIDC, error) {
+func NewOIDC(ctx context.Context, db *ent.Client, sessionKeys auth.SessionKeys, issuerURL, clientID, clientSecret, redirectURL, basePath string, logger *slog.Logger, adminEmails map[string]struct{}, deviceCodeEnabled bool) (*OIDC, error) {
 	provider, err := gooidc.NewProvider(ctx, issuerURL)
 	if err != nil {
 		return nil, fmt.Errorf("oidc provider discovery: %w", err)
@@ -45,7 +46,10 @@ func NewOIDC(ctx context.Context, db *ent.Client, sessionKeys auth.SessionKeys, 
 	//        →  https://login.microsoftonline.com/{tenant}/oauth2/v2.0/devicecode
 	deviceCodeURL := strings.TrimSuffix(issuerURL, "/v2.0") + "/oauth2/v2.0/devicecode"
 
-	return &OIDC{
+	if logger == nil {
+		logger = slog.Default()
+	}
+	h := &OIDC{
 		db:          db,
 		sessionKeys: sessionKeys,
 		oauth2Cfg: oauth2.Config{
@@ -58,10 +62,14 @@ func NewOIDC(ctx context.Context, db *ent.Client, sessionKeys auth.SessionKeys, 
 		verifier:          provider.Verifier(&gooidc.Config{ClientID: clientID}),
 		logger:            logger,
 		basePath:          basePath,
+		adminEmails:       adminEmails,
 		deviceCodeEnabled: deviceCodeEnabled,
 		deviceCodeURL:     deviceCodeURL,
-		deviceCodeTmpl:    webtemplates.DeviceCodePage(),
-	}, nil
+	}
+	if deviceCodeEnabled {
+		h.deviceCodeTmpl = webtemplates.DeviceCodePage()
+	}
+	return h, nil
 }
 
 // Login handles GET /auth/login — redirects to the IdP.
@@ -110,7 +118,6 @@ func (h *OIDC) Callback(c echo.Context) error {
 		return fmt.Errorf("extract claims: %w", err)
 	}
 	h.logger.Info("oidc callback claims", "email", claims.Email, "name", claims.Name, "preferred_username", claims.PreferredUsername)
-	h.logger.Info("oidc id token (decode at jwt.io)", "raw", rawIDToken)
 
 	email := strings.ToLower(claims.Email)
 	if email == "" {
@@ -134,6 +141,7 @@ func (h *OIDC) Callback(c echo.Context) error {
 			SetName(displayName).
 			SetPreferredUsername(preferredUsername).
 			SetVerified(true).
+			SetRole(RoleForEmail(email, h.adminEmails)).
 			Save(c.Request().Context())
 		if err != nil {
 			h.logger.Error("provision oidc user", "err", err)
@@ -145,6 +153,7 @@ func (h *OIDC) Callback(c echo.Context) error {
 		return fmt.Errorf("set session: %w", err)
 	}
 
+	h.writeAuthAudit("loginSuccess", email, map[string]any{"method": "oidc"})
 	return c.Redirect(http.StatusSeeOther, h.basePath+"/?fresh=1")
 }
 
@@ -205,14 +214,19 @@ type devicePollResponse struct {
 	Interval int    `json:"interval,omitempty"` // set when Azure returns slow_down
 }
 
-// DeviceCodePoll handles GET /auth/device/poll — polls the Azure AD token endpoint
+// DeviceCodePoll handles POST /auth/device/poll — polls the Azure AD token endpoint
 // once and returns the current status as JSON. On success it sets the session cookie
 // so the next page load is authenticated.
+// device_code is sent in the POST body (not as a query param) to keep it out of
+// application logs, proxy access logs, and browser history.
 func (h *OIDC) DeviceCodePoll(c echo.Context) error {
-	deviceCode := c.QueryParam("device_code")
-	if deviceCode == "" {
+	var req struct {
+		DeviceCode string `json:"device_code"`
+	}
+	if err := c.Bind(&req); err != nil || req.DeviceCode == "" {
 		return c.JSON(http.StatusBadRequest, devicePollResponse{Status: "expired"})
 	}
+	deviceCode := req.DeviceCode
 
 	resp, err := http.PostForm(h.oauth2Cfg.Endpoint.TokenURL, url.Values{
 		"grant_type":  {"urn:ietf:params:oauth:grant-type:device_code"},
@@ -247,6 +261,8 @@ func (h *OIDC) DeviceCodePoll(c echo.Context) error {
 		}
 		return c.JSON(http.StatusOK, devicePollResponse{Status: "pending", Interval: interval})
 	default:
+		h.logger.Info("device code auth failed", "error", result.Error)
+		h.writeAuthAudit("loginFailed", "", map[string]any{"method": "device_code", "error": result.Error})
 		return c.JSON(http.StatusOK, devicePollResponse{Status: "expired"})
 	}
 
@@ -284,6 +300,7 @@ func (h *OIDC) DeviceCodePoll(c echo.Context) error {
 			SetName(displayName).
 			SetPreferredUsername(preferredUsername).
 			SetVerified(true).
+			SetRole(RoleForEmail(email, h.adminEmails)).
 			Save(c.Request().Context())
 		if err != nil {
 			h.logger.Error("provision device code user", "err", err)
@@ -295,5 +312,20 @@ func (h *OIDC) DeviceCodePoll(c echo.Context) error {
 		return fmt.Errorf("set device code session: %w", err)
 	}
 
+	h.logger.Info("device code auth success", "email", email)
+	h.writeAuthAudit("loginSuccess", email, map[string]any{"method": "device_code"})
 	return c.JSON(http.StatusOK, devicePollResponse{Status: "complete"})
+}
+
+// writeAuthAudit persists an authentication audit event. No-op if db is nil.
+func (h *OIDC) writeAuthAudit(operation, actor string, details map[string]any) {
+	if h.db == nil {
+		return
+	}
+	writeAuditEvent(h.db, h.logger, "management", actor, operation,
+		[]string{operation},
+		[]string{},
+		[]string{},
+		details,
+	)
 }

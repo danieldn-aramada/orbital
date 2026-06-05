@@ -43,7 +43,7 @@ Each spike is a question to answer. Results define the MVP.
 | 9 | Seed iDRAC and storage devices | Does the schema cover all iDRAC and storage fields we need? | Daniel | ✅ Done (5/15) | |
 | 9b | Valkey cache-aside | What is the right caching strategy for read-heavy graph queries, and does orbital degrade correctly without it? | Daniel | Not started | |
 | 10 | Air-gap sync round-trip | Does orbital's config export work as a complete, importable payload for orb? | — | ✅ Done | Orb loads `json.gz` into local DGraph and serves offline |
-| 11 | Authorization | How do we restrict mutations to authorized roles? | — | 🔄 In progress | Local `role` column on users table (`admin`/`readonly`, default `readonly`); `ORBITAL_ADMIN_EMAILS` bootstrap (env var, first login of listed emails gets admin); Echo middleware reads role from DB on each authenticated request, enforces on mutating routes; Azure AD App Roles deferred — requires Azure AD Application Administrator permissions not currently available; DGraph `@auth` directives out of scope (settled — all queries go through Go server) |
+| 11 | Authorization | How do we restrict mutations to authorized roles? | — | ✅ Done (6/5) | Three-role system `readonly < dev < admin` (default `readonly`); `ORBITAL_ADMIN_EMAILS` bootstrap; `RequireRole`/`RequireAdmin` middleware; GraphQL mutations require `dev`; `/api/v1/users` list + role update (admin-only, last-admin guard); `/users` admin UI (button group R/D/A); readonly UI gating (`CanMutate bool` + `access-required` partial on privileged pages); Azure AD App Roles deferred (no Application Administrator access) |
 | 12 | DGraph operations | Can our team operate DGraph on AKS without prior experience? | — | Not started | Runbook: schema change apply, validate, rollback |
 | 13 | Orb import API | What is the right mechanism for orb to pull a signed OCI subgraph from a registry and load it into local DGraph? | — | ✅ Done | OCI puller (oras-go v2), cosign verify, `dgraph live` subprocess, polling loop; full consumer dispatch pipeline on both `triggerImport` (OCI tag path) and `importArtifact` (direct upload) — both dispatch `ExtraLayers` to `ORB_CONSUMERS`; import history: reverse-chronological, friendly layer labels (`mediaTypeLabel`), dispatch errors in Error column, `ORB_DEV` hot-reload |
 | 14 | Divergence reports (orb intake) | How does orb accept and relay divergence reports from edge components? | Daniel | ✅ Done (5/24) | `POST /api/v1/divergence` replaces pending set; `POST /api/v1/divergence/publish` writes snapshot to S3 |
@@ -61,6 +61,7 @@ Each spike is a question to answer. Results define the MVP.
 
 | Spike | Completed | Summary |
 |---|---|---|
+| 11 · Authorization | Jun 5 | Three-role system (`readonly/dev/admin`); `RequireRole` middleware; `/users` admin UI (server-side, button group R/D/A, last-admin guard); readonly UI gating (`CanMutate`+`AdminEmails` on layout.Base, `access-required` partial); `ORBITAL_ADMIN_EMAILS` bootstrap; device code auto-open (`verification_uri_complete`); `ORBITAL_OIDC_DEVICE_CODE` default `true` |
 | 1 · AKS deployment | Apr 20 | Orbital + DGraph on AKS, NetworkPolicy, pod recovery validated |
 | 2 · Orb CLI | Apr 22 | Single binary: `orb start` subcommand (long-running edge service) |
 | 3 · PostgreSQL schema | May 5 | 9 ent tables: users, orbs, namespaces, jobs, audit log, OCI artifacts |
@@ -93,7 +94,7 @@ Fix all critical and high security findings before any staging or production exp
 Key items: unauthenticated `/graphql` root route, no K8s liveness/readiness probes, no CSRF on GraphQL mutations, audit actor forged by client, raw JWT logged at INFO, missing `Secure` cookie flag.
 
 ### Testing foundations
-Automated test pyramid: unit tests, integration tests against real DGraph/PostgreSQL/MinIO/OCI registry, Playwright expansion, CI pipeline, post-deploy AKS smoke suite. Full strategy and actionable steps: `docs/testing-strategy.md`. Requires one Opus design session first (DGraph client interface shape — see T.1 in that doc).
+Test pyramid is substantially complete: 222 Go tests (unit + integration, `make test-unit` / `make test-integration`), 45 Playwright e2e tests (`make test-e2e` / `make test-e2e-orb` / `make test-e2e-smoke`), coverage via `make cover`. Remaining gaps: **CI pipeline** (GitHub Actions workflow — `.github/` exists but has no workflow files yet) and **post-deploy AKS smoke suite hookup**. DGraph client abstraction (T.1 in `docs/testing-strategy.md`) is a tech debt item, not a testing blocker.
 
 ### Performance, cost & observability
 Benchmark DGraph query latency under realistic load, produce AKS node SKU cost estimate. Add Prometheus metrics endpoint, DGraph alpha scraping, Grafana dashboard, and at least one alert for error rate or memory pressure. Valkey cache-aside is post-MVP (Spike 9b) — baseline performance first.
@@ -110,7 +111,7 @@ Benchmark DGraph query latency under realistic load, produce AKS node SKU cost e
 - ✅ Backup and restore — DGraph full snapshots to Azure Blob, restore via UI
 - ✅ Audit log — all config mutations with actor, before/after diff
 - ✅ OCI publish — signed artifacts to configured registry
-- ⬜ Authorization — local role table, default readonly, `ORBITAL_ADMIN_EMAILS` bootstrap, Echo middleware enforcement (Spike 11)
+- ✅ Authorization — three-role system (`readonly/dev/admin`), `ORBITAL_ADMIN_EMAILS` bootstrap, `RequireRole` middleware, admin users page, readonly UI gating (Spike 11)
 - 🔲 Orb registry — register, authenticate, and revoke orbs *(post-MVP: revisit when orb onboarding is scoped)*
 - ⬜ Security hardening — critical/high items (MVP Planning)
 - ✅ `namespaceID` index on `ConfigItem` — `namespaceID: String! @search(by: [exact])` on the interface, backfilled, enforced at application layer on all add mutations.

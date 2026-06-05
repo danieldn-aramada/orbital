@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/armada/orbital/ent/backup"
+	"github.com/armada/orbital/ent/backupschedule"
 	"github.com/armada/orbital/ent/event"
 	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/orb"
@@ -33,6 +34,23 @@ func init() {
 	backupDescID := backupFields[0].Descriptor()
 	// backup.DefaultID holds the default value on creation for the id field.
 	backup.DefaultID = backupDescID.Default.(func() uuid.UUID)
+	backupscheduleMixin := schema.BackupSchedule{}.Mixin()
+	backupscheduleMixinFields0 := backupscheduleMixin[0].Fields()
+	_ = backupscheduleMixinFields0
+	backupscheduleFields := schema.BackupSchedule{}.Fields()
+	_ = backupscheduleFields
+	// backupscheduleDescCreatedAt is the schema descriptor for created_at field.
+	backupscheduleDescCreatedAt := backupscheduleMixinFields0[0].Descriptor()
+	// backupschedule.DefaultCreatedAt holds the default value on creation for the created_at field.
+	backupschedule.DefaultCreatedAt = backupscheduleDescCreatedAt.Default.(func() time.Time)
+	// backupscheduleDescTimezone is the schema descriptor for timezone field.
+	backupscheduleDescTimezone := backupscheduleFields[1].Descriptor()
+	// backupschedule.DefaultTimezone holds the default value on creation for the timezone field.
+	backupschedule.DefaultTimezone = backupscheduleDescTimezone.Default.(string)
+	// backupscheduleDescEnabled is the schema descriptor for enabled field.
+	backupscheduleDescEnabled := backupscheduleFields[2].Descriptor()
+	// backupschedule.DefaultEnabled holds the default value on creation for the enabled field.
+	backupschedule.DefaultEnabled = backupscheduleDescEnabled.Default.(bool)
 	eventFields := schema.Event{}.Fields()
 	_ = eventFields
 	// eventDescTimestamp is the schema descriptor for timestamp field.
@@ -123,7 +141,7 @@ func init() {
 	// user.DefaultVerified holds the default value on creation for the verified field.
 	user.DefaultVerified = userDescVerified.Default.(bool)
 	// userDescCreatedAt is the schema descriptor for created_at field.
-	userDescCreatedAt := userFields[5].Descriptor()
+	userDescCreatedAt := userFields[6].Descriptor()
 	// user.DefaultCreatedAt holds the default value on creation for the created_at field.
 	user.DefaultCreatedAt = userDescCreatedAt.Default.(func() time.Time)
 }

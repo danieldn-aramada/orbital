@@ -21,6 +21,18 @@ func (f BackupFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, erro
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BackupMutation", m)
 }
 
+// The BackupScheduleFunc type is an adapter to allow the use of ordinary
+// function as BackupSchedule mutator.
+type BackupScheduleFunc func(context.Context, *ent.BackupScheduleMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BackupScheduleFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BackupScheduleMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BackupScheduleMutation", m)
+}
+
 // The EventFunc type is an adapter to allow the use of ordinary
 // function as Event mutator.
 type EventFunc func(context.Context, *ent.EventMutation) (ent.Value, error)
