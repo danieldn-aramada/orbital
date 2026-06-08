@@ -93,6 +93,8 @@ spec:
                   key: ORBITAL_OCI_PASSWORD
             - name: ORBITAL_OCI_SIGNING_KEY_PATH
               value: /secrets/cosign.key
+            - name: ORBITAL_OCI_ALLOW_HTTP
+              value: "false"
             - name: DGRAPH_EXPORT_DIR
               value: /dgraph-exports
             - name: DGRAPH_SCRATCH_EXPORT_DIR
@@ -119,6 +121,16 @@ spec:
             limits:
               cpu: "1000m"
               memory: "512Mi"
+        - name: configbundle-bundler
+          image: armadaeksatest.azurecr.io/configbundle-bundler
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8020
+          env:
+            - name: BUNDLER_PORT
+              value: "8020"
+            - name: ORBITAL_GRAPHQL_URL
+              value: http://localhost:8001/graphql
       volumes:
         - name: cosign-key
           secret:

@@ -1,0 +1,23 @@
+{{define "publish-modal-result"}}
+{{if .Failed}}
+<article class="message is-danger">
+  <div class="message-body is-size-7">
+    <p class="mb-1"><strong><span class="icon"><i class="fa-solid fa-circle-xmark"></i></span> Publish failed</strong></p>
+    {{if .ErrorMessage}}<p>{{.ErrorMessage}}</p>{{end}}
+  </div>
+</article>
+{{else}}
+<article class="message is-success">
+  <div class="message-body is-size-7">
+    <p class="mb-2"><strong><span class="icon"><i class="fa-solid fa-circle-check"></i></span> Published</strong></p>
+    <table class="table is-narrow is-fullwidth is-size-7">
+      <tbody>
+        <tr><th style="width:38%">Tag</th><td style="font-family:monospace;font-weight:600;">{{.Tag}}</td></tr>
+        <tr><th>Digest</th><td style="font-family:monospace;font-size:0.65rem;word-break:break-all;">{{if .Digest}}{{.Digest}}{{else}}—{{end}}</td></tr>
+        <tr><th>Signed</th><td>{{if .Signed}}<span class="has-text-success">&#x2713; signed</span>{{else}}<span class="has-text-grey">unsigned</span>{{end}}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</article>
+{{end}}
+{{end}}

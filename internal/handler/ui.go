@@ -29,6 +29,7 @@ type UI struct {
 	oidcEnabled       bool
 	deviceCodeEnabled bool
 	backupEnabled    bool
+	backupCronSpec   string
 	s3Endpoint       string
 	s3Bucket         string
 	ociConfigured    bool
@@ -82,6 +83,10 @@ func (h *UI) SetSchemaPath(path string) {
 
 func (h *UI) SetDGraphURL(url string) {
 	h.dgraphURL = url
+}
+
+func (h *UI) SetBackupCronSpec(spec string) {
+	h.backupCronSpec = spec
 }
 
 func (h *UI) render(c echo.Context, name string, data any) error {
@@ -220,26 +225,11 @@ func (h *UI) Backups(c echo.Context) error {
 		BackupEnabled: h.backupEnabled,
 		S3Endpoint:    h.s3Endpoint,
 		S3Bucket:      h.s3Bucket,
+		ScheduleSpec:  h.backupCronSpec,
 	}
-	if h.db != nil {
-		if sched, err := h.db.BackupSchedule.Query().First(c.Request().Context()); err == nil {
-			p.HasSchedule = true
-			p.ScheduleEnabled = sched.Enabled
-			tz := sched.Timezone
-			if tz == "" {
-				tz = "UTC"
-			}
-			p.ScheduleSummary = sched.CronSpec + " (" + tz + ")"
-			if sched.LastTriggeredAt != nil {
-				p.LastTriggeredAt = sched.LastTriggeredAt.UTC().Format("2006-01-02 15:04 UTC")
-			}
-			if parsed, err := cronParser.Parse(sched.CronSpec); err == nil {
-				loc, _ := time.LoadLocation(tz)
-				if loc == nil {
-					loc = time.UTC
-				}
-				p.NextRunApprox = parsed.Next(time.Now().In(loc)).UTC().Format("2006-01-02 15:04 UTC")
-			}
+	if h.backupCronSpec != "" {
+		if parsed, err := cronParser.Parse(h.backupCronSpec); err == nil {
+			p.NextRunApprox = parsed.Next(time.Now().UTC()).UTC().Format("2006-01-02 15:04 UTC")
 		}
 	}
 	return h.render(c, "backups", p)

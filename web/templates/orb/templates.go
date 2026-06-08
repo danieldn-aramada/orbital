@@ -3,6 +3,7 @@ package orbtemplates
 import (
 	"fmt"
 	"html/template"
+	"path/filepath"
 	"strings"
 )
 
@@ -65,20 +66,30 @@ func Map() map[string]*template.Template {
 		"import-history": parsePage("import-history", page("web/templates/orb/pages/import-history.gohtml")),
 
 		// Standalone fragments — rendered directly (no base layout).
-		"datacenter-tab": template.Must(template.New("datacenter-tab").Funcs(funcMap).ParseFiles(
+		// Base name must equal the file basename so tmpl.Execute picks up the
+		// parsed file content (see ParseFragment comment below).
+		"datacenter-tab": template.Must(template.New("datacenter-tab.gohtml").Funcs(funcMap).ParseFiles(
 			"web/templates/shared/partials/datacenter-tab.gohtml",
 			"web/templates/shared/components/edit-modal-datacenter.gohtml",
 		)),
-		"server-tab": template.Must(template.New("server-tab").Funcs(funcMap).ParseFiles(
+		"server-tab": template.Must(template.New("server-tab.gohtml").Funcs(funcMap).ParseFiles(
 			"web/templates/shared/partials/server-tab.gohtml",
 			"web/templates/shared/components/edit-modal-server.gohtml",
 		)),
 	}
 }
 
-// ParseFragment parses a single partial template file. Used in dev mode for hot reload.
-func ParseFragment(path string) (*template.Template, error) {
-	t, err := template.New("fragment").Funcs(funcMap).ParseFiles(path)
+// ParseFragment parses a partial template file plus any companion templates it
+// references via {{template "name" .}}. Used in dev mode for hot reload.
+// Variadic companions matches the prod registration sets above.
+//
+// The base template name MUST equal the file basename of `path` — otherwise
+// tmpl.Execute(w, data) runs an empty base template and returns "incomplete
+// or empty template". Naming the base to match the file makes Execute pick up
+// the parsed content (Go's html/template merges them).
+func ParseFragment(path string, companions ...string) (*template.Template, error) {
+	files := append([]string{path}, companions...)
+	t, err := template.New(filepath.Base(path)).Funcs(funcMap).ParseFiles(files...)
 	if err != nil {
 		return nil, fmt.Errorf("parse fragment %s: %w", path, err)
 	}

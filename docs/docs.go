@@ -46,14 +46,14 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Filter by resource type (e.g. DataCenter, Server)",
-                        "name": "resource_type",
+                        "description": "Filter by resource ID",
+                        "name": "resource_id",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Filter by resource ID",
-                        "name": "resource_id",
+                        "description": "Filter by resource type (e.g. Server, DataCenter)",
+                        "name": "resource_type",
                         "in": "query"
                     },
                     {
@@ -985,6 +985,9 @@ const docTemplate = `{
         "handler.artifactResponse": {
             "type": "object",
             "properties": {
+                "bundlerError": {
+                    "type": "string"
+                },
                 "completedAt": {
                     "type": "string"
                 },
@@ -999,9 +1002,6 @@ const docTemplate = `{
                 },
                 "enriched": {
                     "type": "boolean"
-                },
-                "enricherError": {
-                    "type": "string"
                 },
                 "error": {
                     "type": "string"
@@ -1066,6 +1066,9 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "status": {
+                    "type": "string"
+                },
+                "trigger": {
                     "type": "string"
                 }
             }

@@ -2,7 +2,6 @@ package orbserver
 
 import (
 	"encoding/json"
-	"fmt"
 	"html/template"
 	"os"
 	"path/filepath"
@@ -47,17 +46,16 @@ type schemaPageData struct {
 }
 
 func (s *Server) orbBase(c echo.Context) layout.Base {
-	version := fmt.Sprintf("%d", time.Now().Unix())
 	path := c.Request().URL.Path
 	return layout.Base{
-		Head:        layout.Head{Version: version},
+		Head:        layout.Head{Version: s.version},
 		AppVersion:  appversion.Version,
 		BasePath:    "",
 		CurrentPath: path,
 		UI: layout.UIConfig{
 			AppName:      "Orb",
 			BasePath:     "",
-			Version:      version,
+			Version:      s.version,
 			ShowAuth:     false,
 			APIDocPath:   "/swagger/index.html",
 			MenuSections: s.buildOrbMenuSections(path),

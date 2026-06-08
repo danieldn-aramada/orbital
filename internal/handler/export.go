@@ -36,7 +36,11 @@ type Export struct {
 	scratchExportDir      string // host-side mount of /dgraph/export in scratch container
 	schemaPath            string // path to the GraphQL schema file
 	logger                *slog.Logger
+	basePath              string // URL base path for fragment-rendered hx-* attributes
 }
+
+// SetBasePath configures the URL base path used by HTML fragments rendered by this handler.
+func (h *Export) SetBasePath(bp string) { h.basePath = bp }
 
 func NewExport(db *ent.Client, dgraphURL, dgraphScratchURL, dgraphScratchAdminURL, dgraphScratchZeroURL, exportDir, scratchExportDir, schemaPath string, logger *slog.Logger) *Export {
 	if err := os.MkdirAll(exportDir, 0o755); err != nil {
@@ -220,7 +224,7 @@ func (h *Export) List(c echo.Context) error {
 			return fmt.Errorf("parse export fragment: %w", err)
 		}
 		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-		return tmpl.Execute(c.Response().Writer, exportJobsFragData{Rows: rows, OCIConfigured: ociConfigured})
+		return tmpl.Execute(c.Response().Writer, exportJobsFragData{Rows: rows, OCIConfigured: ociConfigured, BasePath: h.basePath})
 	}
 
 	out := make([]statusResponse, 0, len(jobs))
@@ -839,6 +843,7 @@ type exportJobFragRow struct {
 type exportJobsFragData struct {
 	Rows          []exportJobFragRow
 	OCIConfigured bool
+	BasePath      string
 }
 
 func toExportJobFragRow(job *ent.ExportJob, published bool) exportJobFragRow {

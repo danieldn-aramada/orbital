@@ -40,6 +40,8 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.SlogLevel()}))
 	var backupHandler *handler.BackupHandler
 
+	handler.ReconcileAdminEmails(context.Background(), db, cfg.AdminEmailSet(), logger)
+
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
@@ -115,6 +117,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	ui.SetSchemaPath(cfg.SchemaPath)
 	ui.SetRestoreAvailable(true)
 	ui.SetDGraphURL(cfg.DGraphURL)
+	ui.SetBackupCronSpec(cfg.BackupSchedule)
 	root.Static("/static", "web/shared/static")
 	if cfg.BasePath != "" {
 		root.GET("", ui.Index)
@@ -177,6 +180,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 
 	if db != nil {
 		exp := handler.NewExport(db, cfg.DGraphURL, cfg.DGraphScratchURL, cfg.DGraphScratchAdminURL, cfg.DGraphScratchZeroURL, cfg.ExportDir, cfg.DGraphScratchExportDir, cfg.SchemaPath, logger)
+		exp.SetBasePath(cfg.BasePath)
 		api.POST("/export", exp.Trigger)
 		api.GET("/export/jobs", exp.List)
 
@@ -201,6 +205,8 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 			bundler.WithMaxResponseBytes(cfg.BundlerMaxResponseBytes),
 		}
 		ociH := handler.NewOCI(db, ociCfg, cfg.DGraphScratchExportDir, logger, cfg.BundlerTimeout, bundlerOpts...)
+		ociH.SetBasePath(cfg.BasePath)
+		api.GET("/export/jobs/:jobId/publish-modal", ociH.PublishModal)
 		api.POST("/export/jobs/:jobId/publish", ociH.Publish)
 		api.DELETE("/export/jobs/:jobId", ociH.DeleteJob)
 		api.GET("/oci/artifacts", ociH.ListArtifacts)
@@ -234,7 +240,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 				RetentionMinCount: cfg.BackupRetentionMinCount,
 				Version:           appversion.Version,
 				RawDB:             rawDB,
-				BootstrapCronSpec: cfg.BackupSchedule,
+				CronSpec:          cfg.BackupSchedule,
 			}, logger)
 			if err != nil {
 				logger.Error("backup handler init failed", "err", err)
@@ -246,8 +252,6 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 				api.GET("/backup/jobs/:jobId/download", bk.Download)
 				api.DELETE("/backup/jobs/:jobId", bk.Delete)
 				api.POST("/backup/test-connection", bk.TestConnection)
-				api.GET("/backup/schedule", bk.GetSchedule)
-				api.PUT("/backup/schedule", bk.UpdateSchedule)
 				backupHandler = bk
 			}
 

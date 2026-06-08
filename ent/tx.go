@@ -14,8 +14,6 @@ type Tx struct {
 	config
 	// Backup is the client for interacting with the Backup builders.
 	Backup *BackupClient
-	// BackupSchedule is the client for interacting with the BackupSchedule builders.
-	BackupSchedule *BackupScheduleClient
 	// Event is the client for interacting with the Event builders.
 	Event *EventClient
 	// EventResource is the client for interacting with the EventResource builders.
@@ -164,7 +162,6 @@ func (tx *Tx) Client() *Client {
 
 func (tx *Tx) init() {
 	tx.Backup = NewBackupClient(tx.config)
-	tx.BackupSchedule = NewBackupScheduleClient(tx.config)
 	tx.Event = NewEventClient(tx.config)
 	tx.EventResource = NewEventResourceClient(tx.config)
 	tx.EventResourceType = NewEventResourceTypeClient(tx.config)

@@ -16,7 +16,7 @@ The two pipelines are symmetric:
 Orbital publish (cloud):         Orb import (edge):
 ────────────────────────         ──────────────────
 DGraph → base export layers      receive full artifact
-enrichers ADD layers         ↔   consumers CONSUME layers
+bundlers ADD layers          ↔   consumers CONSUME layers
 sign once, push once             verify, decompose, dispatch
 ```
 
@@ -30,7 +30,7 @@ Admin clicks Publish
         ▼
 Orbital publish pipeline
         │
-        ├── [if enrichers in request body]
+        ├── [if bundlers in request body]
         │         │
         │         ├─ POST configbundle-bundler /bundle: {datacenter}
         │         │         │
@@ -38,7 +38,7 @@ Orbital publish pipeline
         │         │             for config fields it needs
         │         │             → returns [{mediaType, data (base64)}]
         │         │
-        │         └─ all enrichers must succeed (all-or-nothing)
+        │         └─ all bundlers must succeed (all-or-nothing)
         │
         ├── bundle layers:
         │     data.json.gz                                    ← orb: DGraph import
@@ -89,11 +89,11 @@ sequenceDiagram
     O->>O: write data.json.gz + schema.gz
     O->>O: mark job completed
 
-    %% ── 2. Publish with enricher ────────────────────────────────────────────
-    Admin->>O: POST /api/v1/export/jobs/:jobId/publish\n{"enrichers":["http://cb-bundler/bundle"]}
+    %% ── 2. Publish with bundler ─────────────────────────────────────────────
+    Admin->>O: POST /api/v1/export/jobs/:jobId/publish\n{"bundlers":["http://cb-bundler/bundle"]}
     O-->>Admin: 202 {artifactId, tag}
 
-    Note over O,CBB: async — enrichment (all-or-nothing)
+    Note over O,CBB: async — bundling (all-or-nothing)
     O->>CBB: POST /bundle  {datacenter}
     CBB->>O: GET /graphql  (fetch config fields)
     O-->>CBB: config data
@@ -140,13 +140,13 @@ sequenceDiagram
 
 ### Orbital
 
-- Calls enrichers synchronously before pushing — **all-or-nothing**: any enricher failure = publish fails, nothing pushed
+- Calls bundlers synchronously before pushing — **all-or-nothing**: any bundler failure = publish fails, nothing pushed
 - Assembles all layers into one OCI manifest, signs once, pushes once
-- Records `enriched: true` on the `RegistryArtifact` row when enrichment ran
-- Records `enricher_error` when enrichment failed
-- Treats enricher layers as opaque bytes identified by media type — no awareness of contents
+- Records `enriched: true` on the `RegistryArtifact` row when bundling ran
+- Records `bundler_error` when bundling failed
+- Treats bundler layers as opaque bytes identified by media type — no awareness of contents
 
-### ConfigBundle Bundler (enricher — runs in cloud)
+### ConfigBundle Bundler (runs in cloud)
 
 - Exposes `POST /bundle`
 - Receives `{datacenter}` from Orbital
@@ -175,7 +175,7 @@ sequenceDiagram
 
 ---
 
-## Enricher API Contract (Orbital → bundler)
+## Bundler API Contract (Orbital → bundler)
 
 ### Request
 
@@ -202,10 +202,10 @@ Content-Type: application/json
 ```
 
 - `data` is standard base64 (not URL-safe)
-- An empty array `[]` is valid — enricher ran but produced no layers
-- Non-2xx → Orbital retries up to `ORBITAL_ENRICHER_MAX_ATTEMPTS` times (default 3) with exponential backoff (1s–10s). If all attempts fail, the publish job is marked failed, `enricher_error` is recorded, nothing is pushed to ACR.
+- An empty array `[]` is valid — bundler ran but produced no layers
+- Non-2xx → Orbital retries up to `ORBITAL_BUNDLER_MAX_ATTEMPTS` times (default 3) with exponential backoff (1s–10s). If all attempts fail, the publish job is marked failed, `bundler_error` is recorded, nothing is pushed to ACR.
 - Timeout per attempt (default 30s) → counts as a failed attempt
-- Response body exceeding `ORBITAL_ENRICHER_MAX_RESPONSE_BYTES` (default 10 MB) → immediate failure, no retry
+- Response body exceeding `ORBITAL_BUNDLER_MAX_RESPONSE_BYTES` (default 10 MB) → immediate failure, no retry
 
 ---
 
@@ -223,7 +223,7 @@ X-Orb-Import-ID: <uuid>
 <raw manifest bytes>
 ```
 
-- Body is the raw layer bytes exactly as the bundler produced them — no base64, no envelope
+- Body is the raw layer bytes exactly as the bundler returned them — no base64, no envelope
 - `X-Orb-Tag` — the OCI tag that was imported (e.g. `v5`, `latest`)
 - `X-Orb-Digest` — the artifact manifest digest
 - `X-Orb-Import-ID` — orb's internal import ID for correlation
@@ -273,13 +273,13 @@ Parsed at orb startup. Dispatch failures do not affect DGraph import.
 
 ```json
 {
-  "enrichers": [
+  "bundlers": [
     "https://configbundle-bundler.internal/bundle"
   ]
 }
 ```
 
-If `enrichers` is omitted or empty, only the raw export layers are pushed (orb-only artifact, no ConfigBundle layer).
+If `bundlers` is omitted or empty, only the raw export layers are pushed (orb-only artifact, no ConfigBundle layer).
 
 ---
 
@@ -287,11 +287,11 @@ If `enrichers` is omitted or empty, only the raw export layers are pushed (orb-o
 
 | Variable | Default | Description |
 |---|---|---|
-| `ORBITAL_ENRICHER_TIMEOUT` | `30s` | Per-attempt HTTP timeout for enricher calls |
-| `ORBITAL_ENRICHER_MAX_ATTEMPTS` | `3` | Total attempts (1 initial + 2 retries) |
-| `ORBITAL_ENRICHER_MAX_RESPONSE_BYTES` | `10485760` | Max enricher response size (10 MB) |
+| `ORBITAL_BUNDLER_TIMEOUT` | `30s` | Per-attempt HTTP timeout for bundler calls |
+| `ORBITAL_BUNDLER_MAX_ATTEMPTS` | `3` | Total attempts (1 initial + 2 retries) |
+| `ORBITAL_BUNDLER_MAX_RESPONSE_BYTES` | `10485760` | Max bundler response size (10 MB) |
 
-Enricher URLs are per-request — not configured server-side.
+Bundler URLs are per-request — not configured server-side.
 
 ---
 
@@ -305,7 +305,7 @@ Enricher URLs are per-request — not configured server-side.
 - ConfigBundle bundler running on `:8020`
 - CB Controller running on `:8030` (exposing `POST /consume`)
 
-### Step 1 — Trigger export + publish with enricher
+### Step 1 — Trigger export + publish with bundler
 
 ```bash
 # Get a datacenter ID
@@ -316,9 +316,9 @@ curl -s -X POST http://localhost:8001/api/v1/datacenters/<dcId>/export | jq .
 # Note the jobId. Poll until "completed":
 curl -s http://localhost:8001/api/v1/export/jobs/<jobId> | jq .status
 
-# Publish with enricher
+# Publish with bundler
 cat > /tmp/publish.json <<'EOF'
-{"enrichers": ["http://localhost:8020/bundle"]}
+{"bundlers": ["http://localhost:8020/bundle"]}
 EOF
 curl -s -X POST http://localhost:8001/api/v1/export/jobs/<jobId>/publish \
   -H "Content-Type: application/json" -d @/tmp/publish.json | jq .
@@ -349,13 +349,29 @@ Stop CB Controller, trigger another import. Orb should complete DGraph import su
 
 ---
 
+## Deployment
+
+**Bundler sidecars run in the same pod as orbital** — separate container image, shared pod network. Do not deploy as a standalone service.
+
+**Naming convention:** container name is `<product>-bundler` — never the bare role `bundler`. The ConfigBundle bundler is `configbundle-bundler`, matching its image name. If a second bundler is added (e.g. `plm-bundler`), follow the same pattern. Mirrors the `dgraph-alpha` / `dgraph-zero` convention: product + role, not bare role.
+
+**ConfigBundle bundler specifics:**
+- Container name: `configbundle-bundler`, port 8020
+- Publish requests use `http://localhost:8020/bundle` as the bundler URL — localhost resolves inside the shared pod network
+- No bearer token needed — localhost traffic inside the pod bypasses orbital's auth
+- Image tag pinned per overlay in the `images:` block of `deploy/overlays/<env>/kustomization.yaml`
+- Container spec lives in `deploy/base/deploy.yaml` under `spec.template.spec.containers`
+- If additional bundlers are added, allocate ports sequentially (8021, 8022…) at that time
+
+---
+
 ## Invariants
 
 - Orbital never imports ConfigBundle packages or code
-- Orbital never inspects enricher layer contents — media type and bytes only
-- Orbital's raw export layers (`data.json.gz`, `schema.gz`) are always present regardless of enrichment
+- Orbital never inspects bundler layer contents — media type and bytes only
+- Orbital's raw export layers (`data.json.gz`, `schema.gz`) are always present regardless of bundling
 - No downstream system needs OCI registry write credentials
-- Enrichment is all-or-nothing: partial pushes are never produced
+- Bundling is all-or-nothing: partial pushes are never produced
 - Orb's DGraph import always completes regardless of consumer dispatch results
 - CB Controller never pulls from ACR and never needs registry credentials
 - Dependency direction: CB Controller is a consumer of orb's dispatch; orb never calls CB Controller proactively

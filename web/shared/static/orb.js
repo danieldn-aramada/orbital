@@ -1,6 +1,41 @@
 // orb.js — orb-specific page logic
 
-import { BASE } from './shared.js'
+import {
+  BASE,
+  initInventoryTable,
+  initDatacenterTable,
+  initServerListTable,
+  loadDataCenterTab,
+  loadServerListTab,
+  saveTab,
+  saveServerTab,
+  initDatacenterTabRestoration,
+  initServerListTabRestoration,
+} from './shared.js'
+
+// ─── Server-restart tab cleanup ───────────────────────────────────────────────
+//
+// Orb has no login/session, so there's no natural moment to wipe stale tab
+// state. The shared base layout exposes window.ORBITAL_CONFIG.serverVersion —
+// a timestamp set once per orb startup. When it differs from what we last
+// stored, orb has restarted and any tab IDs in localStorage may point at
+// DGraph UIDs that no longer exist (re-import changes UIDs). Clear them so
+// the restoration code on window.load sees empty storage and skips.
+//
+// Runs on DOMContentLoaded which fires before window.load — restoration runs
+// after, sees empty storage. Orbital uses its login-based ?fresh=1 path
+// instead; this handler is orb-only.
+document.addEventListener('DOMContentLoaded', () => {
+  const v = window.ORBITAL_CONFIG?.serverVersion
+  if (!v) return
+  const stored = localStorage.getItem('serverVersion')
+  if (stored === v) return
+  localStorage.removeItem('datacenterTabs')
+  localStorage.removeItem('serverTabs')
+  localStorage.removeItem('dcTabCurrent')
+  localStorage.removeItem('srvTabCurrent')
+  localStorage.setItem('serverVersion', v)
+})
 
 // ─── Orb import ───────────────────────────────────────────────────────────────
 
@@ -106,134 +141,49 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 })
 
-// ─── Orb servers DataTable ────────────────────────────────────────────────────
+// ─── Inventory / Data Centers / Servers list tables ──────────────────────────
+//
+// DataTable construction + tab loading are shared with orbital (see shared.js).
+// Per docs/claude/ORB.md, orb's UI mirrors orbital's tab-swap interaction model.
+
+document.addEventListener('DOMContentLoaded', () => { initInventoryTable() })
 
 document.addEventListener('DOMContentLoaded', () => {
-  if (!document.getElementById('orb-servers-table')) return
-
-  const orbServersTable = $('#orb-servers-table').DataTable({
-    pageLength: 25,
-    order: [[0, 'asc']],
-    columns: [
-      { data: 'hostname' },
-      { data: 'serviceTag' },
-      { data: 'model' },
-      { data: 'manufacturer' },
-      { data: 'oobIP' },
-      { data: 'rack' },
-      { data: 'rackPosition' },
-    ],
-    ajax: {
-      url: BASE + '/graphql',
-      type: 'POST',
-      contentType: 'application/json',
-      data: () => JSON.stringify({
-        query: `{ queryServer {
-          id orbId hostname serviceTag model manufacturer oobMAC rackPosition
-          oobIP { address }
-          rack { name }
-        } }`,
-      }),
-      dataSrc: (json) => (json.data?.queryServer ?? []).map(s => ({
-        id: s.id,
-        orbId: s.orbId ?? '—',
-        hostname: s.hostname ?? '—',
-        serviceTag: s.serviceTag ?? '—',
-        model: s.model ?? '—',
-        manufacturer: s.manufacturer ?? '—',
-        oobIP: s.oobIP?.address ?? '—',
-        rack: s.rack?.name ?? '—',
-        rackPosition: s.rackPosition || '—',
-      })),
+  initDatacenterTable({
+    onRowOpen: (data) => {
+      const displayName = data.name
+      const id = data.id
+      const tab = document.getElementById(`tab-${id}`)
+      if (tab) {
+        tab.click()
+      } else {
+        loadDataCenterTab(displayName, id)
+        saveTab(displayName, id)
+        document.getElementById(`tab-${id}`).click()
+      }
     },
-    createdRow: function (row) { row.style.cursor = 'pointer' },
-  })
-
-  $('#orb-servers-table tbody').on('click', 'tr', function () {
-    const data = orbServersTable.row(this).data()
-    if (data && data.id) window.location = BASE + '/servers/' + data.id
   })
 })
-
-// ─── Orb DC page ──────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
-  const page = document.getElementById('orb-dc-page')
-  if (!page) return
-
-  const loading = document.getElementById('orb-dc-loading')
-  const content = document.getElementById('orb-dc-content')
-  const empty = document.getElementById('orb-dc-empty')
-
-  fetch(BASE + '/graphql', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query: `{
-        queryDataCenter {
-          id orbId name createdAt updatedAt
-          namespace { name }
-          racks(order: { asc: name }) { id name }
-          serversAggregate { count }
-          servers(order: { asc: rackPosition }) {
-            id orbId hostname serviceTag model manufacturer
-            oobIP { address }
-            rackPosition
-            rack { name }
-          }
-        }
-      }`,
-    }),
+  initServerListTable({
+    onRowOpen: (data) => {
+      const id = data.id
+      const displayName = data.hostname !== '—' ? data.hostname : data.serviceTag
+      const tab = document.getElementById(`tab-srv-${id}`)
+      if (tab) {
+        tab.click()
+      } else {
+        loadServerListTab(displayName, id)
+        saveServerTab(displayName, id)
+        document.getElementById(`tab-srv-${id}`).click()
+      }
+    },
   })
-    .then(r => r.json())
-    .then(json => {
-      loading.style.display = 'none'
-      const list = json.data?.queryDataCenter ?? []
-      if (list.length === 0) { empty.style.display = ''; return }
-      const dc = list[0]
-
-      document.getElementById('orb-dc-name').textContent = dc.name ?? '—'
-      document.getElementById('orb-dc-server-count').textContent = dc.serversAggregate?.count ?? '—'
-      document.getElementById('orb-dc-rack-count').textContent = dc.racks?.length ?? '—'
-      document.getElementById('orb-dc-orb-id').textContent = dc.orbId || '—'
-      document.getElementById('orb-dc-namespace').textContent = dc.namespace?.name || '—'
-      document.getElementById('orb-dc-created-at').textContent = dc.createdAt || '—'
-      document.getElementById('orb-dc-updated-at').textContent = dc.updatedAt || '—'
-
-      const servers = dc.servers ?? []
-      $('#orb-dc-servers-table').DataTable({
-        pageLength: 25,
-        order: [[4, 'asc'], [5, 'asc']],
-        data: servers.map(s => ({
-          id: s.id,
-          hostname: s.hostname ?? '—',
-          serviceTag: s.serviceTag ?? '—',
-          model: s.model ?? '—',
-          oobIP: s.oobIP?.address ?? '—',
-          rack: s.rack?.name ?? '—',
-          rackPosition: s.rackPosition || '—',
-        })),
-        columns: [
-          { data: 'hostname' },
-          { data: 'serviceTag' },
-          { data: 'model' },
-          { data: 'oobIP' },
-          { data: 'rack' },
-          { data: 'rackPosition' },
-        ],
-        createdRow: function (row) { row.style.cursor = 'pointer' },
-      })
-
-      $('#orb-dc-servers-table tbody').on('click', 'tr', function () {
-        const table = $('#orb-dc-servers-table').DataTable()
-        const data = table.row(this).data()
-        if (data && data.id) window.location = BASE + '/servers/' + data.id
-      })
-
-      content.style.display = ''
-    })
-    .catch(() => { loading.style.display = 'none'; empty.style.display = '' })
 })
+
+window.addEventListener('load', initDatacenterTabRestoration)
+window.addEventListener('load', initServerListTabRestoration)
 
 // ─── Orb divergence publish ───────────────────────────────────────────────────
 

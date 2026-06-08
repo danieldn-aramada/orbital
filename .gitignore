@@ -43,8 +43,8 @@ dgraph-exports/
 deploy/local/cosign.key
 deploy/local/cosign.pub
 
-# Zot registry credentials — contains ACR password
-deploy/local/zot-credentials.json
+# Zot sync credentials — contains ACR password
+deploy/local/sync-credentials.json
 
 # Orb local data
 orb-data/

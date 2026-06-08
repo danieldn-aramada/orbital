@@ -1,0 +1,63 @@
+# Edge-data-center simulation stack.
+#
+# Brings up only the services an edge needs: orb's DGraph + a local zot
+# configured to mirror the orbital/colo-galleon repo from upstream ACR.
+#
+# Mutually exclusive with `make up` (both bind :5001 + :8082 + :9082).
+# Container names are pinned so orb's defaults (ORB_DGRAPH_CONTAINER=
+# local-dgraph-orb-alpha-1) work without override.
+#
+# Usage:
+#   make up-orb   # bring up
+#   make down-orb # tear down
+
+services:
+  oci-registry:
+    image: ghcr.io/project-zot/zot-linux-arm64:v2.1.9
+    container_name: local-oci-registry-1
+    command: serve /etc/zot/config.json
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./zot-config-edge.json:/etc/zot/config.json:ro
+      - ./sync-credentials.json:/etc/zot/sync-credentials.json:ro
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/zot-linux-arm64", "verify", "/etc/zot/config.json"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  dgraph-orb-zero:
+    image: dgraph/dgraph:v25.3.1
+    container_name: local-dgraph-orb-zero-1
+    command: dgraph zero --my=dgraph-orb-zero:5080
+    ports:
+      - "5082:5080"
+      - "6082:6080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6080/state"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  dgraph-orb-alpha:
+    image: dgraph/dgraph:v25.3.1
+    container_name: local-dgraph-orb-alpha-1
+    command: >
+      dgraph alpha
+      --my=dgraph-orb-alpha:7080
+      --zero=dgraph-orb-zero:5080
+      --graphql extensions=false
+      --security whitelist=0.0.0.0/0
+    ports:
+      - "7082:7080"
+      - "8082:8080"
+      - "9082:9080"
+    depends_on:
+      dgraph-orb-zero:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12

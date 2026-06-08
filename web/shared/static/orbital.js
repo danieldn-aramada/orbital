@@ -21,47 +21,15 @@ import {
   initServerEventsTable,
   renderTimestamps,
   formatTimestamp,
+  initInventoryTable,
+  initDatacenterTable,
+  initServerListTable,
+  loadDataCenterTab,
+  loadServerListTab,
+  saveServerTab,
+  initDatacenterTabRestoration,
+  initServerListTabRestoration,
 } from './shared.js'
-
-// ─── DC tab loading ───────────────────────────────────────────────────────────
-
-function loadDataCenterTab(displayName, id) {
-  const tabHtml = `<li class="tab">
-    <a id="tab-${id}" data-target="tab-content-${id}" role="tab" aria-selected="false" tabindex="-1">
-      ${displayName}
-      <span class="pl-2">
-        <button id="tab-close-${id}">
-          <i class="fa-solid fa-xmark" style="font-size: 0.8em;"></i>
-        </button>
-      </span>
-    </a>
-  </li>`
-  const contentHtml = `<div class="tab-content" id="tab-content-${id}" role="tabpanel" style="display:none"></div>`
-
-  $('#tablist').append(tabHtml)
-  $('.app-main').append(contentHtml)
-
-  const tabLink = document.getElementById(`tab-${id}`)
-  const tabContent = document.getElementById(`tab-content-${id}`)
-
-  tabLink.addEventListener('click', () => {
-    activateTab(tabLink.parentElement)
-    displayTabContent(`tab-content-${id}`)
-    setCurrentTab(`tab-${id}`)
-    if (!tabContent.dataset.loaded) {
-      htmx.ajax('GET', BASE + '/datacenters/' + id, { target: '#tab-content-' + id, swap: 'innerHTML' })
-    }
-  })
-
-  document.getElementById(`tab-close-${id}`).addEventListener('click', (event) => {
-    event.stopPropagation()
-    localStorage.removeItem(`dc-detail-tab-${id}`)
-    unloadTab(id)
-    deleteTab(displayName, id)
-    document.getElementById('tab-summary').click()
-    replaceCurrentTab(`tab-${id}`, 'tab-summary')
-  })
-}
 
 // ─── Server drill-down in DC tab (dblclick → HTMX load into tab) ─────────────
 
@@ -78,460 +46,49 @@ document.addEventListener('dblclick', function (e) {
 
 // ─── Inventory page ───────────────────────────────────────────────────────────
 
-const INVENTORY_CACHE_KEY = 'inventoryCache'
-
-function inventoryFetch(onData) {
-  fetch(BASE + '/api/v1/inventory')
-    .then(r => r.json())
-    .then(json => {
-      const items = json.items ?? []
-      sessionStorage.setItem(INVENTORY_CACHE_KEY, JSON.stringify(items))
-      onData(items)
-    })
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  if (!document.getElementById('inventory-table')) return
-
-  const savedType = localStorage.getItem('inventoryTypeFilter') || ''
-  const savedNamespace = localStorage.getItem('inventoryNamespaceFilter') || ''
-  const cached = sessionStorage.getItem(INVENTORY_CACHE_KEY)
-  const initialData = cached ? JSON.parse(cached) : []
-
-  const typeFilterEl = $('<div class="select is-small" style="margin-right:0.25rem"><select id="inventory-type-select"><option value="">All Types</option></select></div>')
-
-  const inventoryTable = new DataTable('#inventory-table', {
-    layout: {
-      topStart: [
-        typeFilterEl,
-        { buttons: [
-          { extend: 'excel', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-excel"></i><span>Excel</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Excel', title: '', filename: 'config-items' },
-          { extend: 'csv', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-text"></i><span>CSV</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV', title: '', filename: 'config-items' },
-          { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
-          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
-          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-inventory' } },
-        ] },
-        { pageLength: { menu: [50, 100, 250] } },
-      ],
-      topEnd: { search: { placeholder: 'Search inventory' } },
-    },
-    select: { style: 'os' },
-    autoWidth: true,
-    scrollX: true,
-    scrollY: 400,
-    scrollCollapse: true,
-    pageLength: 50,
-    stateSave: true,
-    language: {
-      infoEmpty: 'No config items to show',
-      info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
-      entries: { _: 'items', 1: 'item' },
-    },
-    searchCols: [savedType ? { search: savedType } : null, null, null, null, null, null],
-    initComplete: function () {
-      dtWrapLengthSelect(this.api())
-
-      document.getElementById('inventory-type-select').addEventListener('change', function () {
-        localStorage.setItem('inventoryTypeFilter', this.value)
-        inventoryTable.column(0).search(this.value, { exact: !!this.value }).draw()
-      })
-
-      const nsSelect = document.getElementById('inventory-namespace-select')
-      nsSelect.addEventListener('change', function () {
-        localStorage.setItem('inventoryNamespaceFilter', this.value)
-        applyNamespaceFilter(this.value)
-      })
-
-      if (savedNamespace) applyNamespaceFilter(savedNamespace)
-    },
-    columns: [
-      { data: 'type' },
-      { data: 'orbId' },
-      { data: 'name' },
-      { data: 'createdBy' },
-      { data: 'createdAt', render: (val) => val ? val.replace('T', ' ').replace('Z', '') : '' },
-      { data: 'uid' },
-    ],
-    columnDefs: [
-      { targets: 0, width: '10%' },
-      { targets: 1, width: '20%' },
-      { targets: 2, width: '20%' },
-      { targets: 3, width: '15%' },
-      { targets: 4, width: '15%', className: 'dt-left' },
-      { targets: 5, visible: false },
-    ],
-    data: initialData,
-  })
-
-  function applyNamespaceFilter(ns) {
-    inventoryTable.column(1).search(ns ? '^' + ns + ':' : '', { regex: true }).draw()
-  }
-
-  function populateDropdowns() {
-    const typeSelect = document.getElementById('inventory-type-select')
-    typeSelect.options.length = 1
-    inventoryTable.column(0).data().unique().sort().each(type => {
-      typeSelect.add(new Option(type, type))
-    })
-    if (savedType) typeSelect.value = savedType
-
-    const nsSelect = document.getElementById('inventory-namespace-select')
-    nsSelect.options.length = 1
-    const seen = new Set()
-    inventoryTable.column(1).data().each(orbId => {
-      const ns = orbId ? orbId.split(':')[0] : ''
-      if (ns && !seen.has(ns)) seen.add(ns)
-    })
-    Array.from(seen).sort().forEach(ns => nsSelect.add(new Option(ns, ns)))
-    if (savedNamespace) nsSelect.value = savedNamespace
-  }
-
-  if (!cached) {
-    inventoryFetch(items => {
-      inventoryTable.clear().rows.add(items).draw()
-      populateDropdowns()
-      if (savedNamespace) applyNamespaceFilter(savedNamespace)
-    })
-  } else {
-    populateDropdowns()
-  }
-
-  const reloadButton = inventoryTable.button('reload:name').node()
-  inventoryTable.button('reload:name').node().on('click', function () {
-    inventoryTable.clear().draw()
-    reloadButton.addClass('is-loading')
-    sessionStorage.removeItem(INVENTORY_CACHE_KEY)
-    setTimeout(() => {
-      inventoryFetch(items => {
-        inventoryTable.rows.add(items).draw()
-        populateDropdowns()
-        const currentNs = document.getElementById('inventory-namespace-select').value
-        if (currentNs) applyNamespaceFilter(currentNs)
-        reloadButton.removeClass('is-loading')
-      })
-    }, 250)
-  })
-})
+document.addEventListener('DOMContentLoaded', () => { initInventoryTable() })
 
 // ─── Data Centers page ────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
-  if (!document.getElementById('datacenter-table')) return
-
-  document.querySelectorAll('li.tab a[data-target]').forEach((a) => {
-    a.addEventListener('click', () => {
-      activateTab(a.parentElement)
-      displayTabContent(a.dataset.target)
-      setCurrentTab(a.id)
-    })
-  })
-
-  const datacenterTable = new DataTable('#datacenter-table', {
-    layout: {
-      topStart: [
-        { pageLength: { menu: [5, 10, 25, 50] } },
-        { buttons: [
-          { extend: 'excel', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-excel"></i><span>Excel</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Excel' },
-          { extend: 'csv', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-text"></i><span>CSV</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV' },
-          { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
-          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
-          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-datacenters' } },
-        ] },
-      ],
-      topEnd: { search: { placeholder: 'Type search here' } },
+  initDatacenterTable({
+    onRowOpen: (data) => {
+      const displayName = data.name
+      const id = data.id
+      const tab = document.getElementById(`tab-${id}`)
+      if (tab) {
+        tab.click()
+      } else {
+        loadDataCenterTab(displayName, id)
+        saveTab(displayName, id)
+        document.getElementById(`tab-${id}`).click()
+      }
     },
-    select: { style: 'os' },
-    autoWidth: true,
-    scrollX: true,
-    scrollY: 400,
-    scrollCollapse: true,
-    stateSave: true,
-    language: {
-      infoEmpty: 'No data centers to show',
-      info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
-      entries: { _: 'data centers', 1: 'data center' },
-    },
-    initComplete: function () { dtWrapLengthSelect(this.api()) },
-    createdRow: function (row) { row.style.cursor = 'pointer'; row.title = 'Double-click to open' },
-    columns: [
-      { data: 'name' },
-      { data: 'serverCount' },
-      { data: 'createdBy' },
-      { data: 'createdAt' },
-      { data: 'id' },
-      { data: 'orbId' },
-    ],
-    columnDefs: [
-      { targets: 0 },
-      { targets: 1, className: 'dt-body-left dt-head-left' },
-      { targets: 2 },
-      { targets: 3 },
-      { targets: [4, 5], visible: false, searchable: true },
-    ],
-    ajax: {
-      url: BASE + '/graphql',
-      type: 'POST',
-      contentType: 'application/json',
-      data: () => JSON.stringify({ query: `{ queryDataCenter { id orbId name createdBy createdAt serversAggregate { count } } }` }),
-      dataSrc: (json) => (json.data?.queryDataCenter ?? []).map(dc => ({
-        id: dc.id,
-        orbId: dc.orbId ?? '—',
-        name: dc.name,
-        createdBy: dc.createdBy ?? '',
-        createdAt: dc.createdAt ?? '',
-        serverCount: dc.serversAggregate?.count ?? 0,
-      })),
-    },
-  })
-
-  const reloadButton = datacenterTable.button('reload:name').node()
-  datacenterTable.button('reload:name').node().on('click', function () {
-    datacenterTable.clear().draw()
-    reloadButton.addClass('is-loading')
-    setTimeout(() => {
-      datacenterTable.ajax.reload(() => { reloadButton.removeClass('is-loading') })
-    }, 250)
-  })
-
-  $('#datacenter-table tbody').on('dblclick', 'tr', function () {
-    const displayName = this.cells[0].innerText
-    const id = datacenterTable.row(this).data().id
-    const tab = document.getElementById(`tab-${id}`)
-    if (tab) {
-      tab.click()
-    } else {
-      loadDataCenterTab(displayName, id)
-      saveTab(displayName, id)
-      document.getElementById(`tab-${id}`).click()
-    }
   })
 })
 
-window.addEventListener('load', () => {
-  if (!document.getElementById('datacenter-table')) return
-
-  if (new URLSearchParams(window.location.search).get('fresh') === '1') {
-    localStorage.removeItem('datacenterTabs')
-    localStorage.removeItem('tabCurrent')
-    history.replaceState(null, '', '/')
-  }
-
-  if (!localStorage.datacenterTabs) return
-  const tabSet = new Set(JSON.parse(localStorage.datacenterTabs))
-  tabSet.forEach(tabData => {
-    const { displayName, id } = JSON.parse(tabData)
-    loadDataCenterTab(displayName, id)
-  })
-  const currentTabId = getCurrentTab()
-  if (currentTabId) document.getElementById(currentTabId)?.click()
-})
+window.addEventListener('load', initDatacenterTabRestoration)
 
 // ─── Servers page ─────────────────────────────────────────────────────────────
 
-function saveServerTab(displayName, id) {
-  const item = JSON.stringify(new TabItem(displayName, id))
-  const s = new Set(localStorage.serverTabs ? JSON.parse(localStorage.serverTabs) : [])
-  s.add(item)
-  localStorage.serverTabs = JSON.stringify([...s])
-}
-
-function deleteServerTab(displayName, id) {
-  const item = JSON.stringify(new TabItem(displayName, id))
-  const s = new Set(localStorage.serverTabs ? JSON.parse(localStorage.serverTabs) : [])
-  s.delete(item)
-  localStorage.serverTabs = JSON.stringify([...s])
-}
-
-function loadServerListTab(displayName, id) {
-  const tabHtml = `<li class="tab">
-    <a id="tab-srv-${id}" data-target="tab-content-srv-${id}" role="tab" aria-selected="false" tabindex="-1">
-      ${displayName}
-      <span class="pl-2">
-        <button id="tab-close-srv-${id}">
-          <i class="fa-solid fa-xmark" style="font-size: 0.8em;"></i>
-        </button>
-      </span>
-    </a>
-  </li>`
-  const contentHtml = `<div class="tab-content" id="tab-content-srv-${id}" role="tabpanel" style="display:none"></div>`
-
-  $('#tablist').append(tabHtml)
-  $('.app-main').append(contentHtml)
-
-  const tabLink = document.getElementById(`tab-srv-${id}`)
-  const tabContent = document.getElementById(`tab-content-srv-${id}`)
-
-  tabLink.addEventListener('click', () => {
-    activateTab(tabLink.parentElement)
-    displayTabContent(`tab-content-srv-${id}`)
-    setCurrentTab(`tab-srv-${id}`)
-    if (!tabContent.dataset.loaded) {
-      htmx.ajax('GET', BASE + '/servers/' + id, { target: '#tab-content-srv-' + id, swap: 'innerHTML' })
-    }
-  })
-
-  document.getElementById(`tab-close-srv-${id}`).addEventListener('click', (event) => {
-    event.stopPropagation()
-    deleteServerTab(displayName, id)
-    replaceCurrentTab(`tab-srv-${id}`, 'tab-summary')
-    tabLink.parentElement.remove()
-    tabContent.remove()
-    document.getElementById('tab-summary').click()
-  })
-}
-
 document.addEventListener('DOMContentLoaded', () => {
-  if (!document.getElementById('server-list-table')) return
-
-  document.querySelectorAll('li.tab a[data-target]').forEach((a) => {
-    a.addEventListener('click', () => {
-      activateTab(a.parentElement)
-      displayTabContent(a.dataset.target)
-      setCurrentTab(a.id)
-    })
-  })
-
-  const dcFilterEl = $('<div class="select is-small" style="margin-right:0.25rem"><select id="server-dc-select"><option value="">All Data Centers</option></select></div>')
-
-  const serverListTable = new DataTable('#server-list-table', {
-    pageLength: 50,
-    layout: {
-      topStart: [
-        dcFilterEl,
-        { buttons: [
-          { extend: 'excel', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-excel"></i><span>Excel</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Excel' },
-          { extend: 'csv', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-text"></i><span>CSV</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV' },
-          { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
-          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
-          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-servers' } },
-        ] },
-        { pageLength: { menu: [25, 50, 100, 250] } },
-      ],
-      topEnd: { search: { placeholder: 'Search servers' } },
-    },
-    select: { style: 'os' },
-    autoWidth: true,
-    scrollX: true,
-    scrollY: 'calc(100vh - 340px)',
-    scrollCollapse: true,
-    stateSave: true,
-    language: {
-      infoEmpty: 'No servers to show',
-      info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
-      entries: { _: 'servers', 1: 'server' },
-    },
-    initComplete: function () {
-      dtWrapLengthSelect(this.api())
-
-      const dcCol = this.api().column(0)
-      dcCol.data().unique().sort().each(function (dc) {
-        document.getElementById('server-dc-select').add(new Option(dc, dc))
-      })
-      const saved = localStorage.getItem('server-dc-filter')
-      if (saved) {
-        const el = document.getElementById('server-dc-select')
-        el.value = saved
-        dcCol.search(saved, { exact: true }).draw()
+  initServerListTable({
+    onRowOpen: (data) => {
+      const id = data.id
+      const displayName = data.hostname !== '—' ? data.hostname : data.serviceTag
+      const tab = document.getElementById(`tab-srv-${id}`)
+      if (tab) {
+        tab.click()
+      } else {
+        loadServerListTab(displayName, id)
+        saveServerTab(displayName, id)
+        document.getElementById(`tab-srv-${id}`).click()
       }
-      document.getElementById('server-dc-select').addEventListener('change', function () {
-        if (this.value) {
-          localStorage.setItem('server-dc-filter', this.value)
-        } else {
-          localStorage.removeItem('server-dc-filter')
-        }
-        dcCol.search(this.value, { exact: !!this.value }).draw()
-      })
     },
-    columns: [
-      { data: 'dataCenter' },
-      { data: 'oobIP' },
-      { data: 'hostname' },
-      { data: 'serviceTag' },
-      { data: 'model' },
-      { data: 'rack' },
-      { data: 'id' },
-      { data: 'orbId' },
-    ],
-    columnDefs: [{ targets: [6, 7], visible: false, searchable: true }],
-    ajax: {
-      url: BASE + '/graphql',
-      type: 'POST',
-      contentType: 'application/json',
-      data: () => JSON.stringify({
-        query: `{ queryServer {
-          id orbId hostname serviceTag model
-          oobIP { address }
-          rack { name }
-          dataCenter { name }
-        } }`,
-      }),
-      dataSrc: (json) => (json.data?.queryServer ?? []).map(s => ({
-        id: s.id,
-        orbId: s.orbId ?? '—',
-        hostname: s.hostname ?? '—',
-        serviceTag: s.serviceTag ?? '—',
-        model: s.model ?? '—',
-        oobIP: s.oobIP?.address ?? '—',
-        rack: s.rack?.name ?? '—',
-        dataCenter: s.dataCenter?.name ?? '—',
-      })),
-    },
-    createdRow: function (row) { row.style.cursor = 'pointer'; row.title = 'Double-click to open' },
-  })
-
-  const reloadButton = serverListTable.button('reload:name').node()
-  serverListTable.button('reload:name').node().on('click', function () {
-    serverListTable.clear().draw()
-    reloadButton.addClass('is-loading')
-    setTimeout(() => {
-      serverListTable.ajax.reload(() => { reloadButton.removeClass('is-loading') })
-    }, 250)
-  })
-
-  $('#server-list-table tbody').on('dblclick', 'tr', function () {
-    const data = serverListTable.row(this).data()
-    if (!data) return
-    const id = data.id
-    const displayName = data.hostname !== '—' ? data.hostname : data.serviceTag
-    const tab = document.getElementById(`tab-srv-${id}`)
-    if (tab) {
-      tab.click()
-    } else {
-      loadServerListTab(displayName, id)
-      saveServerTab(displayName, id)
-      document.getElementById(`tab-srv-${id}`).click()
-    }
   })
 })
 
-window.addEventListener('load', () => {
-  if (!document.getElementById('server-list-table')) return
-
-  if (localStorage.serverTabs) {
-    const tabSet = new Set(JSON.parse(localStorage.serverTabs))
-    tabSet.forEach(tabData => {
-      const { displayName, id } = JSON.parse(tabData)
-      loadServerListTab(displayName, id)
-    })
-  }
-
-  const params = new URLSearchParams(window.location.search)
-  const openId = params.get('open')
-  const openLabel = params.get('label')
-  if (openId) {
-    const displayName = openLabel || openId
-    if (!document.getElementById(`tab-srv-${openId}`)) {
-      loadServerListTab(displayName, openId)
-      saveServerTab(displayName, openId)
-    }
-    document.getElementById(`tab-srv-${openId}`)?.click()
-    history.replaceState(null, '', BASE + '/servers')
-    return
-  }
-
-  const currentTabId = getCurrentTab()
-  if (currentTabId) document.getElementById(currentTabId)?.click()
-})
+window.addEventListener('load', initServerListTabRestoration)
 
 // Double-click on server row in DC detail panel → navigate to /servers?open=<id>
 document.addEventListener('dblclick', (e) => {
@@ -669,21 +226,6 @@ function testBackupConnection() {
     })
 }
 
-function toggleSchedule(enable) {
-  const btn = document.getElementById('btn-toggle-schedule')
-  if (btn) { btn.classList.add('is-loading'); btn.disabled = true }
-  fetch(BASE + '/api/v1/backup/schedule', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled: enable }),
-  })
-    .then(r => r.json())
-    .then(() => { window.location.reload() })
-    .catch(() => {
-      if (btn) { btn.classList.remove('is-loading'); btn.disabled = false }
-    })
-}
-
 // ─── Export page ──────────────────────────────────────────────────────────────
 
 let exportPollTimer = null
@@ -696,6 +238,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (select && submitBtn) {
     select.addEventListener('change', () => { submitBtn.disabled = !select.value })
   }
+
+  document.body.addEventListener('refreshExportJobs', () => loadExportJobsTable())
 
   loadExportJobsTable()
 })
@@ -779,36 +323,16 @@ function loadExportJobsTable() {
   const ociConfigured = table && table.dataset.ociConfigured === 'true'
   fetch(BASE + '/api/v1/export/jobs?ociConfigured=' + ociConfigured, { headers: { 'HX-Request': 'true' } })
     .then(r => r.text())
-    .then(html => { tbody.innerHTML = html })
+    .then(html => { tbody.innerHTML = html; htmx.process(tbody) })
     .catch(() => {})
 }
 
-function downloadExportJob(jobId) {
+function downloadExportJob(btn, jobId) {
   window.location.href = BASE + '/api/v1/export/jobs/' + jobId + '/download'
-}
-
-function publishExportJob(jobId) {
-  fetch(BASE + `/api/v1/export/jobs/${jobId}/publish`, { method: 'POST' })
-    .then(r => r.json())
-    .then(res => {
-      if (res.error) { alert(`Publish failed: ${res.error}`); return }
-      loadExportJobsTable()
-      pollPublishJob(res.artifactId)
-    })
-    .catch(() => alert('Failed to start publish.'))
-}
-
-function pollPublishJob(artifactId) {
-  fetch(BASE + `/api/v1/oci/artifacts/${artifactId}`)
-    .then(r => r.json())
-    .then(a => {
-      if (a.status === 'completed' || a.status === 'failed') {
-        loadExportJobsTable()
-        return
-      }
-      setTimeout(() => pollPublishJob(artifactId), 2000)
-    })
-    .catch(() => setTimeout(() => pollPublishJob(artifactId), 3000))
+  const orig = btn.innerHTML
+  btn.disabled = true
+  btn.innerHTML = '<span class="icon"><i class="fa-solid fa-spinner fa-spin"></i></span><span>Downloading…</span>'
+  setTimeout(() => { btn.disabled = false; btn.innerHTML = orig }, 2000)
 }
 
 function deleteExportJob(jobId) {
@@ -1614,10 +1138,8 @@ window.openDeleteModal = openDeleteModal
 window.closeDeleteModal = closeDeleteModal
 window.confirmDelete = confirmDelete
 window.testBackupConnection = testBackupConnection
-window.toggleSchedule = toggleSchedule
 window.handleExportSubmit = handleExportSubmit
 window.downloadExportJob = downloadExportJob
-window.publishExportJob = publishExportJob
 window.deleteExportJob = deleteExportJob
 window.loadArtifactsTable = loadArtifactsTable
 window.testOCIConnection = testOCIConnection

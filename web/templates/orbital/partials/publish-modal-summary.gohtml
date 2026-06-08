@@ -1,0 +1,31 @@
+{{define "publish-modal-summary"}}
+{{if .Republish}}
+<article class="message is-warning is-light mb-3">
+  <div class="message-body py-2 is-size-7">
+    <strong>Re-publish:</strong> This publishes the same export artifact. To publish updated data, run a new export first.
+  </div>
+</article>
+{{end}}
+<table class="table is-narrow is-fullwidth is-size-7 mb-3">
+  <tbody>
+    <tr><th style="width:38%">Data Center</th><td>{{.DataCenterName}}</td></tr>
+    <tr><th>Exported At</th><td><span data-timestamp="{{.ExportedAt}}">{{.ExportedAt}}</span></td></tr>
+    <tr><th>Tag</th><td style="font-family:monospace;font-weight:600;">{{.SuggestedTag}}</td></tr>
+    <tr><th>Repository</th><td style="font-family:monospace;font-size:0.65rem;word-break:break-all;">{{.Repository}}</td></tr>
+  </tbody>
+</table>
+<form
+  hx-post="{{.BasePath}}/api/v1/export/jobs/{{.JobID}}/publish"
+  hx-target="#publish-modal-body"
+  hx-swap="innerHTML"
+  hx-headers='{"HX-Request":"true"}'
+>
+  <div class="buttons">
+    <button type="submit" class="button {{if .Republish}}is-warning{{else}}is-primary{{end}}">
+      <span class="icon"><i class="fa-solid fa-box-archive"></i></span>
+      <span>{{if .Republish}}Re-publish{{else}}Publish{{end}}</span>
+    </button>
+    <button type="button" class="button" onclick="document.getElementById('publish-confirm-modal').classList.remove('is-active')">Cancel</button>
+  </div>
+</form>
+{{end}}

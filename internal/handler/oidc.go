@@ -148,7 +148,6 @@ func (h *OIDC) Callback(c echo.Context) error {
 			return fmt.Errorf("provision oidc user: %w", err)
 		}
 	}
-
 	if err := auth.SetUserSession(h.sessionKeys, c.Request(), c.Response().Writer, u.ID, u.Name, u.Email, string(u.Role)); err != nil {
 		return fmt.Errorf("set session: %w", err)
 	}
@@ -307,7 +306,6 @@ func (h *OIDC) DeviceCodePoll(c echo.Context) error {
 			return fmt.Errorf("provision device code user: %w", err)
 		}
 	}
-
 	if err := auth.SetUserSession(h.sessionKeys, c.Request(), c.Response().Writer, u.ID, u.Name, u.Email, string(u.Role)); err != nil {
 		return fmt.Errorf("set device code session: %w", err)
 	}

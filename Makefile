@@ -8,7 +8,8 @@ BIN_DIR      := bin
 ORBITAL_BIN  := $(BIN_DIR)/orbital
 ORB_BIN      := $(BIN_DIR)/orb
 
-COMPOSE_FILE := deploy/local/docker-compose.yml
+COMPOSE_FILE      := deploy/local/docker-compose.yml
+COMPOSE_FILE_EDGE := deploy/local/docker-compose.edge.yml
 
 # Packages included in unit test runs and coverage reports.
 # Excludes generated code (ent/*) and the Swagger docs stub.
@@ -16,7 +17,7 @@ TEST_PKGS := $(shell go list ./... | grep -vE '(/ent$$|/ent/|/docs$$)')
 ACR          := armadaeksatest.azurecr.io
 IMAGE        := $(ACR)/orbital:$(VERSION)
 
-.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-unit test-integration test-e2e test-e2e-ui test-e2e-orb test-e2e-smoke cover cover-html lint up up-orb-deps up-orb down seed seed-aks-clean docs orb-docs build-css watch-css
+.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-unit test-integration test-e2e test-e2e-ui test-e2e-orb test-e2e-smoke cover cover-html lint up up-orb down down-orb seed seed-aks-clean docs orb-docs build-css watch-css
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -94,11 +95,21 @@ cover-html: cover ## Open interactive HTML coverage report in browser
 lint: ## Run go vet
 	go vet ./...
 
-up: ## Start all local dependencies (DGraph, PostgreSQL, MinIO, Zot, orb DGraph)
+up: ## Start full local stack (orbital DGraph, PostgreSQL, MinIO, Zot, orb DGraph)
 	docker compose -f $(COMPOSE_FILE) up -d
 
-down: ## Stop local stack
+down: ## Stop full local stack
 	docker compose -f $(COMPOSE_FILE) down -v
+
+up-orb: ## Start edge-data-center sim (orb DGraph + Zot mirroring ACR orbital/colo-galleon). Mutually exclusive with `make up`.
+	@if [ ! -f deploy/local/sync-credentials.json ]; then \
+		echo "ERROR: deploy/local/sync-credentials.json missing — copy sync-credentials.example.json and fill in ACR password"; \
+		exit 1; \
+	fi
+	docker compose -f $(COMPOSE_FILE_EDGE) up -d
+
+down-orb: ## Stop edge-data-center sim
+	docker compose -f $(COMPOSE_FILE_EDGE) down -v
 
 push: ## Build and push image to ACR (requires: az acr login --name armadaeksatest)
 	docker buildx build --platform linux/amd64 --build-arg VERSION=$(VERSION) -t $(IMAGE) --push .

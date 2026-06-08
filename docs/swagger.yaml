@@ -2,6 +2,8 @@ basePath: /api/v1
 definitions:
   handler.artifactResponse:
     properties:
+      bundlerError:
+        type: string
       completedAt:
         type: string
       datacenterId:
@@ -12,8 +14,6 @@ definitions:
         type: string
       enriched:
         type: boolean
-      enricherError:
-        type: string
       error:
         type: string
       exportJobId:
@@ -56,6 +56,8 @@ definitions:
       sizeBytes:
         type: integer
       status:
+        type: string
+      trigger:
         type: string
     type: object
   handler.publishResponse:
@@ -217,13 +219,13 @@ paths:
         in: query
         name: orbId
         type: string
-      - description: Filter by resource type (e.g. DataCenter, Server)
-        in: query
-        name: resource_type
-        type: string
       - description: Filter by resource ID
         in: query
         name: resource_id
+        type: string
+      - description: Filter by resource type (e.g. Server, DataCenter)
+        in: query
+        name: resource_type
         type: string
       - description: Filter by operation name (e.g. UpdateServer)
         in: query

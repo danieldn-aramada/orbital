@@ -33,7 +33,11 @@ type OCI struct {
 	logger           *slog.Logger
 	bundlerTimeout  time.Duration
 	bundlerOpts     []bundler.ClientOption
+	basePath        string // URL base path for fragment-rendered hx-* attributes
 }
+
+// SetBasePath configures the URL base path used by HTML fragments rendered by this handler.
+func (h *OCI) SetBasePath(bp string) { h.basePath = bp }
 
 // NewOCI creates an OCI handler. publisher may be nil when OCI is not configured.
 // bundlerTimeout and bundlerOpts are applied when constructing per-request bundler clients.
@@ -117,15 +121,10 @@ func (h *OCI) Publish(c echo.Context) error {
 		})
 	}
 
-	// Compute next tag: count existing artifacts for this DC + 1.
-	count, err := h.db.RegistryArtifact.Query().
-		Where(registryartifact.DatacenterID(job.DatacenterID)).
-		Count(c.Request().Context())
+	repoName, tag, err := h.nextTagForJob(c.Request().Context(), job)
 	if err != nil {
-		return fmt.Errorf("count artifacts: %w", err)
+		return err
 	}
-	tag := oci.NextTag(count)
-	repoName := oci.RepoForDC(h.cfg.Registry, h.cfg.Repo, job.DatacenterName)
 
 	userID, _ := c.Get("user_id").(int)
 
@@ -160,6 +159,19 @@ func (h *OCI) Publish(c echo.Context) error {
 	}
 
 	go h.publisher.Publish(artifact.ID, job, tag, bundlerClients)
+
+	if c.Request().Header.Get("HX-Request") == "true" {
+		tmpl, err := template.ParseFiles("web/templates/orbital/partials/publish-modal-progress.gohtml")
+		if err != nil {
+			return fmt.Errorf("parse publish-modal-progress: %w", err)
+		}
+		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+		c.Response().Header().Set("HX-Trigger", "refreshExportJobs")
+		return tmpl.ExecuteTemplate(c.Response().Writer, "publish-modal-progress", publishProgressData{
+			BasePath:   h.basePath,
+			ArtifactID: artifact.ID,
+		})
+	}
 
 	return c.JSON(http.StatusAccepted, publishResponse{
 		ArtifactID: artifact.ID,
@@ -204,6 +216,82 @@ func (h *OCI) ListArtifacts(c echo.Context) error {
 	return c.JSON(http.StatusOK, out)
 }
 
+// nextTagForJob computes the suggested next tag for the data center associated
+// with an export job. Uses Repository (stable) — not DatacenterID, which is a
+// DGraph internal UID that changes on reseed/restore — and takes max+1 over
+// existing version numbers rather than counting rows.
+func (h *OCI) nextTagForJob(ctx context.Context, job *ent.ExportJob) (repoName, tag string, err error) {
+	repoName = oci.RepoForDC(h.cfg.Registry, h.cfg.Repo, job.DatacenterName)
+	existing, err := h.db.RegistryArtifact.Query().
+		Where(registryartifact.Repository(repoName)).
+		Select(registryartifact.FieldTag).
+		All(ctx)
+	if err != nil {
+		return "", "", fmt.Errorf("query artifact tags: %w", err)
+	}
+	return repoName, oci.NextTagAfter(existing), nil
+}
+
+type publishModalData struct {
+	BasePath       string
+	JobID          string
+	DataCenterName string
+	ExportedAt     string
+	SuggestedTag   string
+	Repository     string
+	Republish      bool
+}
+
+// PublishModal handles GET /api/v1/export/jobs/:jobId/publish-modal
+//
+// @Summary     Get publish confirmation modal
+// @Description Returns an HTML fragment containing the publish confirmation modal body (summary + confirm form). UI-only endpoint — always returns HTML.
+// @Tags        oci
+// @Produce     html
+// @Param       jobId     path  string true  "Export job ID (UUID)"
+// @Param       republish query bool   false "Set to true when re-publishing an already-published artifact"
+// @Success     200
+// @Failure     404 {object} map[string]string
+// @Router      /api/v1/export/jobs/{jobId}/publish-modal [get]
+func (h *OCI) PublishModal(c echo.Context) error {
+	id, err := uuid.Parse(c.Param("jobId"))
+	if err != nil {
+		return echo.ErrBadRequest
+	}
+	job, err := h.db.ExportJob.Get(c.Request().Context(), id)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return echo.ErrNotFound
+		}
+		return fmt.Errorf("get job: %w", err)
+	}
+
+	repoName, suggestedTag, err := h.nextTagForJob(c.Request().Context(), job)
+	if err != nil {
+		return err
+	}
+
+	exportedAt := job.CreatedAt.Format(time.RFC3339)
+	if job.CompletedAt != nil {
+		exportedAt = job.CompletedAt.Format(time.RFC3339)
+	}
+
+	tmpl, err := template.ParseFiles("web/templates/orbital/partials/publish-modal-summary.gohtml")
+	if err != nil {
+		return fmt.Errorf("parse publish-modal-summary: %w", err)
+	}
+	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+	return tmpl.ExecuteTemplate(c.Response().Writer, "publish-modal-summary", publishModalData{
+		BasePath:       h.basePath,
+		JobID:          job.ID.String(),
+		DataCenterName: job.DatacenterName,
+		ExportedAt:     exportedAt,
+		SuggestedTag:   suggestedTag,
+		Repository:     repoName,
+		Republish:      c.QueryParam("republish") == "true",
+	})
+}
+
 // GetArtifact handles GET /api/v1/oci/artifacts/:id
 //
 // @Summary     Get OCI artifact
@@ -227,7 +315,64 @@ func (h *OCI) GetArtifact(c echo.Context) error {
 		}
 		return fmt.Errorf("get artifact: %w", err)
 	}
+
+	if c.Request().Header.Get("HX-Request") == "true" {
+		return h.renderArtifactFragment(c, a)
+	}
 	return c.JSON(http.StatusOK, toArtifactResponse(a))
+}
+
+type publishProgressData struct {
+	BasePath   string
+	ArtifactID int
+}
+
+type publishResultData struct {
+	Failed       bool
+	ErrorMessage string
+	Tag          string
+	Digest       string
+	Signed       bool
+}
+
+// renderArtifactFragment returns the publish-modal-progress fragment for
+// in-progress artifacts (keeps HTMX polling), or publish-modal-result for
+// terminal (completed/failed) states (stops polling). When the state is
+// terminal the response carries HX-Trigger: refreshExportJobs so the export
+// jobs table reloads in the background.
+func (h *OCI) renderArtifactFragment(c echo.Context, a *ent.RegistryArtifact) error {
+	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	terminal := a.Status == registryartifact.StatusCompleted || a.Status == registryartifact.StatusFailed
+	if !terminal {
+		tmpl, err := template.ParseFiles("web/templates/orbital/partials/publish-modal-progress.gohtml")
+		if err != nil {
+			return fmt.Errorf("parse publish-modal-progress: %w", err)
+		}
+		return tmpl.ExecuteTemplate(c.Response().Writer, "publish-modal-progress", publishProgressData{
+			BasePath:   h.basePath,
+			ArtifactID: a.ID,
+		})
+	}
+
+	c.Response().Header().Set("HX-Trigger", "refreshExportJobs")
+	data := publishResultData{Failed: a.Status == registryartifact.StatusFailed}
+	if data.Failed {
+		if a.Error != nil {
+			data.ErrorMessage = *a.Error
+		}
+	} else {
+		data.Tag = a.Tag
+		if a.Digest != nil {
+			data.Digest = *a.Digest
+		}
+		data.Signed = a.Signed
+	}
+	tmpl, err := template.ParseFiles("web/templates/orbital/partials/publish-modal-result.gohtml")
+	if err != nil {
+		return fmt.Errorf("parse publish-modal-result: %w", err)
+	}
+	return tmpl.ExecuteTemplate(c.Response().Writer, "publish-modal-result", data)
 }
 
 // DeleteJob handles DELETE /api/v1/export/jobs/:jobId

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	_ "github.com/armada/orbital/docs/orb"
@@ -32,6 +33,7 @@ type Server struct {
 	divPublisher *divergence.Publisher // nil if S3 not configured
 	templates    map[string]*template.Template
 	devMode      bool
+	version      string // stable per-restart; exposed to JS so the client can wipe stale tab state on orb restart
 }
 
 // templateMap rebuilds the template map from disk — used in dev mode for hot reload.
@@ -48,6 +50,10 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	e.HidePort = true
 
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+		Skipper: func(c echo.Context) bool {
+			p := c.Request().URL.Path
+			return strings.HasPrefix(p, "/static/") || p == "/favicon.ico"
+		},
 		LogMethod:  true,
 		LogURI:     true,
 		LogStatus:  true,
@@ -107,6 +113,7 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 		divPublisher: divPublisher,
 		templates:    orbtemplates.Map(),
 		devMode:      cfg.Dev,
+		version:      fmt.Sprintf("%d", time.Now().Unix()),
 	}
 
 	// Seed currentVersion from history on startup.
@@ -181,9 +188,12 @@ func (s *Server) Start(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
-		shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		s.logger.Info("shutting down")
+		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		return srv.Shutdown(shutCtx)
+		err := srv.Shutdown(shutCtx)
+		s.logger.Info("shutdown complete")
+		return err
 	case err := <-errCh:
 		return fmt.Errorf("server error: %w", err)
 	}

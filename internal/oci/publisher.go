@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -395,4 +396,18 @@ func PublicKeyPEM(signingKeyPath string) ([]byte, error) {
 // NextTag returns the next version tag based on the count of existing artifacts for a DC.
 func NextTag(count int) string {
 	return fmt.Sprintf("v%d", count+1)
+}
+
+// NextTagAfter returns the next version tag by finding the highest existing tag
+// number and incrementing it. This is correct when duplicate tags exist in the DB
+// (e.g. multiple "v1" records), where counting records would inflate the version.
+func NextTagAfter(existing []*ent.RegistryArtifact) string {
+	var maxN int
+	for _, a := range existing {
+		tag := strings.TrimPrefix(a.Tag, "v")
+		if n, err := strconv.Atoi(tag); err == nil && n > maxN {
+			maxN = n
+		}
+	}
+	return fmt.Sprintf("v%d", maxN+1)
 }

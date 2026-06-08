@@ -6,13 +6,10 @@ import (
 
 type Backups struct {
 	layout.Base
-	PageTitle       string
-	BackupEnabled   bool
-	S3Endpoint      string
-	S3Bucket        string
-	HasSchedule     bool
-	ScheduleEnabled bool
-	ScheduleSummary string // e.g. "Every 24h at 02:00 UTC"
-	NextRunApprox   string
-	LastTriggeredAt string
+	PageTitle     string
+	BackupEnabled bool
+	S3Endpoint    string
+	S3Bucket      string
+	ScheduleSpec  string // ORBITAL_BACKUP_SCHEDULE cron expression; empty = disabled
+	NextRunApprox string
 }

@@ -130,7 +130,7 @@ Architecture decisions with full rationale. Read when the context would otherwis
 | Backup scheduler design | `docs/decisions/005-backup-scheduler.md` |
 | Restore mechanism (why subprocess, not exec) | `docs/decisions/006-dgraph-restore-backend.md` |
 | DGraph schema migration (tooling landscape, sharp edges, production approach) | `docs/decisions/007-dgraph-schema-migration.md` |
-| OCI enricher pipeline, ConfigBundle integration | `docs/configbundle-integration.md` |
+| OCI bundler pipeline, ConfigBundle integration | `docs/configbundle-integration.md` |
 
 ## Local Development
 

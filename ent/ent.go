@@ -13,7 +13,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/armada/orbital/ent/backup"
-	"github.com/armada/orbital/ent/backupschedule"
 	"github.com/armada/orbital/ent/event"
 	"github.com/armada/orbital/ent/eventresource"
 	"github.com/armada/orbital/ent/eventresourcetype"
@@ -83,7 +82,6 @@ func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
 			backup.Table:            backup.ValidColumn,
-			backupschedule.Table:    backupschedule.ValidColumn,
 			event.Table:             event.ValidColumn,
 			eventresource.Table:     eventresource.ValidColumn,
 			eventresourcetype.Table: eventresourcetype.ValidColumn,

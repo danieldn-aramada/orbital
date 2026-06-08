@@ -609,3 +609,516 @@ function initDeviceCodePoller() {
 }
 
 document.addEventListener('DOMContentLoaded', initDeviceCodePoller)
+
+// ─── DataCenter / Server tab loading ──────────────────────────────────────────
+//
+// Shared between orbital and orb. Both apps' /datacenters/:id and /servers/:id
+// routes return an HTML fragment when HX-Request: true is sent — we use HTMX
+// to load that fragment into the new tab's content div.
+
+export function loadDataCenterTab(displayName, id) {
+  const tabHtml = `<li class="tab">
+    <a id="tab-${id}" data-target="tab-content-${id}" role="tab" aria-selected="false" tabindex="-1">
+      ${displayName}
+      <span class="pl-2">
+        <button id="tab-close-${id}">
+          <i class="fa-solid fa-xmark" style="font-size: 0.8em;"></i>
+        </button>
+      </span>
+    </a>
+  </li>`
+  const contentHtml = `<div class="tab-content" id="tab-content-${id}" role="tabpanel" style="display:none"></div>`
+
+  $('#tablist').append(tabHtml)
+  $('.app-main').append(contentHtml)
+
+  const tabLink = document.getElementById(`tab-${id}`)
+  const tabContent = document.getElementById(`tab-content-${id}`)
+
+  tabLink.addEventListener('click', () => {
+    activateTab(tabLink.parentElement)
+    displayTabContent(`tab-content-${id}`)
+    setCurrentTab(`tab-${id}`)
+    if (!tabContent.dataset.loaded) {
+      htmx.ajax('GET', BASE + '/datacenters/' + id, { target: '#tab-content-' + id, swap: 'innerHTML' })
+    }
+  })
+
+  document.getElementById(`tab-close-${id}`).addEventListener('click', (event) => {
+    event.stopPropagation()
+    localStorage.removeItem(`dc-detail-tab-${id}`)
+    unloadTab(id)
+    deleteTab(displayName, id)
+    document.getElementById('tab-summary').click()
+    replaceCurrentTab(`tab-${id}`, 'tab-summary')
+  })
+}
+
+export function saveServerTab(displayName, id) {
+  const item = JSON.stringify(new TabItem(displayName, id))
+  const s = new Set(localStorage.serverTabs ? JSON.parse(localStorage.serverTabs) : [])
+  s.add(item)
+  localStorage.serverTabs = JSON.stringify([...s])
+}
+
+export function deleteServerTab(displayName, id) {
+  const item = JSON.stringify(new TabItem(displayName, id))
+  const s = new Set(localStorage.serverTabs ? JSON.parse(localStorage.serverTabs) : [])
+  s.delete(item)
+  localStorage.serverTabs = JSON.stringify([...s])
+}
+
+export function loadServerListTab(displayName, id) {
+  const tabHtml = `<li class="tab">
+    <a id="tab-srv-${id}" data-target="tab-content-srv-${id}" role="tab" aria-selected="false" tabindex="-1">
+      ${displayName}
+      <span class="pl-2">
+        <button id="tab-close-srv-${id}">
+          <i class="fa-solid fa-xmark" style="font-size: 0.8em;"></i>
+        </button>
+      </span>
+    </a>
+  </li>`
+  const contentHtml = `<div class="tab-content" id="tab-content-srv-${id}" role="tabpanel" style="display:none"></div>`
+
+  $('#tablist').append(tabHtml)
+  $('.app-main').append(contentHtml)
+
+  const tabLink = document.getElementById(`tab-srv-${id}`)
+  const tabContent = document.getElementById(`tab-content-srv-${id}`)
+
+  tabLink.addEventListener('click', () => {
+    activateTab(tabLink.parentElement)
+    displayTabContent(`tab-content-srv-${id}`)
+    setCurrentTab(`tab-srv-${id}`)
+    if (!tabContent.dataset.loaded) {
+      htmx.ajax('GET', BASE + '/servers/' + id, { target: '#tab-content-srv-' + id, swap: 'innerHTML' })
+    }
+  })
+
+  document.getElementById(`tab-close-srv-${id}`).addEventListener('click', (event) => {
+    event.stopPropagation()
+    deleteServerTab(displayName, id)
+    replaceCurrentTab(`tab-srv-${id}`, 'tab-summary')
+    tabLink.parentElement.remove()
+    tabContent.remove()
+    document.getElementById('tab-summary').click()
+  })
+}
+
+// initDatacenterTabRestoration restores DC tabs from localStorage on page load.
+// Call on window.load on pages that have #datacenter-table.
+export function initDatacenterTabRestoration() {
+  if (!document.getElementById('datacenter-table')) return
+
+  if (new URLSearchParams(window.location.search).get('fresh') === '1') {
+    localStorage.removeItem('datacenterTabs')
+    localStorage.removeItem('tabCurrent')
+    history.replaceState(null, '', BASE + '/')
+  }
+
+  if (!localStorage.datacenterTabs) return
+  const tabSet = new Set(JSON.parse(localStorage.datacenterTabs))
+  tabSet.forEach(tabData => {
+    const { displayName, id } = JSON.parse(tabData)
+    loadDataCenterTab(displayName, id)
+  })
+  const currentTabId = getCurrentTab()
+  if (currentTabId) document.getElementById(currentTabId)?.click()
+}
+
+// initServerListTabRestoration restores server tabs from localStorage and
+// handles ?open=<id>&label=<label> deep-links from the DC detail panel.
+// Call on window.load on pages that have #server-list-table.
+export function initServerListTabRestoration() {
+  if (!document.getElementById('server-list-table')) return
+
+  if (localStorage.serverTabs) {
+    const tabSet = new Set(JSON.parse(localStorage.serverTabs))
+    tabSet.forEach(tabData => {
+      const { displayName, id } = JSON.parse(tabData)
+      loadServerListTab(displayName, id)
+    })
+  }
+
+  const params = new URLSearchParams(window.location.search)
+  const openId = params.get('open')
+  const openLabel = params.get('label')
+  if (openId) {
+    const displayName = openLabel || openId
+    if (!document.getElementById(`tab-srv-${openId}`)) {
+      loadServerListTab(displayName, openId)
+      saveServerTab(displayName, openId)
+    }
+    document.getElementById(`tab-srv-${openId}`)?.click()
+    history.replaceState(null, '', BASE + '/servers')
+    return
+  }
+
+  const currentTabId = getCurrentTab()
+  if (currentTabId) document.getElementById(currentTabId)?.click()
+}
+
+// ─── Inventory / DataCenter / Server list tables ──────────────────────────────
+//
+// These three DataTables are shared between orbital and orb. The core
+// DataTable construction, columns, ajax, and dataSrc are identical because
+// both apps render the same DGraph schema. App-specific behaviors (row
+// double-click action, currently: orbital opens a tab, orb navigates to a
+// detail page) are injected via the `opts` callbacks.
+
+export const INVENTORY_CACHE_KEY = 'inventoryCache'
+
+export function inventoryFetch(onData) {
+  fetch(BASE + '/api/v1/inventory')
+    .then(r => r.json())
+    .then(json => {
+      const items = json.items ?? []
+      sessionStorage.setItem(INVENTORY_CACHE_KEY, JSON.stringify(items))
+      onData(items)
+    })
+}
+
+// initInventoryTable initializes the inventory DataTable on pages that have
+// #inventory-table. Pure read-only display — no app-specific hooks needed.
+export function initInventoryTable() {
+  if (!document.getElementById('inventory-table')) return
+
+  const savedType = localStorage.getItem('inventoryTypeFilter') || ''
+  const savedNamespace = localStorage.getItem('inventoryNamespaceFilter') || ''
+  const cached = sessionStorage.getItem(INVENTORY_CACHE_KEY)
+  const initialData = cached ? JSON.parse(cached) : []
+
+  const typeFilterEl = $('<div class="select is-small" style="margin-right:0.25rem"><select id="inventory-type-select"><option value="">All Types</option></select></div>')
+
+  const inventoryTable = new DataTable('#inventory-table', {
+    layout: {
+      topStart: [
+        typeFilterEl,
+        { buttons: [
+          { extend: 'excel', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-excel"></i><span>Excel</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Excel', title: '', filename: 'config-items' },
+          { extend: 'csv', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-text"></i><span>CSV</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV', title: '', filename: 'config-items' },
+          { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
+          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
+          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-inventory' } },
+        ] },
+        { pageLength: { menu: [50, 100, 250] } },
+      ],
+      topEnd: { search: { placeholder: 'Search inventory' } },
+    },
+    select: { style: 'os' },
+    autoWidth: true,
+    scrollX: true,
+    scrollY: 400,
+    scrollCollapse: true,
+    pageLength: 50,
+    stateSave: true,
+    language: {
+      infoEmpty: 'No config items to show',
+      info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
+      entries: { _: 'items', 1: 'item' },
+    },
+    searchCols: [savedType ? { search: savedType } : null, null, null, null, null, null],
+    initComplete: function () {
+      dtWrapLengthSelect(this.api())
+
+      document.getElementById('inventory-type-select').addEventListener('change', function () {
+        localStorage.setItem('inventoryTypeFilter', this.value)
+        inventoryTable.column(0).search(this.value, { exact: !!this.value }).draw()
+      })
+
+      const nsSelect = document.getElementById('inventory-namespace-select')
+      if (nsSelect) {
+        nsSelect.addEventListener('change', function () {
+          localStorage.setItem('inventoryNamespaceFilter', this.value)
+          applyNamespaceFilter(this.value)
+        })
+      }
+
+      if (savedNamespace) applyNamespaceFilter(savedNamespace)
+    },
+    columns: [
+      { data: 'type' },
+      { data: 'orbId' },
+      { data: 'name' },
+      { data: 'createdBy' },
+      { data: 'createdAt', render: (val) => val ? val.replace('T', ' ').replace('Z', '') : '' },
+      { data: 'uid' },
+    ],
+    columnDefs: [
+      { targets: 0, width: '10%' },
+      { targets: 1, width: '20%' },
+      { targets: 2, width: '20%' },
+      { targets: 3, width: '15%' },
+      { targets: 4, width: '15%', className: 'dt-left' },
+      { targets: 5, visible: false },
+    ],
+    data: initialData,
+  })
+
+  function applyNamespaceFilter(ns) {
+    inventoryTable.column(1).search(ns ? '^' + ns + ':' : '', { regex: true }).draw()
+  }
+
+  function populateDropdowns() {
+    const typeSelect = document.getElementById('inventory-type-select')
+    typeSelect.options.length = 1
+    inventoryTable.column(0).data().unique().sort().each(type => {
+      typeSelect.add(new Option(type, type))
+    })
+    if (savedType) typeSelect.value = savedType
+
+    const nsSelect = document.getElementById('inventory-namespace-select')
+    if (!nsSelect) return
+    nsSelect.options.length = 1
+    const seen = new Set()
+    inventoryTable.column(1).data().each(orbId => {
+      const ns = orbId ? orbId.split(':')[0] : ''
+      if (ns && !seen.has(ns)) seen.add(ns)
+    })
+    Array.from(seen).sort().forEach(ns => nsSelect.add(new Option(ns, ns)))
+    if (savedNamespace) nsSelect.value = savedNamespace
+  }
+
+  if (!cached) {
+    inventoryFetch(items => {
+      inventoryTable.clear().rows.add(items).draw()
+      populateDropdowns()
+      if (savedNamespace) applyNamespaceFilter(savedNamespace)
+    })
+  } else {
+    populateDropdowns()
+  }
+
+  const reloadButton = inventoryTable.button('reload:name').node()
+  inventoryTable.button('reload:name').node().on('click', function () {
+    inventoryTable.clear().draw()
+    reloadButton.addClass('is-loading')
+    sessionStorage.removeItem(INVENTORY_CACHE_KEY)
+    setTimeout(() => {
+      inventoryFetch(items => {
+        inventoryTable.rows.add(items).draw()
+        populateDropdowns()
+        const nsSelect = document.getElementById('inventory-namespace-select')
+        const currentNs = nsSelect ? nsSelect.value : ''
+        if (currentNs) applyNamespaceFilter(currentNs)
+        reloadButton.removeClass('is-loading')
+      })
+    }, 250)
+  })
+
+  return inventoryTable
+}
+
+// initDatacenterTable initializes #datacenter-table. opts.onRowOpen is called
+// on row double-click with the row's data object; the app supplies what
+// "open" means (orbital: open tab; orb: navigate to detail page).
+export function initDatacenterTable(opts = {}) {
+  if (!document.getElementById('datacenter-table')) return
+
+  document.querySelectorAll('li.tab a[data-target]').forEach((a) => {
+    a.addEventListener('click', () => {
+      activateTab(a.parentElement)
+      displayTabContent(a.dataset.target)
+      setCurrentTab(a.id)
+    })
+  })
+
+  const datacenterTable = new DataTable('#datacenter-table', {
+    layout: {
+      topStart: [
+        { pageLength: { menu: [5, 10, 25, 50] } },
+        { buttons: [
+          { extend: 'excel', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-excel"></i><span>Excel</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Excel' },
+          { extend: 'csv', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-text"></i><span>CSV</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV' },
+          { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
+          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
+          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-datacenters' } },
+        ] },
+      ],
+      topEnd: { search: { placeholder: 'Type search here' } },
+    },
+    select: { style: 'os' },
+    autoWidth: true,
+    scrollX: true,
+    scrollY: 400,
+    scrollCollapse: true,
+    stateSave: true,
+    language: {
+      infoEmpty: 'No data centers to show',
+      info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
+      entries: { _: 'data centers', 1: 'data center' },
+    },
+    initComplete: function () { dtWrapLengthSelect(this.api()) },
+    createdRow: function (row) { row.style.cursor = 'pointer'; row.title = 'Double-click to open' },
+    columns: [
+      { data: 'name' },
+      { data: 'serverCount' },
+      { data: 'createdBy' },
+      { data: 'createdAt' },
+      { data: 'id' },
+      { data: 'orbId' },
+    ],
+    columnDefs: [
+      { targets: 0 },
+      { targets: 1, className: 'dt-body-left dt-head-left' },
+      { targets: 2 },
+      { targets: 3 },
+      { targets: [4, 5], visible: false, searchable: true },
+    ],
+    ajax: {
+      url: BASE + '/graphql',
+      type: 'POST',
+      contentType: 'application/json',
+      data: () => JSON.stringify({ query: `{ queryDataCenter { id orbId name createdBy createdAt serversAggregate { count } } }` }),
+      dataSrc: (json) => (json.data?.queryDataCenter ?? []).map(dc => ({
+        id: dc.id,
+        orbId: dc.orbId ?? '—',
+        name: dc.name,
+        createdBy: dc.createdBy ?? '',
+        createdAt: dc.createdAt ?? '',
+        serverCount: dc.serversAggregate?.count ?? 0,
+      })),
+    },
+  })
+
+  const reloadButton = datacenterTable.button('reload:name').node()
+  datacenterTable.button('reload:name').node().on('click', function () {
+    datacenterTable.clear().draw()
+    reloadButton.addClass('is-loading')
+    setTimeout(() => {
+      datacenterTable.ajax.reload(() => { reloadButton.removeClass('is-loading') })
+    }, 250)
+  })
+
+  if (typeof opts.onRowOpen === 'function') {
+    $('#datacenter-table tbody').on('dblclick', 'tr', function () {
+      const data = datacenterTable.row(this).data()
+      if (!data) return
+      opts.onRowOpen(data, this)
+    })
+  }
+
+  return datacenterTable
+}
+
+// initServerListTable initializes #server-list-table. opts.onRowOpen is
+// called on row double-click with the row's data object.
+export function initServerListTable(opts = {}) {
+  if (!document.getElementById('server-list-table')) return
+
+  document.querySelectorAll('li.tab a[data-target]').forEach((a) => {
+    a.addEventListener('click', () => {
+      activateTab(a.parentElement)
+      displayTabContent(a.dataset.target)
+      setCurrentTab(a.id)
+    })
+  })
+
+  const dcFilterEl = $('<div class="select is-small" style="margin-right:0.25rem"><select id="server-dc-select"><option value="">All Data Centers</option></select></div>')
+
+  const serverListTable = new DataTable('#server-list-table', {
+    pageLength: 50,
+    layout: {
+      topStart: [
+        dcFilterEl,
+        { buttons: [
+          { extend: 'excel', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-excel"></i><span>Excel</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Excel' },
+          { extend: 'csv', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-text"></i><span>CSV</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV' },
+          { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
+          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
+          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-servers' } },
+        ] },
+        { pageLength: { menu: [25, 50, 100, 250] } },
+      ],
+      topEnd: { search: { placeholder: 'Search servers' } },
+    },
+    select: { style: 'os' },
+    autoWidth: true,
+    scrollX: true,
+    scrollY: 'calc(100vh - 340px)',
+    scrollCollapse: true,
+    stateSave: true,
+    language: {
+      infoEmpty: 'No servers to show',
+      info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
+      entries: { _: 'servers', 1: 'server' },
+    },
+    initComplete: function () {
+      dtWrapLengthSelect(this.api())
+
+      const dcCol = this.api().column(0)
+      dcCol.data().unique().sort().each(function (dc) {
+        document.getElementById('server-dc-select').add(new Option(dc, dc))
+      })
+      const saved = localStorage.getItem('server-dc-filter')
+      if (saved) {
+        const el = document.getElementById('server-dc-select')
+        el.value = saved
+        dcCol.search(saved, { exact: true }).draw()
+      }
+      document.getElementById('server-dc-select').addEventListener('change', function () {
+        if (this.value) {
+          localStorage.setItem('server-dc-filter', this.value)
+        } else {
+          localStorage.removeItem('server-dc-filter')
+        }
+        dcCol.search(this.value, { exact: !!this.value }).draw()
+      })
+    },
+    columns: [
+      { data: 'dataCenter' },
+      { data: 'oobIP' },
+      { data: 'hostname' },
+      { data: 'serviceTag' },
+      { data: 'model' },
+      { data: 'rack' },
+      { data: 'id' },
+      { data: 'orbId' },
+    ],
+    columnDefs: [{ targets: [6, 7], visible: false, searchable: true }],
+    ajax: {
+      url: BASE + '/graphql',
+      type: 'POST',
+      contentType: 'application/json',
+      data: () => JSON.stringify({
+        query: `{ queryServer {
+          id orbId hostname serviceTag model
+          oobIP { address }
+          rack { name }
+          dataCenter { name }
+        } }`,
+      }),
+      dataSrc: (json) => (json.data?.queryServer ?? []).map(s => ({
+        id: s.id,
+        orbId: s.orbId ?? '—',
+        hostname: s.hostname ?? '—',
+        serviceTag: s.serviceTag ?? '—',
+        model: s.model ?? '—',
+        oobIP: s.oobIP?.address ?? '—',
+        rack: s.rack?.name ?? '—',
+        dataCenter: s.dataCenter?.name ?? '—',
+      })),
+    },
+    createdRow: function (row) { row.style.cursor = 'pointer'; row.title = 'Double-click to open' },
+  })
+
+  const reloadButton = serverListTable.button('reload:name').node()
+  serverListTable.button('reload:name').node().on('click', function () {
+    serverListTable.clear().draw()
+    reloadButton.addClass('is-loading')
+    setTimeout(() => {
+      serverListTable.ajax.reload(() => { reloadButton.removeClass('is-loading') })
+    }, 250)
+  })
+
+  if (typeof opts.onRowOpen === 'function') {
+    $('#server-list-table tbody').on('dblclick', 'tr', function () {
+      const data = serverListTable.row(this).data()
+      if (!data) return
+      opts.onRowOpen(data, this)
+    })
+  }
+
+  return serverListTable
+}

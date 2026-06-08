@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/armada/orbital/ent"
 )
 
 func TestRepoForDC(t *testing.T) {
@@ -103,6 +105,37 @@ func TestNextTag(t *testing.T) {
 			got := NextTag(tt.count)
 			if got != tt.want {
 				t.Errorf("NextTag(%d) = %q, want %q", tt.count, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNextTagAfter(t *testing.T) {
+	makeArtifacts := func(tags ...string) []*ent.RegistryArtifact {
+		out := make([]*ent.RegistryArtifact, len(tags))
+		for i, t := range tags {
+			out[i] = &ent.RegistryArtifact{Tag: t}
+		}
+		return out
+	}
+
+	tests := []struct {
+		desc string
+		tags []*ent.RegistryArtifact
+		want string
+	}{
+		{"empty — first publish", makeArtifacts(), "v1"},
+		{"only v1", makeArtifacts("v1"), "v2"},
+		{"v1 and v2", makeArtifacts("v1", "v2"), "v3"},
+		{"duplicate v1 entries (old DatacenterID bug)", makeArtifacts("v1", "v1", "v1", "v2"), "v3"},
+		{"gap in sequence", makeArtifacts("v1", "v3"), "v4"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			got := NextTagAfter(tt.tags)
+			if got != tt.want {
+				t.Errorf("NextTagAfter(%v) = %q, want %q", tt.tags, got, tt.want)
 			}
 		})
 	}

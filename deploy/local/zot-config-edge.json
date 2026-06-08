@@ -1,0 +1,41 @@
+{
+  "distSpecVersion": "1.1.1",
+  "storage": {
+    "rootDirectory": "/var/lib/registry"
+  },
+  "http": {
+    "address": "0.0.0.0",
+    "port": "5000"
+  },
+  "log": {
+    "level": "info"
+  },
+  "extensions": {
+    "ui": {
+      "enable": true
+    },
+    "search": {
+      "enable": true
+    },
+    "trust": {
+      "enable": true,
+      "cosign": true
+    },
+    "sync": {
+      "credentialsFile": "/etc/zot/sync-credentials.json",
+      "registries": [
+        {
+          "urls": ["https://armadaeksatest.azurecr.io"],
+          "onDemand": true,
+          "pollInterval": "30s",
+          "tlsVerify": true,
+          "content": [
+            {
+              "prefix": "orbital/colo-galleon"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

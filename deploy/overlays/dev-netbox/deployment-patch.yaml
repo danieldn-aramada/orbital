@@ -13,3 +13,7 @@ spec:
                 secretKeyRef:
                   name: orbital-secrets
                   key: DATABASE_URL
+            - name: ORBITAL_ADMIN_EMAILS
+              value: "admin@armada.ai"
+            - name: ORBITAL_BACKUP_SCHEDULE
+              value: "0 8 * * *"  # daily at 08:00 UTC (midnight PT)

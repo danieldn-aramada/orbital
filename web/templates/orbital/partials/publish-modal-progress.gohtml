@@ -1,0 +1,14 @@
+{{define "publish-modal-progress"}}
+<div
+  hx-get="{{.BasePath}}/api/v1/oci/artifacts/{{.ArtifactID}}"
+  hx-trigger="every 2s"
+  hx-target="#publish-modal-body"
+  hx-swap="innerHTML"
+  hx-headers='{"HX-Request":"true"}'
+>
+  <p class="is-size-7">
+    <span class="icon has-text-info"><i class="fa-solid fa-spinner fa-spin"></i></span>
+    <span>Publishing to registry…</span>
+  </p>
+</div>
+{{end}}

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -28,6 +29,50 @@ func RoleForEmail(email string, adminEmails map[string]struct{}) user.Role {
 		return user.RoleAdmin
 	}
 	return user.RoleReadonly
+}
+
+// ReconcileAdminEmails promotes every existing user whose email appears in
+// adminEmails to admin if their current role is below admin. Called once at
+// startup after migrations so that changes to ORBITAL_ADMIN_EMAILS take effect
+// on the next deploy — no per-login check required. Users not yet in the DB are
+// skipped; RoleForEmail handles the correct role on their first login.
+func ReconcileAdminEmails(ctx context.Context, db *ent.Client, adminEmails map[string]struct{}, logger *slog.Logger) {
+	if db == nil || len(adminEmails) == 0 {
+		return
+	}
+	if logger == nil {
+		logger = slog.Default()
+	}
+	for email := range adminEmails {
+		u, err := db.User.Query().Where(user.Email(email)).Only(ctx)
+		if ent.IsNotFound(err) {
+			continue
+		}
+		if err != nil {
+			logger.Warn("ReconcileAdminEmails: query user", "email", email, "err", err)
+			continue
+		}
+		if RoleAtLeast(u.Role, user.RoleAdmin) {
+			continue
+		}
+		prevRole := u.Role
+		if _, err := db.User.UpdateOneID(u.ID).SetRole(user.RoleAdmin).Save(ctx); err != nil {
+			logger.Warn("ReconcileAdminEmails: promote user", "email", email, "err", err)
+			continue
+		}
+		logger.Info("promoted user to admin via ORBITAL_ADMIN_EMAILS", "email", email, "previous_role", string(prevRole))
+		writeAuditEvent(db, logger, "management", "system:adminEmailsConfig", "updateUserRole",
+			[]string{"updateUserRole"},
+			[]string{},
+			[]string{},
+			map[string]any{
+				"userEmail":    email,
+				"previousRole": string(prevRole),
+				"newRole":      "admin",
+				"reason":       "ORBITAL_ADMIN_EMAILS reconciliation on startup",
+			},
+		)
+	}
 }
 
 // ResolveUser is an Echo middleware that resolves a PostgreSQL user ID from the

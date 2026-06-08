@@ -56,28 +56,14 @@
         </div>
       </section>
 
-      {{if .HasSchedule}}
+      {{if .ScheduleSpec}}
       <section class="mb-6">
         <h2 class="title is-6 mb-2">Automatic Schedule</h2>
-        <div style="max-width: 560px;">
-          <div class="box" style="padding: 1rem;">
-            <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
-              <div>
-                <span class="tag {{if .ScheduleEnabled}}is-success is-light{{else}}is-light{{end}} mr-2">
-                  {{if .ScheduleEnabled}}Enabled{{else}}Disabled{{end}}
-                </span>
-                <span class="is-size-7 has-text-grey">{{.ScheduleSummary}}</span>
-              </div>
-              <button class="button is-small is-light" id="btn-toggle-schedule"
-                onclick="toggleSchedule({{if .ScheduleEnabled}}false{{else}}true{{end}})">
-                {{if .ScheduleEnabled}}Disable{{else}}Enable{{end}}
-              </button>
-            </div>
-            <div class="is-size-7 has-text-grey">
-              {{if .LastTriggeredAt}}<div>Last run: {{.LastTriggeredAt}}</div>{{end}}
-              {{if .NextRunApprox}}<div id="next-run-approx">Next run (approx): {{.NextRunApprox}}</div>{{end}}
-            </div>
-          </div>
+        <div class="is-size-7 has-text-grey">
+          <span class="tag is-success is-light mr-2">Enabled</span>
+          <code>{{.ScheduleSpec}}</code> (UTC)
+          {{if .NextRunApprox}} &mdash; next run approx. {{.NextRunApprox}}{{end}}
+          <p class="mt-1">To change the schedule, update <code>ORBITAL_BACKUP_SCHEDULE</code> and redeploy.</p>
         </div>
       </section>
       {{end}}

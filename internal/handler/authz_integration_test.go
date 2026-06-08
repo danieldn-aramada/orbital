@@ -271,6 +271,78 @@ func TestResolveUser_NoEmail_Returns401(t *testing.T) {
 	}
 }
 
+// ── ReconcileAdminEmails ──────────────────────────────────────────────────────
+
+// TestReconcileAdminEmails_ReadonlyPromotedToAdmin verifies that a readonly user listed in
+// adminEmails is promoted to admin and an audit event is written.
+func TestReconcileAdminEmails_ReadonlyPromotedToAdmin(t *testing.T) {
+	const email = "reconcile-readonly@authztest.com"
+	ctx := context.Background()
+	userID := createTestUser(t, email, user.RoleReadonly)
+	t.Cleanup(func() { testDB.Event.Delete().Where(event.Actor("system:adminEmailsConfig")).ExecX(ctx) })
+
+	handler.ReconcileAdminEmails(ctx, testDB, map[string]struct{}{email: {}}, nil)
+
+	fromDB, err := testDB.User.Get(ctx, userID)
+	if err != nil {
+		t.Fatalf("re-fetch user: %v", err)
+	}
+	if fromDB.Role != user.RoleAdmin {
+		t.Errorf("expected admin role after reconcile, got %q", fromDB.Role)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	ev, err := testDB.Event.Query().Where(event.Actor("system:adminEmailsConfig")).Only(ctx)
+	if err != nil {
+		t.Fatalf("audit event not found: %v", err)
+	}
+	if len(ev.Operations) == 0 || ev.Operations[0] != "updateUserRole" {
+		t.Errorf("expected updateUserRole audit event, got %v", ev.Operations)
+	}
+}
+
+// TestReconcileAdminEmails_DevPromotedToAdmin verifies that a dev user is also promoted.
+func TestReconcileAdminEmails_DevPromotedToAdmin(t *testing.T) {
+	const email = "reconcile-dev@authztest.com"
+	ctx := context.Background()
+	userID := createTestUser(t, email, user.RoleDev)
+
+	handler.ReconcileAdminEmails(ctx, testDB, map[string]struct{}{email: {}}, nil)
+
+	fromDB, err := testDB.User.Get(ctx, userID)
+	if err != nil {
+		t.Fatalf("re-fetch user: %v", err)
+	}
+	if fromDB.Role != user.RoleAdmin {
+		t.Errorf("expected admin role after reconcile, got %q", fromDB.Role)
+	}
+}
+
+// TestReconcileAdminEmails_AdminNoOp verifies that an already-admin user is unchanged.
+func TestReconcileAdminEmails_AdminNoOp(t *testing.T) {
+	const email = "reconcile-admin@authztest.com"
+	ctx := context.Background()
+	userID := createTestUser(t, email, user.RoleAdmin)
+
+	handler.ReconcileAdminEmails(ctx, testDB, map[string]struct{}{email: {}}, nil)
+
+	fromDB, err := testDB.User.Get(ctx, userID)
+	if err != nil {
+		t.Fatalf("re-fetch user: %v", err)
+	}
+	if fromDB.Role != user.RoleAdmin {
+		t.Errorf("expected role unchanged (admin), got %q", fromDB.Role)
+	}
+}
+
+// TestReconcileAdminEmails_UnknownEmailSkipped verifies that an email not in the DB
+// is silently skipped — it will get the correct role on first provision via RoleForEmail.
+func TestReconcileAdminEmails_UnknownEmailSkipped(t *testing.T) {
+	ctx := context.Background()
+	// Should not panic or error even with an email that has no user row.
+	handler.ReconcileAdminEmails(ctx, testDB, map[string]struct{}{"nobody-yet@authztest.com": {}}, nil)
+}
+
 // TestDeviceCodePoll_AdminEmail_SetsAdminRole verifies that a user whose email is in
 // ORBITAL_ADMIN_EMAILS is provisioned with the admin role on first device code login.
 func TestDeviceCodePoll_AdminEmail_SetsAdminRole(t *testing.T) {

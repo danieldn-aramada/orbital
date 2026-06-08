@@ -124,4 +124,21 @@
       {{end}}
     </div>
   </main>
+
+  <!-- Publish confirmation modal — body fragments served by /api/v1/export/jobs/:jobId/publish-modal -->
+  <div id="publish-confirm-modal" class="modal">
+    <div class="modal-background" onclick="document.getElementById('publish-confirm-modal').classList.remove('is-active')"></div>
+    <div class="modal-card">
+      <header class="modal-card-head">
+        <p class="modal-card-title">Publish Export</p>
+        <button class="delete" aria-label="close" onclick="document.getElementById('publish-confirm-modal').classList.remove('is-active')"></button>
+      </header>
+      <section class="modal-card-body">
+        <div id="publish-modal-body"></div>
+      </section>
+      <footer class="modal-card-foot">
+        <button class="button" onclick="document.getElementById('publish-confirm-modal').classList.remove('is-active')">Close</button>
+      </footer>
+    </div>
+  </div>
 {{end}}
