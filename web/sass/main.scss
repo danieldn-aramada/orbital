@@ -769,6 +769,3 @@ div.dt-container:has(#audit-log-table) {
   white-space: nowrap !important;
   overflow: visible !important; /* ✅ let content overflow naturally */
 }
-.k8s-icon img {
-  filter: invert(100%);
-}

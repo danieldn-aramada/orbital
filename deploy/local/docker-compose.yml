@@ -132,6 +132,45 @@ services:
       timeout: 5s
       retries: 10
 
+  # Orbital server — run the built Docker image against the local stack.
+  # Usage: docker build -t orbital:local . && docker compose up orbital
+  orbital:
+    image: orbital:local
+    ports:
+      - "8001:8001"
+    environment:
+      DGRAPH_URL: http://dgraph-alpha:8080/graphql
+      DGRAPH_ADMIN_URL: http://dgraph-alpha:8080/admin
+      DGRAPH_SCRATCH_URL: http://dgraph-alpha-scratch:8080/graphql
+      DGRAPH_SCRATCH_ADMIN_URL: http://dgraph-alpha-scratch:8080/admin
+      DGRAPH_SCRATCH_ZERO_URL: http://dgraph-zero-scratch:6080
+      DGRAPH_EXPORT_DIR: /dgraph/export
+      DATABASE_URL: postgres://orbital:orbital@postgres:5432/orbital?sslmode=disable
+      ORBITAL_S3_ENDPOINT: http://minio:9000
+      ORBITAL_S3_BUCKET: orbital
+      ORBITAL_S3_ACCESS_KEY: minioadmin
+      ORBITAL_S3_SECRET_KEY: minioadmin
+      ORBITAL_OCI_REGISTRY: oci-registry:5000
+      ORBITAL_OCI_ALLOW_HTTP: "true"
+      ORBITAL_DGRAPH_ALPHA_GRPC: dgraph-alpha:9080
+      ORBITAL_DGRAPH_ZERO_GRPC: dgraph-zero:5080
+      ORBITAL_DEV: "true"
+    volumes:
+      - /tmp/orbital-test-blue:/dgraph/export
+      - /tmp/orbital-test-scratch:/tmp/orbital-test-scratch
+      - ./cosign.key:/app/deploy/local/cosign.key:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dgraph-alpha:
+        condition: service_healthy
+      dgraph-alpha-scratch:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    profiles:
+      - orbital
+
   # Orb DGraph — isolated from orbital's blue/scratch instances
   dgraph-orb-zero:
     image: dgraph/dgraph:v25.3.1

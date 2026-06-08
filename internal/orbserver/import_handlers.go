@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"strings"
@@ -166,6 +167,11 @@ func (s *Server) importTags(c echo.Context) error {
 	allTags, err := oci.ListTags(ctx, pullCfg)
 	if err != nil {
 		s.logger.Warn("list tags failed", "err", err)
+		if c.Request().Header.Get("HX-Request") == "true" {
+			c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, err = c.Response().Writer.Write([]byte(`<tr><td colspan="5" class="has-text-grey">No versions available.</td></tr>`))
+			return err
+		}
 		return c.JSON(http.StatusOK, map[string][]tagInfo{"tags": {}})
 	}
 
@@ -174,6 +180,36 @@ func (s *Server) importTags(c echo.Context) error {
 		AllowHTTP:     s.cfg.OCIAllowHTTP,
 	}
 	repoRef := s.cfg.OCIRegistry + "/" + s.cfg.OCIRepo
+
+	if c.Request().Header.Get("HX-Request") == "true" {
+		var rows []orbTagFragRow
+		for i := len(allTags) - 1; i >= 0; i-- {
+			t := allTags[i]
+			if strings.HasSuffix(t, ".sig") {
+				continue
+			}
+			row := orbTagFragRow{Name: t}
+			meta, err := oci.ResolveTag(ctx, pullCfg, t)
+			if err != nil {
+				s.logger.Warn("resolve tag failed", "tag", t, "err", err)
+				rows = append(rows, row)
+				continue
+			}
+			row.Size = fmtOrbTagSize(meta.TotalSize)
+			row.Digest = meta.Digest
+			row.HasDigest = meta.Digest != ""
+			if result, err := oci.Verify(ctx, verifyCfg, repoRef, meta.Digest, s.logger); err == nil {
+				row.Verified = result.Verified
+			}
+			rows = append(rows, row)
+		}
+		tmpl, err := template.ParseFiles("web/templates/orb/partials/orb-tags-tbody.gohtml")
+		if err != nil {
+			return fmt.Errorf("parse orb tags fragment: %w", err)
+		}
+		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+		return tmpl.Execute(c.Response().Writer, rows)
+	}
 
 	var infos []tagInfo
 	for _, t := range allTags {
@@ -466,3 +502,26 @@ func (s *Server) importSubgraph(c echo.Context) error {
 
 	return c.JSON(http.StatusAccepted, map[string]string{"status": "started", "tag": tag})
 }
+
+// ── Fragment renderer ─────────────────────────────────────────────────────────
+
+type orbTagFragRow struct {
+	Name      string
+	Verified  bool
+	Digest    string
+	HasDigest bool
+	Size      string
+}
+
+func fmtOrbTagSize(n int64) string {
+	if n <= 0 {
+		return "—"
+	}
+	if n < 1048576 {
+		return fmt.Sprintf("%.1f KB", float64(n)/1024)
+	}
+	return fmt.Sprintf("%.1f MB", float64(n)/1048576)
+}
+
+// importTagRows handles GET /api/v1/import/tags/rows
+// Returns an HTML fragment of the orb tags tbody, newest first.

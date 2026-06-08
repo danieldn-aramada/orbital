@@ -383,11 +383,9 @@ This is a known gap from Spike 14 (`//go:embed`). Until embedding is done, the b
 
 ### D.2 Schema file named "demo" but is the only/production schema
 
-`internal/config/config.go:27` defaults `ORBITAL_SCHEMA_PATH` to `schema/schema-demo.graphql`. There is no `schema/schema.graphql` — the demo schema is the production schema. The "demo" name is misleading for anyone new to the project and could cause operators to believe it is a non-production file.
+~~`internal/config/config.go:27` defaults `ORBITAL_SCHEMA_PATH` to `schema/schema-demo.graphql`. There is no `schema/schema.graphql` — the demo schema is the production schema. The "demo" name is misleading for anyone new to the project and could cause operators to believe it is a non-production file.~~
 
-The `deploy/dev/deploy.yaml` does not set `ORBITAL_SCHEMA_PATH`, so it correctly inherits the default and uses the demo schema. This is functional today because there is only one schema.
-
-**Recommendation:** Rename `schema/schema-demo.graphql` to `schema/schema.graphql` and update `config.go` default. Do alongside any schema update.
+**✅ Fixed 2026-06-07.** Renamed `schema/schema-demo.graphql` → `schema/schema.graphql`. Default in `config.go` updated to match. All references in `Makefile`, `scripts/seed-dgraph.sh`, tests, and docs updated.
 
 ---
 

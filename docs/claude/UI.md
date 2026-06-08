@@ -1,11 +1,20 @@
 # UI Reference
 
-Read this before: Go template changes, HTMX interactions, JavaScript in `app.js`, CSS/SCSS, any frontend work.
+Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, any frontend work.
+
+## Settled Decisions
+
+- **Inventory namespace filter is page-level, not a DataTable column filter** — lives in the page header (above the table), uses regex search on the orbId column (`^namespace:`). Do not move it into the DataTable toolbar — namespace is a scope selector, not a column filter.
+- **Vendor libraries in `web/shared/static/` use named subdirectories** — `datatables/`, `font-awesome-6.6.0/`, `vanilla-jsoneditor/`. Do not flatten into a single `vendor/` bucket. Each subdir contains only browser-required files — strip docs, type defs, LESS/SASS sources, and package.json before committing a new vendor library.
+- **Go template `range` does not propagate variable assignments outward** — `$x = true` inside `{{range}}` does not affect `$x` after the range ends. Compute aggregates server-side (method on the struct). Example: `ImportRecord.DispatchErrors()` instead of a `$hasError` flag inside range.
 
 ## Core rules
 
-- **All JavaScript goes in `web/static/app.js`** — never inline `<script>` blocks in templates.
-- **All styles go in `web/sass/main.scss`** — never edit `web/static/css/main.css` directly (generated). Rebuild: `make build-css` (one-time) or `make watch-css` (watch mode).
+- **JavaScript is split into ES modules — no bundler** — `web/shared/static/shared.js` (utilities used by both orbital and orb), `web/shared/static/orbital.js` (orbital-only features), `web/shared/static/orb.js` (orb-only features). `head.gohtml` conditionally loads `orbital.js` or `orb.js` based on `{{.UI.AppName}}`. Never inline `<script>` blocks in templates.
+- **`window.*` bridge for `onclick` handlers** — ES modules don't expose functions to global scope. Functions called from template `onclick="fn()"` attributes must be explicitly assigned: `window.fn = fn` at the bottom of the relevant module. `DOMContentLoaded` listeners and delegated event handlers work fine without the bridge.
+- **`DOMContentLoaded` inside modules works correctly** — modules are deferred by default. Use delegated `document.addEventListener('click', e => { if (!e.target.closest('#id')) return; ... })` for button handlers. Never call `getElementById` at module top level.
+- **Go template + HTMX is the primary rendering pattern** — server renders HTML fragments (including `<select>` options, lists, previews); JS fetches HTML and sets `innerHTML`. Reserve JS for things Go templates cannot do: polling loops, DataTables init, JSON editors, tab lifecycle management. Never write JS to fetch data and build DOM that a Go template handler could render directly.
+- **All styles go in `web/sass/main.scss`** — never edit `web/shared/static/css/main.css` directly (generated). Rebuild: `make build-css` (one-time) or `make watch-css` (watch mode).
 - `make run-orbital` uses version `dev` — avoids noisy git-describe strings in local dev. `make build-orbital` and `make push` still use full `$(VERSION)`.
 
 ## HTMX patterns

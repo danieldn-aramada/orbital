@@ -256,7 +256,7 @@ Per Sedar's proposal, CMDB earns its keep in **cross-domain relationships that K
 
 ## Full DGraph Schema (from SDD Section 4.3)
 
-The schema is richer than `schema-demo.graphql`. Full type list from SDD:
+The schema is richer than `schema.graphql`. Full type list from SDD:
 
 **Interface:** `ConfigItem` (id, namespace, name, createdBy, createdAt, updatedBy, updatedAt, version)
 
@@ -264,7 +264,7 @@ The schema is richer than `schema-demo.graphql`. Full type list from SDD:
 
 **Non-ConfigItem types:** `Namespace`, `User`
 
-Types not yet in `schema-demo.graphql` (to be added before MVP): `SystemSettings`, `BiosSettings`, `PxeDevice`, `Processor`, `Memory`, `EthernetInterface`, `PowerSupply`, `Fans`, `Chassis`, `PowerSystem`, `CoolingSystem`, `StructuralComponent`, `SpareComponent`, `ClusterConfig`, `ApplicationConfig`, `KubernetesNode`
+Types not yet in `schema.graphql` (to be added before MVP): `SystemSettings`, `BiosSettings`, `PxeDevice`, `Processor`, `Memory`, `EthernetInterface`, `PowerSupply`, `Fans`, `Chassis`, `PowerSystem`, `CoolingSystem`, `StructuralComponent`, `SpareComponent`, `ClusterConfig`, `ApplicationConfig`, `KubernetesNode`
 
 ---
 

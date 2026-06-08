@@ -40,7 +40,8 @@ subgraph-exports/
 dgraph-exports/
 
 # Cosign keys — private key must never be committed
-cosign.key
+deploy/local/cosign.key
+deploy/local/cosign.pub
 
 # Zot registry credentials — contains ACR password
 deploy/local/zot-credentials.json

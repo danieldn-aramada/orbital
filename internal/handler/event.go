@@ -14,6 +14,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/event"
+	"github.com/armada/orbital/ent/eventresource"
+	"github.com/armada/orbital/ent/eventresourcetype"
 	"github.com/labstack/echo/v4"
 )
 
@@ -27,7 +29,7 @@ func NewEventHandler(db *ent.Client, logger *slog.Logger) *EventHandler {
 	return &EventHandler{
 		db:       db,
 		logger:   logger,
-		fragment: template.Must(template.ParseFiles("web/orbital/templates/partials/events-table.gohtml")),
+		fragment: template.Must(template.ParseFiles("web/templates/orbital/partials/events-table.gohtml")),
 	}
 }
 
@@ -78,8 +80,8 @@ var skipVarsSet = map[string]bool{
 // @Param       limit          query int    false "Max results (default 100, max 500)"
 // @Param       offset         query int    false "Pagination offset"
 // @Param       orbId          query string false "Filter by resource orbId (e.g. alaska-dot:GRTLY24)"
-// @Param       resource_type  query string false "Filter by resource type (e.g. DataCenter, Server)"
 // @Param       resource_id    query string false "Filter by resource ID"
+// @Param       resource_type  query string false "Filter by resource type (e.g. Server, DataCenter)"
 // @Param       operation_name query string false "Filter by operation name (e.g. UpdateServer)"
 // @Success     200 {object} map[string]interface{}
 // @Router      /api/v1/audit-log [get]
@@ -99,34 +101,19 @@ func (h *EventHandler) List(c echo.Context) error {
 
 	q := h.db.Event.Query()
 	if oid := c.QueryParam("orbId"); oid != "" {
-		pattern := `%"` + oid + `"%`
-		q = q.Where(func(s *sql.Selector) {
-			s.Where(sql.P(func(b *sql.Builder) {
-				b.WriteString("(resource_ids::text LIKE ")
-				b.Arg(pattern)
-				b.WriteString(" OR event_category = ")
-				b.Arg("management")
-				b.WriteString(")")
-			}))
-		})
+		q = q.Where(
+			event.Or(
+				event.HasResourcesWith(eventresource.OrbIDEQ(oid)),
+				event.EventCategoryEQ("management"),
+			),
+			event.EventCategoryNEQ("auth"),
+		)
 	}
 	if rid := c.QueryParam("resource_id"); rid != "" {
-		pattern := `%"` + rid + `"%`
-		q = q.Where(func(s *sql.Selector) {
-			s.Where(sql.P(func(b *sql.Builder) {
-				b.WriteString("resource_ids::text LIKE ")
-				b.Arg(pattern)
-			}))
-		})
+		q = q.Where(event.HasResourcesWith(eventresource.OrbIDEQ(rid)))
 	}
 	if rt := c.QueryParam("resource_type"); rt != "" {
-		pattern := `%"` + rt + `"%`
-		q = q.Where(func(s *sql.Selector) {
-			s.Where(sql.P(func(b *sql.Builder) {
-				b.WriteString("resource_types::text LIKE ")
-				b.Arg(pattern)
-			}))
-		})
+		q = q.Where(event.HasResourceTypesWith(eventresourcetype.ResourceTypeEQ(rt)))
 	}
 
 	total, err := q.Clone().Count(c.Request().Context())
@@ -138,6 +125,8 @@ func (h *EventHandler) List(c echo.Context) error {
 		Order(event.ByTimestamp(sql.OrderDesc())).
 		Limit(limit).
 		Offset(offset).
+		WithResources().
+		WithResourceTypes().
 		All(c.Request().Context())
 	if err != nil {
 		return fmt.Errorf("query events: %w", err)
@@ -145,11 +134,12 @@ func (h *EventHandler) List(c echo.Context) error {
 
 	items := make([]eventItem, 0, len(events))
 	for _, e := range events {
+		resTypes := resourceTypeNames(e.Edges.ResourceTypes)
 		item := eventItem{
 			ID:            e.ID.String(),
 			Operations:    e.Operations,
-			ResourceTypes: e.ResourceTypes,
-			ResourceIDs:   e.ResourceIds,
+			ResourceTypes: resTypes,
+			ResourceIDs:   orbIDs(e.Edges.Resources),
 			Actor:         e.Actor,
 			Timestamp:     e.Timestamp.UTC().Format(time.RFC3339),
 			Details:       e.Details,
@@ -160,8 +150,8 @@ func (h *EventHandler) List(c echo.Context) error {
 			if len(e.Details) > 0 {
 				json.Unmarshal(e.Details, &d) //nolint:errcheck
 			}
-			if d.Before != nil && len(e.ResourceTypes) > 0 {
-				item.DiffHTML = buildDiffHTML(d.Before, d.Variables, e.ResourceTypes[0])
+			if d.Before != nil && len(resTypes) > 0 {
+				item.DiffHTML = buildDiffHTML(d.Before, d.Variables, resTypes[0])
 			}
 			if item.DiffHTML == "" {
 				item.VarSummary = buildVarSummary(e.Details)
@@ -399,29 +389,79 @@ func valStr(v, ref any) string {
 
 // writeAuditEvent persists a single audit event row. Failures are logged and
 // swallowed — audit writes must never block or fail a request.
-// eventCategory must be "data" (entity mutations) or "management" (system operations).
+// eventCategory must be "data" (entity mutations), "management" (system operations), or "auth" (login/logout events).
 func writeAuditEvent(db *ent.Client, logger *slog.Logger, eventCategory, actor, opName string, operations, resourceTypes, resourceIDs []string, details map[string]any) {
 	raw, _ := json.Marshal(details)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	c := db.Event.Create().
+	tx, err := db.Tx(ctx)
+	if err != nil {
+		logger.Warn("failed to begin audit transaction", "op", opName, "err", err)
+		return
+	}
+
+	ec := tx.Event.Create().
 		SetActor(actor).
 		SetEventCategory(eventCategory).
 		SetDetails(json.RawMessage(raw))
-
 	if len(operations) > 0 {
-		c = c.SetOperations(operations)
-	}
-	if len(resourceTypes) > 0 {
-		c = c.SetResourceTypes(resourceTypes)
-	}
-	if len(resourceIDs) > 0 {
-		c = c.SetResourceIds(resourceIDs)
+		ec = ec.SetOperations(operations)
 	}
 
-	if err := c.Exec(ctx); err != nil {
+	ev, err := ec.Save(ctx)
+	if err != nil {
+		tx.Rollback() //nolint:errcheck
 		logger.Warn("failed to write audit event", "op", opName, "err", err)
+		return
 	}
+
+	if len(resourceIDs) > 0 {
+		builders := make([]*ent.EventResourceCreate, len(resourceIDs))
+		for i, rid := range resourceIDs {
+			builders[i] = tx.EventResource.Create().
+				SetOrbID(rid).
+				SetEventID(ev.ID)
+		}
+		if err := tx.EventResource.CreateBulk(builders...).Exec(ctx); err != nil {
+			tx.Rollback() //nolint:errcheck
+			logger.Warn("failed to write audit event resources", "op", opName, "err", err)
+			return
+		}
+	}
+
+	if len(resourceTypes) > 0 {
+		builders := make([]*ent.EventResourceTypeCreate, len(resourceTypes))
+		for i, rt := range resourceTypes {
+			builders[i] = tx.EventResourceType.Create().
+				SetResourceType(rt).
+				SetEventID(ev.ID)
+		}
+		if err := tx.EventResourceType.CreateBulk(builders...).Exec(ctx); err != nil {
+			tx.Rollback() //nolint:errcheck
+			logger.Warn("failed to write audit event resource types", "op", opName, "err", err)
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		logger.Warn("failed to commit audit event", "op", opName, "err", err)
+	}
+}
+
+func orbIDs(resources []*ent.EventResource) []string {
+	ids := make([]string, len(resources))
+	for i, r := range resources {
+		ids[i] = r.OrbID
+	}
+	return ids
+}
+
+func resourceTypeNames(rts []*ent.EventResourceType) []string {
+	names := make([]string, len(rts))
+	for i, rt := range rts {
+		names[i] = rt.ResourceType
+	}
+	return names
 }

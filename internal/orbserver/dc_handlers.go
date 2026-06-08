@@ -9,7 +9,7 @@ import (
 
 	"github.com/armada/orbital/internal/orb"
 	"github.com/armada/orbital/internal/web/data/layout"
-	orbtemplates "github.com/armada/orbital/web/orb/templates"
+	orbtemplates "github.com/armada/orbital/web/templates/orb"
 	"github.com/labstack/echo/v4"
 )
 
@@ -231,7 +231,7 @@ func (s *Server) dcTab(c echo.Context) error {
 	tmpl := s.templates["datacenter-tab"]
 	if s.devMode {
 		var err error
-		tmpl, err = orbtemplates.ParseFragment("web/shared/templates/partials/datacenter-tab.gohtml")
+		tmpl, err = orbtemplates.ParseFragment("web/templates/shared/partials/datacenter-tab.gohtml")
 		if err != nil {
 			return fmt.Errorf("parse fragment: %w", err)
 		}

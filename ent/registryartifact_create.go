@@ -189,16 +189,16 @@ func (_c *RegistryArtifactCreate) SetNillableEnriched(v *bool) *RegistryArtifact
 	return _c
 }
 
-// SetEnricherError sets the "enricher_error" field.
-func (_c *RegistryArtifactCreate) SetEnricherError(v string) *RegistryArtifactCreate {
-	_c.mutation.SetEnricherError(v)
+// SetBundlerError sets the "bundler_error" field.
+func (_c *RegistryArtifactCreate) SetBundlerError(v string) *RegistryArtifactCreate {
+	_c.mutation.SetBundlerError(v)
 	return _c
 }
 
-// SetNillableEnricherError sets the "enricher_error" field if the given value is not nil.
-func (_c *RegistryArtifactCreate) SetNillableEnricherError(v *string) *RegistryArtifactCreate {
+// SetNillableBundlerError sets the "bundler_error" field if the given value is not nil.
+func (_c *RegistryArtifactCreate) SetNillableBundlerError(v *string) *RegistryArtifactCreate {
 	if v != nil {
-		_c.SetEnricherError(*v)
+		_c.SetBundlerError(*v)
 	}
 	return _c
 }
@@ -379,9 +379,9 @@ func (_c *RegistryArtifactCreate) createSpec() (*RegistryArtifact, *sqlgraph.Cre
 		_spec.SetField(registryartifact.FieldEnriched, field.TypeBool, value)
 		_node.Enriched = value
 	}
-	if value, ok := _c.mutation.EnricherError(); ok {
-		_spec.SetField(registryartifact.FieldEnricherError, field.TypeString, value)
-		_node.EnricherError = &value
+	if value, ok := _c.mutation.BundlerError(); ok {
+		_spec.SetField(registryartifact.FieldBundlerError, field.TypeString, value)
+		_node.BundlerError = &value
 	}
 	return _node, _spec
 }

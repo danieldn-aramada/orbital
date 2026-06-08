@@ -1,0 +1,18 @@
+{{range .}}<tr>
+  <td>{{.DatacenterName}}</td>
+  <td style="font-family:monospace;font-size:0.7rem">{{.Repository}}</td>
+  <td><span class="tag is-light">{{.Tag}}</span></td>
+  <td style="white-space:nowrap;">
+    {{if .HasDigest}}<div style="display:flex;align-items:center;gap:0.25rem;">
+      <span class="is-family-monospace is-size-7">{{.DigestShort}}…</span>
+      <button class="button is-small is-white" title="Copy digest" data-copy-value="{{.Digest}}"><span class="icon"><i class="fas fa-copy"></i></span></button>
+    </div>{{else}}—{{end}}
+  </td>
+  <td>{{if .Signed}}<span class="tag is-success is-light">signed</span>{{else}}<span class="tag is-light">unsigned</span>{{end}}</td>
+  <td>{{if .Enriched}}<span class="tag is-info is-light">bundled</span>{{else}}—{{end}}{{if .BundlerError}}<p class="has-text-danger is-size-7 mt-1">{{.BundlerError}}</p>{{end}}</td>
+  <td><span class="tag {{.StatusClass}}">{{.Status}}</span></td>
+  <td>{{.InitiatedAt}}</td>
+  <td class="has-text-danger is-size-7">{{.Error}}</td>
+</tr>
+{{else}}<tr><td colspan="9" class="has-text-grey">No artifacts yet.</td></tr>
+{{end}}

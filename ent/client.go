@@ -15,9 +15,12 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/armada/orbital/ent/backup"
 	"github.com/armada/orbital/ent/backupschedule"
 	"github.com/armada/orbital/ent/event"
+	"github.com/armada/orbital/ent/eventresource"
+	"github.com/armada/orbital/ent/eventresourcetype"
 	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/orb"
 	"github.com/armada/orbital/ent/registryartifact"
@@ -36,6 +39,10 @@ type Client struct {
 	BackupSchedule *BackupScheduleClient
 	// Event is the client for interacting with the Event builders.
 	Event *EventClient
+	// EventResource is the client for interacting with the EventResource builders.
+	EventResource *EventResourceClient
+	// EventResourceType is the client for interacting with the EventResourceType builders.
+	EventResourceType *EventResourceTypeClient
 	// ExportJob is the client for interacting with the ExportJob builders.
 	ExportJob *ExportJobClient
 	// Orb is the client for interacting with the Orb builders.
@@ -60,6 +67,8 @@ func (c *Client) init() {
 	c.Backup = NewBackupClient(c.config)
 	c.BackupSchedule = NewBackupScheduleClient(c.config)
 	c.Event = NewEventClient(c.config)
+	c.EventResource = NewEventResourceClient(c.config)
+	c.EventResourceType = NewEventResourceTypeClient(c.config)
 	c.ExportJob = NewExportJobClient(c.config)
 	c.Orb = NewOrbClient(c.config)
 	c.RegistryArtifact = NewRegistryArtifactClient(c.config)
@@ -155,16 +164,18 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:              ctx,
-		config:           cfg,
-		Backup:           NewBackupClient(cfg),
-		BackupSchedule:   NewBackupScheduleClient(cfg),
-		Event:            NewEventClient(cfg),
-		ExportJob:        NewExportJobClient(cfg),
-		Orb:              NewOrbClient(cfg),
-		RegistryArtifact: NewRegistryArtifactClient(cfg),
-		RestoreJob:       NewRestoreJobClient(cfg),
-		User:             NewUserClient(cfg),
+		ctx:               ctx,
+		config:            cfg,
+		Backup:            NewBackupClient(cfg),
+		BackupSchedule:    NewBackupScheduleClient(cfg),
+		Event:             NewEventClient(cfg),
+		EventResource:     NewEventResourceClient(cfg),
+		EventResourceType: NewEventResourceTypeClient(cfg),
+		ExportJob:         NewExportJobClient(cfg),
+		Orb:               NewOrbClient(cfg),
+		RegistryArtifact:  NewRegistryArtifactClient(cfg),
+		RestoreJob:        NewRestoreJobClient(cfg),
+		User:              NewUserClient(cfg),
 	}, nil
 }
 
@@ -182,16 +193,18 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:              ctx,
-		config:           cfg,
-		Backup:           NewBackupClient(cfg),
-		BackupSchedule:   NewBackupScheduleClient(cfg),
-		Event:            NewEventClient(cfg),
-		ExportJob:        NewExportJobClient(cfg),
-		Orb:              NewOrbClient(cfg),
-		RegistryArtifact: NewRegistryArtifactClient(cfg),
-		RestoreJob:       NewRestoreJobClient(cfg),
-		User:             NewUserClient(cfg),
+		ctx:               ctx,
+		config:            cfg,
+		Backup:            NewBackupClient(cfg),
+		BackupSchedule:    NewBackupScheduleClient(cfg),
+		Event:             NewEventClient(cfg),
+		EventResource:     NewEventResourceClient(cfg),
+		EventResourceType: NewEventResourceTypeClient(cfg),
+		ExportJob:         NewExportJobClient(cfg),
+		Orb:               NewOrbClient(cfg),
+		RegistryArtifact:  NewRegistryArtifactClient(cfg),
+		RestoreJob:        NewRestoreJobClient(cfg),
+		User:              NewUserClient(cfg),
 	}, nil
 }
 
@@ -221,8 +234,8 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Backup, c.BackupSchedule, c.Event, c.ExportJob, c.Orb, c.RegistryArtifact,
-		c.RestoreJob, c.User,
+		c.Backup, c.BackupSchedule, c.Event, c.EventResource, c.EventResourceType,
+		c.ExportJob, c.Orb, c.RegistryArtifact, c.RestoreJob, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -232,8 +245,8 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Backup, c.BackupSchedule, c.Event, c.ExportJob, c.Orb, c.RegistryArtifact,
-		c.RestoreJob, c.User,
+		c.Backup, c.BackupSchedule, c.Event, c.EventResource, c.EventResourceType,
+		c.ExportJob, c.Orb, c.RegistryArtifact, c.RestoreJob, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -248,6 +261,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.BackupSchedule.mutate(ctx, m)
 	case *EventMutation:
 		return c.Event.mutate(ctx, m)
+	case *EventResourceMutation:
+		return c.EventResource.mutate(ctx, m)
+	case *EventResourceTypeMutation:
+		return c.EventResourceType.mutate(ctx, m)
 	case *ExportJobMutation:
 		return c.ExportJob.mutate(ctx, m)
 	case *OrbMutation:
@@ -637,6 +654,38 @@ func (c *EventClient) GetX(ctx context.Context, id uuid.UUID) *Event {
 	return obj
 }
 
+// QueryResources queries the resources edge of a Event.
+func (c *EventClient) QueryResources(_m *Event) *EventResourceQuery {
+	query := (&EventResourceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(event.Table, event.FieldID, id),
+			sqlgraph.To(eventresource.Table, eventresource.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, event.ResourcesTable, event.ResourcesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryResourceTypes queries the resource_types edge of a Event.
+func (c *EventClient) QueryResourceTypes(_m *Event) *EventResourceTypeQuery {
+	query := (&EventResourceTypeClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(event.Table, event.FieldID, id),
+			sqlgraph.To(eventresourcetype.Table, eventresourcetype.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, event.ResourceTypesTable, event.ResourceTypesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *EventClient) Hooks() []Hook {
 	return c.hooks.Event
@@ -659,6 +708,304 @@ func (c *EventClient) mutate(ctx context.Context, m *EventMutation) (Value, erro
 		return (&EventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Event mutation op: %q", m.Op())
+	}
+}
+
+// EventResourceClient is a client for the EventResource schema.
+type EventResourceClient struct {
+	config
+}
+
+// NewEventResourceClient returns a client for the EventResource from the given config.
+func NewEventResourceClient(c config) *EventResourceClient {
+	return &EventResourceClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `eventresource.Hooks(f(g(h())))`.
+func (c *EventResourceClient) Use(hooks ...Hook) {
+	c.hooks.EventResource = append(c.hooks.EventResource, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `eventresource.Intercept(f(g(h())))`.
+func (c *EventResourceClient) Intercept(interceptors ...Interceptor) {
+	c.inters.EventResource = append(c.inters.EventResource, interceptors...)
+}
+
+// Create returns a builder for creating a EventResource entity.
+func (c *EventResourceClient) Create() *EventResourceCreate {
+	mutation := newEventResourceMutation(c.config, OpCreate)
+	return &EventResourceCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of EventResource entities.
+func (c *EventResourceClient) CreateBulk(builders ...*EventResourceCreate) *EventResourceCreateBulk {
+	return &EventResourceCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *EventResourceClient) MapCreateBulk(slice any, setFunc func(*EventResourceCreate, int)) *EventResourceCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &EventResourceCreateBulk{err: fmt.Errorf("calling to EventResourceClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*EventResourceCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &EventResourceCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for EventResource.
+func (c *EventResourceClient) Update() *EventResourceUpdate {
+	mutation := newEventResourceMutation(c.config, OpUpdate)
+	return &EventResourceUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *EventResourceClient) UpdateOne(_m *EventResource) *EventResourceUpdateOne {
+	mutation := newEventResourceMutation(c.config, OpUpdateOne, withEventResource(_m))
+	return &EventResourceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *EventResourceClient) UpdateOneID(id int) *EventResourceUpdateOne {
+	mutation := newEventResourceMutation(c.config, OpUpdateOne, withEventResourceID(id))
+	return &EventResourceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for EventResource.
+func (c *EventResourceClient) Delete() *EventResourceDelete {
+	mutation := newEventResourceMutation(c.config, OpDelete)
+	return &EventResourceDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *EventResourceClient) DeleteOne(_m *EventResource) *EventResourceDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *EventResourceClient) DeleteOneID(id int) *EventResourceDeleteOne {
+	builder := c.Delete().Where(eventresource.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &EventResourceDeleteOne{builder}
+}
+
+// Query returns a query builder for EventResource.
+func (c *EventResourceClient) Query() *EventResourceQuery {
+	return &EventResourceQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeEventResource},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a EventResource entity by its id.
+func (c *EventResourceClient) Get(ctx context.Context, id int) (*EventResource, error) {
+	return c.Query().Where(eventresource.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *EventResourceClient) GetX(ctx context.Context, id int) *EventResource {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryEvent queries the event edge of a EventResource.
+func (c *EventResourceClient) QueryEvent(_m *EventResource) *EventQuery {
+	query := (&EventClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(eventresource.Table, eventresource.FieldID, id),
+			sqlgraph.To(event.Table, event.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, eventresource.EventTable, eventresource.EventColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *EventResourceClient) Hooks() []Hook {
+	return c.hooks.EventResource
+}
+
+// Interceptors returns the client interceptors.
+func (c *EventResourceClient) Interceptors() []Interceptor {
+	return c.inters.EventResource
+}
+
+func (c *EventResourceClient) mutate(ctx context.Context, m *EventResourceMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&EventResourceCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&EventResourceUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&EventResourceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&EventResourceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown EventResource mutation op: %q", m.Op())
+	}
+}
+
+// EventResourceTypeClient is a client for the EventResourceType schema.
+type EventResourceTypeClient struct {
+	config
+}
+
+// NewEventResourceTypeClient returns a client for the EventResourceType from the given config.
+func NewEventResourceTypeClient(c config) *EventResourceTypeClient {
+	return &EventResourceTypeClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `eventresourcetype.Hooks(f(g(h())))`.
+func (c *EventResourceTypeClient) Use(hooks ...Hook) {
+	c.hooks.EventResourceType = append(c.hooks.EventResourceType, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `eventresourcetype.Intercept(f(g(h())))`.
+func (c *EventResourceTypeClient) Intercept(interceptors ...Interceptor) {
+	c.inters.EventResourceType = append(c.inters.EventResourceType, interceptors...)
+}
+
+// Create returns a builder for creating a EventResourceType entity.
+func (c *EventResourceTypeClient) Create() *EventResourceTypeCreate {
+	mutation := newEventResourceTypeMutation(c.config, OpCreate)
+	return &EventResourceTypeCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of EventResourceType entities.
+func (c *EventResourceTypeClient) CreateBulk(builders ...*EventResourceTypeCreate) *EventResourceTypeCreateBulk {
+	return &EventResourceTypeCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *EventResourceTypeClient) MapCreateBulk(slice any, setFunc func(*EventResourceTypeCreate, int)) *EventResourceTypeCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &EventResourceTypeCreateBulk{err: fmt.Errorf("calling to EventResourceTypeClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*EventResourceTypeCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &EventResourceTypeCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for EventResourceType.
+func (c *EventResourceTypeClient) Update() *EventResourceTypeUpdate {
+	mutation := newEventResourceTypeMutation(c.config, OpUpdate)
+	return &EventResourceTypeUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *EventResourceTypeClient) UpdateOne(_m *EventResourceType) *EventResourceTypeUpdateOne {
+	mutation := newEventResourceTypeMutation(c.config, OpUpdateOne, withEventResourceType(_m))
+	return &EventResourceTypeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *EventResourceTypeClient) UpdateOneID(id int) *EventResourceTypeUpdateOne {
+	mutation := newEventResourceTypeMutation(c.config, OpUpdateOne, withEventResourceTypeID(id))
+	return &EventResourceTypeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for EventResourceType.
+func (c *EventResourceTypeClient) Delete() *EventResourceTypeDelete {
+	mutation := newEventResourceTypeMutation(c.config, OpDelete)
+	return &EventResourceTypeDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *EventResourceTypeClient) DeleteOne(_m *EventResourceType) *EventResourceTypeDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *EventResourceTypeClient) DeleteOneID(id int) *EventResourceTypeDeleteOne {
+	builder := c.Delete().Where(eventresourcetype.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &EventResourceTypeDeleteOne{builder}
+}
+
+// Query returns a query builder for EventResourceType.
+func (c *EventResourceTypeClient) Query() *EventResourceTypeQuery {
+	return &EventResourceTypeQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeEventResourceType},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a EventResourceType entity by its id.
+func (c *EventResourceTypeClient) Get(ctx context.Context, id int) (*EventResourceType, error) {
+	return c.Query().Where(eventresourcetype.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *EventResourceTypeClient) GetX(ctx context.Context, id int) *EventResourceType {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryEvent queries the event edge of a EventResourceType.
+func (c *EventResourceTypeClient) QueryEvent(_m *EventResourceType) *EventQuery {
+	query := (&EventClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(eventresourcetype.Table, eventresourcetype.FieldID, id),
+			sqlgraph.To(event.Table, event.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, eventresourcetype.EventTable, eventresourcetype.EventColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *EventResourceTypeClient) Hooks() []Hook {
+	return c.hooks.EventResourceType
+}
+
+// Interceptors returns the client interceptors.
+func (c *EventResourceTypeClient) Interceptors() []Interceptor {
+	return c.inters.EventResourceType
+}
+
+func (c *EventResourceTypeClient) mutate(ctx context.Context, m *EventResourceTypeMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&EventResourceTypeCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&EventResourceTypeUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&EventResourceTypeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&EventResourceTypeDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown EventResourceType mutation op: %q", m.Op())
 	}
 }
 
@@ -1330,11 +1677,11 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Backup, BackupSchedule, Event, ExportJob, Orb, RegistryArtifact, RestoreJob,
-		User []ent.Hook
+		Backup, BackupSchedule, Event, EventResource, EventResourceType, ExportJob, Orb,
+		RegistryArtifact, RestoreJob, User []ent.Hook
 	}
 	inters struct {
-		Backup, BackupSchedule, Event, ExportJob, Orb, RegistryArtifact, RestoreJob,
-		User []ent.Interceptor
+		Backup, BackupSchedule, Event, EventResource, EventResourceType, ExportJob, Orb,
+		RegistryArtifact, RestoreJob, User []ent.Interceptor
 	}
 )

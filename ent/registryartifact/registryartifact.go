@@ -45,8 +45,8 @@ const (
 	FieldError = "error"
 	// FieldEnriched holds the string denoting the enriched field in the database.
 	FieldEnriched = "enriched"
-	// FieldEnricherError holds the string denoting the enricher_error field in the database.
-	FieldEnricherError = "enricher_error"
+	// FieldBundlerError holds the string denoting the bundler_error field in the database.
+	FieldBundlerError = "bundler_error"
 	// Table holds the table name of the registryartifact in the database.
 	Table = "registry_artifacts"
 )
@@ -70,7 +70,7 @@ var Columns = []string{
 	FieldCompletedAt,
 	FieldError,
 	FieldEnriched,
-	FieldEnricherError,
+	FieldBundlerError,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -205,7 +205,7 @@ func ByEnriched(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEnriched, opts...).ToFunc()
 }
 
-// ByEnricherError orders the results by the enricher_error field.
-func ByEnricherError(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldEnricherError, opts...).ToFunc()
+// ByBundlerError orders the results by the bundler_error field.
+func ByBundlerError(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBundlerError, opts...).ToFunc()
 }

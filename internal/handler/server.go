@@ -80,8 +80,8 @@ func NewServerHandler(dgraphURL string, dev bool, logger *slog.Logger, basePath 
 
 func parseServerFragment() *template.Template {
 	return template.Must(template.ParseFiles(
-		"web/shared/templates/partials/server-tab.gohtml",
-		"web/shared/templates/components/edit-modal-server.gohtml",
+		"web/templates/shared/partials/server-tab.gohtml",
+		"web/templates/shared/components/edit-modal-server.gohtml",
 	))
 }
 
@@ -234,6 +234,7 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 	raw := result.Data.GetServer
 
 	currentUser := actorFromContext(c)
+	canMutate, _ := c.Get("can_mutate").(bool)
 
 	idracFields := map[string]any{
 		"firmwareVersion":             "",
@@ -290,7 +291,7 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 		CurrentUser:    currentUser,
 		EditDataJSON:   template.JS(editJSON),
 		BasePath:       h.basePath,
-		Actions:        layout.OrbitalActions,
+		Actions:        layout.OrbitalActions(canMutate),
 	}
 
 	if raw.IdracSettings != nil {

@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -12,6 +13,8 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/armada/orbital/ent/event"
+	"github.com/armada/orbital/ent/eventresource"
+	"github.com/armada/orbital/ent/eventresourcetype"
 	"github.com/armada/orbital/ent/predicate"
 	"github.com/google/uuid"
 )
@@ -19,10 +22,12 @@ import (
 // EventQuery is the builder for querying Event entities.
 type EventQuery struct {
 	config
-	ctx        *QueryContext
-	order      []event.OrderOption
-	inters     []Interceptor
-	predicates []predicate.Event
+	ctx               *QueryContext
+	order             []event.OrderOption
+	inters            []Interceptor
+	predicates        []predicate.Event
+	withResources     *EventResourceQuery
+	withResourceTypes *EventResourceTypeQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -57,6 +62,50 @@ func (_q *EventQuery) Unique(unique bool) *EventQuery {
 func (_q *EventQuery) Order(o ...event.OrderOption) *EventQuery {
 	_q.order = append(_q.order, o...)
 	return _q
+}
+
+// QueryResources chains the current query on the "resources" edge.
+func (_q *EventQuery) QueryResources() *EventResourceQuery {
+	query := (&EventResourceClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(event.Table, event.FieldID, selector),
+			sqlgraph.To(eventresource.Table, eventresource.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, event.ResourcesTable, event.ResourcesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryResourceTypes chains the current query on the "resource_types" edge.
+func (_q *EventQuery) QueryResourceTypes() *EventResourceTypeQuery {
+	query := (&EventResourceTypeClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(event.Table, event.FieldID, selector),
+			sqlgraph.To(eventresourcetype.Table, eventresourcetype.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, event.ResourceTypesTable, event.ResourceTypesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first Event entity from the query.
@@ -246,15 +295,39 @@ func (_q *EventQuery) Clone() *EventQuery {
 		return nil
 	}
 	return &EventQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]event.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.Event{}, _q.predicates...),
+		config:            _q.config,
+		ctx:               _q.ctx.Clone(),
+		order:             append([]event.OrderOption{}, _q.order...),
+		inters:            append([]Interceptor{}, _q.inters...),
+		predicates:        append([]predicate.Event{}, _q.predicates...),
+		withResources:     _q.withResources.Clone(),
+		withResourceTypes: _q.withResourceTypes.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
+}
+
+// WithResources tells the query-builder to eager-load the nodes that are connected to
+// the "resources" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *EventQuery) WithResources(opts ...func(*EventResourceQuery)) *EventQuery {
+	query := (&EventResourceClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withResources = query
+	return _q
+}
+
+// WithResourceTypes tells the query-builder to eager-load the nodes that are connected to
+// the "resource_types" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *EventQuery) WithResourceTypes(opts ...func(*EventResourceTypeQuery)) *EventQuery {
+	query := (&EventResourceTypeClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withResourceTypes = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -333,8 +406,12 @@ func (_q *EventQuery) prepareQuery(ctx context.Context) error {
 
 func (_q *EventQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Event, error) {
 	var (
-		nodes = []*Event{}
-		_spec = _q.querySpec()
+		nodes       = []*Event{}
+		_spec       = _q.querySpec()
+		loadedTypes = [2]bool{
+			_q.withResources != nil,
+			_q.withResourceTypes != nil,
+		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Event).scanValues(nil, columns)
@@ -342,6 +419,7 @@ func (_q *EventQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Event,
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &Event{config: _q.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -353,7 +431,82 @@ func (_q *EventQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Event,
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := _q.withResources; query != nil {
+		if err := _q.loadResources(ctx, query, nodes,
+			func(n *Event) { n.Edges.Resources = []*EventResource{} },
+			func(n *Event, e *EventResource) { n.Edges.Resources = append(n.Edges.Resources, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withResourceTypes; query != nil {
+		if err := _q.loadResourceTypes(ctx, query, nodes,
+			func(n *Event) { n.Edges.ResourceTypes = []*EventResourceType{} },
+			func(n *Event, e *EventResourceType) { n.Edges.ResourceTypes = append(n.Edges.ResourceTypes, e) }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (_q *EventQuery) loadResources(ctx context.Context, query *EventResourceQuery, nodes []*Event, init func(*Event), assign func(*Event, *EventResource)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[uuid.UUID]*Event)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(eventresource.FieldEventID)
+	}
+	query.Where(predicate.EventResource(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(event.ResourcesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.EventID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "event_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *EventQuery) loadResourceTypes(ctx context.Context, query *EventResourceTypeQuery, nodes []*Event, init func(*Event), assign func(*Event, *EventResourceType)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[uuid.UUID]*Event)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(eventresourcetype.FieldEventID)
+	}
+	query.Where(predicate.EventResourceType(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(event.ResourceTypesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.EventID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "event_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
 }
 
 func (_q *EventQuery) sqlCount(ctx context.Context) (int, error) {

@@ -117,7 +117,7 @@ The namespace name string is the shared identifier — no cross-store pointer ne
 
 ### Step 1 — Add scalar (additive, safe, deploy independently)
 
-Add to `ConfigItem` interface in `schema/schema-demo.graphql`:
+Add to `ConfigItem` interface in `schema/schema.graphql`:
 
 ```graphql
 interface ConfigItem {
@@ -180,7 +180,7 @@ Function signature `(name, orbID, namespaceName string, err error)` stays the sa
 
 ### Step 5 — Remove `namespace` edge from `ConfigItem` (breaking, schema version bump)
 
-Remove from `schema/schema-demo.graphql`:
+Remove from `schema/schema.graphql`:
 - `namespace: Namespace!` from the `ConfigItem` interface only
 - **Keep the `Namespace` type** — it is still a standalone DGraph entity
 

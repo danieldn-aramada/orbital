@@ -12,14 +12,18 @@ type PageActions struct {
 	ShowDivergenceTab bool // Divergence Reports tab on DC detail page (orbital-side reports)
 }
 
-// OrbitalActions is the default PageActions for all orbital pages.
-var OrbitalActions = PageActions{
-	Create:            true,
-	Edit:              true,
-	Delete:            true,
-	Reload:            true,
-	ShowAuditTab:      true,
-	ShowDivergenceTab: true,
+// OrbitalActions returns PageActions for orbital pages scoped to the caller's
+// mutation capability. Read-only users get Reload and the audit/divergence tabs
+// but no Create, Edit, or Delete controls.
+func OrbitalActions(canMutate bool) PageActions {
+	return PageActions{
+		Create:            canMutate,
+		Edit:              canMutate,
+		Delete:            canMutate,
+		Reload:            true,
+		ShowAuditTab:      true,
+		ShowDivergenceTab: true,
+	}
 }
 
 // OrbActions is the default PageActions for all orb pages (read-only).

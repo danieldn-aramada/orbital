@@ -31,6 +31,23 @@ Read this before: touching `internal/handler/graphql.go`, `internal/handler/even
 - Arguments: `*ent.Client`, `*slog.Logger`, actor, opName, operations, resourceTypes, resourceIDs, details map.
 - **Failures are logged and swallowed** — audit writes must never block or fail a request.
 
+## event_category values
+
+Three values (stored as string, not enum — adding a value does not require ent codegen):
+
+| Value | Used for |
+|---|---|
+| `"data"` | GraphQL mutations on entities (GraphQL proxy handler) |
+| `"management"` | System operations: backup, restore, export, schema apply, authorizationDenied |
+| `"auth"` | Login/logout events: loginSuccess, loginFailed, logout |
+
+The audit tab query (`GET /api/v1/events?orbId=...`) filters to `event_category IN ('data', 'management')`. Auth events are excluded structurally — they have no resource_ids and appear in every resource tab if included.
+
 ## ent conventions for events
 
 - **Do not use `Immutable()` on ent schema fields** — immutability enforced at app layer (never call `.Update()` on event records). `Immutable()` causes migration pain: changing a field requires drop/recreate rather than ALTER.
+
+## Settled Decisions
+
+- **`event_category` values are fixed: `"data"` / `"management"` / `"auth"`** — see event_category section above. Do not add new categories without discussion. The audit tab filters to `data` and `management` — adding a fourth category requires auditing every query filter.
+- **Management event operation names use `verbNoun` camelCase** — current names: `createBackup`, `restoreBackup`, `exportSubgraph`, `publishArtifact`, `applySchema`. Do not use dot-namespaced names (`dgraph.restore`) or implementation-leaking prefixes (`trigger*`). "trigger" is an implementation detail; name what happened from the user's perspective.

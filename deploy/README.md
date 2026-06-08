@@ -130,7 +130,7 @@ kubectl run schema-apply --rm -it --restart=Never \
   --image=curlimages/curl -- \
   curl -sf -X POST http://dgraph-blue-dgraph-alpha:8080/admin/schema \
   -H "Content-Type: application/graphql" \
-  --data-binary @- < schema/schema-demo.graphql
+  --data-binary @- < schema/schema.graphql
 ```
 
 ### 7. Deploy orbital

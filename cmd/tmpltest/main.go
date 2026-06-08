@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	orbtemplates "github.com/armada/orbital/web/orb/templates"
+	orbtemplates "github.com/armada/orbital/web/templates/orb"
 	"github.com/armada/orbital/internal/web/data/layout"
 )
 

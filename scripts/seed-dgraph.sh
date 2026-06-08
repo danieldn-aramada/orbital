@@ -27,7 +27,7 @@ apply_schema() {
   local resp
   resp=$(curl -sf -X POST "${url}/admin/schema" \
     -H "Content-Type: application/graphql" \
-    --data-binary @schema/schema-demo.graphql)
+    --data-binary @schema/schema.graphql)
   if echo "$resp" | jq -e '.errors' >/dev/null 2>&1; then
     echo "ERROR: schema apply failed (${label}):" >&2
     echo "$resp" | jq -r '.errors[].message' >&2

@@ -34,17 +34,16 @@ func TestIsMissedRun_InvalidCronSpec(t *testing.T) {
 }
 
 func TestIsMissedRun_NotYetDue(t *testing.T) {
-	// Schedule runs every hour; last triggered 30 minutes ago → not due yet.
-	recent := time.Now().Add(-30 * time.Minute)
+	// Just triggered — Next(now) always returns a future tick regardless of wall clock position.
+	now := time.Now()
 	s := &ent.BackupSchedule{
 		Enabled:         true,
 		CronSpec:        "0 * * * *", // top of every hour
-		CreatedAt:       time.Now().Add(-2 * time.Hour),
-		LastTriggeredAt: &recent,
+		CreatedAt:       now.Add(-2 * time.Hour),
+		LastTriggeredAt: &now,
 	}
-	// next run after "30 minutes ago" is at the next top-of-hour, which is in the future
 	if isMissedRun(s) {
-		t.Error("expected false: next scheduled run is in the future")
+		t.Error("expected false: just triggered, next run has not arrived yet")
 	}
 }
 

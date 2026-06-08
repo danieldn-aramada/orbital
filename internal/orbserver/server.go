@@ -14,7 +14,7 @@ import (
 	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/orb"
 	"github.com/armada/orbital/internal/orbconfig"
-	orbtemplates "github.com/armada/orbital/web/orb/templates"
+	orbtemplates "github.com/armada/orbital/web/templates/orb"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	echoswagger "github.com/swaggo/echo-swagger"

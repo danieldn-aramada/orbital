@@ -32,7 +32,7 @@ Orbital publish pipeline
         │
         ├── [if enrichers in request body]
         │         │
-        │         ├─ POST configbundle-bundler /bundle: {jobId, datacenter}
+        │         ├─ POST configbundle-bundler /bundle: {datacenter}
         │         │         │
         │         │         └─ bundler queries Orbital GraphQL
         │         │             for config fields it needs
@@ -94,7 +94,7 @@ sequenceDiagram
     O-->>Admin: 202 {artifactId, tag}
 
     Note over O,CBB: async — enrichment (all-or-nothing)
-    O->>CBB: POST /bundle  {jobId, datacenter}
+    O->>CBB: POST /bundle  {datacenter}
     CBB->>O: GET /graphql  (fetch config fields)
     O-->>CBB: config data
     CBB-->>O: [{mediaType, data (base64)}]
@@ -149,7 +149,7 @@ sequenceDiagram
 ### ConfigBundle Bundler (enricher — runs in cloud)
 
 - Exposes `POST /bundle`
-- Receives `{jobId, datacenter}` from Orbital
+- Receives `{datacenter}` from Orbital
 - Queries Orbital's GraphQL API to fetch the config fields it needs
 - Builds the ConfigBundle manifest (YAML or any format)
 - Returns `[{mediaType, data}]` where `data` is base64-encoded
@@ -184,7 +184,6 @@ POST /bundle
 Content-Type: application/json
 
 {
-  "jobId": "a1b2c3d4-e5f6-...",
   "datacenter": "colo-galleon"
 }
 ```

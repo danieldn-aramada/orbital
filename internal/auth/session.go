@@ -15,6 +15,7 @@ const (
 	userIDKey    = "user_id"
 	userNameKey  = "user_name"
 	userEmailKey = "user_email"
+	userRoleKey  = "user_role"
 	csrfKey      = "csrf_token"
 	oidcStateKey = "oidc_state"
 )
@@ -45,7 +46,7 @@ func newStore(keys SessionKeys) *sessions.CookieStore {
 	return s
 }
 
-func SetUserSession(keys SessionKeys, r *http.Request, w http.ResponseWriter, id int, name, email string) error {
+func SetUserSession(keys SessionKeys, r *http.Request, w http.ResponseWriter, id int, name, email, role string) error {
 	store := newStore(keys)
 	session, err := store.Get(r, cookieName)
 	if err != nil {
@@ -54,18 +55,15 @@ func SetUserSession(keys SessionKeys, r *http.Request, w http.ResponseWriter, id
 	session.Values[userIDKey] = id
 	session.Values[userNameKey] = name
 	session.Values[userEmailKey] = email
+	session.Values[userRoleKey] = role
 	return session.Save(r, w)
-}
-
-// SetUserID is kept for callers that don't have name/email available.
-func SetUserID(keys SessionKeys, r *http.Request, w http.ResponseWriter, id int) error {
-	return SetUserSession(keys, r, w, id, "", "")
 }
 
 type UserSession struct {
 	ID    int
 	Name  string
 	Email string
+	Role  string // "readonly", "dev", or "admin"; empty string treated as "readonly"
 }
 
 func GetUserSession(keys SessionKeys, r *http.Request) (UserSession, error) {
@@ -80,7 +78,11 @@ func GetUserSession(keys SessionKeys, r *http.Request) (UserSession, error) {
 	}
 	name, _ := session.Values[userNameKey].(string)
 	email, _ := session.Values[userEmailKey].(string)
-	return UserSession{ID: id, Name: name, Email: email}, nil
+	role, _ := session.Values[userRoleKey].(string)
+	if role == "" {
+		role = "readonly" // safe default for sessions that predate this field
+	}
+	return UserSession{ID: id, Name: name, Email: email, Role: role}, nil
 }
 
 func GetUserID(keys SessionKeys, r *http.Request) (int, error) {

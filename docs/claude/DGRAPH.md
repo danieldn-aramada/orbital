@@ -7,7 +7,7 @@ Read this before: DGraph schema changes, query/mutation work, export/import, see
 - Schema changes must be **backwards compatible** — orbs may lag orbital by versions. Safe: new types, new nullable fields. Breaking: removing/renaming types or fields, adding non-null fields to existing types.
 - `id: ID` must be declared on the `ConfigItem` interface — DGraph does not auto-expose internal UIDs via GraphQL without it. Without it, `getDataCenter(id: $id)` queries fail. Always keep it.
 - Applying a GraphQL schema to DGraph is **additive at the RDF predicate layer**. Removing a field from GraphQL does NOT delete underlying RDF triples — data persists but is no longer queryable. To permanently remove a field and its data: `POST /alter {"drop_attr": "<predicate_name>"}`. This is irreversible.
-- `cfg.SchemaPath` is the authoritative schema file path — default `schema/schema-demo.graphql`. All handlers (export, backup, schema UI) read from this env-configurable path. Never hardcode `schema/schema-v1.graphql`.
+- `cfg.SchemaPath` is the authoritative schema file path — default `schema/schema.graphql`. All handlers (export, backup, schema UI) read from this env-configurable path. Never hardcode the path directly.
 - `make seed` applies schema to both DGraph instances — blue (`:8080`) and scratch (`:8081`) via `apply_schema` in `scripts/seed-dgraph.sh`.
 
 ## ConfigItem interface

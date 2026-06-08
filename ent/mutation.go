@@ -15,6 +15,8 @@ import (
 	"github.com/armada/orbital/ent/backup"
 	"github.com/armada/orbital/ent/backupschedule"
 	"github.com/armada/orbital/ent/event"
+	"github.com/armada/orbital/ent/eventresource"
+	"github.com/armada/orbital/ent/eventresourcetype"
 	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/orb"
 	"github.com/armada/orbital/ent/predicate"
@@ -33,14 +35,16 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
-	TypeBackup           = "Backup"
-	TypeBackupSchedule   = "BackupSchedule"
-	TypeEvent            = "Event"
-	TypeExportJob        = "ExportJob"
-	TypeOrb              = "Orb"
-	TypeRegistryArtifact = "RegistryArtifact"
-	TypeRestoreJob       = "RestoreJob"
-	TypeUser             = "User"
+	TypeBackup            = "Backup"
+	TypeBackupSchedule    = "BackupSchedule"
+	TypeEvent             = "Event"
+	TypeEventResource     = "EventResource"
+	TypeEventResourceType = "EventResourceType"
+	TypeExportJob         = "ExportJob"
+	TypeOrb               = "Orb"
+	TypeRegistryArtifact  = "RegistryArtifact"
+	TypeRestoreJob        = "RestoreJob"
+	TypeUser              = "User"
 )
 
 // BackupMutation represents an operation that mutates the Backup nodes in the graph.
@@ -2185,24 +2189,26 @@ func (m *BackupScheduleMutation) ResetEdge(name string) error {
 // EventMutation represents an operation that mutates the Event nodes in the graph.
 type EventMutation struct {
 	config
-	op                   Op
-	typ                  string
-	id                   *uuid.UUID
-	operations           *[]string
-	appendoperations     []string
-	resource_types       *[]string
-	appendresource_types []string
-	resource_ids         *[]string
-	appendresource_ids   []string
-	actor                *string
-	timestamp            *time.Time
-	details              *json.RawMessage
-	appenddetails        json.RawMessage
-	event_category       *string
-	clearedFields        map[string]struct{}
-	done                 bool
-	oldValue             func(context.Context) (*Event, error)
-	predicates           []predicate.Event
+	op                    Op
+	typ                   string
+	id                    *uuid.UUID
+	operations            *[]string
+	appendoperations      []string
+	actor                 *string
+	timestamp             *time.Time
+	details               *json.RawMessage
+	appenddetails         json.RawMessage
+	event_category        *string
+	clearedFields         map[string]struct{}
+	resources             map[int]struct{}
+	removedresources      map[int]struct{}
+	clearedresources      bool
+	resource_types        map[int]struct{}
+	removedresource_types map[int]struct{}
+	clearedresource_types bool
+	done                  bool
+	oldValue              func(context.Context) (*Event, error)
+	predicates            []predicate.Event
 }
 
 var _ ent.Mutation = (*EventMutation)(nil)
@@ -2372,136 +2378,6 @@ func (m *EventMutation) ResetOperations() {
 	m.operations = nil
 	m.appendoperations = nil
 	delete(m.clearedFields, event.FieldOperations)
-}
-
-// SetResourceTypes sets the "resource_types" field.
-func (m *EventMutation) SetResourceTypes(s []string) {
-	m.resource_types = &s
-	m.appendresource_types = nil
-}
-
-// ResourceTypes returns the value of the "resource_types" field in the mutation.
-func (m *EventMutation) ResourceTypes() (r []string, exists bool) {
-	v := m.resource_types
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldResourceTypes returns the old "resource_types" field's value of the Event entity.
-// If the Event object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *EventMutation) OldResourceTypes(ctx context.Context) (v []string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldResourceTypes is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldResourceTypes requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldResourceTypes: %w", err)
-	}
-	return oldValue.ResourceTypes, nil
-}
-
-// AppendResourceTypes adds s to the "resource_types" field.
-func (m *EventMutation) AppendResourceTypes(s []string) {
-	m.appendresource_types = append(m.appendresource_types, s...)
-}
-
-// AppendedResourceTypes returns the list of values that were appended to the "resource_types" field in this mutation.
-func (m *EventMutation) AppendedResourceTypes() ([]string, bool) {
-	if len(m.appendresource_types) == 0 {
-		return nil, false
-	}
-	return m.appendresource_types, true
-}
-
-// ClearResourceTypes clears the value of the "resource_types" field.
-func (m *EventMutation) ClearResourceTypes() {
-	m.resource_types = nil
-	m.appendresource_types = nil
-	m.clearedFields[event.FieldResourceTypes] = struct{}{}
-}
-
-// ResourceTypesCleared returns if the "resource_types" field was cleared in this mutation.
-func (m *EventMutation) ResourceTypesCleared() bool {
-	_, ok := m.clearedFields[event.FieldResourceTypes]
-	return ok
-}
-
-// ResetResourceTypes resets all changes to the "resource_types" field.
-func (m *EventMutation) ResetResourceTypes() {
-	m.resource_types = nil
-	m.appendresource_types = nil
-	delete(m.clearedFields, event.FieldResourceTypes)
-}
-
-// SetResourceIds sets the "resource_ids" field.
-func (m *EventMutation) SetResourceIds(s []string) {
-	m.resource_ids = &s
-	m.appendresource_ids = nil
-}
-
-// ResourceIds returns the value of the "resource_ids" field in the mutation.
-func (m *EventMutation) ResourceIds() (r []string, exists bool) {
-	v := m.resource_ids
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldResourceIds returns the old "resource_ids" field's value of the Event entity.
-// If the Event object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *EventMutation) OldResourceIds(ctx context.Context) (v []string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldResourceIds is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldResourceIds requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldResourceIds: %w", err)
-	}
-	return oldValue.ResourceIds, nil
-}
-
-// AppendResourceIds adds s to the "resource_ids" field.
-func (m *EventMutation) AppendResourceIds(s []string) {
-	m.appendresource_ids = append(m.appendresource_ids, s...)
-}
-
-// AppendedResourceIds returns the list of values that were appended to the "resource_ids" field in this mutation.
-func (m *EventMutation) AppendedResourceIds() ([]string, bool) {
-	if len(m.appendresource_ids) == 0 {
-		return nil, false
-	}
-	return m.appendresource_ids, true
-}
-
-// ClearResourceIds clears the value of the "resource_ids" field.
-func (m *EventMutation) ClearResourceIds() {
-	m.resource_ids = nil
-	m.appendresource_ids = nil
-	m.clearedFields[event.FieldResourceIds] = struct{}{}
-}
-
-// ResourceIdsCleared returns if the "resource_ids" field was cleared in this mutation.
-func (m *EventMutation) ResourceIdsCleared() bool {
-	_, ok := m.clearedFields[event.FieldResourceIds]
-	return ok
-}
-
-// ResetResourceIds resets all changes to the "resource_ids" field.
-func (m *EventMutation) ResetResourceIds() {
-	m.resource_ids = nil
-	m.appendresource_ids = nil
-	delete(m.clearedFields, event.FieldResourceIds)
 }
 
 // SetActor sets the "actor" field.
@@ -2677,6 +2553,114 @@ func (m *EventMutation) ResetEventCategory() {
 	m.event_category = nil
 }
 
+// AddResourceIDs adds the "resources" edge to the EventResource entity by ids.
+func (m *EventMutation) AddResourceIDs(ids ...int) {
+	if m.resources == nil {
+		m.resources = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.resources[ids[i]] = struct{}{}
+	}
+}
+
+// ClearResources clears the "resources" edge to the EventResource entity.
+func (m *EventMutation) ClearResources() {
+	m.clearedresources = true
+}
+
+// ResourcesCleared reports if the "resources" edge to the EventResource entity was cleared.
+func (m *EventMutation) ResourcesCleared() bool {
+	return m.clearedresources
+}
+
+// RemoveResourceIDs removes the "resources" edge to the EventResource entity by IDs.
+func (m *EventMutation) RemoveResourceIDs(ids ...int) {
+	if m.removedresources == nil {
+		m.removedresources = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.resources, ids[i])
+		m.removedresources[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedResources returns the removed IDs of the "resources" edge to the EventResource entity.
+func (m *EventMutation) RemovedResourcesIDs() (ids []int) {
+	for id := range m.removedresources {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResourcesIDs returns the "resources" edge IDs in the mutation.
+func (m *EventMutation) ResourcesIDs() (ids []int) {
+	for id := range m.resources {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetResources resets all changes to the "resources" edge.
+func (m *EventMutation) ResetResources() {
+	m.resources = nil
+	m.clearedresources = false
+	m.removedresources = nil
+}
+
+// AddResourceTypeIDs adds the "resource_types" edge to the EventResourceType entity by ids.
+func (m *EventMutation) AddResourceTypeIDs(ids ...int) {
+	if m.resource_types == nil {
+		m.resource_types = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.resource_types[ids[i]] = struct{}{}
+	}
+}
+
+// ClearResourceTypes clears the "resource_types" edge to the EventResourceType entity.
+func (m *EventMutation) ClearResourceTypes() {
+	m.clearedresource_types = true
+}
+
+// ResourceTypesCleared reports if the "resource_types" edge to the EventResourceType entity was cleared.
+func (m *EventMutation) ResourceTypesCleared() bool {
+	return m.clearedresource_types
+}
+
+// RemoveResourceTypeIDs removes the "resource_types" edge to the EventResourceType entity by IDs.
+func (m *EventMutation) RemoveResourceTypeIDs(ids ...int) {
+	if m.removedresource_types == nil {
+		m.removedresource_types = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.resource_types, ids[i])
+		m.removedresource_types[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedResourceTypes returns the removed IDs of the "resource_types" edge to the EventResourceType entity.
+func (m *EventMutation) RemovedResourceTypesIDs() (ids []int) {
+	for id := range m.removedresource_types {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResourceTypesIDs returns the "resource_types" edge IDs in the mutation.
+func (m *EventMutation) ResourceTypesIDs() (ids []int) {
+	for id := range m.resource_types {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetResourceTypes resets all changes to the "resource_types" edge.
+func (m *EventMutation) ResetResourceTypes() {
+	m.resource_types = nil
+	m.clearedresource_types = false
+	m.removedresource_types = nil
+}
+
 // Where appends a list predicates to the EventMutation builder.
 func (m *EventMutation) Where(ps ...predicate.Event) {
 	m.predicates = append(m.predicates, ps...)
@@ -2711,15 +2695,9 @@ func (m *EventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EventMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 5)
 	if m.operations != nil {
 		fields = append(fields, event.FieldOperations)
-	}
-	if m.resource_types != nil {
-		fields = append(fields, event.FieldResourceTypes)
-	}
-	if m.resource_ids != nil {
-		fields = append(fields, event.FieldResourceIds)
 	}
 	if m.actor != nil {
 		fields = append(fields, event.FieldActor)
@@ -2743,10 +2721,6 @@ func (m *EventMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case event.FieldOperations:
 		return m.Operations()
-	case event.FieldResourceTypes:
-		return m.ResourceTypes()
-	case event.FieldResourceIds:
-		return m.ResourceIds()
 	case event.FieldActor:
 		return m.Actor()
 	case event.FieldTimestamp:
@@ -2766,10 +2740,6 @@ func (m *EventMutation) OldField(ctx context.Context, name string) (ent.Value, e
 	switch name {
 	case event.FieldOperations:
 		return m.OldOperations(ctx)
-	case event.FieldResourceTypes:
-		return m.OldResourceTypes(ctx)
-	case event.FieldResourceIds:
-		return m.OldResourceIds(ctx)
 	case event.FieldActor:
 		return m.OldActor(ctx)
 	case event.FieldTimestamp:
@@ -2793,20 +2763,6 @@ func (m *EventMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetOperations(v)
-		return nil
-	case event.FieldResourceTypes:
-		v, ok := value.([]string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetResourceTypes(v)
-		return nil
-	case event.FieldResourceIds:
-		v, ok := value.([]string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetResourceIds(v)
 		return nil
 	case event.FieldActor:
 		v, ok := value.(string)
@@ -2869,12 +2825,6 @@ func (m *EventMutation) ClearedFields() []string {
 	if m.FieldCleared(event.FieldOperations) {
 		fields = append(fields, event.FieldOperations)
 	}
-	if m.FieldCleared(event.FieldResourceTypes) {
-		fields = append(fields, event.FieldResourceTypes)
-	}
-	if m.FieldCleared(event.FieldResourceIds) {
-		fields = append(fields, event.FieldResourceIds)
-	}
 	if m.FieldCleared(event.FieldDetails) {
 		fields = append(fields, event.FieldDetails)
 	}
@@ -2895,12 +2845,6 @@ func (m *EventMutation) ClearField(name string) error {
 	case event.FieldOperations:
 		m.ClearOperations()
 		return nil
-	case event.FieldResourceTypes:
-		m.ClearResourceTypes()
-		return nil
-	case event.FieldResourceIds:
-		m.ClearResourceIds()
-		return nil
 	case event.FieldDetails:
 		m.ClearDetails()
 		return nil
@@ -2914,12 +2858,6 @@ func (m *EventMutation) ResetField(name string) error {
 	switch name {
 	case event.FieldOperations:
 		m.ResetOperations()
-		return nil
-	case event.FieldResourceTypes:
-		m.ResetResourceTypes()
-		return nil
-	case event.FieldResourceIds:
-		m.ResetResourceIds()
 		return nil
 	case event.FieldActor:
 		m.ResetActor()
@@ -2939,50 +2877,980 @@ func (m *EventMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *EventMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 2)
+	if m.resources != nil {
+		edges = append(edges, event.EdgeResources)
+	}
+	if m.resource_types != nil {
+		edges = append(edges, event.EdgeResourceTypes)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *EventMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case event.EdgeResources:
+		ids := make([]ent.Value, 0, len(m.resources))
+		for id := range m.resources {
+			ids = append(ids, id)
+		}
+		return ids
+	case event.EdgeResourceTypes:
+		ids := make([]ent.Value, 0, len(m.resource_types))
+		for id := range m.resource_types {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *EventMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 2)
+	if m.removedresources != nil {
+		edges = append(edges, event.EdgeResources)
+	}
+	if m.removedresource_types != nil {
+		edges = append(edges, event.EdgeResourceTypes)
+	}
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *EventMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case event.EdgeResources:
+		ids := make([]ent.Value, 0, len(m.removedresources))
+		for id := range m.removedresources {
+			ids = append(ids, id)
+		}
+		return ids
+	case event.EdgeResourceTypes:
+		ids := make([]ent.Value, 0, len(m.removedresource_types))
+		for id := range m.removedresource_types {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *EventMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 2)
+	if m.clearedresources {
+		edges = append(edges, event.EdgeResources)
+	}
+	if m.clearedresource_types {
+		edges = append(edges, event.EdgeResourceTypes)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *EventMutation) EdgeCleared(name string) bool {
+	switch name {
+	case event.EdgeResources:
+		return m.clearedresources
+	case event.EdgeResourceTypes:
+		return m.clearedresource_types
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *EventMutation) ClearEdge(name string) error {
+	switch name {
+	}
 	return fmt.Errorf("unknown Event unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *EventMutation) ResetEdge(name string) error {
+	switch name {
+	case event.EdgeResources:
+		m.ResetResources()
+		return nil
+	case event.EdgeResourceTypes:
+		m.ResetResourceTypes()
+		return nil
+	}
 	return fmt.Errorf("unknown Event edge %s", name)
+}
+
+// EventResourceMutation represents an operation that mutates the EventResource nodes in the graph.
+type EventResourceMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	orb_id        *string
+	clearedFields map[string]struct{}
+	event         *uuid.UUID
+	clearedevent  bool
+	done          bool
+	oldValue      func(context.Context) (*EventResource, error)
+	predicates    []predicate.EventResource
+}
+
+var _ ent.Mutation = (*EventResourceMutation)(nil)
+
+// eventresourceOption allows management of the mutation configuration using functional options.
+type eventresourceOption func(*EventResourceMutation)
+
+// newEventResourceMutation creates new mutation for the EventResource entity.
+func newEventResourceMutation(c config, op Op, opts ...eventresourceOption) *EventResourceMutation {
+	m := &EventResourceMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeEventResource,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withEventResourceID sets the ID field of the mutation.
+func withEventResourceID(id int) eventresourceOption {
+	return func(m *EventResourceMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *EventResource
+		)
+		m.oldValue = func(ctx context.Context) (*EventResource, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().EventResource.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withEventResource sets the old EventResource of the mutation.
+func withEventResource(node *EventResource) eventresourceOption {
+	return func(m *EventResourceMutation) {
+		m.oldValue = func(context.Context) (*EventResource, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m EventResourceMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m EventResourceMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *EventResourceMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *EventResourceMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().EventResource.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetEventID sets the "event_id" field.
+func (m *EventResourceMutation) SetEventID(u uuid.UUID) {
+	m.event = &u
+}
+
+// EventID returns the value of the "event_id" field in the mutation.
+func (m *EventResourceMutation) EventID() (r uuid.UUID, exists bool) {
+	v := m.event
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEventID returns the old "event_id" field's value of the EventResource entity.
+// If the EventResource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventResourceMutation) OldEventID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEventID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEventID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEventID: %w", err)
+	}
+	return oldValue.EventID, nil
+}
+
+// ResetEventID resets all changes to the "event_id" field.
+func (m *EventResourceMutation) ResetEventID() {
+	m.event = nil
+}
+
+// SetOrbID sets the "orb_id" field.
+func (m *EventResourceMutation) SetOrbID(s string) {
+	m.orb_id = &s
+}
+
+// OrbID returns the value of the "orb_id" field in the mutation.
+func (m *EventResourceMutation) OrbID() (r string, exists bool) {
+	v := m.orb_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOrbID returns the old "orb_id" field's value of the EventResource entity.
+// If the EventResource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventResourceMutation) OldOrbID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOrbID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOrbID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOrbID: %w", err)
+	}
+	return oldValue.OrbID, nil
+}
+
+// ResetOrbID resets all changes to the "orb_id" field.
+func (m *EventResourceMutation) ResetOrbID() {
+	m.orb_id = nil
+}
+
+// ClearEvent clears the "event" edge to the Event entity.
+func (m *EventResourceMutation) ClearEvent() {
+	m.clearedevent = true
+	m.clearedFields[eventresource.FieldEventID] = struct{}{}
+}
+
+// EventCleared reports if the "event" edge to the Event entity was cleared.
+func (m *EventResourceMutation) EventCleared() bool {
+	return m.clearedevent
+}
+
+// EventIDs returns the "event" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// EventID instead. It exists only for internal usage by the builders.
+func (m *EventResourceMutation) EventIDs() (ids []uuid.UUID) {
+	if id := m.event; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetEvent resets all changes to the "event" edge.
+func (m *EventResourceMutation) ResetEvent() {
+	m.event = nil
+	m.clearedevent = false
+}
+
+// Where appends a list predicates to the EventResourceMutation builder.
+func (m *EventResourceMutation) Where(ps ...predicate.EventResource) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the EventResourceMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *EventResourceMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.EventResource, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *EventResourceMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *EventResourceMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (EventResource).
+func (m *EventResourceMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *EventResourceMutation) Fields() []string {
+	fields := make([]string, 0, 2)
+	if m.event != nil {
+		fields = append(fields, eventresource.FieldEventID)
+	}
+	if m.orb_id != nil {
+		fields = append(fields, eventresource.FieldOrbID)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *EventResourceMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case eventresource.FieldEventID:
+		return m.EventID()
+	case eventresource.FieldOrbID:
+		return m.OrbID()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *EventResourceMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case eventresource.FieldEventID:
+		return m.OldEventID(ctx)
+	case eventresource.FieldOrbID:
+		return m.OldOrbID(ctx)
+	}
+	return nil, fmt.Errorf("unknown EventResource field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *EventResourceMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case eventresource.FieldEventID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEventID(v)
+		return nil
+	case eventresource.FieldOrbID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOrbID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown EventResource field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *EventResourceMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *EventResourceMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *EventResourceMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown EventResource numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *EventResourceMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *EventResourceMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *EventResourceMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown EventResource nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *EventResourceMutation) ResetField(name string) error {
+	switch name {
+	case eventresource.FieldEventID:
+		m.ResetEventID()
+		return nil
+	case eventresource.FieldOrbID:
+		m.ResetOrbID()
+		return nil
+	}
+	return fmt.Errorf("unknown EventResource field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *EventResourceMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.event != nil {
+		edges = append(edges, eventresource.EdgeEvent)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *EventResourceMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case eventresource.EdgeEvent:
+		if id := m.event; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *EventResourceMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *EventResourceMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *EventResourceMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedevent {
+		edges = append(edges, eventresource.EdgeEvent)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *EventResourceMutation) EdgeCleared(name string) bool {
+	switch name {
+	case eventresource.EdgeEvent:
+		return m.clearedevent
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *EventResourceMutation) ClearEdge(name string) error {
+	switch name {
+	case eventresource.EdgeEvent:
+		m.ClearEvent()
+		return nil
+	}
+	return fmt.Errorf("unknown EventResource unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *EventResourceMutation) ResetEdge(name string) error {
+	switch name {
+	case eventresource.EdgeEvent:
+		m.ResetEvent()
+		return nil
+	}
+	return fmt.Errorf("unknown EventResource edge %s", name)
+}
+
+// EventResourceTypeMutation represents an operation that mutates the EventResourceType nodes in the graph.
+type EventResourceTypeMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	resource_type *string
+	clearedFields map[string]struct{}
+	event         *uuid.UUID
+	clearedevent  bool
+	done          bool
+	oldValue      func(context.Context) (*EventResourceType, error)
+	predicates    []predicate.EventResourceType
+}
+
+var _ ent.Mutation = (*EventResourceTypeMutation)(nil)
+
+// eventresourcetypeOption allows management of the mutation configuration using functional options.
+type eventresourcetypeOption func(*EventResourceTypeMutation)
+
+// newEventResourceTypeMutation creates new mutation for the EventResourceType entity.
+func newEventResourceTypeMutation(c config, op Op, opts ...eventresourcetypeOption) *EventResourceTypeMutation {
+	m := &EventResourceTypeMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeEventResourceType,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withEventResourceTypeID sets the ID field of the mutation.
+func withEventResourceTypeID(id int) eventresourcetypeOption {
+	return func(m *EventResourceTypeMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *EventResourceType
+		)
+		m.oldValue = func(ctx context.Context) (*EventResourceType, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().EventResourceType.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withEventResourceType sets the old EventResourceType of the mutation.
+func withEventResourceType(node *EventResourceType) eventresourcetypeOption {
+	return func(m *EventResourceTypeMutation) {
+		m.oldValue = func(context.Context) (*EventResourceType, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m EventResourceTypeMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m EventResourceTypeMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *EventResourceTypeMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *EventResourceTypeMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().EventResourceType.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetEventID sets the "event_id" field.
+func (m *EventResourceTypeMutation) SetEventID(u uuid.UUID) {
+	m.event = &u
+}
+
+// EventID returns the value of the "event_id" field in the mutation.
+func (m *EventResourceTypeMutation) EventID() (r uuid.UUID, exists bool) {
+	v := m.event
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEventID returns the old "event_id" field's value of the EventResourceType entity.
+// If the EventResourceType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventResourceTypeMutation) OldEventID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEventID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEventID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEventID: %w", err)
+	}
+	return oldValue.EventID, nil
+}
+
+// ResetEventID resets all changes to the "event_id" field.
+func (m *EventResourceTypeMutation) ResetEventID() {
+	m.event = nil
+}
+
+// SetResourceType sets the "resource_type" field.
+func (m *EventResourceTypeMutation) SetResourceType(s string) {
+	m.resource_type = &s
+}
+
+// ResourceType returns the value of the "resource_type" field in the mutation.
+func (m *EventResourceTypeMutation) ResourceType() (r string, exists bool) {
+	v := m.resource_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResourceType returns the old "resource_type" field's value of the EventResourceType entity.
+// If the EventResourceType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventResourceTypeMutation) OldResourceType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResourceType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResourceType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResourceType: %w", err)
+	}
+	return oldValue.ResourceType, nil
+}
+
+// ResetResourceType resets all changes to the "resource_type" field.
+func (m *EventResourceTypeMutation) ResetResourceType() {
+	m.resource_type = nil
+}
+
+// ClearEvent clears the "event" edge to the Event entity.
+func (m *EventResourceTypeMutation) ClearEvent() {
+	m.clearedevent = true
+	m.clearedFields[eventresourcetype.FieldEventID] = struct{}{}
+}
+
+// EventCleared reports if the "event" edge to the Event entity was cleared.
+func (m *EventResourceTypeMutation) EventCleared() bool {
+	return m.clearedevent
+}
+
+// EventIDs returns the "event" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// EventID instead. It exists only for internal usage by the builders.
+func (m *EventResourceTypeMutation) EventIDs() (ids []uuid.UUID) {
+	if id := m.event; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetEvent resets all changes to the "event" edge.
+func (m *EventResourceTypeMutation) ResetEvent() {
+	m.event = nil
+	m.clearedevent = false
+}
+
+// Where appends a list predicates to the EventResourceTypeMutation builder.
+func (m *EventResourceTypeMutation) Where(ps ...predicate.EventResourceType) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the EventResourceTypeMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *EventResourceTypeMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.EventResourceType, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *EventResourceTypeMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *EventResourceTypeMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (EventResourceType).
+func (m *EventResourceTypeMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *EventResourceTypeMutation) Fields() []string {
+	fields := make([]string, 0, 2)
+	if m.event != nil {
+		fields = append(fields, eventresourcetype.FieldEventID)
+	}
+	if m.resource_type != nil {
+		fields = append(fields, eventresourcetype.FieldResourceType)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *EventResourceTypeMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case eventresourcetype.FieldEventID:
+		return m.EventID()
+	case eventresourcetype.FieldResourceType:
+		return m.ResourceType()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *EventResourceTypeMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case eventresourcetype.FieldEventID:
+		return m.OldEventID(ctx)
+	case eventresourcetype.FieldResourceType:
+		return m.OldResourceType(ctx)
+	}
+	return nil, fmt.Errorf("unknown EventResourceType field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *EventResourceTypeMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case eventresourcetype.FieldEventID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEventID(v)
+		return nil
+	case eventresourcetype.FieldResourceType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResourceType(v)
+		return nil
+	}
+	return fmt.Errorf("unknown EventResourceType field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *EventResourceTypeMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *EventResourceTypeMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *EventResourceTypeMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown EventResourceType numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *EventResourceTypeMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *EventResourceTypeMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *EventResourceTypeMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown EventResourceType nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *EventResourceTypeMutation) ResetField(name string) error {
+	switch name {
+	case eventresourcetype.FieldEventID:
+		m.ResetEventID()
+		return nil
+	case eventresourcetype.FieldResourceType:
+		m.ResetResourceType()
+		return nil
+	}
+	return fmt.Errorf("unknown EventResourceType field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *EventResourceTypeMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.event != nil {
+		edges = append(edges, eventresourcetype.EdgeEvent)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *EventResourceTypeMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case eventresourcetype.EdgeEvent:
+		if id := m.event; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *EventResourceTypeMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *EventResourceTypeMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *EventResourceTypeMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedevent {
+		edges = append(edges, eventresourcetype.EdgeEvent)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *EventResourceTypeMutation) EdgeCleared(name string) bool {
+	switch name {
+	case eventresourcetype.EdgeEvent:
+		return m.clearedevent
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *EventResourceTypeMutation) ClearEdge(name string) error {
+	switch name {
+	case eventresourcetype.EdgeEvent:
+		m.ClearEvent()
+		return nil
+	}
+	return fmt.Errorf("unknown EventResourceType unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *EventResourceTypeMutation) ResetEdge(name string) error {
+	switch name {
+	case eventresourcetype.EdgeEvent:
+		m.ResetEvent()
+		return nil
+	}
+	return fmt.Errorf("unknown EventResourceType edge %s", name)
 }
 
 // ExportJobMutation represents an operation that mutates the ExportJob nodes in the graph.
@@ -4825,7 +5693,7 @@ type RegistryArtifactMutation struct {
 	completed_at            *time.Time
 	error                   *string
 	enriched                *bool
-	enricher_error          *string
+	bundler_error           *string
 	clearedFields           map[string]struct{}
 	done                    bool
 	oldValue                func(context.Context) (*RegistryArtifact, error)
@@ -5626,53 +6494,53 @@ func (m *RegistryArtifactMutation) ResetEnriched() {
 	m.enriched = nil
 }
 
-// SetEnricherError sets the "enricher_error" field.
-func (m *RegistryArtifactMutation) SetEnricherError(s string) {
-	m.enricher_error = &s
+// SetBundlerError sets the "bundler_error" field.
+func (m *RegistryArtifactMutation) SetBundlerError(s string) {
+	m.bundler_error = &s
 }
 
-// EnricherError returns the value of the "enricher_error" field in the mutation.
-func (m *RegistryArtifactMutation) EnricherError() (r string, exists bool) {
-	v := m.enricher_error
+// BundlerError returns the value of the "bundler_error" field in the mutation.
+func (m *RegistryArtifactMutation) BundlerError() (r string, exists bool) {
+	v := m.bundler_error
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldEnricherError returns the old "enricher_error" field's value of the RegistryArtifact entity.
+// OldBundlerError returns the old "bundler_error" field's value of the RegistryArtifact entity.
 // If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *RegistryArtifactMutation) OldEnricherError(ctx context.Context) (v *string, err error) {
+func (m *RegistryArtifactMutation) OldBundlerError(ctx context.Context) (v *string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldEnricherError is only allowed on UpdateOne operations")
+		return v, errors.New("OldBundlerError is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldEnricherError requires an ID field in the mutation")
+		return v, errors.New("OldBundlerError requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldEnricherError: %w", err)
+		return v, fmt.Errorf("querying old value for OldBundlerError: %w", err)
 	}
-	return oldValue.EnricherError, nil
+	return oldValue.BundlerError, nil
 }
 
-// ClearEnricherError clears the value of the "enricher_error" field.
-func (m *RegistryArtifactMutation) ClearEnricherError() {
-	m.enricher_error = nil
-	m.clearedFields[registryartifact.FieldEnricherError] = struct{}{}
+// ClearBundlerError clears the value of the "bundler_error" field.
+func (m *RegistryArtifactMutation) ClearBundlerError() {
+	m.bundler_error = nil
+	m.clearedFields[registryartifact.FieldBundlerError] = struct{}{}
 }
 
-// EnricherErrorCleared returns if the "enricher_error" field was cleared in this mutation.
-func (m *RegistryArtifactMutation) EnricherErrorCleared() bool {
-	_, ok := m.clearedFields[registryartifact.FieldEnricherError]
+// BundlerErrorCleared returns if the "bundler_error" field was cleared in this mutation.
+func (m *RegistryArtifactMutation) BundlerErrorCleared() bool {
+	_, ok := m.clearedFields[registryartifact.FieldBundlerError]
 	return ok
 }
 
-// ResetEnricherError resets all changes to the "enricher_error" field.
-func (m *RegistryArtifactMutation) ResetEnricherError() {
-	m.enricher_error = nil
-	delete(m.clearedFields, registryartifact.FieldEnricherError)
+// ResetBundlerError resets all changes to the "bundler_error" field.
+func (m *RegistryArtifactMutation) ResetBundlerError() {
+	m.bundler_error = nil
+	delete(m.clearedFields, registryartifact.FieldBundlerError)
 }
 
 // Where appends a list predicates to the RegistryArtifactMutation builder.
@@ -5758,8 +6626,8 @@ func (m *RegistryArtifactMutation) Fields() []string {
 	if m.enriched != nil {
 		fields = append(fields, registryartifact.FieldEnriched)
 	}
-	if m.enricher_error != nil {
-		fields = append(fields, registryartifact.FieldEnricherError)
+	if m.bundler_error != nil {
+		fields = append(fields, registryartifact.FieldBundlerError)
 	}
 	return fields
 }
@@ -5801,8 +6669,8 @@ func (m *RegistryArtifactMutation) Field(name string) (ent.Value, bool) {
 		return m.Error()
 	case registryartifact.FieldEnriched:
 		return m.Enriched()
-	case registryartifact.FieldEnricherError:
-		return m.EnricherError()
+	case registryartifact.FieldBundlerError:
+		return m.BundlerError()
 	}
 	return nil, false
 }
@@ -5844,8 +6712,8 @@ func (m *RegistryArtifactMutation) OldField(ctx context.Context, name string) (e
 		return m.OldError(ctx)
 	case registryartifact.FieldEnriched:
 		return m.OldEnriched(ctx)
-	case registryartifact.FieldEnricherError:
-		return m.OldEnricherError(ctx)
+	case registryartifact.FieldBundlerError:
+		return m.OldBundlerError(ctx)
 	}
 	return nil, fmt.Errorf("unknown RegistryArtifact field %s", name)
 }
@@ -5967,12 +6835,12 @@ func (m *RegistryArtifactMutation) SetField(name string, value ent.Value) error 
 		}
 		m.SetEnriched(v)
 		return nil
-	case registryartifact.FieldEnricherError:
+	case registryartifact.FieldBundlerError:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetEnricherError(v)
+		m.SetBundlerError(v)
 		return nil
 	}
 	return fmt.Errorf("unknown RegistryArtifact field %s", name)
@@ -6049,8 +6917,8 @@ func (m *RegistryArtifactMutation) ClearedFields() []string {
 	if m.FieldCleared(registryartifact.FieldError) {
 		fields = append(fields, registryartifact.FieldError)
 	}
-	if m.FieldCleared(registryartifact.FieldEnricherError) {
-		fields = append(fields, registryartifact.FieldEnricherError)
+	if m.FieldCleared(registryartifact.FieldBundlerError) {
+		fields = append(fields, registryartifact.FieldBundlerError)
 	}
 	return fields
 }
@@ -6084,8 +6952,8 @@ func (m *RegistryArtifactMutation) ClearField(name string) error {
 	case registryartifact.FieldError:
 		m.ClearError()
 		return nil
-	case registryartifact.FieldEnricherError:
-		m.ClearEnricherError()
+	case registryartifact.FieldBundlerError:
+		m.ClearBundlerError()
 		return nil
 	}
 	return fmt.Errorf("unknown RegistryArtifact nullable field %s", name)
@@ -6143,8 +7011,8 @@ func (m *RegistryArtifactMutation) ResetField(name string) error {
 	case registryartifact.FieldEnriched:
 		m.ResetEnriched()
 		return nil
-	case registryartifact.FieldEnricherError:
-		m.ResetEnricherError()
+	case registryartifact.FieldBundlerError:
+		m.ResetBundlerError()
 		return nil
 	}
 	return fmt.Errorf("unknown RegistryArtifact field %s", name)

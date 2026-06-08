@@ -93,7 +93,7 @@ func setupExportSuite() error {
 	return nil
 }
 
-// schemaPath returns the path to schema-demo.graphql relative to this package.
+// schemaPath returns the path to schema.graphql relative to this package.
 // go test sets the working directory to the package directory (internal/handler/).
 func schemaPath() string {
 	if v := os.Getenv("TEST_SCHEMA_PATH"); v != "" {
@@ -101,7 +101,7 @@ func schemaPath() string {
 	}
 	_, file, _, _ := runtime.Caller(0)
 	root := filepath.Join(filepath.Dir(file), "..", "..")
-	return filepath.Join(root, "schema", "schema-demo.graphql")
+	return filepath.Join(root, "schema", "schema.graphql")
 }
 
 // newExportHandler creates an Export handler wired to the test services.

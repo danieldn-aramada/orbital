@@ -2,6 +2,17 @@
 
 Read this before: OIDC flow changes, CLI login, keychain, session handling, bearer token validation, authz work.
 
+## Settled Decisions
+
+- **DGraph `@auth` directives are out of scope** — all queries go through the Go server; clients never reach DGraph directly. Authorization is enforced entirely at the Go middleware layer. DGraph `@auth` adds no security value given the network topology. Do not re-add it.
+- **Authorization model: three-role local table (`readonly < dev < admin`)** — `role` enum on `users` ent schema: `readonly` (default), `dev`, `admin`. `ORBITAL_ADMIN_EMAILS` (comma-separated): on first OIDC/device-code login, matching emails get promoted to `admin`. `RoleAtLeast(actual, minimum user.Role) bool` in `authz.go` is the canonical comparison helper. `RequireRole(db, minRole)` checks mutating methods (POST/PUT/PATCH/DELETE), passes GET through; `RequireAdmin` is a wrapper. GraphQL mutations require `dev` minimum (not admin). Azure AD App Roles deferred — requires Application Administrator permissions. If available later, extract `roles` claim at login and override local role; local table stays as source of truth.
+- **Admin role management UI at `/users`** — server-side rendered Go template (not DataTables). Button group per row (R/D/A), active role highlighted+disabled. Self-row fully disabled. Last-admin guard: `PUT /api/v1/users/:id/role` returns 409. Operation is idempotent (same role → 200 with no DB write).
+- **Readonly UI gating: `CanMutate bool` on `layout.Base`** — `true` for dev and admin. Pages gate action forms behind `{{if .CanMutate}}...{{else}}{{template "access-required" .}}{{end}}`. Pure-action pages (Restore): entire content gated. Mixed pages (Export, Backup, Signed Artifacts): list/table always visible, action form gated.
+- **`can_mutate` is derived from the session cookie, not a DB lookup** — computed in the global session middleware in `server.go` via `RoleAtLeast`. No DB call on GET requests. `RequireRole` is DB-backed on mutating methods (security enforcement boundary). `can_mutate` is a UI display hint only. Role changes take effect on next login. Do not re-add a separate `SetCanMutate` middleware or per-route `can_mutate` wiring.
+- **`ORBITAL_OIDC_DEVICE_CODE` defaults to `true`** — device code is the only viable browser SSO for this deployment (private DNS/ILB, no publicly resolvable redirect URI). Set `false` only if deploying on a public URL with a registered redirect URI. No auto-open: Azure AD's v1 `deviceauth` endpoint doesn't support `?otc=` pre-fill.
+- **`POST /auth/device/poll` sends `device_code` in the JSON body** — not as a query parameter. Query params appear in application logs, proxy logs, and browser history. `device_code` is a short-lived credential. Handler uses `c.Bind()`. Route is `POST`, not `GET`.
+- **`ResolveUser` middleware bridges bearer token auth to the user table** — wired after `RequireAuth()` and before `RequireRole()` in `server.go`. When `user_id` is 0 (bearer path: JWT validated but no session), finds or provisions the user by email from JWT claims. Without this, all bearer token requests were always-403. Do not remove or reorder it.
+
 ## Session auth (orbital web)
 
 - Sessions use gorilla/sessions cookie store with HMAC-SHA256 (`ORBITAL_SESSION_HMAC_KEY`) and AES-256 (`ORBITAL_SESSION_ENCRYPTION_KEY`).
@@ -43,7 +54,7 @@ Role enforcement is done entirely at the Go middleware layer. DGraph `@auth` dir
 - `ORBITAL_ADMIN_EMAILS` (comma-separated env var): on first OIDC or device-code login, matching emails are promoted to `admin`; all other users get `readonly`
 
 **Middleware:**
-- `RequireRole(db, minRole)` — Echo middleware; checks mutating HTTP methods (POST/PUT/PATCH/DELETE), passes GET through; 403 for insufficient role
+- `RequireRole(db, minRole)` — Echo middleware; checks mutating HTTP methods (POST/PUT/PATCH/DELETE), passes GET through; 403 for insufficient role. DB-backed because it is a security enforcement boundary.
 - `RequireAdmin` — convenience wrapper around `RequireRole` with `minRole = admin`
 - `RoleAtLeast(actual, minimum user.Role) bool` helper in `authz.go`
 
@@ -51,7 +62,9 @@ Role enforcement is done entirely at the Go middleware layer. DGraph `@auth` dir
 - `/users` — admin-only page; button group per row for R/D/A role assignment; last-admin guard returns 409 to prevent locking yourself out
 
 **Readonly UI gating:**
-- `CanMutate bool` in `layout.Base` — set from the authenticated user's role
+- `CanMutate bool` in `layout.Base` — derived from `auth.UserSession.Role` in the global session middleware; no DB call on GET requests
+- Role is baked into the session cookie at login. Role changes take effect on next login; `PUT /api/v1/users/:id/role` response includes a `"note"` field telling callers to re-login.
+- Sessions predating the `user_role` key default to `"readonly"` — safe fallback.
 - Amber access-required banner shown on privileged pages for readonly users
 
 ## orbital-cli credential storage

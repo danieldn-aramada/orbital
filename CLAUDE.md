@@ -50,88 +50,23 @@ The following invariants apply to Kubernetes-based deployments of orbital. Orbit
 
 ### Data flow
 
-Orbital provides the APIs — consumers wire the transport. Orbital does not prescribe how its APIs are called or how payloads move between systems.
+Orbital provides APIs — consumers wire the transport. Four APIs: Export (`POST /api/v1/export`), Publish (`POST /api/v1/export/jobs/:jobId/publish`), Report intake, Topology (DGraph GraphQL proxy). Orbital never initiates contact with the edge.
 
-- **Export API** (`POST /api/v1/export`, body: `{"orbId":"..."}`) — produces a scoped `json.gz` + `schema.gz` for a data center's subgraph.
-- **Publish API** (`POST /api/v1/export/jobs/:jobId/publish`) — pushes a completed export as a signed OCI artifact to the configured registry. Requires `ORBITAL_OCI_REGISTRY` and `ORBITAL_OCI_SIGNING_KEY_PATH`.
-- **Report intake API** — receives drift and divergence reports. Transport is the deployment layer's concern. Orbital never initiates contact with the edge.
-- **Topology API** — proxies DGraph's GraphQL API for digital twin consumers.
-
-### Namespace and DataCenter
-
-`Namespace` is a pure tenancy boundary — it is not a config item. Exists solely as an isolation scope. No config fields.
-
-`DataCenter implements ConfigItem` — root node for a data center's subgraph.
-
-**Convention: 1:1 between Namespace and DataCenter.** Enforced by orbital's application layer. Never add config fields to `Namespace` or allow multiple data centers per namespace.
-
-### Schema management
-
-DGraph schema is defined in versioned GraphQL files under `schema/` and applied to DGraph via its admin API. Orbital owns the schema — orb never modifies it. Changes must always be backwards compatible. Orbital tracks the active schema version in PostgreSQL (`schema_versions` table) and applies on startup if behind.
-
-See `docs/claude/DGRAPH.md` for schema gotchas, DQL patterns, and blue-green export topology.
+See `docs/claude/DGRAPH.md` for schema, Namespace/DataCenter conventions, and blue-green export topology.
 
 ### Other subsystems
 
-- **Authentication:** local email/password + OIDC/SSO via Azure AD. See `docs/claude/AUTH.md`.
-- **Backup/Restore:** DGraph backup to S3-compatible storage; restore via idle `dgraph-live` pod. See `docs/claude/OCI.md`.
-- **Export + OCI publish:** blue-green DGraph export flow, signed OCI artifacts via oras-go v2 + cosign. Optional enrichment step: before pushing, Orbital calls per-request enricher URLs (supplied in publish body), collects additional OCI layers, bundles all layers, signs once, pushes once — all-or-nothing. See `docs/claude/OCI.md` and `docs/configbundle-integration.md`.
-- **Audit log:** one event per HTTP request, three-source orbId extraction. See `docs/claude/AUDIT.md`.
-- **Caching:** Valkey cache-aside. Orbital must operate correctly without Valkey — cache is an optimization, not a dependency.
-- **Divergence reporting:** orb does not detect divergence itself. Other edge components (e.g., cb-agent) detect divergence and POST reports to orb's intake API. Orb publishes reports to external storage (S3/OCI) for orbital to consume. Orbital surfaces divergence to administrators for human decision (accept/reject/ignore). Orbital is never in the reconciliation path.
-- **GraphQL middleware:** all queries go through the Go server (rate limiting, caching, auth). Clients never query DGraph directly.
-- **Topology API:** proxies DGraph's auto-generated GraphQL as-is. Orbital adds auth, rate limiting, caching — does not transform the schema.
+Two runtime constraints worth knowing in every session:
+- **Clients never query DGraph directly** — all GraphQL goes through the Go server (auth, rate limiting, caching).
+- **Valkey is an optimization, not a dependency** — orbital must operate correctly without it.
+
+Auth, audit, export/OCI/backup/restore, and orb details are in the Reference Index below.
 
 ### Orb
 
-- **CLI vs server:** `orb` is a single binary (`cmd/orb/`). `orb start` is the long-running edge service. `orb export`, `orb import` are admin operations. `orb scan` is a stub and its scope is not yet designed.
-- **Role:** passive cache + local UI. Orb imports orbital's intended state, stores it in a local DGraph instance, and serves it offline via the orb UI. Orb does not scan hardware, does not execute against K8s, and is not a K8s controller.
-- **Import pipeline:** orb has two import endpoints, both always present:
-  - `POST /api/v1/import/subgraph` — fast path. Accepts a zip of `data.json.gz` + `schema.gz` only. No dispatch. Used by courier (direct upload) and any caller that already has graph layers.
-  - `POST /api/v1/import/artifact` — full pipeline. Accepts a complete multi-layer OCI artifact zip. Decomposes by layer media type: built-in DGraph consumer handles graph layers; registered external consumers receive their layer bytes. This is the symmetric reverse of orbital's enricher pipeline.
-- **Consumer dispatch model:** `ORB_CONSUMERS` is a JSON array of `{mediaType, url}` pairs registered at orb startup. When `/import/artifact` is called, orb dispatches each non-graph layer to the matching consumer URL via HTTP POST (raw bytes, `Content-Type` = media type, metadata in headers). Dispatch is **best-effort** — graph import always proceeds regardless of consumer failures. Dispatch results (per-consumer status + error) are surfaced in the import history record.
-- **OCI source** (activated by `ORB_ENABLE_OCI_REGISTRY=true`): orb polls a configured registry, pulls full artifacts, and feeds them through the `/import/artifact` pipeline. When disabled, only `/import/subgraph` (courier/API) is available. Cosign verification required when OCI source is enabled.
-- **Orb is the single artifact ingress at the edge.** ConfigBundle Controller is a registered consumer — it exposes `POST /consume`, receives its manifest layer from orb, and applies it. CB Controller does not pull from ACR and does not need registry credentials. CB Controller depends on orb being available to receive layer dispatches.
-- **Divergence intake:** `POST /api/v1/divergence` accepts a JSON array of `{orbId, field, intendedValue, overrideValue, who, when}` entries (replaces current set). `POST /api/v1/divergence/publish` aggregates into a snapshot and writes to S3. S3 key: `divergence/{OCIRepo}/{timestamp}.json`. Publish is on-demand via UI or API. S3 disabled gracefully if `ORB_S3_ENDPOINT` or `ORB_S3_BUCKET` are unset.
+`orb` is a single binary (`cmd/orb/`). `orb start` is the long-running edge service — passive cache + local UI. Orb does not scan hardware, does not execute against K8s, is not a K8s controller. `orb scan` is post-MVP.
 
-## Current State
-
-**Phase:** Prototyping → MVP (target July 2026; GA August 2026)
-
-**Active spikes:**
-- None.
-
-**Recently completed:**
-- **Backup scheduler cron refactor** — `ORBITAL_BACKUP_SCHEDULE` is now a 5-field cron expression (was duration + hour + TZ triple); `BackupSchedule` ent schema has `cron_spec` field (old `interval_seconds`/`run_at_hour`/`run_at_minute` dropped); `isMissedRun` simplified to one cron parser call; `ORBITAL_BACKUP_RETENTION_DAYS` default 14; schedule UI shows cron spec + timezone
-- **Bearer auth fix** — `ResolveUser` middleware on API group bridges JWT→user table for bearer token callers; without it all API bearer requests were 403
-- **GraphQL proxy orbId fix** — only strips `orbId` from variables when query doesn't declare `$orbId`; previously always-stripping broke idiomatic GraphQL mutations
-- **Smoke test hardened** — Step 7 mutation passes through proxy correctly; Step 9 restore verification uses `JSON.parse`+`toEqual` (DGraph key order non-determinism)
-- **Playwright headless by default** — `HEADED=true make test-e2e` for headed; `make test-e2e-ui` for interactive Playwright UI mode
-- **Spike 11 (Authorization)** — three-role system (`readonly < dev < admin`); `RoleAtLeast` helper; `RequireRole(db, minRole)` middleware + `RequireAdmin` wrapper; GraphQL mutations require `dev` (not admin); `/api/v1/users` list + role update endpoints (admin-only, last-admin guard 409); `/users` admin UI (server-side rendered, button group R/D/A per row, self-row disabled); `ORBITAL_ADMIN_EMAILS` bootstrap on first OIDC login; readonly UI gating (`CanMutate bool` + `AdminEmails []string` on `layout.Base`; `access-required.gohtml` partial on restore/export/backups/signed-artifacts); `user@armada.ai`/`user` readonly seed user added; unit + integration tests for users and authz handlers
-- **Device code hardening** — `POST /auth/device/poll` (was GET) sends `device_code` in JSON body to keep it out of all log surfaces (app logs, Istio access logs, proxy logs, browser history); static asset requests (`/static/*`, `/favicon.ico`) suppressed from Echo request logger (noisy with zero signal value); `ORBITAL_OIDC_DEVICE_CODE` default changed to `true`; AUTH.md updated with full rationale; 7 integration tests updated to POST + JSON body
-- **Device code flow (browser SSO)** — `ORBITAL_OIDC_DEVICE_CODE=true` feature flag; `GET /auth/device` initiates flow, `POST /auth/device/poll` polls token endpoint; standalone page with user_code + JS poller; no HTTPS required; works behind ILB in AKS; login modal conditionally shows device vs standard OIDC button
-- **Kustomize deployment structure** — `deploy/base/` (namespace-agnostic); `deploy/overlays/dev-netbox/` (netbox namespace, v0.0.13) and `deploy/overlays/dev-orbital/` (orbital namespace, v0.0.14, in-cluster PostgreSQL, own DGraph clusters, `ORBITAL_OIDC_DEVICE_CODE=true`); image tag pinned per overlay via `images:` transformer; `deploy/charts/dgraph/` Helm charts for DGraph blue + scratch
-- **Import history UX polish + triggerImport dispatch bug** — `triggerImport` (OCI tag import path) was pulling `artifact.ExtraLayers` but never dispatching them — fixed to run same dispatch pipeline as `importArtifact`; `DispatchErrors()` method on `ImportRecord` for template use (Go template `range` doesn't propagate variable assignments outward); `mediaTypeLabel` template func derives friendly name from vendor media type (`application/vnd.armada.configbundle.manifest.v1+yaml` → `configbundle`); summary line shows per-layer friendly names (`configbundle ✓`) not aggregate counts; dispatch errors surfaced in Error column; status 0 (no response) shows no badge; import history page now reverse-chronological; `ORB_DEV` env var for template hot-reload
-- **Orb import history schema + DC Orb ID fix** — `ImportRecord.Verification` three-state string (`"verified"/"unverified"/"not-applicable"`) replaces `Verified bool`; `Layers []LayerRecord` (with `Role`: `"graph"/"dispatched"/"unknown"`) replaces `DispatchResults`; import history UI: collapsible layers sub-table with dispatch status codes + errors; three-state verification badge; DC Orb ID column now shows real orbId — orbital's OCI annotation (`com.armada.orbital.datacenter-id`) now set from `export_jobs.datacenter_orb_id` (real orbId, not DGraph UID); `datacenter_orb_id` ent field added to export jobs; local dev OCI/S3 defaults point to local Docker Compose services (was production ACR/Azure Blob); Zot sync extension removed; `minio-setup` bucket creation service added
-- **Orb import hardening + DGraphBackend abstraction** — `oci.Verify` now hard-errors when key not configured (no skip path); `ResolveTag()` added for lightweight manifest inspection; `DGraphBackend` interface with `DockerBackend` (docker cp + exec) and `K8sBackend` (idle pod + shared PVC, mirrors orbital restore); `ORB_BACKEND` env var; `orbserver.New` returns error; 22 new tests (unit + e2e); `make test-integration` creates `orbital_test` DB inline
-- **Spike 19 (ConfigBundle enricher integration)** — Orbital is now the sole OCI producer; per-request enricher URLs in publish body; all-or-nothing enrichment before push; `enriched`/`enricher_error` fields on `RegistryArtifact`; retryable HTTP client (`go-retryablehttp`) with size cap; UI Enriched column on Signed Artifacts page; enricher unit tests; `docs/configbundle-integration.md` full integration plan
-- **Spike 14 (Orb divergence intake)** — done: `POST /api/v1/divergence` replaces pending set; `POST /api/v1/divergence/publish` writes snapshot to S3
-- **Spike 13 (Orb import API)** — done: OCI puller, cosign verify, dgraph live import, polling loop
-- **Spike 17 (Orb UI)** — done: shared template infrastructure, `UIConfig` + `PageActions` (read-only mode), orb Echo server, status page, import subgraph, inventory, schema version, DC + servers, import history, divergence report
-- **Orbital inventory namespace filter** — page-level namespace selector; regex column search; persisted to localStorage
-
-**MVP gaps remaining:**
-- Valkey cache-aside (Spike 9b) — not yet implemented
-- Schema management — versioned apply with backwards compat check on startup
-- Orb registry — register, authenticate, and revoke orbs
-- Orb: deployment model (Spike 15), API surface & authN/Z (Spike 16)
-- CI pipeline — GitHub Actions workflow (test pyramid itself is done: 222 Go tests + 45 Playwright e2e)
-- Security hardening — critical/high findings before any prod exposure
-- Production deployment — AKS prod, ingress, TLS, CI/CD
-
-**Next priority:** Testing foundations or Spike 15 (orb deployment model).
-
-*Update this section at each session wrap-up.*
+All architecture and settled decisions for orb (import pipeline, consumer dispatch, DGraphBackend, divergence intake, orb scan) are in `docs/claude/ORB.md`.
 
 ## Model & Workflow Guide
 
@@ -145,23 +80,13 @@ See `docs/claude/DGRAPH.md` for schema gotchas, DQL patterns, and blue-green exp
 
 ### When to suggest switching to Opus (`/effort max`)
 
-If on Sonnet and the user asks any of the following, **proactively suggest switching to Opus before proceeding**:
+Proactively suggest before proceeding if: (1) design work with no settled decision, (2) task touches 3+ domains, (3) security-sensitive design (authz, signing, JWT), (4) planning a new spike for the first time, (5) user says `discuss:` or `thoughts:` with significant design implications.
 
-- "How should we design / approach / implement [spike or new feature]" — design work where the answer is not already a settled decision
-- Any task touching 3+ domains simultaneously (e.g. schema + auth + middleware + CLI)
-- Security-sensitive design: authz model, signing, JWT validation, key management
-- Planning a spike that is "Not started" in ROADMAP.md for the first time
-- Reviewing a completed spike for correctness against architectural invariants
-- User says "discuss:" or "thoughts:" but the topic has significant design implications
-
-**Signal to user:** *"This is a design decision with long-term consequences — consider switching to Opus (`/effort max`) before I implement anything."*
+**Signal:** *"This is a design decision with long-term consequences — consider switching to Opus (`/effort max`) before I implement anything."*
 
 ### When Opus should signal Sonnet-ready (`/effort normal`)
 
-If on Opus and the task is now implementation of a settled plan:
-
-- A clear implementation plan exists from this session or from settled decisions in CLAUDE.md
-- Work is execution: UI changes, bug fixes, seeding, scripts, known-spec features
+When a clear plan exists and work is execution: UI changes, bug fixes, seeding, scripts, known-spec features.
 
 **Signal:** *"Design is settled — switch to Sonnet (`/effort normal`) to implement."*
 
@@ -169,25 +94,43 @@ If on Opus and the task is now implementation of a settled plan:
 
 1. **Before starting a new spike** → `/plan` or Opus design session; read ROADMAP.md spike definition
 2. **After implementing a complex spike** → consider Opus review against deployment model invariants before marking done
-3. **Before wrapping up** → check if any decisions from this session belong in CLAUDE.md settled decisions or domain files
+3. **Before wrapping up** → check if any decisions belong in the relevant domain file (see Reference Index below)
 
 ### Session hygiene
 
-- Start a new session after each natural milestone (feature done, spike complete, bug fixed). Don't try to span a full spike in one session — compaction loses precision.
-- Domain files: before working in a specific area, read the relevant file (see below).
+Start a new session after each natural milestone (feature done, spike complete, bug fixed). Don't try to span a full spike in one session — compaction loses precision.
 
-## Domain Reference Files
+## Reference Index
 
-Before starting work in a specific area, read the relevant file. These contain all settled decisions, patterns, and gotchas for that domain.
+### Domain files
 
-| Working on | Read |
+Read the relevant file before starting work in that area. Each file contains settled decisions, patterns, and gotchas. **When a decision is made, document it in the domain file — not in CLAUDE.md.**
+
+| Working on | File |
 |---|---|
 | DGraph schema, queries, mutations, export, seeding | `docs/claude/DGRAPH.md` |
 | UI templates, HTMX, JavaScript, CSS | `docs/claude/UI.md` |
 | Auth, sessions, OIDC, bearer tokens, keychain | `docs/claude/AUTH.md` |
 | Audit events, mutation recording, `graphql.go` | `docs/claude/AUDIT.md` |
 | OCI publish, export jobs, backup, restore | `docs/claude/OCI.md` |
+| Orb import pipeline, consumer dispatch, DGraphBackend, orb UI | `docs/claude/ORB.md` |
 | Planning or starting any spike | `ROADMAP.md` |
+
+### Decision records
+
+Architecture decisions with full rationale. Read when the context would otherwise be invisible from the code.
+
+| When working on | Read |
+|---|---|
+| Any new REST endpoint | `docs/decisions/002-api-design-philosophy.md` |
+| Audit mutation recording, orbId extraction | `docs/decisions/001-mutation-audit-recording.md` |
+| Audit event_category, operation names | `docs/decisions/003-audit-event-categories.md` |
+| DGraph schema migration (namespace edge) | `docs/decisions/004-namespace-id-scalar-migration.md` |
+| Security/audit logging (OWASP/NIST alignment) | `docs/decisions/004-security-logging.md` |
+| Backup scheduler design | `docs/decisions/005-backup-scheduler.md` |
+| Restore mechanism (why subprocess, not exec) | `docs/decisions/006-dgraph-restore-backend.md` |
+| DGraph schema migration (tooling landscape, sharp edges, production approach) | `docs/decisions/007-dgraph-schema-migration.md` |
+| OCI enricher pipeline, ConfigBundle integration | `docs/configbundle-integration.md` |
 
 ## Local Development
 
@@ -207,19 +150,7 @@ Then open both UIs side by side:
 
 **Nothing we commit should break this flow.** Before merging any change that touches templates, handlers, routes, or the template loader, verify both UIs load without 500 errors.
 
-### Services started by `make up`
-
-| Service | Port(s) | Notes |
-|---|---|---|
-| DGraph Zero | 5080, 6080 | Orbital cluster coordinator |
-| DGraph Alpha | 8080 (HTTP/GraphQL), 9080 (gRPC) | GraphQL playground at http://localhost:8080 |
-| DGraph Ratel | 8000 | DGraph UI |
-| PostgreSQL | 5432 | user/password/db: `orbital` |
-| Orb DGraph Zero | 5082, 6082 | Orb cluster coordinator |
-| Orb DGraph Alpha | 8082 (HTTP/GraphQL), 9082 (gRPC) | Orb local graph |
-| MinIO / OCI registry | various | S3-compatible storage + artifact registry |
-
-No env sourcing required — all local dev defaults are in `config.go` / `orbconfig/config.go`.
+Starts DGraph (blue `:8080`/`:9080` + scratch `:8081`/`:9081`), PostgreSQL (`:5432`), Valkey, MinIO, OCI registry, and orb's DGraph (`:8082`/`:9082`). No env sourcing required — all local dev defaults are in `config.go` / `orbconfig/config.go`. See `deploy/local/docker-compose.yml` for full port map.
 
 ### Seeding
 
@@ -238,32 +169,7 @@ make test-e2e-orb      # requires: make run-orb
 
 ## Repository Structure
 
-```
-cmd/
-  orb/                # orb binary — subcommand-driven (orb start, orb scan, orb export, orb import)
-  orbital/            # orbital server entry point
-deploy/
-  local/              # Local development stack (docker-compose)
-  orb/                # Deployment files for orb
-  orbital/            # Deployment files for orbital
-docs/
-  claude/             # Domain reference files for AI sessions (DGRAPH, UI, AUTH, AUDIT, OCI)
-  decisions/          # Architecture decision records (ADRs)
-internal/
-  auth/               # Session management, CSRF, OIDC state, bearer validation
-  config/             # Config struct with envconfig defaults
-  discovery/          # Aspirational scaffold — BMC discovery stub; not part of current orb design
-    bmc/              # BMC stub (not implemented)
-  drift/              # Aspirational scaffold — not part of current orb design
-  graph/              # DGraph client, schema loading, topology operations
-  handler/            # HTTP handlers (GraphQL proxy, backup, export, UI, login, OIDC)
-  server/             # Echo server setup and lifecycle
-schema/
-  schema-demo.graphql # DGraph GraphQL schema (demo/dev version)
-web/
-  static/             # Static assets — all page JS lives in app.js here
-  templates/          # Go HTML templates (layouts, pages, partials)
-```
+`cmd/` — entry points (`orbital/`, `orb/`). `internal/` — all application logic (`handler/`, `auth/`, `graph/`, `server/`, `config/`). `web/templates/` — Go templates split by app (`orbital/`, `orb/`, `shared/`). `web/shared/static/` — JS modules, CSS, vendor libs. `schema/` — DGraph GraphQL schema. `ent/` — PostgreSQL schema + generated client. `deploy/local/` — docker-compose dev stack. `docs/claude/` — domain reference files. `docs/decisions/` — ADRs. `e2e/` — Playwright tests.
 
 ## Working Style
 
@@ -273,14 +179,14 @@ web/
 - Only touch files relevant to the task
 - Don't clean up unrelated code while working on something else
 - Don't add TODOs or placeholder comments
-- All page JavaScript goes in `web/static/app.js` — never inline `<script>` blocks in templates
-- All styles go in `web/sass/main.scss` — never edit `web/static/css/main.css` directly
+- All styles go in `web/sass/main.scss` — never edit `web/shared/static/css/main.css` directly. See `docs/claude/UI.md` for JS/HTMX/template patterns.
+- **HTML fragment negotiation uses `HX-Request: true`, never a separate URL** — when a handler needs to return an HTML fragment for the UI and JSON for API callers, branch on `c.Request().Header.Get("HX-Request") == "true"` inside the **existing** handler. Do not create a sibling `/rows` or `/fragment` route. Violates REST content negotiation (RFC 7231) and breaks the `/api/v1/` contract.
 - **Write tests alongside every behavioral change** — when you add a field, persist data, change an API response, or introduce an interface, include tests asserting the new behavior in the same response. Do not wait to be asked. Exception: CSS/template presentation changes covered implicitly by e2e do not need dedicated unit tests unless the logic is non-trivial.
 - **Run tests after writing them** — always run the relevant test command after writing new tests. If tests fail, diagnose and fix before reporting done. Do not hand back failing tests.
 - **Test at the lowest isolatable level** — don't write an e2e test when a unit test can cover the same behavior. Level order: unit (no services) → integration (real services) → e2e (browser). Choose the lowest level where the behavior is fully exercised.
 - **Any persistence requires a round-trip test** — if data is written to disk, PostgreSQL, or any file: write a test that writes, reads back, and asserts. Persistence bugs are invisible without this. E.g., a new `bool` field on a struct written to JSON must be verified to survive encode+decode.
 - **Handler logic must be tested at unit level** — use `httptest.NewRecorder` (net/http) or Echo's `httptest` equivalent. Do not rely solely on e2e to validate HTTP handler behavior. This applies to: status codes on error, request validation, response body shape.
-- Before marking a task as done: check whether any architectural decisions, conventions, or settled rules from this session should be added to CLAUDE.md or the relevant domain file
+- Before marking a task as done: check whether any decisions made this session should be documented. Domain-specific decisions go in the relevant `docs/claude/` file (see Reference Index above). Only cross-cutting platform decisions go in CLAUDE.md's Settled Decisions.
 
 ### Conversation conventions
 
@@ -293,7 +199,7 @@ web/
 
 ## Settled Decisions
 
-These have been explicitly decided. Do not re-suggest them.
+These are cross-cutting platform decisions. Domain-specific decisions live in the domain files listed above — **that is where new decisions belong when you document them.**
 
 - **Do not replace DGraph** — chosen deliberately; RDF model fits configuration items naturally
 - **Do not switch to Redis** — Valkey chosen over Redis due to licensing
@@ -301,83 +207,20 @@ These have been explicitly decided. Do not re-suggest them.
 - **Do not prescribe a data transport mechanism** — orbital's contract ends at the export API (`json.gz` + `schema.gz`). How that payload is transported, packaged, or stored is the consumer's concern.
 - **Report intake API is transport-agnostic** — how reports travel from edge to orbital is the deployment layer's concern. Do not couple the intake API to any specific transport.
 - **Schema migration automation is out of MVP scope** — a runbook is sufficient for MVP. Do not build a custom migration tool until explicitly scoped.
-- **Do not proxy Ratel through orbital** — Ratel is a React SPA with `PUBLIC_URL=/`; webpack bakes absolute paths (`/3rdpartystatic/`, `/static/js/`) that bypass any sub-path reverse proxy. Correct solution: dedicated DNS hostname (`ratel.devnew.armada.internal`) with its own Istio VirtualService. Until infra provisioning, show a todo toast when the link is clicked.
-- **PLM and ITSM integrations are out of v1 scope** — vendor selection in progress. Design behind Go interfaces when the time comes; do not couple to any specific vendor now.
+- **Do not proxy Ratel through orbital** — Ratel is a React SPA with `PUBLIC_URL=/`; webpack bakes absolute paths that bypass any sub-path reverse proxy. Correct solution: dedicated DNS hostname with its own Istio VirtualService. Until then, show a todo toast when the link is clicked.
+- **PLM and ITSM integrations are out of v1 scope** — vendor selection in progress. Design behind Go interfaces when the time comes.
 - **Network infrastructure config items are out of v1 scope** — VLANs and general network IPs are owned by an external system. Functional IPs tied to specific workloads (Tinkerbell, K8s control plane) are in scope as properties or dedicated nodes — discuss before adding.
-- **Orb DGraph is a read-only intent mirror** — orb never mutates DGraph. DGraph retains orbital's authoritative intent verbatim. Orb has no local override mechanism.
-- **"Import is sudo"** — `orb import` always runs `drop_all` + live load, overwriting all local DGraph state.
-- **Orb divergence transport is not direct HTTP** — orb never sends divergence reports directly to orbital over HTTP. Transport is S3/OCI (deployment layer concern). Direct HTTP between orb and orbital violates the air-gap invariant.
-- **Orb does not detect divergence and has no K8s awareness** — the orb server (`orb start`) does not scan hardware, does not read K8s CRs, and is not a K8s controller. Divergence detection is other edge components' responsibility (e.g., ConfigBundle controller reads its own CRs' managedFields). Those components POST divergence reports to orb's intake API; orb publishes to S3/OCI for orbital to consume.
-- **`orb scan` is a CLI-only subcommand — operator-invoked, stateless, never runs inside the server process.** It scans Redfish/iDRAC endpoints on the Galleon's management LAN, produces GraphQL upsert mutations for human review, and exits. It never auto-imports, never auto-mutates orbital, and never runs as part of `orb start`. Structural enforcement: `internal/orb/` (server package) must never import from `internal/discovery/` or `internal/cli/scan/`. Package layout: `internal/cli/scan/` (cobra wiring), `internal/discovery/redfish/` (Redfish client + data mapping). Post-MVP.
-- **`orb scan` output format: JSON-wrapped GraphQL upsert mutations.** Output is `{"query": "mutation ScanImport { addServer(..., upsert: true) { numUids } addStorageController(..., upsert: true) { numUids } ... }"}` — directly pipeable to `curl -d @- orbital:8001/graphql`. DGraph matches on `orbId` (@id field) and handles add-or-update natively: provided fields overwrite, omitted fields are left untouched. The add-vs-update problem is eliminated. Optional `--format graphql` for raw GraphQL text to paste into GraphiQL. Multiple ordered mutations required for large scans: IPAddress + Server first, StorageController second, StorageDevice/StorageVolume third (child nodes reference parent orbIds). Output is identical in structure to the existing seed files in `examples/seed/`.
-- **`orb scan` orbId convention for scanned hardware:** `{namespace}:server:{bmc-ip-dashed}` at the server level (e.g. `colo-galleon:server:idrac-192-168-1-10`). Sub-components use Redfish resource IDs: `{namespace}:server:{bmc-ip-dashed}:storage-controller:{redfish-id}`. Namespace supplied via `--namespace` flag (required). Do not auto-derive namespace from orb config for scan — it is a seeding operation, not a server operation.
-- **`orb scan` only emits orbital-schema fields.** The Redfish-to-orbital field mapping is compiled into the scanner. Only fields present in orbital's DGraph GraphQL schema appear in the output. Raw Redfish fields with no schema equivalent are silently dropped. Re-scan updates firmware versions, serial numbers, etc. — leaves admin-set intent fields (`hostname`, `rackPosition`, etc.) untouched because they are omitted from scan output.
-- **Canonical divergence report format** — `{orbId, field, intendedValue, overrideValue, who, when}`. This is the format orb's intake API accepts and orbital displays. Source of the report (cb-controller SSA translation, orb UI button, manual API call) is irrelevant to the format. ConfigBundle controller must translate SSA field ownership into this format before posting to orb. Field names must match DGraph schema field names (cb-generator uses orbital's field names — settled).
-- **ConfigBundle is a separate project, built after orbital** — user owns both projects. Orbital's APIs (export, divergence intake) are the contract. ConfigBundle is designed around orbital's APIs, not the inverse. Do not add ConfigBundle awareness to orbital. Plan ConfigBundle separately after orbital MVP.
-- **Orbital is the sole OCI producer** — no downstream system needs OCI registry write credentials. Orbital calls enrichers before pushing, bundles all layers, signs once, pushes once. ConfigBundle bundler is an enricher — it queries Orbital's GraphQL, returns layers, never pushes directly to ACR.
-- **Enricher URLs are per-request, not server-side config** — callers supply `{"enrichers": ["url"]}` in the publish request body. Acceptable because the publish API requires Azure AD authn/authz and runs in AKS on VPN. A future migration to named server-side enrichers is tracked in a code comment in `publisher.go`. Do not pre-emptively add server-side enricher config.
-- **Enrichment is all-or-nothing** — if any enricher fails (non-2xx, timeout, size exceeded), the publish job fails and nothing is pushed to ACR. There are no partial pushes. Clients can retry without enrichers to get a raw-export-only artifact.
-- **`orb.spec.ts` is excluded from the default Playwright config** — it runs only via `make test-e2e-orb` (`playwright.orb.config.ts`). The default `playwright.config.ts` has `testIgnore: '**/orb.spec.ts'` to prevent orb tests running against the orbital server on `:8001`.
-- **Orb UI pages mirror orbital client-side patterns** — orb pages use the same interaction model as orbital: GraphQL proxy fetch, DataTables, HTMX tab swap. Not simplified server-rendered alternatives.
-- **Orb is stateless re: DC identity** — `DCSlug` was removed from `orbconfig.Config`. Orb derives which data center it serves from the imported DGraph data (one `DataCenter` node after `drop_all` + live load). `ORB_OCI_REPO` carries the full DC-specific path (e.g. `orbital/colo-galleon`). Do not re-add a `DCSlug` field.
-- **Inventory namespace filter is page-level, not a DataTable column filter** — the namespace selector lives in the page header (above the table) and uses regex search on the orbId column (`^namespace:`). Do not move it into the DataTable toolbar — namespace is a scope, type is a column filter; they are different cognitive categories.
-- **Product naming: "Orbital" (cloud) / "Orb" (edge) — this is the north star.** The project is called Orbital. The cloud component UI shows "Orbital." The edge component UI shows "Orb." Do not use "Orbital Edge" or conflate the two. Orb is a purpose-built edge agent — not a deployment variant of Orbital. `AppName: "Orbital"` in orbital handlers; `AppName: "Orb"` in orb handlers.
-- **`POST /api/v1/import/subgraph` is the fast-path import contract.** Always registered. Accepts a zip of `data.json.gz` + `schema.gz` only. No consumer dispatch. This is what courier callers and simple integrations use.
-- **`POST /api/v1/import/artifact` is the full import pipeline.** Always registered. Accepts a complete multi-layer OCI artifact zip. Decomposes layers, dispatches non-graph layers to registered consumers, imports graph layers to DGraph. This is the symmetric reverse of orbital's enricher pipeline.
-- **Consumer dispatch is best-effort.** Graph import always proceeds regardless of consumer dispatch failures. Failures are logged and recorded in the import history entry (per-consumer status + error). Never roll back a DGraph import because a consumer was unreachable.
-- **`ORB_CONSUMERS` configures external layer consumers at startup.** JSON array: `[{"mediaType":"...","url":"..."}]`. Registered against media types. Dispatch: `POST consumer-url` with raw layer bytes as body, `Content-Type` = media type, `X-Orb-Tag` / `X-Orb-Digest` / `X-Orb-Import-ID` as headers. Unknown media types with no registered consumer are silently ignored.
-- **OCI source is a runtime feature activated by `ORB_ENABLE_OCI_REGISTRY=true`.** When enabled: registers `/import/tags` and trigger-by-tag routes; import tags UI visible; OCI pulls feed through `/import/artifact` pipeline. When disabled: only `/import/subgraph`, `/import/artifact`, `/import/history`, `/import/status` are available.
-- **Cosign verification is required when `ORB_ENABLE_OCI_REGISTRY=true` — no skip path.** `oci.Verify` returns a hard error when `ORB_OCI_PUBLIC_KEY_PATH` is not configured. Do not re-add a skip/warn path. `cosign.pub` exists in the repo root so local dev is unaffected.
-- **Orb is the single artifact ingress at the edge. CB Controller is a registered consumer.** CB Controller exposes `POST /consume`, receives its manifest layer from orb via dispatch, applies it to the cluster. CB Controller does not pull from ACR and does not need registry credentials. CB Controller depends on orb availability — this coupling is intentional and accepted. Do not re-add OCI pull logic to CB Controller. The dependency direction is: CB Controller is a consumer of orb's dispatch, orb never calls CB Controller directly (dispatch is one-way push).
-- **`DGraphBackend` interface abstracts orb's dgraph live execution.** `DockerBackend` (default, `ORB_BACKEND=docker`): `docker cp` + `docker exec` into the alpha container — correct for local dev where Docker SDK is available. `K8sBackend` (`ORB_BACKEND=k8s`): finds an idle `app.kubernetes.io/name=dgraph-live` pod and execs via SPDY; `ORB_DATA_DIR` must be the shared PVC mount path. Same pattern and rationale as orbital's `restore.go`. Do not collapse the two backends — they serve genuinely different deployment contexts.
-- **Orb's K8s backend uses an idle `dgraph-live` pod, not exec into alpha.** Reasons: (1) `dgraph live` is a gRPC client — it doesn't need to run inside alpha; (2) RBAC: `pods/exec` on a serving pod is a broader attack surface than on an idle utility pod; (3) PVC topology: the shared PVC is mounted on `dgraph-live`, not alpha. Mirror orbital's deployment pattern exactly.
-- **`orbserver.New` returns `(*Server, error)`.** K8s backend init failure is a hard startup error, not a warn-and-fallback. Do not change this to a panic or silent fallback.
-- **`ImportMeta.Verified` carries the verification result into the history file.** `Import()` calls `recordHistory(meta, ...)` and `meta.Verified` must be set by the caller before calling `Import()`. Do not add a separate `verified` argument to `recordHistory` — keep it as part of meta.
-
-- **`ImportRecord.Verification` is a three-state string, not a bool** — values: `"verified"` / `"unverified"` / `"not-applicable"`. Constants `VerificationVerified`, `VerificationUnverified`, `VerificationNotApplicable` in `internal/orb/importer.go`. Do not revert to `Verified bool`.
-- **`ImportRecord.Layers` replaces `DispatchResults`** — each layer has `Role` (`"graph"/"dispatched"/"unknown"`), `MediaType`, and optional `Dispatch` struct with `StatusCode` and `Error`. Graph layers never have a dispatch record.
-- **Orbital's OCI annotation carries orbId, not DGraph UID** — `com.armada.orbital.datacenter-id` is set from `export_jobs.datacenter_orb_id` (the datacenter's orbId string). DGraph UIDs (`0x...`) must never appear in OCI artifact annotations. Compensating workarounds in orb (post-import DGraph queries) are wrong — fix at the source in orbital's publisher.
-- **Local dev defaults must point to local services** — `OCIRegistry`, `S3Endpoint`, `S3Bucket`, `S3AccessKey`, `S3SecretKey` all default to local Docker Compose services (`localhost:5001`, `localhost:9000`, etc.). Production credentials must never appear as code defaults.
-- **All Docker Compose images must use pinned versions** — no `latest` tags. If pinning is needed, look up the actual release tag from the project's GitHub releases.
-- **Both import paths must dispatch extra layers.** `triggerImport` (OCI tag pull → `oci.Pull`) and `importArtifact` (direct zip upload) both produce extra layers. Both must run the full consumer dispatch pipeline after DGraph import. Any change to dispatch logic applies to both handlers.
-- **Go template `range` does not propagate variable assignments outward.** `$x = true` inside `{{range}}` does not affect `$x` after the range ends. Compute aggregates server-side (method on the struct) rather than accumulating in template variables. Example: `ImportRecord.DispatchErrors()` instead of a `$hasError` flag inside range.
-- **Import history layer label derivation** — `mediaTypeLabel` template func: strip `application/vnd.`, split by `.`, take second segment (the product name). `application/vnd.armada.configbundle.manifest.v1+yaml` → `configbundle`. Used in both summary tags and expanded detail rows.
-- **Import history UX conventions** — summary shows per-layer friendly name + ✓/✗ (not aggregate "N dispatched"); expanded detail shows status code badge for HTTP-level failures only (>= 300), nothing for network failures (status 0); dispatch errors belong in the Error column, not inline in the expanded layer table.
-
-- **`actorFromContext(c echo.Context) string` is the canonical identity helper** — in `internal/handler/actor.go`. Prefers email over display name: email is stable across Azure AD profile changes; display name is not. All handlers that record "created by" or "actor" fields must call this function. Never inline `c.Get("user_name")` / `c.Get("user_email")` in new handlers. `ui.go` is the only legitimate exception — it reads both fields separately for template rendering (`layout.User{Name, Email}`).
-- **Export trigger is `POST /api/v1/export` with `{"orbId":"..."}` in the request body** — not a path segment. `fetchDCInfo` queries DGraph by orbId (`getDataCenter(orbId: $orbId)`), never by DGraph UID. The UID is internal and unstable; orbId is the canonical DC identifier.
-- **REST API convention: operation-centric triggers, resource-centric jobs** — orbital is GraphQL-first for CRUD; REST endpoints exist only for async operational workflows. Trigger endpoints (`POST /api/v1/export`, `POST /api/v1/backup`, `POST /api/v1/restore`) create a job resource and return a job ID. Job endpoints follow standard collection/instance patterns (`GET /namespace/jobs`, `GET /namespace/jobs/:jobId`). Do not create resource-centric paths (`/datacenters/:id/export`) for operations that have no corresponding GET/PUT/DELETE — this implies a REST hierarchy that doesn't exist. Full rationale: `docs/decisions/002-api-design-philosophy.md`.
-- **Export jobs show `createdBy` (email), not `startedAt`** — `createdBy` is populated from `actorFromContext` at job creation. `startedAt` was removed from the API response and UI; it remains on the ent schema for internal tracking only.
-- **`event_category` follows CloudTrail's Management/Data split** — `"data"` for entity mutations (GraphQL proxy), `"management"` for system operations (restore, backup, export triggers, schema apply). Management events surface in all entity audit tabs (no orbId filter excludes them). Rationale and alignment: `docs/decisions/003-audit-event-categories.md`.
-- **Management event operation names use `verbNoun` camelCase** — the verb describes the operation from the user's perspective, not the implementation mechanism. Current names: `createBackup`, `restoreBackup`, `exportSubgraph`, `publishArtifact`, `applySchema`. Do not use dot-namespaced names (`dgraph.restore`) or implementation-leaking prefixes (`trigger*`). "trigger" is an implementation detail; the audit record should name what happened.
-- **`RestoreBackend` interface abstracts orbital's dgraph live execution** — mirrors orb's `DGraphBackend`. `DockerRestoreBackend` (default, `ORBITAL_RESTORE_BACKEND=docker`): `docker exec` into the alpha container — correct for local dev. `K8sRestoreBackend` (`ORBITAL_RESTORE_BACKEND=k8s`): finds an idle `dgraph-live` pod and execs via SPDY. `ORBITAL_DGRAPH_CONTAINER` (default `local-dgraph-alpha-1`) and `ORBITAL_RESTORE_EXEC_DATA_DIR` (default `/dgraph/export`) configure the docker backend. Restore is always available when a backend can be constructed; the UI `RestoreAvailable` flag is set accordingly.
-- **Backup checksum dedup was dropped — rely on retention only** — DGraph's JSON export is not byte-deterministic (same logical data produces different bytes across runs, size varies by ~1 KB). SHA-256 of the raw export therefore differs on every run even with no data changes. Do not re-implement checksum-based dedup. Retention (count-based, `ORBITAL_BACKUP_RETENTION_COUNT`) is the correct bound on storage growth.
-- **Backup retention is count-based only for MVP; `skipped` status is reserved** — `skipped` remains in the enum for future use cases where a backup is deliberately not attempted (maintenance windows, rate limiting, policy suppression). Do not repurpose `skipped` for dedup. The `enforceRetention` prune is safe without dedup: each completed backup has a unique S3 key, so deleting the DB record and the S3 object together never orphans another record.
-
-- **DGraph `@auth` directives are out of scope for authorization** — all queries go through the Go server; clients never reach DGraph directly (settled). Authorization is enforced entirely at the Go middleware layer. DGraph `@auth` is redundant and adds no security value given the network topology. Do not re-add it.
-- **Authorization model: three-role local table (`readonly < dev < admin`)** — `role` enum on `users` ent schema: `readonly` (default), `dev`, `admin`. `ORBITAL_ADMIN_EMAILS` (comma-separated): on first OIDC/device-code login, matching emails get promoted to `admin`. `RoleAtLeast(actual, minimum user.Role) bool` in `authz.go` is the canonical comparison helper. `RequireRole(db, minRole)` is the Echo middleware — checks mutating methods (POST/PUT/PATCH/DELETE), passes GET through; `RequireAdmin` is a wrapper for `RequireRole(db, admin)`. GraphQL mutations require `dev` minimum (not admin). Azure AD App Roles deferred — requires Azure AD Application Administrator permissions not currently available. If App Roles become available later, extract `roles` claim at login and override the local role; local table stays as source of truth.
-- **Admin role management UI at `/users`** — server-side rendered Go template (not DataTables — small static list). Button group per row (R/D/A), active role highlighted+disabled. Self-row fully disabled (can't change your own role). Last-admin guard: `PUT /api/v1/users/:id/role` returns 409 if demoting the last admin. Operation is idempotent (same role → 200 with no DB write).
-- **Readonly UI gating: `CanMutate bool` on `layout.Base`** — `true` for dev and admin (`RoleAtLeast(role, dev)`). `AdminEmails []string` queried from DB on each page render. Pages gate action forms behind `{{if .CanMutate}}...{{else}}{{template "access-required" .}}{{end}}`. Pure-action pages (Restore): entire content gated. Mixed pages (Export, Backup, Signed Artifacts): list/table always visible, action form gated. Banner partial: `access-required.gohtml` — amber warning with mailto links to admin emails.
-- **`ORBITAL_OIDC_DEVICE_CODE` defaults to `true`** — device code is the only viable browser SSO for this deployment (private DNS/ILB + Istio TLS termination + no publicly resolvable redirect URI). Set `false` only if deploying on a public URL with a registered redirect URI in Azure AD. Browser device code page shows `user_code` and a manual link to `microsoft.com/devicelogin` — user opens the link and types the code. No auto-open: Azure AD returns a v1 `deviceauth` endpoint URL which doesn't support `?otc=` pre-fill. The UX improvement (Auth Code + PKCE, no copy/paste) requires registering the orbital URL as a redirect URI in Azure AD — blocked until Application Administrator access is available.
-- **`POST /auth/device/poll` sends `device_code` in the JSON body** — not as a query parameter. Query params appear in application logs, Istio access logs, proxy logs, and browser history. `device_code` is a short-lived credential; body keeps it out of all log surfaces. Handler uses `c.Bind()` to parse `{"device_code":"..."}`. Route is `POST`, not `GET`.
-- **`ResolveUser` middleware on the API group bridges bearer token auth to the user table** — wired after `RequireAuth()` and before `RequireRole()` in `server.go`. When `user_id` is 0 (bearer path: JWT validated but no session), it finds or provisions the user by email from JWT claims, then sets `user_id` on the context so `RequireRole` can enforce correctly. Without this, all bearer token requests were always-403. Do not remove or reorder it.
-- **`ORBITAL_BACKUP_SCHEDULE` is a cron expression** — standard 5-field cron spec (e.g. `"0 0 * * *"`). Empty = no schedule bootstrap on startup (local dev default). Validated via `robfig/cron/v3`. Replaces the old duration + hour + timezone triple (`ORBITAL_BACKUP_SCHEDULE` as duration, `ORBITAL_BACKUP_SCHEDULE_HOUR`, `ORBITAL_BACKUP_SCHEDULE_TZ`). AKS dev overlay sets `"0 0 * * *"`. `ORBITAL_BACKUP_RETENTION_DAYS` default is 14 (not 30).
-- **GraphQL proxy strips `orbId` from variables only when the query doesn't declare `$orbId`** — `orbIdIsQueryVar := strings.Contains(req.Query, "$orbId")` controls this. If the query declares `$orbId` as a DGraph variable, stripping it causes a "must be defined" error from DGraph. The UI convention is inline literals (no declared `$orbId`); API clients writing idiomatic GraphQL may declare it. Both patterns must work.
-
-*Domain-specific settled decisions live in `docs/claude/DGRAPH.md`, `docs/claude/UI.md`, `docs/claude/AUTH.md`, `docs/claude/AUDIT.md`, `docs/claude/OCI.md`.*
-
-## E2E Tests (Playwright)
-
-Tests live in `e2e/`. Run with `make test-e2e` (requires orbital running on `:8001`).
-
-**Auth setup:** `e2e/global-setup.ts` logs in as `admin@armada.ai` / `admin` once, saves session cookie to `e2e/.auth.json`. All tests reuse this state. The `.auth.json` file is gitignored and regenerated automatically.
-
-**Headed mode:** `make test-e2e` runs headless by default. Use `HEADED=true make test-e2e` to watch in a browser. For interactive local development use `make test-e2e-ui` (Playwright UI mode — no flashing, better experience than `--headed`).
-
-**Test conventions:**
-- Use `data-testid` attributes on elements that need stable selectors
-- Assert against values read from the page rather than hardcoded seed data — hardcoded counts break when seed data changes
-- Compare JSON string fields with `JSON.parse` + `toEqual`, not `.toBe` — DGraph does not guarantee key order in string fields
+- **ConfigBundle is a separate project, built after orbital** — orbital's APIs (export, divergence intake) are the contract. ConfigBundle is designed around orbital's APIs, not the inverse. Do not add ConfigBundle awareness to orbital.
+- **Orbital is the sole OCI producer** — no downstream system needs registry write credentials. See `docs/claude/OCI.md` for bundler/signing details.
+- **Product naming: "Orbital" (cloud) / "Orb" (edge) — this is the north star.** Do not use "Orbital Edge" or conflate the two. Orb is a purpose-built edge agent, not a deployment variant of Orbital. `AppName: "Orbital"` in orbital handlers; `AppName: "Orb"` in orb handlers.
+- **`actorFromContext(c echo.Context) string` is the canonical identity helper** — in `internal/handler/actor.go`. Prefers email over display name. All handlers recording "created by" or "actor" must call this. Never inline `c.Get("user_name")` / `c.Get("user_email")` in new handlers. `ui.go` is the only legitimate exception.
+- **REST API convention: operation-centric triggers, resource-centric jobs** — orbital is GraphQL-first for CRUD; REST endpoints exist only for async operational workflows. Trigger endpoints create a job and return a job ID. Do not create resource-centric paths for operations that have no corresponding GET/PUT/DELETE. Rationale: `docs/decisions/002-api-design-philosophy.md`.
+- **Local dev defaults must point to local services** — `OCIRegistry`, `S3Endpoint`, `S3Bucket`, `S3AccessKey`, `S3SecretKey` all default to local Docker Compose services. Production credentials must never appear as code defaults.
+- **All Docker Compose images must use pinned versions** — no `latest` tags. Look up the actual release tag from the project's GitHub releases.
+- **`cosign.key` lives at `deploy/local/cosign.key`** — never at the project root. Local dev secrets live alongside local dev config. Gitignored via `deploy/local/*.key`. The compose file mounts it at `./cosign.key:/app/deploy/local/cosign.key:ro`.
+- **`schema/VERSION` is the authoritative schema version label** — single line (e.g. `v1`). Bumped manually on DGraph-relevant schema changes only. Comments, whitespace, and formatting changes to `schema/schema.graphql` do NOT bump it. See `docs/decisions/007-dgraph-schema-migration.md`.
+- **`schema/schema.graphql` is the production schema** — was `schema-demo.graphql`; renamed 2026-06-07. All references must use `cfg.SchemaPath` (env: `ORBITAL_SCHEMA_PATH`, default `schema/schema.graphql`). Never hardcode the path.
+- **GraphQL proxy strips `orbId` from variables only when the query doesn't declare `$orbId`** — `orbIdIsQueryVar := strings.Contains(req.Query, "$orbId")` controls this. If the query declares `$orbId`, stripping it causes a DGraph "must be defined" error. Both inline-literal and declared-variable patterns must work.
 
 ## Go Conventions
 

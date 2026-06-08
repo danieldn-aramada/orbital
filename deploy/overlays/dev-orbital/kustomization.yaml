@@ -4,14 +4,10 @@ namespace: orbital
 resources:
   - ../../base
   - postgres.yaml
-  - secrets.yaml  # gitignored — copy from deploy/dev/secrets.yaml, update ORBITAL_OIDC_REDIRECT_URL
+  - secrets.yaml  # gitignored — see README.md for how to create this file
 images:
   - name: armadaeksatest.azurecr.io/orbital
     newTag: v0.0.14
 
 patches:
   - path: deployment-patch.yaml
-  - path: dgraph-live-patch.yaml
-# Secrets are NOT managed here — copy deploy/dev/secrets.yaml, update namespace to orbital
-# and ORBITAL_OIDC_REDIRECT_URL, then apply:
-#   kubectl apply -f deploy/overlays/orbital/secrets.yaml -n orbital

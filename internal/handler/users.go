@@ -29,6 +29,7 @@ type userItem struct {
 	PreferredUsername string `json:"preferredUsername"`
 	Role              string `json:"role"`
 	CreatedAt         string `json:"createdAt"`
+	Note              string `json:"note,omitempty"`
 }
 
 // List handles GET /api/v1/users — admin only.
@@ -136,7 +137,9 @@ func (h *UsersHandler) UpdateRole(c echo.Context) error {
 		},
 	)
 
-	return c.JSON(http.StatusOK, toUserItem(updated))
+	item := toUserItem(updated)
+	item.Note = "User must re-login for UI role change to take effect"
+	return c.JSON(http.StatusOK, item)
 }
 
 func toUserItem(u *ent.User) userItem {

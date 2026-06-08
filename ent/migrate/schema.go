@@ -55,8 +55,6 @@ var (
 	EventsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "operations", Type: field.TypeJSON, Nullable: true},
-		{Name: "resource_types", Type: field.TypeJSON, Nullable: true},
-		{Name: "resource_ids", Type: field.TypeJSON, Nullable: true},
 		{Name: "actor", Type: field.TypeString},
 		{Name: "timestamp", Type: field.TypeTime},
 		{Name: "details", Type: field.TypeJSON, Nullable: true},
@@ -71,7 +69,71 @@ var (
 			{
 				Name:    "event_timestamp",
 				Unique:  false,
-				Columns: []*schema.Column{EventsColumns[5]},
+				Columns: []*schema.Column{EventsColumns[3]},
+			},
+		},
+	}
+	// EventResourcesColumns holds the columns for the "event_resources" table.
+	EventResourcesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "orb_id", Type: field.TypeString},
+		{Name: "event_id", Type: field.TypeUUID},
+	}
+	// EventResourcesTable holds the schema information for the "event_resources" table.
+	EventResourcesTable = &schema.Table{
+		Name:       "event_resources",
+		Columns:    EventResourcesColumns,
+		PrimaryKey: []*schema.Column{EventResourcesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "event_resources_events_resources",
+				Columns:    []*schema.Column{EventResourcesColumns[2]},
+				RefColumns: []*schema.Column{EventsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "eventresource_orb_id",
+				Unique:  false,
+				Columns: []*schema.Column{EventResourcesColumns[1]},
+			},
+			{
+				Name:    "eventresource_event_id_orb_id",
+				Unique:  true,
+				Columns: []*schema.Column{EventResourcesColumns[2], EventResourcesColumns[1]},
+			},
+		},
+	}
+	// EventResourceTypesColumns holds the columns for the "event_resource_types" table.
+	EventResourceTypesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "resource_type", Type: field.TypeString},
+		{Name: "event_id", Type: field.TypeUUID},
+	}
+	// EventResourceTypesTable holds the schema information for the "event_resource_types" table.
+	EventResourceTypesTable = &schema.Table{
+		Name:       "event_resource_types",
+		Columns:    EventResourceTypesColumns,
+		PrimaryKey: []*schema.Column{EventResourceTypesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "event_resource_types_events_resource_types",
+				Columns:    []*schema.Column{EventResourceTypesColumns[2]},
+				RefColumns: []*schema.Column{EventsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "eventresourcetype_resource_type",
+				Unique:  false,
+				Columns: []*schema.Column{EventResourceTypesColumns[1]},
+			},
+			{
+				Name:    "eventresourcetype_event_id_resource_type",
+				Unique:  true,
+				Columns: []*schema.Column{EventResourceTypesColumns[2], EventResourceTypesColumns[1]},
 			},
 		},
 	}
@@ -133,7 +195,7 @@ var (
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "enriched", Type: field.TypeBool, Default: false},
-		{Name: "enricher_error", Type: field.TypeString, Nullable: true},
+		{Name: "bundler_error", Type: field.TypeString, Nullable: true},
 	}
 	// RegistryArtifactsTable holds the schema information for the "registry_artifacts" table.
 	RegistryArtifactsTable = &schema.Table{
@@ -184,6 +246,8 @@ var (
 		BackupsTable,
 		BackupSchedulesTable,
 		EventsTable,
+		EventResourcesTable,
+		EventResourceTypesTable,
 		ExportJobsTable,
 		OrbsTable,
 		RegistryArtifactsTable,
@@ -193,4 +257,6 @@ var (
 )
 
 func init() {
+	EventResourcesTable.ForeignKeys[0].RefTable = EventsTable
+	EventResourceTypesTable.ForeignKeys[0].RefTable = EventsTable
 }

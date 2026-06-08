@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"log/slog"
 	"net/http"
@@ -198,15 +199,28 @@ func (h *Export) List(c echo.Context) error {
 		for _, j := range jobs {
 			jobIDs = append(jobIDs, j.ID)
 		}
-		artifactRows, err := h.db.RegistryArtifact.Query().
+		if artifactRows, err := h.db.RegistryArtifact.Query().
 			Where(registryartifact.ExportJobIDIn(jobIDs...)).
 			Select(registryartifact.FieldExportJobID).
-			All(c.Request().Context())
-		if err == nil {
+			All(c.Request().Context()); err == nil {
 			for _, a := range artifactRows {
 				publishedJobIDs[a.ExportJobID] = true
 			}
 		}
+	}
+
+	if c.Request().Header.Get("HX-Request") == "true" {
+		ociConfigured := c.QueryParam("ociConfigured") == "true"
+		rows := make([]exportJobFragRow, 0, len(jobs))
+		for _, job := range jobs {
+			rows = append(rows, toExportJobFragRow(job, publishedJobIDs[job.ID]))
+		}
+		tmpl, err := template.ParseFiles("web/templates/orbital/partials/export-jobs-tbody.gohtml")
+		if err != nil {
+			return fmt.Errorf("parse export fragment: %w", err)
+		}
+		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+		return tmpl.Execute(c.Response().Writer, exportJobsFragData{Rows: rows, OCIConfigured: ociConfigured})
 	}
 
 	out := make([]statusResponse, 0, len(jobs))
@@ -806,3 +820,52 @@ func writeZip(path string, dataGZ, dqlSchemaGZ, gqlSchemaGZ []byte) error {
 	}
 	return nil
 }
+
+// ── Fragment renderer ─────────────────────────────────────────────────────────
+
+type exportJobFragRow struct {
+	JobID       string
+	DataCenter  string
+	Status      string
+	StatusClass string
+	Published   bool
+	CreatedAt   string
+	CreatedBy   string
+	CompletedAt string
+	CanDownload bool
+	CanPublish  bool
+}
+
+type exportJobsFragData struct {
+	Rows          []exportJobFragRow
+	OCIConfigured bool
+}
+
+func toExportJobFragRow(job *ent.ExportJob, published bool) exportJobFragRow {
+	statusClass := map[string]string{
+		"pending":   "is-warning is-light",
+		"running":   "is-info is-light",
+		"completed": "is-success is-light",
+		"failed":    "is-danger is-light",
+		"stale":     "is-light",
+	}[string(job.Status)]
+	completedAt := "—"
+	if job.CompletedAt != nil {
+		completedAt = job.CompletedAt.UTC().Format("2006-01-02 15:04:05")
+	}
+	return exportJobFragRow{
+		JobID:       job.ID.String(),
+		DataCenter:  job.DatacenterName,
+		Status:      string(job.Status),
+		StatusClass: statusClass,
+		Published:   published,
+		CreatedAt:   job.CreatedAt.UTC().Format("2006-01-02 15:04:05"),
+		CreatedBy:   job.CreatedBy,
+		CompletedAt: completedAt,
+		CanDownload: job.Status == exportjob.StatusCompleted && job.ArtifactPath != nil,
+		CanPublish:  job.Status == exportjob.StatusCompleted && job.ArtifactPath != nil,
+	}
+}
+
+// ListRows handles GET /api/v1/export/jobs/rows
+// Returns an HTML fragment containing the export jobs tbody rows.

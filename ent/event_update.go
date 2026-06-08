@@ -14,6 +14,8 @@ import (
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/armada/orbital/ent/event"
+	"github.com/armada/orbital/ent/eventresource"
+	"github.com/armada/orbital/ent/eventresourcetype"
 	"github.com/armada/orbital/ent/predicate"
 )
 
@@ -45,42 +47,6 @@ func (_u *EventUpdate) AppendOperations(v []string) *EventUpdate {
 // ClearOperations clears the value of the "operations" field.
 func (_u *EventUpdate) ClearOperations() *EventUpdate {
 	_u.mutation.ClearOperations()
-	return _u
-}
-
-// SetResourceTypes sets the "resource_types" field.
-func (_u *EventUpdate) SetResourceTypes(v []string) *EventUpdate {
-	_u.mutation.SetResourceTypes(v)
-	return _u
-}
-
-// AppendResourceTypes appends value to the "resource_types" field.
-func (_u *EventUpdate) AppendResourceTypes(v []string) *EventUpdate {
-	_u.mutation.AppendResourceTypes(v)
-	return _u
-}
-
-// ClearResourceTypes clears the value of the "resource_types" field.
-func (_u *EventUpdate) ClearResourceTypes() *EventUpdate {
-	_u.mutation.ClearResourceTypes()
-	return _u
-}
-
-// SetResourceIds sets the "resource_ids" field.
-func (_u *EventUpdate) SetResourceIds(v []string) *EventUpdate {
-	_u.mutation.SetResourceIds(v)
-	return _u
-}
-
-// AppendResourceIds appends value to the "resource_ids" field.
-func (_u *EventUpdate) AppendResourceIds(v []string) *EventUpdate {
-	_u.mutation.AppendResourceIds(v)
-	return _u
-}
-
-// ClearResourceIds clears the value of the "resource_ids" field.
-func (_u *EventUpdate) ClearResourceIds() *EventUpdate {
-	_u.mutation.ClearResourceIds()
 	return _u
 }
 
@@ -144,9 +110,81 @@ func (_u *EventUpdate) SetNillableEventCategory(v *string) *EventUpdate {
 	return _u
 }
 
+// AddResourceIDs adds the "resources" edge to the EventResource entity by IDs.
+func (_u *EventUpdate) AddResourceIDs(ids ...int) *EventUpdate {
+	_u.mutation.AddResourceIDs(ids...)
+	return _u
+}
+
+// AddResources adds the "resources" edges to the EventResource entity.
+func (_u *EventUpdate) AddResources(v ...*EventResource) *EventUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddResourceIDs(ids...)
+}
+
+// AddResourceTypeIDs adds the "resource_types" edge to the EventResourceType entity by IDs.
+func (_u *EventUpdate) AddResourceTypeIDs(ids ...int) *EventUpdate {
+	_u.mutation.AddResourceTypeIDs(ids...)
+	return _u
+}
+
+// AddResourceTypes adds the "resource_types" edges to the EventResourceType entity.
+func (_u *EventUpdate) AddResourceTypes(v ...*EventResourceType) *EventUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddResourceTypeIDs(ids...)
+}
+
 // Mutation returns the EventMutation object of the builder.
 func (_u *EventUpdate) Mutation() *EventMutation {
 	return _u.mutation
+}
+
+// ClearResources clears all "resources" edges to the EventResource entity.
+func (_u *EventUpdate) ClearResources() *EventUpdate {
+	_u.mutation.ClearResources()
+	return _u
+}
+
+// RemoveResourceIDs removes the "resources" edge to EventResource entities by IDs.
+func (_u *EventUpdate) RemoveResourceIDs(ids ...int) *EventUpdate {
+	_u.mutation.RemoveResourceIDs(ids...)
+	return _u
+}
+
+// RemoveResources removes "resources" edges to EventResource entities.
+func (_u *EventUpdate) RemoveResources(v ...*EventResource) *EventUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveResourceIDs(ids...)
+}
+
+// ClearResourceTypes clears all "resource_types" edges to the EventResourceType entity.
+func (_u *EventUpdate) ClearResourceTypes() *EventUpdate {
+	_u.mutation.ClearResourceTypes()
+	return _u
+}
+
+// RemoveResourceTypeIDs removes the "resource_types" edge to EventResourceType entities by IDs.
+func (_u *EventUpdate) RemoveResourceTypeIDs(ids ...int) *EventUpdate {
+	_u.mutation.RemoveResourceTypeIDs(ids...)
+	return _u
+}
+
+// RemoveResourceTypes removes "resource_types" edges to EventResourceType entities.
+func (_u *EventUpdate) RemoveResourceTypes(v ...*EventResourceType) *EventUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveResourceTypeIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -196,28 +234,6 @@ func (_u *EventUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.OperationsCleared() {
 		_spec.ClearField(event.FieldOperations, field.TypeJSON)
 	}
-	if value, ok := _u.mutation.ResourceTypes(); ok {
-		_spec.SetField(event.FieldResourceTypes, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedResourceTypes(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, event.FieldResourceTypes, value)
-		})
-	}
-	if _u.mutation.ResourceTypesCleared() {
-		_spec.ClearField(event.FieldResourceTypes, field.TypeJSON)
-	}
-	if value, ok := _u.mutation.ResourceIds(); ok {
-		_spec.SetField(event.FieldResourceIds, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedResourceIds(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, event.FieldResourceIds, value)
-		})
-	}
-	if _u.mutation.ResourceIdsCleared() {
-		_spec.ClearField(event.FieldResourceIds, field.TypeJSON)
-	}
 	if value, ok := _u.mutation.Actor(); ok {
 		_spec.SetField(event.FieldActor, field.TypeString, value)
 	}
@@ -237,6 +253,96 @@ func (_u *EventUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.EventCategory(); ok {
 		_spec.SetField(event.FieldEventCategory, field.TypeString, value)
+	}
+	if _u.mutation.ResourcesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   event.ResourcesTable,
+			Columns: []string{event.ResourcesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventresource.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedResourcesIDs(); len(nodes) > 0 && !_u.mutation.ResourcesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   event.ResourcesTable,
+			Columns: []string{event.ResourcesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventresource.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ResourcesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   event.ResourcesTable,
+			Columns: []string{event.ResourcesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventresource.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ResourceTypesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   event.ResourceTypesTable,
+			Columns: []string{event.ResourceTypesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventresourcetype.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedResourceTypesIDs(); len(nodes) > 0 && !_u.mutation.ResourceTypesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   event.ResourceTypesTable,
+			Columns: []string{event.ResourceTypesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventresourcetype.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ResourceTypesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   event.ResourceTypesTable,
+			Columns: []string{event.ResourceTypesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventresourcetype.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -273,42 +379,6 @@ func (_u *EventUpdateOne) AppendOperations(v []string) *EventUpdateOne {
 // ClearOperations clears the value of the "operations" field.
 func (_u *EventUpdateOne) ClearOperations() *EventUpdateOne {
 	_u.mutation.ClearOperations()
-	return _u
-}
-
-// SetResourceTypes sets the "resource_types" field.
-func (_u *EventUpdateOne) SetResourceTypes(v []string) *EventUpdateOne {
-	_u.mutation.SetResourceTypes(v)
-	return _u
-}
-
-// AppendResourceTypes appends value to the "resource_types" field.
-func (_u *EventUpdateOne) AppendResourceTypes(v []string) *EventUpdateOne {
-	_u.mutation.AppendResourceTypes(v)
-	return _u
-}
-
-// ClearResourceTypes clears the value of the "resource_types" field.
-func (_u *EventUpdateOne) ClearResourceTypes() *EventUpdateOne {
-	_u.mutation.ClearResourceTypes()
-	return _u
-}
-
-// SetResourceIds sets the "resource_ids" field.
-func (_u *EventUpdateOne) SetResourceIds(v []string) *EventUpdateOne {
-	_u.mutation.SetResourceIds(v)
-	return _u
-}
-
-// AppendResourceIds appends value to the "resource_ids" field.
-func (_u *EventUpdateOne) AppendResourceIds(v []string) *EventUpdateOne {
-	_u.mutation.AppendResourceIds(v)
-	return _u
-}
-
-// ClearResourceIds clears the value of the "resource_ids" field.
-func (_u *EventUpdateOne) ClearResourceIds() *EventUpdateOne {
-	_u.mutation.ClearResourceIds()
 	return _u
 }
 
@@ -372,9 +442,81 @@ func (_u *EventUpdateOne) SetNillableEventCategory(v *string) *EventUpdateOne {
 	return _u
 }
 
+// AddResourceIDs adds the "resources" edge to the EventResource entity by IDs.
+func (_u *EventUpdateOne) AddResourceIDs(ids ...int) *EventUpdateOne {
+	_u.mutation.AddResourceIDs(ids...)
+	return _u
+}
+
+// AddResources adds the "resources" edges to the EventResource entity.
+func (_u *EventUpdateOne) AddResources(v ...*EventResource) *EventUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddResourceIDs(ids...)
+}
+
+// AddResourceTypeIDs adds the "resource_types" edge to the EventResourceType entity by IDs.
+func (_u *EventUpdateOne) AddResourceTypeIDs(ids ...int) *EventUpdateOne {
+	_u.mutation.AddResourceTypeIDs(ids...)
+	return _u
+}
+
+// AddResourceTypes adds the "resource_types" edges to the EventResourceType entity.
+func (_u *EventUpdateOne) AddResourceTypes(v ...*EventResourceType) *EventUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddResourceTypeIDs(ids...)
+}
+
 // Mutation returns the EventMutation object of the builder.
 func (_u *EventUpdateOne) Mutation() *EventMutation {
 	return _u.mutation
+}
+
+// ClearResources clears all "resources" edges to the EventResource entity.
+func (_u *EventUpdateOne) ClearResources() *EventUpdateOne {
+	_u.mutation.ClearResources()
+	return _u
+}
+
+// RemoveResourceIDs removes the "resources" edge to EventResource entities by IDs.
+func (_u *EventUpdateOne) RemoveResourceIDs(ids ...int) *EventUpdateOne {
+	_u.mutation.RemoveResourceIDs(ids...)
+	return _u
+}
+
+// RemoveResources removes "resources" edges to EventResource entities.
+func (_u *EventUpdateOne) RemoveResources(v ...*EventResource) *EventUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveResourceIDs(ids...)
+}
+
+// ClearResourceTypes clears all "resource_types" edges to the EventResourceType entity.
+func (_u *EventUpdateOne) ClearResourceTypes() *EventUpdateOne {
+	_u.mutation.ClearResourceTypes()
+	return _u
+}
+
+// RemoveResourceTypeIDs removes the "resource_types" edge to EventResourceType entities by IDs.
+func (_u *EventUpdateOne) RemoveResourceTypeIDs(ids ...int) *EventUpdateOne {
+	_u.mutation.RemoveResourceTypeIDs(ids...)
+	return _u
+}
+
+// RemoveResourceTypes removes "resource_types" edges to EventResourceType entities.
+func (_u *EventUpdateOne) RemoveResourceTypes(v ...*EventResourceType) *EventUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveResourceTypeIDs(ids...)
 }
 
 // Where appends a list predicates to the EventUpdate builder.
@@ -454,28 +596,6 @@ func (_u *EventUpdateOne) sqlSave(ctx context.Context) (_node *Event, err error)
 	if _u.mutation.OperationsCleared() {
 		_spec.ClearField(event.FieldOperations, field.TypeJSON)
 	}
-	if value, ok := _u.mutation.ResourceTypes(); ok {
-		_spec.SetField(event.FieldResourceTypes, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedResourceTypes(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, event.FieldResourceTypes, value)
-		})
-	}
-	if _u.mutation.ResourceTypesCleared() {
-		_spec.ClearField(event.FieldResourceTypes, field.TypeJSON)
-	}
-	if value, ok := _u.mutation.ResourceIds(); ok {
-		_spec.SetField(event.FieldResourceIds, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedResourceIds(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, event.FieldResourceIds, value)
-		})
-	}
-	if _u.mutation.ResourceIdsCleared() {
-		_spec.ClearField(event.FieldResourceIds, field.TypeJSON)
-	}
 	if value, ok := _u.mutation.Actor(); ok {
 		_spec.SetField(event.FieldActor, field.TypeString, value)
 	}
@@ -495,6 +615,96 @@ func (_u *EventUpdateOne) sqlSave(ctx context.Context) (_node *Event, err error)
 	}
 	if value, ok := _u.mutation.EventCategory(); ok {
 		_spec.SetField(event.FieldEventCategory, field.TypeString, value)
+	}
+	if _u.mutation.ResourcesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   event.ResourcesTable,
+			Columns: []string{event.ResourcesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventresource.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedResourcesIDs(); len(nodes) > 0 && !_u.mutation.ResourcesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   event.ResourcesTable,
+			Columns: []string{event.ResourcesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventresource.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ResourcesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   event.ResourcesTable,
+			Columns: []string{event.ResourcesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventresource.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ResourceTypesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   event.ResourceTypesTable,
+			Columns: []string{event.ResourceTypesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventresourcetype.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedResourceTypesIDs(); len(nodes) > 0 && !_u.mutation.ResourceTypesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   event.ResourceTypesTable,
+			Columns: []string{event.ResourceTypesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventresourcetype.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ResourceTypesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   event.ResourceTypesTable,
+			Columns: []string{event.ResourceTypesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventresourcetype.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &Event{config: _u.config}
 	_spec.Assign = _node.assignValues

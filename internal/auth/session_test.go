@@ -21,7 +21,7 @@ func copyCookies(t *testing.T, rec *httptest.ResponseRecorder) *http.Request {
 func TestSetAndGetUserSession(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
-	if err := SetUserSession(testKeys, req, rec, 42, "Alice", "alice@example.com"); err != nil {
+	if err := SetUserSession(testKeys, req, rec, 42, "Alice", "alice@example.com", "admin"); err != nil {
 		t.Fatalf("SetUserSession: %v", err)
 	}
 
@@ -29,8 +29,31 @@ func TestSetAndGetUserSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetUserSession: %v", err)
 	}
-	if got.ID != 42 || got.Name != "Alice" || got.Email != "alice@example.com" {
-		t.Errorf("got %+v, want {42, Alice, alice@example.com}", got)
+	if got.ID != 42 || got.Name != "Alice" || got.Email != "alice@example.com" || got.Role != "admin" {
+		t.Errorf("got %+v, want {42, Alice, alice@example.com, admin}", got)
+	}
+}
+
+func TestGetUserSession_RoleDefaultsToReadonly(t *testing.T) {
+	// Sessions created before the role field was added have no userRoleKey entry.
+	// GetUserSession must fall back to "readonly" rather than returning empty string.
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	// Write a session without a role field by temporarily using the old pattern.
+	store := newStore(testKeys)
+	session, _ := store.Get(req, cookieName)
+	session.Values[userIDKey] = 7
+	session.Values[userNameKey] = "Bob"
+	session.Values[userEmailKey] = "bob@example.com"
+	// intentionally omit userRoleKey
+	_ = session.Save(req, rec)
+
+	got, err := GetUserSession(testKeys, copyCookies(t, rec))
+	if err != nil {
+		t.Fatalf("GetUserSession: %v", err)
+	}
+	if got.Role != "readonly" {
+		t.Errorf("expected default role %q, got %q", "readonly", got.Role)
 	}
 }
 
@@ -45,7 +68,7 @@ func TestGetUserSession_NoSession(t *testing.T) {
 func TestClearSession_SetsDeleteHeader(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
-	if err := SetUserSession(testKeys, req, rec, 1, "Bob", "bob@example.com"); err != nil {
+	if err := SetUserSession(testKeys, req, rec, 1, "Bob", "bob@example.com", "readonly"); err != nil {
 		t.Fatalf("SetUserSession: %v", err)
 	}
 

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/armada/orbital/ent/event"
+	"github.com/armada/orbital/ent/eventresource"
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/labstack/echo/v4"
@@ -53,10 +54,8 @@ func TestGraphQL_MutationWritesAuditEvent(t *testing.T) {
 	adminUser := createTestUser(t, "graphql-audit-admin@test.com", user.RoleAdmin)
 
 	// Clean up any pre-existing events for this actor (from prior runs).
-	testDB.Event.Delete().Where(event.Actor(actor)).ExecX(ctx)
-	t.Cleanup(func() {
-		testDB.Event.Delete().Where(event.Actor(actor)).ExecX(ctx)
-	})
+	clearEvents(ctx)
+	t.Cleanup(func() { clearEvents(ctx) })
 
 	// Mock DGraph returns a successful mutation response with an orbId.
 	dgraph := mockDGraphSrv(t, `{"data":{"addServer":{"server":[{"orbId":"alaska:SRV999"}]}}}`)
@@ -83,15 +82,18 @@ func TestGraphQL_MutationWritesAuditEvent(t *testing.T) {
 	pollForEvent(t, actor, 5*time.Second)
 
 	// Verify the event fields.
-	ev := testDB.Event.Query().Where(event.Actor(actor)).OnlyX(ctx)
+	ev := testDB.Event.Query().Where(event.Actor(actor)).WithResources().WithResourceTypes().OnlyX(ctx)
 	if len(ev.Operations) == 0 || ev.Operations[0] != "addServer" {
 		t.Errorf("operations: got %v, want [addServer]", ev.Operations)
 	}
-	if len(ev.ResourceTypes) == 0 || ev.ResourceTypes[0] != "Server" {
-		t.Errorf("resourceTypes: got %v, want [Server]", ev.ResourceTypes)
+	if len(ev.Edges.ResourceTypes) == 0 || ev.Edges.ResourceTypes[0].ResourceType != "Server" {
+		t.Errorf("resourceTypes: got %v, want [Server]", ev.Edges.ResourceTypes)
 	}
-	if len(ev.ResourceIds) == 0 || ev.ResourceIds[0] != "alaska:SRV999" {
-		t.Errorf("resourceIds: got %v, want [alaska:SRV999]", ev.ResourceIds)
+	resources := testDB.EventResource.Query().
+		Where(eventresource.HasEventWith(event.Actor(actor))).
+		AllX(ctx)
+	if len(resources) == 0 || resources[0].OrbID != "alaska:SRV999" {
+		t.Errorf("resources: got %v, want [alaska:SRV999]", resources)
 	}
 }
 
@@ -99,7 +101,7 @@ func TestGraphQL_GQLErrorsSuppressAuditEvent(t *testing.T) {
 	const actor = "audit-error-actor"
 	ctx := context.Background()
 
-	testDB.Event.Delete().Where(event.Actor(actor)).ExecX(ctx)
+	clearEvents(ctx)
 
 	// DGraph returns errors — audit must not be written.
 	dgraph := mockDGraphSrv(t, `{"errors":[{"message":"something went wrong"}]}`)

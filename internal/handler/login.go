@@ -63,7 +63,7 @@ func (h *Login) Post(c echo.Context) error {
 		return h.renderForm(c, "Invalid email or password.")
 	}
 
-	if err := auth.SetUserSession(h.sessionKeys, c.Request(), c.Response().Writer, u.ID, u.Name, u.Email); err != nil {
+	if err := auth.SetUserSession(h.sessionKeys, c.Request(), c.Response().Writer, u.ID, u.Name, u.Email, string(u.Role)); err != nil {
 		return fmt.Errorf("set session: %w", err)
 	}
 
@@ -92,7 +92,7 @@ func (h *Login) writeAuthAudit(operation, actor string, details map[string]any) 
 	if h.db == nil {
 		return
 	}
-	writeAuditEvent(h.db, h.logger, "management", actor, operation,
+	writeAuditEvent(h.db, h.logger, "auth", actor, operation,
 		[]string{operation},
 		[]string{},
 		[]string{},

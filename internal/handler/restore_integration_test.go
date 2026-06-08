@@ -46,7 +46,6 @@ func (m *mockRestoreBackend) RunLive(_ context.Context, dataDir, alphaGRPC, zero
 // newRestoreHandlerWithBackend creates a RestoreHandler using the provided backend.
 func newRestoreHandlerWithBackend(t *testing.T, backend handler.RestoreBackend) *handler.RestoreHandler {
 	t.Helper()
-	dir := t.TempDir()
 	h, err := handler.NewRestoreHandler(
 		context.Background(),
 		testDB,
@@ -60,8 +59,6 @@ func newRestoreHandlerWithBackend(t *testing.T, backend handler.RestoreBackend) 
 			DGraphAlphaGRPC: "localhost:19080",
 			DGraphZeroGRPC:  "localhost:5080",
 			SchemaPath:      schemaPath(),
-			RestoreDir:      dir,
-			ExecDataDir:     dir,
 			RestoreTimeout:  30 * time.Second,
 		},
 		backend,
@@ -279,7 +276,7 @@ func TestRestoreTrigger_BackendRunLiveError_JobFails(t *testing.T) {
 
 func TestRestoreCompleted_WritesManagementAuditEvent(t *testing.T) {
 	// Clean up any existing audit events so we can assert on the new one.
-	testDB.Event.Delete().ExecX(context.Background())
+	clearEvents(context.Background())
 
 	s3Key := uploadTestBackupZip(t)
 	backupID := createCompletedBackupWithKey(t, s3Key)

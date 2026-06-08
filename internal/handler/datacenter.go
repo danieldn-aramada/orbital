@@ -70,8 +70,8 @@ func NewDataCenter(dgraphURL string, dev bool, logger *slog.Logger, basePath str
 
 func parseDataCenterFragment() *template.Template {
 	return template.Must(template.ParseFiles(
-		"web/shared/templates/partials/datacenter-tab.gohtml",
-		"web/shared/templates/components/edit-modal-datacenter.gohtml",
+		"web/templates/shared/partials/datacenter-tab.gohtml",
+		"web/templates/shared/components/edit-modal-datacenter.gohtml",
 	))
 }
 
@@ -209,6 +209,7 @@ func (h *DataCenter) Tab(c echo.Context) error {
 	}
 
 	currentUser := actorFromContext(c)
+	canMutate, _ := c.Get("can_mutate").(bool)
 
 	editFields := map[string]any{"name": raw.Name}
 	if raw.AssetDataV2 != "" {
@@ -236,7 +237,7 @@ func (h *DataCenter) Tab(c echo.Context) error {
 		CurrentUser:  currentUser,
 		EditDataJSON: template.JS(editJSON),
 		BasePath:     h.basePath,
-		Actions:      layout.OrbitalActions,
+		Actions:      layout.OrbitalActions(canMutate),
 	}
 	for _, r := range raw.Racks {
 		dc.Racks = append(dc.Racks, rackTabData{

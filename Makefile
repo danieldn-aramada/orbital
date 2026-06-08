@@ -30,7 +30,7 @@ docs: ## Regenerate Swagger docs (requires swag: go install github.com/swaggo/sw
 orb-docs: ## Regenerate Swagger docs for orb (requires swag: go install github.com/swaggo/swag/cmd/swag@latest)
 	swag init -g doc.go -o docs/orb --dir cmd/orb,internal/orbserver,internal/orb
 
-build-css: ## Compile web/sass/main.scss → web/static/css/main.css (requires: npm install)
+build-css: ## Compile web/sass/main.scss → web/shared/static/css/main.css (requires: npm install)
 	npm run build-css
 
 watch-css: ## Watch and recompile SCSS on change (requires: npm install)
@@ -53,7 +53,7 @@ run-orb: ## Run orb edge service (requires: make up)
 
 seed-orb-schema: ## Apply DGraph schema to orb's local DGraph (empty — data comes from import)
 	@echo "Applying schema to orb DGraph (localhost:8082)..."
-	@curl -s -X POST localhost:8082/admin/schema --data-binary @schema/schema-demo.graphql | jq .
+	@curl -s -X POST localhost:8082/admin/schema --data-binary @schema/schema.graphql | jq .
 
 
 test-unit: ## Run unit tests with coverage summary (no external services required)

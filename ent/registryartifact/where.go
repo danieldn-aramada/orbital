@@ -130,9 +130,9 @@ func Enriched(v bool) predicate.RegistryArtifact {
 	return predicate.RegistryArtifact(sql.FieldEQ(FieldEnriched, v))
 }
 
-// EnricherError applies equality check predicate on the "enricher_error" field. It's identical to EnricherErrorEQ.
-func EnricherError(v string) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldEQ(FieldEnricherError, v))
+// BundlerError applies equality check predicate on the "bundler_error" field. It's identical to BundlerErrorEQ.
+func BundlerError(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldEQ(FieldBundlerError, v))
 }
 
 // ExportJobIDEQ applies the EQ predicate on the "export_job_id" field.
@@ -955,79 +955,79 @@ func EnrichedNEQ(v bool) predicate.RegistryArtifact {
 	return predicate.RegistryArtifact(sql.FieldNEQ(FieldEnriched, v))
 }
 
-// EnricherErrorEQ applies the EQ predicate on the "enricher_error" field.
-func EnricherErrorEQ(v string) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldEQ(FieldEnricherError, v))
+// BundlerErrorEQ applies the EQ predicate on the "bundler_error" field.
+func BundlerErrorEQ(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldEQ(FieldBundlerError, v))
 }
 
-// EnricherErrorNEQ applies the NEQ predicate on the "enricher_error" field.
-func EnricherErrorNEQ(v string) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldNEQ(FieldEnricherError, v))
+// BundlerErrorNEQ applies the NEQ predicate on the "bundler_error" field.
+func BundlerErrorNEQ(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldNEQ(FieldBundlerError, v))
 }
 
-// EnricherErrorIn applies the In predicate on the "enricher_error" field.
-func EnricherErrorIn(vs ...string) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldIn(FieldEnricherError, vs...))
+// BundlerErrorIn applies the In predicate on the "bundler_error" field.
+func BundlerErrorIn(vs ...string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldIn(FieldBundlerError, vs...))
 }
 
-// EnricherErrorNotIn applies the NotIn predicate on the "enricher_error" field.
-func EnricherErrorNotIn(vs ...string) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldNotIn(FieldEnricherError, vs...))
+// BundlerErrorNotIn applies the NotIn predicate on the "bundler_error" field.
+func BundlerErrorNotIn(vs ...string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldNotIn(FieldBundlerError, vs...))
 }
 
-// EnricherErrorGT applies the GT predicate on the "enricher_error" field.
-func EnricherErrorGT(v string) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldGT(FieldEnricherError, v))
+// BundlerErrorGT applies the GT predicate on the "bundler_error" field.
+func BundlerErrorGT(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldGT(FieldBundlerError, v))
 }
 
-// EnricherErrorGTE applies the GTE predicate on the "enricher_error" field.
-func EnricherErrorGTE(v string) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldGTE(FieldEnricherError, v))
+// BundlerErrorGTE applies the GTE predicate on the "bundler_error" field.
+func BundlerErrorGTE(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldGTE(FieldBundlerError, v))
 }
 
-// EnricherErrorLT applies the LT predicate on the "enricher_error" field.
-func EnricherErrorLT(v string) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldLT(FieldEnricherError, v))
+// BundlerErrorLT applies the LT predicate on the "bundler_error" field.
+func BundlerErrorLT(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldLT(FieldBundlerError, v))
 }
 
-// EnricherErrorLTE applies the LTE predicate on the "enricher_error" field.
-func EnricherErrorLTE(v string) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldLTE(FieldEnricherError, v))
+// BundlerErrorLTE applies the LTE predicate on the "bundler_error" field.
+func BundlerErrorLTE(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldLTE(FieldBundlerError, v))
 }
 
-// EnricherErrorContains applies the Contains predicate on the "enricher_error" field.
-func EnricherErrorContains(v string) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldContains(FieldEnricherError, v))
+// BundlerErrorContains applies the Contains predicate on the "bundler_error" field.
+func BundlerErrorContains(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldContains(FieldBundlerError, v))
 }
 
-// EnricherErrorHasPrefix applies the HasPrefix predicate on the "enricher_error" field.
-func EnricherErrorHasPrefix(v string) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldHasPrefix(FieldEnricherError, v))
+// BundlerErrorHasPrefix applies the HasPrefix predicate on the "bundler_error" field.
+func BundlerErrorHasPrefix(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldHasPrefix(FieldBundlerError, v))
 }
 
-// EnricherErrorHasSuffix applies the HasSuffix predicate on the "enricher_error" field.
-func EnricherErrorHasSuffix(v string) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldHasSuffix(FieldEnricherError, v))
+// BundlerErrorHasSuffix applies the HasSuffix predicate on the "bundler_error" field.
+func BundlerErrorHasSuffix(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldHasSuffix(FieldBundlerError, v))
 }
 
-// EnricherErrorIsNil applies the IsNil predicate on the "enricher_error" field.
-func EnricherErrorIsNil() predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldIsNull(FieldEnricherError))
+// BundlerErrorIsNil applies the IsNil predicate on the "bundler_error" field.
+func BundlerErrorIsNil() predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldIsNull(FieldBundlerError))
 }
 
-// EnricherErrorNotNil applies the NotNil predicate on the "enricher_error" field.
-func EnricherErrorNotNil() predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldNotNull(FieldEnricherError))
+// BundlerErrorNotNil applies the NotNil predicate on the "bundler_error" field.
+func BundlerErrorNotNil() predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldNotNull(FieldBundlerError))
 }
 
-// EnricherErrorEqualFold applies the EqualFold predicate on the "enricher_error" field.
-func EnricherErrorEqualFold(v string) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldEqualFold(FieldEnricherError, v))
+// BundlerErrorEqualFold applies the EqualFold predicate on the "bundler_error" field.
+func BundlerErrorEqualFold(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldEqualFold(FieldBundlerError, v))
 }
 
-// EnricherErrorContainsFold applies the ContainsFold predicate on the "enricher_error" field.
-func EnricherErrorContainsFold(v string) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldContainsFold(FieldEnricherError, v))
+// BundlerErrorContainsFold applies the ContainsFold predicate on the "bundler_error" field.
+func BundlerErrorContainsFold(v string) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldContainsFold(FieldBundlerError, v))
 }
 
 // And groups predicates with the AND operator between them.

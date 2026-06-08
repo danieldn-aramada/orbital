@@ -8,8 +8,6 @@ spec:
       containers:
         - name: orbital
           env:
-            - name: ORBITAL_DGRAPH_NAMESPACE
-              value: orbital
             - name: DATABASE_URL
               value: postgres://orbital:orbital@orbital-postgres:5432/orbital?sslmode=disable
             - name: DGRAPH_URL

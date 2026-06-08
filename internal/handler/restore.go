@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"html/template"
 	"io"
 	"log/slog"
 	"net/http"
@@ -22,8 +23,6 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-const dgraphLiveLabelSelector = "app.kubernetes.io/name=dgraph-live"
-
 // RestoreHandler handles async DGraph restore operations.
 type RestoreHandler struct {
 	db              *ent.Client
@@ -34,8 +33,6 @@ type RestoreHandler struct {
 	dgraphAlphaGRPC string // e.g. dgraph-blue-dgraph-alpha:9080
 	dgraphZeroGRPC  string // e.g. dgraph-blue-dgraph-zero:5080
 	schemaPath      string // path to the GraphQL SDL schema file
-	restoreDir      string // host-side directory where backup files are staged
-	execDataDir     string // same directory as seen from inside the execution environment
 	restoreTimeout  time.Duration
 	logger          *slog.Logger
 }
@@ -51,8 +48,6 @@ type RestoreConfig struct {
 	DGraphAlphaGRPC string // gRPC address of DGraph alpha, e.g. dgraph-blue-dgraph-alpha:9080
 	DGraphZeroGRPC  string // gRPC address of DGraph zero, e.g. dgraph-blue-dgraph-zero:5080
 	SchemaPath      string // path to the GraphQL SDL schema file
-	RestoreDir      string // host-side path where backup files are staged
-	ExecDataDir     string // path to staged files as seen inside the execution environment
 	RestoreTimeout  time.Duration
 }
 
@@ -69,10 +64,6 @@ func NewRestoreHandler(ctx context.Context, db *ent.Client, cfg RestoreConfig, b
 	}
 
 	base := strings.TrimSuffix(cfg.DGraphAdminURL, "/admin")
-	execDataDir := cfg.ExecDataDir
-	if execDataDir == "" {
-		execDataDir = cfg.RestoreDir
-	}
 
 	return &RestoreHandler{
 		db:              db,
@@ -83,8 +74,6 @@ func NewRestoreHandler(ctx context.Context, db *ent.Client, cfg RestoreConfig, b
 		dgraphAlphaGRPC: cfg.DGraphAlphaGRPC,
 		dgraphZeroGRPC:  cfg.DGraphZeroGRPC,
 		schemaPath:      cfg.SchemaPath,
-		restoreDir:      cfg.RestoreDir,
-		execDataDir:     execDataDir,
 		restoreTimeout:  cfg.RestoreTimeout,
 		logger:          logger,
 	}, nil
@@ -246,6 +235,18 @@ func (h *RestoreHandler) List(c echo.Context) error {
 	if err != nil {
 		return fmt.Errorf("list restore jobs: %w", err)
 	}
+	if c.Request().Header.Get("HX-Request") == "true" {
+		rows := make([]restoreFragRow, 0, len(jobs))
+		for _, j := range jobs {
+			rows = append(rows, toRestoreFragRow(j))
+		}
+		tmpl, err := template.ParseFiles("web/templates/orbital/partials/restore-jobs-tbody.gohtml")
+		if err != nil {
+			return fmt.Errorf("parse restore fragment: %w", err)
+		}
+		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+		return tmpl.Execute(c.Response().Writer, rows)
+	}
 	out := make([]restoreJobResponse, 0, len(jobs))
 	for _, j := range jobs {
 		out = append(out, toRestoreJobResponse(j))
@@ -330,33 +331,25 @@ func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 		return
 	}
 
-	// Clean up any leftover files from a previous failed restore
-	zipPath := filepath.Join(h.restoreDir, "backup.zip")
-	dataGzPath := filepath.Join(h.restoreDir, "data.json.gz")
-	dqlSchemaGzPath := filepath.Join(h.restoreDir, "schema.gz")
-	gqlSchemaGzPath := filepath.Join(h.restoreDir, "gql_schema.gz")
-	os.Remove(zipPath)
-	os.Remove(dataGzPath)
-	os.Remove(dqlSchemaGzPath)
-	os.Remove(gqlSchemaGzPath)
+	tmpDir, err := os.MkdirTemp("", "orbital-restore-*")
+	if err != nil {
+		fail("create temp dir", err)
+		return
+	}
+	defer os.RemoveAll(tmpDir)
 
-	defer func() {
-		os.Remove(zipPath)
-		os.Remove(dataGzPath)
-		os.Remove(dqlSchemaGzPath)
-		os.Remove(gqlSchemaGzPath)
-	}()
+	zipPath := filepath.Join(tmpDir, "backup.zip")
 
-	// Download backup zip to the shared PVC
+	// Download backup zip to temp dir
 	log("Downloading backup from storage...")
 	if err := h.downloadToFile(ctx, bk.S3Key, zipPath); err != nil {
 		fail("download backup", err)
 		return
 	}
 
-	// Extract all three files from zip onto the shared PVC
+	// Extract all three files from zip into temp dir
 	log("Extracting backup...")
-	if err := extractBackupZip(zipPath, h.restoreDir); err != nil {
+	if err := extractBackupZip(zipPath, tmpDir); err != nil {
 		fail("extract backup", err)
 		return
 	}
@@ -372,7 +365,7 @@ func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 
 	// Run dgraph live with the DQL schema — loads data with correct predicate types.
 	log("Running dgraph live...")
-	out, err := h.backend.RunLive(ctx, h.execDataDir, h.dgraphAlphaGRPC, h.dgraphZeroGRPC)
+	out, err := h.backend.RunLive(ctx, tmpDir, h.dgraphAlphaGRPC, h.dgraphZeroGRPC)
 	fmt.Fprintln(&logBuf, out)
 	if err != nil {
 		fail("dgraph live", err)
@@ -517,4 +510,79 @@ func (h *RestoreHandler) applyBlueSchema(ctx context.Context) error {
 	}
 	return nil
 }
+
+// ── Fragment renderer ─────────────────────────────────────────────────────────
+
+type restoreFragRow struct {
+	StartedAt   string
+	Status      string
+	StatusClass string
+	BackupLabel string
+	CreatedBy   string
+	Duration    string
+	HasLog      bool
+	Log         string
+	Error       string
+}
+
+func toRestoreFragRow(j *ent.RestoreJob) restoreFragRow {
+	statusClass := map[string]string{
+		"completed": "is-success",
+		"failed":    "is-danger",
+		"running":   "is-warning",
+	}[string(j.Status)]
+	if statusClass == "" {
+		statusClass = "is-light"
+	}
+
+	startedAt := "—"
+	if j.StartedAt != nil {
+		startedAt = j.StartedAt.UTC().Format("2006-01-02 15:04:05")
+	} else {
+		startedAt = j.CreatedAt.UTC().Format("2006-01-02 15:04:05")
+	}
+
+	duration := "—"
+	switch {
+	case j.StartedAt != nil && j.CompletedAt != nil:
+		secs := int(j.CompletedAt.Sub(*j.StartedAt).Seconds())
+		duration = fmt.Sprintf("%ds", secs)
+	case string(j.Status) == "running":
+		duration = "Running..."
+	}
+
+	backupLabel := "—"
+	if j.BackupKey != nil {
+		parts := strings.Split(*j.BackupKey, "/")
+		backupLabel = parts[len(parts)-1]
+	} else if j.BackupID != nil {
+		id := j.BackupID.String()
+		if len(id) > 8 {
+			backupLabel = id[:8] + "..."
+		} else {
+			backupLabel = id
+		}
+	}
+
+	row := restoreFragRow{
+		StartedAt:   startedAt,
+		Status:      string(j.Status),
+		StatusClass: statusClass,
+		BackupLabel: backupLabel,
+		CreatedBy:   j.CreatedBy,
+		Duration:    duration,
+		HasLog:      j.Log != nil || j.Error != nil,
+	}
+	if j.Log != nil {
+		row.Log = *j.Log
+	}
+	if j.Error != nil {
+		row.Error = *j.Error
+	}
+	return row
+}
+
+// ListRows handles GET /api/v1/restore/jobs/rows
+// Returns an HTML fragment containing the restore jobs tbody rows.
+
 

@@ -21,10 +21,6 @@ type Event struct {
 	ID uuid.UUID `json:"id,omitempty"`
 	// Operations holds the value of the "operations" field.
 	Operations []string `json:"operations,omitempty"`
-	// ResourceTypes holds the value of the "resource_types" field.
-	ResourceTypes []string `json:"resource_types,omitempty"`
-	// ResourceIds holds the value of the "resource_ids" field.
-	ResourceIds []string `json:"resource_ids,omitempty"`
 	// Actor holds the value of the "actor" field.
 	Actor string `json:"actor,omitempty"`
 	// Timestamp holds the value of the "timestamp" field.
@@ -33,7 +29,39 @@ type Event struct {
 	Details json.RawMessage `json:"details,omitempty"`
 	// EventCategory holds the value of the "event_category" field.
 	EventCategory string `json:"event_category,omitempty"`
-	selectValues  sql.SelectValues
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the EventQuery when eager-loading is set.
+	Edges        EventEdges `json:"edges"`
+	selectValues sql.SelectValues
+}
+
+// EventEdges holds the relations/edges for other nodes in the graph.
+type EventEdges struct {
+	// Resources holds the value of the resources edge.
+	Resources []*EventResource `json:"resources,omitempty"`
+	// ResourceTypes holds the value of the resource_types edge.
+	ResourceTypes []*EventResourceType `json:"resource_types,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [2]bool
+}
+
+// ResourcesOrErr returns the Resources value or an error if the edge
+// was not loaded in eager-loading.
+func (e EventEdges) ResourcesOrErr() ([]*EventResource, error) {
+	if e.loadedTypes[0] {
+		return e.Resources, nil
+	}
+	return nil, &NotLoadedError{edge: "resources"}
+}
+
+// ResourceTypesOrErr returns the ResourceTypes value or an error if the edge
+// was not loaded in eager-loading.
+func (e EventEdges) ResourceTypesOrErr() ([]*EventResourceType, error) {
+	if e.loadedTypes[1] {
+		return e.ResourceTypes, nil
+	}
+	return nil, &NotLoadedError{edge: "resource_types"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -41,7 +69,7 @@ func (*Event) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case event.FieldOperations, event.FieldResourceTypes, event.FieldResourceIds, event.FieldDetails:
+		case event.FieldOperations, event.FieldDetails:
 			values[i] = new([]byte)
 		case event.FieldActor, event.FieldEventCategory:
 			values[i] = new(sql.NullString)
@@ -76,22 +104,6 @@ func (_m *Event) assignValues(columns []string, values []any) error {
 			} else if value != nil && len(*value) > 0 {
 				if err := json.Unmarshal(*value, &_m.Operations); err != nil {
 					return fmt.Errorf("unmarshal field operations: %w", err)
-				}
-			}
-		case event.FieldResourceTypes:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field resource_types", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.ResourceTypes); err != nil {
-					return fmt.Errorf("unmarshal field resource_types: %w", err)
-				}
-			}
-		case event.FieldResourceIds:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field resource_ids", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.ResourceIds); err != nil {
-					return fmt.Errorf("unmarshal field resource_ids: %w", err)
 				}
 			}
 		case event.FieldActor:
@@ -133,6 +145,16 @@ func (_m *Event) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
+// QueryResources queries the "resources" edge of the Event entity.
+func (_m *Event) QueryResources() *EventResourceQuery {
+	return NewEventClient(_m.config).QueryResources(_m)
+}
+
+// QueryResourceTypes queries the "resource_types" edge of the Event entity.
+func (_m *Event) QueryResourceTypes() *EventResourceTypeQuery {
+	return NewEventClient(_m.config).QueryResourceTypes(_m)
+}
+
 // Update returns a builder for updating this Event.
 // Note that you need to call Event.Unwrap() before calling this method if this Event
 // was returned from a transaction, and the transaction was committed or rolled back.
@@ -158,12 +180,6 @@ func (_m *Event) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("operations=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Operations))
-	builder.WriteString(", ")
-	builder.WriteString("resource_types=")
-	builder.WriteString(fmt.Sprintf("%v", _m.ResourceTypes))
-	builder.WriteString(", ")
-	builder.WriteString("resource_ids=")
-	builder.WriteString(fmt.Sprintf("%v", _m.ResourceIds))
 	builder.WriteString(", ")
 	builder.WriteString("actor=")
 	builder.WriteString(_m.Actor)

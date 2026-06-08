@@ -4,9 +4,15 @@ import (
 	"github.com/armada/orbital/internal/web/data/layout"
 )
 
+type BackupOption struct {
+	ID    string
+	Label string
+}
+
 type Restore struct {
 	layout.Base
-	PageTitle     string
-	BackupEnabled bool
-	K8sAvailable  bool
+	PageTitle        string
+	BackupEnabled    bool
+	K8sAvailable     bool
+	CompletedBackups []BackupOption
 }

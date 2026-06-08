@@ -1,0 +1,57 @@
+package templates
+
+import (
+	"html/template"
+)
+
+// base is included in every page parse set.
+var base = []string{
+	"web/templates/shared/layouts/base.gohtml",
+	"web/templates/shared/layouts/head.gohtml",
+	"web/templates/shared/layouts/footer.gohtml",
+	"web/templates/shared/components/navbar.gohtml",
+	"web/templates/shared/components/menu.gohtml",
+	"web/templates/shared/components/todo-toast.gohtml",
+	"web/templates/orbital/components/report-issue-modal.gohtml",
+	"web/templates/orbital/components/login-modal.gohtml",
+	"web/templates/shared/components/hint-banner.gohtml",
+	"web/templates/orbital/partials/access-required.gohtml",
+	"web/templates/orbital/components/config-item-delete-modal.gohtml",
+}
+
+func page(path string) []string {
+	files := make([]string, len(base)+1)
+	copy(files, base)
+	files[len(base)] = path
+	return files
+}
+
+// LoginForm returns a parsed template for the login form fragment.
+// Used by the login handler to re-render the form with error states.
+func LoginForm() *template.Template {
+	return template.Must(template.ParseFiles("web/templates/orbital/partials/login-form.gohtml"))
+}
+
+// DeviceCodePage returns a parsed template for the standalone device code auth page.
+func DeviceCodePage() *template.Template {
+	return template.Must(template.ParseFiles("web/templates/orbital/partials/device-code-page.gohtml"))
+}
+
+// Map builds the full template map at startup. Each entry is an isolated
+// parse set — base layout/components plus one page — so {{define "page"}}
+// is unambiguous per route.
+func Map() map[string]*template.Template {
+	return map[string]*template.Template{
+		"home":               template.Must(template.ParseFiles(page("web/templates/orbital/pages/home.gohtml")...)),
+		"datacenters":        template.Must(template.ParseFiles(page("web/templates/orbital/pages/datacenters.gohtml")...)),
+		"backups":            template.Must(template.ParseFiles(page("web/templates/orbital/pages/backups.gohtml")...)),
+		"divergence-reports": template.Must(template.ParseFiles(page("web/templates/orbital/pages/divergence-reports.gohtml")...)),
+		"audit-log":          template.Must(template.ParseFiles(page("web/templates/orbital/pages/audit-log.gohtml")...)),
+		"schema":             template.Must(template.ParseFiles(page("web/templates/orbital/pages/schema.gohtml")...)),
+		"export":             template.Must(template.ParseFiles(page("web/templates/orbital/pages/export.gohtml")...)),
+		"signed-artifacts":   template.Must(template.ParseFiles(page("web/templates/orbital/pages/signed-artifacts.gohtml")...)),
+		"servers":            template.Must(template.ParseFiles(page("web/templates/orbital/pages/servers.gohtml")...)),
+		"restore":            template.Must(template.ParseFiles(page("web/templates/orbital/pages/restore.gohtml")...)),
+		"users":              template.Must(template.ParseFiles(page("web/templates/orbital/pages/users.gohtml")...)),
+	}
+}

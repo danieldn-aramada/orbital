@@ -1,19 +1,24 @@
 package handler
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"html/template"
+	"net/http"
 	"os"
+	"path"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent"
+	"github.com/armada/orbital/ent/backup"
 	"github.com/armada/orbital/ent/user"
 	appversion "github.com/armada/orbital/internal/version"
 	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/armada/orbital/internal/web/data/page"
-	webtemplates "github.com/armada/orbital/web/templates"
+	webtemplates "github.com/armada/orbital/web/templates/orbital"
 	"github.com/labstack/echo/v4"
 )
 
@@ -32,6 +37,7 @@ type UI struct {
 	exportDir        string
 	schemaPath       string
 	restoreAvailable bool
+	dgraphURL        string
 	version          string
 	basePath         string
 	db               *ent.Client
@@ -72,6 +78,10 @@ func (h *UI) SetExportDir(dir string) {
 
 func (h *UI) SetSchemaPath(path string) {
 	h.schemaPath = path
+}
+
+func (h *UI) SetDGraphURL(url string) {
+	h.dgraphURL = url
 }
 
 func (h *UI) render(c echo.Context, name string, data any) error {
@@ -250,14 +260,39 @@ func (h *UI) AuditLog(c echo.Context) error {
 }
 
 func (h *UI) Export(c echo.Context) error {
-	return h.render(c, "export", page.Export{
+	p := page.Export{
 		Base:          h.base(c),
 		PageTitle:     "Export Subgraph",
 		OCIConfigured: h.ociConfigured,
 		OCIRegistry:   h.ociRegistry,
 		OCIRepo:       h.ociRepo,
 		ExportDir:     h.exportDir,
-	})
+	}
+	if h.dgraphURL != "" {
+		body, _ := json.Marshal(map[string]string{"query": "{ queryDataCenter { orbId name } }"})
+		resp, err := http.Post(h.dgraphURL, "application/json", bytes.NewReader(body))
+		if err == nil {
+			defer resp.Body.Close()
+			var result struct {
+				Data struct {
+					QueryDataCenter []struct {
+						OrbID string `json:"orbId"`
+						Name  string `json:"name"`
+					} `json:"queryDataCenter"`
+				} `json:"data"`
+			}
+			if json.NewDecoder(resp.Body).Decode(&result) == nil {
+				p.DataCenters = make([]page.DataCenterOption, 0, len(result.Data.QueryDataCenter))
+				for _, dc := range result.Data.QueryDataCenter {
+					p.DataCenters = append(p.DataCenters, page.DataCenterOption{
+						OrbID: dc.OrbID,
+						Name:  dc.Name,
+					})
+				}
+			}
+		}
+	}
+	return h.render(c, "export", p)
 }
 
 func (h *UI) EdgeDelivery(c echo.Context) error {
@@ -278,12 +313,32 @@ func (h *UI) Servers(c echo.Context) error {
 }
 
 func (h *UI) Restore(c echo.Context) error {
-	return h.render(c, "restore", page.Restore{
+	p := page.Restore{
 		Base:          h.base(c),
 		PageTitle:     "Restore Graph",
 		BackupEnabled: h.backupEnabled,
 		K8sAvailable:  h.restoreAvailable,
-	})
+	}
+	if h.db != nil && h.backupEnabled {
+		backups, err := h.db.Backup.Query().
+			Where(backup.StatusEQ(backup.StatusCompleted)).
+			Order(backup.ByCompletedAt(sql.OrderDesc())).
+			All(c.Request().Context())
+		if err == nil {
+			p.CompletedBackups = make([]page.BackupOption, 0, len(backups))
+			for _, b := range backups {
+				label := path.Base(b.S3Key)
+				if b.CompletedAt != nil {
+					label += " (" + b.CompletedAt.UTC().Format("2006-01-02 15:04 UTC") + ")"
+				}
+				p.CompletedBackups = append(p.CompletedBackups, page.BackupOption{
+					ID:    b.ID.String(),
+					Label: label,
+				})
+			}
+		}
+	}
+	return h.render(c, "restore", p)
 }
 
 func (h *UI) Schema(c echo.Context) error {

@@ -282,8 +282,8 @@ func TestLogin_Success_WritesAuditEvent(t *testing.T) {
 	if len(ev.Operations) == 0 || ev.Operations[0] != "loginSuccess" {
 		t.Errorf("expected operation loginSuccess, got %v", ev.Operations)
 	}
-	if ev.EventCategory != "management" {
-		t.Errorf("expected category management, got %q", ev.EventCategory)
+	if ev.EventCategory != "auth" {
+		t.Errorf("expected category auth, got %q", ev.EventCategory)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"html/template"
 	"io"
 	"log/slog"
 	"net/http"
@@ -606,6 +607,18 @@ func (h *BackupHandler) List(c echo.Context) error {
 	if err != nil {
 		return fmt.Errorf("list backups: %w", err)
 	}
+	if c.Request().Header.Get("HX-Request") == "true" {
+		rows := make([]backupFragRow, 0, len(jobs))
+		for _, j := range jobs {
+			rows = append(rows, toBackupFragRow(j))
+		}
+		tmpl, err := template.ParseFiles("web/templates/orbital/partials/backup-jobs-tbody.gohtml")
+		if err != nil {
+			return fmt.Errorf("parse backup fragment: %w", err)
+		}
+		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+		return tmpl.Execute(c.Response().Writer, rows)
+	}
 	out := make([]backupResponse, 0, len(jobs))
 	for _, j := range jobs {
 		out = append(out, toBackupResponse(j))
@@ -938,6 +951,78 @@ func toBackupResponse(j *ent.Backup) backupResponse {
 	return r
 }
 
+// ── Fragment renderer ─────────────────────────────────────────────────────────
+
+type backupFragRow struct {
+	ID            string
+	InitiatedAt   string
+	Status        string
+	StatusClass   string
+	StatusError   string
+	Trigger       string
+	TriggerClass  string
+	InitiatedBy   string
+	SizeBytes     string
+	Checksum      string
+	ChecksumShort string
+	CanDownload   bool
+	CanDelete     bool
+}
+
+func toBackupFragRow(j *ent.Backup) backupFragRow {
+	statusClass := map[string]string{
+		"completed": "is-success",
+		"running":   "is-warning",
+		"pending":   "is-warning",
+		"failed":    "is-danger",
+	}[string(j.Status)]
+	if statusClass == "" {
+		statusClass = "is-light"
+	}
+	triggerClass := "is-light"
+	if j.Trigger == backup.TriggerScheduled {
+		triggerClass = "is-info is-light"
+	}
+	row := backupFragRow{
+		ID:          j.ID.String(),
+		InitiatedAt: j.CreatedAt.UTC().Format("2006-01-02 15:04:05"),
+		Status:      string(j.Status),
+		StatusClass: statusClass,
+		Trigger:     string(j.Trigger),
+		TriggerClass: triggerClass,
+		InitiatedBy: j.CreatedBy,
+		SizeBytes:   fmtBytes(j.SizeBytes),
+		Checksum:    j.Checksum,
+		CanDownload: j.Status == backup.StatusCompleted && j.S3Key != "",
+		CanDelete:   j.Status != backup.StatusRunning && j.Status != backup.StatusPending,
+	}
+	if j.Error != nil {
+		row.StatusError = *j.Error
+	}
+	if j.Checksum != "" && len(j.Checksum) > 36 {
+		row.ChecksumShort = j.Checksum[:36]
+	} else {
+		row.ChecksumShort = j.Checksum
+	}
+	return row
+}
+
+func fmtBytes(n *int64) string {
+	if n == nil || *n == 0 {
+		return "—"
+	}
+	b := *n
+	if b < 1024 {
+		return fmt.Sprintf("%d B", b)
+	}
+	if b < 1048576 {
+		return fmt.Sprintf("%.1f KB", float64(b)/1024)
+	}
+	return fmt.Sprintf("%.1f MB", float64(b)/1048576)
+}
+
+// ListRows handles GET /api/v1/backup/jobs/rows
+// Returns an HTML fragment containing the backup jobs tbody rows.
 // ── Schedule REST endpoints ────────────────────────────────────────────────────
 
 type scheduleResponse struct {

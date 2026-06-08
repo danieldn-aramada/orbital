@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/armada/orbital/ent/predicate"
 	"github.com/google/uuid"
 )
@@ -78,26 +79,6 @@ func OperationsIsNil() predicate.Event {
 // OperationsNotNil applies the NotNil predicate on the "operations" field.
 func OperationsNotNil() predicate.Event {
 	return predicate.Event(sql.FieldNotNull(FieldOperations))
-}
-
-// ResourceTypesIsNil applies the IsNil predicate on the "resource_types" field.
-func ResourceTypesIsNil() predicate.Event {
-	return predicate.Event(sql.FieldIsNull(FieldResourceTypes))
-}
-
-// ResourceTypesNotNil applies the NotNil predicate on the "resource_types" field.
-func ResourceTypesNotNil() predicate.Event {
-	return predicate.Event(sql.FieldNotNull(FieldResourceTypes))
-}
-
-// ResourceIdsIsNil applies the IsNil predicate on the "resource_ids" field.
-func ResourceIdsIsNil() predicate.Event {
-	return predicate.Event(sql.FieldIsNull(FieldResourceIds))
-}
-
-// ResourceIdsNotNil applies the NotNil predicate on the "resource_ids" field.
-func ResourceIdsNotNil() predicate.Event {
-	return predicate.Event(sql.FieldNotNull(FieldResourceIds))
 }
 
 // ActorEQ applies the EQ predicate on the "actor" field.
@@ -278,6 +259,52 @@ func EventCategoryEqualFold(v string) predicate.Event {
 // EventCategoryContainsFold applies the ContainsFold predicate on the "event_category" field.
 func EventCategoryContainsFold(v string) predicate.Event {
 	return predicate.Event(sql.FieldContainsFold(FieldEventCategory, v))
+}
+
+// HasResources applies the HasEdge predicate on the "resources" edge.
+func HasResources() predicate.Event {
+	return predicate.Event(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ResourcesTable, ResourcesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasResourcesWith applies the HasEdge predicate on the "resources" edge with a given conditions (other predicates).
+func HasResourcesWith(preds ...predicate.EventResource) predicate.Event {
+	return predicate.Event(func(s *sql.Selector) {
+		step := newResourcesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasResourceTypes applies the HasEdge predicate on the "resource_types" edge.
+func HasResourceTypes() predicate.Event {
+	return predicate.Event(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ResourceTypesTable, ResourceTypesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasResourceTypesWith applies the HasEdge predicate on the "resource_types" edge with a given conditions (other predicates).
+func HasResourceTypesWith(preds ...predicate.EventResourceType) predicate.Event {
+	return predicate.Event(func(s *sql.Selector) {
+		step := newResourceTypesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.

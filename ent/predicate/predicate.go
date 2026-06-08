@@ -15,6 +15,12 @@ type BackupSchedule func(*sql.Selector)
 // Event is the predicate function for event builders.
 type Event func(*sql.Selector)
 
+// EventResource is the predicate function for eventresource builders.
+type EventResource func(*sql.Selector)
+
+// EventResourceType is the predicate function for eventresourcetype builders.
+type EventResourceType func(*sql.Selector)
+
 // ExportJob is the predicate function for exportjob builders.
 type ExportJob func(*sql.Selector)
 

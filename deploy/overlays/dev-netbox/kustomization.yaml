@@ -3,12 +3,10 @@ kind: Kustomization
 namespace: netbox
 resources:
   - ../../base
-  - secrets.yaml  # gitignored — copy from deploy/dev/secrets.yaml (kustomize sets namespace: netbox)
+  - secrets.yaml  # gitignored — see README.md for how to create this file
 images:
   - name: armadaeksatest.azurecr.io/orbital
-    newTag: v0.0.15
+    newTag: v0.0.16
 
 patches:
   - path: deployment-patch.yaml
-# Secrets are NOT managed here — apply separately:
-#   kubectl apply -f deploy/dev/secrets.yaml -n netbox

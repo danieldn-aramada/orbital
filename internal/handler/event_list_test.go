@@ -35,9 +35,33 @@ func eventCtx(method, url string, query map[string]string) (echo.Context, *httpt
 	return e.NewContext(req, rec), rec
 }
 
+// clearEvents deletes all event child records then events to satisfy FK constraints.
+func clearEvents(ctx context.Context) {
+	testDB.EventResourceType.Delete().ExecX(ctx)
+	testDB.EventResource.Delete().ExecX(ctx)
+	testDB.Event.Delete().ExecX(ctx)
+}
+
+// createEvent creates an event and associates orbId resources and resource types with it.
+func createEvent(t *testing.T, actor string, operations, resourceTypes, resourceIDs []string, category string) {
+	t.Helper()
+	ctx := context.Background()
+	c := testDB.Event.Create().SetActor(actor).SetOperations(operations)
+	if category != "" {
+		c = c.SetEventCategory(category)
+	}
+	ev := c.SaveX(ctx)
+	for _, rid := range resourceIDs {
+		testDB.EventResource.Create().SetOrbID(rid).SetEventID(ev.ID).ExecX(ctx)
+	}
+	for _, rt := range resourceTypes {
+		testDB.EventResourceType.Create().SetResourceType(rt).SetEventID(ev.ID).ExecX(ctx)
+	}
+}
+
 func TestEventList_EmptyDB(t *testing.T) {
 	ctx := context.Background()
-	testDB.Event.Delete().ExecX(ctx)
+	clearEvents(ctx)
 
 	h := newEventHandler(t)
 	c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", nil)
@@ -64,24 +88,11 @@ func TestEventList_EmptyDB(t *testing.T) {
 
 func TestEventList_ReturnsEventsWithRequiredFields(t *testing.T) {
 	ctx := context.Background()
-	testDB.Event.Delete().ExecX(ctx)
+	clearEvents(ctx)
 
-	e1 := testDB.Event.Create().
-		SetActor("user-a").
-		SetOperations([]string{"updateServer"}).
-		SetResourceTypes([]string{"Server"}).
-		SetResourceIds([]string{"test:srv-01"}).
-		SaveX(ctx)
-	e2 := testDB.Event.Create().
-		SetActor("user-b").
-		SetOperations([]string{"updateDataCenter"}).
-		SetResourceTypes([]string{"DataCenter"}).
-		SetResourceIds([]string{"test:dc-01"}).
-		SaveX(ctx)
-	t.Cleanup(func() {
-		testDB.Event.DeleteOne(e1).ExecX(ctx)
-		testDB.Event.DeleteOne(e2).ExecX(ctx)
-	})
+	createEvent(t, "user-a", []string{"updateServer"}, []string{"Server"}, []string{"test:srv-01"}, "")
+	createEvent(t, "user-b", []string{"updateDataCenter"}, []string{"DataCenter"}, []string{"test:dc-01"}, "")
+	t.Cleanup(func() { clearEvents(ctx) })
 
 	h := newEventHandler(t)
 	c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", nil)
@@ -101,7 +112,6 @@ func TestEventList_ReturnsEventsWithRequiredFields(t *testing.T) {
 	if len(events) != 2 {
 		t.Fatalf("expected 2 events, got %d", len(events))
 	}
-	// Each event must have required fields.
 	for _, item := range events {
 		m := item.(map[string]any)
 		for _, field := range []string{"id", "operations", "resourceTypes", "resourceIds", "actor", "timestamp"} {
@@ -115,69 +125,14 @@ func TestEventList_ReturnsEventsWithRequiredFields(t *testing.T) {
 	}
 }
 
-func TestEventList_FilterByResourceType(t *testing.T) {
-	ctx := context.Background()
-	testDB.Event.Delete().ExecX(ctx)
-
-	eServer := testDB.Event.Create().
-		SetActor("filter-test").
-		SetOperations([]string{"updateServer"}).
-		SetResourceTypes([]string{"Server"}).
-		SetResourceIds([]string{"test:srv-99"}).
-		SaveX(ctx)
-	eDC := testDB.Event.Create().
-		SetActor("filter-test").
-		SetOperations([]string{"updateDataCenter"}).
-		SetResourceTypes([]string{"DataCenter"}).
-		SetResourceIds([]string{"test:dc-99"}).
-		SaveX(ctx)
-	t.Cleanup(func() {
-		testDB.Event.DeleteOne(eServer).ExecX(ctx)
-		testDB.Event.DeleteOne(eDC).ExecX(ctx)
-	})
-
-	h := newEventHandler(t)
-	c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", map[string]string{"resource_type": "Server"})
-
-	if err := h.List(c); err != nil {
-		t.Fatalf("List: %v", err)
-	}
-
-	var body map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	events, _ := body["events"].([]any)
-	if len(events) != 1 {
-		t.Fatalf("expected 1 Server event, got %d", len(events))
-	}
-	m := events[0].(map[string]any)
-	types, _ := m["resourceTypes"].([]any)
-	if len(types) == 0 || types[0].(string) != "Server" {
-		t.Errorf("resourceTypes: got %v, want [Server]", types)
-	}
-}
 
 func TestEventList_FilterByOrbId(t *testing.T) {
 	ctx := context.Background()
-	testDB.Event.Delete().ExecX(ctx)
+	clearEvents(ctx)
 
-	target := testDB.Event.Create().
-		SetActor("orbid-test").
-		SetOperations([]string{"updateServer"}).
-		SetResourceTypes([]string{"Server"}).
-		SetResourceIds([]string{"alaska:SRV-MATCH"}).
-		SaveX(ctx)
-	other := testDB.Event.Create().
-		SetActor("orbid-test").
-		SetOperations([]string{"updateServer"}).
-		SetResourceTypes([]string{"Server"}).
-		SetResourceIds([]string{"alaska:SRV-OTHER"}).
-		SaveX(ctx)
-	t.Cleanup(func() {
-		testDB.Event.DeleteOne(target).ExecX(ctx)
-		testDB.Event.DeleteOne(other).ExecX(ctx)
-	})
+	createEvent(t, "orbid-test", []string{"updateServer"}, []string{"Server"}, []string{"alaska:SRV-MATCH"}, "")
+	createEvent(t, "orbid-test", []string{"updateServer"}, []string{"Server"}, []string{"alaska:SRV-OTHER"}, "")
+	t.Cleanup(func() { clearEvents(ctx) })
 
 	h := newEventHandler(t)
 	c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", map[string]string{"orbId": "alaska:SRV-MATCH"})
@@ -201,25 +156,72 @@ func TestEventList_FilterByOrbId(t *testing.T) {
 	}
 }
 
+// TestEventList_FilterByOrbId_ExactMatch verifies that prefix orbIds don't collide.
+// e.g. filtering for "ns:server:a" must not return events for "ns:server:ab".
+func TestEventList_FilterByOrbId_ExactMatch(t *testing.T) {
+	ctx := context.Background()
+	clearEvents(ctx)
+
+	createEvent(t, "exact-test", []string{"updateServer"}, []string{"Server"}, []string{"ns:server:a"}, "")
+	createEvent(t, "exact-test", []string{"updateServer"}, []string{"Server"}, []string{"ns:server:ab"}, "")
+	t.Cleanup(func() { clearEvents(ctx) })
+
+	h := newEventHandler(t)
+	c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", map[string]string{"orbId": "ns:server:a"})
+
+	if err := h.List(c); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	var body map[string]any
+	json.Unmarshal(rec.Body.Bytes(), &body)
+	events, _ := body["events"].([]any)
+	if len(events) != 1 {
+		t.Fatalf("exact match: expected 1 event for ns:server:a, got %d", len(events))
+	}
+}
+
+func TestEventList_FilterByResourceType(t *testing.T) {
+	ctx := context.Background()
+	clearEvents(ctx)
+
+	createEvent(t, "filter-test", []string{"updateServer"}, []string{"Server"}, []string{"test:srv-99"}, "")
+	createEvent(t, "filter-test", []string{"updateDataCenter"}, []string{"DataCenter"}, []string{"test:dc-99"}, "")
+	t.Cleanup(func() { clearEvents(ctx) })
+
+	h := newEventHandler(t)
+	c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", map[string]string{"resource_type": "Server"})
+
+	if err := h.List(c); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	events, _ := body["events"].([]any)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 Server event, got %d", len(events))
+	}
+	m := events[0].(map[string]any)
+	types, _ := m["resourceTypes"].([]any)
+	if len(types) == 0 || types[0].(string) != "Server" {
+		t.Errorf("resourceTypes: got %v, want [Server]", types)
+	}
+}
+
 func TestEventList_LimitAndOffset(t *testing.T) {
 	ctx := context.Background()
-	testDB.Event.Delete().ExecX(ctx)
+	clearEvents(ctx)
 
 	for range 5 {
-		testDB.Event.Create().
-			SetActor("pagination-test").
-			SetOperations([]string{"op"}).
-			SetResourceTypes([]string{"Server"}).
-			SetResourceIds([]string{"test:srv"}).
-			ExecX(ctx)
+		createEvent(t, "pagination-test", []string{"op"}, []string{"Server"}, []string{"test:srv"}, "")
 	}
-	t.Cleanup(func() {
-		testDB.Event.Delete().ExecX(ctx)
-	})
+	t.Cleanup(func() { clearEvents(ctx) })
 
 	h := newEventHandler(t)
 
-	// Limit to 2.
 	c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", map[string]string{"limit": "2"})
 	if err := h.List(c); err != nil {
 		t.Fatalf("List: %v", err)
@@ -234,7 +236,6 @@ func TestEventList_LimitAndOffset(t *testing.T) {
 		t.Errorf("total: expected 5, got %v", body["total"])
 	}
 
-	// Offset beyond count returns empty.
 	c2, rec2 := eventCtx(http.MethodGet, "/api/v1/audit-log", map[string]string{"offset": "10"})
 	if err := h.List(c2); err != nil {
 		t.Fatalf("List offset: %v", err)
@@ -249,24 +250,11 @@ func TestEventList_LimitAndOffset(t *testing.T) {
 
 func TestEventList_EventCategoryInResponse(t *testing.T) {
 	ctx := context.Background()
-	testDB.Event.Delete().ExecX(ctx)
+	clearEvents(ctx)
 
-	dataEv := testDB.Event.Create().
-		SetActor("cat-test").
-		SetEventCategory("data").
-		SetOperations([]string{"updateServer"}).
-		SetResourceTypes([]string{"Server"}).
-		SetResourceIds([]string{"test:srv-cat"}).
-		SaveX(ctx)
-	mgmtEv := testDB.Event.Create().
-		SetActor("cat-test").
-		SetEventCategory("management").
-		SetOperations([]string{"restoreBackup"}).
-		SaveX(ctx)
-	t.Cleanup(func() {
-		testDB.Event.DeleteOne(dataEv).ExecX(ctx)
-		testDB.Event.DeleteOne(mgmtEv).ExecX(ctx)
-	})
+	createEvent(t, "cat-test", []string{"updateServer"}, []string{"Server"}, []string{"test:srv-cat"}, "data")
+	createEvent(t, "cat-test", []string{"restoreBackup"}, nil, nil, "management")
+	t.Cleanup(func() { clearEvents(ctx) })
 
 	h := newEventHandler(t)
 	c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", nil)
@@ -282,7 +270,6 @@ func TestEventList_EventCategoryInResponse(t *testing.T) {
 	if len(events) != 2 {
 		t.Fatalf("expected 2 events, got %d", len(events))
 	}
-	// Both events must have eventCategory set.
 	cats := map[string]bool{}
 	for _, ev := range events {
 		m := ev.(map[string]any)
@@ -302,34 +289,12 @@ func TestEventList_EventCategoryInResponse(t *testing.T) {
 
 func TestEventList_OrbIdFilterIncludesManagementEvents(t *testing.T) {
 	ctx := context.Background()
-	testDB.Event.Delete().ExecX(ctx)
+	clearEvents(ctx)
 
-	// A data event matching the orbId.
-	dataEv := testDB.Event.Create().
-		SetActor("mgmt-filter-test").
-		SetEventCategory("data").
-		SetOperations([]string{"updateServer"}).
-		SetResourceTypes([]string{"Server"}).
-		SetResourceIds([]string{"alaska:SRV-MGMT"}).
-		SaveX(ctx)
-	// A management event with no matching orbId — should still be returned.
-	mgmtEv := testDB.Event.Create().
-		SetActor("mgmt-filter-test").
-		SetEventCategory("management").
-		SetOperations([]string{"restoreBackup"}).
-		SaveX(ctx)
-	// A data event with a different orbId — should not be returned.
-	otherEv := testDB.Event.Create().
-		SetActor("mgmt-filter-test").
-		SetEventCategory("data").
-		SetOperations([]string{"updateServer"}).
-		SetResourceIds([]string{"alaska:SRV-OTHER"}).
-		SaveX(ctx)
-	t.Cleanup(func() {
-		testDB.Event.DeleteOne(dataEv).ExecX(ctx)
-		testDB.Event.DeleteOne(mgmtEv).ExecX(ctx)
-		testDB.Event.DeleteOne(otherEv).ExecX(ctx)
-	})
+	createEvent(t, "mgmt-filter-test", []string{"updateServer"}, []string{"Server"}, []string{"alaska:SRV-MGMT"}, "data")
+	createEvent(t, "mgmt-filter-test", []string{"restoreBackup"}, nil, nil, "management")
+	createEvent(t, "mgmt-filter-test", []string{"updateServer"}, nil, []string{"alaska:SRV-OTHER"}, "data")
+	t.Cleanup(func() { clearEvents(ctx) })
 
 	h := newEventHandler(t)
 	c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", map[string]string{"orbId": "alaska:SRV-MGMT"})
@@ -342,7 +307,6 @@ func TestEventList_OrbIdFilterIncludesManagementEvents(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	events, _ := body["events"].([]any)
-	// Should return: the matching data event + the management event = 2.
 	if len(events) != 2 {
 		t.Fatalf("expected 2 events (1 data + 1 management), got %d: %v", len(events), body)
 	}
@@ -359,29 +323,53 @@ func TestEventList_OrbIdFilterIncludesManagementEvents(t *testing.T) {
 	}
 }
 
+func TestEventList_OrbIdFilterExcludesAuthEvents(t *testing.T) {
+	ctx := context.Background()
+	clearEvents(ctx)
+
+	createEvent(t, "auth-filter-test", []string{"updateServer"}, []string{"Server"}, []string{"ns:srv-01"}, "data")
+	createEvent(t, "auth-filter-test", []string{"loginSuccess"}, nil, nil, "auth")
+	t.Cleanup(func() { clearEvents(ctx) })
+
+	h := newEventHandler(t)
+	c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", map[string]string{"orbId": "ns:srv-01"})
+	if err := h.List(c); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	var body map[string]any
+	json.Unmarshal(rec.Body.Bytes(), &body)
+	events, _ := body["events"].([]any)
+	if len(events) != 1 {
+		t.Fatalf("auth events must be excluded from orbId filter; expected 1 event, got %d: %v", len(events), body)
+	}
+	m := events[0].(map[string]any)
+	if m["eventCategory"].(string) != "data" {
+		t.Errorf("expected data event, got %q", m["eventCategory"])
+	}
+}
+
 func TestEventList_OrderedByTimestampDesc(t *testing.T) {
 	ctx := context.Background()
-	testDB.Event.Delete().ExecX(ctx)
+	clearEvents(ctx)
 
-	// Create events with explicit timestamps so ordering is deterministic.
 	e1 := testDB.Event.Create().
 		SetActor("order-test").
 		SetOperations([]string{"op"}).
-		SetResourceTypes([]string{"Server"}).
-		SetResourceIds([]string{"test:srv"}).
 		SetTimestamp(time.Now().Add(-2 * time.Minute)).
 		SaveX(ctx)
+	testDB.EventResource.Create().SetOrbID("test:srv").SetEventID(e1.ID).ExecX(ctx)
+	testDB.EventResourceType.Create().SetResourceType("Server").SetEventID(e1.ID).ExecX(ctx)
+
 	e2 := testDB.Event.Create().
 		SetActor("order-test").
 		SetOperations([]string{"op"}).
-		SetResourceTypes([]string{"Server"}).
-		SetResourceIds([]string{"test:srv"}).
 		SetTimestamp(time.Now()).
 		SaveX(ctx)
-	t.Cleanup(func() {
-		testDB.Event.DeleteOne(e1).ExecX(ctx)
-		testDB.Event.DeleteOne(e2).ExecX(ctx)
-	})
+	testDB.EventResource.Create().SetOrbID("test:srv").SetEventID(e2.ID).ExecX(ctx)
+	testDB.EventResourceType.Create().SetResourceType("Server").SetEventID(e2.ID).ExecX(ctx)
+
+	t.Cleanup(func() { clearEvents(ctx) })
 
 	h := newEventHandler(t)
 	c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", nil)
@@ -395,7 +383,6 @@ func TestEventList_OrderedByTimestampDesc(t *testing.T) {
 	if len(events) < 2 {
 		t.Fatalf("expected at least 2 events, got %d", len(events))
 	}
-	// First event should have a later timestamp than the second.
 	t1 := events[0].(map[string]any)["timestamp"].(string)
 	t2 := events[1].(map[string]any)["timestamp"].(string)
 	if t1 < t2 {

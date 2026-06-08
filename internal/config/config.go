@@ -25,7 +25,7 @@ type Config struct {
 	DatabaseURL            string        `envconfig:"DATABASE_URL"                    default:"postgres://orbital:orbital@localhost:5432/orbital?sslmode=disable"`
 	ExportDir              string        `envconfig:"ORBITAL_EXPORT_DIR"              default:"./subgraph-exports"`
 	DGraphScratchExportDir string        `envconfig:"DGRAPH_SCRATCH_EXPORT_DIR"       default:"/tmp/orbital-test-scratch"`
-	SchemaPath             string        `envconfig:"ORBITAL_SCHEMA_PATH"             default:"schema/schema-demo.graphql"`
+	SchemaPath             string        `envconfig:"ORBITAL_SCHEMA_PATH"             default:"schema/schema.graphql"`
 	SessionHMACKey         string        `envconfig:"ORBITAL_SESSION_HMAC_KEY"        default:"local-dev-hmac-key-change-in-prod"` // must be changed in prod
 	SessionEncryptionKey   string        `envconfig:"ORBITAL_SESSION_ENCRYPTION_KEY"  default:"local-dev-enc-key-32-bytes-pad!!"`  // must be exactly 32 bytes for AES-256; empty disables cookie encryption
 	DGraphExportDir        string        `envconfig:"DGRAPH_EXPORT_DIR"               default:"/tmp/orbital-test-blue"`            // host-side mount of /dgraph/export on blue alpha
@@ -50,19 +50,14 @@ type Config struct {
 	OCIUsername            string        `envconfig:"ORBITAL_OCI_USERNAME"            default:""`
 	OCIPassword            string        `envconfig:"ORBITAL_OCI_PASSWORD"            default:""`
 	OCIAllowHTTP           bool          `envconfig:"ORBITAL_OCI_ALLOW_HTTP"          default:"true"`              // set false in prod (TLS registry)
-	OCISigningKeyPath      string        `envconfig:"ORBITAL_OCI_SIGNING_KEY_PATH"    default:"cosign.key"`        // run: cosign generate-key-pair
+	OCISigningKeyPath      string        `envconfig:"ORBITAL_OCI_SIGNING_KEY_PATH"    default:"deploy/local/cosign.key"`        // run: cosign generate-key-pair
 	BasePath                  string        `envconfig:"ORBITAL_BASE_PATH"                    default:""`
-	EnricherTimeout           time.Duration `envconfig:"ORBITAL_ENRICHER_TIMEOUT"             default:"30s"`  // per-attempt HTTP timeout; per-request URLs supplied in publish body
-	EnricherMaxAttempts       int           `envconfig:"ORBITAL_ENRICHER_MAX_ATTEMPTS"        default:"3"`    // total attempts (1 initial + N-1 retries)
-	EnricherMaxResponseBytes  int64         `envconfig:"ORBITAL_ENRICHER_MAX_RESPONSE_BYTES"  default:"10485760"` // 10 MB
+	BundlerTimeout           time.Duration `envconfig:"ORBITAL_BUNDLER_TIMEOUT"             default:"30s"`  // per-attempt HTTP timeout; per-request URLs supplied in publish body
+	BundlerMaxAttempts       int           `envconfig:"ORBITAL_BUNDLER_MAX_ATTEMPTS"        default:"3"`    // total attempts (1 initial + N-1 retries)
+	BundlerMaxResponseBytes  int64         `envconfig:"ORBITAL_BUNDLER_MAX_RESPONSE_BYTES"  default:"10485760"` // 10 MB
 	RestoreTimeout         time.Duration `envconfig:"ORBITAL_RESTORE_TIMEOUT"         default:"10m"`
-	DGraphNamespace        string        `envconfig:"ORBITAL_DGRAPH_NAMESPACE"        default:"dgraph"`
 	DGraphAlphaGRPC        string        `envconfig:"ORBITAL_DGRAPH_ALPHA_GRPC"       default:"localhost:9080"`
 	DGraphZeroGRPC         string        `envconfig:"ORBITAL_DGRAPH_ZERO_GRPC"        default:"localhost:5080"`
-	RestoreDir             string        `envconfig:"ORBITAL_RESTORE_DIR"             default:"/tmp/orbital-test-blue"` // host-side staging dir; matches DGraphExportDir volume mount
-	RestoreExecDataDir     string        `envconfig:"ORBITAL_RESTORE_EXEC_DATA_DIR"   default:"/dgraph/export"`         // container/pod-internal view of RestoreDir
-	RestoreBackend         string        `envconfig:"ORBITAL_RESTORE_BACKEND"         default:"docker"`                  // "docker" or "k8s"
-	DGraphContainer        string        `envconfig:"ORBITAL_DGRAPH_CONTAINER"        default:"local-dgraph-alpha-1"`   // Docker container name for RestoreBackend=docker
 }
 
 func New() (*Config, error) {

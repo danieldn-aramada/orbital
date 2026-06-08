@@ -1,0 +1,23 @@
+{{range .}}<tr>
+  <td>{{.InitiatedAt}}</td>
+  <td data-testid="backup-job-status">
+    <span class="tag {{.StatusClass}}">{{.Status}}</span>
+    {{if .StatusError}}<br><span class="has-text-danger" style="display:block;max-width:400px;white-space:normal;word-break:break-word;margin-top:4px;">{{.StatusError}}</span>{{end}}
+  </td>
+  <td><span class="tag {{.TriggerClass}}">{{.Trigger}}</span></td>
+  <td>{{.InitiatedBy}}</td>
+  <td>{{.SizeBytes}}</td>
+  <td>
+    {{if .Checksum}}<span class="is-family-monospace" title="{{.Checksum}}">{{.ChecksumShort}}…</span>
+    <button class="button is-small is-white" title="Copy checksum" data-copy-value="{{.Checksum}}"><span class="icon"><i class="fas fa-copy"></i></span></button>
+    {{else}}—{{end}}
+  </td>
+  <td>
+    <div class="buttons is-right" style="gap: 0.25rem; flex-wrap: nowrap;">
+      {{if .CanDownload}}<a data-testid="backup-download-btn" class="button is-small is-light" onclick="downloadBackup('{{.ID}}')" title="Download"><span class="icon"><i class="fas fa-download"></i></span></a>{{end}}
+      {{if .CanDelete}}<a class="button is-small is-light has-text-danger" onclick="openDeleteModal('{{.ID}}', '{{.InitiatedAt}}')" title="Delete"><span class="icon"><i class="fas fa-trash"></i></span></a>{{end}}
+    </div>
+  </td>
+</tr>
+{{else}}<tr><td colspan="7" class="has-text-grey has-text-centered">No backups yet.</td></tr>
+{{end}}

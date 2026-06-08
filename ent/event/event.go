@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/google/uuid"
 )
 
@@ -16,10 +17,6 @@ const (
 	FieldID = "id"
 	// FieldOperations holds the string denoting the operations field in the database.
 	FieldOperations = "operations"
-	// FieldResourceTypes holds the string denoting the resource_types field in the database.
-	FieldResourceTypes = "resource_types"
-	// FieldResourceIds holds the string denoting the resource_ids field in the database.
-	FieldResourceIds = "resource_ids"
 	// FieldActor holds the string denoting the actor field in the database.
 	FieldActor = "actor"
 	// FieldTimestamp holds the string denoting the timestamp field in the database.
@@ -28,16 +25,32 @@ const (
 	FieldDetails = "details"
 	// FieldEventCategory holds the string denoting the event_category field in the database.
 	FieldEventCategory = "event_category"
+	// EdgeResources holds the string denoting the resources edge name in mutations.
+	EdgeResources = "resources"
+	// EdgeResourceTypes holds the string denoting the resource_types edge name in mutations.
+	EdgeResourceTypes = "resource_types"
 	// Table holds the table name of the event in the database.
 	Table = "events"
+	// ResourcesTable is the table that holds the resources relation/edge.
+	ResourcesTable = "event_resources"
+	// ResourcesInverseTable is the table name for the EventResource entity.
+	// It exists in this package in order to avoid circular dependency with the "eventresource" package.
+	ResourcesInverseTable = "event_resources"
+	// ResourcesColumn is the table column denoting the resources relation/edge.
+	ResourcesColumn = "event_id"
+	// ResourceTypesTable is the table that holds the resource_types relation/edge.
+	ResourceTypesTable = "event_resource_types"
+	// ResourceTypesInverseTable is the table name for the EventResourceType entity.
+	// It exists in this package in order to avoid circular dependency with the "eventresourcetype" package.
+	ResourceTypesInverseTable = "event_resource_types"
+	// ResourceTypesColumn is the table column denoting the resource_types relation/edge.
+	ResourceTypesColumn = "event_id"
 )
 
 // Columns holds all SQL columns for event fields.
 var Columns = []string{
 	FieldID,
 	FieldOperations,
-	FieldResourceTypes,
-	FieldResourceIds,
 	FieldActor,
 	FieldTimestamp,
 	FieldDetails,
@@ -84,4 +97,46 @@ func ByTimestamp(opts ...sql.OrderTermOption) OrderOption {
 // ByEventCategory orders the results by the event_category field.
 func ByEventCategory(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEventCategory, opts...).ToFunc()
+}
+
+// ByResourcesCount orders the results by resources count.
+func ByResourcesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newResourcesStep(), opts...)
+	}
+}
+
+// ByResources orders the results by resources terms.
+func ByResources(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newResourcesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByResourceTypesCount orders the results by resource_types count.
+func ByResourceTypesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newResourceTypesStep(), opts...)
+	}
+}
+
+// ByResourceTypes orders the results by resource_types terms.
+func ByResourceTypes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newResourceTypesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newResourcesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ResourcesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ResourcesTable, ResourcesColumn),
+	)
+}
+func newResourceTypesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ResourceTypesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ResourceTypesTable, ResourceTypesColumn),
+	)
 }

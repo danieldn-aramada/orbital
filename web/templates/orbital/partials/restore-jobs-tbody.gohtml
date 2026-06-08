@@ -1,0 +1,10 @@
+{{range .}}<tr>
+  <td>{{.StartedAt}}</td>
+  <td><span class="tag {{.StatusClass}}">{{.Status}}</span></td>
+  <td>{{.BackupLabel}}</td>
+  <td>{{.CreatedBy}}</td>
+  <td>{{.Duration}}</td>
+  <td>{{if .HasLog}}<button class="button is-small is-light" data-log="{{.Log}}" data-error="{{.Error}}" onclick="openRestoreLogModal(this)">Log</button>{{end}}</td>
+</tr>
+{{else}}<tr><td colspan="6" class="has-text-grey has-text-centered">No restore jobs yet.</td></tr>
+{{end}}

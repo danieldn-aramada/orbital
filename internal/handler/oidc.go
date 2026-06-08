@@ -16,7 +16,7 @@ import (
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/auth"
-	webtemplates "github.com/armada/orbital/web/templates"
+	webtemplates "github.com/armada/orbital/web/templates/orbital"
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/labstack/echo/v4"
 	"golang.org/x/oauth2"
@@ -149,7 +149,7 @@ func (h *OIDC) Callback(c echo.Context) error {
 		}
 	}
 
-	if err := auth.SetUserSession(h.sessionKeys, c.Request(), c.Response().Writer, u.ID, u.Name, u.Email); err != nil {
+	if err := auth.SetUserSession(h.sessionKeys, c.Request(), c.Response().Writer, u.ID, u.Name, u.Email, string(u.Role)); err != nil {
 		return fmt.Errorf("set session: %w", err)
 	}
 
@@ -308,7 +308,7 @@ func (h *OIDC) DeviceCodePoll(c echo.Context) error {
 		}
 	}
 
-	if err := auth.SetUserSession(h.sessionKeys, c.Request(), c.Response().Writer, u.ID, u.Name, u.Email); err != nil {
+	if err := auth.SetUserSession(h.sessionKeys, c.Request(), c.Response().Writer, u.ID, u.Name, u.Email, string(u.Role)); err != nil {
 		return fmt.Errorf("set device code session: %w", err)
 	}
 
@@ -322,7 +322,7 @@ func (h *OIDC) writeAuthAudit(operation, actor string, details map[string]any) {
 	if h.db == nil {
 		return
 	}
-	writeAuditEvent(h.db, h.logger, "management", actor, operation,
+	writeAuditEvent(h.db, h.logger, "auth", actor, operation,
 		[]string{operation},
 		[]string{},
 		[]string{},

@@ -45,6 +45,30 @@ func (f EventFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EventMutation", m)
 }
 
+// The EventResourceFunc type is an adapter to allow the use of ordinary
+// function as EventResource mutator.
+type EventResourceFunc func(context.Context, *ent.EventResourceMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f EventResourceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.EventResourceMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EventResourceMutation", m)
+}
+
+// The EventResourceTypeFunc type is an adapter to allow the use of ordinary
+// function as EventResourceType mutator.
+type EventResourceTypeFunc func(context.Context, *ent.EventResourceTypeMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f EventResourceTypeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.EventResourceTypeMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EventResourceTypeMutation", m)
+}
+
 // The ExportJobFunc type is an adapter to allow the use of ordinary
 // function as ExportJob mutator.
 type ExportJobFunc func(context.Context, *ent.ExportJobMutation) (ent.Value, error)

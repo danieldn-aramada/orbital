@@ -50,9 +50,9 @@ type RegistryArtifact struct {
 	Error *string `json:"error,omitempty"`
 	// Enriched holds the value of the "enriched" field.
 	Enriched bool `json:"enriched,omitempty"`
-	// EnricherError holds the value of the "enricher_error" field.
-	EnricherError *string `json:"enricher_error,omitempty"`
-	selectValues  sql.SelectValues
+	// BundlerError holds the value of the "bundler_error" field.
+	BundlerError *string `json:"bundler_error,omitempty"`
+	selectValues sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -64,7 +64,7 @@ func (*RegistryArtifact) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case registryartifact.FieldID, registryartifact.FieldSizeBytes, registryartifact.FieldInitiatedBy:
 			values[i] = new(sql.NullInt64)
-		case registryartifact.FieldDatacenterID, registryartifact.FieldDatacenterName, registryartifact.FieldRegistry, registryartifact.FieldRepository, registryartifact.FieldTag, registryartifact.FieldDigest, registryartifact.FieldSigningKeyFingerprint, registryartifact.FieldStatus, registryartifact.FieldError, registryartifact.FieldEnricherError:
+		case registryartifact.FieldDatacenterID, registryartifact.FieldDatacenterName, registryartifact.FieldRegistry, registryartifact.FieldRepository, registryartifact.FieldTag, registryartifact.FieldDigest, registryartifact.FieldSigningKeyFingerprint, registryartifact.FieldStatus, registryartifact.FieldError, registryartifact.FieldBundlerError:
 			values[i] = new(sql.NullString)
 		case registryartifact.FieldInitiatedAt, registryartifact.FieldCompletedAt:
 			values[i] = new(sql.NullTime)
@@ -193,12 +193,12 @@ func (_m *RegistryArtifact) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Enriched = value.Bool
 			}
-		case registryartifact.FieldEnricherError:
+		case registryartifact.FieldBundlerError:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field enricher_error", values[i])
+				return fmt.Errorf("unexpected type %T for field bundler_error", values[i])
 			} else if value.Valid {
-				_m.EnricherError = new(string)
-				*_m.EnricherError = value.String
+				_m.BundlerError = new(string)
+				*_m.BundlerError = value.String
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -296,8 +296,8 @@ func (_m *RegistryArtifact) String() string {
 	builder.WriteString("enriched=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Enriched))
 	builder.WriteString(", ")
-	if v := _m.EnricherError; v != nil {
-		builder.WriteString("enricher_error=")
+	if v := _m.BundlerError; v != nil {
+		builder.WriteString("bundler_error=")
 		builder.WriteString(*v)
 	}
 	builder.WriteByte(')')

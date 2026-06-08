@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,7 +15,7 @@ import (
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/registryartifact"
-	"github.com/armada/orbital/internal/enricher"
+	"github.com/armada/orbital/internal/bundler"
 	"github.com/armada/orbital/internal/oci"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -30,18 +31,18 @@ type OCI struct {
 	cfg              oci.Config
 	scratchExportDir string
 	logger           *slog.Logger
-	enricherTimeout  time.Duration
-	enricherOpts     []enricher.ClientOption
+	bundlerTimeout  time.Duration
+	bundlerOpts     []bundler.ClientOption
 }
 
 // NewOCI creates an OCI handler. publisher may be nil when OCI is not configured.
-// enricherTimeout and enricherOpts are applied when constructing per-request enricher clients.
-func NewOCI(db *ent.Client, cfg oci.Config, scratchExportDir string, logger *slog.Logger, enricherTimeout time.Duration, enricherOpts ...enricher.ClientOption) *OCI {
+// bundlerTimeout and bundlerOpts are applied when constructing per-request bundler clients.
+func NewOCI(db *ent.Client, cfg oci.Config, scratchExportDir string, logger *slog.Logger, bundlerTimeout time.Duration, bundlerOpts ...bundler.ClientOption) *OCI {
 	var pub *oci.Publisher
 	if cfg.Registry != "" && cfg.SigningKeyPath != "" {
 		pub = oci.New(db, cfg, logger)
 	}
-	return &OCI{db: db, publisher: pub, cfg: cfg, scratchExportDir: scratchExportDir, logger: logger, enricherTimeout: enricherTimeout, enricherOpts: enricherOpts}
+	return &OCI{db: db, publisher: pub, cfg: cfg, scratchExportDir: scratchExportDir, logger: logger, bundlerTimeout: bundlerTimeout, bundlerOpts: bundlerOpts}
 }
 
 type publishResponse struct {
@@ -66,9 +67,9 @@ type artifactResponse struct {
 	Status               string  `json:"status"`
 	InitiatedAt          string  `json:"initiatedAt"`
 	CompletedAt          *string `json:"completedAt,omitempty"`
-	Error          *string `json:"error,omitempty"`
-	Enriched       bool    `json:"enriched"`
-	EnricherError  *string `json:"enricherError,omitempty"`
+	Error         *string `json:"error,omitempty"`
+	Enriched      bool    `json:"enriched"`
+	BundlerError  *string `json:"bundlerError,omitempty"`
 }
 
 // Publish handles POST /api/v1/export/jobs/:jobId/publish
@@ -143,22 +144,22 @@ func (h *OCI) Publish(c echo.Context) error {
 		return fmt.Errorf("create artifact record: %w", err)
 	}
 
-	// Parse optional enricher URLs from the request body.
-	// Enricher URLs are supplied per-request by the caller — no server-side URL config required.
+	// Parse optional bundler URLs from the request body.
+	// Bundler URLs are supplied per-request by the caller — no server-side URL config required.
 	// The API is protected by Azure AD authn/authz and runs inside AKS on VPN, so per-request
-	// URLs are acceptable. TODO(future): consider named server-side enrichers for stricter
+	// URLs are acceptable. TODO(future): consider named server-side bundlers for stricter
 	// governance if the threat model changes.
 	var req struct {
-		Enrichers []string `json:"enrichers"`
+		Bundlers []string `json:"bundlers"`
 	}
 	_ = json.NewDecoder(c.Request().Body).Decode(&req) // empty body is valid
 
-	var enricherClients []*enricher.Client
-	for _, url := range req.Enrichers {
-		enricherClients = append(enricherClients, enricher.New(url, h.enricherTimeout))
+	var bundlerClients []*bundler.Client
+	for _, url := range req.Bundlers {
+		bundlerClients = append(bundlerClients, bundler.New(url, h.bundlerTimeout))
 	}
 
-	go h.publisher.Publish(artifact.ID, job, tag, enricherClients)
+	go h.publisher.Publish(artifact.ID, job, tag, bundlerClients)
 
 	return c.JSON(http.StatusAccepted, publishResponse{
 		ArtifactID: artifact.ID,
@@ -184,7 +185,18 @@ func (h *OCI) ListArtifacts(c echo.Context) error {
 	if err != nil {
 		return fmt.Errorf("list artifacts: %w", err)
 	}
-
+	if c.Request().Header.Get("HX-Request") == "true" {
+		rows := make([]artifactFragRow, 0, len(artifacts))
+		for _, a := range artifacts {
+			rows = append(rows, toArtifactFragRow(a))
+		}
+		tmpl, err := template.ParseFiles("web/templates/orbital/partials/artifacts-tbody.gohtml")
+		if err != nil {
+			return fmt.Errorf("parse artifacts fragment: %w", err)
+		}
+		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+		return tmpl.Execute(c.Response().Writer, rows)
+	}
 	out := make([]artifactResponse, 0, len(artifacts))
 	for _, a := range artifacts {
 		out = append(out, toArtifactResponse(a))
@@ -339,8 +351,8 @@ func toArtifactResponse(a *ent.RegistryArtifact) artifactResponse {
 		r.Error = a.Error
 	}
 	r.Enriched = a.Enriched
-	if a.EnricherError != nil {
-		r.EnricherError = a.EnricherError
+	if a.BundlerError != nil {
+		r.BundlerError = a.BundlerError
 	}
 	return r
 }
@@ -366,3 +378,57 @@ func testRegistryConnection(registry, username, password string, allowHTTP bool)
 	}
 	return reg.Ping(context.Background())
 }
+
+// ── Fragment renderer ─────────────────────────────────────────────────────────
+
+type artifactFragRow struct {
+	DatacenterName string
+	Repository     string
+	Tag            string
+	Digest         string
+	DigestShort    string
+	HasDigest      bool
+	Signed        bool
+	Enriched      bool
+	BundlerError  string
+	Status        string
+	StatusClass    string
+	InitiatedAt    string
+	Error          string
+}
+
+func toArtifactFragRow(a *ent.RegistryArtifact) artifactFragRow {
+	statusClass := map[string]string{
+		"pending":   "is-warning is-light",
+		"pushing":   "is-info is-light",
+		"completed": "is-success is-light",
+		"failed":    "is-danger is-light",
+	}[string(a.Status)]
+	row := artifactFragRow{
+		DatacenterName: a.DatacenterName,
+		Repository:     a.Repository,
+		Tag:            a.Tag,
+		Signed:         a.Signed,
+		Enriched:       a.Enriched,
+		Status:         string(a.Status),
+		StatusClass:    statusClass,
+		InitiatedAt:    a.InitiatedAt.UTC().Format("2006-01-02 15:04:05"),
+	}
+	if a.Digest != nil {
+		row.Digest = *a.Digest
+		row.HasDigest = true
+		if len(*a.Digest) > 19 {
+			row.DigestShort = (*a.Digest)[:19]
+		} else {
+			row.DigestShort = *a.Digest
+		}
+	}
+	if a.BundlerError != nil {
+		row.BundlerError = *a.BundlerError
+	}
+	if a.Error != nil {
+		row.Error = *a.Error
+	}
+	return row
+}
+

@@ -16,19 +16,17 @@ import (
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/auth"
 	"github.com/armada/orbital/internal/config"
-	"github.com/armada/orbital/internal/enricher"
+	"github.com/armada/orbital/internal/bundler"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/metrics"
 	"github.com/armada/orbital/internal/oci"
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	appversion "github.com/armada/orbital/internal/version"
-	webtemplates "github.com/armada/orbital/web/templates"
+	webtemplates "github.com/armada/orbital/web/templates/orbital"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	echoswagger "github.com/swaggo/echo-swagger"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 type Server struct {
@@ -56,6 +54,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 			c.Set("user_name", u.Name)
 			c.Set("user_email", u.Email)
 			c.Set("is_authn", err == nil && u.ID > 0)
+			c.Set("can_mutate", u.ID > 0 && handler.RoleAtLeast(user.Role(u.Role), user.RoleDev))
 			csrfToken, _ := auth.GetOrCreateCSRF(cfg.SessionKeys(), c.Request(), c.Response().Writer)
 			c.Set("csrf_token", csrfToken)
 			return next(c)
@@ -110,27 +109,12 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		logger.Warn("OCI publishing not configured (ORBITAL_OCI_REGISTRY and ORBITAL_OCI_SIGNING_KEY_PATH) — publish disabled")
 	}
 
-	// Detect in-cluster k8s — restore via kubectl exec requires this.
-	var k8sCfg *rest.Config
-	var k8sClient kubernetes.Interface
-	k8sAvailable := false
-	if inClusterCfg, err := rest.InClusterConfig(); err == nil {
-		if kc, err := kubernetes.NewForConfig(inClusterCfg); err == nil {
-			k8sCfg = inClusterCfg
-			k8sClient = kc
-			k8sAvailable = true
-		} else {
-			logger.Warn("k8s client init failed — restore from stored backup disabled", "err", err)
-		}
-	} else {
-		logger.Warn("not running in-cluster — restore from stored backup disabled")
-	}
-
 	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, cfg.OIDCDeviceCode, s3Configured, cfg.S3Endpoint, cfg.S3Bucket, cfg.BasePath, db)
 	ui.SetOCIConfig(ociConfigured, cfg.OCIRegistry, cfg.OCIRepo)
 	ui.SetExportDir(cfg.ExportDir)
 	ui.SetSchemaPath(cfg.SchemaPath)
-	ui.SetRestoreAvailable(cfg.RestoreBackend == "docker" || k8sAvailable)
+	ui.SetRestoreAvailable(true)
+	ui.SetDGraphURL(cfg.DGraphURL)
 	root.Static("/static", "web/shared/static")
 	if cfg.BasePath != "" {
 		root.GET("", ui.Index)
@@ -187,10 +171,15 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	srv := handler.NewServerHandler(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath)
 	root.GET("/servers/:id", srv.Tab)
 
+	delH := handler.NewDeleteHandler(cfg.DGraphURL, db, logger)
+	root.GET("/config-items/delete-preview", delH.Preview)
+	api.DELETE("/config-items", delH.Execute)
+
 	if db != nil {
 		exp := handler.NewExport(db, cfg.DGraphURL, cfg.DGraphScratchURL, cfg.DGraphScratchAdminURL, cfg.DGraphScratchZeroURL, cfg.ExportDir, cfg.DGraphScratchExportDir, cfg.SchemaPath, logger)
 		api.POST("/export", exp.Trigger)
 		api.GET("/export/jobs", exp.List)
+
 		api.GET("/export/jobs/:jobId", exp.Status)
 		api.GET("/export/jobs/:jobId/download", exp.Download)
 
@@ -203,18 +192,19 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 			AllowHTTP:     cfg.OCIAllowHTTP,
 		}
 		retryClient := retryablehttp.NewClient()
-		retryClient.RetryMax = cfg.EnricherMaxAttempts - 1
+		retryClient.RetryMax = cfg.BundlerMaxAttempts - 1
 		retryClient.RetryWaitMin = time.Second
 		retryClient.RetryWaitMax = 10 * time.Second
 		retryClient.Logger = nil // silence default logger; errors surface via publisher logging
-		enricherOpts := []enricher.ClientOption{
-			enricher.WithHTTPClient(retryClient.StandardClient()),
-			enricher.WithMaxResponseBytes(cfg.EnricherMaxResponseBytes),
+		bundlerOpts := []bundler.ClientOption{
+			bundler.WithHTTPClient(retryClient.StandardClient()),
+			bundler.WithMaxResponseBytes(cfg.BundlerMaxResponseBytes),
 		}
-		ociH := handler.NewOCI(db, ociCfg, cfg.DGraphScratchExportDir, logger, cfg.EnricherTimeout, enricherOpts...)
+		ociH := handler.NewOCI(db, ociCfg, cfg.DGraphScratchExportDir, logger, cfg.BundlerTimeout, bundlerOpts...)
 		api.POST("/export/jobs/:jobId/publish", ociH.Publish)
 		api.DELETE("/export/jobs/:jobId", ociH.DeleteJob)
 		api.GET("/oci/artifacts", ociH.ListArtifacts)
+
 		api.GET("/oci/artifacts/:id", ociH.GetArtifact)
 		api.GET("/oci/public-key", ociH.PublicKey)
 		api.POST("/oci/test-connection", ociH.TestConnection)
@@ -251,6 +241,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 			} else {
 				api.POST("/backup", bk.Trigger)
 				api.GET("/backup/jobs", bk.List)
+
 				api.GET("/backup/jobs/:jobId", bk.Status)
 				api.GET("/backup/jobs/:jobId/download", bk.Download)
 				api.DELETE("/backup/jobs/:jobId", bk.Delete)
@@ -258,18 +249,6 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 				api.GET("/backup/schedule", bk.GetSchedule)
 				api.PUT("/backup/schedule", bk.UpdateSchedule)
 				backupHandler = bk
-			}
-
-			var restoreBackend handler.RestoreBackend
-			switch cfg.RestoreBackend {
-			case "k8s":
-				if k8sAvailable {
-					restoreBackend = handler.NewK8sRestoreBackend(k8sClient, k8sCfg, cfg.DGraphNamespace)
-				} else {
-					logger.Warn("ORBITAL_RESTORE_BACKEND=k8s but not in-cluster — restore trigger disabled")
-				}
-			default: // "docker"
-				restoreBackend = handler.NewDockerRestoreBackend(cfg.DGraphContainer)
 			}
 
 			rh, err := handler.NewRestoreHandler(context.Background(), db, handler.RestoreConfig{
@@ -282,18 +261,15 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 				DGraphAlphaGRPC: cfg.DGraphAlphaGRPC,
 				DGraphZeroGRPC:  cfg.DGraphZeroGRPC,
 				SchemaPath:      cfg.SchemaPath,
-				RestoreDir:      cfg.RestoreDir,
-				ExecDataDir:     cfg.RestoreExecDataDir,
 				RestoreTimeout:  cfg.RestoreTimeout,
-			}, restoreBackend, logger)
+			}, handler.NewSubprocessRestoreBackend(), logger)
 			if err != nil {
 				logger.Error("restore handler init failed", "err", err)
 			} else {
 				api.GET("/restore/jobs", rh.List)
+
 				api.GET("/restore/jobs/:jobId", rh.Status)
-				if restoreBackend != nil {
-					api.POST("/restore", rh.Trigger)
-				}
+				api.POST("/restore", rh.Trigger)
 			}
 		}
 

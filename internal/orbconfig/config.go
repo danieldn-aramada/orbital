@@ -47,7 +47,7 @@ type Config struct {
 	OCIUsername      string `envconfig:"ORB_OCI_USERNAME"       default:""`
 	OCIPassword      string `envconfig:"ORB_OCI_PASSWORD"       default:""`
 	OCIAllowHTTP     bool   `envconfig:"ORB_OCI_ALLOW_HTTP"     default:"true"`
-	OCIPublicKeyPath string `envconfig:"ORB_OCI_PUBLIC_KEY_PATH" default:"cosign.pub"`
+	OCIPublicKeyPath string `envconfig:"ORB_OCI_PUBLIC_KEY_PATH" default:"deploy/local/cosign.pub"`
 
 	// S3 — divergence report publishing
 	S3Endpoint  string `envconfig:"ORB_S3_ENDPOINT"   default:""`

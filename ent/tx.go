@@ -18,6 +18,10 @@ type Tx struct {
 	BackupSchedule *BackupScheduleClient
 	// Event is the client for interacting with the Event builders.
 	Event *EventClient
+	// EventResource is the client for interacting with the EventResource builders.
+	EventResource *EventResourceClient
+	// EventResourceType is the client for interacting with the EventResourceType builders.
+	EventResourceType *EventResourceTypeClient
 	// ExportJob is the client for interacting with the ExportJob builders.
 	ExportJob *ExportJobClient
 	// Orb is the client for interacting with the Orb builders.
@@ -162,6 +166,8 @@ func (tx *Tx) init() {
 	tx.Backup = NewBackupClient(tx.config)
 	tx.BackupSchedule = NewBackupScheduleClient(tx.config)
 	tx.Event = NewEventClient(tx.config)
+	tx.EventResource = NewEventResourceClient(tx.config)
+	tx.EventResourceType = NewEventResourceTypeClient(tx.config)
 	tx.ExportJob = NewExportJobClient(tx.config)
 	tx.Orb = NewOrbClient(tx.config)
 	tx.RegistryArtifact = NewRegistryArtifactClient(tx.config)

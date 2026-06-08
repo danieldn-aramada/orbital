@@ -12,6 +12,8 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/armada/orbital/ent/event"
+	"github.com/armada/orbital/ent/eventresource"
+	"github.com/armada/orbital/ent/eventresourcetype"
 	"github.com/google/uuid"
 )
 
@@ -25,18 +27,6 @@ type EventCreate struct {
 // SetOperations sets the "operations" field.
 func (_c *EventCreate) SetOperations(v []string) *EventCreate {
 	_c.mutation.SetOperations(v)
-	return _c
-}
-
-// SetResourceTypes sets the "resource_types" field.
-func (_c *EventCreate) SetResourceTypes(v []string) *EventCreate {
-	_c.mutation.SetResourceTypes(v)
-	return _c
-}
-
-// SetResourceIds sets the "resource_ids" field.
-func (_c *EventCreate) SetResourceIds(v []string) *EventCreate {
-	_c.mutation.SetResourceIds(v)
 	return _c
 }
 
@@ -92,6 +82,36 @@ func (_c *EventCreate) SetNillableID(v *uuid.UUID) *EventCreate {
 		_c.SetID(*v)
 	}
 	return _c
+}
+
+// AddResourceIDs adds the "resources" edge to the EventResource entity by IDs.
+func (_c *EventCreate) AddResourceIDs(ids ...int) *EventCreate {
+	_c.mutation.AddResourceIDs(ids...)
+	return _c
+}
+
+// AddResources adds the "resources" edges to the EventResource entity.
+func (_c *EventCreate) AddResources(v ...*EventResource) *EventCreate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddResourceIDs(ids...)
+}
+
+// AddResourceTypeIDs adds the "resource_types" edge to the EventResourceType entity by IDs.
+func (_c *EventCreate) AddResourceTypeIDs(ids ...int) *EventCreate {
+	_c.mutation.AddResourceTypeIDs(ids...)
+	return _c
+}
+
+// AddResourceTypes adds the "resource_types" edges to the EventResourceType entity.
+func (_c *EventCreate) AddResourceTypes(v ...*EventResourceType) *EventCreate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddResourceTypeIDs(ids...)
 }
 
 // Mutation returns the EventMutation object of the builder.
@@ -193,14 +213,6 @@ func (_c *EventCreate) createSpec() (*Event, *sqlgraph.CreateSpec) {
 		_spec.SetField(event.FieldOperations, field.TypeJSON, value)
 		_node.Operations = value
 	}
-	if value, ok := _c.mutation.ResourceTypes(); ok {
-		_spec.SetField(event.FieldResourceTypes, field.TypeJSON, value)
-		_node.ResourceTypes = value
-	}
-	if value, ok := _c.mutation.ResourceIds(); ok {
-		_spec.SetField(event.FieldResourceIds, field.TypeJSON, value)
-		_node.ResourceIds = value
-	}
 	if value, ok := _c.mutation.Actor(); ok {
 		_spec.SetField(event.FieldActor, field.TypeString, value)
 		_node.Actor = value
@@ -216,6 +228,38 @@ func (_c *EventCreate) createSpec() (*Event, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.EventCategory(); ok {
 		_spec.SetField(event.FieldEventCategory, field.TypeString, value)
 		_node.EventCategory = value
+	}
+	if nodes := _c.mutation.ResourcesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   event.ResourcesTable,
+			Columns: []string{event.ResourcesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventresource.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.ResourceTypesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   event.ResourceTypesTable,
+			Columns: []string{event.ResourceTypesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventresourcetype.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }
