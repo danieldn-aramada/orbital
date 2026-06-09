@@ -19,6 +19,9 @@ var rootCmd = &cobra.Command{
 	Use:          "orbital",
 	Short:        "Orbital CLI — manage and authenticate with the Orbital cloud service",
 	SilenceUsage: true,
+	CompletionOptions: cobra.CompletionOptions{
+		HiddenDefaultCmd: true,
+	},
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		if verbose {
 			slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{

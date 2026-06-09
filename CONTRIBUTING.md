@@ -90,9 +90,15 @@ gh release view cli/v0.0.2 --repo danieldn-aramada/orbital
 
 ```bash
 brew update
-brew upgrade orbital    # or: brew install orbital (first time)
-orbital version         # should print v0.0.2
-orbital completion zsh  # should print a zsh completion script
+brew upgrade orbital          # already installed — picks up new version
+# brew install orbital        # first-time install
+# brew reinstall orbital      # force reinstall (formula-only change, same version)
+
+orbital version               # should print the new version
+orbital completion zsh        # should print a zsh completion script
+
+# If completions don't work immediately, open a new terminal (or run: exec zsh)
+# to reload the shell's completion index.
 ```
 
 ### What the formula does
