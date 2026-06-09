@@ -117,6 +117,17 @@ Other endpoints:
 - GraphQL playground: http://localhost:8001/graphql
 - Swagger API docs: http://localhost:8001/swagger/index.html
 
+## Calling orbital from your own code
+
+Install the CLI (macOS):
+
+```bash
+brew install danieldn-aramada/tools/orbital
+orbital login
+```
+
+For the full developer quickstart — ad-hoc curl/scripting, MSAL pattern for long-running services, a Go example — see **[docs/auth.md → Developer quickstart](docs/auth.md#developer-quickstart--calling-orbital-from-your-own-code)**.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for running tests and editing styles.
 
 ## Deploy

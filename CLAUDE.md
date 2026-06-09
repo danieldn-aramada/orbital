@@ -221,6 +221,7 @@ These are cross-cutting platform decisions. Domain-specific decisions live in th
 - **`schema/VERSION` is the authoritative schema version label** — single line (e.g. `v1`). Bumped manually on DGraph-relevant schema changes only. Comments, whitespace, and formatting changes to `schema/schema.graphql` do NOT bump it. See `docs/decisions/007-dgraph-schema-migration.md`.
 - **`schema/schema.graphql` is the production schema** — was `schema-demo.graphql`; renamed 2026-06-07. All references must use `cfg.SchemaPath` (env: `ORBITAL_SCHEMA_PATH`, default `schema/schema.graphql`). Never hardcode the path.
 - **GraphQL proxy strips `orbId` from variables only when the query doesn't declare `$orbId`** — `orbIdIsQueryVar := strings.Contains(req.Query, "$orbId")` controls this. If the query declares `$orbId`, stripping it causes a DGraph "must be defined" error. Both inline-literal and declared-variable patterns must work.
+- **Per-component versioning across binaries** — server tags as `v*` (existing lineage), orbital-cli as `cli/v*`, orb as `orb/v*`. Makefile derives each via `git describe --match`/`--exclude`. Each build target injects its own value into `internal/version.Version` at link time. Same package var, different injected values per binary. Rationale: `docs/decisions/009-per-component-versioning.md`. Do NOT re-unify under a single tag scheme — CLI version conflation with server version was the problem this solves.
 
 ## Go Conventions
 

@@ -1,8 +1,16 @@
 SHELL := /bin/bash
 
-MODULE  := github.com/armada/orbital
-VERSION := $(shell git describe --tags --dirty 2>/dev/null || echo "v0.0.0-dev")
-LDFLAGS := -ldflags "-X $(MODULE)/internal/version.Version=$(VERSION)"
+MODULE := github.com/armada/orbital
+
+# Per-component versioning — each binary has its own tag lineage.
+# Server: bare v* tags (e.g. v0.0.17). CLI: cli/v* tags. Orb: orb/v* tags.
+SERVER_VERSION := $(shell git describe --tags --exclude 'cli/*' --exclude 'orb/*' --dirty 2>/dev/null || echo "v0.0.0-dev")
+CLI_VERSION    := $(shell (git describe --tags --match 'cli/v*' --dirty 2>/dev/null || echo "cli/v0.0.0-dev") | sed 's|^cli/||')
+ORB_VERSION    := $(shell (git describe --tags --match 'orb/v*' --dirty 2>/dev/null || echo "orb/v0.0.0-dev") | sed 's|^orb/||')
+
+SERVER_LDFLAGS := -ldflags "-X $(MODULE)/internal/version.Version=$(SERVER_VERSION)"
+CLI_LDFLAGS    := -ldflags "-X $(MODULE)/internal/version.Version=$(CLI_VERSION)"
+ORB_LDFLAGS    := -ldflags "-X $(MODULE)/internal/version.Version=$(ORB_VERSION)"
 
 BIN_DIR      := bin
 ORBITAL_BIN  := $(BIN_DIR)/orbital
@@ -15,7 +23,7 @@ COMPOSE_FILE_EDGE := deploy/local/docker-compose.edge.yml
 # Excludes generated code (ent/*) and the Swagger docs stub.
 TEST_PKGS := $(shell go list ./... | grep -vE '(/ent$$|/ent/|/docs$$)')
 ACR          := armadaeksatest.azurecr.io
-IMAGE        := $(ACR)/orbital:$(VERSION)
+IMAGE        := $(ACR)/orbital:$(SERVER_VERSION)
 
 .PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-unit test-integration test-e2e test-e2e-ui test-e2e-orb test-e2e-smoke cover cover-html lint up up-orb down down-orb seed seed-aks-clean docs orb-docs build-css watch-css
 
@@ -38,13 +46,13 @@ watch-css: ## Watch and recompile SCSS on change (requires: npm install)
 	npm run build-css-dev
 
 build-orbital: docs ## Build the orbital server binary → bin/orbital
-	go build $(LDFLAGS) -o $(ORBITAL_BIN) ./cmd/orbital
+	go build $(SERVER_LDFLAGS) -o $(ORBITAL_BIN) ./cmd/orbital
 
-build-orbital-cli: ## Build the orbital admin CLI (experimental) → bin/orbital-cli
-	CGO_ENABLED=1 go build $(LDFLAGS) -o $(BIN_DIR)/orbital-cli ./cmd/orbital-cli
+build-orbital-cli: ## Build the orbital admin CLI → bin/orbital-cli
+	go build $(CLI_LDFLAGS) -o $(BIN_DIR)/orbital-cli ./cmd/orbital-cli
 
 build-orb: orb-docs ## Build the orb edge binary → bin/orb
-	go build $(LDFLAGS) -o $(ORB_BIN) ./cmd/orb
+	go build $(ORB_LDFLAGS) -o $(ORB_BIN) ./cmd/orb
 
 run-orbital: ## Run orbital server
 	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orbital
@@ -112,7 +120,7 @@ down-orb: ## Stop edge-data-center sim
 	docker compose -f $(COMPOSE_FILE_EDGE) down -v
 
 push: ## Build and push image to ACR (requires: az acr login --name armadaeksatest)
-	docker buildx build --platform linux/amd64 --build-arg VERSION=$(VERSION) -t $(IMAGE) --push .
+	docker buildx build --platform linux/amd64 --build-arg VERSION=$(SERVER_VERSION) -t $(IMAGE) --push .
 
 seed: ## Seed DGraph with example data (local)
 	bash scripts/seed.sh

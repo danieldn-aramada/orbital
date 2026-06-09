@@ -7,16 +7,6 @@ import (
 	"path/filepath"
 )
 
-// keychainData is the subset of Credentials stored in the OS keychain.
-// Only the refresh token and identity fields are stored — the access token
-// is large (~6 KB for Azure AD JWTs) and may exceed keychain limits on some
-// platforms. A fresh access token is obtained via refresh on every load.
-type keychainData struct {
-	RefreshToken string `json:"refresh_token"`
-	Name         string `json:"name"`
-	Email        string `json:"email"`
-}
-
 // Store persists and loads credentials.
 type Store interface {
 	Load() (*Credentials, error)
@@ -70,7 +60,7 @@ func OrbFileStore() (*FileStore, error) {
 }
 
 // OrbitalFileStore returns a FileStore pointing at ~/.orbital/credentials.json.
-// This stores only the access token and expiry — the refresh token lives in the keychain.
+// Stores the full credentials blob: access token, refresh token, and identity.
 func OrbitalFileStore() (*FileStore, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -79,8 +69,8 @@ func OrbitalFileStore() (*FileStore, error) {
 	return &FileStore{Path: filepath.Join(home, ".orbital", "credentials.json")}, nil
 }
 
-// ClearOrbitalCredentials removes the access token file and keychain entry,
-// signing the user out completely. Safe to call when already logged out.
+// ClearOrbitalCredentials removes the credentials file, signing the user out.
+// Safe to call when already logged out.
 func ClearOrbitalCredentials() error {
 	fileStore, err := OrbitalFileStore()
 	if err != nil {
@@ -88,15 +78,6 @@ func ClearOrbitalCredentials() error {
 	}
 	if err := fileStore.Delete(); err != nil {
 		return fmt.Errorf("remove credentials file: %w", err)
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-	fallbackPath := filepath.Join(home, ".orbital", ".keychain-fallback.json")
-	kcStore := NewKeychainStore(&FileStore{Path: fallbackPath})
-	if err := kcStore.Delete(); err != nil {
-		return fmt.Errorf("remove keychain entry: %w", err)
 	}
 	return nil
 }

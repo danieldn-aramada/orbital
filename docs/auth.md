@@ -1,12 +1,13 @@
 # Authentication
 
-Orbital has three distinct authentication flows depending on the caller:
+Orbital has two authentication flows depending on the caller:
 
 | Flow | Caller | Mechanism |
 |---|---|---|
 | 1 | Orbital admin UI | Entra ID OIDC — browser-based login, session cookie |
-| 2 | API consumers (e.g. Atlas UI) | JWT bearer token — orbital as resource server, any OIDC-compliant IdP |
-| 3 | Orb (edge service) | Long-lived opaque API key — air-gap safe, no external IdP |
+| 2 | API consumers (services, scripts, third-party UIs) | JWT bearer token — orbital as resource server, any OIDC-compliant IdP |
+
+Orb does not authenticate to orbital — by design, orb never calls orbital directly. Edge-to-cloud and cloud-to-edge communication flows through OCI registry and object storage, not HTTP APIs on orbital.
 
 ---
 
@@ -58,30 +59,116 @@ sequenceDiagram
 
 ---
 
-## Flow 3: Orb → Orbital — Long-lived API Key
+## Developer quickstart — calling orbital from your own code
 
-```mermaid
-sequenceDiagram
-    participant Admin as Orbital Admin
-    participant O as Orbital Server
-    participant DB as PostgreSQL
-    participant Orb as Orb (edge)
+Two paths depending on whether you're hacking on a script or building a service.
 
-    Admin->>O: Create orb slot for data center
-    O->>O: Generate one-time token (1hr TTL)
-    O->>DB: Store hashed token + orb metadata
-    O-->>Admin: Return plaintext token
-    Admin-->>Orb: Deliver token (USB / print / email)
+### Install the orbital CLI (macOS)
 
-    Note over Orb: Orb startup — needs to register
-    Orb->>O: POST /orbs/register {token: "..."}
-    O->>DB: Lookup + validate token (not expired, not used)
-    O->>DB: Mark token used, create orb record + API key
-    O-->>Orb: Return long-lived API key
-
-    Note over Orb: All future requests
-    Orb->>O: POST /orbs/poll
-    Note over Orb,O: X-Orb-Key: sk_orb_xxxx
-    O->>DB: Validate key → resolve orb identity
-    O-->>Orb: DGraph export (json.gz + schema.gz)
+```bash
+brew tap danieldn-aramada/tools
+brew install orbital
+orbital --version
 ```
+
+Or as a one-liner without the explicit tap step:
+
+```bash
+brew install danieldn-aramada/tools/orbital
+```
+
+Updates:
+
+```bash
+brew update
+brew upgrade orbital
+```
+
+### Path A — ad-hoc curl / scripting
+
+Use the CLI to get an access token via PKCE. One interactive login; pass `-v` to print the token as an exportable shell variable.
+
+```bash
+# One-time interactive login (opens browser, redirects to localhost)
+orbital login -v
+
+# Output ends with:
+#   export ORBITAL_TOKEN=eyJ0eXAiOi...
+# Paste that line into your shell, then:
+
+curl -H "Authorization: Bearer $ORBITAL_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"query":"{ queryNamespace { name } }"}' \
+     https://<orbital-host>/api/v1/graphql
+```
+
+Even faster — eval directly so `ORBITAL_TOKEN` is set in your current shell:
+
+```bash
+eval "$(orbital login -v | grep '^  export ')"
+```
+
+Token lasts ~1 hour. Re-run `orbital login -v` when it expires. Fine for poking, scripting, demos. Not for long-running services.
+
+### Path B — long-running service
+
+Register your own Entra ID (Azure AD) App Registration, then use MSAL (or any OIDC library — every language has one). MSAL caches and refreshes tokens internally; your code never checks expiry.
+
+| Language | Library |
+|---|---|
+| Go     | `github.com/AzureAD/microsoft-authentication-library-for-go` |
+| Node   | `@azure/msal-node` |
+| Python | `msal` |
+| .NET   | `Microsoft.Identity.Client` |
+| Java   | `com.microsoft.azure:msal4j` |
+
+**Configuration values to request from the orbital team:**
+
+```
+Tenant ID:         <Entra ID tenant GUID>
+Orbital client ID: <orbital app client GUID>
+Scope:             api://<orbital-client-id>/user_impersonation
+                   (fallback: api://<orbital-client-id>/.default)
+API endpoint:      https://<orbital-host>/api/v1/graphql
+Auth header:       Authorization: Bearer <access_token>
+```
+
+**Go example (On-Behalf-Of — frontend → your backend → orbital):**
+
+```go
+import (
+    "context"
+    "net/http"
+    "strings"
+    "github.com/AzureAD/microsoft-authentication-library-for-go/apps/confidential"
+)
+
+func NewOrbitalClient(tenantID, clientID, clientSecret, orbitalClientID string) (confidential.Client, string, error) {
+    cred, err := confidential.NewCredFromSecret(clientSecret)
+    if err != nil {
+        return confidential.Client{}, "", err
+    }
+    app, err := confidential.New(
+        "https://login.microsoftonline.com/"+tenantID,
+        clientID,
+        cred,
+    )
+    return app, "api://" + orbitalClientID + "/user_impersonation", err
+}
+
+func CallOrbital(ctx context.Context, app confidential.Client, scope, inboundUserToken, baseURL, query string) (*http.Response, error) {
+    // MSAL caches + refreshes automatically — call this on every request.
+    result, err := app.AcquireTokenOnBehalfOf(ctx, inboundUserToken, []string{scope})
+    if err != nil {
+        return nil, err
+    }
+    req, _ := http.NewRequestWithContext(ctx, "POST", baseURL+"/api/v1/graphql", strings.NewReader(query))
+    req.Header.Set("Authorization", "Bearer "+result.AccessToken)
+    req.Header.Set("Content-Type", "application/json")
+    return http.DefaultClient.Do(req)
+}
+```
+
+Notice what's not there: no expiry check, no manual refresh, no token storage. `AcquireTokenOnBehalfOf` does all of it. For persistence across restarts, implement `cache.ExportReplace` and pass it as `confidential.WithCache(...)` — one extra option, no other code changes.
+
+**First call provisions you in orbital's user table as `readonly`.** Mutating calls (POST/PUT/PATCH/DELETE) require `dev` or `admin` — ask an orbital admin to promote your account via `/users` after your first sign-in.

@@ -3,12 +3,14 @@ package orbitalcli
 import (
 	"os"
 
+	"github.com/armada/orbital/internal/version"
 	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "orbital",
-	Short: "Orbital CLI — manage and authenticate with the Orbital cloud service",
+	Use:     "orbital",
+	Short:   "Orbital CLI — manage and authenticate with the Orbital cloud service",
+	Version: version.Version,
 }
 
 func Execute() {

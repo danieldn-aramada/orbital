@@ -57,3 +57,6 @@ deploy/dev/secrets.yaml
 Thumbs.db
 e2e/.auth.json
 coverage.html
+
+# release artifacts (uploaded to GitHub Releases, not committed)
+dist/

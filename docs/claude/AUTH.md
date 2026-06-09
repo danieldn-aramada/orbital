@@ -1,6 +1,22 @@
 # Auth Reference
 
-Read this before: OIDC flow changes, CLI login, keychain, session handling, bearer token validation, authz work.
+Read this before: OIDC flow changes, CLI login, session handling, bearer token validation, authz work.
+
+## Design framing — requirements vs. opinions
+
+User identity and per-user audit are hard requirements for orbital. That requirement *forces* one thing only: tokens must carry a signed assertion of user identity. Everything else in this doc is a chosen opinion with named alternatives.
+
+| Decision | Status | Alternatives we did not pick |
+|---|---|---|
+| Tokens must carry signed user identity | **Forced** by audit requirement | None |
+| OIDC as the token format | **Defensible default**, not forced | SAML assertions; mTLS + signed user-context header; custom IdP |
+| Azure AD as the IdP | **Operational choice**, not in code | Okta, Auth0, Keycloak — orbital's bearer middleware is IdP-agnostic; swap is config-only |
+| JIT user provisioning on first login | **Opinion** | Pre-provisioned only (admin creates row first); directory sync from AD groups via SCIM/Graph |
+| Local `users.role` column as authz source of truth | **Opinion** (forced shape, not existence) | Azure AD App Roles in JWT claims (requires AD admin permissions we lack); external policy engine (OPA, Cedar, SpiceDB); AD group lookup at login |
+| Three-role model (readonly/dev/admin) | **Opinion** | Finer-grained RBAC matrix; ABAC (per-namespace, per-resource); two-role read/write |
+| Orbital is the authoritative authz decision point | **Opinion** | External policy-as-code engine consulted per request — gains policy provenance and what-if simulation, costs an external dependency |
+
+**Why this matters:** "audit is core → SSO is required" is defensibly true but understates the design surface. The honest framing is: *given user identity + audit are non-negotiable, we chose OIDC + local role table + JIT provisioning + three-role RBAC. Each link is a defensible choice, not an inevitability.* If audit ever grows from "who did what" into "why was this allowed" (regulatory reproducibility, policy provenance), revisit the last row.
 
 ## Settled Decisions
 
@@ -44,6 +60,37 @@ Activated by `ORBITAL_OIDC_DEVICE_CODE=true`. The login modal shows a "Sign in w
 - `/api/v1/graphql` registered on both `e.Any("/graphql")` (session auth, for browser) and `api.Any("/graphql")` (bearer auth, for CLI/API clients).
 - **Azure AD app must set `requestedAccessTokenVersion: 2`** in the app manifest (`api.requestedAccessTokenVersion: 2`). Default `null` produces v1 tokens with `iss: "https://sts.windows.net/..."` which does not match go-oidc v2 discovery issuer.
 - **Bearer token audience is the bare client GUID** — Azure AD v2 sets `aud` to bare GUID (e.g. `5fc832f6-...`), not `api://5fc832f6-...`. Configure `go-oidc` with `cfg.OIDCClientID` directly, not `"api://"+cfg.OIDCClientID`.
+- **`internal/auth/bearer.go` validates signature, issuer, and audience only — not `scp`/`scope`.** Authorization is enforced downstream by `RequireRole` against the local `users.role` column. Adding scope-based checks would duplicate logic and tie us to Azure AD specifics.
+
+## Third-party API clients
+
+Orbital is an OAuth **resource server**, not an identity provider. Client applications authenticate with Azure AD directly and present the resulting JWT to orbital. Orbital does not issue tokens, proxy auth, or expose a device-code endpoint for external clients — `/auth/device` is for orbital's own browser UI.
+
+**Integrator quickstart (give this to client teams):**
+
+```
+Tenant ID:         <Azure AD tenant GUID>
+Orbital client ID: <ORBITAL_OIDC_CLIENT_ID value>
+Scope to request:  api://<orbital-client-id>/user_impersonation
+                   (fallback: api://<orbital-client-id>/.default)
+API endpoint:      https://<orbital-host>/api/v1/graphql
+Auth header:       Authorization: Bearer <access_token>
+Token version:     v2 (issuer https://login.microsoftonline.com/<tenant>/v2.0)
+```
+
+**OAuth flow** — orbital doesn't care which flow produces the token, only that the resulting JWT has the right issuer + audience. Common topologies:
+
+- **Frontend → client backend → orbital** — backend uses **On-Behalf-Of (OBO)** to mint an `aud=orbital` token from the inbound `aud=client-api` token. Preserves user identity (`preferred_username` flows through), so `ResolveUser` maps to the right row and audit logs show the real user. Requires the backend be a confidential client (secret or cert), and admin consent granted on its App Registration's API permission to orbital's `user_impersonation` scope. The OBO exchange itself is between the client and Azure AD — orbital sees only the final token. See Microsoft's [OBO docs](https://learn.microsoft.com/azure/active-directory/develop/v2-oauth2-on-behalf-of-flow). The frontend can be a SPA, native app, or server-rendered UI — only the backend's role matters here.
+- **Public client → orbital direct** — Authorization Code + PKCE if the client has a registerable HTTPS redirect URI; device code if it's behind private DNS / VPN-only (same constraint that pushed orbital's own UI to device code). No exchange, client requests `aud=orbital` upfront. "Public client" covers SPAs, native desktop, and mobile apps — anything that cannot keep a secret.
+- **Headless service / scheduled job (no user identity)** — `grant_type=client_credentials` with `scope=api://<orbital-client-id>/.default`. Resulting token has no `preferred_username`, so `ResolveUser` cannot map it. Avoid until we add explicit service-account provisioning. Use OBO for any human-driven action, even from a backend.
+
+**Scope policy** — orbital's App Registration exposes `user_impersonation` (Azure AD's default scope name when adding a delegated scope via "Expose an API"). Orbital does not validate `scp` — the scope name is consent-clarity only, not an authz boundary. `.default` works as a fallback but is discouraged because it requires admin consent and bundles all consented permissions opaquely.
+
+**Pre-authorizing client apps** — the "Authorized client applications" section in "Expose an API" is left empty by default. Each client must request user (or admin) consent the first time. To skip the consent dialog for a specific trusted integrator, add their App Registration's client ID with the `user_impersonation` scope checked. Reserve this for fully trusted internal clients — leaves consent explicit and revocable for everyone else.
+
+**First-call provisioning** — when a JWT arrives with an email not in the `users` table, `ResolveUser` middleware (see `internal/handler/authz.go`) auto-provisions a row with `role: readonly`. Admins listed in `ORBITAL_ADMIN_EMAILS` get promoted on first login. Tell integrators: their users will hit 403 on mutating calls until an admin promotes them via `/users`.
+
+**Convenience endpoint to expose later** — a `GET /api/v1/whoami` would let integrators verify their token works and see the role orbital assigned, without making a mutating call. Not in scope today, but cheap to add if multiple integrators ask.
 
 ## Authorization
 
@@ -70,15 +117,14 @@ Role enforcement is done entirely at the Go middleware layer. DGraph `@auth` dir
 ## orbital-cli credential storage
 
 - **Login flow**: Authorization Code + PKCE. Opens browser automatically with a local redirect server on a random port. No private DNS issue — runs on the user's machine where the private VPN DNS resolves correctly.
-- **Keychain** (macOS only, CGo + Security framework directly — not `go-keyring`): stores `{refresh_token, name, email}` JSON blob. Uses `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` — locked when device is locked, not synced to iCloud. No Touch ID — requires Apple code signing entitlements (`errSecMissingEntitlement = -34018`) not available for unsigned CLIs.
-- **File** (`~/.orbital/credentials.json`, mode 0600): stores access token + expiry only. Azure AD JWTs are ~6KB, exceeding go-keyring's 4096-byte macOS `security -i` limit.
-- **Subcommands read file only** — never touch keychain, never silently refresh. If access token expired → exit with "run `orbital login`". Only `orbital login` does the keychain read + refresh token exchange.
-- **JSON blob in keychain** (not separate entries) — atomic, avoids multiple keychain prompts, easy to version. Same pattern as GitHub CLI, Azure CLI.
+- **Single-file storage**: `~/.orbital/credentials.json`, mode 0600. Stores the full `Credentials` blob — access token, refresh token, expiry, name, email — as JSON. Matches the pattern used by `aws`, `gcloud`, `kubectl`, `terraform`, `az`. `orb login` uses the same model at `~/.orb/credentials.json`.
+- **Subcommands read file only** — never silently refresh. If access token expired → exit with "run `orbital login`". Only `orbital login` does the refresh-token exchange.
+- **No OS keychain integration.** Removed 2026-06-09. The previous implementation (CGo + macOS Security framework via `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`) bought defense against one narrow threat (stolen Mac with FileVault disabled and disk pulled offline) at the cost of ~360 lines of platform-specific code, CGo cross-compile pain (required `clang -arch x86_64` for darwin/amd64), and a larger binary. Touch ID was off the table without Apple code-signing entitlements (`errSecMissingEntitlement = -34018`). Industry baseline for OAuth-token CLIs is mode-0600 file storage — keychain integration is the exception, justifiable only when biometric UX is actually available. Reconsider only if (1) orbital-cli gets signed and notarized, or (2) regulatory requirement specifies at-rest encryption beyond FileVault.
 
 ## orbauth shared package
 
-- `internal/orbauth/` — PKCE flow, token exchange, refresh, Store interface, FileStore, KeychainStore. Both `orb` and `orbital-cli` import it. Neither CLI contains auth logic directly.
-- `orb login` uses plain FileStore at `~/.orb/credentials.json` (stores full credentials including access token). Different from `orbital-cli` which splits keychain (refresh token) + file (access token).
+- `internal/orbauth/` — PKCE flow, token exchange, refresh, `Store` interface, `FileStore` (the only implementation). Both `orb` and `orbital-cli` import it. Neither CLI contains auth logic directly.
+- `orb login` (at `~/.orb/credentials.json`) and `orbital login` (at `~/.orbital/credentials.json`) now follow identical patterns — single file, full credentials including refresh token.
 
 ## `orbital get datacenter` CLI
 
