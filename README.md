@@ -117,6 +117,10 @@ Other endpoints:
 - GraphQL playground: http://localhost:8001/graphql
 - Swagger API docs: http://localhost:8001/swagger/index.html
 
+## Calling orbital from your own code
+
+Building a service or script that consumes orbital's API? See the **[Developer quickstart](docs/auth.md#developer-quickstart--calling-orbital-from-your-own-code)** in `docs/auth.md` — covers ad-hoc token retrieval via `orbital-cli` and the MSAL pattern for long-running services (with a Go example).
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for running tests and editing styles.
 
 ## Deploy
