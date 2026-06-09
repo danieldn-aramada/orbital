@@ -117,16 +117,33 @@ Other endpoints:
 - GraphQL playground: http://localhost:8001/graphql
 - Swagger API docs: http://localhost:8001/swagger/index.html
 
-## Calling orbital from your own code
+## API Access
 
-Install the CLI (macOS):
+To call orbital's API from your own code or scripts, install the CLI (macOS):
 
 ```bash
 brew install danieldn-aramada/tools/orbital
-orbital login
+orbital login -v
 ```
 
-For the full developer quickstart — ad-hoc curl/scripting, MSAL pattern for long-running services, a Go example — see **[docs/auth.md → Developer quickstart](docs/auth.md#developer-quickstart--calling-orbital-from-your-own-code)**.
+`orbital login -v` opens your browser for SSO and, on success, prints an exportable access token:
+
+```
+  export ORBITAL_TOKEN=eyJ0eXAi...
+```
+
+Paste that line into your shell, then call the API:
+
+```bash
+curl -H "Authorization: Bearer $ORBITAL_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"query":"{ queryNamespace { name } }"}' \
+     https://<orbital-host>/api/v1/graphql
+```
+
+Tokens last about an hour. Re-run `orbital login -v` to mint a fresh one (silent refresh, no browser unless your session has expired).
+
+For long-running services that need automatic token refresh, see the **[Developer quickstart](docs/auth.md#developer-quickstart--calling-orbital-from-your-own-code)** in `docs/auth.md` — covers MSAL / On-Behalf-Of patterns with a Go example.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for running tests and editing styles.
 
