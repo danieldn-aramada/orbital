@@ -22,7 +22,7 @@ SRC_REPO="danieldn-aramada/orbital"
 # 1. Build Mac binaries. orbital-cli is pure Go — no CGo, trivial cross-compile.
 rm -rf dist && mkdir -p dist
 
-LDFLAGS="-s -w -X github.com/armada/orbital/internal/version.Version=$VERSION"
+LDFLAGS="-s -w -X github.com/armada/orbital/internal/version.Version=$VERSION -X 'github.com/armada/orbital/internal/orbital-cli.DefaultServerURL=http://ilb.devnew.armada.internal/orbital'"
 
 build_one() {
   local arch="$1"
@@ -64,10 +64,11 @@ class Orbital < Formula
 
   def install
     bin.install "orbital"
+    generate_completions_from_executable(bin/"orbital", "completion")
   end
 
   test do
-    system "#{bin}/orbital", "--version"
+    assert_match version.to_s, shell_output("#{bin}/orbital version")
   end
 end
 EOF

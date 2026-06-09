@@ -108,7 +108,9 @@ Even faster — eval directly so `ORBITAL_TOKEN` is set in your current shell:
 eval "$(orbital login -v | grep '^  export ')"
 ```
 
-Token lasts ~1 hour. Re-run `orbital login -v` when it expires. Fine for poking, scripting, demos. Not for long-running services.
+Access tokens last ~1 hour. If you keep working through `orbital`'s own subcommands (`orbital get`, `orbital patch`, …), expiry is invisible — they silently refresh from your cached refresh token. The only case where you re-run `orbital login -v` is when you've copied the raw token into a shell variable (or another tool) and that copy has gone stale. Refresh tokens last ~90 days idle; until then `orbital login -v` returns silently without re-opening the browser.
+
+Fine for poking, scripting, demos. Not for long-running services — see Path B for the MSAL-based pattern that handles refresh inside your own service.
 
 ### Path B — long-running service
 

@@ -12,6 +12,56 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// fetchDataCenter resolves name|orbId|0x-id to a dcSummary. Used by patch
+// commands which need to accept any form of identifier.
+func fetchDataCenter(cmd *cobra.Command, base, token, arg string) (*dcSummary, error) {
+	if strings.HasPrefix(arg, "0x") {
+		return queryByUID(cmd, base, token, arg)
+	}
+	if strings.Contains(arg, ":") {
+		return queryByOrbID(cmd, base, token, arg)
+	}
+	dc, err := queryByOrbID(cmd, base, token, arg)
+	if err != nil || dc != nil {
+		return dc, err
+	}
+	return queryByName(cmd, base, token, arg)
+}
+
+func queryByUID(cmd *cobra.Command, base, token, id string) (*dcSummary, error) {
+	const q = `query GetDataCenter($id: ID!) {
+  getDataCenter(id: $id) { ` + dcFields + ` }
+}`
+	var result struct {
+		Data   struct{ GetDataCenter *dcSummary } `json:"data"`
+		Errors []struct{ Message string }         `json:"errors"`
+	}
+	if err := gqlRequest(cmd, base, token, q, map[string]any{"id": id}, &result); err != nil {
+		return nil, err
+	}
+	if len(result.Errors) > 0 {
+		return nil, fmt.Errorf("graphql: %s", result.Errors[0].Message)
+	}
+	return result.Data.GetDataCenter, nil
+}
+
+func queryByOrbID(cmd *cobra.Command, base, token, orbID string) (*dcSummary, error) {
+	const q = `query GetDataCenterByOrbID($orbId: String!) {
+  getDataCenter(orbId: $orbId) { ` + dcFields + ` }
+}`
+	var result struct {
+		Data   struct{ GetDataCenter *dcSummary } `json:"data"`
+		Errors []struct{ Message string }         `json:"errors"`
+	}
+	if err := gqlRequest(cmd, base, token, q, map[string]any{"orbId": orbID}, &result); err != nil {
+		return nil, err
+	}
+	if len(result.Errors) > 0 {
+		return nil, fmt.Errorf("graphql: %s", result.Errors[0].Message)
+	}
+	return result.Data.GetDataCenter, nil
+}
+
 var patchCmd = &cobra.Command{
 	Use:   "patch",
 	Short: "Update resources on the Orbital server",
@@ -58,13 +108,9 @@ func runPatchDatacenter(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	store, err := orbauth.OrbitalFileStore()
+	creds, err := orbauth.GetCredentials()
 	if err != nil {
-		return err
-	}
-	creds, _ := orbauth.LoadValid(store)
-	if creds == nil {
-		fmt.Fprintln(os.Stderr, "credentials expired — run: orbital login")
+		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
 

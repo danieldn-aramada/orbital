@@ -49,21 +49,28 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	e.HideBanner = true
 	e.HidePort = true
 
+	// HTTP access log — attribute names follow OpenTelemetry semantic
+	// conventions for HTTP server. See docs/reference/AUDIT.md for the convention
+	// document. Kept in sync with orbital's logger in internal/server/server.go.
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		Skipper: func(c echo.Context) bool {
 			p := c.Request().URL.Path
 			return strings.HasPrefix(p, "/static/") || p == "/favicon.ico"
 		},
-		LogMethod:  true,
-		LogURI:     true,
-		LogStatus:  true,
-		LogLatency: true,
+		LogMethod:    true,
+		LogURI:       true,
+		LogStatus:    true,
+		LogLatency:   true,
+		LogRemoteIP:  true,
+		LogUserAgent: true,
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
 			logger.Info("request",
-				"method", v.Method,
-				"uri", v.URI,
-				"status", v.Status,
-				"latency_ms", v.Latency.Milliseconds(),
+				"http.request.method", v.Method,
+				"url.path", v.URI,
+				"http.response.status_code", v.Status,
+				"client.address", v.RemoteIP,
+				"user_agent.original", v.UserAgent,
+				"duration_ms", v.Latency.Milliseconds(),
 			)
 			return nil
 		},

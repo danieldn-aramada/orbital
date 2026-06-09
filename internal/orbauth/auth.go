@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -164,10 +165,11 @@ func RefreshToken(refreshToken, name, email string) (*Credentials, error) {
 }
 
 func tokenRequest(values url.Values) (*Credentials, error) {
-	resp, err := http.PostForm(
-		"https://login.microsoftonline.com/"+TenantID+"/oauth2/v2.0/token",
-		values,
-	)
+	endpoint := "https://login.microsoftonline.com/" + TenantID + "/oauth2/v2.0/token"
+	slog.Debug("orbauth: POST to AAD token endpoint",
+		"endpoint", endpoint,
+		"grant_type", values.Get("grant_type"))
+	resp, err := http.PostForm(endpoint, values)
 	if err != nil {
 		return nil, fmt.Errorf("token request: %w", err)
 	}

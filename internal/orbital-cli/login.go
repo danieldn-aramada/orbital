@@ -8,16 +8,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var verbose bool
-
 var loginCmd = &cobra.Command{
 	Use:   "login",
 	Short: "Authenticate with Orbital using your Microsoft account",
 	RunE:  runLogin,
-}
-
-func init() {
-	loginCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Print the access token after login")
 }
 
 func runLogin(cmd *cobra.Command, args []string) error {

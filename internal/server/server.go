@@ -63,22 +63,31 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		}
 	})
 
+	// HTTP access log — attribute names follow OpenTelemetry semantic
+	// conventions for HTTP server (https://opentelemetry.io/docs/specs/semconv/http/).
+	// `duration_ms` and `actor` are orbital-specific extensions because OTel
+	// log-record semconv has no stable attribute for either (duration is
+	// span/metric territory; enduser.id was deprecated). See docs/reference/AUDIT.md.
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		Skipper: func(c echo.Context) bool {
 			p := c.Request().URL.Path
 			return strings.HasPrefix(p, "/static/") || p == "/favicon.ico" || strings.HasSuffix(p, "/auth/device/poll")
 		},
-		LogMethod:  true,
-		LogURI:     true,
-		LogStatus:  true,
-		LogLatency: true,
+		LogMethod:    true,
+		LogURI:       true,
+		LogStatus:    true,
+		LogLatency:   true,
+		LogRemoteIP:  true,
+		LogUserAgent: true,
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
 			actor, _ := c.Get("user_email").(string)
 			logger.Info("request",
-				"method", v.Method,
-				"uri", v.URI,
-				"status", v.Status,
-				"latency_ms", v.Latency.Milliseconds(),
+				"http.request.method", v.Method,
+				"url.path", v.URI,
+				"http.response.status_code", v.Status,
+				"client.address", v.RemoteIP,
+				"user_agent.original", v.UserAgent,
+				"duration_ms", v.Latency.Milliseconds(),
 				"actor", actor,
 			)
 			return nil
@@ -92,19 +101,31 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 
 	root := e.Group(cfg.BasePath)
 
-	var api *echo.Group
+	// apiAuth is the common auth chain (bearer or session) for every /api/v1
+	// endpoint. Built once and reused so /api/v1/graphql and the rest of the
+	// API surface stay in sync.
+	var apiAuth []echo.MiddlewareFunc
 	if cfg.OIDCIssuerURL != "" {
 		bv, err := auth.NewBearerVerifier(context.Background(), cfg.OIDCIssuerURL, cfg.OIDCClientID)
 		if err != nil {
 			logger.Warn("bearer verifier init failed — API auth disabled", "err", err)
-			api = root.Group("/api/v1", handler.RequireRole(db, user.RoleDev))
 		} else {
-			api = root.Group("/api/v1", bv.RequireAuth(), handler.ResolveUser(db, cfg.AdminEmailSet()), handler.RequireRole(db, user.RoleDev))
+			apiAuth = []echo.MiddlewareFunc{bv.RequireAuth(), handler.ResolveUser(db, cfg.AdminEmailSet())}
 		}
 	} else {
 		logger.Warn("ORBITAL_OIDC_ISSUER_URL is not set — API auth disabled")
-		api = root.Group("/api/v1", handler.RequireRole(db, user.RoleDev))
 	}
+
+	// Default API group — dev+ required for mutating methods (POST/PUT/PATCH/DELETE).
+	// RequireRole passes GET/HEAD/OPTIONS through unconditionally.
+	api := root.Group("/api/v1", append(apiAuth, handler.RequireRole(db, user.RoleDev))...)
+
+	// GraphQL group — auth required, but NO route-level role check. GraphQL
+	// queries use POST, so RequireRole(RoleDev) would wrongly block readonly
+	// callers from running reads. Mutation authorization is enforced at the
+	// handler (graphql.go), which calls RoleAtLeast(role, RoleDev) when
+	// isMutation(query) returns true.
+	apiGraphQL := root.Group("/api/v1", apiAuth...)
 	s3Configured := cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != ""
 	ociConfigured := cfg.OCIConfigured()
 	if !ociConfigured {
@@ -286,9 +307,12 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		root.GET("/users", ui.Users)
 	}
 
+	// Single GraphQL endpoint at /api/v1/graphql. Auth via apiAuth (accepts
+	// either session cookie or bearer token); mutation authorization enforced
+	// inside the handler so readonly callers can run queries via POST while
+	// mutations still require dev+. See docs/reference/AUTH.md.
 	gql := handler.NewGraphQL(cfg.DGraphURL, db, logger)
-	root.Any("/graphql", gql.Handle)
-	api.Any("/graphql", gql.Handle)
+	apiGraphQL.Any("/graphql", gql.Handle)
 	root.GET("/swagger/*", echoswagger.WrapHandler)
 
 	// Stub: divergence report intake (Spike 14 will implement full handling).

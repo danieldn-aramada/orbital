@@ -381,8 +381,80 @@ func collectOrbIDs(v any, add func(string)) {
 	}
 }
 
+// isMutation reports whether a GraphQL request body contains a mutation
+// operation. It is the security boundary for write authorization: this
+// function returning true triggers the dev+ role check in Handle.
+//
+// Conservative by design: a mutation keyword surviving comment/string
+// stripping anywhere in the body returns true, even if a non-mutation
+// operation is selected via operationName. False positives (readonly users
+// sending bodies that contain a mutation operation but execute a query)
+// are acceptable; false negatives are not.
+//
+// Bypasses guarded against:
+//   - Leading # line comments: # foo\nmutation Bar { ... }
+//   - String literals containing the word: { field(arg: "mutation") }
+//   - Block strings: """mutation"""\nmutation Bar { ... }
+//   - Multi-operation requests where the first op is a query
+//
+// Alternative: github.com/vektah/gqlparser/v2 for a full AST parse — more
+// accurate (knows operationName selection, fragments) but slower and adds
+// a dependency. Switch if false positives become a real problem.
 func isMutation(query string) bool {
-	return strings.HasPrefix(strings.TrimSpace(strings.ToLower(query)), "mutation")
+	return mutationKeywordRe.MatchString(stripCommentsAndStrings(query))
+}
+
+// mutationKeywordRe matches the literal token "mutation" surrounded by
+// word boundaries — case-insensitive. Cannot smuggle past via substring
+// like "mutationOfThings" (no boundary between 'n' and 'O').
+var mutationKeywordRe = regexp.MustCompile(`(?i)\bmutation\b`)
+
+// stripCommentsAndStrings removes GraphQL line comments (#...) and double-
+// quoted string literals (both regular "..." and block """...""") from the
+// input. The result preserves byte positions for safe regex application.
+func stripCommentsAndStrings(query string) string {
+	var sb strings.Builder
+	sb.Grow(len(query))
+	i := 0
+	for i < len(query) {
+		ch := query[i]
+		switch {
+		case ch == '#':
+			// Line comment: skip to end-of-line, keep the newline so token
+			// boundaries on the next line remain intact.
+			for i < len(query) && query[i] != '\n' {
+				i++
+			}
+		case ch == '"' && i+2 < len(query) && query[i+1] == '"' && query[i+2] == '"':
+			// Block string """..."""
+			i += 3
+			for i+2 < len(query) && !(query[i] == '"' && query[i+1] == '"' && query[i+2] == '"') {
+				i++
+			}
+			if i+2 < len(query) {
+				i += 3 // skip closing """
+			} else {
+				i = len(query)
+			}
+		case ch == '"':
+			// Single-line string "..."
+			i++ // opening quote
+			for i < len(query) && query[i] != '"' {
+				if query[i] == '\\' && i+1 < len(query) {
+					i += 2 // skip escape sequence
+					continue
+				}
+				i++
+			}
+			if i < len(query) {
+				i++ // closing quote
+			}
+		default:
+			sb.WriteByte(ch)
+			i++
+		}
+	}
+	return sb.String()
 }
 
 func hasGQLErrors(body []byte) bool {

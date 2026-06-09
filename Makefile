@@ -4,9 +4,9 @@ MODULE := github.com/armada/orbital
 
 # Per-component versioning — each binary has its own tag lineage.
 # Server: bare v* tags (e.g. v0.0.17). CLI: cli/v* tags. Orb: orb/v* tags.
-SERVER_VERSION := $(shell git describe --tags --exclude 'cli/*' --exclude 'orb/*' --dirty 2>/dev/null || echo "v0.0.0-dev")
-CLI_VERSION    := $(shell (git describe --tags --match 'cli/v*' --dirty 2>/dev/null || echo "cli/v0.0.0-dev") | sed 's|^cli/||')
-ORB_VERSION    := $(shell (git describe --tags --match 'orb/v*' --dirty 2>/dev/null || echo "orb/v0.0.0-dev") | sed 's|^orb/||')
+SERVER_VERSION ?= $(shell git describe --tags --exclude 'cli/*' --exclude 'orb/*' --dirty 2>/dev/null || echo "v0.0.0-dev")
+CLI_VERSION    ?= $(shell (git describe --tags --match 'cli/v*' --dirty 2>/dev/null || echo "cli/v0.0.0-dev") | sed 's|^cli/||')
+ORB_VERSION    ?= $(shell (git describe --tags --match 'orb/v*' --dirty 2>/dev/null || echo "orb/v0.0.0-dev") | sed 's|^orb/||')
 
 SERVER_LDFLAGS := -ldflags "-X $(MODULE)/internal/version.Version=$(SERVER_VERSION)"
 CLI_LDFLAGS    := -ldflags "-X $(MODULE)/internal/version.Version=$(CLI_VERSION)"

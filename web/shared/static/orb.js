@@ -144,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ─── Inventory / Data Centers / Servers list tables ──────────────────────────
 //
 // DataTable construction + tab loading are shared with orbital (see shared.js).
-// Per docs/claude/ORB.md, orb's UI mirrors orbital's tab-swap interaction model.
+// Per docs/reference/ORB.md, orb's UI mirrors orbital's tab-swap interaction model.
 
 document.addEventListener('DOMContentLoaded', () => { initInventoryTable() })
 

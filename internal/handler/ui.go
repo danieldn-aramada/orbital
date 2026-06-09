@@ -142,11 +142,12 @@ func (h *UI) base(c echo.Context) layout.Base {
 		BasePath:          h.basePath,
 		CurrentPath:       c.Request().URL.Path,
 		UI: layout.UIConfig{
-			AppName:    "Orbital",
-			BasePath:   h.basePath,
-			Version:    version,
-			ShowAuth:   true,
-			APIDocPath: h.basePath + "/swagger/index.html",
+			AppName:     "Orbital",
+			BasePath:    h.basePath,
+			Version:     version,
+			ShowAuth:    true,
+			APIDocPath:  h.basePath + "/swagger/index.html",
+			GraphQLPath: "/api/v1/graphql",
 			MoreLinks: []layout.NavItem{
 				{Label: "GitHub", URL: "https://github.com/danieldn-aramada/demo"},
 				{Label: "Report Issue"},

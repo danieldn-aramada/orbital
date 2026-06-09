@@ -91,4 +91,4 @@ All auth/authz events use `event_category: "management"`. Operation names follow
 
 - `docs/decisions/001-mutation-audit-recording.md` — GraphQL mutation audit events
 - `docs/decisions/003-audit-event-categories.md` — `"data"` vs `"management"` event categories
-- `docs/claude/AUTH.md` — auth architecture (OIDC, device code, sessions)
+- `docs/reference/AUTH.md` — auth architecture (OIDC, device code, sessions)

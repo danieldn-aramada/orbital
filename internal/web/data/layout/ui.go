@@ -11,6 +11,9 @@ type UIConfig struct {
 	MoreLinks []NavItem
 	ShowAuth   bool
 	APIDocPath string
+	// GraphQLPath is the navbar link target for the GraphQL endpoint.
+	// Orbital uses "/api/v1/graphql"; orb uses "/graphql".
+	GraphQLPath string
 	// MenuSections drives the sidebar menu. Handler builds this from the current path.
 	MenuSections []MenuSection
 }

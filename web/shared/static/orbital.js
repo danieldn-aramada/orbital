@@ -511,7 +511,7 @@ document.addEventListener('click', function (e) {
             vars.assetDataV2 = JSON.stringify(vars.assetDataV2)
           }
           const currentVersion = parseInt(modal.dataset.version, 10) || 0
-          const resp = await fetch(BASE + '/graphql', {
+          const resp = await fetch(BASE + '/api/v1/graphql', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -707,7 +707,7 @@ document.addEventListener('click', function (e) {
           const idracNamespace = (modal.dataset.orbId || '').split(':')[0]
           const now = new Date().toISOString()
           const currentUser = modal.dataset.currentUser || ''
-          const resp = await fetch(BASE + '/graphql', {
+          const resp = await fetch(BASE + '/api/v1/graphql', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

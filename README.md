@@ -141,9 +141,7 @@ curl -H "Authorization: Bearer $ORBITAL_TOKEN" \
      https://<orbital-host>/api/v1/graphql
 ```
 
-Tokens last about an hour. Re-run `orbital login -v` to mint a fresh one (silent refresh, no browser unless your session has expired).
-
-For long-running services that need automatic token refresh, see the **[Developer quickstart](docs/auth.md#developer-quickstart--calling-orbital-from-your-own-code)** in `docs/auth.md` — covers MSAL / On-Behalf-Of patterns with a Go example.
+For long-running services that need automatic token refresh inside their own code, see the **[Developer quickstart](docs/auth.md#developer-quickstart--calling-orbital-from-your-own-code)** in `docs/auth.md` — covers MSAL / On-Behalf-Of patterns with a Go example.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for running tests and editing styles.
 

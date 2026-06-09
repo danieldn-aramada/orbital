@@ -610,6 +610,51 @@ function initDeviceCodePoller() {
 
 document.addEventListener('DOMContentLoaded', initDeviceCodePoller)
 
+// ─── Device code copy-to-clipboard ────────────────────────────────────────────
+//
+// Lets the user one-click copy the device code so they can paste it into
+// the Microsoft device-login page in the other tab.
+
+function initDeviceCodeCopy() {
+  const btn = document.getElementById('device-code-copy')
+  if (!btn) return
+
+  btn.addEventListener('click', async () => {
+    const text = btn.dataset.copyText || ''
+    const label = btn.querySelector('span:last-child')
+    const icon = btn.querySelector('i')
+    const orig = { label: label.textContent, icon: icon.className }
+
+    try {
+      await navigator.clipboard.writeText(text)
+      label.textContent = 'Copied!'
+      icon.className = 'fa-solid fa-check'
+      btn.classList.remove('is-light')
+      btn.classList.add('is-success')
+      setTimeout(() => {
+        label.textContent = orig.label
+        icon.className = orig.icon
+        btn.classList.remove('is-success')
+        btn.classList.add('is-light')
+      }, 1500)
+    } catch (_) {
+      // Clipboard API blocked (non-secure context or denied permission) —
+      // fall back to selecting the code text so the user can Ctrl+C manually.
+      const codeEl = document.getElementById('device-code-value')
+      if (!codeEl) return
+      const range = document.createRange()
+      range.selectNodeContents(codeEl)
+      const sel = window.getSelection()
+      sel.removeAllRanges()
+      sel.addRange(range)
+      label.textContent = 'Press Ctrl+C'
+      setTimeout(() => { label.textContent = orig.label }, 2000)
+    }
+  })
+}
+
+document.addEventListener('DOMContentLoaded', initDeviceCodeCopy)
+
 // ─── DataCenter / Server tab loading ──────────────────────────────────────────
 //
 // Shared between orbital and orb. Both apps' /datacenters/:id and /servers/:id
@@ -967,7 +1012,7 @@ export function initDatacenterTable(opts = {}) {
       { targets: [4, 5], visible: false, searchable: true },
     ],
     ajax: {
-      url: BASE + '/graphql',
+      url: BASE + '/api/v1/graphql',
       type: 'POST',
       contentType: 'application/json',
       data: () => JSON.stringify({ query: `{ queryDataCenter { id orbId name createdBy createdAt serversAggregate { count } } }` }),
@@ -1078,7 +1123,7 @@ export function initServerListTable(opts = {}) {
     ],
     columnDefs: [{ targets: [6, 7], visible: false, searchable: true }],
     ajax: {
-      url: BASE + '/graphql',
+      url: BASE + '/api/v1/graphql',
       type: 'POST',
       contentType: 'application/json',
       data: () => JSON.stringify({

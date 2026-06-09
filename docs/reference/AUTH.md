@@ -57,7 +57,9 @@ Activated by `ORBITAL_OIDC_DEVICE_CODE=true`. The login modal shows a "Sign in w
 
 ## Bearer token validation
 
-- `/api/v1/graphql` registered on both `e.Any("/graphql")` (session auth, for browser) and `api.Any("/graphql")` (bearer auth, for CLI/API clients).
+- **Single GraphQL endpoint at `/api/v1/graphql`.** Consolidated 2026-06-09 from the prior split (`root.Any("/graphql")` for session, `api.Any("/graphql")` for bearer). The split caused asymmetric authz: the bearer path had route-level `RequireRole(RoleDev)` which blocked readonly callers from running queries (which use POST), and the session path had NO route-level auth enforcement at all (leaking data to anonymous users). Now one path with `bv.RequireAuth()` (accepts session OR bearer) and `ResolveUser`; mutations enforced at the handler. UI fetches updated from `/graphql` to `/api/v1/graphql` in `orbital.js`/`shared.js`. The orb edge service keeps its own `/graphql` (separate concern, no consolidation needed).
+- **Mutation authorization is enforced in the handler, not on the route.** `internal/handler/graphql.go` calls `isMutation(req.Query)` and, when true, checks `RoleAtLeast(role, RoleDev)`. The handler is the sole authoritative gate for write authz on the GraphQL endpoint — do not re-add `RequireRole(db, RoleDev)` to the route or you will block readonly POST queries.
+- **`isMutation` is the security boundary, not a heuristic.** It must defend against bypasses (leading `#`-comments, multi-operation requests, string-literal smuggling, block strings). Strengthened 2026-06-09 to strip comments and string literals before matching `\bmutation\b`. See `internal/handler/graphql.go` and `TestIsMutation` cases. If you add features to the GraphQL parser path, add adversarial cases to that test.
 - **Azure AD app must set `requestedAccessTokenVersion: 2`** in the app manifest (`api.requestedAccessTokenVersion: 2`). Default `null` produces v1 tokens with `iss: "https://sts.windows.net/..."` which does not match go-oidc v2 discovery issuer.
 - **Bearer token audience is the bare client GUID** — Azure AD v2 sets `aud` to bare GUID (e.g. `5fc832f6-...`), not `api://5fc832f6-...`. Configure `go-oidc` with `cfg.OIDCClientID` directly, not `"api://"+cfg.OIDCClientID`.
 - **`internal/auth/bearer.go` validates signature, issuer, and audience only — not `scp`/`scope`.** Authorization is enforced downstream by `RequireRole` against the local `users.role` column. Adding scope-based checks would duplicate logic and tie us to Azure AD specifics.
@@ -118,8 +120,25 @@ Role enforcement is done entirely at the Go middleware layer. DGraph `@auth` dir
 
 - **Login flow**: Authorization Code + PKCE. Opens browser automatically with a local redirect server on a random port. No private DNS issue — runs on the user's machine where the private VPN DNS resolves correctly.
 - **Single-file storage**: `~/.orbital/credentials.json`, mode 0600. Stores the full `Credentials` blob — access token, refresh token, expiry, name, email — as JSON. Matches the pattern used by `aws`, `gcloud`, `kubectl`, `terraform`, `az`. `orb login` uses the same model at `~/.orb/credentials.json`.
-- **Subcommands read file only** — never silently refresh. If access token expired → exit with "run `orbital login`". Only `orbital login` does the refresh-token exchange.
+- **Subcommands silently refresh expired access tokens.** `orbauth.GetCredentials()` (and the thin `GetToken()` wrapper) is the canonical chokepoint — every subcommand reads through it. If the cached access token has > 60s remaining, returns immediately. If expired but a refresh token is on disk, exchanges it with AAD and saves the rotated credentials before returning. Only when refresh fails or no refresh token exists does the user see "run `orbital login`". This reverses the prior "subcommands read file only, never refresh" behavior (which forced redundant `orbital login` invocations for any expired session) and matches `gcloud`, `gh`, `aws`, `az` conventions.
+- **Concurrent CLI invocations are not file-locked.** If two subcommands hit the refresh path simultaneously, the second exchange may fail because AAD rotated the refresh token after the first call. Probability is low (users rarely parallelize CLI subcommands); accepted for v1. Add a flock around `getCredentialsFromStore` if it becomes a real problem.
 - **No OS keychain integration.** Removed 2026-06-09. The previous implementation (CGo + macOS Security framework via `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`) bought defense against one narrow threat (stolen Mac with FileVault disabled and disk pulled offline) at the cost of ~360 lines of platform-specific code, CGo cross-compile pain (required `clang -arch x86_64` for darwin/amd64), and a larger binary. Touch ID was off the table without Apple code-signing entitlements (`errSecMissingEntitlement = -34018`). Industry baseline for OAuth-token CLIs is mode-0600 file storage — keychain integration is the exception, justifiable only when biometric UX is actually available. Reconsider only if (1) orbital-cli gets signed and notarized, or (2) regulatory requirement specifies at-rest encryption beyond FileVault.
+
+## Why orbital-cli uses hand-rolled OAuth instead of MSAL
+
+`docs/auth.md` recommends external service developers use Microsoft's MSAL library for OAuth (especially On-Behalf-Of). orbital-cli does NOT use MSAL — it implements PKCE + refresh directly in `internal/orbauth`. This is deliberate, not laziness:
+
+- **Different audiences, different tools.** MSAL is recommended for external service authors because OBO is intricate and not worth writing by hand. orbital-cli implements PKCE + refresh, which is simple OAuth — well-defined RFC, ~250 lines of working Go code today. Writing it ourselves avoids a ~2-3 MB binary-size increase (real cost for a brew-distributed CLI).
+- **`-v` UX** (printing the access token as `export ORBITAL_TOKEN=<value>` after login) is custom and easier to add to our thin OAuth layer than to wrap around MSAL's account-management abstractions.
+- **No OBO** in orbital-cli — it's a public client doing user-delegated PKCE, not a confidential client brokering tokens on behalf of others. The MSAL feature set largely doesn't apply.
+
+**Trigger conditions to reconsider** migrating to MSAL `public.Client`:
+1. Auth code grows beyond ~400 lines (currently ~250 in `internal/orbauth/`)
+2. Hit an edge case `orbauth` mishandles (e.g., concurrent-refresh races requiring proper token cache coordination, weird clock-skew handling)
+3. Multi-tenant support becomes a real requirement (account switching, multiple identity providers)
+4. Need to share auth code across multiple Go clients (then publishing a vendor-maintained library wrapper makes sense)
+
+Until one of those triggers fires, the recommendation split (MSAL for service authors, `orbauth` for the CLI) is deliberate.
 
 ## orbauth shared package
 

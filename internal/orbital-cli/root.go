@@ -1,16 +1,40 @@
 package orbitalcli
 
 import (
+	"log/slog"
 	"os"
 
 	"github.com/armada/orbital/internal/version"
 	"github.com/spf13/cobra"
 )
 
+// verbose is set by the persistent --verbose/-v flag on rootCmd. When true,
+// slog is configured to emit Debug-level messages to stderr — surfacing
+// network calls (AAD token endpoint, orbital GraphQL endpoint) and other
+// internal events. login.go also reads it to decide whether to print the
+// access token after a successful login.
+var verbose bool
+
 var rootCmd = &cobra.Command{
-	Use:     "orbital",
-	Short:   "Orbital CLI — manage and authenticate with the Orbital cloud service",
-	Version: version.Version,
+	Use:          "orbital",
+	Short:        "Orbital CLI — manage and authenticate with the Orbital cloud service",
+	SilenceUsage: true,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if verbose {
+			slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+				Level: slog.LevelDebug,
+			})))
+		}
+	},
+}
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print the orbital CLI version",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		cmd.Println(version.Version)
+	},
 }
 
 func Execute() {
@@ -20,8 +44,11 @@ func Execute() {
 }
 
 func init() {
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false,
+		"Verbose output — log network calls; print access token after login")
 	rootCmd.AddCommand(loginCmd)
 	rootCmd.AddCommand(logoutCmd)
 	rootCmd.AddCommand(getCmd)
-	rootCmd.AddCommand(patchCmd)
+	rootCmd.AddCommand(versionCmd)
+	// rootCmd.AddCommand(patchCmd) // disabled: CLI is read-only for now
 }

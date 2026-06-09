@@ -3,45 +3,60 @@ package orbitalcli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/armada/orbital/internal/orbauth"
 	"github.com/spf13/cobra"
 )
 
+// DefaultServerURL is the Orbital server endpoint used when --server is not
+// passed and ORBITAL_SERVER is not set. Override at release time via ldflags:
+//
+//	-X 'github.com/armada/orbital/internal/orbital-cli.DefaultServerURL=http://ilb.devnew.armada.internal/orbital'
+var DefaultServerURL = "http://localhost:8001"
+
+// httpClient is shared across all commands with a 15-second timeout so the
+// CLI fails fast when the server is unreachable rather than hanging.
+var httpClient = &http.Client{Timeout: 15 * time.Second}
+
 var serverURL string
+var namespaceFilter string
 
 var getCmd = &cobra.Command{
 	Use:   "get",
 	Short: "Fetch resources from the Orbital server",
 }
 
-var getDatacentersCmd = &cobra.Command{
-	Use:   "datacenters",
-	Short: "List all data centers",
-	Args:  cobra.NoArgs,
-	RunE:  runGetDatacenters,
-}
-
+// getDatacenterCmd lists all data centers when called with no args, or fetches
+// a specific one by name when called with a single arg — kubectl
+// `get pod[s] [name]` shape. The plural alias keeps muscle memory working.
 var getDatacenterCmd = &cobra.Command{
-	Use:     "datacenter <name|orbId|id>",
-	Aliases: []string{"dc"},
-	Short:   "Fetch and display a data center summary",
-	Args:    cobra.ExactArgs(1),
+	Use:     "datacenter [name]",
+	Aliases: []string{"datacenters", "dc", "dcs"},
+	Short:   "List data centers, or fetch one by name",
+	Args:    cobra.MaximumNArgs(1),
 	RunE:    runGetDatacenter,
 }
 
 func init() {
-	getCmd.PersistentFlags().StringVar(&serverURL, "server", "", "Orbital server URL (default: $ORBITAL_SERVER or http://localhost:8001)")
-	getCmd.AddCommand(getDatacentersCmd)
+	getCmd.PersistentFlags().StringVar(&serverURL, "server", "", "Orbital server URL (overrides $ORBITAL_SERVER and compiled-in default)")
+	getCmd.PersistentFlags().StringVarP(&namespaceFilter, "namespace", "n", "", "Filter by namespace name")
 	getCmd.AddCommand(getDatacenterCmd)
+	getCmd.AddCommand(getServerCmd)
 }
 
 func runGetDatacenter(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return runGetDatacenters(cmd, args)
+	}
+
 	token, err := orbauth.GetToken()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "credentials expired — run: orbital login")
@@ -49,77 +64,35 @@ func runGetDatacenter(cmd *cobra.Command, args []string) error {
 	}
 
 	base := resolveServerURL()
-	arg := args[0]
 
-	dc, err := fetchDataCenter(cmd, base, token, arg)
+	dc, err := queryByName(cmd, base, token, args[0])
 	if err != nil {
 		return err
 	}
 	if dc == nil {
-		return fmt.Errorf("data center %q not found", arg)
+		return fmt.Errorf("data center %q not found", args[0])
 	}
 	printDcSummary(dc)
 	return nil
 }
 
-// fetchDataCenter resolves the argument as a DGraph UID (starts with 0x),
-// an orbId (contains :), or a name, trying each in order until one matches.
-func fetchDataCenter(cmd *cobra.Command, base, token, arg string) (*dcSummary, error) {
-	if strings.HasPrefix(arg, "0x") {
-		return queryByUID(cmd, base, token, arg)
-	}
-	if strings.Contains(arg, ":") {
-		return queryByOrbID(cmd, base, token, arg)
-	}
-	// Try orbId first (exact match), then name.
-	dc, err := queryByOrbID(cmd, base, token, arg)
-	if err != nil || dc != nil {
-		return dc, err
-	}
-	return queryByName(cmd, base, token, arg)
-}
-
-func queryByUID(cmd *cobra.Command, base, token, id string) (*dcSummary, error) {
-	const q = `query GetDataCenter($id: ID!) {
-  getDataCenter(id: $id) { ` + dcFields + ` }
-}`
-	var result struct {
-		Data   struct{ GetDataCenter *dcSummary } `json:"data"`
-		Errors []struct{ Message string }         `json:"errors"`
-	}
-	if err := gqlRequest(cmd, base, token, q, map[string]any{"id": id}, &result); err != nil {
-		return nil, err
-	}
-	if len(result.Errors) > 0 {
-		return nil, fmt.Errorf("graphql: %s", result.Errors[0].Message)
-	}
-	return result.Data.GetDataCenter, nil
-}
-
-func queryByOrbID(cmd *cobra.Command, base, token, orbID string) (*dcSummary, error) {
-	const q = `query GetDataCenterByOrbID($orbId: String!) {
-  getDataCenter(orbId: $orbId) { ` + dcFields + ` }
-}`
-	var result struct {
-		Data   struct{ GetDataCenter *dcSummary } `json:"data"`
-		Errors []struct{ Message string }         `json:"errors"`
-	}
-	if err := gqlRequest(cmd, base, token, q, map[string]any{"orbId": orbID}, &result); err != nil {
-		return nil, err
-	}
-	if len(result.Errors) > 0 {
-		return nil, fmt.Errorf("graphql: %s", result.Errors[0].Message)
-	}
-	return result.Data.GetDataCenter, nil
-}
 
 func queryByName(cmd *cobra.Command, base, token, name string) (*dcSummary, error) {
-	const q = `{ queryDataCenter { ` + dcFields + ` } }`
+	var q string
+	var vars map[string]any
+	if namespaceFilter != "" {
+		q = `query($ns: String!) {
+  queryDataCenter(filter: {namespace: {eq: $ns}}) { ` + dcFields + ` }
+}`
+		vars = map[string]any{"ns": namespaceFilter}
+	} else {
+		q = `{ queryDataCenter { ` + dcFields + ` } }`
+	}
 	var result struct {
 		Data   struct{ QueryDataCenter []*dcSummary } `json:"data"`
 		Errors []struct{ Message string }             `json:"errors"`
 	}
-	if err := gqlRequest(cmd, base, token, q, nil, &result); err != nil {
+	if err := gqlRequest(cmd, base, token, q, vars, &result); err != nil {
 		return nil, err
 	}
 	if len(result.Errors) > 0 {
@@ -138,18 +111,28 @@ func gqlRequest(cmd *cobra.Command, base, token, query string, vars map[string]a
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
 	}
-	req, err := http.NewRequestWithContext(cmd.Context(), http.MethodPost, base+"/api/v1/graphql", bytes.NewReader(body))
+	endpoint := base + "/api/v1/graphql"
+
+	if verbose {
+		logVerboseRequest(endpoint, token, query, vars)
+	}
+
+	req, err := http.NewRequestWithContext(cmd.Context(), http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+		return requestError(err, base)
 	}
 	defer resp.Body.Close()
+
+	if verbose {
+		fmt.Fprintf(os.Stderr, "< %s\n\n", resp.Status)
+	}
 
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -159,6 +142,32 @@ func gqlRequest(cmd *cobra.Command, base, token, query string, vars map[string]a
 		return fmt.Errorf("server returned %d: %s", resp.StatusCode, string(raw))
 	}
 	return json.Unmarshal(raw, dest)
+}
+
+// logVerboseRequest prints a curl-style request trace to stderr.
+func logVerboseRequest(endpoint, token, query string, vars map[string]any) {
+	fmt.Fprintf(os.Stderr, "\n> POST %s\n", endpoint)
+	fmt.Fprintf(os.Stderr, "> Authorization: Bearer %s\n", token)
+	fmt.Fprintf(os.Stderr, "> Content-Type: application/json\n>\n")
+	fmt.Fprintln(os.Stderr, strings.TrimSpace(query))
+	if len(vars) > 0 {
+		b, _ := json.MarshalIndent(vars, "", "  ")
+		fmt.Fprintf(os.Stderr, "\nvariables: %s\n", b)
+	}
+	fmt.Fprintln(os.Stderr)
+}
+
+// requestError converts a network error into a user-friendly message.
+// For timeouts against internal Armada endpoints it adds a VPN hint.
+func requestError(err error, base string) error {
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		if strings.Contains(base, "armada.internal") {
+			return fmt.Errorf("connection timed out — ensure you are connected to VPN for %s", base)
+		}
+		return fmt.Errorf("connection timed out — check that the Orbital server is reachable at %s", base)
+	}
+	return fmt.Errorf("request failed: %w", err)
 }
 
 const dcFields = `
@@ -182,8 +191,8 @@ type dcSummary struct {
 	UpdatedBy   string `json:"updatedBy"`
 	UpdatedAt   string `json:"updatedAt"`
 	AssetDataV2 string `json:"assetDataV2"`
-	Namespace string `json:"namespace"`
-	Racks     []struct {
+	Namespace   string `json:"namespace"`
+	Racks       []struct {
 		ID    string `json:"id"`
 		OrbID string `json:"orbId"`
 		Name  string `json:"name"`
@@ -243,7 +252,7 @@ func printDcSummary(dc *dcSummary) {
 	}
 }
 
-func runGetDatacenters(cmd *cobra.Command, args []string) error {
+func runGetDatacenters(cmd *cobra.Command, _ []string) error {
 	token, err := orbauth.GetToken()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "credentials expired — run: orbital login")
@@ -252,13 +261,27 @@ func runGetDatacenters(cmd *cobra.Command, args []string) error {
 
 	base := resolveServerURL()
 
-	const q = `{ queryDataCenter { name orbId serversAggregate { count } } }`
+	var q string
+	var vars map[string]any
+	if namespaceFilter != "" {
+		q = `query($ns: String!) {
+  queryDataCenter(filter: {namespace: {eq: $ns}}) {
+    id orbId name createdBy createdAt serversAggregate { count }
+  }
+}`
+		vars = map[string]any{"ns": namespaceFilter}
+	} else {
+		q = `{ queryDataCenter { id orbId name createdBy createdAt serversAggregate { count } } }`
+	}
+
 	var result struct {
 		Data struct {
 			QueryDataCenter []struct {
 				ID        string `json:"id"`
 				Name      string `json:"name"`
 				OrbID     string `json:"orbId"`
+				CreatedBy string `json:"createdBy"`
+				CreatedAt string `json:"createdAt"`
 				ServersAggregate struct {
 					Count int `json:"count"`
 				} `json:"serversAggregate"`
@@ -267,26 +290,8 @@ func runGetDatacenters(cmd *cobra.Command, args []string) error {
 		Errors []struct{ Message string } `json:"errors"`
 	}
 
-	body, _ := json.Marshal(map[string]any{"query": q})
-	req, err := http.NewRequestWithContext(cmd.Context(), http.MethodPost, base+"/api/v1/graphql", bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("build request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	raw, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("server returned %d: %s", resp.StatusCode, string(raw))
-	}
-	if err := json.Unmarshal(raw, &result); err != nil {
-		return fmt.Errorf("decode response: %w", err)
+	if err := gqlRequest(cmd, base, token, q, vars, &result); err != nil {
+		return err
 	}
 	if len(result.Errors) > 0 {
 		return fmt.Errorf("graphql: %s", result.Errors[0].Message)
@@ -299,19 +304,35 @@ func runGetDatacenters(cmd *cobra.Command, args []string) error {
 	}
 
 	// Compute column widths from data, kubectl-style.
-	wName, wOrbID := len("NAME"), len("ORB ID")
+	// Columns match UI DataTable: Name | Servers | Created By | Created At | ID | Orb ID
+	wName, wSrv, wCreatedBy, wCreatedAt, wID, wOrbID :=
+		len("NAME"), len("SERVERS"), len("CREATED BY"), len("CREATED AT"), len("ID"), len("ORB ID")
 	for _, dc := range dcs {
 		if n := len(dc.Name); n > wName {
 			wName = n
+		}
+		if n := len(fmt.Sprintf("%d", dc.ServersAggregate.Count)); n > wSrv {
+			wSrv = n
+		}
+		if n := len(dc.CreatedBy); n > wCreatedBy {
+			wCreatedBy = n
+		}
+		if n := len(dc.CreatedAt); n > wCreatedAt {
+			wCreatedAt = n
+		}
+		if n := len(dc.ID); n > wID {
+			wID = n
 		}
 		if n := len(dc.OrbID); n > wOrbID {
 			wOrbID = n
 		}
 	}
-	colFmt := fmt.Sprintf("%%-%ds  %%-%ds  %%s\n", wName, wOrbID)
-	fmt.Printf(colFmt, "NAME", "ORB ID", "SERVERS")
+	colFmt := fmt.Sprintf("%%-%ds  %%-%ds  %%-%ds  %%-%ds  %%-%ds  %%s\n",
+		wName, wSrv, wCreatedBy, wCreatedAt, wID)
+	fmt.Printf(colFmt, "NAME", "SERVERS", "CREATED BY", "CREATED AT", "ID", "ORB ID")
 	for _, dc := range dcs {
-		fmt.Printf(colFmt, dc.Name, dc.OrbID, fmt.Sprintf("%d", dc.ServersAggregate.Count))
+		fmt.Printf(colFmt, dc.Name, fmt.Sprintf("%d", dc.ServersAggregate.Count),
+			dc.CreatedBy, dc.CreatedAt, dc.ID, dc.OrbID)
 	}
 	return nil
 }
@@ -323,5 +344,5 @@ func resolveServerURL() string {
 	if env := os.Getenv("ORBITAL_SERVER"); env != "" {
 		return env
 	}
-	return "http://localhost:8001"
+	return DefaultServerURL
 }

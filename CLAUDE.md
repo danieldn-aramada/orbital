@@ -52,7 +52,7 @@ The following invariants apply to Kubernetes-based deployments of orbital. Orbit
 
 Orbital provides APIs — consumers wire the transport. Four APIs: Export (`POST /api/v1/export`), Publish (`POST /api/v1/export/jobs/:jobId/publish`), Report intake, Topology (DGraph GraphQL proxy). Orbital never initiates contact with the edge.
 
-See `docs/claude/DGRAPH.md` for schema, Namespace/DataCenter conventions, and blue-green export topology.
+See `docs/reference/DGRAPH.md` for schema, Namespace/DataCenter conventions, and blue-green export topology.
 
 ### Other subsystems
 
@@ -66,7 +66,7 @@ Auth, audit, export/OCI/backup/restore, and orb details are in the Reference Ind
 
 `orb` is a single binary (`cmd/orb/`). `orb start` is the long-running edge service — passive cache + local UI. Orb does not scan hardware, does not execute against K8s, is not a K8s controller. `orb scan` is post-MVP.
 
-All architecture and settled decisions for orb (import pipeline, consumer dispatch, DGraphBackend, divergence intake, orb scan) are in `docs/claude/ORB.md`.
+All architecture and settled decisions for orb (import pipeline, consumer dispatch, DGraphBackend, divergence intake, orb scan) are in `docs/reference/ORB.md`.
 
 ## Model & Workflow Guide
 
@@ -108,12 +108,12 @@ Read the relevant file before starting work in that area. Each file contains set
 
 | Working on | File |
 |---|---|
-| DGraph schema, queries, mutations, export, seeding | `docs/claude/DGRAPH.md` |
-| UI templates, HTMX, JavaScript, CSS | `docs/claude/UI.md` |
-| Auth, sessions, OIDC, bearer tokens, keychain | `docs/claude/AUTH.md` |
-| Audit events, mutation recording, `graphql.go` | `docs/claude/AUDIT.md` |
-| OCI publish, export jobs, backup, restore | `docs/claude/OCI.md` |
-| Orb import pipeline, consumer dispatch, DGraphBackend, orb UI | `docs/claude/ORB.md` |
+| DGraph schema, queries, mutations, export, seeding | `docs/reference/DGRAPH.md` |
+| UI templates, HTMX, JavaScript, CSS | `docs/reference/UI.md` |
+| Auth, sessions, OIDC, bearer tokens, keychain | `docs/reference/AUTH.md` |
+| Audit events, mutation recording, `graphql.go` | `docs/reference/AUDIT.md` |
+| OCI publish, export jobs, backup, restore | `docs/reference/OCI.md` |
+| Orb import pipeline, consumer dispatch, DGraphBackend, orb UI | `docs/reference/ORB.md` |
 | Planning or starting any spike | `ROADMAP.md` |
 
 ### Decision records
@@ -169,7 +169,7 @@ make test-e2e-orb      # requires: make run-orb
 
 ## Repository Structure
 
-`cmd/` — entry points (`orbital/`, `orb/`). `internal/` — all application logic (`handler/`, `auth/`, `graph/`, `server/`, `config/`). `web/templates/` — Go templates split by app (`orbital/`, `orb/`, `shared/`). `web/shared/static/` — JS modules, CSS, vendor libs. `schema/` — DGraph GraphQL schema. `ent/` — PostgreSQL schema + generated client. `deploy/local/` — docker-compose dev stack. `docs/claude/` — domain reference files. `docs/decisions/` — ADRs. `e2e/` — Playwright tests.
+`cmd/` — entry points (`orbital/`, `orb/`). `internal/` — all application logic (`handler/`, `auth/`, `graph/`, `server/`, `config/`). `web/templates/` — Go templates split by app (`orbital/`, `orb/`, `shared/`). `web/shared/static/` — JS modules, CSS, vendor libs. `schema/` — DGraph GraphQL schema. `ent/` — PostgreSQL schema + generated client. `deploy/local/` — docker-compose dev stack. `docs/reference/` — domain reference files. `docs/decisions/` — ADRs. `e2e/` — Playwright tests.
 
 ## Working Style
 
@@ -179,14 +179,14 @@ make test-e2e-orb      # requires: make run-orb
 - Only touch files relevant to the task
 - Don't clean up unrelated code while working on something else
 - Don't add TODOs or placeholder comments
-- All styles go in `web/sass/main.scss` — never edit `web/shared/static/css/main.css` directly. See `docs/claude/UI.md` for JS/HTMX/template patterns.
+- All styles go in `web/sass/main.scss` — never edit `web/shared/static/css/main.css` directly. See `docs/reference/UI.md` for JS/HTMX/template patterns.
 - **HTML fragment negotiation uses `HX-Request: true`, never a separate URL** — when a handler needs to return an HTML fragment for the UI and JSON for API callers, branch on `c.Request().Header.Get("HX-Request") == "true"` inside the **existing** handler. Do not create a sibling `/rows` or `/fragment` route. Violates REST content negotiation (RFC 7231) and breaks the `/api/v1/` contract.
 - **Write tests alongside every behavioral change** — when you add a field, persist data, change an API response, or introduce an interface, include tests asserting the new behavior in the same response. Do not wait to be asked. Exception: CSS/template presentation changes covered implicitly by e2e do not need dedicated unit tests unless the logic is non-trivial.
 - **Run tests after writing them** — always run the relevant test command after writing new tests. If tests fail, diagnose and fix before reporting done. Do not hand back failing tests.
 - **Test at the lowest isolatable level** — don't write an e2e test when a unit test can cover the same behavior. Level order: unit (no services) → integration (real services) → e2e (browser). Choose the lowest level where the behavior is fully exercised.
 - **Any persistence requires a round-trip test** — if data is written to disk, PostgreSQL, or any file: write a test that writes, reads back, and asserts. Persistence bugs are invisible without this. E.g., a new `bool` field on a struct written to JSON must be verified to survive encode+decode.
 - **Handler logic must be tested at unit level** — use `httptest.NewRecorder` (net/http) or Echo's `httptest` equivalent. Do not rely solely on e2e to validate HTTP handler behavior. This applies to: status codes on error, request validation, response body shape.
-- Before marking a task as done: check whether any decisions made this session should be documented. Domain-specific decisions go in the relevant `docs/claude/` file (see Reference Index above). Only cross-cutting platform decisions go in CLAUDE.md's Settled Decisions.
+- Before marking a task as done: check whether any decisions made this session should be documented. Domain-specific decisions go in the relevant `docs/reference/` file (see Reference Index above). Only cross-cutting platform decisions go in CLAUDE.md's Settled Decisions.
 
 ### Conversation conventions
 
@@ -211,7 +211,7 @@ These are cross-cutting platform decisions. Domain-specific decisions live in th
 - **PLM and ITSM integrations are out of v1 scope** — vendor selection in progress. Design behind Go interfaces when the time comes.
 - **Network infrastructure config items are out of v1 scope** — VLANs and general network IPs are owned by an external system. Functional IPs tied to specific workloads (Tinkerbell, K8s control plane) are in scope as properties or dedicated nodes — discuss before adding.
 - **ConfigBundle is a separate project, built after orbital** — orbital's APIs (export, divergence intake) are the contract. ConfigBundle is designed around orbital's APIs, not the inverse. Do not add ConfigBundle awareness to orbital.
-- **Orbital is the sole OCI producer** — no downstream system needs registry write credentials. See `docs/claude/OCI.md` for bundler/signing details.
+- **Orbital is the sole OCI producer** — no downstream system needs registry write credentials. See `docs/reference/OCI.md` for bundler/signing details.
 - **Product naming: "Orbital" (cloud) / "Orb" (edge) — this is the north star.** Do not use "Orbital Edge" or conflate the two. Orb is a purpose-built edge agent, not a deployment variant of Orbital. `AppName: "Orbital"` in orbital handlers; `AppName: "Orb"` in orb handlers.
 - **`actorFromContext(c echo.Context) string` is the canonical identity helper** — in `internal/handler/actor.go`. Prefers email over display name. All handlers recording "created by" or "actor" must call this. Never inline `c.Get("user_name")` / `c.Get("user_email")` in new handlers. `ui.go` is the only legitimate exception.
 - **REST API convention: operation-centric triggers, resource-centric jobs** — orbital is GraphQL-first for CRUD; REST endpoints exist only for async operational workflows. Trigger endpoints create a job and return a job ID. Do not create resource-centric paths for operations that have no corresponding GET/PUT/DELETE. Rationale: `docs/decisions/002-api-design-philosophy.md`.

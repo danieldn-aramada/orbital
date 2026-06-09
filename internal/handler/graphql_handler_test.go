@@ -17,20 +17,39 @@ import (
 
 func TestIsMutation(t *testing.T) {
 	tests := []struct {
+		name  string
 		query string
 		want  bool
 	}{
-		{"mutation { addServer(input:[]) { server { id } } }", true},
-		{"mutation Foo { updateDataCenter(input:{}) { dataCenter { id } } }", true},
-		{"  mutation\n{ deleteServer(filter:{}) { server { id } } }", true},
-		{"{ queryDataCenter { id name } }", false},
-		{"query { queryServer { id } }", false},
-		{"", false},
+		// Happy paths
+		{"simple mutation", "mutation { addServer(input:[]) { server { id } } }", true},
+		{"named mutation", "mutation Foo { updateDataCenter(input:{}) { dataCenter { id } } }", true},
+		{"mutation with leading whitespace + newline", "  mutation\n{ deleteServer(filter:{}) { server { id } } }", true},
+		{"uppercase MUTATION", "MUTATION Foo { updateDataCenter(input:{}) { dataCenter { id } } }", true},
+		{"shorthand query", "{ queryDataCenter { id name } }", false},
+		{"explicit query", "query { queryServer { id } }", false},
+		{"empty body", "", false},
+
+		// Bypass vectors that the original prefix-check missed
+		{"#-comment hiding mutation", "# innocuous comment\nmutation Bar { addServer(input:[]) { server { id } } }", true},
+		{"#-comment inline before mutation", "# what's this?\n# another line\nmutation Bar { ok }", true},
+		{"query operation first, mutation second", "query Foo { ok }\nmutation Bar { addServer(input:[]) { server { id } } }", true},
+		{"block string before mutation", `"""leading docblock"""` + "\nmutation Bar { addServer(input:[]) { server { id } } }", true},
+
+		// Strings and comments that contain the word "mutation" but aren't mutations
+		{"string literal containing 'mutation'", `{ queryServer(filter: { name: { eq: "mutation" } }) { id } }`, false},
+		{"comment containing the word mutation", "# this query references mutation behavior\n{ queryServer { id } }", false},
+		{"block string containing 'mutation'", `{ queryServer(filter: { name: { eq: """mutation""" } }) { id } }`, false},
+
+		// Identifier that contains 'mutation' as substring should not trigger
+		{"identifier containing mutation substring", "{ queryMutationLog { id } }", false},
 	}
 	for _, tt := range tests {
-		if got := isMutation(tt.query); got != tt.want {
-			t.Errorf("isMutation(%q) = %v, want %v", tt.query, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isMutation(tt.query); got != tt.want {
+				t.Errorf("isMutation(%q) = %v, want %v", tt.query, got, tt.want)
+			}
+		})
 	}
 }
 
