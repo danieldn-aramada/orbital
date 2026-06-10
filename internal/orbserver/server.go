@@ -61,6 +61,10 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	e.HideBanner = true
 	e.HidePort = true
 
+	e.GET("/healthz", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	})
+
 	// HTTP access log — attribute names follow OpenTelemetry semantic
 	// conventions for HTTP server. See docs/reference/AUDIT.md for the convention
 	// document. Kept in sync with orbital's logger in internal/server/server.go.
@@ -90,14 +94,9 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 
 	state := newImportState()
 
-	var backend orb.DGraphBackend
-	if cfg.Backend == "k8s" {
-		backend = &orb.SubprocessBackend{
-			AlphaGRPC: cfg.DGraphAlphaGRPC,
-			ZeroGRPC:  cfg.DGraphZeroGRPC,
-		}
-	} else {
-		backend = &orb.DockerBackend{ContainerName: cfg.DGraphContainerName}
+	backend := &orb.SubprocessBackend{
+		AlphaGRPC: cfg.DGraphAlphaGRPC,
+		ZeroGRPC:  cfg.DGraphZeroGRPC,
 	}
 
 	imp := orb.NewImporter(*cfg, logger, backend)
@@ -168,13 +167,14 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	e.GET("/divergence", s.divergencePage)
 	e.GET("/import-history", s.importHistoryPage)
 
+	// GraphQL proxy — browser-side DataTables calls go here.
+	// Registered at /graphql (not /api/v1/graphql) — GraphQL is not URL-versioned,
+	// per convention (GitHub, GitLab, NetBox, Apollo). See CLAUDE.md.
+	gql := handler.NewGraphQL(cfg.DGraphURL, nil, logger)
+	e.Any("/graphql", gql.Handle)
+
 	// API.
 	api := e.Group("/api/v1")
-
-	// GraphQL proxy — browser-side DataTables calls go here.
-	// Registered at /api/v1/graphql to match the path shared.js expects.
-	gql := handler.NewGraphQL(cfg.DGraphURL, nil, logger)
-	api.Any("/graphql", gql.Handle)
 	api.POST("/import/subgraph", s.importSubgraph)
 	api.POST("/import/artifact", s.importArtifact)
 	api.GET("/import/status", s.importStatus)
@@ -183,8 +183,6 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 		api.POST("/import", s.triggerImport)
 		api.GET("/import/tags", s.importTags)
 	}
-	inv := handler.NewInventory(cfg.DGraphURL)
-	api.GET("/inventory", inv.List)
 	api.POST("/divergence", s.receiveDivergence)
 	api.GET("/divergence", s.getDivergence)
 	api.POST("/divergence/publish", s.publishDivergence)

@@ -8,7 +8,7 @@
 
 ## Context
 
-Orbital is GraphQL-first. All CRUD operations on config items (DataCenter, Server, Rack, etc.) go through the GraphQL API at `/api/v1/graphql`. REST endpoints exist only for async operational workflows that do not fit the GraphQL model: export, backup, restore, publish, import.
+Orbital is GraphQL-first. All CRUD operations on config items (DataCenter, Server, Rack, etc.) go through the GraphQL API at `/graphql`. REST endpoints exist only for async operational workflows that do not fit the GraphQL model: export, backup, restore, publish, import.
 
 When designing these REST endpoints, two questions came up:
 

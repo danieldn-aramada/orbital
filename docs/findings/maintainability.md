@@ -77,7 +77,7 @@ A step-by-step technical debt and improvement roadmap based on a full codebase a
 **Files:**
 - `internal/orbauth/auth.go` — remove constants, accept via parameters
 - `internal/config/config.go` — ensure fields are present
-- `cmd/orbital-cli/` — pass config values through
+- `cmd/orbctl/` — pass config values through
 
 **Effort:** 45 min
 

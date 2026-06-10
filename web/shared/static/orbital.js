@@ -473,6 +473,7 @@ function copyVerifyCmd() {
 // ─── DC edit modal ────────────────────────────────────────────────────────────
 
 const dcEditors = new Map()
+window.dcEditors = dcEditors // exposed for e2e smoke tests to assert editor registration
 
 document.addEventListener('click', function (e) {
   const editBtn = e.target.closest('[data-dc-edit-id]')
@@ -511,7 +512,7 @@ document.addEventListener('click', function (e) {
             vars.assetDataV2 = JSON.stringify(vars.assetDataV2)
           }
           const currentVersion = parseInt(modal.dataset.version, 10) || 0
-          const resp = await fetch(BASE + '/api/v1/graphql', {
+          const resp = await fetch(BASE + '/graphql', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -667,6 +668,7 @@ document.addEventListener('htmx:afterSwap', (evt) => {
 // ─── Server edit modal ────────────────────────────────────────────────────────
 
 const srvEditors = new Map()
+window.srvEditors = srvEditors // exposed for e2e smoke tests
 
 document.addEventListener('click', function (e) {
   const editBtn = e.target.closest('[data-srv-edit-id]')
@@ -707,7 +709,7 @@ document.addEventListener('click', function (e) {
           const idracNamespace = (modal.dataset.orbId || '').split(':')[0]
           const now = new Date().toISOString()
           const currentUser = modal.dataset.currentUser || ''
-          const resp = await fetch(BASE + '/api/v1/graphql', {
+          const resp = await fetch(BASE + '/graphql', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

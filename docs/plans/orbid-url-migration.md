@@ -149,7 +149,7 @@ Run `grep -rn "0x[0-9a-f]" e2e/` and update any hardcoded UIDs.
 
 ### 10. Generated swagger docs
 
-Both `docs/orb/swagger.yaml` and the orbital docs will need re-gen. Run `make docs` and `make orb-docs` at the end.
+Both `docs/orb/swagger.yaml` and the orbital docs will need re-gen. Run `make docs` at the end (regenerates both).
 
 ## Suggested commit boundary
 
@@ -164,7 +164,7 @@ Before declaring done, manually verify with `make up && make run-orbital && make
 3. Orb `/datacenter` — dblclick → tab opens, content loads
 4. Orb `/servers` — same
 5. Browser hard-refresh: localStorage migration runs once silently, no stale UID entries cause 404 loops
-6. Existing e2e suite passes: `make test-e2e` and `make test-e2e-orb`
+6. Existing e2e suite passes: `make test-e2e` (orbital + orb projects)
 7. No remaining references: `grep -rn ':id\|"id"' internal/orbserver/dc_handlers.go internal/orbserver/server_handlers.go internal/handler/datacenter.go internal/handler/server.go web/shared/static/shared.js | grep -v "// "` — should be empty for the touched handlers
 
 ## What to do if blocked

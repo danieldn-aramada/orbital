@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 
-// Orb UI smoke tests — run against the orb server (default :8010).
-// Requires: make up-orb-deps && make run-orb
-// Run with: npx playwright test --config=playwright.orb.config.ts
+// Orb UI tests — run against the orb server on :8010 as the `orb` Playwright
+// project (see playwright.config.ts). Requires orb running locally.
+// Run with: make test-e2e (or `npx playwright test --project=orb` for just orb).
 
 const pages: Array<{ path: string; heading?: string; testid?: boolean; tableId?: string }> = [
   { path: '/',               heading: 'Status',              testid: true  },

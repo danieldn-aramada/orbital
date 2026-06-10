@@ -27,7 +27,7 @@ import (
 // @Success     202 {object} map[string]string
 // @Failure     400 {object} map[string]string
 // @Failure     409 {object} map[string]string
-// @Router      /import [post]
+// @Router      /api/v1/import [post]
 func (s *Server) triggerImport(c echo.Context) error {
 	var req struct {
 		Tag string `json:"tag"`
@@ -137,7 +137,7 @@ func (s *Server) triggerImport(c echo.Context) error {
 // @Tags        import
 // @Produce     json
 // @Success     200 {object} importSnapshot
-// @Router      /import/status [get]
+// @Router      /api/v1/import/status [get]
 func (s *Server) importStatus(c echo.Context) error {
 	return c.JSON(http.StatusOK, s.state.snapshot())
 }
@@ -154,7 +154,7 @@ type tagInfo struct {
 // @Tags        import
 // @Produce     json
 // @Success     200 {object} map[string][]tagInfo
-// @Router      /import/tags [get]
+// @Router      /api/v1/import/tags [get]
 func (s *Server) importTags(c echo.Context) error {
 	ctx := c.Request().Context()
 	pullCfg := oci.PullConfig{
@@ -240,7 +240,7 @@ func (s *Server) importTags(c echo.Context) error {
 // @Tags        import
 // @Produce     json
 // @Success     200 {array}  orb.ImportRecord
-// @Router      /import/history [get]
+// @Router      /api/v1/import/history [get]
 func (s *Server) importHistory(c echo.Context) error {
 	records, err := orb.LoadHistory(s.cfg.DataDir)
 	if err != nil {
@@ -273,7 +273,7 @@ func newImportID() string {
 // @Success     202 {object} map[string]string
 // @Failure     400 {object} map[string]string
 // @Failure     409 {object} map[string]string
-// @Router      /import/artifact [post]
+// @Router      /api/v1/import/artifact [post]
 func (s *Server) importArtifact(c echo.Context) error {
 	if snap := s.state.snapshot(); snap.Status == "running" {
 		return c.JSON(http.StatusConflict, map[string]string{"error": "import already running"})
@@ -419,7 +419,7 @@ func (s *Server) importArtifact(c echo.Context) error {
 // @Success     202 {object} map[string]string
 // @Failure     400 {object} map[string]string
 // @Failure     409 {object} map[string]string
-// @Router      /import/subgraph [post]
+// @Router      /api/v1/import/subgraph [post]
 // importSubgraph reads the entire zip into memory before extracting. At peak it holds
 // the raw zip + the extracted data.json.gz simultaneously (~2× zip size). This is
 // acceptable for typical single-DC subgraphs (1–10 MB compressed). If subgraph size

@@ -1,4 +1,3 @@
-basePath: /api/v1
 definitions:
   handler.artifactResponse:
     properties:
@@ -198,7 +197,7 @@ info:
   contact: {}
   description: API-first, graph-native source of truth for modular data centers.
   title: Orbital API
-  version: 0.1.0
+  version: 0.0.0-dev
 paths:
   /api/v1/audit-log:
     get:
@@ -508,20 +507,194 @@ paths:
       summary: Publish export as OCI artifact
       tags:
       - oci
-  /api/v1/inventory:
+  /api/v1/export/jobs/{jobId}/publish-modal:
     get:
-      description: Returns every node implementing ConfigItem, across all namespaces.
+      description: Returns an HTML fragment containing the publish confirmation modal
+        body (summary + confirm form). UI-only endpoint — always returns HTML.
+      parameters:
+      - description: Export job ID (UUID)
+        in: path
+        name: jobId
+        required: true
+        type: string
+      - description: Set to true when re-publishing an already-published artifact
+        in: query
+        name: republish
+        type: boolean
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get publish confirmation modal
+      tags:
+      - oci
+  /api/v1/import:
+    post:
+      consumes:
+      - application/json
+      description: Starts an async OCI artifact pull and DGraph import for the requested
+        tag. Returns 409 if an import is already running.
+      parameters:
+      - description: Import request
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Trigger import
+      tags:
+      - import
+  /api/v1/import/artifact:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Accepts a zip bundle (data.json.gz + schema.gz + optional layers.json
+        + layer blobs)
+      parameters:
+      - description: Zip archive containing data.json.gz, schema.gz, and optionally
+          layers.json + layer blobs
+        in: formData
+        name: bundle
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Import OCI artifact bundle
+      tags:
+      - import
+  /api/v1/import/history:
+    get:
+      description: Returns the rolling history of completed and failed imports from
+        disk.
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            additionalProperties: true
-            type: object
-      summary: List all config items
+            items:
+              $ref: '#/definitions/orb.ImportRecord'
+            type: array
+      summary: Import history
       tags:
-      - graph
+      - import
+  /api/v1/import/status:
+    get:
+      description: Returns the current import state snapshot including status, current
+        version, and last import record.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/orbserver.importSnapshot'
+      summary: Import status
+      tags:
+      - import
+  /api/v1/import/subgraph:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 'Accepts a zip bundle (data.json.gz + schema.gz) and imports it
+        into local DGraph. Source-agnostic: use for courier (direct upload), ConfigBundle
+        Controller delivery, or any caller with a subgraph zip.'
+      parameters:
+      - description: Zip archive containing data.json.gz and schema.gz
+        in: formData
+        name: bundle
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Import subgraph bundle
+      tags:
+      - import
+  /api/v1/import/tags:
+    get:
+      description: Lists available OCI artifact tags from the configured registry
+        for this data center, enriched with signature verification status and artifact
+        size.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/orbserver.tagInfo'
+              type: array
+            type: object
+      summary: List import tags
+      tags:
+      - import
   /api/v1/oci/artifacts:
     get:
       description: Returns the 100 most recent OCI artifacts ordered by publish time
@@ -702,169 +875,10 @@ paths:
       summary: GraphQL endpoint
       tags:
       - graphql
-  /import:
-    post:
-      consumes:
-      - application/json
-      description: Starts an async OCI artifact pull and DGraph import for the requested
-        tag. Returns 409 if an import is already running.
-      parameters:
-      - description: Import request
-        in: body
-        name: body
-        required: true
-        schema:
-          type: object
-      produces:
-      - application/json
-      responses:
-        "202":
-          description: Accepted
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: Conflict
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Trigger import
-      tags:
-      - import
-  /import/artifact:
-    post:
-      consumes:
-      - multipart/form-data
-      description: Accepts a zip bundle (data.json.gz + schema.gz + optional layers.json
-        + layer blobs)
-      parameters:
-      - description: Zip archive containing data.json.gz, schema.gz, and optionally
-          layers.json + layer blobs
-        in: formData
-        name: bundle
-        required: true
-        type: file
-      produces:
-      - application/json
-      responses:
-        "202":
-          description: Accepted
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: Conflict
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Import OCI artifact bundle
-      tags:
-      - import
-  /import/history:
-    get:
-      description: Returns the rolling history of completed and failed imports from
-        disk.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/orb.ImportRecord'
-            type: array
-      summary: Import history
-      tags:
-      - import
-  /import/status:
-    get:
-      description: Returns the current import state snapshot including status, current
-        version, and last import record.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/orbserver.importSnapshot'
-      summary: Import status
-      tags:
-      - import
-  /import/subgraph:
-    post:
-      consumes:
-      - multipart/form-data
-      description: 'Accepts a zip bundle (data.json.gz + schema.gz) and imports it
-        into local DGraph. Source-agnostic: use for courier (direct upload), ConfigBundle
-        Controller delivery, or any caller with a subgraph zip.'
-      parameters:
-      - description: Zip archive containing data.json.gz and schema.gz
-        in: formData
-        name: bundle
-        required: true
-        type: file
-      produces:
-      - application/json
-      responses:
-        "202":
-          description: Accepted
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: Conflict
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Import subgraph bundle
-      tags:
-      - import
-  /import/tags:
-    get:
-      description: Lists available OCI artifact tags from the configured registry
-        for this data center, enriched with signature verification status and artifact
-        size.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              items:
-                $ref: '#/definitions/orbserver.tagInfo'
-              type: array
-            type: object
-      summary: List import tags
-      tags:
-      - import
 swagger: "2.0"
 tags:
-- name: backup graph
-- name: export subgraph
-- name: events
+- name: audit
+- name: graph
+- name: graphql
 - name: oci
+- name: subgraph

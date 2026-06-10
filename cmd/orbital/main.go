@@ -1,12 +1,12 @@
 // @title           Orbital API
-// @version         0.1.0
+// @version         0.0.0-dev
 // @description     API-first, graph-native source of truth for modular data centers.
-// @BasePath        /api/v1
 //
-// @tag.name         backup graph
-// @tag.name         export subgraph
-// @tag.name         events
+// @tag.name         audit
+// @tag.name         graph
+// @tag.name         graphql
 // @tag.name         oci
+// @tag.name         subgraph
 
 package main
 
@@ -39,7 +39,8 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 
-	docs.SwaggerInfo.BasePath = cfg.BasePath + "/api/v1"
+	docs.SwaggerInfo.BasePath = cfg.BasePath
+	docs.SwaggerInfo.Version = version.Version
 
 	db, err := ent.Open("postgres", cfg.DatabaseURL)
 	if err != nil {

@@ -64,7 +64,7 @@ GraphQL cannot traverse typed back-refs polymorphically. For queries like "is th
 - Order: `addNamespace` → `addDataCenter` → `addRack` → `addServer` in a single mutation batch
 - DGraph upsert never deletes stale nodes — add explicit `deleteX` mutations in `seed-dgraph.sh` for removed nodes
 - `hostname` and `rackPosition` on `Server` are **design intent** fields (admin-set, not orb scan). Convention: `r{rack:02d}-u{position:02d}.{datacenter}` — e.g. `r01-u17.alaska-dot-cruiser`
-- `make seed-aks-clean` drops all data before seeding (clean slate). `make seed-aks` does NOT drop first.
+- `make seed-aks` is additive; `make seed-aks CLEAN=1` drops all data first (clean slate). Both also seed the Postgres admin user.
 - **Full seed produces 1,351 config items** — 9 DC + 24 Rack + 188 Server + 155 IdracSettings + 106 StorageController + 313 StorageVolume + 368 StorageDevice + 188 IPAddress
 
 ## Redfish / hardware naming

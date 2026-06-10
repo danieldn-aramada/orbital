@@ -15,7 +15,7 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
 - **`DOMContentLoaded` inside modules works correctly** — modules are deferred by default. Use delegated `document.addEventListener('click', e => { if (!e.target.closest('#id')) return; ... })` for button handlers. Never call `getElementById` at module top level.
 - **Go template + HTMX is the primary rendering pattern** — server renders HTML fragments (including `<select>` options, lists, previews); JS fetches HTML and sets `innerHTML`. Reserve JS for things Go templates cannot do: polling loops, DataTables init, JSON editors, tab lifecycle management. Never write JS to fetch data and build DOM that a Go template handler could render directly.
 - **All styles go in `web/sass/main.scss`** — never edit `web/shared/static/css/main.css` directly (generated). Rebuild: `make build-css` (one-time) or `make watch-css` (watch mode).
-- `make run-orbital` uses version `dev` — avoids noisy git-describe strings in local dev. `make build-orbital` and `make push` still use full `$(VERSION)`.
+- `make run-orbital` uses version `v0.0.0-dev` — avoids noisy git-describe strings in local dev. `make push` still uses full `$(SERVER_VERSION)`.
 
 ## HTMX patterns
 

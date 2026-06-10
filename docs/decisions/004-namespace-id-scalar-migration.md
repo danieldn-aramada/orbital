@@ -199,7 +199,7 @@ Affected:
 
 `datacenter.go` and `orbserver/dc_handlers.go` render `dc.Namespace.Name` / `raw.Namespace.Name`.
 Replace with `dc.NamespaceID` / `raw.NamespaceID` (same string value, direct field instead of traversal).
-Same fix needed in `internal/orbital-cli/get_dc.go` and `internal/orbserver/server_handlers.go`.
+Same fix needed in `internal/orbctl/get_dc.go` and `internal/orbserver/server_handlers.go`.
 
 ### Step 8 — Drop PostgreSQL `namespaces` table
 

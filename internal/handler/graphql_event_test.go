@@ -64,15 +64,13 @@ func TestGraphQL_MutationWritesAuditEvent(t *testing.T) {
 	e := echo.New()
 	body, _ := json.Marshal(map[string]any{
 		"query": `mutation { addServer(input:[]) { server { orbId } } }`,
-		"variables": map[string]any{
-			"updatedBy": actor,
-		},
 	})
 	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.Set("user_id", adminUser) // role enforcement requires an authenticated admin
+	c.Set("user_id", adminUser)     // role enforcement requires an authenticated admin
+	c.Set("user_email", actor)      // actorFromContext sources the audit actor here
 
 	if err := h.Handle(c); err != nil {
 		t.Fatalf("Handle: %v", err)

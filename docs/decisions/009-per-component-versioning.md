@@ -9,11 +9,11 @@ The orbital repo produces three independent binaries:
 
 - `cmd/orbital` — orbital server (deployed to AKS as Docker image)
 - `cmd/orb` — orb edge service (separate deployment target)
-- `cmd/orbital-cli` — user CLI (distributed via Homebrew tap)
+- `cmd/orbctl` — user CLI (distributed via Homebrew tap)
 
 Initially these shared a single `VERSION` derived from `git describe --tags --dirty`, with all three binaries link-injecting the same value into `internal/version.Version`. Tags used the unprefixed `v0.0.X` form.
 
-This caused a real problem when `orbital-cli` became a published artifact: its version reported v0.0.17 because the server had been iterating, even though the CLI itself had no prior release. New users seeing `orbital --version` would infer a maturity history that didn't exist.
+This caused a real problem when `orbctl` became a published artifact: its version reported v0.0.17 because the server had been iterating, even though the CLI itself had no prior release. New users seeing `orbctl --version` would infer a maturity history that didn't exist.
 
 ## Decision
 

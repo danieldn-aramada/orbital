@@ -1,4 +1,4 @@
-package orbitalcli
+package orbctl
 
 import (
 	"bytes"
@@ -19,7 +19,7 @@ import (
 // DefaultServerURL is the Orbital server endpoint used when --server is not
 // passed and ORBITAL_SERVER is not set. Override at release time via ldflags:
 //
-//	-X 'github.com/armada/orbital/internal/orbital-cli.DefaultServerURL=http://ilb.devnew.armada.internal/orbital'
+//	-X 'github.com/armada/orbital/internal/orbctl.DefaultServerURL=http://ilb.devnew.armada.internal/orbital'
 var DefaultServerURL = "http://localhost:8001"
 
 // httpClient is shared across all commands with a 15-second timeout so the
@@ -111,7 +111,7 @@ func gqlRequest(cmd *cobra.Command, base, token, query string, vars map[string]a
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
 	}
-	endpoint := base + "/api/v1/graphql"
+	endpoint := base + "/graphql"
 
 	if verbose {
 		logVerboseRequest(endpoint, token, query, vars)

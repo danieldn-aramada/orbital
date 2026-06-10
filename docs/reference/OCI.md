@@ -54,5 +54,5 @@ Read this before: export job work, OCI publish/signing, backup/restore, Swagger 
 
 ## Swagger
 
-- Regenerated via `make docs` (runs `swag init -g cmd/orbital/main.go -o docs`). Both `make build-orbital` and `make run-orbital` depend on this — docs always up to date.
+- Regenerated via `make docs` (runs `swag init` for both orbital and orb). Run after changing any `@Router`, `@Tags`, or `@Summary` annotations.
 - Swagger tag names: `backup graph`, `export subgraph`, `oci`.

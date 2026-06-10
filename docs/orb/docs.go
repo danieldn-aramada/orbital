@@ -15,73 +15,7 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/divergence/publish": {
-            "post": {
-                "description": "Sends a divergence report containing local overrides to orbital's report intake API. Returns 502 if orbital is unreachable.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "divergence"
-                ],
-                "summary": "Publish divergence report",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "502": {
-                        "description": "Bad Gateway",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/graphql": {
-            "post": {
-                "description": "POST: proxies GraphQL queries to orb's local DGraph instance. GET: serves the GraphiQL explorer UI.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "graphql"
-                ],
-                "summary": "GraphQL endpoint",
-                "parameters": [
-                    {
-                        "example": "\"{\\\"query\\\": \\\"{ queryServer { id hostname } }\\\"}\"",
-                        "description": "GraphQL request body",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/import": {
+        "/api/v1/import": {
             "post": {
                 "description": "Starts an async OCI artifact pull and DGraph import for the requested tag. Returns 409 if an import is already running.",
                 "consumes": [
@@ -136,7 +70,60 @@ const docTemplate = `{
                 }
             }
         },
-        "/import/history": {
+        "/api/v1/import/artifact": {
+            "post": {
+                "description": "Accepts a zip bundle (data.json.gz + schema.gz + optional layers.json + layer blobs)",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "import"
+                ],
+                "summary": "Import OCI artifact bundle",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "Zip archive containing data.json.gz, schema.gz, and optionally layers.json + layer blobs",
+                        "name": "bundle",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/import/history": {
             "get": {
                 "description": "Returns the rolling history of completed and failed imports from disk.",
                 "produces": [
@@ -159,7 +146,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/import/status": {
+        "/api/v1/import/status": {
             "get": {
                 "description": "Returns the current import state snapshot including status, current version, and last import record.",
                 "produces": [
@@ -179,35 +166,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/import/tags": {
-            "get": {
-                "description": "Lists available OCI artifact tags from the configured registry for this data center.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "import"
-                ],
-                "summary": "List import tags",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/import/upload": {
+        "/api/v1/import/subgraph": {
             "post": {
-                "description": "Accepts a zip bundle (data.json.gz + schema.gz) exported from orbital and imports it directly — no registry required. Use this when delivering a subgraph via physical media or manual transfer.",
+                "description": "Accepts a zip bundle (data.json.gz + schema.gz) and imports it into local DGraph. Source-agnostic: use for courier (direct upload), ConfigBundle Controller delivery, or any caller with a subgraph zip.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -217,7 +178,7 @@ const docTemplate = `{
                 "tags": [
                     "import"
                 ],
-                "summary": "Upload subgraph bundle (courier)",
+                "summary": "Import subgraph bundle",
                 "parameters": [
                     {
                         "type": "file",
@@ -258,30 +219,35 @@ const docTemplate = `{
                 }
             }
         },
-        "/overrides": {
+        "/api/v1/import/tags": {
             "get": {
-                "description": "Returns all current local field overrides from overrides.json.",
+                "description": "Lists available OCI artifact tags from the configured registry for this data center, enriched with signature verification status and artifact size.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "overrides"
+                    "import"
                 ],
-                "summary": "List overrides",
+                "summary": "List import tags",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/orb.Override"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/orbserver.tagInfo"
+                                }
                             }
                         }
                     }
                 }
-            },
+            }
+        },
+        "/graphql": {
             "post": {
-                "description": "Records a local field override for a Server or DataCenter resource. Writes the local value to DGraph and persists to overrides.json.",
+                "description": "POST: proxies GraphQL queries to orb's local DGraph instance. GET: serves the GraphiQL explorer UI.",
                 "consumes": [
                     "application/json"
                 ],
@@ -289,17 +255,18 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "overrides"
+                    "graphql"
                 ],
-                "summary": "Record local override",
+                "summary": "GraphQL endpoint",
                 "parameters": [
                     {
-                        "description": "Override request",
+                        "example": "\"{\\\"query\\\": \\\"{ queryServer { id hostname } }\\\"}\"",
+                        "description": "GraphQL request body",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/orbserver.overrideRequest"
+                            "type": "string"
                         }
                     }
                 ],
@@ -308,18 +275,7 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -327,6 +283,23 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "orb.DispatchResult": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "mediaType": {
+                    "type": "string"
+                },
+                "statusCode": {
+                    "type": "integer"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
         "orb.ImportRecord": {
             "type": "object",
             "properties": {
@@ -345,41 +318,41 @@ const docTemplate = `{
                 "importedAt": {
                     "type": "string"
                 },
+                "layers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/orb.LayerRecord"
+                    }
+                },
                 "status": {
                     "description": "\"done\" | \"failed\"",
                     "type": "string"
                 },
                 "tag": {
                     "type": "string"
+                },
+                "verification": {
+                    "description": "Verification* constant",
+                    "type": "string"
                 }
             }
         },
-        "orb.Override": {
+        "orb.LayerRecord": {
             "type": "object",
             "properties": {
-                "field": {
+                "dispatch": {
+                    "description": "set when Role == LayerRoleDispatched",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/orb.DispatchResult"
+                        }
+                    ]
+                },
+                "mediaType": {
                     "type": "string"
                 },
-                "intentValue": {
-                    "type": "string"
-                },
-                "localValue": {
-                    "type": "string"
-                },
-                "overriddenAt": {
-                    "type": "string"
-                },
-                "overriddenBy": {
-                    "type": "string"
-                },
-                "resourceId": {
-                    "description": "DGraph ID",
-                    "type": "string"
-                },
-                "resourceOrbId": {
-                    "type": "string"
-                },
-                "resourceType": {
+                "role": {
+                    "description": "LayerRole* constant",
                     "type": "string"
                 }
             }
@@ -407,23 +380,20 @@ const docTemplate = `{
                 }
             }
         },
-        "orbserver.overrideRequest": {
+        "orbserver.tagInfo": {
             "type": "object",
             "properties": {
-                "field": {
+                "digest": {
                     "type": "string"
                 },
-                "localValue": {
+                "name": {
                     "type": "string"
                 },
-                "resourceId": {
-                    "type": "string"
+                "sizeBytes": {
+                    "type": "integer"
                 },
-                "resourceOrbId": {
-                    "type": "string"
-                },
-                "resourceType": {
-                    "type": "string"
+                "verified": {
+                    "type": "boolean"
                 }
             }
         }
@@ -433,19 +403,16 @@ const docTemplate = `{
             "name": "import"
         },
         {
-            "name": "overrides"
-        },
-        {
-            "name": "divergence"
+            "name": "graphql"
         }
     ]
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "0.1.0",
+	Version:          "0.0.0-dev",
 	Host:             "",
-	BasePath:         "/api/v1",
+	BasePath:         "",
 	Schemes:          []string{},
 	Title:            "Orb API",
 	Description:      "Edge service API for orb — air-gap ready config serving and divergence reporting.",

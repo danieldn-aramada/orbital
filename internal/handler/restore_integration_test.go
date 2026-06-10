@@ -204,7 +204,7 @@ func TestRestoreTrigger_BackupNotCompleted(t *testing.T) {
 	}
 }
 
-func TestRestoreTrigger_DockerBackend_CallsRunLive(t *testing.T) {
+func TestRestoreTrigger_CallsBackendRunLive(t *testing.T) {
 	// Upload a real backup zip to MinIO so the download + extract steps succeed.
 	s3Key := uploadTestBackupZip(t)
 	backupID := createCompletedBackupWithKey(t, s3Key)

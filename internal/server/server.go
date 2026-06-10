@@ -105,7 +105,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	root := e.Group(cfg.BasePath)
 
 	// apiAuth is the common auth chain (bearer or session) for every /api/v1
-	// endpoint. Built once and reused so /api/v1/graphql and the rest of the
+	// endpoint. Built once and reused so /graphql and the rest of the
 	// API surface stay in sync.
 	var apiAuth []echo.MiddlewareFunc
 	if cfg.OIDCIssuerURL != "" {
@@ -127,8 +127,10 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	// queries use POST, so RequireRole(RoleDev) would wrongly block readonly
 	// callers from running reads. Mutation authorization is enforced at the
 	// handler (graphql.go), which calls RoleAtLeast(role, RoleDev) when
-	// isMutation(query) returns true.
-	apiGraphQL := root.Group("/api/v1", apiAuth...)
+	// isMutation(query) returns true. Registered at /graphql (under BasePath)
+	// not /api/v1/graphql — GraphQL is not URL-versioned, per convention
+	// (GitHub, GitLab, NetBox, Apollo). See CLAUDE.md Settled Decisions.
+	gqlGroup := root.Group("", apiAuth...)
 	s3Configured := cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != ""
 	ociConfigured := cfg.OCIConfigured()
 	if !ociConfigured {
@@ -188,9 +190,6 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 			}
 		}
 	}
-
-	inv := handler.NewInventory(cfg.DGraphURL)
-	api.GET("/inventory", inv.List)
 
 	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath)
 	root.GET("/datacenters/:id", dc.Tab)
@@ -310,12 +309,12 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		root.GET("/users", ui.Users)
 	}
 
-	// Single GraphQL endpoint at /api/v1/graphql. Auth via apiAuth (accepts
-	// either session cookie or bearer token); mutation authorization enforced
-	// inside the handler so readonly callers can run queries via POST while
-	// mutations still require dev+. See docs/reference/AUTH.md.
+	// Single GraphQL endpoint at /graphql (under BasePath). Auth via apiAuth
+	// (accepts either session cookie or bearer token); mutation authorization
+	// enforced inside the handler so readonly callers can run queries via POST
+	// while mutations still require dev+. See docs/reference/AUTH.md.
 	gql := handler.NewGraphQL(cfg.DGraphURL, db, logger)
-	apiGraphQL.Any("/graphql", gql.Handle)
+	gqlGroup.Any("/graphql", gql.Handle)
 	root.GET("/swagger/*", echoswagger.WrapHandler)
 
 	// Stub: divergence report intake (Spike 14 will implement full handling).
@@ -377,3 +376,4 @@ func (s *Server) Start(ctx context.Context) error {
 
 	return nil
 }
+

@@ -6,8 +6,10 @@ import (
 	"os/signal"
 	"syscall"
 
+	orbdocs "github.com/armada/orbital/docs/orb"
 	"github.com/armada/orbital/internal/orbconfig"
 	"github.com/armada/orbital/internal/orbserver"
+	"github.com/armada/orbital/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -25,6 +27,8 @@ func runStart(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
+
+	orbdocs.SwaggerInfo.Version = version.Version
 
 	srv, err := orbserver.New(cfg)
 	if err != nil {

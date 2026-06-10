@@ -171,6 +171,33 @@ services:
     profiles:
       - orbital
 
+  # Orb edge service — run the built Docker image against the local stack.
+  # Usage: docker build --target=orb -t orb:local . && docker compose --profile orb up orb
+  # Required for `make release-check` so the import → restore flow exercises
+  # the production code path (dgraph live as a subprocess inside the orb container).
+  orb:
+    image: orb:local
+    ports:
+      - "8010:8010"
+    environment:
+      ORB_DGRAPH_URL: http://dgraph-orb-alpha:8080/graphql
+      ORB_DGRAPH_ADMIN_URL: http://dgraph-orb-alpha:8080/admin
+      ORB_DGRAPH_ALPHA_GRPC: dgraph-orb-alpha:9080
+      ORB_DGRAPH_ZERO_GRPC: dgraph-orb-zero:5080
+      ORB_OCI_REGISTRY: oci-registry:5000
+      ORB_OCI_ALLOW_HTTP: "true"
+      ORB_OCI_PUBLIC_KEY_PATH: /app/deploy/local/cosign.pub
+      ORB_ENABLE_OCI_REGISTRY: "true"
+      ORB_DATA_DIR: /var/lib/orb
+      ORB_DEV: "true"
+    volumes:
+      - ./cosign.pub:/app/deploy/local/cosign.pub:ro
+    depends_on:
+      dgraph-orb-alpha:
+        condition: service_healthy
+    profiles:
+      - orb
+
   # Orb DGraph — isolated from orbital's blue/scratch instances
   dgraph-orb-zero:
     image: dgraph/dgraph:v25.3.1

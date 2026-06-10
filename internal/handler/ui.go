@@ -147,7 +147,7 @@ func (h *UI) base(c echo.Context) layout.Base {
 			Version:     version,
 			ShowAuth:    true,
 			APIDocPath:  h.basePath + "/swagger/index.html",
-			GraphQLPath: "/api/v1/graphql",
+			GraphQLPath: "/graphql",
 			MoreLinks: []layout.NavItem{
 				{Label: "GitHub", URL: "https://github.com/danieldn-aramada/demo"},
 				{Label: "Report Issue"},

@@ -14,15 +14,13 @@ import (
 func testCfg(t *testing.T) *orbconfig.Config {
 	t.Helper()
 	return &orbconfig.Config{
-		Port:                "0",
-		DGraphURL:           "http://localhost:8082/graphql",
-		DGraphAdminURL:      "http://localhost:8082/admin",
-		DGraphAlphaGRPC:     "localhost:9082",
-		DataDir:             t.TempDir(),
-		Backend:             "docker",
-		DGraphContainerName: "test-dgraph",
-		PollInterval:        60 * time.Second,
-		LogLevel:            "error",
+		Port:            "0",
+		DGraphURL:       "http://localhost:8082/graphql",
+		DGraphAdminURL:  "http://localhost:8082/admin",
+		DGraphAlphaGRPC: "localhost:9082",
+		DataDir:         t.TempDir(),
+		PollInterval:    60 * time.Second,
+		LogLevel:        "error",
 	}
 }
 
@@ -131,5 +129,34 @@ func TestRoutes_HistoryAndStatusAlwaysRegistered(t *testing.T) {
 		if code == http.StatusNotFound {
 			t.Errorf("%s %s: got 404, expected always-registered route", tc.method, tc.path)
 		}
+	}
+}
+
+// GraphQL must live at /graphql (not /api/v1/graphql) — GraphQL is not
+// URL-versioned, per convention (GitHub, GitLab, NetBox, Apollo). /api/v1/
+// is reserved for REST. See CLAUDE.md Settled Decisions.
+func TestRoutes_GraphQLAtRoot(t *testing.T) {
+	t.Chdir("../..")
+	cfg := testCfg(t)
+	cfg.EnableOCIRegistry = false
+
+	if code := routeStatus(t, cfg, http.MethodPost, "/graphql"); code == http.StatusNotFound {
+		t.Errorf("POST /graphql: got 404, expected route to be registered at root")
+	}
+	if code := routeStatus(t, cfg, http.MethodPost, "/api/v1/graphql"); code != http.StatusNotFound {
+		t.Errorf("POST /api/v1/graphql: got %d, expected 404 (GraphQL must not live under /api/v1/)", code)
+	}
+}
+
+// /healthz is the K8s readiness probe target. It must always return 200 and
+// must NOT require auth — registered before any auth middleware. See CLAUDE.md
+// Settled Decisions ("K8s probes: readiness only, always-200 /healthz").
+func TestRoutes_HealthzAtRoot(t *testing.T) {
+	t.Chdir("../..")
+	cfg := testCfg(t)
+	cfg.EnableOCIRegistry = false
+
+	if code := routeStatus(t, cfg, http.MethodGet, "/healthz"); code != http.StatusOK {
+		t.Errorf("GET /healthz: got %d, expected 200", code)
 	}
 }

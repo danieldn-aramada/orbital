@@ -1,4 +1,4 @@
-package orbitalcli
+package orbctl
 
 import (
 	"log/slog"
@@ -16,8 +16,8 @@ import (
 var verbose bool
 
 var rootCmd = &cobra.Command{
-	Use:          "orbital",
-	Short:        "Orbital CLI — manage and authenticate with the Orbital cloud service",
+	Use:          "orbctl",
+	Short:        "orbctl — CLI for the Orbital configuration management system",
 	SilenceUsage: true,
 	CompletionOptions: cobra.CompletionOptions{
 		HiddenDefaultCmd: true,
@@ -33,7 +33,7 @@ var rootCmd = &cobra.Command{
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
-	Short: "Print the orbital CLI version",
+	Short: "Print the orbctl version",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.Println(version.Version)

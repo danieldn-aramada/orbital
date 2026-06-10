@@ -4,12 +4,10 @@
 # configured to mirror the orbital/colo-galleon repo from upstream ACR.
 #
 # Mutually exclusive with `make up` (both bind :5001 + :8082 + :9082).
-# Container names are pinned so orb's defaults (ORB_DGRAPH_CONTAINER=
-# local-dgraph-orb-alpha-1) work without override.
 #
-# Usage:
-#   make up-orb   # bring up
-#   make down-orb # tear down
+# Usage (no Makefile wrappers — invoke compose directly):
+#   docker compose -f deploy/local/docker-compose.edge.yml up -d
+#   docker compose -f deploy/local/docker-compose.edge.yml down -v
 
 services:
   oci-registry:

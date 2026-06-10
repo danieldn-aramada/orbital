@@ -63,25 +63,25 @@ sequenceDiagram
 
 Two paths depending on whether you're hacking on a script or building a service.
 
-### Install the orbital CLI (macOS)
+### Install the orbctl CLI (macOS)
 
 ```bash
 brew tap danieldn-aramada/tools
-brew install orbital
-orbital --version
+brew install orbctl
+orbctl --version
 ```
 
 Or as a one-liner without the explicit tap step:
 
 ```bash
-brew install danieldn-aramada/tools/orbital
+brew install danieldn-aramada/tools/orbctl
 ```
 
 Updates:
 
 ```bash
 brew update
-brew upgrade orbital
+brew upgrade orbctl
 ```
 
 ### Path A — ad-hoc curl / scripting
@@ -90,7 +90,7 @@ Use the CLI to get an access token via PKCE. One interactive login; pass `-v` to
 
 ```bash
 # One-time interactive login (opens browser, redirects to localhost)
-orbital login -v
+orbctl login -v
 
 # Output ends with:
 #   export ORBITAL_TOKEN=eyJ0eXAiOi...
@@ -99,16 +99,16 @@ orbital login -v
 curl -H "Authorization: Bearer $ORBITAL_TOKEN" \
      -H "Content-Type: application/json" \
      -d '{"query":"{ queryNamespace { name } }"}' \
-     https://<orbital-host>/api/v1/graphql
+     https://<orbital-host>/graphql
 ```
 
 Even faster — eval directly so `ORBITAL_TOKEN` is set in your current shell:
 
 ```bash
-eval "$(orbital login -v | grep '^  export ')"
+eval "$(orbctl login -v | grep '^  export ')"
 ```
 
-Access tokens last ~1 hour. If you keep working through `orbital`'s own subcommands (`orbital get`, `orbital patch`, …), expiry is invisible — they silently refresh from your cached refresh token. The only case where you re-run `orbital login -v` is when you've copied the raw token into a shell variable (or another tool) and that copy has gone stale. Refresh tokens last ~90 days idle; until then `orbital login -v` returns silently without re-opening the browser.
+Access tokens last ~1 hour. If you keep working through `orbctl`'s own subcommands (`orbctl get`, `orbctl patch`, …), expiry is invisible — they silently refresh from your cached refresh token. The only case where you re-run `orbctl login -v` is when you've copied the raw token into a shell variable (or another tool) and that copy has gone stale. Refresh tokens last ~90 days idle; until then `orbctl login -v` returns silently without re-opening the browser.
 
 Fine for poking, scripting, demos. Not for long-running services — see Path B for the MSAL-based pattern that handles refresh inside your own service.
 
@@ -131,7 +131,7 @@ Tenant ID:         <Entra ID tenant GUID>
 Orbital client ID: <orbital app client GUID>
 Scope:             api://<orbital-client-id>/user_impersonation
                    (fallback: api://<orbital-client-id>/.default)
-API endpoint:      https://<orbital-host>/api/v1/graphql
+API endpoint:      https://<orbital-host>/graphql
 Auth header:       Authorization: Bearer <access_token>
 ```
 
@@ -164,7 +164,7 @@ func CallOrbital(ctx context.Context, app confidential.Client, scope, inboundUse
     if err != nil {
         return nil, err
     }
-    req, _ := http.NewRequestWithContext(ctx, "POST", baseURL+"/api/v1/graphql", strings.NewReader(query))
+    req, _ := http.NewRequestWithContext(ctx, "POST", baseURL+"/graphql", strings.NewReader(query))
     req.Header.Set("Authorization", "Bearer "+result.AccessToken)
     req.Header.Set("Content-Type", "application/json")
     return http.DefaultClient.Do(req)

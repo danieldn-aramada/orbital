@@ -314,14 +314,14 @@ Path A: local admin patches ConfigBundle CR via `kubectl` SSA → cb-controller 
 | 2 | Orb CLI Structure | Apr 22 | Single binary: `orb start/scan/export/import`; `internal/cli/` scaffolding |
 | 3 | PostgreSQL / ent Data Model | May 5 | 9 tables: users, orbs, namespaces, backups, export_jobs, registry_artifacts, events, restore_jobs, schema_versions |
 | 4 | Management Web UI | Apr 20 – May 14 | DC tab view (HTMX, inline edit, audit diff); Servers cross-DC DataTable + drill-down (iDRAC/Storage/Config Profile tabs); Export, Backup, Restore, Audit Log, Signed Artifacts, Schema, Divergence pages; Playwright E2E suite |
-| 5 | Authentication | May 8 | OIDC + local auth; orbital-cli with macOS keychain; bearer token validation end-to-end with real Azure AD v2 tokens |
+| 5 | Authentication | May 8 | OIDC + local auth; orbctl with macOS keychain; bearer token validation end-to-end with real Azure AD v2 tokens |
 | 6 | DGraph Backup to Azure Blob | May 9 | Async backup pipeline; SHA-256 dedup; configurable retention; Azure Blob + S3-compatible; validated on AKS |
 | — | Config Export + OCI Pipeline | May 9 – May 18 | 8 endpoints; blue-green DGraph export topology; per-job scratch dirs; oras-go v2 + cosign signing; air-gap safe OCI publish — orbital side complete |
 | 7 | DGraph Restore from Backup | May 14 | Full restore via dgraph-live idle pod; client-go exec; conflict detection; validated on AKS |
 | — | Audit Log System | May 5 – May 13 | GraphQL mutation interceptor; before-state capture; LCS line diff; three-source orbId extraction; per-entity audit tabs |
 | 8 | AKS Dev Environment | May 18 | Full deploy manifests, Helm charts, seed scripts, step-by-step deploy guide |
 | 9 | Hardware Data Modeling & Validation | May 15 | 4 new iDRAC schema fields; 9 data centers modeled from real Netbox hostnames and rack topology |
-| — | orbital-cli | May 11 | `orbital get datacenter/datacenters`; bearer auth; macOS keychain; kubectl-style output |
+| — | orbctl | May 11 | `orbital get datacenter/datacenters`; bearer auth; macOS keychain; kubectl-style output |
 | 13 | Orb import API | May 21 | OCI puller (oras-go v2), cosign verify, dgraph live import, polling loop, Zot local registry |
 | 17 | Orb UI | May 22 | Shared template infrastructure, PageActions (read-only mode), orb Echo server, status page (pre/post import), import subgraph, inventory (Config Items), schema version, DC + servers (read-only DataTables + HTMX tabs), import history, divergence report |
 
@@ -356,6 +356,5 @@ See `CLAUDE.md` (project root) for up-to-date active spikes, recently completed 
 | Digital Twin Notes | `~/Downloads/Notes on Digital Twin for Modular Data Centers.docx` | Meeting notes from 3/2/26; Atlas integration scope |
 | SDD (v0.3) | `~/Downloads/SDD DCIM & CMBD for Galleon Digital Twin in Atlas (3).pdf` | Formal design doc — 5 key decisions, full architecture, GraphQL schema, ConfigBundle CRD, local overrides, data transport. **Read `docs/project-background.md` instead — all key content is distilled here.** |
 | Architectural Proposal | `~/Downloads/CMDB_Architectural_Proposal.docx` | Sedar's CCP-authored/edge-enforced proposal. **Key content distilled into this file.** |
-| Orbital CHANGELOG | `CHANGELOG.md` | Completed spike detail — API contracts, what was validated, key decisions |
-| Orbital ROADMAP | `ROADMAP.md` | Gantt chart; spike table; What We've Built; MVP Planning; MVP Definition; Technical Debt |
+| Orbital ROADMAP | `ROADMAP.md` | Recent accomplishments (dated log, updated at every wrap-up); Gantt; spike table; MVP Definition; Technical Debt |
 | Excel Tracker | `~/Downloads/Edge Platform Q4-Q1.xlsx` — sheet `cmdb` | Management-facing progress tracker |

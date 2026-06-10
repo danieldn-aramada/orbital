@@ -15,7 +15,7 @@ type RestoreBackend interface {
 
 // SubprocessRestoreBackend runs dgraph live as a subprocess. The dgraph binary
 // must be present in PATH — it is included in the orbital Docker image via a
-// multi-stage build (copied from dgraph/dgraph:v24.1.4).
+// multi-stage build (copied from dgraph/dgraph:v25.3.1).
 type SubprocessRestoreBackend struct{}
 
 func NewSubprocessRestoreBackend() *SubprocessRestoreBackend {

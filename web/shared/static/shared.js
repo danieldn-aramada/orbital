@@ -815,10 +815,22 @@ export function initServerListTabRestoration() {
 export const INVENTORY_CACHE_KEY = 'inventoryCache'
 
 export function inventoryFetch(onData) {
-  fetch(BASE + '/api/v1/inventory')
+  const query = `{ queryConfigItem { id __typename orbId name createdBy createdAt } }`
+  fetch(BASE + '/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+  })
     .then(r => r.json())
     .then(json => {
-      const items = json.items ?? []
+      const items = (json.data?.queryConfigItem ?? []).map(it => ({
+        uid: it.id,
+        type: it.__typename,
+        orbId: it.orbId,
+        name: it.name ?? '',
+        createdBy: it.createdBy ?? '',
+        createdAt: it.createdAt ?? '',
+      }))
       sessionStorage.setItem(INVENTORY_CACHE_KEY, JSON.stringify(items))
       onData(items)
     })
@@ -1012,7 +1024,7 @@ export function initDatacenterTable(opts = {}) {
       { targets: [4, 5], visible: false, searchable: true },
     ],
     ajax: {
-      url: BASE + '/api/v1/graphql',
+      url: BASE + '/graphql',
       type: 'POST',
       contentType: 'application/json',
       data: () => JSON.stringify({ query: `{ queryDataCenter { id orbId name createdBy createdAt serversAggregate { count } } }` }),
@@ -1123,7 +1135,7 @@ export function initServerListTable(opts = {}) {
     ],
     columnDefs: [{ targets: [6, 7], visible: false, searchable: true }],
     ajax: {
-      url: BASE + '/api/v1/graphql',
+      url: BASE + '/graphql',
       type: 'POST',
       contentType: 'application/json',
       data: () => JSON.stringify({

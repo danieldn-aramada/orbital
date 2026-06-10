@@ -74,15 +74,7 @@ type Config struct {
 	// Data directory — holds import history and divergence reports
 	DataDir string `envconfig:"ORB_DATA_DIR" default:"./orb-data"`
 
-	// Backend selects the dgraph live execution strategy: "docker" (local dev) or "k8s" (production).
-	// docker: docker cp + docker exec into the DGraph alpha container. Requires Docker socket.
-	// k8s: runs dgraph live as a subprocess inside the orb pod. Requires dgraph binary in PATH.
-	Backend string `envconfig:"ORB_BACKEND" default:"docker"`
-
-	// Docker container name — used only when ORB_BACKEND=docker.
-	DGraphContainerName string `envconfig:"ORB_DGRAPH_CONTAINER" default:"local-dgraph-orb-alpha-1"`
-
-	// Subprocess backend fields — used only when ORB_BACKEND=k8s.
+	// DGraph zero gRPC endpoint — used by the dgraph live subprocess during import.
 	DGraphZeroGRPC string `envconfig:"ORB_DGRAPH_ZERO_GRPC" default:"localhost:5082"`
 
 	LogLevel string `envconfig:"ORB_LOG_LEVEL" default:"info"`

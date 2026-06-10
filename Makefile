@@ -6,18 +6,12 @@ MODULE := github.com/armada/orbital
 # Server: bare v* tags (e.g. v0.0.17). CLI: cli/v* tags. Orb: orb/v* tags.
 SERVER_VERSION ?= $(shell git describe --tags --exclude 'cli/*' --exclude 'orb/*' --dirty 2>/dev/null || echo "v0.0.0-dev")
 CLI_VERSION    ?= $(shell (git describe --tags --match 'cli/v*' --dirty 2>/dev/null || echo "cli/v0.0.0-dev") | sed 's|^cli/||')
-ORB_VERSION    ?= $(shell (git describe --tags --match 'orb/v*' --dirty 2>/dev/null || echo "orb/v0.0.0-dev") | sed 's|^orb/||')
 
-SERVER_LDFLAGS := -ldflags "-X $(MODULE)/internal/version.Version=$(SERVER_VERSION)"
 CLI_LDFLAGS    := -ldflags "-X $(MODULE)/internal/version.Version=$(CLI_VERSION)"
-ORB_LDFLAGS    := -ldflags "-X $(MODULE)/internal/version.Version=$(ORB_VERSION)"
 
 BIN_DIR      := bin
-ORBITAL_BIN  := $(BIN_DIR)/orbital
-ORB_BIN      := $(BIN_DIR)/orb
 
-COMPOSE_FILE      := deploy/local/docker-compose.yml
-COMPOSE_FILE_EDGE := deploy/local/docker-compose.edge.yml
+COMPOSE_FILE := deploy/local/docker-compose.yml
 
 # Packages included in unit test runs and coverage reports.
 # Excludes generated code (ent/*) and the Swagger docs stub.
@@ -25,45 +19,30 @@ TEST_PKGS := $(shell go list ./... | grep -vE '(/ent$$|/ent/|/docs$$)')
 ACR          := armadaeksatest.azurecr.io
 IMAGE        := $(ACR)/orbital:$(SERVER_VERSION)
 
-.PHONY: help build build-orbital build-orbital-cli build-orb run-orbital push test test-unit test-integration test-e2e test-e2e-ui test-e2e-orb test-e2e-smoke cover cover-html lint up up-orb down down-orb seed seed-aks-clean docs orb-docs build-css watch-css
+.PHONY: help up down run-orbital run-orb seed test-unit test-integration test-e2e test-e2e-ui release-check release-check-down docs build-css build-orbctl push seed-aks smoke-aks
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
-build: build-orbital build-orb ## Build all binaries
+## ── daily ─────────────────────────────────────────────────────────────────────
 
-docs: ## Regenerate Swagger docs (requires swag: go install github.com/swaggo/swag/cmd/swag@latest)
-	swag init -g cmd/orbital/main.go -o docs
+up: ## Start the local stack (DGraph, Postgres, MinIO, Zot, orb DGraph)
+	docker compose -f $(COMPOSE_FILE) up -d
 
-orb-docs: ## Regenerate Swagger docs for orb (requires swag: go install github.com/swaggo/swag/cmd/swag@latest)
-	swag init -g doc.go -o docs/orb --dir cmd/orb,internal/orbserver,internal/orb
+down: ## Stop the local stack
+	docker compose -f $(COMPOSE_FILE) down -v
 
-build-css: ## Compile web/sass/main.scss → web/shared/static/css/main.css (requires: npm install)
-	npm run build-css
-
-watch-css: ## Watch and recompile SCSS on change (requires: npm install)
-	npm run build-css-dev
-
-build-orbital: docs ## Build the orbital server binary → bin/orbital
-	go build $(SERVER_LDFLAGS) -o $(ORBITAL_BIN) ./cmd/orbital
-
-build-orbital-cli: ## Build the orbital admin CLI → bin/orbital-cli
-	go build $(CLI_LDFLAGS) -o $(BIN_DIR)/orbital-cli ./cmd/orbital-cli
-
-build-orb: orb-docs ## Build the orb edge binary → bin/orb
-	go build $(ORB_LDFLAGS) -o $(ORB_BIN) ./cmd/orb
-
-run-orbital: ## Run orbital server
+run-orbital: ## Run orbital server (go run; fast dev iteration). Restore requires dgraph in PATH
 	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orbital
 
-run-orb: ## Run orb edge service (requires: make up)
+run-orb: ## Run orb edge service (go run; fast dev iteration). Import requires dgraph in PATH
 	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orb start
 
-seed-orb-schema: ## Apply DGraph schema to orb's local DGraph (empty — data comes from import)
-	@echo "Applying schema to orb DGraph (localhost:8082)..."
-	@curl -s -X POST localhost:8082/admin/schema --data-binary @schema/schema.graphql | jq .
+seed: ## Seed DGraph with example data + admin user (local)
+	bash scripts/seed.sh
 
+## ── tests ─────────────────────────────────────────────────────────────────────
 
 test-unit: ## Run unit tests with coverage summary (no external services required)
 	@echo "Running unit tests..."
@@ -77,62 +56,50 @@ test-integration: ## Run integration tests against real services (requires: make
 	@echo "Reseeding DGraph for E2E tests..."
 	@bash scripts/seed.sh
 
-test-e2e: ## Run Playwright e2e tests headless (requires orbital on :8001); HEADED=true make test-e2e to watch
+test-e2e: ## Run Playwright UI tests for orbital + orb (requires both running; HEADED=true to watch)
 	npx playwright test
 
-test-e2e-ui: ## Open Playwright UI mode for interactive local test watching (requires orbital on :8001)
+test-e2e-ui: ## Open Playwright UI mode for interactive local test watching
 	npx playwright test --ui
 
-test-e2e-orb: ## Run Playwright orb UI tests (requires orb running on :8010)
-	npx playwright test --config=playwright.orb.config.ts
-
-test-e2e-smoke: ## Run pre-release smoke checklist (requires: make up, make run-orbital, make run-orb with ORB_ENABLE_OCI_REGISTRY=true, make seed)
-	npx playwright test --config=playwright.smoke.config.ts
-
-test: test-unit test-integration test-e2e test-e2e-orb ## Run full test suite (unit + integration + e2e + e2e-orb)
-
-cover: ## Run tests with coverage and print summary to terminal
-	@echo "Running tests with coverage..."
-	@go test -short -coverprofile=coverage.out -covermode=atomic $(TEST_PKGS)
-	@go tool cover -func=coverage.out | tail -1
-
-cover-html: cover ## Open interactive HTML coverage report in browser
-	go tool cover -html=coverage.out -o coverage.html
-	open coverage.html
-
-lint: ## Run go vet
-	go vet ./...
-
-up: ## Start full local stack (orbital DGraph, PostgreSQL, MinIO, Zot, orb DGraph)
-	docker compose -f $(COMPOSE_FILE) up -d
-
-down: ## Stop full local stack
-	docker compose -f $(COMPOSE_FILE) down -v
-
-up-orb: ## Start edge-data-center sim (orb DGraph + Zot mirroring ACR orbital/colo-galleon). Mutually exclusive with `make up`.
-	@if [ ! -f deploy/local/sync-credentials.json ]; then \
-		echo "ERROR: deploy/local/sync-credentials.json missing — copy sync-credentials.example.json and fill in ACR password"; \
-		exit 1; \
-	fi
-	docker compose -f $(COMPOSE_FILE_EDGE) up -d
-
-down-orb: ## Stop edge-data-center sim
-	docker compose -f $(COMPOSE_FILE_EDGE) down -v
-
-push: ## Build and push image to ACR (requires: az acr login --name armadaeksatest)
-	docker buildx build --platform linux/amd64 --build-arg VERSION=$(SERVER_VERSION) -t $(IMAGE) --push .
-
-seed: ## Seed DGraph with example data (local)
+release-check: ## Pre-release validation: build orbital+orb images, start as containers
+	docker build --target=orbital -t orbital:local --build-arg VERSION=v0.0.0-dev .
+	docker build --target=orb     -t orb:local     --build-arg VERSION=v0.0.0-dev .
+	docker compose -f $(COMPOSE_FILE) --profile orbital --profile orb up -d orbital orb
+	@echo "Waiting for orbital + orb to be ready..."
+	@until curl -fs http://localhost:8001/healthz >/dev/null && curl -fs http://localhost:8010/healthz >/dev/null; do sleep 1; done
 	bash scripts/seed.sh
+	npx playwright test --config=playwright.release-check.config.ts
 
-seed-aks-clean: ## Seed AKS dev DGraph — drop all first then reseed (clean slate)
-	bash scripts/seed-aks.sh --clean
+release-check-down: ## Stop the release-check containers (deps from `make up` are unaffected)
+	docker compose -f $(COMPOSE_FILE) --profile orbital --profile orb stop orbital orb
+	docker compose -f $(COMPOSE_FILE) --profile orbital --profile orb rm -f orbital orb
 
-seed-aks: ## Seed AKS dev DGraph (port-forwards, seeds, cleans up)
-	bash scripts/seed-aks.sh
+## ── as needed ─────────────────────────────────────────────────────────────────
 
-seed-aks-postgres: ## Seed AKS dev PostgreSQL admin user (port-forwards, seeds, cleans up)
+docs: ## Regenerate Swagger docs for orbital + orb (requires swag)
+	swag init -g main.go -o docs --dir cmd/orbital,internal/handler
+	swag init -g doc.go -o docs/orb --dir cmd/orb,internal/orbserver,internal/orb
+
+build-css: ## Compile web/sass/main.scss → web/shared/static/css/main.css (requires: npm install)
+	npm run build-css
+
+
+build-orbctl: ## Build the orbctl CLI → bin/orbctl
+	go build $(CLI_LDFLAGS) -o $(BIN_DIR)/orbctl ./cmd/orbctl
+
+## ── release / AKS ─────────────────────────────────────────────────────────────
+
+push: ## Build and push orbital image to ACR (requires: az acr login --name armadaeksatest)
+	docker buildx build --platform linux/amd64 --target=orbital --build-arg VERSION=$(SERVER_VERSION) -t $(IMAGE) --push .
+
+seed-aks: ## Seed AKS dev DGraph + Postgres admin user. CLEAN=1 drops DGraph first.
+	@if [ "$(CLEAN)" = "1" ]; then \
+		bash scripts/seed-aks.sh --clean; \
+	else \
+		bash scripts/seed-aks.sh; \
+	fi
 	bash scripts/seed-aks-postgres.sh
 
-smoke-aks: ## Run smoke tests against AKS (requires: kubectl port-forward svc/orbital 8001:8001 -n netbox)
-	npx playwright test --config=playwright.smoke.config.ts
+smoke-aks: ## Smoke tests against AKS dev (requires: kubectl port-forward svc/orbital 8001:8001 -n orbital)
+	npx playwright test --config=playwright.release-check.config.ts

@@ -16,9 +16,9 @@ import (
 )
 
 // These tests cover the handler-level authorization boundary on the GraphQL
-// endpoint after the 2026-06-09 consolidation (server.go now exposes a single
-// /api/v1/graphql with no route-level RequireRole — mutation authz is enforced
-// inside graphql.go via isMutation + RoleAtLeast(role, RoleDev)).
+// endpoint. server.go exposes a single /graphql with no route-level
+// RequireRole — mutation authz is enforced inside graphql.go via isMutation +
+// RoleAtLeast(role, RoleDev).
 //
 // They invoke Handle directly with a pre-populated user_id context, bypassing
 // the route middleware. Route-level RequireAuth is exercised separately in
@@ -26,7 +26,7 @@ import (
 
 func newAuthzGQLContext(t *testing.T, userID int, body string) (echo.Context, *httptest.ResponseRecorder) {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/graphql", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/graphql", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := echo.New().NewContext(req, rec)

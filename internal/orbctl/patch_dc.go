@@ -1,4 +1,4 @@
-package orbitalcli
+package orbctl
 
 import (
 	"encoding/json"
