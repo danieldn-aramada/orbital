@@ -1,0 +1,18 @@
+# GitHub Linguist hints — control how files appear in the language bar and
+# diff views. See https://github.com/github-linguist/linguist/blob/main/docs/overrides.md
+
+# Compiled CSS — source is web/sass/main.scss
+web/shared/static/css/main.css linguist-generated=true
+
+# ent-generated Go code — hand-written schemas live in ent/schema/
+ent/** linguist-generated=true
+ent/schema/** linguist-generated=false
+
+# Vendored third-party assets
+web/shared/static/htmx-2.0.2.min.js linguist-vendored=true
+web/shared/static/modal-fx.min.js linguist-vendored=true
+web/shared/static/bulma-toast.js linguist-vendored=true
+web/shared/static/graphiql.html linguist-vendored=true
+web/shared/static/datatables/** linguist-vendored=true
+web/shared/static/font-awesome-6.6.0/** linguist-vendored=true
+web/shared/static/vanilla-jsoneditor/** linguist-vendored=true
