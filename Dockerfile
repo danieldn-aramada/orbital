@@ -40,7 +40,13 @@ RUN apk add --no-cache \
     bash \
     bind-tools \
     netcat-openbsd \
-    procps
+    procps \
+    gcompat \
+    libc6-compat
+
+# gcompat + libc6-compat provide the glibc compat layer needed to run the
+# dgraph binary (built on Ubuntu against glibc) on alpine (musl). Without
+# them dgraph fails with a misleading "no such file or directory" on exec.
 
 WORKDIR /app
 
@@ -54,6 +60,7 @@ COPY --from=dgraph-tools /usr/local/bin/dgraph /usr/local/bin/dgraph
 
 # ---- Orb image ----
 FROM runtime-base AS orb
+RUN mkdir -p /var/lib/orb
 COPY --from=builder /out/orb ./
 EXPOSE 8010
 CMD ["./orb", "start"]

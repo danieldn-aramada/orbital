@@ -9,6 +9,12 @@ CLI_VERSION    ?= $(shell (git describe --tags --match 'cli/v*' --dirty 2>/dev/n
 
 CLI_LDFLAGS    := -ldflags "-X $(MODULE)/internal/version.Version=$(CLI_VERSION)"
 
+# Version baked into the release-check images. Override on the command line
+# when validating a specific release candidate, e.g. `make release-check VERSION=v0.0.18`.
+# Drives `internal/version.Version` via the Dockerfile's `ARG VERSION` (passed into
+# ldflags) so /healthz, orbctl version, etc. report the value you pass.
+VERSION      ?= v0.0.0-dev
+
 BIN_DIR      := bin
 
 COMPOSE_FILE := deploy/local/docker-compose.yml
@@ -62,9 +68,10 @@ test-e2e: ## Run Playwright UI tests for orbital + orb (requires both running; H
 test-e2e-ui: ## Open Playwright UI mode for interactive local test watching
 	npx playwright test --ui
 
-release-check: ## Pre-release validation: build orbital+orb images, start as containers
-	docker build --target=orbital -t orbital:local --build-arg VERSION=v0.0.0-dev .
-	docker build --target=orb     -t orb:local     --build-arg VERSION=v0.0.0-dev .
+release-check: ## Pre-release validation: build orbital + orb images, start as containers (set version with VERSION=v0.0.18)
+	@echo "Building orbital + orb images at VERSION=$(VERSION)"
+	docker build --target=orbital -t orbital:local -t orbital:$(VERSION) --build-arg VERSION=$(VERSION) .
+	docker build --target=orb     -t orb:local     -t orb:$(VERSION)     --build-arg VERSION=$(VERSION) .
 	docker compose -f $(COMPOSE_FILE) --profile orbital --profile orb up -d orbital orb
 	@echo "Waiting for orbital + orb to be ready..."
 	@until curl -fs http://localhost:8001/healthz >/dev/null && curl -fs http://localhost:8010/healthz >/dev/null; do sleep 1; done
