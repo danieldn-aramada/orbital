@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	orbweb "github.com/armada/orbital/web"
 	orbtemplates "github.com/armada/orbital/web/templates/orb"
 	"github.com/armada/orbital/internal/web/data/layout"
 )
@@ -22,7 +23,7 @@ type statusPageData struct {
 }
 
 func main() {
-	m := orbtemplates.Map()
+	m := orbtemplates.Map(orbweb.FS)
 	tmpl := m["status"]
 	if tmpl == nil {
 		fmt.Println("template 'status' not found")

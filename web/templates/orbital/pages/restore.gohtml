@@ -48,11 +48,11 @@
               <label class="label is-small">Backup</label>
               <div class="control">
                 <div class="select is-small is-fullwidth">
-                  <select id="restore-backup-select">
+                  <select id="restore-backup-select" data-current-schema="{{.CurrentSchemaVersion}}" onchange="onRestoreSelectChange(this)">
                     {{if .CompletedBackups}}
                       <option value="">— select a backup —</option>
                       {{range .CompletedBackups}}
-                        <option value="{{.ID}}">{{.Label}}</option>
+                        <option value="{{.ID}}" data-schema-version="{{.SchemaVersion}}">{{.Label}}{{if .SchemaVersion}} [{{.SchemaVersion}}]{{end}}</option>
                       {{end}}
                     {{else}}
                       <option value="">No completed backups available</option>
@@ -61,6 +61,11 @@
                 </div>
               </div>
             </div>
+
+            {{if .CurrentSchemaVersion}}
+            <p class="is-size-7 has-text-grey mt-1 mb-3">Current schema: <strong>{{.CurrentSchemaVersion}}</strong></p>
+            {{end}}
+            <p id="restore-schema-warning" class="notification is-warning is-light is-size-7 py-2 px-3 mb-3" style="display:none;"></p>
 
             <div class="field">
               <div class="control">

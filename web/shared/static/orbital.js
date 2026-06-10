@@ -933,7 +933,22 @@ function loadRestoreJobs() {
     })
 }
 
-function triggerRestore() {
+function onRestoreSelectChange(sel) {
+  const warning = document.getElementById('restore-schema-warning')
+  const btn = document.getElementById('btn-restore')
+  if (!warning) return
+  const sv = sel.options[sel.selectedIndex]?.dataset?.schemaVersion
+  const currentSV = document.getElementById('restore-backup-select')?.dataset?.currentSchema
+  if (sv && currentSV && sv !== currentSV) {
+    warning.textContent = `Schema version mismatch: selected backup is ${sv}, current schema is ${currentSV}. You will be prompted to confirm before the restore proceeds.`
+    warning.style.display = ''
+  } else {
+    warning.style.display = 'none'
+  }
+  if (btn) { btn.textContent = 'Restore Now'; btn.setAttribute('onclick', 'triggerRestore()') }
+}
+
+function triggerRestore(confirm) {
   const btn = document.getElementById('btn-restore')
   const msg = document.getElementById('restore-status-msg')
   const sel = document.getElementById('restore-backup-select')
@@ -946,19 +961,32 @@ function triggerRestore() {
   btn.disabled = true
   msg.style.display = 'none'
 
+  const body = { backupId: sel.value }
+  if (confirm) body.confirmSchemaMismatch = true
+
   fetch(BASE + '/api/v1/restore', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ backupId: sel.value }),
+    body: JSON.stringify(body),
   })
     .then(r => r.json())
     .then(data => {
+      btn.classList.remove('is-loading')
       if (data.error) {
         msg.textContent = data.error
         msg.style.display = ''
-        btn.classList.remove('is-loading')
-        btn.disabled = false
+        if (data.requiresConfirmation) {
+          btn.textContent = 'Confirm Restore'
+          btn.setAttribute('onclick', 'triggerRestore(true)')
+          btn.disabled = false
+        } else {
+          btn.textContent = 'Restore Now'
+          btn.setAttribute('onclick', 'triggerRestore()')
+          btn.disabled = false
+        }
       } else {
+        btn.textContent = 'Restore Now'
+        btn.setAttribute('onclick', 'triggerRestore()')
         loadRestoreJobs()
         pollRestore(data.jobId)
       }
@@ -1148,6 +1176,7 @@ window.copyPublicKey = copyPublicKey
 window.downloadPublicKey = downloadPublicKey
 window.copyVerifyCmd = copyVerifyCmd
 window.triggerRestore = triggerRestore
+window.onRestoreSelectChange = onRestoreSelectChange
 window.openRestoreLogModal = openRestoreLogModal
 window.closeRestoreLogModal = closeRestoreLogModal
 window.setUserRole = setUserRole

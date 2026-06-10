@@ -167,6 +167,20 @@ func (_c *BackupCreate) SetNillableSchemaVersion(v *string) *BackupCreate {
 	return _c
 }
 
+// SetBinaryVersion sets the "binary_version" field.
+func (_c *BackupCreate) SetBinaryVersion(v string) *BackupCreate {
+	_c.mutation.SetBinaryVersion(v)
+	return _c
+}
+
+// SetNillableBinaryVersion sets the "binary_version" field if the given value is not nil.
+func (_c *BackupCreate) SetNillableBinaryVersion(v *string) *BackupCreate {
+	if v != nil {
+		_c.SetBinaryVersion(*v)
+	}
+	return _c
+}
+
 // SetSizeBytes sets the "size_bytes" field.
 func (_c *BackupCreate) SetSizeBytes(v int64) *BackupCreate {
 	_c.mutation.SetSizeBytes(v)
@@ -385,6 +399,10 @@ func (_c *BackupCreate) createSpec() (*Backup, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.SchemaVersion(); ok {
 		_spec.SetField(backup.FieldSchemaVersion, field.TypeString, value)
 		_node.SchemaVersion = value
+	}
+	if value, ok := _c.mutation.BinaryVersion(); ok {
+		_spec.SetField(backup.FieldBinaryVersion, field.TypeString, value)
+		_node.BinaryVersion = value
 	}
 	if value, ok := _c.mutation.SizeBytes(); ok {
 		_spec.SetField(backup.FieldSizeBytes, field.TypeInt64, value)

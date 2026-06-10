@@ -100,6 +100,11 @@ func SchemaVersion(v string) predicate.Backup {
 	return predicate.Backup(sql.FieldEQ(FieldSchemaVersion, v))
 }
 
+// BinaryVersion applies equality check predicate on the "binary_version" field. It's identical to BinaryVersionEQ.
+func BinaryVersion(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldEQ(FieldBinaryVersion, v))
+}
+
 // SizeBytes applies equality check predicate on the "size_bytes" field. It's identical to SizeBytesEQ.
 func SizeBytes(v int64) predicate.Backup {
 	return predicate.Backup(sql.FieldEQ(FieldSizeBytes, v))
@@ -773,6 +778,81 @@ func SchemaVersionEqualFold(v string) predicate.Backup {
 // SchemaVersionContainsFold applies the ContainsFold predicate on the "schema_version" field.
 func SchemaVersionContainsFold(v string) predicate.Backup {
 	return predicate.Backup(sql.FieldContainsFold(FieldSchemaVersion, v))
+}
+
+// BinaryVersionEQ applies the EQ predicate on the "binary_version" field.
+func BinaryVersionEQ(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldEQ(FieldBinaryVersion, v))
+}
+
+// BinaryVersionNEQ applies the NEQ predicate on the "binary_version" field.
+func BinaryVersionNEQ(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldNEQ(FieldBinaryVersion, v))
+}
+
+// BinaryVersionIn applies the In predicate on the "binary_version" field.
+func BinaryVersionIn(vs ...string) predicate.Backup {
+	return predicate.Backup(sql.FieldIn(FieldBinaryVersion, vs...))
+}
+
+// BinaryVersionNotIn applies the NotIn predicate on the "binary_version" field.
+func BinaryVersionNotIn(vs ...string) predicate.Backup {
+	return predicate.Backup(sql.FieldNotIn(FieldBinaryVersion, vs...))
+}
+
+// BinaryVersionGT applies the GT predicate on the "binary_version" field.
+func BinaryVersionGT(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldGT(FieldBinaryVersion, v))
+}
+
+// BinaryVersionGTE applies the GTE predicate on the "binary_version" field.
+func BinaryVersionGTE(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldGTE(FieldBinaryVersion, v))
+}
+
+// BinaryVersionLT applies the LT predicate on the "binary_version" field.
+func BinaryVersionLT(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldLT(FieldBinaryVersion, v))
+}
+
+// BinaryVersionLTE applies the LTE predicate on the "binary_version" field.
+func BinaryVersionLTE(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldLTE(FieldBinaryVersion, v))
+}
+
+// BinaryVersionContains applies the Contains predicate on the "binary_version" field.
+func BinaryVersionContains(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldContains(FieldBinaryVersion, v))
+}
+
+// BinaryVersionHasPrefix applies the HasPrefix predicate on the "binary_version" field.
+func BinaryVersionHasPrefix(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldHasPrefix(FieldBinaryVersion, v))
+}
+
+// BinaryVersionHasSuffix applies the HasSuffix predicate on the "binary_version" field.
+func BinaryVersionHasSuffix(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldHasSuffix(FieldBinaryVersion, v))
+}
+
+// BinaryVersionIsNil applies the IsNil predicate on the "binary_version" field.
+func BinaryVersionIsNil() predicate.Backup {
+	return predicate.Backup(sql.FieldIsNull(FieldBinaryVersion))
+}
+
+// BinaryVersionNotNil applies the NotNil predicate on the "binary_version" field.
+func BinaryVersionNotNil() predicate.Backup {
+	return predicate.Backup(sql.FieldNotNull(FieldBinaryVersion))
+}
+
+// BinaryVersionEqualFold applies the EqualFold predicate on the "binary_version" field.
+func BinaryVersionEqualFold(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldEqualFold(FieldBinaryVersion, v))
+}
+
+// BinaryVersionContainsFold applies the ContainsFold predicate on the "binary_version" field.
+func BinaryVersionContainsFold(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldContainsFold(FieldBinaryVersion, v))
 }
 
 // SizeBytesEQ applies the EQ predicate on the "size_bytes" field.

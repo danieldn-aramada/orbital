@@ -40,6 +40,8 @@ type Backup struct {
 	Checksum string `json:"checksum,omitempty"`
 	// SchemaVersion holds the value of the "schema_version" field.
 	SchemaVersion string `json:"schema_version,omitempty"`
+	// BinaryVersion holds the value of the "binary_version" field.
+	BinaryVersion string `json:"binary_version,omitempty"`
 	// SizeBytes holds the value of the "size_bytes" field.
 	SizeBytes *int64 `json:"size_bytes,omitempty"`
 	// Error holds the value of the "error" field.
@@ -58,7 +60,7 @@ func (*Backup) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case backup.FieldSizeBytes:
 			values[i] = new(sql.NullInt64)
-		case backup.FieldCreatedBy, backup.FieldUpdatedBy, backup.FieldStatus, backup.FieldTrigger, backup.FieldS3Bucket, backup.FieldS3Key, backup.FieldS3Endpoint, backup.FieldChecksum, backup.FieldSchemaVersion, backup.FieldError:
+		case backup.FieldCreatedBy, backup.FieldUpdatedBy, backup.FieldStatus, backup.FieldTrigger, backup.FieldS3Bucket, backup.FieldS3Key, backup.FieldS3Endpoint, backup.FieldChecksum, backup.FieldSchemaVersion, backup.FieldBinaryVersion, backup.FieldError:
 			values[i] = new(sql.NullString)
 		case backup.FieldCreatedAt, backup.FieldUpdatedAt, backup.FieldStartedAt, backup.FieldCompletedAt:
 			values[i] = new(sql.NullTime)
@@ -151,6 +153,12 @@ func (_m *Backup) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field schema_version", values[i])
 			} else if value.Valid {
 				_m.SchemaVersion = value.String
+			}
+		case backup.FieldBinaryVersion:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field binary_version", values[i])
+			} else if value.Valid {
+				_m.BinaryVersion = value.String
 			}
 		case backup.FieldSizeBytes:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -250,6 +258,9 @@ func (_m *Backup) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("schema_version=")
 	builder.WriteString(_m.SchemaVersion)
+	builder.WriteString(", ")
+	builder.WriteString("binary_version=")
+	builder.WriteString(_m.BinaryVersion)
 	builder.WriteString(", ")
 	if v := _m.SizeBytes; v != nil {
 		builder.WriteString("size_bytes=")

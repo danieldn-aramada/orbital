@@ -21,6 +21,7 @@ func (Backup) Fields() []ent.Field {
 		field.String("s3_endpoint").Optional(),   // custom endpoint; empty = AWS S3
 		field.String("checksum").Optional(),      // SHA-256 of json.gz; used for dedup
 		field.String("schema_version").Optional(),
+		field.String("binary_version").Optional(),
 		field.Int64("size_bytes").Optional().Nillable(),
 		field.String("error").Optional().Nillable(),
 		field.Time("started_at").Optional().Nillable(),

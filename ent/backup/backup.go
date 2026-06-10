@@ -37,6 +37,8 @@ const (
 	FieldChecksum = "checksum"
 	// FieldSchemaVersion holds the string denoting the schema_version field in the database.
 	FieldSchemaVersion = "schema_version"
+	// FieldBinaryVersion holds the string denoting the binary_version field in the database.
+	FieldBinaryVersion = "binary_version"
 	// FieldSizeBytes holds the string denoting the size_bytes field in the database.
 	FieldSizeBytes = "size_bytes"
 	// FieldError holds the string denoting the error field in the database.
@@ -63,6 +65,7 @@ var Columns = []string{
 	FieldS3Endpoint,
 	FieldChecksum,
 	FieldSchemaVersion,
+	FieldBinaryVersion,
 	FieldSizeBytes,
 	FieldError,
 	FieldStartedAt,
@@ -199,6 +202,11 @@ func ByChecksum(opts ...sql.OrderTermOption) OrderOption {
 // BySchemaVersion orders the results by the schema_version field.
 func BySchemaVersion(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSchemaVersion, opts...).ToFunc()
+}
+
+// ByBinaryVersion orders the results by the binary_version field.
+func ByBinaryVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBinaryVersion, opts...).ToFunc()
 }
 
 // BySizeBytes orders the results by the size_bytes field.

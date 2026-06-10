@@ -2,6 +2,7 @@
 
 import {
   BASE,
+  INVENTORY_CACHE_KEY,
   initInventoryTable,
   initDatacenterTable,
   initServerListTable,
@@ -13,27 +14,29 @@ import {
   initServerListTabRestoration,
 } from './shared.js'
 
-// ─── Server-restart tab cleanup ───────────────────────────────────────────────
+// ─── Stale-state cleanup ──────────────────────────────────────────────────────
 //
-// Orb has no login/session, so there's no natural moment to wipe stale tab
-// state. The shared base layout exposes window.ORBITAL_CONFIG.serverVersion —
-// a timestamp set once per orb startup. When it differs from what we last
-// stored, orb has restarted and any tab IDs in localStorage may point at
-// DGraph UIDs that no longer exist (re-import changes UIDs). Clear them so
-// the restoration code on window.load sees empty storage and skips.
-//
-// Runs on DOMContentLoaded which fires before window.load — restoration runs
-// after, sees empty storage. Orbital uses its login-based ?fresh=1 path
-// instead; this handler is orb-only.
+// Orb's open DC/Server tabs are keyed by DGraph UIDs. Two events invalidate
+// those UIDs: (1) orb restart with a re-seed, (2) `orb import` (drop_all +
+// live load assigns new UIDs). Both call this helper so the restoration code
+// on window.load sees empty storage and skips.
+function clearStaleTabState() {
+  localStorage.removeItem('datacenterTabs')
+  localStorage.removeItem('serverTabs')
+  localStorage.removeItem('dcTabCurrent')
+  localStorage.removeItem('srvTabCurrent')
+}
+
+// Server-restart trigger — `window.ORBITAL_CONFIG.serverVersion` is a per-restart
+// timestamp set by the shared base layout. Differs → orb restarted. Orb has no
+// login/session, so there's no natural moment to wipe state; this is the
+// orb-only analog to orbital's login-based ?fresh=1 path.
 document.addEventListener('DOMContentLoaded', () => {
   const v = window.ORBITAL_CONFIG?.serverVersion
   if (!v) return
   const stored = localStorage.getItem('serverVersion')
   if (stored === v) return
-  localStorage.removeItem('datacenterTabs')
-  localStorage.removeItem('serverTabs')
-  localStorage.removeItem('dcTabCurrent')
-  localStorage.removeItem('srvTabCurrent')
+  clearStaleTabState()
   localStorage.setItem('serverVersion', v)
 })
 
@@ -68,6 +71,11 @@ function pollOrbImport() {
     .then(r => r.json())
     .then(data => {
       if (data.status === 'done') {
+        // Imported data replaces the local DGraph store. Cached inventory is
+        // now stale (sessionStorage doesn't auto-refresh on page load); open
+        // DC/Server tab IDs point at UIDs that no longer exist after drop_all.
+        sessionStorage.removeItem(INVENTORY_CACHE_KEY)
+        clearStaleTabState()
         orbShowImportStatus('is-success', 'fa-circle-check', `Imported ${data.currentVersion} successfully.`)
       } else if (data.status === 'failed') {
         orbShowImportStatus('is-danger', 'fa-circle-xmark', `Import failed: ${data.lastError || 'unknown error'}`)

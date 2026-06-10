@@ -22,6 +22,7 @@ var (
 		{Name: "s3_endpoint", Type: field.TypeString, Nullable: true},
 		{Name: "checksum", Type: field.TypeString, Nullable: true},
 		{Name: "schema_version", Type: field.TypeString, Nullable: true},
+		{Name: "binary_version", Type: field.TypeString, Nullable: true},
 		{Name: "size_bytes", Type: field.TypeInt64, Nullable: true},
 		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime, Nullable: true},

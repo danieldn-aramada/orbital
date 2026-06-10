@@ -28,6 +28,7 @@ var ErrNotAuthenticated = errors.New("not authenticated")
 type SessionKeys struct {
 	HMACKey       string
 	EncryptionKey string // 32 bytes for AES-256; empty = no encryption
+	Dev           bool   // true in local dev; sets Secure: false on cookies
 }
 
 func newStore(keys SessionKeys) *sessions.CookieStore {
@@ -42,6 +43,7 @@ func newStore(keys SessionKeys) *sessions.CookieStore {
 		MaxAge:   86400,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   !keys.Dev,
 	}
 	return s
 }

@@ -50,7 +50,7 @@ deploy/local/sync-credentials.json
 orb-data/
 
 # Secrets — never commit filled-in secret manifests
-deploy/dev/secrets.yaml
+deploy/legacy/secrets.yaml
 
 # OS
 .DS_Store

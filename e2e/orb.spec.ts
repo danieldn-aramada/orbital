@@ -133,10 +133,12 @@ test('import history API › response is an array', async ({ request }) => {
   expect(Array.isArray(records)).toBeTruthy();
 });
 
-test('import history API › records include verified field', async ({ request }) => {
+test('import history API › records include verification field', async ({ request }) => {
   const resp = await request.get('/api/v1/import/history');
   const records: Array<Record<string, unknown>> = await resp.json();
+  const validValues = new Set(['verified', 'unverified', 'not-applicable']);
   for (const r of records) {
-    expect(typeof r.verified).toBe('boolean');
+    expect(typeof r.verification).toBe('string');
+    expect(validValues.has(r.verification as string)).toBeTruthy();
   }
 });

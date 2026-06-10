@@ -26,7 +26,14 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM dgraph/dgraph:v25.3.1 AS dgraph-tools
 
 # ---- Runtime stage ----
-FROM alpine:3.19
+FROM alpine:3.21
+
+RUN apk add --no-cache \
+    curl \
+    bash \
+    bind-tools \
+    netcat-openbsd \
+    procps
 
 WORKDIR /app
 

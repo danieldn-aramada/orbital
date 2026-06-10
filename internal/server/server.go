@@ -48,6 +48,9 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 
 	e.Use(metrics.Middleware())
 	e.GET("/metrics", metrics.Handler())
+	e.GET("/healthz", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	})
 
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {

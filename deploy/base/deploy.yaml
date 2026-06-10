@@ -114,6 +114,13 @@ spec:
               mountPath: /scratch-exports
             - name: dgraph-exports
               mountPath: /dgraph-exports
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
           resources:
             requests:
               cpu: "200m"

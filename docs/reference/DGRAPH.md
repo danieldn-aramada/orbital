@@ -52,7 +52,7 @@ GraphQL cannot traverse typed back-refs polymorphically. For queries like "is th
 - **Export jobs globally serialized** — scratch is shared state; only one may be pending/running at a time across all data centers. Returns 409 if another is in progress.
 - **Per-job scratch export directories** — each job writes to `/dgraph/export/<jobID>/` inside scratch container (host-side: `DGRAPH_SCRATCH_EXPORT_DIR/<jobID>/`). Container-side base path `/dgraph/export` is hardcoded; only host-side mount path is configurable. Directory persists until user deletes the job — never auto-cleaned.
 - **DGraph export `destination` parameter** — routes output to a specific path. DGraph writes a timestamped subdirectory (`dgraph.r<raft>.u<date>.<time>/`) inside the destination.
-- **`ORBITAL_EXPORT_DIR` must be PVC-backed in AKS** — default `./subgraph-exports` is ephemeral, lost on pod restart. Set to `/scratch-exports/zips` in `deploy/dev/deploy.yaml`.
+- **`ORBITAL_EXPORT_DIR` must be PVC-backed in AKS** — default `./subgraph-exports` is ephemeral, lost on pod restart. Set to `/scratch-exports/zips` in `deploy/base/deploy.yaml`.
 - **Helm chart `backups.full.enabled` gates PVC mount on scratch DGraph** — set to `true` with never-firing cron (`"0 0 31 2 *"`) to keep PVC mounted without running backup jobs. Setting to `false` silently removes the PVC and export fails.
 
 ## Seeding

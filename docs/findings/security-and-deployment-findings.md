@@ -26,7 +26,7 @@ The original intent appears to be that GET requests to `/graphql` serve the Grap
 
 ### S.2 No Kubernetes liveness or readiness probes
 
-**Problem:** `deploy/dev/deploy.yaml` defines no `livenessProbe`, `readinessProbe`, or `startupProbe` on the orbital container. There are no `/health`, `/ready`, `/healthz`, or `/ping` endpoints in the server.
+**Problem:** `deploy/base/deploy.yaml` defines no `livenessProbe`, `readinessProbe`, or `startupProbe` on the orbital container. There are no `/health`, `/ready`, `/healthz`, or `/ping` endpoints in the server.
 
 Consequences:
 - Kubernetes considers the pod ready the instant the process starts — before the DB connection, DGraph connection, and schema version check have completed.
@@ -57,110 +57,34 @@ readinessProbe:
   periodSeconds: 10
 ```
 
-**Files:** `internal/server/server.go`, `deploy/dev/deploy.yaml`
+**Files:** `internal/server/server.go`, `deploy/base/deploy.yaml`
 **Effort:** 1 hr
 
 ---
 
 ## High — Fix Before MVP
 
-### S.3 CSRF not enforced on GraphQL mutations (session-authenticated users)
+### ~~S.3 CSRF not enforced on GraphQL mutations~~ — Not a real finding
 
-**Problem:** CSRF tokens are generated correctly (`internal/auth/session.go:101-122`, using `crypto/rand` and `subtle.ConstantTimeCompare`) and validated on form-based login/logout only. The GraphQL handler (`internal/handler/graphql.go:73-175`) never validates the CSRF token.
-
-A malicious page visited by a logged-in user can POST mutations to `/graphql` using the user's session cookie. Combined with `SameSite: Lax` (which blocks cross-site POST), this is currently partially mitigated — `SameSite: Lax` prevents CSRF for navigation-triggered POST requests but is not a reliable defence against CSRF via `fetch()` or `XMLHttpRequest` on modern browsers.
-
-**Fix:** Add CSRF validation to the GraphQL handler for session-authenticated requests (not for bearer-authenticated API calls, which are not CSRF-vulnerable). Check `X-CSRF-Token` header against the stored session token:
-
-```go
-// In graphql.go Handle(), before proxying:
-if _, ok := c.Get("is_authn").(bool); ok {
-    if err := auth.ValidateCSRF(c); err != nil {
-        return echo.ErrForbidden
-    }
-}
-```
-
-The JS frontend already has access to the CSRF token (it is injected into the page via `{{.CsrfToken}}`) and should send it as an `X-CSRF-Token` header on all GraphQL requests.
-
-**Files:** `internal/handler/graphql.go`, `web/static/app.js` (add header to all GraphQL fetch calls)
-**Effort:** 1-2 hr
+**Closed 2026-06-09.** `SameSite: Lax` fully blocks cross-site CSRF on POST endpoints. The original finding claimed Lax "is not a reliable defence against CSRF via `fetch()` or `XMLHttpRequest`" — this is incorrect. `SameSite: Lax` cookies are not sent on cross-site subresource requests (fetch/XHR) regardless of `credentials: 'include'`; they are only sent on top-level same-site navigations. Since orbital's GraphQL endpoint only accepts POST, a CSRF attack from a malicious page cannot include the session cookie. No CSRF token on the GraphQL handler is needed.
 
 ---
 
-### S.4 Audit actor identity is forged by the client
+### ~~S.4 Audit actor identity is forged by the client~~ — Fixed 2026-06-09
 
-**Problem:** `internal/handler/graphql.go:99-101` reads `updatedBy` from the request's GraphQL `variables` map and trusts it as the actor for the audit event:
-
-```go
-if v, ok := req.Variables["updatedBy"].(string); ok {
-    updatedBy = v
-}
-```
-
-Any client can set `"updatedBy": "admin@armada.ai"` in their mutation variables and the audit log will record that user as the actor. The authenticated identity (`user_name`/`user_email` from the session or bearer token) is available in the Echo context but is only used as a fallback.
-
-**Fix:** Invert the logic — use the authenticated identity from the Echo context as the authoritative actor, and ignore `updatedBy` from the client entirely:
-
-```go
-updatedBy = currentUser(c)  // from session/bearer token, not from client
-```
-
-**File:** `internal/handler/graphql.go:99-101`
-**Effort:** 15 min
+**Fixed:** `internal/handler/graphql.go` — removed `updatedBy` extraction from client-supplied variables entirely. `actor` is now always `actorFromContext(c)` (authenticated identity from session or bearer token). Client-supplied `updatedBy` is ignored.
 
 ---
 
-### S.5 Raw JWT ID token logged at INFO level
+### ~~S.5 Raw JWT ID token logged at INFO level~~ — Already gone
 
-**Problem:** `internal/handler/oidc.go:96`:
-
-```go
-h.logger.Info("oidc id token (decode at jwt.io)", "raw", rawIDToken)
-```
-
-The full JWT — containing the user's name, email, groups, and identity claims, signed and valid until expiry — is written to application logs at INFO level with a hint to decode it at jwt.io. Anyone with log access (cluster operators, log aggregation systems) can replay this token to authenticate as that user for the remainder of its validity window.
-
-**Fix:** Remove this log line entirely, or log only non-sensitive claims (subject, expiry time) for debugging:
-
-```go
-h.logger.Debug("oidc callback: token received", "subject", idToken.Subject, "expiry", idToken.Expiry)
-```
-
-**File:** `internal/handler/oidc.go:96`
-**Effort:** 5 min
+**Closed 2026-06-09.** The raw JWT log line does not exist in the current codebase. `internal/handler/oidc.go` logs only non-sensitive claims (email, name, preferred_username) after successful token verification. Finding was written against an older revision.
 
 ---
 
-### S.6 Session cookie missing `Secure` flag
+### ~~S.6 Session cookie missing `Secure` flag~~ — Fixed 2026-06-09
 
-**Problem:** `internal/auth/session.go:39-45` sets `HttpOnly: true` and `SameSite: Lax` but does not set `Secure: true`:
-
-```go
-s.Options = &sessions.Options{
-    Path:     "/",
-    MaxAge:   86400,
-    HttpOnly: true,
-    SameSite: http.SameSiteLaxMode,
-    // Secure: not set — defaults to false
-}
-```
-
-Without `Secure`, the session cookie is transmitted over plain HTTP connections. An attacker on the same network can intercept it.
-
-**Fix:** Set `Secure: !cfg.Dev` so the flag is false in local development (where HTTPS is not used) and true in all other deployments:
-
-```go
-s.Options = &sessions.Options{
-    ...
-    Secure: !h.dev,
-}
-```
-
-The `sessions.Options` struct will need access to the dev flag, which is already available on handler constructors that take a `dev bool` parameter.
-
-**File:** `internal/auth/session.go:39-45`
-**Effort:** 15 min
+**Fixed:** `internal/auth/session.go` — added `Secure: !keys.Dev` to the session options. `SessionKeys.Dev` is set from `cfg.Dev` (`ORBITAL_DEV` env var, default `true`). Local dev keeps `Secure: false` (HTTP). All non-dev deployments (production, staging) get `Secure: true` — zero cost since Istio ingress terminates TLS and the browser URL is already HTTPS.
 
 ---
 
@@ -395,10 +319,10 @@ This is a known gap from Spike 14 (`//go:embed`). Until embedding is done, the b
 |----|---------|----------|--------|
 | S.1 | Unauthenticated GraphQL proxy on root group | Critical | 30 min |
 | S.2 | No K8s liveness/readiness probes | Critical | 1 hr |
-| S.3 | No CSRF on GraphQL mutations | High | 1-2 hr |
-| S.4 | Audit actor forged via client-supplied `updatedBy` | High | 15 min |
-| S.5 | Raw JWT logged at INFO level | High | 5 min |
-| S.6 | Session cookie missing `Secure` flag | High | 15 min |
+| ~~S.3~~ | ~~No CSRF on GraphQL mutations~~ | ~~High~~ | Not a real finding — SameSite: Lax blocks cross-site fetch/XHR |
+| ~~S.4~~ | ~~Audit actor forged via client-supplied `updatedBy`~~ | ~~High~~ | ✅ Fixed 2026-06-09 |
+| ~~S.5~~ | ~~Raw JWT logged at INFO level~~ | ~~High~~ | ✅ Already gone |
+| ~~S.6~~ | ~~Session cookie missing `Secure` flag~~ | ~~High~~ | ✅ Fixed 2026-06-09 |
 | S.7 | No HTTP body size limit (OOM risk) | Medium | 15 min |
 | S.8 | TOCTOU race in job creation | Medium | 1-2 hr |
 | S.9 | Graceful shutdown orphans async jobs | Medium | 2 hr |

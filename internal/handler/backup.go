@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -32,6 +33,22 @@ import (
 )
 
 const presignTTL = 15 * time.Minute
+
+type backupManifest struct {
+	ManifestVersion int    `json:"manifestVersion"`
+	CreatedAt       string `json:"createdAt"`
+	OrbitalVersion  string `json:"orbitalVersion"`
+	SchemaVersion   string `json:"schemaVersion"`
+}
+
+// readSchemaVersion reads the schema/VERSION file adjacent to schemaPath.
+func readSchemaVersion(schemaPath string) (string, error) {
+	b, err := os.ReadFile(filepath.Join(filepath.Dir(schemaPath), "VERSION"))
+	if err != nil {
+		return "", fmt.Errorf("read schema/VERSION: %w", err)
+	}
+	return strings.TrimSpace(string(b)), nil
+}
 
 // blobStorage abstracts upload/download/delete over S3-compatible and Azure Blob backends.
 type blobStorage interface {
@@ -701,10 +718,28 @@ func (h *BackupHandler) doBackup(ctx context.Context, jobID uuid.UUID, log *slog
 		return fmt.Errorf("read gql_schema.gz: %w", err)
 	}
 
+	schemaVersion, err := readSchemaVersion(h.schemaPath)
+	if err != nil {
+		log.Warn("could not read schema/VERSION", "err", err)
+		schemaVersion = ""
+	}
+
+	manifestJSON, _ := json.Marshal(backupManifest{
+		ManifestVersion: 1,
+		CreatedAt:       time.Now().UTC().Format(time.RFC3339),
+		OrbitalVersion:  h.version,
+		SchemaVersion:   schemaVersion,
+	})
+
 	ts := time.Now().UTC().Format("20060102T150405Z")
-	zipName := fmt.Sprintf("orbital-%s-%s.zip", h.version, ts)
+	var zipName string
+	if schemaVersion != "" {
+		zipName = fmt.Sprintf("orbital-schema-%s-binary-%s-%s.zip", schemaVersion, h.version, ts)
+	} else {
+		zipName = fmt.Sprintf("orbital-%s-%s.zip", h.version, ts)
+	}
 	zipPath := filepath.Join(os.TempDir(), zipName)
-	if err := writeZip(zipPath, dataGZ, dqlSchemaGZ, gqlSchemaGZ); err != nil {
+	if err := writeZip(zipPath, dataGZ, dqlSchemaGZ, gqlSchemaGZ, manifestJSON); err != nil {
 		return fmt.Errorf("write zip: %w", err)
 	}
 	defer os.Remove(zipPath)
@@ -722,15 +757,19 @@ func (h *BackupHandler) doBackup(ctx context.Context, jobID uuid.UUID, log *slog
 		sizeBytes = zipInfo.Size()
 	}
 
-	_, err = h.db.Backup.UpdateOneID(jobID).
+	u := h.db.Backup.UpdateOneID(jobID).
 		SetStatus(backup.StatusCompleted).
 		SetS3Bucket(h.s3Bucket).
 		SetS3Key(storageKey).
 		SetS3Endpoint(h.s3Endpoint).
 		SetChecksum(checksum).
 		SetSizeBytes(sizeBytes).
-		SetCompletedAt(time.Now()).
-		Save(ctx)
+		SetBinaryVersion(h.version).
+		SetCompletedAt(time.Now())
+	if schemaVersion != "" {
+		u = u.SetSchemaVersion(schemaVersion)
+	}
+	_, err = u.Save(ctx)
 	if err != nil {
 		return fmt.Errorf("mark completed: %w", err)
 	}

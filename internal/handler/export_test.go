@@ -21,7 +21,7 @@ func TestWriteZip(t *testing.T) {
 
 	t.Run("writes all three entries", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "out.zip")
-		if err := writeZip(path, dataGZ, dqlSchemaGZ, gqlSchemaGZ); err != nil {
+		if err := writeZip(path, dataGZ, dqlSchemaGZ, gqlSchemaGZ, nil); err != nil {
 			t.Fatalf("writeZip: %v", err)
 		}
 
@@ -33,7 +33,7 @@ func TestWriteZip(t *testing.T) {
 
 	t.Run("nil entries are omitted", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "out.zip")
-		if err := writeZip(path, dataGZ, nil, nil); err != nil {
+		if err := writeZip(path, dataGZ, nil, nil, nil); err != nil {
 			t.Fatalf("writeZip: %v", err)
 		}
 
@@ -45,7 +45,7 @@ func TestWriteZip(t *testing.T) {
 	})
 
 	t.Run("fails on unwritable path", func(t *testing.T) {
-		err := writeZip("/nonexistent/path/out.zip", dataGZ, dqlSchemaGZ, gqlSchemaGZ)
+		err := writeZip("/nonexistent/path/out.zip", dataGZ, dqlSchemaGZ, gqlSchemaGZ, nil)
 		if err == nil {
 			t.Fatal("expected error for bad path, got nil")
 		}

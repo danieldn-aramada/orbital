@@ -2,59 +2,85 @@
 
 ## Local
 
+Use `make up` + `make run-orbital` for day-to-day local dev. The instructions
+below cover building a container image and running it standalone, which is
+rarely needed.
+
 Start dependencies (DGraph + PostgreSQL):
 ```bash
-docker-compose -f deploy/local/docker-compose.yml up -d
+make up
 ```
 
-Build and run orbital:
+Build and run orbital from a container:
 ```bash
-docker build -t orbital:v0.0.1 .
+docker build -t orbital:dev .
 
 docker run -p 8001:8001 \
   -e DGRAPH_URL=http://host.docker.internal:8080/graphql \
-  orbital:v0.0.1
+  orbital:dev
 ```
 
 ---
 
 ## AKS Dev
 
+Canonical AKS deployment uses **kustomize overlays** in `deploy/overlays/`.
+Two overlays target different namespaces; both share `deploy/base/`.
+
+| Overlay | Namespace | PostgreSQL | Notes |
+|---|---|---|---|
+| `dev-netbox` | `netbox` | Azure managed (external) | Original deployment |
+| `dev-orbital` | `orbital` | In-cluster StatefulSet | Newer, isolated stack |
+
+> Raw manifests in `deploy/legacy/` exist for reference only — not the
+> recommended path. Use the overlays.
+
 ### Prerequisites
 
 - `kubectl` context pointing at the dev AKS cluster
 - `helm` installed
-- Access to `armadaeksatest` ACR (see link in build step)
-- nginx ingress controller installed in the cluster
-- Azure managed PostgreSQL instance (connection string ready)
+- Push access to `armadaeksatest` ACR — see step 4
+- Istio installed in the cluster (orbital ingress is an Istio VirtualService)
+- Azure managed PostgreSQL connection string (for `dev-netbox` only)
 
 ### 1. Determine the orbital hostname
 
-Orbital must be publicly reachable for OIDC to work. Get the ingress controller's external IP:
+Orbital must be publicly reachable for OIDC to work. Get the Istio ingress
+gateway's external IP:
 
 ```bash
-kubectl get svc -n ingress-nginx ingress-nginx-controller
+kubectl get svc -n istio-system istio-ingressgateway
 # Note the EXTERNAL-IP
 ```
 
-Choose a hostname (e.g. `orbital-dev.<external-ip>.nip.io` for a quick no-DNS option, or a real DNS name).
-Update `deploy/dev/ingress.yaml` — replace `orbital-dev.REPLACE_ME` with the actual hostname.
+Choose a hostname (e.g. `orbital-dev.<external-ip>.nip.io` for a quick
+no-DNS option, or a real DNS name). The VirtualService in `deploy/base/`
+references this hostname.
 
 ### 2. Update Azure AD redirect URI
 
-In the Azure AD app registration for orbital (client ID `5fc832f6-843e-4207-93dd-b3c3a77c06f2`):
+In the Azure AD app registration for orbital (client ID
+`5fc832f6-843e-4207-93dd-b3c3a77c06f2`):
 - Go to **Authentication → Redirect URIs**
 - Add: `https://<hostname>/auth/callback`
 
-### 3. Create Kubernetes secrets
+### 3. Create the secrets file
 
-All secrets go into a namespace of your choice (e.g. `orbital-dev`). Create the namespace first if needed:
+`secrets.yaml` is gitignored per overlay and must be created locally before
+applying. Copy the template and fill in the real values:
 
 ```bash
-kubectl create namespace orbital-dev
+cp deploy/legacy/secrets.yaml deploy/overlays/dev-netbox/secrets.yaml
+# or
+cp deploy/legacy/secrets.yaml deploy/overlays/dev-orbital/secrets.yaml
 ```
 
-Generate session keys:
+> The template lives under `deploy/legacy/` because the original raw-manifest
+> workflow used it directly. Overlays now read `secrets.yaml` from their own
+> directory — each is gitignored. A dedicated `secrets.example.yaml` per
+> overlay would be cleaner; tracked as a followup.
+
+Generate session keys if you need fresh ones:
 ```bash
 # HMAC key — any random string
 openssl rand -hex 32
@@ -63,110 +89,181 @@ openssl rand -hex 32
 LC_ALL=C tr -dc 'a-zA-Z0-9!@#$%^&*' < /dev/urandom | head -c32
 ```
 
-Create the main secrets:
-```bash
-kubectl create secret generic orbital-secrets \
-  --namespace orbital-dev \
-  --from-literal=DATABASE_URL='postgres://orbital:<password>@<host>:5432/orbital?sslmode=require' \
-  --from-literal=ORBITAL_SESSION_HMAC_KEY='<64-char hex from openssl above>' \
-  --from-literal=ORBITAL_SESSION_ENCRYPTION_KEY='<exactly-32-chars>' \
-  --from-literal=ORBITAL_OIDC_CLIENT_SECRET='<client secret from Azure AD>' \
-  --from-literal=ORBITAL_OIDC_REDIRECT_URL='https://<hostname>/auth/callback' \
-  --from-literal=ORBITAL_S3_SECRET_KEY='<azure blob storage access key>' \
-  --from-literal=ORBITAL_OCI_PASSWORD='<ACR admin password>'
-```
+**For `dev-netbox`** — update `DATABASE_URL` to the Azure managed PostgreSQL
+connection string. The cosign signing key (`cosign.key`) lives in the secret
+alongside the other values — generate once with `cosign generate-key-pair`
+if needed.
 
-Create the cosign key secret (generate once with `cosign generate-key-pair` if you don't have one):
-```bash
-kubectl create secret generic orbital-cosign-key \
-  --namespace orbital-dev \
-  --from-file=cosign.key=./cosign.key
-```
+**For `dev-orbital`** — update `ORBITAL_OIDC_REDIRECT_URL` to the AKS ingress
+URL for the orbital namespace. The `DATABASE_URL` in the template points to
+the in-cluster `orbital-postgres` service.
 
-### 4. Build and push orbital
+### 4. Build and push the image
 
-Requires access to the Sandbox Services Landing Zone and push access to
+Requires push access to
 [armadaeksatest](https://portal.azure.com/#@armada.ai/resource/subscriptions/212ddfb2-b7cf-4041-8eed-8882792f8d41/resourceGroups/eksa-acr-test/providers/Microsoft.ContainerRegistry/registries/armadaeksatest/repository).
 
-```bash
-az login
-az acr login --name armadaeksatest
+The image tag is derived from `git describe` against the latest `v*` tag.
+Tag the release first, then push:
 
-# Bump the version tag in deploy/dev/deploy.yaml first, then:
-docker buildx build \
-  --platform linux/amd64 \
-  -t armadaeksatest.azurecr.io/orbital:v0.1.0 \
-  --push .
+```bash
+git tag v0.0.17                    # bump as appropriate
+git push origin main v0.0.17
+az acr login --name armadaeksatest
+make push                          # pushes armadaeksatest.azurecr.io/orbital:v0.0.17
 ```
 
-### 5. Deploy DGraph (two instances)
+`make push` reads `SERVER_VERSION` from `git describe` — if the working tree
+is dirty the tag will include `-dirty`. Commit/stash first.
 
-Blue is the live instance. Scratch is used exclusively for subgraph exports.
+If you amend the commit after tagging, move the tag before pushing:
+```bash
+git tag -f v0.0.17
+git push origin main v0.0.17 --force
+make push
+```
+
+### 5. Set the image tag in the overlay
+
+Edit the overlay's `kustomization.yaml` and bump `newTag` to match what you
+just pushed:
+
+```yaml
+images:
+  - name: armadaeksatest.azurecr.io/orbital
+    newTag: v0.0.17   # ← set this
+```
+
+### 6. Deploy DGraph (blue + scratch)
+
+Blue is the live instance serving the Topology API. Scratch is used
+exclusively for subgraph exports (blue-green pattern).
 
 ```bash
-# Blue — live, serves Topology API
+# Pick the target namespace based on overlay choice
+NS=netbox   # or "orbital"
+
 helm upgrade --install dgraph-blue ./deploy/charts/dgraph \
-  --namespace orbital-dev \
+  --namespace "$NS" \
   --values deploy/charts/values-dev.yaml
 
-# Scratch — export only, no Ratel
 helm upgrade --install dgraph-scratch ./deploy/charts/dgraph \
-  --namespace orbital-dev \
+  --namespace "$NS" \
   --values deploy/charts/values-dev-scratch.yaml
+
+kubectl rollout status statefulset/dgraph-blue-dgraph-alpha -n "$NS"
+kubectl rollout status statefulset/dgraph-scratch-dgraph-alpha -n "$NS"
 ```
 
-Wait for both to be ready:
-```bash
-kubectl rollout status statefulset/dgraph-blue-dgraph-alpha -n orbital-dev
-kubectl rollout status statefulset/dgraph-scratch-dgraph-alpha -n orbital-dev
-```
-
-### 6. Apply the DGraph schema
-
-Once orbital is running (step 7), it applies the schema automatically on startup. If you need to apply manually:
-```bash
-kubectl run schema-apply --rm -it --restart=Never \
-  --namespace orbital-dev \
-  --image=curlimages/curl -- \
-  curl -sf -X POST http://dgraph-blue-dgraph-alpha:8080/admin/schema \
-  -H "Content-Type: application/graphql" \
-  --data-binary @- < schema/schema.graphql
-```
-
-### 7. Deploy orbital
+### 7. Apply the overlay
 
 ```bash
-kubectl apply -f deploy/dev/deploy.yaml -n orbital-dev
-kubectl apply -f deploy/dev/ingress.yaml -n orbital-dev
+kubectl apply -k deploy/overlays/dev-netbox
+# or
+kubectl apply -k deploy/overlays/dev-orbital
 ```
 
-Watch startup logs:
+Dry-run first to verify without applying:
 ```bash
-kubectl logs -f deployment/orbital -n orbital-dev
+kubectl apply -k deploy/overlays/dev-netbox --dry-run=client
 ```
 
-Orbital applies PostgreSQL migrations and DGraph schema on first boot.
-
-### 8. Create the admin user
-
-Orbital's local login requires a seed user in PostgreSQL. Run against your Azure managed PostgreSQL:
-```sql
-INSERT INTO users (id, email, password_hash, name, created_at)
-VALUES (gen_random_uuid(), 'admin@armada.ai', '<bcrypt hash>', 'Admin', now());
+Watch the rollout:
+```bash
+kubectl rollout status deployment/orbital -n "$NS"
+kubectl logs -f deployment/orbital -n "$NS"
 ```
 
-Or use `make seed-users` if that target exists, pointing at the prod DB URL.
+Orbital applies the DGraph schema on first boot.
+
+### 8. Seed PostgreSQL admin user
+
+Creates `admin@armada.ai` / `admin` and `user@armada.ai` / `user`.
+
+**For `dev-netbox`** (Azure managed PostgreSQL — no port-forward needed):
+```bash
+psql "<DATABASE_URL>" -c "
+  INSERT INTO users (email, name, preferred_username, password_hash, verified, role, created_at)
+  VALUES ('admin@armada.ai', 'Admin', 'admin@armada.ai',
+    '\$2a\$12\$Wb3DtBrZbW9528J/FKL81ON73s7PEPNkup9FN8JN.jGBtM03.sckG', true, 'admin', NOW())
+  ON CONFLICT (email) DO UPDATE SET role = 'admin';
+"
+```
+
+**For `dev-orbital`** (in-cluster PostgreSQL):
+```bash
+./scripts/seed-aks-postgres.sh --namespace orbital
+```
+
+> The bcrypt hash is for password `admin` (cost 12). Dev only.
+
+### 9. Seed DGraph (optional — example data)
+
+Run once after initial deployment, or any time you need to reset graph data.
+The `seed-aks.sh` script opens and closes DGraph port-forwards automatically:
+
+```bash
+./scripts/seed-aks.sh --namespace "$NS"          # additive seed (safe to re-run)
+./scripts/seed-aks.sh --namespace "$NS" --clean  # drop all existing graph data first
+```
+
+Manual port-forward (if the script doesn't fit your workflow):
+```bash
+# Terminal 1 — blue (production graph)
+kubectl port-forward svc/dgraph-blue-dgraph-alpha 8080:8080 -n "$NS"
+
+# Terminal 2 — scratch alpha
+kubectl port-forward svc/dgraph-scratch-dgraph-alpha 8081:8080 -n "$NS"
+
+# Terminal 3 — scratch zero
+kubectl port-forward svc/dgraph-scratch-dgraph-zero 6081:6080 -n "$NS"
+
+# Then in another terminal:
+./scripts/seed-dgraph.sh         # or --clean
+```
 
 ### Verify
 
 ```bash
-# Orbital pod running
-kubectl get pods -n orbital-dev -l app=orbital
+# Pod is ready (readiness probe hits /healthz — 10s initial delay)
+kubectl get pods -n "$NS" -l app=orbital
 
-# Ingress has an address
-kubectl get ingress orbital -n orbital-dev
+# VirtualService configured
+kubectl get virtualservice -n "$NS"
 
-# Orbital health (from inside cluster)
-kubectl run curl-test --rm -it --restart=Never --namespace orbital-dev \
-  --image=curlimages/curl -- curl -s http://orbital/health
+# Smoke tests
+kubectl port-forward svc/orbital 8001:8001 -n "$NS" &
+make smoke-aks
 ```
+
+The readiness probe is intentionally a no-op `/healthz` that always
+returns 200 — it confirms the process is bound to its port. There is no
+liveness probe; transient DB failures should not cause restart loops.
+
+### Troubleshooting
+
+Exec into the orbital pod (image includes `curl`, `bash`, `bind-tools`,
+`netcat-openbsd`, `procps`):
+
+```bash
+kubectl exec -it deployment/orbital -n "$NS" -- bash
+```
+
+From inside the pod:
+```bash
+curl -s http://dgraph-blue-dgraph-alpha:8080/health    # blue DGraph reachable
+nslookup orbital-postgres                              # if using in-cluster PG
+ps auxf                                                # running processes
+```
+
+### What's in the base
+
+`deploy/base/` contains resources applied to **every** overlay:
+
+- `deploy.yaml` — orbital Deployment and Service
+- `scratch-exports-pvc.yaml` — PVC for subgraph export scratch space
+- `dgraph-exports-pvc.yaml` — PVC for DGraph export output
+- `virtualservice.yaml` — Istio VirtualService for ingress routing
+
+`dev-orbital` additionally includes `postgres.yaml` for the in-cluster
+PostgreSQL StatefulSet.

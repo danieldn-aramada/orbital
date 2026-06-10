@@ -5,14 +5,16 @@ import (
 )
 
 type BackupOption struct {
-	ID    string
-	Label string
+	ID            string
+	Label         string
+	SchemaVersion string // empty for legacy backups
 }
 
 type Restore struct {
 	layout.Base
-	PageTitle        string
-	BackupEnabled    bool
-	K8sAvailable     bool
-	CompletedBackups []BackupOption
+	PageTitle            string
+	BackupEnabled        bool
+	K8sAvailable         bool
+	CompletedBackups     []BackupOption
+	CurrentSchemaVersion string
 }

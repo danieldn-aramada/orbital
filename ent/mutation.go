@@ -62,6 +62,7 @@ type BackupMutation struct {
 	s3_endpoint    *string
 	checksum       *string
 	schema_version *string
+	binary_version *string
 	size_bytes     *int64
 	addsize_bytes  *int64
 	error          *string
@@ -677,6 +678,55 @@ func (m *BackupMutation) ResetSchemaVersion() {
 	delete(m.clearedFields, backup.FieldSchemaVersion)
 }
 
+// SetBinaryVersion sets the "binary_version" field.
+func (m *BackupMutation) SetBinaryVersion(s string) {
+	m.binary_version = &s
+}
+
+// BinaryVersion returns the value of the "binary_version" field in the mutation.
+func (m *BackupMutation) BinaryVersion() (r string, exists bool) {
+	v := m.binary_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBinaryVersion returns the old "binary_version" field's value of the Backup entity.
+// If the Backup object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BackupMutation) OldBinaryVersion(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBinaryVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBinaryVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBinaryVersion: %w", err)
+	}
+	return oldValue.BinaryVersion, nil
+}
+
+// ClearBinaryVersion clears the value of the "binary_version" field.
+func (m *BackupMutation) ClearBinaryVersion() {
+	m.binary_version = nil
+	m.clearedFields[backup.FieldBinaryVersion] = struct{}{}
+}
+
+// BinaryVersionCleared returns if the "binary_version" field was cleared in this mutation.
+func (m *BackupMutation) BinaryVersionCleared() bool {
+	_, ok := m.clearedFields[backup.FieldBinaryVersion]
+	return ok
+}
+
+// ResetBinaryVersion resets all changes to the "binary_version" field.
+func (m *BackupMutation) ResetBinaryVersion() {
+	m.binary_version = nil
+	delete(m.clearedFields, backup.FieldBinaryVersion)
+}
+
 // SetSizeBytes sets the "size_bytes" field.
 func (m *BackupMutation) SetSizeBytes(i int64) {
 	m.size_bytes = &i
@@ -928,7 +978,7 @@ func (m *BackupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *BackupMutation) Fields() []string {
-	fields := make([]string, 0, 15)
+	fields := make([]string, 0, 16)
 	if m.created_at != nil {
 		fields = append(fields, backup.FieldCreatedAt)
 	}
@@ -961,6 +1011,9 @@ func (m *BackupMutation) Fields() []string {
 	}
 	if m.schema_version != nil {
 		fields = append(fields, backup.FieldSchemaVersion)
+	}
+	if m.binary_version != nil {
+		fields = append(fields, backup.FieldBinaryVersion)
 	}
 	if m.size_bytes != nil {
 		fields = append(fields, backup.FieldSizeBytes)
@@ -1004,6 +1057,8 @@ func (m *BackupMutation) Field(name string) (ent.Value, bool) {
 		return m.Checksum()
 	case backup.FieldSchemaVersion:
 		return m.SchemaVersion()
+	case backup.FieldBinaryVersion:
+		return m.BinaryVersion()
 	case backup.FieldSizeBytes:
 		return m.SizeBytes()
 	case backup.FieldError:
@@ -1043,6 +1098,8 @@ func (m *BackupMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldChecksum(ctx)
 	case backup.FieldSchemaVersion:
 		return m.OldSchemaVersion(ctx)
+	case backup.FieldBinaryVersion:
+		return m.OldBinaryVersion(ctx)
 	case backup.FieldSizeBytes:
 		return m.OldSizeBytes(ctx)
 	case backup.FieldError:
@@ -1136,6 +1193,13 @@ func (m *BackupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSchemaVersion(v)
+		return nil
+	case backup.FieldBinaryVersion:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBinaryVersion(v)
 		return nil
 	case backup.FieldSizeBytes:
 		v, ok := value.(int64)
@@ -1234,6 +1298,9 @@ func (m *BackupMutation) ClearedFields() []string {
 	if m.FieldCleared(backup.FieldSchemaVersion) {
 		fields = append(fields, backup.FieldSchemaVersion)
 	}
+	if m.FieldCleared(backup.FieldBinaryVersion) {
+		fields = append(fields, backup.FieldBinaryVersion)
+	}
 	if m.FieldCleared(backup.FieldSizeBytes) {
 		fields = append(fields, backup.FieldSizeBytes)
 	}
@@ -1283,6 +1350,9 @@ func (m *BackupMutation) ClearField(name string) error {
 		return nil
 	case backup.FieldSchemaVersion:
 		m.ClearSchemaVersion()
+		return nil
+	case backup.FieldBinaryVersion:
+		m.ClearBinaryVersion()
 		return nil
 	case backup.FieldSizeBytes:
 		m.ClearSizeBytes()
@@ -1336,6 +1406,9 @@ func (m *BackupMutation) ResetField(name string) error {
 		return nil
 	case backup.FieldSchemaVersion:
 		m.ResetSchemaVersion()
+		return nil
+	case backup.FieldBinaryVersion:
+		m.ResetBinaryVersion()
 		return nil
 	case backup.FieldSizeBytes:
 		m.ResetSizeBytes()

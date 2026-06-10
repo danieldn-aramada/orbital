@@ -231,9 +231,9 @@ func (s *Server) dcTab(c echo.Context) error {
 	tmpl := s.templates["datacenter-tab"]
 	if s.devMode {
 		var err error
-		tmpl, err = orbtemplates.ParseFragment(
-			"web/templates/shared/partials/datacenter-tab.gohtml",
-			"web/templates/shared/components/edit-modal-datacenter.gohtml",
+		tmpl, err = orbtemplates.ParseFragment(s.webFS,
+			"templates/shared/partials/datacenter-tab.gohtml",
+			"templates/shared/components/edit-modal-datacenter.gohtml",
 		)
 		if err != nil {
 			return fmt.Errorf("parse fragment: %w", err)

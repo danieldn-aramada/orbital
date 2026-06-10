@@ -137,7 +137,8 @@ func toRestoreJobResponse(j *ent.RestoreJob) restoreJobResponse {
 // @Router      /api/v1/restore [post]
 func (h *RestoreHandler) Trigger(c echo.Context) error {
 	var req struct {
-		BackupID string `json:"backupId"`
+		BackupID              string `json:"backupId"`
+		ConfirmSchemaMismatch bool   `json:"confirmSchemaMismatch"`
 	}
 	if err := c.Bind(&req); err != nil {
 		return echo.ErrBadRequest
@@ -198,6 +199,15 @@ func (h *RestoreHandler) Trigger(c echo.Context) error {
 	}
 	if bk.S3Key == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "backup has no stored file"})
+	}
+
+	if bk.SchemaVersion != "" && !req.ConfirmSchemaMismatch {
+		if currentVersion, err := readSchemaVersion(h.schemaPath); err == nil && currentVersion != "" && currentVersion != bk.SchemaVersion {
+			return c.JSON(http.StatusConflict, map[string]any{
+				"error":                fmt.Sprintf("backup schema version %s does not match current schema %s — this restore will replace the DGraph schema. Add confirmSchemaMismatch: true to proceed.", bk.SchemaVersion, currentVersion),
+				"requiresConfirmation": true,
+			})
+		}
 	}
 
 	actor := actorFromContext(c)
@@ -329,6 +339,9 @@ func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 	if bk.S3Key == "" {
 		fail("check s3_key", fmt.Errorf("backup has no s3_key"))
 		return
+	}
+	if bk.SchemaVersion != "" {
+		log(fmt.Sprintf("Backup schema version: %s", bk.SchemaVersion))
 	}
 
 	tmpDir, err := os.MkdirTemp("", "orbital-restore-*")

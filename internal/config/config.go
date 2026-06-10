@@ -75,6 +75,7 @@ func (c *Config) SessionKeys() auth.SessionKeys {
 	return auth.SessionKeys{
 		HMACKey:       c.SessionHMACKey,
 		EncryptionKey: c.SessionEncryptionKey,
+		Dev:           c.Dev,
 	}
 }
 

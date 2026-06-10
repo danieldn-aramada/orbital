@@ -207,9 +207,9 @@ func (s *Server) srvTab(c echo.Context) error {
 	tmpl := s.templates["server-tab"]
 	if s.devMode {
 		var err error
-		tmpl, err = orbtemplates.ParseFragment(
-			"web/templates/shared/partials/server-tab.gohtml",
-			"web/templates/shared/components/edit-modal-server.gohtml",
+		tmpl, err = orbtemplates.ParseFragment(s.webFS,
+			"templates/shared/partials/server-tab.gohtml",
+			"templates/shared/components/edit-modal-server.gohtml",
 		)
 		if err != nil {
 			return fmt.Errorf("parse fragment: %w", err)

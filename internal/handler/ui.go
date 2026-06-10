@@ -310,6 +310,9 @@ func (h *UI) Restore(c echo.Context) error {
 		BackupEnabled: h.backupEnabled,
 		K8sAvailable:  h.restoreAvailable,
 	}
+	if sv, err := readSchemaVersion(h.schemaPath); err == nil {
+		p.CurrentSchemaVersion = sv
+	}
 	if h.db != nil && h.backupEnabled {
 		backups, err := h.db.Backup.Query().
 			Where(backup.StatusEQ(backup.StatusCompleted)).
@@ -323,8 +326,9 @@ func (h *UI) Restore(c echo.Context) error {
 					label += " (" + b.CompletedAt.UTC().Format("2006-01-02 15:04 UTC") + ")"
 				}
 				p.CompletedBackups = append(p.CompletedBackups, page.BackupOption{
-					ID:    b.ID.String(),
-					Label: label,
+					ID:            b.ID.String(),
+					Label:         label,
+					SchemaVersion: b.SchemaVersion,
 				})
 			}
 		}

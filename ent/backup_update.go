@@ -216,6 +216,26 @@ func (_u *BackupUpdate) ClearSchemaVersion() *BackupUpdate {
 	return _u
 }
 
+// SetBinaryVersion sets the "binary_version" field.
+func (_u *BackupUpdate) SetBinaryVersion(v string) *BackupUpdate {
+	_u.mutation.SetBinaryVersion(v)
+	return _u
+}
+
+// SetNillableBinaryVersion sets the "binary_version" field if the given value is not nil.
+func (_u *BackupUpdate) SetNillableBinaryVersion(v *string) *BackupUpdate {
+	if v != nil {
+		_u.SetBinaryVersion(*v)
+	}
+	return _u
+}
+
+// ClearBinaryVersion clears the value of the "binary_version" field.
+func (_u *BackupUpdate) ClearBinaryVersion() *BackupUpdate {
+	_u.mutation.ClearBinaryVersion()
+	return _u
+}
+
 // SetSizeBytes sets the "size_bytes" field.
 func (_u *BackupUpdate) SetSizeBytes(v int64) *BackupUpdate {
 	_u.mutation.ResetSizeBytes()
@@ -415,6 +435,12 @@ func (_u *BackupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.SchemaVersionCleared() {
 		_spec.ClearField(backup.FieldSchemaVersion, field.TypeString)
+	}
+	if value, ok := _u.mutation.BinaryVersion(); ok {
+		_spec.SetField(backup.FieldBinaryVersion, field.TypeString, value)
+	}
+	if _u.mutation.BinaryVersionCleared() {
+		_spec.ClearField(backup.FieldBinaryVersion, field.TypeString)
 	}
 	if value, ok := _u.mutation.SizeBytes(); ok {
 		_spec.SetField(backup.FieldSizeBytes, field.TypeInt64, value)
@@ -651,6 +677,26 @@ func (_u *BackupUpdateOne) ClearSchemaVersion() *BackupUpdateOne {
 	return _u
 }
 
+// SetBinaryVersion sets the "binary_version" field.
+func (_u *BackupUpdateOne) SetBinaryVersion(v string) *BackupUpdateOne {
+	_u.mutation.SetBinaryVersion(v)
+	return _u
+}
+
+// SetNillableBinaryVersion sets the "binary_version" field if the given value is not nil.
+func (_u *BackupUpdateOne) SetNillableBinaryVersion(v *string) *BackupUpdateOne {
+	if v != nil {
+		_u.SetBinaryVersion(*v)
+	}
+	return _u
+}
+
+// ClearBinaryVersion clears the value of the "binary_version" field.
+func (_u *BackupUpdateOne) ClearBinaryVersion() *BackupUpdateOne {
+	_u.mutation.ClearBinaryVersion()
+	return _u
+}
+
 // SetSizeBytes sets the "size_bytes" field.
 func (_u *BackupUpdateOne) SetSizeBytes(v int64) *BackupUpdateOne {
 	_u.mutation.ResetSizeBytes()
@@ -880,6 +926,12 @@ func (_u *BackupUpdateOne) sqlSave(ctx context.Context) (_node *Backup, err erro
 	}
 	if _u.mutation.SchemaVersionCleared() {
 		_spec.ClearField(backup.FieldSchemaVersion, field.TypeString)
+	}
+	if value, ok := _u.mutation.BinaryVersion(); ok {
+		_spec.SetField(backup.FieldBinaryVersion, field.TypeString, value)
+	}
+	if _u.mutation.BinaryVersionCleared() {
+		_spec.ClearField(backup.FieldBinaryVersion, field.TypeString)
 	}
 	if value, ok := _u.mutation.SizeBytes(); ok {
 		_spec.SetField(backup.FieldSizeBytes, field.TypeInt64, value)

@@ -447,7 +447,7 @@ func (h *Export) doExport(ctx context.Context, jobID uuid.UUID, log *slog.Logger
 
 	// 11. Write zip archive
 	zipPath := filepath.Join(h.exportDir, fmt.Sprintf("orbital-export-%s.zip", jobID))
-	if err := writeZip(zipPath, dataGZ, schemaGZ, nil); err != nil {
+	if err := writeZip(zipPath, dataGZ, schemaGZ, nil, nil); err != nil {
 		return fmt.Errorf("write zip: %w", err)
 	}
 	log.Info("artifact written", "path", zipPath)
@@ -793,7 +793,7 @@ func gzipBytes(data []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func writeZip(path string, dataGZ, dqlSchemaGZ, gqlSchemaGZ []byte) error {
+func writeZip(path string, dataGZ, dqlSchemaGZ, gqlSchemaGZ, manifestJSON []byte) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -807,6 +807,7 @@ func writeZip(path string, dataGZ, dqlSchemaGZ, gqlSchemaGZ []byte) error {
 		name string
 		data []byte
 	}{
+		{"manifest.json", manifestJSON},
 		{"data.json.gz", dataGZ},
 		{"schema.gz", dqlSchemaGZ},
 		{"gql_schema.gz", gqlSchemaGZ},

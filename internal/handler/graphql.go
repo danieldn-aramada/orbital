@@ -109,13 +109,7 @@ func (h *GraphQL) Handle(c echo.Context) error {
 		}
 	}
 
-	var actor string
-	if v, ok := req.Variables["updatedBy"]; ok {
-		actor, _ = v.(string)
-	}
-	if actor == "" {
-		actor = actorFromContext(c)
-	}
+	actor := actorFromContext(c)
 
 	// Fetch before-state for all known single-entity mutations (used for MVCC and audit diff).
 	var before map[string]any
