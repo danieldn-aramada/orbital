@@ -32,9 +32,15 @@ func LoginForm() *template.Template {
 	return template.Must(template.ParseFiles("web/templates/orbital/partials/login-form.gohtml"))
 }
 
-// DeviceCodePage returns a parsed template for the standalone device code auth page.
+// DeviceCodePage returns a parsed template for the device-code auth page.
+// Includes head.gohtml so static assets pick up the same `?v=` cache-busting
+// as every other page. Does NOT include base.gohtml or nav components —
+// this is an unauthenticated landing rendered without app chrome.
 func DeviceCodePage() *template.Template {
-	return template.Must(template.ParseFiles("web/templates/orbital/partials/device-code-page.gohtml"))
+	return template.Must(template.ParseFiles(
+		"web/templates/shared/layouts/head.gohtml",
+		"web/templates/orbital/pages/device-code.gohtml",
+	))
 }
 
 // Map builds the full template map at startup. Each entry is an isolated

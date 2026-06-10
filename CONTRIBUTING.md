@@ -26,7 +26,7 @@ Run `make help` for the full list. The most-used:
 | `make up` / `make down` | `make test-unit` | `make docs` (regen Swagger for both apps) |
 | `make run-orbital` / `make run-orb` | `make test-integration` (needs `make up`) | `make build-css` / `make watch-css` (SCSS) |
 | `make seed` | `make test-e2e` (needs orbital + orb running) | `make build-orbctl` (compile the CLI) |
-| | `make release-check` (pre-release; see below) | |
+| | `make release-check` (pre-release; see below) | `make edge-up` / `make edge-down` (test orb against AKS upstream; see below) |
 
 `make run-orbital` / `make run-orb` use `go run` for fast iteration. The host doesn't have `dgraph` in PATH, so the import flow (orb) and restore flow (orbital) will fail under `go run` — that's expected. Use `make release-check` to exercise those paths against the actual container images.
 
@@ -51,6 +51,26 @@ make release-check-down  # tear down the release-check containers when finished
 This validates the actual deployable artifacts (production code paths) — not just the `go run` dev path. If `release-check` is green and the unit + integration suites are green, the release is good to ship.
 
 `make smoke-aks` runs the same Playwright suite against an AKS-deployed orbital (after `kubectl port-forward svc/orbital 8001:8001 -n netbox`). Use this to verify a fresh deploy works.
+
+## Testing orb against an AKS-deployed orbital
+
+When you want to validate orb's import flow against ConfigBundles that a real
+AKS-deployed orbital pushed to ACR (instead of your local orbital), use the
+edge sim. It brings up a local zot configured to mirror `orbital/colo-galleon`
+from upstream ACR, plus orb's own DGraph. orb itself runs on the host pointing
+at the local zot.
+
+```bash
+cp deploy/local/sync-credentials.example.json deploy/local/sync-credentials.json
+# Edit sync-credentials.json — fill in the ACR password
+make edge-up        # local zot + orb DGraph (mirrors ACR)
+make run-orb        # in another terminal — orb on :8010 pointing at the local zot
+make edge-down      # tear down when finished
+```
+
+**Mutually exclusive with `make up`** — both bind :5001, :8082, and :9082. Run
+one or the other, not both. The edge sim deliberately omits orbital and its
+DGraph because the whole point is to test against an upstream-published bundle.
 
 ## Editing styles (CSS)
 

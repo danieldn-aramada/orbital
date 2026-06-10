@@ -25,10 +25,16 @@ var ErrNotAuthenticated = errors.New("not authenticated")
 // SessionKeys holds the HMAC signing key and optional AES-256 encryption key
 // for the session cookie. HMACKey is required. EncryptionKey must be exactly
 // 32 bytes when set — if empty, cookie contents are signed but not encrypted.
+//
+// Secure controls the cookie's Secure attribute independently of Dev. Default
+// in production is true (HTTPS-only). The HTTP-only AKS dev cluster sets it
+// false explicitly so the browser will accept the cookie over plain HTTP;
+// when AKS dev gains TLS this override comes back out.
 type SessionKeys struct {
 	HMACKey       string
 	EncryptionKey string // 32 bytes for AES-256; empty = no encryption
-	Dev           bool   // true in local dev; sets Secure: false on cookies
+	Dev           bool   // true in local dev; relaxes other dev-only behavior unrelated to cookies
+	Secure        bool   // true = Secure cookie attribute set (HTTPS-only)
 }
 
 func newStore(keys SessionKeys) *sessions.CookieStore {
@@ -43,7 +49,7 @@ func newStore(keys SessionKeys) *sessions.CookieStore {
 		MaxAge:   86400,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   !keys.Dev,
+		Secure:   keys.Secure,
 	}
 	return s
 }

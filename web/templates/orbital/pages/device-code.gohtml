@@ -1,12 +1,8 @@
-{{define "device-code-page.gohtml"}}<!DOCTYPE html>
+{{define "device-code"}}<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign in — Orbital</title>
-  <script>window.ORBITAL_BASE = '{{.BasePath}}';</script>
-  <link rel="stylesheet" href="{{.BasePath}}/static/css/main.css">
-  <link rel="stylesheet" href="{{.BasePath}}/static/font-awesome-6.6.0/css/all.min.css">
+  {{template "head.gohtml" .}}
 </head>
 <body class="has-background-light" style="min-height:100vh;display:flex;align-items:center;justify-content:center;">
   <div class="box" style="max-width:440px;width:100%;margin:2rem auto;">
@@ -52,7 +48,6 @@
       data-base-path="{{.BasePath}}">
     </div>
   </div>
-  <script type="module" src="{{.BasePath}}/static/shared.js"></script>
 </body>
 </html>
 {{end}}

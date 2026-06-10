@@ -16,6 +16,8 @@ import (
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/auth"
+	appversion "github.com/armada/orbital/internal/version"
+	"github.com/armada/orbital/internal/web/data/layout"
 	webtemplates "github.com/armada/orbital/web/templates/orbital"
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/labstack/echo/v4"
@@ -157,12 +159,17 @@ func (h *OIDC) Callback(c echo.Context) error {
 }
 
 // deviceCodePageData is the template data for the device code page.
+// UI / PageTitle / Version are required by the shared head.gohtml template
+// (cache-busting + page title). The rest are device-code-specific.
 type deviceCodePageData struct {
 	BasePath        string
 	UserCode        string
 	VerificationURI string
 	DeviceCode      string
 	Interval        int
+	Version         string
+	UI              layout.UIConfig
+	PageTitle       string
 }
 
 // DeviceCodeStart handles GET /auth/device — requests a device code from Azure AD
@@ -198,12 +205,15 @@ func (h *OIDC) DeviceCodeStart(c echo.Context) error {
 	}
 
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return h.deviceCodeTmpl.ExecuteTemplate(c.Response().Writer, "device-code-page.gohtml", deviceCodePageData{
+	return h.deviceCodeTmpl.ExecuteTemplate(c.Response().Writer, "device-code", deviceCodePageData{
 		BasePath:        h.basePath,
 		UserCode:        dc.UserCode,
 		VerificationURI: dc.VerificationURI,
 		DeviceCode:      dc.DeviceCode,
 		Interval:        dc.Interval,
+		Version:         appversion.Version,
+		UI:              layout.UIConfig{AppName: "Orbital"},
+		PageTitle:       "Sign in",
 	})
 }
 

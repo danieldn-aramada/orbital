@@ -187,3 +187,36 @@ func TestOIDCState_ClearedAfterGet(t *testing.T) {
 		t.Error("expected error on second get — state should have been cleared")
 	}
 }
+
+// TestCookieSecure_FollowsConfig asserts the Secure attribute on the
+// emitted Set-Cookie tracks SessionKeys.Secure independently of Dev. This
+// is the regression class that locked HTTP-only AKS dev out: Secure=true
+// causes the browser to silently drop the cookie on non-HTTPS connections.
+func TestCookieSecure_FollowsConfig(t *testing.T) {
+	cases := []struct {
+		name   string
+		keys   SessionKeys
+		expect bool
+	}{
+		{"secure true", SessionKeys{HMACKey: "k", Secure: true}, true},
+		{"secure false", SessionKeys{HMACKey: "k", Secure: false}, false},
+		{"secure false with dev true", SessionKeys{HMACKey: "k", Dev: true, Secure: false}, false},
+		{"secure true with dev true", SessionKeys{HMACKey: "k", Dev: true, Secure: true}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			rec := httptest.NewRecorder()
+			if err := SetUserSession(tc.keys, req, rec, 1, "x", "x@x", "readonly"); err != nil {
+				t.Fatalf("SetUserSession: %v", err)
+			}
+			cookies := rec.Result().Cookies()
+			if len(cookies) == 0 {
+				t.Fatal("no Set-Cookie header emitted")
+			}
+			if got := cookies[0].Secure; got != tc.expect {
+				t.Errorf("Secure attribute: got %v, want %v", got, tc.expect)
+			}
+		})
+	}
+}

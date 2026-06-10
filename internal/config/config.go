@@ -56,6 +56,10 @@ type Config struct {
 	BundlerMaxAttempts       int           `envconfig:"ORBITAL_BUNDLER_MAX_ATTEMPTS"        default:"3"`    // total attempts (1 initial + N-1 retries)
 	BundlerMaxResponseBytes  int64         `envconfig:"ORBITAL_BUNDLER_MAX_RESPONSE_BYTES"  default:"10485760"` // 10 MB
 	RestoreTimeout         time.Duration `envconfig:"ORBITAL_RESTORE_TIMEOUT"         default:"10m"`
+	// CookieSecure controls the session cookie's Secure attribute. Default true
+	// (HTTPS-only). Set false ONLY for HTTP-only deploys like the AKS dev cluster
+	// that doesn't yet have TLS — remove the override once HTTPS is in place.
+	CookieSecure           bool          `envconfig:"ORBITAL_COOKIE_SECURE"           default:"true"`
 	DGraphAlphaGRPC        string        `envconfig:"ORBITAL_DGRAPH_ALPHA_GRPC"       default:"localhost:9080"`
 	DGraphZeroGRPC         string        `envconfig:"ORBITAL_DGRAPH_ZERO_GRPC"        default:"localhost:5080"`
 }
@@ -76,6 +80,7 @@ func (c *Config) SessionKeys() auth.SessionKeys {
 		HMACKey:       c.SessionHMACKey,
 		EncryptionKey: c.SessionEncryptionKey,
 		Dev:           c.Dev,
+		Secure:        c.CookieSecure,
 	}
 }
 

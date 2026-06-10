@@ -29,6 +29,11 @@ spec:
               value: "/orbital"
             - name: ORBITAL_DEV
               value: "false"
+            # AKS dev is HTTP-only (no Istio TLS yet). Secure cookies would
+            # be silently dropped by the browser over HTTP. Remove this
+            # override once HTTPS is configured on the ingress.
+            - name: ORBITAL_COOKIE_SECURE
+              value: "false"
             - name: ORBITAL_LOG_LEVEL
               value: "info"
             # DGraph — FQDNs so these work from any namespace

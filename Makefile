@@ -25,7 +25,7 @@ TEST_PKGS := $(shell go list ./... | grep -vE '(/ent$$|/ent/|/docs$$)')
 ACR          := armadaeksatest.azurecr.io
 IMAGE        := $(ACR)/orbital:$(SERVER_VERSION)
 
-.PHONY: help up down run-orbital run-orb seed test-unit test-integration test-e2e test-e2e-ui release-check release-check-down docs build-css build-orbctl push seed-aks smoke-aks
+.PHONY: help up down run-orbital run-orb seed test-unit test-integration test-e2e test-e2e-ui release-check release-check-down edge-up edge-down docs build-css build-orbctl push seed-aks smoke-aks
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -68,7 +68,7 @@ test-e2e: ## Run Playwright UI tests for orbital + orb (requires both running; H
 test-e2e-ui: ## Open Playwright UI mode for interactive local test watching
 	npx playwright test --ui
 
-release-check: ## Pre-release validation: build orbital + orb images, start as containers (set version with VERSION=v0.0.18)
+release-check: ## Build images, start containers, perform e2e (set version; VERSION=v0.0.18)
 	@echo "Building orbital + orb images at VERSION=$(VERSION)"
 	docker build --target=orbital -t orbital:local -t orbital:$(VERSION) --build-arg VERSION=$(VERSION) .
 	docker build --target=orb     -t orb:local     -t orb:$(VERSION)     --build-arg VERSION=$(VERSION) .
@@ -83,6 +83,14 @@ release-check-down: ## Stop the release-check containers (deps from `make up` ar
 	docker compose -f $(COMPOSE_FILE) --profile orbital --profile orb rm -f orbital orb
 
 ## ── as needed ─────────────────────────────────────────────────────────────────
+
+edge-up: ## Start edge sim — local zot mirroring upstream ACR + orb DGraph (test orb against an AKS-deployed orbital). Mutually exclusive with `make up` (port conflicts).
+	@[ -f deploy/local/sync-credentials.json ] || { echo "ERROR: deploy/local/sync-credentials.json missing — copy from sync-credentials.example.json and fill in ACR password"; exit 1; }
+	docker compose -f deploy/local/docker-compose.edge.yml up -d
+	@echo "edge sim up. Now: make run-orb (in another terminal) to start orb pointing at the local zot."
+
+edge-down: ## Stop the edge sim
+	docker compose -f deploy/local/docker-compose.edge.yml down -v
 
 docs: ## Regenerate Swagger docs for orbital + orb (requires swag)
 	swag init -g main.go -o docs --dir cmd/orbital,internal/handler

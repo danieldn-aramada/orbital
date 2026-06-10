@@ -140,6 +140,11 @@ Role enforcement is done entirely at the Go middleware layer. DGraph `@auth` dir
 
 Until one of those triggers fires, the recommendation split (MSAL for service authors, `orbauth` for the CLI) is deliberate.
 
+## Session cookie Secure flag
+
+- **`ORBITAL_COOKIE_SECURE` (default `true`) is the only source of truth for the cookie's `Secure` attribute** — decoupled from `ORBITAL_DEV` because that flag bundles unrelated dev behavior. Do NOT revert to `Secure: !cfg.Dev` — pinned by `auth.TestCookieSecure_FollowsConfig`.
+- **AKS dev sets `ORBITAL_COOKIE_SECURE=false`** because Istio is HTTP-only there; otherwise the browser silently drops the cookie and every login appears to fail. Remove the override once TLS lands.
+
 ## orbauth shared package
 
 - `internal/orbauth/` — PKCE flow, token exchange, refresh, `Store` interface, `FileStore` (the only implementation). Both `orb` and `orbctl` import it. Neither CLI contains auth logic directly.

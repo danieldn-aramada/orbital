@@ -93,6 +93,8 @@ These patterns are used in both orbital and orb. Always use them — never inven
 - **`updatedBy` and `updatedAt` excluded from audit log variable display** (`skipVars` in `app.js`) — system metadata, not user-supplied input. They remain in `details.variables` in the database.
 - **REST-triggered audit events have no child row** — `renderPayload` returns `null` when `details.query` absent. Expand arrow also hidden via `createdRow`.
 - **Startup log must use slog, not `log.Printf`** — `cmd/orbital/main.go` calls `slog.SetDefault` before anything else so startup line emits JSON consistent with all other output.
+- **Standalone unauthenticated pages still include `head.gohtml`** — pages outside the main app shell (currently only `pages/device-code.gohtml`) must include `{{template "head.gohtml" .}}` so they pick up `?v={{.Version}}` cache-busting automatically. Page data struct needs `BasePath`, `Version`, `UI layout.UIConfig`, `PageTitle`.
+- **Full-document templates live in `pages/`, not `partials/`** — `partials/` is for HTMX fragments swapped into an already-loaded page. Anything starting with `<!DOCTYPE html>` is a page.
 
 ## Timestamp rendering
 

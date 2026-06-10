@@ -619,36 +619,70 @@ function initDeviceCodeCopy() {
   const btn = document.getElementById('device-code-copy')
   if (!btn) return
 
-  btn.addEventListener('click', async () => {
+  // execCommand('copy') copies whatever is currently selected. Using a
+  // hidden <textarea> is the maximally compatible approach: contenteditable
+  // selection works in Chrome but flakes in Safari, and selecting a <p>
+  // element's text content isn't reliably copyable across browsers.
+  function legacyCopy(text) {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.setAttribute('readonly', '')
+    // Position off-screen but still rendered (visibility:hidden / display:none
+    // disqualify the textarea from being selected on iOS Safari).
+    ta.style.position = 'fixed'
+    ta.style.top = '0'
+    ta.style.left = '0'
+    ta.style.opacity = '0'
+    ta.style.pointerEvents = 'none'
+    document.body.appendChild(ta)
+    ta.focus()
+    ta.select()
+    ta.setSelectionRange(0, text.length)
+    let ok = false
+    try { ok = document.execCommand('copy') } catch (_) { /* ignore */ }
+    document.body.removeChild(ta)
+    return ok
+  }
+
+  function showSuccess(label, icon, orig) {
+    label.textContent = 'Copied!'
+    icon.className = 'fa-solid fa-check'
+    btn.classList.remove('is-light')
+    btn.classList.add('is-success')
+    setTimeout(() => {
+      label.textContent = orig.label
+      icon.className = orig.icon
+      btn.classList.remove('is-success')
+      btn.classList.add('is-light')
+    }, 1500)
+  }
+
+  btn.addEventListener('click', () => {
     const text = btn.dataset.copyText || ''
     const label = btn.querySelector('span:last-child')
     const icon = btn.querySelector('i')
     const orig = { label: label.textContent, icon: icon.className }
 
-    try {
-      await navigator.clipboard.writeText(text)
-      label.textContent = 'Copied!'
-      icon.className = 'fa-solid fa-check'
-      btn.classList.remove('is-light')
-      btn.classList.add('is-success')
-      setTimeout(() => {
-        label.textContent = orig.label
-        icon.className = orig.icon
-        btn.classList.remove('is-success')
-        btn.classList.add('is-light')
-      }, 1500)
-    } catch (_) {
-      // Clipboard API blocked (non-secure context or denied permission) —
-      // fall back to selecting the code text so the user can Ctrl+C manually.
-      const codeEl = document.getElementById('device-code-value')
-      if (!codeEl) return
-      const range = document.createRange()
-      range.selectNodeContents(codeEl)
-      const sel = window.getSelection()
-      sel.removeAllRanges()
-      sel.addRange(range)
-      label.textContent = 'Press Ctrl+C'
-      setTimeout(() => { label.textContent = orig.label }, 2000)
+    // Secure context (HTTPS or localhost): modern API is allowed. Non-secure
+    // (plain HTTP on AKS dev): navigator.clipboard.writeText rejects, often
+    // asynchronously after user-activation expires — skip it entirely and
+    // go straight to the legacy path so execCommand runs inside the click.
+    if (window.isSecureContext && navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(
+        () => showSuccess(label, icon, orig),
+        () => {
+          if (legacyCopy(text)) showSuccess(label, icon, orig)
+          else { label.textContent = 'Copy failed'; setTimeout(() => { label.textContent = orig.label }, 2500) }
+        },
+      )
+      return
+    }
+
+    if (legacyCopy(text)) {
+      showSuccess(label, icon, orig)
+    } else {
+      label.textContent = 'Copy failed'
+      setTimeout(() => { label.textContent = orig.label }, 2500)
     }
   })
 }

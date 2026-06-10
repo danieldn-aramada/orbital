@@ -55,11 +55,36 @@ func TestDeviceCodeStart_RendersUserCode(t *testing.T) {
 		t.Errorf("expected 200, got %d", rec.Code)
 	}
 	body := rec.Body.String()
+
+	// Page-specific data plumbed through deviceCodePageData.
 	if !strings.Contains(body, "ABCD-1234") {
 		t.Errorf("expected user_code ABCD-1234 in response body, got: %s", body)
 	}
 	if !strings.Contains(body, "test-device-code") {
 		t.Errorf("expected device_code test-device-code in response body")
+	}
+
+	// Proves the page actually renders as a full HTML document (not just the
+	// head fragment that would result from calling Execute() on the wrong
+	// root template — a real foot-gun that broke once already).
+	if !strings.HasPrefix(strings.TrimSpace(body), "<!DOCTYPE html>") {
+		t.Errorf("expected full HTML document starting with <!DOCTYPE html>; got first 80 chars: %q", body[:min(80, len(body))])
+	}
+
+	// Proves `{{template "head.gohtml" .}}` resolved and the shared head
+	// content was inlined — pick a marker that ONLY appears in head.gohtml.
+	if !strings.Contains(body, "htmx-2.0.2.min.js") {
+		t.Error("expected head.gohtml content to be included (looked for htmx script tag); the {{template \"head.gohtml\" .}} directive did not resolve")
+	}
+
+	// Proves cache-busting works on this page — shared.js and main.css must
+	// carry the ?v= query string so a redeploy bumps the URL. Without this,
+	// browsers serve stale JS forever (the bug that lost us hours on AKS).
+	if !strings.Contains(body, "shared.js?v=") {
+		t.Error("expected shared.js to have ?v= cache-bust query string")
+	}
+	if !strings.Contains(body, "main.css?v=") {
+		t.Error("expected main.css to have ?v= cache-bust query string")
 	}
 }
 
