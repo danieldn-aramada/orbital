@@ -36,17 +36,18 @@ spec:
               value: "false"
             - name: ORBITAL_LOG_LEVEL
               value: "info"
-            # DGraph — FQDNs so these work from any namespace
+            # DGraph — short names resolve to the local namespace via DNS search path.
+            # Each overlay deploys DGraph alongside orbital in its own namespace.
             - name: DGRAPH_URL
-              value: http://dgraph-blue-dgraph-alpha.netbox.svc.cluster.local:8080/graphql
+              value: http://dgraph-blue-dgraph-alpha:8080/graphql
             - name: DGRAPH_ADMIN_URL
-              value: http://dgraph-blue-dgraph-alpha.netbox.svc.cluster.local:8080/admin
+              value: http://dgraph-blue-dgraph-alpha:8080/admin
             - name: DGRAPH_SCRATCH_URL
-              value: http://dgraph-scratch-dgraph-alpha.netbox.svc.cluster.local:8080/graphql
+              value: http://dgraph-scratch-dgraph-alpha:8080/graphql
             - name: DGRAPH_SCRATCH_ADMIN_URL
-              value: http://dgraph-scratch-dgraph-alpha.netbox.svc.cluster.local:8080/admin
+              value: http://dgraph-scratch-dgraph-alpha:8080/admin
             - name: DGRAPH_SCRATCH_ZERO_URL
-              value: http://dgraph-scratch-dgraph-zero.netbox.svc.cluster.local:6080
+              value: http://dgraph-scratch-dgraph-zero:6080
             # PostgreSQL — DATABASE_URL supplied by each overlay (dev: secretKeyRef, orbital: in-cluster)
             # Session
             - name: ORBITAL_SESSION_HMAC_KEY
@@ -111,9 +112,9 @@ spec:
               value: /scratch-exports/zips
             # Restore — dgraph live runs as a subprocess inside orbital
             - name: ORBITAL_DGRAPH_ALPHA_GRPC
-              value: dgraph-blue-dgraph-alpha.netbox.svc.cluster.local:9080
+              value: dgraph-blue-dgraph-alpha:9080
             - name: ORBITAL_DGRAPH_ZERO_GRPC
-              value: dgraph-blue-dgraph-zero.netbox.svc.cluster.local:5080
+              value: dgraph-blue-dgraph-zero:5080
           volumeMounts:
             - name: cosign-key
               mountPath: /secrets

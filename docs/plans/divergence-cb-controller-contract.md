@@ -214,6 +214,17 @@ Cost: N+1 API calls per bundle when there are N takeovers. Fine at our scale.
 
 cb-bundler calls orbital's `POST /api/v1/divergence/resolutions/:id/consumed` after the bundle is pushed.
 
+### Why we do NOT use SSA shared management (conflict resolution option 3)
+
+K8s SSA offers three conflict resolutions: (1) overwrite + become sole manager (`--force-conflicts`), (2) drop the field from your manifest + give up the claim, (3) match the server's current value + become a **shared** manager (both managers appear in `managedFields` for that field).
+
+We use (1) for Force and (2) for Ignore. **We never use (3).** Reasons:
+
+- **Shared management does not enable writes.** It's a declarative co-existence state — both managers agree on the current value. The next time either tries to change it, the conflict re-fires. It doesn't unblock mutation; it only signals "I also care about this field."
+- **Our ownership model is single-owner with explicit handoff.** At any moment exactly one side is canonical: Accept → cb-controller (with new value); Force → cb-controller (reclaimed); Ignore → `local:admin` (cb-controller drops the field). Co-ownership would muddy "who really set this?" in the audit trail.
+- **Divergence detection does not need it.** cb-controller observes admin-owned fields by reading `managedFields` regardless of whether cb-controller co-owns them. The observation pipeline is independent of the apply pipeline.
+- **K8s designed option 3 for peer-equal controllers** (e.g. HPA + custom autoscaler both legitimately managing `spec.replicas`). Our model is hierarchical — orbital intent is canonical; local override is an exception to be resolved — not peer-equal. If we ever reach for option 3, it's a signal we've drifted from the divergence-resolution model and should flag.
+
 ### Ignore
 
 Cloud admin chose "leave as-is." Orbital records `DivergenceResolution{action: ignore}`. cb-bundler does nothing special — the next bundle is built from intent unchanged. cb-controller does nothing special — local override persists. The entry stays in the divergence report until admin releases ownership.
