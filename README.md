@@ -119,20 +119,37 @@ Other endpoints:
 
 ## API Access
 
-To call orbital's API from your own code or scripts, install the `orbctl` CLI (macOS):
+Install the `orbctl` CLI (macOS):
 
 ```bash
-brew install danieldn-aramada/tools/orbctl
-orbctl login -v
+brew tap danieldn-aramada/tools
+brew trust danieldn-aramada/tools
+brew install orbctl
 ```
 
-`orbctl login -v` opens your browser for SSO and, on success, prints an exportable access token:
+Point it at your Orbital instance and log in:
+
+```bash
+export ORBITAL_SERVER=http://ilb.devnew.armada.internal/orbital
+orbctl login
+```
+
+`ORBITAL_SERVER` defaults to `http://localhost:8001` (local dev). Set it once in your shell profile.
+
+Then query resources:
+
+```bash
+orbctl get datacenter
+orbctl get server --namespace colo
+```
+
+To get a raw access token for use with `curl` or other tools, run `orbctl login -v` — on success it prints:
 
 ```
   export ORBITAL_TOKEN=eyJ0eXAi...
 ```
 
-Paste that line into your shell, then call the API:
+Paste that line into your shell, then call the API directly:
 
 ```bash
 curl -H "Authorization: Bearer $ORBITAL_TOKEN" \

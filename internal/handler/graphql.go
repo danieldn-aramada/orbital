@@ -2,7 +2,9 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -184,6 +186,69 @@ func (h *GraphQL) Handle(c echo.Context) error {
 	c.Response().Header().Set("Content-Type", "application/json")
 	_, err = c.Response().Writer.Write(respBytes)
 	return err
+}
+
+// DispatchMutation runs a server-internal GraphQL mutation against DGraph.
+//
+// Use it when an orbital-internal action (e.g. accepting a divergence override)
+// needs to mutate intent and have the change appear in the audit log just like
+// a user-driven mutation. It does NOT enforce role gating — callers must have
+// already authz'd. It does NOT perform MVCC checks or before-fetches; those are
+// user-facing concerns from Handle.
+//
+// Returns the raw DGraph response body alongside the error so callers can
+// inspect specific GraphQL errors when needed. A non-nil error means the
+// mutation did not succeed and any side-effects (e.g. recording a resolution)
+// MUST be skipped.
+func (h *GraphQL) DispatchMutation(ctx context.Context, actor, query string, variables map[string]any) ([]byte, error) {
+	body, err := json.Marshal(gqlRequest{Query: query, Variables: variables})
+	if err != nil {
+		return nil, fmt.Errorf("marshal mutation: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.dgraphURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("post dgraph: %w", err)
+	}
+	defer resp.Body.Close()
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return respBytes, fmt.Errorf("dgraph returned %d", resp.StatusCode)
+	}
+	if hasGQLErrors(respBytes) {
+		return respBytes, errors.New(firstGQLError(respBytes))
+	}
+	if h.db != nil {
+		opName := ""
+		if m := mutationOpRe.FindStringSubmatch(query); len(m) > 1 {
+			opName = m[1]
+		}
+		operations, resourceTypes := extractOperations(query)
+		resourceIDs := extractResourceIDs(query, variables, respBytes)
+		go h.writeEvent(opName, operations, resourceTypes, resourceIDs, actor, query, variables, nil)
+	}
+	return respBytes, nil
+}
+
+// firstGQLError extracts the first error.message from a DGraph response body,
+// or returns a generic string when none is parseable.
+func firstGQLError(body []byte) string {
+	var r struct {
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil || len(r.Errors) == 0 {
+		return "graphql error"
+	}
+	return r.Errors[0].Message
 }
 
 func (h *GraphQL) proxyRaw(c echo.Context, body []byte) error {

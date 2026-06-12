@@ -971,31 +971,39 @@ export function initInventoryTable() {
     if (savedNamespace) nsSelect.value = savedNamespace
   }
 
-  if (!cached) {
+  function revalidate(onDone) {
     inventoryFetch(items => {
       inventoryTable.clear().rows.add(items).draw()
       populateDropdowns()
-      if (savedNamespace) applyNamespaceFilter(savedNamespace)
+      const nsSelect = document.getElementById('inventory-namespace-select')
+      const currentNs = nsSelect ? nsSelect.value : savedNamespace
+      if (currentNs) applyNamespaceFilter(currentNs)
+      if (onDone) onDone()
     })
+  }
+
+  if (!cached) {
+    revalidate()
   } else {
     populateDropdowns()
+    if (savedNamespace) applyNamespaceFilter(savedNamespace)
   }
+
+  // Refetch when the user returns focus — covers the "switch to terminal,
+  // run `make seed`, switch back" case without firing on every in-app navigation.
+  // `visibilitychange` covers tab switching / minimize; `focus` covers app
+  // switching when both windows stay on screen (e.g. browser + terminal side-by-side).
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') revalidate()
+  })
+  window.addEventListener('focus', () => revalidate())
 
   const reloadButton = inventoryTable.button('reload:name').node()
   inventoryTable.button('reload:name').node().on('click', function () {
     inventoryTable.clear().draw()
     reloadButton.addClass('is-loading')
     sessionStorage.removeItem(INVENTORY_CACHE_KEY)
-    setTimeout(() => {
-      inventoryFetch(items => {
-        inventoryTable.rows.add(items).draw()
-        populateDropdowns()
-        const nsSelect = document.getElementById('inventory-namespace-select')
-        const currentNs = nsSelect ? nsSelect.value : ''
-        if (currentNs) applyNamespaceFilter(currentNs)
-        reloadButton.removeClass('is-loading')
-      })
-    }, 250)
+    setTimeout(() => revalidate(() => reloadButton.removeClass('is-loading')), 250)
   })
 
   return inventoryTable

@@ -17,6 +17,7 @@ import (
 	"github.com/armada/orbital/internal/auth"
 	"github.com/armada/orbital/internal/config"
 	"github.com/armada/orbital/internal/bundler"
+	"github.com/armada/orbital/internal/divergenceingest"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/metrics"
 	"github.com/armada/orbital/internal/oci"
@@ -30,10 +31,11 @@ import (
 )
 
 type Server struct {
-	cfg           *config.Config
-	echo          *echo.Echo
-	logger        *slog.Logger
-	backupHandler *handler.BackupHandler // non-nil when S3 is configured; started in Start()
+	cfg                *config.Config
+	echo               *echo.Echo
+	logger             *slog.Logger
+	backupHandler      *handler.BackupHandler          // non-nil when S3 is configured; started in Start()
+	divergenceIngester *divergenceingest.Ingester      // non-nil when ORBITAL_DIVERGENCE_INGEST_ENABLED=true and S3 reachable; started in Start()
 }
 
 func New(cfg *config.Config, db *ent.Client) *Server {
@@ -131,6 +133,9 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	// not /api/v1/graphql — GraphQL is not URL-versioned, per convention
 	// (GitHub, GitLab, NetBox, Apollo). See CLAUDE.md Settled Decisions.
 	gqlGroup := root.Group("", apiAuth...)
+	// Constructed once at outer scope so the DivergenceHandler can borrow it
+	// for the Accept-mutation dispatch (see internal/handler/divergence.go).
+	gql := handler.NewGraphQL(cfg.DGraphURL, db, logger)
 	s3Configured := cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != ""
 	ociConfigured := cfg.OCIConfigured()
 	if !ociConfigured {
@@ -307,13 +312,16 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		api.GET("/users", uh.List)
 		api.PUT("/users/:id/role", uh.UpdateRole)
 		root.GET("/users", ui.Users)
+
+		dh := handler.NewDivergenceHandler(db, logger, gql)
+		api.GET("/divergence", dh.List)
+		api.POST("/divergence/:id/accept", dh.Accept)
+		api.POST("/divergence/:id/force", dh.Force)
+		api.POST("/divergence/:id/ignore", dh.Ignore)
+		api.GET("/divergence/resolutions/pending-force", dh.PendingForce)
+		api.POST("/divergence/resolutions/:id/consumed", dh.MarkConsumed)
 	}
 
-	// Single GraphQL endpoint at /graphql (under BasePath). Auth via apiAuth
-	// (accepts either session cookie or bearer token); mutation authorization
-	// enforced inside the handler so readonly callers can run queries via POST
-	// while mutations still require dev+. See docs/reference/AUTH.md.
-	gql := handler.NewGraphQL(cfg.DGraphURL, db, logger)
 	gqlGroup.Any("/graphql", gql.Handle)
 	root.GET("/swagger/*", echoswagger.WrapHandler)
 
@@ -327,11 +335,29 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		return c.JSON(http.StatusOK, map[string]string{"reportId": uuid.New().String()})
 	})
 
+	var divIngester *divergenceingest.Ingester
+	if cfg.DivergenceIngestEnabled && cfg.S3Bucket != "" {
+		ig, err := divergenceingest.New(context.Background(), db, divergenceingest.Config{
+			Endpoint:     cfg.S3Endpoint,
+			Region:       cfg.S3Region,
+			Bucket:       cfg.S3Bucket,
+			AccessKey:    cfg.S3AccessKey,
+			SecretKey:    cfg.S3SecretKey,
+			PollInterval: cfg.DivergencePollInterval,
+		}, logger)
+		if err != nil {
+			logger.Warn("divergence ingester init failed — ingest disabled", "err", err)
+		} else {
+			divIngester = ig
+		}
+	}
+
 	return &Server{
-		cfg:           cfg,
-		echo:          e,
-		logger:        logger,
-		backupHandler: backupHandler,
+		cfg:                cfg,
+		echo:               e,
+		logger:             logger,
+		backupHandler:      backupHandler,
+		divergenceIngester: divIngester,
 	}
 }
 
@@ -357,6 +383,10 @@ func (s *Server) Start(ctx context.Context) error {
 
 	if s.backupHandler != nil {
 		go s.backupHandler.StartScheduler(ctx)
+	}
+
+	if s.divergenceIngester != nil {
+		go s.divergenceIngester.Start(ctx)
 	}
 
 	select {

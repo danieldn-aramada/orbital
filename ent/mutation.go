@@ -13,6 +13,8 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent/backup"
+	"github.com/armada/orbital/ent/divergenceentry"
+	"github.com/armada/orbital/ent/divergenceresolution"
 	"github.com/armada/orbital/ent/event"
 	"github.com/armada/orbital/ent/eventresource"
 	"github.com/armada/orbital/ent/eventresourcetype"
@@ -34,15 +36,17 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
-	TypeBackup            = "Backup"
-	TypeEvent             = "Event"
-	TypeEventResource     = "EventResource"
-	TypeEventResourceType = "EventResourceType"
-	TypeExportJob         = "ExportJob"
-	TypeOrb               = "Orb"
-	TypeRegistryArtifact  = "RegistryArtifact"
-	TypeRestoreJob        = "RestoreJob"
-	TypeUser              = "User"
+	TypeBackup               = "Backup"
+	TypeDivergenceEntry      = "DivergenceEntry"
+	TypeDivergenceResolution = "DivergenceResolution"
+	TypeEvent                = "Event"
+	TypeEventResource        = "EventResource"
+	TypeEventResourceType    = "EventResourceType"
+	TypeExportJob            = "ExportJob"
+	TypeOrb                  = "Orb"
+	TypeRegistryArtifact     = "RegistryArtifact"
+	TypeRestoreJob           = "RestoreJob"
+	TypeUser                 = "User"
 )
 
 // BackupMutation represents an operation that mutates the Backup nodes in the graph.
@@ -1472,6 +1476,2142 @@ func (m *BackupMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *BackupMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Backup edge %s", name)
+}
+
+// DivergenceEntryMutation represents an operation that mutates the DivergenceEntry nodes in the graph.
+type DivergenceEntryMutation struct {
+	config
+	op                         Op
+	typ                        string
+	id                         *uuid.UUID
+	created_at                 *time.Time
+	created_by                 *string
+	updated_at                 *time.Time
+	updated_by                 *string
+	dc_orb_id                  *string
+	entry_orb_id               *string
+	field                      *string
+	type_name                  *string
+	intended_value             *json.RawMessage
+	appendintended_value       json.RawMessage
+	override_value             *json.RawMessage
+	appendoverride_value       json.RawMessage
+	who                        *string
+	first_seen_at              *time.Time
+	last_seen_at               *time.Time
+	last_snapshot_published_at *time.Time
+	clearedFields              map[string]struct{}
+	done                       bool
+	oldValue                   func(context.Context) (*DivergenceEntry, error)
+	predicates                 []predicate.DivergenceEntry
+}
+
+var _ ent.Mutation = (*DivergenceEntryMutation)(nil)
+
+// divergenceentryOption allows management of the mutation configuration using functional options.
+type divergenceentryOption func(*DivergenceEntryMutation)
+
+// newDivergenceEntryMutation creates new mutation for the DivergenceEntry entity.
+func newDivergenceEntryMutation(c config, op Op, opts ...divergenceentryOption) *DivergenceEntryMutation {
+	m := &DivergenceEntryMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeDivergenceEntry,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withDivergenceEntryID sets the ID field of the mutation.
+func withDivergenceEntryID(id uuid.UUID) divergenceentryOption {
+	return func(m *DivergenceEntryMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *DivergenceEntry
+		)
+		m.oldValue = func(ctx context.Context) (*DivergenceEntry, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().DivergenceEntry.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withDivergenceEntry sets the old DivergenceEntry of the mutation.
+func withDivergenceEntry(node *DivergenceEntry) divergenceentryOption {
+	return func(m *DivergenceEntryMutation) {
+		m.oldValue = func(context.Context) (*DivergenceEntry, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m DivergenceEntryMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m DivergenceEntryMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of DivergenceEntry entities.
+func (m *DivergenceEntryMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *DivergenceEntryMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *DivergenceEntryMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().DivergenceEntry.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *DivergenceEntryMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *DivergenceEntryMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the DivergenceEntry entity.
+// If the DivergenceEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceEntryMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *DivergenceEntryMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *DivergenceEntryMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *DivergenceEntryMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the DivergenceEntry entity.
+// If the DivergenceEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceEntryMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *DivergenceEntryMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[divergenceentry.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *DivergenceEntryMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[divergenceentry.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *DivergenceEntryMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, divergenceentry.FieldCreatedBy)
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *DivergenceEntryMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *DivergenceEntryMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the DivergenceEntry entity.
+// If the DivergenceEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceEntryMutation) OldUpdatedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ClearUpdatedAt clears the value of the "updated_at" field.
+func (m *DivergenceEntryMutation) ClearUpdatedAt() {
+	m.updated_at = nil
+	m.clearedFields[divergenceentry.FieldUpdatedAt] = struct{}{}
+}
+
+// UpdatedAtCleared returns if the "updated_at" field was cleared in this mutation.
+func (m *DivergenceEntryMutation) UpdatedAtCleared() bool {
+	_, ok := m.clearedFields[divergenceentry.FieldUpdatedAt]
+	return ok
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *DivergenceEntryMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+	delete(m.clearedFields, divergenceentry.FieldUpdatedAt)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *DivergenceEntryMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *DivergenceEntryMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the DivergenceEntry entity.
+// If the DivergenceEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceEntryMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *DivergenceEntryMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[divergenceentry.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *DivergenceEntryMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[divergenceentry.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *DivergenceEntryMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, divergenceentry.FieldUpdatedBy)
+}
+
+// SetDcOrbID sets the "dc_orb_id" field.
+func (m *DivergenceEntryMutation) SetDcOrbID(s string) {
+	m.dc_orb_id = &s
+}
+
+// DcOrbID returns the value of the "dc_orb_id" field in the mutation.
+func (m *DivergenceEntryMutation) DcOrbID() (r string, exists bool) {
+	v := m.dc_orb_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDcOrbID returns the old "dc_orb_id" field's value of the DivergenceEntry entity.
+// If the DivergenceEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceEntryMutation) OldDcOrbID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDcOrbID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDcOrbID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDcOrbID: %w", err)
+	}
+	return oldValue.DcOrbID, nil
+}
+
+// ResetDcOrbID resets all changes to the "dc_orb_id" field.
+func (m *DivergenceEntryMutation) ResetDcOrbID() {
+	m.dc_orb_id = nil
+}
+
+// SetEntryOrbID sets the "entry_orb_id" field.
+func (m *DivergenceEntryMutation) SetEntryOrbID(s string) {
+	m.entry_orb_id = &s
+}
+
+// EntryOrbID returns the value of the "entry_orb_id" field in the mutation.
+func (m *DivergenceEntryMutation) EntryOrbID() (r string, exists bool) {
+	v := m.entry_orb_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntryOrbID returns the old "entry_orb_id" field's value of the DivergenceEntry entity.
+// If the DivergenceEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceEntryMutation) OldEntryOrbID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntryOrbID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntryOrbID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntryOrbID: %w", err)
+	}
+	return oldValue.EntryOrbID, nil
+}
+
+// ResetEntryOrbID resets all changes to the "entry_orb_id" field.
+func (m *DivergenceEntryMutation) ResetEntryOrbID() {
+	m.entry_orb_id = nil
+}
+
+// SetFieldField sets the "field" field.
+func (m *DivergenceEntryMutation) SetFieldField(s string) {
+	m.field = &s
+}
+
+// GetField returns the value of the "field" field in the mutation.
+func (m *DivergenceEntryMutation) GetField() (r string, exists bool) {
+	v := m.field
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// GetOldField returns the old "field" field's value of the DivergenceEntry entity.
+// If the DivergenceEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceEntryMutation) GetOldField(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("GetOldField is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("GetOldField requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for GetOldField: %w", err)
+	}
+	return oldValue.Field, nil
+}
+
+// ResetFieldField resets all changes to the "field" field.
+func (m *DivergenceEntryMutation) ResetFieldField() {
+	m.field = nil
+}
+
+// SetTypeName sets the "type_name" field.
+func (m *DivergenceEntryMutation) SetTypeName(s string) {
+	m.type_name = &s
+}
+
+// TypeName returns the value of the "type_name" field in the mutation.
+func (m *DivergenceEntryMutation) TypeName() (r string, exists bool) {
+	v := m.type_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTypeName returns the old "type_name" field's value of the DivergenceEntry entity.
+// If the DivergenceEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceEntryMutation) OldTypeName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTypeName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTypeName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTypeName: %w", err)
+	}
+	return oldValue.TypeName, nil
+}
+
+// ClearTypeName clears the value of the "type_name" field.
+func (m *DivergenceEntryMutation) ClearTypeName() {
+	m.type_name = nil
+	m.clearedFields[divergenceentry.FieldTypeName] = struct{}{}
+}
+
+// TypeNameCleared returns if the "type_name" field was cleared in this mutation.
+func (m *DivergenceEntryMutation) TypeNameCleared() bool {
+	_, ok := m.clearedFields[divergenceentry.FieldTypeName]
+	return ok
+}
+
+// ResetTypeName resets all changes to the "type_name" field.
+func (m *DivergenceEntryMutation) ResetTypeName() {
+	m.type_name = nil
+	delete(m.clearedFields, divergenceentry.FieldTypeName)
+}
+
+// SetIntendedValue sets the "intended_value" field.
+func (m *DivergenceEntryMutation) SetIntendedValue(jm json.RawMessage) {
+	m.intended_value = &jm
+	m.appendintended_value = nil
+}
+
+// IntendedValue returns the value of the "intended_value" field in the mutation.
+func (m *DivergenceEntryMutation) IntendedValue() (r json.RawMessage, exists bool) {
+	v := m.intended_value
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIntendedValue returns the old "intended_value" field's value of the DivergenceEntry entity.
+// If the DivergenceEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceEntryMutation) OldIntendedValue(ctx context.Context) (v json.RawMessage, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIntendedValue is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIntendedValue requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIntendedValue: %w", err)
+	}
+	return oldValue.IntendedValue, nil
+}
+
+// AppendIntendedValue adds jm to the "intended_value" field.
+func (m *DivergenceEntryMutation) AppendIntendedValue(jm json.RawMessage) {
+	m.appendintended_value = append(m.appendintended_value, jm...)
+}
+
+// AppendedIntendedValue returns the list of values that were appended to the "intended_value" field in this mutation.
+func (m *DivergenceEntryMutation) AppendedIntendedValue() (json.RawMessage, bool) {
+	if len(m.appendintended_value) == 0 {
+		return nil, false
+	}
+	return m.appendintended_value, true
+}
+
+// ClearIntendedValue clears the value of the "intended_value" field.
+func (m *DivergenceEntryMutation) ClearIntendedValue() {
+	m.intended_value = nil
+	m.appendintended_value = nil
+	m.clearedFields[divergenceentry.FieldIntendedValue] = struct{}{}
+}
+
+// IntendedValueCleared returns if the "intended_value" field was cleared in this mutation.
+func (m *DivergenceEntryMutation) IntendedValueCleared() bool {
+	_, ok := m.clearedFields[divergenceentry.FieldIntendedValue]
+	return ok
+}
+
+// ResetIntendedValue resets all changes to the "intended_value" field.
+func (m *DivergenceEntryMutation) ResetIntendedValue() {
+	m.intended_value = nil
+	m.appendintended_value = nil
+	delete(m.clearedFields, divergenceentry.FieldIntendedValue)
+}
+
+// SetOverrideValue sets the "override_value" field.
+func (m *DivergenceEntryMutation) SetOverrideValue(jm json.RawMessage) {
+	m.override_value = &jm
+	m.appendoverride_value = nil
+}
+
+// OverrideValue returns the value of the "override_value" field in the mutation.
+func (m *DivergenceEntryMutation) OverrideValue() (r json.RawMessage, exists bool) {
+	v := m.override_value
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOverrideValue returns the old "override_value" field's value of the DivergenceEntry entity.
+// If the DivergenceEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceEntryMutation) OldOverrideValue(ctx context.Context) (v json.RawMessage, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOverrideValue is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOverrideValue requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOverrideValue: %w", err)
+	}
+	return oldValue.OverrideValue, nil
+}
+
+// AppendOverrideValue adds jm to the "override_value" field.
+func (m *DivergenceEntryMutation) AppendOverrideValue(jm json.RawMessage) {
+	m.appendoverride_value = append(m.appendoverride_value, jm...)
+}
+
+// AppendedOverrideValue returns the list of values that were appended to the "override_value" field in this mutation.
+func (m *DivergenceEntryMutation) AppendedOverrideValue() (json.RawMessage, bool) {
+	if len(m.appendoverride_value) == 0 {
+		return nil, false
+	}
+	return m.appendoverride_value, true
+}
+
+// ClearOverrideValue clears the value of the "override_value" field.
+func (m *DivergenceEntryMutation) ClearOverrideValue() {
+	m.override_value = nil
+	m.appendoverride_value = nil
+	m.clearedFields[divergenceentry.FieldOverrideValue] = struct{}{}
+}
+
+// OverrideValueCleared returns if the "override_value" field was cleared in this mutation.
+func (m *DivergenceEntryMutation) OverrideValueCleared() bool {
+	_, ok := m.clearedFields[divergenceentry.FieldOverrideValue]
+	return ok
+}
+
+// ResetOverrideValue resets all changes to the "override_value" field.
+func (m *DivergenceEntryMutation) ResetOverrideValue() {
+	m.override_value = nil
+	m.appendoverride_value = nil
+	delete(m.clearedFields, divergenceentry.FieldOverrideValue)
+}
+
+// SetWho sets the "who" field.
+func (m *DivergenceEntryMutation) SetWho(s string) {
+	m.who = &s
+}
+
+// Who returns the value of the "who" field in the mutation.
+func (m *DivergenceEntryMutation) Who() (r string, exists bool) {
+	v := m.who
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWho returns the old "who" field's value of the DivergenceEntry entity.
+// If the DivergenceEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceEntryMutation) OldWho(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWho is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWho requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWho: %w", err)
+	}
+	return oldValue.Who, nil
+}
+
+// ResetWho resets all changes to the "who" field.
+func (m *DivergenceEntryMutation) ResetWho() {
+	m.who = nil
+}
+
+// SetFirstSeenAt sets the "first_seen_at" field.
+func (m *DivergenceEntryMutation) SetFirstSeenAt(t time.Time) {
+	m.first_seen_at = &t
+}
+
+// FirstSeenAt returns the value of the "first_seen_at" field in the mutation.
+func (m *DivergenceEntryMutation) FirstSeenAt() (r time.Time, exists bool) {
+	v := m.first_seen_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFirstSeenAt returns the old "first_seen_at" field's value of the DivergenceEntry entity.
+// If the DivergenceEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceEntryMutation) OldFirstSeenAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFirstSeenAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFirstSeenAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFirstSeenAt: %w", err)
+	}
+	return oldValue.FirstSeenAt, nil
+}
+
+// ResetFirstSeenAt resets all changes to the "first_seen_at" field.
+func (m *DivergenceEntryMutation) ResetFirstSeenAt() {
+	m.first_seen_at = nil
+}
+
+// SetLastSeenAt sets the "last_seen_at" field.
+func (m *DivergenceEntryMutation) SetLastSeenAt(t time.Time) {
+	m.last_seen_at = &t
+}
+
+// LastSeenAt returns the value of the "last_seen_at" field in the mutation.
+func (m *DivergenceEntryMutation) LastSeenAt() (r time.Time, exists bool) {
+	v := m.last_seen_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastSeenAt returns the old "last_seen_at" field's value of the DivergenceEntry entity.
+// If the DivergenceEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceEntryMutation) OldLastSeenAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastSeenAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastSeenAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastSeenAt: %w", err)
+	}
+	return oldValue.LastSeenAt, nil
+}
+
+// ResetLastSeenAt resets all changes to the "last_seen_at" field.
+func (m *DivergenceEntryMutation) ResetLastSeenAt() {
+	m.last_seen_at = nil
+}
+
+// SetLastSnapshotPublishedAt sets the "last_snapshot_published_at" field.
+func (m *DivergenceEntryMutation) SetLastSnapshotPublishedAt(t time.Time) {
+	m.last_snapshot_published_at = &t
+}
+
+// LastSnapshotPublishedAt returns the value of the "last_snapshot_published_at" field in the mutation.
+func (m *DivergenceEntryMutation) LastSnapshotPublishedAt() (r time.Time, exists bool) {
+	v := m.last_snapshot_published_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastSnapshotPublishedAt returns the old "last_snapshot_published_at" field's value of the DivergenceEntry entity.
+// If the DivergenceEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceEntryMutation) OldLastSnapshotPublishedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastSnapshotPublishedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastSnapshotPublishedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastSnapshotPublishedAt: %w", err)
+	}
+	return oldValue.LastSnapshotPublishedAt, nil
+}
+
+// ResetLastSnapshotPublishedAt resets all changes to the "last_snapshot_published_at" field.
+func (m *DivergenceEntryMutation) ResetLastSnapshotPublishedAt() {
+	m.last_snapshot_published_at = nil
+}
+
+// Where appends a list predicates to the DivergenceEntryMutation builder.
+func (m *DivergenceEntryMutation) Where(ps ...predicate.DivergenceEntry) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the DivergenceEntryMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *DivergenceEntryMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.DivergenceEntry, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *DivergenceEntryMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *DivergenceEntryMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (DivergenceEntry).
+func (m *DivergenceEntryMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *DivergenceEntryMutation) Fields() []string {
+	fields := make([]string, 0, 14)
+	if m.created_at != nil {
+		fields = append(fields, divergenceentry.FieldCreatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, divergenceentry.FieldCreatedBy)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, divergenceentry.FieldUpdatedAt)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, divergenceentry.FieldUpdatedBy)
+	}
+	if m.dc_orb_id != nil {
+		fields = append(fields, divergenceentry.FieldDcOrbID)
+	}
+	if m.entry_orb_id != nil {
+		fields = append(fields, divergenceentry.FieldEntryOrbID)
+	}
+	if m.field != nil {
+		fields = append(fields, divergenceentry.FieldField)
+	}
+	if m.type_name != nil {
+		fields = append(fields, divergenceentry.FieldTypeName)
+	}
+	if m.intended_value != nil {
+		fields = append(fields, divergenceentry.FieldIntendedValue)
+	}
+	if m.override_value != nil {
+		fields = append(fields, divergenceentry.FieldOverrideValue)
+	}
+	if m.who != nil {
+		fields = append(fields, divergenceentry.FieldWho)
+	}
+	if m.first_seen_at != nil {
+		fields = append(fields, divergenceentry.FieldFirstSeenAt)
+	}
+	if m.last_seen_at != nil {
+		fields = append(fields, divergenceentry.FieldLastSeenAt)
+	}
+	if m.last_snapshot_published_at != nil {
+		fields = append(fields, divergenceentry.FieldLastSnapshotPublishedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *DivergenceEntryMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case divergenceentry.FieldCreatedAt:
+		return m.CreatedAt()
+	case divergenceentry.FieldCreatedBy:
+		return m.CreatedBy()
+	case divergenceentry.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case divergenceentry.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case divergenceentry.FieldDcOrbID:
+		return m.DcOrbID()
+	case divergenceentry.FieldEntryOrbID:
+		return m.EntryOrbID()
+	case divergenceentry.FieldField:
+		return m.GetField()
+	case divergenceentry.FieldTypeName:
+		return m.TypeName()
+	case divergenceentry.FieldIntendedValue:
+		return m.IntendedValue()
+	case divergenceentry.FieldOverrideValue:
+		return m.OverrideValue()
+	case divergenceentry.FieldWho:
+		return m.Who()
+	case divergenceentry.FieldFirstSeenAt:
+		return m.FirstSeenAt()
+	case divergenceentry.FieldLastSeenAt:
+		return m.LastSeenAt()
+	case divergenceentry.FieldLastSnapshotPublishedAt:
+		return m.LastSnapshotPublishedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *DivergenceEntryMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case divergenceentry.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case divergenceentry.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case divergenceentry.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case divergenceentry.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case divergenceentry.FieldDcOrbID:
+		return m.OldDcOrbID(ctx)
+	case divergenceentry.FieldEntryOrbID:
+		return m.OldEntryOrbID(ctx)
+	case divergenceentry.FieldField:
+		return m.GetOldField(ctx)
+	case divergenceentry.FieldTypeName:
+		return m.OldTypeName(ctx)
+	case divergenceentry.FieldIntendedValue:
+		return m.OldIntendedValue(ctx)
+	case divergenceentry.FieldOverrideValue:
+		return m.OldOverrideValue(ctx)
+	case divergenceentry.FieldWho:
+		return m.OldWho(ctx)
+	case divergenceentry.FieldFirstSeenAt:
+		return m.OldFirstSeenAt(ctx)
+	case divergenceentry.FieldLastSeenAt:
+		return m.OldLastSeenAt(ctx)
+	case divergenceentry.FieldLastSnapshotPublishedAt:
+		return m.OldLastSnapshotPublishedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown DivergenceEntry field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DivergenceEntryMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case divergenceentry.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case divergenceentry.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case divergenceentry.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case divergenceentry.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case divergenceentry.FieldDcOrbID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDcOrbID(v)
+		return nil
+	case divergenceentry.FieldEntryOrbID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntryOrbID(v)
+		return nil
+	case divergenceentry.FieldField:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFieldField(v)
+		return nil
+	case divergenceentry.FieldTypeName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTypeName(v)
+		return nil
+	case divergenceentry.FieldIntendedValue:
+		v, ok := value.(json.RawMessage)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIntendedValue(v)
+		return nil
+	case divergenceentry.FieldOverrideValue:
+		v, ok := value.(json.RawMessage)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOverrideValue(v)
+		return nil
+	case divergenceentry.FieldWho:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWho(v)
+		return nil
+	case divergenceentry.FieldFirstSeenAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFirstSeenAt(v)
+		return nil
+	case divergenceentry.FieldLastSeenAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastSeenAt(v)
+		return nil
+	case divergenceentry.FieldLastSnapshotPublishedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastSnapshotPublishedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown DivergenceEntry field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *DivergenceEntryMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *DivergenceEntryMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DivergenceEntryMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown DivergenceEntry numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *DivergenceEntryMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(divergenceentry.FieldCreatedBy) {
+		fields = append(fields, divergenceentry.FieldCreatedBy)
+	}
+	if m.FieldCleared(divergenceentry.FieldUpdatedAt) {
+		fields = append(fields, divergenceentry.FieldUpdatedAt)
+	}
+	if m.FieldCleared(divergenceentry.FieldUpdatedBy) {
+		fields = append(fields, divergenceentry.FieldUpdatedBy)
+	}
+	if m.FieldCleared(divergenceentry.FieldTypeName) {
+		fields = append(fields, divergenceentry.FieldTypeName)
+	}
+	if m.FieldCleared(divergenceentry.FieldIntendedValue) {
+		fields = append(fields, divergenceentry.FieldIntendedValue)
+	}
+	if m.FieldCleared(divergenceentry.FieldOverrideValue) {
+		fields = append(fields, divergenceentry.FieldOverrideValue)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *DivergenceEntryMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *DivergenceEntryMutation) ClearField(name string) error {
+	switch name {
+	case divergenceentry.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case divergenceentry.FieldUpdatedAt:
+		m.ClearUpdatedAt()
+		return nil
+	case divergenceentry.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case divergenceentry.FieldTypeName:
+		m.ClearTypeName()
+		return nil
+	case divergenceentry.FieldIntendedValue:
+		m.ClearIntendedValue()
+		return nil
+	case divergenceentry.FieldOverrideValue:
+		m.ClearOverrideValue()
+		return nil
+	}
+	return fmt.Errorf("unknown DivergenceEntry nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *DivergenceEntryMutation) ResetField(name string) error {
+	switch name {
+	case divergenceentry.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case divergenceentry.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case divergenceentry.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case divergenceentry.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case divergenceentry.FieldDcOrbID:
+		m.ResetDcOrbID()
+		return nil
+	case divergenceentry.FieldEntryOrbID:
+		m.ResetEntryOrbID()
+		return nil
+	case divergenceentry.FieldField:
+		m.ResetFieldField()
+		return nil
+	case divergenceentry.FieldTypeName:
+		m.ResetTypeName()
+		return nil
+	case divergenceentry.FieldIntendedValue:
+		m.ResetIntendedValue()
+		return nil
+	case divergenceentry.FieldOverrideValue:
+		m.ResetOverrideValue()
+		return nil
+	case divergenceentry.FieldWho:
+		m.ResetWho()
+		return nil
+	case divergenceentry.FieldFirstSeenAt:
+		m.ResetFirstSeenAt()
+		return nil
+	case divergenceentry.FieldLastSeenAt:
+		m.ResetLastSeenAt()
+		return nil
+	case divergenceentry.FieldLastSnapshotPublishedAt:
+		m.ResetLastSnapshotPublishedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown DivergenceEntry field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *DivergenceEntryMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *DivergenceEntryMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *DivergenceEntryMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *DivergenceEntryMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *DivergenceEntryMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *DivergenceEntryMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *DivergenceEntryMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown DivergenceEntry unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *DivergenceEntryMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown DivergenceEntry edge %s", name)
+}
+
+// DivergenceResolutionMutation represents an operation that mutates the DivergenceResolution nodes in the graph.
+type DivergenceResolutionMutation struct {
+	config
+	op             Op
+	typ            string
+	id             *uuid.UUID
+	created_at     *time.Time
+	created_by     *string
+	updated_at     *time.Time
+	updated_by     *string
+	entry_orb_id   *string
+	field          *string
+	action         *divergenceresolution.Action
+	actor          *string
+	decided_at     *time.Time
+	cb_consumed    *bool
+	cb_consumed_at *time.Time
+	clearedFields  map[string]struct{}
+	done           bool
+	oldValue       func(context.Context) (*DivergenceResolution, error)
+	predicates     []predicate.DivergenceResolution
+}
+
+var _ ent.Mutation = (*DivergenceResolutionMutation)(nil)
+
+// divergenceresolutionOption allows management of the mutation configuration using functional options.
+type divergenceresolutionOption func(*DivergenceResolutionMutation)
+
+// newDivergenceResolutionMutation creates new mutation for the DivergenceResolution entity.
+func newDivergenceResolutionMutation(c config, op Op, opts ...divergenceresolutionOption) *DivergenceResolutionMutation {
+	m := &DivergenceResolutionMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeDivergenceResolution,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withDivergenceResolutionID sets the ID field of the mutation.
+func withDivergenceResolutionID(id uuid.UUID) divergenceresolutionOption {
+	return func(m *DivergenceResolutionMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *DivergenceResolution
+		)
+		m.oldValue = func(ctx context.Context) (*DivergenceResolution, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().DivergenceResolution.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withDivergenceResolution sets the old DivergenceResolution of the mutation.
+func withDivergenceResolution(node *DivergenceResolution) divergenceresolutionOption {
+	return func(m *DivergenceResolutionMutation) {
+		m.oldValue = func(context.Context) (*DivergenceResolution, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m DivergenceResolutionMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m DivergenceResolutionMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of DivergenceResolution entities.
+func (m *DivergenceResolutionMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *DivergenceResolutionMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *DivergenceResolutionMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().DivergenceResolution.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *DivergenceResolutionMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *DivergenceResolutionMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the DivergenceResolution entity.
+// If the DivergenceResolution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceResolutionMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *DivergenceResolutionMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *DivergenceResolutionMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *DivergenceResolutionMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the DivergenceResolution entity.
+// If the DivergenceResolution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceResolutionMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *DivergenceResolutionMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[divergenceresolution.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *DivergenceResolutionMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[divergenceresolution.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *DivergenceResolutionMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, divergenceresolution.FieldCreatedBy)
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *DivergenceResolutionMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *DivergenceResolutionMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the DivergenceResolution entity.
+// If the DivergenceResolution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceResolutionMutation) OldUpdatedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ClearUpdatedAt clears the value of the "updated_at" field.
+func (m *DivergenceResolutionMutation) ClearUpdatedAt() {
+	m.updated_at = nil
+	m.clearedFields[divergenceresolution.FieldUpdatedAt] = struct{}{}
+}
+
+// UpdatedAtCleared returns if the "updated_at" field was cleared in this mutation.
+func (m *DivergenceResolutionMutation) UpdatedAtCleared() bool {
+	_, ok := m.clearedFields[divergenceresolution.FieldUpdatedAt]
+	return ok
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *DivergenceResolutionMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+	delete(m.clearedFields, divergenceresolution.FieldUpdatedAt)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *DivergenceResolutionMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *DivergenceResolutionMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the DivergenceResolution entity.
+// If the DivergenceResolution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceResolutionMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *DivergenceResolutionMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[divergenceresolution.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *DivergenceResolutionMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[divergenceresolution.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *DivergenceResolutionMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, divergenceresolution.FieldUpdatedBy)
+}
+
+// SetEntryOrbID sets the "entry_orb_id" field.
+func (m *DivergenceResolutionMutation) SetEntryOrbID(s string) {
+	m.entry_orb_id = &s
+}
+
+// EntryOrbID returns the value of the "entry_orb_id" field in the mutation.
+func (m *DivergenceResolutionMutation) EntryOrbID() (r string, exists bool) {
+	v := m.entry_orb_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntryOrbID returns the old "entry_orb_id" field's value of the DivergenceResolution entity.
+// If the DivergenceResolution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceResolutionMutation) OldEntryOrbID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntryOrbID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntryOrbID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntryOrbID: %w", err)
+	}
+	return oldValue.EntryOrbID, nil
+}
+
+// ResetEntryOrbID resets all changes to the "entry_orb_id" field.
+func (m *DivergenceResolutionMutation) ResetEntryOrbID() {
+	m.entry_orb_id = nil
+}
+
+// SetFieldField sets the "field" field.
+func (m *DivergenceResolutionMutation) SetFieldField(s string) {
+	m.field = &s
+}
+
+// GetField returns the value of the "field" field in the mutation.
+func (m *DivergenceResolutionMutation) GetField() (r string, exists bool) {
+	v := m.field
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// GetOldField returns the old "field" field's value of the DivergenceResolution entity.
+// If the DivergenceResolution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceResolutionMutation) GetOldField(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("GetOldField is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("GetOldField requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for GetOldField: %w", err)
+	}
+	return oldValue.Field, nil
+}
+
+// ResetFieldField resets all changes to the "field" field.
+func (m *DivergenceResolutionMutation) ResetFieldField() {
+	m.field = nil
+}
+
+// SetAction sets the "action" field.
+func (m *DivergenceResolutionMutation) SetAction(d divergenceresolution.Action) {
+	m.action = &d
+}
+
+// Action returns the value of the "action" field in the mutation.
+func (m *DivergenceResolutionMutation) Action() (r divergenceresolution.Action, exists bool) {
+	v := m.action
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAction returns the old "action" field's value of the DivergenceResolution entity.
+// If the DivergenceResolution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceResolutionMutation) OldAction(ctx context.Context) (v divergenceresolution.Action, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAction is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAction requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAction: %w", err)
+	}
+	return oldValue.Action, nil
+}
+
+// ResetAction resets all changes to the "action" field.
+func (m *DivergenceResolutionMutation) ResetAction() {
+	m.action = nil
+}
+
+// SetActor sets the "actor" field.
+func (m *DivergenceResolutionMutation) SetActor(s string) {
+	m.actor = &s
+}
+
+// Actor returns the value of the "actor" field in the mutation.
+func (m *DivergenceResolutionMutation) Actor() (r string, exists bool) {
+	v := m.actor
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActor returns the old "actor" field's value of the DivergenceResolution entity.
+// If the DivergenceResolution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceResolutionMutation) OldActor(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActor is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActor requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActor: %w", err)
+	}
+	return oldValue.Actor, nil
+}
+
+// ResetActor resets all changes to the "actor" field.
+func (m *DivergenceResolutionMutation) ResetActor() {
+	m.actor = nil
+}
+
+// SetDecidedAt sets the "decided_at" field.
+func (m *DivergenceResolutionMutation) SetDecidedAt(t time.Time) {
+	m.decided_at = &t
+}
+
+// DecidedAt returns the value of the "decided_at" field in the mutation.
+func (m *DivergenceResolutionMutation) DecidedAt() (r time.Time, exists bool) {
+	v := m.decided_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDecidedAt returns the old "decided_at" field's value of the DivergenceResolution entity.
+// If the DivergenceResolution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceResolutionMutation) OldDecidedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDecidedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDecidedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDecidedAt: %w", err)
+	}
+	return oldValue.DecidedAt, nil
+}
+
+// ResetDecidedAt resets all changes to the "decided_at" field.
+func (m *DivergenceResolutionMutation) ResetDecidedAt() {
+	m.decided_at = nil
+}
+
+// SetCbConsumed sets the "cb_consumed" field.
+func (m *DivergenceResolutionMutation) SetCbConsumed(b bool) {
+	m.cb_consumed = &b
+}
+
+// CbConsumed returns the value of the "cb_consumed" field in the mutation.
+func (m *DivergenceResolutionMutation) CbConsumed() (r bool, exists bool) {
+	v := m.cb_consumed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCbConsumed returns the old "cb_consumed" field's value of the DivergenceResolution entity.
+// If the DivergenceResolution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceResolutionMutation) OldCbConsumed(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCbConsumed is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCbConsumed requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCbConsumed: %w", err)
+	}
+	return oldValue.CbConsumed, nil
+}
+
+// ResetCbConsumed resets all changes to the "cb_consumed" field.
+func (m *DivergenceResolutionMutation) ResetCbConsumed() {
+	m.cb_consumed = nil
+}
+
+// SetCbConsumedAt sets the "cb_consumed_at" field.
+func (m *DivergenceResolutionMutation) SetCbConsumedAt(t time.Time) {
+	m.cb_consumed_at = &t
+}
+
+// CbConsumedAt returns the value of the "cb_consumed_at" field in the mutation.
+func (m *DivergenceResolutionMutation) CbConsumedAt() (r time.Time, exists bool) {
+	v := m.cb_consumed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCbConsumedAt returns the old "cb_consumed_at" field's value of the DivergenceResolution entity.
+// If the DivergenceResolution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceResolutionMutation) OldCbConsumedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCbConsumedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCbConsumedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCbConsumedAt: %w", err)
+	}
+	return oldValue.CbConsumedAt, nil
+}
+
+// ClearCbConsumedAt clears the value of the "cb_consumed_at" field.
+func (m *DivergenceResolutionMutation) ClearCbConsumedAt() {
+	m.cb_consumed_at = nil
+	m.clearedFields[divergenceresolution.FieldCbConsumedAt] = struct{}{}
+}
+
+// CbConsumedAtCleared returns if the "cb_consumed_at" field was cleared in this mutation.
+func (m *DivergenceResolutionMutation) CbConsumedAtCleared() bool {
+	_, ok := m.clearedFields[divergenceresolution.FieldCbConsumedAt]
+	return ok
+}
+
+// ResetCbConsumedAt resets all changes to the "cb_consumed_at" field.
+func (m *DivergenceResolutionMutation) ResetCbConsumedAt() {
+	m.cb_consumed_at = nil
+	delete(m.clearedFields, divergenceresolution.FieldCbConsumedAt)
+}
+
+// Where appends a list predicates to the DivergenceResolutionMutation builder.
+func (m *DivergenceResolutionMutation) Where(ps ...predicate.DivergenceResolution) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the DivergenceResolutionMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *DivergenceResolutionMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.DivergenceResolution, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *DivergenceResolutionMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *DivergenceResolutionMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (DivergenceResolution).
+func (m *DivergenceResolutionMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *DivergenceResolutionMutation) Fields() []string {
+	fields := make([]string, 0, 11)
+	if m.created_at != nil {
+		fields = append(fields, divergenceresolution.FieldCreatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, divergenceresolution.FieldCreatedBy)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, divergenceresolution.FieldUpdatedAt)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, divergenceresolution.FieldUpdatedBy)
+	}
+	if m.entry_orb_id != nil {
+		fields = append(fields, divergenceresolution.FieldEntryOrbID)
+	}
+	if m.field != nil {
+		fields = append(fields, divergenceresolution.FieldField)
+	}
+	if m.action != nil {
+		fields = append(fields, divergenceresolution.FieldAction)
+	}
+	if m.actor != nil {
+		fields = append(fields, divergenceresolution.FieldActor)
+	}
+	if m.decided_at != nil {
+		fields = append(fields, divergenceresolution.FieldDecidedAt)
+	}
+	if m.cb_consumed != nil {
+		fields = append(fields, divergenceresolution.FieldCbConsumed)
+	}
+	if m.cb_consumed_at != nil {
+		fields = append(fields, divergenceresolution.FieldCbConsumedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *DivergenceResolutionMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case divergenceresolution.FieldCreatedAt:
+		return m.CreatedAt()
+	case divergenceresolution.FieldCreatedBy:
+		return m.CreatedBy()
+	case divergenceresolution.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case divergenceresolution.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case divergenceresolution.FieldEntryOrbID:
+		return m.EntryOrbID()
+	case divergenceresolution.FieldField:
+		return m.GetField()
+	case divergenceresolution.FieldAction:
+		return m.Action()
+	case divergenceresolution.FieldActor:
+		return m.Actor()
+	case divergenceresolution.FieldDecidedAt:
+		return m.DecidedAt()
+	case divergenceresolution.FieldCbConsumed:
+		return m.CbConsumed()
+	case divergenceresolution.FieldCbConsumedAt:
+		return m.CbConsumedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *DivergenceResolutionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case divergenceresolution.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case divergenceresolution.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case divergenceresolution.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case divergenceresolution.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case divergenceresolution.FieldEntryOrbID:
+		return m.OldEntryOrbID(ctx)
+	case divergenceresolution.FieldField:
+		return m.GetOldField(ctx)
+	case divergenceresolution.FieldAction:
+		return m.OldAction(ctx)
+	case divergenceresolution.FieldActor:
+		return m.OldActor(ctx)
+	case divergenceresolution.FieldDecidedAt:
+		return m.OldDecidedAt(ctx)
+	case divergenceresolution.FieldCbConsumed:
+		return m.OldCbConsumed(ctx)
+	case divergenceresolution.FieldCbConsumedAt:
+		return m.OldCbConsumedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown DivergenceResolution field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DivergenceResolutionMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case divergenceresolution.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case divergenceresolution.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case divergenceresolution.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case divergenceresolution.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case divergenceresolution.FieldEntryOrbID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntryOrbID(v)
+		return nil
+	case divergenceresolution.FieldField:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFieldField(v)
+		return nil
+	case divergenceresolution.FieldAction:
+		v, ok := value.(divergenceresolution.Action)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAction(v)
+		return nil
+	case divergenceresolution.FieldActor:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActor(v)
+		return nil
+	case divergenceresolution.FieldDecidedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDecidedAt(v)
+		return nil
+	case divergenceresolution.FieldCbConsumed:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCbConsumed(v)
+		return nil
+	case divergenceresolution.FieldCbConsumedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCbConsumedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown DivergenceResolution field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *DivergenceResolutionMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *DivergenceResolutionMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DivergenceResolutionMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown DivergenceResolution numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *DivergenceResolutionMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(divergenceresolution.FieldCreatedBy) {
+		fields = append(fields, divergenceresolution.FieldCreatedBy)
+	}
+	if m.FieldCleared(divergenceresolution.FieldUpdatedAt) {
+		fields = append(fields, divergenceresolution.FieldUpdatedAt)
+	}
+	if m.FieldCleared(divergenceresolution.FieldUpdatedBy) {
+		fields = append(fields, divergenceresolution.FieldUpdatedBy)
+	}
+	if m.FieldCleared(divergenceresolution.FieldCbConsumedAt) {
+		fields = append(fields, divergenceresolution.FieldCbConsumedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *DivergenceResolutionMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *DivergenceResolutionMutation) ClearField(name string) error {
+	switch name {
+	case divergenceresolution.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case divergenceresolution.FieldUpdatedAt:
+		m.ClearUpdatedAt()
+		return nil
+	case divergenceresolution.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case divergenceresolution.FieldCbConsumedAt:
+		m.ClearCbConsumedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown DivergenceResolution nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *DivergenceResolutionMutation) ResetField(name string) error {
+	switch name {
+	case divergenceresolution.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case divergenceresolution.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case divergenceresolution.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case divergenceresolution.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case divergenceresolution.FieldEntryOrbID:
+		m.ResetEntryOrbID()
+		return nil
+	case divergenceresolution.FieldField:
+		m.ResetFieldField()
+		return nil
+	case divergenceresolution.FieldAction:
+		m.ResetAction()
+		return nil
+	case divergenceresolution.FieldActor:
+		m.ResetActor()
+		return nil
+	case divergenceresolution.FieldDecidedAt:
+		m.ResetDecidedAt()
+		return nil
+	case divergenceresolution.FieldCbConsumed:
+		m.ResetCbConsumed()
+		return nil
+	case divergenceresolution.FieldCbConsumedAt:
+		m.ResetCbConsumedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown DivergenceResolution field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *DivergenceResolutionMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *DivergenceResolutionMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *DivergenceResolutionMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *DivergenceResolutionMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *DivergenceResolutionMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *DivergenceResolutionMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *DivergenceResolutionMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown DivergenceResolution unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *DivergenceResolutionMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown DivergenceResolution edge %s", name)
 }
 
 // EventMutation represents an operation that mutates the Event nodes in the graph.

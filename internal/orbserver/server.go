@@ -33,6 +33,7 @@ type Server struct {
 	dispatcher   *orb.Dispatcher        // nil if no consumers configured
 	divStore     *divergence.Store
 	divPublisher *divergence.Publisher // nil if S3 not configured
+	mappingStore *divergence.MappingStore
 	templates    map[string]*template.Template
 	webFS        fs.FS // embedded in production; os.DirFS("web") in dev for hot-reload
 	devMode      bool
@@ -102,6 +103,7 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	imp := orb.NewImporter(*cfg, logger, backend)
 	dispatcher := orb.NewDispatcher(cfg.Consumers)
 	divStore := divergence.NewStore(cfg.DataDir)
+	mappingStore := divergence.NewMappingStore(cfg.DataDir)
 
 	var divPublisher *divergence.Publisher
 	if cfg.S3Endpoint != "" && cfg.S3Bucket != "" {
@@ -128,6 +130,7 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 		dispatcher:   dispatcher,
 		divStore:     divStore,
 		divPublisher: divPublisher,
+		mappingStore: mappingStore,
 		templates:    orbtemplates.Map(webFS),
 		webFS:        webFS,
 		devMode:      cfg.Dev,
@@ -194,6 +197,11 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 func (s *Server) Start(ctx context.Context) error {
 	if s.cfg.EnableOCIRegistry {
 		go s.pollLoop(ctx)
+	}
+
+	if s.divPublisher != nil && s.cfg.DivergencePublishSchedule != "" {
+		sched := NewDivergenceScheduler(s.divStore, s.divPublisher, s.cfg.DivergencePublishSchedule, s.logger)
+		go sched.Start(ctx)
 	}
 
 	s.logger.Info("starting orb", "port", s.cfg.Port)

@@ -9,6 +9,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -43,6 +44,7 @@ func EnsureTestBucketE() error {
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
 		awsconfig.WithRegion(TestS3Region),
 		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(testMinIOUser, testMinIOPassword, "")),
+		awsconfig.WithResponseChecksumValidation(aws.ResponseChecksumValidationWhenRequired),
 	)
 	if err != nil {
 		return fmt.Errorf("load aws config: %w", err)
@@ -124,6 +126,7 @@ func newTestS3Client(t *testing.T) *s3.Client {
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
 		awsconfig.WithRegion(TestS3Region),
 		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(testMinIOUser, testMinIOPassword, "")),
+		awsconfig.WithResponseChecksumValidation(aws.ResponseChecksumValidationWhenRequired),
 	)
 	if err != nil {
 		t.Fatalf("newTestS3Client load config: %v", err)

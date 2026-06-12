@@ -33,6 +33,7 @@ const (
 	LayerRoleGraph      = "graph"      // consumed by DGraph (always)
 	LayerRoleDispatched = "dispatched" // dispatched to a registered consumer
 	LayerRoleUnknown    = "unknown"    // no registered consumer — silently skipped
+	LayerRoleMapping    = "mapping"    // bundle's divergence-mapping layer; stored locally by orb, not dispatched
 
 	// graph layer media types — used when recording history entries.
 	layerMediaTypeData   = "application/vnd.orbital.subgraph.data.v1+gzip"

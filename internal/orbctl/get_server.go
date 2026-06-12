@@ -45,7 +45,7 @@ func runGetServers(cmd *cobra.Command, args []string) error {
 		vars = map[string]any{"ns": namespaceFilter}
 	} else {
 		q = `{ queryServer {
-      id orbId hostname serviceTag model
+      orbId hostname serviceTag model
       oobIP { address }
       rack { name }
       dataCenter { name }
@@ -55,8 +55,7 @@ func runGetServers(cmd *cobra.Command, args []string) error {
 	var result struct {
 		Data struct {
 			QueryServer []struct {
-				ID         string `json:"id"`
-				OrbID      string `json:"orbId"`
+			OrbID      string `json:"orbId"`
 				Hostname   string `json:"hostname"`
 				ServiceTag string `json:"serviceTag"`
 				Model      string `json:"model"`
@@ -111,10 +110,8 @@ func runGetServers(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Compute column widths from data, kubectl-style.
-	// Columns match UI DataTable: Data Center | OOB IP | Hostname | Service Tag | Model | Rack | ID | Orb ID
-	wDC, wOobIP, wHostname, wSvcTag, wModel, wRack, wID, wOrbID :=
-		len("DATA CENTER"), len("OOB IP"), len("HOSTNAME"), len("SERVICE TAG"), len("MODEL"), len("RACK"), len("ID"), len("ORB ID")
+	wDC, wOobIP, wHostname, wSvcTag, wModel, wRack, wOrbID :=
+		len("DATA CENTER"), len("OOB IP"), len("HOSTNAME"), len("SERVICE TAG"), len("MODEL"), len("RACK"), len("ORB ID")
 	for _, s := range servers {
 		dc := s.DataCenter.Name
 		if dc == "" {
@@ -146,17 +143,14 @@ func runGetServers(cmd *cobra.Command, args []string) error {
 		if n := len(rack); n > wRack {
 			wRack = n
 		}
-		if n := len(s.ID); n > wID {
-			wID = n
-		}
 		if n := len(s.OrbID); n > wOrbID {
 			wOrbID = n
 		}
 	}
 
-	colFmt := fmt.Sprintf("%%-%ds  %%-%ds  %%-%ds  %%-%ds  %%-%ds  %%-%ds  %%-%ds  %%s\n",
-		wDC, wOobIP, wHostname, wSvcTag, wModel, wRack, wID)
-	fmt.Printf(colFmt, "DATA CENTER", "OOB IP", "HOSTNAME", "SERVICE TAG", "MODEL", "RACK", "ID", "ORB ID")
+	colFmt := fmt.Sprintf("%%-%ds  %%-%ds  %%-%ds  %%-%ds  %%-%ds  %%-%ds  %%s\n",
+		wDC, wOobIP, wHostname, wSvcTag, wModel, wRack)
+	fmt.Printf(colFmt, "DATA CENTER", "OOB IP", "HOSTNAME", "SERVICE TAG", "MODEL", "RACK", "ORB ID")
 	for _, s := range servers {
 		dc := s.DataCenter.Name
 		if dc == "" {
@@ -186,7 +180,7 @@ func runGetServers(cmd *cobra.Command, args []string) error {
 		if orbID == "" {
 			orbID = "—"
 		}
-		fmt.Printf(colFmt, dc, oob, hostname, svcTag, model, rack, s.ID, orbID)
+		fmt.Printf(colFmt, dc, oob, hostname, svcTag, model, rack, orbID)
 	}
 	return nil
 }

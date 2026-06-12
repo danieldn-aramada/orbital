@@ -16,8 +16,15 @@ import (
 var verbose bool
 
 var rootCmd = &cobra.Command{
-	Use:          "orbctl",
-	Short:        "orbctl — CLI for the Orbital configuration management system",
+	Use:   "orbctl",
+	Short: "orbctl — CLI for the Orbital configuration management system",
+	Long: `orbctl — CLI for the Orbital configuration management system
+
+By default, orbctl connects to http://localhost:8001.
+Point it at a different instance via environment variable or flag:
+
+  export ORBITAL_SERVER=http://ilb.devnew.armada.internal/orbital
+  orbctl get datacenter`,
 	SilenceUsage: true,
 	CompletionOptions: cobra.CompletionOptions{
 		HiddenDefaultCmd: true,

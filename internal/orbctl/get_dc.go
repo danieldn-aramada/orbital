@@ -16,8 +16,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// DefaultServerURL is the Orbital server endpoint used when --server is not
-// passed and ORBITAL_SERVER is not set. Override at release time via ldflags:
+// DefaultServerURL is the Orbital server endpoint used when ORBITAL_SERVER is
+// not set. Override at release time via ldflags:
 //
 //	-X 'github.com/armada/orbital/internal/orbctl.DefaultServerURL=http://ilb.devnew.armada.internal/orbital'
 var DefaultServerURL = "http://localhost:8001"
@@ -26,7 +26,6 @@ var DefaultServerURL = "http://localhost:8001"
 // CLI fails fast when the server is unreachable rather than hanging.
 var httpClient = &http.Client{Timeout: 15 * time.Second}
 
-var serverURL string
 var namespaceFilter string
 
 var getCmd = &cobra.Command{
@@ -46,7 +45,6 @@ var getDatacenterCmd = &cobra.Command{
 }
 
 func init() {
-	getCmd.PersistentFlags().StringVar(&serverURL, "server", "", "Orbital server URL (overrides $ORBITAL_SERVER and compiled-in default)")
 	getCmd.PersistentFlags().StringVarP(&namespaceFilter, "namespace", "n", "", "Filter by namespace name")
 	getCmd.AddCommand(getDatacenterCmd)
 	getCmd.AddCommand(getServerCmd)
@@ -152,7 +150,7 @@ func logVerboseRequest(endpoint, token, query string, vars map[string]any) {
 	fmt.Fprintln(os.Stderr, strings.TrimSpace(query))
 	if len(vars) > 0 {
 		b, _ := json.MarshalIndent(vars, "", "  ")
-		fmt.Fprintf(os.Stderr, "\nvariables: %s\n", b)
+		fmt.Fprintf(os.Stderr, "\nvariables:\n%s\n", b)
 	}
 	fmt.Fprintln(os.Stderr)
 }
@@ -216,7 +214,6 @@ type dcSummary struct {
 
 func printDcSummary(dc *dcSummary) {
 	fmt.Printf("Name:       %s\n", dc.Name)
-	fmt.Printf("ID:         %s\n", dc.ID)
 	fmt.Printf("OrbID:      %s\n", dc.OrbID)
 	fmt.Printf("Namespace:  %s\n", dc.Namespace)
 	fmt.Printf("Created:    %s (by %s)\n", dc.CreatedAt, dc.CreatedBy)
@@ -266,7 +263,7 @@ func runGetDatacenters(cmd *cobra.Command, _ []string) error {
 	if namespaceFilter != "" {
 		q = `query($ns: String!) {
   queryDataCenter(filter: {namespace: {eq: $ns}}) {
-    id orbId name createdBy createdAt serversAggregate { count }
+    orbId name createdBy createdAt serversAggregate { count }
   }
 }`
 		vars = map[string]any{"ns": namespaceFilter}
@@ -277,7 +274,6 @@ func runGetDatacenters(cmd *cobra.Command, _ []string) error {
 	var result struct {
 		Data struct {
 			QueryDataCenter []struct {
-				ID        string `json:"id"`
 				Name      string `json:"name"`
 				OrbID     string `json:"orbId"`
 				CreatedBy string `json:"createdBy"`
@@ -303,10 +299,8 @@ func runGetDatacenters(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	// Compute column widths from data, kubectl-style.
-	// Columns match UI DataTable: Name | Servers | Created By | Created At | ID | Orb ID
-	wName, wSrv, wCreatedBy, wCreatedAt, wID, wOrbID :=
-		len("NAME"), len("SERVERS"), len("CREATED BY"), len("CREATED AT"), len("ID"), len("ORB ID")
+	wName, wSrv, wCreatedBy, wCreatedAt, wOrbID :=
+		len("NAME"), len("SERVERS"), len("CREATED BY"), len("CREATED AT"), len("ORB ID")
 	for _, dc := range dcs {
 		if n := len(dc.Name); n > wName {
 			wName = n
@@ -320,27 +314,21 @@ func runGetDatacenters(cmd *cobra.Command, _ []string) error {
 		if n := len(dc.CreatedAt); n > wCreatedAt {
 			wCreatedAt = n
 		}
-		if n := len(dc.ID); n > wID {
-			wID = n
-		}
 		if n := len(dc.OrbID); n > wOrbID {
 			wOrbID = n
 		}
 	}
-	colFmt := fmt.Sprintf("%%-%ds  %%-%ds  %%-%ds  %%-%ds  %%-%ds  %%s\n",
-		wName, wSrv, wCreatedBy, wCreatedAt, wID)
-	fmt.Printf(colFmt, "NAME", "SERVERS", "CREATED BY", "CREATED AT", "ID", "ORB ID")
+	colFmt := fmt.Sprintf("%%-%ds  %%-%ds  %%-%ds  %%-%ds  %%s\n",
+		wName, wSrv, wCreatedBy, wCreatedAt)
+	fmt.Printf(colFmt, "NAME", "SERVERS", "CREATED BY", "CREATED AT", "ORB ID")
 	for _, dc := range dcs {
 		fmt.Printf(colFmt, dc.Name, fmt.Sprintf("%d", dc.ServersAggregate.Count),
-			dc.CreatedBy, dc.CreatedAt, dc.ID, dc.OrbID)
+			dc.CreatedBy, dc.CreatedAt, dc.OrbID)
 	}
 	return nil
 }
 
 func resolveServerURL() string {
-	if serverURL != "" {
-		return serverURL
-	}
 	if env := os.Getenv("ORBITAL_SERVER"); env != "" {
 		return env
 	}

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -21,6 +22,7 @@ import (
 type OverrideEntry struct {
 	OrbID         string `json:"orbId"`
 	Field         string `json:"field"`
+	Type          string `json:"type,omitempty"` // orbital GraphQL type name (e.g. "Server"); empty for legacy producers
 	IntendedValue any    `json:"intendedValue"`
 	OverrideValue any    `json:"overrideValue"`
 	Who           string `json:"who"`
@@ -130,6 +132,9 @@ func NewPublisher(ctx context.Context, cfg PublisherConfig) (*Publisher, error) 
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
 		awsconfig.WithRegion(cfg.Region),
 		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey, "")),
+		// MinIO doesn't emit x-amz-checksum-* response headers; WhenRequired
+		// silences the SDK's per-call "no supported checksum" warnings.
+		awsconfig.WithResponseChecksumValidation(aws.ResponseChecksumValidationWhenRequired),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("divergence publisher aws config: %w", err)

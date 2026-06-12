@@ -9,6 +9,12 @@ import (
 // Backup is the predicate function for backup builders.
 type Backup func(*sql.Selector)
 
+// DivergenceEntry is the predicate function for divergenceentry builders.
+type DivergenceEntry func(*sql.Selector)
+
+// DivergenceResolution is the predicate function for divergenceresolution builders.
+type DivergenceResolution func(*sql.Selector)
+
 // Event is the predicate function for event builders.
 type Event func(*sql.Selector)
 

@@ -14,6 +14,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/backup"
+	"github.com/armada/orbital/ent/divergenceentry"
+	"github.com/armada/orbital/ent/divergenceresolution"
 	"github.com/armada/orbital/ent/user"
 	appversion "github.com/armada/orbital/internal/version"
 	"github.com/armada/orbital/internal/web/data/layout"
@@ -237,10 +239,82 @@ func (h *UI) Backups(c echo.Context) error {
 }
 
 func (h *UI) DivergenceReports(c echo.Context) error {
+	base := h.base(c)
+	var groups []page.DivergenceGroup
+	if h.db != nil {
+		ctx := c.Request().Context()
+		entries, err := h.db.DivergenceEntry.Query().
+			Order(ent.Desc(divergenceentry.FieldLastSeenAt)).
+			All(ctx)
+		if err != nil {
+			return fmt.Errorf("query divergence entries: %w", err)
+		}
+		idx := map[string]int{}
+		for _, e := range entries {
+			row := page.DivergenceRow{
+				ID:            e.ID.String(),
+				DCOrbID:       e.DcOrbID,
+				EntryOrbID:    e.EntryOrbID,
+				Field:         e.Field,
+				IntendedValue: formatDivergenceValue(e.IntendedValue),
+				OverrideValue: formatDivergenceValue(e.OverrideValue),
+				Who:           e.Who,
+				FirstSeenAt:   e.FirstSeenAt.UTC().Format("2006-01-02 15:04"),
+				LastSeenAt:    e.LastSeenAt.UTC().Format("2006-01-02 15:04"),
+			}
+			res, err := h.db.DivergenceResolution.Query().
+				Where(
+					divergenceresolution.EntryOrbID(e.EntryOrbID),
+					divergenceresolution.Field(e.Field),
+				).
+				Only(ctx)
+			if err == nil {
+				row.ResolutionAction = string(res.Action)
+				row.ResolutionActor = res.Actor
+				row.DecidedAt = res.DecidedAt.UTC().Format("2006-01-02 15:04")
+				row.CbConsumed = res.CbConsumed
+			}
+
+			gi, ok := idx[e.DcOrbID]
+			if !ok {
+				groups = append(groups, page.DivergenceGroup{
+					DCOrbID:    e.DcOrbID,
+					LastSeenAt: row.LastSeenAt,
+				})
+				gi = len(groups) - 1
+				idx[e.DcOrbID] = gi
+			}
+			g := &groups[gi]
+			g.Rows = append(g.Rows, row)
+			g.Total++
+			switch row.ResolutionAction {
+			case "force":
+				g.Forced++
+			case "accept":
+				g.Accepted++
+			case "ignore":
+				g.Ignored++
+			default:
+				g.Pending++
+			}
+			if row.LastSeenAt > g.LastSeenAt {
+				g.LastSeenAt = row.LastSeenAt
+			}
+		}
+	}
 	return h.render(c, "divergence-reports", page.DivergenceReports{
-		Base:      h.base(c),
-		PageTitle: "Divergence Reports",
+		Base:       base,
+		PageTitle:  "Divergence Reports",
+		Groups:     groups,
+		CanResolve: base.User.Role == "admin",
 	})
+}
+
+func formatDivergenceValue(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return "—"
+	}
+	return string(raw)
 }
 
 func (h *UI) AuditLog(c echo.Context) error {

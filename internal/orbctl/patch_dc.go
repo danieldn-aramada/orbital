@@ -86,7 +86,6 @@ var dcPatchFieldTypes = map[string]string{
 
 func init() {
 	patchCmd.AddCommand(patchDatacenterCmd)
-	patchDatacenterCmd.Flags().StringVar(&serverURL, "server", "", "Orbital server URL (default: $ORBITAL_SERVER or http://localhost:8001)")
 	patchDatacenterCmd.Flags().StringVarP(&patchJSON, "patch", "p", "", `JSON fields to update, e.g. '{"name":"new-name"}'`)
 	_ = patchDatacenterCmd.MarkFlagRequired("patch")
 }

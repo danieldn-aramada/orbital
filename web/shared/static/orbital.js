@@ -1061,6 +1061,72 @@ function setUserRole(userId, role, btn) {
     })
 }
 
+// ─── Divergence reports page ──────────────────────────────────────────────────
+
+const DIVERGENCE_EXPANDED_KEY = 'divergence:expanded'
+
+function loadExpandedSet() {
+  try { return new Set(JSON.parse(sessionStorage.getItem(DIVERGENCE_EXPANDED_KEY) || '[]')) }
+  catch (_) { return new Set() }
+}
+
+function saveExpandedSet(set) {
+  sessionStorage.setItem(DIVERGENCE_EXPANDED_KEY, JSON.stringify([...set]))
+}
+
+function setGroupExpanded(dcId, expanded) {
+  const sel = `[data-dc="${CSS.escape(dcId)}"]`
+  const parent = document.querySelector('tr.divergence-group-row' + sel)
+  const detail = document.querySelector('tr.divergence-group-detail' + sel)
+  if (!parent || !detail) return
+  detail.style.display = expanded ? '' : 'none'
+  const chevron = parent.querySelector('.divergence-chevron')
+  if (chevron) {
+    chevron.classList.toggle('fa-chevron-down', expanded)
+    chevron.classList.toggle('fa-chevron-right', !expanded)
+  }
+}
+
+function toggleDivergenceGroup(dcId) {
+  const set = loadExpandedSet()
+  const expand = !set.has(dcId)
+  setGroupExpanded(dcId, expand)
+  if (expand) set.add(dcId)
+  else set.delete(dcId)
+  saveExpandedSet(set)
+}
+
+function restoreDivergenceGroups() {
+  if (!document.querySelector('tr.divergence-group-row')) return
+  for (const dcId of loadExpandedSet()) setGroupExpanded(dcId, true)
+}
+
+function resolveDivergence(id, action, btn) {
+  btn.classList.add('is-loading')
+  btn.disabled = true
+
+  fetch(BASE + `/api/v1/divergence/${id}/${action}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  })
+    .then(r => {
+      if (!r.ok) return r.text().then(t => Promise.reject(t || 'Request failed'))
+      window.location.reload()
+    })
+    .catch(msg => {
+      btn.classList.remove('is-loading')
+      btn.disabled = false
+      const errEl = document.getElementById('divergence-error')
+      if (errEl) {
+        errEl.textContent = typeof msg === 'string' ? msg : 'Resolution failed.'
+        errEl.style.display = ''
+        setTimeout(() => { errEl.style.display = 'none' }, 5000)
+      }
+    })
+}
+
+document.addEventListener('DOMContentLoaded', restoreDivergenceGroups)
+
 // ─── Config-item delete modal (DataCenter / Server) ───────────────────────────
 
 ;(function () {
@@ -1182,3 +1248,5 @@ window.onRestoreSelectChange = onRestoreSelectChange
 window.openRestoreLogModal = openRestoreLogModal
 window.closeRestoreLogModal = closeRestoreLogModal
 window.setUserRole = setUserRole
+window.resolveDivergence = resolveDivergence
+window.toggleDivergenceGroup = toggleDivergenceGroup

@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/armada/orbital/ent/backup"
+	"github.com/armada/orbital/ent/divergenceentry"
+	"github.com/armada/orbital/ent/divergenceresolution"
 	"github.com/armada/orbital/ent/event"
 	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/orb"
@@ -33,6 +35,68 @@ func init() {
 	backupDescID := backupFields[0].Descriptor()
 	// backup.DefaultID holds the default value on creation for the id field.
 	backup.DefaultID = backupDescID.Default.(func() uuid.UUID)
+	divergenceentryMixin := schema.DivergenceEntry{}.Mixin()
+	divergenceentryMixinFields0 := divergenceentryMixin[0].Fields()
+	_ = divergenceentryMixinFields0
+	divergenceentryFields := schema.DivergenceEntry{}.Fields()
+	_ = divergenceentryFields
+	// divergenceentryDescCreatedAt is the schema descriptor for created_at field.
+	divergenceentryDescCreatedAt := divergenceentryMixinFields0[0].Descriptor()
+	// divergenceentry.DefaultCreatedAt holds the default value on creation for the created_at field.
+	divergenceentry.DefaultCreatedAt = divergenceentryDescCreatedAt.Default.(func() time.Time)
+	// divergenceentryDescDcOrbID is the schema descriptor for dc_orb_id field.
+	divergenceentryDescDcOrbID := divergenceentryFields[1].Descriptor()
+	// divergenceentry.DcOrbIDValidator is a validator for the "dc_orb_id" field. It is called by the builders before save.
+	divergenceentry.DcOrbIDValidator = divergenceentryDescDcOrbID.Validators[0].(func(string) error)
+	// divergenceentryDescEntryOrbID is the schema descriptor for entry_orb_id field.
+	divergenceentryDescEntryOrbID := divergenceentryFields[2].Descriptor()
+	// divergenceentry.EntryOrbIDValidator is a validator for the "entry_orb_id" field. It is called by the builders before save.
+	divergenceentry.EntryOrbIDValidator = divergenceentryDescEntryOrbID.Validators[0].(func(string) error)
+	// divergenceentryDescField is the schema descriptor for field field.
+	divergenceentryDescField := divergenceentryFields[3].Descriptor()
+	// divergenceentry.FieldValidator is a validator for the "field" field. It is called by the builders before save.
+	divergenceentry.FieldValidator = divergenceentryDescField.Validators[0].(func(string) error)
+	// divergenceentryDescTypeName is the schema descriptor for type_name field.
+	divergenceentryDescTypeName := divergenceentryFields[4].Descriptor()
+	// divergenceentry.DefaultTypeName holds the default value on creation for the type_name field.
+	divergenceentry.DefaultTypeName = divergenceentryDescTypeName.Default.(string)
+	// divergenceentryDescWho is the schema descriptor for who field.
+	divergenceentryDescWho := divergenceentryFields[7].Descriptor()
+	// divergenceentry.WhoValidator is a validator for the "who" field. It is called by the builders before save.
+	divergenceentry.WhoValidator = divergenceentryDescWho.Validators[0].(func(string) error)
+	// divergenceentryDescID is the schema descriptor for id field.
+	divergenceentryDescID := divergenceentryFields[0].Descriptor()
+	// divergenceentry.DefaultID holds the default value on creation for the id field.
+	divergenceentry.DefaultID = divergenceentryDescID.Default.(func() uuid.UUID)
+	divergenceresolutionMixin := schema.DivergenceResolution{}.Mixin()
+	divergenceresolutionMixinFields0 := divergenceresolutionMixin[0].Fields()
+	_ = divergenceresolutionMixinFields0
+	divergenceresolutionFields := schema.DivergenceResolution{}.Fields()
+	_ = divergenceresolutionFields
+	// divergenceresolutionDescCreatedAt is the schema descriptor for created_at field.
+	divergenceresolutionDescCreatedAt := divergenceresolutionMixinFields0[0].Descriptor()
+	// divergenceresolution.DefaultCreatedAt holds the default value on creation for the created_at field.
+	divergenceresolution.DefaultCreatedAt = divergenceresolutionDescCreatedAt.Default.(func() time.Time)
+	// divergenceresolutionDescEntryOrbID is the schema descriptor for entry_orb_id field.
+	divergenceresolutionDescEntryOrbID := divergenceresolutionFields[1].Descriptor()
+	// divergenceresolution.EntryOrbIDValidator is a validator for the "entry_orb_id" field. It is called by the builders before save.
+	divergenceresolution.EntryOrbIDValidator = divergenceresolutionDescEntryOrbID.Validators[0].(func(string) error)
+	// divergenceresolutionDescField is the schema descriptor for field field.
+	divergenceresolutionDescField := divergenceresolutionFields[2].Descriptor()
+	// divergenceresolution.FieldValidator is a validator for the "field" field. It is called by the builders before save.
+	divergenceresolution.FieldValidator = divergenceresolutionDescField.Validators[0].(func(string) error)
+	// divergenceresolutionDescActor is the schema descriptor for actor field.
+	divergenceresolutionDescActor := divergenceresolutionFields[4].Descriptor()
+	// divergenceresolution.ActorValidator is a validator for the "actor" field. It is called by the builders before save.
+	divergenceresolution.ActorValidator = divergenceresolutionDescActor.Validators[0].(func(string) error)
+	// divergenceresolutionDescCbConsumed is the schema descriptor for cb_consumed field.
+	divergenceresolutionDescCbConsumed := divergenceresolutionFields[6].Descriptor()
+	// divergenceresolution.DefaultCbConsumed holds the default value on creation for the cb_consumed field.
+	divergenceresolution.DefaultCbConsumed = divergenceresolutionDescCbConsumed.Default.(bool)
+	// divergenceresolutionDescID is the schema descriptor for id field.
+	divergenceresolutionDescID := divergenceresolutionFields[0].Descriptor()
+	// divergenceresolution.DefaultID holds the default value on creation for the id field.
+	divergenceresolution.DefaultID = divergenceresolutionDescID.Default.(func() uuid.UUID)
 	eventFields := schema.Event{}.Fields()
 	_ = eventFields
 	// eventDescTimestamp is the schema descriptor for timestamp field.

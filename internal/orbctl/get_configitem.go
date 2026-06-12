@@ -36,7 +36,7 @@ func runGetConfigItems(cmd *cobra.Command, args []string) error {
 	if namespaceFilter != "" {
 		query = `query($ns: String!) {
   queryConfigItem(filter: {namespace: {eq: $ns}}) {
-    id orbId name namespace createdBy createdAt __typename
+    orbId name namespace createdBy createdAt __typename
   }
 }`
 		vars = map[string]any{"ns": namespaceFilter}
@@ -49,8 +49,7 @@ func runGetConfigItems(cmd *cobra.Command, args []string) error {
 	var result struct {
 		Data struct {
 			QueryConfigItem []struct {
-				ID        string `json:"id"`
-				OrbID     string `json:"orbId"`
+			OrbID     string `json:"orbId"`
 				Name      string `json:"name"`
 				Namespace string `json:"namespace"`
 				CreatedBy string `json:"createdBy"`

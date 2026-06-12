@@ -3,6 +3,11 @@
 ## First-time setup
 
 ```bash
+make dev-deps     # once per machine — installs a host-side `dgraph` wrapper to ~/.local/bin
+                  # (orb's import and orbital's restore exec `dgraph live` as a subprocess;
+                  # dgraph is Linux-only, so on macOS the wrapper proxies to a container)
+                  # If ~/.local/bin isn't on PATH, the make output tells you what to add.
+
 make up           # Terminal 1 — start all dependencies (DGraph, Postgres, MinIO, Zot, orb DGraph)
 make run-orbital  # Terminal 2 — orbital on :8001
 make run-orb      # Terminal 3 — orb on :8010
@@ -56,17 +61,21 @@ This validates the actual deployable artifacts (production code paths) — not j
 
 When you want to validate orb's import flow against ConfigBundles that a real
 AKS-deployed orbital pushed to ACR (instead of your local orbital), use the
-edge sim. It brings up a local zot configured to mirror `orbital/colo-galleon`
-from upstream ACR, plus orb's own DGraph. orb itself runs on the host pointing
-at the local zot.
+edge sim. It brings up the full edge half as containers — local zot mirroring
+upstream ACR, orb's DGraph, and **orb itself**. orb runs as a container
+because `dgraph live` is Linux-only and can't run via `go run` on macOS.
 
 ```bash
 cp deploy/local/sync-credentials.example.json deploy/local/sync-credentials.json
 # Edit sync-credentials.json — fill in the ACR password
-make edge-up        # local zot + orb DGraph (mirrors ACR)
-make run-orb        # in another terminal — orb on :8010 pointing at the local zot
+
+make edge-up        # builds orb image; starts zot + orb DGraph + orb container
+                    # orb UI: http://localhost:8010
 make edge-down      # tear down when finished
 ```
+
+When you change orb code, re-run `make edge-up` — it rebuilds the orb image
+and recreates the container (Docker layer cache keeps this to ~10-30s).
 
 **Mutually exclusive with `make up`** — both bind :5001, :8082, and :9082. Run
 one or the other, not both. The edge sim deliberately omits orbital and its

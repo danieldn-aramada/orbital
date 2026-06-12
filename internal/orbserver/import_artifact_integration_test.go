@@ -57,16 +57,14 @@ func newServerWithMockBackend(t *testing.T, consumers orbconfig.ConsumersConfig)
 	t.Cleanup(dgraph.Close)
 
 	cfg := &orbconfig.Config{
-		Port:                "0",
-		DGraphURL:           dgraph.URL + "/graphql",
-		DGraphAdminURL:      dgraph.URL + "/admin",
-		DGraphAlphaGRPC:     "localhost:9082",
-		DataDir:             t.TempDir(),
-		Backend:             "docker",
-		DGraphContainerName: "local-dgraph-orb-alpha-1",
-		PollInterval:        60 * time.Second,
-		LogLevel:            "error",
-		Consumers:           consumers,
+		Port:            "0",
+		DGraphURL:       dgraph.URL + "/graphql",
+		DGraphAdminURL:  dgraph.URL + "/admin",
+		DGraphAlphaGRPC: "localhost:9082",
+		DataDir:         t.TempDir(),
+		PollInterval:    60 * time.Second,
+		LogLevel:        "error",
+		Consumers:       consumers,
 	}
 
 	srv, err := New(cfg)

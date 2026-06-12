@@ -11,21 +11,120 @@
       {{else}}
 
       <p class="is-size-4 mb-2" data-testid="page-heading">Divergence Reports</p>
-      <p class="has-text-grey mb-5" style="font-size: 0.875rem;">Local overrides made by edge admins, reported by orbs. Accept, reject, or ignore each change to update intent.</p>
+      <p class="has-text-grey mb-5" style="font-size: 0.875rem;">
+        Each row is one report from a data center — the most recent snapshot orb published. Click a row to see the diverged fields.
+        {{if .CanResolve}}<br>
+        <strong>Accept</strong> — record the decision; update intent via the normal UI.
+        <strong>Force</strong> — next bundle re-takes ownership of the field.
+        <strong>Ignore</strong> — acknowledge without effect.
+        {{end}}
+      </p>
 
-      <div>
-        <table id="divergence-report-table" class="table is-striped is-hoverable is-fullwidth">
-          <thead>
-            <tr>
-              <th>Data Center</th>
-              <th>Config Item</th>
-              <th>Field</th>
-              <th>Reported At</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-        </table>
-      </div>
+      <div id="divergence-error" class="notification is-danger is-light" style="display:none;"></div>
+
+      <table class="table is-striped is-hoverable is-fullwidth is-size-7">
+        <thead>
+          <tr>
+            <th style="width: 2rem"></th>
+            <th>Data Center</th>
+            <th>Last Seen</th>
+            <th>Entries</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Groups}}
+          {{$dcId := .DCOrbID}}
+          <tr class="divergence-group-row" data-dc="{{$dcId}}" onclick="toggleDivergenceGroup('{{$dcId}}', this)" style="cursor: pointer;">
+            <td><span class="icon is-small"><i class="fas fa-chevron-right divergence-chevron"></i></span></td>
+            <td>{{.DCOrbID}}</td>
+            <td>{{.LastSeenAt}}</td>
+            <td>{{.Total}}</td>
+            <td>
+              {{if .Pending}}<span class="tag is-light mr-1">{{.Pending}} pending</span>{{end}}
+              {{if .Accepted}}<span class="tag is-success is-light mr-1">{{.Accepted}} accepted</span>{{end}}
+              {{if .Ignored}}<span class="tag is-warning is-light mr-1">{{.Ignored}} ignored</span>{{end}}
+              {{if .Forced}}<span class="tag is-danger is-light mr-1">{{.Forced}} forced</span>{{end}}
+            </td>
+          </tr>
+          <tr class="divergence-group-detail" data-dc="{{$dcId}}" style="display:none;">
+            <td></td>
+            <td colspan="4">
+              <table class="table is-fullwidth is-size-7" style="margin-bottom:0;">
+                <thead>
+                  <tr>
+                    <th>Config Item</th>
+                    <th>Field</th>
+                    <th>Intended</th>
+                    <th>Override</th>
+                    <th>Who</th>
+                    <th>First Seen</th>
+                    <th>Status</th>
+                    {{if $.CanResolve}}<th></th>{{end}}
+                  </tr>
+                </thead>
+                <tbody>
+                  {{range .Rows}}
+                  <tr data-entry-id="{{.ID}}">
+                    <td>{{.EntryOrbID}}</td>
+                    <td>{{.Field}}</td>
+                    <td><code>{{.IntendedValue}}</code></td>
+                    <td><code>{{.OverrideValue}}</code></td>
+                    <td>{{.Who}}</td>
+                    <td>{{.FirstSeenAt}}</td>
+                    <td>
+                      {{if eq .ResolutionAction "accept"}}
+                        <span class="tag is-success is-light" title="Decided by {{.ResolutionActor}} on {{.DecidedAt}}">accepted</span>
+                      {{else if eq .ResolutionAction "force"}}
+                        {{if .CbConsumed}}
+                          <span class="tag is-danger is-light" title="Decided by {{.ResolutionActor}} on {{.DecidedAt}}">forced (applied)</span>
+                        {{else}}
+                          <span class="tag is-danger is-light" title="Decided by {{.ResolutionActor}} on {{.DecidedAt}}">forced (queued)</span>
+                        {{end}}
+                      {{else if eq .ResolutionAction "ignore"}}
+                        <span class="tag is-warning is-light" title="Decided by {{.ResolutionActor}} on {{.DecidedAt}}">ignored</span>
+                      {{else}}
+                        <span class="tag is-light">pending</span>
+                      {{end}}
+                    </td>
+                    {{if $.CanResolve}}
+                    <td>
+                      <div class="buttons has-addons" style="margin-bottom:0; flex-wrap:nowrap;">
+                        <button
+                          class="button is-small is-success{{if eq .ResolutionAction "accept"}} is-selected{{else}} is-outlined{{end}}"
+                          onclick="resolveDivergence('{{.ID}}', 'accept', this)"
+                          {{if eq .ResolutionAction "accept"}}disabled{{end}}
+                          title="Record acceptance; update intent via the normal UI"
+                          style="width:5rem;"
+                        >Accept</button>
+                        <button
+                          class="button is-small is-warning{{if eq .ResolutionAction "ignore"}} is-selected{{else}} is-outlined{{end}}"
+                          onclick="resolveDivergence('{{.ID}}', 'ignore', this)"
+                          {{if eq .ResolutionAction "ignore"}}disabled{{end}}
+                          title="Acknowledge without effect"
+                          style="width:5rem;"
+                        >Ignore</button>
+                        <button
+                          class="button is-small is-danger{{if eq .ResolutionAction "force"}} is-selected{{else}} is-outlined{{end}}"
+                          onclick="resolveDivergence('{{.ID}}', 'force', this)"
+                          {{if eq .ResolutionAction "force"}}disabled{{end}}
+                          title="Next bundle re-takes ownership of this field"
+                          style="width:5rem;"
+                        >Force</button>
+                      </div>
+                    </td>
+                    {{end}}
+                  </tr>
+                  {{end}}
+                </tbody>
+              </table>
+            </td>
+          </tr>
+          {{else}}
+          <tr><td colspan="5" class="has-text-grey">No divergence reports.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
 
       {{end}}
     </div>

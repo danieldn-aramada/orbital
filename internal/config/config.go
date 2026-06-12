@@ -39,6 +39,12 @@ type Config struct {
 	BackupRetentionDays     int           `envconfig:"ORBITAL_BACKUP_RETENTION_DAYS"    default:"14"`       // delete backups older than N days; 0 = no time-based pruning
 	BackupRetentionMinCount int           `envconfig:"ORBITAL_BACKUP_RETENTION_MIN_COUNT" default:"3"`     // always keep at least N backups regardless of age
 	BackupSchedule   string `envconfig:"ORBITAL_BACKUP_SCHEDULE"    default:""`    // cron expression for in-process scheduler (e.g. "0 8 * * *" = midnight PT); empty = disabled
+	// DivergenceIngestEnabled toggles the S3 poller that ingests divergence
+	// snapshots published by orbs. Defaults on so `make run-orbital` picks up
+	// snapshots seeded by scripts/seed-divergence-s3.sh without extra env vars.
+	// Production AKS overrides interval via deploy/base/deploy.yaml.
+	DivergenceIngestEnabled bool          `envconfig:"ORBITAL_DIVERGENCE_INGEST_ENABLED" default:"true"`
+	DivergencePollInterval  time.Duration `envconfig:"ORBITAL_DIVERGENCE_POLL_INTERVAL"  default:"10s"`
 	OIDCIssuerURL          string        `envconfig:"ORBITAL_OIDC_ISSUER_URL"         default:"https://login.microsoftonline.com/8f231c2a-9551-4b40-be17-5b24afe5e890/v2.0"`
 	OIDCClientID           string        `envconfig:"ORBITAL_OIDC_CLIENT_ID"          default:"5fc832f6-843e-4207-93dd-b3c3a77c06f2"`
 	OIDCClientSecret       string        `envconfig:"ORBITAL_OIDC_CLIENT_SECRET"      default:""`

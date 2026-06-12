@@ -21,6 +21,30 @@ func (f BackupFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, erro
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BackupMutation", m)
 }
 
+// The DivergenceEntryFunc type is an adapter to allow the use of ordinary
+// function as DivergenceEntry mutator.
+type DivergenceEntryFunc func(context.Context, *ent.DivergenceEntryMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f DivergenceEntryFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.DivergenceEntryMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DivergenceEntryMutation", m)
+}
+
+// The DivergenceResolutionFunc type is an adapter to allow the use of ordinary
+// function as DivergenceResolution mutator.
+type DivergenceResolutionFunc func(context.Context, *ent.DivergenceResolutionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f DivergenceResolutionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.DivergenceResolutionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DivergenceResolutionMutation", m)
+}
+
 // The EventFunc type is an adapter to allow the use of ordinary
 // function as Event mutator.
 type EventFunc func(context.Context, *ent.EventMutation) (ent.Value, error)

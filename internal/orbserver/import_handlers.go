@@ -13,10 +13,47 @@ import (
 	"strings"
 	"time"
 
+	"github.com/armada/orbital/internal/divergence"
 	"github.com/armada/orbital/internal/oci"
 	"github.com/armada/orbital/internal/orb"
 	"github.com/labstack/echo/v4"
 )
+
+// extractMappingLayer pulls the divergence-mapping layer (if present) out of
+// extraLayers, persists it to the local mapping store keyed by bundle digest,
+// and returns a LayerRecord describing the outcome. The mapping entry is
+// removed from extraLayers so the dispatcher doesn't try to ship it to a
+// consumer. Returns nil when no mapping layer is present.
+//
+// Bundles arriving via `POST /api/v1/import/artifact` (direct upload) usually
+// have no digest; in that case the mapping is logged as unknown and not
+// persisted — divergence reports keyed by digest will fail to resolve, which
+// is the right signal that the artifact-upload path doesn't carry mappings
+// through to divergence reporting end-to-end.
+func (s *Server) extractMappingLayer(extraLayers map[string][]byte, digest string) *orb.LayerRecord {
+	payload, ok := extraLayers[divergence.MediaTypeMapping]
+	if !ok {
+		return nil
+	}
+	delete(extraLayers, divergence.MediaTypeMapping)
+
+	rec := orb.LayerRecord{
+		MediaType: divergence.MediaTypeMapping,
+		Role:      orb.LayerRoleMapping,
+	}
+	if s.mappingStore == nil || digest == "" {
+		s.logger.Warn("divergence mapping layer received but cannot persist", "digestEmpty", digest == "", "storeNil", s.mappingStore == nil)
+		rec.Role = orb.LayerRoleUnknown
+		return &rec
+	}
+	if err := s.mappingStore.Save(digest, payload); err != nil {
+		s.logger.Warn("divergence mapping save failed", "digest", digest, "err", err)
+		rec.Role = orb.LayerRoleUnknown
+		return &rec
+	}
+	s.logger.Info("divergence mapping stored", "digest", digest, "bytes", len(payload))
+	return &rec
+}
 
 // @Summary     Trigger import
 // @Description Starts an async OCI artifact pull and DGraph import for the requested tag. Returns 409 if an import is already running.
@@ -90,11 +127,18 @@ func (s *Server) triggerImport(c echo.Context) error {
 			return
 		}
 
-		// Best-effort consumer dispatch for extra (non-graph) layers.
+		// Divergence mapping layer (if present) is stored locally for later
+		// translation, not dispatched to a consumer. Must run before Dispatch
+		// so the mapping doesn't get shipped to cb-controller as a payload.
+		var layerRecords []orb.LayerRecord
+		if mappingRec := s.extractMappingLayer(artifact.ExtraLayers, meta.Digest); mappingRec != nil {
+			layerRecords = append(layerRecords, *mappingRec)
+		}
+
+		// Best-effort consumer dispatch for the remaining (non-graph, non-mapping) layers.
 		importID := newImportID()
 		if len(artifact.ExtraLayers) > 0 && s.dispatcher != nil {
 			results := s.dispatcher.Dispatch(ctx, artifact.ExtraLayers, meta.Tag, meta.Digest, importID)
-			var layerRecords []orb.LayerRecord
 			dispatched := make(map[string]bool, len(results))
 			for i := range results {
 				dr := results[i]
@@ -113,6 +157,8 @@ func (s *Server) triggerImport(c echo.Context) error {
 					})
 				}
 			}
+		}
+		if len(layerRecords) > 0 {
 			if err := orb.AppendLayersToLastHistory(s.cfg.DataDir, layerRecords); err != nil {
 				s.logger.Warn("append layers to history failed", "err", err)
 			}
@@ -373,8 +419,15 @@ func (s *Server) importArtifact(c echo.Context) error {
 			return
 		}
 
-		// Best-effort consumer dispatch for extra layers.
+		// Divergence mapping layer goes to local storage, not dispatch.
+		// Manual-upload path has no digest, so the mapping (if present)
+		// is logged as unknown — this path doesn't support divergence-by-digest.
 		var layerRecords []orb.LayerRecord
+		if mappingRec := s.extractMappingLayer(extraLayers, ""); mappingRec != nil {
+			layerRecords = append(layerRecords, *mappingRec)
+		}
+
+		// Best-effort consumer dispatch for remaining extra layers.
 		if len(extraLayers) > 0 && s.dispatcher != nil {
 			results := s.dispatcher.Dispatch(ctx, extraLayers, tag, "", importID)
 			dispatched := make(map[string]bool, len(results))
@@ -395,6 +448,8 @@ func (s *Server) importArtifact(c echo.Context) error {
 					})
 				}
 			}
+		}
+		if len(layerRecords) > 0 {
 			if err := orb.AppendLayersToLastHistory(s.cfg.DataDir, layerRecords); err != nil {
 				s.logger.Warn("failed to append layer records to history", "err", err)
 			}

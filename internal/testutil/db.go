@@ -58,6 +58,8 @@ func truncateAll(dsn string) error {
 		"restore_jobs",
 		"export_jobs",
 		"backups",
+		"divergence_resolutions",
+		"divergence_entries",
 		"event_resource_types",
 		"event_resources",
 		"events",

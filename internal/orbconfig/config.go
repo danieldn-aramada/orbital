@@ -77,6 +77,12 @@ type Config struct {
 	// DGraph zero gRPC endpoint — used by the dgraph live subprocess during import.
 	DGraphZeroGRPC string `envconfig:"ORB_DGRAPH_ZERO_GRPC" default:"localhost:5082"`
 
+	// DivergencePublishSchedule is a cron expression for the divergence publish
+	// scheduler. Empty (default) disables the scheduler — divergence is published
+	// only by the manual UI button. Example: "0 9 * * *" → daily at 09:00 UTC.
+	// Mirrors orbital's ORBITAL_BACKUP_SCHEDULE pattern.
+	DivergencePublishSchedule string `envconfig:"ORB_DIVERGENCE_PUBLISH_SCHEDULE" default:""`
+
 	LogLevel string `envconfig:"ORB_LOG_LEVEL" default:"info"`
 }
 

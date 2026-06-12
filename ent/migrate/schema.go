@@ -34,6 +34,75 @@ var (
 		Columns:    BackupsColumns,
 		PrimaryKey: []*schema.Column{BackupsColumns[0]},
 	}
+	// DivergenceEntriesColumns holds the columns for the "divergence_entries" table.
+	DivergenceEntriesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_at", Type: field.TypeTime, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "dc_orb_id", Type: field.TypeString},
+		{Name: "entry_orb_id", Type: field.TypeString},
+		{Name: "field", Type: field.TypeString},
+		{Name: "type_name", Type: field.TypeString, Nullable: true, Default: ""},
+		{Name: "intended_value", Type: field.TypeJSON, Nullable: true},
+		{Name: "override_value", Type: field.TypeJSON, Nullable: true},
+		{Name: "who", Type: field.TypeString},
+		{Name: "first_seen_at", Type: field.TypeTime},
+		{Name: "last_seen_at", Type: field.TypeTime},
+		{Name: "last_snapshot_published_at", Type: field.TypeTime},
+	}
+	// DivergenceEntriesTable holds the schema information for the "divergence_entries" table.
+	DivergenceEntriesTable = &schema.Table{
+		Name:       "divergence_entries",
+		Columns:    DivergenceEntriesColumns,
+		PrimaryKey: []*schema.Column{DivergenceEntriesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "divergenceentry_dc_orb_id_entry_orb_id_field",
+				Unique:  true,
+				Columns: []*schema.Column{DivergenceEntriesColumns[5], DivergenceEntriesColumns[6], DivergenceEntriesColumns[7]},
+			},
+			{
+				Name:    "divergenceentry_dc_orb_id_last_seen_at",
+				Unique:  false,
+				Columns: []*schema.Column{DivergenceEntriesColumns[5], DivergenceEntriesColumns[13]},
+			},
+		},
+	}
+	// DivergenceResolutionsColumns holds the columns for the "divergence_resolutions" table.
+	DivergenceResolutionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_at", Type: field.TypeTime, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "entry_orb_id", Type: field.TypeString},
+		{Name: "field", Type: field.TypeString},
+		{Name: "action", Type: field.TypeEnum, Enums: []string{"accept", "force", "ignore"}},
+		{Name: "actor", Type: field.TypeString},
+		{Name: "decided_at", Type: field.TypeTime},
+		{Name: "cb_consumed", Type: field.TypeBool, Default: false},
+		{Name: "cb_consumed_at", Type: field.TypeTime, Nullable: true},
+	}
+	// DivergenceResolutionsTable holds the schema information for the "divergence_resolutions" table.
+	DivergenceResolutionsTable = &schema.Table{
+		Name:       "divergence_resolutions",
+		Columns:    DivergenceResolutionsColumns,
+		PrimaryKey: []*schema.Column{DivergenceResolutionsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "divergenceresolution_entry_orb_id_field",
+				Unique:  true,
+				Columns: []*schema.Column{DivergenceResolutionsColumns[5], DivergenceResolutionsColumns[6]},
+			},
+			{
+				Name:    "divergenceresolution_action_cb_consumed",
+				Unique:  false,
+				Columns: []*schema.Column{DivergenceResolutionsColumns[7], DivergenceResolutionsColumns[10]},
+			},
+		},
+	}
 	// EventsColumns holds the columns for the "events" table.
 	EventsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -227,6 +296,8 @@ var (
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		BackupsTable,
+		DivergenceEntriesTable,
+		DivergenceResolutionsTable,
 		EventsTable,
 		EventResourcesTable,
 		EventResourceTypesTable,

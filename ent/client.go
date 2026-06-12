@@ -17,6 +17,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/armada/orbital/ent/backup"
+	"github.com/armada/orbital/ent/divergenceentry"
+	"github.com/armada/orbital/ent/divergenceresolution"
 	"github.com/armada/orbital/ent/event"
 	"github.com/armada/orbital/ent/eventresource"
 	"github.com/armada/orbital/ent/eventresourcetype"
@@ -34,6 +36,10 @@ type Client struct {
 	Schema *migrate.Schema
 	// Backup is the client for interacting with the Backup builders.
 	Backup *BackupClient
+	// DivergenceEntry is the client for interacting with the DivergenceEntry builders.
+	DivergenceEntry *DivergenceEntryClient
+	// DivergenceResolution is the client for interacting with the DivergenceResolution builders.
+	DivergenceResolution *DivergenceResolutionClient
 	// Event is the client for interacting with the Event builders.
 	Event *EventClient
 	// EventResource is the client for interacting with the EventResource builders.
@@ -62,6 +68,8 @@ func NewClient(opts ...Option) *Client {
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.Backup = NewBackupClient(c.config)
+	c.DivergenceEntry = NewDivergenceEntryClient(c.config)
+	c.DivergenceResolution = NewDivergenceResolutionClient(c.config)
 	c.Event = NewEventClient(c.config)
 	c.EventResource = NewEventResourceClient(c.config)
 	c.EventResourceType = NewEventResourceTypeClient(c.config)
@@ -160,17 +168,19 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:               ctx,
-		config:            cfg,
-		Backup:            NewBackupClient(cfg),
-		Event:             NewEventClient(cfg),
-		EventResource:     NewEventResourceClient(cfg),
-		EventResourceType: NewEventResourceTypeClient(cfg),
-		ExportJob:         NewExportJobClient(cfg),
-		Orb:               NewOrbClient(cfg),
-		RegistryArtifact:  NewRegistryArtifactClient(cfg),
-		RestoreJob:        NewRestoreJobClient(cfg),
-		User:              NewUserClient(cfg),
+		ctx:                  ctx,
+		config:               cfg,
+		Backup:               NewBackupClient(cfg),
+		DivergenceEntry:      NewDivergenceEntryClient(cfg),
+		DivergenceResolution: NewDivergenceResolutionClient(cfg),
+		Event:                NewEventClient(cfg),
+		EventResource:        NewEventResourceClient(cfg),
+		EventResourceType:    NewEventResourceTypeClient(cfg),
+		ExportJob:            NewExportJobClient(cfg),
+		Orb:                  NewOrbClient(cfg),
+		RegistryArtifact:     NewRegistryArtifactClient(cfg),
+		RestoreJob:           NewRestoreJobClient(cfg),
+		User:                 NewUserClient(cfg),
 	}, nil
 }
 
@@ -188,17 +198,19 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:               ctx,
-		config:            cfg,
-		Backup:            NewBackupClient(cfg),
-		Event:             NewEventClient(cfg),
-		EventResource:     NewEventResourceClient(cfg),
-		EventResourceType: NewEventResourceTypeClient(cfg),
-		ExportJob:         NewExportJobClient(cfg),
-		Orb:               NewOrbClient(cfg),
-		RegistryArtifact:  NewRegistryArtifactClient(cfg),
-		RestoreJob:        NewRestoreJobClient(cfg),
-		User:              NewUserClient(cfg),
+		ctx:                  ctx,
+		config:               cfg,
+		Backup:               NewBackupClient(cfg),
+		DivergenceEntry:      NewDivergenceEntryClient(cfg),
+		DivergenceResolution: NewDivergenceResolutionClient(cfg),
+		Event:                NewEventClient(cfg),
+		EventResource:        NewEventResourceClient(cfg),
+		EventResourceType:    NewEventResourceTypeClient(cfg),
+		ExportJob:            NewExportJobClient(cfg),
+		Orb:                  NewOrbClient(cfg),
+		RegistryArtifact:     NewRegistryArtifactClient(cfg),
+		RestoreJob:           NewRestoreJobClient(cfg),
+		User:                 NewUserClient(cfg),
 	}, nil
 }
 
@@ -228,8 +240,9 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Backup, c.Event, c.EventResource, c.EventResourceType, c.ExportJob, c.Orb,
-		c.RegistryArtifact, c.RestoreJob, c.User,
+		c.Backup, c.DivergenceEntry, c.DivergenceResolution, c.Event, c.EventResource,
+		c.EventResourceType, c.ExportJob, c.Orb, c.RegistryArtifact, c.RestoreJob,
+		c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -239,8 +252,9 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Backup, c.Event, c.EventResource, c.EventResourceType, c.ExportJob, c.Orb,
-		c.RegistryArtifact, c.RestoreJob, c.User,
+		c.Backup, c.DivergenceEntry, c.DivergenceResolution, c.Event, c.EventResource,
+		c.EventResourceType, c.ExportJob, c.Orb, c.RegistryArtifact, c.RestoreJob,
+		c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -251,6 +265,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
 	case *BackupMutation:
 		return c.Backup.mutate(ctx, m)
+	case *DivergenceEntryMutation:
+		return c.DivergenceEntry.mutate(ctx, m)
+	case *DivergenceResolutionMutation:
+		return c.DivergenceResolution.mutate(ctx, m)
 	case *EventMutation:
 		return c.Event.mutate(ctx, m)
 	case *EventResourceMutation:
@@ -402,6 +420,272 @@ func (c *BackupClient) mutate(ctx context.Context, m *BackupMutation) (Value, er
 		return (&BackupDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Backup mutation op: %q", m.Op())
+	}
+}
+
+// DivergenceEntryClient is a client for the DivergenceEntry schema.
+type DivergenceEntryClient struct {
+	config
+}
+
+// NewDivergenceEntryClient returns a client for the DivergenceEntry from the given config.
+func NewDivergenceEntryClient(c config) *DivergenceEntryClient {
+	return &DivergenceEntryClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `divergenceentry.Hooks(f(g(h())))`.
+func (c *DivergenceEntryClient) Use(hooks ...Hook) {
+	c.hooks.DivergenceEntry = append(c.hooks.DivergenceEntry, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `divergenceentry.Intercept(f(g(h())))`.
+func (c *DivergenceEntryClient) Intercept(interceptors ...Interceptor) {
+	c.inters.DivergenceEntry = append(c.inters.DivergenceEntry, interceptors...)
+}
+
+// Create returns a builder for creating a DivergenceEntry entity.
+func (c *DivergenceEntryClient) Create() *DivergenceEntryCreate {
+	mutation := newDivergenceEntryMutation(c.config, OpCreate)
+	return &DivergenceEntryCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of DivergenceEntry entities.
+func (c *DivergenceEntryClient) CreateBulk(builders ...*DivergenceEntryCreate) *DivergenceEntryCreateBulk {
+	return &DivergenceEntryCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *DivergenceEntryClient) MapCreateBulk(slice any, setFunc func(*DivergenceEntryCreate, int)) *DivergenceEntryCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &DivergenceEntryCreateBulk{err: fmt.Errorf("calling to DivergenceEntryClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*DivergenceEntryCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &DivergenceEntryCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for DivergenceEntry.
+func (c *DivergenceEntryClient) Update() *DivergenceEntryUpdate {
+	mutation := newDivergenceEntryMutation(c.config, OpUpdate)
+	return &DivergenceEntryUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *DivergenceEntryClient) UpdateOne(_m *DivergenceEntry) *DivergenceEntryUpdateOne {
+	mutation := newDivergenceEntryMutation(c.config, OpUpdateOne, withDivergenceEntry(_m))
+	return &DivergenceEntryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *DivergenceEntryClient) UpdateOneID(id uuid.UUID) *DivergenceEntryUpdateOne {
+	mutation := newDivergenceEntryMutation(c.config, OpUpdateOne, withDivergenceEntryID(id))
+	return &DivergenceEntryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for DivergenceEntry.
+func (c *DivergenceEntryClient) Delete() *DivergenceEntryDelete {
+	mutation := newDivergenceEntryMutation(c.config, OpDelete)
+	return &DivergenceEntryDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *DivergenceEntryClient) DeleteOne(_m *DivergenceEntry) *DivergenceEntryDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *DivergenceEntryClient) DeleteOneID(id uuid.UUID) *DivergenceEntryDeleteOne {
+	builder := c.Delete().Where(divergenceentry.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &DivergenceEntryDeleteOne{builder}
+}
+
+// Query returns a query builder for DivergenceEntry.
+func (c *DivergenceEntryClient) Query() *DivergenceEntryQuery {
+	return &DivergenceEntryQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeDivergenceEntry},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a DivergenceEntry entity by its id.
+func (c *DivergenceEntryClient) Get(ctx context.Context, id uuid.UUID) (*DivergenceEntry, error) {
+	return c.Query().Where(divergenceentry.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *DivergenceEntryClient) GetX(ctx context.Context, id uuid.UUID) *DivergenceEntry {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *DivergenceEntryClient) Hooks() []Hook {
+	return c.hooks.DivergenceEntry
+}
+
+// Interceptors returns the client interceptors.
+func (c *DivergenceEntryClient) Interceptors() []Interceptor {
+	return c.inters.DivergenceEntry
+}
+
+func (c *DivergenceEntryClient) mutate(ctx context.Context, m *DivergenceEntryMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&DivergenceEntryCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&DivergenceEntryUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&DivergenceEntryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&DivergenceEntryDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown DivergenceEntry mutation op: %q", m.Op())
+	}
+}
+
+// DivergenceResolutionClient is a client for the DivergenceResolution schema.
+type DivergenceResolutionClient struct {
+	config
+}
+
+// NewDivergenceResolutionClient returns a client for the DivergenceResolution from the given config.
+func NewDivergenceResolutionClient(c config) *DivergenceResolutionClient {
+	return &DivergenceResolutionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `divergenceresolution.Hooks(f(g(h())))`.
+func (c *DivergenceResolutionClient) Use(hooks ...Hook) {
+	c.hooks.DivergenceResolution = append(c.hooks.DivergenceResolution, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `divergenceresolution.Intercept(f(g(h())))`.
+func (c *DivergenceResolutionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.DivergenceResolution = append(c.inters.DivergenceResolution, interceptors...)
+}
+
+// Create returns a builder for creating a DivergenceResolution entity.
+func (c *DivergenceResolutionClient) Create() *DivergenceResolutionCreate {
+	mutation := newDivergenceResolutionMutation(c.config, OpCreate)
+	return &DivergenceResolutionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of DivergenceResolution entities.
+func (c *DivergenceResolutionClient) CreateBulk(builders ...*DivergenceResolutionCreate) *DivergenceResolutionCreateBulk {
+	return &DivergenceResolutionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *DivergenceResolutionClient) MapCreateBulk(slice any, setFunc func(*DivergenceResolutionCreate, int)) *DivergenceResolutionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &DivergenceResolutionCreateBulk{err: fmt.Errorf("calling to DivergenceResolutionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*DivergenceResolutionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &DivergenceResolutionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for DivergenceResolution.
+func (c *DivergenceResolutionClient) Update() *DivergenceResolutionUpdate {
+	mutation := newDivergenceResolutionMutation(c.config, OpUpdate)
+	return &DivergenceResolutionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *DivergenceResolutionClient) UpdateOne(_m *DivergenceResolution) *DivergenceResolutionUpdateOne {
+	mutation := newDivergenceResolutionMutation(c.config, OpUpdateOne, withDivergenceResolution(_m))
+	return &DivergenceResolutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *DivergenceResolutionClient) UpdateOneID(id uuid.UUID) *DivergenceResolutionUpdateOne {
+	mutation := newDivergenceResolutionMutation(c.config, OpUpdateOne, withDivergenceResolutionID(id))
+	return &DivergenceResolutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for DivergenceResolution.
+func (c *DivergenceResolutionClient) Delete() *DivergenceResolutionDelete {
+	mutation := newDivergenceResolutionMutation(c.config, OpDelete)
+	return &DivergenceResolutionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *DivergenceResolutionClient) DeleteOne(_m *DivergenceResolution) *DivergenceResolutionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *DivergenceResolutionClient) DeleteOneID(id uuid.UUID) *DivergenceResolutionDeleteOne {
+	builder := c.Delete().Where(divergenceresolution.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &DivergenceResolutionDeleteOne{builder}
+}
+
+// Query returns a query builder for DivergenceResolution.
+func (c *DivergenceResolutionClient) Query() *DivergenceResolutionQuery {
+	return &DivergenceResolutionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeDivergenceResolution},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a DivergenceResolution entity by its id.
+func (c *DivergenceResolutionClient) Get(ctx context.Context, id uuid.UUID) (*DivergenceResolution, error) {
+	return c.Query().Where(divergenceresolution.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *DivergenceResolutionClient) GetX(ctx context.Context, id uuid.UUID) *DivergenceResolution {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *DivergenceResolutionClient) Hooks() []Hook {
+	return c.hooks.DivergenceResolution
+}
+
+// Interceptors returns the client interceptors.
+func (c *DivergenceResolutionClient) Interceptors() []Interceptor {
+	return c.inters.DivergenceResolution
+}
+
+func (c *DivergenceResolutionClient) mutate(ctx context.Context, m *DivergenceResolutionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&DivergenceResolutionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&DivergenceResolutionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&DivergenceResolutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&DivergenceResolutionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown DivergenceResolution mutation op: %q", m.Op())
 	}
 }
 
@@ -1536,11 +1820,13 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Backup, Event, EventResource, EventResourceType, ExportJob, Orb,
-		RegistryArtifact, RestoreJob, User []ent.Hook
+		Backup, DivergenceEntry, DivergenceResolution, Event, EventResource,
+		EventResourceType, ExportJob, Orb, RegistryArtifact, RestoreJob,
+		User []ent.Hook
 	}
 	inters struct {
-		Backup, Event, EventResource, EventResourceType, ExportJob, Orb,
-		RegistryArtifact, RestoreJob, User []ent.Interceptor
+		Backup, DivergenceEntry, DivergenceResolution, Event, EventResource,
+		EventResourceType, ExportJob, Orb, RegistryArtifact, RestoreJob,
+		User []ent.Interceptor
 	}
 )
