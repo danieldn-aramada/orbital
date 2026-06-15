@@ -6,7 +6,8 @@ type UIConfig struct {
 	BasePath string
 	Version  string
 	// Tagline is rendered below the brand in the navbar when non-empty.
-	Tagline string
+	// Each slice entry is one line.
+	Tagline []string
 	// MoreLinks is the list of items rendered in the "More" dropdown in the navbar.
 	MoreLinks []NavItem
 	ShowAuth   bool

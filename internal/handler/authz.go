@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -165,7 +166,7 @@ func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 					"uri", c.Request().URL.Path,
 					"reason", "unauthenticated",
 				)
-				return echo.ErrForbidden
+				return echo.NewHTTPError(http.StatusForbidden, "not authenticated — sign in and retry")
 			}
 			u, err := db.User.Get(c.Request().Context(), userID)
 			if err != nil {
@@ -175,7 +176,7 @@ func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 					"uri", c.Request().URL.Path,
 					"reason", "user_not_found",
 				)
-				return echo.ErrForbidden
+				return echo.NewHTTPError(http.StatusForbidden, "user record not found — sign in and retry")
 			}
 			if !RoleAtLeast(u.Role, minRole) {
 				slog.Default().Warn("authorization denied",
@@ -196,7 +197,7 @@ func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 						"userRole":     string(u.Role),
 					},
 				)
-				return echo.ErrForbidden
+				return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("role %q is below required %q for this action", u.Role, minRole))
 			}
 			return next(c)
 		}

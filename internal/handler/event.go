@@ -178,7 +178,7 @@ func (h *EventHandler) List(c echo.Context) error {
 				json.Unmarshal(e.Details, &d) //nolint:errcheck
 			}
 			if d.Before != nil && len(resTypes) > 0 {
-				item.DiffHTML = buildDiffHTML(d.Before, d.Variables, resTypes[0])
+				item.DiffHTML = buildDiffHTML(d.Before, d.Variables)
 			}
 			if item.DiffHTML == "" {
 				item.VarSummary = buildVarSummary(e.Details)
@@ -236,21 +236,16 @@ func buildVarSummary(raw json.RawMessage) template.HTML {
 // buildDiffHTML computes a before/after line diff and returns colored HTML.
 // Returns "" when nothing changed.
 //
-// Generic across resource types: diffs every field present in BOTH before and
-// after (minus skipDiffFields metadata). No per-type allowlist. Adding a new
-// ConfigItem type produces diffs automatically.
+// Generic across resource types — no allowlist gating. The top-level field
+// loop diffs every field present in BOTH before and after (minus skipDiffFields
+// metadata). The nested-iDRAC block at the bottom fires whenever the before
+// snapshot includes idracSettings AND the mutation included idracInput. New
+// ConfigItem types produce diffs automatically without any edits here.
 //
 // Patch-style mutations (`update{Type}(input: {filter, set: $set})`) keep
 // after-values nested under variables["set"]; user-driven flat-shape edits
 // keep them at the top level. Both shapes work.
-//
-// resourceType remains a parameter for the Server-specific compound-mutation
-// block at the bottom — that handles the case where ONE user-driven event
-// touches both Server top-level fields AND nested IdracSettings via
-// `addIdracSettings(input: $idracInput, upsert: true)`. When that flow is
-// reshaped (e.g. dispatch IdracSettings as a separate audit event), the
-// compound block can be removed.
-func buildDiffHTML(before, variables map[string]any, resourceType string) template.HTML {
+func buildDiffHTML(before, variables map[string]any) template.HTML {
 	after := variables
 	if set, ok := variables["set"].(map[string]any); ok {
 		after = set
@@ -302,8 +297,11 @@ func buildDiffHTML(before, variables map[string]any, resourceType string) templa
 		sections.WriteString(`</pre></div>`)
 	}
 
-	// iDRAC diff — when the before-snapshot includes idracSettings and the mutation included idracInput
-	if resourceType == "Server" {
+	// iDRAC diff — data-driven, not gated on resourceType. Fires whenever the
+	// before-snapshot includes idracSettings AND the mutation included idracInput,
+	// regardless of whether the audit's recorded resourceType is "Server"
+	// (compound UpdateServerAndIdrac) or "IdracSettings" (idrac-only edit).
+	{
 		beforeIdrac, hasBefore := before["idracSettings"].(map[string]any)
 		afterIdracArr, _ := variables["idracInput"].([]any)
 		if hasBefore && len(afterIdracArr) > 0 {

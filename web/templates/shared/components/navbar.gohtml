@@ -1,7 +1,7 @@
 <nav class="navbar is-dark" role="navigation" aria-label="main navigation">
 
   <div class="navbar-brand">
-    <a class="navbar-item pl-5" href="{{.BasePath}}/" style="gap: 0.8rem;">
+    <a class="navbar-item pl-5 {{if .UI.Tagline}}pr-2{{else}}pr-5{{end}}" href="{{.BasePath}}/" style="gap: 0.8rem;">
       <img src="{{.BasePath}}/static/logo/logo-orbital.svg" alt="{{.UI.AppName}} logo" style="height: 1.5rem;">
       <span class="varela-round-regular has-text-white is-size-4"><strong>{{.UI.AppName}}</strong></span>
     </a>
@@ -18,7 +18,9 @@
     <div class="navbar-start">
       {{if .UI.Tagline}}
       <div class="navbar-item">
-        <div class="is-size-7 has-text-grey-light">{{.UI.Tagline}}</div>
+        <div class="is-size-7 has-text-grey-light" style="line-height: 1.2;">
+          {{range $i, $line := .UI.Tagline}}{{if $i}}<br>{{end}}{{$line}}{{end}}
+        </div>
       </div>
       {{end}}
       {{if .UI.APIDocPath}}

@@ -110,7 +110,7 @@ func TestBuildVarSummary_WithUserFields(t *testing.T) {
 func TestBuildDiffHTML_NoChange(t *testing.T) {
 	before := map[string]any{"name": "alpha"}
 	variables := map[string]any{"name": "alpha"}
-	got := buildDiffHTML(before, variables, "DataCenter")
+	got := buildDiffHTML(before, variables)
 	if got != "" {
 		t.Errorf("no change: expected empty HTML, got %q", got)
 	}
@@ -119,7 +119,7 @@ func TestBuildDiffHTML_NoChange(t *testing.T) {
 func TestBuildDiffHTML_FieldChanged(t *testing.T) {
 	before := map[string]any{"name": "alpha"}
 	variables := map[string]any{"name": "beta"}
-	got := string(buildDiffHTML(before, variables, "DataCenter"))
+	got := string(buildDiffHTML(before, variables))
 	if got == "" {
 		t.Fatal("changed field: expected non-empty HTML, got empty")
 	}
@@ -217,6 +217,45 @@ func TestValStr_JSONStringNormalized(t *testing.T) {
 	}
 }
 
+// idrac-only edits go through addIdracSettings(upsert: true) with the new
+// values nested in variables["idracInput"][0]. The before-snapshot is the
+// Server (resourceType == "Server") with idracSettings nested. The Server
+// top-level fields are unchanged — the diff must surface ONLY the idrac
+// field that changed, prefixed with "idrac:". Regression: idrac-only path
+// did not produce a diff because the proxy's before-fetch step gated on an
+// opName allowlist. The fix derives the resource type generically and uses
+// beforeFetchOverrides only for the nested-iDRAC exception. See graphql.go.
+func TestBuildDiffHTML_IdracOnlyChange(t *testing.T) {
+	before := map[string]any{
+		"hostname": "srv-a",
+		"idracSettings": map[string]any{
+			"firmwareVersion": "7.10.00.00",
+			"sshEnabled":      true,
+		},
+	}
+	variables := map[string]any{
+		"idracInput": []any{
+			map[string]any{
+				"firmwareVersion": "7.10.90.00",
+				"sshEnabled":      true,
+			},
+		},
+	}
+	got := string(buildDiffHTML(before, variables))
+	if got == "" {
+		t.Fatal("expected non-empty diff for idrac-only change")
+	}
+	if !strings.Contains(got, "idrac: firmwareVersion") {
+		t.Errorf("expected 'idrac: firmwareVersion' label in diff, got: %s", got)
+	}
+	if !strings.Contains(got, "-7.10.00.00") || !strings.Contains(got, "+7.10.90.00") {
+		t.Errorf("expected -/+ lines for firmwareVersion, got: %s", got)
+	}
+	if strings.Contains(got, "sshEnabled") {
+		t.Errorf("unchanged sshEnabled should not appear in diff, got: %s", got)
+	}
+}
+
 func TestBuildDiffHTML_UnchangedJSONFieldSuppressed(t *testing.T) {
 	// assetDataV2 arrives as a raw JSON string in the before-snapshot (from
 	// DGraph) but as a parsed map in mutation variables. They are logically
@@ -228,7 +267,7 @@ func TestBuildDiffHTML_UnchangedJSONFieldSuppressed(t *testing.T) {
 	before := map[string]any{"name": "old-name", "assetDataV2": assetJSON}
 	variables := map[string]any{"name": "new-name", "assetDataV2": assetMap}
 
-	got := string(buildDiffHTML(before, variables, "DataCenter"))
+	got := string(buildDiffHTML(before, variables))
 	if strings.Contains(got, "assetDataV2") {
 		t.Errorf("unchanged assetDataV2 should not appear in diff, got: %s", got)
 	}

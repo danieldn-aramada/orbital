@@ -161,6 +161,7 @@ func (h *UI) base(c echo.Context) layout.Base {
 		CurrentPath:       c.Request().URL.Path,
 		UI: layout.UIConfig{
 			AppName:     "Orbital",
+			Tagline:     []string{"Graph-native source of truth", "for modular data centers"},
 			BasePath:    h.basePath,
 			Version:     version,
 			ShowAuth:    true,
@@ -361,7 +362,7 @@ func (h *UI) DivergenceReports(c echo.Context) error {
 		Base:       base,
 		PageTitle:  "Divergence Reports",
 		Groups:     groups,
-		CanResolve: base.User.Role == "admin",
+		CanResolve: RoleAtLeast(user.Role(base.User.Role), user.RoleDev),
 	}
 	// HX-Request callers (the Refresh button) get just the table fragment.
 	if c.Request().Header.Get("HX-Request") == "true" {

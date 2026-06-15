@@ -16,24 +16,16 @@ export function gqlErrorMessage(json) {
 }
 window.gqlErrorMessage = gqlErrorMessage
 
-// gqlSurfaceErrors is the read-only-query counterpart: toasts on failure and
-// returns false so callers can bail. For modal mutations, call
-// gqlErrorMessage() directly and route the message into the modal's own
-// error notification (keeps the message visible where the user clicked).
+// gqlSurfaceErrors is the read-only-query counterpart: logs to console and
+// returns false so callers can bail. No UI banner — read queries that fail
+// should leave the table empty rather than overlay an alert on top of nav.
+// For modal mutations, call gqlErrorMessage() directly and route the message
+// into the modal's own error notification.
 export function gqlSurfaceErrors(json, label) {
   const msg = gqlErrorMessage(json)
   if (!msg) return true
   // eslint-disable-next-line no-console
-  console.error(`[graphql] ${label} failed:`, json.errors)
-  if (window.bulmaToast) {
-    window.bulmaToast.toast({
-      message: `${label} failed: ${msg}`,
-      type: 'is-danger',
-      duration: 6000,
-      position: 'top-center',
-      dismissible: true,
-    })
-  }
+  console.error(`[graphql] ${label} failed:`, msg, json.errors)
   return false
 }
 window.gqlSurfaceErrors = gqlSurfaceErrors

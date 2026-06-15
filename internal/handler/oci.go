@@ -203,9 +203,10 @@ func (h *OCI) Publish(c echo.Context) error {
 		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 		c.Response().Header().Set("HX-Trigger", "refreshExportJobs")
 		return tmpl.ExecuteTemplate(c.Response().Writer, "publish-modal-progress", publishProgressData{
-			BasePath:   h.basePath,
-			ArtifactID: artifact.ID,
-			Phase:      string(artifact.Status),
+			BasePath:     h.basePath,
+			ArtifactID:   artifact.ID,
+			Phase:        string(artifact.Status),
+			BundlerNames: h.bundlerNamesLabel(),
 		})
 	}
 
@@ -374,9 +375,26 @@ func parseBundlerSpec(spec string) (name, url string) {
 }
 
 type publishProgressData struct {
-	BasePath   string
-	ArtifactID int
-	Phase      string // current registry_artifact.status: pending|bundling|pushing|signing
+	BasePath     string
+	ArtifactID   int
+	Phase        string // current registry_artifact.status: pending|bundling|pushing|signing
+	BundlerNames string // comma-joined names from ORBITAL_BUNDLER_URLS (e.g. "configbundle-bundler"), surfaced in the bundling step label
+}
+
+// bundlerNamesLabel parses the configured ORBITAL_BUNDLER_URLS into a
+// human-readable label for the publish progress modal. Multiple bundlers are
+// joined with ", ". Empty defaults yield "bundler" so the label degrades
+// gracefully rather than collapsing to nothing.
+func (h *OCI) bundlerNamesLabel() string {
+	if len(h.defaultBundlerURLs) == 0 {
+		return "bundler"
+	}
+	names := make([]string, 0, len(h.defaultBundlerURLs))
+	for _, spec := range h.defaultBundlerURLs {
+		name, _ := parseBundlerSpec(spec)
+		names = append(names, name)
+	}
+	return strings.Join(names, ", ")
 }
 
 type publishResultData struct {
@@ -402,9 +420,10 @@ func (h *OCI) renderArtifactFragment(c echo.Context, a *ent.RegistryArtifact) er
 			return fmt.Errorf("parse publish-modal-progress: %w", err)
 		}
 		return tmpl.ExecuteTemplate(c.Response().Writer, "publish-modal-progress", publishProgressData{
-			BasePath:   h.basePath,
-			ArtifactID: a.ID,
-			Phase:      string(a.Status),
+			BasePath:     h.basePath,
+			ArtifactID:   a.ID,
+			Phase:        string(a.Status),
+			BundlerNames: h.bundlerNamesLabel(),
 		})
 	}
 

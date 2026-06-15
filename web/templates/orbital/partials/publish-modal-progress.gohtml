@@ -13,13 +13,13 @@
     <li>
       {{if eq .Phase "bundling"}}
         <span class="icon has-text-info"><i class="fa-solid fa-spinner fa-spin"></i></span>
-        <strong>Bundling (calling cb-bundler)…</strong>
+        <strong>Bundling (calling {{.BundlerNames}})…</strong>
       {{else if or (eq .Phase "pushing") (eq .Phase "signing") (eq .Phase "completed")}}
         <span class="icon has-text-success"><i class="fa-solid fa-check"></i></span>
-        <span class="has-text-grey">Bundling (calling cb-bundler)</span>
+        <span class="has-text-grey">Bundling (calling {{.BundlerNames}})</span>
       {{else}}
         <span class="icon has-text-grey-light"><i class="fa-regular fa-circle"></i></span>
-        <span class="has-text-grey-light">Bundling (calling cb-bundler)</span>
+        <span class="has-text-grey-light">Bundling (calling {{.BundlerNames}})</span>
       {{end}}
     </li>
     <li>

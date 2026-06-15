@@ -173,6 +173,7 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	api.POST("/divergence", s.receiveDivergence)
 	api.GET("/divergence", s.getDivergence)
 	api.POST("/divergence/publish", s.publishDivergence)
+	api.POST("/divergence/test-connection", s.testDivergenceConnection)
 
 	return s, nil
 }

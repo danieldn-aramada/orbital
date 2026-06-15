@@ -146,6 +146,12 @@ func NewPublisher(ctx context.Context, cfg PublisherConfig) (*Publisher, error) 
 	return &Publisher{store: store, ociRepo: cfg.OCIRepo}, nil
 }
 
+// Ping verifies the configured blob store is reachable with current credentials.
+// Used by the orb UI's "Test Connection" button on the divergence report page.
+func (p *Publisher) Ping(ctx context.Context) error {
+	return p.store.Ping(ctx)
+}
+
 // Publish writes a snapshot of the given entries to storage and returns the key.
 func (p *Publisher) Publish(ctx context.Context, entries []OverrideEntry) (string, error) {
 	now := time.Now().UTC()

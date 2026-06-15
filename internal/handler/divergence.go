@@ -336,16 +336,27 @@ func (h *DivergenceHandler) applyResolution(ctx context.Context, id uuid.UUID, a
 	// ("accept") is too ambiguous in the global audit log — `acceptDivergence`
 	// reads correctly out of context. Action enum stays as the raw verb;
 	// only the audit-facing operation name gets the noun.
+	//
+	// intendedValue/overrideValue carry the actual data: an `accept` event
+	// records the value orbital is now adopting; a `reject`/`ignore` records
+	// the value that was offered and refused. Without these, audit shows the
+	// metadata of the decision but loses the substance of what changed.
+	var intendedVal, overrideVal any
+	_ = json.Unmarshal(entry.IntendedValue, &intendedVal)
+	_ = json.Unmarshal(entry.OverrideValue, &overrideVal)
 	writeAuditEvent(h.db, h.logger, "management", actor, "resolveDivergence",
 		[]string{string(action) + "Divergence"},
 		[]string{"DivergenceEntry"},
 		[]string{entry.EntryOrbID + ":" + entry.Field},
 		map[string]any{
-			"entryId": entry.ID.String(),
-			"action":  string(action),
-			"orbId":   entry.EntryOrbID,
-			"field":   entry.Field,
-			"dcOrbId": entry.DcOrbID,
+			"entryId":       entry.ID.String(),
+			"action":        string(action),
+			"orbId":         entry.EntryOrbID,
+			"field":         entry.Field,
+			"dcOrbId":       entry.DcOrbID,
+			"typeName":      entry.TypeName,
+			"intendedValue": intendedVal,
+			"overrideValue": overrideVal,
 		},
 	)
 

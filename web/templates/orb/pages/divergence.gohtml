@@ -12,7 +12,7 @@
 
     <div class="field mb-4">
       <div class="control is-flex is-align-items-center" style="gap: 0.75rem;">
-        <button id="btn-refresh-divergence" class="button is-light is-small" onclick="refreshOrbDivergence()">
+        <button id="btn-refresh-divergence" class="button is-info is-small" onclick="refreshOrbDivergence()">
           <span class="icon"><i class="fa-solid fa-rotate"></i></span>
           <span>Refresh</span>
         </button>
@@ -21,6 +21,14 @@
             <span class="icon"><i class="fa-solid fa-upload"></i></span>
             <span>Publish to S3</span>
           </button>
+          <button id="btn-test-divergence-connection" type="button" class="button is-light is-small"
+                  hx-post="{{.BasePath}}/api/v1/divergence/test-connection"
+                  hx-target="#divergence-connection-result"
+                  hx-swap="innerHTML">
+            <span class="icon"><i class="fa-solid fa-plug"></i></span>
+            <span>Test Connection</span>
+          </button>
+          <span id="divergence-connection-result" class="is-size-7"></span>
         {{else}}
           <span class="tag is-warning is-light">S3 not configured — publish disabled</span>
         {{end}}

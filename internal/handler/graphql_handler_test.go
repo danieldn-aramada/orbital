@@ -105,6 +105,23 @@ func TestExtractOperations(t *testing.T) {
 			wantOps:   nil,
 			wantTypes: nil,
 		},
+		{
+			// Operation name must NOT be picked up — only body field calls. The
+			// idrac-only branch of the edit-server modal builds a query named
+			// "UpdateIdracSettings" whose body calls addIdracSettings(upsert:true).
+			// A regex that scans the whole query was logging both ops; we only
+			// want the body call.
+			name:      "operation name not scanned",
+			query:     `mutation UpdateIdracSettings($v: Int!) { addIdracSettings(input: $v, upsert: true) { numUids } }`,
+			wantOps:   []string{"addIdracSettings"},
+			wantTypes: []string{"IdracSettings"},
+		},
+		{
+			name:      "operation name with And — body wins",
+			query:     `mutation UpdateServerAndIdrac { updateServer(input:{}) { server { id } } addIdracSettings(input:[]) { numUids } }`,
+			wantOps:   []string{"updateServer", "addIdracSettings"},
+			wantTypes: []string{"Server", "IdracSettings"},
+		},
 	}
 
 	for _, tt := range tests {

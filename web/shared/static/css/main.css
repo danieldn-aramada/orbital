@@ -21696,11 +21696,7 @@ has-background-danger.is-hoverable:active {
   letter-spacing: normal !important;
 }
 
-.navbar-brand {
-  min-width: 10.5rem;
-}
 .navbar-brand .navbar-item {
-  padding-right: 1.5em;
   gap: 0.5rem;
   line-height: normal;
 }
@@ -21895,7 +21891,8 @@ div.dt-container:has(#audit-log-table) .dt-paging .pagination-link {
 }
 
 #export-jobs-table td,
-#artifacts-table td {
+#artifacts-table td,
+#import-history-table td {
   vertical-align: middle;
 }
 

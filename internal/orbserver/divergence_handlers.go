@@ -1,8 +1,10 @@
 package orbserver
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
 	"time"
 
@@ -173,4 +175,38 @@ func (s *Server) publishDivergence(c echo.Context) error {
 	}
 	s.logger.Info("divergence report published", "key", key, "entries", len(entries))
 	return c.JSON(http.StatusOK, map[string]string{"key": key})
+}
+
+// POST /api/v1/divergence/test-connection
+//
+// Verifies the configured S3/Azure Blob target is reachable. Mirrors
+// orbital's BackupHandler.TestConnection pattern: HX-Request callers get a
+// single-span HTML fragment ready to swap into a result slot; other callers
+// get JSON. Returns 503 when S3 is not configured so the same gating used by
+// publish surfaces consistently.
+func (s *Server) testDivergenceConnection(c echo.Context) error {
+	if s.divPublisher == nil {
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "S3 not configured")
+	}
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 10*time.Second)
+	defer cancel()
+	err := s.divPublisher.Ping(ctx)
+	if c.Request().Header.Get("HX-Request") == "true" {
+		return renderTestConnectionFragment(c, err)
+	}
+	if err != nil {
+		return c.JSON(http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, map[string]any{"ok": true})
+}
+
+// renderTestConnectionFragment writes the inline HTML span shown next to a
+// "Test Connection" button. Mirrors the orbital handler-package helper of the
+// same shape; kept inline (not a template file) because the markup is trivial
+// and lives at the same boundary in both apps.
+func renderTestConnectionFragment(c echo.Context, pingErr error) error {
+	if pingErr != nil {
+		return c.HTML(http.StatusOK, `<span class="has-text-danger"><i class="fa-solid fa-circle-xmark"></i> `+template.HTMLEscapeString(pingErr.Error())+`</span>`)
+	}
+	return c.HTML(http.StatusOK, `<span class="has-text-success"><i class="fa-solid fa-circle-check"></i> Connected</span>`)
 }

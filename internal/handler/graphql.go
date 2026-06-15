@@ -28,14 +28,19 @@ var orbIdFilterRe = regexp.MustCompile(`orbId\s*:\s*\{\s*eq\s*:\s*"([^"]+)"`)
 
 var mutationOpRe = regexp.MustCompile(`(?i)^\s*mutation\s+(\w+)`)
 
-// singleEntityTypes maps DGraph getter names to resource type labels, used for
-// best-effort resource_id extraction on single-entity mutations.
-var singleEntityTypes = map[string]string{
-	"UpdateDataCenter":        "DataCenter",
-	"UpdateServer":            "Server",
-	"UpdateServerAndIdrac":    "Server",
-	"UpdateKubernetesCluster": "KubernetesCluster",
-	"UpdateEksaConfig":        "EksaConfig",
+// beforeFetchOverrides maps an operation name to the resource type whose
+// `before` snapshot should be fetched. ONLY needed for compound or nested
+// mutations where the body's resource type is not the one we want to diff
+// against — e.g. iDRAC-only edits call addIdracSettings but the diff source
+// is the parent Server (idracSettings is nested in the Server snapshot).
+//
+// The default path (no override) derives the resource type from the mutation
+// body via extractOperations and fetches when variables carry `id` or `orbId`.
+// New simple `update{Type}($id, $set)` flows therefore audit with no edits
+// here — the override map shrinks to the entries that are genuine exceptions.
+var beforeFetchOverrides = map[string]string{
+	"UpdateServerAndIdrac": "Server", // body touches Server + IdracSettings; diff source is Server (idrac nested in snapshot).
+	"UpdateIdracSettings":  "Server", // body touches only IdracSettings; idrac variables carry no fetchable orbId — fetch parent Server, event.go's nested-idrac block consumes it.
 }
 
 // typeBeforeFields lists the DGraph fields to fetch in before-snapshots per type.
@@ -128,17 +133,27 @@ func (h *GraphQL) Handle(c echo.Context) error {
 
 	actor := actorFromContext(c)
 
-	// Fetch before-state for all known single-entity mutations (used for MVCC and audit diff).
+	// Fetch before-state for any single-entity mutation (used for MVCC and audit diff).
+	//
+	// Default rule: derive the resource type from the mutation body. If exactly
+	// one ConfigItem type is touched AND variables carry `id` or `orbId`, fetch
+	// before. Override map kicks in only when the diff source differs from the
+	// body's resource type (compound/nested cases — see beforeFetchOverrides).
 	var before map[string]any
-	resourceType, isSingleEntity := singleEntityTypes[opName]
-	if isSingleEntity {
-		getter := "get" + resourceType
+	resourceType, hasOverride := beforeFetchOverrides[opName]
+	if !hasOverride {
+		_, resourceTypes := extractOperations(req.Query)
+		if len(resourceTypes) == 1 {
+			resourceType = resourceTypes[0]
+		}
+	}
+	if resourceType != "" {
 		entityID, _ := req.Variables["id"].(string)
 		orbID, _ := req.Variables["orbId"].(string)
 
 		var fetchErr error
 		if entityID != "" {
-			before, fetchErr = h.fetchBeforeByID(getter, resourceType, entityID)
+			before, fetchErr = h.fetchBeforeByID("get"+resourceType, resourceType, entityID)
 		} else if orbID != "" {
 			before, fetchErr = h.fetchBeforeByOrbID("query"+resourceType, resourceType, orbID)
 		}
@@ -393,8 +408,17 @@ func (h *GraphQL) writeEvent(opName string, operations, resourceTypes, resourceI
 // extractOperations returns deduplicated DGraph operation names and resource type
 // names from all mutation calls in the query body.
 // e.g. two updateServer calls → operations: ["updateServer"], types: ["Server"]
+//
+// Scans only the body (everything after the first `{`), not the operation
+// signature — otherwise `mutation UpdateIdracSettings(...) { addIdracSettings(...) }`
+// would record both `updateIdracSettings` (from the operation name) and
+// `addIdracSettings` (from the body call).
 func extractOperations(query string) (operations []string, resourceTypes []string) {
-	matches := knownMutationRe.FindAllStringSubmatch(query, -1)
+	body := query
+	if i := strings.Index(query, "{"); i >= 0 {
+		body = query[i:]
+	}
+	matches := knownMutationRe.FindAllStringSubmatch(body, -1)
 	seenOp := map[string]bool{}
 	seenType := map[string]bool{}
 	for _, m := range matches {

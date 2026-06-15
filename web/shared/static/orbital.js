@@ -716,19 +716,20 @@ document.addEventListener('click', function (e) {
           // is chosen so the proxy's MVCC singleEntityTypes lookup matches when
           // the server is being touched (UpdateServer / UpdateServerAndIdrac).
           // Idrac-only edits use a distinct name; no server MVCC is needed.
-          const queryArgs = ['$updatedBy: String!', '$updatedAt: DateTime!']
+          const queryArgs = []
           const bodyParts = []
           const variables = {
             orbId: modal.dataset.orbId || '',
-            updatedBy: currentUser,
-            updatedAt: now,
           }
           if (serverChanged) {
             queryArgs.push(
+              '$updatedBy: String!', '$updatedAt: DateTime!',
               '$id: ID!', '$hostname: String', '$manufacturer: String', '$model: String',
               '$oobMAC: String', '$rackPosition: Int', '$serviceTag: String',
               '$version: Int',
             )
+            variables.updatedBy = currentUser
+            variables.updatedAt = now
             bodyParts.push(`updateServer(input: {
                   filter: { id: [$id] }
                   set: {
@@ -1295,6 +1296,16 @@ function confirmDivergenceBatch() {
       window.location.reload()
       return
     }
+    // Mark each failed row's Decision cell inline so the row itself shows the
+    // failure — the banner is a summary, the row is the source of truth.
+    failed.forEach(f => {
+      const row = document.querySelector(`tr[data-entry-id="${f.id}"]`)
+      if (!row) return
+      const decisionCell = row.querySelector('td:last-child')
+      if (decisionCell) {
+        decisionCell.innerHTML = `<span class="has-text-danger has-text-weight-medium" title="${f.error.replace(/"/g, '&quot;')}">failed</span>`
+      }
+    })
     const msg = okCount > 0
       ? `${okCount} applied, ${failed.length} failed:\n${failed.map(f => `• ${f.id}: ${f.error}`).join('\n')}`
       : `All ${failed.length} decisions failed:\n${failed.map(f => `• ${f.id}: ${f.error}`).join('\n')}`
@@ -1303,7 +1314,7 @@ function confirmDivergenceBatch() {
       errEl.style.whiteSpace = 'pre-line'
       errEl.textContent = msg
       errEl.style.display = ''
-      setTimeout(() => { errEl.style.display = 'none' }, 10000)
+      // Persistent — no auto-hide. User dismisses via reload/refresh or new submit.
     }
     if (submit) submit.classList.remove('is-loading')
     updateDivergenceBatchCounter()
