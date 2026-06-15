@@ -43,6 +43,17 @@
 
 set -euo pipefail
 
+# Rewrite localhost:<port> → host.docker.internal:<port> in every argument.
+# When this wrapper runs inside a Docker container (--network=local_default),
+# "localhost" resolves to the container's own loopback, not the Mac host.
+# host.docker.internal is Docker Desktop's stable alias for the Mac host IP,
+# so gRPC connections to -a localhost:9082 / -z localhost:5082 reach the
+# compose-exposed ports as intended.
+args=()
+for arg in "$@"; do
+  args+=("${arg//localhost/host.docker.internal}")
+done
+
 # /tmp is mounted because orbital's restore and orb's import write the
 # downloaded backup zip to a host-side temp dir, then pass that path as
 # the --files arg to `dgraph live`. The wrapper container needs to see
@@ -52,4 +63,4 @@ exec docker run --rm \
   -v /tmp:/tmp \
   -v "$PWD:$PWD" -w "$PWD" \
   dgraph/dgraph:v25.3.1 \
-  dgraph "$@"
+  dgraph "${args[@]}"

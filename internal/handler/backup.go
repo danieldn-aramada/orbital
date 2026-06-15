@@ -18,16 +18,10 @@ import (
 	"time"
 
 	entsql "entgo.io/ent/dialect/sql"
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/service"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/backup"
 	"github.com/armada/orbital/ent/restorejob"
+	"github.com/armada/orbital/internal/blobstore"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	cron "github.com/robfig/cron/v3"
@@ -51,14 +45,6 @@ func readSchemaVersion(schemaPath string) (string, error) {
 	return strings.TrimSpace(string(b)), nil
 }
 
-// blobStorage abstracts upload/download/delete over S3-compatible and Azure Blob backends.
-type blobStorage interface {
-	upload(ctx context.Context, localPath, key string) error
-	presignURL(ctx context.Context, key string) (string, error)
-	deleteObject(ctx context.Context, key string) error
-	ping(ctx context.Context) error
-}
-
 // schedulerAdvisoryLockKey is the PostgreSQL advisory lock key for the backup scheduler.
 // Transaction-scoped: auto-releases if the process crashes.
 const schedulerAdvisoryLockKey int64 = 5555100001
@@ -71,7 +57,7 @@ type BackupHandler struct {
 	dgraphExportDir          string
 	dgraphContainerExportDir string
 	schemaPath               string
-	storage                  blobStorage
+	storage                  blobstore.Store
 	s3Bucket                 string
 	s3Prefix                 string
 	s3Endpoint               string
@@ -104,14 +90,13 @@ type BackupConfig struct {
 }
 
 func NewBackupHandler(ctx context.Context, db *ent.Client, cfg BackupConfig, logger *slog.Logger) (*BackupHandler, error) {
-	var store blobStorage
-	var err error
-
-	if strings.Contains(cfg.S3Endpoint, ".blob.core.windows.net") {
-		store, err = newAzureStorage(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket)
-	} else {
-		store, err = newS3Storage(ctx, cfg.S3Endpoint, cfg.S3Region, cfg.S3Bucket, cfg.S3AccessKey, cfg.S3SecretKey)
-	}
+	store, err := blobstore.New(ctx, blobstore.Config{
+		Endpoint:  cfg.S3Endpoint,
+		Region:    cfg.S3Region,
+		Bucket:    cfg.S3Bucket,
+		AccessKey: cfg.S3AccessKey,
+		SecretKey: cfg.S3SecretKey,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +223,7 @@ func (h *BackupHandler) fire(ctx context.Context) {
 
 	writeAuditEvent(h.db, h.logger, "management", "scheduler", "createBackup",
 		[]string{"createBackup"}, nil, nil,
-		map[string]any{"jobId": job.ID.String(), "trigger": "scheduled"},
+		map[string]any{"id": job.ID.String(), "trigger": "scheduled"},
 	)
 	h.logger.Info("scheduled backup triggered", "jobId", job.ID)
 }
@@ -282,146 +267,6 @@ func (h *BackupHandler) StartScheduler(ctx context.Context) {
 	h.cronMu.Unlock()
 }
 
-// ── Azure Blob Storage backend ─────────────────────────────────────────────────
-
-type azureStorage struct {
-	client    *azblob.Client
-	svcClient *service.Client
-	container string
-	accountName string
-	accountKey  string
-}
-
-func newAzureStorage(endpoint, accountName, accountKey, container string) (*azureStorage, error) {
-	cred, err := azblob.NewSharedKeyCredential(accountName, accountKey)
-	if err != nil {
-		return nil, fmt.Errorf("azure shared key credential: %w", err)
-	}
-	client, err := azblob.NewClientWithSharedKeyCredential(endpoint, cred, nil)
-	if err != nil {
-		return nil, fmt.Errorf("azure blob client: %w", err)
-	}
-	svcCred, err := service.NewClientWithSharedKeyCredential(endpoint, cred, nil)
-	if err != nil {
-		return nil, fmt.Errorf("azure service client: %w", err)
-	}
-	return &azureStorage{client: client, svcClient: svcCred, container: container, accountName: accountName, accountKey: accountKey}, nil
-}
-
-func (a *azureStorage) upload(ctx context.Context, localPath, key string) error {
-	f, err := os.Open(localPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = a.client.UploadFile(ctx, a.container, key, f, nil)
-	return err
-}
-
-func (a *azureStorage) presignURL(ctx context.Context, key string) (string, error) {
-	cred, err := azblob.NewSharedKeyCredential(a.accountName, a.accountKey)
-	if err != nil {
-		return "", err
-	}
-	sasQueryParams, err := sas.BlobSignatureValues{
-		Protocol:      sas.ProtocolHTTPS,
-		StartTime:     time.Now().UTC(),
-		ExpiryTime:    time.Now().UTC().Add(presignTTL),
-		Permissions:   to(sas.BlobPermissions{Read: true}).String(),
-		ContainerName: a.container,
-		BlobName:      key,
-	}.SignWithSharedKey(cred)
-	if err != nil {
-		return "", err
-	}
-	blobURL := fmt.Sprintf("%s/%s/%s?%s", a.svcClient.URL(), a.container, key, sasQueryParams.Encode())
-	return blobURL, nil
-}
-
-func (a *azureStorage) deleteObject(ctx context.Context, key string) error {
-	_, err := a.client.DeleteBlob(ctx, a.container, key, nil)
-	return err
-}
-
-func (a *azureStorage) ping(ctx context.Context) error {
-	pager := a.client.NewListBlobsFlatPager(a.container, nil)
-	_, err := pager.NextPage(ctx)
-	return err
-}
-
-func to[T any](v T) *T { return &v }
-
-// ── S3-compatible backend ──────────────────────────────────────────────────────
-
-type s3Storage struct {
-	client  *s3.Client
-	presign *s3.PresignClient
-	bucket  string
-}
-
-func newS3Storage(ctx context.Context, endpoint, region, bucket, accessKey, secretKey string) (*s3Storage, error) {
-	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
-		awsconfig.WithRegion(region),
-		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
-		// MinIO doesn't emit x-amz-checksum-* response headers; WhenRequired
-		// silences the SDK's per-call "no supported checksum" warnings.
-		awsconfig.WithResponseChecksumValidation(aws.ResponseChecksumValidationWhenRequired),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("load aws config: %w", err)
-	}
-
-	opts := []func(*s3.Options){}
-	if endpoint != "" {
-		ep := endpoint
-		opts = append(opts, func(o *s3.Options) {
-			o.BaseEndpoint = &ep
-			o.UsePathStyle = true
-		})
-	}
-
-	client := s3.NewFromConfig(awsCfg, opts...)
-	return &s3Storage{client: client, presign: s3.NewPresignClient(client), bucket: bucket}, nil
-}
-
-func (s *s3Storage) upload(ctx context.Context, localPath, key string) error {
-	f, err := os.Open(localPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: &s.bucket,
-		Key:    &key,
-		Body:   f,
-	})
-	return err
-}
-
-func (s *s3Storage) presignURL(ctx context.Context, key string) (string, error) {
-	req, err := s.presign.PresignGetObject(ctx, &s3.GetObjectInput{
-		Bucket: &s.bucket,
-		Key:    &key,
-	}, s3.WithPresignExpires(presignTTL))
-	if err != nil {
-		return "", err
-	}
-	return req.URL, nil
-}
-
-func (s *s3Storage) deleteObject(ctx context.Context, key string) error {
-	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
-		Bucket: &s.bucket,
-		Key:    &key,
-	})
-	return err
-}
-
-func (s *s3Storage) ping(ctx context.Context) error {
-	_, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &s.bucket})
-	return err
-}
-
 // ── HTTP handlers ──────────────────────────────────────────────────────────────
 
 type backupResponse struct {
@@ -437,14 +282,33 @@ type backupResponse struct {
 	Error       *string `json:"error,omitempty"`
 }
 
-// TestConnection handles POST /api/v1/backup/test-connection
+// TestConnection handles POST /api/v1/backup/test-connection.
+//
+// Content negotiation: HTMX callers (HX-Request: true) get a single-span HTML
+// fragment ready to swap into a result slot. Other callers get JSON. The
+// fragment shape is the same on both backup and divergence pages — both read
+// from the same S3 storage backend, so one endpoint serves both UIs.
 func (h *BackupHandler) TestConnection(c echo.Context) error {
 	ctx, cancel := context.WithTimeout(c.Request().Context(), 10*time.Second)
 	defer cancel()
-	if err := h.storage.ping(ctx); err != nil {
+	err := h.storage.Ping(ctx)
+	if c.Request().Header.Get("HX-Request") == "true" {
+		return renderTestConnectionFragment(c, err)
+	}
+	if err != nil {
 		return c.JSON(http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
 	}
 	return c.JSON(http.StatusOK, map[string]any{"ok": true})
+}
+
+// renderTestConnectionFragment writes the inline HTML span shown next to a
+// "Test Connection" button. Kept inline (not a template file) because it's a
+// single element and the markup is trivial.
+func renderTestConnectionFragment(c echo.Context, pingErr error) error {
+	if pingErr != nil {
+		return c.HTML(http.StatusOK, `<span class="has-text-danger"><i class="fa-solid fa-circle-xmark"></i> `+template.HTMLEscapeString(pingErr.Error())+`</span>`)
+	}
+	return c.HTML(http.StatusOK, `<span class="has-text-success"><i class="fa-solid fa-circle-check"></i> Connected</span>`)
 }
 
 // Trigger handles POST /api/v1/backup
@@ -509,7 +373,7 @@ func (h *BackupHandler) Trigger(c echo.Context) error {
 		[]string{"createBackup"},
 		nil,
 		nil,
-		map[string]any{"jobId": job.ID.String(), "trigger": string(triggerVal)},
+		map[string]any{"id": job.ID.String(), "trigger": string(triggerVal)},
 	)
 
 	return c.JSON(http.StatusAccepted, triggerResponse{
@@ -604,7 +468,7 @@ func (h *BackupHandler) Download(c echo.Context) error {
 		return echo.ErrNotFound
 	}
 
-	url, err := h.storage.presignURL(c.Request().Context(), j.S3Key)
+	url, err := h.storage.PresignURL(c.Request().Context(), j.S3Key, presignTTL)
 	if err != nil {
 		return fmt.Errorf("presign: %w", err)
 	}
@@ -641,7 +505,7 @@ func (h *BackupHandler) Delete(c echo.Context) error {
 		return c.JSON(http.StatusConflict, map[string]string{"error": "cannot delete a backup that is in progress"})
 	}
 	if j.S3Key != "" {
-		if err := h.storage.deleteObject(c.Request().Context(), j.S3Key); err != nil {
+		if err := h.storage.Delete(c.Request().Context(), j.S3Key); err != nil {
 			h.logger.Warn("failed to delete backup from storage", "key", j.S3Key, "err", err)
 		}
 	}
@@ -750,9 +614,15 @@ func (h *BackupHandler) doBackup(ctx context.Context, jobID uuid.UUID, log *slog
 
 	storageKey := fmt.Sprintf("%s%s", h.s3Prefix, zipName)
 	log.Info("uploading backup", "bucket", h.s3Bucket, "key", storageKey)
-	if err := h.storage.upload(ctx, zipPath, storageKey); err != nil {
+	zf, err := os.Open(zipPath)
+	if err != nil {
+		return fmt.Errorf("open backup zip for upload: %w", err)
+	}
+	if err := h.storage.Put(ctx, storageKey, zf, "application/zip"); err != nil {
+		zf.Close()
 		return fmt.Errorf("upload: %w", err)
 	}
+	zf.Close()
 	log.Info("upload complete")
 
 	zipInfo, _ := os.Stat(zipPath)
@@ -870,7 +740,7 @@ func (h *BackupHandler) enforceRetention(ctx context.Context, log *slog.Logger) 
 
 	for _, old := range toDelete {
 		if old.S3Key != "" {
-			if err := h.storage.deleteObject(ctx, old.S3Key); err != nil {
+			if err := h.storage.Delete(ctx, old.S3Key); err != nil {
 				log.Warn("failed to delete old backup from storage", "key", old.S3Key, "err", err)
 			}
 		}

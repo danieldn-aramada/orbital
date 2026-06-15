@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/armada/orbital/ent/registryartifact"
+	"github.com/armada/orbital/internal/ocitype"
 	"github.com/google/uuid"
 )
 
@@ -203,6 +204,12 @@ func (_c *RegistryArtifactCreate) SetNillableBundlerError(v *string) *RegistryAr
 	return _c
 }
 
+// SetLayers sets the "layers" field.
+func (_c *RegistryArtifactCreate) SetLayers(v []ocitype.ArtifactLayer) *RegistryArtifactCreate {
+	_c.mutation.SetLayers(v)
+	return _c
+}
+
 // Mutation returns the RegistryArtifactMutation object of the builder.
 func (_c *RegistryArtifactCreate) Mutation() *RegistryArtifactMutation {
 	return _c.mutation
@@ -382,6 +389,10 @@ func (_c *RegistryArtifactCreate) createSpec() (*RegistryArtifact, *sqlgraph.Cre
 	if value, ok := _c.mutation.BundlerError(); ok {
 		_spec.SetField(registryartifact.FieldBundlerError, field.TypeString, value)
 		_node.BundlerError = &value
+	}
+	if value, ok := _c.mutation.Layers(); ok {
+		_spec.SetField(registryartifact.FieldLayers, field.TypeJSON, value)
+		_node.Layers = value
 	}
 	return _node, _spec
 }

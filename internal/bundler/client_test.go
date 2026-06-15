@@ -32,10 +32,12 @@ func TestClient_Enrich(t *testing.T) {
 					return
 				}
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode([]map[string]string{
-					{
-						"mediaType": "application/vnd.armada.configbundle.manifest.v1+yaml",
-						"data":      fakeB64,
+				json.NewEncoder(w).Encode(map[string]any{
+					"layers": []map[string]string{
+						{
+							"mediaType": "application/vnd.armada.configbundle.manifest.v1+yaml",
+							"data":      fakeB64,
+						},
 					},
 				})
 			},
@@ -43,10 +45,10 @@ func TestClient_Enrich(t *testing.T) {
 			wantData:   fakePayload,
 		},
 		{
-			name: "empty array is valid",
+			name: "empty layers list is valid",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				w.Write([]byte("[]"))
+				w.Write([]byte(`{"layers":[]}`))
 			},
 			wantLayers: 0,
 		},
@@ -54,9 +56,11 @@ func TestClient_Enrich(t *testing.T) {
 			name: "multiple layers returned",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode([]map[string]string{
-					{"mediaType": "application/vnd.armada.configbundle.manifest.v1+yaml", "data": fakeB64},
-					{"mediaType": "application/vnd.armada.other.v1+json", "data": base64.StdEncoding.EncodeToString([]byte("other"))},
+				json.NewEncoder(w).Encode(map[string]any{
+					"layers": []map[string]string{
+						{"mediaType": "application/vnd.armada.configbundle.manifest.v1+yaml", "data": fakeB64},
+						{"mediaType": "application/vnd.armada.other.v1+json", "data": base64.StdEncoding.EncodeToString([]byte("other"))},
+					},
 				})
 			},
 			wantLayers: 2,
@@ -80,7 +84,7 @@ func TestClient_Enrich(t *testing.T) {
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				// Write more than the cap (set to 10 bytes via WithMaxResponseBytes).
-				w.Write([]byte(`[{"mediaType":"x","data":"` + fakeB64 + `"}]`))
+				w.Write([]byte(`{"layers":[{"mediaType":"x","data":"` + fakeB64 + `"}]}`))
 			},
 			opts:       []ClientOption{WithMaxResponseBytes(10)},
 			wantErrSub: "byte limit",
@@ -89,7 +93,7 @@ func TestClient_Enrich(t *testing.T) {
 			name: "invalid base64 in data field",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				w.Write([]byte(`[{"mediaType":"x","data":"!!!not-base64!!!"}]`))
+				w.Write([]byte(`{"layers":[{"mediaType":"x","data":"!!!not-base64!!!"}]}`))
 			},
 			wantErrSub: "decode layer data",
 		},
@@ -101,18 +105,18 @@ func TestClient_Enrich(t *testing.T) {
 			wantErrSub: "decode bundler response",
 		},
 		{
-			name: "request body contains datacenter",
+			name: "request body contains orbId",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				var req Request
 				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 					http.Error(w, "bad request", http.StatusBadRequest)
 					return
 				}
-				if req.Datacenter != "colo-galleon" {
+				if req.OrbID != "colo:colo-galleon" {
 					http.Error(w, "unexpected request fields", http.StatusBadRequest)
 					return
 				}
-				w.Write([]byte("[]"))
+				w.Write([]byte(`{"layers":[]}`))
 			},
 			wantLayers: 0,
 		},
@@ -123,9 +127,9 @@ func TestClient_Enrich(t *testing.T) {
 			srv := httptest.NewServer(tt.handler)
 			defer srv.Close()
 
-			c := New(srv.URL, 5*time.Second, tt.opts...)
-			layers, err := c.Enrich(context.Background(), Request{
-				Datacenter: "colo-galleon",
+			c := New("test-bundler", srv.URL, 5*time.Second, tt.opts...)
+			result, err := c.Enrich(context.Background(), Request{
+				OrbID: "colo:colo-galleon",
 			})
 
 			if tt.wantErrSub != "" {
@@ -141,12 +145,12 @@ func TestClient_Enrich(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(layers) != tt.wantLayers {
-				t.Errorf("got %d layers, want %d", len(layers), tt.wantLayers)
+			if len(result.Layers) != tt.wantLayers {
+				t.Errorf("got %d layers, want %d", len(result.Layers), tt.wantLayers)
 			}
-			if tt.wantData != nil && len(layers) > 0 {
-				if string(layers[0].Data) != string(tt.wantData) {
-					t.Errorf("layer[0].Data = %q, want %q", layers[0].Data, tt.wantData)
+			if tt.wantData != nil && len(result.Layers) > 0 {
+				if string(result.Layers[0].Data) != string(tt.wantData) {
+					t.Errorf("layer[0].Data = %q, want %q", result.Layers[0].Data, tt.wantData)
 				}
 			}
 		})
@@ -155,16 +159,16 @@ func TestClient_Enrich(t *testing.T) {
 
 func TestClient_WithHTTPClient(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("[]"))
+		w.Write([]byte(`{"layers":[]}`))
 	}))
 	defer srv.Close()
 
 	custom := &http.Client{Timeout: 2 * time.Second}
-	c := New(srv.URL, 5*time.Second, WithHTTPClient(custom))
+	c := New("test-bundler", srv.URL, 5*time.Second, WithHTTPClient(custom))
 	if c.httpClient != custom {
 		t.Error("WithHTTPClient did not replace backing client")
 	}
-	_, err := c.Enrich(context.Background(), Request{Datacenter: "dc"})
+	_, err := c.Enrich(context.Background(), Request{OrbID: "ns:dc"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -173,12 +177,12 @@ func TestClient_WithHTTPClient(t *testing.T) {
 func TestClient_Timeout(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(200 * time.Millisecond)
-		w.Write([]byte("[]"))
+		w.Write([]byte(`{"layers":[]}`))
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, 50*time.Millisecond) // timeout shorter than handler delay
-	_, err := c.Enrich(context.Background(), Request{Datacenter: "dc"})
+	c := New("test-bundler", srv.URL, 50*time.Millisecond) // timeout shorter than handler delay
+	_, err := c.Enrich(context.Background(), Request{OrbID: "ns:dc"})
 	if err == nil {
 		t.Fatal("expected timeout error, got nil")
 	}

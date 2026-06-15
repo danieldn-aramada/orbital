@@ -2,16 +2,110 @@ package handler
 
 import (
 	"archive/zip"
+	"context"
 	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/backup"
 	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
 )
+
+// stubBlobstore is a minimal blobstore.Store stub for the test-connection
+// handler tests. Only Ping carries real behavior; the rest exist to satisfy
+// the interface.
+type stubBlobstore struct {
+	pingErr error
+}
+
+func (s *stubBlobstore) Put(context.Context, string, io.Reader, string) error { return nil }
+func (s *stubBlobstore) Get(context.Context, string) ([]byte, error)          { return nil, nil }
+func (s *stubBlobstore) List(context.Context, string) ([]string, error)       { return nil, nil }
+func (s *stubBlobstore) Delete(context.Context, string) error                 { return nil }
+func (s *stubBlobstore) PresignURL(context.Context, string, time.Duration) (string, error) {
+	return "", nil
+}
+func (s *stubBlobstore) Ping(context.Context) error { return s.pingErr }
+
+// ── TestConnection HX-Request negotiation ─────────────────────────────────────
+//
+// The same endpoint serves backups.gohtml and divergence-reports.gohtml. Both
+// pages target their own result span via hx-target; the server-rendered
+// fragment is identical, so one handler covers both UIs.
+
+func TestTestConnection_HX_Success(t *testing.T) {
+	h := &BackupHandler{storage: &stubBlobstore{pingErr: nil}}
+	c, rec := newBackupEchoCtx(http.MethodPost, "/api/v1/backup/test-connection")
+	c.Request().Header.Set("HX-Request", "true")
+
+	if err := h.TestConnection(c); err != nil {
+		t.Fatalf("TestConnection: %v", err)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Errorf("expected HTML content-type for HX-Request, got %q", ct)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Connected") || !strings.Contains(body, "has-text-success") {
+		t.Errorf("expected success fragment, got: %s", body)
+	}
+}
+
+func TestTestConnection_HX_Failure_EscapesErrorMessage(t *testing.T) {
+	// The error string is interpolated into HTML — must be escaped to prevent
+	// a backend that returns crafted text from poisoning the fragment.
+	h := &BackupHandler{storage: &stubBlobstore{pingErr: errors.New("denied <script>x</script>")}}
+	c, rec := newBackupEchoCtx(http.MethodPost, "/api/v1/backup/test-connection")
+	c.Request().Header.Set("HX-Request", "true")
+
+	if err := h.TestConnection(c); err != nil {
+		t.Fatalf("TestConnection: %v", err)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "has-text-danger") {
+		t.Errorf("expected danger styling in fragment, got: %s", body)
+	}
+	if strings.Contains(body, "<script>x</script>") {
+		t.Errorf("error message must be HTML-escaped; got raw script tag in body: %s", body)
+	}
+	if !strings.Contains(body, "&lt;script&gt;") {
+		t.Errorf("expected escaped script tag in fragment, got: %s", body)
+	}
+}
+
+func TestTestConnection_JSON_FallbackForNonHXCallers(t *testing.T) {
+	h := &BackupHandler{storage: &stubBlobstore{pingErr: nil}}
+	c, rec := newBackupEchoCtx(http.MethodPost, "/api/v1/backup/test-connection")
+
+	if err := h.TestConnection(c); err != nil {
+		t.Fatalf("TestConnection: %v", err)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Errorf("non-HX caller must get JSON; got content-type %q", ct)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode JSON: %v", err)
+	}
+	if got["ok"] != true {
+		t.Errorf("expected ok=true in JSON body, got: %v", got)
+	}
+}
+
+func newBackupEchoCtx(method, path string) (echo.Context, *httptest.ResponseRecorder) {
+	e := echo.New()
+	req := httptest.NewRequest(method, path, nil)
+	rec := httptest.NewRecorder()
+	return e.NewContext(req, rec), rec
+}
 
 // ── toBackupResponse ──────────────────────────────────────────────────────────
 

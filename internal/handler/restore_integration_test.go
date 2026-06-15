@@ -218,7 +218,7 @@ func TestRestoreTrigger_CallsBackendRunLive(t *testing.T) {
 	}
 
 	var resp struct {
-		JobID string `json:"jobId"`
+		JobID string `json:"id"`
 	}
 	if err := json.Unmarshal(respBody, &resp); err != nil {
 		t.Fatalf("parse response: %v", err)
@@ -261,7 +261,7 @@ func TestRestoreTrigger_BackendRunLiveError_JobFails(t *testing.T) {
 		t.Fatalf("expected 202, got %d: %s", code, respBody)
 	}
 
-	var resp struct{ JobID string `json:"jobId"` }
+	var resp struct{ JobID string `json:"id"` }
 	json.Unmarshal(respBody, &resp)
 	jobID, _ := uuid.Parse(resp.JobID)
 
@@ -289,7 +289,7 @@ func TestRestoreCompleted_WritesManagementAuditEvent(t *testing.T) {
 		t.Fatalf("expected 202, got %d: %s", code, respBody)
 	}
 
-	var resp struct{ JobID string `json:"jobId"` }
+	var resp struct{ JobID string `json:"id"` }
 	json.Unmarshal(respBody, &resp)
 	jobID, _ := uuid.Parse(resp.JobID)
 

@@ -9,6 +9,7 @@ import (
 	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/ent/restorejob"
+	"github.com/armada/orbital/internal/ocitype"
 	"github.com/google/uuid"
 )
 
@@ -176,7 +177,7 @@ func TestToExportJobFragRow_Published(t *testing.T) {
 
 func TestToArtifactFragRow_NoDigest(t *testing.T) {
 	a := &ent.RegistryArtifact{Status: registryartifact.StatusCompleted, InitiatedAt: time.Now()}
-	row := toArtifactFragRow(a)
+	row := toArtifactFragRow(a, "")
 	if row.HasDigest {
 		t.Error("expected HasDigest=false when Digest is nil")
 	}
@@ -185,7 +186,7 @@ func TestToArtifactFragRow_NoDigest(t *testing.T) {
 func TestToArtifactFragRow_DigestShort(t *testing.T) {
 	d := "sha256:abcdef1234567890abcdef123456789012345678"
 	a := &ent.RegistryArtifact{Status: registryartifact.StatusCompleted, InitiatedAt: time.Now(), Digest: &d}
-	row := toArtifactFragRow(a)
+	row := toArtifactFragRow(a, "")
 	if !row.HasDigest {
 		t.Error("expected HasDigest=true")
 	}
@@ -206,10 +207,66 @@ func TestToArtifactFragRow_StatusClass(t *testing.T) {
 	}
 	for _, c := range cases {
 		a := &ent.RegistryArtifact{Status: c.status, InitiatedAt: time.Now()}
-		row := toArtifactFragRow(a)
+		row := toArtifactFragRow(a, "")
 		if row.StatusClass != c.wantClass {
 			t.Errorf("status %q: StatusClass = %q, want %q", c.status, row.StatusClass, c.wantClass)
 		}
+	}
+}
+
+func TestToArtifactFragRow_Layers(t *testing.T) {
+	a := &ent.RegistryArtifact{
+		Status:      registryartifact.StatusCompleted,
+		InitiatedAt: time.Now(),
+		Layers: []ocitype.ArtifactLayer{
+			{MediaType: "application/vnd.orbital.subgraph.data.v1+gzip", SizeBytes: 1024, Digest: "sha256:abc123", IsOrbitalNative: true},
+			{MediaType: "application/vnd.orbital.subgraph.schema.v1+gzip", SizeBytes: 512, Digest: "sha256:def456", IsOrbitalNative: true},
+			{MediaType: "application/vnd.example.config.v1+json", SizeBytes: 2048, Digest: "sha256:xyz789", IsOrbitalNative: false},
+		},
+	}
+	row := toArtifactFragRow(a, "")
+
+	if !row.HasLayers {
+		t.Fatal("expected HasLayers=true")
+	}
+	if len(row.LayerRows) != 3 {
+		t.Fatalf("expected 3 LayerRows, got %d", len(row.LayerRows))
+	}
+
+	// LayerRows are reversed from manifest order — bundler layers at top,
+	// dgraph layers at bottom, matching container-image convention.
+	if row.LayerRows[0].IsOrbitalNative {
+		t.Error("LayerRows[0].IsOrbitalNative = true, want false (bundler at top)")
+	}
+	if row.LayerRows[0].MediaType != "application/vnd.example.config.v1+json" {
+		t.Errorf("LayerRows[0].MediaType = %q, want bundler config", row.LayerRows[0].MediaType)
+	}
+	if !row.LayerRows[1].IsOrbitalNative || !row.LayerRows[2].IsOrbitalNative {
+		t.Error("LayerRows[1] and LayerRows[2] should be orbital-native (dgraph)")
+	}
+
+	// SizeDisplay should be formatted — LayerRows[0] is the 2048-byte bundler layer.
+	if row.LayerRows[0].SizeDisplay != "2.0 KB" {
+		t.Errorf("LayerRows[0].SizeDisplay = %q, want %q", row.LayerRows[0].SizeDisplay, "2.0 KB")
+	}
+	if row.LayerRows[2].SizeDisplay != "1.0 KB" {
+		t.Errorf("LayerRows[2].SizeDisplay = %q, want %q", row.LayerRows[2].SizeDisplay, "1.0 KB")
+	}
+
+	// DigestShort should be truncated.
+	if row.LayerRows[0].DigestShort == "" {
+		t.Error("LayerRows[0].DigestShort is empty")
+	}
+}
+
+func TestToArtifactFragRow_NoLayers(t *testing.T) {
+	a := &ent.RegistryArtifact{Status: registryartifact.StatusCompleted, InitiatedAt: time.Now()}
+	row := toArtifactFragRow(a, "")
+	if row.HasLayers {
+		t.Error("expected HasLayers=false for artifact with no layers (legacy)")
+	}
+	if len(row.LayerRows) != 0 {
+		t.Errorf("expected empty LayerRows, got %d", len(row.LayerRows))
 	}
 }
 

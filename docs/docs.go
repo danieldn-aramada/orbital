@@ -247,6 +247,381 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/config-items/{type}/{id}": {
+            "delete": {
+                "description": "Deletes a DataCenter or Server together with its dependent\nchildren. Bound to the UI delete modal's confirm action.\nSingle-entity (non-cascading) deletes go through GraphQL.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "config-items"
+                ],
+                "summary": "Cascade-delete a config item (UI flow)",
+                "parameters": [
+                    {
+                        "enum": [
+                            "DataCenter",
+                            "Server"
+                        ],
+                        "type": "string",
+                        "description": "Config item type",
+                        "name": "type",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "DGraph node id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "{ \\\"deleted\\\": N }",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "integer"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/divergences": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "divergence"
+                ],
+                "summary": "List divergences with their resolution",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "enum": [
+                                "accept",
+                                "reject",
+                                "ignore"
+                            ],
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Filter by resolution action; repeatable for OR",
+                        "name": "action",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Filter by resolution.propagatedAt presence",
+                        "name": "propagated",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by dc_orb_id",
+                        "name": "dc",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handler.entryItem"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/divergences/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "divergence"
+                ],
+                "summary": "Get one divergence by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Divergence entry UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.entryItem"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "divergence"
+                ],
+                "summary": "Dismiss a stale divergence",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Divergence entry UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Not stale — accept/reject/ignore instead",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/divergences/{id}/resolution": {
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "divergence"
+                ],
+                "summary": "Record a divergence resolution",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Divergence entry UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Decision payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.putResolutionBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.resolutionItem"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "MVCC conflict — intent changed since report",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "divergence"
+                ],
+                "summary": "Clear a divergence resolution",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Divergence entry UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "divergence"
+                ],
+                "summary": "Patch a divergence resolution (operator recovery only)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Divergence entry UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to update",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.patchResolutionBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.resolutionItem"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/export": {
             "post": {
                 "description": "Triggers an async export of the data center's configuration subgraph. Returns immediately with a job ID. Returns 409 if an export is already in progress for this data center.",
@@ -504,236 +879,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/import": {
-            "post": {
-                "description": "Starts an async OCI artifact pull and DGraph import for the requested tag. Returns 409 if an import is already running.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "import"
-                ],
-                "summary": "Trigger import",
-                "parameters": [
-                    {
-                        "description": "Import request",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object"
-                        }
-                    }
-                ],
-                "responses": {
-                    "202": {
-                        "description": "Accepted",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/import/artifact": {
-            "post": {
-                "description": "Accepts a zip bundle (data.json.gz + schema.gz + optional layers.json + layer blobs)",
-                "consumes": [
-                    "multipart/form-data"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "import"
-                ],
-                "summary": "Import OCI artifact bundle",
-                "parameters": [
-                    {
-                        "type": "file",
-                        "description": "Zip archive containing data.json.gz, schema.gz, and optionally layers.json + layer blobs",
-                        "name": "bundle",
-                        "in": "formData",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "202": {
-                        "description": "Accepted",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/import/history": {
-            "get": {
-                "description": "Returns the rolling history of completed and failed imports from disk.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "import"
-                ],
-                "summary": "Import history",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/orb.ImportRecord"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/import/status": {
-            "get": {
-                "description": "Returns the current import state snapshot including status, current version, and last import record.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "import"
-                ],
-                "summary": "Import status",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/orbserver.importSnapshot"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/import/subgraph": {
-            "post": {
-                "description": "Accepts a zip bundle (data.json.gz + schema.gz) and imports it into local DGraph. Source-agnostic: use for courier (direct upload), ConfigBundle Controller delivery, or any caller with a subgraph zip.",
-                "consumes": [
-                    "multipart/form-data"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "import"
-                ],
-                "summary": "Import subgraph bundle",
-                "parameters": [
-                    {
-                        "type": "file",
-                        "description": "Zip archive containing data.json.gz and schema.gz",
-                        "name": "bundle",
-                        "in": "formData",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "202": {
-                        "description": "Accepted",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/import/tags": {
-            "get": {
-                "description": "Lists available OCI artifact tags from the configured registry for this data center, enriched with signature verification status and artifact size.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "import"
-                ],
-                "summary": "List import tags",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "array",
-                                "items": {
-                                    "$ref": "#/definitions/orbserver.tagInfo"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/oci/artifacts": {
             "get": {
                 "description": "Returns the 100 most recent OCI artifacts ordered by publish time descending.",
@@ -782,6 +927,41 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handler.artifactResponse"
                         }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/oci/artifacts/{id}/layers": {
+            "get": {
+                "description": "Returns an HTML fragment rendering the layers modal for the given artifact.",
+                "produces": [
+                    "text/html"
+                ],
+                "tags": [
+                    "oci"
+                ],
+                "summary": "Get layers for an OCI artifact",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Artifact ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
                     },
                     "404": {
                         "description": "Not Found",
@@ -966,7 +1146,7 @@ const docTemplate = `{
         },
         "/graphql": {
             "post": {
-                "description": "POST: proxies GraphQL queries to orb's local DGraph instance. GET: serves the GraphiQL explorer UI.",
+                "description": "POST: proxies GraphQL queries and mutations to DGraph. GET: serves the GraphiQL explorer UI.",
                 "consumes": [
                     "application/json"
                 ],
@@ -979,7 +1159,7 @@ const docTemplate = `{
                 "summary": "GraphQL endpoint",
                 "parameters": [
                     {
-                        "example": "\"{\\\"query\\\": \\\"{ queryServer { id hostname } }\\\"}\"",
+                        "example": "\"{\\\"query\\\": \\\"{ queryDataCenter { id name } }\\\"}\"",
                         "description": "GraphQL request body",
                         "name": "body",
                         "in": "body",
@@ -1034,6 +1214,12 @@ const docTemplate = `{
                 },
                 "initiatedAt": {
                     "type": "string"
+                },
+                "layers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ocitype.ArtifactLayer"
+                    }
                 },
                 "registry": {
                     "type": "string"
@@ -1093,6 +1279,55 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.entryItem": {
+            "type": "object",
+            "properties": {
+                "dcOrbId": {
+                    "type": "string"
+                },
+                "entryOrbId": {
+                    "type": "string"
+                },
+                "field": {
+                    "type": "string"
+                },
+                "firstSeenAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "intendedValue": {
+                    "type": "object"
+                },
+                "lastSeenAt": {
+                    "type": "string"
+                },
+                "overrideValue": {
+                    "type": "object"
+                },
+                "resolution": {
+                    "description": "Resolution is the current decision on this entry, if any. Nil when un-resolved.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/handler.resolutionItem"
+                        }
+                    ]
+                },
+                "who": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.patchResolutionBody": {
+            "type": "object",
+            "properties": {
+                "propagatedAt": {
+                    "description": "PropagatedAt: RFC3339 timestamp, or the literal \"now\" for server-side\ntime. Operator-recovery only — normal propagation is observed by the\ningester when orb stops reporting the field. Setting this manually is\nfor stuck rows that the ingester can't observe (orb down, snapshot\npipeline broken).",
+                    "type": "string"
+                }
+            }
+        },
         "handler.publishResponse": {
             "type": "object",
             "properties": {
@@ -1106,6 +1341,37 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "tag": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.putResolutionBody": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "description": "\"accept\" | \"reject\" | \"ignore\"",
+                    "type": "string"
+                }
+            }
+        },
+        "handler.resolutionItem": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "description": "\"accept\" | \"reject\" | \"ignore\"",
+                    "type": "string"
+                },
+                "actor": {
+                    "type": "string"
+                },
+                "decidedAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "propagatedAt": {
+                    "description": "RFC3339; null until ingester sweeps the entry",
                     "type": "string"
                 }
             }
@@ -1163,7 +1429,7 @@ const docTemplate = `{
                 "error": {
                     "type": "string"
                 },
-                "jobId": {
+                "id": {
                     "type": "string"
                 },
                 "published": {
@@ -1177,7 +1443,7 @@ const docTemplate = `{
         "handler.triggerResponse": {
             "type": "object",
             "properties": {
-                "jobId": {
+                "id": {
                     "type": "string"
                 },
                 "status": {
@@ -1185,117 +1451,21 @@ const docTemplate = `{
                 }
             }
         },
-        "orb.DispatchResult": {
-            "type": "object",
-            "properties": {
-                "error": {
-                    "type": "string"
-                },
-                "mediaType": {
-                    "type": "string"
-                },
-                "statusCode": {
-                    "type": "integer"
-                },
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
-        "orb.ImportRecord": {
-            "type": "object",
-            "properties": {
-                "dcOrbId": {
-                    "type": "string"
-                },
-                "digest": {
-                    "type": "string"
-                },
-                "error": {
-                    "type": "string"
-                },
-                "exportJobId": {
-                    "type": "string"
-                },
-                "importedAt": {
-                    "type": "string"
-                },
-                "layers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/orb.LayerRecord"
-                    }
-                },
-                "status": {
-                    "description": "\"done\" | \"failed\"",
-                    "type": "string"
-                },
-                "tag": {
-                    "type": "string"
-                },
-                "verification": {
-                    "description": "Verification* constant",
-                    "type": "string"
-                }
-            }
-        },
-        "orb.LayerRecord": {
-            "type": "object",
-            "properties": {
-                "dispatch": {
-                    "description": "set when Role == LayerRoleDispatched",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/orb.DispatchResult"
-                        }
-                    ]
-                },
-                "mediaType": {
-                    "type": "string"
-                },
-                "role": {
-                    "description": "LayerRole* constant",
-                    "type": "string"
-                }
-            }
-        },
-        "orbserver.importSnapshot": {
-            "type": "object",
-            "properties": {
-                "availableVersion": {
-                    "type": "string"
-                },
-                "currentVersion": {
-                    "type": "string"
-                },
-                "lastChecked": {
-                    "type": "string"
-                },
-                "lastError": {
-                    "type": "string"
-                },
-                "lastImport": {
-                    "$ref": "#/definitions/orb.ImportRecord"
-                },
-                "status": {
-                    "type": "string"
-                }
-            }
-        },
-        "orbserver.tagInfo": {
+        "ocitype.ArtifactLayer": {
             "type": "object",
             "properties": {
                 "digest": {
                     "type": "string"
                 },
-                "name": {
+                "isOrbitalNative": {
+                    "description": "true for data.json.gz + schema.gz; false for anything bundler-added",
+                    "type": "boolean"
+                },
+                "mediaType": {
                     "type": "string"
                 },
                 "sizeBytes": {
                     "type": "integer"
-                },
-                "verified": {
-                    "type": "boolean"
                 }
             }
         }

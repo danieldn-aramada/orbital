@@ -123,7 +123,7 @@ func TestExportList_ReturnsJobsWithRequiredFields(t *testing.T) {
 
 	// Each item must have required fields.
 	for _, item := range body {
-		for _, field := range []string{"jobId", "dataCenter", "status", "createdAt", "createdBy"} {
+		for _, field := range []string{"id", "dataCenter", "status", "createdAt", "createdBy"} {
 			if _, ok := item[field]; !ok {
 				t.Errorf("missing field %q in job response", field)
 			}
@@ -168,8 +168,8 @@ func TestExportStatus_ReturnsJobFields(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if body["jobId"] != job.ID.String() {
-		t.Errorf("jobId: got %v, want %q", body["jobId"], job.ID.String())
+	if body["id"] != job.ID.String() {
+		t.Errorf("id: got %v, want %q", body["id"], job.ID.String())
 	}
 	if body["status"] != "running" {
 		t.Errorf("status: got %v, want running", body["status"])
@@ -285,8 +285,8 @@ func TestExportTrigger_ConflictWhenJobRunning(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if body["jobId"] == "" {
-		t.Errorf("expected conflicting jobId in response, got: %v", body)
+	if body["id"] == "" {
+		t.Errorf("expected conflicting id in response, got: %v", body)
 	}
 }
 

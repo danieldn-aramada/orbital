@@ -338,3 +338,38 @@ func TestImporter_LoadHistory_VerificationRoundtrip(t *testing.T) {
 		t.Errorf("expected verification:verified in history JSON, got: %s", data)
 	}
 }
+
+// TestWriteAtomic_LeavesNoTmpFile verifies the helper renames the tmp away.
+// A leftover .tmp file is a sign the rename failed silently.
+func TestWriteAtomic_LeavesNoTmpFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+	if err := writeAtomic(path, []byte(`{"k":"v"}`)); err != nil {
+		t.Fatalf("writeAtomic: %v", err)
+	}
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Errorf("expected tmp file to be renamed away, but it still exists")
+	}
+	data, _ := os.ReadFile(path)
+	if string(data) != `{"k":"v"}` {
+		t.Errorf("final file mismatch: %s", data)
+	}
+}
+
+// TestWriteAtomic_OverwriteIsAtomic simulates the recovery scenario: when a
+// new write completes successfully, the old content is fully replaced and no
+// partial state lingers. (Pre-existing content is overwritten via rename.)
+func TestWriteAtomic_OverwriteIsAtomic(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(path, []byte(`old`), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := writeAtomic(path, []byte(`new`)); err != nil {
+		t.Fatalf("writeAtomic: %v", err)
+	}
+	data, _ := os.ReadFile(path)
+	if string(data) != `new` {
+		t.Errorf("expected new content, got: %s", data)
+	}
+}

@@ -45,6 +45,16 @@ func (DivergenceEntry) Fields() []ent.Field {
 		field.JSON("intended_value", json.RawMessage{}).Optional(),
 		field.JSON("override_value", json.RawMessage{}).Optional(),
 
+		// intended_at_version is the DGraph `version` on the target ConfigItem
+		// at the moment this divergence was first ingested. Used at Accept time
+		// to detect intent that has moved on since the report — surfaced to the
+		// cloud admin as "please re-review" rather than silently overwriting
+		// their edit. Nillable: legacy entries (pre-MVCC) and ConfigItems with
+		// null/missing version are accepted with a logged warning, not blocked.
+		// Captured ONLY on insert; never overwritten on UPSERT — the original
+		// snapshot moment is what matters for race detection.
+		field.Int("intended_at_version").Optional().Nillable(),
+
 		// who set the local override (e.g. "local:admin").
 		field.String("who").NotEmpty(),
 

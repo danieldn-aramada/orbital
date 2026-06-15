@@ -10,50 +10,16 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/armada/orbital/internal/divergence"
 	"github.com/armada/orbital/internal/oci"
+	"github.com/armada/orbital/internal/ocitype"
 	"github.com/armada/orbital/internal/orb"
 	"github.com/labstack/echo/v4"
 )
-
-// extractMappingLayer pulls the divergence-mapping layer (if present) out of
-// extraLayers, persists it to the local mapping store keyed by bundle digest,
-// and returns a LayerRecord describing the outcome. The mapping entry is
-// removed from extraLayers so the dispatcher doesn't try to ship it to a
-// consumer. Returns nil when no mapping layer is present.
-//
-// Bundles arriving via `POST /api/v1/import/artifact` (direct upload) usually
-// have no digest; in that case the mapping is logged as unknown and not
-// persisted — divergence reports keyed by digest will fail to resolve, which
-// is the right signal that the artifact-upload path doesn't carry mappings
-// through to divergence reporting end-to-end.
-func (s *Server) extractMappingLayer(extraLayers map[string][]byte, digest string) *orb.LayerRecord {
-	payload, ok := extraLayers[divergence.MediaTypeMapping]
-	if !ok {
-		return nil
-	}
-	delete(extraLayers, divergence.MediaTypeMapping)
-
-	rec := orb.LayerRecord{
-		MediaType: divergence.MediaTypeMapping,
-		Role:      orb.LayerRoleMapping,
-	}
-	if s.mappingStore == nil || digest == "" {
-		s.logger.Warn("divergence mapping layer received but cannot persist", "digestEmpty", digest == "", "storeNil", s.mappingStore == nil)
-		rec.Role = orb.LayerRoleUnknown
-		return &rec
-	}
-	if err := s.mappingStore.Save(digest, payload); err != nil {
-		s.logger.Warn("divergence mapping save failed", "digest", digest, "err", err)
-		rec.Role = orb.LayerRoleUnknown
-		return &rec
-	}
-	s.logger.Info("divergence mapping stored", "digest", digest, "bytes", len(payload))
-	return &rec
-}
 
 // @Summary     Trigger import
 // @Description Starts an async OCI artifact pull and DGraph import for the requested tag. Returns 409 if an import is already running.
@@ -127,35 +93,38 @@ func (s *Server) triggerImport(c echo.Context) error {
 			return
 		}
 
-		// Divergence mapping layer (if present) is stored locally for later
-		// translation, not dispatched to a consumer. Must run before Dispatch
-		// so the mapping doesn't get shipped to cb-controller as a payload.
-		var layerRecords []orb.LayerRecord
-		if mappingRec := s.extractMappingLayer(artifact.ExtraLayers, meta.Digest); mappingRec != nil {
-			layerRecords = append(layerRecords, *mappingRec)
+		// Best-effort consumer dispatch for all non-graph layers. Every extra
+		// layer is treated identically — orb has no built-in knowledge of any
+		// specific media type; consumers register themselves via ORB_CONSUMERS.
+		// Producer attribution comes from the OCI manifest's per-layer
+		// annotations (com.armada.orbital.producer), declared by whoever
+		// assembled the artifact (orbital).
+		producerFor := func(mediaType string) string {
+			if ann := artifact.LayerAnnotations[mediaType]; ann != nil {
+				return ann[ocitype.AnnotationProducer]
+			}
+			return ""
 		}
-
-		// Best-effort consumer dispatch for the remaining (non-graph, non-mapping) layers.
+		var layerRecords []orb.LayerRecord
 		importID := newImportID()
 		if len(artifact.ExtraLayers) > 0 && s.dispatcher != nil {
 			results := s.dispatcher.Dispatch(ctx, artifact.ExtraLayers, meta.Tag, meta.Digest, importID)
-			dispatched := make(map[string]bool, len(results))
+			// With the broadcast Dispatcher, every layer produces a result.
+			// Role classification is now driven by the response:
+			//   - 2xx → "dispatched" (some consumer accepted it)
+			//   - non-2xx → "unknown" (no consumer claimed it)
 			for i := range results {
 				dr := results[i]
+				role := orb.LayerRoleUnknown
+				if dr.StatusCode >= 200 && dr.StatusCode < 300 {
+					role = orb.LayerRoleDispatched
+				}
 				layerRecords = append(layerRecords, orb.LayerRecord{
 					MediaType: dr.MediaType,
-					Role:      orb.LayerRoleDispatched,
+					Role:      role,
+					Producer:  producerFor(dr.MediaType),
 					Dispatch:  &dr,
 				})
-				dispatched[dr.MediaType] = true
-			}
-			for mt := range artifact.ExtraLayers {
-				if !dispatched[mt] {
-					layerRecords = append(layerRecords, orb.LayerRecord{
-						MediaType: mt,
-						Role:      orb.LayerRoleUnknown,
-					})
-				}
 			}
 		}
 		if len(layerRecords) > 0 {
@@ -227,10 +196,11 @@ func (s *Server) importTags(c echo.Context) error {
 	}
 	repoRef := s.cfg.OCIRegistry + "/" + s.cfg.OCIRepo
 
+	allTags = sortTagsByVersionDesc(allTags)
+
 	if c.Request().Header.Get("HX-Request") == "true" {
 		var rows []orbTagFragRow
-		for i := len(allTags) - 1; i >= 0; i-- {
-			t := allTags[i]
+		for _, t := range allTags {
 			if strings.HasSuffix(t, ".sig") {
 				continue
 			}
@@ -257,6 +227,8 @@ func (s *Server) importTags(c echo.Context) error {
 		return tmpl.Execute(c.Response().Writer, rows)
 	}
 
+	// JSON path uses the same descending-version order as the HTMX rows so
+	// callers don't have to re-sort.
 	var infos []tagInfo
 	for _, t := range allTags {
 		// Skip cosign signature tags — not importable artifacts.
@@ -298,11 +270,94 @@ func (s *Server) importHistory(c echo.Context) error {
 	return c.JSON(http.StatusOK, records)
 }
 
+// @Summary     Import layers modal
+// @Description Returns an HTML fragment rendering the layers modal for an import-history record, found by tag (newest match wins).
+// @Tags        import
+// @Produce     html
+// @Param       tag path string true "Import tag"
+// @Success     200
+// @Failure     404 {object} map[string]string
+// @Router      /api/v1/import/history/{tag}/layers [get]
+func (s *Server) importHistoryLayers(c echo.Context) error {
+	tag := c.Param("tag")
+	if tag == "" {
+		return echo.ErrBadRequest
+	}
+	records, err := orb.LoadHistory(s.cfg.DataDir)
+	if err != nil {
+		return fmt.Errorf("load history: %w", err)
+	}
+	// History is appended chronologically; iterate newest-first to match the page.
+	var match *orb.ImportRecord
+	for i := len(records) - 1; i >= 0; i-- {
+		if records[i].Tag == tag {
+			match = &records[i]
+			break
+		}
+	}
+	if match == nil {
+		return echo.ErrNotFound
+	}
+	tmpl, err := template.ParseFiles("web/templates/orb/partials/layers-modal.gohtml")
+	if err != nil {
+		return fmt.Errorf("parse layers-modal: %w", err)
+	}
+	reversed := make([]orb.LayerRecord, len(match.Layers))
+	for i, l := range match.Layers {
+		reversed[len(match.Layers)-1-i] = l
+	}
+	viewModel := struct {
+		Tag    string
+		Layers []orb.LayerRecord
+	}{
+		Tag:    match.Tag,
+		Layers: reversed,
+	}
+	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+	return tmpl.ExecuteTemplate(c.Response().Writer, "layers-modal", viewModel)
+}
+
 // newImportID generates a random UUID-format string for import correlation.
 func newImportID() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
+
+// sortTagsByVersionDesc sorts orbital's `v<N>`-style tags numerically descending,
+// pushing any non-version tag (e.g. "latest") to the end. Without this, lex sort
+// orders v10 between v1 and v2 because "1" < "2" character-wise.
+func sortTagsByVersionDesc(tags []string) []string {
+	out := make([]string, len(tags))
+	copy(out, tags)
+	sort.SliceStable(out, func(i, j int) bool {
+		ni, oki := parseVersionTag(out[i])
+		nj, okj := parseVersionTag(out[j])
+		switch {
+		case oki && okj:
+			return ni > nj
+		case oki:
+			return true // version tags before non-version tags
+		case okj:
+			return false
+		default:
+			return out[i] < out[j] // stable lex among non-version tags
+		}
+	})
+	return out
+}
+
+// parseVersionTag returns the integer N for a "v<N>" tag (e.g. "v10" → 10),
+// or false if the tag doesn't fit the convention.
+func parseVersionTag(tag string) (int, bool) {
+	if len(tag) < 2 || tag[0] != 'v' {
+		return 0, false
+	}
+	n, err := strconv.Atoi(tag[1:])
+	if err != nil {
+		return 0, false
+	}
+	return n, true
 }
 
 // @Summary     Import OCI artifact bundle
@@ -419,15 +474,10 @@ func (s *Server) importArtifact(c echo.Context) error {
 			return
 		}
 
-		// Divergence mapping layer goes to local storage, not dispatch.
-		// Manual-upload path has no digest, so the mapping (if present)
-		// is logged as unknown — this path doesn't support divergence-by-digest.
+		// Best-effort consumer dispatch for all extra layers. Every extra
+		// layer is treated identically — orb has no built-in knowledge of any
+		// specific media type; consumers register themselves via ORB_CONSUMERS.
 		var layerRecords []orb.LayerRecord
-		if mappingRec := s.extractMappingLayer(extraLayers, ""); mappingRec != nil {
-			layerRecords = append(layerRecords, *mappingRec)
-		}
-
-		// Best-effort consumer dispatch for remaining extra layers.
 		if len(extraLayers) > 0 && s.dispatcher != nil {
 			results := s.dispatcher.Dispatch(ctx, extraLayers, tag, "", importID)
 			dispatched := make(map[string]bool, len(results))

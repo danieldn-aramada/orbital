@@ -63,11 +63,16 @@ services:
   # orb runs as a container in the edge sim because the dgraph binary it execs
   # for `dgraph live` is Linux-only — can't run via `go run` on macOS. The
   # image is built by `make edge-up` from the local working tree.
+  #
+  # env_file pulls in Azure Blob credentials + DC identity + ORB_CONSUMERS;
+  # see edge.env.example for the keys it expects.
   orb:
     image: orb:local
     container_name: local-orb-1
     ports:
       - "8010:8010"
+    env_file:
+      - ./edge.env
     environment:
       ORB_DGRAPH_URL: http://dgraph-orb-alpha:8080/graphql
       ORB_DGRAPH_ADMIN_URL: http://dgraph-orb-alpha:8080/admin
@@ -81,6 +86,10 @@ services:
       ORB_DEV: "true"
     volumes:
       - ./cosign.pub:/app/deploy/local/cosign.pub:ro
+    extra_hosts:
+      # Lets ORB_CONSUMERS URLs reference `host.docker.internal` (cb-controller
+      # runs on the macOS host via `make run-controller`).
+      - "host.docker.internal:host-gateway"
     depends_on:
       dgraph-orb-alpha:
         condition: service_healthy

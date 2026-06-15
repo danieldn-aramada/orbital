@@ -21,6 +21,10 @@ definitions:
         type: integer
       initiatedAt:
         type: string
+      layers:
+        items:
+          $ref: '#/definitions/ocitype.ArtifactLayer'
+        type: array
       registry:
         type: string
       repository:
@@ -59,6 +63,43 @@ definitions:
       trigger:
         type: string
     type: object
+  handler.entryItem:
+    properties:
+      dcOrbId:
+        type: string
+      entryOrbId:
+        type: string
+      field:
+        type: string
+      firstSeenAt:
+        type: string
+      id:
+        type: string
+      intendedValue:
+        type: object
+      lastSeenAt:
+        type: string
+      overrideValue:
+        type: object
+      resolution:
+        allOf:
+        - $ref: '#/definitions/handler.resolutionItem'
+        description: Resolution is the current decision on this entry, if any. Nil
+          when un-resolved.
+      who:
+        type: string
+    type: object
+  handler.patchResolutionBody:
+    properties:
+      propagatedAt:
+        description: |-
+          PropagatedAt: RFC3339 timestamp, or the literal "now" for server-side
+          time. Operator-recovery only — normal propagation is observed by the
+          ingester when orb stops reporting the field. Setting this manually is
+          for stuck rows that the ingester can't observe (orb down, snapshot
+          pipeline broken).
+        type: string
+    type: object
   handler.publishResponse:
     properties:
       artifactId:
@@ -68,6 +109,27 @@ definitions:
       status:
         type: string
       tag:
+        type: string
+    type: object
+  handler.putResolutionBody:
+    properties:
+      action:
+        description: '"accept" | "reject" | "ignore"'
+        type: string
+    type: object
+  handler.resolutionItem:
+    properties:
+      action:
+        description: '"accept" | "reject" | "ignore"'
+        type: string
+      actor:
+        type: string
+      decidedAt:
+        type: string
+      id:
+        type: string
+      propagatedAt:
+        description: RFC3339; null until ingester sweeps the entry
         type: string
     type: object
   handler.restoreJobResponse:
@@ -105,7 +167,7 @@ definitions:
         type: string
       error:
         type: string
-      jobId:
+      id:
         type: string
       published:
         type: boolean
@@ -114,84 +176,22 @@ definitions:
     type: object
   handler.triggerResponse:
     properties:
-      jobId:
+      id:
         type: string
       status:
         type: string
     type: object
-  orb.DispatchResult:
-    properties:
-      error:
-        type: string
-      mediaType:
-        type: string
-      statusCode:
-        type: integer
-      url:
-        type: string
-    type: object
-  orb.ImportRecord:
-    properties:
-      dcOrbId:
-        type: string
-      digest:
-        type: string
-      error:
-        type: string
-      exportJobId:
-        type: string
-      importedAt:
-        type: string
-      layers:
-        items:
-          $ref: '#/definitions/orb.LayerRecord'
-        type: array
-      status:
-        description: '"done" | "failed"'
-        type: string
-      tag:
-        type: string
-      verification:
-        description: Verification* constant
-        type: string
-    type: object
-  orb.LayerRecord:
-    properties:
-      dispatch:
-        allOf:
-        - $ref: '#/definitions/orb.DispatchResult'
-        description: set when Role == LayerRoleDispatched
-      mediaType:
-        type: string
-      role:
-        description: LayerRole* constant
-        type: string
-    type: object
-  orbserver.importSnapshot:
-    properties:
-      availableVersion:
-        type: string
-      currentVersion:
-        type: string
-      lastChecked:
-        type: string
-      lastError:
-        type: string
-      lastImport:
-        $ref: '#/definitions/orb.ImportRecord'
-      status:
-        type: string
-    type: object
-  orbserver.tagInfo:
+  ocitype.ArtifactLayer:
     properties:
       digest:
         type: string
-      name:
+      isOrbitalNative:
+        description: true for data.json.gz + schema.gz; false for anything bundler-added
+        type: boolean
+      mediaType:
         type: string
       sizeBytes:
         type: integer
-      verified:
-        type: boolean
     type: object
 info:
   contact: {}
@@ -359,6 +359,257 @@ paths:
       summary: Download backup
       tags:
       - backup graph
+  /api/v1/config-items/{type}/{id}:
+    delete:
+      description: |-
+        Deletes a DataCenter or Server together with its dependent
+        children. Bound to the UI delete modal's confirm action.
+        Single-entity (non-cascading) deletes go through GraphQL.
+      parameters:
+      - description: Config item type
+        enum:
+        - DataCenter
+        - Server
+        in: path
+        name: type
+        required: true
+        type: string
+      - description: DGraph node id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{ \"deleted\": N }'
+          schema:
+            additionalProperties:
+              type: integer
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Cascade-delete a config item (UI flow)
+      tags:
+      - config-items
+  /api/v1/divergences:
+    get:
+      parameters:
+      - collectionFormat: csv
+        description: Filter by resolution action; repeatable for OR
+        in: query
+        items:
+          enum:
+          - accept
+          - reject
+          - ignore
+          type: string
+        name: action
+        type: array
+      - description: Filter by resolution.propagatedAt presence
+        in: query
+        name: propagated
+        type: boolean
+      - description: Filter by dc_orb_id
+        in: query
+        name: dc
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.entryItem'
+            type: array
+      summary: List divergences with their resolution
+      tags:
+      - divergence
+  /api/v1/divergences/{id}:
+    delete:
+      parameters:
+      - description: Divergence entry UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Not stale — accept/reject/ignore instead
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Dismiss a stale divergence
+      tags:
+      - divergence
+    get:
+      parameters:
+      - description: Divergence entry UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.entryItem'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get one divergence by ID
+      tags:
+      - divergence
+  /api/v1/divergences/{id}/resolution:
+    delete:
+      parameters:
+      - description: Divergence entry UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Clear a divergence resolution
+      tags:
+      - divergence
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Divergence entry UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.patchResolutionBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.resolutionItem'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Patch a divergence resolution (operator recovery only)
+      tags:
+      - divergence
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Divergence entry UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Decision payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.putResolutionBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.resolutionItem'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: MVCC conflict — intent changed since report
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Record a divergence resolution
+      tags:
+      - divergence
   /api/v1/export:
     post:
       consumes:
@@ -535,166 +786,6 @@ paths:
       summary: Get publish confirmation modal
       tags:
       - oci
-  /api/v1/import:
-    post:
-      consumes:
-      - application/json
-      description: Starts an async OCI artifact pull and DGraph import for the requested
-        tag. Returns 409 if an import is already running.
-      parameters:
-      - description: Import request
-        in: body
-        name: body
-        required: true
-        schema:
-          type: object
-      produces:
-      - application/json
-      responses:
-        "202":
-          description: Accepted
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: Conflict
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Trigger import
-      tags:
-      - import
-  /api/v1/import/artifact:
-    post:
-      consumes:
-      - multipart/form-data
-      description: Accepts a zip bundle (data.json.gz + schema.gz + optional layers.json
-        + layer blobs)
-      parameters:
-      - description: Zip archive containing data.json.gz, schema.gz, and optionally
-          layers.json + layer blobs
-        in: formData
-        name: bundle
-        required: true
-        type: file
-      produces:
-      - application/json
-      responses:
-        "202":
-          description: Accepted
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: Conflict
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Import OCI artifact bundle
-      tags:
-      - import
-  /api/v1/import/history:
-    get:
-      description: Returns the rolling history of completed and failed imports from
-        disk.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/orb.ImportRecord'
-            type: array
-      summary: Import history
-      tags:
-      - import
-  /api/v1/import/status:
-    get:
-      description: Returns the current import state snapshot including status, current
-        version, and last import record.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/orbserver.importSnapshot'
-      summary: Import status
-      tags:
-      - import
-  /api/v1/import/subgraph:
-    post:
-      consumes:
-      - multipart/form-data
-      description: 'Accepts a zip bundle (data.json.gz + schema.gz) and imports it
-        into local DGraph. Source-agnostic: use for courier (direct upload), ConfigBundle
-        Controller delivery, or any caller with a subgraph zip.'
-      parameters:
-      - description: Zip archive containing data.json.gz and schema.gz
-        in: formData
-        name: bundle
-        required: true
-        type: file
-      produces:
-      - application/json
-      responses:
-        "202":
-          description: Accepted
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: Conflict
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Import subgraph bundle
-      tags:
-      - import
-  /api/v1/import/tags:
-    get:
-      description: Lists available OCI artifact tags from the configured registry
-        for this data center, enriched with signature verification status and artifact
-        size.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              items:
-                $ref: '#/definitions/orbserver.tagInfo'
-              type: array
-            type: object
-      summary: List import tags
-      tags:
-      - import
   /api/v1/oci/artifacts:
     get:
       description: Returns the 100 most recent OCI artifacts ordered by publish time
@@ -734,6 +825,30 @@ paths:
               type: string
             type: object
       summary: Get OCI artifact
+      tags:
+      - oci
+  /api/v1/oci/artifacts/{id}/layers:
+    get:
+      description: Returns an HTML fragment rendering the layers modal for the given
+        artifact.
+      parameters:
+      - description: Artifact ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get layers for an OCI artifact
       tags:
       - oci
   /api/v1/oci/public-key:
@@ -854,11 +969,11 @@ paths:
     post:
       consumes:
       - application/json
-      description: 'POST: proxies GraphQL queries to orb''s local DGraph instance.
-        GET: serves the GraphiQL explorer UI.'
+      description: 'POST: proxies GraphQL queries and mutations to DGraph. GET: serves
+        the GraphiQL explorer UI.'
       parameters:
       - description: GraphQL request body
-        example: '"{\"query\": \"{ queryServer { id hostname } }\"}"'
+        example: '"{\"query\": \"{ queryDataCenter { id name } }\"}"'
         in: body
         name: body
         required: true

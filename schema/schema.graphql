@@ -35,13 +35,25 @@ type User {
 interface ConfigItem {
     id: ID!
     namespace: String! @search(by: [exact])
-    orbId: String! @id @search(by: [hash]) # unique key for upsert
+    # orbId is the public stable identifier — load-bearing contract with external
+    # consumers (configbundle/cb-controller use it as SSA list-map key).
+    # @id is what makes it API-immutable: DGraph excludes @id fields from the
+    # auto-generated XPatch, so updateX(set:{orbId:"..."}) is rejected at
+    # schema-validation time. Do NOT remove @id or add custom mutations that
+    # bypass DGraph's auto-generated Patch. See docs/reference/DGRAPH.md.
+    orbId: String! @id @search(by: [hash])
     name: String @search(by: [term])
     createdBy: String @search(by: [hash])
     createdAt: DateTime @search
     updatedBy: String @search(by: [hash])
     updatedAt: DateTime @search
-    version: Int
+    # version is the optimistic-concurrency counter. Auto-incremented by
+    # orbital's GraphQL proxy on every mutation — clients don't need to set it.
+    # MVCC race detection via ifVersion variable is opt-in (UI Edit modals
+    # send it; raw GraphQL devs may omit and get last-writer-wins). Required
+    # in the schema so direct DGraph writes that bypass orbital's proxy are
+    # rejected.
+    version: Int!
 }
 
 ########################

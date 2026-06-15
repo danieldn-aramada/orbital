@@ -13,24 +13,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/registryartifact"
+	"github.com/armada/orbital/internal/blobstore"
 	"github.com/armada/orbital/internal/divergence"
 )
 
-// Config holds the S3 + polling parameters. S3 fields typically mirror the
-// backup S3 endpoint — the same bucket is shared by convention.
+// Config holds the storage + polling parameters. Storage fields typically
+// mirror the backup endpoint — the same bucket is shared by convention.
 type Config struct {
 	Endpoint     string
 	Region       string
@@ -40,11 +35,10 @@ type Config struct {
 	PollInterval time.Duration
 }
 
-// Ingester polls S3 for divergence snapshots and writes them to the ent store.
+// Ingester polls storage for divergence snapshots and writes them to the ent store.
 type Ingester struct {
 	db     *ent.Client
-	s3     *s3.Client
-	bucket string
+	store  blobstore.Store
 	logger *slog.Logger
 
 	pollInterval time.Duration
@@ -52,8 +46,8 @@ type Ingester struct {
 	// lastIngestedByDC tracks the snapshot publishedAt timestamp of the most
 	// recent ingest per data center, so the poller skips snapshots it has
 	// already processed. Populated lazily — empty map on startup means the
-	// first tick re-ingests whatever is latest in S3 (idempotent because of
-	// the (dc_orb_id, entry_orb_id, field) unique key — UPSERT preserves
+	// first tick re-ingests whatever is latest in storage (idempotent because
+	// of the (dc_orb_id, entry_orb_id, field) unique key — UPSERT preserves
 	// first_seen_at).
 	lastIngestedByDC map[string]time.Time
 }
@@ -62,30 +56,22 @@ func New(ctx context.Context, db *ent.Client, cfg Config, logger *slog.Logger) (
 	if cfg.Bucket == "" {
 		return nil, errors.New("ingester: bucket required")
 	}
-	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
-		awsconfig.WithRegion(cfg.Region),
-		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey, "")),
-		// MinIO + many S3-compatible stores don't emit x-amz-checksum-* response
-		// headers, which makes the SDK's default "WhenSupported" mode log warnings
-		// on every Get/List. WhenRequired matches the pre-2025 behavior.
-		awsconfig.WithResponseChecksumValidation(aws.ResponseChecksumValidationWhenRequired),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("ingester aws config: %w", err)
-	}
-	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-		if cfg.Endpoint != "" {
-			o.BaseEndpoint = &cfg.Endpoint
-			o.UsePathStyle = true
-		}
+	store, err := blobstore.New(ctx, blobstore.Config{
+		Endpoint:  cfg.Endpoint,
+		Region:    cfg.Region,
+		Bucket:    cfg.Bucket,
+		AccessKey: cfg.AccessKey,
+		SecretKey: cfg.SecretKey,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("ingester: %w", err)
+	}
 	if cfg.PollInterval <= 0 {
 		cfg.PollInterval = 5 * time.Minute
 	}
 	return &Ingester{
 		db:               db,
-		s3:               client,
-		bucket:           cfg.Bucket,
+		store:            store,
 		logger:           logger,
 		pollInterval:     cfg.PollInterval,
 		lastIngestedByDC: make(map[string]time.Time),
@@ -115,12 +101,29 @@ func (i *Ingester) Start(ctx context.Context) {
 }
 
 // Poll runs one ingest cycle: discover DCs from RegistryArtifact, pull the
-// latest snapshot per DC from S3, UPSERT entries, DELETE stale rows.
+// latest snapshot per DC from storage, UPSERT entries, DELETE stale rows.
+//
+// Observability: emits a DEBUG log per tick listing every prefix that will be
+// polled. This is the single greppable surface for "why isn't my divergence
+// landing?" — without it, a path-prefix mismatch (the bug class that motivated
+// this package's existence) is silently invisible. Operators can enable DEBUG
+// when troubleshooting; in normal operation the line is filtered out.
 func (i *Ingester) Poll(ctx context.Context) error {
 	dcs, err := i.discoverDCs(ctx)
 	if err != nil {
 		return fmt.Errorf("discover datacenters: %w", err)
 	}
+	if len(dcs) == 0 {
+		i.logger.Debug("divergence ingester: no DCs discovered (no completed registry artifacts yet)")
+		return nil
+	}
+	prefixes := make([]string, 0, len(dcs))
+	for _, dc := range dcs {
+		prefixes = append(prefixes, divergence.PrefixForRepo(dc.repository))
+	}
+	i.logger.Debug("divergence ingester: polling",
+		"dc_count", len(dcs),
+		"prefixes", prefixes)
 	for _, dc := range dcs {
 		if err := i.pollDC(ctx, dc); err != nil {
 			// Per-DC failure is logged, not fatal — other DCs continue.
@@ -131,7 +134,7 @@ func (i *Ingester) Poll(ctx context.Context) error {
 }
 
 // dcRef is one (datacenter, repository) pair derived from RegistryArtifact.
-// The repository is the S3 prefix component orb writes under.
+// The repository is the storage prefix component orb writes under.
 type dcRef struct {
 	id         string // dc_orb_id (e.g. "colo:colo-galleon")
 	repository string // OCI repo (e.g. "orbital/colo-galleon") — orb publishes under divergence/<repository>/
@@ -148,12 +151,16 @@ func (i *Ingester) discoverDCs(ctx context.Context) ([]dcRef, error) {
 	seen := make(map[string]struct{})
 	var out []dcRef
 	for _, r := range rows {
-		key := r.DatacenterID + "|" + r.Repository
+		// Normalize via the shared helper so producer (orb) and consumer
+		// (this ingester) can't drift on the S3 path convention. See
+		// internal/divergence/path.go for the canonical encoding.
+		repoPath := divergence.NormalizeRepoPath(r.Repository)
+		key := r.DatacenterID + "|" + repoPath
 		if _, ok := seen[key]; ok {
 			continue
 		}
 		seen[key] = struct{}{}
-		out = append(out, dcRef{id: r.DatacenterID, repository: r.Repository})
+		out = append(out, dcRef{id: r.DatacenterID, repository: repoPath})
 	}
 	return out, nil
 }
@@ -161,43 +168,32 @@ func (i *Ingester) discoverDCs(ctx context.Context) ([]dcRef, error) {
 // pollDC pulls the latest snapshot for one DC, parses it, and writes the diff
 // (UPSERT new/changed entries, DELETE entries no longer present).
 func (i *Ingester) pollDC(ctx context.Context, dc dcRef) error {
-	prefix := "divergence/" + dc.repository + "/"
-	list, err := i.s3.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
-		Bucket: &i.bucket,
-		Prefix: &prefix,
-	})
+	prefix := divergence.PrefixForRepo(dc.repository)
+	keys, err := i.store.List(ctx, prefix)
 	if err != nil {
 		return fmt.Errorf("list %s: %w", prefix, err)
 	}
-	if len(list.Contents) == 0 {
+	if len(keys) == 0 {
 		return nil // nothing to ingest yet
 	}
 
 	// Filenames are RFC3339-with-colons-replaced timestamps, lexicographically
 	// sortable. Latest key wins.
-	keys := make([]string, 0, len(list.Contents))
-	for _, obj := range list.Contents {
-		if obj.Key != nil && strings.HasSuffix(*obj.Key, ".json") {
-			keys = append(keys, *obj.Key)
+	jsonKeys := make([]string, 0, len(keys))
+	for _, k := range keys {
+		if strings.HasSuffix(k, ".json") {
+			jsonKeys = append(jsonKeys, k)
 		}
 	}
-	if len(keys) == 0 {
+	if len(jsonKeys) == 0 {
 		return nil
 	}
-	sort.Strings(keys)
-	latestKey := keys[len(keys)-1]
+	sort.Strings(jsonKeys)
+	latestKey := jsonKeys[len(jsonKeys)-1]
 
-	get, err := i.s3.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: &i.bucket,
-		Key:    &latestKey,
-	})
+	body, err := i.store.Get(ctx, latestKey)
 	if err != nil {
 		return fmt.Errorf("get %s: %w", latestKey, err)
-	}
-	defer get.Body.Close()
-	body, err := io.ReadAll(get.Body)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", latestKey, err)
 	}
 
 	var snap divergence.Snapshot
@@ -210,7 +206,11 @@ func (i *Ingester) pollDC(ctx context.Context, dc dcRef) error {
 	}
 
 	// Idempotency: skip if we already ingested this publishedAt for this DC.
+	// DEBUG-log the skip so operators can distinguish "ingestion working,
+	// nothing new" from "ingestion broken, no logs at all."
 	if last, ok := i.lastIngestedByDC[dc.id]; ok && !publishedAt.After(last) {
+		i.logger.Debug("divergence ingester: snapshot unchanged since last ingest",
+			"dc", dc.id, "publishedAt", snap.PublishedAt)
 		return nil
 	}
 

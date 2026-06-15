@@ -33,6 +33,7 @@ Read this before: export job work, OCI publish/signing, backup/restore, Swagger 
   - `data.json.gz` — `application/vnd.orbital.subgraph.data.v1+gzip`
   - `schema.gz` — `application/vnd.orbital.subgraph.schema.v1+gzip`
   - Manifest annotations use `com.armada.orbital.*` prefix.
+- **Per-layer producer attribution:** every layer carries the annotation `com.armada.orbital.producer` set at push time. Orbital's own graph layers use `orbital`; bundler-returned layers use the friendly name from `ORBITAL_BUNDLER_URLS` (e.g. `configbundle-bundler=http://...`). Orb reads this on import and displays it. Layers without the annotation render as `(unannotated)` (legacy artifacts). Do NOT invent producer names downstream — the OCI annotation is the source of truth.
 - **Tag strategy:** monotonic `v{n}` tags per data center repo, derived from count of existing `registry_artifacts` rows. `:latest` updated on every successful publish.
 - `registry_artifact.datacenter_name` stores DC name at publish time — denormalized for display, avoids DGraph lookup on every artifact list. Default `""` allows migration on existing rows.
 

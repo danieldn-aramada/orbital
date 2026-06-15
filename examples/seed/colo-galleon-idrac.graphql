@@ -2,11 +2,12 @@ mutation UpsertIdracSettings {
   addIdracSettings(input: [
     {
       orbId: "colo:3RK3V64-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:3RK3V64" }
+      server: { orbId: "colo:3RK3V64" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -18,11 +19,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:FQK3V64-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:FQK3V64" }
+      server: { orbId: "colo:FQK3V64" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -34,11 +36,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:8MP6K74-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:8MP6K74" }
+      server: { orbId: "colo:8MP6K74" version: 1 }
       firmwareVersion: "7.10.90.00"
       sshEnabled: false
       ipmiEnabled: false
@@ -50,11 +53,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:GJ32V64-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:GJ32V64" }
+      server: { orbId: "colo:GJ32V64" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -66,11 +70,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:CWJHDX3-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:CWJHDX3" }
+      server: { orbId: "colo:CWJHDX3" version: 1 }
       firmwareVersion: "7.10.70.00"
       sshEnabled: false
       ipmiEnabled: false
@@ -82,11 +87,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:CFRHDX3-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:CFRHDX3" }
+      server: { orbId: "colo:CFRHDX3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -98,11 +104,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:3V5Y2Z3-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:3V5Y2Z3" }
+      server: { orbId: "colo:3V5Y2Z3" version: 1 }
       firmwareVersion: "7.10.70.00"
       sshEnabled: false
       ipmiEnabled: false
@@ -114,11 +121,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:5PJ1FZ3-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:5PJ1FZ3" }
+      server: { orbId: "colo:5PJ1FZ3" version: 1 }
       firmwareVersion: "7.10.70.00"
       sshEnabled: false
       ipmiEnabled: false
@@ -130,11 +138,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:FJ32V64-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:FJ32V64" }
+      server: { orbId: "colo:FJ32V64" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -146,11 +155,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:5B52FZ3-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:5B52FZ3" }
+      server: { orbId: "colo:5B52FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -162,11 +172,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:2RK3V64-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:2RK3V64" }
+      server: { orbId: "colo:2RK3V64" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -178,11 +189,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:1W8Y2Z3-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:1W8Y2Z3" }
+      server: { orbId: "colo:1W8Y2Z3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -194,11 +206,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:HQK3V64-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:HQK3V64" }
+      server: { orbId: "colo:HQK3V64" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -210,11 +223,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:B4KS2Z3-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:B4KS2Z3" }
+      server: { orbId: "colo:B4KS2Z3" version: 1 }
       firmwareVersion: "7.10.90.00"
       sshEnabled: false
       ipmiEnabled: false
@@ -226,11 +240,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:2W8Y2Z3-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:2W8Y2Z3" }
+      server: { orbId: "colo:2W8Y2Z3" version: 1 }
       firmwareVersion: "7.10.90.00"
       sshEnabled: false
       ipmiEnabled: false
@@ -242,11 +257,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:6CVD664-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:6CVD664" }
+      server: { orbId: "colo:6CVD664" version: 1 }
       firmwareVersion: "7.10.90.00"
       sshEnabled: false
       ipmiEnabled: false
@@ -258,11 +274,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:1RK3V64-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:1RK3V64" }
+      server: { orbId: "colo:1RK3V64" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -274,11 +291,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:JV8Y2Z3-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:JV8Y2Z3" }
+      server: { orbId: "colo:JV8Y2Z3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -290,11 +308,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:9FRHDX3-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:9FRHDX3" }
+      server: { orbId: "colo:9FRHDX3" version: 1 }
       firmwareVersion: "7.10.90.00"
       sshEnabled: false
       ipmiEnabled: false
@@ -306,11 +325,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:BFRHDX3-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:BFRHDX3" }
+      server: { orbId: "colo:BFRHDX3" version: 1 }
       firmwareVersion: "7.10.50.00"
       sshEnabled: false
       ipmiEnabled: false
@@ -322,11 +342,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:6F206G4-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:6F206G4" }
+      server: { orbId: "colo:6F206G4" version: 1 }
       firmwareVersion: "7.20.80.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -338,11 +359,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:7F206G4-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:7F206G4" }
+      server: { orbId: "colo:7F206G4" version: 1 }
       firmwareVersion: "7.20.80.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -354,11 +376,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:HD206G4-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:HD206G4" }
+      server: { orbId: "colo:HD206G4" version: 1 }
       firmwareVersion: "7.20.80.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -370,11 +393,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:1F206G4-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:1F206G4" }
+      server: { orbId: "colo:1F206G4" version: 1 }
       firmwareVersion: "7.20.80.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -386,11 +410,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:2F206G4-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:2F206G4" }
+      server: { orbId: "colo:2F206G4" version: 1 }
       firmwareVersion: "7.20.80.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -402,11 +427,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:4F206G4-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:4F206G4" }
+      server: { orbId: "colo:4F206G4" version: 1 }
       firmwareVersion: "7.20.80.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -418,11 +444,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:5F206G4-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:5F206G4" }
+      server: { orbId: "colo:5F206G4" version: 1 }
       firmwareVersion: "7.20.80.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -434,11 +461,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:JD206G4-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:JD206G4" }
+      server: { orbId: "colo:JD206G4" version: 1 }
       firmwareVersion: "7.20.80.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -450,11 +478,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:JQK3V64-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:JQK3V64" }
+      server: { orbId: "colo:JQK3V64" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -466,11 +495,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:BGMM3D4-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:BGMM3D4" }
+      server: { orbId: "colo:BGMM3D4" version: 1 }
       firmwareVersion: "7.20.70.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -482,11 +512,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:9GMM3D4-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:9GMM3D4" }
+      server: { orbId: "colo:9GMM3D4" version: 1 }
       firmwareVersion: "7.20.70.50"
       sshEnabled: false
       ipmiEnabled: true
@@ -498,11 +529,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:CGMM3D4-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:CGMM3D4" }
+      server: { orbId: "colo:CGMM3D4" version: 1 }
       firmwareVersion: "7.20.70.50"
       sshEnabled: false
       ipmiEnabled: true
@@ -514,11 +546,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:BMP6K74-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:BMP6K74" }
+      server: { orbId: "colo:BMP6K74" version: 1 }
       firmwareVersion: "7.20.80.50"
       sshEnabled: false
       ipmiEnabled: true
@@ -530,11 +563,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:GQK3V64-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:GQK3V64" }
+      server: { orbId: "colo:GQK3V64" version: 1 }
       firmwareVersion: "7.20.80.50"
       sshEnabled: false
       ipmiEnabled: true
@@ -546,11 +580,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:FGMM3D4-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:FGMM3D4" }
+      server: { orbId: "colo:FGMM3D4" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: true
@@ -562,11 +597,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:9BQS2Z3-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:9BQS2Z3" }
+      server: { orbId: "colo:9BQS2Z3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: true
@@ -578,11 +614,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:DGMM3D4-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:DGMM3D4" }
+      server: { orbId: "colo:DGMM3D4" version: 1 }
       firmwareVersion: "7.20.70.50"
       sshEnabled: true
       ipmiEnabled: true
@@ -594,11 +631,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:7CVD664-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:7CVD664" }
+      server: { orbId: "colo:7CVD664" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: true
@@ -610,11 +648,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:HMP6K74-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:HMP6K74" }
+      server: { orbId: "colo:HMP6K74" version: 1 }
       firmwareVersion: "7.10.90.00"
       sshEnabled: false
       ipmiEnabled: true
@@ -626,11 +665,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:4RK3V64-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:4RK3V64" }
+      server: { orbId: "colo:4RK3V64" version: 1 }
       firmwareVersion: "7.20.80.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -642,11 +682,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:GD206G4-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:GD206G4" }
+      server: { orbId: "colo:GD206G4" version: 1 }
       firmwareVersion: "7.20.80.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -658,11 +699,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:9MP6K74-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:9MP6K74" }
+      server: { orbId: "colo:9MP6K74" version: 1 }
       firmwareVersion: "7.20.80.50"
       sshEnabled: false
       ipmiEnabled: true
@@ -674,11 +716,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:7MP6K74-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:7MP6K74" }
+      server: { orbId: "colo:7MP6K74" version: 1 }
       firmwareVersion: "7.10.90.00"
       sshEnabled: false
       ipmiEnabled: true
@@ -690,11 +733,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "colo:8CVD664-idrac"
+      version: 1
       name: "idrac"
       namespace: "colo"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "colo:8CVD664" }
+      server: { orbId: "colo:8CVD664" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false

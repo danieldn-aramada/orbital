@@ -10,9 +10,11 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/armada/orbital/ent/predicate"
 	"github.com/armada/orbital/ent/registryartifact"
+	"github.com/armada/orbital/internal/ocitype"
 	"github.com/google/uuid"
 )
 
@@ -323,6 +325,24 @@ func (_u *RegistryArtifactUpdate) ClearBundlerError() *RegistryArtifactUpdate {
 	return _u
 }
 
+// SetLayers sets the "layers" field.
+func (_u *RegistryArtifactUpdate) SetLayers(v []ocitype.ArtifactLayer) *RegistryArtifactUpdate {
+	_u.mutation.SetLayers(v)
+	return _u
+}
+
+// AppendLayers appends value to the "layers" field.
+func (_u *RegistryArtifactUpdate) AppendLayers(v []ocitype.ArtifactLayer) *RegistryArtifactUpdate {
+	_u.mutation.AppendLayers(v)
+	return _u
+}
+
+// ClearLayers clears the value of the "layers" field.
+func (_u *RegistryArtifactUpdate) ClearLayers() *RegistryArtifactUpdate {
+	_u.mutation.ClearLayers()
+	return _u
+}
+
 // Mutation returns the RegistryArtifactMutation object of the builder.
 func (_u *RegistryArtifactUpdate) Mutation() *RegistryArtifactMutation {
 	return _u.mutation
@@ -454,6 +474,17 @@ func (_u *RegistryArtifactUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if _u.mutation.BundlerErrorCleared() {
 		_spec.ClearField(registryartifact.FieldBundlerError, field.TypeString)
+	}
+	if value, ok := _u.mutation.Layers(); ok {
+		_spec.SetField(registryartifact.FieldLayers, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedLayers(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, registryartifact.FieldLayers, value)
+		})
+	}
+	if _u.mutation.LayersCleared() {
+		_spec.ClearField(registryartifact.FieldLayers, field.TypeJSON)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -769,6 +800,24 @@ func (_u *RegistryArtifactUpdateOne) ClearBundlerError() *RegistryArtifactUpdate
 	return _u
 }
 
+// SetLayers sets the "layers" field.
+func (_u *RegistryArtifactUpdateOne) SetLayers(v []ocitype.ArtifactLayer) *RegistryArtifactUpdateOne {
+	_u.mutation.SetLayers(v)
+	return _u
+}
+
+// AppendLayers appends value to the "layers" field.
+func (_u *RegistryArtifactUpdateOne) AppendLayers(v []ocitype.ArtifactLayer) *RegistryArtifactUpdateOne {
+	_u.mutation.AppendLayers(v)
+	return _u
+}
+
+// ClearLayers clears the value of the "layers" field.
+func (_u *RegistryArtifactUpdateOne) ClearLayers() *RegistryArtifactUpdateOne {
+	_u.mutation.ClearLayers()
+	return _u
+}
+
 // Mutation returns the RegistryArtifactMutation object of the builder.
 func (_u *RegistryArtifactUpdateOne) Mutation() *RegistryArtifactMutation {
 	return _u.mutation
@@ -930,6 +979,17 @@ func (_u *RegistryArtifactUpdateOne) sqlSave(ctx context.Context) (_node *Regist
 	}
 	if _u.mutation.BundlerErrorCleared() {
 		_spec.ClearField(registryartifact.FieldBundlerError, field.TypeString)
+	}
+	if value, ok := _u.mutation.Layers(); ok {
+		_spec.SetField(registryartifact.FieldLayers, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedLayers(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, registryartifact.FieldLayers, value)
+		})
+	}
+	if _u.mutation.LayersCleared() {
+		_spec.ClearField(registryartifact.FieldLayers, field.TypeJSON)
 	}
 	_node = &RegistryArtifact{config: _u.config}
 	_spec.Assign = _node.assignValues

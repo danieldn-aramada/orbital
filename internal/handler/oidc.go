@@ -154,7 +154,8 @@ func (h *OIDC) Callback(c echo.Context) error {
 		return fmt.Errorf("set session: %w", err)
 	}
 
-	h.writeAuthAudit("loginSuccess", email, map[string]any{"method": "oidc"})
+	ua := c.Request().UserAgent()
+	h.writeAuthAudit("loginSuccess", email, map[string]any{"method": "oidc", "user_agent": ua})
 	return c.Redirect(http.StatusSeeOther, h.basePath+"/?fresh=1")
 }
 
@@ -271,7 +272,8 @@ func (h *OIDC) DeviceCodePoll(c echo.Context) error {
 		return c.JSON(http.StatusOK, devicePollResponse{Status: "pending", Interval: interval})
 	default:
 		h.logger.Info("device code auth failed", "error", result.Error)
-		h.writeAuthAudit("loginFailed", "", map[string]any{"method": "device_code", "error": result.Error})
+		ua := c.Request().UserAgent()
+		h.writeAuthAudit("loginFailed", "", map[string]any{"method": "device_code", "error": result.Error, "user_agent": ua})
 		return c.JSON(http.StatusOK, devicePollResponse{Status: "expired"})
 	}
 
@@ -321,7 +323,7 @@ func (h *OIDC) DeviceCodePoll(c echo.Context) error {
 	}
 
 	h.logger.Info("device code auth success", "email", email)
-	h.writeAuthAudit("loginSuccess", email, map[string]any{"method": "device_code"})
+	h.writeAuthAudit("loginSuccess", email, map[string]any{"method": "device_code", "user_agent": c.Request().UserAgent()})
 	return c.JSON(http.StatusOK, devicePollResponse{Status: "complete"})
 }
 

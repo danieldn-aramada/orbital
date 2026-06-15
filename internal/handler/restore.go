@@ -19,6 +19,7 @@ import (
 	"github.com/armada/orbital/ent/backup"
 	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/restorejob"
+	"github.com/armada/orbital/internal/blobstore"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
@@ -26,7 +27,7 @@ import (
 // RestoreHandler handles async DGraph restore operations.
 type RestoreHandler struct {
 	db              *ent.Client
-	storage         blobStorage
+	storage         blobstore.Store
 	backend         RestoreBackend
 	dgraphAlterURL  string // e.g. http://dgraph-blue:8080/alter
 	dgraphSchemaURL string // e.g. http://dgraph-blue:8080/admin/schema
@@ -52,13 +53,13 @@ type RestoreConfig struct {
 }
 
 func NewRestoreHandler(ctx context.Context, db *ent.Client, cfg RestoreConfig, backend RestoreBackend, logger *slog.Logger) (*RestoreHandler, error) {
-	var store blobStorage
-	var err error
-	if strings.Contains(cfg.S3Endpoint, ".blob.core.windows.net") {
-		store, err = newAzureStorage(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket)
-	} else {
-		store, err = newS3Storage(ctx, cfg.S3Endpoint, cfg.S3Region, cfg.S3Bucket, cfg.S3AccessKey, cfg.S3SecretKey)
-	}
+	store, err := blobstore.New(ctx, blobstore.Config{
+		Endpoint:  cfg.S3Endpoint,
+		Region:    cfg.S3Region,
+		Bucket:    cfg.S3Bucket,
+		AccessKey: cfg.S3AccessKey,
+		SecretKey: cfg.S3SecretKey,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +171,7 @@ func (h *RestoreHandler) Trigger(c echo.Context) error {
 	}
 	if existingExport != nil {
 		return c.JSON(http.StatusConflict, map[string]string{
-			"error": fmt.Sprintf("export in progress (jobId: %s)", existingExport.ID),
+			"error": fmt.Sprintf("export in progress (id: %s)", existingExport.ID),
 		})
 	}
 
@@ -397,7 +398,7 @@ func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 		[]string{"restoreBackup"},
 		[]string{},
 		[]string{},
-		map[string]any{"jobId": jobID.String(), "backupKey": bk.S3Key},
+		map[string]any{"id": jobID.String(), "backupKey": bk.S3Key},
 	)
 	if _, err := h.db.RestoreJob.UpdateOneID(jobID).
 		SetStatus(restorejob.StatusCompleted).
@@ -410,7 +411,7 @@ func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 
 // downloadToFile downloads the S3 object at s3Key to destPath on disk via a presigned URL.
 func (h *RestoreHandler) downloadToFile(ctx context.Context, s3Key, destPath string) error {
-	presignedURL, err := h.storage.presignURL(ctx, s3Key)
+	presignedURL, err := h.storage.PresignURL(ctx, s3Key, presignTTL)
 	if err != nil {
 		return fmt.Errorf("presign url: %w", err)
 	}

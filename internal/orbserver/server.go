@@ -8,18 +8,19 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	_ "github.com/armada/orbital/docs/orb"
 	"github.com/armada/orbital/internal/divergence"
 	"github.com/armada/orbital/internal/handler"
+	orbmw "github.com/armada/orbital/internal/middleware"
 	"github.com/armada/orbital/internal/orb"
 	"github.com/armada/orbital/internal/orbconfig"
+	"github.com/armada/orbital/internal/startupcheck"
 	orbweb "github.com/armada/orbital/web"
 	orbtemplates "github.com/armada/orbital/web/templates/orb"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	echomw "github.com/labstack/echo/v4/middleware"
 	echoswagger "github.com/swaggo/echo-swagger"
 )
 
@@ -33,7 +34,6 @@ type Server struct {
 	dispatcher   *orb.Dispatcher        // nil if no consumers configured
 	divStore     *divergence.Store
 	divPublisher *divergence.Publisher // nil if S3 not configured
-	mappingStore *divergence.MappingStore
 	templates    map[string]*template.Template
 	webFS        fs.FS // embedded in production; os.DirFS("web") in dev for hot-reload
 	devMode      bool
@@ -66,31 +66,16 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
 
-	// HTTP access log — attribute names follow OpenTelemetry semantic
-	// conventions for HTTP server. See docs/reference/AUDIT.md for the convention
-	// document. Kept in sync with orbital's logger in internal/server/server.go.
-	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
-		Skipper: func(c echo.Context) bool {
-			p := c.Request().URL.Path
-			return strings.HasPrefix(p, "/static/") || p == "/favicon.ico"
-		},
-		LogMethod:    true,
-		LogURI:       true,
-		LogStatus:    true,
-		LogLatency:   true,
-		LogRemoteIP:  true,
-		LogUserAgent: true,
-		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
-			logger.Info("request",
-				"http.request.method", v.Method,
-				"url.path", v.URI,
-				"http.response.status_code", v.Status,
-				"client.address", v.RemoteIP,
-				"user_agent.original", v.UserAgent,
-				"duration_ms", v.Latency.Milliseconds(),
-			)
-			return nil
-		},
+	// RequestID must precede AccessLog so the middleware has an ID to log.
+	// Honors inbound X-Request-ID header; generates one when absent.
+	e.Use(echomw.RequestID())
+
+	// HTTP access log — see docs/reference/AUDIT.md for attribute conventions.
+	// Orb has no auth, so no ActorFromContext.
+	e.Use(orbmw.AccessLog(orbmw.AccessLogConfig{
+		Logger:         logger,
+		SkipPrefixes:   []string{"/static/"},
+		SkipExactPaths: []string{"/favicon.ico", "/healthz"},
 	}))
 
 	state := newImportState()
@@ -103,7 +88,6 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	imp := orb.NewImporter(*cfg, logger, backend)
 	dispatcher := orb.NewDispatcher(cfg.Consumers)
 	divStore := divergence.NewStore(cfg.DataDir)
-	mappingStore := divergence.NewMappingStore(cfg.DataDir)
 
 	var divPublisher *divergence.Publisher
 	if cfg.S3Endpoint != "" && cfg.S3Bucket != "" {
@@ -130,7 +114,6 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 		dispatcher:   dispatcher,
 		divStore:     divStore,
 		divPublisher: divPublisher,
-		mappingStore: mappingStore,
 		templates:    orbtemplates.Map(webFS),
 		webFS:        webFS,
 		devMode:      cfg.Dev,
@@ -182,6 +165,7 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	api.POST("/import/artifact", s.importArtifact)
 	api.GET("/import/status", s.importStatus)
 	api.GET("/import/history", s.importHistory)
+	api.GET("/import/history/:tag/layers", s.importHistoryLayers)
 	if cfg.EnableOCIRegistry {
 		api.POST("/import", s.triggerImport)
 		api.GET("/import/tags", s.importTags)
@@ -195,6 +179,17 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 
 // Start begins the polling loop (OCI source only) then starts the HTTP server.
 func (s *Server) Start(ctx context.Context) error {
+	// Preflight: probe configured consumers. If ORB_CONSUMERS is set but any
+	// URL is unreachable, fail fast — better than silently dispatching every
+	// bundler layer to role=unknown for hours.
+	urls := make([]string, 0, len(s.cfg.Consumers))
+	for _, c := range s.cfg.Consumers {
+		urls = append(urls, c.URL)
+	}
+	if _, err := startupcheck.ProbeOrFatal(ctx, "ORB_CONSUMERS", urls, !s.cfg.Dev, s.logger); err != nil {
+		return fmt.Errorf("consumer preflight: %w", err)
+	}
+
 	if s.cfg.EnableOCIRegistry {
 		go s.pollLoop(ctx)
 	}

@@ -47,6 +47,8 @@ const (
 	FieldEnriched = "enriched"
 	// FieldBundlerError holds the string denoting the bundler_error field in the database.
 	FieldBundlerError = "bundler_error"
+	// FieldLayers holds the string denoting the layers field in the database.
+	FieldLayers = "layers"
 	// Table holds the table name of the registryartifact in the database.
 	Table = "registry_artifacts"
 )
@@ -71,6 +73,7 @@ var Columns = []string{
 	FieldError,
 	FieldEnriched,
 	FieldBundlerError,
+	FieldLayers,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -98,7 +101,9 @@ type Status string
 // Status values.
 const (
 	StatusPending   Status = "pending"
+	StatusBundling  Status = "bundling"
 	StatusPushing   Status = "pushing"
+	StatusSigning   Status = "signing"
 	StatusCompleted Status = "completed"
 	StatusFailed    Status = "failed"
 )
@@ -110,7 +115,7 @@ func (s Status) String() string {
 // StatusValidator is a validator for the "status" field enum values. It is called by the builders before save.
 func StatusValidator(s Status) error {
 	switch s {
-	case StatusPending, StatusPushing, StatusCompleted, StatusFailed:
+	case StatusPending, StatusBundling, StatusPushing, StatusSigning, StatusCompleted, StatusFailed:
 		return nil
 	default:
 		return fmt.Errorf("registryartifact: invalid enum value for status field: %q", s)

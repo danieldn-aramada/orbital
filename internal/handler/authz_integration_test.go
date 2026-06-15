@@ -12,6 +12,7 @@ import (
 
 	"github.com/armada/orbital/ent/event"
 	"github.com/armada/orbital/ent/user"
+	"github.com/armada/orbital/internal/auth"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/labstack/echo/v4"
 )
@@ -268,6 +269,137 @@ func TestResolveUser_NoEmail_Returns401(t *testing.T) {
 	}
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401, got %d", rec.Code)
+	}
+}
+
+// ── App-principal authorization (ADR 010 §App Caller Authorization) ──────────
+
+// TestRequireRole_AppPrincipal_DevMinRole_Allowed verifies the MVP policy: an
+// app-only caller (BearerVerifier set user_name="app:<appid>", user_id=0) passes
+// RequireRole(dev) without a users-table row. The allowlist gate happened in
+// BearerVerifier; RequireRole grants dev-equivalent access.
+func TestRequireRole_AppPrincipal_DevMinRole_Allowed(t *testing.T) {
+	e := echo.New()
+	mw := handler.RequireRole(testDB, user.RoleDev)
+	called := false
+	h := mw(func(c echo.Context) error {
+		called = true
+		return c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/export", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user_id", 0)
+	c.Set("user_name", auth.AppPrincipalPrefix+"5fc832f6-843e-4207-93dd-b3c3a77c06f2")
+
+	if err := h(c); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Error("handler should have been called for app principal on dev route")
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+// TestRequireRole_AppPrincipal_AdminMinRole_Forbidden verifies that the MVP
+// dev-equivalent policy denies app callers on admin-gated routes — the inverse
+// of the path above. When App Roles land (post-MVP), the `roles` claim will
+// gate this instead.
+func TestRequireRole_AppPrincipal_AdminMinRole_Forbidden(t *testing.T) {
+	e := echo.New()
+	mw := handler.RequireAdmin(testDB)
+	called := false
+	h := mw(func(c echo.Context) error {
+		called = true
+		return c.String(http.StatusOK, "should not reach")
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/users/1/role", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user_id", 0)
+	c.Set("user_name", auth.AppPrincipalPrefix+"5fc832f6-843e-4207-93dd-b3c3a77c06f2")
+
+	err := h(c)
+	if err == nil {
+		t.Fatal("expected 403 error, got nil")
+	}
+	httpErr, ok := err.(*echo.HTTPError)
+	if !ok || httpErr.Code != http.StatusForbidden {
+		t.Errorf("expected 403 HTTPError, got: %v", err)
+	}
+	if called {
+		t.Error("handler must not be called when app caller is below admin")
+	}
+}
+
+// TestRequireRole_AppPrincipal_GetPassesThrough verifies the existing GET
+// pass-through still applies for app principals (sanity check that the new
+// branch doesn't break the read path).
+func TestRequireRole_AppPrincipal_GetPassesThrough(t *testing.T) {
+	e := echo.New()
+	mw := handler.RequireAdmin(testDB)
+	called := false
+	h := mw(func(c echo.Context) error {
+		called = true
+		return c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user_id", 0)
+	c.Set("user_name", auth.AppPrincipalPrefix+"5fc832f6-843e-4207-93dd-b3c3a77c06f2")
+
+	if err := h(c); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Error("GET request from app principal should pass through")
+	}
+}
+
+// TestResolveUser_AppPrincipal_NoDBLookup verifies that with a real DB attached,
+// an app principal still bypasses the users-table lookup and does NOT get a
+// provisioned row (no fake `app:...@something` user appears in the table).
+func TestResolveUser_AppPrincipal_NoDBLookup(t *testing.T) {
+	const appID = "5fc832f6-843e-4207-93dd-b3c3a77c06f2"
+	ctx := context.Background()
+
+	e := echo.New()
+	mw := handler.ResolveUser(testDB, nil)
+	called := false
+	h := mw(func(c echo.Context) error {
+		called = true
+		return c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/graphql", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user_id", 0)
+	c.Set("user_name", auth.AppPrincipalPrefix+appID)
+	c.Set("user_email", "")
+
+	if err := h(c); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Error("handler should have been called for app principal")
+	}
+	if userID, _ := c.Get("user_id").(int); userID != 0 {
+		t.Errorf("app principal must not get a user_id; got %d", userID)
+	}
+	// Sanity check: confirm no user row was provisioned.
+	cnt, err := testDB.User.Query().Where(user.NameContains(appID)).Count(ctx)
+	if err != nil {
+		t.Fatalf("user count query: %v", err)
+	}
+	if cnt != 0 {
+		t.Errorf("expected 0 user rows containing appid, got %d (provisioning leak)", cnt)
 	}
 }
 

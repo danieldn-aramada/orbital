@@ -83,16 +83,40 @@ func (h *DeleteHandler) Preview(c echo.Context) error {
 	return tmpl.Execute(c.Response().Writer, preview)
 }
 
-// Execute performs the cascade delete for the given node.
+// Execute performs the cascade delete for the given config item.
+//
+// This REST endpoint exists specifically to back the UI's cascade-delete flow:
+// a DataCenter or Server delete must (a) gather a single before-state and
+// audit record, (b) remove the node together with its dependent children in
+// one transaction, and (c) pair with `GET /config-items/delete-preview` for
+// the impact summary. None of that fits a single auto-generated GraphQL
+// mutation cleanly.
+//
+// Single-entity, non-cascading mutations (CRUD on individual ConfigItems) go
+// through GraphQL at `/graphql`. This endpoint is not a general-purpose REST
+// CRUD surface — see ADR 002.
+//
+// @Summary     Cascade-delete a config item (UI flow)
+// @Description Deletes a DataCenter or Server together with its dependent
+// @Description children. Bound to the UI delete modal's confirm action.
+// @Description Single-entity (non-cascading) deletes go through GraphQL.
+// @Tags        config-items
+// @Produce     json
+// @Param       type path string true "Config item type" Enums(DataCenter, Server)
+// @Param       id   path string true "DGraph node id"
+// @Success     200 {object} map[string]int "{ \"deleted\": N }"
+// @Failure     400 {object} map[string]string
+// @Failure     500 {object} map[string]string
+// @Router      /api/v1/config-items/{type}/{id} [delete]
 func (h *DeleteHandler) Execute(c echo.Context) error {
-	id := c.QueryParam("id")
+	id := c.Param("id")
 	if id == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "id required")
 	}
 	ctx := c.Request().Context()
 	actor := actorFromContext(c)
 
-	switch c.QueryParam("type") {
+	switch c.Param("type") {
 	case "DataCenter":
 		plan, err := h.planDCDelete(ctx, id)
 		if err != nil {

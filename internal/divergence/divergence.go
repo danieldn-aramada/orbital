@@ -10,23 +10,27 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/armada/orbital/internal/blobstore"
 )
 
 // OverrideEntry is a single field-level divergence between orbital's intent and
 // a locally observed override. This is the canonical format orb accepts and
 // orbital displays.
+//
+// IntendedAtVersion is populated by orb's intake handler from orb's local
+// DGraph at the moment the report arrives — producers (cb-controller, etc.)
+// do not need to send it. It anchors the observation to the ConfigItem
+// version orb believed intent was at when this report was observed, which
+// orbital uses for MVCC race detection at Accept time.
 type OverrideEntry struct {
-	OrbID         string `json:"orbId"`
-	Field         string `json:"field"`
-	Type          string `json:"type,omitempty"` // orbital GraphQL type name (e.g. "Server"); empty for legacy producers
-	IntendedValue any    `json:"intendedValue"`
-	OverrideValue any    `json:"overrideValue"`
-	Who           string `json:"who"`
-	When          string `json:"when"`
+	OrbID             string `json:"orbId"`
+	Field             string `json:"field"`
+	Type              string `json:"type,omitempty"` // orbital GraphQL type name (e.g. "Server"); empty for legacy producers
+	IntendedValue     any    `json:"intendedValue"`
+	OverrideValue     any    `json:"overrideValue"`
+	IntendedAtVersion *int   `json:"intendedAtVersion,omitempty"`
+	Who               string `json:"who"`
+	When              string `json:"when"`
 }
 
 // Snapshot is the published divergence state — the full set of currently pending
@@ -64,7 +68,7 @@ func (s *Store) Save(entries []OverrideEntry) error {
 	if err != nil {
 		return fmt.Errorf("divergence store marshal: %w", err)
 	}
-	return os.WriteFile(filepath.Join(s.dir, "current.json"), b, 0o644)
+	return writeAtomic(filepath.Join(s.dir, "current.json"), b)
 }
 
 // Load returns the current set of pending override entries. Returns empty slice
@@ -93,7 +97,7 @@ func (s *Store) SavePublishRecord(rec PublishRecord) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(s.dir, "published.json"), b, 0o644)
+	return writeAtomic(filepath.Join(s.dir, "published.json"), b)
 }
 
 // LoadPublishRecord returns the last-published record, or nil if never published.
@@ -112,10 +116,10 @@ func (s *Store) LoadPublishRecord() (*PublishRecord, error) {
 	return &rec, nil
 }
 
-// Publisher writes divergence snapshots to S3.
+// Publisher writes divergence snapshots to S3-compatible or Azure Blob storage.
+// The choice of backend is hidden behind blobstore.Store.
 type Publisher struct {
-	client  *s3.Client
-	bucket  string
+	store   blobstore.Store
 	ociRepo string // used as path prefix, e.g. "orbital/colo-galleon"
 }
 
@@ -129,32 +133,20 @@ type PublisherConfig struct {
 }
 
 func NewPublisher(ctx context.Context, cfg PublisherConfig) (*Publisher, error) {
-	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
-		awsconfig.WithRegion(cfg.Region),
-		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey, "")),
-		// MinIO doesn't emit x-amz-checksum-* response headers; WhenRequired
-		// silences the SDK's per-call "no supported checksum" warnings.
-		awsconfig.WithResponseChecksumValidation(aws.ResponseChecksumValidationWhenRequired),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("divergence publisher aws config: %w", err)
-	}
-
-	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-		if cfg.Endpoint != "" {
-			o.BaseEndpoint = &cfg.Endpoint
-			o.UsePathStyle = true
-		}
+	store, err := blobstore.New(ctx, blobstore.Config{
+		Endpoint:  cfg.Endpoint,
+		Region:    cfg.Region,
+		Bucket:    cfg.Bucket,
+		AccessKey: cfg.AccessKey,
+		SecretKey: cfg.SecretKey,
 	})
-
-	return &Publisher{
-		client:  client,
-		bucket:  cfg.Bucket,
-		ociRepo: cfg.OCIRepo,
-	}, nil
+	if err != nil {
+		return nil, fmt.Errorf("divergence publisher: %w", err)
+	}
+	return &Publisher{store: store, ociRepo: cfg.OCIRepo}, nil
 }
 
-// Publish writes a snapshot of the given entries to S3 and returns the S3 key.
+// Publish writes a snapshot of the given entries to storage and returns the key.
 func (p *Publisher) Publish(ctx context.Context, entries []OverrideEntry) (string, error) {
 	now := time.Now().UTC()
 	snap := Snapshot{
@@ -166,21 +158,24 @@ func (p *Publisher) Publish(ctx context.Context, entries []OverrideEntry) (strin
 		return "", fmt.Errorf("divergence publish marshal: %w", err)
 	}
 
-	// Key: divergence/{oci-repo}/{timestamp}.json
-	// Replace slashes in oci-repo are preserved — they form a natural S3 prefix.
+	// Slashes in oci-repo become natural prefix separators inside SnapshotKey.
 	ts := strings.ReplaceAll(now.Format("2006-01-02T15-04-05Z"), ":", "-")
-	key := fmt.Sprintf("divergence/%s/%s.json", p.ociRepo, ts)
+	key := SnapshotKey(p.ociRepo, ts)
 
-	_, err = p.client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      &p.bucket,
-		Key:         &key,
-		Body:        bytes.NewReader(b),
-		ContentType: strPtr("application/json"),
-	})
-	if err != nil {
-		return "", fmt.Errorf("divergence publish s3 put: %w", err)
+	if err := p.store.Put(ctx, key, bytes.NewReader(b), "application/json"); err != nil {
+		return "", fmt.Errorf("divergence publish put: %w", err)
 	}
 	return key, nil
 }
 
-func strPtr(s string) *string { return &s }
+// writeAtomic writes data to path via a tmp+rename so a crash mid-write can't
+// leave a truncated/corrupt file. POSIX rename is atomic on the same filesystem.
+// Mirrors the same helper in the orb package; consolidate to a shared package
+// if a third copy ever shows up.
+func writeAtomic(path string, data []byte) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}

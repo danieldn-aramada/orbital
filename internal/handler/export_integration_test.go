@@ -140,7 +140,7 @@ func triggerExport(t *testing.T, h *handler.Export, orbID string) uuid.UUID {
 	}
 
 	var resp struct {
-		JobID string `json:"jobId"`
+		JobID string `json:"id"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("parse trigger response: %v", err)
@@ -212,7 +212,7 @@ func TestExportTrigger_ConflictWhenJobInProgress(t *testing.T) {
 
 	// Wait for the first job to finish to leave a clean state for subsequent tests.
 	var resp struct {
-		JobID string `json:"jobId"`
+		JobID string `json:"id"`
 	}
 	json.Unmarshal(rec1.Body.Bytes(), &resp)
 	if jobID, err := uuid.Parse(resp.JobID); err == nil {

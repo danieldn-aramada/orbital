@@ -42,6 +42,7 @@ func (h *Login) Post(c echo.Context) error {
 	email := strings.ToLower(c.FormValue("email"))
 	password := c.FormValue("password")
 	csrf := c.FormValue("csrf")
+	ua := c.Request().UserAgent()
 
 	if !auth.ValidateCSRF(h.sessionKeys, c.Request(), csrf) {
 		return h.renderForm(c, "Invalid request.")
@@ -51,7 +52,7 @@ func (h *Login) Post(c echo.Context) error {
 		Where(user.Email(email)).
 		Only(c.Request().Context())
 	if err != nil {
-		h.writeAuthAudit("loginFailed", email, map[string]any{"method": "local", "reason": "unknown_email"})
+		h.writeAuthAudit("loginFailed", email, map[string]any{"method": "local", "reason": "unknown_email", "user_agent": ua})
 		return h.renderForm(c, "Invalid email or password.")
 	}
 
@@ -59,7 +60,7 @@ func (h *Login) Post(c echo.Context) error {
 		return h.renderForm(c, "This account uses SSO login.")
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(*u.PasswordHash), []byte(password)); err != nil {
-		h.writeAuthAudit("loginFailed", email, map[string]any{"method": "local", "reason": "invalid_password"})
+		h.writeAuthAudit("loginFailed", email, map[string]any{"method": "local", "reason": "invalid_password", "user_agent": ua})
 		return h.renderForm(c, "Invalid email or password.")
 	}
 
@@ -67,7 +68,7 @@ func (h *Login) Post(c echo.Context) error {
 		return fmt.Errorf("set session: %w", err)
 	}
 
-	h.writeAuthAudit("loginSuccess", email, map[string]any{"method": "local"})
+	h.writeAuthAudit("loginSuccess", email, map[string]any{"method": "local", "user_agent": ua})
 	c.Response().Header().Set("HX-Redirect", h.basePath+"/?fresh=1")
 	return c.NoContent(http.StatusOK)
 }
@@ -77,13 +78,14 @@ func (h *Login) Logout(c echo.Context) error {
 	csrf := c.FormValue("csrf")
 	// Read actor before clearing the session.
 	actor, _ := c.Get("user_email").(string)
+	ua := c.Request().UserAgent()
 	if !auth.ValidateCSRF(h.sessionKeys, c.Request(), csrf) {
 		return c.Redirect(http.StatusSeeOther, h.basePath+"/")
 	}
 	if err := auth.ClearSession(h.sessionKeys, c.Request(), c.Response().Writer); err != nil {
 		return fmt.Errorf("clear session: %w", err)
 	}
-	h.writeAuthAudit("logout", actor, map[string]any{})
+	h.writeAuthAudit("logout", actor, map[string]any{"user_agent": ua})
 	return c.Redirect(http.StatusSeeOther, h.basePath+"/")
 }
 

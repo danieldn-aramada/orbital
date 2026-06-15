@@ -123,7 +123,10 @@ func GetOrCreateCSRF(keys SessionKeys, r *http.Request, w http.ResponseWriter) (
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	token := base64.StdEncoding.EncodeToString(b)
+	// RawURLEncoding is URL-safe (no `+`/`/`/`=`) so the token doesn't get
+	// HTML-entity-encoded when rendered inside a template attribute. Clients
+	// (curl, CLI scripts) can read the token verbatim without HTML decoding.
+	token := base64.RawURLEncoding.EncodeToString(b)
 	session.Values[csrfKey] = token
 	if err := session.Save(r, w); err != nil {
 		return "", err

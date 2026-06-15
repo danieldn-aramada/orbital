@@ -1030,6 +1030,16 @@ func BundlerErrorContainsFold(v string) predicate.RegistryArtifact {
 	return predicate.RegistryArtifact(sql.FieldContainsFold(FieldBundlerError, v))
 }
 
+// LayersIsNil applies the IsNil predicate on the "layers" field.
+func LayersIsNil() predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldIsNull(FieldLayers))
+}
+
+// LayersNotNil applies the NotNil predicate on the "layers" field.
+func LayersNotNil() predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(sql.FieldNotNull(FieldLayers))
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.RegistryArtifact) predicate.RegistryArtifact {
 	return predicate.RegistryArtifact(sql.AndPredicates(predicates...))

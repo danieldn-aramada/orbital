@@ -1,6 +1,8 @@
 package divergence
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -94,5 +96,22 @@ func TestStore_LoadPublishRecord_Empty(t *testing.T) {
 	}
 	if got != nil {
 		t.Errorf("expected nil, got %+v", got)
+	}
+}
+
+// TestWriteAtomic_LeavesNoTmpFile guards the divergence-package copy of the
+// atomic write helper (mirrors the orb-package test).
+func TestWriteAtomic_LeavesNoTmpFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+	if err := writeAtomic(path, []byte(`{"k":"v"}`)); err != nil {
+		t.Fatalf("writeAtomic: %v", err)
+	}
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Errorf("expected tmp file to be renamed away, but it still exists")
+	}
+	data, _ := os.ReadFile(path)
+	if string(data) != `{"k":"v"}` {
+		t.Errorf("final file mismatch: %s", data)
 	}
 }

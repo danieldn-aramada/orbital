@@ -129,7 +129,7 @@ function triggerBackup() {
         btn.disabled = false
       } else {
         loadBackups()
-        pollBackup(data.jobId)
+        pollBackup(data.id)
       }
     })
     .catch(() => {
@@ -205,26 +205,10 @@ document.addEventListener('DOMContentLoaded', () => {
   loadBackups()
 })
 
-function testBackupConnection() {
-  const btn = document.getElementById('btn-test-backup-connection')
-  const result = document.getElementById('backup-connection-result')
-  btn.classList.add('is-loading')
-  result.textContent = ''
-  fetch(BASE + '/api/v1/backup/test-connection', { method: 'POST' })
-    .then(r => r.json())
-    .then(res => {
-      btn.classList.remove('is-loading')
-      if (res.ok) {
-        result.innerHTML = '<span class="has-text-success"><i class="fa-solid fa-circle-check"></i> Connected</span>'
-      } else {
-        result.innerHTML = `<span class="has-text-danger"><i class="fa-solid fa-circle-xmark"></i> ${res.error ?? 'Failed'}</span>`
-      }
-    })
-    .catch(() => {
-      btn.classList.remove('is-loading')
-      result.innerHTML = '<span class="has-text-danger">Request failed</span>'
-    })
-}
+// Test Connection buttons are declarative — see backups.gohtml and
+// divergence-reports.gohtml. The button posts to /api/v1/backup/test-connection
+// with HX-Request: true and the server returns an HTML fragment swapped into
+// the result slot. No JS handler needed.
 
 // ─── Export page ──────────────────────────────────────────────────────────────
 
@@ -267,7 +251,7 @@ function handleExportSubmit() {
         return
       }
       showExportStatus('is-info', 'fa-spinner fa-spin', 'Export started…')
-      pollExportStatus(json.jobId)
+      pollExportStatus(json.id)
       loadExportJobsTable()
     })
     .catch(() => {
@@ -360,7 +344,7 @@ function loadArtifactsTable(showSpinner = false) {
   const minDelay = new Promise(resolve => setTimeout(resolve, showSpinner ? 200 : 0))
   fetch(BASE + '/api/v1/oci/artifacts', { headers: { 'HX-Request': 'true' } })
     .then(r => r.text())
-    .then(html => { tbody.innerHTML = html })
+    .then(html => { tbody.innerHTML = html; htmx.process(tbody) })
     .catch(() => {})
     .finally(() => { minDelay.then(() => { if (btn) btn.classList.remove('is-loading') }) })
 }
@@ -548,7 +532,8 @@ document.addEventListener('click', function (e) {
             return
           }
           const result = await resp.json()
-          if (result.errors && result.errors.length > 0) { showError(result.errors[0].message); return }
+          const errMsg = window.gqlErrorMessage(result)
+          if (errMsg) { showError(errMsg); return }
           modal.classList.remove('is-active')
           document.documentElement.style.overflow = ''
           dcEditors.delete(id)
@@ -684,7 +669,11 @@ document.addEventListener('click', function (e) {
         target: document.getElementById('srv-json-editor-' + id),
         props: { mode: 'text', mainMenuBar: false },
       })
-      editor.set({ text: JSON.stringify(JSON.parse(initialJSON), null, 2) })
+      const parsedInitial = JSON.parse(initialJSON)
+      editor.set({ text: JSON.stringify(parsedInitial, null, 2) })
+      const { idracSettings: _initialIdrac, ...initialServer } = parsedInitial
+      modal.dataset.idracSnapshot = JSON.stringify(_initialIdrac ?? {})
+      modal.dataset.serverSnapshot = JSON.stringify(initialServer)
       srvEditors.set(id, editor)
 
       const errorEl = document.getElementById('srv-edit-error-' + id)
@@ -705,21 +694,42 @@ document.addEventListener('click', function (e) {
           const currentVersion = parseInt(modal.dataset.version, 10) || 0
           const idracSettings = vars.idracSettings ?? {}
           delete vars.idracSettings
+          // Diff against snapshots captured at modal open. Only fire the
+          // mutation(s) whose side actually changed — keeps the audit
+          // operations list honest (e.g. flipping sshEnabled records as
+          // addIdracSettings only, not updateServer + addIdracSettings).
+          const idracChanged = JSON.stringify(idracSettings) !== (modal.dataset.idracSnapshot || '{}')
+          const serverChanged = JSON.stringify(vars) !== (modal.dataset.serverSnapshot || '{}')
+
+          if (!serverChanged && !idracChanged) {
+            modal.classList.remove('is-active')
+            document.documentElement.style.overflow = ''
+            return
+          }
+
           const idracOrbId = (modal.dataset.orbId || '') + '-idrac'
           const idracNamespace = (modal.dataset.orbId || '').split(':')[0]
           const now = new Date().toISOString()
           const currentUser = modal.dataset.currentUser || ''
-          const resp = await fetch(BASE + '/graphql', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              query: `mutation UpdateServerAndIdrac(
-                $id: ID!, $hostname: String, $manufacturer: String, $model: String,
-                $oobMAC: String, $rackPosition: Int, $serviceTag: String,
-                $version: Int, $updatedBy: String!, $updatedAt: DateTime!,
-                $idracInput: [AddIdracSettingsInput!]!
-              ) {
-                updateServer(input: {
+
+          // Build query + variables from the parts that changed. Mutation name
+          // is chosen so the proxy's MVCC singleEntityTypes lookup matches when
+          // the server is being touched (UpdateServer / UpdateServerAndIdrac).
+          // Idrac-only edits use a distinct name; no server MVCC is needed.
+          const queryArgs = ['$updatedBy: String!', '$updatedAt: DateTime!']
+          const bodyParts = []
+          const variables = {
+            orbId: modal.dataset.orbId || '',
+            updatedBy: currentUser,
+            updatedAt: now,
+          }
+          if (serverChanged) {
+            queryArgs.push(
+              '$id: ID!', '$hostname: String', '$manufacturer: String', '$model: String',
+              '$oobMAC: String', '$rackPosition: Int', '$serviceTag: String',
+              '$version: Int',
+            )
+            bodyParts.push(`updateServer(input: {
                   filter: { id: [$id] }
                   set: {
                     hostname: $hostname, manufacturer: $manufacturer, model: $model,
@@ -728,39 +738,49 @@ document.addEventListener('click', function (e) {
                   }
                 }) {
                   server { id hostname }
-                }
-                addIdracSettings(input: $idracInput, upsert: true) {
+                }`)
+            variables.id = id
+            variables.ifVersion = currentVersion
+            variables.version = currentVersion + 1
+            variables.hostname = vars.hostname
+            variables.manufacturer = vars.manufacturer
+            variables.model = vars.model
+            variables.oobMAC = vars.oobMAC
+            variables.rackPosition = vars.rackPosition
+            variables.serviceTag = vars.serviceTag
+          }
+          if (idracChanged) {
+            queryArgs.push('$idracInput: [AddIdracSettingsInput!]!')
+            bodyParts.push(`addIdracSettings(input: $idracInput, upsert: true) {
                   numUids
-                }
-              }`,
-              variables: {
-                ...vars,
-                id,
-                orbId: modal.dataset.orbId || '',
-                ifVersion: currentVersion,
-                version: currentVersion + 1,
-                updatedBy: currentUser,
-                updatedAt: now,
-                idracInput: [{
-                  orbId: idracOrbId,
-                  name: 'idrac',
-                  namespace: { name: idracNamespace },
-                  createdBy: currentUser,
-                  createdAt: now,
-                  updatedBy: currentUser,
-                  updatedAt: now,
-                  server: { id },
-                  firmwareVersion: idracSettings.firmwareVersion ?? null,
-                  sshEnabled: idracSettings.sshEnabled ?? null,
-                  ipmiEnabled: idracSettings.ipmiEnabled ?? null,
-                  lockdownModeEnabled: idracSettings.lockdownModeEnabled ?? null,
-                  osToIdracPassThroughEnabled: idracSettings.osToIdracPassThroughEnabled ?? null,
-                  usbManagementPortEnabled: idracSettings.usbManagementPortEnabled ?? null,
-                  dhcpEnabled: idracSettings.dhcpEnabled ?? null,
-                  racadmEnabled: idracSettings.racadmEnabled ?? null,
-                }],
-              },
-            }),
+                }`)
+            variables.idracInput = [{
+              orbId: idracOrbId,
+              name: 'idrac',
+              namespace: idracNamespace,
+              createdBy: currentUser,
+              createdAt: now,
+              updatedBy: currentUser,
+              updatedAt: now,
+              server: { id },
+              firmwareVersion: idracSettings.firmwareVersion ?? null,
+              sshEnabled: idracSettings.sshEnabled ?? null,
+              ipmiEnabled: idracSettings.ipmiEnabled ?? null,
+              lockdownModeEnabled: idracSettings.lockdownModeEnabled ?? null,
+              osToIdracPassThroughEnabled: idracSettings.osToIdracPassThroughEnabled ?? null,
+              usbManagementPortEnabled: idracSettings.usbManagementPortEnabled ?? null,
+              dhcpEnabled: idracSettings.dhcpEnabled ?? null,
+              racadmEnabled: idracSettings.racadmEnabled ?? null,
+            }]
+          }
+          const opName = serverChanged && idracChanged ? 'UpdateServerAndIdrac'
+            : serverChanged ? 'UpdateServer'
+            : 'UpdateIdracSettings'
+          const query = `mutation ${opName}(${queryArgs.join(', ')}) { ${bodyParts.join(' ')} }`
+          const resp = await fetch(BASE + '/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, variables }),
           })
           if (!resp.ok) {
             if (resp.status === 409) {
@@ -772,7 +792,8 @@ document.addEventListener('click', function (e) {
             return
           }
           const result = await resp.json()
-          if (result.errors && result.errors.length > 0) { showError(result.errors[0].message); return }
+          const errMsg = window.gqlErrorMessage(result)
+          if (errMsg) { showError(errMsg); return }
           modal.classList.remove('is-active')
           document.documentElement.style.overflow = ''
           srvEditors.delete(id)
@@ -990,7 +1011,7 @@ function triggerRestore(confirm) {
         btn.textContent = 'Restore Now'
         btn.setAttribute('onclick', 'triggerRestore()')
         loadRestoreJobs()
-        pollRestore(data.jobId)
+        pollRestore(data.id)
       }
     })
     .catch(() => {
@@ -1101,31 +1122,249 @@ function restoreDivergenceGroups() {
   for (const dcId of loadExpandedSet()) setGroupExpanded(dcId, true)
 }
 
-function resolveDivergence(id, action, btn) {
-  btn.classList.add('is-loading')
-  btn.disabled = true
+// toggleDivergenceAction selects/deselects an action button within a per-row
+// .divergence-action-group. Radio-style: clicking a different button switches
+// the selection; clicking the already-selected button unselects it (= no
+// decision staged on that row).
+function toggleDivergenceAction(btn) {
+  const group = btn.closest('.divergence-action-group')
+  if (!group) return
+  const wasSelected = btn.classList.contains('is-selected')
+  // Reset every button in this group to the unselected (outlined) state.
+  for (const b of group.querySelectorAll('.divergence-action-btn')) {
+    b.classList.remove('is-selected')
+    b.classList.add('is-outlined')
+  }
+  // Toggle the clicked one if it wasn't already selected.
+  if (!wasSelected) {
+    btn.classList.remove('is-outlined')
+    btn.classList.add('is-selected')
+  }
+  updateDivergenceBatchCounter()
+}
 
-  fetch(BASE + `/api/v1/divergence/${id}/${action}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  })
-    .then(r => {
-      if (!r.ok) return r.text().then(t => Promise.reject(t || 'Request failed'))
+// collectDivergenceSelections returns [{id, action}, ...] for every row whose
+// action group has a button in the .is-selected state. Rows where the operator
+// hasn't clicked any action button (or has explicitly unstaged) are excluded
+// — those are silently skipped by the batch endpoint server-side too.
+function collectDivergenceSelections() {
+  const groups = document.querySelectorAll('.divergence-action-group')
+  const out = []
+  for (const g of groups) {
+    const selected = g.querySelector('.divergence-action-btn.is-selected')
+    if (selected) {
+      out.push({ id: g.dataset.entryId, action: selected.dataset.action })
+    }
+  }
+  return out
+}
+
+// Submit is gated on the ALL-OR-NOTHING rule: every visible pending row must
+// have a staged decision. Resolved rows don't render the action group, so the
+// "pending" count is exactly the number of .divergence-action-group elements
+// on the page. This keeps the rule precise (resolved rows don't count against
+// the gate) and self-correcting (after a partial submit the page reloads;
+// remaining rows reset the gate).
+function updateDivergenceBatchCounter() {
+  const counter = document.getElementById('divergence-batch-counter')
+  const submit = document.getElementById('divergence-batch-submit')
+  if (!counter || !submit) return
+
+  const total = document.querySelectorAll('.divergence-action-group').length
+  const staged = collectDivergenceSelections().length
+
+  if (total === 0) {
+    submit.disabled = true
+    counter.textContent = 'No pending decisions.'
+    return
+  }
+  if (staged === total) {
+    submit.disabled = false
+    counter.textContent = `${staged} of ${total} decisions made — ready to submit.`
+    return
+  }
+  submit.disabled = true
+  const remaining = total - staged
+  counter.textContent =
+    `${staged} of ${total} decisions made — ${remaining} row${remaining === 1 ? '' : 's'} still need${remaining === 1 ? 's' : ''} a decision.`
+}
+
+// submitDivergenceBatch is the Submit-button handler. Instead of POSTing
+// immediately, it opens the confirmation modal pre-populated with the staged
+// decisions. The actual POST happens when the modal's Confirm button fires
+// confirmDivergenceBatch().
+function submitDivergenceBatch() {
+  const resolutions = collectDivergenceSelections()
+  if (resolutions.length === 0) return
+  populateDivergenceConfirmModal(resolutions)
+  const modal = document.getElementById('divergence-confirm-modal')
+  if (modal) modal.classList.add('is-active')
+}
+
+function closeDivergenceConfirmModal() {
+  const modal = document.getElementById('divergence-confirm-modal')
+  if (modal) modal.classList.remove('is-active')
+  const btn = document.getElementById('divergence-confirm-btn')
+  if (btn) { btn.classList.remove('is-loading'); btn.disabled = false }
+}
+
+// populateDivergenceConfirmModal fills the modal body with:
+//   - summary tags (count per action with appropriate colors)
+//   - a Force warning when any forces are staged
+//   - a per-row list (collapsed via <details> when >10 rows)
+function populateDivergenceConfirmModal(resolutions) {
+  const counts = { accept: 0, reject: 0, ignore: 0 }
+  for (const r of resolutions) counts[r.action] = (counts[r.action] || 0) + 1
+
+  const tags = []
+  if (counts.accept) tags.push(`<span class="tag is-success is-light">${counts.accept} Accept</span>`)
+  if (counts.reject) tags.push(`<span class="tag is-danger is-light">${counts.reject} Reject</span>`)
+  if (counts.ignore) tags.push(`<span class="tag is-warning is-light">${counts.ignore} Ignore</span>`)
+
+  const warning = counts.reject > 0
+    ? `<div class="notification is-warning is-light is-size-7 mt-3 mb-0" style="padding:0.75em 1em;">
+         <strong>Reject</strong> instructs the deployment layer to take ownership of the field on the next bundle and reset the edge value to cloud intent.
+         Once propagated, it's hard to reverse from this UI — plan accordingly.
+       </div>`
+    : ''
+
+  const rowsHTML = resolutions.map(r => {
+    const group = document.querySelector(`.divergence-action-group[data-entry-id="${r.id}"]`)
+    const orbId = group?.dataset.entryOrbid || r.id
+    const field = group?.dataset.entryField || '?'
+    const colorClass = r.action === 'accept' ? 'has-text-success'
+                      : r.action === 'reject' ? 'has-text-danger'
+                      : 'has-text-warning-dark'
+    return `<li class="is-size-7" style="margin-bottom:0.15em;">
+              <code>${orbId}</code> / <code>${field}</code>
+              &nbsp;→&nbsp; <strong class="${colorClass}">${r.action}</strong>
+            </li>`
+  }).join('')
+
+  const listHTML = resolutions.length <= 10
+    ? `<ul style="margin-left:1.25em; margin-top:0.75em;">${rowsHTML}</ul>`
+    : `<details style="margin-top:0.75em;">
+         <summary class="is-size-7 has-text-grey" style="cursor:pointer;">Show all ${resolutions.length} decisions</summary>
+         <ul style="margin-left:1.25em; margin-top:0.5em;">${rowsHTML}</ul>
+       </details>`
+
+  const summary = document.getElementById('divergence-confirm-summary')
+  summary.innerHTML = `
+    <p class="mb-3">Submitting ${resolutions.length} decision${resolutions.length === 1 ? '' : 's'}:</p>
+    <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">${tags.join('')}</div>
+    ${warning}
+    ${listHTML}
+  `
+}
+
+// confirmDivergenceBatch is the Confirm-button handler.
+// Fires N parallel PUT /api/v1/divergences/:id/resolution calls — one per
+// staged decision. The server's REST endpoint is single-row; batching is a
+// client-side concern. Per-row errors surface in the same #divergence-error
+// notification slot; full success reloads the page.
+function confirmDivergenceBatch() {
+  const confirmBtn = document.getElementById('divergence-confirm-btn')
+  const submit = document.getElementById('divergence-batch-submit')
+  const errEl = document.getElementById('divergence-error')
+  const resolutions = collectDivergenceSelections()
+  if (resolutions.length === 0) {
+    closeDivergenceConfirmModal()
+    return
+  }
+
+  confirmBtn.classList.add('is-loading')
+  confirmBtn.disabled = true
+
+  Promise.allSettled(resolutions.map(r =>
+    fetch(BASE + `/api/v1/divergences/${encodeURIComponent(r.id)}/resolution`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: r.action }),
+    }).then(async resp => {
+      if (resp.ok) return { id: r.id, ok: true }
+      const body = await resp.json().catch(() => ({}))
+      const errMessage = body.message || body.error || `HTTP ${resp.status}`
+      throw Object.assign(new Error(errMessage), { id: r.id, status: resp.status })
+    })
+  )).then(outcomes => {
+    const failed = outcomes
+      .filter(o => o.status === 'rejected')
+      .map(o => ({ id: o.reason.id || '?', error: o.reason.message || 'unknown error' }))
+    const okCount = outcomes.length - failed.length
+    if (failed.length === 0) {
       window.location.reload()
-    })
-    .catch(msg => {
-      btn.classList.remove('is-loading')
-      btn.disabled = false
-      const errEl = document.getElementById('divergence-error')
-      if (errEl) {
-        errEl.textContent = typeof msg === 'string' ? msg : 'Resolution failed.'
-        errEl.style.display = ''
-        setTimeout(() => { errEl.style.display = 'none' }, 5000)
-      }
-    })
+      return
+    }
+    const msg = okCount > 0
+      ? `${okCount} applied, ${failed.length} failed:\n${failed.map(f => `• ${f.id}: ${f.error}`).join('\n')}`
+      : `All ${failed.length} decisions failed:\n${failed.map(f => `• ${f.id}: ${f.error}`).join('\n')}`
+    closeDivergenceConfirmModal()
+    if (errEl) {
+      errEl.style.whiteSpace = 'pre-line'
+      errEl.textContent = msg
+      errEl.style.display = ''
+      setTimeout(() => { errEl.style.display = 'none' }, 10000)
+    }
+    if (submit) submit.classList.remove('is-loading')
+    updateDivergenceBatchCounter()
+  })
 }
 
 document.addEventListener('DOMContentLoaded', restoreDivergenceGroups)
+document.addEventListener('DOMContentLoaded', updateDivergenceBatchCounter)
+
+// refreshDivergenceReports fetches the page's HX fragment and swaps the
+// table contents in place. Same Promise.all pattern as loadOrbTags: skeleton
+// rows show immediately, and the swap waits for BOTH the fetch and the 500ms
+// min-delay so a fast response doesn't flash the skeleton.
+function refreshDivergenceReports() {
+  const btn = document.getElementById('btn-refresh-divergence')
+  const container = document.getElementById('divergence-content')
+  if (!container) return
+  if (btn) btn.classList.add('is-loading')
+  container.innerHTML = divergenceSkeletonHTML()
+  Promise.all([
+    fetch(BASE + '/divergence-reports', { headers: { 'HX-Request': 'true' } }).then(r => r.text()),
+    new Promise(resolve => setTimeout(resolve, 500)),
+  ])
+    .then(([html]) => {
+      container.innerHTML = html
+      htmx.process(container)
+      restoreDivergenceGroups()
+      updateDivergenceBatchCounter()
+    })
+    .catch(() => {})
+    .finally(() => { if (btn) btn.classList.remove('is-loading') })
+}
+
+// divergenceSkeletonHTML mirrors the real table's column widths so the
+// transition from skeleton → real content doesn't reflow. Same is-skeleton
+// span pattern as loadOrbTags and shared.js helpers.
+function divergenceSkeletonHTML() {
+  const s = () => `<span class="is-skeleton" style="display:block">&nbsp;</span>`
+  const row = () => `<tr>
+    <td>${s()}</td><td>${s()}</td><td>${s()}</td><td>${s()}</td><td>${s()}</td>
+  </tr>`
+  return `<table class="table is-striped is-fullwidth is-size-7" style="table-layout: fixed;">
+    <colgroup>
+      <col style="width: 2.5rem">
+      <col style="width: 20%">
+      <col style="width: 20%">
+      <col style="width: 20%">
+      <col>
+    </colgroup>
+    <thead>
+      <tr>
+        <th></th>
+        <th>Data Center</th>
+        <th>Last Seen</th>
+        <th>Entries</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>${[1, 2, 3].map(row).join('')}</tbody>
+  </table>`
+}
 
 // ─── Config-item delete modal (DataCenter / Server) ───────────────────────────
 
@@ -1151,7 +1390,7 @@ document.addEventListener('DOMContentLoaded', restoreDivergenceGroups)
     confirmBtn.classList.remove('is-loading')
     modal.classList.add('is-active')
 
-    fetch(BASE + '/api/v1/config-items/delete-preview?id=' + encodeURIComponent(id) + '&type=' + type)
+    fetch(BASE + '/config-items/delete-preview?id=' + encodeURIComponent(id) + '&type=' + type)
       .then(r => r.ok ? r.text() : r.text().then(t => Promise.reject(t)))
       .then(html => {
         loading.style.display = 'none'
@@ -1196,7 +1435,7 @@ document.addEventListener('DOMContentLoaded', restoreDivergenceGroups)
     btn.disabled = true
 
     try {
-      const r = await fetch(BASE + '/api/v1/config-items?id=' + encodeURIComponent(id) + '&type=' + type, { method: 'DELETE' })
+      const r = await fetch(BASE + '/api/v1/config-items/' + encodeURIComponent(type) + '/' + encodeURIComponent(id), { method: 'DELETE' })
       if (!r.ok) {
         const t = await r.text()
         throw new Error(t || 'Delete failed')
@@ -1233,7 +1472,6 @@ window.downloadBackup = downloadBackup
 window.openDeleteModal = openDeleteModal
 window.closeDeleteModal = closeDeleteModal
 window.confirmDelete = confirmDelete
-window.testBackupConnection = testBackupConnection
 window.handleExportSubmit = handleExportSubmit
 window.downloadExportJob = downloadExportJob
 window.deleteExportJob = deleteExportJob
@@ -1248,5 +1486,10 @@ window.onRestoreSelectChange = onRestoreSelectChange
 window.openRestoreLogModal = openRestoreLogModal
 window.closeRestoreLogModal = closeRestoreLogModal
 window.setUserRole = setUserRole
-window.resolveDivergence = resolveDivergence
 window.toggleDivergenceGroup = toggleDivergenceGroup
+window.toggleDivergenceAction = toggleDivergenceAction
+window.updateDivergenceBatchCounter = updateDivergenceBatchCounter
+window.submitDivergenceBatch = submitDivergenceBatch
+window.confirmDivergenceBatch = confirmDivergenceBatch
+window.closeDivergenceConfirmModal = closeDivergenceConfirmModal
+window.refreshDivergenceReports = refreshDivergenceReports

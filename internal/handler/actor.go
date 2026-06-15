@@ -9,9 +9,15 @@ import "github.com/labstack/echo/v4"
 // name can change in Azure AD without their email changing, which would silently
 // corrupt historical audit trails.
 //
-// Falls back to display name when email is absent (e.g. local dev sessions that
-// omit email). Returns empty string when neither is set (unauthenticated or test
-// contexts where no session middleware ran).
+// Falls back to display name when email is absent. Three legitimate cases for
+// the fallback:
+//   - Local dev sessions that omit email
+//   - App-only (client-credentials) bearer tokens — the bearer verifier sets
+//     user_email="" and user_name="app:<appid>" so service callers are
+//     attributable in audit logs (see auth.AppPrincipalPrefix + ADR 010)
+//   - Test contexts that only populate user_name
+//
+// Returns empty string when neither is set (unauthenticated or unmiddlewared).
 func actorFromContext(c echo.Context) string {
 	if email, _ := c.Get("user_email").(string); email != "" {
 		return email

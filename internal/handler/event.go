@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -52,12 +53,21 @@ type eventDetails struct {
 	Before        map[string]any `json:"before"`
 }
 
-// diffableFields lists the fields to include in the before/after diff per resource type.
-var diffableFields = map[string][]string{
-	"DataCenter":        {"name", "assetDataV2"},
-	"Server":            {"name", "hostname", "model", "manufacturer", "serviceTag", "rackPosition", "oobMAC"},
-	"KubernetesCluster": {"name", "provider"},
-	"EksaConfig":        {"name", "clusterType"},
+// skipDiffFields are metadata fields excluded from before/after diffs across
+// every resource type. Everything else present in BOTH before and after is
+// diffed generically — no per-type allowlist. Adding a new ConfigItem type
+// requires no changes here; divergence-accept / DispatchMutation diffs work
+// out of the box.
+var skipDiffFields = map[string]bool{
+	"id":         true,
+	"version":    true,
+	"orbId":      true,
+	"namespace":  true,
+	"createdAt":  true,
+	"createdBy":  true,
+	"updatedAt":  true,
+	"updatedBy":  true,
+	"ifVersion":  true,
 }
 
 type eventsFragmentData struct {
@@ -100,10 +110,27 @@ func (h *EventHandler) List(c echo.Context) error {
 	}
 
 	q := h.db.Event.Query()
-	if oid := c.QueryParam("orbId"); oid != "" {
+	// orbId is repeatable: ?orbId=server&orbId=idrac&orbId=scp&... Single value
+	// covers a node-specific filter; the list covers a UI panel that aggregates
+	// events across a parent and its nested ConfigItems (e.g. a Server tab
+	// pulling its IdracSettings / ServerConfigurationProfile / StorageControllers
+	// in one fetch). Capped to defend against URL/query bloat.
+	const maxOrbIDs = 32
+	rawOrbIDs := c.QueryParams()["orbId"]
+	// Drop empties so an attribute like data-related-orb-ids="" doesn't insert "".
+	orbIDFilter := make([]string, 0, len(rawOrbIDs))
+	for _, id := range rawOrbIDs {
+		if id != "" {
+			orbIDFilter = append(orbIDFilter, id)
+		}
+	}
+	if len(orbIDFilter) > maxOrbIDs {
+		orbIDFilter = orbIDFilter[:maxOrbIDs]
+	}
+	if len(orbIDFilter) > 0 {
 		q = q.Where(
 			event.Or(
-				event.HasResourcesWith(eventresource.OrbIDEQ(oid)),
+				event.HasResourcesWith(eventresource.OrbIDIn(orbIDFilter...)),
 				event.EventCategoryEQ("management"),
 			),
 			event.EventCategoryNEQ("auth"),
@@ -206,22 +233,46 @@ func buildVarSummary(raw json.RawMessage) template.HTML {
 	return template.HTML(strings.Join(parts, "<br>"))
 }
 
-// buildDiffHTML computes a before/after line diff for diffable fields of the given
-// resource type and returns colored HTML. Returns "" when nothing changed or no
-// diffable fields are present.
+// buildDiffHTML computes a before/after line diff and returns colored HTML.
+// Returns "" when nothing changed.
+//
+// Generic across resource types: diffs every field present in BOTH before and
+// after (minus skipDiffFields metadata). No per-type allowlist. Adding a new
+// ConfigItem type produces diffs automatically.
+//
+// Patch-style mutations (`update{Type}(input: {filter, set: $set})`) keep
+// after-values nested under variables["set"]; user-driven flat-shape edits
+// keep them at the top level. Both shapes work.
+//
+// resourceType remains a parameter for the Server-specific compound-mutation
+// block at the bottom — that handles the case where ONE user-driven event
+// touches both Server top-level fields AND nested IdracSettings via
+// `addIdracSettings(input: $idracInput, upsert: true)`. When that flow is
+// reshaped (e.g. dispatch IdracSettings as a separate audit event), the
+// compound block can be removed.
 func buildDiffHTML(before, variables map[string]any, resourceType string) template.HTML {
-	fields := diffableFields[resourceType]
-	if len(fields) == 0 {
-		return ""
+	after := variables
+	if set, ok := variables["set"].(map[string]any); ok {
+		after = set
 	}
+
+	// Intersection of before and after keys, stable-sorted, metadata excluded.
+	fields := make([]string, 0, len(before))
+	for k := range before {
+		if skipDiffFields[k] {
+			continue
+		}
+		if _, ok := after[k]; !ok {
+			continue
+		}
+		fields = append(fields, k)
+	}
+	sort.Strings(fields)
 
 	var sections strings.Builder
 	for _, field := range fields {
-		bv, inBefore := before[field]
-		av, inVars := variables[field]
-		if !inBefore || !inVars {
-			continue
-		}
+		bv := before[field]
+		av := after[field]
 		beforeStr := valStr(bv, av)
 		afterStr := valStr(av, av)
 		if beforeStr == afterStr {

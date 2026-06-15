@@ -10,9 +10,16 @@ import (
 )
 
 // ConsumerConfig registers an external layer consumer for orb dispatch.
+// Consumer-centric, not media-type-centric: one entry per consumer process.
+// orb broadcasts each non-graph layer to every registered consumer with
+// `Content-Type: <layer media type>`. Consumers route internally and
+// return 415 for layers they don't handle — that's the contract.
+//
+// `Name` is the friendly identifier (e.g. "cb-controller"); surfaces in
+// import history and logs. `URL` is the consumer's dispatch endpoint.
 type ConsumerConfig struct {
-	MediaType string `json:"mediaType"`
-	URL       string `json:"url"`
+	Name string `json:"name"`
+	URL  string `json:"url"`
 }
 
 // ConsumersConfig is a []ConsumerConfig that decodes from a JSON-array env var.
@@ -52,12 +59,13 @@ type Config struct {
 	OCIAllowHTTP     bool   `envconfig:"ORB_OCI_ALLOW_HTTP"     default:"true"`
 	OCIPublicKeyPath string `envconfig:"ORB_OCI_PUBLIC_KEY_PATH" default:"deploy/local/cosign.pub"`
 
-	// S3 — divergence report publishing
-	S3Endpoint  string `envconfig:"ORB_S3_ENDPOINT"   default:""`
+	// S3 — divergence report publishing. Defaults target the local MinIO from
+	// docker-compose; production must override every value via env.
+	S3Endpoint  string `envconfig:"ORB_S3_ENDPOINT"   default:"http://localhost:9000"`
 	S3Region    string `envconfig:"ORB_S3_REGION"     default:"us-east-1"`
-	S3Bucket    string `envconfig:"ORB_S3_BUCKET"     default:""`
-	S3AccessKey string `envconfig:"ORB_S3_ACCESS_KEY" default:""`
-	S3SecretKey string `envconfig:"ORB_S3_SECRET_KEY" default:""`
+	S3Bucket    string `envconfig:"ORB_S3_BUCKET"     default:"orbital"`
+	S3AccessKey string `envconfig:"ORB_S3_ACCESS_KEY" default:"minioadmin"`
+	S3SecretKey string `envconfig:"ORB_S3_SECRET_KEY" default:"minioadmin"`
 
 	// EnableOCIRegistry activates the OCI import source: registry polling, /import/tags route,
 	// and the "Pull from Registry" UI section. When false, only /import/subgraph (courier/API)
@@ -65,8 +73,16 @@ type Config struct {
 	EnableOCIRegistry bool `envconfig:"ORB_ENABLE_OCI_REGISTRY" default:"true"`
 
 	// Consumers holds registered layer consumers for dispatch via /import/artifact.
-	// Set via: ORB_CONSUMERS='[{"mediaType":"...","url":"..."}]'
-	Consumers ConsumersConfig `envconfig:"ORB_CONSUMERS" default:""`
+	// Set via: ORB_CONSUMERS='[{"mediaType":"...","url":"..."}]'.
+	// Default points at cb-controller's /consume + /mapping running on the host
+	// at :8095 (configbundle repo's `make run-controller` exposes these). Local
+	// dev requires no env-var setup — `make run-orb` connects out of the box.
+	// Production deploys override with the cluster service URL.
+	// One entry per consumer process; orb broadcasts each non-graph layer to
+	// every consumer with `Content-Type: <layer media type>`. Consumers route
+	// internally and 415 on unknown types. Default points at the local cb-
+	// controller from configbundle repo's `make run-controller`.
+	Consumers ConsumersConfig `envconfig:"ORB_CONSUMERS" default:"[{\"name\":\"cb-controller\",\"url\":\"http://localhost:8095/dispatch\"}]"`
 
 	// Polling — how often orb checks Zot for a newer artifact version (OCI source only)
 	PollInterval time.Duration `envconfig:"ORB_POLL_INTERVAL" default:"60s"`

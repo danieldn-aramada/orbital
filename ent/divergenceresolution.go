@@ -36,10 +36,8 @@ type DivergenceResolution struct {
 	Actor string `json:"actor,omitempty"`
 	// DecidedAt holds the value of the "decided_at" field.
 	DecidedAt time.Time `json:"decided_at,omitempty"`
-	// CbConsumed holds the value of the "cb_consumed" field.
-	CbConsumed bool `json:"cb_consumed,omitempty"`
-	// CbConsumedAt holds the value of the "cb_consumed_at" field.
-	CbConsumedAt *time.Time `json:"cb_consumed_at,omitempty"`
+	// PropagatedAt holds the value of the "propagated_at" field.
+	PropagatedAt *time.Time `json:"propagated_at,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -48,11 +46,9 @@ func (*DivergenceResolution) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case divergenceresolution.FieldCbConsumed:
-			values[i] = new(sql.NullBool)
 		case divergenceresolution.FieldCreatedBy, divergenceresolution.FieldUpdatedBy, divergenceresolution.FieldEntryOrbID, divergenceresolution.FieldField, divergenceresolution.FieldAction, divergenceresolution.FieldActor:
 			values[i] = new(sql.NullString)
-		case divergenceresolution.FieldCreatedAt, divergenceresolution.FieldUpdatedAt, divergenceresolution.FieldDecidedAt, divergenceresolution.FieldCbConsumedAt:
+		case divergenceresolution.FieldCreatedAt, divergenceresolution.FieldUpdatedAt, divergenceresolution.FieldDecidedAt, divergenceresolution.FieldPropagatedAt:
 			values[i] = new(sql.NullTime)
 		case divergenceresolution.FieldID:
 			values[i] = new(uuid.UUID)
@@ -132,18 +128,12 @@ func (_m *DivergenceResolution) assignValues(columns []string, values []any) err
 			} else if value.Valid {
 				_m.DecidedAt = value.Time
 			}
-		case divergenceresolution.FieldCbConsumed:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field cb_consumed", values[i])
-			} else if value.Valid {
-				_m.CbConsumed = value.Bool
-			}
-		case divergenceresolution.FieldCbConsumedAt:
+		case divergenceresolution.FieldPropagatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field cb_consumed_at", values[i])
+				return fmt.Errorf("unexpected type %T for field propagated_at", values[i])
 			} else if value.Valid {
-				_m.CbConsumedAt = new(time.Time)
-				*_m.CbConsumedAt = value.Time
+				_m.PropagatedAt = new(time.Time)
+				*_m.PropagatedAt = value.Time
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -210,11 +200,8 @@ func (_m *DivergenceResolution) String() string {
 	builder.WriteString("decided_at=")
 	builder.WriteString(_m.DecidedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
-	builder.WriteString("cb_consumed=")
-	builder.WriteString(fmt.Sprintf("%v", _m.CbConsumed))
-	builder.WriteString(", ")
-	if v := _m.CbConsumedAt; v != nil {
-		builder.WriteString("cb_consumed_at=")
+	if v := _m.PropagatedAt; v != nil {
+		builder.WriteString("propagated_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteByte(')')

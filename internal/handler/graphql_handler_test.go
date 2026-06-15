@@ -302,6 +302,107 @@ func TestHandle_MVCCVersionMatch(t *testing.T) {
 	}
 }
 
+func TestHandle_AutoIncrementVersionOnUpdate(t *testing.T) {
+	// Before-state version=7. Caller omits version from `set`. Proxy must inject set.version=8.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		body, _ := io.ReadAll(r.Body)
+		if strings.Contains(string(body), "BeforeFetch") {
+			w.Write([]byte(`{"data":{"getServer":{"id":"1","version":7}}}`)) //nolint:errcheck
+			return
+		}
+		// Forwarded mutation: assert set.version == 8.
+		var fwd gqlRequest
+		_ = json.Unmarshal(body, &fwd)
+		setMap, _ := fwd.Variables["set"].(map[string]any)
+		v, _ := setMap["version"].(float64)
+		if int(v) != 8 {
+			t.Errorf("expected auto-injected set.version=8, got %v (set=%v)", setMap["version"], setMap)
+		}
+		w.Write([]byte(`{"data":{"updateServer":{"server":{"orbId":"x","version":8}}}}`)) //nolint:errcheck
+	}))
+	t.Cleanup(srv.Close)
+
+	h := NewGraphQL(srv.URL, nil, slog.Default())
+	c, _ := newGQLCtx(t, map[string]any{
+		"query":         `mutation UpdateServer($set: ServerPatch!) { updateServer(input: { filter: { orbId: { eq: "x" } }, set: $set }) { server { orbId version } } }`,
+		"operationName": "UpdateServer",
+		"variables": map[string]any{
+			"id":  "1",
+			"set": map[string]any{"hostname": "newname"},
+		},
+	})
+	if err := h.Handle(c); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+}
+
+func TestHandle_AutoIncrementVersionOnAdd(t *testing.T) {
+	// addServer with input array → proxy injects version: 1 into each entry that omits it.
+	srv, bodies := captureRequests(t, `{"data":{"addServer":{"server":[{"orbId":"x"}]}}}`)
+	h := NewGraphQL(srv.URL, nil, slog.Default())
+
+	c, _ := newGQLCtx(t, map[string]any{
+		"query": `mutation { addServer(input: $input) { server { orbId } } }`,
+		"variables": map[string]any{
+			"input": []any{
+				map[string]any{"orbId": "x", "namespace": "ns"},
+				map[string]any{"orbId": "y", "namespace": "ns", "version": 42}, // explicit, must not overwrite
+			},
+		},
+	})
+	if err := h.Handle(c); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	var fwd gqlRequest
+	_ = json.Unmarshal((*bodies)[len(*bodies)-1], &fwd)
+	input, _ := fwd.Variables["input"].([]any)
+	if len(input) != 2 {
+		t.Fatalf("expected 2 input entries, got %d", len(input))
+	}
+	first, _ := input[0].(map[string]any)
+	second, _ := input[1].(map[string]any)
+	if v, _ := first["version"].(float64); int(v) != 1 {
+		t.Errorf("expected first entry version=1, got %v", first["version"])
+	}
+	if v, _ := second["version"].(float64); int(v) != 42 {
+		t.Errorf("expected second entry version=42 (caller-set, not overwritten), got %v", second["version"])
+	}
+}
+
+func TestHandle_AutoIncrementInjectsIntoAnyArrayVariable(t *testing.T) {
+	// Regression: the Edit Server modal passes idracSettings via a variable
+	// named $idracInput, not $input. Before the fix, the proxy only looked at
+	// the literal "input" key, so DGraph rejected addIdracSettings with
+	// "variable.idracInput.0.version must be defined".
+	srv, bodies := captureRequests(t, `{"data":{}}`)
+	h := NewGraphQL(srv.URL, nil, slog.Default())
+
+	c, _ := newGQLCtx(t, map[string]any{
+		"query": `mutation { addIdracSettings(input: $idracInput, upsert: true) { numUids } }`,
+		"variables": map[string]any{
+			"idracInput": []any{
+				map[string]any{"orbId": "x-idrac", "sshEnabled": true},
+			},
+		},
+	})
+	if err := h.Handle(c); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	var fwd gqlRequest
+	_ = json.Unmarshal((*bodies)[len(*bodies)-1], &fwd)
+	arr, _ := fwd.Variables["idracInput"].([]any)
+	if len(arr) != 1 {
+		t.Fatalf("expected 1 idracInput entry, got %d", len(arr))
+	}
+	first, _ := arr[0].(map[string]any)
+	if v, _ := first["version"].(float64); int(v) != 1 {
+		t.Errorf("expected idracInput[0].version=1 injected, got %v", first["version"])
+	}
+}
+
 func TestHandle_GQLErrorsSuppressAudit(t *testing.T) {
 	// When DGraph returns errors, no audit event should be written.
 	// With db=nil, any attempt to writeAuditEvent would panic — so if this test

@@ -7,6 +7,7 @@ mutation {
     {
       name: "2f-uae"
       orbId: "2f-uae:2f-uae"
+      version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "2f-uae"
@@ -20,18 +21,20 @@ mutation {
     {
       name: "Rack-3"
       orbId: "2f-uae:Rack-3"
+      version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "2f-uae"
-      dataCenter: { orbId: "2f-uae:2f-uae" }
+      dataCenter: { orbId: "2f-uae:2f-uae" version: 1 }
     }
     {
       name: "Rack-4"
       orbId: "2f-uae:Rack-4"
+      version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "2f-uae"
-      dataCenter: { orbId: "2f-uae:2f-uae" }
+      dataCenter: { orbId: "2f-uae:2f-uae" version: 1 }
     }
   ], upsert: true) {
     numUids
@@ -40,6 +43,7 @@ mutation {
   addIPAddress(input: [
     {
       orbId: "2f-uae:10.96.127.50"
+      version: 1
       address: "10.96.127.50"
       name: "10.96.127.50"
       role: "oob"
@@ -49,6 +53,7 @@ mutation {
     }
     {
       orbId: "2f-uae:10.96.127.51"
+      version: 1
       address: "10.96.127.51"
       name: "10.96.127.51"
       role: "oob"
@@ -58,6 +63,7 @@ mutation {
     }
     {
       orbId: "2f-uae:10.96.127.52"
+      version: 1
       address: "10.96.127.52"
       name: "10.96.127.52"
       role: "oob"
@@ -67,6 +73,7 @@ mutation {
     }
     {
       orbId: "2f-uae:10.96.127.54"
+      version: 1
       address: "10.96.127.54"
       name: "10.96.127.54"
       role: "oob"
@@ -76,6 +83,7 @@ mutation {
     }
     {
       orbId: "2f-uae:10.96.127.55"
+      version: 1
       address: "10.96.127.55"
       name: "10.96.127.55"
       role: "oob"
@@ -85,6 +93,7 @@ mutation {
     }
     {
       orbId: "2f-uae:10.96.127.56"
+      version: 1
       address: "10.96.127.56"
       name: "10.96.127.56"
       role: "oob"
@@ -101,97 +110,103 @@ mutation {
       serviceTag: "5HSC3D4"
       manufacturer: "Dell"
       orbId: "2f-uae:5HSC3D4"
+      version: 1
       name: "r03-u23.2f-uae"
       hostname: "r03-u23.2f-uae"
       model: "PowerEdge R660"
       rackPosition: 23
-      oobIP: { orbId: "2f-uae:10.96.127.50" }
+      oobIP: { orbId: "2f-uae:10.96.127.50" version: 1 }
       oobMAC: "fc:4c:ea:68:89:bb"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "2f-uae"
-      dataCenter: { orbId: "2f-uae:2f-uae" }
-      rack: { orbId: "2f-uae:Rack-3" }
+      dataCenter: { orbId: "2f-uae:2f-uae" version: 1 }
+      rack: { orbId: "2f-uae:Rack-3" version: 1 }
     }
     {
       serviceTag: "6MLN3D4"
       manufacturer: "Dell"
       orbId: "2f-uae:6MLN3D4"
+      version: 1
       name: "r03-u24.2f-uae"
       hostname: "r03-u24.2f-uae"
       model: "PowerEdge R450"
       rackPosition: 24
-      oobIP: { orbId: "2f-uae:10.96.127.56" }
+      oobIP: { orbId: "2f-uae:10.96.127.56" version: 1 }
       oobMAC: "b4:e9:b8:c3:a3:33"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "2f-uae"
-      dataCenter: { orbId: "2f-uae:2f-uae" }
-      rack: { orbId: "2f-uae:Rack-3" }
+      dataCenter: { orbId: "2f-uae:2f-uae" version: 1 }
+      rack: { orbId: "2f-uae:Rack-3" version: 1 }
     }
     {
       serviceTag: "9MLN3D4"
       manufacturer: "Dell"
       orbId: "2f-uae:9MLN3D4"
+      version: 1
       name: "r03-u25.2f-uae"
       hostname: "r03-u25.2f-uae"
       model: "PowerEdge R450"
       rackPosition: 25
-      oobIP: { orbId: "2f-uae:10.96.127.55" }
+      oobIP: { orbId: "2f-uae:10.96.127.55" version: 1 }
       oobMAC: "b4:e9:b8:c4:9a:2b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "2f-uae"
-      dataCenter: { orbId: "2f-uae:2f-uae" }
-      rack: { orbId: "2f-uae:Rack-3" }
+      dataCenter: { orbId: "2f-uae:2f-uae" version: 1 }
+      rack: { orbId: "2f-uae:Rack-3" version: 1 }
     }
     {
       serviceTag: "7MLN3D4"
       manufacturer: "Dell"
       orbId: "2f-uae:7MLN3D4"
+      version: 1
       name: "r04-u23.2f-uae"
       hostname: "r04-u23.2f-uae"
       model: "PowerEdge R450"
       rackPosition: 23
-      oobIP: { orbId: "2f-uae:10.96.127.54" }
+      oobIP: { orbId: "2f-uae:10.96.127.54" version: 1 }
       oobMAC: "b4:e9:b8:c3:a8:f3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "2f-uae"
-      dataCenter: { orbId: "2f-uae:2f-uae" }
-      rack: { orbId: "2f-uae:Rack-4" }
+      dataCenter: { orbId: "2f-uae:2f-uae" version: 1 }
+      rack: { orbId: "2f-uae:Rack-4" version: 1 }
     }
     {
       serviceTag: "3MLN3D4"
       manufacturer: "Dell"
       orbId: "2f-uae:3MLN3D4"
+      version: 1
       name: "r04-u24.2f-uae"
       hostname: "r04-u24.2f-uae"
       model: "PowerEdge R450"
       rackPosition: 24
-      oobIP: { orbId: "2f-uae:10.96.127.52" }
+      oobIP: { orbId: "2f-uae:10.96.127.52" version: 1 }
       oobMAC: "b4:e9:b8:c3:b0:83"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "2f-uae"
-      dataCenter: { orbId: "2f-uae:2f-uae" }
-      rack: { orbId: "2f-uae:Rack-4" }
+      dataCenter: { orbId: "2f-uae:2f-uae" version: 1 }
+      rack: { orbId: "2f-uae:Rack-4" version: 1 }
     }
     {
       serviceTag: "2MLN3D4"
       manufacturer: "Dell"
       orbId: "2f-uae:2MLN3D4"
+      version: 1
       name: "r04-u25.2f-uae"
       hostname: "r04-u25.2f-uae"
       model: "PowerEdge R450"
       rackPosition: 25
-      oobIP: { orbId: "2f-uae:10.96.127.51" }
+      oobIP: { orbId: "2f-uae:10.96.127.51" version: 1 }
       oobMAC: "b4:e9:b8:c4:94:f3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "2f-uae"
-      dataCenter: { orbId: "2f-uae:2f-uae" }
-      rack: { orbId: "2f-uae:Rack-4" }
+      dataCenter: { orbId: "2f-uae:2f-uae" version: 1 }
+      rack: { orbId: "2f-uae:Rack-4" version: 1 }
     }
   ], upsert: true) {
     numUids

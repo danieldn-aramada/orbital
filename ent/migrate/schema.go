@@ -47,6 +47,7 @@ var (
 		{Name: "type_name", Type: field.TypeString, Nullable: true, Default: ""},
 		{Name: "intended_value", Type: field.TypeJSON, Nullable: true},
 		{Name: "override_value", Type: field.TypeJSON, Nullable: true},
+		{Name: "intended_at_version", Type: field.TypeInt, Nullable: true},
 		{Name: "who", Type: field.TypeString},
 		{Name: "first_seen_at", Type: field.TypeTime},
 		{Name: "last_seen_at", Type: field.TypeTime},
@@ -66,7 +67,7 @@ var (
 			{
 				Name:    "divergenceentry_dc_orb_id_last_seen_at",
 				Unique:  false,
-				Columns: []*schema.Column{DivergenceEntriesColumns[5], DivergenceEntriesColumns[13]},
+				Columns: []*schema.Column{DivergenceEntriesColumns[5], DivergenceEntriesColumns[14]},
 			},
 		},
 	}
@@ -79,11 +80,10 @@ var (
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "entry_orb_id", Type: field.TypeString},
 		{Name: "field", Type: field.TypeString},
-		{Name: "action", Type: field.TypeEnum, Enums: []string{"accept", "force", "ignore"}},
+		{Name: "action", Type: field.TypeEnum, Enums: []string{"accept", "reject", "ignore"}},
 		{Name: "actor", Type: field.TypeString},
 		{Name: "decided_at", Type: field.TypeTime},
-		{Name: "cb_consumed", Type: field.TypeBool, Default: false},
-		{Name: "cb_consumed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "propagated_at", Type: field.TypeTime, Nullable: true},
 	}
 	// DivergenceResolutionsTable holds the schema information for the "divergence_resolutions" table.
 	DivergenceResolutionsTable = &schema.Table{
@@ -97,7 +97,7 @@ var (
 				Columns: []*schema.Column{DivergenceResolutionsColumns[5], DivergenceResolutionsColumns[6]},
 			},
 			{
-				Name:    "divergenceresolution_action_cb_consumed",
+				Name:    "divergenceresolution_action_propagated_at",
 				Unique:  false,
 				Columns: []*schema.Column{DivergenceResolutionsColumns[7], DivergenceResolutionsColumns[10]},
 			},
@@ -241,13 +241,14 @@ var (
 		{Name: "size_bytes", Type: field.TypeInt64, Nullable: true},
 		{Name: "signed", Type: field.TypeBool, Default: false},
 		{Name: "signing_key_fingerprint", Type: field.TypeString, Nullable: true},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "pushing", "completed", "failed"}},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "bundling", "pushing", "signing", "completed", "failed"}},
 		{Name: "initiated_by", Type: field.TypeInt, Nullable: true},
 		{Name: "initiated_at", Type: field.TypeTime},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "enriched", Type: field.TypeBool, Default: false},
 		{Name: "bundler_error", Type: field.TypeString, Nullable: true},
+		{Name: "layers", Type: field.TypeJSON, Nullable: true},
 	}
 	// RegistryArtifactsTable holds the schema information for the "registry_artifacts" table.
 	RegistryArtifactsTable = &schema.Table{

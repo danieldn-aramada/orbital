@@ -15,6 +15,12 @@ CLI_LDFLAGS    := -ldflags "-X $(MODULE)/internal/version.Version=$(CLI_VERSION)
 # ldflags) so /healthz, orbctl version, etc. report the value you pass.
 VERSION      ?= v0.0.0-dev
 
+# Tag for the orb image used by `make edge-up`.
+# Default `local` builds fresh from the working tree on every invocation.
+# Override with ORB_TAG=vX.Y.Z to reuse an already-built `orb:vX.Y.Z` image
+# (must exist locally — edge-up will not pull or rebuild it).
+ORB_TAG      ?= local
+
 BIN_DIR      := bin
 
 COMPOSE_FILE := deploy/local/docker-compose.yml
@@ -25,7 +31,7 @@ TEST_PKGS := $(shell go list ./... | grep -vE '(/ent$$|/ent/|/docs$$)')
 ACR          := armadaeksatest.azurecr.io
 IMAGE        := $(ACR)/orbital:$(SERVER_VERSION)
 
-.PHONY: help up down run-orbital run-orb seed test-unit test-integration test-e2e test-e2e-ui release-check release-check-down edge-up edge-down docs build-css build-orbctl push seed-aks smoke-aks
+.PHONY: help up down run-orbital run-orb seed test-unit test-integration test-e2e test-e2e-ui release-check release-check-down edge-up edge-down docs build-css build-orbctl push seed-aks smoke-aks dev-deps
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -68,6 +74,9 @@ test-e2e: ## Run Playwright UI tests for orbital + orb (requires both running; H
 test-e2e-ui: ## Open Playwright UI mode for interactive local test watching
 	npx playwright test --ui
 
+e2e-divergence: ## E2E divergence flow: export→publish→orb import→SSA override→assert (requires orbital+orb+cb-bundler+cb-controller all running)
+	bash scripts/e2e-divergence.sh
+
 release-check: ## Build images, start containers, perform e2e (set version; VERSION=v0.0.18)
 	@echo "Building orbital + orb images at VERSION=$(VERSION)"
 	docker build --target=orbital -t orbital:local -t orbital:$(VERSION) --build-arg VERSION=$(VERSION) .
@@ -84,17 +93,26 @@ release-check-down: ## Stop the release-check containers (deps from `make up` ar
 
 ## ── as needed ─────────────────────────────────────────────────────────────────
 
-edge-up: ## Start edge sim — local zot mirroring upstream ACR + orb DGraph (test orb against an AKS-deployed orbital). Mutually exclusive with `make up` (port conflicts).
+edge-up: ## Start edge sim — builds orb:local from working tree (or ORB_TAG=vX.Y.Z to reuse a pre-built image). Mutually exclusive with `make up` (port conflicts).
 	@[ -f deploy/local/sync-credentials.json ] || { echo "ERROR: deploy/local/sync-credentials.json missing — copy from sync-credentials.example.json and fill in ACR password"; exit 1; }
+	@[ -f deploy/local/edge.env ] || { echo "ERROR: deploy/local/edge.env missing — copy from edge.env.example and fill in the Azure Blob secret + DC repo"; exit 1; }
+	@if [ "$(ORB_TAG)" = "local" ]; then \
+		echo "Building orb:local from working tree..."; \
+		docker build --target=orb -t orb:local . ; \
+	else \
+		docker image inspect orb:$(ORB_TAG) >/dev/null 2>&1 || { echo "ERROR: orb:$(ORB_TAG) not found locally. Build it (e.g. make release-check VERSION=$(ORB_TAG)) or omit ORB_TAG to build from working tree."; exit 1; }; \
+		echo "Using pre-built orb:$(ORB_TAG) (tagging as orb:local for compose)"; \
+		docker tag orb:$(ORB_TAG) orb:local ; \
+	fi
 	docker compose -f deploy/local/docker-compose.edge.yml up -d
-	@echo "edge sim up. Now: make run-orb (in another terminal) to start orb pointing at the local zot."
+	@echo "edge sim up. orb is running at http://localhost:8010 against the local zot."
 
 edge-down: ## Stop the edge sim
 	docker compose -f deploy/local/docker-compose.edge.yml down -v
 
 docs: ## Regenerate Swagger docs for orbital + orb (requires swag)
-	swag init -g main.go -o docs --dir cmd/orbital,internal/handler
-	swag init -g doc.go -o docs/orb --dir cmd/orb,internal/orbserver,internal/orb
+	swag init -g main.go -o docs --dir cmd/orbital,internal/handler,internal/ocitype
+	swag init -g doc.go -o docs/orb --dir cmd/orb,internal/orbserver,internal/orb,internal/ocitype
 
 build-css: ## Compile web/sass/main.scss → web/shared/static/css/main.css (requires: npm install)
 	npm run build-css
@@ -102,6 +120,13 @@ build-css: ## Compile web/sass/main.scss → web/shared/static/css/main.css (req
 
 build-orbctl: ## Build the orbctl CLI → bin/orbctl
 	go build $(CLI_LDFLAGS) -o $(BIN_DIR)/orbctl ./cmd/orbctl
+
+dev-deps: ## Install host-side dev tools (dgraph wrapper for macOS). Re-run after pulling changes.
+	mkdir -p $(HOME)/.local/bin
+	cp scripts/dgraph-host-wrapper.sh $(HOME)/.local/bin/dgraph
+	chmod +x $(HOME)/.local/bin/dgraph
+	@echo "dgraph wrapper installed to ~/.local/bin/dgraph"
+	@echo "Ensure ~/.local/bin is on PATH (add to .zshrc: export PATH=\"\$$HOME/.local/bin:\$$PATH\")"
 
 ## ── release / AKS ─────────────────────────────────────────────────────────────
 

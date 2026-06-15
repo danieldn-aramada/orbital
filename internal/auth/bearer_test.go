@@ -131,7 +131,7 @@ func TestRequireAuth_NoAuth_Returns401(t *testing.T) {
 func TestRequireAuth_ValidBearer_SetsContext(t *testing.T) {
 	issuerURL, sign := newTestOIDCServer(t)
 
-	v, err := NewBearerVerifier(context.Background(), issuerURL, "orbital-test")
+	v, err := NewBearerVerifier(context.Background(), issuerURL, "orbital-test", nil)
 	if err != nil {
 		t.Fatalf("NewBearerVerifier: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestRequireAuth_ValidBearer_SetsContext(t *testing.T) {
 func TestRequireAuth_ValidBearer_UPNFallback(t *testing.T) {
 	issuerURL, sign := newTestOIDCServer(t)
 
-	v, err := NewBearerVerifier(context.Background(), issuerURL, "orbital-test")
+	v, err := NewBearerVerifier(context.Background(), issuerURL, "orbital-test", nil)
 	if err != nil {
 		t.Fatalf("NewBearerVerifier: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestRequireAuth_ValidBearer_UPNFallback(t *testing.T) {
 func TestRequireAuth_ExpiredBearer_Returns401(t *testing.T) {
 	issuerURL, sign := newTestOIDCServer(t)
 
-	v, err := NewBearerVerifier(context.Background(), issuerURL, "orbital-test")
+	v, err := NewBearerVerifier(context.Background(), issuerURL, "orbital-test", nil)
 	if err != nil {
 		t.Fatalf("NewBearerVerifier: %v", err)
 	}
@@ -237,7 +237,7 @@ func TestRequireAuth_ExpiredBearer_Returns401(t *testing.T) {
 func TestRequireAuth_WrongAudience_Returns401(t *testing.T) {
 	issuerURL, sign := newTestOIDCServer(t)
 
-	v, err := NewBearerVerifier(context.Background(), issuerURL, "orbital-test")
+	v, err := NewBearerVerifier(context.Background(), issuerURL, "orbital-test", nil)
 	if err != nil {
 		t.Fatalf("NewBearerVerifier: %v", err)
 	}
@@ -264,5 +264,152 @@ func TestRequireAuth_WrongAudience_Returns401(t *testing.T) {
 	}
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401 for wrong audience, got %d", rec.Code)
+	}
+}
+
+// ── App-only (client credentials) bearer tokens — ADR 010 ───────────────────
+
+func TestRequireAuth_AppOnlyToken_v1_Accepted(t *testing.T) {
+	issuerURL, sign := newTestOIDCServer(t)
+
+	v, err := NewBearerVerifier(context.Background(), issuerURL, "orbital-test", nil)
+	if err != nil {
+		t.Fatalf("NewBearerVerifier: %v", err)
+	}
+
+	// v1.0 app token: appid present, no user-identity claims.
+	const appID = "5fc832f6-843e-4207-93dd-b3c3a77c06f2"
+	token := sign(map[string]any{
+		"iss":   issuerURL,
+		"aud":   "orbital-test",
+		"sub":   appID,
+		"exp":   time.Now().Add(time.Hour).Unix(),
+		"appid": appID,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	c, rec := echoCtx(req)
+
+	called := false
+	_ = v.RequireAuth()(func(c echo.Context) error {
+		called = true
+		if got := c.Get("user_name"); got != AppPrincipalPrefix+appID {
+			t.Errorf("user_name: got %v, want %q", got, AppPrincipalPrefix+appID)
+		}
+		if got := c.Get("user_email"); got != "" {
+			t.Errorf("user_email should be empty for app token; got %v", got)
+		}
+		if got, _ := c.Get("is_authn").(bool); !got {
+			t.Errorf("is_authn should be true")
+		}
+		return nil
+	})(c)
+
+	if !called {
+		t.Errorf("expected next handler called (status %d)", rec.Code)
+	}
+}
+
+func TestRequireAuth_AppOnlyToken_v2_AZP_Accepted(t *testing.T) {
+	issuerURL, sign := newTestOIDCServer(t)
+
+	v, err := NewBearerVerifier(context.Background(), issuerURL, "orbital-test", nil)
+	if err != nil {
+		t.Fatalf("NewBearerVerifier: %v", err)
+	}
+
+	// v2.0 app token: azp present instead of (or alongside) appid.
+	const appID = "5fc832f6-843e-4207-93dd-b3c3a77c06f2"
+	token := sign(map[string]any{
+		"iss": issuerURL,
+		"aud": "orbital-test",
+		"sub": appID,
+		"exp": time.Now().Add(time.Hour).Unix(),
+		"azp": appID,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	c, _ := echoCtx(req)
+
+	called := false
+	_ = v.RequireAuth()(func(c echo.Context) error {
+		called = true
+		if got := c.Get("user_name"); got != AppPrincipalPrefix+appID {
+			t.Errorf("user_name: got %v, want %q (v2.0 azp claim should map identically to v1.0 appid)", got, AppPrincipalPrefix+appID)
+		}
+		return nil
+	})(c)
+
+	if !called {
+		t.Errorf("expected next handler called for v2.0 azp app token")
+	}
+}
+
+func TestRequireAuth_AppOnlyToken_AllowlistRejection(t *testing.T) {
+	issuerURL, sign := newTestOIDCServer(t)
+
+	// Allowlist contains a different appid — caller's appid is not in it.
+	v, err := NewBearerVerifier(context.Background(), issuerURL, "orbital-test", []string{"another-app-id"})
+	if err != nil {
+		t.Fatalf("NewBearerVerifier: %v", err)
+	}
+
+	token := sign(map[string]any{
+		"iss":   issuerURL,
+		"aud":   "orbital-test",
+		"sub":   "5fc832f6-843e-4207-93dd-b3c3a77c06f2",
+		"exp":   time.Now().Add(time.Hour).Unix(),
+		"appid": "5fc832f6-843e-4207-93dd-b3c3a77c06f2",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	c, rec := echoCtx(req)
+
+	called := false
+	_ = v.RequireAuth()(func(c echo.Context) error {
+		called = true
+		return nil
+	})(c)
+
+	if called {
+		t.Errorf("next handler should NOT be called for allowlist-rejected appid")
+	}
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", rec.Code)
+	}
+}
+
+func TestRequireAuth_AppOnlyToken_AllowlistAccepts(t *testing.T) {
+	issuerURL, sign := newTestOIDCServer(t)
+
+	const appID = "5fc832f6-843e-4207-93dd-b3c3a77c06f2"
+	v, err := NewBearerVerifier(context.Background(), issuerURL, "orbital-test", []string{appID})
+	if err != nil {
+		t.Fatalf("NewBearerVerifier: %v", err)
+	}
+
+	token := sign(map[string]any{
+		"iss":   issuerURL,
+		"aud":   "orbital-test",
+		"sub":   appID,
+		"exp":   time.Now().Add(time.Hour).Unix(),
+		"appid": appID,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	c, _ := echoCtx(req)
+
+	called := false
+	_ = v.RequireAuth()(func(c echo.Context) error {
+		called = true
+		return nil
+	})(c)
+
+	if !called {
+		t.Errorf("next handler should be called for allowlisted appid")
 	}
 }

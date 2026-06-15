@@ -69,5 +69,5 @@ func SaveOverride(dataDir string, o Override) error {
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir dataDir: %w", err)
 	}
-	return os.WriteFile(filepath.Join(dataDir, overridesFile), data, 0o644)
+	return writeAtomic(filepath.Join(dataDir, overridesFile), data)
 }

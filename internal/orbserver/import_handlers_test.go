@@ -279,3 +279,45 @@ func TestImportHistory_Empty(t *testing.T) {
 		t.Errorf("expected 0 records, got %d", len(records))
 	}
 }
+
+func TestSortTagsByVersionDesc(t *testing.T) {
+	cases := []struct {
+		name string
+		in   []string
+		want []string
+	}{
+		{
+			name: "v10 sorts above v2",
+			in:   []string{"v1", "v2", "v6", "v7", "v8", "v9", "v10", "latest"},
+			want: []string{"v10", "v9", "v8", "v7", "v6", "v2", "v1", "latest"},
+		},
+		{
+			name: "non-version tags pushed to end, lex-stable among themselves",
+			in:   []string{"latest", "v3", "stable", "v1"},
+			want: []string{"v3", "v1", "latest", "stable"},
+		},
+		{
+			name: "empty input",
+			in:   []string{},
+			want: []string{},
+		},
+		{
+			name: "single non-version tag",
+			in:   []string{"latest"},
+			want: []string{"latest"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := sortTagsByVersionDesc(tc.in)
+			if len(got) != len(tc.want) {
+				t.Fatalf("len mismatch: got %v, want %v", got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("position %d: got %q, want %q (full: %v)", i, got[i], tc.want[i], got)
+				}
+			}
+		})
+	}
+}

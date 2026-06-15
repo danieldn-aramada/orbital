@@ -170,6 +170,30 @@ paths:
       summary: Import history
       tags:
       - import
+  /api/v1/import/history/{tag}/layers:
+    get:
+      description: Returns an HTML fragment rendering the layers modal for an import-history
+        record, found by tag (newest match wins).
+      parameters:
+      - description: Import tag
+        in: path
+        name: tag
+        required: true
+        type: string
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Import layers modal
+      tags:
+      - import
   /api/v1/import/status:
     get:
       description: Returns the current import state snapshot including status, current

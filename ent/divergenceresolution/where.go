@@ -95,14 +95,9 @@ func DecidedAt(v time.Time) predicate.DivergenceResolution {
 	return predicate.DivergenceResolution(sql.FieldEQ(FieldDecidedAt, v))
 }
 
-// CbConsumed applies equality check predicate on the "cb_consumed" field. It's identical to CbConsumedEQ.
-func CbConsumed(v bool) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldEQ(FieldCbConsumed, v))
-}
-
-// CbConsumedAt applies equality check predicate on the "cb_consumed_at" field. It's identical to CbConsumedAtEQ.
-func CbConsumedAt(v time.Time) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldEQ(FieldCbConsumedAt, v))
+// PropagatedAt applies equality check predicate on the "propagated_at" field. It's identical to PropagatedAtEQ.
+func PropagatedAt(v time.Time) predicate.DivergenceResolution {
+	return predicate.DivergenceResolution(sql.FieldEQ(FieldPropagatedAt, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
@@ -600,64 +595,54 @@ func DecidedAtLTE(v time.Time) predicate.DivergenceResolution {
 	return predicate.DivergenceResolution(sql.FieldLTE(FieldDecidedAt, v))
 }
 
-// CbConsumedEQ applies the EQ predicate on the "cb_consumed" field.
-func CbConsumedEQ(v bool) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldEQ(FieldCbConsumed, v))
+// PropagatedAtEQ applies the EQ predicate on the "propagated_at" field.
+func PropagatedAtEQ(v time.Time) predicate.DivergenceResolution {
+	return predicate.DivergenceResolution(sql.FieldEQ(FieldPropagatedAt, v))
 }
 
-// CbConsumedNEQ applies the NEQ predicate on the "cb_consumed" field.
-func CbConsumedNEQ(v bool) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldNEQ(FieldCbConsumed, v))
+// PropagatedAtNEQ applies the NEQ predicate on the "propagated_at" field.
+func PropagatedAtNEQ(v time.Time) predicate.DivergenceResolution {
+	return predicate.DivergenceResolution(sql.FieldNEQ(FieldPropagatedAt, v))
 }
 
-// CbConsumedAtEQ applies the EQ predicate on the "cb_consumed_at" field.
-func CbConsumedAtEQ(v time.Time) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldEQ(FieldCbConsumedAt, v))
+// PropagatedAtIn applies the In predicate on the "propagated_at" field.
+func PropagatedAtIn(vs ...time.Time) predicate.DivergenceResolution {
+	return predicate.DivergenceResolution(sql.FieldIn(FieldPropagatedAt, vs...))
 }
 
-// CbConsumedAtNEQ applies the NEQ predicate on the "cb_consumed_at" field.
-func CbConsumedAtNEQ(v time.Time) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldNEQ(FieldCbConsumedAt, v))
+// PropagatedAtNotIn applies the NotIn predicate on the "propagated_at" field.
+func PropagatedAtNotIn(vs ...time.Time) predicate.DivergenceResolution {
+	return predicate.DivergenceResolution(sql.FieldNotIn(FieldPropagatedAt, vs...))
 }
 
-// CbConsumedAtIn applies the In predicate on the "cb_consumed_at" field.
-func CbConsumedAtIn(vs ...time.Time) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldIn(FieldCbConsumedAt, vs...))
+// PropagatedAtGT applies the GT predicate on the "propagated_at" field.
+func PropagatedAtGT(v time.Time) predicate.DivergenceResolution {
+	return predicate.DivergenceResolution(sql.FieldGT(FieldPropagatedAt, v))
 }
 
-// CbConsumedAtNotIn applies the NotIn predicate on the "cb_consumed_at" field.
-func CbConsumedAtNotIn(vs ...time.Time) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldNotIn(FieldCbConsumedAt, vs...))
+// PropagatedAtGTE applies the GTE predicate on the "propagated_at" field.
+func PropagatedAtGTE(v time.Time) predicate.DivergenceResolution {
+	return predicate.DivergenceResolution(sql.FieldGTE(FieldPropagatedAt, v))
 }
 
-// CbConsumedAtGT applies the GT predicate on the "cb_consumed_at" field.
-func CbConsumedAtGT(v time.Time) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldGT(FieldCbConsumedAt, v))
+// PropagatedAtLT applies the LT predicate on the "propagated_at" field.
+func PropagatedAtLT(v time.Time) predicate.DivergenceResolution {
+	return predicate.DivergenceResolution(sql.FieldLT(FieldPropagatedAt, v))
 }
 
-// CbConsumedAtGTE applies the GTE predicate on the "cb_consumed_at" field.
-func CbConsumedAtGTE(v time.Time) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldGTE(FieldCbConsumedAt, v))
+// PropagatedAtLTE applies the LTE predicate on the "propagated_at" field.
+func PropagatedAtLTE(v time.Time) predicate.DivergenceResolution {
+	return predicate.DivergenceResolution(sql.FieldLTE(FieldPropagatedAt, v))
 }
 
-// CbConsumedAtLT applies the LT predicate on the "cb_consumed_at" field.
-func CbConsumedAtLT(v time.Time) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldLT(FieldCbConsumedAt, v))
+// PropagatedAtIsNil applies the IsNil predicate on the "propagated_at" field.
+func PropagatedAtIsNil() predicate.DivergenceResolution {
+	return predicate.DivergenceResolution(sql.FieldIsNull(FieldPropagatedAt))
 }
 
-// CbConsumedAtLTE applies the LTE predicate on the "cb_consumed_at" field.
-func CbConsumedAtLTE(v time.Time) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldLTE(FieldCbConsumedAt, v))
-}
-
-// CbConsumedAtIsNil applies the IsNil predicate on the "cb_consumed_at" field.
-func CbConsumedAtIsNil() predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldIsNull(FieldCbConsumedAt))
-}
-
-// CbConsumedAtNotNil applies the NotNil predicate on the "cb_consumed_at" field.
-func CbConsumedAtNotNil() predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldNotNull(FieldCbConsumedAt))
+// PropagatedAtNotNil applies the NotNil predicate on the "propagated_at" field.
+func PropagatedAtNotNil() predicate.DivergenceResolution {
+	return predicate.DivergenceResolution(sql.FieldNotNull(FieldPropagatedAt))
 }
 
 // And groups predicates with the AND operator between them.

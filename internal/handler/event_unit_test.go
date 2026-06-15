@@ -107,17 +107,6 @@ func TestBuildVarSummary_WithUserFields(t *testing.T) {
 
 // ── buildDiffHTML ────────────────────────────────────────────────────────────
 
-func TestBuildDiffHTML_UnknownResourceTypeReturnsEmpty(t *testing.T) {
-	got := buildDiffHTML(
-		map[string]any{"foo": "bar"},
-		map[string]any{"foo": "baz"},
-		"UnknownType",
-	)
-	if got != "" {
-		t.Errorf("unknown resource type: expected empty, got %q", got)
-	}
-}
-
 func TestBuildDiffHTML_NoChange(t *testing.T) {
 	before := map[string]any{"name": "alpha"}
 	variables := map[string]any{"name": "alpha"}

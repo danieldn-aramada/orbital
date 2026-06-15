@@ -255,6 +255,56 @@ func TestPublicKeyFingerprint(t *testing.T) {
 	})
 }
 
+// TestBuildLayerMeta verifies that pushArtifact builds layer metadata with correct
+// IsOrbitalNative flags — orbital-native layers are true, bundler layers are false.
+// We test via buildLayerMeta rather than calling doPush (which requires a live registry).
+func TestBuildLayerMeta_OrbitalNativeAndBundler(t *testing.T) {
+	dataGZ := []byte("fake-data-gz")
+	schemaGZ := []byte("fake-schema-gz")
+	bundlerData1 := []byte("bundler-layer-one")
+	bundlerData2 := []byte("bundler-layer-two")
+
+	layers := buildLayerMeta(dataGZ, schemaGZ, []bundlerLayerInput{
+		{mediaType: "application/vnd.example.config.v1+json", data: bundlerData1},
+		{mediaType: "application/vnd.example.manifest.v1+json", data: bundlerData2},
+	})
+
+	if len(layers) != 4 {
+		t.Fatalf("expected 4 layers (2 orbital + 2 bundler), got %d", len(layers))
+	}
+
+	// First two are always orbital-native.
+	for i := 0; i < 2; i++ {
+		if !layers[i].IsOrbitalNative {
+			t.Errorf("layers[%d].IsOrbitalNative = false, want true (orbital-native)", i)
+		}
+		if layers[i].SizeBytes == 0 {
+			t.Errorf("layers[%d].SizeBytes = 0", i)
+		}
+		if layers[i].Digest == "" {
+			t.Errorf("layers[%d].Digest is empty", i)
+		}
+	}
+
+	// Last two are bundler-added.
+	for i := 2; i < 4; i++ {
+		if layers[i].IsOrbitalNative {
+			t.Errorf("layers[%d].IsOrbitalNative = true, want false (bundler-added)", i)
+		}
+	}
+
+	// Check correct media types.
+	if layers[0].MediaType != mediaTypeDataGZ {
+		t.Errorf("layers[0].MediaType = %q, want %q", layers[0].MediaType, mediaTypeDataGZ)
+	}
+	if layers[1].MediaType != mediaTypeSchemaGZ {
+		t.Errorf("layers[1].MediaType = %q, want %q", layers[1].MediaType, mediaTypeSchemaGZ)
+	}
+	if layers[2].MediaType != "application/vnd.example.config.v1+json" {
+		t.Errorf("layers[2].MediaType = %q, want bundler media type", layers[2].MediaType)
+	}
+}
+
 // makeTestZip creates a temporary zip file with the given entries and returns its path.
 func makeTestZip(t *testing.T, entries map[string][]byte) string {
 	t.Helper()

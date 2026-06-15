@@ -56,7 +56,7 @@ func triggerBackup(t *testing.T, h *handler.BackupHandler) uuid.UUID {
 	}
 
 	var resp struct {
-		JobID string `json:"jobId"`
+		JobID string `json:"id"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("parse trigger response: %v", err)
@@ -146,7 +146,7 @@ func TestBackupTrigger_ConflictWhenInProgress(t *testing.T) {
 
 	// Wait for first job to finish so the DB is clean for subsequent tests.
 	var resp struct {
-		JobID string `json:"jobId"`
+		JobID string `json:"id"`
 	}
 	json.Unmarshal(rec1.Body.Bytes(), &resp) //nolint:errcheck
 	if jobID, err := uuid.Parse(resp.JobID); err == nil {

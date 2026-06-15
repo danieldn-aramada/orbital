@@ -2,6 +2,42 @@
 
 export const BASE = window.ORBITAL_BASE || ''
 
+// gqlErrorMessage formats GraphQL `errors[]` for display. Returns null on
+// clean responses, or a "message (path)" string otherwise. Multiple errors
+// are joined with "; ". Use this for both modal mutations and read queries —
+// HTTP 200 from GraphQL does NOT mean success; the body may carry errors.
+export function gqlErrorMessage(json) {
+  if (!json?.errors?.length) return null
+  return json.errors.map(e => {
+    const path = Array.isArray(e.path) ? e.path.join('.') : ''
+    const msg = e.message || 'unknown error'
+    return path ? `${msg} (${path})` : msg
+  }).join('; ')
+}
+window.gqlErrorMessage = gqlErrorMessage
+
+// gqlSurfaceErrors is the read-only-query counterpart: toasts on failure and
+// returns false so callers can bail. For modal mutations, call
+// gqlErrorMessage() directly and route the message into the modal's own
+// error notification (keeps the message visible where the user clicked).
+export function gqlSurfaceErrors(json, label) {
+  const msg = gqlErrorMessage(json)
+  if (!msg) return true
+  // eslint-disable-next-line no-console
+  console.error(`[graphql] ${label} failed:`, json.errors)
+  if (window.bulmaToast) {
+    window.bulmaToast.toast({
+      message: `${label} failed: ${msg}`,
+      type: 'is-danger',
+      duration: 6000,
+      position: 'top-center',
+      dismissible: true,
+    })
+  }
+  return false
+}
+window.gqlSurfaceErrors = gqlSurfaceErrors
+
 // ─── Tab management ───────────────────────────────────────────────────────────
 
 export class TabItem {
@@ -409,11 +445,18 @@ export function initDcDetailTabs(id) {
 
   function loadAuditPanel() {
     const tab = [...tabs].find(t => t.dataset.panel === auditPanelId)
-    const orbId = tab && tab.dataset.orbId
-    if (!orbId) return
+    if (!tab) return
+    // Templates can embed the full subgraph orbId list in data-related-orb-ids
+    // so the audit panel pulls events for the parent AND its nested config
+    // items (e.g. Server + IdracSettings + StorageControllers) in one call.
+    // Falls back to data-orb-id when the related list is missing.
+    const related = (tab.dataset.relatedOrbIds || tab.dataset.orbId || '')
+      .split(',').map(s => s.trim()).filter(Boolean)
+    if (related.length === 0) return
     const panel = document.getElementById(auditPanelId)
     if (!panel) return
-    fetch(BASE + `/api/v1/audit-log?orbId=${encodeURIComponent(orbId)}&limit=50`, {
+    const qs = related.map(id => `orbId=${encodeURIComponent(id)}`).join('&')
+    fetch(BASE + `/api/v1/audit-log?${qs}&limit=50`, {
       headers: { 'HX-Request': 'true' },
     })
       .then(r => r.text())
@@ -457,11 +500,18 @@ export function initServerDetailTabs(root) {
 
   function loadAuditPanel() {
     const tab = [...tabs].find(t => t.dataset.panel === auditPanelId)
-    const orbId = tab && tab.dataset.orbId
-    if (!orbId) return
+    if (!tab) return
+    // Templates can embed the full subgraph orbId list in data-related-orb-ids
+    // so the audit panel pulls events for the parent AND its nested config
+    // items (e.g. Server + IdracSettings + StorageControllers) in one call.
+    // Falls back to data-orb-id when the related list is missing.
+    const related = (tab.dataset.relatedOrbIds || tab.dataset.orbId || '')
+      .split(',').map(s => s.trim()).filter(Boolean)
+    if (related.length === 0) return
     const panel = document.getElementById(auditPanelId)
     if (!panel) return
-    fetch(BASE + `/api/v1/audit-log?orbId=${encodeURIComponent(orbId)}&limit=50`, {
+    const qs = related.map(id => `orbId=${encodeURIComponent(id)}`).join('&')
+    fetch(BASE + `/api/v1/audit-log?${qs}&limit=50`, {
       headers: { 'HX-Request': 'true' },
     })
       .then(r => r.text())
@@ -785,16 +835,35 @@ export function loadServerListTab(displayName, id) {
   })
 }
 
+// clearTabStateOnFresh wipes all per-user tab/UI state (open DC tabs, open
+// server tabs, last-active tab id, …) when the URL has ?fresh=1 — set by the
+// login redirect (see internal/handler/login.go + oidc.go). Login is a hard
+// boundary; one user should not inherit another user's tabs from a previous
+// session on the same machine.
+//
+// MUST run on every page load (not just pages that host the DC or server
+// tables) — the login redirect lands on `/` (home), which only has the
+// inventory table. If this were gated on table presence, the user would
+// land on home, the ?fresh=1 would be ignored, then they'd navigate to
+// /servers and find stale tabs.
+function clearTabStateOnFresh() {
+  if (new URLSearchParams(window.location.search).get('fresh') !== '1') return
+  localStorage.removeItem('datacenterTabs')
+  localStorage.removeItem('serverTabs')
+  localStorage.removeItem('tabCurrent')
+  history.replaceState(null, '', window.location.pathname)
+}
+
+// Run once at module load — covers home, /servers, /datacenters, and any
+// future page. Idempotent: re-runs are no-ops once the query param is stripped.
+clearTabStateOnFresh()
+
 // initDatacenterTabRestoration restores DC tabs from localStorage on page load.
 // Call on window.load on pages that have #datacenter-table.
 export function initDatacenterTabRestoration() {
   if (!document.getElementById('datacenter-table')) return
 
-  if (new URLSearchParams(window.location.search).get('fresh') === '1') {
-    localStorage.removeItem('datacenterTabs')
-    localStorage.removeItem('tabCurrent')
-    history.replaceState(null, '', BASE + '/')
-  }
+  clearTabStateOnFresh()
 
   if (!localStorage.datacenterTabs) return
   const tabSet = new Set(JSON.parse(localStorage.datacenterTabs))
@@ -811,6 +880,8 @@ export function initDatacenterTabRestoration() {
 // Call on window.load on pages that have #server-list-table.
 export function initServerListTabRestoration() {
   if (!document.getElementById('server-list-table')) return
+
+  clearTabStateOnFresh()
 
   if (localStorage.serverTabs) {
     const tabSet = new Set(JSON.parse(localStorage.serverTabs))
@@ -857,6 +928,7 @@ export function inventoryFetch(onData) {
   })
     .then(r => r.json())
     .then(json => {
+      if (!gqlSurfaceErrors(json, 'Load inventory')) { onData([]); return }
       const items = (json.data?.queryConfigItem ?? []).map(it => ({
         uid: it.id,
         type: it.__typename,
@@ -893,7 +965,7 @@ export function initInventoryTable() {
           { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
           { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-inventory' } },
         ] },
-        { pageLength: { menu: [50, 100, 250] } },
+        { pageLength: { menu: [100, 250, 500] } },
       ],
       topEnd: { search: { placeholder: 'Search inventory' } },
     },
@@ -902,7 +974,7 @@ export function initInventoryTable() {
     scrollX: true,
     scrollY: 400,
     scrollCollapse: true,
-    pageLength: 50,
+    pageLength: 250,
     stateSave: true,
     language: {
       infoEmpty: 'No config items to show',
@@ -1070,14 +1142,17 @@ export function initDatacenterTable(opts = {}) {
       type: 'POST',
       contentType: 'application/json',
       data: () => JSON.stringify({ query: `{ queryDataCenter { id orbId name createdBy createdAt serversAggregate { count } } }` }),
-      dataSrc: (json) => (json.data?.queryDataCenter ?? []).map(dc => ({
-        id: dc.id,
-        orbId: dc.orbId ?? '—',
-        name: dc.name,
-        createdBy: dc.createdBy ?? '',
-        createdAt: dc.createdAt ?? '',
-        serverCount: dc.serversAggregate?.count ?? 0,
-      })),
+      dataSrc: (json) => {
+        if (!gqlSurfaceErrors(json, 'Load data centers')) return []
+        return (json.data?.queryDataCenter ?? []).map(dc => ({
+          id: dc.id,
+          orbId: dc.orbId ?? '—',
+          name: dc.name,
+          createdBy: dc.createdBy ?? '',
+          createdAt: dc.createdAt ?? '',
+          serverCount: dc.serversAggregate?.count ?? 0,
+        }))
+      },
     },
   })
 
@@ -1188,16 +1263,19 @@ export function initServerListTable(opts = {}) {
           dataCenter { name }
         } }`,
       }),
-      dataSrc: (json) => (json.data?.queryServer ?? []).map(s => ({
-        id: s.id,
-        orbId: s.orbId ?? '—',
-        hostname: s.hostname ?? '—',
-        serviceTag: s.serviceTag ?? '—',
-        model: s.model ?? '—',
-        oobIP: s.oobIP?.address ?? '—',
-        rack: s.rack?.name ?? '—',
-        dataCenter: s.dataCenter?.name ?? '—',
-      })),
+      dataSrc: (json) => {
+        if (!gqlSurfaceErrors(json, 'Load servers')) return []
+        return (json.data?.queryServer ?? []).map(s => ({
+          id: s.id,
+          orbId: s.orbId ?? '—',
+          hostname: s.hostname ?? '—',
+          serviceTag: s.serviceTag ?? '—',
+          model: s.model ?? '—',
+          oobIP: s.oobIP?.address ?? '—',
+          rack: s.rack?.name ?? '—',
+          dataCenter: s.dataCenter?.name ?? '—',
+        }))
+      },
     },
     createdRow: function (row) { row.style.cursor = 'pointer'; row.title = 'Double-click to open' },
   })
@@ -1221,3 +1299,4 @@ export function initServerListTable(opts = {}) {
 
   return serverListTable
 }
+

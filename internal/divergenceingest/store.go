@@ -1,6 +1,7 @@
 package divergenceingest
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/divergenceentry"
+	"github.com/armada/orbital/ent/divergenceresolution"
 	"github.com/armada/orbital/internal/divergence"
 )
 
@@ -18,15 +20,46 @@ import (
 // Single read + per-entry UPSERT + bulk-delete-by-key — not transactional.
 // If the process dies between the UPSERT phase and the delete phase, the next
 // poll cycle is idempotent and converges to the right state.
+//
+// Resolved entries are write-protected: once an admin has decided an entry,
+// re-ingesting later snapshots refreshes only "we saw this again" timestamps
+// (last_seen_at, last_snapshot_published_at, type_name). The intended/override
+// values stay frozen at resolution time. Orb's snapshots reflect what orb
+// believed intent was at report time — that's a stale view until orb imports
+// a fresh bundle, and we must not let it rewrite the history the admin
+// already decided against.
 func (i *Ingester) applySnapshot(ctx context.Context, dc dcRef, publishedAt time.Time, overrides []divergence.OverrideEntry) error {
 	// Track which (entry_orb_id, field) pairs appear in this snapshot so we
 	// can delete the others below.
 	present := make(map[string]bool, len(overrides))
 
+	// Pre-fetch resolved (entryOrbId, field) pairs whose entryOrbIds appear in
+	// this snapshot. Narrowed by EntryOrbIDIn first to avoid scanning the
+	// whole resolutions table; field equality is checked in-memory below
+	// since orbital resolutions don't carry the DC identifier.
+	resolved := make(map[string]bool, len(overrides))
+	if len(overrides) > 0 {
+		orbIDs := make([]string, 0, len(overrides))
+		for _, ov := range overrides {
+			orbIDs = append(orbIDs, ov.OrbID)
+		}
+		rows, err := i.db.DivergenceResolution.Query().
+			Where(divergenceresolution.EntryOrbIDIn(orbIDs...)).
+			All(ctx)
+		if err != nil {
+			return fmt.Errorf("query resolutions for DC %s: %w", dc.id, err)
+		}
+		for _, r := range rows {
+			resolved[r.EntryOrbID+"|"+r.Field] = true
+		}
+	}
+
 	for _, ov := range overrides {
 		when, _ := time.Parse(time.RFC3339, ov.When) // best-effort; zero time if unparseable
 		intended, _ := json.Marshal(ov.IntendedValue)
 		override, _ := json.Marshal(ov.OverrideValue)
+		entryKey := ov.OrbID + "|" + ov.Field
+		isResolved := resolved[entryKey]
 
 		// UPSERT: find existing by (dc, orbId, field), update if present, insert otherwise.
 		existing, err := i.db.DivergenceEntry.Query().
@@ -38,8 +71,12 @@ func (i *Ingester) applySnapshot(ctx context.Context, dc dcRef, publishedAt time
 			Only(ctx)
 
 		if ent.IsNotFound(err) {
-			// New entry.
-			_, err = i.db.DivergenceEntry.Create().
+			// New entry — no prior decision frozen, take values from the report.
+			// IntendedAtVersion comes from the report itself (orb captured it
+			// at intake from its local read-only DGraph). Nil means "MVCC
+			// unavailable for this row" — orbital's Accept handler degrades to
+			// a value-based stale check.
+			creator := i.db.DivergenceEntry.Create().
 				SetDcOrbID(dc.id).
 				SetEntryOrbID(ov.OrbID).
 				SetField(ov.Field).
@@ -49,31 +86,57 @@ func (i *Ingester) applySnapshot(ctx context.Context, dc dcRef, publishedAt time
 				SetWho(ov.Who).
 				SetFirstSeenAt(when).
 				SetLastSeenAt(when).
-				SetLastSnapshotPublishedAt(publishedAt).
-				Save(ctx)
-			if err != nil {
+				SetLastSnapshotPublishedAt(publishedAt)
+			if ov.IntendedAtVersion != nil {
+				creator = creator.SetIntendedAtVersion(*ov.IntendedAtVersion)
+			}
+			if _, err := creator.Save(ctx); err != nil {
 				return fmt.Errorf("insert %s/%s.%s: %w", dc.id, ov.OrbID, ov.Field, err)
 			}
 		} else if err != nil {
 			return fmt.Errorf("query %s/%s.%s: %w", dc.id, ov.OrbID, ov.Field, err)
 		} else {
-			// Update last_seen_at and last_snapshot_published_at; preserve first_seen_at.
-			// Values may have changed too if admin changed the override; type_name
-			// may also have appeared if the entry was first ingested under a legacy
-			// snapshot and a later snapshot includes the type.
-			_, err = existing.Update().
+			// Resolved entries follow one of two paths:
+			//   (1) New override == stored override → loop hasn't closed yet,
+			//       orb is echoing the same divergence we already decided on.
+			//       Freeze values; only refresh "we saw it again" timestamps.
+			//   (2) New override != stored override → edge state drifted to a
+			//       NEW value since the admin's decision. The decision was for
+			//       a different value and is now stale. Delete the resolution
+			//       so the entry reappears as pending and admin re-decides.
+			// The history of the prior decision remains in the audit events
+			// table (resolveDivergence + updateIdracSettings).
+			shouldUpdateValues := !isResolved
+			if isResolved && !bytes.Equal(override, existing.OverrideValue) {
+				if _, err := i.db.DivergenceResolution.Delete().
+					Where(
+						divergenceresolution.EntryOrbID(ov.OrbID),
+						divergenceresolution.Field(ov.Field),
+					).Exec(ctx); err != nil {
+					return fmt.Errorf("supersede resolution %s/%s.%s: %w", dc.id, ov.OrbID, ov.Field, err)
+				}
+				i.logger.Info("divergence ingester: superseded resolution — edge override changed since decision",
+					"dc", dc.id, "orbId", ov.OrbID, "field", ov.Field,
+					"priorOverride", string(existing.OverrideValue),
+					"newOverride", string(override),
+				)
+				shouldUpdateValues = true
+			}
+
+			u := existing.Update().
 				SetTypeName(ov.Type).
-				SetIntendedValue(intended).
-				SetOverrideValue(override).
-				SetWho(ov.Who).
 				SetLastSeenAt(when).
-				SetLastSnapshotPublishedAt(publishedAt).
-				Save(ctx)
-			if err != nil {
+				SetLastSnapshotPublishedAt(publishedAt)
+			if shouldUpdateValues {
+				u = u.SetIntendedValue(intended).
+					SetOverrideValue(override).
+					SetWho(ov.Who)
+			}
+			if _, err := u.Save(ctx); err != nil {
 				return fmt.Errorf("update %s/%s.%s: %w", dc.id, ov.OrbID, ov.Field, err)
 			}
 		}
-		present[ov.OrbID+"|"+ov.Field] = true
+		present[entryKey] = true
 	}
 
 	// DELETE entries for this DC that are no longer in the snapshot.
@@ -109,8 +172,28 @@ func (i *Ingester) applySnapshot(ctx context.Context, dc dcRef, publishedAt time
 	}
 
 	deleted := 0
+	now := time.Now().UTC()
 	for _, e := range stale {
 		if !present[e.EntryOrbID+"|"+e.Field] {
+			// Loop closure: orb stopped reporting this divergence, which means
+			// (a) the value matches intent now, AND (b) cb-controller no longer
+			// has `local:*` as a co-manager on this field. If a resolution
+			// exists, mark it propagated BEFORE deleting the entry — the
+			// resolution itself stays for audit history, but its lifecycle
+			// transitions to "propagated as of now."
+			if _, err := i.db.DivergenceResolution.Update().
+				Where(
+					divergenceresolution.EntryOrbID(e.EntryOrbID),
+					divergenceresolution.Field(e.Field),
+					divergenceresolution.PropagatedAtIsNil(),
+				).
+				SetPropagatedAt(now).
+				Save(ctx); err != nil {
+				i.logger.Warn("divergence ingester: mark resolution propagated failed",
+					"dc", dc.id, "orbId", e.EntryOrbID, "field", e.Field, "err", err)
+				// Continue with delete — propagated_at being stale is recoverable;
+				// orphaning entries is not.
+			}
 			if err := i.db.DivergenceEntry.DeleteOne(e).Exec(ctx); err != nil {
 				i.logger.Warn("divergence ingester: delete stale entry failed",
 					"dc", dc.id, "orbId", e.EntryOrbID, "field", e.Field, "err", err)
@@ -120,8 +203,8 @@ func (i *Ingester) applySnapshot(ctx context.Context, dc dcRef, publishedAt time
 		}
 	}
 	if deleted > 0 {
-		i.logger.Info("divergence ingester: removed resolved entries",
-			"dc", dc.id, "deleted", deleted)
+		i.logger.Info("divergence ingester: closed loop on resolved entries",
+			"dc", dc.id, "deleted", deleted, "propagatedAt", now)
 	}
 	return nil
 }

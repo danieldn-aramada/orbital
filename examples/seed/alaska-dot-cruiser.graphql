@@ -7,6 +7,7 @@ mutation {
     {
       name: "alaska-dot-cruiser"
       orbId: "alaska-dot-cruiser:alaska-dot-cruiser"
+      version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "alaska-dot-cruiser"
@@ -20,18 +21,20 @@ mutation {
     {
       name: "G8-Rack1"
       orbId: "alaska-dot-cruiser:G8-Rack1"
+      version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "alaska-dot-cruiser"
-      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }
     }
     {
       name: "G8-Rack2"
       orbId: "alaska-dot-cruiser:G8-Rack2"
+      version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "alaska-dot-cruiser"
-      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }
     }
   ], upsert: true) {
     numUids
@@ -40,6 +43,7 @@ mutation {
   addIPAddress(input: [
     {
       orbId: "alaska-dot-cruiser:10.64.12.50"
+      version: 1
       address: "10.64.12.50"
       name: "10.64.12.50"
       role: "oob"
@@ -49,6 +53,7 @@ mutation {
     },
     {
       orbId: "alaska-dot-cruiser:10.64.12.51"
+      version: 1
       address: "10.64.12.51"
       name: "10.64.12.51"
       role: "oob"
@@ -58,6 +63,7 @@ mutation {
     },
     {
       orbId: "alaska-dot-cruiser:10.64.12.52"
+      version: 1
       address: "10.64.12.52"
       name: "10.64.12.52"
       role: "oob"
@@ -67,6 +73,7 @@ mutation {
     },
     {
       orbId: "alaska-dot-cruiser:10.64.12.53"
+      version: 1
       address: "10.64.12.53"
       name: "10.64.12.53"
       role: "oob"
@@ -76,6 +83,7 @@ mutation {
     },
     {
       orbId: "alaska-dot-cruiser:10.64.12.54"
+      version: 1
       address: "10.64.12.54"
       name: "10.64.12.54"
       role: "oob"
@@ -85,6 +93,7 @@ mutation {
     },
     {
       orbId: "alaska-dot-cruiser:10.64.12.55"
+      version: 1
       address: "10.64.12.55"
       name: "10.64.12.55"
       role: "oob"
@@ -94,6 +103,7 @@ mutation {
     },
     {
       orbId: "alaska-dot-cruiser:10.64.12.56"
+      version: 1
       address: "10.64.12.56"
       name: "10.64.12.56"
       role: "oob"
@@ -103,6 +113,7 @@ mutation {
     },
     {
       orbId: "alaska-dot-cruiser:10.64.12.57"
+      version: 1
       address: "10.64.12.57"
       name: "10.64.12.57"
       role: "oob"
@@ -112,6 +123,7 @@ mutation {
     },
     {
       orbId: "alaska-dot-cruiser:10.64.12.58"
+      version: 1
       address: "10.64.12.58"
       name: "10.64.12.58"
       role: "oob"
@@ -121,6 +133,7 @@ mutation {
     },
     {
       orbId: "alaska-dot-cruiser:10.64.12.59"
+      version: 1
       address: "10.64.12.59"
       name: "10.64.12.59"
       role: "oob"
@@ -130,6 +143,7 @@ mutation {
     },
     {
       orbId: "alaska-dot-cruiser:10.64.12.60"
+      version: 1
       address: "10.64.12.60"
       name: "10.64.12.60"
       role: "oob"
@@ -139,6 +153,7 @@ mutation {
     },
     {
       orbId: "alaska-dot-cruiser:10.64.12.61"
+      version: 1
       address: "10.64.12.61"
       name: "10.64.12.61"
       role: "oob"
@@ -148,6 +163,7 @@ mutation {
     },
     {
       orbId: "alaska-dot-cruiser:10.64.12.62"
+      version: 1
       address: "10.64.12.62"
       name: "10.64.12.62"
       role: "oob"
@@ -157,6 +173,7 @@ mutation {
     },
     {
       orbId: "alaska-dot-cruiser:10.64.12.63"
+      version: 1
       address: "10.64.12.63"
       name: "10.64.12.63"
       role: "oob"
@@ -166,6 +183,7 @@ mutation {
     },
     {
       orbId: "alaska-dot-cruiser:10.64.12.64"
+      version: 1
       address: "10.64.12.64"
       name: "10.64.12.64"
       role: "oob"
@@ -182,241 +200,256 @@ mutation {
       serviceTag: "2V36XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:2V36XB4"
+      version: 1
       name: "r02-u20.alaska-dot-cruiser"
       model: "PowerEdge R450"
       hostname: "r02-u20.alaska-dot-cruiser"
       rackPosition: 20
-      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.50" }
+      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.50" version: 1 }
       oobMAC: "b4:e9:b8:c0:83:f3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "alaska-dot-cruiser"
-      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
-      rack: { orbId: "alaska-dot-cruiser:G8-Rack2" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }
+      rack: { orbId: "alaska-dot-cruiser:G8-Rack2" version: 1 }
     }
     {
       serviceTag: "DT36XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:DT36XB4"
+      version: 1
       name: "r02-u19.alaska-dot-cruiser"
       model: "PowerEdge R450"
       hostname: "r02-u19.alaska-dot-cruiser"
       rackPosition: 19
-      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.51" }
+      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.51" version: 1 }
       oobMAC: "b4:e9:b8:c0:48:a3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "alaska-dot-cruiser"
-      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
-      rack: { orbId: "alaska-dot-cruiser:G8-Rack2" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }
+      rack: { orbId: "alaska-dot-cruiser:G8-Rack2" version: 1 }
     }
     {
       serviceTag: "1V36XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:1V36XB4"
+      version: 1
       name: "r02-u18.alaska-dot-cruiser"
       model: "PowerEdge R450"
       hostname: "r02-u18.alaska-dot-cruiser"
       rackPosition: 18
-      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.52" }
+      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.52" version: 1 }
       oobMAC: "b4:e9:b8:c0:05:13"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "alaska-dot-cruiser"
-      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
-      rack: { orbId: "alaska-dot-cruiser:G8-Rack2" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }
+      rack: { orbId: "alaska-dot-cruiser:G8-Rack2" version: 1 }
     }
     {
       serviceTag: "JT36XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:JT36XB4"
+      version: 1
       name: "r02-u17.alaska-dot-cruiser"
       model: "PowerEdge R450"
       hostname: "r02-u17.alaska-dot-cruiser"
       rackPosition: 17
-      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.53" }
+      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.53" version: 1 }
       oobMAC: "b4:e9:b8:c0:45:83"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "alaska-dot-cruiser"
-      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
-      rack: { orbId: "alaska-dot-cruiser:G8-Rack2" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }
+      rack: { orbId: "alaska-dot-cruiser:G8-Rack2" version: 1 }
     }
     {
       serviceTag: "FT36XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:FT36XB4"
+      version: 1
       name: "r01-u20.alaska-dot-cruiser"
       model: "PowerEdge R450"
       hostname: "r01-u20.alaska-dot-cruiser"
       rackPosition: 20
-      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.54" }
+      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.54" version: 1 }
       oobMAC: "b4:e9:b8:c0:7e:93"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "alaska-dot-cruiser"
-      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
-      rack: { orbId: "alaska-dot-cruiser:G8-Rack1" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }
+      rack: { orbId: "alaska-dot-cruiser:G8-Rack1" version: 1 }
     }
     {
       serviceTag: "HT36XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:HT36XB4"
+      version: 1
       name: "r01-u19.alaska-dot-cruiser"
       model: "PowerEdge R450"
       hostname: "r01-u19.alaska-dot-cruiser"
       rackPosition: 19
-      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.55" }
+      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.55" version: 1 }
       oobMAC: "b4:e9:b8:c0:83:eb"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "alaska-dot-cruiser"
-      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
-      rack: { orbId: "alaska-dot-cruiser:G8-Rack1" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }
+      rack: { orbId: "alaska-dot-cruiser:G8-Rack1" version: 1 }
     }
     {
       serviceTag: "GT36XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:GT36XB4"
+      version: 1
       name: "r01-u18.alaska-dot-cruiser"
       model: "PowerEdge R450"
       hostname: "r01-u18.alaska-dot-cruiser"
       rackPosition: 18
-      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.56" }
+      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.56" version: 1 }
       oobMAC: "b4:e9:b8:c0:47:b3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "alaska-dot-cruiser"
-      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
-      rack: { orbId: "alaska-dot-cruiser:G8-Rack1" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }
+      rack: { orbId: "alaska-dot-cruiser:G8-Rack1" version: 1 }
     }
     {
       serviceTag: "3V36XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:3V36XB4"
+      version: 1
       name: "r01-u17.alaska-dot-cruiser"
       model: "PowerEdge R450"
       hostname: "r01-u17.alaska-dot-cruiser"
       rackPosition: 17
-      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.57" }
+      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.57" version: 1 }
       oobMAC: "b4:e9:b8:c0:31:bb"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "alaska-dot-cruiser"
-      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
-      rack: { orbId: "alaska-dot-cruiser:G8-Rack1" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }
+      rack: { orbId: "alaska-dot-cruiser:G8-Rack1" version: 1 }
     }
     {
       serviceTag: "C8R6XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:C8R6XB4"
+      version: 1
       name: "r01-u13.alaska-dot-cruiser"
       model: "PowerEdge R660"
       hostname: "r01-u13.alaska-dot-cruiser"
       rackPosition: 13
-      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.58" }
+      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.58" version: 1 }
       oobMAC: "d0:c1:b5:12:2e:04"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "alaska-dot-cruiser"
-      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
-      rack: { orbId: "alaska-dot-cruiser:G8-Rack1" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }
+      rack: { orbId: "alaska-dot-cruiser:G8-Rack1" version: 1 }
     }
     {
       serviceTag: "F8R6XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:F8R6XB4"
+      version: 1
       name: "r01-u14.alaska-dot-cruiser"
       model: "PowerEdge R660"
       hostname: "r01-u14.alaska-dot-cruiser"
       rackPosition: 14
-      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.59" }
+      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.59" version: 1 }
       oobMAC: "d0:c1:b5:12:32:ae"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "alaska-dot-cruiser"
-      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
-      rack: { orbId: "alaska-dot-cruiser:G8-Rack1" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }
+      rack: { orbId: "alaska-dot-cruiser:G8-Rack1" version: 1 }
     }
     {
       serviceTag: "B9V6XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:B9V6XB4"
+      version: 1
       name: "r02-u13.alaska-dot-cruiser"
       model: "PowerEdge R660"
       hostname: "r02-u13.alaska-dot-cruiser"
       rackPosition: 13
-      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.60" }
+      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.60" version: 1 }
       oobMAC: "d0:c1:b5:12:32:4e"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "alaska-dot-cruiser"
-      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
-      rack: { orbId: "alaska-dot-cruiser:G8-Rack2" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }
+      rack: { orbId: "alaska-dot-cruiser:G8-Rack2" version: 1 }
     }
     {
       serviceTag: "D8R6XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:D8R6XB4"
+      version: 1
       name: "r02-u14.alaska-dot-cruiser"
       model: "PowerEdge R660"
       hostname: "r02-u14.alaska-dot-cruiser"
       rackPosition: 14
-      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.61" }
+      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.61" version: 1 }
       oobMAC: "d0:c1:b5:12:31:2e"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "alaska-dot-cruiser"
-      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
-      rack: { orbId: "alaska-dot-cruiser:G8-Rack2" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }
+      rack: { orbId: "alaska-dot-cruiser:G8-Rack2" version: 1 }
     }
     {
       serviceTag: "7FF6XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:7FF6XB4"
+      version: 1
       name: "r01-u07.alaska-dot-cruiser"
       model: "PowerEdge R760"
       hostname: "r01-u07.alaska-dot-cruiser"
       rackPosition: 7
-      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.62" }
+      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.62" version: 1 }
       oobMAC: "d0:c1:b5:18:ec:0c"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "alaska-dot-cruiser"
-      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
-      rack: { orbId: "alaska-dot-cruiser:G8-Rack1" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }
+      rack: { orbId: "alaska-dot-cruiser:G8-Rack1" version: 1 }
     }
     {
       serviceTag: "2PR6YB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:2PR6YB4"
+      version: 1
       name: "r02-u07.alaska-dot-cruiser"
       model: "PowerEdge R760"
       hostname: "r02-u07.alaska-dot-cruiser"
       rackPosition: 7
-      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.63" }
+      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.63" version: 1 }
       oobMAC: "d0:c1:b5:1a:a2:66"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "alaska-dot-cruiser"
-      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
-      rack: { orbId: "alaska-dot-cruiser:G8-Rack2" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }
+      rack: { orbId: "alaska-dot-cruiser:G8-Rack2" version: 1 }
     }
     {
       serviceTag: "DCT36XB4"
       manufacturer: "Dell"
       orbId: "alaska-dot-cruiser:DCT36XB4"
+      version: 1
       name: "r02-u24.alaska-dot-cruiser"
       model: "PowerEdge R450"
       hostname: "r02-u24.alaska-dot-cruiser"
       rackPosition: 24
-      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.64" }
+      oobIP: { orbId: "alaska-dot-cruiser:10.64.12.64" version: 1 }
       oobMAC: "b4:e9:b8:c0:0e:db"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "alaska-dot-cruiser"
-      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" }
-      rack: { orbId: "alaska-dot-cruiser:G8-Rack2" }
+      dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }
+      rack: { orbId: "alaska-dot-cruiser:G8-Rack2" version: 1 }
     }
   ], upsert: true) {
     numUids

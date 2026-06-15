@@ -146,6 +146,41 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/import/history/{tag}/layers": {
+            "get": {
+                "description": "Returns an HTML fragment rendering the layers modal for an import-history record, found by tag (newest match wins).",
+                "produces": [
+                    "text/html"
+                ],
+                "tags": [
+                    "import"
+                ],
+                "summary": "Import layers modal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Import tag",
+                        "name": "tag",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/import/status": {
             "get": {
                 "description": "Returns the current import state snapshot including status, current version, and last import record.",

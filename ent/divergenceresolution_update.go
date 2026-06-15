@@ -158,37 +158,23 @@ func (_u *DivergenceResolutionUpdate) SetNillableDecidedAt(v *time.Time) *Diverg
 	return _u
 }
 
-// SetCbConsumed sets the "cb_consumed" field.
-func (_u *DivergenceResolutionUpdate) SetCbConsumed(v bool) *DivergenceResolutionUpdate {
-	_u.mutation.SetCbConsumed(v)
+// SetPropagatedAt sets the "propagated_at" field.
+func (_u *DivergenceResolutionUpdate) SetPropagatedAt(v time.Time) *DivergenceResolutionUpdate {
+	_u.mutation.SetPropagatedAt(v)
 	return _u
 }
 
-// SetNillableCbConsumed sets the "cb_consumed" field if the given value is not nil.
-func (_u *DivergenceResolutionUpdate) SetNillableCbConsumed(v *bool) *DivergenceResolutionUpdate {
+// SetNillablePropagatedAt sets the "propagated_at" field if the given value is not nil.
+func (_u *DivergenceResolutionUpdate) SetNillablePropagatedAt(v *time.Time) *DivergenceResolutionUpdate {
 	if v != nil {
-		_u.SetCbConsumed(*v)
+		_u.SetPropagatedAt(*v)
 	}
 	return _u
 }
 
-// SetCbConsumedAt sets the "cb_consumed_at" field.
-func (_u *DivergenceResolutionUpdate) SetCbConsumedAt(v time.Time) *DivergenceResolutionUpdate {
-	_u.mutation.SetCbConsumedAt(v)
-	return _u
-}
-
-// SetNillableCbConsumedAt sets the "cb_consumed_at" field if the given value is not nil.
-func (_u *DivergenceResolutionUpdate) SetNillableCbConsumedAt(v *time.Time) *DivergenceResolutionUpdate {
-	if v != nil {
-		_u.SetCbConsumedAt(*v)
-	}
-	return _u
-}
-
-// ClearCbConsumedAt clears the value of the "cb_consumed_at" field.
-func (_u *DivergenceResolutionUpdate) ClearCbConsumedAt() *DivergenceResolutionUpdate {
-	_u.mutation.ClearCbConsumedAt()
+// ClearPropagatedAt clears the value of the "propagated_at" field.
+func (_u *DivergenceResolutionUpdate) ClearPropagatedAt() *DivergenceResolutionUpdate {
+	_u.mutation.ClearPropagatedAt()
 	return _u
 }
 
@@ -294,14 +280,11 @@ func (_u *DivergenceResolutionUpdate) sqlSave(ctx context.Context) (_node int, e
 	if value, ok := _u.mutation.DecidedAt(); ok {
 		_spec.SetField(divergenceresolution.FieldDecidedAt, field.TypeTime, value)
 	}
-	if value, ok := _u.mutation.CbConsumed(); ok {
-		_spec.SetField(divergenceresolution.FieldCbConsumed, field.TypeBool, value)
+	if value, ok := _u.mutation.PropagatedAt(); ok {
+		_spec.SetField(divergenceresolution.FieldPropagatedAt, field.TypeTime, value)
 	}
-	if value, ok := _u.mutation.CbConsumedAt(); ok {
-		_spec.SetField(divergenceresolution.FieldCbConsumedAt, field.TypeTime, value)
-	}
-	if _u.mutation.CbConsumedAtCleared() {
-		_spec.ClearField(divergenceresolution.FieldCbConsumedAt, field.TypeTime)
+	if _u.mutation.PropagatedAtCleared() {
+		_spec.ClearField(divergenceresolution.FieldPropagatedAt, field.TypeTime)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -453,37 +436,23 @@ func (_u *DivergenceResolutionUpdateOne) SetNillableDecidedAt(v *time.Time) *Div
 	return _u
 }
 
-// SetCbConsumed sets the "cb_consumed" field.
-func (_u *DivergenceResolutionUpdateOne) SetCbConsumed(v bool) *DivergenceResolutionUpdateOne {
-	_u.mutation.SetCbConsumed(v)
+// SetPropagatedAt sets the "propagated_at" field.
+func (_u *DivergenceResolutionUpdateOne) SetPropagatedAt(v time.Time) *DivergenceResolutionUpdateOne {
+	_u.mutation.SetPropagatedAt(v)
 	return _u
 }
 
-// SetNillableCbConsumed sets the "cb_consumed" field if the given value is not nil.
-func (_u *DivergenceResolutionUpdateOne) SetNillableCbConsumed(v *bool) *DivergenceResolutionUpdateOne {
+// SetNillablePropagatedAt sets the "propagated_at" field if the given value is not nil.
+func (_u *DivergenceResolutionUpdateOne) SetNillablePropagatedAt(v *time.Time) *DivergenceResolutionUpdateOne {
 	if v != nil {
-		_u.SetCbConsumed(*v)
+		_u.SetPropagatedAt(*v)
 	}
 	return _u
 }
 
-// SetCbConsumedAt sets the "cb_consumed_at" field.
-func (_u *DivergenceResolutionUpdateOne) SetCbConsumedAt(v time.Time) *DivergenceResolutionUpdateOne {
-	_u.mutation.SetCbConsumedAt(v)
-	return _u
-}
-
-// SetNillableCbConsumedAt sets the "cb_consumed_at" field if the given value is not nil.
-func (_u *DivergenceResolutionUpdateOne) SetNillableCbConsumedAt(v *time.Time) *DivergenceResolutionUpdateOne {
-	if v != nil {
-		_u.SetCbConsumedAt(*v)
-	}
-	return _u
-}
-
-// ClearCbConsumedAt clears the value of the "cb_consumed_at" field.
-func (_u *DivergenceResolutionUpdateOne) ClearCbConsumedAt() *DivergenceResolutionUpdateOne {
-	_u.mutation.ClearCbConsumedAt()
+// ClearPropagatedAt clears the value of the "propagated_at" field.
+func (_u *DivergenceResolutionUpdateOne) ClearPropagatedAt() *DivergenceResolutionUpdateOne {
+	_u.mutation.ClearPropagatedAt()
 	return _u
 }
 
@@ -619,14 +588,11 @@ func (_u *DivergenceResolutionUpdateOne) sqlSave(ctx context.Context) (_node *Di
 	if value, ok := _u.mutation.DecidedAt(); ok {
 		_spec.SetField(divergenceresolution.FieldDecidedAt, field.TypeTime, value)
 	}
-	if value, ok := _u.mutation.CbConsumed(); ok {
-		_spec.SetField(divergenceresolution.FieldCbConsumed, field.TypeBool, value)
+	if value, ok := _u.mutation.PropagatedAt(); ok {
+		_spec.SetField(divergenceresolution.FieldPropagatedAt, field.TypeTime, value)
 	}
-	if value, ok := _u.mutation.CbConsumedAt(); ok {
-		_spec.SetField(divergenceresolution.FieldCbConsumedAt, field.TypeTime, value)
-	}
-	if _u.mutation.CbConsumedAtCleared() {
-		_spec.ClearField(divergenceresolution.FieldCbConsumedAt, field.TypeTime)
+	if _u.mutation.PropagatedAtCleared() {
+		_spec.ClearField(divergenceresolution.FieldPropagatedAt, field.TypeTime)
 	}
 	_node = &DivergenceResolution{config: _u.config}
 	_spec.Assign = _node.assignValues

@@ -21,6 +21,7 @@ import (
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/internal/bundler"
+	"github.com/armada/orbital/internal/ocitype"
 	"github.com/google/go-containerregistry/pkg/authn"
 	godigest "github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -84,19 +85,36 @@ func (p *Publisher) Publish(artifactID int, job *ent.ExportJob, tag string, bund
 	ctx := context.Background()
 	log := p.logger.With("artifactId", artifactID, "jobId", job.ID, "tag", tag)
 
-	if _, err := p.db.RegistryArtifact.UpdateOneID(artifactID).
-		SetStatus(registryartifact.StatusPushing).
-		Save(ctx); err != nil {
-		log.Error("failed to mark artifact pushing", "err", err)
-		return
+	// setPhase writes a transitional status so the UI's progress poll can show
+	// what's currently happening (bundling → pushing → signing → completed).
+	// Errors here are non-fatal — we log and continue so the actual work isn't
+	// blocked by an audit/progress write.
+	setPhase := func(s registryartifact.Status) {
+		if _, err := p.db.RegistryArtifact.UpdateOneID(artifactID).
+			SetStatus(s).
+			Save(ctx); err != nil {
+			log.Warn("phase update failed", "phase", s, "err", err)
+		}
 	}
 
 	// Call bundlers before pushing. All must succeed — partial push is not allowed.
 	var extraLayers []bundler.Layer
+	var consumedResolutionIDs []string
 	if len(bundlers) > 0 {
-		req := bundler.Request{Datacenter: job.DatacenterName}
+		setPhase(registryartifact.StatusBundling)
+		if job.DatacenterOrbID == nil {
+			log.Error("bundler call requires DatacenterOrbID but export job has none")
+			errStr := "bundler failed: export job is missing DatacenterOrbID; re-run export"
+			p.db.RegistryArtifact.UpdateOneID(artifactID). //nolint:errcheck
+				SetStatus(registryartifact.StatusFailed).
+				SetBundlerError(errStr).
+				SetCompletedAt(time.Now()).
+				Save(ctx)
+			return
+		}
+		req := bundler.Request{OrbID: *job.DatacenterOrbID}
 		for _, b := range bundlers {
-			layers, err := b.Enrich(ctx, req)
+			result, err := b.Enrich(ctx, req)
 			if err != nil {
 				log.Error("bundler failed — aborting publish", "err", err)
 				errStr := fmt.Sprintf("bundler failed: %s", err.Error())
@@ -107,12 +125,20 @@ func (p *Publisher) Publish(artifactID int, job *ent.ExportJob, tag string, bund
 					Save(ctx)
 				return
 			}
-			extraLayers = append(extraLayers, layers...)
+			// Stamp producer on each layer so push-time annotation writes can
+			// attribute it. Wire shape doesn't carry producer; orbital sets
+			// it from the bundler client's configured friendly name.
+			for i := range result.Layers {
+				result.Layers[i].Producer = b.Name()
+			}
+			extraLayers = append(extraLayers, result.Layers...)
+			consumedResolutionIDs = append(consumedResolutionIDs, result.ConsumedResolutionIDs...)
 		}
-		log.Info("bundlers produced layers", "count", len(extraLayers))
+		log.Info("bundlers produced layers", "count", len(extraLayers), "consumedResolutionIDs", len(consumedResolutionIDs))
 	}
 
-	digest, sizeBytes, fingerprint, err := p.doPush(ctx, job, tag, extraLayers, log)
+	setPhase(registryartifact.StatusPushing)
+	digest, sizeBytes, fingerprint, layers, err := p.doPush(ctx, job, tag, extraLayers, log, setPhase)
 	if err != nil {
 		log.Error("publish failed", "err", err)
 		errStr := err.Error()
@@ -124,12 +150,16 @@ func (p *Publisher) Publish(artifactID int, job *ent.ExportJob, tag string, bund
 		return
 	}
 
+	// Layer media types are opaque from orbital's perspective. Consumers must NOT interpret
+	// them or build media-type-aware UI features. See feedback_orb_orbital_agnostic_of_configbundle
+	// memory for the principle this enforces.
 	update := p.db.RegistryArtifact.UpdateOneID(artifactID).
 		SetStatus(registryartifact.StatusCompleted).
 		SetDigest(digest).
 		SetSizeBytes(sizeBytes).
 		SetSigned(true).
 		SetEnriched(len(extraLayers) > 0).
+		SetLayers(layers).
 		SetCompletedAt(time.Now())
 	if fingerprint != "" {
 		update = update.SetSigningKeyFingerprint(fingerprint)
@@ -137,55 +167,83 @@ func (p *Publisher) Publish(artifactID int, job *ent.ExportJob, tag string, bund
 	if _, err := update.Save(ctx); err != nil {
 		log.Error("failed to mark artifact completed", "err", err)
 	}
+
+	// Note: divergence-resolution propagation is tracked by the divergence
+	// ingester, not here. When the next orb snapshot omits a previously
+	// reported field (loop closed at the edge), the ingester sweeps the entry
+	// and sets `propagated_at` on any associated resolution. Bundlers MAY
+	// return `consumedResolutionIds` for forward compatibility; we ignore
+	// it — observation is the source of truth, not consumer assertion.
+	// See docs/reference/DIVERGENCE.md.
+	_ = consumedResolutionIDs
 }
 
-func (p *Publisher) doPush(ctx context.Context, job *ent.ExportJob, tag string, extraLayers []bundler.Layer, log *slog.Logger) (digest string, sizeBytes int64, fingerprint string, err error) {
+func (p *Publisher) doPush(ctx context.Context, job *ent.ExportJob, tag string, extraLayers []bundler.Layer, log *slog.Logger, setPhase func(registryartifact.Status)) (digest string, sizeBytes int64, fingerprint string, layers []ocitype.ArtifactLayer, err error) {
 	if job.ArtifactPath == nil {
-		return "", 0, "", fmt.Errorf("export job has no artifact path")
+		return "", 0, "", nil, fmt.Errorf("export job has no artifact path")
 	}
 
 	dataGZ, schemaGZ, err := extractZip(*job.ArtifactPath)
 	if err != nil {
-		return "", 0, "", fmt.Errorf("extract zip: %w", err)
+		return "", 0, "", nil, fmt.Errorf("extract zip: %w", err)
 	}
 	log.Info("extracted zip", "dataBytes", len(dataGZ), "schemaBytes", len(schemaGZ))
 
 	repoName := RepoForDC(p.cfg.Registry, p.cfg.Repo, job.DatacenterName)
 	log.Info("target repository", "repo", repoName)
 
-	manifestDesc, err := p.pushArtifact(ctx, repoName, tag, dataGZ, schemaGZ, extraLayers, job, log)
+	manifestDesc, layers, err := p.pushArtifact(ctx, repoName, tag, dataGZ, schemaGZ, extraLayers, job, log)
 	if err != nil {
-		return "", 0, "", fmt.Errorf("push artifact: %w", err)
+		return "", 0, "", nil, fmt.Errorf("push artifact: %w", err)
 	}
 	digestStr := manifestDesc.Digest.String()
 	log.Info("artifact pushed", "digest", digestStr, "tag", tag)
 
+	setPhase(registryartifact.StatusSigning)
 	fingerprint, err = p.sign(ctx, repoName, digestStr, log)
 	if err != nil {
-		return "", 0, "", fmt.Errorf("sign: %w", err)
+		return "", 0, "", nil, fmt.Errorf("sign: %w", err)
 	}
 	log.Info("artifact signed", "fingerprint", fingerprint)
 
-	return digestStr, manifestDesc.Size, fingerprint, nil
+	return digestStr, manifestDesc.Size, fingerprint, layers, nil
 }
 
-func (p *Publisher) pushArtifact(ctx context.Context, repoName, tag string, dataGZ, schemaGZ []byte, extraLayers []bundler.Layer, job *ent.ExportJob, log *slog.Logger) (ocispec.Descriptor, error) {
+func (p *Publisher) pushArtifact(ctx context.Context, repoName, tag string, dataGZ, schemaGZ []byte, extraLayers []bundler.Layer, job *ent.ExportJob, log *slog.Logger) (ocispec.Descriptor, []ocitype.ArtifactLayer, error) {
 	store := memory.New()
 
 	dataDesc, err := pushBlob(ctx, store, mediaTypeDataGZ, dataGZ)
 	if err != nil {
-		return ocispec.Descriptor{}, fmt.Errorf("push data blob: %w", err)
+		return ocispec.Descriptor{}, nil, fmt.Errorf("push data blob: %w", err)
 	}
 	schemaDesc, err := pushBlob(ctx, store, mediaTypeSchemaGZ, schemaGZ)
 	if err != nil {
-		return ocispec.Descriptor{}, fmt.Errorf("push schema blob: %w", err)
+		return ocispec.Descriptor{}, nil, fmt.Errorf("push schema blob: %w", err)
 	}
+	// Attribute orbital's own graph layers to producer "orbital". Bundler
+	// layers get their producer from `el.Producer` (stamped by Publish from
+	// the bundler client's friendly name). orb reads these annotations at
+	// import time and displays them in the layers UI.
+	dataDesc.Annotations = map[string]string{ocitype.AnnotationProducer: ocitype.ProducerOrbital}
+	schemaDesc.Annotations = map[string]string{ocitype.AnnotationProducer: ocitype.ProducerOrbital}
+
+	// Layer media types are opaque from orbital's perspective. Consumers must NOT interpret
+	// them or build media-type-aware UI features. See feedback_orb_orbital_agnostic_of_configbundle
+	// memory for the principle this enforces.
+	bundlerInputs := make([]bundlerLayerInput, len(extraLayers))
+	for i, el := range extraLayers {
+		bundlerInputs[i] = bundlerLayerInput{mediaType: el.MediaType, data: el.Data, producer: el.Producer}
+	}
+	layerMeta := buildLayerMeta(dataGZ, schemaGZ, bundlerInputs)
 
 	layers := []ocispec.Descriptor{dataDesc, schemaDesc}
 	for _, el := range extraLayers {
 		desc, err := pushBlob(ctx, store, el.MediaType, el.Data)
 		if err != nil {
-			return ocispec.Descriptor{}, fmt.Errorf("push bundler layer (%s): %w", el.MediaType, err)
+			return ocispec.Descriptor{}, nil, fmt.Errorf("push bundler layer (%s): %w", el.MediaType, err)
+		}
+		if el.Producer != "" {
+			desc.Annotations = map[string]string{ocitype.AnnotationProducer: el.Producer}
 		}
 		layers = append(layers, desc)
 	}
@@ -209,26 +267,26 @@ func (p *Publisher) pushArtifact(ctx context.Context, repoName, tag string, data
 		ManifestAnnotations: annotations,
 	})
 	if err != nil {
-		return ocispec.Descriptor{}, fmt.Errorf("pack manifest: %w", err)
+		return ocispec.Descriptor{}, nil, fmt.Errorf("pack manifest: %w", err)
 	}
 
 	repo, err := p.newRepo(repoName)
 	if err != nil {
-		return ocispec.Descriptor{}, fmt.Errorf("new repo: %w", err)
+		return ocispec.Descriptor{}, nil, fmt.Errorf("new repo: %w", err)
 	}
 
 	if err := store.Tag(ctx, manifestDesc, tag); err != nil {
-		return ocispec.Descriptor{}, fmt.Errorf("tag manifest: %w", err)
+		return ocispec.Descriptor{}, nil, fmt.Errorf("tag manifest: %w", err)
 	}
 	if _, err := oras.Copy(ctx, store, tag, repo, tag, oras.DefaultCopyOptions); err != nil {
-		return ocispec.Descriptor{}, fmt.Errorf("oras copy: %w", err)
+		return ocispec.Descriptor{}, nil, fmt.Errorf("oras copy: %w", err)
 	}
 
 	if err := repo.Tag(ctx, manifestDesc, "latest"); err != nil {
 		log.Warn("failed to update :latest tag", "err", err)
 	}
 
-	return manifestDesc, nil
+	return manifestDesc, layerMeta, nil
 }
 
 func (p *Publisher) sign(ctx context.Context, repoName, digestStr string, log *slog.Logger) (string, error) {
@@ -410,4 +468,47 @@ func NextTagAfter(existing []*ent.RegistryArtifact) string {
 		}
 	}
 	return fmt.Sprintf("v%d", maxN+1)
+}
+
+// buildLayerMeta constructs the ArtifactLayer metadata slice for a push operation.
+// Called by pushArtifact and exposed for unit testing.
+//
+// extraInputs is a []struct{ mediaType string; data []byte } compatible type — callers
+// use the package-internal bundlerLayerInput alias so the signature stays clean.
+type bundlerLayerInput struct {
+	mediaType string
+	data      []byte
+	producer  string
+}
+
+func buildLayerMeta(dataGZ, schemaGZ []byte, extras []bundlerLayerInput) []ocitype.ArtifactLayer {
+	descriptorFor := func(mediaType string, data []byte) ocitype.ArtifactLayer {
+		d := godigest.FromBytes(data)
+		return ocitype.ArtifactLayer{
+			MediaType: mediaType,
+			SizeBytes: int64(len(data)),
+			Digest:    d.String(),
+		}
+	}
+	result := []ocitype.ArtifactLayer{
+		func() ocitype.ArtifactLayer {
+			l := descriptorFor(mediaTypeDataGZ, dataGZ)
+			l.IsOrbitalNative = true
+			l.Producer = ocitype.ProducerOrbital
+			return l
+		}(),
+		func() ocitype.ArtifactLayer {
+			l := descriptorFor(mediaTypeSchemaGZ, schemaGZ)
+			l.IsOrbitalNative = true
+			l.Producer = ocitype.ProducerOrbital
+			return l
+		}(),
+	}
+	for _, e := range extras {
+		l := descriptorFor(e.mediaType, e.data)
+		l.IsOrbitalNative = false
+		l.Producer = e.producer
+		result = append(result, l)
+	}
+	return result
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/armada/orbital/ent/user"
+	"github.com/armada/orbital/internal/auth"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/labstack/echo/v4"
 )
@@ -117,6 +118,71 @@ func TestRequireAdmin_NilDB_PassesThrough(t *testing.T) {
 		if !called {
 			t.Errorf("%s: handler should have been called when db is nil", method)
 		}
+	}
+}
+
+// TestResolveUser_AppPrincipal_PassesThroughWithoutDB verifies the ADR 010
+// MVP policy: an app-only caller (set by BearerVerifier with
+// user_name="app:<appid>", user_email="") skips the users-table lookup. The
+// app-principal branch must execute before any DB use, so a nil db is safe.
+func TestResolveUser_AppPrincipal_PassesThroughWithoutDB(t *testing.T) {
+	e := echo.New()
+	mw := handler.ResolveUser(nil, nil)
+	called := false
+	h := mw(func(c echo.Context) error {
+		called = true
+		return c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/graphql", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	// Mirror what BearerVerifier sets for an app-only token.
+	c.Set("user_id", 0)
+	c.Set("user_name", auth.AppPrincipalPrefix+"5fc832f6-843e-4207-93dd-b3c3a77c06f2")
+	c.Set("user_email", "")
+
+	if err := h(c); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Error("handler should have been called for app principal")
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+	if userID, _ := c.Get("user_id").(int); userID != 0 {
+		t.Errorf("app principal should not get a user_id; got %d", userID)
+	}
+}
+
+// TestResolveUser_EmptyEmail_NoAppPrincipal_Unauthorized verifies that a non-app
+// caller with no email and no session is rejected — the bug that motivated ADR 010
+// only applies to the app-principal path.
+func TestResolveUser_EmptyEmail_NoAppPrincipal_Unauthorized(t *testing.T) {
+	e := echo.New()
+	mw := handler.ResolveUser(nil, nil)
+	called := false
+	h := mw(func(c echo.Context) error {
+		called = true
+		return c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/graphql", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user_id", 0)
+	c.Set("user_email", "")
+	// no user_name → not an app principal
+
+	if err := h(c); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if called {
+		t.Error("handler should NOT have been called for empty-email non-app caller")
+	}
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", rec.Code)
 	}
 }
 

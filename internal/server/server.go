@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	_ "github.com/lib/pq" // postgres driver for database/sql
@@ -20,13 +19,15 @@ import (
 	"github.com/armada/orbital/internal/divergenceingest"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/metrics"
+	orbmw "github.com/armada/orbital/internal/middleware"
 	"github.com/armada/orbital/internal/oci"
+	"github.com/armada/orbital/internal/startupcheck"
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	appversion "github.com/armada/orbital/internal/version"
 	webtemplates "github.com/armada/orbital/web/templates/orbital"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	echomw "github.com/labstack/echo/v4/middleware"
 	echoswagger "github.com/swaggo/echo-swagger"
 )
 
@@ -68,34 +69,20 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		}
 	})
 
-	// HTTP access log — attribute names follow OpenTelemetry semantic
-	// conventions for HTTP server (https://opentelemetry.io/docs/specs/semconv/http/).
-	// `duration_ms` and `actor` are orbital-specific extensions because OTel
-	// log-record semconv has no stable attribute for either (duration is
-	// span/metric territory; enduser.id was deprecated). See docs/reference/AUDIT.md.
-	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
-		Skipper: func(c echo.Context) bool {
-			p := c.Request().URL.Path
-			return strings.HasPrefix(p, "/static/") || p == "/favicon.ico" || strings.HasSuffix(p, "/auth/device/poll")
-		},
-		LogMethod:    true,
-		LogURI:       true,
-		LogStatus:    true,
-		LogLatency:   true,
-		LogRemoteIP:  true,
-		LogUserAgent: true,
-		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+	// RequestID must precede AccessLog so the middleware has an ID to log.
+	// Honors inbound X-Request-ID header; generates one when absent.
+	e.Use(echomw.RequestID())
+
+	// HTTP access log — see docs/reference/AUDIT.md for the attribute conventions.
+	// Orbital includes `actor` (extracted from session); orb does not.
+	e.Use(orbmw.AccessLog(orbmw.AccessLogConfig{
+		Logger:         logger,
+		SkipPrefixes:   []string{"/static/"},
+		SkipExactPaths: []string{"/favicon.ico", "/healthz"},
+		SkipSuffixes:   []string{"/auth/device/poll"},
+		ActorFromContext: func(c echo.Context) string {
 			actor, _ := c.Get("user_email").(string)
-			logger.Info("request",
-				"http.request.method", v.Method,
-				"url.path", v.URI,
-				"http.response.status_code", v.Status,
-				"client.address", v.RemoteIP,
-				"user_agent.original", v.UserAgent,
-				"duration_ms", v.Latency.Milliseconds(),
-				"actor", actor,
-			)
-			return nil
+			return actor
 		},
 	}))
 
@@ -109,11 +96,25 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	// apiAuth is the common auth chain (bearer or session) for every /api/v1
 	// endpoint. Built once and reused so /graphql and the rest of the
 	// API surface stay in sync.
+	//
+	// Dev mode (cfg.Dev=true) leaves apiAuth empty so machine-to-machine
+	// callers like cb-bundler can query /graphql plain-HTTP without an OAuth2
+	// token. UI flows still work because the session-cookie middleware higher
+	// up already populates user_id/user_email from the cookie, and the
+	// per-handler authz (RequireRole on /api/v1, handler-level isMutation
+	// check on /graphql) reads those directly. SSO is unaffected —
+	// /auth/login and /auth/callback aren't on apiAuth. Production
+	// (Dev=false) keeps strict bearer verification.
 	var apiAuth []echo.MiddlewareFunc
 	if cfg.OIDCIssuerURL != "" {
-		bv, err := auth.NewBearerVerifier(context.Background(), cfg.OIDCIssuerURL, cfg.OIDCClientID)
+		bv, err := auth.NewBearerVerifier(context.Background(), cfg.OIDCIssuerURL, cfg.OIDCClientID, cfg.AppTokenAllowedAppIDs)
 		if err != nil {
 			logger.Warn("bearer verifier init failed — API auth disabled", "err", err)
+		} else if cfg.Dev {
+			logger.Warn("ORBITAL_DEV=true — bearer verification on /api/v1 and /graphql is BYPASSED; session-cookie auth remains. Production must set ORBITAL_DEV=false.")
+			// apiAuth stays nil — session middleware sets user info for UI;
+			// unauthenticated callers (cb-bundler) pass through to handlers
+			// which decide based on operation type (mutations require user_id).
 		} else {
 			apiAuth = []echo.MiddlewareFunc{bv.RequireAuth(), handler.ResolveUser(db, cfg.AdminEmailSet())}
 		}
@@ -204,7 +205,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 
 	delH := handler.NewDeleteHandler(cfg.DGraphURL, db, logger)
 	root.GET("/config-items/delete-preview", delH.Preview)
-	api.DELETE("/config-items", delH.Execute)
+	api.DELETE("/config-items/:type/:id", delH.Execute)
 
 	if db != nil {
 		exp := handler.NewExport(db, cfg.DGraphURL, cfg.DGraphScratchURL, cfg.DGraphScratchAdminURL, cfg.DGraphScratchZeroURL, cfg.ExportDir, cfg.DGraphScratchExportDir, cfg.SchemaPath, logger)
@@ -232,7 +233,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 			bundler.WithHTTPClient(retryClient.StandardClient()),
 			bundler.WithMaxResponseBytes(cfg.BundlerMaxResponseBytes),
 		}
-		ociH := handler.NewOCI(db, ociCfg, cfg.DGraphScratchExportDir, logger, cfg.BundlerTimeout, bundlerOpts...)
+		ociH := handler.NewOCI(db, ociCfg, cfg.DGraphScratchExportDir, logger, cfg.BundlerTimeout, cfg.BundlerURLs, bundlerOpts...)
 		ociH.SetBasePath(cfg.BasePath)
 		api.GET("/export/jobs/:jobId/publish-modal", ociH.PublishModal)
 		api.POST("/export/jobs/:jobId/publish", ociH.Publish)
@@ -240,6 +241,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		api.GET("/oci/artifacts", ociH.ListArtifacts)
 
 		api.GET("/oci/artifacts/:id", ociH.GetArtifact)
+		api.GET("/oci/artifacts/:id/layers", ociH.ArtifactLayers)
 		api.GET("/oci/public-key", ociH.PublicKey)
 		api.POST("/oci/test-connection", ociH.TestConnection)
 		root.GET("/signed-artifacts", ui.EdgeDelivery)
@@ -306,7 +308,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		}
 
 		evh := handler.NewEventHandler(db, logger)
-		root.GET("/api/v1/audit-log", evh.List)
+		api.GET("/audit-log", evh.List)
 
 		uh := handler.NewUsersHandler(db, logger)
 		api.GET("/users", uh.List)
@@ -314,12 +316,12 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		root.GET("/users", ui.Users)
 
 		dh := handler.NewDivergenceHandler(db, logger, gql)
-		api.GET("/divergence", dh.List)
-		api.POST("/divergence/:id/accept", dh.Accept)
-		api.POST("/divergence/:id/force", dh.Force)
-		api.POST("/divergence/:id/ignore", dh.Ignore)
-		api.GET("/divergence/resolutions/pending-force", dh.PendingForce)
-		api.POST("/divergence/resolutions/:id/consumed", dh.MarkConsumed)
+		api.GET("/divergences", dh.List)
+		api.GET("/divergences/:id", dh.Get)
+		api.DELETE("/divergences/:id", dh.Dismiss)
+		api.PUT("/divergences/:id/resolution", dh.PutResolution)
+		api.DELETE("/divergences/:id/resolution", dh.DeleteResolution)
+		api.PATCH("/divergences/:id/resolution", dh.PatchResolution)
 	}
 
 	gqlGroup.Any("/graphql", gql.Handle)
@@ -362,6 +364,15 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 }
 
 func (s *Server) Start(ctx context.Context) error {
+	// Preflight: probe configured downstream services. If BUNDLER_URLS is set
+	// but unreachable, fail fast in production — silent "publish skipped bundler"
+	// is the exact silent-failure mode we want to surface at boot. In dev (cfg.Dev
+	// true), downgrade to a WARN so `make run-orbital` succeeds even when
+	// cb-bundler isn't yet started.
+	if _, err := startupcheck.ProbeOrFatal(ctx, "ORBITAL_BUNDLER_URLS", s.cfg.BundlerURLs, !s.cfg.Dev, s.logger); err != nil {
+		return fmt.Errorf("bundler preflight: %w", err)
+	}
+
 	errCh := make(chan error, 1)
 
 	s.logger.Info("starting orbital", "port", s.cfg.Port, "dgraph", s.cfg.DGraphURL)

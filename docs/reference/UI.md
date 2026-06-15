@@ -7,6 +7,7 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
 - **Inventory namespace filter is page-level, not a DataTable column filter** — lives in the page header (above the table), uses regex search on the orbId column (`^namespace:`). Do not move it into the DataTable toolbar — namespace is a scope selector, not a column filter.
 - **Vendor libraries in `web/shared/static/` use named subdirectories** — `datatables/`, `font-awesome-6.6.0/`, `vanilla-jsoneditor/`. Do not flatten into a single `vendor/` bucket. Each subdir contains only browser-required files — strip docs, type defs, LESS/SASS sources, and package.json before committing a new vendor library.
 - **Go template `range` does not propagate variable assignments outward** — `$x = true` inside `{{range}}` does not affect `$x` after the range ends. Compute aggregates server-side (method on the struct). Example: `ImportRecord.DispatchErrors()` instead of a `$hasError` flag inside range.
+- **Color convention — Bulma color classes are reserved for state classification.** `is-danger` (errors, failures, destructive actions), `is-warning` (needs attention, unverified, degraded), `is-success` (completed, healthy, verified), `is-info` (informational tags, neutral highlights). Do NOT apply these to ordinary value text — a cell showing a config value is not "danger" just because it differs from intent. `<code>` is rendered in default text color with a subtle background — its differentiation from prose is typographic (monospace), not chromatic. Bulma's default `--bulma-code` is overridden in `main.scss` to neutralize the hot-pink red, which would otherwise consume the danger-color channel for purely typographic styling. If you reach for `has-text-danger` on something that isn't an error, find a different signal.
 
 ## Core rules
 
@@ -60,8 +61,60 @@ These patterns are used in both orbital and orb. Always use them — never inven
     </button>
   </div>`
   ```
-- **Skeleton + min-delay on refresh** — show skeleton rows immediately, enforce 500ms minimum display with `Promise.all([fetch(...), new Promise(r => setTimeout(r, 500))])`. Add `is-loading` to the refresh button for the same duration. See `loadOrbTags()` and `fetchWithMinDelay()` in `app.js`.
-- **Refresh button loading state** — add `id="btn-refresh-*"` to the button; JS adds/removes `is-loading` class around the fetch.
+
+## Canonical button patterns
+
+When adding a button that triggers an action, match the pattern below for its category. **Do not invent a new spinner / status mechanism.** Default to these unless you have a written reason not to.
+
+### Refresh / reload button (data appears in-place)
+
+User clicks → button shows spinner → page content swaps without navigation → spinner clears after a minimum visible duration.
+
+- Pattern reference: `loadArtifactsTable()` (orbital.js), `loadOrbTags()` (orb.js), `refreshDivergenceReports()` (orbital.js).
+- Helper: `fetchWithMinDelay(url, minMs = 500)` in `shared.js`.
+- Server side: handler branches on `HX-Request: true` and returns just the fragment (a named `{{define}}` block) — see `UI.renderFragment` in `internal/handler/ui.go` and `DivergenceReports` for an example.
+- Button id: `btn-refresh-*`. Spinner class: Bulma `is-loading` (added/removed by JS).
+- Min display 500ms via `Promise.all([fetch, new Promise(r => setTimeout(r, 500))])`. The `.then` that does the swap must be on the `Promise.all`, **not** on the bare fetch — otherwise the swap fires when the fetch resolves and the skeleton flashes before disappearing. Mistake pattern to avoid:
+  ```js
+  // WRONG — skeleton flashes when fetch < 500ms because the swap fires inside the bare-fetch .then
+  fetch(url).then(r => r.text()).then(html => { container.innerHTML = html })  // fires at t=fetch
+    .finally(() => minDelay.then(() => btn.classList.remove('is-loading')))    // fires at t=max(fetch,500)
+  ```
+- **Show skeleton rows immediately** — inject a skeleton table whose `colgroup` mirrors the real table's column widths so the swap doesn't reflow. Use `<span class="is-skeleton" style="display:block">&nbsp;</span>` for cell placeholders. See `divergenceSkeletonHTML()` in orbital.js and `showDatacenterSkeleton()` in shared.js for the canonical shape.
+- Always `htmx.process(container)` after swap so any HTMX attributes in the fragment get re-bound.
+- Do NOT use `window.location.reload()`. Full reload doesn't match the established pattern and discards client state (open tab, scroll, expanded rows).
+
+### Test connection / probe button (single status indicator)
+
+User clicks → button spinner → server returns success / error HTML fragment → swapped into a result span next to the button.
+
+- Pattern reference: backups page and divergence-reports page (`btn-test-backup-connection`, `btn-test-divergence-connection`).
+- Declarative HTMX — no JS:
+  ```html
+  <button hx-post="{{.BasePath}}/api/v1/backup/test-connection"
+          hx-target="#backup-connection-result"
+          hx-swap="innerHTML"
+          class="button is-light is-small">
+    <span class="icon"><i class="fa-solid fa-plug"></i></span>
+    <span>Test Connection</span>
+  </button>
+  <span id="backup-connection-result" class="is-size-7"></span>
+  ```
+- Server: detect `HX-Request: true`, return HTML span (`<span class="has-text-success">… Connected</span>` or `<span class="has-text-danger">… <error></span>`). Always HTML-escape the error message — see `renderTestConnectionFragment` in `internal/handler/backup.go`.
+- Spinner CSS hook: `.button.htmx-request` in `main.scss` mirrors `.button.is-loading`. HTMX adds `.htmx-request` automatically while the request is in flight.
+- Do NOT add `hx-disabled-elt="this"` — it sets the `disabled` attribute which interacts badly with Bulma's disabled styling and was the source of a stuck-spinner bug. CSS `pointer-events: none` in the `.htmx-request` rule already blocks clicks during the request.
+
+### Inline status — not toast
+
+Action-result status (Publish succeeded, etc.) shows in an existing `<div id="*-status">` notification slot above or below the action. The slot stays visible until the user navigates away or triggers another action.
+
+- Pattern reference: `showPublishStatus()` in `orb.js`; `#publish-status` on orb's divergence page.
+- Do NOT use fixed-position toasts — they vanish before slow readers see them, and we don't have a toast convention anywhere else.
+
+## Iterating on CSS / templates
+
+- **Static assets are aggressively cached by browsers.** When a CSS or template change doesn't appear after server restart, **hard-refresh first** (Cmd+Shift+R). The `?v={{.Version}}` cache-bust on `head.gohtml` covers _real_ deploys, not iterative dev changes within the same `Version` value. Don't chase phantom JS / HTMX bugs before ruling out cache.
+- **Templates hot-reload from disk; Go handlers do not.** Editing a `.gohtml` file in dev mode picks up on the next page request. Editing a `.go` file requires restarting orbital (`make run-orbital`).
 
 ## DataTables + Bulma
 
@@ -90,7 +143,7 @@ These patterns are used in both orbital and orb. Always use them — never inven
 - **`ShowDCBack` / `dcCtx=1` pattern** — when a server tab is opened by drilling from a DC tab, URL includes `?dcCtx=1`. Handler sets `ShowDCBack: true`, renders back button (`is-warning` class — do not change to `is-link`), sets `data-reload-url`/`data-reload-target` on edit modal so post-save reload targets DC tab content.
 - **`localStorage.serverTabs` is separate from `localStorage.tabs`** — DC tabs persist under `localStorage.tabs`; Servers page tabs persist under `localStorage.serverTabs`.
 - **Edge delivery page** — route `/signed-artifacts`, template `signed-artifacts.gohtml`, template key `"signed-artifacts"`. No auto-poll — manual reload button only.
-- **`updatedBy` and `updatedAt` excluded from audit log variable display** (`skipVars` in `app.js`) — system metadata, not user-supplied input. They remain in `details.variables` in the database.
+- **`updatedBy` and `updatedAt` excluded from audit log variable display** (`skipVars` in `orbital.js`) — system metadata, not user-supplied input. They remain in `details.variables` in the database.
 - **REST-triggered audit events have no child row** — `renderPayload` returns `null` when `details.query` absent. Expand arrow also hidden via `createdRow`.
 - **Startup log must use slog, not `log.Printf`** — `cmd/orbital/main.go` calls `slog.SetDefault` before anything else so startup line emits JSON consistent with all other output.
 - **Standalone unauthenticated pages still include `head.gohtml`** — pages outside the main app shell (currently only `pages/device-code.gohtml`) must include `{{template "head.gohtml" .}}` so they pick up `?v={{.Version}}` cache-busting automatically. Page data struct needs `BasePath`, `Version`, `UI layout.UIConfig`, `PageTitle`.
@@ -102,4 +155,4 @@ These patterns are used in both orbital and orb. Always use them — never inven
   ```gohtml
   <span data-timestamp="{{.SomeTime.Format "2006-01-02T15:04:05Z07:00"}}">{{.SomeTime.Format "2006-01-02 15:04"}}</span>
   ```
-- **`renderTimestamps(document)` runs globally at DOMContentLoaded** — a single handler in `app.js` calls `renderTimestamps(document)` on every page load. This covers full-page renders (e.g. import history). HTMX-swapped content calls `renderTimestamps(panel)` explicitly after swap — both paths are handled.
+- **`renderTimestamps(document)` runs globally at DOMContentLoaded** — a single handler in `shared.js` calls `renderTimestamps(document)` on every page load. This covers full-page renders (e.g. import history). HTMX-swapped content calls `renderTimestamps(panel)` explicitly after swap — both paths are handled.

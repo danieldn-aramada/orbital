@@ -156,6 +156,56 @@ func TestEventList_FilterByOrbId(t *testing.T) {
 	}
 }
 
+// TestEventList_FilterByOrbId_Multiple verifies repeatable ?orbId= params
+// return events whose resources include ANY of the listed orbIds.
+// This is the shape the server tab uses to pull events for a server PLUS
+// its nested ConfigItems (IdracSettings, ServerConfigurationProfile, etc.)
+// in one fetch.
+func TestEventList_FilterByOrbId_Multiple(t *testing.T) {
+	ctx := context.Background()
+	clearEvents(ctx)
+
+	createEvent(t, "multi-test", []string{"updateServer"}, []string{"Server"}, []string{"colo:CWJHDX3"}, "")
+	createEvent(t, "multi-test", []string{"updateIdracSettings"}, []string{"IdracSettings"}, []string{"colo:CWJHDX3-idrac"}, "")
+	createEvent(t, "multi-test", []string{"updateServer"}, []string{"Server"}, []string{"colo:UNRELATED"}, "")
+	t.Cleanup(func() { clearEvents(ctx) })
+
+	h := newEventHandler(t)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/v1/audit-log?orbId=colo:CWJHDX3&orbId=colo:CWJHDX3-idrac", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := h.List(c); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	events, _ := body["events"].([]any)
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events (server + idrac), got %d", len(events))
+	}
+	seen := map[string]bool{}
+	for _, ev := range events {
+		m := ev.(map[string]any)
+		ids, _ := m["resourceIds"].([]any)
+		for _, id := range ids {
+			seen[id.(string)] = true
+		}
+	}
+	for _, want := range []string{"colo:CWJHDX3", "colo:CWJHDX3-idrac"} {
+		if !seen[want] {
+			t.Errorf("missing expected orbId %q in returned events", want)
+		}
+	}
+	if seen["colo:UNRELATED"] {
+		t.Errorf("returned event for unlisted orbId colo:UNRELATED")
+	}
+}
+
 // TestEventList_FilterByOrbId_ExactMatch verifies that prefix orbIds don't collide.
 // e.g. filtering for "ns:server:a" must not return events for "ns:server:ab".
 func TestEventList_FilterByOrbId_ExactMatch(t *testing.T) {

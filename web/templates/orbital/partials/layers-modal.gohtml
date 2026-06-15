@@ -1,0 +1,48 @@
+{{define "layers-modal"}}
+<div class="modal-card" style="width:760px;max-width:95vw;">
+  <header class="modal-card-head">
+    <p class="modal-card-title is-size-6">Layers — {{.Tag}}</p>
+    <button class="delete" aria-label="close" onclick="document.getElementById('layers-modal').classList.remove('is-active')"></button>
+  </header>
+  <section class="modal-card-body">
+    {{if .HasLayers}}
+    {{/* Producer comes from the OCI annotation com.armada.orbital.producer,
+         declared by orbital at push time. Falls back to (unannotated) for
+         legacy artifacts published before producer attribution shipped. */}}
+    <table class="table is-fullwidth is-striped is-size-7">
+      <thead>
+        <tr>
+          <th>Producer</th>
+          <th>Media Type</th>
+          <th class="is-nowrap">Size</th>
+          <th>Digest</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .LayerRows}}
+        <tr>
+          <td>
+            {{if .Producer}}
+              <span class="tag is-light">{{.Producer}}</span>
+            {{else if .IsOrbitalNative}}
+              <span class="tag is-light">orbital</span>
+            {{else}}
+              <span class="has-text-grey is-size-7">(unannotated)</span>
+            {{end}}
+          </td>
+          <td class="is-family-monospace">{{.MediaType}}</td>
+          <td class="is-nowrap">{{.SizeDisplay}}</td>
+          <td class="is-family-monospace">{{if .DigestShort}}{{.DigestShort}}{{else}}—{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="has-text-grey">No layer metadata stored for this artifact.</p>
+    {{end}}
+  </section>
+  <footer class="modal-card-foot">
+    <button class="button is-small" onclick="document.getElementById('layers-modal').classList.remove('is-active')">Close</button>
+  </footer>
+</div>
+{{end}}

@@ -67,6 +67,34 @@ func TestExtractResourceIDs(t *testing.T) {
 			want:      []string{"alaska:SRV003"},
 		},
 		{
+			// The shape used by dispatchAcceptMutation: $filter passed as a
+			// variable so the audit-log expanded row renders the same Input
+			// block as a user-driven mutation. The orbId hides inside
+			// variables.filter.orbId.eq and was previously missed.
+			name:  "orbId in filter variable (eq)",
+			query: `mutation AcceptDivergence($filter: IdracSettingsFilter!, $set: IdracSettingsPatch!) { updateIdracSettings(input: {filter: $filter, set: $set}) { numUids } }`,
+			variables: map[string]any{
+				"filter": map[string]any{
+					"orbId": map[string]any{"eq": "colo:CWJHDX3-idrac"},
+				},
+				"set": map[string]any{"sshEnabled": true},
+			},
+			respBody: []byte(`{"data":{"updateIdracSettings":{"numUids":1}}}`),
+			want:     []string{"colo:CWJHDX3-idrac"},
+		},
+		{
+			name:  "orbIds in filter variable (in)",
+			query: `mutation Bulk($filter: ServerFilter!, $set: ServerPatch!) { updateServer(input: {filter: $filter, set: $set}) { numUids } }`,
+			variables: map[string]any{
+				"filter": map[string]any{
+					"orbId": map[string]any{"in": []any{"alaska:SRV001", "alaska:SRV002"}},
+				},
+				"set": map[string]any{"powerState": "on"},
+			},
+			respBody: []byte(`{"data":{"updateServer":{"numUids":2}}}`),
+			want:     []string{"alaska:SRV001", "alaska:SRV002"},
+		},
+		{
 			name:      "orbId in response body",
 			query:     `mutation { addServer(input: []) { server { orbId } } }`,
 			variables: map[string]any{},

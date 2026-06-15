@@ -2,11 +2,12 @@ mutation UpsertIdracSettings {
   addIdracSettings(input: [
     {
       orbId: "seattle:FZ7P7Y3-idrac"
+      version: 1
       name: "idrac"
       namespace: "seattle"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "seattle:FZ7P7Y3" }
+      server: { orbId: "seattle:FZ7P7Y3" version: 1 }
       firmwareVersion: "7.10.70.00"
       sshEnabled: false
       ipmiEnabled: false
@@ -18,11 +19,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "seattle:5L4P7Y3-idrac"
+      version: 1
       name: "idrac"
       namespace: "seattle"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "seattle:5L4P7Y3" }
+      server: { orbId: "seattle:5L4P7Y3" version: 1 }
       firmwareVersion: "7.10.70.00"
       sshEnabled: false
       ipmiEnabled: false
@@ -34,11 +36,12 @@ mutation UpsertIdracSettings {
     }
     {
       orbId: "seattle:7L4P7Y3-idrac"
+      version: 1
       name: "idrac"
       namespace: "seattle"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "seattle:7L4P7Y3" }
+      server: { orbId: "seattle:7L4P7Y3" version: 1 }
       firmwareVersion: "7.10.70.00"
       sshEnabled: false
       ipmiEnabled: false

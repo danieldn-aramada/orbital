@@ -46,6 +46,9 @@ deploy/local/cosign.pub
 # Zot sync credentials — contains ACR password
 deploy/local/sync-credentials.json
 
+# Edge sim env — contains Azure Blob secret + DC config
+deploy/local/edge.env
+
 # Orb local data
 orb-data/
 

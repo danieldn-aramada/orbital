@@ -188,6 +188,33 @@ func (_u *DivergenceEntryUpdate) ClearOverrideValue() *DivergenceEntryUpdate {
 	return _u
 }
 
+// SetIntendedAtVersion sets the "intended_at_version" field.
+func (_u *DivergenceEntryUpdate) SetIntendedAtVersion(v int) *DivergenceEntryUpdate {
+	_u.mutation.ResetIntendedAtVersion()
+	_u.mutation.SetIntendedAtVersion(v)
+	return _u
+}
+
+// SetNillableIntendedAtVersion sets the "intended_at_version" field if the given value is not nil.
+func (_u *DivergenceEntryUpdate) SetNillableIntendedAtVersion(v *int) *DivergenceEntryUpdate {
+	if v != nil {
+		_u.SetIntendedAtVersion(*v)
+	}
+	return _u
+}
+
+// AddIntendedAtVersion adds value to the "intended_at_version" field.
+func (_u *DivergenceEntryUpdate) AddIntendedAtVersion(v int) *DivergenceEntryUpdate {
+	_u.mutation.AddIntendedAtVersion(v)
+	return _u
+}
+
+// ClearIntendedAtVersion clears the value of the "intended_at_version" field.
+func (_u *DivergenceEntryUpdate) ClearIntendedAtVersion() *DivergenceEntryUpdate {
+	_u.mutation.ClearIntendedAtVersion()
+	return _u
+}
+
 // SetWho sets the "who" field.
 func (_u *DivergenceEntryUpdate) SetWho(v string) *DivergenceEntryUpdate {
 	_u.mutation.SetWho(v)
@@ -367,6 +394,15 @@ func (_u *DivergenceEntryUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if _u.mutation.OverrideValueCleared() {
 		_spec.ClearField(divergenceentry.FieldOverrideValue, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.IntendedAtVersion(); ok {
+		_spec.SetField(divergenceentry.FieldIntendedAtVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedIntendedAtVersion(); ok {
+		_spec.AddField(divergenceentry.FieldIntendedAtVersion, field.TypeInt, value)
+	}
+	if _u.mutation.IntendedAtVersionCleared() {
+		_spec.ClearField(divergenceentry.FieldIntendedAtVersion, field.TypeInt)
 	}
 	if value, ok := _u.mutation.Who(); ok {
 		_spec.SetField(divergenceentry.FieldWho, field.TypeString, value)
@@ -555,6 +591,33 @@ func (_u *DivergenceEntryUpdateOne) AppendOverrideValue(v json.RawMessage) *Dive
 // ClearOverrideValue clears the value of the "override_value" field.
 func (_u *DivergenceEntryUpdateOne) ClearOverrideValue() *DivergenceEntryUpdateOne {
 	_u.mutation.ClearOverrideValue()
+	return _u
+}
+
+// SetIntendedAtVersion sets the "intended_at_version" field.
+func (_u *DivergenceEntryUpdateOne) SetIntendedAtVersion(v int) *DivergenceEntryUpdateOne {
+	_u.mutation.ResetIntendedAtVersion()
+	_u.mutation.SetIntendedAtVersion(v)
+	return _u
+}
+
+// SetNillableIntendedAtVersion sets the "intended_at_version" field if the given value is not nil.
+func (_u *DivergenceEntryUpdateOne) SetNillableIntendedAtVersion(v *int) *DivergenceEntryUpdateOne {
+	if v != nil {
+		_u.SetIntendedAtVersion(*v)
+	}
+	return _u
+}
+
+// AddIntendedAtVersion adds value to the "intended_at_version" field.
+func (_u *DivergenceEntryUpdateOne) AddIntendedAtVersion(v int) *DivergenceEntryUpdateOne {
+	_u.mutation.AddIntendedAtVersion(v)
+	return _u
+}
+
+// ClearIntendedAtVersion clears the value of the "intended_at_version" field.
+func (_u *DivergenceEntryUpdateOne) ClearIntendedAtVersion() *DivergenceEntryUpdateOne {
+	_u.mutation.ClearIntendedAtVersion()
 	return _u
 }
 
@@ -767,6 +830,15 @@ func (_u *DivergenceEntryUpdateOne) sqlSave(ctx context.Context) (_node *Diverge
 	}
 	if _u.mutation.OverrideValueCleared() {
 		_spec.ClearField(divergenceentry.FieldOverrideValue, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.IntendedAtVersion(); ok {
+		_spec.SetField(divergenceentry.FieldIntendedAtVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedIntendedAtVersion(); ok {
+		_spec.AddField(divergenceentry.FieldIntendedAtVersion, field.TypeInt, value)
+	}
+	if _u.mutation.IntendedAtVersionCleared() {
+		_spec.ClearField(divergenceentry.FieldIntendedAtVersion, field.TypeInt)
 	}
 	if value, ok := _u.mutation.Who(); ok {
 		_spec.SetField(divergenceentry.FieldWho, field.TypeString, value)

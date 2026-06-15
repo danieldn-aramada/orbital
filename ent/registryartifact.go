@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent/registryartifact"
+	"github.com/armada/orbital/internal/ocitype"
 	"github.com/google/uuid"
 )
 
@@ -52,6 +54,8 @@ type RegistryArtifact struct {
 	Enriched bool `json:"enriched,omitempty"`
 	// BundlerError holds the value of the "bundler_error" field.
 	BundlerError *string `json:"bundler_error,omitempty"`
+	// Layers holds the value of the "layers" field.
+	Layers       []ocitype.ArtifactLayer `json:"layers,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -60,6 +64,8 @@ func (*RegistryArtifact) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case registryartifact.FieldLayers:
+			values[i] = new([]byte)
 		case registryartifact.FieldSigned, registryartifact.FieldEnriched:
 			values[i] = new(sql.NullBool)
 		case registryartifact.FieldID, registryartifact.FieldSizeBytes, registryartifact.FieldInitiatedBy:
@@ -200,6 +206,14 @@ func (_m *RegistryArtifact) assignValues(columns []string, values []any) error {
 				_m.BundlerError = new(string)
 				*_m.BundlerError = value.String
 			}
+		case registryartifact.FieldLayers:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field layers", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Layers); err != nil {
+					return fmt.Errorf("unmarshal field layers: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -300,6 +314,9 @@ func (_m *RegistryArtifact) String() string {
 		builder.WriteString("bundler_error=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("layers=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Layers))
 	builder.WriteByte(')')
 	return builder.String()
 }

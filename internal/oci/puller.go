@@ -29,7 +29,8 @@ type PullConfig struct {
 type PulledArtifact struct {
 	DataGZ      []byte
 	SchemaGZ    []byte
-	ExtraLayers map[string][]byte // mediaType → bytes; non-graph layers for consumer dispatch
+	ExtraLayers map[string][]byte            // mediaType → bytes; non-graph layers for consumer dispatch
+	LayerAnnotations map[string]map[string]string // mediaType → per-layer manifest annotations
 	Annotations map[string]string
 	Digest      string // manifest digest, used for cosign verification
 	Tag         string
@@ -136,7 +137,9 @@ func Pull(ctx context.Context, cfg PullConfig, tag string) (*PulledArtifact, err
 		Tag:         tag,
 	}
 
-	// Extract data.json.gz and schema.gz by mediaType.
+	// Extract data.json.gz and schema.gz by mediaType. Also capture per-layer
+	// annotations so the importer can surface producer attribution
+	// (`com.armada.orbital.producer`) in the import history UI.
 	for _, layer := range manifest.Layers {
 		rc, err := store.Fetch(ctx, layer)
 		if err != nil {
@@ -146,6 +149,12 @@ func Pull(ctx context.Context, cfg PullConfig, tag string) (*PulledArtifact, err
 		rc.Close()
 		if err != nil {
 			return nil, fmt.Errorf("read layer %s: %w", layer.MediaType, err)
+		}
+		if len(layer.Annotations) > 0 {
+			if artifact.LayerAnnotations == nil {
+				artifact.LayerAnnotations = make(map[string]map[string]string)
+			}
+			artifact.LayerAnnotations[layer.MediaType] = layer.Annotations
 		}
 		switch layer.MediaType {
 		case mediaTypeDataGZ:

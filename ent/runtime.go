@@ -61,7 +61,7 @@ func init() {
 	// divergenceentry.DefaultTypeName holds the default value on creation for the type_name field.
 	divergenceentry.DefaultTypeName = divergenceentryDescTypeName.Default.(string)
 	// divergenceentryDescWho is the schema descriptor for who field.
-	divergenceentryDescWho := divergenceentryFields[7].Descriptor()
+	divergenceentryDescWho := divergenceentryFields[8].Descriptor()
 	// divergenceentry.WhoValidator is a validator for the "who" field. It is called by the builders before save.
 	divergenceentry.WhoValidator = divergenceentryDescWho.Validators[0].(func(string) error)
 	// divergenceentryDescID is the schema descriptor for id field.
@@ -89,10 +89,6 @@ func init() {
 	divergenceresolutionDescActor := divergenceresolutionFields[4].Descriptor()
 	// divergenceresolution.ActorValidator is a validator for the "actor" field. It is called by the builders before save.
 	divergenceresolution.ActorValidator = divergenceresolutionDescActor.Validators[0].(func(string) error)
-	// divergenceresolutionDescCbConsumed is the schema descriptor for cb_consumed field.
-	divergenceresolutionDescCbConsumed := divergenceresolutionFields[6].Descriptor()
-	// divergenceresolution.DefaultCbConsumed holds the default value on creation for the cb_consumed field.
-	divergenceresolution.DefaultCbConsumed = divergenceresolutionDescCbConsumed.Default.(bool)
 	// divergenceresolutionDescID is the schema descriptor for id field.
 	divergenceresolutionDescID := divergenceresolutionFields[0].Descriptor()
 	// divergenceresolution.DefaultID holds the default value on creation for the id field.

@@ -203,20 +203,63 @@ function publishDivergence() {
     .then(r => r.json().then(body => ({ ok: r.ok, body })))
     .then(({ ok, body }) => {
       if (!ok) throw new Error(body.message || 'publish failed')
-      showPublishToast('Divergence report published: ' + body.key, 'is-success')
-      setTimeout(() => location.reload(), 1500)
+      showPublishStatus('Divergence report published.', 'is-success')
     })
-    .catch(err => showPublishToast(err.message, 'is-danger'))
+    .catch(err => showPublishStatus(err.message, 'is-danger'))
     .finally(() => { if (btn) btn.classList.remove('is-loading') })
 }
 
-function showPublishToast(msg, cls) {
-  const toast = document.getElementById('publish-toast')
-  if (!toast) return
-  toast.className = 'notification ' + cls
-  toast.textContent = msg
-  toast.classList.remove('is-hidden')
-  setTimeout(() => toast.classList.add('is-hidden'), 4000)
+// showPublishStatus populates the inline #publish-status notification slot
+// with a result message. Same pattern as orbital's #divergence-error — the
+// notification stays visible until the user navigates away or triggers
+// another publish, matching the project's "inline status, not toast" UX.
+function showPublishStatus(msg, cls) {
+  const el = document.getElementById('publish-status')
+  if (!el) return
+  el.className = 'notification is-size-7 is-light ' + cls
+  el.textContent = msg
+  el.style.display = ''
+}
+
+// refreshOrbDivergence fetches the page's HX fragment and swaps the table in
+// place. Mirrors orbital's refreshDivergenceReports: skeleton rows render
+// immediately, the swap waits on Promise.all so a fast response doesn't flash.
+function refreshOrbDivergence() {
+  const btn = document.getElementById('btn-refresh-divergence')
+  const container = document.getElementById('divergence-content')
+  if (!container) return
+  if (btn) btn.classList.add('is-loading')
+  container.innerHTML = orbDivergenceSkeletonHTML()
+  Promise.all([
+    fetch(BASE + '/divergence', { headers: { 'HX-Request': 'true' } }).then(r => r.text()),
+    new Promise(resolve => setTimeout(resolve, 500)),
+  ])
+    .then(([html]) => {
+      container.innerHTML = html
+      if (typeof htmx !== 'undefined') htmx.process(container)
+    })
+    .catch(() => {})
+    .finally(() => { if (btn) btn.classList.remove('is-loading') })
+}
+
+// orbDivergenceSkeletonHTML mirrors the real table's six columns so the
+// transition from skeleton → real content doesn't reflow. Same is-skeleton
+// span pattern as loadOrbTags (orb.js:107) and orbital's divergenceSkeletonHTML.
+function orbDivergenceSkeletonHTML() {
+  const s = () => `<span class="is-skeleton" style="display:block">&nbsp;</span>`
+  const row = () => `<tr>
+    <td>${s()}</td><td>${s()}</td><td>${s()}</td><td>${s()}</td><td>${s()}</td><td>${s()}</td>
+  </tr>`
+  return `<div class="table-container">
+    <table class="table is-fullwidth is-hoverable is-size-7">
+      <thead>
+        <tr>
+          <th>Orb ID</th><th>Field</th><th>Intended</th><th>Override</th><th>Who</th><th>When</th>
+        </tr>
+      </thead>
+      <tbody>${[1, 2, 3].map(row).join('')}</tbody>
+    </table>
+  </div>`
 }
 
 // ─── window bridge for onclick handlers ──────────────────────────────────────
@@ -226,3 +269,4 @@ window.handleOrbImportLatest = handleOrbImportLatest
 window.loadOrbTags = loadOrbTags
 window.handleOrbCourierUpload = handleOrbCourierUpload
 window.publishDivergence = publishDivergence
+window.refreshOrbDivergence = refreshOrbDivergence

@@ -33,7 +33,13 @@ Run `make help` for the full list. The most-used:
 | `make seed` | `make test-e2e` (needs orbital + orb running) | `make build-orbctl` (compile the CLI) |
 | | `make release-check` (pre-release; see below) | `make edge-up` / `make edge-down` (test orb against AKS upstream; see below) |
 
-`make run-orbital` / `make run-orb` use `go run` for fast iteration. The host doesn't have `dgraph` in PATH, so the import flow (orb) and restore flow (orbital) will fail under `go run` — that's expected. Use `make release-check` to exercise those paths against the actual container images.
+`make run-orbital` / `make run-orb` use `go run` for fast iteration. The host wrapper at `~/.local/bin/dgraph` makes the orb import flow and orbital restore flow work under `go run` — ensure `~/.local/bin` is on your `PATH` or those paths fail with `dgraph: executable file not found`. `make release-check` exercises the same paths against the actual container images.
+
+### Divergence flow gotchas
+
+- **Orb doesn't auto-import.** Its poller only detects new tags; trigger imports with `POST /api/v1/import {"tag":"vN"}`.
+- **cb-controller's reporter defaults to 5 min.** For local dev, set `DIVERGENCE_REPORTER_INTERVAL=15s` when running it.
+- **End-to-end smoke**: `make e2e-divergence` runs the full export → publish → orb import → SSA admin override → orb publish → orbital ingest flow and asserts the divergence is visible. Requires orbital + orb + cb-bundler + cb-controller all running and minikube up.
 
 ## Running tests
 

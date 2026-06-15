@@ -14,18 +14,74 @@
       <p class="has-text-grey mb-5" style="font-size: 0.875rem;">
         Each row is one report from a data center — the most recent snapshot orb published. Click a row to see the diverged fields.
         {{if .CanResolve}}<br>
-        <strong>Accept</strong> — record the decision; update intent via the normal UI.
-        <strong>Force</strong> — next bundle re-takes ownership of the field.
-        <strong>Ignore</strong> — acknowledge without effect.
+        Stage a decision (<strong>Accept</strong>, <strong>Reject</strong>, or <strong>Ignore</strong>) on <strong>every</strong> pending field, then click <strong>Submit Decisions</strong> to apply them all and mark the report reviewed. Partial submissions aren't accepted — every field needs a decision.
+        <strong>Accept</strong> updates orbital intent to match the override.
+        <strong>Reject</strong> keeps cloud intent and instructs the deployment layer to reset the edge value on the next bundle.
+        <strong>Ignore</strong> formally disengages — cloud no longer enforces this field; local admin keeps it.
         {{end}}
       </p>
 
+      <div class="field mb-4">
+        <div class="control is-flex is-align-items-center" style="gap: 0.75rem;">
+          <button id="btn-refresh-divergence" class="button is-light is-small" onclick="refreshDivergenceReports()">
+            <span class="icon"><i class="fa-solid fa-rotate"></i></span>
+            <span>Refresh</span>
+          </button>
+          <button id="btn-test-divergence-connection" type="button" class="button is-light is-small"
+                  hx-post="{{.BasePath}}/api/v1/backup/test-connection"
+                  hx-target="#divergence-connection-result"
+                  hx-swap="innerHTML">
+            <span class="icon"><i class="fa-solid fa-plug"></i></span>
+            <span>Test Connection</span>
+          </button>
+          <span id="divergence-connection-result" class="is-size-7"></span>
+        </div>
+      </div>
+
       <div id="divergence-error" class="notification is-danger is-light" style="display:none;"></div>
 
-      <table class="table is-striped is-hoverable is-fullwidth is-size-7">
+      {{/* Refresh swaps the inner HTML of this div with the same {{define
+           "divergence-content"}} fragment the server returns when called with
+           HX-Request: true. */}}
+      <div id="divergence-content">
+        {{template "divergence-content" .}}
+      </div>
+
+      {{end}}
+    </div>
+  </main>
+
+  <div id="divergence-confirm-modal" class="modal">
+    <div class="modal-background" onclick="closeDivergenceConfirmModal()"></div>
+    <div class="modal-card" style="max-width: 640px;">
+      <header class="modal-card-head">
+        <p class="modal-card-title is-size-6">Submit decisions</p>
+        <button class="delete" aria-label="close" onclick="closeDivergenceConfirmModal()"></button>
+      </header>
+      <section class="modal-card-body">
+        <div id="divergence-confirm-summary"></div>
+      </section>
+      <footer class="modal-card-foot is-flex is-justify-content-flex-end" style="gap:0.5rem;">
+        <button class="button" onclick="closeDivergenceConfirmModal()">Cancel</button>
+        <button id="divergence-confirm-btn" class="button is-primary" onclick="confirmDivergenceBatch()">Confirm</button>
+      </footer>
+    </div>
+  </div>
+{{end}}
+
+{{define "divergence-content"}}
+      <form id="divergence-batch-form" onsubmit="event.preventDefault(); submitDivergenceBatch();">
+      <table class="table is-striped is-hoverable is-fullwidth is-size-7" style="table-layout: fixed;">
+        <colgroup>
+          <col style="width: 2.5rem">  {{/* chevron */}}
+          <col style="width: 20%">      {{/* Data Center */}}
+          <col style="width: 20%">      {{/* Last Seen */}}
+          <col style="width: 20%">      {{/* Entries */}}
+          <col>                         {{/* Status — remainder */}}
+        </colgroup>
         <thead>
           <tr>
-            <th style="width: 2rem"></th>
+            <th></th>
             <th>Data Center</th>
             <th>Last Seen</th>
             <th>Entries</th>
@@ -41,16 +97,32 @@
             <td>{{.LastSeenAt}}</td>
             <td>{{.Total}}</td>
             <td>
-              {{if .Pending}}<span class="tag is-light mr-1">{{.Pending}} pending</span>{{end}}
-              {{if .Accepted}}<span class="tag is-success is-light mr-1">{{.Accepted}} accepted</span>{{end}}
-              {{if .Ignored}}<span class="tag is-warning is-light mr-1">{{.Ignored}} ignored</span>{{end}}
-              {{if .Forced}}<span class="tag is-danger is-light mr-1">{{.Forced}} forced</span>{{end}}
+              {{if gt .Pending 0}}
+                <span class="tag is-warning">
+                  <span class="icon is-small"><i class="fa-solid fa-circle-exclamation"></i></span>
+                  <span>Needs review</span>
+                </span>
+              {{else if gt .Total 0}}
+                <span class="tag is-success">
+                  <span class="icon is-small"><i class="fa-solid fa-circle-check"></i></span>
+                  <span>Reviewed</span>
+                </span>
+              {{end}}
             </td>
           </tr>
           <tr class="divergence-group-detail" data-dc="{{$dcId}}" style="display:none;">
             <td></td>
             <td colspan="4">
-              <table class="table is-fullwidth is-size-7" style="margin-bottom:0;">
+              <table class="table is-fullwidth is-size-7" style="margin-bottom:0; table-layout: fixed;">
+                <colgroup>
+                  <col style="width: 15%">    {{/* Config Item: type + orbId stacked */}}
+                  <col style="width: 15%">    {{/* Field */}}
+                  <col style="width: 10%">     {{/* Intended */}}
+                  <col style="width: 10%">     {{/* Override */}}
+                  <col style="width: 10%">    {{/* Who */}}
+                  <col style="width: 15%">    {{/* First Seen */}}
+                  <col>                       {{/* Decision — remainder; holds action buttons when pending */}}
+                </colgroup>
                 <thead>
                   <tr>
                     <th>Config Item</th>
@@ -59,61 +131,67 @@
                     <th>Override</th>
                     <th>Who</th>
                     <th>First Seen</th>
-                    <th>Status</th>
-                    {{if $.CanResolve}}<th></th>{{end}}
+                    <th>Decision</th>
                   </tr>
                 </thead>
                 <tbody>
                   {{range .Rows}}
                   <tr data-entry-id="{{.ID}}">
-                    <td>{{.EntryOrbID}}</td>
+                    <td>
+                      {{if .TypeName}}<div>{{.TypeName}}</div>{{end}}
+                      <div>{{.EntryOrbID}}</div>
+                    </td>
                     <td>{{.Field}}</td>
                     <td><code>{{.IntendedValue}}</code></td>
                     <td><code>{{.OverrideValue}}</code></td>
                     <td>{{.Who}}</td>
                     <td>{{.FirstSeenAt}}</td>
-                    <td>
+                    <td style="white-space:nowrap;">
                       {{if eq .ResolutionAction "accept"}}
-                        <span class="tag is-success is-light" title="Decided by {{.ResolutionActor}} on {{.DecidedAt}}">accepted</span>
-                      {{else if eq .ResolutionAction "force"}}
-                        {{if .CbConsumed}}
-                          <span class="tag is-danger is-light" title="Decided by {{.ResolutionActor}} on {{.DecidedAt}}">forced (applied)</span>
+                        {{if .Propagated}}
+                          <span class="has-text-success has-text-weight-medium" title="Decided by {{.ResolutionActor}} on {{.DecidedAt}}; propagated at the edge">accepted</span>
                         {{else}}
-                          <span class="tag is-danger is-light" title="Decided by {{.ResolutionActor}} on {{.DecidedAt}}">forced (queued)</span>
+                          <span class="has-text-success has-text-weight-medium" title="Decided by {{.ResolutionActor}} on {{.DecidedAt}}; pending propagation">accepted (pending propagation)</span>
+                        {{end}}
+                      {{else if eq .ResolutionAction "reject"}}
+                        {{if .Propagated}}
+                          <span class="has-text-danger has-text-weight-medium" title="Decided by {{.ResolutionActor}} on {{.DecidedAt}}; propagated at the edge">rejected</span>
+                        {{else}}
+                          <span class="has-text-danger has-text-weight-medium" title="Decided by {{.ResolutionActor}} on {{.DecidedAt}}; pending propagation">rejected (pending propagation)</span>
                         {{end}}
                       {{else if eq .ResolutionAction "ignore"}}
-                        <span class="tag is-warning is-light" title="Decided by {{.ResolutionActor}} on {{.DecidedAt}}">ignored</span>
-                      {{else}}
-                        <span class="tag is-light">pending</span>
-                      {{end}}
-                    </td>
-                    {{if $.CanResolve}}
-                    <td>
-                      <div class="buttons has-addons" style="margin-bottom:0; flex-wrap:nowrap;">
+                        <span class="has-text-warning-dark has-text-weight-medium" title="Decided by {{.ResolutionActor}} on {{.DecidedAt}}">ignored</span>
+                      {{else if $.CanResolve}}
+                      <div class="buttons has-addons divergence-action-group" data-entry-id="{{.ID}}" data-entry-orbid="{{.EntryOrbID}}" data-entry-field="{{.Field}}" style="margin-bottom:0; flex-wrap:nowrap;">
                         <button
-                          class="button is-small is-success{{if eq .ResolutionAction "accept"}} is-selected{{else}} is-outlined{{end}}"
-                          onclick="resolveDivergence('{{.ID}}', 'accept', this)"
-                          {{if eq .ResolutionAction "accept"}}disabled{{end}}
-                          title="Record acceptance; update intent via the normal UI"
+                          type="button"
+                          class="button is-small is-success is-outlined divergence-action-btn"
+                          data-action="accept"
+                          onclick="toggleDivergenceAction(this)"
+                          title="Update orbital intent to match the override"
                           style="width:5rem;"
                         >Accept</button>
                         <button
-                          class="button is-small is-warning{{if eq .ResolutionAction "ignore"}} is-selected{{else}} is-outlined{{end}}"
-                          onclick="resolveDivergence('{{.ID}}', 'ignore', this)"
-                          {{if eq .ResolutionAction "ignore"}}disabled{{end}}
+                          type="button"
+                          class="button is-small is-warning is-outlined divergence-action-btn"
+                          data-action="ignore"
+                          onclick="toggleDivergenceAction(this)"
                           title="Acknowledge without effect"
                           style="width:5rem;"
                         >Ignore</button>
                         <button
-                          class="button is-small is-danger{{if eq .ResolutionAction "force"}} is-selected{{else}} is-outlined{{end}}"
-                          onclick="resolveDivergence('{{.ID}}', 'force', this)"
-                          {{if eq .ResolutionAction "force"}}disabled{{end}}
-                          title="Next bundle re-takes ownership of this field"
+                          type="button"
+                          class="button is-small is-danger is-outlined divergence-action-btn"
+                          data-action="reject"
+                          onclick="toggleDivergenceAction(this)"
+                          title="Reject the override: cloud intent wins, edge resets, cb-controller takes ownership"
                           style="width:5rem;"
-                        >Force</button>
+                        >Reject</button>
                       </div>
+                      {{else}}
+                      <span class="has-text-grey">pending</span>
+                      {{end}}
                     </td>
-                    {{end}}
                   </tr>
                   {{end}}
                 </tbody>
@@ -126,7 +204,14 @@
         </tbody>
       </table>
 
+      {{if and .CanResolve .Groups}}
+      <div class="is-flex is-align-items-center is-justify-content-flex-end mt-4" style="gap:1rem;">
+        <span id="divergence-batch-counter" class="has-text-grey is-size-7">No decisions selected.</span>
+        <button type="submit" id="divergence-batch-submit" class="button is-primary" disabled>
+          <span class="icon is-small"><i class="fa-solid fa-check"></i></span>
+          <span>Submit Decisions</span>
+        </button>
+      </div>
       {{end}}
-    </div>
-  </main>
+      </form>
 {{end}}

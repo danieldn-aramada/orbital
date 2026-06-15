@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/armada/orbital/internal/ocitype"
 	"github.com/armada/orbital/internal/orbconfig"
 )
 
@@ -33,7 +34,6 @@ const (
 	LayerRoleGraph      = "graph"      // consumed by DGraph (always)
 	LayerRoleDispatched = "dispatched" // dispatched to a registered consumer
 	LayerRoleUnknown    = "unknown"    // no registered consumer — silently skipped
-	LayerRoleMapping    = "mapping"    // bundle's divergence-mapping layer; stored locally by orb, not dispatched
 
 	// graph layer media types — used when recording history entries.
 	layerMediaTypeData   = "application/vnd.orbital.subgraph.data.v1+gzip"
@@ -54,6 +54,7 @@ type ImportMeta struct {
 type LayerRecord struct {
 	MediaType string          `json:"mediaType"`
 	Role      string          `json:"role"`               // LayerRole* constant
+	Producer  string          `json:"producer,omitempty"` // from OCI annotation com.armada.orbital.producer (empty for legacy)
 	Dispatch  *DispatchResult `json:"dispatch,omitempty"` // set when Role == LayerRoleDispatched
 }
 
@@ -227,8 +228,13 @@ func (i *Importer) recordHistory(meta ImportMeta, status, errMsg string) error {
 		Verification: meta.Verification,
 		Error:       errMsg,
 		Layers: []LayerRecord{
-			{MediaType: layerMediaTypeData, Role: LayerRoleGraph},
-			{MediaType: layerMediaTypeSchema, Role: LayerRoleGraph},
+			// Graph layers are by definition produced by orbital. We don't need
+			// to read the OCI annotation for these — orbital is the only thing
+			// that can produce dgraph-loaded subgraph layers. Using the canonical
+			// "orbital" string keeps orb's UI consistent with the annotation
+			// value that the publisher writes on the same layers.
+			{MediaType: layerMediaTypeData, Role: LayerRoleGraph, Producer: ocitype.ProducerOrbital},
+			{MediaType: layerMediaTypeSchema, Role: LayerRoleGraph, Producer: ocitype.ProducerOrbital},
 		},
 	})
 
@@ -241,7 +247,7 @@ func (i *Importer) recordHistory(meta ImportMeta, status, errMsg string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	return writeAtomic(path, data)
 }
 
 // AppendLayersToLastHistory appends extra layer records (dispatched + unknown) to the most
@@ -269,7 +275,7 @@ func AppendLayersToLastHistory(dataDir string, layers []LayerRecord) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, out, 0o644)
+	return writeAtomic(path, out)
 }
 
 // LoadHistory reads the import history from disk. Returns empty slice if none exists.
@@ -287,5 +293,16 @@ func LoadHistory(dataDir string) ([]ImportRecord, error) {
 		return nil, err
 	}
 	return records, nil
+}
+
+// writeAtomic writes data to path via a tmp+rename so a crash mid-write can't
+// leave a truncated/corrupt file. POSIX rename is atomic on the same filesystem.
+// Edge runtimes lose power unexpectedly — this matters more than for cloud state.
+func writeAtomic(path string, data []byte) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 

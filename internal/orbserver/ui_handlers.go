@@ -123,6 +123,23 @@ func (s *Server) render(c echo.Context, name string, data any) error {
 	return nil
 }
 
+// renderFragment executes a single named {{define}} block within a page's
+// parse set. Used for HX-Request swaps where the caller wants one chunk of
+// the page back, not the full layout. Mirrors handler.UI.renderFragment.
+func (s *Server) renderFragment(c echo.Context, page, fragment string, data any) error {
+	var tmpl *template.Template
+	if s.devMode {
+		tmpl = s.templateMap()[page]
+	} else {
+		tmpl = s.templates[page]
+	}
+	if tmpl == nil {
+		return echo.ErrNotFound
+	}
+	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+	return tmpl.ExecuteTemplate(c.Response().Writer, fragment, data)
+}
+
 func (s *Server) statusPage(c echo.Context) error {
 	snap := s.state.snapshot()
 	b := s.orbBase(c)

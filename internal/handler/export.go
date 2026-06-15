@@ -63,12 +63,12 @@ func NewExport(db *ent.Client, dgraphURL, dgraphScratchURL, dgraphScratchAdminUR
 }
 
 type triggerResponse struct {
-	JobID  string `json:"jobId"`
+	JobID  string `json:"id"`
 	Status string `json:"status"`
 }
 
 type statusResponse struct {
-	JobID       string  `json:"jobId"`
+	JobID       string  `json:"id"`
 	DataCenter  string  `json:"dataCenter"`
 	Status      string  `json:"status"`
 	Published   bool    `json:"published"`
@@ -115,8 +115,8 @@ func (h *Export) Trigger(c echo.Context) error {
 	}
 	if existing != nil {
 		return c.JSON(http.StatusConflict, map[string]string{
-			"error": fmt.Sprintf("export already in progress (jobId: %s)", existing.ID),
-			"jobId": existing.ID.String(),
+			"error": fmt.Sprintf("export already in progress (id: %s)", existing.ID),
+			"id":    existing.ID.String(),
 		})
 	}
 
@@ -155,7 +155,7 @@ func (h *Export) Trigger(c echo.Context) error {
 		[]string{"DataCenter"},
 		[]string{dcOrbID},
 		map[string]any{
-			"jobId":          job.ID.String(),
+			"id":             job.ID.String(),
 			"datacenterId":   datacenterID,
 			"datacenterName": dcName,
 		},

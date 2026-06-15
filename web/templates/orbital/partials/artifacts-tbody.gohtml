@@ -1,15 +1,31 @@
 {{range .}}<tr>
   <td>{{.DatacenterName}}</td>
-  <td style="font-family:monospace;font-size:0.7rem">{{.Repository}}</td>
+  <td class="is-family-monospace is-size-7">{{.Repository}}</td>
   <td><span class="tag is-light">{{.Tag}}</span></td>
-  <td style="white-space:nowrap;">
-    {{if .HasDigest}}<div style="display:flex;align-items:center;gap:0.25rem;">
+  <td class="is-nowrap">
+    {{if .HasDigest}}<div class="is-flex is-align-items-center" style="gap:0.25rem;">
       <span class="is-family-monospace is-size-7">{{.DigestShort}}…</span>
       <button class="button is-small is-white" title="Copy digest" data-copy-value="{{.Digest}}"><span class="icon"><i class="fas fa-copy"></i></span></button>
     </div>{{else}}—{{end}}
   </td>
   <td>{{if .Signed}}<span class="tag is-success is-light">signed</span>{{else}}<span class="tag is-light">unsigned</span>{{end}}</td>
-  <td>{{if .Enriched}}<span class="tag is-info is-light">bundled</span>{{else}}—{{end}}{{if .BundlerError}}<p class="has-text-danger is-size-7 mt-1">{{.BundlerError}}</p>{{end}}</td>
+  <td class="is-nowrap">
+    {{if .HasLayers}}
+      <div class="is-flex is-align-items-center" style="gap:0.25rem;">
+        <span class="tag is-light is-small">{{.OrbitalLayers}} dgraph</span>
+        {{if gt .BundlerLayers 0}}<span class="tag is-info is-light is-small">{{.BundlerLayers}} bundler</span>{{end}}
+        <button class="button is-small is-white" title="View layers"
+          hx-get="{{.BasePath}}/api/v1/oci/artifacts/{{.ID}}/layers"
+          hx-target="#layers-modal-body"
+          hx-swap="innerHTML"
+          onclick="document.getElementById('layers-modal').classList.add('is-active')">
+          <span class="icon"><i class="fas fa-up-right-from-square"></i></span>
+        </button>
+      </div>
+    {{else if .Enriched}}<span class="tag is-info is-light is-small">bundled</span>
+    {{else}}—{{end}}
+    {{if .BundlerError}}<p class="has-text-danger is-size-7 mt-1">{{.BundlerError}}</p>{{end}}
+  </td>
   <td><span class="tag {{.StatusClass}}">{{.Status}}</span></td>
   <td>{{.InitiatedAt}}</td>
   <td class="has-text-danger is-size-7">{{.Error}}</td>

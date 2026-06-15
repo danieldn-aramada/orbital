@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -17,6 +19,7 @@ import (
 	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/internal/bundler"
 	"github.com/armada/orbital/internal/oci"
+	"github.com/armada/orbital/internal/ocitype"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	orasauth "oras.land/oras-go/v2/registry/remote/auth"
@@ -31,9 +34,14 @@ type OCI struct {
 	cfg              oci.Config
 	scratchExportDir string
 	logger           *slog.Logger
-	bundlerTimeout  time.Duration
-	bundlerOpts     []bundler.ClientOption
-	basePath        string // URL base path for fragment-rendered hx-* attributes
+	bundlerTimeout   time.Duration
+	bundlerOpts      []bundler.ClientOption
+	// defaultBundlerURLs is consulted when a publish request body omits
+	// `bundlers`. Set to the in-pod sidecar URL (http://localhost:8020/bundle)
+	// in deploy/base/deploy.yaml so UI publishes — which form-encode and don't
+	// supply JSON — still hit the sidecar.
+	defaultBundlerURLs []string
+	basePath           string // URL base path for fragment-rendered hx-* attributes
 }
 
 // SetBasePath configures the URL base path used by HTML fragments rendered by this handler.
@@ -41,12 +49,22 @@ func (h *OCI) SetBasePath(bp string) { h.basePath = bp }
 
 // NewOCI creates an OCI handler. publisher may be nil when OCI is not configured.
 // bundlerTimeout and bundlerOpts are applied when constructing per-request bundler clients.
-func NewOCI(db *ent.Client, cfg oci.Config, scratchExportDir string, logger *slog.Logger, bundlerTimeout time.Duration, bundlerOpts ...bundler.ClientOption) *OCI {
+// defaultBundlerURLs supplies a fallback list when the publish request omits `bundlers`.
+func NewOCI(db *ent.Client, cfg oci.Config, scratchExportDir string, logger *slog.Logger, bundlerTimeout time.Duration, defaultBundlerURLs []string, bundlerOpts ...bundler.ClientOption) *OCI {
 	var pub *oci.Publisher
 	if cfg.Registry != "" && cfg.SigningKeyPath != "" {
 		pub = oci.New(db, cfg, logger)
 	}
-	return &OCI{db: db, publisher: pub, cfg: cfg, scratchExportDir: scratchExportDir, logger: logger, bundlerTimeout: bundlerTimeout, bundlerOpts: bundlerOpts}
+	return &OCI{
+		db:                 db,
+		publisher:          pub,
+		cfg:                cfg,
+		scratchExportDir:   scratchExportDir,
+		logger:             logger,
+		bundlerTimeout:     bundlerTimeout,
+		bundlerOpts:        bundlerOpts,
+		defaultBundlerURLs: defaultBundlerURLs,
+	}
 }
 
 type publishResponse struct {
@@ -71,9 +89,10 @@ type artifactResponse struct {
 	Status               string  `json:"status"`
 	InitiatedAt          string  `json:"initiatedAt"`
 	CompletedAt          *string `json:"completedAt,omitempty"`
-	Error         *string `json:"error,omitempty"`
-	Enriched      bool    `json:"enriched"`
-	BundlerError  *string `json:"bundlerError,omitempty"`
+	Error         *string                  `json:"error,omitempty"`
+	Enriched      bool                     `json:"enriched"`
+	BundlerError  *string                  `json:"bundlerError,omitempty"`
+	Layers        []ocitype.ArtifactLayer  `json:"layers,omitempty"`
 }
 
 // Publish handles POST /api/v1/export/jobs/:jobId/publish
@@ -143,19 +162,35 @@ func (h *OCI) Publish(c echo.Context) error {
 		return fmt.Errorf("create artifact record: %w", err)
 	}
 
-	// Parse optional bundler URLs from the request body.
-	// Bundler URLs are supplied per-request by the caller — no server-side URL config required.
-	// The API is protected by Azure AD authn/authz and runs inside AKS on VPN, so per-request
-	// URLs are acceptable. TODO(future): consider named server-side bundlers for stricter
-	// governance if the threat model changes.
+	// Parse optional bundler URLs from the request body. The UI publish form
+	// sends form-encoded data (no JSON), so this Decode silently fails and
+	// req.Bundlers stays nil — the defaultBundlerURLs fallback below covers
+	// that path. JSON callers (curl, scripts) can still override per-request.
 	var req struct {
 		Bundlers []string `json:"bundlers"`
 	}
 	_ = json.NewDecoder(c.Request().Body).Decode(&req) // empty body is valid
 
+	bundlerSpecs := req.Bundlers
+	if len(bundlerSpecs) == 0 {
+		bundlerSpecs = h.defaultBundlerURLs
+	}
 	var bundlerClients []*bundler.Client
-	for _, url := range req.Bundlers {
-		bundlerClients = append(bundlerClients, bundler.New(url, h.bundlerTimeout))
+	for _, spec := range bundlerSpecs {
+		name, url := parseBundlerSpec(spec)
+		bundlerClients = append(bundlerClients, bundler.New(name, url, h.bundlerTimeout))
+	}
+
+	// Stamp the first real phase synchronously so the immediate progress
+	// fragment renders something more useful than `pending`. The goroutine
+	// will overwrite this within microseconds, but if it raced ahead we'd
+	// otherwise show three hollow circles for the first frame.
+	firstPhase := registryartifact.StatusPushing
+	if len(bundlerClients) > 0 {
+		firstPhase = registryartifact.StatusBundling
+	}
+	if _, err := h.db.RegistryArtifact.UpdateOneID(artifact.ID).SetStatus(firstPhase).Save(c.Request().Context()); err == nil {
+		artifact.Status = firstPhase
 	}
 
 	go h.publisher.Publish(artifact.ID, job, tag, bundlerClients)
@@ -170,6 +205,7 @@ func (h *OCI) Publish(c echo.Context) error {
 		return tmpl.ExecuteTemplate(c.Response().Writer, "publish-modal-progress", publishProgressData{
 			BasePath:   h.basePath,
 			ArtifactID: artifact.ID,
+			Phase:      string(artifact.Status),
 		})
 	}
 
@@ -200,7 +236,7 @@ func (h *OCI) ListArtifacts(c echo.Context) error {
 	if c.Request().Header.Get("HX-Request") == "true" {
 		rows := make([]artifactFragRow, 0, len(artifacts))
 		for _, a := range artifacts {
-			rows = append(rows, toArtifactFragRow(a))
+			rows = append(rows, toArtifactFragRow(a, h.basePath))
 		}
 		tmpl, err := template.ParseFiles("web/templates/orbital/partials/artifacts-tbody.gohtml")
 		if err != nil {
@@ -322,9 +358,25 @@ func (h *OCI) GetArtifact(c echo.Context) error {
 	return c.JSON(http.StatusOK, toArtifactResponse(a))
 }
 
+// parseBundlerSpec splits a `ORBITAL_BUNDLER_URLS` entry into a (name, url)
+// pair. Accepts both `name=url` (canonical) and bare URLs (back-compat;
+// the name falls back to the URL host). The friendly name lands in OCI
+// layer annotations (`com.armada.orbital.producer`) so orb's UI can
+// attribute layers to specific producers.
+func parseBundlerSpec(spec string) (name, url string) {
+	if i := strings.Index(spec, "="); i >= 0 {
+		return spec[:i], spec[i+1:]
+	}
+	// Back-compat: bare URL → derive a fallback name from the host. Not pretty
+	// but better than empty-string in the annotation. Callers using the new
+	// format get clean names.
+	return "bundler", spec
+}
+
 type publishProgressData struct {
 	BasePath   string
 	ArtifactID int
+	Phase      string // current registry_artifact.status: pending|bundling|pushing|signing
 }
 
 type publishResultData struct {
@@ -352,14 +404,24 @@ func (h *OCI) renderArtifactFragment(c echo.Context, a *ent.RegistryArtifact) er
 		return tmpl.ExecuteTemplate(c.Response().Writer, "publish-modal-progress", publishProgressData{
 			BasePath:   h.basePath,
 			ArtifactID: a.ID,
+			Phase:      string(a.Status),
 		})
 	}
 
 	c.Response().Header().Set("HX-Trigger", "refreshExportJobs")
 	data := publishResultData{Failed: a.Status == registryartifact.StatusFailed}
 	if data.Failed {
-		if a.Error != nil {
+		// Two distinct failure surfaces: push errors land in `error`, bundler
+		// errors (cb-bundler unreachable, bundler returned non-2xx, etc.) land
+		// in `bundler_error`. Either populates the result modal — fall back to
+		// the generic field when the specific one is empty.
+		switch {
+		case a.Error != nil && *a.Error != "":
 			data.ErrorMessage = *a.Error
+		case a.BundlerError != nil && *a.BundlerError != "":
+			data.ErrorMessage = "bundler error: " + *a.BundlerError
+		default:
+			data.ErrorMessage = "publish failed with no recorded error — check orbital logs"
 		}
 	} else {
 		data.Tag = a.Tag
@@ -499,6 +561,9 @@ func toArtifactResponse(a *ent.RegistryArtifact) artifactResponse {
 	if a.BundlerError != nil {
 		r.BundlerError = a.BundlerError
 	}
+	if len(a.Layers) > 0 {
+		r.Layers = a.Layers
+	}
 	return r
 }
 
@@ -524,25 +589,72 @@ func testRegistryConnection(registry, username, password string, allowHTTP bool)
 	return reg.Ping(context.Background())
 }
 
+// ArtifactLayers handles GET /api/v1/oci/artifacts/:id/layers
+//
+// @Summary     Get layers for an OCI artifact
+// @Description Returns an HTML fragment rendering the layers modal for the given artifact.
+// @Tags        oci
+// @Produce     html
+// @Param       id path int true "Artifact ID"
+// @Success     200
+// @Failure     404 {object} map[string]string
+// @Router      /api/v1/oci/artifacts/{id}/layers [get]
+func (h *OCI) ArtifactLayers(c echo.Context) error {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		return echo.ErrBadRequest
+	}
+	a, err := h.db.RegistryArtifact.Get(c.Request().Context(), id)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return echo.ErrNotFound
+		}
+		return fmt.Errorf("get artifact: %w", err)
+	}
+	row := toArtifactFragRow(a, h.basePath)
+	tmpl, err := template.ParseFiles("web/templates/orbital/partials/layers-modal.gohtml")
+	if err != nil {
+		return fmt.Errorf("parse layers-modal: %w", err)
+	}
+	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+	return tmpl.ExecuteTemplate(c.Response().Writer, "layers-modal", row)
+}
+
 // ── Fragment renderer ─────────────────────────────────────────────────────────
 
+// artifactLayerRow is a display-ready representation of a single OCI layer.
+// Values are pre-formatted so the template needs no funcs.
+type artifactLayerRow struct {
+	MediaType       string
+	SizeDisplay     string
+	DigestShort     string
+	IsOrbitalNative bool
+	Producer        string
+}
+
 type artifactFragRow struct {
+	BasePath       string // for declarative HTMX hx-* attrs that need a full URL
+	ID             int
 	DatacenterName string
 	Repository     string
 	Tag            string
 	Digest         string
 	DigestShort    string
 	HasDigest      bool
-	Signed        bool
-	Enriched      bool
-	BundlerError  string
-	Status        string
+	Signed         bool
+	Enriched       bool
+	BundlerError   string
+	Status         string
 	StatusClass    string
 	InitiatedAt    string
 	Error          string
+	LayerRows      []artifactLayerRow
+	HasLayers      bool
+	OrbitalLayers  int // count of layers with IsOrbitalNative=true, pre-computed for template
+	BundlerLayers  int // count of layers with IsOrbitalNative=false
 }
 
-func toArtifactFragRow(a *ent.RegistryArtifact) artifactFragRow {
+func toArtifactFragRow(a *ent.RegistryArtifact, basePath string) artifactFragRow {
 	statusClass := map[string]string{
 		"pending":   "is-warning is-light",
 		"pushing":   "is-info is-light",
@@ -550,6 +662,8 @@ func toArtifactFragRow(a *ent.RegistryArtifact) artifactFragRow {
 		"failed":    "is-danger is-light",
 	}[string(a.Status)]
 	row := artifactFragRow{
+		BasePath:       basePath,
+		ID:             a.ID,
 		DatacenterName: a.DatacenterName,
 		Repository:     a.Repository,
 		Tag:            a.Tag,
@@ -574,6 +688,42 @@ func toArtifactFragRow(a *ent.RegistryArtifact) artifactFragRow {
 	if a.Error != nil {
 		row.Error = *a.Error
 	}
+	if len(a.Layers) > 0 {
+		row.HasLayers = true
+		row.LayerRows = make([]artifactLayerRow, 0, len(a.Layers))
+		for i := len(a.Layers) - 1; i >= 0; i-- {
+			l := a.Layers[i]
+			lr := artifactLayerRow{
+				MediaType:       l.MediaType,
+				SizeDisplay:     fmtLayerBytes(l.SizeBytes),
+				IsOrbitalNative: l.IsOrbitalNative,
+				Producer:        l.Producer,
+			}
+			if len(l.Digest) > 19 {
+				lr.DigestShort = l.Digest[:19] + "…"
+			} else {
+				lr.DigestShort = l.Digest
+			}
+			if l.IsOrbitalNative {
+				row.OrbitalLayers++
+			} else {
+				row.BundlerLayers++
+			}
+			row.LayerRows = append(row.LayerRows, lr)
+		}
+	}
 	return row
+}
+
+// fmtLayerBytes formats a byte count as a human-readable string (e.g. "1.2 MB").
+func fmtLayerBytes(n int64) string {
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(n)/float64(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1f KB", float64(n)/float64(1<<10))
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
 }
 

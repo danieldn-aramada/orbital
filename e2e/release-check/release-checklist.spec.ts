@@ -118,8 +118,8 @@ test('pre-release checklist: backup → export → publish → orb import → mu
   console.log('\n[smoke] ── Step 1: Backup ──────────────────────────────────');
   const backupTrigger = await page.request.post('/api/v1/backup');
   expect(backupTrigger.status(), 'backup trigger: expect 202').toBe(202);
-  const { jobId: backupJobId } = await backupTrigger.json();
-  expect(backupJobId, 'backup trigger: expect jobId').toBeTruthy();
+  const { id: backupJobId } = await backupTrigger.json();
+  expect(backupJobId, 'backup trigger: expect id').toBeTruthy();
   console.log(`[smoke] Backup job created: ${backupJobId}`);
 
   const backupJob = await pollUntil(
@@ -143,8 +143,8 @@ test('pre-release checklist: backup → export → publish → orb import → mu
     data: { orbId: DC_ORB_ID },
   });
   expect(exportTrigger.status(), 'export trigger: expect 202').toBe(202);
-  const { jobId: exportJobId } = await exportTrigger.json();
-  expect(exportJobId, 'export trigger: expect jobId').toBeTruthy();
+  const { id: exportJobId } = await exportTrigger.json();
+  expect(exportJobId, 'export trigger: expect id').toBeTruthy();
   console.log(`[smoke] Export job created: ${exportJobId}`);
 
   const exportJob = await pollUntil(
@@ -257,8 +257,8 @@ test('pre-release checklist: backup → export → publish → orb import → mu
     data: { backupId: backupRecordId },
   });
   expect(restoreTrigger.status(), 'restore trigger: expect 202').toBe(202);
-  const { jobId: restoreJobId } = await restoreTrigger.json();
-  expect(restoreJobId, 'restore trigger: expect jobId').toBeTruthy();
+  const { id: restoreJobId } = await restoreTrigger.json();
+  expect(restoreJobId, 'restore trigger: expect id').toBeTruthy();
   console.log(`[smoke] Restore job created: ${restoreJobId} (this will take several minutes...)`);
 
   const restoreJob = await pollUntil(

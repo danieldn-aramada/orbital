@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/armada/orbital/internal/web/data/layout"
@@ -34,8 +35,9 @@ const getServerQuery = `
       namespace
       rack { id name }
       dataCenter { id name }
-      oobIP { address role }
+      oobIP { orbId address role }
       idracSettings {
+        orbId
         firmwareVersion
         osToIdracPassThroughEnabled
         sshEnabled
@@ -45,7 +47,7 @@ const getServerQuery = `
         dhcpEnabled
         racadmEnabled
       }
-      serverConfigurationProfile { json }
+      serverConfigurationProfile { orbId json }
       storageControllers {
         orbId
         name
@@ -110,10 +112,12 @@ type serverQueryResponse struct {
 		Name string `json:"name"`
 	} `json:"dataCenter"`
 	OobIP struct {
+		OrbID   string `json:"orbId"`
 		Address string `json:"address"`
 		Role    string `json:"role"`
 	} `json:"oobIP"`
 	IdracSettings *struct {
+		OrbID                       string `json:"orbId"`
 		FirmwareVersion             string `json:"firmwareVersion"`
 		OsToIdracPassThroughEnabled bool   `json:"osToIdracPassThroughEnabled"`
 		SshEnabled                  bool   `json:"sshEnabled"`
@@ -124,7 +128,8 @@ type serverQueryResponse struct {
 		RacadmEnabled               bool   `json:"racadmEnabled"`
 	} `json:"idracSettings"`
 	ServerConfigurationProfile *struct {
-		JSON string `json:"json"`
+		OrbID string `json:"orbId"`
+		JSON  string `json:"json"`
 	} `json:"serverConfigurationProfile"`
 	StorageControllers []struct {
 		OrbID          string `json:"orbId"`
@@ -192,6 +197,36 @@ type serverTabDetailData struct {
 	StorageControllers []storageControllerTabData
 	BasePath           string
 	Actions            layout.PageActions
+	// RelatedOrbIDsCSV is "<server-orbId>,<idrac-orbId>,<scp-orbId>,..." —
+	// every ConfigItem in the rendered subgraph. The audit tab uses it to
+	// fetch events for the whole server-and-its-children in one call. See
+	// shared.js initServerDetailTabs.
+	RelatedOrbIDsCSV string
+}
+
+// collectRelatedOrbIDs returns the server's orbId followed by every nested
+// ConfigItem orbId present on the GraphQL response. Empty / zero values are
+// skipped so the result is ready for the data-related-orb-ids attribute.
+// Order is stable: the server's own orbId comes first.
+func collectRelatedOrbIDs(raw *serverQueryResponse) []string {
+	out := make([]string, 0, 4+len(raw.StorageControllers))
+	add := func(id string) {
+		if id != "" {
+			out = append(out, id)
+		}
+	}
+	add(raw.OrbID)
+	if raw.IdracSettings != nil {
+		add(raw.IdracSettings.OrbID)
+	}
+	if raw.ServerConfigurationProfile != nil {
+		add(raw.ServerConfigurationProfile.OrbID)
+	}
+	add(raw.OobIP.OrbID)
+	for _, sc := range raw.StorageControllers {
+		add(sc.OrbID)
+	}
+	return out
 }
 
 func (h *ServerHandler) Tab(c echo.Context) error {
@@ -329,6 +364,8 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 		}
 		srv.StorageControllers = append(srv.StorageControllers, ctrl)
 	}
+
+	srv.RelatedOrbIDsCSV = strings.Join(collectRelatedOrbIDs(&raw), ",")
 
 	tmpl := h.fragment
 	if h.dev {

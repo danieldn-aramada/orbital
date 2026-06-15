@@ -46,55 +46,26 @@
           </td>
           <td style="white-space:nowrap">
             {{if .Layers}}
-              {{$graph := 0}}
-              {{range .Layers}}{{if eq .Role "graph"}}{{$graph = add $graph 1}}{{end}}{{end}}
-              <details style="position:relative;cursor:pointer">
-                <summary style="font-size:0.75rem;white-space:nowrap">
-                  <span class="tag is-light is-small">{{$graph}} graph</span>
-                  {{range .Layers}}
-                    {{if eq .Role "dispatched"}}
-                      {{if and .Dispatch (gt .Dispatch.StatusCode 0) (lt .Dispatch.StatusCode 300)}}
-                      <span class="tag is-success is-light is-small ml-1">{{mediaTypeLabel .MediaType}} ✓</span>
-                      {{else}}
-                      <span class="tag is-danger is-light is-small ml-1">{{mediaTypeLabel .MediaType}} ✗</span>
-                      {{end}}
-                    {{else if eq .Role "unknown"}}
-                    <span class="tag is-warning is-light is-small ml-1">{{mediaTypeLabel .MediaType}}</span>
-                    {{end}}
-                  {{end}}
-                </summary>
-                <div style="position:absolute;top:100%;left:0;z-index:20;background:var(--bulma-scheme-main);border:1px solid var(--bulma-border);border-radius:4px;padding:0.25rem 0.5rem;box-shadow:0 4px 12px rgba(0,0,0,0.12);white-space:nowrap">
-                <table class="table is-narrow is-size-7 mb-0" style="background:transparent;--bulma-table-cell-padding:0.2em 0.5em">
-                  <tbody>
-                    {{range .Layers}}
-                    <tr>
-                      <td style="white-space:nowrap;vertical-align:middle">
-                        {{if eq .Role "graph"}}
-                        <span class="tag is-light is-small">graph</span>
-                        {{else if eq .Role "dispatched"}}
-                        <span class="tag is-info is-light is-small">{{mediaTypeLabel .MediaType}}</span>
-                        {{else}}
-                        <span class="tag is-warning is-light is-small">{{mediaTypeLabel .MediaType}}</span>
-                        {{end}}
-                      </td>
-                      <td style="vertical-align:middle"><code style="font-size:0.7rem">{{.MediaType}}</code></td>
-                      <td style="vertical-align:middle">
-                        {{if .Dispatch}}
-                          {{if and (gt .Dispatch.StatusCode 0) (lt .Dispatch.StatusCode 300)}}
-                          <span class="tag is-success is-light is-small">{{.Dispatch.StatusCode}}</span>
-                          {{else if gt .Dispatch.StatusCode 0}}
-                          <span class="tag is-danger is-light is-small">{{.Dispatch.StatusCode}}</span>
-                          {{end}}
-                        {{else if eq .Role "unknown"}}
-                        <span class="has-text-grey" style="font-size:0.7rem">no consumer registered</span>
-                        {{end}}
-                      </td>
-                    </tr>
-                    {{end}}
-                  </tbody>
-                </table>
-                </div>
-              </details>
+              {{$graph := 0}}{{$dispatched := 0}}{{$failed := 0}}
+              {{range .Layers}}
+                {{if eq .Role "graph"}}{{$graph = add $graph 1}}{{end}}
+                {{if ne .Role "graph"}}{{$dispatched = add $dispatched 1}}{{end}}
+                {{if eq .Role "dispatched"}}
+                  {{if not (and .Dispatch (gt .Dispatch.StatusCode 0) (lt .Dispatch.StatusCode 300))}}{{$failed = add $failed 1}}{{end}}
+                {{end}}
+              {{end}}
+              <div class="is-flex is-align-items-center" style="gap:0.25rem;">
+                <span class="tag is-light is-small">{{$graph}} graph</span>
+                {{if gt $dispatched 0}}<span class="tag is-info is-light is-small">{{$dispatched}} dispatched</span>{{end}}
+                {{if gt $failed 0}}<span class="tag is-danger is-light is-small">{{$failed}} failed</span>{{end}}
+                <button class="button is-small is-white" title="View layers"
+                  hx-get="/api/v1/import/history/{{.Tag}}/layers"
+                  hx-target="#layers-modal-body"
+                  hx-swap="innerHTML"
+                  onclick="document.getElementById('layers-modal').classList.add('is-active')">
+                  <span class="icon"><i class="fas fa-up-right-from-square"></i></span>
+                </button>
+              </div>
             {{else}}
             —
             {{end}}
@@ -119,4 +90,9 @@
 
   </div>
 </main>
+
+<div id="layers-modal" class="modal">
+  <div class="modal-background" onclick="document.getElementById('layers-modal').classList.remove('is-active')"></div>
+  <div id="layers-modal-body"></div>
+</div>
 {{end}}

@@ -56,6 +56,11 @@ func NewGraphQL(dgraphURL string, db *ent.Client, logger *slog.Logger) *GraphQL 
 	return &GraphQL{dgraphURL: dgraphURL, db: db, logger: logger}
 }
 
+// DGraphURL exposes the configured DGraph endpoint for adjacent handlers that
+// need to issue point-in-time reads (e.g. the divergence Accept handler's MVCC
+// re-fetch). Avoids passing the URL string around redundantly.
+func (h *GraphQL) DGraphURL() string { return h.dgraphURL }
+
 type gqlRequest struct {
 	Query         string         `json:"query"`
 	OperationName string         `json:"operationName"`
@@ -87,6 +92,10 @@ func (h *GraphQL) Handle(c echo.Context) error {
 
 	var req gqlRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil || !isMutation(req.Query) {
+		if req.OperationName != "" {
+			c.Set("graphql.operation.name", req.OperationName)
+		}
+		c.Set("graphql.operation.type", "query")
 		return h.proxyRaw(c, bodyBytes)
 	}
 
@@ -110,6 +119,12 @@ func (h *GraphQL) Handle(c echo.Context) error {
 			opName = m[1]
 		}
 	}
+	if opName == "" {
+		ops, _ := extractOperations(req.Query)
+		opName = strings.Join(ops, ",")
+	}
+	c.Set("graphql.operation.name", opName)
+	c.Set("graphql.operation.type", "mutation")
 
 	actor := actorFromContext(c)
 
@@ -133,7 +148,9 @@ func (h *GraphQL) Handle(c echo.Context) error {
 		}
 	}
 
-	// MVCC check — opt-in via ifVersion variable
+	// MVCC check — opt-in via ifVersion variable. Auto-increment of `version`
+	// below is mandatory and server-managed; MVCC race detection here is the
+	// opt-in layer on top. See docs/reference/DIVERGENCE.md "MVCC" section.
 	ifVersion, hasIfVersion := req.Variables["ifVersion"]
 	if hasIfVersion && before != nil {
 		if int(toFloat64(before["version"])) != int(toFloat64(ifVersion)) {
@@ -143,13 +160,47 @@ func (h *GraphQL) Handle(c echo.Context) error {
 		}
 	}
 
+	// Auto-increment version. Two patterns handled, both via top-level variables:
+	//   - UPDATE with `set` map variable → inject `set.version = before.version + 1`
+	//     when set lacks version. Skipped if caller explicitly set it.
+	//   - ADD with any array-of-maps variable → inject `version: 1` into each
+	//     entry that lacks one. The variable name doesn't matter (callers use
+	//     `input`, `idracInput`, etc.) — every array-of-maps payload is treated
+	//     as an add/upsert input. Caller-set version is preserved.
+	autoIncremented := false
+	if before != nil {
+		if setMap, ok := req.Variables["set"].(map[string]any); ok {
+			if _, has := setMap["version"]; !has {
+				setMap["version"] = int(toFloat64(before["version"])) + 1
+				req.Variables["set"] = setMap
+				autoIncremented = true
+			}
+		}
+	}
+	for _, v := range req.Variables {
+		arr, ok := v.([]any)
+		if !ok {
+			continue
+		}
+		for _, item := range arr {
+			m, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			if _, has := m["version"]; !has {
+				m["version"] = 1
+				autoIncremented = true
+			}
+		}
+	}
+
 	// Strip orbital-meta variables before forwarding to DGraph.
 	// ifVersion is always orbital-only (MVCC). orbId is orbital-only unless the
 	// query itself declares $orbId as a variable — in that case DGraph needs it.
 	auditOrbID, _ := req.Variables["orbId"].(string)
 	orbIdIsQueryVar := strings.Contains(req.Query, "$orbId")
 	shouldStripOrbID := auditOrbID != "" && !orbIdIsQueryVar
-	needsReMarshal := hasIfVersion || shouldStripOrbID
+	needsReMarshal := hasIfVersion || shouldStripOrbID || autoIncremented
 	if hasIfVersion {
 		delete(req.Variables, "ifVersion")
 	}
@@ -193,14 +244,15 @@ func (h *GraphQL) Handle(c echo.Context) error {
 // Use it when an orbital-internal action (e.g. accepting a divergence override)
 // needs to mutate intent and have the change appear in the audit log just like
 // a user-driven mutation. It does NOT enforce role gating — callers must have
-// already authz'd. It does NOT perform MVCC checks or before-fetches; those are
-// user-facing concerns from Handle.
+// already authz'd. It does NOT perform MVCC checks or auto before-fetches;
+// callers that want a diff in the audit row must supply `before` directly
+// (e.g. the divergence-accept path passes the entry's intended_value).
 //
 // Returns the raw DGraph response body alongside the error so callers can
 // inspect specific GraphQL errors when needed. A non-nil error means the
 // mutation did not succeed and any side-effects (e.g. recording a resolution)
 // MUST be skipped.
-func (h *GraphQL) DispatchMutation(ctx context.Context, actor, query string, variables map[string]any) ([]byte, error) {
+func (h *GraphQL) DispatchMutation(ctx context.Context, actor, query string, variables map[string]any, before map[string]any) ([]byte, error) {
 	body, err := json.Marshal(gqlRequest{Query: query, Variables: variables})
 	if err != nil {
 		return nil, fmt.Errorf("marshal mutation: %w", err)
@@ -232,7 +284,7 @@ func (h *GraphQL) DispatchMutation(ctx context.Context, actor, query string, var
 		}
 		operations, resourceTypes := extractOperations(query)
 		resourceIDs := extractResourceIDs(query, variables, respBytes)
-		go h.writeEvent(opName, operations, resourceTypes, resourceIDs, actor, query, variables, nil)
+		go h.writeEvent(opName, operations, resourceTypes, resourceIDs, actor, query, variables, before)
 	}
 	return respBytes, nil
 }
@@ -397,6 +449,25 @@ func extractResourceIDs(query string, variables map[string]any, respBody []byte)
 		case map[string]any:
 			if id, ok := v["orbId"].(string); ok {
 				add(id)
+			}
+		}
+	}
+
+	// Variables: typed filter passed as $filter (DGraph-generated {Type}Filter).
+	// Shape: {"filter": {"orbId": {"eq": "..."}}} or {"filter": {"orbId": {"in": [...]}}}.
+	// This is the shape used by update{Type}/delete{Type} when the caller wants
+	// the audit-log expanded row to show variables instead of inlined values.
+	if filter, ok := variables["filter"].(map[string]any); ok {
+		if orbIdF, ok := filter["orbId"].(map[string]any); ok {
+			if eq, ok := orbIdF["eq"].(string); ok {
+				add(eq)
+			}
+			if in, ok := orbIdF["in"].([]any); ok {
+				for _, v := range in {
+					if s, ok := v.(string); ok {
+						add(s)
+					}
+				}
 			}
 		}
 	}

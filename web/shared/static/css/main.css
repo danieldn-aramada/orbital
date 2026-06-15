@@ -21571,6 +21571,7 @@ has-background-danger.is-hoverable:active {
   --bulma-danger-h: 348deg;
   --bulma-danger-s: 100%;
   --bulma-danger-l: 70%;
+  --bulma-code: var(--bulma-text);
   --h: var(--theme-h);
   --s: var(--theme-s);
   --l: 60%;
@@ -21585,6 +21586,10 @@ has-background-danger.is-hoverable:active {
 .modal-card.is-large {
   width: 80%;
   max-height: 80%;
+}
+
+.is-nowrap {
+  white-space: nowrap;
 }
 
 .modal-card-head {
@@ -21926,6 +21931,26 @@ div.dt-container:has(#audit-log-table) .dt-paging .pagination-link {
 .no-wrap-text {
   white-space: nowrap !important;
   overflow: visible !important; /* ✅ let content overflow naturally */
+}
+
+.button.htmx-request {
+  box-shadow: none;
+  color: transparent !important;
+  pointer-events: none;
+}
+.button.htmx-request::after {
+  animation: spinAround 500ms infinite linear;
+  border: 2px solid var(--bulma-loading-color);
+  border-radius: var(--bulma-radius-rounded);
+  border-right-color: transparent;
+  border-top-color: transparent;
+  content: "";
+  display: block;
+  height: 1em;
+  width: 1em;
+  position: absolute !important;
+  left: calc(50% - 0.5em);
+  top: calc(50% - 0.5em);
 }
 
 /*# sourceMappingURL=main.css.map */

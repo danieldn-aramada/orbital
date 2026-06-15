@@ -6,6 +6,7 @@ mutation UpsertAll {
     {
       name: "colo-galleon"
       orbId: "colo:colo-galleon"
+      version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
@@ -18,34 +19,38 @@ mutation UpsertAll {
     {
       name: "A.OF.C.09"
       orbId: "colo:A.OF.C.09"
+      version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
     }
     {
       name: "A.OF.C.10"
       orbId: "colo:A.OF.C.10"
+      version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
     }
     {
       name: "A.OF.C.11"
       orbId: "colo:A.OF.C.11"
+      version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
     }
     {
       name: "A.OF.C.12"
       orbId: "colo:A.OF.C.12"
+      version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
     }
   ], upsert: true) {
     numUids
@@ -53,6 +58,7 @@ mutation UpsertAll {
   addIPAddress(input: [
     {
       orbId: "colo:10.20.21.41"
+      version: 1
       address: "10.20.21.41"
       name: "10.20.21.41"
       role: "oob"
@@ -62,6 +68,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.42"
+      version: 1
       address: "10.20.21.42"
       name: "10.20.21.42"
       role: "oob"
@@ -71,6 +78,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.43"
+      version: 1
       address: "10.20.21.43"
       name: "10.20.21.43"
       role: "oob"
@@ -80,6 +88,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.44"
+      version: 1
       address: "10.20.21.44"
       name: "10.20.21.44"
       role: "oob"
@@ -89,6 +98,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.45"
+      version: 1
       address: "10.20.21.45"
       name: "10.20.21.45"
       role: "oob"
@@ -98,6 +108,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.46"
+      version: 1
       address: "10.20.21.46"
       name: "10.20.21.46"
       role: "oob"
@@ -107,6 +118,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.47"
+      version: 1
       address: "10.20.21.47"
       name: "10.20.21.47"
       role: "oob"
@@ -116,6 +128,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.48"
+      version: 1
       address: "10.20.21.48"
       name: "10.20.21.48"
       role: "oob"
@@ -125,6 +138,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.49"
+      version: 1
       address: "10.20.21.49"
       name: "10.20.21.49"
       role: "oob"
@@ -134,6 +148,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.50"
+      version: 1
       address: "10.20.21.50"
       name: "10.20.21.50"
       role: "oob"
@@ -143,6 +158,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.51"
+      version: 1
       address: "10.20.21.51"
       name: "10.20.21.51"
       role: "oob"
@@ -152,6 +168,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.52"
+      version: 1
       address: "10.20.21.52"
       name: "10.20.21.52"
       role: "oob"
@@ -161,6 +178,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.100"
+      version: 1
       address: "10.20.21.100"
       name: "10.20.21.100"
       role: "oob"
@@ -170,6 +188,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.54"
+      version: 1
       address: "10.20.21.54"
       name: "10.20.21.54"
       role: "oob"
@@ -179,6 +198,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.55"
+      version: 1
       address: "10.20.21.55"
       name: "10.20.21.55"
       role: "oob"
@@ -188,6 +208,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.56"
+      version: 1
       address: "10.20.21.56"
       name: "10.20.21.56"
       role: "oob"
@@ -197,6 +218,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.57"
+      version: 1
       address: "10.20.21.57"
       name: "10.20.21.57"
       role: "oob"
@@ -206,6 +228,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.68"
+      version: 1
       address: "10.20.21.68"
       name: "10.20.21.68"
       role: "oob"
@@ -215,6 +238,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.69"
+      version: 1
       address: "10.20.21.69"
       name: "10.20.21.69"
       role: "oob"
@@ -224,6 +248,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.70"
+      version: 1
       address: "10.20.21.70"
       name: "10.20.21.70"
       role: "oob"
@@ -233,6 +258,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.73"
+      version: 1
       address: "10.20.21.73"
       name: "10.20.21.73"
       role: "oob"
@@ -242,6 +268,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.72"
+      version: 1
       address: "10.20.21.72"
       name: "10.20.21.72"
       role: "oob"
@@ -251,6 +278,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.71"
+      version: 1
       address: "10.20.21.71"
       name: "10.20.21.71"
       role: "oob"
@@ -260,6 +288,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.74"
+      version: 1
       address: "10.20.21.74"
       name: "10.20.21.74"
       role: "oob"
@@ -269,6 +298,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.58"
+      version: 1
       address: "10.20.21.58"
       name: "10.20.21.58"
       role: "oob"
@@ -278,6 +308,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.59"
+      version: 1
       address: "10.20.21.59"
       name: "10.20.21.59"
       role: "oob"
@@ -287,6 +318,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.60"
+      version: 1
       address: "10.20.21.60"
       name: "10.20.21.60"
       role: "oob"
@@ -296,6 +328,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.61"
+      version: 1
       address: "10.20.21.61"
       name: "10.20.21.61"
       role: "oob"
@@ -305,6 +338,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.62"
+      version: 1
       address: "10.20.21.62"
       name: "10.20.21.62"
       role: "oob"
@@ -314,6 +348,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.63"
+      version: 1
       address: "10.20.21.63"
       name: "10.20.21.63"
       role: "oob"
@@ -323,6 +358,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.64"
+      version: 1
       address: "10.20.21.64"
       name: "10.20.21.64"
       role: "oob"
@@ -332,6 +368,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.65"
+      version: 1
       address: "10.20.21.65"
       name: "10.20.21.65"
       role: "oob"
@@ -341,6 +378,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.66"
+      version: 1
       address: "10.20.21.66"
       name: "10.20.21.66"
       role: "oob"
@@ -350,6 +388,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.67"
+      version: 1
       address: "10.20.21.67"
       name: "10.20.21.67"
       role: "oob"
@@ -359,6 +398,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.79"
+      version: 1
       address: "10.20.21.79"
       name: "10.20.21.79"
       role: "oob"
@@ -368,6 +408,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.78"
+      version: 1
       address: "10.20.21.78"
       name: "10.20.21.78"
       role: "oob"
@@ -377,6 +418,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.77"
+      version: 1
       address: "10.20.21.77"
       name: "10.20.21.77"
       role: "oob"
@@ -386,6 +428,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.76"
+      version: 1
       address: "10.20.21.76"
       name: "10.20.21.76"
       role: "oob"
@@ -395,6 +438,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.75"
+      version: 1
       address: "10.20.21.75"
       name: "10.20.21.75"
       role: "oob"
@@ -404,6 +448,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.80"
+      version: 1
       address: "10.20.21.80"
       name: "10.20.21.80"
       role: "oob"
@@ -413,6 +458,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.81"
+      version: 1
       address: "10.20.21.81"
       name: "10.20.21.81"
       role: "oob"
@@ -422,6 +468,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.82"
+      version: 1
       address: "10.20.21.82"
       name: "10.20.21.82"
       role: "oob"
@@ -431,6 +478,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.83"
+      version: 1
       address: "10.20.21.83"
       name: "10.20.21.83"
       role: "oob"
@@ -440,6 +488,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.84"
+      version: 1
       address: "10.20.21.84"
       name: "10.20.21.84"
       role: "oob"
@@ -449,6 +498,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.85"
+      version: 1
       address: "10.20.21.85"
       name: "10.20.21.85"
       role: "oob"
@@ -458,6 +508,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.86"
+      version: 1
       address: "10.20.21.86"
       name: "10.20.21.86"
       role: "oob"
@@ -467,6 +518,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.87"
+      version: 1
       address: "10.20.21.87"
       name: "10.20.21.87"
       role: "oob"
@@ -476,6 +528,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.88"
+      version: 1
       address: "10.20.21.88"
       name: "10.20.21.88"
       role: "oob"
@@ -485,6 +538,7 @@ mutation UpsertAll {
     },
     {
       orbId: "colo:10.20.21.89"
+      version: 1
       address: "10.20.21.89"
       name: "10.20.21.89"
       role: "oob"
@@ -501,785 +555,834 @@ mutation UpsertAll {
       serviceTag: "CWJHDX3"
       manufacturer: "Dell"
       orbId: "colo:CWJHDX3"
+      version: 1
       name: "r09-u02.colo-galleon"
       hostname: "r09-u02.colo-galleon"
       model: "PowerEdge R750"
       rackPosition: 2
-      oobIP: { orbId: "colo:10.20.21.41" }
+      oobIP: { orbId: "colo:10.20.21.41" version: 1 }
       oobMAC: "c8:4b:d6:9c:87:74"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "BFRHDX3"
       manufacturer: "Dell"
       orbId: "colo:BFRHDX3"
+      version: 1
       name: "r09-u04.colo-galleon"
       hostname: "r09-u04.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 4
-      oobIP: { orbId: "colo:10.20.21.42" }
+      oobIP: { orbId: "colo:10.20.21.42" version: 1 }
       oobMAC: "c8:4b:d6:9d:d7:04"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "9FRHDX3"
       manufacturer: "Dell"
       orbId: "colo:9FRHDX3"
+      version: 1
       name: "r09-u05.colo-galleon"
       hostname: "r09-u05.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 5
-      oobIP: { orbId: "colo:10.20.21.43" }
+      oobIP: { orbId: "colo:10.20.21.43" version: 1 }
       oobMAC: "c8:4b:d6:9d:d7:4c"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "CFRHDX3"
       manufacturer: "Dell"
       orbId: "colo:CFRHDX3"
+      version: 1
       name: "r09-u06.colo-galleon"
       hostname: "r09-u06.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 6
-      oobIP: { orbId: "colo:10.20.21.44" }
+      oobIP: { orbId: "colo:10.20.21.44" version: 1 }
       oobMAC: "c8:4b:d6:9d:d7:0a"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "3V5Y2Z3"
       manufacturer: "Dell"
       orbId: "colo:3V5Y2Z3"
+      version: 1
       name: "r09-u07.colo-galleon"
       hostname: "r09-u07.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 7
-      oobIP: { orbId: "colo:10.20.21.45" }
+      oobIP: { orbId: "colo:10.20.21.45" version: 1 }
       oobMAC: "c8:4b:d6:a6:75:9b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "2W8Y2Z3"
       manufacturer: "Dell"
       orbId: "colo:2W8Y2Z3"
+      version: 1
       name: "r09-u08.colo-galleon"
       hostname: "r09-u08.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 8
-      oobIP: { orbId: "colo:10.20.21.46" }
+      oobIP: { orbId: "colo:10.20.21.46" version: 1 }
       oobMAC: "c8:4b:d6:a6:75:41"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "9BQS2Z3"
       manufacturer: "Dell"
       orbId: "colo:9BQS2Z3"
+      version: 1
       name: "r10-u02.colo-galleon"
       hostname: "r10-u02.colo-galleon"
       model: "PowerEdge R750"
       rackPosition: 2
-      oobIP: { orbId: "colo:10.20.21.47" }
+      oobIP: { orbId: "colo:10.20.21.47" version: 1 }
       oobMAC: "c8:4b:d6:a5:39:d3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.10" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.10" version: 1 }
     }
     {
       serviceTag: "B4KS2Z3"
       manufacturer: "Dell"
       orbId: "colo:B4KS2Z3"
+      version: 1
       name: "r10-u04.colo-galleon"
       hostname: "r10-u04.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 4
-      oobIP: { orbId: "colo:10.20.21.48" }
+      oobIP: { orbId: "colo:10.20.21.48" version: 1 }
       oobMAC: "ec:2a:72:ee:39:f4"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.10" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.10" version: 1 }
     }
     {
       serviceTag: "1W8Y2Z3"
       manufacturer: "Dell"
       orbId: "colo:1W8Y2Z3"
+      version: 1
       name: "r10-u05.colo-galleon"
       hostname: "r10-u05.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 5
-      oobIP: { orbId: "colo:10.20.21.49" }
+      oobIP: { orbId: "colo:10.20.21.49" version: 1 }
       oobMAC: "c8:4b:d6:a6:75:6b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.10" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.10" version: 1 }
     }
     {
       serviceTag: "JV8Y2Z3"
       manufacturer: "Dell"
       orbId: "colo:JV8Y2Z3"
+      version: 1
       name: "r10-u06.colo-galleon"
       hostname: "r10-u06.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 6
-      oobIP: { orbId: "colo:10.20.21.50" }
+      oobIP: { orbId: "colo:10.20.21.50" version: 1 }
       oobMAC: "c8:4b:d6:a6:76:a3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.10" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.10" version: 1 }
     }
     {
       serviceTag: "5PJ1FZ3"
       manufacturer: "Dell"
       orbId: "colo:5PJ1FZ3"
+      version: 1
       name: "r10-u07.colo-galleon"
       hostname: "r10-u07.colo-galleon"
       model: "PowerEdge R750"
       rackPosition: 7
-      oobIP: { orbId: "colo:10.20.21.51" }
+      oobIP: { orbId: "colo:10.20.21.51" version: 1 }
       oobMAC: "c8:4b:d6:a7:07:9b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.10" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.10" version: 1 }
     }
     {
       serviceTag: "5B52FZ3"
       manufacturer: "Dell"
       orbId: "colo:5B52FZ3"
+      version: 1
       name: "r10-u09.colo-galleon"
       hostname: "r10-u09.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 9
-      oobIP: { orbId: "colo:10.20.21.52" }
+      oobIP: { orbId: "colo:10.20.21.52" version: 1 }
       oobMAC: "c8:4b:d6:a6:d4:03"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.10" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.10" version: 1 }
     }
     {
       serviceTag: "2B52FZ3"
       manufacturer: "Dell"
       orbId: "colo:2B52FZ3"
+      version: 1
       name: "r10-u10.colo-galleon"
       hostname: "r10-u10.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 10
-      oobIP: { orbId: "colo:10.20.21.100" }
+      oobIP: { orbId: "colo:10.20.21.100" version: 1 }
       oobMAC: "c8:4b:d6:a6:ee:9d"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.10" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.10" version: 1 }
     }
     {
       serviceTag: "4B52FZ3"
       manufacturer: "Dell"
       orbId: "colo:4B52FZ3"
+      version: 1
       name: "r10-u11.colo-galleon"
       hostname: "r10-u11.colo-galleon"
       model: "PowerEdge R650"
       rackPosition: 11
-      oobIP: { orbId: "colo:10.20.21.54" }
+      oobIP: { orbId: "colo:10.20.21.54" version: 1 }
       oobMAC: "c8:4b:d6:a6:ee:6d"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.10" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.10" version: 1 }
     }
     {
       serviceTag: "6CVD664"
       manufacturer: "Dell"
       orbId: "colo:6CVD664"
+      version: 1
       name: "r10-u13.colo-galleon"
       hostname: "r10-u13.colo-galleon"
       model: "PowerEdge R760"
       rackPosition: 13
-      oobIP: { orbId: "colo:10.20.21.55" }
+      oobIP: { orbId: "colo:10.20.21.55" version: 1 }
       oobMAC: "d0:c1:b5:07:87:6f"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.10" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.10" version: 1 }
     }
     {
       serviceTag: "7CVD664"
       manufacturer: "Dell"
       orbId: "colo:7CVD664"
+      version: 1
       name: "r10-u15.colo-galleon"
       hostname: "r10-u15.colo-galleon"
       model: "PowerEdge R760"
       rackPosition: 15
-      oobIP: { orbId: "colo:10.20.21.56" }
+      oobIP: { orbId: "colo:10.20.21.56" version: 1 }
       oobMAC: "d0:c1:b5:07:89:3d"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.10" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.10" version: 1 }
     }
     {
       serviceTag: "8CVD664"
       manufacturer: "Dell"
       orbId: "colo:8CVD664"
+      version: 1
       name: "r10-u17.colo-galleon"
       hostname: "r10-u17.colo-galleon"
       model: "PowerEdge R760"
       rackPosition: 17
-      oobIP: { orbId: "colo:10.20.21.57" }
+      oobIP: { orbId: "colo:10.20.21.57" version: 1 }
       oobMAC: "d0:c1:b5:07:8a:2d"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.10" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.10" version: 1 }
     }
     {
       serviceTag: "6MP6K74"
       manufacturer: "Dell"
       orbId: "colo:6MP6K74"
+      version: 1
       name: "r10-u20.colo-galleon"
       hostname: "r10-u20.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 20
-      oobIP: { orbId: "colo:10.20.21.68" }
+      oobIP: { orbId: "colo:10.20.21.68" version: 1 }
       oobMAC: "e8:cf:83:27:9f:73"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.10" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.10" version: 1 }
     }
     {
       serviceTag: "DMP6K74"
       manufacturer: "Dell"
       orbId: "colo:DMP6K74"
+      version: 1
       name: "r10-u21.colo-galleon"
       hostname: "r10-u21.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 21
-      oobIP: { orbId: "colo:10.20.21.69" }
+      oobIP: { orbId: "colo:10.20.21.69" version: 1 }
       oobMAC: "e8:cf:83:27:a0:6b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.10" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.10" version: 1 }
     }
     {
       serviceTag: "HMP6K74"
       manufacturer: "Dell"
       orbId: "colo:HMP6K74"
+      version: 1
       name: "r10-u22.colo-galleon"
       hostname: "r10-u22.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 22
-      oobIP: { orbId: "colo:10.20.21.70" }
+      oobIP: { orbId: "colo:10.20.21.70" version: 1 }
       oobMAC: "e8:cf:83:27:a3:f3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.10" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.10" version: 1 }
     }
     {
       serviceTag: "BMP6K74"
       manufacturer: "Dell"
       orbId: "colo:BMP6K74"
+      version: 1
       name: "r10-u23.colo-galleon"
       hostname: "r10-u23.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 23
-      oobIP: { orbId: "colo:10.20.21.73" }
+      oobIP: { orbId: "colo:10.20.21.73" version: 1 }
       oobMAC: "e8:cf:83:27:a9:cb"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.10" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.10" version: 1 }
     }
     {
       serviceTag: "7MP6K74"
       manufacturer: "Dell"
       orbId: "colo:7MP6K74"
+      version: 1
       name: "r10-u24.colo-galleon"
       hostname: "r10-u24.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 24
-      oobIP: { orbId: "colo:10.20.21.72" }
+      oobIP: { orbId: "colo:10.20.21.72" version: 1 }
       oobMAC: "e8:cf:83:27:b2:63"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.10" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.10" version: 1 }
     }
     {
       serviceTag: "8MP6K74"
       manufacturer: "Dell"
       orbId: "colo:8MP6K74"
+      version: 1
       name: "r10-u25.colo-galleon"
       hostname: "r10-u25.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 25
-      oobIP: { orbId: "colo:10.20.21.71" }
+      oobIP: { orbId: "colo:10.20.21.71" version: 1 }
       oobMAC: "ac:b4:80:29:f9:23"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.10" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.10" version: 1 }
     }
     {
       serviceTag: "9MP6K74"
       manufacturer: "Dell"
       orbId: "colo:9MP6K74"
+      version: 1
       name: "r10-u26.colo-galleon"
       hostname: "r10-u26.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 26
-      oobIP: { orbId: "colo:10.20.21.74" }
+      oobIP: { orbId: "colo:10.20.21.74" version: 1 }
       oobMAC: "d0:c1:b5:0c:b2:00"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.10" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.10" version: 1 }
     }
     {
       serviceTag: "FJ32V64"
       manufacturer: "Dell"
       orbId: "colo:FJ32V64"
+      version: 1
       name: "r09-u15.colo-galleon"
       hostname: "r09-u15.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 15
-      oobIP: { orbId: "colo:10.20.21.58" }
+      oobIP: { orbId: "colo:10.20.21.58" version: 1 }
       oobMAC: "d0:c1:b5:0c:00:66"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "GJ32V64"
       manufacturer: "Dell"
       orbId: "colo:GJ32V64"
+      version: 1
       name: "r09-u16.colo-galleon"
       hostname: "r09-u16.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 16
-      oobIP: { orbId: "colo:10.20.21.59" }
+      oobIP: { orbId: "colo:10.20.21.59" version: 1 }
       oobMAC: "d0:c1:b5:0c:00:06"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "2RK3V64"
       manufacturer: "Dell"
       orbId: "colo:2RK3V64"
+      version: 1
       name: "r09-u17.colo-galleon"
       hostname: "r09-u17.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 17
-      oobIP: { orbId: "colo:10.20.21.60" }
+      oobIP: { orbId: "colo:10.20.21.60" version: 1 }
       oobMAC: "d0:c1:b5:0a:77:85"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "GQK3V64"
       manufacturer: "Dell"
       orbId: "colo:GQK3V64"
+      version: 1
       name: "r09-u18.colo-galleon"
       hostname: "r09-u18.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 18
-      oobIP: { orbId: "colo:10.20.21.61" }
+      oobIP: { orbId: "colo:10.20.21.61" version: 1 }
       oobMAC: "d0:c1:b5:0a:6a:35"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "HQK3V64"
       manufacturer: "Dell"
       orbId: "colo:HQK3V64"
+      version: 1
       name: "r09-u19.colo-galleon"
       hostname: "r09-u19.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 19
-      oobIP: { orbId: "colo:10.20.21.62" }
+      oobIP: { orbId: "colo:10.20.21.62" version: 1 }
       oobMAC: "d0:c1:b5:0a:6a:95"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "1RK3V64"
       manufacturer: "Dell"
       orbId: "colo:1RK3V64"
+      version: 1
       name: "r09-u20.colo-galleon"
       hostname: "r09-u20.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 20
-      oobIP: { orbId: "colo:10.20.21.63" }
+      oobIP: { orbId: "colo:10.20.21.63" version: 1 }
       oobMAC: "d0:c1:b5:0a:69:fd"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "FQK3V64"
       manufacturer: "Dell"
       orbId: "colo:FQK3V64"
+      version: 1
       name: "r09-u21.colo-galleon"
       hostname: "r09-u21.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 21
-      oobIP: { orbId: "colo:10.20.21.64" }
+      oobIP: { orbId: "colo:10.20.21.64" version: 1 }
       oobMAC: "d0:c1:b5:0a:68:f5"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "JQK3V64"
       manufacturer: "Dell"
       orbId: "colo:JQK3V64"
+      version: 1
       name: "r09-u22.colo-galleon"
       hostname: "r09-u22.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 22
-      oobIP: { orbId: "colo:10.20.21.65" }
+      oobIP: { orbId: "colo:10.20.21.65" version: 1 }
       oobMAC: "d0:c1:b5:0a:7b:35"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "3RK3V64"
       manufacturer: "Dell"
       orbId: "colo:3RK3V64"
+      version: 1
       name: "r09-u23.colo-galleon"
       hostname: "r09-u23.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 23
-      oobIP: { orbId: "colo:10.20.21.66" }
+      oobIP: { orbId: "colo:10.20.21.66" version: 1 }
       oobMAC: "d0:c1:b5:0a:68:45"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "4RK3V64"
       manufacturer: "Dell"
       orbId: "colo:4RK3V64"
+      version: 1
       name: "r09-u24.colo-galleon"
       hostname: "r09-u24.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 24
-      oobIP: { orbId: "colo:10.20.21.67" }
+      oobIP: { orbId: "colo:10.20.21.67" version: 1 }
       oobMAC: "d0:c1:b5:0a:7b:7d"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "FGMM3D4"
       manufacturer: "Dell"
       orbId: "colo:FGMM3D4"
+      version: 1
       name: "r09-u30.colo-galleon"
       hostname: "r09-u30.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 30
-      oobIP: { orbId: "colo:10.20.21.79" }
+      oobIP: { orbId: "colo:10.20.21.79" version: 1 }
       oobMAC: "b4:e9:b8:c3:c7:6b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "DGMM3D4"
       manufacturer: "Dell"
       orbId: "colo:DGMM3D4"
+      version: 1
       name: "r09-u29.colo-galleon"
       hostname: "r09-u29.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 29
-      oobIP: { orbId: "colo:10.20.21.78" }
+      oobIP: { orbId: "colo:10.20.21.78" version: 1 }
       oobMAC: "b4:e9:b8:c3:af:fb"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "BGMM3D4"
       manufacturer: "Dell"
       orbId: "colo:BGMM3D4"
+      version: 1
       name: "r09-u28.colo-galleon"
       hostname: "r09-u28.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 28
-      oobIP: { orbId: "colo:10.20.21.77" }
+      oobIP: { orbId: "colo:10.20.21.77" version: 1 }
       oobMAC: "b4:e9:b8:c3:9e:7b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "9GMM3D4"
       manufacturer: "Dell"
       orbId: "colo:9GMM3D4"
+      version: 1
       name: "r09-u27.colo-galleon"
       hostname: "r09-u27.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 27
-      oobIP: { orbId: "colo:10.20.21.76" }
+      oobIP: { orbId: "colo:10.20.21.76" version: 1 }
       oobMAC: "fc:4c:ea:68:a0:23"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "CGMM3D4"
       manufacturer: "Dell"
       orbId: "colo:CGMM3D4"
+      version: 1
       name: "r09-u26.colo-galleon"
       hostname: "r09-u26.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 26
-      oobIP: { orbId: "colo:10.20.21.75" }
+      oobIP: { orbId: "colo:10.20.21.75" version: 1 }
       oobMAC: "b4:e9:b8:c3:b0:53"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.09" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.09" version: 1 }
     }
     {
       serviceTag: "6F206G4"
       manufacturer: "Dell"
       orbId: "colo:6F206G4"
+      version: 1
       name: "r12-u03.colo-galleon"
       hostname: "r12-u03.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 3
-      oobIP: { orbId: "colo:10.20.21.80" }
+      oobIP: { orbId: "colo:10.20.21.80" version: 1 }
       oobMAC: "84:5c:31:f0:ee:c9"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.12" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.12" version: 1 }
     }
     {
       serviceTag: "7F206G4"
       manufacturer: "Dell"
       orbId: "colo:7F206G4"
+      version: 1
       name: "r12-u04.colo-galleon"
       hostname: "r12-u04.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 4
-      oobIP: { orbId: "colo:10.20.21.81" }
+      oobIP: { orbId: "colo:10.20.21.81" version: 1 }
       oobMAC: "84:5c:31:f0:d8:f9"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.12" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.12" version: 1 }
     }
     {
       serviceTag: "HD206G4"
       manufacturer: "Dell"
       orbId: "colo:HD206G4"
+      version: 1
       name: "r12-u05.colo-galleon"
       hostname: "r12-u05.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 5
-      oobIP: { orbId: "colo:10.20.21.82" }
+      oobIP: { orbId: "colo:10.20.21.82" version: 1 }
       oobMAC: "84:5c:31:f0:dc:81"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.12" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.12" version: 1 }
     }
     {
       serviceTag: "1F206G4"
       manufacturer: "Dell"
       orbId: "colo:1F206G4"
+      version: 1
       name: "r12-u06.colo-galleon"
       hostname: "r12-u06.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 6
-      oobIP: { orbId: "colo:10.20.21.83" }
+      oobIP: { orbId: "colo:10.20.21.83" version: 1 }
       oobMAC: "84:5c:31:f0:dc:79"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.12" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.12" version: 1 }
     }
     {
       serviceTag: "JD206G4"
       manufacturer: "Dell"
       orbId: "colo:JD206G4"
+      version: 1
       name: "r12-u07.colo-galleon"
       hostname: "r12-u07.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 7
-      oobIP: { orbId: "colo:10.20.21.84" }
+      oobIP: { orbId: "colo:10.20.21.84" version: 1 }
       oobMAC: "84:5c:31:f0:eb:29"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.12" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.12" version: 1 }
     }
     {
       serviceTag: "2F206G4"
       manufacturer: "Dell"
       orbId: "colo:2F206G4"
+      version: 1
       name: "r11-u05.colo-galleon"
       hostname: "r11-u05.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 5
-      oobIP: { orbId: "colo:10.20.21.85" }
+      oobIP: { orbId: "colo:10.20.21.85" version: 1 }
       oobMAC: "84:5c:31:f0:df:e9"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.11" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.11" version: 1 }
     }
     {
       serviceTag: "4F206G4"
       manufacturer: "Dell"
       orbId: "colo:4F206G4"
+      version: 1
       name: "r11-u06.colo-galleon"
       hostname: "r11-u06.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 6
-      oobIP: { orbId: "colo:10.20.21.86" }
+      oobIP: { orbId: "colo:10.20.21.86" version: 1 }
       oobMAC: "84:5c:31:f0:eb:59"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.11" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.11" version: 1 }
     }
     {
       serviceTag: "3F206G4"
       manufacturer: "Dell"
       orbId: "colo:3F206G4"
+      version: 1
       name: "r11-u07.colo-galleon"
       hostname: "r11-u07.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 7
-      oobIP: { orbId: "colo:10.20.21.87" }
+      oobIP: { orbId: "colo:10.20.21.87" version: 1 }
       oobMAC: "84:5c:31:f0:f0:39"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.11" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.11" version: 1 }
     }
     {
       serviceTag: "GD206G4"
       manufacturer: "Dell"
       orbId: "colo:GD206G4"
+      version: 1
       name: "r11-u08.colo-galleon"
       hostname: "r11-u08.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 8
-      oobIP: { orbId: "colo:10.20.21.88" }
+      oobIP: { orbId: "colo:10.20.21.88" version: 1 }
       oobMAC: "84:5c:31:f0:de:29"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.11" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.11" version: 1 }
     }
     {
       serviceTag: "5F206G4"
       manufacturer: "Dell"
       orbId: "colo:5F206G4"
+      version: 1
       name: "r11-u09.colo-galleon"
       hostname: "r11-u09.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 9
-      oobIP: { orbId: "colo:10.20.21.89" }
+      oobIP: { orbId: "colo:10.20.21.89" version: 1 }
       oobMAC: "84:5c:31:f0:db:b9"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "colo"
-      dataCenter: { orbId: "colo:colo-galleon" }
-      rack: { orbId: "colo:A.OF.C.11" }
+      dataCenter: { orbId: "colo:colo-galleon" version: 1 }
+      rack: { orbId: "colo:A.OF.C.11" version: 1 }
     }
   ], upsert: true) {
     numUids

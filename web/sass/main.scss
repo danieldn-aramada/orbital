@@ -109,11 +109,20 @@
   --theme-color: hsl(var(--theme-h), var(--theme-s), var(--theme-l));
 
   --bulma-start-h: 28deg;
-  --bulma-start-s: 86%; 
-  --bulma-start-l: 61%; 
+  --bulma-start-s: 86%;
+  --bulma-start-l: 61%;
   --bulma-danger-h: 348deg;
   --bulma-danger-s: 100%;
   --bulma-danger-l: 70%;
+
+  // Neutralize Bulma's hot-pink default for inline <code>. Bulma sets
+  // --bulma-code to the same hue as --bulma-danger, which steals the
+  // danger-color channel for purely typographic styling. <code> needs to be
+  // *visually distinct from prose*, not *colored*. Monospace + the existing
+  // subtle --bulma-code-background tint is enough differentiation. Color is
+  // reserved for state classification (is-danger / is-warning / is-success /
+  // is-info). See docs/reference/UI.md → "Color convention".
+  --bulma-code: var(--bulma-text);
   --h: var(--theme-h);
   --s: var(--theme-s);
   --l: 60%;
@@ -137,6 +146,13 @@ html {
     max-height: 80%;
     // max-height: calc(100vh - 40px);
 }
+
+// Generic text utility — Bulma 1.x has no nowrap helper. Use on cells that
+// must not wrap (sizes, timestamps, narrow numeric columns).
+.is-nowrap {
+    white-space: nowrap;
+}
+
 
 // overwrite bulma defaults
 .modal-card-head {
@@ -768,4 +784,31 @@ div.dt-container:has(#audit-log-table) {
 .no-wrap-text {
   white-space: nowrap !important;
   overflow: visible !important; /* ✅ let content overflow naturally */
+}
+
+// HTMX adds .htmx-request to the requesting element while its request is in
+// flight. Mirror Bulma's .button.is-loading so HTMX-driven buttons get the
+// same spinner UX as JS-driven ones — no per-button event handlers needed.
+// pointer-events: none blocks clicks during the request without needing
+// hx-disabled-elt, which can leave the button visually disabled after the
+// swap completes.
+.button.htmx-request {
+  box-shadow: none;
+  color: transparent !important;
+  pointer-events: none;
+
+  &::after {
+    animation: spinAround 500ms infinite linear;
+    border: 2px solid var(--bulma-loading-color);
+    border-radius: var(--bulma-radius-rounded);
+    border-right-color: transparent;
+    border-top-color: transparent;
+    content: "";
+    display: block;
+    height: 1em;
+    width: 1em;
+    position: absolute !important;
+    left: calc(50% - 1em * 0.5);
+    top: calc(50% - 1em * 0.5);
+  }
 }

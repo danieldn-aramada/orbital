@@ -24,6 +24,7 @@ import (
 	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/ent/restorejob"
 	"github.com/armada/orbital/ent/user"
+	"github.com/armada/orbital/internal/ocitype"
 	"github.com/google/uuid"
 )
 
@@ -1496,6 +1497,8 @@ type DivergenceEntryMutation struct {
 	appendintended_value       json.RawMessage
 	override_value             *json.RawMessage
 	appendoverride_value       json.RawMessage
+	intended_at_version        *int
+	addintended_at_version     *int
 	who                        *string
 	first_seen_at              *time.Time
 	last_seen_at               *time.Time
@@ -2080,6 +2083,76 @@ func (m *DivergenceEntryMutation) ResetOverrideValue() {
 	delete(m.clearedFields, divergenceentry.FieldOverrideValue)
 }
 
+// SetIntendedAtVersion sets the "intended_at_version" field.
+func (m *DivergenceEntryMutation) SetIntendedAtVersion(i int) {
+	m.intended_at_version = &i
+	m.addintended_at_version = nil
+}
+
+// IntendedAtVersion returns the value of the "intended_at_version" field in the mutation.
+func (m *DivergenceEntryMutation) IntendedAtVersion() (r int, exists bool) {
+	v := m.intended_at_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIntendedAtVersion returns the old "intended_at_version" field's value of the DivergenceEntry entity.
+// If the DivergenceEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DivergenceEntryMutation) OldIntendedAtVersion(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIntendedAtVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIntendedAtVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIntendedAtVersion: %w", err)
+	}
+	return oldValue.IntendedAtVersion, nil
+}
+
+// AddIntendedAtVersion adds i to the "intended_at_version" field.
+func (m *DivergenceEntryMutation) AddIntendedAtVersion(i int) {
+	if m.addintended_at_version != nil {
+		*m.addintended_at_version += i
+	} else {
+		m.addintended_at_version = &i
+	}
+}
+
+// AddedIntendedAtVersion returns the value that was added to the "intended_at_version" field in this mutation.
+func (m *DivergenceEntryMutation) AddedIntendedAtVersion() (r int, exists bool) {
+	v := m.addintended_at_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearIntendedAtVersion clears the value of the "intended_at_version" field.
+func (m *DivergenceEntryMutation) ClearIntendedAtVersion() {
+	m.intended_at_version = nil
+	m.addintended_at_version = nil
+	m.clearedFields[divergenceentry.FieldIntendedAtVersion] = struct{}{}
+}
+
+// IntendedAtVersionCleared returns if the "intended_at_version" field was cleared in this mutation.
+func (m *DivergenceEntryMutation) IntendedAtVersionCleared() bool {
+	_, ok := m.clearedFields[divergenceentry.FieldIntendedAtVersion]
+	return ok
+}
+
+// ResetIntendedAtVersion resets all changes to the "intended_at_version" field.
+func (m *DivergenceEntryMutation) ResetIntendedAtVersion() {
+	m.intended_at_version = nil
+	m.addintended_at_version = nil
+	delete(m.clearedFields, divergenceentry.FieldIntendedAtVersion)
+}
+
 // SetWho sets the "who" field.
 func (m *DivergenceEntryMutation) SetWho(s string) {
 	m.who = &s
@@ -2258,7 +2331,7 @@ func (m *DivergenceEntryMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DivergenceEntryMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 15)
 	if m.created_at != nil {
 		fields = append(fields, divergenceentry.FieldCreatedAt)
 	}
@@ -2288,6 +2361,9 @@ func (m *DivergenceEntryMutation) Fields() []string {
 	}
 	if m.override_value != nil {
 		fields = append(fields, divergenceentry.FieldOverrideValue)
+	}
+	if m.intended_at_version != nil {
+		fields = append(fields, divergenceentry.FieldIntendedAtVersion)
 	}
 	if m.who != nil {
 		fields = append(fields, divergenceentry.FieldWho)
@@ -2329,6 +2405,8 @@ func (m *DivergenceEntryMutation) Field(name string) (ent.Value, bool) {
 		return m.IntendedValue()
 	case divergenceentry.FieldOverrideValue:
 		return m.OverrideValue()
+	case divergenceentry.FieldIntendedAtVersion:
+		return m.IntendedAtVersion()
 	case divergenceentry.FieldWho:
 		return m.Who()
 	case divergenceentry.FieldFirstSeenAt:
@@ -2366,6 +2444,8 @@ func (m *DivergenceEntryMutation) OldField(ctx context.Context, name string) (en
 		return m.OldIntendedValue(ctx)
 	case divergenceentry.FieldOverrideValue:
 		return m.OldOverrideValue(ctx)
+	case divergenceentry.FieldIntendedAtVersion:
+		return m.OldIntendedAtVersion(ctx)
 	case divergenceentry.FieldWho:
 		return m.OldWho(ctx)
 	case divergenceentry.FieldFirstSeenAt:
@@ -2453,6 +2533,13 @@ func (m *DivergenceEntryMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetOverrideValue(v)
 		return nil
+	case divergenceentry.FieldIntendedAtVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIntendedAtVersion(v)
+		return nil
 	case divergenceentry.FieldWho:
 		v, ok := value.(string)
 		if !ok {
@@ -2488,13 +2575,21 @@ func (m *DivergenceEntryMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *DivergenceEntryMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addintended_at_version != nil {
+		fields = append(fields, divergenceentry.FieldIntendedAtVersion)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *DivergenceEntryMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case divergenceentry.FieldIntendedAtVersion:
+		return m.AddedIntendedAtVersion()
+	}
 	return nil, false
 }
 
@@ -2503,6 +2598,13 @@ func (m *DivergenceEntryMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *DivergenceEntryMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case divergenceentry.FieldIntendedAtVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddIntendedAtVersion(v)
+		return nil
 	}
 	return fmt.Errorf("unknown DivergenceEntry numeric field %s", name)
 }
@@ -2528,6 +2630,9 @@ func (m *DivergenceEntryMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(divergenceentry.FieldOverrideValue) {
 		fields = append(fields, divergenceentry.FieldOverrideValue)
+	}
+	if m.FieldCleared(divergenceentry.FieldIntendedAtVersion) {
+		fields = append(fields, divergenceentry.FieldIntendedAtVersion)
 	}
 	return fields
 }
@@ -2560,6 +2665,9 @@ func (m *DivergenceEntryMutation) ClearField(name string) error {
 		return nil
 	case divergenceentry.FieldOverrideValue:
 		m.ClearOverrideValue()
+		return nil
+	case divergenceentry.FieldIntendedAtVersion:
+		m.ClearIntendedAtVersion()
 		return nil
 	}
 	return fmt.Errorf("unknown DivergenceEntry nullable field %s", name)
@@ -2598,6 +2706,9 @@ func (m *DivergenceEntryMutation) ResetField(name string) error {
 		return nil
 	case divergenceentry.FieldOverrideValue:
 		m.ResetOverrideValue()
+		return nil
+	case divergenceentry.FieldIntendedAtVersion:
+		m.ResetIntendedAtVersion()
 		return nil
 	case divergenceentry.FieldWho:
 		m.ResetWho()
@@ -2666,24 +2777,23 @@ func (m *DivergenceEntryMutation) ResetEdge(name string) error {
 // DivergenceResolutionMutation represents an operation that mutates the DivergenceResolution nodes in the graph.
 type DivergenceResolutionMutation struct {
 	config
-	op             Op
-	typ            string
-	id             *uuid.UUID
-	created_at     *time.Time
-	created_by     *string
-	updated_at     *time.Time
-	updated_by     *string
-	entry_orb_id   *string
-	field          *string
-	action         *divergenceresolution.Action
-	actor          *string
-	decided_at     *time.Time
-	cb_consumed    *bool
-	cb_consumed_at *time.Time
-	clearedFields  map[string]struct{}
-	done           bool
-	oldValue       func(context.Context) (*DivergenceResolution, error)
-	predicates     []predicate.DivergenceResolution
+	op            Op
+	typ           string
+	id            *uuid.UUID
+	created_at    *time.Time
+	created_by    *string
+	updated_at    *time.Time
+	updated_by    *string
+	entry_orb_id  *string
+	field         *string
+	action        *divergenceresolution.Action
+	actor         *string
+	decided_at    *time.Time
+	propagated_at *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*DivergenceResolution, error)
+	predicates    []predicate.DivergenceResolution
 }
 
 var _ ent.Mutation = (*DivergenceResolutionMutation)(nil)
@@ -3153,89 +3263,53 @@ func (m *DivergenceResolutionMutation) ResetDecidedAt() {
 	m.decided_at = nil
 }
 
-// SetCbConsumed sets the "cb_consumed" field.
-func (m *DivergenceResolutionMutation) SetCbConsumed(b bool) {
-	m.cb_consumed = &b
+// SetPropagatedAt sets the "propagated_at" field.
+func (m *DivergenceResolutionMutation) SetPropagatedAt(t time.Time) {
+	m.propagated_at = &t
 }
 
-// CbConsumed returns the value of the "cb_consumed" field in the mutation.
-func (m *DivergenceResolutionMutation) CbConsumed() (r bool, exists bool) {
-	v := m.cb_consumed
+// PropagatedAt returns the value of the "propagated_at" field in the mutation.
+func (m *DivergenceResolutionMutation) PropagatedAt() (r time.Time, exists bool) {
+	v := m.propagated_at
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldCbConsumed returns the old "cb_consumed" field's value of the DivergenceResolution entity.
+// OldPropagatedAt returns the old "propagated_at" field's value of the DivergenceResolution entity.
 // If the DivergenceResolution object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *DivergenceResolutionMutation) OldCbConsumed(ctx context.Context) (v bool, err error) {
+func (m *DivergenceResolutionMutation) OldPropagatedAt(ctx context.Context) (v *time.Time, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCbConsumed is only allowed on UpdateOne operations")
+		return v, errors.New("OldPropagatedAt is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCbConsumed requires an ID field in the mutation")
+		return v, errors.New("OldPropagatedAt requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCbConsumed: %w", err)
+		return v, fmt.Errorf("querying old value for OldPropagatedAt: %w", err)
 	}
-	return oldValue.CbConsumed, nil
+	return oldValue.PropagatedAt, nil
 }
 
-// ResetCbConsumed resets all changes to the "cb_consumed" field.
-func (m *DivergenceResolutionMutation) ResetCbConsumed() {
-	m.cb_consumed = nil
+// ClearPropagatedAt clears the value of the "propagated_at" field.
+func (m *DivergenceResolutionMutation) ClearPropagatedAt() {
+	m.propagated_at = nil
+	m.clearedFields[divergenceresolution.FieldPropagatedAt] = struct{}{}
 }
 
-// SetCbConsumedAt sets the "cb_consumed_at" field.
-func (m *DivergenceResolutionMutation) SetCbConsumedAt(t time.Time) {
-	m.cb_consumed_at = &t
-}
-
-// CbConsumedAt returns the value of the "cb_consumed_at" field in the mutation.
-func (m *DivergenceResolutionMutation) CbConsumedAt() (r time.Time, exists bool) {
-	v := m.cb_consumed_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldCbConsumedAt returns the old "cb_consumed_at" field's value of the DivergenceResolution entity.
-// If the DivergenceResolution object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *DivergenceResolutionMutation) OldCbConsumedAt(ctx context.Context) (v *time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCbConsumedAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCbConsumedAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCbConsumedAt: %w", err)
-	}
-	return oldValue.CbConsumedAt, nil
-}
-
-// ClearCbConsumedAt clears the value of the "cb_consumed_at" field.
-func (m *DivergenceResolutionMutation) ClearCbConsumedAt() {
-	m.cb_consumed_at = nil
-	m.clearedFields[divergenceresolution.FieldCbConsumedAt] = struct{}{}
-}
-
-// CbConsumedAtCleared returns if the "cb_consumed_at" field was cleared in this mutation.
-func (m *DivergenceResolutionMutation) CbConsumedAtCleared() bool {
-	_, ok := m.clearedFields[divergenceresolution.FieldCbConsumedAt]
+// PropagatedAtCleared returns if the "propagated_at" field was cleared in this mutation.
+func (m *DivergenceResolutionMutation) PropagatedAtCleared() bool {
+	_, ok := m.clearedFields[divergenceresolution.FieldPropagatedAt]
 	return ok
 }
 
-// ResetCbConsumedAt resets all changes to the "cb_consumed_at" field.
-func (m *DivergenceResolutionMutation) ResetCbConsumedAt() {
-	m.cb_consumed_at = nil
-	delete(m.clearedFields, divergenceresolution.FieldCbConsumedAt)
+// ResetPropagatedAt resets all changes to the "propagated_at" field.
+func (m *DivergenceResolutionMutation) ResetPropagatedAt() {
+	m.propagated_at = nil
+	delete(m.clearedFields, divergenceresolution.FieldPropagatedAt)
 }
 
 // Where appends a list predicates to the DivergenceResolutionMutation builder.
@@ -3272,7 +3346,7 @@ func (m *DivergenceResolutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DivergenceResolutionMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 10)
 	if m.created_at != nil {
 		fields = append(fields, divergenceresolution.FieldCreatedAt)
 	}
@@ -3300,11 +3374,8 @@ func (m *DivergenceResolutionMutation) Fields() []string {
 	if m.decided_at != nil {
 		fields = append(fields, divergenceresolution.FieldDecidedAt)
 	}
-	if m.cb_consumed != nil {
-		fields = append(fields, divergenceresolution.FieldCbConsumed)
-	}
-	if m.cb_consumed_at != nil {
-		fields = append(fields, divergenceresolution.FieldCbConsumedAt)
+	if m.propagated_at != nil {
+		fields = append(fields, divergenceresolution.FieldPropagatedAt)
 	}
 	return fields
 }
@@ -3332,10 +3403,8 @@ func (m *DivergenceResolutionMutation) Field(name string) (ent.Value, bool) {
 		return m.Actor()
 	case divergenceresolution.FieldDecidedAt:
 		return m.DecidedAt()
-	case divergenceresolution.FieldCbConsumed:
-		return m.CbConsumed()
-	case divergenceresolution.FieldCbConsumedAt:
-		return m.CbConsumedAt()
+	case divergenceresolution.FieldPropagatedAt:
+		return m.PropagatedAt()
 	}
 	return nil, false
 }
@@ -3363,10 +3432,8 @@ func (m *DivergenceResolutionMutation) OldField(ctx context.Context, name string
 		return m.OldActor(ctx)
 	case divergenceresolution.FieldDecidedAt:
 		return m.OldDecidedAt(ctx)
-	case divergenceresolution.FieldCbConsumed:
-		return m.OldCbConsumed(ctx)
-	case divergenceresolution.FieldCbConsumedAt:
-		return m.OldCbConsumedAt(ctx)
+	case divergenceresolution.FieldPropagatedAt:
+		return m.OldPropagatedAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown DivergenceResolution field %s", name)
 }
@@ -3439,19 +3506,12 @@ func (m *DivergenceResolutionMutation) SetField(name string, value ent.Value) er
 		}
 		m.SetDecidedAt(v)
 		return nil
-	case divergenceresolution.FieldCbConsumed:
-		v, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetCbConsumed(v)
-		return nil
-	case divergenceresolution.FieldCbConsumedAt:
+	case divergenceresolution.FieldPropagatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetCbConsumedAt(v)
+		m.SetPropagatedAt(v)
 		return nil
 	}
 	return fmt.Errorf("unknown DivergenceResolution field %s", name)
@@ -3492,8 +3552,8 @@ func (m *DivergenceResolutionMutation) ClearedFields() []string {
 	if m.FieldCleared(divergenceresolution.FieldUpdatedBy) {
 		fields = append(fields, divergenceresolution.FieldUpdatedBy)
 	}
-	if m.FieldCleared(divergenceresolution.FieldCbConsumedAt) {
-		fields = append(fields, divergenceresolution.FieldCbConsumedAt)
+	if m.FieldCleared(divergenceresolution.FieldPropagatedAt) {
+		fields = append(fields, divergenceresolution.FieldPropagatedAt)
 	}
 	return fields
 }
@@ -3518,8 +3578,8 @@ func (m *DivergenceResolutionMutation) ClearField(name string) error {
 	case divergenceresolution.FieldUpdatedBy:
 		m.ClearUpdatedBy()
 		return nil
-	case divergenceresolution.FieldCbConsumedAt:
-		m.ClearCbConsumedAt()
+	case divergenceresolution.FieldPropagatedAt:
+		m.ClearPropagatedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown DivergenceResolution nullable field %s", name)
@@ -3556,11 +3616,8 @@ func (m *DivergenceResolutionMutation) ResetField(name string) error {
 	case divergenceresolution.FieldDecidedAt:
 		m.ResetDecidedAt()
 		return nil
-	case divergenceresolution.FieldCbConsumed:
-		m.ResetCbConsumed()
-		return nil
-	case divergenceresolution.FieldCbConsumedAt:
-		m.ResetCbConsumedAt()
+	case divergenceresolution.FieldPropagatedAt:
+		m.ResetPropagatedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown DivergenceResolution field %s", name)
@@ -7122,6 +7179,8 @@ type RegistryArtifactMutation struct {
 	error                   *string
 	enriched                *bool
 	bundler_error           *string
+	layers                  *[]ocitype.ArtifactLayer
+	appendlayers            []ocitype.ArtifactLayer
 	clearedFields           map[string]struct{}
 	done                    bool
 	oldValue                func(context.Context) (*RegistryArtifact, error)
@@ -7971,6 +8030,71 @@ func (m *RegistryArtifactMutation) ResetBundlerError() {
 	delete(m.clearedFields, registryartifact.FieldBundlerError)
 }
 
+// SetLayers sets the "layers" field.
+func (m *RegistryArtifactMutation) SetLayers(ol []ocitype.ArtifactLayer) {
+	m.layers = &ol
+	m.appendlayers = nil
+}
+
+// Layers returns the value of the "layers" field in the mutation.
+func (m *RegistryArtifactMutation) Layers() (r []ocitype.ArtifactLayer, exists bool) {
+	v := m.layers
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLayers returns the old "layers" field's value of the RegistryArtifact entity.
+// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistryArtifactMutation) OldLayers(ctx context.Context) (v []ocitype.ArtifactLayer, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLayers is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLayers requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLayers: %w", err)
+	}
+	return oldValue.Layers, nil
+}
+
+// AppendLayers adds ol to the "layers" field.
+func (m *RegistryArtifactMutation) AppendLayers(ol []ocitype.ArtifactLayer) {
+	m.appendlayers = append(m.appendlayers, ol...)
+}
+
+// AppendedLayers returns the list of values that were appended to the "layers" field in this mutation.
+func (m *RegistryArtifactMutation) AppendedLayers() ([]ocitype.ArtifactLayer, bool) {
+	if len(m.appendlayers) == 0 {
+		return nil, false
+	}
+	return m.appendlayers, true
+}
+
+// ClearLayers clears the value of the "layers" field.
+func (m *RegistryArtifactMutation) ClearLayers() {
+	m.layers = nil
+	m.appendlayers = nil
+	m.clearedFields[registryartifact.FieldLayers] = struct{}{}
+}
+
+// LayersCleared returns if the "layers" field was cleared in this mutation.
+func (m *RegistryArtifactMutation) LayersCleared() bool {
+	_, ok := m.clearedFields[registryartifact.FieldLayers]
+	return ok
+}
+
+// ResetLayers resets all changes to the "layers" field.
+func (m *RegistryArtifactMutation) ResetLayers() {
+	m.layers = nil
+	m.appendlayers = nil
+	delete(m.clearedFields, registryartifact.FieldLayers)
+}
+
 // Where appends a list predicates to the RegistryArtifactMutation builder.
 func (m *RegistryArtifactMutation) Where(ps ...predicate.RegistryArtifact) {
 	m.predicates = append(m.predicates, ps...)
@@ -8005,7 +8129,7 @@ func (m *RegistryArtifactMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *RegistryArtifactMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 18)
 	if m.export_job_id != nil {
 		fields = append(fields, registryartifact.FieldExportJobID)
 	}
@@ -8057,6 +8181,9 @@ func (m *RegistryArtifactMutation) Fields() []string {
 	if m.bundler_error != nil {
 		fields = append(fields, registryartifact.FieldBundlerError)
 	}
+	if m.layers != nil {
+		fields = append(fields, registryartifact.FieldLayers)
+	}
 	return fields
 }
 
@@ -8099,6 +8226,8 @@ func (m *RegistryArtifactMutation) Field(name string) (ent.Value, bool) {
 		return m.Enriched()
 	case registryartifact.FieldBundlerError:
 		return m.BundlerError()
+	case registryartifact.FieldLayers:
+		return m.Layers()
 	}
 	return nil, false
 }
@@ -8142,6 +8271,8 @@ func (m *RegistryArtifactMutation) OldField(ctx context.Context, name string) (e
 		return m.OldEnriched(ctx)
 	case registryartifact.FieldBundlerError:
 		return m.OldBundlerError(ctx)
+	case registryartifact.FieldLayers:
+		return m.OldLayers(ctx)
 	}
 	return nil, fmt.Errorf("unknown RegistryArtifact field %s", name)
 }
@@ -8270,6 +8401,13 @@ func (m *RegistryArtifactMutation) SetField(name string, value ent.Value) error 
 		}
 		m.SetBundlerError(v)
 		return nil
+	case registryartifact.FieldLayers:
+		v, ok := value.([]ocitype.ArtifactLayer)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLayers(v)
+		return nil
 	}
 	return fmt.Errorf("unknown RegistryArtifact field %s", name)
 }
@@ -8348,6 +8486,9 @@ func (m *RegistryArtifactMutation) ClearedFields() []string {
 	if m.FieldCleared(registryartifact.FieldBundlerError) {
 		fields = append(fields, registryartifact.FieldBundlerError)
 	}
+	if m.FieldCleared(registryartifact.FieldLayers) {
+		fields = append(fields, registryartifact.FieldLayers)
+	}
 	return fields
 }
 
@@ -8382,6 +8523,9 @@ func (m *RegistryArtifactMutation) ClearField(name string) error {
 		return nil
 	case registryartifact.FieldBundlerError:
 		m.ClearBundlerError()
+		return nil
+	case registryartifact.FieldLayers:
+		m.ClearLayers()
 		return nil
 	}
 	return fmt.Errorf("unknown RegistryArtifact nullable field %s", name)
@@ -8441,6 +8585,9 @@ func (m *RegistryArtifactMutation) ResetField(name string) error {
 		return nil
 	case registryartifact.FieldBundlerError:
 		m.ResetBundlerError()
+		return nil
+	case registryartifact.FieldLayers:
+		m.ResetLayers()
 		return nil
 	}
 	return fmt.Errorf("unknown RegistryArtifact field %s", name)

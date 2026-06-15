@@ -33,10 +33,8 @@ const (
 	FieldActor = "actor"
 	// FieldDecidedAt holds the string denoting the decided_at field in the database.
 	FieldDecidedAt = "decided_at"
-	// FieldCbConsumed holds the string denoting the cb_consumed field in the database.
-	FieldCbConsumed = "cb_consumed"
-	// FieldCbConsumedAt holds the string denoting the cb_consumed_at field in the database.
-	FieldCbConsumedAt = "cb_consumed_at"
+	// FieldPropagatedAt holds the string denoting the propagated_at field in the database.
+	FieldPropagatedAt = "propagated_at"
 	// Table holds the table name of the divergenceresolution in the database.
 	Table = "divergence_resolutions"
 )
@@ -53,8 +51,7 @@ var Columns = []string{
 	FieldAction,
 	FieldActor,
 	FieldDecidedAt,
-	FieldCbConsumed,
-	FieldCbConsumedAt,
+	FieldPropagatedAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -76,8 +73,6 @@ var (
 	FieldValidator func(string) error
 	// ActorValidator is a validator for the "actor" field. It is called by the builders before save.
 	ActorValidator func(string) error
-	// DefaultCbConsumed holds the default value on creation for the "cb_consumed" field.
-	DefaultCbConsumed bool
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -88,7 +83,7 @@ type Action string
 // Action values.
 const (
 	ActionAccept Action = "accept"
-	ActionForce  Action = "force"
+	ActionReject Action = "reject"
 	ActionIgnore Action = "ignore"
 )
 
@@ -99,7 +94,7 @@ func (a Action) String() string {
 // ActionValidator is a validator for the "action" field enum values. It is called by the builders before save.
 func ActionValidator(a Action) error {
 	switch a {
-	case ActionAccept, ActionForce, ActionIgnore:
+	case ActionAccept, ActionReject, ActionIgnore:
 		return nil
 	default:
 		return fmt.Errorf("divergenceresolution: invalid enum value for action field: %q", a)
@@ -159,12 +154,7 @@ func ByDecidedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDecidedAt, opts...).ToFunc()
 }
 
-// ByCbConsumed orders the results by the cb_consumed field.
-func ByCbConsumed(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCbConsumed, opts...).ToFunc()
-}
-
-// ByCbConsumedAt orders the results by the cb_consumed_at field.
-func ByCbConsumedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCbConsumedAt, opts...).ToFunc()
+// ByPropagatedAt orders the results by the propagated_at field.
+func ByPropagatedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPropagatedAt, opts...).ToFunc()
 }

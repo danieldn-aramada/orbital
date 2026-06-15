@@ -8,6 +8,7 @@ import (
 
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/user"
+	"github.com/armada/orbital/internal/auth"
 	"github.com/labstack/echo/v4"
 )
 
@@ -89,6 +90,12 @@ func ResolveUser(db *ent.Client, adminEmails map[string]struct{}) echo.Middlewar
 			if id, _ := c.Get("user_id").(int); id != 0 {
 				return next(c) // session auth already resolved
 			}
+			// App-only (client credentials) tokens have no email and no users-table
+			// row, by design — the appid allowlist in BearerVerifier is the authz
+			// gate. Pass through without a DB lookup. See ADR 010.
+			if name, _ := c.Get("user_name").(string); strings.HasPrefix(name, auth.AppPrincipalPrefix) {
+				return next(c)
+			}
 			email, _ := c.Get("user_email").(string)
 			email = strings.ToLower(strings.TrimSpace(email))
 			if email == "" {
@@ -129,6 +136,26 @@ func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 			}
 			if db == nil {
 				return next(c)
+			}
+			// App-only (client credentials) callers were authenticated by the
+			// BearerVerifier allowlist (ORBITAL_APP_TOKEN_ALLOWED_APPIDS). MVP
+			// policy: any allowlist-passed app caller is treated as `dev`-
+			// equivalent — sufficient for all mutating API routes today. Future
+			// best practice: check the `roles` claim against required role using
+			// Microsoft Entra App Roles, once Application Administrator perms
+			// allow defining them. See ADR 010 §App Caller Authorization.
+			if name, _ := c.Get("user_name").(string); strings.HasPrefix(name, auth.AppPrincipalPrefix) {
+				if RoleAtLeast(user.RoleDev, minRole) {
+					return next(c)
+				}
+				slog.Default().Warn("authorization denied",
+					"actor", name,
+					"method", c.Request().Method,
+					"uri", c.Request().URL.Path,
+					"required_role", string(minRole),
+					"reason", "app_caller_below_required_role",
+				)
+				return echo.ErrForbidden
 			}
 			userID, _ := c.Get("user_id").(int)
 			if userID == 0 {

@@ -95,6 +95,11 @@ func TypeName(v string) predicate.DivergenceEntry {
 	return predicate.DivergenceEntry(sql.FieldEQ(FieldTypeName, v))
 }
 
+// IntendedAtVersion applies equality check predicate on the "intended_at_version" field. It's identical to IntendedAtVersionEQ.
+func IntendedAtVersion(v int) predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldEQ(FieldIntendedAtVersion, v))
+}
+
 // Who applies equality check predicate on the "who" field. It's identical to WhoEQ.
 func Who(v string) predicate.DivergenceEntry {
 	return predicate.DivergenceEntry(sql.FieldEQ(FieldWho, v))
@@ -643,6 +648,56 @@ func OverrideValueIsNil() predicate.DivergenceEntry {
 // OverrideValueNotNil applies the NotNil predicate on the "override_value" field.
 func OverrideValueNotNil() predicate.DivergenceEntry {
 	return predicate.DivergenceEntry(sql.FieldNotNull(FieldOverrideValue))
+}
+
+// IntendedAtVersionEQ applies the EQ predicate on the "intended_at_version" field.
+func IntendedAtVersionEQ(v int) predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldEQ(FieldIntendedAtVersion, v))
+}
+
+// IntendedAtVersionNEQ applies the NEQ predicate on the "intended_at_version" field.
+func IntendedAtVersionNEQ(v int) predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldNEQ(FieldIntendedAtVersion, v))
+}
+
+// IntendedAtVersionIn applies the In predicate on the "intended_at_version" field.
+func IntendedAtVersionIn(vs ...int) predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldIn(FieldIntendedAtVersion, vs...))
+}
+
+// IntendedAtVersionNotIn applies the NotIn predicate on the "intended_at_version" field.
+func IntendedAtVersionNotIn(vs ...int) predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldNotIn(FieldIntendedAtVersion, vs...))
+}
+
+// IntendedAtVersionGT applies the GT predicate on the "intended_at_version" field.
+func IntendedAtVersionGT(v int) predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldGT(FieldIntendedAtVersion, v))
+}
+
+// IntendedAtVersionGTE applies the GTE predicate on the "intended_at_version" field.
+func IntendedAtVersionGTE(v int) predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldGTE(FieldIntendedAtVersion, v))
+}
+
+// IntendedAtVersionLT applies the LT predicate on the "intended_at_version" field.
+func IntendedAtVersionLT(v int) predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldLT(FieldIntendedAtVersion, v))
+}
+
+// IntendedAtVersionLTE applies the LTE predicate on the "intended_at_version" field.
+func IntendedAtVersionLTE(v int) predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldLTE(FieldIntendedAtVersion, v))
+}
+
+// IntendedAtVersionIsNil applies the IsNil predicate on the "intended_at_version" field.
+func IntendedAtVersionIsNil() predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldIsNull(FieldIntendedAtVersion))
+}
+
+// IntendedAtVersionNotNil applies the NotNil predicate on the "intended_at_version" field.
+func IntendedAtVersionNotNil() predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldNotNull(FieldIntendedAtVersion))
 }
 
 // WhoEQ applies the EQ predicate on the "who" field.

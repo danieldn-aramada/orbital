@@ -1,0 +1,71 @@
+{{define "layers-modal"}}
+<div class="modal-card" style="width:760px;max-width:95vw;">
+  <header class="modal-card-head">
+    <p class="modal-card-title is-size-6">Layers — {{.Tag}}</p>
+    <button class="delete" aria-label="close" onclick="document.getElementById('layers-modal').classList.remove('is-active')"></button>
+  </header>
+  <section class="modal-card-body">
+    {{if .Layers}}
+    {{/* Columns: Producer (who made the layer, from OCI annotation) |
+         Media Type | Consumer (where orb sent it; "(local dgraph)" for
+         orbital-native graph layers) | Status (HTTP dispatch result or "—"
+         for built-ins). Role is no longer surfaced — it's derivable from
+         producer + consumer. */}}
+    <table class="table is-fullwidth is-striped is-size-7">
+      <thead>
+        <tr>
+          <th>Producer</th>
+          <th>Media Type</th>
+          <th>Consumer</th>
+          <th class="is-nowrap">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Layers}}
+        <tr>
+          <td>
+            {{if .Producer}}
+              <span class="tag is-light">{{.Producer}}</span>
+            {{else}}
+              <span class="has-text-grey is-size-7">(unannotated)</span>
+            {{end}}
+          </td>
+          <td class="is-family-monospace">{{.MediaType}}</td>
+          <td class="is-nowrap">
+            {{if eq .Role "graph"}}
+              <span class="has-text-grey is-size-7">(local dgraph)</span>
+            {{else if .Dispatch}}
+              {{if .Dispatch.URL}}<span style="font-family:monospace;font-size:0.7rem;word-break:break-all">{{.Dispatch.URL}}</span>{{end}}
+            {{else if eq .Role "unknown"}}
+              <span class="has-text-grey is-size-7">(no consumer registered)</span>
+            {{else}}
+              <span class="has-text-grey">—</span>
+            {{end}}
+          </td>
+          <td class="is-nowrap">
+            {{if .Dispatch}}
+              {{if and (gt .Dispatch.StatusCode 0) (lt .Dispatch.StatusCode 300)}}
+              <span class="tag is-success is-light is-small">{{.Dispatch.StatusCode}} OK</span>
+              {{else if gt .Dispatch.StatusCode 0}}
+              <span class="tag is-danger is-light is-small">{{.Dispatch.StatusCode}}</span>
+              {{else}}
+              <span class="has-text-grey">—</span>
+              {{end}}
+              {{if .Dispatch.Error}}<div class="is-size-7 has-text-danger mt-1">{{.Dispatch.Error}}</div>{{end}}
+            {{else}}
+              <span class="has-text-grey">—</span>
+            {{end}}
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="has-text-grey">No layer records for this import.</p>
+    {{end}}
+  </section>
+  <footer class="modal-card-foot">
+    <button class="button is-small" onclick="document.getElementById('layers-modal').classList.remove('is-active')">Close</button>
+  </footer>
+</div>
+{{end}}

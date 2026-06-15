@@ -85,7 +85,7 @@
                 <th>Tag</th>
                 <th>Digest</th>
                 <th>Signed</th>
-                <th>Enriched</th>
+                <th>Layers</th>
                 <th>Status</th>
                 <th>Published At</th>
                 <th>Error</th>
@@ -101,4 +101,9 @@
       {{end}}
     </div>
   </main>
+
+  <div id="layers-modal" class="modal">
+    <div class="modal-background" onclick="document.getElementById('layers-modal').classList.remove('is-active')"></div>
+    <div id="layers-modal-body"></div>
+  </div>
 {{end}}

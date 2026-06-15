@@ -7,6 +7,7 @@ mutation {
     {
       name: "houston-galleon"
       orbId: "houston:houston-galleon"
+      version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
@@ -20,26 +21,29 @@ mutation {
     {
       name: "Rack-3"
       orbId: "houston:Rack-3"
+      version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
     }
     {
       name: "Rack-5"
       orbId: "houston:Rack-5"
+      version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
     }
     {
       name: "Rack-6"
       orbId: "houston:Rack-6"
+      version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
     }
   ], upsert: true) {
     numUids
@@ -48,6 +52,7 @@ mutation {
   addIPAddress(input: [
     {
       orbId: "houston:10.10.7.72"
+      version: 1
       address: "10.10.7.72"
       name: "10.10.7.72"
       role: "oob"
@@ -57,6 +62,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.64"
+      version: 1
       address: "10.10.7.64"
       name: "10.10.7.64"
       role: "oob"
@@ -66,6 +72,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.65"
+      version: 1
       address: "10.10.7.65"
       name: "10.10.7.65"
       role: "oob"
@@ -75,6 +82,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.66"
+      version: 1
       address: "10.10.7.66"
       name: "10.10.7.66"
       role: "oob"
@@ -84,6 +92,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.67"
+      version: 1
       address: "10.10.7.67"
       name: "10.10.7.67"
       role: "oob"
@@ -93,6 +102,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.68"
+      version: 1
       address: "10.10.7.68"
       name: "10.10.7.68"
       role: "oob"
@@ -102,6 +112,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.98"
+      version: 1
       address: "10.10.7.98"
       name: "10.10.7.98"
       role: "oob"
@@ -111,6 +122,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.55"
+      version: 1
       address: "10.10.7.55"
       name: "10.10.7.55"
       role: "oob"
@@ -120,6 +132,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.56"
+      version: 1
       address: "10.10.7.56"
       name: "10.10.7.56"
       role: "oob"
@@ -129,6 +142,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.57"
+      version: 1
       address: "10.10.7.57"
       name: "10.10.7.57"
       role: "oob"
@@ -138,6 +152,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.58"
+      version: 1
       address: "10.10.7.58"
       name: "10.10.7.58"
       role: "oob"
@@ -147,6 +162,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.99"
+      version: 1
       address: "10.10.7.99"
       name: "10.10.7.99"
       role: "oob"
@@ -156,6 +172,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.70"
+      version: 1
       address: "10.10.7.70"
       name: "10.10.7.70"
       role: "oob"
@@ -165,6 +182,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.71"
+      version: 1
       address: "10.10.7.71"
       name: "10.10.7.71"
       role: "oob"
@@ -174,6 +192,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.69"
+      version: 1
       address: "10.10.7.69"
       name: "10.10.7.69"
       role: "oob"
@@ -183,6 +202,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.61"
+      version: 1
       address: "10.10.7.61"
       name: "10.10.7.61"
       role: "oob"
@@ -192,6 +212,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.62"
+      version: 1
       address: "10.10.7.62"
       name: "10.10.7.62"
       role: "oob"
@@ -201,6 +222,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.63"
+      version: 1
       address: "10.10.7.63"
       name: "10.10.7.63"
       role: "oob"
@@ -210,6 +232,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.50"
+      version: 1
       address: "10.10.7.50"
       name: "10.10.7.50"
       role: "oob"
@@ -219,6 +242,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.51"
+      version: 1
       address: "10.10.7.51"
       name: "10.10.7.51"
       role: "oob"
@@ -228,6 +252,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.52"
+      version: 1
       address: "10.10.7.52"
       name: "10.10.7.52"
       role: "oob"
@@ -237,6 +262,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.53"
+      version: 1
       address: "10.10.7.53"
       name: "10.10.7.53"
       role: "oob"
@@ -246,6 +272,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.7.54"
+      version: 1
       address: "10.10.7.54"
       name: "10.10.7.54"
       role: "oob"
@@ -255,6 +282,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.22.70"
+      version: 1
       address: "10.10.22.70"
       name: "10.10.22.70"
       role: "oob"
@@ -264,6 +292,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.22.69"
+      version: 1
       address: "10.10.22.69"
       name: "10.10.22.69"
       role: "oob"
@@ -273,6 +302,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.22.68"
+      version: 1
       address: "10.10.22.68"
       name: "10.10.22.68"
       role: "oob"
@@ -282,6 +312,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.22.67"
+      version: 1
       address: "10.10.22.67"
       name: "10.10.22.67"
       role: "oob"
@@ -291,6 +322,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.22.66"
+      version: 1
       address: "10.10.22.66"
       name: "10.10.22.66"
       role: "oob"
@@ -300,6 +332,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.22.6"
+      version: 1
       address: "10.10.22.6"
       name: "10.10.22.6"
       role: "oob"
@@ -309,6 +342,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.22.5"
+      version: 1
       address: "10.10.22.5"
       name: "10.10.22.5"
       role: "oob"
@@ -318,6 +352,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.22.4"
+      version: 1
       address: "10.10.22.4"
       name: "10.10.22.4"
       role: "oob"
@@ -327,6 +362,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.22.3"
+      version: 1
       address: "10.10.22.3"
       name: "10.10.22.3"
       role: "oob"
@@ -336,6 +372,7 @@ mutation {
     },
     {
       orbId: "houston:10.10.22.2"
+      version: 1
       address: "10.10.22.2"
       name: "10.10.22.2"
       role: "oob"
@@ -352,529 +389,562 @@ mutation {
       serviceTag: "6PJ1FZ3"
       manufacturer: "Dell"
       orbId: "houston:6PJ1FZ3"
+      version: 1
       name: "r06-u12.houston-galleon"
       hostname: "r06-u12.houston-galleon"
       model: "PowerEdge R750"
       rackPosition: 12
-      oobIP: { orbId: "houston:10.10.7.72" }
+      oobIP: { orbId: "houston:10.10.7.72" version: 1 }
       oobMAC: "c8:4b:d6:a7:07:e3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-6" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-6" version: 1 }
     }
     {
       serviceTag: "9B52FZ3"
       manufacturer: "Dell"
       orbId: "houston:9B52FZ3"
+      version: 1
       name: "r06-u14.houston-galleon"
       hostname: "r06-u14.houston-galleon"
       model: "PowerEdge R650"
       rackPosition: 14
-      oobIP: { orbId: "houston:10.10.7.64" }
+      oobIP: { orbId: "houston:10.10.7.64" version: 1 }
       oobMAC: "c8:4b:d6:a6:1b:09"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-6" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-6" version: 1 }
     }
     {
       serviceTag: "BB52FZ3"
       manufacturer: "Dell"
       orbId: "houston:BB52FZ3"
+      version: 1
       name: "r06-u15.houston-galleon"
       hostname: "r06-u15.houston-galleon"
       model: "PowerEdge R650"
       rackPosition: 15
-      oobIP: { orbId: "houston:10.10.7.65" }
+      oobIP: { orbId: "houston:10.10.7.65" version: 1 }
       oobMAC: "c8:4b:d6:a6:ef:f9"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-6" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-6" version: 1 }
     }
     {
       serviceTag: "DB52FZ3"
       manufacturer: "Dell"
       orbId: "houston:DB52FZ3"
+      version: 1
       name: "r06-u16.houston-galleon"
       hostname: "r06-u16.houston-galleon"
       model: "PowerEdge R650"
       rackPosition: 16
-      oobIP: { orbId: "houston:10.10.7.66" }
+      oobIP: { orbId: "houston:10.10.7.66" version: 1 }
       oobMAC: "c8:4b:d6:a6:ef:ff"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-6" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-6" version: 1 }
     }
     {
       serviceTag: "6B52FZ3"
       manufacturer: "Dell"
       orbId: "houston:6B52FZ3"
+      version: 1
       name: "r06-u17.houston-galleon"
       hostname: "r06-u17.houston-galleon"
       model: "PowerEdge R650"
       rackPosition: 17
-      oobIP: { orbId: "houston:10.10.7.67" }
+      oobIP: { orbId: "houston:10.10.7.67" version: 1 }
       oobMAC: "c8:4b:d6:a6:ef:09"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-6" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-6" version: 1 }
     }
     {
       serviceTag: "8B52FZ3"
       manufacturer: "Dell"
       orbId: "houston:8B52FZ3"
+      version: 1
       name: "r06-u18.houston-galleon"
       hostname: "r06-u18.houston-galleon"
       model: "PowerEdge R650"
       rackPosition: 18
-      oobIP: { orbId: "houston:10.10.7.68" }
+      oobIP: { orbId: "houston:10.10.7.68" version: 1 }
       oobMAC: "c8:4b:d6:a6:ee:5b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-6" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-6" version: 1 }
     }
     {
       serviceTag: "J922FZ3"
       manufacturer: "Dell"
       orbId: "houston:J922FZ3"
+      version: 1
       name: "r06-u22.houston-galleon"
       hostname: "r06-u22.houston-galleon"
       model: "PowerEdge R450"
       rackPosition: 22
-      oobIP: { orbId: "houston:10.10.7.98" }
+      oobIP: { orbId: "houston:10.10.7.98" version: 1 }
       oobMAC: "b4:45:06:fb:70:58"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-6" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-6" version: 1 }
     }
     {
       serviceTag: "J452FZ3"
       manufacturer: "Dell"
       orbId: "houston:J452FZ3"
+      version: 1
       name: "r06-u23.houston-galleon"
       hostname: "r06-u23.houston-galleon"
       model: "PowerEdge R450"
       rackPosition: 23
-      oobIP: { orbId: "houston:10.10.7.55" }
+      oobIP: { orbId: "houston:10.10.7.55" version: 1 }
       oobMAC: "b4:45:06:fb:7a:d0"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-6" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-6" version: 1 }
     }
     {
       serviceTag: "1B22FZ3"
       manufacturer: "Dell"
       orbId: "houston:1B22FZ3"
+      version: 1
       name: "r06-u24.houston-galleon"
       hostname: "r06-u24.houston-galleon"
       model: "PowerEdge R450"
       rackPosition: 24
-      oobIP: { orbId: "houston:10.10.7.56" }
+      oobIP: { orbId: "houston:10.10.7.56" version: 1 }
       oobMAC: "b4:45:06:fb:8d:58"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-6" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-6" version: 1 }
     }
     {
       serviceTag: "2B22FZ3"
       manufacturer: "Dell"
       orbId: "houston:2B22FZ3"
+      version: 1
       name: "r06-u25.houston-galleon"
       hostname: "r06-u25.houston-galleon"
       model: "PowerEdge R450"
       rackPosition: 25
-      oobIP: { orbId: "houston:10.10.7.57" }
+      oobIP: { orbId: "houston:10.10.7.57" version: 1 }
       oobMAC: "b4:45:06:fb:8e:00"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-6" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-6" version: 1 }
     }
     {
       serviceTag: "4B22FZ3"
       manufacturer: "Dell"
       orbId: "houston:4B22FZ3"
+      version: 1
       name: "r06-u26.houston-galleon"
       hostname: "r06-u26.houston-galleon"
       model: "PowerEdge R450"
       rackPosition: 26
-      oobIP: { orbId: "houston:10.10.7.58" }
+      oobIP: { orbId: "houston:10.10.7.58" version: 1 }
       oobMAC: "b4:45:06:fb:6a:d8"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-6" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-6" version: 1 }
     }
     {
       serviceTag: "53RKHZ3"
       manufacturer: "Dell"
       orbId: "houston:53RKHZ3"
+      version: 1
       name: "r06-u27.houston-galleon"
       hostname: "r06-u27.houston-galleon"
       model: "PowerEdge Camera"
       rackPosition: 27
-      oobIP: { orbId: "houston:10.10.7.99" }
+      oobIP: { orbId: "houston:10.10.7.99" version: 1 }
       oobMAC: "6c:3c:8c:74:cc:7e"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-6" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-6" version: 1 }
     }
     {
       serviceTag: "7PJ1FZ3"
       manufacturer: "Dell"
       orbId: "houston:7PJ1FZ3"
+      version: 1
       name: "r05-u09.houston-galleon"
       hostname: "r05-u09.houston-galleon"
       model: "PowerEdge R750"
       rackPosition: 9
-      oobIP: { orbId: "houston:10.10.7.70" }
+      oobIP: { orbId: "houston:10.10.7.70" version: 1 }
       oobMAC: "c8:4b:d6:a7:07:65"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-5" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-5" version: 1 }
     }
     {
       serviceTag: "4PJ1FZ3"
       manufacturer: "Dell"
       orbId: "houston:4PJ1FZ3"
+      version: 1
       name: "r05-u11.houston-galleon"
       hostname: "r05-u11.houston-galleon"
       model: "PowerEdge R750"
       rackPosition: 11
-      oobIP: { orbId: "houston:10.10.7.71" }
+      oobIP: { orbId: "houston:10.10.7.71" version: 1 }
       oobMAC: "c8:4b:d6:a7:07:35"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-5" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-5" version: 1 }
     }
     {
       serviceTag: "3B52FZ3"
       manufacturer: "Dell"
       orbId: "houston:3B52FZ3"
+      version: 1
       name: "r05-u14.houston-galleon"
       hostname: "r05-u14.houston-galleon"
       model: "PowerEdge R650"
       rackPosition: 14
-      oobIP: { orbId: "houston:10.10.7.69" }
+      oobIP: { orbId: "houston:10.10.7.69" version: 1 }
       oobMAC: "c8:4b:d6:a6:ef:39"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-5" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-5" version: 1 }
     }
     {
       serviceTag: "CB52FZ3"
       manufacturer: "Dell"
       orbId: "houston:CB52FZ3"
+      version: 1
       name: "r05-u15.houston-galleon"
       hostname: "r05-u15.houston-galleon"
       model: "PowerEdge R650"
       rackPosition: 15
-      oobIP: { orbId: "houston:10.10.7.61" }
+      oobIP: { orbId: "houston:10.10.7.61" version: 1 }
       oobMAC: "c8:4b:d6:a6:ee:3d"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-5" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-5" version: 1 }
     }
     {
       serviceTag: "7B52FZ3"
       manufacturer: "Dell"
       orbId: "houston:7B52FZ3"
+      version: 1
       name: "r05-u16.houston-galleon"
       hostname: "r05-u16.houston-galleon"
       model: "PowerEdge R650"
       rackPosition: 16
-      oobIP: { orbId: "houston:10.10.7.62" }
+      oobIP: { orbId: "houston:10.10.7.62" version: 1 }
       oobMAC: "c8:4b:d6:a6:ef:bd"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-5" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-5" version: 1 }
     }
     {
       serviceTag: "FB52FZ3"
       manufacturer: "Dell"
       orbId: "houston:FB52FZ3"
+      version: 1
       name: "r05-u17.houston-galleon"
       hostname: "r05-u17.houston-galleon"
       model: "PowerEdge R650"
       rackPosition: 17
-      oobIP: { orbId: "houston:10.10.7.63" }
+      oobIP: { orbId: "houston:10.10.7.63" version: 1 }
       oobMAC: "c8:4b:d6:a6:ef:e1"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-5" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-5" version: 1 }
     }
     {
       serviceTag: "1552FZ3"
       manufacturer: "Dell"
       orbId: "houston:1552FZ3"
+      version: 1
       name: "r05-u21.houston-galleon"
       hostname: "r05-u21.houston-galleon"
       model: "PowerEdge R450"
       rackPosition: 21
-      oobIP: { orbId: "houston:10.10.7.50" }
+      oobIP: { orbId: "houston:10.10.7.50" version: 1 }
       oobMAC: "b4:45:06:fb:90:20"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-5" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-5" version: 1 }
     }
     {
       serviceTag: "6B22FZ3"
       manufacturer: "Dell"
       orbId: "houston:6B22FZ3"
+      version: 1
       name: "r05-u22.houston-galleon"
       hostname: "r05-u22.houston-galleon"
       model: "PowerEdge R450"
       rackPosition: 22
-      oobIP: { orbId: "houston:10.10.7.51" }
+      oobIP: { orbId: "houston:10.10.7.51" version: 1 }
       oobMAC: "b4:45:06:fb:8b:80"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-5" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-5" version: 1 }
     }
     {
       serviceTag: "3B22FZ3"
       manufacturer: "Dell"
       orbId: "houston:3B22FZ3"
+      version: 1
       name: "r05-u23.houston-galleon"
       hostname: "r05-u23.houston-galleon"
       model: "PowerEdge R450"
       rackPosition: 23
-      oobIP: { orbId: "houston:10.10.7.52" }
+      oobIP: { orbId: "houston:10.10.7.52" version: 1 }
       oobMAC: "b4:45:06:fb:8b:48"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-5" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-5" version: 1 }
     }
     {
       serviceTag: "7B22FZ3"
       manufacturer: "Dell"
       orbId: "houston:7B22FZ3"
+      version: 1
       name: "r05-u24.houston-galleon"
       hostname: "r05-u24.houston-galleon"
       model: "PowerEdge R450"
       rackPosition: 24
-      oobIP: { orbId: "houston:10.10.7.53" }
+      oobIP: { orbId: "houston:10.10.7.53" version: 1 }
       oobMAC: "b4:45:06:fb:86:98"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-5" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-5" version: 1 }
     }
     {
       serviceTag: "5B22FZ3"
       manufacturer: "Dell"
       orbId: "houston:5B22FZ3"
+      version: 1
       name: "r05-u25.houston-galleon"
       hostname: "r05-u25.houston-galleon"
       model: "PowerEdge R450"
       rackPosition: 25
-      oobIP: { orbId: "houston:10.10.7.54" }
+      oobIP: { orbId: "houston:10.10.7.54" version: 1 }
       oobMAC: "b4:45:06:fb:74:d8"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-5" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-5" version: 1 }
     }
     {
       serviceTag: "F9J1X54"
       manufacturer: "Dell"
       orbId: "houston:F9J1X54"
+      version: 1
       name: "r03-u09.houston-galleon"
       hostname: "r03-u09.houston-galleon"
       model: "PowerEdge AS760"
       rackPosition: 9
-      oobIP: { orbId: "houston:10.10.22.70" }
+      oobIP: { orbId: "houston:10.10.22.70" version: 1 }
       oobMAC: "d0:c1:b5:05:a9:45"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-3" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-3" version: 1 }
     }
     {
       serviceTag: "D9J1X54"
       manufacturer: "Dell"
       orbId: "houston:D9J1X54"
+      version: 1
       name: "r03-u11.houston-galleon"
       hostname: "r03-u11.houston-galleon"
       model: "PowerEdge AS760"
       rackPosition: 11
-      oobIP: { orbId: "houston:10.10.22.69" }
+      oobIP: { orbId: "houston:10.10.22.69" version: 1 }
       oobMAC: "d0:c1:b5:05:aa:59"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-3" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-3" version: 1 }
     }
     {
       serviceTag: "H9J1X54"
       manufacturer: "Dell"
       orbId: "houston:H9J1X54"
+      version: 1
       name: "r03-u13.houston-galleon"
       hostname: "r03-u13.houston-galleon"
       model: "PowerEdge AS760"
       rackPosition: 13
-      oobIP: { orbId: "houston:10.10.22.68" }
+      oobIP: { orbId: "houston:10.10.22.68" version: 1 }
       oobMAC: "d0:c1:b5:03:d4:54"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-3" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-3" version: 1 }
     }
     {
       serviceTag: "G9J1X54"
       manufacturer: "Dell"
       orbId: "houston:G9J1X54"
+      version: 1
       name: "r03-u15.houston-galleon"
       hostname: "r03-u15.houston-galleon"
       model: "PowerEdge AS760"
       rackPosition: 15
-      oobIP: { orbId: "houston:10.10.22.67" }
+      oobIP: { orbId: "houston:10.10.22.67" version: 1 }
       oobMAC: "d0:c1:b5:03:c5:1e"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-3" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-3" version: 1 }
     }
     {
       serviceTag: "C9J1X54"
       manufacturer: "Dell"
       orbId: "houston:C9J1X54"
+      version: 1
       name: "r03-u17.houston-galleon"
       hostname: "r03-u17.houston-galleon"
       model: "PowerEdge AS760"
       rackPosition: 17
-      oobIP: { orbId: "houston:10.10.22.66" }
+      oobIP: { orbId: "houston:10.10.22.66" version: 1 }
       oobMAC: "d0:c1:b5:03:d2:6e"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-3" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-3" version: 1 }
     }
     {
       serviceTag: "8N4VW54"
       manufacturer: "Dell"
       orbId: "houston:8N4VW54"
+      version: 1
       name: "r03-u20.houston-galleon"
       hostname: "r03-u20.houston-galleon"
       model: "PowerEdge AS760"
       rackPosition: 20
-      oobIP: { orbId: "houston:10.10.22.6" }
+      oobIP: { orbId: "houston:10.10.22.6" version: 1 }
       oobMAC: "d0:c1:b5:03:cb:24"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-3" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-3" version: 1 }
     }
     {
       serviceTag: "9N4VW54"
       manufacturer: "Dell"
       orbId: "houston:9N4VW54"
+      version: 1
       name: "r03-u22.houston-galleon"
       hostname: "r03-u22.houston-galleon"
       model: "PowerEdge AS760"
       rackPosition: 22
-      oobIP: { orbId: "houston:10.10.22.5" }
+      oobIP: { orbId: "houston:10.10.22.5" version: 1 }
       oobMAC: "d0:c1:b5:03:80:d2"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-3" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-3" version: 1 }
     }
     {
       serviceTag: "CN4VW54"
       manufacturer: "Dell"
       orbId: "houston:CN4VW54"
+      version: 1
       name: "r03-u24.houston-galleon"
       hostname: "r03-u24.houston-galleon"
       model: "PowerEdge AS760"
       rackPosition: 24
-      oobIP: { orbId: "houston:10.10.22.4" }
+      oobIP: { orbId: "houston:10.10.22.4" version: 1 }
       oobMAC: "d0:c1:b5:05:a9:93"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-3" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-3" version: 1 }
     }
     {
       serviceTag: "BN4VW54"
       manufacturer: "Dell"
       orbId: "houston:BN4VW54"
+      version: 1
       name: "r03-u26.houston-galleon"
       hostname: "r03-u26.houston-galleon"
       model: "PowerEdge AS760"
       rackPosition: 26
-      oobIP: { orbId: "houston:10.10.22.3" }
+      oobIP: { orbId: "houston:10.10.22.3" version: 1 }
       oobMAC: "d0:c1:b5:03:8a:14"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-3" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-3" version: 1 }
     }
     {
       serviceTag: "J9J1X54"
       manufacturer: "Dell"
       orbId: "houston:J9J1X54"
+      version: 1
       name: "r03-u28.houston-galleon"
       hostname: "r03-u28.houston-galleon"
       model: "PowerEdge AS760"
       rackPosition: 28
-      oobIP: { orbId: "houston:10.10.22.2" }
+      oobIP: { orbId: "houston:10.10.22.2" version: 1 }
       oobMAC: "d0:c1:b5:03:d0:70"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "houston"
-      dataCenter: { orbId: "houston:houston-galleon" }
-      rack: { orbId: "houston:Rack-3" }
+      dataCenter: { orbId: "houston:houston-galleon" version: 1 }
+      rack: { orbId: "houston:Rack-3" version: 1 }
     }
   ], upsert: true) {
     numUids

@@ -3,6 +3,7 @@ package schema
 import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
+	"github.com/armada/orbital/internal/ocitype"
 	"github.com/google/uuid"
 )
 
@@ -23,13 +24,14 @@ func (RegistryArtifact) Fields() []ent.Field {
 		field.Int64("size_bytes").Optional().Nillable(),
 		field.Bool("signed").Default(false),
 		field.String("signing_key_fingerprint").Optional().Nillable(),
-		field.Enum("status").Values("pending", "pushing", "completed", "failed"),
+		field.Enum("status").Values("pending", "bundling", "pushing", "signing", "completed", "failed"),
 		field.Int("initiated_by").Optional().Nillable(),
 		field.Time("initiated_at"),
 		field.Time("completed_at").Optional().Nillable(),
 		field.String("error").Optional().Nillable(),
 		field.Bool("enriched").Default(false),                  // true if all bundlers ran and their layers are included
 		field.String("bundler_error").Optional().Nillable(),   // set if any bundler failed (job will also be failed)
+		field.JSON("layers", []ocitype.ArtifactLayer{}).Optional(), // per-layer metadata captured at push time; nil for legacy artifacts
 	}
 }
 

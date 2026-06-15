@@ -90,7 +90,7 @@
               <a><span class="icon is-small"><i class="fa-solid fa-hard-drive"></i></span><span>Storage</span></a>
             </li>
             {{if .Actions.ShowAuditTab}}
-            <li data-panel="srv-panel-audit-{{.ID}}" data-orb-id="{{.OrbID}}">
+            <li data-panel="srv-panel-audit-{{.ID}}" data-orb-id="{{.OrbID}}" data-related-orb-ids="{{.RelatedOrbIDsCSV}}">
               <a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a>
             </li>
             {{end}}

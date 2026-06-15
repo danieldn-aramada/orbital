@@ -78,6 +78,11 @@ spec:
             # Divergence ingest — override the dev-friendly 10s default.
             - name: ORBITAL_DIVERGENCE_POLL_INTERVAL
               value: 15s
+            # Bundlers — UI publish form-encodes; this default supplies the
+            # in-pod cb-bundler sidecar so the manifest+mapping layers always
+            # get added. JSON callers can still override per-request.
+            - name: ORBITAL_BUNDLER_URLS
+              value: http://localhost:8020/bundle
             # Backup (Azure Blob)
             - name: ORBITAL_S3_ENDPOINT
               value: https://armadagalleonbackups.blob.core.windows.net
@@ -147,6 +152,20 @@ spec:
               value: "8020"
             - name: ORBITAL_GRAPHQL_URL
               value: http://localhost:8001/graphql
+            # OAuth2 client credentials grant — cb-bundler mints its own bearer
+            # token from Entra to call orbital's /graphql. See orbital ADR 010.
+            # Same secret as the orbital container (single K8s Secret on both).
+            - name: ORBITAL_TENANT_ID
+              value: 8f231c2a-9551-4b40-be17-5b24afe5e890
+            - name: ORBITAL_CLIENT_ID
+              value: 5fc832f6-843e-4207-93dd-b3c3a77c06f2
+            - name: ORBITAL_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: orbital-secrets
+                  key: ORBITAL_OIDC_CLIENT_SECRET
+            - name: ORBITAL_OAUTH_SCOPE
+              value: api://5fc832f6-843e-4207-93dd-b3c3a77c06f2/.default
       volumes:
         - name: cosign-key
           secret:

@@ -22,82 +22,117 @@ type divergencePageData struct {
 func (s *Server) divergencePage(c echo.Context) error {
 	entries, _ := s.divStore.Load()
 	rec, _ := s.divStore.LoadPublishRecord()
-	return s.render(c, "divergence", divergencePageData{
+	data := divergencePageData{
 		Base:         s.orbBase(c),
 		PageTitle:    "Divergence Report",
 		Entries:      entries,
 		LastPublish:  rec,
 		S3Configured: s.divPublisher != nil,
-	})
+	}
+	// HX-Request callers (the Refresh button) get just the table fragment.
+	if c.Request().Header.Get("HX-Request") == "true" {
+		return s.renderFragment(c, "divergence", "divergence-content", data)
+	}
+	return s.render(c, "divergence", data)
 }
 
-// intakeOverride is one entry in the divergence intake payload. cb-controller
-// sends K8s field paths; orb translates them to {orbId, field} using the
-// stored mapping for the given bundle digest.
-type intakeOverride struct {
-	Path          string `json:"path"`
-	IntendedValue any    `json:"intendedValue"`
-	OverrideValue any    `json:"overrideValue"`
-	Who           string `json:"who"`
-	When          string `json:"when"`
-}
-
-// intakePayload is the new payload shape accepted by POST /api/v1/divergence.
-// The bundleDigest selects which mapping orb uses to translate paths into
-// canonical {orbId, field} entries. Replace-not-merge: the array represents
-// the FULL current divergence set; entries not included are considered
-// resolved by disappearance.
-type intakePayload struct {
-	BundleDigest string           `json:"bundleDigest"`
-	Overrides    []intakeOverride `json:"overrides"`
-}
-
-// POST /api/v1/divergence — intake endpoint for edge components (e.g. cb-controller).
-// Accepts K8s-path-keyed overrides plus the bundle digest. Orb looks up the
-// matching mapping, translates each path into a canonical {orbId, field} entry,
-// and saves the canonical set (replace-not-merge).
+// intakePayload is the wire shape accepted by POST /api/v1/divergence.
+// Producers translate their native vocabulary into orbital-native before
+// posting; orb does not interpret producer-specific concepts. Replace-not-
+// merge: the array represents the FULL current divergence set.
 //
-// Returns 422 when the bundleDigest has no matching mapping stored — caller
-// should retry on a later tick (typically after orb has imported the matching
-// bundle and persisted its mapping layer).
+// See docs/reference/DIVERGENCE-INTAKE.md for the canonical contract.
+type intakePayload struct {
+	Overrides []divergence.OverrideEntry `json:"overrides"`
+}
+
+// POST /api/v1/divergence — producer-agnostic intake.
+//
+// Accepts an orbital-native divergence set. Validates structural correctness
+// (presence of required fields, parseable timestamp) and stores. Does not
+// validate orbital-domain semantics (real orbId, real type, real field).
+//
+// For each override, orb looks up the ConfigItem's current `version` from its
+// local DGraph (which is the imported-bundle view that the producer observed
+// against) and stamps it into IntendedAtVersion. Orb's DGraph is read-only
+// outside of `orb import`, so the version captured here matches what the
+// producer observed; producers don't need to send version themselves.
+//
+// Lookup failures (orbId not in local DGraph, DGraph unreachable, version
+// field null) leave IntendedAtVersion as nil. Orbital's Accept handler
+// degrades to a value-based stale check when version is missing.
 func (s *Server) receiveDivergence(c echo.Context) error {
 	var payload intakePayload
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid divergence report")
 	}
-	if payload.BundleDigest == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "bundleDigest is required")
-	}
-
-	mapping, err := s.mappingStore.Load(payload.BundleDigest)
-	if err != nil {
-		s.logger.Warn("divergence intake: mapping not found", "digest", payload.BundleDigest, "err", err)
-		return echo.NewHTTPError(http.StatusUnprocessableEntity, "unknown bundleDigest: "+payload.BundleDigest)
-	}
-
-	entries := make([]divergence.OverrideEntry, 0, len(payload.Overrides))
-	for _, ov := range payload.Overrides {
-		orbID, field, typeName, resolveErr := mapping.Resolve(ov.Path)
-		if resolveErr != nil {
-			s.logger.Warn("divergence intake: resolve failed", "path", ov.Path, "digest", payload.BundleDigest, "err", resolveErr)
-			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("path %q: %v", ov.Path, resolveErr))
+	for i, ov := range payload.Overrides {
+		if err := validateOverrideEntry(ov); err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("overrides[%d]: %v", i, err))
 		}
-		entries = append(entries, divergence.OverrideEntry{
-			OrbID:         orbID,
-			Field:         field,
-			Type:          typeName,
-			IntendedValue: ov.IntendedValue,
-			OverrideValue: ov.OverrideValue,
-			Who:           ov.Who,
-			When:          ov.When,
-		})
 	}
 
-	if err := s.divStore.Save(entries); err != nil {
+	// Version capture. Batched by orbId so a report with N fields on the same
+	// ConfigItem makes one lookup, not N. Failures degrade silently — leaves
+	// IntendedAtVersion nil for that override.
+	ctx := c.Request().Context()
+	versions := make(map[string]*int, len(payload.Overrides))
+	for _, ov := range payload.Overrides {
+		key := ov.Type + "|" + ov.OrbID
+		if _, seen := versions[key]; seen {
+			continue
+		}
+		v, err := divergence.FetchCurrentVersion(ctx, s.cfg.DGraphURL, ov.Type, ov.OrbID)
+		if err != nil {
+			s.logger.Warn("orb divergence intake: version lookup failed",
+				"orbId", ov.OrbID, "type", ov.Type, "err", err)
+			versions[key] = nil
+		} else {
+			versions[key] = v
+		}
+	}
+	for i := range payload.Overrides {
+		ov := &payload.Overrides[i]
+		key := ov.Type + "|" + ov.OrbID
+		ov.IntendedAtVersion = versions[key]
+	}
+
+	if err := s.divStore.Save(payload.Overrides); err != nil {
 		s.logger.Error("divergence store save failed", "err", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to store report")
 	}
-	return c.JSON(http.StatusOK, map[string]int{"stored": len(entries)})
+	return c.JSON(http.StatusOK, map[string]int{"stored": len(payload.Overrides)})
+}
+
+// validateOverrideEntry enforces presence and structural rules for a single
+// intake entry. Orbital-domain validity (real orbId/type/field) is checked
+// downstream by orbital on ingestion.
+func validateOverrideEntry(ov divergence.OverrideEntry) error {
+	if ov.OrbID == "" {
+		return fmt.Errorf("orbId is required")
+	}
+	if ov.Field == "" {
+		return fmt.Errorf("field is required")
+	}
+	if ov.Type == "" {
+		return fmt.Errorf("type is required")
+	}
+	if ov.IntendedValue == nil {
+		return fmt.Errorf("intendedValue is required")
+	}
+	if ov.OverrideValue == nil {
+		return fmt.Errorf("overrideValue is required")
+	}
+	if ov.Who == "" {
+		return fmt.Errorf("who is required")
+	}
+	if ov.When == "" {
+		return fmt.Errorf("when is required")
+	}
+	if _, err := time.Parse(time.RFC3339, ov.When); err != nil {
+		return fmt.Errorf("when must be RFC3339: %w", err)
+	}
+	return nil
 }
 
 // GET /api/v1/divergence — returns current pending entries.
@@ -117,6 +152,12 @@ func (s *Server) publishDivergence(c echo.Context) error {
 	entries, err := s.divStore.Load()
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load reports")
+	}
+	// Refuse to publish an empty snapshot — it would pollute S3 with files
+	// that contain no information. Orbital reconciles state from non-empty
+	// publishes; absence of new keys does not need to be communicated.
+	if len(entries) == 0 {
+		return echo.NewHTTPError(http.StatusConflict, "nothing to publish")
 	}
 	key, err := s.divPublisher.Publish(c.Request().Context(), entries)
 	if err != nil {

@@ -209,6 +209,118 @@ Content-Type: application/json
 
 ---
 
+## Divergence Resolution Contract (Bundler ← Orbital)
+
+The full semantic model is in [`docs/reference/DIVERGENCE.md`](./reference/DIVERGENCE.md). This section is the wire-level contract.
+
+### One resource, query-filtered
+
+cb-bundler queries `/api/v1/divergences` per bundle build, twice, with different filters. The same endpoint serves both the actionable set and the disengaged set — orbital doesn't expose state-named sub-paths.
+
+#### Actionable: `GET /api/v1/divergences?action=accept&action=reject&propagated=false`
+
+Returns divergences whose resolution is accept or reject AND has not yet been observed-as-propagated. Each entry must be added to `spec.takeover[]` in the cb-manifest so cb-controller's reconciler does a `force: true` SSA apply — evicting `local:*` managers from `managedFields`.
+
+Each entry includes the embedded `resolution`:
+
+```json
+[
+  {
+    "id": "b955774d-fcfc-4919-abe4-b95397c755d2",
+    "dcOrbId": "colo:colo-galleon",
+    "entryOrbId": "colo:CWJHDX3-idrac",
+    "field": "sshEnabled",
+    "intendedValue": false,
+    "overrideValue": true,
+    "who": "local:admin",
+    "firstSeenAt": "2026-06-14T07:35:51Z",
+    "lastSeenAt":  "2026-06-14T07:35:51Z",
+    "resolution": {
+      "id": "...",
+      "action": "accept",
+      "actor": "admin@armada.ai",
+      "decidedAt": "2026-06-14T07:46:01Z",
+      "propagatedAt": null
+    }
+  }
+]
+```
+
+- `resolution.action` distinguishes accept vs. reject. Both go in `spec.takeover[]`; the difference is which value cb-controller applies (the current intent, which for accept equals the former override, and for reject equals the original intent). cb-bundler doesn't need to compute the value — it comes from the published subgraph.
+- **Observation-driven lifecycle.** cb-bundler does NOT report back which IDs it included. Orbital marks `propagated_at` automatically when the next orb snapshot omits the diverged field. Between decision and propagation, the same entries will keep appearing in this query — cb-bundler should treat that as "still pending," not duplicate work.
+
+#### Disengaged: `GET /api/v1/divergences?action=ignore`
+
+Returns divergences whose resolution is `ignore`, regardless of `propagated_at`. For each `(entryOrbId, field)` pair, **remove that field from the cb-manifest's SSA apply config** — do not include it in the patch cb-controller receives.
+
+- **Persistent**: re-queried every bundle build, no "consume" signal.
+- Why omission is the mechanic: a normal apply with `manager: cb-controller` adds cb-controller to the field's manager set (co-owner with `local:admin`). The divergence reporter detects co-ownership and re-reports forever. The only way to keep `local:admin` as sole manager is to never include the field in cb-controller's apply config.
+
+#### Bundle response shape
+
+```json
+{
+  "layers": [
+    { "mediaType": "application/vnd.armada.configbundle.manifest.v1+yaml", "data": "..." }
+  ]
+}
+```
+
+Just layers. No `consumedResolutionIds`. Orbital observes propagation from orb snapshots; the deployment layer never asserts state back to orbital.
+
+#### `PATCH /api/v1/divergences/:id/resolution` — operator recovery only
+
+Manually mark a resolution as propagated. NOT part of normal flow — orbital observes propagation automatically. Use this only when the observation can't happen (orb stuck, snapshot publishing broken) and an operator wants to unblock a stuck row.
+
+```
+PATCH /api/v1/divergences/b955774d-fcfc-4919-abe4-b95397c755d2/resolution
+Content-Type: application/json
+
+{ "propagatedAt": "now" }      # or an RFC3339 timestamp
+→ 200 { "id": "...", "action": "accept", ..., "propagatedAt": "2026-06-14T07:46:01Z" }
+```
+
+### Sequencing in a bundle build
+
+```
+1. cb-bundler reads orbital state (single point-in-time):
+     GET /api/v1/divergences?action=accept&action=reject&propagated=false   → actionable
+     GET /api/v1/divergences?action=ignore                                   → disengaged
+2. cb-bundler computes cb-manifest:
+     a. start from the published subgraph (intent)
+     b. for each disengaged entry: drop the field from the apply config
+     c. for each actionable entry: add to spec.takeover[]
+3. cb-bundler returns { layers: [...] } in the bundle response
+4. orbital publishes the OCI artifact
+5. orb imports, dispatches cb-manifest to cb-controller
+6. cb-controller reconciles: force-apply takeover entries, normal apply for the rest
+7. (Later) cb-controller's divergence reporter sees no `local:*` on those fields → orb's next snapshot doesn't include them → orbital's ingester sweeps the entries → sets propagated_at on the resolutions
+```
+
+### Full orbital API surface for divergence
+
+For reference, the entire surface — 5 endpoints under `/api/v1/divergences`:
+
+```
+GET    /api/v1/divergences                       list, with ?action=&propagated=&dc= filters
+GET    /api/v1/divergences/:id                   one (resolution embedded)
+PUT    /api/v1/divergences/:id/resolution        upsert resolution (body: {action})
+DELETE /api/v1/divergences/:id/resolution        clear resolution
+PATCH  /api/v1/divergences/:id/resolution        operator-recovery: set propagatedAt manually
+```
+
+Direction is one-way: orbital pulls from cb-bundler (`POST /bundle`). cb-bundler never initiates a request to orbital. Propagation state is observed at orbital, not asserted by cb-bundler.
+
+### cb-controller-side expectations
+
+For each item in `spec.takeover[]`, do SSA with `force: true` on that field. This evicts any `local:*` managers and makes cb-controller the sole manager. The divergence reporter on the next tick walks `managedFields`, finds no `local:*` on this field, emits no divergence — loop closed.
+
+For omitted fields: cb-controller simply doesn't claim them. If cb-controller previously applied the field, omission in the new apply config releases its claim; existing `local:admin` retains sole ownership.
+
+The divergence reporter must derive "fields cb-controller wants to manage" from the **currently applied cb-manifest**, not from a schema-level allowlist. This is what makes omission silence the reporter.
+
+---
+
 ## Consumer API Contract (Orb → cb-controller)
 
 ### Request

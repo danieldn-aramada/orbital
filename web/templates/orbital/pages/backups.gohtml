@@ -39,7 +39,10 @@
                   <span class="icon"><i class="fas fa-database"></i></span>
                   <span>Backup Now</span>
                 </button>
-                <button id="btn-test-backup-connection" class="button is-light is-small" onclick="testBackupConnection()">
+                <button id="btn-test-backup-connection" type="button" class="button is-light is-small"
+                        hx-post="{{.BasePath}}/api/v1/backup/test-connection"
+                        hx-target="#backup-connection-result"
+                        hx-swap="innerHTML">
                   <span class="icon"><i class="fa-solid fa-plug"></i></span>
                   <span>Test Connection</span>
                 </button>

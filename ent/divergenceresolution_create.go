@@ -107,30 +107,16 @@ func (_c *DivergenceResolutionCreate) SetDecidedAt(v time.Time) *DivergenceResol
 	return _c
 }
 
-// SetCbConsumed sets the "cb_consumed" field.
-func (_c *DivergenceResolutionCreate) SetCbConsumed(v bool) *DivergenceResolutionCreate {
-	_c.mutation.SetCbConsumed(v)
+// SetPropagatedAt sets the "propagated_at" field.
+func (_c *DivergenceResolutionCreate) SetPropagatedAt(v time.Time) *DivergenceResolutionCreate {
+	_c.mutation.SetPropagatedAt(v)
 	return _c
 }
 
-// SetNillableCbConsumed sets the "cb_consumed" field if the given value is not nil.
-func (_c *DivergenceResolutionCreate) SetNillableCbConsumed(v *bool) *DivergenceResolutionCreate {
+// SetNillablePropagatedAt sets the "propagated_at" field if the given value is not nil.
+func (_c *DivergenceResolutionCreate) SetNillablePropagatedAt(v *time.Time) *DivergenceResolutionCreate {
 	if v != nil {
-		_c.SetCbConsumed(*v)
-	}
-	return _c
-}
-
-// SetCbConsumedAt sets the "cb_consumed_at" field.
-func (_c *DivergenceResolutionCreate) SetCbConsumedAt(v time.Time) *DivergenceResolutionCreate {
-	_c.mutation.SetCbConsumedAt(v)
-	return _c
-}
-
-// SetNillableCbConsumedAt sets the "cb_consumed_at" field if the given value is not nil.
-func (_c *DivergenceResolutionCreate) SetNillableCbConsumedAt(v *time.Time) *DivergenceResolutionCreate {
-	if v != nil {
-		_c.SetCbConsumedAt(*v)
+		_c.SetPropagatedAt(*v)
 	}
 	return _c
 }
@@ -188,10 +174,6 @@ func (_c *DivergenceResolutionCreate) defaults() {
 		v := divergenceresolution.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := _c.mutation.CbConsumed(); !ok {
-		v := divergenceresolution.DefaultCbConsumed
-		_c.mutation.SetCbConsumed(v)
-	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := divergenceresolution.DefaultID()
 		_c.mutation.SetID(v)
@@ -237,9 +219,6 @@ func (_c *DivergenceResolutionCreate) check() error {
 	}
 	if _, ok := _c.mutation.DecidedAt(); !ok {
 		return &ValidationError{Name: "decided_at", err: errors.New(`ent: missing required field "DivergenceResolution.decided_at"`)}
-	}
-	if _, ok := _c.mutation.CbConsumed(); !ok {
-		return &ValidationError{Name: "cb_consumed", err: errors.New(`ent: missing required field "DivergenceResolution.cb_consumed"`)}
 	}
 	return nil
 }
@@ -312,13 +291,9 @@ func (_c *DivergenceResolutionCreate) createSpec() (*DivergenceResolution, *sqlg
 		_spec.SetField(divergenceresolution.FieldDecidedAt, field.TypeTime, value)
 		_node.DecidedAt = value
 	}
-	if value, ok := _c.mutation.CbConsumed(); ok {
-		_spec.SetField(divergenceresolution.FieldCbConsumed, field.TypeBool, value)
-		_node.CbConsumed = value
-	}
-	if value, ok := _c.mutation.CbConsumedAt(); ok {
-		_spec.SetField(divergenceresolution.FieldCbConsumedAt, field.TypeTime, value)
-		_node.CbConsumedAt = &value
+	if value, ok := _c.mutation.PropagatedAt(); ok {
+		_spec.SetField(divergenceresolution.FieldPropagatedAt, field.TypeTime, value)
+		_node.PropagatedAt = &value
 	}
 	return _node, _spec
 }
