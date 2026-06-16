@@ -103,14 +103,14 @@
           {{if .IdracSettings}}
           <table class="table is-fullwidth mt-2">
             <tbody>
-              <tr><td style="white-space:nowrap;width:1%">Firmware Version</td><td>{{if .IdracSettings.FirmwareVersion}}{{.IdracSettings.FirmwareVersion}}{{else}}—{{end}}</td></tr>
-              <tr><td style="white-space:nowrap">SSH Enabled</td><td>{{.IdracSettings.SshEnabled}}</td></tr>
-              <tr><td style="white-space:nowrap">USB Mgmt Port Enabled</td><td>{{.IdracSettings.UsbManagementPortEnabled}}</td></tr>
-              <tr><td style="white-space:nowrap">OS-to-iDRAC Pass-through</td><td>{{.IdracSettings.OsToIdracPassThroughEnabled}}</td></tr>
-              <tr><td style="white-space:nowrap">IPMI Enabled</td><td>{{.IdracSettings.IpmiEnabled}}</td></tr>
-              <tr><td style="white-space:nowrap">Lockdown Mode</td><td>{{.IdracSettings.LockdownModeEnabled}}</td></tr>
-              <tr><td style="white-space:nowrap">DHCP Enabled</td><td>{{.IdracSettings.DhcpEnabled}}</td></tr>
-              <tr><td style="white-space:nowrap">RACADM Enabled</td><td>{{.IdracSettings.RacadmEnabled}}</td></tr>
+              <tr><td style="white-space:nowrap;width:1%">firmwareVersion</td><td>{{if .IdracSettings.FirmwareVersion}}{{.IdracSettings.FirmwareVersion}}{{else}}—{{end}}</td></tr>
+              <tr><td style="white-space:nowrap">sshEnabled</td><td>{{if .IdracSettings.SshEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td></tr>
+              <tr><td style="white-space:nowrap">usbManagementPortEnabled</td><td>{{if .IdracSettings.UsbManagementPortEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td></tr>
+              <tr><td style="white-space:nowrap">osToIdracPassThroughEnabled</td><td>{{if .IdracSettings.OsToIdracPassThroughEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td></tr>
+              <tr><td style="white-space:nowrap">ipmiEnabled</td><td>{{if .IdracSettings.IpmiEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td></tr>
+              <tr><td style="white-space:nowrap">lockdownModeEnabled</td><td>{{if .IdracSettings.LockdownModeEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td></tr>
+              <tr><td style="white-space:nowrap">dhcpEnabled</td><td>{{if .IdracSettings.DhcpEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td></tr>
+              <tr><td style="white-space:nowrap">racadmEnabled</td><td>{{if .IdracSettings.RacadmEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td></tr>
             </tbody>
           </table>
           {{else}}

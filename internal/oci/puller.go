@@ -31,6 +31,11 @@ type PulledArtifact struct {
 	SchemaGZ    []byte
 	ExtraLayers map[string][]byte            // mediaType → bytes; non-graph layers for consumer dispatch
 	LayerAnnotations map[string]map[string]string // mediaType → per-layer manifest annotations
+	// Per-layer descriptor fields captured from the OCI manifest, indexed by
+	// mediaType. Used by orb to surface size + digest in the import-history
+	// layers modal so it mirrors orbital's signed-artifacts modal.
+	LayerDigests map[string]string // mediaType → digest (e.g. "sha256:abc…")
+	LayerSizes   map[string]int64  // mediaType → size in bytes
 	Annotations map[string]string
 	Digest      string // manifest digest, used for cosign verification
 	Tag         string
@@ -156,6 +161,12 @@ func Pull(ctx context.Context, cfg PullConfig, tag string) (*PulledArtifact, err
 			}
 			artifact.LayerAnnotations[layer.MediaType] = layer.Annotations
 		}
+		if artifact.LayerDigests == nil {
+			artifact.LayerDigests = make(map[string]string)
+			artifact.LayerSizes = make(map[string]int64)
+		}
+		artifact.LayerDigests[layer.MediaType] = layer.Digest.String()
+		artifact.LayerSizes[layer.MediaType] = layer.Size
 		switch layer.MediaType {
 		case mediaTypeDataGZ:
 			artifact.DataGZ = data

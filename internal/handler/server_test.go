@@ -139,6 +139,7 @@ func TestCollectRelatedOrbIDs(t *testing.T) {
 		if idrac != "" {
 			r.IdracSettings = &struct {
 				OrbID                       string `json:"orbId"`
+				Version                     int    `json:"version"`
 				FirmwareVersion             string `json:"firmwareVersion"`
 				OsToIdracPassThroughEnabled bool   `json:"osToIdracPassThroughEnabled"`
 				SshEnabled                  bool   `json:"sshEnabled"`

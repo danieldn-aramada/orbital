@@ -79,6 +79,11 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	}))
 
 	state := newImportState()
+	if records, err := orb.LoadHistory(cfg.DataDir); err != nil {
+		logger.Warn("load import history at startup failed — status page will show no last import", "err", err)
+	} else {
+		state.hydrateFromHistory(records)
+	}
 
 	backend := &orb.SubprocessBackend{
 		AlphaGRPC: cfg.DGraphAlphaGRPC,

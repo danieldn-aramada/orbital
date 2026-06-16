@@ -1,6 +1,9 @@
 definitions:
   orb.DispatchResult:
     properties:
+      consumerName:
+        description: name of the accepting consumer; empty if no 2xx
+        type: string
       error:
         type: string
       mediaType:
@@ -37,15 +40,22 @@ definitions:
     type: object
   orb.LayerRecord:
     properties:
+      digest:
+        type: string
       dispatch:
         allOf:
         - $ref: '#/definitions/orb.DispatchResult'
         description: set when Role == LayerRoleDispatched
       mediaType:
         type: string
+      producer:
+        description: from OCI annotation com.armada.orbital.producer (empty for legacy)
+        type: string
       role:
         description: LayerRole* constant
         type: string
+      sizeBytes:
+        type: integer
     type: object
   orbserver.importSnapshot:
     properties:

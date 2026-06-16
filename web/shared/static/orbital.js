@@ -336,17 +336,34 @@ document.addEventListener('DOMContentLoaded', () => {
   loadArtifactsTable()
 })
 
+// artifactsSkeletonHTML returns a 9-column skeleton row block matching the
+// signed-artifacts table's column count so the swap doesn't reflow when the
+// real content lands.
+function artifactsSkeletonHTML(rows = 5) {
+  const s = () => `<span class="is-skeleton" style="display:block">&nbsp;</span>`
+  const cells = Array(9).fill(0).map(() => `<td>${s()}</td>`).join('')
+  return Array(rows).fill(0).map(() => `<tr>${cells}</tr>`).join('')
+}
+
 function loadArtifactsTable(showSpinner = false) {
   const tbody = document.getElementById('artifacts-tbody')
   if (!tbody) return
   const btn = document.querySelector('button[onclick="loadArtifactsTable(true)"]')
-  if (showSpinner && btn) btn.classList.add('is-loading')
-  const minDelay = new Promise(resolve => setTimeout(resolve, showSpinner ? 200 : 0))
-  fetch(BASE + '/api/v1/oci/artifacts', { headers: { 'HX-Request': 'true' } })
-    .then(r => r.text())
+  if (showSpinner) {
+    if (btn) btn.classList.add('is-loading')
+    tbody.innerHTML = artifactsSkeletonHTML()
+  }
+  // Canonical refresh pattern (docs/reference/UI.md): skeleton in place
+  // immediately, then BOTH fetch and min-delay resolve before the swap so a
+  // fast response doesn't flash the skeleton. Spinner clears at the same point.
+  const fetchP = fetch(BASE + '/api/v1/oci/artifacts', { headers: { 'HX-Request': 'true' } }).then(r => r.text())
+  const work = showSpinner
+    ? Promise.all([fetchP, new Promise(resolve => setTimeout(resolve, 500))]).then(([html]) => html)
+    : fetchP
+  work
     .then(html => { tbody.innerHTML = html; htmx.process(tbody) })
     .catch(() => {})
-    .finally(() => { minDelay.then(() => { if (btn) btn.classList.remove('is-loading') }) })
+    .finally(() => { if (showSpinner && btn) btn.classList.remove('is-loading') })
 }
 
 function testOCIConnection() {
@@ -501,19 +518,18 @@ document.addEventListener('click', function (e) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               query: `mutation UpdateDataCenter(
-                $id: ID!, $name: String!, $assetDataV2: String,
+                $orbId: String!, $name: String!, $assetDataV2: String,
                 $version: Int, $updatedBy: String!, $updatedAt: DateTime!
               ) {
                 updateDataCenter(input: {
-                  filter: { id: [$id] }
+                  filter: { orbId: { eq: $orbId } }
                   set: { name: $name, assetDataV2: $assetDataV2, version: $version, updatedBy: $updatedBy, updatedAt: $updatedAt }
                 }) {
-                  dataCenter { id name }
+                  dataCenter { orbId name }
                 }
               }`,
               variables: {
                 ...vars,
-                id,
                 orbId: modal.dataset.orbId || '',
                 ifVersion: currentVersion,
                 version: currentVersion + 1,
@@ -707,40 +723,51 @@ document.addEventListener('click', function (e) {
             return
           }
 
-          const idracOrbId = (modal.dataset.orbId || '') + '-idrac'
-          const idracNamespace = (modal.dataset.orbId || '').split(':')[0]
+          const idracOrbId = modal.dataset.idracOrbId || ''
+          const currentIdracVersion = parseInt(modal.dataset.idracVersion, 10) || 0
           const now = new Date().toISOString()
           const currentUser = modal.dataset.currentUser || ''
 
-          // Build query + variables from the parts that changed. Mutation name
-          // is chosen so the proxy's MVCC singleEntityTypes lookup matches when
-          // the server is being touched (UpdateServer / UpdateServerAndIdrac).
-          // Idrac-only edits use a distinct name; no server MVCC is needed.
-          const queryArgs = []
+          // Both halves are keyed by orbId (the @id field) — never by DGraph UID.
+          // orbId is the stable, restore-safe, cross-instance identifier.
+          // Both halves use updateX; the invariant "every Server has an
+          // IdracSettings" is enforced at the seed/create layer so
+          // updateIdracSettings always matches a row.
+          //
+          // variables.orbId is ALWAYS set — orbital's audit pipeline reads it
+          // for the before-fetch (Server snapshot) and entity-id extraction.
+          // The orbital GraphQL proxy strips orbId from variables before
+          // forwarding to DGraph if the query body doesn't declare $orbId
+          // (idrac-only edits), then restores it for audit.
+          //
+          // $orbId is DECLARED in queryArgs only when serverChanged — that's
+          // the branch whose body actually uses it. Declaring it
+          // unconditionally would make DGraph reject the idrac-only mutation
+          // for "Variable $orbId is never used."
+          const queryArgs = ['$updatedBy: String!', '$updatedAt: DateTime!']
           const bodyParts = []
           const variables = {
             orbId: modal.dataset.orbId || '',
+            updatedBy: currentUser,
+            updatedAt: now,
           }
           if (serverChanged) {
             queryArgs.push(
-              '$updatedBy: String!', '$updatedAt: DateTime!',
-              '$id: ID!', '$hostname: String', '$manufacturer: String', '$model: String',
+              '$orbId: String!',
+              '$hostname: String', '$manufacturer: String', '$model: String',
               '$oobMAC: String', '$rackPosition: Int', '$serviceTag: String',
               '$version: Int',
             )
-            variables.updatedBy = currentUser
-            variables.updatedAt = now
             bodyParts.push(`updateServer(input: {
-                  filter: { id: [$id] }
+                  filter: { orbId: { eq: $orbId } }
                   set: {
                     hostname: $hostname, manufacturer: $manufacturer, model: $model,
                     oobMAC: $oobMAC, rackPosition: $rackPosition, serviceTag: $serviceTag,
                     version: $version, updatedBy: $updatedBy, updatedAt: $updatedAt
                   }
                 }) {
-                  server { id hostname }
+                  server { orbId hostname }
                 }`)
-            variables.id = id
             variables.ifVersion = currentVersion
             variables.version = currentVersion + 1
             variables.hostname = vars.hostname
@@ -751,28 +778,36 @@ document.addEventListener('click', function (e) {
             variables.serviceTag = vars.serviceTag
           }
           if (idracChanged) {
-            queryArgs.push('$idracInput: [AddIdracSettingsInput!]!')
-            bodyParts.push(`addIdracSettings(input: $idracInput, upsert: true) {
-                  numUids
+            queryArgs.push(
+              '$idracOrbId: String!', '$idracVersion: Int',
+              '$firmwareVersion: String', '$sshEnabled: Boolean', '$ipmiEnabled: Boolean',
+              '$lockdownModeEnabled: Boolean', '$osToIdracPassThroughEnabled: Boolean',
+              '$usbManagementPortEnabled: Boolean', '$dhcpEnabled: Boolean', '$racadmEnabled: Boolean',
+            )
+            bodyParts.push(`updateIdracSettings(input: {
+                  filter: { orbId: { eq: $idracOrbId } }
+                  set: {
+                    firmwareVersion: $firmwareVersion,
+                    sshEnabled: $sshEnabled, ipmiEnabled: $ipmiEnabled,
+                    lockdownModeEnabled: $lockdownModeEnabled,
+                    osToIdracPassThroughEnabled: $osToIdracPassThroughEnabled,
+                    usbManagementPortEnabled: $usbManagementPortEnabled,
+                    dhcpEnabled: $dhcpEnabled, racadmEnabled: $racadmEnabled,
+                    version: $idracVersion, updatedBy: $updatedBy, updatedAt: $updatedAt
+                  }
+                }) {
+                  idracSettings { orbId }
                 }`)
-            variables.idracInput = [{
-              orbId: idracOrbId,
-              name: 'idrac',
-              namespace: idracNamespace,
-              createdBy: currentUser,
-              createdAt: now,
-              updatedBy: currentUser,
-              updatedAt: now,
-              server: { id },
-              firmwareVersion: idracSettings.firmwareVersion ?? null,
-              sshEnabled: idracSettings.sshEnabled ?? null,
-              ipmiEnabled: idracSettings.ipmiEnabled ?? null,
-              lockdownModeEnabled: idracSettings.lockdownModeEnabled ?? null,
-              osToIdracPassThroughEnabled: idracSettings.osToIdracPassThroughEnabled ?? null,
-              usbManagementPortEnabled: idracSettings.usbManagementPortEnabled ?? null,
-              dhcpEnabled: idracSettings.dhcpEnabled ?? null,
-              racadmEnabled: idracSettings.racadmEnabled ?? null,
-            }]
+            variables.idracOrbId = idracOrbId
+            variables.idracVersion = currentIdracVersion + 1
+            variables.firmwareVersion = idracSettings.firmwareVersion ?? null
+            variables.sshEnabled = idracSettings.sshEnabled ?? null
+            variables.ipmiEnabled = idracSettings.ipmiEnabled ?? null
+            variables.lockdownModeEnabled = idracSettings.lockdownModeEnabled ?? null
+            variables.osToIdracPassThroughEnabled = idracSettings.osToIdracPassThroughEnabled ?? null
+            variables.usbManagementPortEnabled = idracSettings.usbManagementPortEnabled ?? null
+            variables.dhcpEnabled = idracSettings.dhcpEnabled ?? null
+            variables.racadmEnabled = idracSettings.racadmEnabled ?? null
           }
           const opName = serverChanged && idracChanged ? 'UpdateServerAndIdrac'
             : serverChanged ? 'UpdateServer'

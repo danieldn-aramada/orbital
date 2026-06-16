@@ -202,7 +202,7 @@ func (h *OCI) Publish(c echo.Context) error {
 		}
 		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 		c.Response().Header().Set("HX-Trigger", "refreshExportJobs")
-		return tmpl.ExecuteTemplate(c.Response().Writer, "publish-modal-progress", publishProgressData{
+		return tmpl.ExecuteTemplate(c.Response(), "publish-modal-progress", publishProgressData{
 			BasePath:     h.basePath,
 			ArtifactID:   artifact.ID,
 			Phase:        string(artifact.Status),
@@ -244,7 +244,7 @@ func (h *OCI) ListArtifacts(c echo.Context) error {
 			return fmt.Errorf("parse artifacts fragment: %w", err)
 		}
 		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-		return tmpl.Execute(c.Response().Writer, rows)
+		return tmpl.Execute(c.Response(), rows)
 	}
 	out := make([]artifactResponse, 0, len(artifacts))
 	for _, a := range artifacts {
@@ -276,6 +276,7 @@ type publishModalData struct {
 	ExportedAt     string
 	SuggestedTag   string
 	Repository     string
+	BundlerNames   string
 	Republish      bool
 }
 
@@ -318,13 +319,14 @@ func (h *OCI) PublishModal(c echo.Context) error {
 		return fmt.Errorf("parse publish-modal-summary: %w", err)
 	}
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return tmpl.ExecuteTemplate(c.Response().Writer, "publish-modal-summary", publishModalData{
+	return tmpl.ExecuteTemplate(c.Response(), "publish-modal-summary", publishModalData{
 		BasePath:       h.basePath,
 		JobID:          job.ID.String(),
 		DataCenterName: job.DatacenterName,
 		ExportedAt:     exportedAt,
 		SuggestedTag:   suggestedTag,
 		Repository:     repoName,
+		BundlerNames:   h.bundlerNamesLabel(),
 		Republish:      c.QueryParam("republish") == "true",
 	})
 }
@@ -403,6 +405,7 @@ type publishResultData struct {
 	Tag          string
 	Digest       string
 	Signed       bool
+	Layers       int
 }
 
 // renderArtifactFragment returns the publish-modal-progress fragment for
@@ -419,7 +422,7 @@ func (h *OCI) renderArtifactFragment(c echo.Context, a *ent.RegistryArtifact) er
 		if err != nil {
 			return fmt.Errorf("parse publish-modal-progress: %w", err)
 		}
-		return tmpl.ExecuteTemplate(c.Response().Writer, "publish-modal-progress", publishProgressData{
+		return tmpl.ExecuteTemplate(c.Response(), "publish-modal-progress", publishProgressData{
 			BasePath:     h.basePath,
 			ArtifactID:   a.ID,
 			Phase:        string(a.Status),
@@ -448,12 +451,13 @@ func (h *OCI) renderArtifactFragment(c echo.Context, a *ent.RegistryArtifact) er
 			data.Digest = *a.Digest
 		}
 		data.Signed = a.Signed
+		data.Layers = len(a.Layers)
 	}
 	tmpl, err := template.ParseFiles("web/templates/orbital/partials/publish-modal-result.gohtml")
 	if err != nil {
 		return fmt.Errorf("parse publish-modal-result: %w", err)
 	}
-	return tmpl.ExecuteTemplate(c.Response().Writer, "publish-modal-result", data)
+	return tmpl.ExecuteTemplate(c.Response(), "publish-modal-result", data)
 }
 
 // DeleteJob handles DELETE /api/v1/export/jobs/:jobId
@@ -636,17 +640,19 @@ func (h *OCI) ArtifactLayers(c echo.Context) error {
 		return fmt.Errorf("parse layers-modal: %w", err)
 	}
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return tmpl.ExecuteTemplate(c.Response().Writer, "layers-modal", row)
+	return tmpl.ExecuteTemplate(c.Response(), "layers-modal", row)
 }
 
 // ── Fragment renderer ─────────────────────────────────────────────────────────
 
 // artifactLayerRow is a display-ready representation of a single OCI layer.
 // Values are pre-formatted so the template needs no funcs.
+// Digest is the full digest (e.g. sha256:abc…64chars) — the layers modal is
+// the detail view, so we don't truncate.
 type artifactLayerRow struct {
 	MediaType       string
 	SizeDisplay     string
-	DigestShort     string
+	Digest          string
 	IsOrbitalNative bool
 	Producer        string
 }
@@ -669,8 +675,6 @@ type artifactFragRow struct {
 	Error          string
 	LayerRows      []artifactLayerRow
 	HasLayers      bool
-	OrbitalLayers  int // count of layers with IsOrbitalNative=true, pre-computed for template
-	BundlerLayers  int // count of layers with IsOrbitalNative=false
 }
 
 func toArtifactFragRow(a *ent.RegistryArtifact, basePath string) artifactFragRow {
@@ -715,18 +719,9 @@ func toArtifactFragRow(a *ent.RegistryArtifact, basePath string) artifactFragRow
 			lr := artifactLayerRow{
 				MediaType:       l.MediaType,
 				SizeDisplay:     fmtLayerBytes(l.SizeBytes),
+				Digest:          l.Digest,
 				IsOrbitalNative: l.IsOrbitalNative,
 				Producer:        l.Producer,
-			}
-			if len(l.Digest) > 19 {
-				lr.DigestShort = l.Digest[:19] + "…"
-			} else {
-				lr.DigestShort = l.Digest
-			}
-			if l.IsOrbitalNative {
-				row.OrbitalLayers++
-			} else {
-				row.BundlerLayers++
 			}
 			row.LayerRows = append(row.LayerRows, lr)
 		}

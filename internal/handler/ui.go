@@ -101,7 +101,7 @@ func (h *UI) render(c echo.Context, name string, data any) error {
 		return echo.ErrNotFound
 	}
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return tmpl.ExecuteTemplate(c.Response().Writer, "base.gohtml", data)
+	return tmpl.ExecuteTemplate(c.Response(), "base.gohtml", data)
 }
 
 // renderFragment executes a single named {{define}} block within a page's
@@ -116,7 +116,7 @@ func (h *UI) renderFragment(c echo.Context, page, fragment string, data any) err
 		return echo.ErrNotFound
 	}
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return tmpl.ExecuteTemplate(c.Response().Writer, fragment, data)
+	return tmpl.ExecuteTemplate(c.Response(), fragment, data)
 }
 
 func (h *UI) base(c echo.Context) layout.Base {
@@ -328,7 +328,6 @@ func (h *UI) DivergenceReports(c echo.Context) error {
 				row.ResolutionAction = string(res.Action)
 				row.ResolutionActor = res.Actor
 				row.DecidedAt = res.DecidedAt.UTC().Format("2006-01-02 15:04 UTC")
-				row.Propagated = res.PropagatedAt != nil
 			}
 
 			gi, ok := idx[e.DcOrbID]
@@ -359,10 +358,13 @@ func (h *UI) DivergenceReports(c echo.Context) error {
 		}
 	}
 	data := page.DivergenceReports{
-		Base:       base,
-		PageTitle:  "Divergence Reports",
-		Groups:     groups,
-		CanResolve: RoleAtLeast(user.Role(base.User.Role), user.RoleDev),
+		Base:          base,
+		PageTitle:     "Divergence Reports",
+		Groups:        groups,
+		CanResolve:    RoleAtLeast(user.Role(base.User.Role), user.RoleDev),
+		BackupEnabled: h.backupEnabled,
+		S3Endpoint:    h.s3Endpoint,
+		S3Bucket:      h.s3Bucket,
 	}
 	// HX-Request callers (the Refresh button) get just the table fragment.
 	if c.Request().Header.Get("HX-Request") == "true" {
@@ -477,10 +479,14 @@ func (h *UI) Schema(c echo.Context) error {
 		return fmt.Errorf("read schema: %w", err)
 	}
 	sum := sha256.Sum256(content)
+	version, err := readSchemaVersion(h.schemaPath)
+	if err != nil {
+		return fmt.Errorf("read schema version: %w", err)
+	}
 	return h.render(c, "schema", page.Schema{
 		Base:      h.base(c),
 		PageTitle: "Schema",
-		Version:   "v1",
+		Version:   version,
 		Checksum:  fmt.Sprintf("%x", sum[:6]),
 		SDL:       string(content),
 	})

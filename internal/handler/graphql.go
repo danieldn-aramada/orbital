@@ -27,6 +27,7 @@ var knownMutationRe = regexp.MustCompile(`(?i)\b(add|update|delete)(DataCenter|S
 var orbIdFilterRe = regexp.MustCompile(`orbId\s*:\s*\{\s*eq\s*:\s*"([^"]+)"`)
 
 var mutationOpRe = regexp.MustCompile(`(?i)^\s*mutation\s+(\w+)`)
+var queryOpRe = regexp.MustCompile(`(?i)^\s*query\s+(\w+)`)
 
 // beforeFetchOverrides maps an operation name to the resource type whose
 // `before` snapshot should be fetched. ONLY needed for compound or nested
@@ -97,8 +98,14 @@ func (h *GraphQL) Handle(c echo.Context) error {
 
 	var req gqlRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil || !isMutation(req.Query) {
-		if req.OperationName != "" {
-			c.Set("graphql.operation.name", req.OperationName)
+		opName := req.OperationName
+		if opName == "" {
+			if m := queryOpRe.FindStringSubmatch(req.Query); len(m) > 1 {
+				opName = m[1]
+			}
+		}
+		if opName != "" {
+			c.Set("graphql.operation.name", opName)
 		}
 		c.Set("graphql.operation.type", "query")
 		return h.proxyRaw(c, bodyBytes)
@@ -250,7 +257,7 @@ func (h *GraphQL) Handle(c echo.Context) error {
 	}
 
 	c.Response().Header().Set("Content-Type", "application/json")
-	_, err = c.Response().Writer.Write(respBytes)
+	_, err = c.Response().Write(respBytes)
 	return err
 }
 
@@ -325,7 +332,7 @@ func (h *GraphQL) proxyRaw(c echo.Context, body []byte) error {
 	}
 	defer resp.Body.Close()
 	c.Response().Header().Set("Content-Type", "application/json")
-	_, err = io.Copy(c.Response().Writer, resp.Body)
+	_, err = io.Copy(c.Response(), resp.Body)
 	return err
 }
 

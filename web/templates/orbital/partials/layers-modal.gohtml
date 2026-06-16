@@ -23,16 +23,16 @@
         <tr>
           <td>
             {{if .Producer}}
-              <span class="tag is-light">{{.Producer}}</span>
+              <span class="tag is-light{{if eq .Producer "orbital"}} is-info{{end}}">{{.Producer}}</span>
             {{else if .IsOrbitalNative}}
-              <span class="tag is-light">orbital</span>
+              <span class="tag is-info is-light">orbital</span>
             {{else}}
               <span class="has-text-grey is-size-7">(unannotated)</span>
             {{end}}
           </td>
           <td class="is-family-monospace">{{.MediaType}}</td>
           <td class="is-nowrap">{{.SizeDisplay}}</td>
-          <td class="is-family-monospace">{{if .DigestShort}}{{.DigestShort}}{{else}}—{{end}}</td>
+          <td class="is-family-monospace is-size-7" style="word-break:break-all;">{{if .Digest}}{{.Digest}}{{else}}—{{end}}</td>
         </tr>
         {{end}}
       </tbody>

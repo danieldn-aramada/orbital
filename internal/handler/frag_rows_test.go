@@ -253,9 +253,9 @@ func TestToArtifactFragRow_Layers(t *testing.T) {
 		t.Errorf("LayerRows[2].SizeDisplay = %q, want %q", row.LayerRows[2].SizeDisplay, "1.0 KB")
 	}
 
-	// DigestShort should be truncated.
-	if row.LayerRows[0].DigestShort == "" {
-		t.Error("LayerRows[0].DigestShort is empty")
+	// Layer Digest is the full string (modal is the detail view, not truncated).
+	if row.LayerRows[0].Digest == "" {
+		t.Error("LayerRows[0].Digest is empty")
 	}
 }
 

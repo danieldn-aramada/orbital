@@ -321,6 +321,10 @@ const docTemplate = `{
         "orb.DispatchResult": {
             "type": "object",
             "properties": {
+                "consumerName": {
+                    "description": "name of the accepting consumer; empty if no 2xx",
+                    "type": "string"
+                },
                 "error": {
                     "type": "string"
                 },
@@ -375,6 +379,9 @@ const docTemplate = `{
         "orb.LayerRecord": {
             "type": "object",
             "properties": {
+                "digest": {
+                    "type": "string"
+                },
                 "dispatch": {
                     "description": "set when Role == LayerRoleDispatched",
                     "allOf": [
@@ -386,9 +393,16 @@ const docTemplate = `{
                 "mediaType": {
                     "type": "string"
                 },
+                "producer": {
+                    "description": "from OCI annotation com.armada.orbital.producer (empty for legacy)",
+                    "type": "string"
+                },
                 "role": {
                     "description": "LayerRole* constant",
                     "type": "string"
+                },
+                "sizeBytes": {
+                    "type": "integer"
                 }
             }
         },

@@ -334,12 +334,6 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "type": "boolean",
-                        "description": "Filter by resolution.propagatedAt presence",
-                        "name": "propagated",
-                        "in": "query"
-                    },
-                    {
                         "type": "string",
                         "description": "Filter by dc_orb_id",
                         "name": "dc",
@@ -544,62 +538,6 @@ const docTemplate = `{
                 "responses": {
                     "204": {
                         "description": "No Content"
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            },
-            "patch": {
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "divergence"
-                ],
-                "summary": "Patch a divergence resolution (operator recovery only)",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Divergence entry UUID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Fields to update",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.patchResolutionBody"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handler.resolutionItem"
-                        }
                     },
                     "400": {
                         "description": "Bad Request",
@@ -1319,15 +1257,6 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.patchResolutionBody": {
-            "type": "object",
-            "properties": {
-                "propagatedAt": {
-                    "description": "PropagatedAt: RFC3339 timestamp, or the literal \"now\" for server-side\ntime. Operator-recovery only — normal propagation is observed by the\ningester when orb stops reporting the field. Setting this manually is\nfor stuck rows that the ingester can't observe (orb down, snapshot\npipeline broken).",
-                    "type": "string"
-                }
-            }
-        },
         "handler.publishResponse": {
             "type": "object",
             "properties": {
@@ -1368,10 +1297,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "id": {
-                    "type": "string"
-                },
-                "propagatedAt": {
-                    "description": "RFC3339; null until ingester sweeps the entry",
                     "type": "string"
                 }
             }
@@ -1462,6 +1387,10 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "mediaType": {
+                    "type": "string"
+                },
+                "producer": {
+                    "description": "Producer is the friendly name of whatever produced this layer (e.g.\n\"orbital\" for the two graph layers, \"configbundle-bundler\" for layers\nreturned by that bundler). Mirrors the OCI manifest annotation\n` + "`" + `com.armada.orbital.producer` + "`" + ` written at push time. Empty for legacy\nartifacts published before producer attribution was introduced.",
                     "type": "string"
                 },
                 "sizeBytes": {

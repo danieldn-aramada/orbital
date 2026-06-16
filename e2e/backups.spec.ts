@@ -7,11 +7,11 @@ test.describe('Backups page', () => {
 
   test('shows heading and subtitle', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'Backup Graph' })).toBeVisible();
-    await expect(page.locator('p.subtitle')).toContainText('S3');
+    await expect(page.locator('p.subtitle')).toContainText('object storage');
   });
 
   test('shows storage location (configured or not)', async ({ page }) => {
-    // Either a working endpoint input or a danger input with "S3 not configured"
+    // Either a working endpoint input or a danger input with "Object store not configured"
     const locationInput = page.locator('input[type="text"]').first();
     await expect(locationInput).toBeVisible();
     const value = await locationInput.inputValue();
@@ -54,7 +54,7 @@ test.describe('Backup workflow', () => {
     const backupBtn = page.locator('#btn-backup');
     const isPresent = await backupBtn.count() > 0;
     if (!isPresent) {
-      test.skip(true, 'S3 not configured — backup workflow unavailable');
+      test.skip(true, 'Object store not configured — backup workflow unavailable');
       return;
     }
 

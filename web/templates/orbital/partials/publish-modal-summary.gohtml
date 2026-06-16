@@ -10,8 +10,9 @@
   <tbody>
     <tr><th style="width:38%">Data Center</th><td>{{.DataCenterName}}</td></tr>
     <tr><th>Exported At</th><td><span data-timestamp="{{.ExportedAt}}">{{.ExportedAt}}</span></td></tr>
-    <tr><th>Tag</th><td style="font-family:monospace;font-weight:600;">{{.SuggestedTag}}</td></tr>
-    <tr><th>Repository</th><td style="font-family:monospace;font-size:0.65rem;word-break:break-all;">{{.Repository}}</td></tr>
+    <tr><th>Tag</th><td style="font-weight:600;">{{.SuggestedTag}}</td></tr>
+    <tr><th>Repository</th><td style="word-break:break-all;">{{.Repository}}</td></tr>
+    {{if .BundlerNames}}<tr><th>Bundlers</th><td>{{.BundlerNames}}</td></tr>{{end}}
   </tbody>
 </table>
 <form

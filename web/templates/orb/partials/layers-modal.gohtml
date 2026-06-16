@@ -6,18 +6,17 @@
   </header>
   <section class="modal-card-body">
     {{if .Layers}}
-    {{/* Columns: Producer (who made the layer, from OCI annotation) |
-         Media Type | Consumer (where orb sent it; "(local dgraph)" for
-         orbital-native graph layers) | Status (HTTP dispatch result or "—"
-         for built-ins). Role is no longer surfaced — it's derivable from
-         producer + consumer. */}}
+    {{/* Columns mirror orbital's signed-artifacts layers-modal:
+         Producer | Media Type | Size | Digest. orbital-producer pill is
+         light blue (is-info is-light); bundler-named producers stay neutral. */}}
     <table class="table is-fullwidth is-striped is-size-7">
       <thead>
         <tr>
           <th>Producer</th>
           <th>Media Type</th>
-          <th>Consumer</th>
-          <th class="is-nowrap">Status</th>
+          <th class="is-nowrap">Size</th>
+          <th class="is-nowrap">Dispatch</th>
+          <th>Digest</th>
         </tr>
       </thead>
       <tbody>
@@ -25,37 +24,27 @@
         <tr>
           <td>
             {{if .Producer}}
-              <span class="tag is-light">{{.Producer}}</span>
+              <span class="tag is-light{{if eq .Producer "orbital"}} is-info{{end}}">{{.Producer}}</span>
             {{else}}
               <span class="has-text-grey is-size-7">(unannotated)</span>
             {{end}}
           </td>
           <td class="is-family-monospace">{{.MediaType}}</td>
+          <td class="is-nowrap">{{.SizeDisplay}}</td>
           <td class="is-nowrap">
             {{if eq .Role "graph"}}
-              <span class="has-text-grey is-size-7">(local dgraph)</span>
+              <span class="has-text-grey">—</span>
             {{else if .Dispatch}}
-              {{if .Dispatch.URL}}<span style="font-family:monospace;font-size:0.7rem;word-break:break-all">{{.Dispatch.URL}}</span>{{end}}
-            {{else if eq .Role "unknown"}}
-              <span class="has-text-grey is-size-7">(no consumer registered)</span>
-            {{else}}
-              <span class="has-text-grey">—</span>
-            {{end}}
-          </td>
-          <td class="is-nowrap">
-            {{if .Dispatch}}
-              {{if and (gt .Dispatch.StatusCode 0) (lt .Dispatch.StatusCode 300)}}
-              <span class="tag is-success is-light is-small">{{.Dispatch.StatusCode}} OK</span>
-              {{else if gt .Dispatch.StatusCode 0}}
-              <span class="tag is-danger is-light is-small">{{.Dispatch.StatusCode}}</span>
+              {{if eq .Role "dispatched"}}
+                <span class="tag is-success is-light" title="{{.Dispatch.ConsumerName}} {{.Dispatch.URL}}">{{.Dispatch.StatusCode}}{{if .Dispatch.ConsumerName}} · {{.Dispatch.ConsumerName}}{{end}}</span>
               {{else}}
-              <span class="has-text-grey">—</span>
+                <span class="tag is-danger is-light" title="{{.Dispatch.Error}}">{{if .Dispatch.StatusCode}}{{.Dispatch.StatusCode}}{{else}}error{{end}}</span>
               {{end}}
-              {{if .Dispatch.Error}}<div class="is-size-7 has-text-danger mt-1">{{.Dispatch.Error}}</div>{{end}}
             {{else}}
               <span class="has-text-grey">—</span>
             {{end}}
           </td>
+          <td class="is-family-monospace is-size-7" style="word-break:break-all;">{{if .Digest}}{{.Digest}}{{else}}—{{end}}</td>
         </tr>
         {{end}}
       </tbody>

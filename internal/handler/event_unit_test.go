@@ -217,14 +217,13 @@ func TestValStr_JSONStringNormalized(t *testing.T) {
 	}
 }
 
-// idrac-only edits go through addIdracSettings(upsert: true) with the new
-// values nested in variables["idracInput"][0]. The before-snapshot is the
-// Server (resourceType == "Server") with idracSettings nested. The Server
-// top-level fields are unchanged — the diff must surface ONLY the idrac
-// field that changed, prefixed with "idrac:". Regression: idrac-only path
-// did not produce a diff because the proxy's before-fetch step gated on an
-// opName allowlist. The fix derives the resource type generically and uses
-// beforeFetchOverrides only for the nested-iDRAC exception. See graphql.go.
+// idrac-only edits go through updateIdracSettings keyed by orbId. The
+// before-snapshot is the Server (resourceType == "Server") with idracSettings
+// nested. The Server top-level fields are unchanged — the diff must surface
+// ONLY the idrac field that changed, prefixed with "idrac:". The signal that
+// iDRAC was touched is variables["idracOrbId"] (the dispatch passes the
+// iDRAC's orbId here for both UpdateServerAndIdrac and UpdateIdracSettings).
+// Field-level after-values are top-level variables (not nested in idracInput).
 func TestBuildDiffHTML_IdracOnlyChange(t *testing.T) {
 	before := map[string]any{
 		"hostname": "srv-a",
@@ -234,12 +233,9 @@ func TestBuildDiffHTML_IdracOnlyChange(t *testing.T) {
 		},
 	}
 	variables := map[string]any{
-		"idracInput": []any{
-			map[string]any{
-				"firmwareVersion": "7.10.90.00",
-				"sshEnabled":      true,
-			},
-		},
+		"idracOrbId":      "colo:3RK3V64-idrac",
+		"firmwareVersion": "7.10.90.00",
+		"sshEnabled":      true,
 	}
 	got := string(buildDiffHTML(before, variables))
 	if got == "" {

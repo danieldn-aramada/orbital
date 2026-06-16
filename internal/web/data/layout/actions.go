@@ -4,25 +4,23 @@ package layout
 // Templates check these flags to conditionally render buttons and tabs.
 // Orbital sets all applicable flags true; orb is read-only and only sets Reload.
 type PageActions struct {
-	Create           bool // "New…" buttons on list pages
-	Edit             bool // edit existing records via JSON modal
-	Delete           bool // delete records
-	Reload           bool // reload / refresh data
-	ShowAuditTab     bool // Audit Log tab on DC and server detail pages
-	ShowDivergenceTab bool // Divergence Reports tab on DC detail page (orbital-side reports)
+	Create       bool // "New…" buttons on list pages
+	Edit         bool // edit existing records via JSON modal
+	Delete       bool // delete records
+	Reload       bool // reload / refresh data
+	ShowAuditTab bool // Audit Log tab on DC and server detail pages
 }
 
 // OrbitalActions returns PageActions for orbital pages scoped to the caller's
-// mutation capability. Read-only users get Reload and the audit/divergence tabs
-// but no Create, Edit, or Delete controls.
+// mutation capability. Read-only users get Reload and the audit tab but no
+// Create, Edit, or Delete controls.
 func OrbitalActions(canMutate bool) PageActions {
 	return PageActions{
-		Create:            canMutate,
-		Edit:              canMutate,
-		Delete:            canMutate,
-		Reload:            true,
-		ShowAuditTab:      true,
-		ShowDivergenceTab: true,
+		Create:       canMutate,
+		Edit:         canMutate,
+		Delete:       canMutate,
+		Reload:       true,
+		ShowAuditTab: true,
 	}
 }
 

@@ -18,11 +18,6 @@ type DivergenceRow struct {
 	ResolutionAction string // "accept" | "reject" | "ignore" | ""
 	ResolutionActor  string
 	DecidedAt        string
-	// Propagated is true when the divergence ingester has observed loop
-	// closure (the entry stopped appearing in orb snapshots, so the
-	// resolution's `propagated_at` was set). Drives UI affordance for "this
-	// decision has actually been seen at the edge."
-	Propagated bool
 	// Stale is true when orbital's current DGraph version for the target
 	// ConfigItem differs from the row's `intended_at_version` captured at
 	// ingest. Means intent has moved since the report was made — the
@@ -45,9 +40,12 @@ type DivergenceGroup struct {
 
 type DivergenceReports struct {
 	layout.Base
-	PageTitle  string
-	Groups     []DivergenceGroup
-	CanResolve bool
+	PageTitle      string
+	Groups         []DivergenceGroup
+	CanResolve     bool
+	BackupEnabled  bool // true when ORBITAL_S3_BUCKET et al are set
+	S3Endpoint     string
+	S3Bucket       string
 }
 
 type AuditLog struct {

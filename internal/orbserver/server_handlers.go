@@ -217,7 +217,7 @@ func (s *Server) srvTab(c echo.Context) error {
 	}
 
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return tmpl.Execute(c.Response().Writer, srv)
+	return tmpl.Execute(c.Response(), srv)
 }
 
 // dgraphQuery sends a GraphQL query to orb's local DGraph.

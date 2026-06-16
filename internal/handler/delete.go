@@ -80,7 +80,7 @@ func (h *DeleteHandler) Preview(c echo.Context) error {
 	}
 	tmpl := h.previewTmpl
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return tmpl.Execute(c.Response().Writer, preview)
+	return tmpl.Execute(c.Response(), preview)
 }
 
 // Execute performs the cascade delete for the given config item.

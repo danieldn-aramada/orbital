@@ -9,9 +9,22 @@
 
       {{if .HasData}}
 
-      <p class="has-text-grey mb-5" style="font-size: 0.875rem;">
+      <p class="has-text-grey mb-3" style="font-size: 0.875rem;">
         Edge service status for data center <strong>{{.DCName}}</strong>.
       </p>
+
+      {{if .AvailableVersion}}
+      <div class="notification is-info is-light mb-4" style="max-width: 620px;">
+        <span class="icon-text">
+          <span class="icon has-text-info"><i class="fa-solid fa-circle-up"></i></span>
+          <span>New version available: <strong>{{.AvailableVersion}}</strong></span>
+        </span>
+        <a class="button is-info is-small ml-4" href="/import">
+          <span class="icon"><i class="fa-solid fa-upload"></i></span>
+          <span>Go to Import</span>
+        </a>
+      </div>
+      {{end}}
 
       <div class="columns is-multiline" style="max-width: 620px;" id="status-panel">
         <div class="column is-half">
@@ -48,19 +61,6 @@
         </div>
       </div>
 
-      {{if .AvailableVersion}}
-      <div class="notification is-info is-light mt-2" style="max-width: 620px;">
-        <span class="icon-text">
-          <span class="icon has-text-info"><i class="fa-solid fa-circle-up"></i></span>
-          <span>New version available: <strong>{{.AvailableVersion}}</strong></span>
-        </span>
-        <button class="button is-info is-small ml-4" onclick="handleOrbImport('{{.AvailableVersion}}')">
-          <span class="icon"><i class="fa-solid fa-download"></i></span>
-          <span>Import now</span>
-        </button>
-      </div>
-      {{end}}
-
       {{else}}
 
       <div class="notification is-light mt-4" style="max-width: 560px;">
@@ -72,15 +72,6 @@
       </div>
 
       {{end}}
-
-      <div id="orb-import-status-box" style="display:none; max-width: 620px;" class="mt-4">
-        <article id="orb-import-status-article" class="message is-info">
-          <div class="message-body" style="font-size: 0.875rem;">
-            <span id="orb-import-status-icon" class="icon"><i class="fa-solid fa-spinner fa-spin"></i></span>
-            <span id="orb-import-status-text">Starting import…</span>
-          </div>
-        </article>
-      </div>
 
     </div>
   </main>

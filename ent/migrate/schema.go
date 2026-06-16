@@ -83,7 +83,6 @@ var (
 		{Name: "action", Type: field.TypeEnum, Enums: []string{"accept", "reject", "ignore"}},
 		{Name: "actor", Type: field.TypeString},
 		{Name: "decided_at", Type: field.TypeTime},
-		{Name: "propagated_at", Type: field.TypeTime, Nullable: true},
 	}
 	// DivergenceResolutionsTable holds the schema information for the "divergence_resolutions" table.
 	DivergenceResolutionsTable = &schema.Table{
@@ -95,11 +94,6 @@ var (
 				Name:    "divergenceresolution_entry_orb_id_field",
 				Unique:  true,
 				Columns: []*schema.Column{DivergenceResolutionsColumns[5], DivergenceResolutionsColumns[6]},
-			},
-			{
-				Name:    "divergenceresolution_action_propagated_at",
-				Unique:  false,
-				Columns: []*schema.Column{DivergenceResolutionsColumns[7], DivergenceResolutionsColumns[10]},
 			},
 		},
 	}

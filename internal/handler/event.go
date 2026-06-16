@@ -190,7 +190,7 @@ func (h *EventHandler) List(c echo.Context) error {
 	if c.Request().Header.Get("HX-Request") == "true" {
 		tmpl := h.fragment
 		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-		return tmpl.Execute(c.Response().Writer, eventsFragmentData{Items: items, Total: total})
+		return tmpl.Execute(c.Response(), eventsFragmentData{Items: items, Total: total})
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{
@@ -298,20 +298,22 @@ func buildDiffHTML(before, variables map[string]any) template.HTML {
 	}
 
 	// iDRAC diff — data-driven, not gated on resourceType. Fires whenever the
-	// before-snapshot includes idracSettings AND the mutation included idracInput,
-	// regardless of whether the audit's recorded resourceType is "Server"
-	// (compound UpdateServerAndIdrac) or "IdracSettings" (idrac-only edit).
+	// before-snapshot includes idracSettings AND the mutation touched iDRAC.
+	// Touched signal: variables["idracOrbId"] is set by the UpdateServerAndIdrac
+	// / UpdateIdracSettings dispatch path. Each iDRAC field is read as a
+	// top-level variable (no nested idracInput array since the switch to
+	// updateIdracSettings).
 	{
 		beforeIdrac, hasBefore := before["idracSettings"].(map[string]any)
-		afterIdracArr, _ := variables["idracInput"].([]any)
-		if hasBefore && len(afterIdracArr) > 0 {
-			afterIdrac, _ := afterIdracArr[0].(map[string]any)
+		_, idracTouched := variables["idracOrbId"]
+		if hasBefore && idracTouched {
 			for _, field := range []string{
 				"firmwareVersion", "sshEnabled", "ipmiEnabled", "lockdownModeEnabled",
 				"osToIdracPassThroughEnabled", "usbManagementPortEnabled", "dhcpEnabled", "racadmEnabled",
 			} {
-				beforeStr := valStr(beforeIdrac[field], afterIdrac[field])
-				afterStr := valStr(afterIdrac[field], afterIdrac[field])
+				afterVal := variables[field]
+				beforeStr := valStr(beforeIdrac[field], afterVal)
+				afterStr := valStr(afterVal, afterVal)
 				if beforeStr == afterStr {
 					continue
 				}

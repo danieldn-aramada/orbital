@@ -74,11 +74,6 @@
             <li data-panel="dc-panel-racks-{{.ID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-table-cells"></i></span><span>Racks</span></a>
             </li>
-            {{if .Actions.ShowDivergenceTab}}
-            <li data-panel="dc-panel-divergence-{{.ID}}">
-              <a><span class="icon is-small"><i class="fa-solid fa-triangle-exclamation"></i></span><span>Divergence Reports</span></a>
-            </li>
-            {{end}}
             {{if .Actions.ShowAuditTab}}
             <li data-panel="dc-panel-audit-{{.ID}}" data-orb-id="{{.OrbID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a>
@@ -151,10 +146,6 @@
           {{else}}
           <p class="is-size-7 has-text-grey p-2">No racks discovered yet.</p>
           {{end}}
-        </div>
-
-        <div id="dc-panel-divergence-{{.ID}}" style="display:none">
-          <p class="is-size-7 has-text-grey p-2">No divergence reports.</p>
         </div>
 
         <div id="dc-panel-audit-{{.ID}}" style="display:none"></div>

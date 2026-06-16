@@ -35,9 +35,7 @@ type DivergenceResolution struct {
 	// Actor holds the value of the "actor" field.
 	Actor string `json:"actor,omitempty"`
 	// DecidedAt holds the value of the "decided_at" field.
-	DecidedAt time.Time `json:"decided_at,omitempty"`
-	// PropagatedAt holds the value of the "propagated_at" field.
-	PropagatedAt *time.Time `json:"propagated_at,omitempty"`
+	DecidedAt    time.Time `json:"decided_at,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -48,7 +46,7 @@ func (*DivergenceResolution) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case divergenceresolution.FieldCreatedBy, divergenceresolution.FieldUpdatedBy, divergenceresolution.FieldEntryOrbID, divergenceresolution.FieldField, divergenceresolution.FieldAction, divergenceresolution.FieldActor:
 			values[i] = new(sql.NullString)
-		case divergenceresolution.FieldCreatedAt, divergenceresolution.FieldUpdatedAt, divergenceresolution.FieldDecidedAt, divergenceresolution.FieldPropagatedAt:
+		case divergenceresolution.FieldCreatedAt, divergenceresolution.FieldUpdatedAt, divergenceresolution.FieldDecidedAt:
 			values[i] = new(sql.NullTime)
 		case divergenceresolution.FieldID:
 			values[i] = new(uuid.UUID)
@@ -128,13 +126,6 @@ func (_m *DivergenceResolution) assignValues(columns []string, values []any) err
 			} else if value.Valid {
 				_m.DecidedAt = value.Time
 			}
-		case divergenceresolution.FieldPropagatedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field propagated_at", values[i])
-			} else if value.Valid {
-				_m.PropagatedAt = new(time.Time)
-				*_m.PropagatedAt = value.Time
-			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -199,11 +190,6 @@ func (_m *DivergenceResolution) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("decided_at=")
 	builder.WriteString(_m.DecidedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	if v := _m.PropagatedAt; v != nil {
-		builder.WriteString("propagated_at=")
-		builder.WriteString(v.Format(time.ANSIC))
-	}
 	builder.WriteByte(')')
 	return builder.String()
 }

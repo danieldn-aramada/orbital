@@ -172,27 +172,24 @@ func (i *Ingester) applySnapshot(ctx context.Context, dc dcRef, publishedAt time
 	}
 
 	deleted := 0
-	now := time.Now().UTC()
 	for _, e := range stale {
 		if !present[e.EntryOrbID+"|"+e.Field] {
-			// Loop closure: orb stopped reporting this divergence, which means
-			// (a) the value matches intent now, AND (b) cb-controller no longer
-			// has `local:*` as a co-manager on this field. If a resolution
-			// exists, mark it propagated BEFORE deleting the entry — the
-			// resolution itself stays for audit history, but its lifecycle
-			// transitions to "propagated as of now."
-			if _, err := i.db.DivergenceResolution.Update().
+			// Loop closure: orb stopped reporting this divergence. Delete the
+			// entry AND any attached resolution — the resolution row is bound
+			// 1:1 with the active entry, never outlives it. Audit of the
+			// decision lives in the Event log. If local admin later re-applies
+			// the same override, orb reports a fresh divergence; the operator
+			// re-decides from a clean slate.
+			if _, err := i.db.DivergenceResolution.Delete().
 				Where(
 					divergenceresolution.EntryOrbID(e.EntryOrbID),
 					divergenceresolution.Field(e.Field),
-					divergenceresolution.PropagatedAtIsNil(),
 				).
-				SetPropagatedAt(now).
-				Save(ctx); err != nil {
-				i.logger.Warn("divergence ingester: mark resolution propagated failed",
+				Exec(ctx); err != nil {
+				i.logger.Warn("divergence ingester: delete resolution failed",
 					"dc", dc.id, "orbId", e.EntryOrbID, "field", e.Field, "err", err)
-				// Continue with delete — propagated_at being stale is recoverable;
-				// orphaning entries is not.
+				// Continue with entry delete — orphaning the entry is worse
+				// than a stale resolution row, which can be cleaned up later.
 			}
 			if err := i.db.DivergenceEntry.DeleteOne(e).Exec(ctx); err != nil {
 				i.logger.Warn("divergence ingester: delete stale entry failed",
@@ -204,7 +201,7 @@ func (i *Ingester) applySnapshot(ctx context.Context, dc dcRef, publishedAt time
 	}
 	if deleted > 0 {
 		i.logger.Info("divergence ingester: closed loop on resolved entries",
-			"dc", dc.id, "deleted", deleted, "propagatedAt", now)
+			"dc", dc.id, "deleted", deleted)
 	}
 	return nil
 }

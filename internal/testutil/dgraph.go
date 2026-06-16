@@ -145,6 +145,7 @@ func SeedMinimalE(graphqlURL string) (namespaceID, dcOrbID string, err error) {
 			orbId:     "test-dc"
 			name:      "Test DC"
 			namespace: "test-namespace"
+			version:   1
 		}]) {
 			dataCenter { id }
 		}

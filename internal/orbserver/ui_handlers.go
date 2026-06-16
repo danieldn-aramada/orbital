@@ -116,7 +116,7 @@ func (s *Server) render(c echo.Context, name string, data any) error {
 		return echo.ErrNotFound
 	}
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.ExecuteTemplate(c.Response().Writer, "base.gohtml", data); err != nil {
+	if err := tmpl.ExecuteTemplate(c.Response(), "base.gohtml", data); err != nil {
 		s.logger.Error("template render failed", "name", name, "err", err)
 		return err
 	}
@@ -137,7 +137,7 @@ func (s *Server) renderFragment(c echo.Context, page, fragment string, data any)
 		return echo.ErrNotFound
 	}
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return tmpl.ExecuteTemplate(c.Response().Writer, fragment, data)
+	return tmpl.ExecuteTemplate(c.Response(), fragment, data)
 }
 
 func (s *Server) statusPage(c echo.Context) error {

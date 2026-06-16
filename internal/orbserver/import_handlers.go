@@ -123,6 +123,8 @@ func (s *Server) triggerImport(c echo.Context) error {
 					MediaType: dr.MediaType,
 					Role:      role,
 					Producer:  producerFor(dr.MediaType),
+					SizeBytes: artifact.LayerSizes[dr.MediaType],
+					Digest:    artifact.LayerDigests[dr.MediaType],
 					Dispatch:  &dr,
 				})
 			}
@@ -184,7 +186,7 @@ func (s *Server) importTags(c echo.Context) error {
 		s.logger.Warn("list tags failed", "err", err)
 		if c.Request().Header.Get("HX-Request") == "true" {
 			c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-			_, err = c.Response().Writer.Write([]byte(`<tr><td colspan="5" class="has-text-grey">No versions available.</td></tr>`))
+			_, err = c.Response().Write([]byte(`<tr><td colspan="5" class="has-text-grey">No versions available.</td></tr>`))
 			return err
 		}
 		return c.JSON(http.StatusOK, map[string][]tagInfo{"tags": {}})
@@ -224,7 +226,7 @@ func (s *Server) importTags(c echo.Context) error {
 			return fmt.Errorf("parse orb tags fragment: %w", err)
 		}
 		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-		return tmpl.Execute(c.Response().Writer, rows)
+		return tmpl.Execute(c.Response(), rows)
 	}
 
 	// JSON path uses the same descending-version order as the HTMX rows so
@@ -314,7 +316,7 @@ func (s *Server) importHistoryLayers(c echo.Context) error {
 		Layers: reversed,
 	}
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return tmpl.ExecuteTemplate(c.Response().Writer, "layers-modal", viewModel)
+	return tmpl.ExecuteTemplate(c.Response(), "layers-modal", viewModel)
 }
 
 // newImportID generates a random UUID-format string for import correlation.

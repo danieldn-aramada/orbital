@@ -34,7 +34,13 @@
 <link rel="stylesheet" href="{{.BasePath}}/static/css/main.css?v={{.Version}}">
 <link rel="stylesheet" href="{{.BasePath}}/static/css/modal-fx.css">
 
-<script type="module" src="{{.BasePath}}/static/shared.js?v={{.Version}}"></script>
+{{/* shared.js is NOT loaded directly — orbital.js / orb.js import it as a
+     module. Loading it explicitly here AND letting the app modules import
+     `./shared.js` causes the browser to fetch it twice (different URLs: with
+     and without the `?v=` query) and run all its top-level side-effects
+     twice: doubled event listeners, doubled module-level Maps/Sets, every
+     handler fires twice. See past bug: post-edit-submit tab restoration broke
+     because two afterSwap handlers raced on different copies of state. */}}
 {{if eq .UI.AppName "Orbital"}}
 <script type="module" src="{{.BasePath}}/static/orbital.js?v={{.Version}}"></script>
 {{else}}

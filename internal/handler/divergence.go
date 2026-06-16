@@ -54,11 +54,10 @@ type entryItem struct {
 }
 
 type resolutionItem struct {
-	ID           string  `json:"id"`
-	Action       string  `json:"action"` // "accept" | "reject" | "ignore"
-	Actor        string  `json:"actor"`
-	DecidedAt    string  `json:"decidedAt"`
-	PropagatedAt *string `json:"propagatedAt,omitempty"` // RFC3339; null until ingester sweeps the entry
+	ID        string `json:"id"`
+	Action    string `json:"action"` // "accept" | "reject" | "ignore"
+	Actor     string `json:"actor"`
+	DecidedAt string `json:"decidedAt"`
 }
 
 // List handles GET /api/v1/divergences.
@@ -67,12 +66,11 @@ type resolutionItem struct {
 // Filterable by query params:
 //
 //	?action=accept&action=reject   resolution action — repeatable for OR. Entries without a resolution are excluded when this filter is set.
-//	?propagated=true | false       resolution.propagatedAt presence — only meaningful with action= filter.
 //	?dc=colo:colo-galleon          dc_orb_id exact match.
 //
 // Two canonical query shapes for the deployment layer:
-//   - "actionable now": ?action=accept&action=reject&propagated=false
-//   - "disengaged":     ?action=ignore
+//   - "force takeover":  ?action=accept&action=reject  → spec.takeover[]
+//   - "disengaged":      ?action=ignore                 → spec omissions
 //
 // UI feed (the divergence-reports page) calls with no params and groups
 // client-side by dc_orb_id.
@@ -81,7 +79,6 @@ type resolutionItem struct {
 // @Tags     divergence
 // @Produce  json
 // @Param    action      query []string false "Filter by resolution action; repeatable for OR" Enums(accept,reject,ignore)
-// @Param    propagated  query bool     false "Filter by resolution.propagatedAt presence"
 // @Param    dc          query string   false "Filter by dc_orb_id"
 // @Success  200 {array} entryItem
 // @Router   /api/v1/divergences [get]
@@ -89,7 +86,6 @@ func (h *DivergenceHandler) List(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	actions := c.QueryParams()["action"]
-	propagatedStr := c.QueryParam("propagated")
 	dcFilter := c.QueryParam("dc")
 
 	entryQuery := h.db.DivergenceEntry.Query().Order(ent.Desc(divergenceentry.FieldLastSeenAt))
@@ -111,19 +107,6 @@ func (h *DivergenceHandler) List(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("bad action filter: %v", perr))
 		}
 		wantAction[parsed] = true
-	}
-	var wantPropagated *bool
-	if propagatedStr != "" {
-		switch propagatedStr {
-		case "true":
-			t := true
-			wantPropagated = &t
-		case "false":
-			f := false
-			wantPropagated = &f
-		default:
-			return echo.NewHTTPError(http.StatusBadRequest, "propagated must be 'true' or 'false'")
-		}
 	}
 
 	out := make([]entryItem, 0, len(entries))
@@ -147,11 +130,10 @@ func (h *DivergenceHandler) List(c echo.Context) error {
 			Only(ctx)
 		if err == nil {
 			item.Resolution = &resolutionItem{
-				ID:           res.ID.String(),
-				Action:       string(res.Action),
-				Actor:        res.Actor,
-				DecidedAt:    res.DecidedAt.UTC().Format(time.RFC3339),
-				PropagatedAt: formatNullableTime(res.PropagatedAt),
+				ID:        res.ID.String(),
+				Action:    string(res.Action),
+				Actor:     res.Actor,
+				DecidedAt: res.DecidedAt.UTC().Format(time.RFC3339),
 			}
 		} else if !ent.IsNotFound(err) {
 			h.logger.Warn("query resolution failed", "orbId", e.EntryOrbID, "field", e.Field, "err", err)
@@ -163,16 +145,6 @@ func (h *DivergenceHandler) List(c echo.Context) error {
 				continue
 			}
 			if !wantAction[divergenceresolution.Action(item.Resolution.Action)] {
-				continue
-			}
-		}
-		// Propagated filter requires a resolution (only meaningful with action).
-		if wantPropagated != nil {
-			if item.Resolution == nil {
-				continue
-			}
-			isPropagated := item.Resolution.PropagatedAt != nil
-			if isPropagated != *wantPropagated {
 				continue
 			}
 		}
@@ -223,11 +195,10 @@ func (h *DivergenceHandler) Get(c echo.Context) error {
 		Only(ctx)
 	if err == nil {
 		item.Resolution = &resolutionItem{
-			ID:           res.ID.String(),
-			Action:       string(res.Action),
-			Actor:        res.Actor,
-			DecidedAt:    res.DecidedAt.UTC().Format(time.RFC3339),
-			PropagatedAt: formatNullableTime(res.PropagatedAt),
+			ID:        res.ID.String(),
+			Action:    string(res.Action),
+			Actor:     res.Actor,
+			DecidedAt: res.DecidedAt.UTC().Format(time.RFC3339),
 		}
 	} else if !ent.IsNotFound(err) {
 		h.logger.Warn("query resolution failed", "orbId", entry.EntryOrbID, "field", entry.Field, "err", err)
@@ -361,22 +332,11 @@ func (h *DivergenceHandler) applyResolution(ctx context.Context, id uuid.UUID, a
 	)
 
 	return &resolutionItem{
-		ID:           res.ID.String(),
-		Action:       string(res.Action),
-		Actor:        res.Actor,
-		DecidedAt:    res.DecidedAt.UTC().Format(time.RFC3339),
-		PropagatedAt: formatNullableTime(res.PropagatedAt),
+		ID:        res.ID.String(),
+		Action:    string(res.Action),
+		Actor:     res.Actor,
+		DecidedAt: res.DecidedAt.UTC().Format(time.RFC3339),
 	}, nil
-}
-
-// formatNullableTime returns nil for nil input, or a pointer to an RFC3339
-// string for non-nil. Used for the propagated_at column which is nullable.
-func formatNullableTime(t *time.Time) *string {
-	if t == nil {
-		return nil
-	}
-	s := t.UTC().Format(time.RFC3339)
-	return &s
 }
 
 // currentValueMatches asks DGraph for the current value of one field on a
@@ -667,90 +627,6 @@ func (h *DivergenceHandler) DeleteResolution(c echo.Context) error {
 		return fmt.Errorf("delete resolution: %w", err)
 	}
 	return c.NoContent(http.StatusNoContent)
-}
-
-// patchResolutionBody is the JSON body for PATCH /api/v1/divergences/:id/resolution.
-type patchResolutionBody struct {
-	// PropagatedAt: RFC3339 timestamp, or the literal "now" for server-side
-	// time. Operator-recovery only — normal propagation is observed by the
-	// ingester when orb stops reporting the field. Setting this manually is
-	// for stuck rows that the ingester can't observe (orb down, snapshot
-	// pipeline broken).
-	PropagatedAt string `json:"propagatedAt"`
-}
-
-// PatchResolution handles PATCH /api/v1/divergences/:id/resolution.
-//
-// Partial update of a resolution. Currently exposes only the `propagatedAt`
-// field for operator-recovery purposes. Other resolution fields (action,
-// actor, decidedAt) are immutable through this endpoint — use PUT to record
-// a new decision.
-//
-// @Summary  Patch a divergence resolution (operator recovery only)
-// @Tags     divergence
-// @Accept   json
-// @Produce  json
-// @Param    id   path string              true "Divergence entry UUID"
-// @Param    body body patchResolutionBody true "Fields to update"
-// @Success  200  {object} resolutionItem
-// @Failure  400  {object} map[string]string
-// @Failure  404  {object} map[string]string
-// @Router   /api/v1/divergences/{id}/resolution [patch]
-func (h *DivergenceHandler) PatchResolution(c echo.Context) error {
-	ctx := c.Request().Context()
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
-	}
-	var body patchResolutionBody
-	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid body: "+err.Error())
-	}
-	if body.PropagatedAt == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "propagatedAt required (RFC3339 timestamp or 'now')")
-	}
-
-	var propagatedAt time.Time
-	if body.PropagatedAt == "now" {
-		propagatedAt = time.Now().UTC()
-	} else {
-		t, perr := time.Parse(time.RFC3339, body.PropagatedAt)
-		if perr != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, "propagatedAt must be RFC3339 or 'now'")
-		}
-		propagatedAt = t.UTC()
-	}
-
-	entry, err := h.db.DivergenceEntry.Get(ctx, id)
-	if ent.IsNotFound(err) {
-		return echo.NewHTTPError(http.StatusNotFound, "divergence not found")
-	}
-	if err != nil {
-		return fmt.Errorf("get entry: %w", err)
-	}
-	res, err := h.db.DivergenceResolution.Query().
-		Where(
-			divergenceresolution.EntryOrbID(entry.EntryOrbID),
-			divergenceresolution.Field(entry.Field),
-		).
-		Only(ctx)
-	if ent.IsNotFound(err) {
-		return echo.NewHTTPError(http.StatusNotFound, "resolution not found")
-	}
-	if err != nil {
-		return fmt.Errorf("query resolution: %w", err)
-	}
-	res, err = res.Update().SetPropagatedAt(propagatedAt).Save(ctx)
-	if err != nil {
-		return fmt.Errorf("patch resolution: %w", err)
-	}
-	return c.JSON(http.StatusOK, resolutionItem{
-		ID:           res.ID.String(),
-		Action:       string(res.Action),
-		Actor:        res.Actor,
-		DecidedAt:    res.DecidedAt.UTC().Format(time.RFC3339),
-		PropagatedAt: formatNullableTime(res.PropagatedAt),
-	})
 }
 
 // parseAction maps an external action string to the typed enum value.

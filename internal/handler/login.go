@@ -30,7 +30,7 @@ func NewLogin(db *ent.Client, sessionKeys auth.SessionKeys, formTmpl *template.T
 func (h *Login) renderForm(c echo.Context, errMsg string) error {
 	csrfToken, _ := c.Get("csrf_token").(string)
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return h.formTmpl.ExecuteTemplate(c.Response().Writer, "login-form.gohtml", fragment.LoginForm{
+	return h.formTmpl.ExecuteTemplate(c.Response(), "login-form.gohtml", fragment.LoginForm{
 		CsrfToken: csrfToken,
 		ErrorMsg:  errMsg,
 		BasePath:  h.basePath,
@@ -64,7 +64,7 @@ func (h *Login) Post(c echo.Context) error {
 		return h.renderForm(c, "Invalid email or password.")
 	}
 
-	if err := auth.SetUserSession(h.sessionKeys, c.Request(), c.Response().Writer, u.ID, u.Name, u.Email, string(u.Role)); err != nil {
+	if err := auth.SetUserSession(h.sessionKeys, c.Request(), c.Response(), u.ID, u.Name, u.Email, string(u.Role)); err != nil {
 		return fmt.Errorf("set session: %w", err)
 	}
 
@@ -82,7 +82,7 @@ func (h *Login) Logout(c echo.Context) error {
 	if !auth.ValidateCSRF(h.sessionKeys, c.Request(), csrf) {
 		return c.Redirect(http.StatusSeeOther, h.basePath+"/")
 	}
-	if err := auth.ClearSession(h.sessionKeys, c.Request(), c.Response().Writer); err != nil {
+	if err := auth.ClearSession(h.sessionKeys, c.Request(), c.Response()); err != nil {
 		return fmt.Errorf("clear session: %w", err)
 	}
 	h.writeAuthAudit("logout", actor, map[string]any{"user_agent": ua})

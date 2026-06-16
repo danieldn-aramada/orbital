@@ -19,6 +19,8 @@ type divergencePageData struct {
 	Entries      []divergence.OverrideEntry
 	LastPublish  *divergence.PublishRecord
 	S3Configured bool
+	S3Endpoint   string
+	S3Bucket     string
 }
 
 func (s *Server) divergencePage(c echo.Context) error {
@@ -30,6 +32,8 @@ func (s *Server) divergencePage(c echo.Context) error {
 		Entries:      entries,
 		LastPublish:  rec,
 		S3Configured: s.divPublisher != nil,
+		S3Endpoint:   s.cfg.S3Endpoint,
+		S3Bucket:     s.cfg.S3Bucket,
 	}
 	// HX-Request callers (the Refresh button) get just the table fragment.
 	if c.Request().Header.Get("HX-Request") == "true" {
@@ -149,7 +153,7 @@ func (s *Server) getDivergence(c echo.Context) error {
 // POST /api/v1/divergence/publish — aggregates pending entries into a snapshot and writes to S3.
 func (s *Server) publishDivergence(c echo.Context) error {
 	if s.divPublisher == nil {
-		return echo.NewHTTPError(http.StatusServiceUnavailable, "S3 not configured")
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "Object store not configured")
 	}
 	entries, err := s.divStore.Load()
 	if err != nil {
@@ -186,7 +190,7 @@ func (s *Server) publishDivergence(c echo.Context) error {
 // publish surfaces consistently.
 func (s *Server) testDivergenceConnection(c echo.Context) error {
 	if s.divPublisher == nil {
-		return echo.NewHTTPError(http.StatusServiceUnavailable, "S3 not configured")
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "Object store not configured")
 	}
 	ctx, cancel := context.WithTimeout(c.Request().Context(), 10*time.Second)
 	defer cancel()

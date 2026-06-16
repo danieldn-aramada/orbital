@@ -116,7 +116,23 @@ Any producer that can answer "what fields am I watching, what's their intended v
 3. **Translate to orbital-native.** If the producer's native vocabulary differs from orbital's (e.g. K8s field paths vs orbital orbIds), the producer carries the translation table. cb-bundler ships a mapping inside the OCI bundle that cb-controller uses for this purpose; other producers can use any mechanism.
 4. **POST the full current set** on whatever cadence makes sense.
 
-The first producer (cb-controller) is documented in `docs/plans/divergence-cb-controller-contract.md`. That doc covers configbundle-specific concerns (the bundle's mapping layer, walking `managedFields`, takeover-apply semantics) — none of which are part of this API.
+The first producer (cb-controller) lives in the configbundle repo and handles its own configbundle-specific concerns (the bundle's mapping layer, walking `managedFields`, takeover-apply semantics) — none of which are part of this API.
+
+## Recovery semantics — what producers MUST handle
+
+The intake is **replace-not-merge**: each POST overwrites orb's stored set verbatim. A POST with `{Overrides: []}` wipes the store. This is the contract — producers MUST NOT POST an empty set unless they actually mean "no divergences exist."
+
+Two failure modes producers need to defend against, both observed live with cb-controller:
+
+1. **Producer-side state loss** (e.g. controller restart). If the producer's intent baseline lives only in memory, a restart loses it. Subsequent runs of `computeOverrides()` produce empty results — not because there are no divergences, but because the producer can't compute them. Posting that empty set wipes orb.
+
+   **Mitigation:** persist the intent baseline durably (cb-controller stores `last-applied-spec.yaml` in the per-CR ConfigMap and rehydrates on startup). When intent is unknown, **skip the POST entirely** rather than posting empty.
+
+2. **Consumer-side state loss** (orb wipe / fresh edge deploy). orb has no signal back to the producer. The producer's dedup cache ("I already posted this set") prevents re-emission. orb stays empty forever until the next intent change.
+
+   **Mitigation:** producers should re-post on a heartbeat (cb-controller's reporter ticks every 5min by default, clearing its dedup cache and re-running the comparison). Bounds recovery latency to one interval. Trades a small amount of redundant traffic for self-healing.
+
+These are producer concerns — the intake API itself stays stateless and replace-not-merge. A producer that doesn't implement either guard will degrade silently when the failure mode hits.
 
 ## Why this contract has no producer-specific concepts
 

@@ -12,8 +12,7 @@
   <td class="is-nowrap">
     {{if .HasLayers}}
       <div class="is-flex is-align-items-center" style="gap:0.25rem;">
-        <span class="tag is-light is-small">{{.OrbitalLayers}} dgraph</span>
-        {{if gt .BundlerLayers 0}}<span class="tag is-info is-light is-small">{{.BundlerLayers}} bundler</span>{{end}}
+        <span class="tag is-light is-small">{{len .LayerRows}}</span>
         <button class="button is-small is-white" title="View layers"
           hx-get="{{.BasePath}}/api/v1/oci/artifacts/{{.ID}}/layers"
           hx-target="#layers-modal-body"

@@ -63,7 +63,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 			c.Set("user_email", u.Email)
 			c.Set("is_authn", err == nil && u.ID > 0)
 			c.Set("can_mutate", u.ID > 0 && handler.RoleAtLeast(user.Role(u.Role), user.RoleDev))
-			csrfToken, _ := auth.GetOrCreateCSRF(cfg.SessionKeys(), c.Request(), c.Response().Writer)
+			csrfToken, _ := auth.GetOrCreateCSRF(cfg.SessionKeys(), c.Request(), c.Response())
 			c.Set("csrf_token", csrfToken)
 			return next(c)
 		}
@@ -321,7 +321,6 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		api.DELETE("/divergences/:id", dh.Dismiss)
 		api.PUT("/divergences/:id/resolution", dh.PutResolution)
 		api.DELETE("/divergences/:id/resolution", dh.DeleteResolution)
-		api.PATCH("/divergences/:id/resolution", dh.PatchResolution)
 	}
 
 	gqlGroup.Any("/graphql", gql.Handle)

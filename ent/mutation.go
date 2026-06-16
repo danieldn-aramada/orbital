@@ -2789,7 +2789,6 @@ type DivergenceResolutionMutation struct {
 	action        *divergenceresolution.Action
 	actor         *string
 	decided_at    *time.Time
-	propagated_at *time.Time
 	clearedFields map[string]struct{}
 	done          bool
 	oldValue      func(context.Context) (*DivergenceResolution, error)
@@ -3263,55 +3262,6 @@ func (m *DivergenceResolutionMutation) ResetDecidedAt() {
 	m.decided_at = nil
 }
 
-// SetPropagatedAt sets the "propagated_at" field.
-func (m *DivergenceResolutionMutation) SetPropagatedAt(t time.Time) {
-	m.propagated_at = &t
-}
-
-// PropagatedAt returns the value of the "propagated_at" field in the mutation.
-func (m *DivergenceResolutionMutation) PropagatedAt() (r time.Time, exists bool) {
-	v := m.propagated_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldPropagatedAt returns the old "propagated_at" field's value of the DivergenceResolution entity.
-// If the DivergenceResolution object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *DivergenceResolutionMutation) OldPropagatedAt(ctx context.Context) (v *time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldPropagatedAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldPropagatedAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldPropagatedAt: %w", err)
-	}
-	return oldValue.PropagatedAt, nil
-}
-
-// ClearPropagatedAt clears the value of the "propagated_at" field.
-func (m *DivergenceResolutionMutation) ClearPropagatedAt() {
-	m.propagated_at = nil
-	m.clearedFields[divergenceresolution.FieldPropagatedAt] = struct{}{}
-}
-
-// PropagatedAtCleared returns if the "propagated_at" field was cleared in this mutation.
-func (m *DivergenceResolutionMutation) PropagatedAtCleared() bool {
-	_, ok := m.clearedFields[divergenceresolution.FieldPropagatedAt]
-	return ok
-}
-
-// ResetPropagatedAt resets all changes to the "propagated_at" field.
-func (m *DivergenceResolutionMutation) ResetPropagatedAt() {
-	m.propagated_at = nil
-	delete(m.clearedFields, divergenceresolution.FieldPropagatedAt)
-}
-
 // Where appends a list predicates to the DivergenceResolutionMutation builder.
 func (m *DivergenceResolutionMutation) Where(ps ...predicate.DivergenceResolution) {
 	m.predicates = append(m.predicates, ps...)
@@ -3346,7 +3296,7 @@ func (m *DivergenceResolutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DivergenceResolutionMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 9)
 	if m.created_at != nil {
 		fields = append(fields, divergenceresolution.FieldCreatedAt)
 	}
@@ -3374,9 +3324,6 @@ func (m *DivergenceResolutionMutation) Fields() []string {
 	if m.decided_at != nil {
 		fields = append(fields, divergenceresolution.FieldDecidedAt)
 	}
-	if m.propagated_at != nil {
-		fields = append(fields, divergenceresolution.FieldPropagatedAt)
-	}
 	return fields
 }
 
@@ -3403,8 +3350,6 @@ func (m *DivergenceResolutionMutation) Field(name string) (ent.Value, bool) {
 		return m.Actor()
 	case divergenceresolution.FieldDecidedAt:
 		return m.DecidedAt()
-	case divergenceresolution.FieldPropagatedAt:
-		return m.PropagatedAt()
 	}
 	return nil, false
 }
@@ -3432,8 +3377,6 @@ func (m *DivergenceResolutionMutation) OldField(ctx context.Context, name string
 		return m.OldActor(ctx)
 	case divergenceresolution.FieldDecidedAt:
 		return m.OldDecidedAt(ctx)
-	case divergenceresolution.FieldPropagatedAt:
-		return m.OldPropagatedAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown DivergenceResolution field %s", name)
 }
@@ -3506,13 +3449,6 @@ func (m *DivergenceResolutionMutation) SetField(name string, value ent.Value) er
 		}
 		m.SetDecidedAt(v)
 		return nil
-	case divergenceresolution.FieldPropagatedAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetPropagatedAt(v)
-		return nil
 	}
 	return fmt.Errorf("unknown DivergenceResolution field %s", name)
 }
@@ -3552,9 +3488,6 @@ func (m *DivergenceResolutionMutation) ClearedFields() []string {
 	if m.FieldCleared(divergenceresolution.FieldUpdatedBy) {
 		fields = append(fields, divergenceresolution.FieldUpdatedBy)
 	}
-	if m.FieldCleared(divergenceresolution.FieldPropagatedAt) {
-		fields = append(fields, divergenceresolution.FieldPropagatedAt)
-	}
 	return fields
 }
 
@@ -3577,9 +3510,6 @@ func (m *DivergenceResolutionMutation) ClearField(name string) error {
 		return nil
 	case divergenceresolution.FieldUpdatedBy:
 		m.ClearUpdatedBy()
-		return nil
-	case divergenceresolution.FieldPropagatedAt:
-		m.ClearPropagatedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown DivergenceResolution nullable field %s", name)
@@ -3615,9 +3545,6 @@ func (m *DivergenceResolutionMutation) ResetField(name string) error {
 		return nil
 	case divergenceresolution.FieldDecidedAt:
 		m.ResetDecidedAt()
-		return nil
-	case divergenceresolution.FieldPropagatedAt:
-		m.ResetPropagatedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown DivergenceResolution field %s", name)

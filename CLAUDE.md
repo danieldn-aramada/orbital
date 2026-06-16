@@ -132,7 +132,7 @@ Architecture decisions with full rationale. Read when the context would otherwis
 | Backup scheduler design | `docs/decisions/005-backup-scheduler.md` |
 | Restore mechanism (why subprocess, not exec) | `docs/decisions/006-dgraph-restore-backend.md` |
 | DGraph schema migration (tooling landscape, sharp edges, production approach) | `docs/decisions/007-dgraph-schema-migration.md` |
-| Bundler / internal-service auth to orbital (OAuth2 client credentials) | `docs/decisions/010-bundler-service-auth.md` + `docs/plans/bundler-service-auth.md` |
+| Bundler / internal-service auth to orbital (OAuth2 client credentials) | `docs/decisions/010-bundler-service-auth.md` |
 | OCI bundler pipeline, ConfigBundle integration | `docs/configbundle-integration.md` |
 
 ## Local Development

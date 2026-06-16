@@ -82,7 +82,7 @@ func (h *OIDC) Login(c echo.Context) error {
 	}
 	state := base64.URLEncoding.EncodeToString(b)
 
-	if err := auth.SetOIDCState(h.sessionKeys, c.Request(), c.Response().Writer, state); err != nil {
+	if err := auth.SetOIDCState(h.sessionKeys, c.Request(), c.Response(), state); err != nil {
 		return fmt.Errorf("set oidc state: %w", err)
 	}
 
@@ -91,7 +91,7 @@ func (h *OIDC) Login(c echo.Context) error {
 
 // Callback handles GET /auth/callback — exchanges the code, verifies the token, creates a session.
 func (h *OIDC) Callback(c echo.Context) error {
-	storedState, err := auth.GetAndClearOIDCState(h.sessionKeys, c.Request(), c.Response().Writer)
+	storedState, err := auth.GetAndClearOIDCState(h.sessionKeys, c.Request(), c.Response())
 	if err != nil || storedState != c.QueryParam("state") {
 		return c.Redirect(http.StatusSeeOther, "/?error=invalid_state")
 	}
@@ -150,7 +150,7 @@ func (h *OIDC) Callback(c echo.Context) error {
 			return fmt.Errorf("provision oidc user: %w", err)
 		}
 	}
-	if err := auth.SetUserSession(h.sessionKeys, c.Request(), c.Response().Writer, u.ID, u.Name, u.Email, string(u.Role)); err != nil {
+	if err := auth.SetUserSession(h.sessionKeys, c.Request(), c.Response(), u.ID, u.Name, u.Email, string(u.Role)); err != nil {
 		return fmt.Errorf("set session: %w", err)
 	}
 
@@ -206,7 +206,7 @@ func (h *OIDC) DeviceCodeStart(c echo.Context) error {
 	}
 
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return h.deviceCodeTmpl.ExecuteTemplate(c.Response().Writer, "device-code", deviceCodePageData{
+	return h.deviceCodeTmpl.ExecuteTemplate(c.Response(), "device-code", deviceCodePageData{
 		BasePath:        h.basePath,
 		UserCode:        dc.UserCode,
 		VerificationURI: dc.VerificationURI,
@@ -318,7 +318,7 @@ func (h *OIDC) DeviceCodePoll(c echo.Context) error {
 			return fmt.Errorf("provision device code user: %w", err)
 		}
 	}
-	if err := auth.SetUserSession(h.sessionKeys, c.Request(), c.Response().Writer, u.ID, u.Name, u.Email, string(u.Role)); err != nil {
+	if err := auth.SetUserSession(h.sessionKeys, c.Request(), c.Response(), u.ID, u.Name, u.Email, string(u.Role)); err != nil {
 		return fmt.Errorf("set device code session: %w", err)
 	}
 

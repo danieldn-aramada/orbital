@@ -22,7 +22,7 @@ import (
 //     admin can re-review instead of silently overwriting their own intent edit.
 //
 // Shared across packages to keep the query shape and the nil-handling rules
-// in one place. See docs/plans/divergence-storage-mvcc.md §MVCC Implementation Plan.
+// in one place.
 func FetchCurrentVersion(ctx context.Context, dgraphURL, typeName, orbID string) (*int, error) {
 	if typeName == "" || orbID == "" {
 		// Legacy entry without type info, or pathological empty orbId.

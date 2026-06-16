@@ -179,6 +179,5 @@ AWS, GitHub, Stripe, and Microsoft Entra all use distinct actor-type discriminat
 
 ## Related
 
-- Implementation plan: `docs/plans/bundler-service-auth.md`
 - Orbital auth implementation: `internal/auth/bearer.go`, `internal/handler/authz.go`
 - cb-bundler's existing token field: `configbundle/internal/bundler/orbital.go` `BearerToken`

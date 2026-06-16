@@ -15,6 +15,7 @@
         <tr><th style="width:38%">Tag</th><td style="font-family:monospace;font-weight:600;">{{.Tag}}</td></tr>
         <tr><th>Digest</th><td style="font-family:monospace;font-size:0.65rem;word-break:break-all;">{{if .Digest}}{{.Digest}}{{else}}—{{end}}</td></tr>
         <tr><th>Signed</th><td>{{if .Signed}}<span class="has-text-success">&#x2713; signed</span>{{else}}<span class="has-text-grey">unsigned</span>{{end}}</td></tr>
+        <tr><th>Layers</th><td>{{.Layers}}</td></tr>
       </tbody>
     </table>
   </div>

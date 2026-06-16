@@ -46,18 +46,8 @@
           </td>
           <td style="white-space:nowrap">
             {{if .Layers}}
-              {{$graph := 0}}{{$dispatched := 0}}{{$failed := 0}}
-              {{range .Layers}}
-                {{if eq .Role "graph"}}{{$graph = add $graph 1}}{{end}}
-                {{if ne .Role "graph"}}{{$dispatched = add $dispatched 1}}{{end}}
-                {{if eq .Role "dispatched"}}
-                  {{if not (and .Dispatch (gt .Dispatch.StatusCode 0) (lt .Dispatch.StatusCode 300))}}{{$failed = add $failed 1}}{{end}}
-                {{end}}
-              {{end}}
               <div class="is-flex is-align-items-center" style="gap:0.25rem;">
-                <span class="tag is-light is-small">{{$graph}} graph</span>
-                {{if gt $dispatched 0}}<span class="tag is-info is-light is-small">{{$dispatched}} dispatched</span>{{end}}
-                {{if gt $failed 0}}<span class="tag is-danger is-light is-small">{{$failed}} failed</span>{{end}}
+                <span class="tag is-light is-small">{{len .Layers}}</span>
                 <button class="button is-small is-white" title="View layers"
                   hx-get="/api/v1/import/history/{{.Tag}}/layers"
                   hx-target="#layers-modal-body"

@@ -89,17 +89,6 @@ definitions:
       who:
         type: string
     type: object
-  handler.patchResolutionBody:
-    properties:
-      propagatedAt:
-        description: |-
-          PropagatedAt: RFC3339 timestamp, or the literal "now" for server-side
-          time. Operator-recovery only — normal propagation is observed by the
-          ingester when orb stops reporting the field. Setting this manually is
-          for stuck rows that the ingester can't observe (orb down, snapshot
-          pipeline broken).
-        type: string
-    type: object
   handler.publishResponse:
     properties:
       artifactId:
@@ -127,9 +116,6 @@ definitions:
       decidedAt:
         type: string
       id:
-        type: string
-      propagatedAt:
-        description: RFC3339; null until ingester sweeps the entry
         type: string
     type: object
   handler.restoreJobResponse:
@@ -189,6 +175,14 @@ definitions:
         description: true for data.json.gz + schema.gz; false for anything bundler-added
         type: boolean
       mediaType:
+        type: string
+      producer:
+        description: |-
+          Producer is the friendly name of whatever produced this layer (e.g.
+          "orbital" for the two graph layers, "configbundle-bundler" for layers
+          returned by that bundler). Mirrors the OCI manifest annotation
+          `com.armada.orbital.producer` written at push time. Empty for legacy
+          artifacts published before producer attribution was introduced.
         type: string
       sizeBytes:
         type: integer
@@ -417,10 +411,6 @@ paths:
           type: string
         name: action
         type: array
-      - description: Filter by resolution.propagatedAt presence
-        in: query
-        name: propagated
-        type: boolean
       - description: Filter by dc_orb_id
         in: query
         name: dc
@@ -522,43 +512,6 @@ paths:
               type: string
             type: object
       summary: Clear a divergence resolution
-      tags:
-      - divergence
-    patch:
-      consumes:
-      - application/json
-      parameters:
-      - description: Divergence entry UUID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Fields to update
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/handler.patchResolutionBody'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handler.resolutionItem'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Patch a divergence resolution (operator recovery only)
       tags:
       - divergence
     put:

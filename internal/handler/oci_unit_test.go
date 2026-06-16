@@ -142,11 +142,10 @@ func TestArtifactsTbody_WithLayers(t *testing.T) {
 	if !strings.Contains(body, `hx-target="#layers-modal-body"`) {
 		t.Errorf("expected hx-target=#layers-modal-body; body:\n%s", body)
 	}
-	if !strings.Contains(body, "1 dgraph") {
-		t.Errorf("expected dgraph layer count tag in trigger; body:\n%s", body)
-	}
-	if !strings.Contains(body, "1 bundler") {
-		t.Errorf("expected bundler layer count tag in trigger; body:\n%s", body)
+	// Table cell shows just the total layer count; per-producer breakdown
+	// lives in the layers-modal opened via the button.
+	if !strings.Contains(body, `>2</span>`) {
+		t.Errorf("expected total layer count (2) in trigger; body:\n%s", body)
 	}
 }
 
@@ -161,8 +160,8 @@ func TestLayersModal_RendersLayers(t *testing.T) {
 		Tag:       "v3",
 		HasLayers: true,
 		LayerRows: []artifactLayerRow{
-			{MediaType: "application/vnd.orbital.subgraph.data.v1+gzip", SizeDisplay: "1.0 KB", DigestShort: "sha256:abc…", IsOrbitalNative: true, Producer: "orbital"},
-			{MediaType: "application/vnd.example.bundle.v1", SizeDisplay: "2.0 KB", DigestShort: "sha256:xyz…", IsOrbitalNative: false, Producer: "configbundle-bundler"},
+			{MediaType: "application/vnd.orbital.subgraph.data.v1+gzip", SizeDisplay: "1.0 KB", Digest: "sha256:abc0000000000000000000000000000000000000000000000000000000000000", IsOrbitalNative: true, Producer: "orbital"},
+			{MediaType: "application/vnd.example.bundle.v1", SizeDisplay: "2.0 KB", Digest: "sha256:xyz0000000000000000000000000000000000000000000000000000000000000", IsOrbitalNative: false, Producer: "configbundle-bundler"},
 		},
 	}
 	tmpl, err := template.ParseFiles("web/templates/orbital/partials/layers-modal.gohtml")
@@ -245,12 +244,6 @@ func TestToRow_LayerRowsReversedFromManifestOrder(t *testing.T) {
 	}
 	if !hasSuffix(row.LayerRows[3].MediaType, "data.v1+gzip") {
 		t.Errorf("LayerRows[3] should be data (dgraph bottom); got %q", row.LayerRows[3].MediaType)
-	}
-	if row.OrbitalLayers != 2 {
-		t.Errorf("OrbitalLayers = %d, want 2", row.OrbitalLayers)
-	}
-	if row.BundlerLayers != 2 {
-		t.Errorf("BundlerLayers = %d, want 2", row.BundlerLayers)
 	}
 }
 

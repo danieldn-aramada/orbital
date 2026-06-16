@@ -35,8 +35,8 @@ Each row of `divergence_entries` ends in one of three states. The action determi
 
 | Action | Intent change in orbital DGraph | Edge value after propagation | Deployment-layer responsibility | Final manager state | Lifecycle |
 |---|---|---|---|---|---|
-| **Accept** | intent ← override value | unchanged (was already at override) | enforce intent: take ownership of the field with the new intent value | cb-controller sole owner; `local:admin` evicted | one-shot: orbital observes propagation via snapshot delta → marks `propagated_at` |
-| **Reject** | unchanged | reverts to original intent | enforce intent: take ownership of the field, reset edge to intent value | cb-controller sole owner; `local:admin` evicted | one-shot: orbital observes propagation via snapshot delta → marks `propagated_at` |
+| **Accept** | intent ← override value | unchanged (was already at override) | enforce intent: take ownership of the field with the new intent value | cb-controller sole owner; `local:admin` evicted | resolution active until orb stops reporting the entry; entry+resolution deleted together on loop closure |
+| **Reject** | unchanged | reverts to original intent | enforce intent: take ownership of the field, reset edge to intent value | cb-controller sole owner; `local:admin` evicted | resolution active until orb stops reporting the entry; entry+resolution deleted together on loop closure |
 | **Ignore** | unchanged (stays stale vs. edge — intentionally) | unchanged | DISengage: exclude the field from any apply config | `local:admin` sole owner; cb-controller never co-owns | persistent: re-applied on every bundle build until the resolution row is deleted |
 
 Audit event operation names: `acceptDivergence`, `rejectDivergence`, `ignoreDivergence`. Always `verbNoun` per [AUDIT.md](./AUDIT.md). The `divergence_resolutions.action` column stores the bare verb (`accept`/`reject`/`ignore`) — that's internal state, not an audit operation name.
@@ -70,21 +70,21 @@ Treat `ignore` as a deliberate operational choice, not a "skip this one" shortcu
 
 1. Admin clicks Accept (or Reject) and submits.
 2. For Accept: `dispatchAcceptMutation` updates DGraph intent. For Reject: no DGraph change.
-3. `divergence_resolutions` row written with `action` and `propagated_at=NULL`.
+3. `divergence_resolutions` row written with `action`.
 4. Operator triggers an export + publish. Orbital calls `POST /bundle` on the deployment layer (cb-bundler today).
-5. The deployment layer queries orbital for divergences whose resolution is unpropagated (`GET /api/v1/divergences?action=accept&action=reject&propagated=false`) and enforces intent for each: in K8s terms, emit a `spec.takeover[]` entry so cb-controller force-applies the current intent value, evicting `local:*` from `managedFields`.
-6. Orbital pushes the OCI artifact. (No callback from the deployment layer — orbital does NOT learn "propagated" from a bundler response. See next step.)
+5. The deployment layer queries orbital for active accept/reject resolutions (`GET /api/v1/divergences?action=accept&action=reject`) and enforces intent for each: in K8s terms, emit a `spec.takeover[]` entry so cb-controller force-applies the current intent value, evicting `local:*` from `managedFields`.
+6. Orbital pushes the OCI artifact.
 7. Orb imports the bundle, dispatches cb-manifest to cb-controller. cb-controller reconciles; `local:admin` is evicted; cb-controller becomes sole manager.
 8. cb-controller's divergence reporter on the next tick sees no `local:*` on this field → no divergence emitted.
-9. Next orb snapshot omits the entry. Orbital ingester's stale sweep deletes the `divergence_entries` row, AND sets `propagated_at=NOW()` on any resolution that pointed at it. See `internal/divergenceingest/store.go applySnapshot`.
-10. Loop closed. Resolution row retained for audit (with `propagated_at` set).
+9. Next orb snapshot omits the entry. Orbital ingester's stale sweep deletes the `divergence_entries` row AND the matching `divergence_resolutions` row in the same pass. See `internal/divergenceingest/store.go applySnapshot`.
+10. Loop closed. Audit history of the decision lives in the `events` table (the `acceptDivergence`/`rejectDivergence` event recorded at step 3) — the resolution row itself is gone.
 
-**Lifecycle is derived from observation, not asserted by the deployment layer.** Orbital's source of truth for "did the loop close?" is what orb's next snapshot shows. The deployment layer doesn't tell orbital "I propagated these IDs" — orbital observes propagation by snapshot delta. This is intentional: bundler-asserted state would be a lie if the bundle silently dropped a field or cb-controller had a bug. Observation tells the truth.
+**Orbital does NOT track edge propagation.** Its contract ends at "intent is captured and exposed via the export API." Whether the deployment layer actually applied a force is the edge's concern. If local admin re-overrides the same field after a Reject, orb reports a fresh divergence on the next tick and the operator re-decides from a clean slate — no inherited "pending propagation" state.
 
 **Ignore:**
 
 1. Admin clicks Ignore and submits. No DGraph change.
-2. `divergence_resolutions` row written with `action=ignore`. `propagated_at` is not meaningful for ignore — the row itself IS the persistent instruction.
+2. `divergence_resolutions` row written with `action=ignore`. The row itself IS the persistent instruction.
 3. On every future bundle build, the deployment layer queries orbital for ignored divergences (`GET /api/v1/divergences?action=ignore`) and **filters those (orbId, field) pairs out** of its apply config projection. The field never appears in the apply config cb-controller receives.
 4. cb-controller releases the field (or never claimed it). `local:admin` retains sole ownership. Edge value unchanged.
 5. Reporter doesn't surface the field (not in cb's current `managedFields` for the object).
@@ -96,22 +96,21 @@ The deployment layer (today: cb-bundler) calls **one endpoint** with **two filte
 
 | Query | Returns | Lifecycle |
 |---|---|---|
-| `GET /api/v1/divergences?action=accept&action=reject&propagated=false` | divergences whose resolution is accept or reject AND has not yet been observed-as-propagated | one-shot per resolution: orbital marks `propagated_at` automatically when orb stops reporting the field as diverged. No callback required. |
-| `GET /api/v1/divergences?action=ignore` | divergences whose resolution is ignore (regardless of `propagated_at`) | **persistent** — every bundle build re-queries; the disengagement re-applies forever until the resolution is deleted |
+| `GET /api/v1/divergences?action=accept&action=reject` | divergences with an active accept or reject resolution | active until orb stops reporting the underlying divergence entry — at which point the ingester deletes entry + resolution together; the query no longer returns them. |
+| `GET /api/v1/divergences?action=ignore` | divergences whose resolution is ignore | **persistent** — every bundle build re-queries; the disengagement re-applies forever until the resolution is deleted |
 
-The shape is filterable REST: one resource (`/divergences`), state-as-query-string. Filters are deployment-layer-neutral domain terms (`action`, `propagated`, `dc`). How the deployment layer USES these — `spec.takeover[]`, omission from cb-manifest, force-apply SSA, etc. — is the deployment layer's concern. See [`configbundle-integration.md`](../configbundle-integration.md) for ConfigBundle's specific interpretation.
+The shape is filterable REST: one resource (`/divergences`), state-as-query-string. Filters are deployment-layer-neutral domain terms (`action`, `dc`). How the deployment layer USES these — `spec.takeover[]`, omission from cb-manifest, force-apply SSA, etc. — is the deployment layer's concern. See [`configbundle-integration.md`](../configbundle-integration.md) for ConfigBundle's specific interpretation.
 
-The full REST surface for divergence is five endpoints, all under `/api/v1/divergences`:
+The full REST surface for divergence is four endpoints, all under `/api/v1/divergences`:
 
 ```
-GET    /api/v1/divergences                       list, with ?action=&propagated=&dc= filters
+GET    /api/v1/divergences                       list, with ?action=&dc= filters
 GET    /api/v1/divergences/:id                   one (resolution embedded)
 PUT    /api/v1/divergences/:id/resolution        upsert resolution      body: {"action":"accept|reject|ignore"}
 DELETE /api/v1/divergences/:id/resolution        clear resolution
-PATCH  /api/v1/divergences/:id/resolution        partial update         body: {"propagatedAt":"now"|RFC3339}  — operator recovery only
 ```
 
-**Lifecycle observation:** orbital does NOT receive a callback from the deployment layer to mark resolutions propagated. Propagation is observed by the divergence ingester when orb's snapshot stops reporting a previously diverged field (loop closure). The ingester sets `propagated_at=NOW()` on the resolution and deletes the divergence entry in the same sweep. This is the design's most important architectural choice — observation is the source of truth, not bundler assertion. See `internal/divergenceingest/store.go applySnapshot`.
+**Resolution lifecycle is bound 1:1 with the active divergence entry.** The ingester deletes entry + resolution together on loop closure. Orbital's source of truth for "is this field still diverging?" is what orb's next snapshot shows — not bundler assertion. See `internal/divergenceingest/store.go applySnapshot`.
 
 ## What the divergence reporter sees
 
@@ -141,7 +140,7 @@ Two cases at the ingester (`internal/divergenceingest/store.go applySnapshot`):
 - **Same override as stored** → orb is still echoing the same divergence because the loop hasn't closed yet (bundle hasn't shipped, or just shipped and orb hasn't republished a clean snapshot). Refresh `last_seen_at`, `last_snapshot_published_at`, `type_name`. **Freeze** `intended_value`, `override_value`, `who` — the admin decided based on those exact values.
 - **Different override than stored** → edge state drifted to a new value since the admin's decision. The prior decision was for a different override and is now stale. **Delete the `divergence_resolutions` row** and update the entry's values normally. The entry reappears as pending; admin re-decides on the new state.
 
-Audit history of the prior resolution stays in the `events` table (`acceptDivergence` / `forceDivergence` / `ignoreDivergence` + any dispatched `update{Type}`). The `divergence_resolutions` table holds the **current** decision only.
+Audit history of the prior resolution stays in the `events` table (`acceptDivergence` / `rejectDivergence` / `ignoreDivergence` + any dispatched `update{Type}`). The `divergence_resolutions` table holds the **current** decision only and is empty whenever there is no active divergence entry to act on.
 
 See also: [AUDIT.md "Resolved divergence entries freeze on re-ingest WHEN the override matches; supersede when it changes"](./AUDIT.md).
 
@@ -224,10 +223,8 @@ When the override changes after a resolution exists, the ingester deletes the re
 - **Ignore is implemented as omission from the apply config, not as a no-op.** Without active omission, cb-controller's apply would co-own the field and the divergence reporter would never stop reporting it.
 - **`divergence_resolutions.action` stays as the bare verb (`accept`/`reject`/`ignore`).** Audit operation names use the verbNoun form (`acceptDivergence`, etc.). The action column is internal state.
 - **The action verb is `reject`, not `force`.** "Force" leaks the K8s SSA verb into orbital's domain vocabulary. "Reject" is the policy decision; "force-apply" is one possible mechanism a deployment layer uses to honor it.
-- **Conventional REST API surface.** One resource (`/divergences`), standard verbs (GET, PUT, DELETE, PATCH), query strings for filters. No coined nouns in URLs, no state-as-path-segment, no batch endpoint (client fires N parallel PUTs). ConfigBundle-specific terms ("takeover," "cb-manifest," "omission") live in the configbundle integration docs, not the divergence API contract.
-- **Lifecycle is observed, not asserted.** `propagated_at` is set by the divergence ingester when orb stops reporting a field as diverged — NOT by a callback from the deployment layer. The deployment layer doesn't tell orbital "I propagated these IDs" because that would be an assertion orbital can't verify. Observation tells the truth even when bundlers or reconcilers have bugs.
-- **`PATCH /divergences/:id/resolution` is operator-recovery only.** Not part of normal bundle flow. Manual unblock for the rare case where the ingester can't observe propagation (e.g., orb stuck, snapshot publishing broken). Standard PATCH semantics — partial update of the resolution resource.
-- **`propagated_at` (nullable timestamp) replaces the legacy `cb_consumed`+`cb_consumed_at` pair.** A single nullable timestamp captures both "is it propagated?" (NULL = no) and "when?" (the timestamp). The `cb_` prefix leaked deployment-layer naming into orbital's schema.
+- **Conventional REST API surface.** One resource (`/divergences`), standard verbs (GET, PUT, DELETE), query strings for filters. No coined nouns in URLs, no state-as-path-segment, no batch endpoint (client fires N parallel PUTs). ConfigBundle-specific terms ("takeover," "cb-manifest," "omission") live in the configbundle integration docs, not the divergence API contract.
+- **Orbital does NOT track edge propagation.** Its contract is "intent is captured and exposed via the export API." Whether the deployment layer applied a force is the edge's concern. There is no `propagated_at` column, no `?propagated` filter, no PATCH-for-recovery endpoint — those existed in an earlier draft and were removed (2026-06-15) because they violated the air-gap separation. If admin re-overrides after Reject, orb reports a fresh divergence on the next tick and the operator re-decides from a clean slate. Audit of every decision lives in the `events` table; the resolution row itself is bound 1:1 with the active entry and disappears with it on loop closure.
 - **Topology API does not annotate ignored fields.** Cloud intent is the API's contract; consumers needing ground truth join with `/api/v1/divergence`. Annotation is deferred until a real consumer needs it.
-- **One-shot vs. persistent resolutions have different lifecycles.** Accept/reject transition `NULL → timestamp` exactly once via observed propagation. Ignore has no transition — the resolution row IS the standing instruction and re-applies on every bundle build until manually removed.
+- **Accept/reject resolutions and Ignore have different lifecycles.** Accept/reject rows are bound to their entry — both delete together on loop closure. Ignore rows are persistent: the row IS the standing instruction and re-applies on every bundle build until manually removed.
 - **`intended_at_version` is captured at INSERT, never on UPDATE.** Refreshing it on re-ingest would silently disable the MVCC check that catches "admin edited intent between report and resolution." See the dedicated section above for the failure-mode walkthrough. This rule is load-bearing for race-condition correctness.

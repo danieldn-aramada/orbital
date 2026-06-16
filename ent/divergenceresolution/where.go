@@ -95,11 +95,6 @@ func DecidedAt(v time.Time) predicate.DivergenceResolution {
 	return predicate.DivergenceResolution(sql.FieldEQ(FieldDecidedAt, v))
 }
 
-// PropagatedAt applies equality check predicate on the "propagated_at" field. It's identical to PropagatedAtEQ.
-func PropagatedAt(v time.Time) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldEQ(FieldPropagatedAt, v))
-}
-
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.DivergenceResolution {
 	return predicate.DivergenceResolution(sql.FieldEQ(FieldCreatedAt, v))
@@ -593,56 +588,6 @@ func DecidedAtLT(v time.Time) predicate.DivergenceResolution {
 // DecidedAtLTE applies the LTE predicate on the "decided_at" field.
 func DecidedAtLTE(v time.Time) predicate.DivergenceResolution {
 	return predicate.DivergenceResolution(sql.FieldLTE(FieldDecidedAt, v))
-}
-
-// PropagatedAtEQ applies the EQ predicate on the "propagated_at" field.
-func PropagatedAtEQ(v time.Time) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldEQ(FieldPropagatedAt, v))
-}
-
-// PropagatedAtNEQ applies the NEQ predicate on the "propagated_at" field.
-func PropagatedAtNEQ(v time.Time) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldNEQ(FieldPropagatedAt, v))
-}
-
-// PropagatedAtIn applies the In predicate on the "propagated_at" field.
-func PropagatedAtIn(vs ...time.Time) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldIn(FieldPropagatedAt, vs...))
-}
-
-// PropagatedAtNotIn applies the NotIn predicate on the "propagated_at" field.
-func PropagatedAtNotIn(vs ...time.Time) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldNotIn(FieldPropagatedAt, vs...))
-}
-
-// PropagatedAtGT applies the GT predicate on the "propagated_at" field.
-func PropagatedAtGT(v time.Time) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldGT(FieldPropagatedAt, v))
-}
-
-// PropagatedAtGTE applies the GTE predicate on the "propagated_at" field.
-func PropagatedAtGTE(v time.Time) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldGTE(FieldPropagatedAt, v))
-}
-
-// PropagatedAtLT applies the LT predicate on the "propagated_at" field.
-func PropagatedAtLT(v time.Time) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldLT(FieldPropagatedAt, v))
-}
-
-// PropagatedAtLTE applies the LTE predicate on the "propagated_at" field.
-func PropagatedAtLTE(v time.Time) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldLTE(FieldPropagatedAt, v))
-}
-
-// PropagatedAtIsNil applies the IsNil predicate on the "propagated_at" field.
-func PropagatedAtIsNil() predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldIsNull(FieldPropagatedAt))
-}
-
-// PropagatedAtNotNil applies the NotNil predicate on the "propagated_at" field.
-func PropagatedAtNotNil() predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldNotNull(FieldPropagatedAt))
 }
 
 // And groups predicates with the AND operator between them.

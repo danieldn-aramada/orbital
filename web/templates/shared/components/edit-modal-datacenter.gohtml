@@ -7,13 +7,13 @@
     </header>
     <section class="modal-card-body">
       <div id="dc-json-editor-{{.ID}}" style="min-height:200px"></div>
-      <div id="dc-edit-error-{{.ID}}" class="notification is-danger mt-4" style="display:none"></div>
     </section>
-    <footer class="modal-card-foot">
-      <div class="buttons">
+    <footer class="modal-card-foot is-flex is-align-items-center" style="gap:0.75rem;">
+      <div class="buttons" style="margin-bottom:0;">
         <button class="button is-success" id="dc-edit-submit-{{.ID}}">Save</button>
         <button class="button" data-dc-modal-close="{{.ID}}">Cancel</button>
       </div>
+      <span id="dc-edit-error-{{.ID}}" class="has-text-danger is-size-7" style="display:none; flex:1;"></span>
     </footer>
   </div>
 </div>

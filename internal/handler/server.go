@@ -38,6 +38,7 @@ const getServerQuery = `
       oobIP { orbId address role }
       idracSettings {
         orbId
+        version
         firmwareVersion
         osToIdracPassThroughEnabled
         sshEnabled
@@ -118,6 +119,7 @@ type serverQueryResponse struct {
 	} `json:"oobIP"`
 	IdracSettings *struct {
 		OrbID                       string `json:"orbId"`
+		Version                     int    `json:"version"`
 		FirmwareVersion             string `json:"firmwareVersion"`
 		OsToIdracPassThroughEnabled bool   `json:"osToIdracPassThroughEnabled"`
 		SshEnabled                  bool   `json:"sshEnabled"`
@@ -192,6 +194,8 @@ type serverTabDetailData struct {
 	ShowDCBack         bool // true when drilled from a DC tab
 	CurrentUser        string
 	EditDataJSON       template.JS
+	IdracOrbID         string
+	IdracVersion       int
 	IdracSettings      *idracSettingsTabData
 	ConfigProfileJSON  string
 	StorageControllers []storageControllerTabData
@@ -330,6 +334,8 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 	}
 
 	if raw.IdracSettings != nil {
+		srv.IdracOrbID = raw.IdracSettings.OrbID
+		srv.IdracVersion = raw.IdracSettings.Version
 		srv.IdracSettings = &idracSettingsTabData{
 			FirmwareVersion:             raw.IdracSettings.FirmwareVersion,
 			OsToIdracPassThroughEnabled: raw.IdracSettings.OsToIdracPassThroughEnabled,
@@ -373,5 +379,5 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 	}
 
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return tmpl.Execute(c.Response().Writer, srv)
+	return tmpl.Execute(c.Response(), srv)
 }

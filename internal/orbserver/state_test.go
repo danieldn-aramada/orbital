@@ -72,6 +72,64 @@ func TestState_FailedTransition(t *testing.T) {
 	}
 }
 
+func TestState_HydrateFromHistory(t *testing.T) {
+	t.Run("empty history leaves state at defaults", func(t *testing.T) {
+		s := newImportState()
+		s.hydrateFromHistory(nil)
+		snap := s.snapshot()
+		if snap.LastImport != nil {
+			t.Errorf("LastImport: expected nil, got %+v", snap.LastImport)
+		}
+		if snap.CurrentVersion != "" {
+			t.Errorf("CurrentVersion: got %q, want empty", snap.CurrentVersion)
+		}
+	})
+
+	t.Run("seeds from most recent done record", func(t *testing.T) {
+		s := newImportState()
+		s.hydrateFromHistory([]orb.ImportRecord{
+			{Tag: "v1", Status: "done"},
+			{Tag: "v2", Status: "done"},
+		})
+		snap := s.snapshot()
+		if snap.LastImport == nil || snap.LastImport.Tag != "v2" {
+			t.Errorf("LastImport: expected v2, got %+v", snap.LastImport)
+		}
+		if snap.CurrentVersion != "v2" {
+			t.Errorf("CurrentVersion: got %q, want %q", snap.CurrentVersion, "v2")
+		}
+	})
+
+	t.Run("skips failed records, falls back to last done", func(t *testing.T) {
+		s := newImportState()
+		s.hydrateFromHistory([]orb.ImportRecord{
+			{Tag: "v1", Status: "done"},
+			{Tag: "v2", Status: "failed"},
+		})
+		snap := s.snapshot()
+		if snap.LastImport == nil || snap.LastImport.Tag != "v1" {
+			t.Errorf("LastImport: expected v1, got %+v", snap.LastImport)
+		}
+		if snap.CurrentVersion != "v1" {
+			t.Errorf("CurrentVersion: got %q, want %q", snap.CurrentVersion, "v1")
+		}
+	})
+
+	t.Run("all failed leaves state at defaults", func(t *testing.T) {
+		s := newImportState()
+		s.hydrateFromHistory([]orb.ImportRecord{
+			{Tag: "v1", Status: "failed"},
+		})
+		snap := s.snapshot()
+		if snap.LastImport != nil {
+			t.Errorf("LastImport: expected nil, got %+v", snap.LastImport)
+		}
+		if snap.CurrentVersion != "" {
+			t.Errorf("CurrentVersion: got %q, want empty", snap.CurrentVersion)
+		}
+	})
+}
+
 func TestState_ConcurrentAccess(t *testing.T) {
 	s := newImportState()
 	var wg sync.WaitGroup

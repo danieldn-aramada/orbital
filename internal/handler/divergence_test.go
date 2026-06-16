@@ -12,8 +12,8 @@ import (
 
 // These unit tests cover the parameter-validation branches of the divergence
 // handlers — the only paths that don't require a real DB. Behavior tests live
-// in the integration suite (skipped today due to the OCI integration test
-// build break; see Spike 23).
+// in the integration suite (`divergence_integration_test.go`, behind the
+// `integration` build tag).
 
 func newCtx(method, path string, body string, idParam string) (echo.Context, *httptest.ResponseRecorder) {
 	e := echo.New()
@@ -66,33 +66,6 @@ func TestDeleteResolution_InvalidID(t *testing.T) {
 	err := h.DeleteResolution(c)
 	if echoErr, ok := err.(*echo.HTTPError); !ok || echoErr.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %v", err)
-	}
-}
-
-func TestPatchResolution_InvalidID(t *testing.T) {
-	h := handler.NewDivergenceHandler(nil, nil, nil)
-	c, _ := newCtx(http.MethodPatch, "/api/v1/divergences/bad/resolution", `{"propagatedAt":"now"}`, "bad")
-	err := h.PatchResolution(c)
-	if echoErr, ok := err.(*echo.HTTPError); !ok || echoErr.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %v", err)
-	}
-}
-
-func TestPatchResolution_MissingPropagatedAt(t *testing.T) {
-	h := handler.NewDivergenceHandler(nil, nil, nil)
-	c, _ := newCtx(http.MethodPatch, "/api/v1/divergences/00000000-0000-0000-0000-000000000000/resolution", `{}`, "00000000-0000-0000-0000-000000000000")
-	err := h.PatchResolution(c)
-	if echoErr, ok := err.(*echo.HTTPError); !ok || echoErr.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for missing propagatedAt, got %v", err)
-	}
-}
-
-func TestPatchResolution_BadTimestamp(t *testing.T) {
-	h := handler.NewDivergenceHandler(nil, nil, nil)
-	c, _ := newCtx(http.MethodPatch, "/api/v1/divergences/00000000-0000-0000-0000-000000000000/resolution", `{"propagatedAt":"yesterday"}`, "00000000-0000-0000-0000-000000000000")
-	err := h.PatchResolution(c)
-	if echoErr, ok := err.(*echo.HTTPError); !ok || echoErr.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for non-RFC3339 timestamp, got %v", err)
 	}
 }
 

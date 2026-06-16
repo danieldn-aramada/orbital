@@ -23,6 +23,25 @@ func newImportState() *importState {
 	return &importState{status: "idle"}
 }
 
+// hydrateFromHistory seeds in-memory state from the persisted import history
+// at startup. Without this, restarting orb makes the status page show "Last
+// Import: —" even though import-history.json on disk has entries. We seed from
+// the most recent successful (Status == "done") record because failed imports
+// don't represent applied state.
+func (s *importState) hydrateFromHistory(records []orb.ImportRecord) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := len(records) - 1; i >= 0; i-- {
+		r := records[i]
+		if r.Status == "done" {
+			rec := r
+			s.lastImport = &rec
+			s.currentVersion = r.Tag
+			return
+		}
+	}
+}
+
 func (s *importState) setRunning() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

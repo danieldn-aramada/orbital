@@ -51,12 +51,15 @@ func seedDivergenceEntry(t *testing.T, dcID, orbID, field, typeName string, over
 	return e.ID.String()
 }
 
-// newAcceptRequest builds the echo.Context for POST /api/v1/divergence/:id/accept
+// newPutResolutionRequest builds the echo.Context for
+// PUT /api/v1/divergences/:id/resolution with {"action": action} as the body,
 // authenticated as the given admin user.
-func newAcceptRequest(t *testing.T, entryID string, adminID int, actor string) (echo.Context, *httptest.ResponseRecorder) {
+func newPutResolutionRequest(t *testing.T, entryID, action string, adminID int, actor string) (echo.Context, *httptest.ResponseRecorder) {
 	t.Helper()
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/divergence/"+entryID+"/accept", nil)
+	body := strings.NewReader(`{"action":"` + action + `"}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/divergences/"+entryID+"/resolution", body)
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")
@@ -81,8 +84,8 @@ func TestAccept_EmptyTypeReturns422(t *testing.T) {
 	gql := handler.NewGraphQL(dgraph.URL, testDB, slog.Default())
 	h := handler.NewDivergenceHandler(testDB, slog.Default(), gql)
 
-	c, _ := newAcceptRequest(t, entryID, adminID, "accept-empty-type@test.com")
-	err := h.Accept(c)
+	c, _ := newPutResolutionRequest(t, entryID, "accept", adminID, "accept-empty-type@test.com")
+	err := h.PutResolution(c)
 	if err == nil {
 		t.Fatal("expected error for empty type, got nil")
 	}
@@ -120,9 +123,9 @@ func TestAccept_DispatchesMutationAndRecordsResolution(t *testing.T) {
 	gql := handler.NewGraphQL(dgraph.URL, testDB, slog.Default())
 	h := handler.NewDivergenceHandler(testDB, slog.Default(), gql)
 
-	c, _ := newAcceptRequest(t, entryID, adminID, "accept-success@test.com")
-	if err := h.Accept(c); err != nil {
-		t.Fatalf("Accept failed: %v", err)
+	c, _ := newPutResolutionRequest(t, entryID, "accept", adminID, "accept-success@test.com")
+	if err := h.PutResolution(c); err != nil {
+		t.Fatalf("PutResolution(accept) failed: %v", err)
 	}
 
 	// Sanity-check the dispatched mutation hits the right type, declares
@@ -170,8 +173,8 @@ func TestAccept_MutationFailureLeavesNoResolution(t *testing.T) {
 	gql := handler.NewGraphQL(dgraph.URL, testDB, slog.Default())
 	h := handler.NewDivergenceHandler(testDB, slog.Default(), gql)
 
-	c, _ := newAcceptRequest(t, entryID, adminID, "accept-fail@test.com")
-	err := h.Accept(c)
+	c, _ := newPutResolutionRequest(t, entryID, "accept", adminID, "accept-fail@test.com")
+	err := h.PutResolution(c)
 	if err == nil {
 		t.Fatal("expected error when DGraph returns gql errors, got nil")
 	}
@@ -189,6 +192,99 @@ func TestAccept_MutationFailureLeavesNoResolution(t *testing.T) {
 	// The DivergenceEntry itself stays put (not deleted) so the admin can retry.
 	if !testDB.DivergenceEntry.Query().Where(divergenceentry.EntryOrbID("colo:srv-002")).ExistX(context.Background()) {
 		t.Error("expected entry to still exist after failed Accept")
+	}
+}
+
+// TestList_ActionFilter_PartitionsIgnoreFromAcceptReject pins the contract that
+// cb-bundler relies on for the local:admin-ownership semantic:
+//
+//   - GET /api/v1/divergences?action=accept&action=reject returns ONLY accept
+//     and reject rows (these become spec.takeover[] → cb-controller releases
+//     local:admin's claim).
+//   - GET /api/v1/divergences?action=ignore returns ONLY ignore rows (these
+//     become Omissions → bundler nils the field → cb-controller does not
+//     re-claim → local:admin retains ownership).
+//
+// Regression class: if a refactor of the action-filter logic let an Ignore row
+// leak into the accept|reject result, cb-controller would release local:admin's
+// claim on an Ignored field — silently violating "Ignore retains ownership."
+// Not caught by clicking; only visible after a full bundle/apply cycle.
+func TestList_ActionFilter_PartitionsIgnoreFromAcceptReject(t *testing.T) {
+	ctx := context.Background()
+	dc := "colo:colo-list-filter"
+
+	// Seed one entry per action with a resolution row attached.
+	type seed struct {
+		orbID, field string
+		action       divergenceresolution.Action
+	}
+	seeds := []seed{
+		{"colo:srv-list-accept", "sshEnabled", divergenceresolution.ActionAccept},
+		{"colo:srv-list-reject", "ipmiEnabled", divergenceresolution.ActionReject},
+		{"colo:srv-list-ignore", "dhcpEnabled", divergenceresolution.ActionIgnore},
+	}
+	for _, s := range seeds {
+		seedDivergenceEntry(t, dc, s.orbID, s.field, "IdracSettings", true)
+		_, err := testDB.DivergenceResolution.Create().
+			SetEntryOrbID(s.orbID).
+			SetField(s.field).
+			SetAction(s.action).
+			SetActor("list-filter@test.com").
+			SetDecidedAt(time.Now().UTC()).
+			Save(ctx)
+		if err != nil {
+			t.Fatalf("seed %s resolution: %v", s.action, err)
+		}
+	}
+
+	gql := handler.NewGraphQL("http://unused", testDB, slog.Default())
+	h := handler.NewDivergenceHandler(testDB, slog.Default(), gql)
+
+	listForActions := func(t *testing.T, query string) map[string]bool {
+		t.Helper()
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/divergences?"+query+"&dc="+dc, nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		if err := h.List(c); err != nil {
+			t.Fatalf("List(%s): %v", query, err)
+		}
+		if rec.Code != http.StatusOK {
+			t.Fatalf("List(%s): status %d", query, rec.Code)
+		}
+		var items []struct {
+			EntryOrbID string `json:"entryOrbId"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &items); err != nil {
+			t.Fatalf("decode (%s): %v", query, err)
+		}
+		got := map[string]bool{}
+		for _, it := range items {
+			got[it.EntryOrbID] = true
+		}
+		return got
+	}
+
+	// action=accept|reject — must include accept+reject, must exclude ignore.
+	got := listForActions(t, "action=accept&action=reject")
+	for _, want := range []string{"colo:srv-list-accept", "colo:srv-list-reject"} {
+		if !got[want] {
+			t.Errorf("action=accept|reject: missing %s in response %v", want, got)
+		}
+	}
+	if got["colo:srv-list-ignore"] {
+		t.Errorf("action=accept|reject MUST NOT include the Ignore row — would silently strip local:admin ownership. got %v", got)
+	}
+
+	// action=ignore — must include ignore, must exclude accept+reject.
+	got = listForActions(t, "action=ignore")
+	if !got["colo:srv-list-ignore"] {
+		t.Errorf("action=ignore: missing the Ignore row, got %v", got)
+	}
+	for _, mustNot := range []string{"colo:srv-list-accept", "colo:srv-list-reject"} {
+		if got[mustNot] {
+			t.Errorf("action=ignore MUST NOT include accept/reject row %s, got %v", mustNot, got)
+		}
 	}
 }
 

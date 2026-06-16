@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,6 +19,14 @@ import (
 	"github.com/armada/orbital/internal/ocitype"
 	"github.com/armada/orbital/internal/orbconfig"
 )
+
+// ociDigest returns the OCI-formatted sha256 digest of b ("sha256:<64hex>").
+// OCI layer descriptor digest = sha256 of the layer payload, so computing here
+// at import time produces the same value the puller captured from the manifest.
+func ociDigest(b []byte) string {
+	sum := sha256.Sum256(b)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
 
 const (
 	importHistoryFile = "import-history.json"
@@ -55,7 +65,25 @@ type LayerRecord struct {
 	MediaType string          `json:"mediaType"`
 	Role      string          `json:"role"`               // LayerRole* constant
 	Producer  string          `json:"producer,omitempty"` // from OCI annotation com.armada.orbital.producer (empty for legacy)
+	SizeBytes int64           `json:"sizeBytes,omitempty"`
+	Digest    string          `json:"digest,omitempty"`
 	Dispatch  *DispatchResult `json:"dispatch,omitempty"` // set when Role == LayerRoleDispatched
+}
+
+// SizeDisplay returns a human-readable size for the layer (e.g. "1.7 KB").
+// Templates call this directly: {{.SizeDisplay}}.
+func (r LayerRecord) SizeDisplay() string {
+	n := r.SizeBytes
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(n)/float64(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1f KB", float64(n)/float64(1<<10))
+	case n > 0:
+		return fmt.Sprintf("%d B", n)
+	default:
+		return "—"
+	}
 }
 
 // ImportRecord is one entry in the import history log.
@@ -141,7 +169,7 @@ func (i *Importer) Import(ctx context.Context, dataGZ, schemaGZ []byte, meta Imp
 		}
 	}
 
-	if err := i.recordHistory(meta, "done", ""); err != nil {
+	if err := i.recordHistory(meta, dataGZ, schemaGZ, "done", ""); err != nil {
 		i.logger.Warn("failed to record import history", "err", err)
 	}
 
@@ -210,7 +238,10 @@ func (i *Importer) applySchema(ctx context.Context, schemaGZ []byte) error {
 
 
 // recordHistory appends an ImportRecord to the rolling history file.
-func (i *Importer) recordHistory(meta ImportMeta, status, errMsg string) error {
+// dataGZ + schemaGZ are passed in so Size + Digest can be populated on the
+// graph layer records — these are the same bytes Import() applied to DGraph,
+// so their sha256 equals the OCI layer descriptor digest captured at pull time.
+func (i *Importer) recordHistory(meta ImportMeta, dataGZ, schemaGZ []byte, status, errMsg string) error {
 	path := filepath.Join(i.cfg.DataDir, importHistoryFile)
 
 	var records []ImportRecord
@@ -233,8 +264,8 @@ func (i *Importer) recordHistory(meta ImportMeta, status, errMsg string) error {
 			// that can produce dgraph-loaded subgraph layers. Using the canonical
 			// "orbital" string keeps orb's UI consistent with the annotation
 			// value that the publisher writes on the same layers.
-			{MediaType: layerMediaTypeData, Role: LayerRoleGraph, Producer: ocitype.ProducerOrbital},
-			{MediaType: layerMediaTypeSchema, Role: LayerRoleGraph, Producer: ocitype.ProducerOrbital},
+			{MediaType: layerMediaTypeData, Role: LayerRoleGraph, Producer: ocitype.ProducerOrbital, SizeBytes: int64(len(dataGZ)), Digest: ociDigest(dataGZ)},
+			{MediaType: layerMediaTypeSchema, Role: LayerRoleGraph, Producer: ocitype.ProducerOrbital, SizeBytes: int64(len(schemaGZ)), Digest: ociDigest(schemaGZ)},
 		},
 	})
 

@@ -490,6 +490,11 @@ export function initServerDetailTabs(root) {
   const srvId = tabContainer.id.replace('srv-detail-tabs-', '')
   const auditPanelId = `srv-panel-audit-${srvId}`
 
+  // Active panel persists across edit-then-reload cycles. Without this the
+  // post-submit htmx.ajax re-renders the fragment with iDRAC active (template
+  // default), bouncing the user off the tab they were on (e.g. Audit Log).
+  const activeKey = `srv-tab-active:${srvId}`
+
   function loadAuditPanel() {
     const tab = [...tabs].find(t => t.dataset.panel === auditPanelId)
     if (!tab) return
@@ -500,7 +505,8 @@ export function initServerDetailTabs(root) {
     const related = (tab.dataset.relatedOrbIds || tab.dataset.orbId || '')
       .split(',').map(s => s.trim()).filter(Boolean)
     if (related.length === 0) return
-    const panel = document.getElementById(auditPanelId)
+    // Scoped lookup, not document.getElementById — see scope comment below.
+    const panel = tabContainer.parentElement.querySelector('#' + CSS.escape(auditPanelId))
     if (!panel) return
     const qs = related.map(id => `orbId=${encodeURIComponent(id)}`).join('&')
     fetch(BASE + `/api/v1/audit-log?${qs}&limit=50`, {
@@ -511,24 +517,58 @@ export function initServerDetailTabs(root) {
       .catch(() => {})
   }
 
+  // Pair each tab li with its target panel element up front, scoped to the
+  // SAME article container as the tabs. SCOPING IS LOAD-BEARING: the user can
+  // have the same server open in TWO contexts simultaneously — once as a
+  // standalone server tab (tab-content-srv-X), and once as a drilled-in
+  // server from a DC tab (tab-content-{DCId}). Both contexts contain
+  // srv-panel-idrac-X et al. with IDENTICAL ids (HTML technically allows
+  // duplicate ids; modern browsers honor them with document.getElementById
+  // returning the first match). A global document.getElementById would grab
+  // the wrong panel and update display on the OTHER tab content — leaving
+  // the visible one at the template default (iDRAC active, audit hidden),
+  // even though the tab classes here update correctly. Result: tab nav says
+  // Audit but content stays iDRAC.
+  const scope = tabContainer.parentElement
+  const panelPairs = [...tabs].map(t => ({
+    tab: t,
+    panel: scope.querySelector('#' + CSS.escape(t.dataset.panel)),
+  })).filter(p => p.panel)
+
   function activatePanel(panelId) {
-    tabs.forEach(t => t.classList.remove('is-active'))
-    const active = [...tabs].find(t => t.dataset.panel === panelId)
-    if (active) active.classList.add('is-active')
-    tabContainer.parentElement.querySelectorAll('[id^="srv-panel-"]').forEach(panel => {
-      panel.style.display = panel.id === panelId ? '' : 'none'
-    })
+    for (const { tab, panel } of panelPairs) {
+      if (tab.dataset.panel === panelId) {
+        tab.classList.add('is-active')
+        panel.style.removeProperty('display')
+      } else {
+        tab.classList.remove('is-active')
+        panel.style.setProperty('display', 'none')
+      }
+    }
     if (panelId === auditPanelId) loadAuditPanel()
+    sessionStorage.setItem(activeKey, panelId)
   }
 
-  tabs.forEach(tab => {
+  for (const { tab } of panelPairs) {
     tab.addEventListener('click', () => activatePanel(tab.dataset.panel))
-  })
+  }
+
+  const saved = sessionStorage.getItem(activeKey)
+  if (saved && panelPairs.some(p => p.tab.dataset.panel === saved)) {
+    activatePanel(saved)
+  }
 }
 
-// ─── HTMX afterSwap — shared tab init and timestamp rendering ─────────────────
-
-document.addEventListener('htmx:afterSwap', (evt) => {
+// ─── HTMX afterSettle — shared tab init and timestamp rendering ────────────────
+//
+// We listen on htmx:afterSettle, not htmx:afterSwap. Settle is htmx's phase
+// for applying attribute changes ("settling") on elements matched across the
+// swap. If our tab-restore logic runs in afterSwap, activatePanel removes the
+// audit panel's inline style="display:none", and the settle phase IMMEDIATELY
+// re-applies it from the template attribute — visibly hiding the panel even
+// though the tab class is set to active. afterSettle runs LAST so our changes
+// are authoritative.
+document.addEventListener('htmx:afterSettle', (evt) => {
   const target = evt.detail && evt.detail.target
   if (!target) return
   renderTimestamps(target)
@@ -912,7 +952,7 @@ export function initServerListTabRestoration() {
 export const INVENTORY_CACHE_KEY = 'inventoryCache'
 
 export function inventoryFetch(onData) {
-  const query = `{ queryConfigItem { id __typename orbId name createdBy createdAt } }`
+  const query = `query LoadInventory { queryConfigItem { id __typename orbId name createdBy createdAt } }`
   fetch(BASE + '/graphql', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -955,7 +995,7 @@ export function initInventoryTable() {
           { extend: 'csv', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-text"></i><span>CSV</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV', title: '', filename: 'config-items' },
           { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
           { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
-          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-inventory' } },
+          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-inventory' }, action: function () { reloadInventory() } },
         ] },
         { pageLength: { menu: [100, 250, 500] } },
       ],
@@ -1062,13 +1102,23 @@ export function initInventoryTable() {
   })
   window.addEventListener('focus', () => revalidate())
 
-  const reloadButton = inventoryTable.button('reload:name').node()
-  inventoryTable.button('reload:name').node().on('click', function () {
-    inventoryTable.clear().draw()
-    reloadButton.addClass('is-loading')
+  function reloadInventory() {
     sessionStorage.removeItem(INVENTORY_CACHE_KEY)
-    setTimeout(() => revalidate(() => reloadButton.removeClass('is-loading')), 250)
-  })
+    inventoryTable.clear().draw()
+    const btn = document.getElementById('btn-reload-inventory')
+    if (btn) btn.classList.add('is-loading')
+    const minDelay = new Promise(r => setTimeout(r, 500))
+    new Promise(resolve => inventoryFetch(items => resolve(items)))
+      .then(items => minDelay.then(() => items))
+      .then(items => {
+        inventoryTable.clear().rows.add(items).draw()
+        populateDropdowns()
+        const nsSelect = document.getElementById('inventory-namespace-select')
+        const currentNs = nsSelect ? nsSelect.value : savedNamespace
+        if (currentNs) applyNamespaceFilter(currentNs)
+        if (btn) btn.classList.remove('is-loading')
+      })
+  }
 
   return inventoryTable
 }
@@ -1133,7 +1183,7 @@ export function initDatacenterTable(opts = {}) {
       url: BASE + '/graphql',
       type: 'POST',
       contentType: 'application/json',
-      data: () => JSON.stringify({ query: `{ queryDataCenter { id orbId name createdBy createdAt serversAggregate { count } } }` }),
+      data: () => JSON.stringify({ query: `query LoadDataCenters { queryDataCenter { id orbId name createdBy createdAt serversAggregate { count } } }` }),
       dataSrc: (json) => {
         if (!gqlSurfaceErrors(json, 'Load data centers')) return []
         return (json.data?.queryDataCenter ?? []).map(dc => ({
@@ -1248,7 +1298,7 @@ export function initServerListTable(opts = {}) {
       type: 'POST',
       contentType: 'application/json',
       data: () => JSON.stringify({
-        query: `{ queryServer {
+        query: `query LoadServers { queryServer {
           id orbId hostname serviceTag model
           oobIP { address }
           rack { name }

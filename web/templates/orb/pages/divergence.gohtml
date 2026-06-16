@@ -10,6 +10,20 @@
       Reports arrive from configbundle-controller on its reporter tick (configurable interval). Click <strong>Refresh</strong> to pull the latest snapshot.
     </p>
 
+    <div class="field mb-3" style="max-width: 480px;">
+      <label class="label is-small">Location</label>
+      <div class="control has-icons-right">
+        {{if .S3Configured}}
+          <input class="input is-small has-background-light has-text-grey-dark" type="text" value="{{.S3Endpoint}}/{{.S3Bucket}}" readonly style="cursor: default;">
+          <span class="icon is-small is-right has-text-grey-light"><i class="fas fa-lock"></i></span>
+        {{else}}
+          <input class="input is-small is-danger" type="text" value="Object store not configured" readonly style="cursor: default;">
+          <p class="help is-danger">Set ORB_S3_ENDPOINT, ORB_S3_BUCKET, ORB_S3_ACCESS_KEY, ORB_S3_SECRET_KEY</p>
+        {{end}}
+      </div>
+      {{if .S3Configured}}<p class="help has-text-grey-light">Configurable only via environment variable</p>{{end}}
+    </div>
+
     <div class="field mb-4">
       <div class="control is-flex is-align-items-center" style="gap: 0.75rem;">
         <button id="btn-refresh-divergence" class="button is-info is-small" onclick="refreshOrbDivergence()">
@@ -19,7 +33,7 @@
         {{if .S3Configured}}
           <button class="button is-primary is-small" id="publish-btn" onclick="publishDivergence()">
             <span class="icon"><i class="fa-solid fa-upload"></i></span>
-            <span>Publish to S3</span>
+            <span>Publish Report</span>
           </button>
           <button id="btn-test-divergence-connection" type="button" class="button is-light is-small"
                   hx-post="{{.BasePath}}/api/v1/divergence/test-connection"
@@ -30,7 +44,7 @@
           </button>
           <span id="divergence-connection-result" class="is-size-7"></span>
         {{else}}
-          <span class="tag is-warning is-light">S3 not configured — publish disabled</span>
+          <span class="tag is-warning is-light">Object store not configured — publish disabled</span>
         {{end}}
       </div>
     </div>

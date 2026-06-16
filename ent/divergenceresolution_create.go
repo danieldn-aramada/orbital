@@ -107,20 +107,6 @@ func (_c *DivergenceResolutionCreate) SetDecidedAt(v time.Time) *DivergenceResol
 	return _c
 }
 
-// SetPropagatedAt sets the "propagated_at" field.
-func (_c *DivergenceResolutionCreate) SetPropagatedAt(v time.Time) *DivergenceResolutionCreate {
-	_c.mutation.SetPropagatedAt(v)
-	return _c
-}
-
-// SetNillablePropagatedAt sets the "propagated_at" field if the given value is not nil.
-func (_c *DivergenceResolutionCreate) SetNillablePropagatedAt(v *time.Time) *DivergenceResolutionCreate {
-	if v != nil {
-		_c.SetPropagatedAt(*v)
-	}
-	return _c
-}
-
 // SetID sets the "id" field.
 func (_c *DivergenceResolutionCreate) SetID(v uuid.UUID) *DivergenceResolutionCreate {
 	_c.mutation.SetID(v)
@@ -290,10 +276,6 @@ func (_c *DivergenceResolutionCreate) createSpec() (*DivergenceResolution, *sqlg
 	if value, ok := _c.mutation.DecidedAt(); ok {
 		_spec.SetField(divergenceresolution.FieldDecidedAt, field.TypeTime, value)
 		_node.DecidedAt = value
-	}
-	if value, ok := _c.mutation.PropagatedAt(); ok {
-		_spec.SetField(divergenceresolution.FieldPropagatedAt, field.TypeTime, value)
-		_node.PropagatedAt = &value
 	}
 	return _node, _spec
 }
