@@ -158,6 +158,33 @@ func (_u *DivergenceResolutionUpdate) SetNillableDecidedAt(v *time.Time) *Diverg
 	return _u
 }
 
+// SetIntendedAtVersion sets the "intended_at_version" field.
+func (_u *DivergenceResolutionUpdate) SetIntendedAtVersion(v int) *DivergenceResolutionUpdate {
+	_u.mutation.ResetIntendedAtVersion()
+	_u.mutation.SetIntendedAtVersion(v)
+	return _u
+}
+
+// SetNillableIntendedAtVersion sets the "intended_at_version" field if the given value is not nil.
+func (_u *DivergenceResolutionUpdate) SetNillableIntendedAtVersion(v *int) *DivergenceResolutionUpdate {
+	if v != nil {
+		_u.SetIntendedAtVersion(*v)
+	}
+	return _u
+}
+
+// AddIntendedAtVersion adds value to the "intended_at_version" field.
+func (_u *DivergenceResolutionUpdate) AddIntendedAtVersion(v int) *DivergenceResolutionUpdate {
+	_u.mutation.AddIntendedAtVersion(v)
+	return _u
+}
+
+// ClearIntendedAtVersion clears the value of the "intended_at_version" field.
+func (_u *DivergenceResolutionUpdate) ClearIntendedAtVersion() *DivergenceResolutionUpdate {
+	_u.mutation.ClearIntendedAtVersion()
+	return _u
+}
+
 // Mutation returns the DivergenceResolutionMutation object of the builder.
 func (_u *DivergenceResolutionUpdate) Mutation() *DivergenceResolutionMutation {
 	return _u.mutation
@@ -259,6 +286,15 @@ func (_u *DivergenceResolutionUpdate) sqlSave(ctx context.Context) (_node int, e
 	}
 	if value, ok := _u.mutation.DecidedAt(); ok {
 		_spec.SetField(divergenceresolution.FieldDecidedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.IntendedAtVersion(); ok {
+		_spec.SetField(divergenceresolution.FieldIntendedAtVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedIntendedAtVersion(); ok {
+		_spec.AddField(divergenceresolution.FieldIntendedAtVersion, field.TypeInt, value)
+	}
+	if _u.mutation.IntendedAtVersionCleared() {
+		_spec.ClearField(divergenceresolution.FieldIntendedAtVersion, field.TypeInt)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -410,6 +446,33 @@ func (_u *DivergenceResolutionUpdateOne) SetNillableDecidedAt(v *time.Time) *Div
 	return _u
 }
 
+// SetIntendedAtVersion sets the "intended_at_version" field.
+func (_u *DivergenceResolutionUpdateOne) SetIntendedAtVersion(v int) *DivergenceResolutionUpdateOne {
+	_u.mutation.ResetIntendedAtVersion()
+	_u.mutation.SetIntendedAtVersion(v)
+	return _u
+}
+
+// SetNillableIntendedAtVersion sets the "intended_at_version" field if the given value is not nil.
+func (_u *DivergenceResolutionUpdateOne) SetNillableIntendedAtVersion(v *int) *DivergenceResolutionUpdateOne {
+	if v != nil {
+		_u.SetIntendedAtVersion(*v)
+	}
+	return _u
+}
+
+// AddIntendedAtVersion adds value to the "intended_at_version" field.
+func (_u *DivergenceResolutionUpdateOne) AddIntendedAtVersion(v int) *DivergenceResolutionUpdateOne {
+	_u.mutation.AddIntendedAtVersion(v)
+	return _u
+}
+
+// ClearIntendedAtVersion clears the value of the "intended_at_version" field.
+func (_u *DivergenceResolutionUpdateOne) ClearIntendedAtVersion() *DivergenceResolutionUpdateOne {
+	_u.mutation.ClearIntendedAtVersion()
+	return _u
+}
+
 // Mutation returns the DivergenceResolutionMutation object of the builder.
 func (_u *DivergenceResolutionUpdateOne) Mutation() *DivergenceResolutionMutation {
 	return _u.mutation
@@ -541,6 +604,15 @@ func (_u *DivergenceResolutionUpdateOne) sqlSave(ctx context.Context) (_node *Di
 	}
 	if value, ok := _u.mutation.DecidedAt(); ok {
 		_spec.SetField(divergenceresolution.FieldDecidedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.IntendedAtVersion(); ok {
+		_spec.SetField(divergenceresolution.FieldIntendedAtVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedIntendedAtVersion(); ok {
+		_spec.AddField(divergenceresolution.FieldIntendedAtVersion, field.TypeInt, value)
+	}
+	if _u.mutation.IntendedAtVersionCleared() {
+		_spec.ClearField(divergenceresolution.FieldIntendedAtVersion, field.TypeInt)
 	}
 	_node = &DivergenceResolution{config: _u.config}
 	_spec.Assign = _node.assignValues

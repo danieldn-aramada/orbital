@@ -1,4 +1,4 @@
-# Orbital DGraph Schema - v1
+# Orbital DGraph Schema
 #
 # Rules:
 #   - Schema changes must be backwards compatible. Orbs may be on older versions.

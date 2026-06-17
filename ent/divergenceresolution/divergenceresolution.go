@@ -33,6 +33,8 @@ const (
 	FieldActor = "actor"
 	// FieldDecidedAt holds the string denoting the decided_at field in the database.
 	FieldDecidedAt = "decided_at"
+	// FieldIntendedAtVersion holds the string denoting the intended_at_version field in the database.
+	FieldIntendedAtVersion = "intended_at_version"
 	// Table holds the table name of the divergenceresolution in the database.
 	Table = "divergence_resolutions"
 )
@@ -49,6 +51,7 @@ var Columns = []string{
 	FieldAction,
 	FieldActor,
 	FieldDecidedAt,
+	FieldIntendedAtVersion,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -149,4 +152,9 @@ func ByActor(opts ...sql.OrderTermOption) OrderOption {
 // ByDecidedAt orders the results by the decided_at field.
 func ByDecidedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDecidedAt, opts...).ToFunc()
+}
+
+// ByIntendedAtVersion orders the results by the intended_at_version field.
+func ByIntendedAtVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIntendedAtVersion, opts...).ToFunc()
 }

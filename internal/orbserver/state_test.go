@@ -1,6 +1,7 @@
 package orbserver
 
 import (
+	"errors"
 	"sync"
 	"testing"
 
@@ -128,6 +129,49 @@ func TestState_HydrateFromHistory(t *testing.T) {
 			t.Errorf("CurrentVersion: got %q, want empty", snap.CurrentVersion)
 		}
 	})
+}
+
+// TestState_NotePollErrorPreservesAvailable pins the load-bearing rule for the
+// poller's error path: a transient registry error MUST NOT erase a previously-
+// discovered availableVersion. The banner "New version available: v4" the
+// operator just published would otherwise vanish on the first network blip.
+func TestState_NotePollErrorPreservesAvailable(t *testing.T) {
+	s := newImportState()
+	s.setAvailable("v4")
+
+	s.notePollError(errors.New("dial tcp: i/o timeout"))
+
+	snap := s.snapshot()
+	if snap.AvailableVersion != "v4" {
+		t.Errorf("AvailableVersion must survive transient poll error; got %q", snap.AvailableVersion)
+	}
+	if snap.LastPollErr != "dial tcp: i/o timeout" {
+		t.Errorf("LastPollErr: got %q, want the dial error message", snap.LastPollErr)
+	}
+	if snap.LastChecked.IsZero() {
+		t.Error("LastChecked must update on error path so the UI can show 'last tried at ...'")
+	}
+}
+
+// TestState_SetAvailableClearsPollErr pins the recovery rule: a successful poll
+// after a string of failed ones must clear LastPollErr so the UI stops showing
+// a stale "polling failed" indicator.
+func TestState_SetAvailableClearsPollErr(t *testing.T) {
+	s := newImportState()
+	s.notePollError(errors.New("registry 503"))
+	if snap := s.snapshot(); snap.LastPollErr == "" {
+		t.Fatal("setup: expected LastPollErr to be populated")
+	}
+
+	s.setAvailable("v4") // poller recovered
+
+	snap := s.snapshot()
+	if snap.LastPollErr != "" {
+		t.Errorf("LastPollErr must clear on successful poll; got %q", snap.LastPollErr)
+	}
+	if snap.AvailableVersion != "v4" {
+		t.Errorf("AvailableVersion: got %q, want v4", snap.AvailableVersion)
+	}
 }
 
 func TestState_ConcurrentAccess(t *testing.T) {

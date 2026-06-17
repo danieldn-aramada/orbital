@@ -424,6 +424,9 @@ const docTemplate = `{
                 "lastImport": {
                     "$ref": "#/definitions/orb.ImportRecord"
                 },
+                "lastPollErr": {
+                    "type": "string"
+                },
                 "status": {
                     "type": "string"
                 }

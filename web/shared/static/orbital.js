@@ -268,7 +268,7 @@ function pollExportStatus(jobId) {
     .then(job => {
       loadExportJobsTable()
       if (job.status === 'completed') {
-        showExportStatus('is-success', 'fa-circle-check', 'Export complete.', jobId)
+        showExportStatus('is-success', 'fa-circle-check', 'Export complete.')
       } else if (job.status === 'failed') {
         showExportStatus('is-danger', 'fa-circle-xmark', `Export failed: ${job.error ?? 'unknown error'}`)
       } else {
@@ -279,25 +279,15 @@ function pollExportStatus(jobId) {
     .catch(() => { exportPollTimer = setTimeout(() => pollExportStatus(jobId), 3000) })
 }
 
-function showExportStatus(colorClass, iconClass, text, downloadJobId) {
-  const box = document.getElementById('export-status-box')
+function showExportStatus(colorClass, iconClass, text) {
   const article = document.getElementById('export-status-article')
   const icon = document.getElementById('export-status-icon')
   const textEl = document.getElementById('export-status-text')
-  const dlWrap = document.getElementById('export-download-link')
-  const dlAnchor = document.getElementById('export-download-anchor')
 
   article.className = `message ${colorClass}`
   icon.innerHTML = `<i class="fa-solid ${iconClass}"></i>`
   textEl.textContent = text
-  box.style.display = ''
-
-  if (downloadJobId) {
-    dlAnchor.href = BASE + `/api/v1/export/jobs/${downloadJobId}/download`
-    dlWrap.style.display = ''
-  } else {
-    dlWrap.style.display = 'none'
-  }
+  document.getElementById('export-status-box').style.display = ''
 }
 
 function loadExportJobsTable() {
@@ -1119,17 +1109,11 @@ function setUserRole(userId, role, btn) {
 }
 
 // ─── Divergence reports page ──────────────────────────────────────────────────
-
-const DIVERGENCE_EXPANDED_KEY = 'divergence:expanded'
-
-function loadExpandedSet() {
-  try { return new Set(JSON.parse(sessionStorage.getItem(DIVERGENCE_EXPANDED_KEY) || '[]')) }
-  catch (_) { return new Set() }
-}
-
-function saveExpandedSet(set) {
-  sessionStorage.setItem(DIVERGENCE_EXPANDED_KEY, JSON.stringify([...set]))
-}
+//
+// Expansion is per-session, in-DOM only — no sessionStorage persistence.
+// Page loads (and refreshes) always start collapsed; the operator must click
+// to expand. Avoids the surprise of a newly-arrived report being auto-expanded
+// because the same DC was expanded in a prior session.
 
 function setGroupExpanded(dcId, expanded) {
   const sel = `[data-dc="${CSS.escape(dcId)}"]`
@@ -1145,17 +1129,10 @@ function setGroupExpanded(dcId, expanded) {
 }
 
 function toggleDivergenceGroup(dcId) {
-  const set = loadExpandedSet()
-  const expand = !set.has(dcId)
-  setGroupExpanded(dcId, expand)
-  if (expand) set.add(dcId)
-  else set.delete(dcId)
-  saveExpandedSet(set)
-}
-
-function restoreDivergenceGroups() {
-  if (!document.querySelector('tr.divergence-group-row')) return
-  for (const dcId of loadExpandedSet()) setGroupExpanded(dcId, true)
+  const sel = `[data-dc="${CSS.escape(dcId)}"]`
+  const detail = document.querySelector('tr.divergence-group-detail' + sel)
+  if (!detail) return
+  setGroupExpanded(dcId, detail.style.display === 'none')
 }
 
 // toggleDivergenceAction selects/deselects an action button within a per-row
@@ -1258,9 +1235,8 @@ function populateDivergenceConfirmModal(resolutions) {
   if (counts.ignore) tags.push(`<span class="tag is-warning is-light">${counts.ignore} Ignore</span>`)
 
   const warning = counts.reject > 0
-    ? `<div class="notification is-warning is-light is-size-7 mt-3 mb-0" style="padding:0.75em 1em;">
-         <strong>Reject</strong> instructs the deployment layer to take ownership of the field on the next bundle and reset the edge value to cloud intent.
-         Once propagated, it's hard to reverse from this UI — plan accordingly.
+    ? `<div class="notification is-danger is-light is-size-7 mt-3 mb-0" style="padding:0.75em 1em;">
+         <strong>Reject</strong> will signal a force-apply of orbital intent at the edge, overriding the edge admin's override on the next bundle.
        </div>`
     : ''
 
@@ -1356,7 +1332,6 @@ function confirmDivergenceBatch() {
   })
 }
 
-document.addEventListener('DOMContentLoaded', restoreDivergenceGroups)
 document.addEventListener('DOMContentLoaded', updateDivergenceBatchCounter)
 
 // refreshDivergenceReports fetches the page's HX fragment and swaps the
@@ -1376,7 +1351,6 @@ function refreshDivergenceReports() {
     .then(([html]) => {
       container.innerHTML = html
       htmx.process(container)
-      restoreDivergenceGroups()
       updateDivergenceBatchCounter()
     })
     .catch(() => {})

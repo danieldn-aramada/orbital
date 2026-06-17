@@ -83,6 +83,7 @@ var (
 		{Name: "action", Type: field.TypeEnum, Enums: []string{"accept", "reject", "ignore"}},
 		{Name: "actor", Type: field.TypeString},
 		{Name: "decided_at", Type: field.TypeTime},
+		{Name: "intended_at_version", Type: field.TypeInt, Nullable: true},
 	}
 	// DivergenceResolutionsTable holds the schema information for the "divergence_resolutions" table.
 	DivergenceResolutionsTable = &schema.Table{

@@ -52,6 +52,15 @@ func (DivergenceResolution) Fields() []ent.Field {
 		field.String("actor").NotEmpty(),
 
 		field.Time("decided_at"),
+
+		// intended_at_version pins the DGraph intent version this decision was
+		// made against. Accept stores entry.intended_at_version + 1 (the new
+		// version after the mutation); Reject/Ignore store entry.intended_at_version
+		// (intent unchanged). At bundle build, the List handler refuses to surface
+		// the resolution if DGraph's current version has moved past this pin —
+		// preventing a cloud admin's intent edit from silently flipping what
+		// gets force-applied at the edge. Nullable for legacy rows pre-MVCC.
+		field.Int("intended_at_version").Optional().Nillable(),
 	}
 }
 

@@ -228,6 +228,14 @@ func (i *Importer) applySchema(ctx context.Context, schemaGZ []byte) error {
 		return fmt.Errorf("schema apply returned %d: %s", resp.StatusCode, b)
 	}
 
+	// Ensure DataDir exists before writing; on a fresh install Import() hasn't
+	// done its MkdirAll yet when applySchema runs, so the write would fail
+	// silently and the schema page would show "No schema available" even
+	// though the import succeeded.
+	if err := os.MkdirAll(i.cfg.DataDir, 0o755); err != nil {
+		i.logger.Warn("failed to create data dir for schema file", "err", err)
+		return nil
+	}
 	schemaPath := filepath.Join(i.cfg.DataDir, SchemaFile)
 	if err := os.WriteFile(schemaPath, schema, 0o644); err != nil {
 		i.logger.Warn("failed to save schema to disk", "err", err)

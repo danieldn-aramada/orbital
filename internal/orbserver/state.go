@@ -15,8 +15,9 @@ type importState struct {
 	currentVersion   string // tag of last successfully imported artifact
 	availableVersion string // tag discovered by poller that is newer than currentVersion
 	lastImport       *orb.ImportRecord
-	lastError        string
+	lastError        string // last IMPORT error (setFailed)
 	lastChecked      time.Time
+	lastPollErr      string // last POLL error message (registry unreachable, etc.); separate from import errors
 }
 
 func newImportState() *importState {
@@ -66,11 +67,28 @@ func (s *importState) setFailed(errMsg string) {
 	s.lastError = errMsg
 }
 
+// setAvailable records a SUCCESSFUL poll result. Tag is the registry's highest
+// version (empty when orb is already current). Clears any previous poll error
+// because we just had a successful round-trip to the registry.
 func (s *importState) setAvailable(tag string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.availableVersion = tag
 	s.lastChecked = time.Now().UTC()
+	s.lastPollErr = ""
+}
+
+// notePollError records a FAILED poll without disturbing availableVersion.
+// Preserves last-known-good "newer version available" state across transient
+// registry blips — otherwise a 5-second network hiccup would erase the banner
+// the operator just published an artifact to see.
+func (s *importState) notePollError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lastChecked = time.Now().UTC()
+	if err != nil {
+		s.lastPollErr = err.Error()
+	}
 }
 
 func (s *importState) snapshot() importSnapshot {
@@ -82,6 +100,7 @@ func (s *importState) snapshot() importSnapshot {
 		AvailableVersion: s.availableVersion,
 		LastError:        s.lastError,
 		LastChecked:      s.lastChecked,
+		LastPollErr:      s.lastPollErr,
 	}
 	if s.lastImport != nil {
 		r := *s.lastImport
@@ -97,4 +116,5 @@ type importSnapshot struct {
 	LastImport       *orb.ImportRecord  `json:"lastImport,omitempty"`
 	LastError        string             `json:"lastError,omitempty"`
 	LastChecked      time.Time          `json:"lastChecked,omitempty"`
+	LastPollErr      string             `json:"lastPollErr,omitempty"`
 }

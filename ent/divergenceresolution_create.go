@@ -107,6 +107,20 @@ func (_c *DivergenceResolutionCreate) SetDecidedAt(v time.Time) *DivergenceResol
 	return _c
 }
 
+// SetIntendedAtVersion sets the "intended_at_version" field.
+func (_c *DivergenceResolutionCreate) SetIntendedAtVersion(v int) *DivergenceResolutionCreate {
+	_c.mutation.SetIntendedAtVersion(v)
+	return _c
+}
+
+// SetNillableIntendedAtVersion sets the "intended_at_version" field if the given value is not nil.
+func (_c *DivergenceResolutionCreate) SetNillableIntendedAtVersion(v *int) *DivergenceResolutionCreate {
+	if v != nil {
+		_c.SetIntendedAtVersion(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *DivergenceResolutionCreate) SetID(v uuid.UUID) *DivergenceResolutionCreate {
 	_c.mutation.SetID(v)
@@ -276,6 +290,10 @@ func (_c *DivergenceResolutionCreate) createSpec() (*DivergenceResolution, *sqlg
 	if value, ok := _c.mutation.DecidedAt(); ok {
 		_spec.SetField(divergenceresolution.FieldDecidedAt, field.TypeTime, value)
 		_node.DecidedAt = value
+	}
+	if value, ok := _c.mutation.IntendedAtVersion(); ok {
+		_spec.SetField(divergenceresolution.FieldIntendedAtVersion, field.TypeInt, value)
+		_node.IntendedAtVersion = &value
 	}
 	return _node, _spec
 }

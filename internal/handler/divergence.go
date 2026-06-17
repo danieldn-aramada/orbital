@@ -109,6 +109,40 @@ func (h *DivergenceHandler) List(c echo.Context) error {
 		wantAction[parsed] = true
 	}
 
+	// Per-field staleness check for the action-filtered (bundler) query shape.
+	// Compares the field's current DGraph value to what the admin's resolution
+	// expects: for Reject, intent should still equal entry.intended_value (the
+	// admin decided to keep that intent); for Accept, intent should now equal
+	// entry.override_value (the admin's mutation adopted the override). If the
+	// current value differs, another admin's edit has moved this specific field
+	// since the decision — surface as stale, exclude from the bundler list.
+	//
+	// Per-FIELD (not per-ConfigItem) because batched decisions on sibling
+	// fields of the same ConfigItem (e.g., Accept ipmiEnabled + Reject
+	// sshEnabled on the same IdracSettings) must not invalidate each other.
+	// The version field on ConfigItem bumps for any sibling edit, which would
+	// false-positive every batch resolution that touches more than one field.
+	type cachedValMatches struct{ match bool; have bool }
+	currentValueMatchCache := map[string]cachedValMatches{}
+	currentValueMatchesExpected := func(typeName, orbID, field string, expected json.RawMessage) bool {
+		if typeName == "" || orbID == "" || field == "" || len(expected) == 0 {
+			return true // no anchor → can't check; allow through (degraded MVCC)
+		}
+		key := typeName + "|" + orbID + "|" + field + "|" + string(expected)
+		if c, ok := currentValueMatchCache[key]; ok && c.have {
+			return c.match
+		}
+		match, err := h.currentValueMatches(ctx, typeName, orbID, field, expected)
+		if err != nil {
+			h.logger.Warn("fetch current value for resolution staleness check failed",
+				"orbId", orbID, "type", typeName, "field", field, "err", err)
+			currentValueMatchCache[key] = cachedValMatches{match: true, have: true} // degrade to allow
+			return true
+		}
+		currentValueMatchCache[key] = cachedValMatches{match: match, have: true}
+		return match
+	}
+
 	out := make([]entryItem, 0, len(entries))
 	for _, e := range entries {
 		item := entryItem{
@@ -146,6 +180,28 @@ func (h *DivergenceHandler) List(c echo.Context) error {
 			}
 			if !wantAction[divergenceresolution.Action(item.Resolution.Action)] {
 				continue
+			}
+			// MVCC: refuse to surface accept/reject resolutions whose field
+			// intent has been superseded by another cloud admin's edit since
+			// the decision. Reject expects DGraph current == entry.intended
+			// (admin chose to keep that intent); Accept expects DGraph current
+			// == entry.override (admin's mutation adopted the override). If
+			// current diverges from the expected post-decision value, surface
+			// as stale and exclude from the bundler list. Ignore is exempt —
+			// it's a standing instruction, not a one-shot enforcement.
+			if res != nil &&
+				(res.Action == divergenceresolution.ActionAccept || res.Action == divergenceresolution.ActionReject) {
+				var expected json.RawMessage
+				if res.Action == divergenceresolution.ActionReject {
+					expected = e.IntendedValue
+				} else {
+					expected = e.OverrideValue
+				}
+				if !currentValueMatchesExpected(e.TypeName, e.EntryOrbID, e.Field, expected) {
+					h.logger.Info("excluding stale resolution from action-filtered list",
+						"orbId", e.EntryOrbID, "field", e.Field, "action", res.Action)
+					continue
+				}
 			}
 		}
 		out = append(out, item)
@@ -292,13 +348,27 @@ func (h *DivergenceHandler) applyResolution(ctx context.Context, id uuid.UUID, a
 		Exec(ctx); err != nil {
 		return nil, fmt.Errorf("delete prior resolution: %w", err)
 	}
-	res, err := h.db.DivergenceResolution.Create().
+
+	// Pin the DGraph intent version this decision was made against. The List
+	// handler later compares this against DGraph's current version to refuse
+	// surfacing the resolution if intent has moved (e.g., another cloud admin
+	// edited the field between this decision and the next bundle build).
+	// Accept's mutation already incremented intent by 1, so we pin the
+	// post-mutation version; Reject/Ignore leave intent untouched.
+	create := h.db.DivergenceResolution.Create().
 		SetEntryOrbID(entry.EntryOrbID).
 		SetField(entry.Field).
 		SetAction(action).
 		SetActor(actor).
-		SetDecidedAt(time.Now().UTC()).
-		Save(ctx)
+		SetDecidedAt(time.Now().UTC())
+	if entry.IntendedAtVersion != nil {
+		v := *entry.IntendedAtVersion
+		if action == divergenceresolution.ActionAccept {
+			v++
+		}
+		create = create.SetIntendedAtVersion(v)
+	}
+	res, err := create.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create resolution: %w", err)
 	}

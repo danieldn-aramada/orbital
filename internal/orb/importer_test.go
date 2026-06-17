@@ -111,6 +111,38 @@ func TestImporter_Import_Success(t *testing.T) {
 	}
 }
 
+func TestImporter_Import_WritesSchemaFileOnFreshInstall(t *testing.T) {
+	// Regression: on a fresh install where DataDir doesn't yet exist, applySchema
+	// must still write schema.graphql. The bug was that Import() did MkdirAll
+	// AFTER applySchema, so the schema write failed silently and orb's schema
+	// page rendered "No schema available" even though the import succeeded.
+	ts := newTestDGraphServer(http.StatusOK, http.StatusOK)
+	defer ts.Close()
+
+	backend := &mockBackend{}
+	imp := newTestImporter(t, ts, backend)
+	// Use a subdir of TempDir that DOES NOT YET EXIST — the realistic fresh-
+	// install case. t.TempDir() exists; orb-data underneath does not.
+	imp.cfg.DataDir = filepath.Join(imp.cfg.DataDir, "fresh-install")
+	if _, err := os.Stat(imp.cfg.DataDir); !os.IsNotExist(err) {
+		t.Fatalf("test setup: DataDir should not exist yet, got err=%v", err)
+	}
+
+	meta := ImportMeta{Tag: "v1", Digest: "sha256:abc", Verification: VerificationVerified}
+	if err := imp.Import(context.Background(), fakeDataGZ(t), fakeSchemaGZ(t), meta); err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+
+	schemaPath := filepath.Join(imp.cfg.DataDir, SchemaFile)
+	data, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatalf("expected %s to be written on fresh install, got: %v", SchemaFile, err)
+	}
+	if len(data) == 0 {
+		t.Errorf("expected non-empty schema file, got zero bytes")
+	}
+}
+
 func TestImporter_Import_DropAllError(t *testing.T) {
 	ts := newTestDGraphServer(http.StatusInternalServerError, http.StatusOK)
 	defer ts.Close()
