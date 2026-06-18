@@ -70,13 +70,17 @@ function pollOrbImport() {
   fetch(BASE + '/api/v1/import/status')
     .then(r => r.json())
     .then(data => {
-      if (data.status === 'done') {
+      if (data.status === 'done' || data.status === 'partial') {
         // Imported data replaces the local DGraph store. Cached inventory is
         // now stale (sessionStorage doesn't auto-refresh on page load); open
         // DC/Server tab IDs point at UIDs that no longer exist after drop_all.
         sessionStorage.removeItem(INVENTORY_CACHE_KEY)
         clearStaleTabState()
-        orbShowImportStatus('is-success', 'fa-circle-check', `Imported ${data.currentVersion} successfully.`)
+        if (data.status === 'partial') {
+          orbShowImportStatus('is-warning', 'fa-circle-exclamation', `Imported ${data.currentVersion} with dispatch errors — see Import History.`)
+        } else {
+          orbShowImportStatus('is-success', 'fa-circle-check', `Imported ${data.currentVersion} successfully.`)
+        }
       } else if (data.status === 'failed') {
         orbShowImportStatus('is-danger', 'fa-circle-xmark', `Import failed: ${data.lastError || 'unknown error'}`)
       } else {

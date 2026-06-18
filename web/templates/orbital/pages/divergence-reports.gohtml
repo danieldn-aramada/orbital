@@ -75,6 +75,26 @@
       </footer>
     </div>
   </div>
+
+  {{/* Reuses the same publish-confirm modal markup as /export: per-row button
+       triggers export + opens this modal with the publish summary fragment.
+       Operator confirms by clicking Publish in the modal — same HTMX form
+       flow as the Export page. */}}
+  <div id="publish-confirm-modal" class="modal">
+    <div class="modal-background" onclick="document.getElementById('publish-confirm-modal').classList.remove('is-active')"></div>
+    <div class="modal-card">
+      <header class="modal-card-head">
+        <p class="modal-card-title">Publish Export</p>
+        <button class="delete" aria-label="close" onclick="document.getElementById('publish-confirm-modal').classList.remove('is-active')"></button>
+      </header>
+      <section class="modal-card-body">
+        <div id="publish-modal-body"></div>
+      </section>
+      <footer class="modal-card-foot">
+        <button class="button" onclick="document.getElementById('publish-confirm-modal').classList.remove('is-active')">Close</button>
+      </footer>
+    </div>
+  </div>
 {{end}}
 
 {{define "divergence-content"}}
@@ -83,9 +103,10 @@
         <colgroup>
           <col style="width: 2.5rem">  {{/* chevron */}}
           <col style="width: 20%">      {{/* Data Center */}}
-          <col style="width: 20%">      {{/* Last Seen */}}
-          <col style="width: 20%">      {{/* Entries */}}
-          <col>                         {{/* Status — remainder */}}
+          <col style="width: 18%">      {{/* Last Seen */}}
+          <col style="width: 10%">      {{/* Entries */}}
+          <col style="width: 18%">      {{/* Status */}}
+          <col>                         {{/* Actions — remainder */}}
         </colgroup>
         <thead>
           <tr>
@@ -94,6 +115,7 @@
             <th>Last Seen</th>
             <th>Entries</th>
             <th>Status</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -117,10 +139,37 @@
                 </span>
               {{end}}
             </td>
+            <td onclick="event.stopPropagation()">
+              {{/* Publish button: triggers export + publish for this DC in one
+                   action. Three states:
+                     1. Pending decisions exist → disabled, "Resolve first" tooltip.
+                     2. AlreadyPublished (current resolutions already covered by
+                        a completed publish, server-side check) → permanently
+                        disabled green "Published <tag>". Republish goes via
+                        /export.
+                     3. Otherwise → enabled outlined "Publish".
+                   State (2) enforces one-shot publish semantics across all
+                   operators / sessions. */}}
+              {{if .AlreadyPublished}}
+              <button class="button is-success is-light is-small" disabled
+                      title="Already published — go to Export Subgraph to republish">
+                <span class="icon"><i class="fa-solid fa-check"></i></span>
+                <span>Published{{if .PublishedTag}} {{.PublishedTag}}{{end}}</span>
+              </button>
+              {{else}}
+              <button class="button is-link is-outlined is-small divergence-publish-btn"
+                      data-dc-orbid="{{$dcId}}"
+                      onclick="divergencePublishForDC(this)"
+                      {{if gt .Pending 0}}disabled title="Resolve pending decisions first"{{end}}>
+                <span class="icon"><i class="fa-solid fa-upload"></i></span>
+                <span>Publish</span>
+              </button>
+              {{end}}
+            </td>
           </tr>
           <tr class="divergence-group-detail" data-dc="{{$dcId}}" style="display:none;">
             <td></td>
-            <td colspan="4">
+            <td colspan="5">
               <table class="table is-fullwidth is-size-7" style="margin-bottom:0; table-layout: fixed;">
                 <colgroup>
                   <col style="width: 15%">    {{/* Config Item: type + orbId stacked */}}

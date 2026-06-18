@@ -257,16 +257,16 @@ func (_u *DivergenceEntryUpdate) SetNillableLastSeenAt(v *time.Time) *Divergence
 	return _u
 }
 
-// SetLastSnapshotPublishedAt sets the "last_snapshot_published_at" field.
-func (_u *DivergenceEntryUpdate) SetLastSnapshotPublishedAt(v time.Time) *DivergenceEntryUpdate {
-	_u.mutation.SetLastSnapshotPublishedAt(v)
+// SetLastReportPublishedAt sets the "last_report_published_at" field.
+func (_u *DivergenceEntryUpdate) SetLastReportPublishedAt(v time.Time) *DivergenceEntryUpdate {
+	_u.mutation.SetLastReportPublishedAt(v)
 	return _u
 }
 
-// SetNillableLastSnapshotPublishedAt sets the "last_snapshot_published_at" field if the given value is not nil.
-func (_u *DivergenceEntryUpdate) SetNillableLastSnapshotPublishedAt(v *time.Time) *DivergenceEntryUpdate {
+// SetNillableLastReportPublishedAt sets the "last_report_published_at" field if the given value is not nil.
+func (_u *DivergenceEntryUpdate) SetNillableLastReportPublishedAt(v *time.Time) *DivergenceEntryUpdate {
 	if v != nil {
-		_u.SetLastSnapshotPublishedAt(*v)
+		_u.SetLastReportPublishedAt(*v)
 	}
 	return _u
 }
@@ -413,8 +413,8 @@ func (_u *DivergenceEntryUpdate) sqlSave(ctx context.Context) (_node int, err er
 	if value, ok := _u.mutation.LastSeenAt(); ok {
 		_spec.SetField(divergenceentry.FieldLastSeenAt, field.TypeTime, value)
 	}
-	if value, ok := _u.mutation.LastSnapshotPublishedAt(); ok {
-		_spec.SetField(divergenceentry.FieldLastSnapshotPublishedAt, field.TypeTime, value)
+	if value, ok := _u.mutation.LastReportPublishedAt(); ok {
+		_spec.SetField(divergenceentry.FieldLastReportPublishedAt, field.TypeTime, value)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -663,16 +663,16 @@ func (_u *DivergenceEntryUpdateOne) SetNillableLastSeenAt(v *time.Time) *Diverge
 	return _u
 }
 
-// SetLastSnapshotPublishedAt sets the "last_snapshot_published_at" field.
-func (_u *DivergenceEntryUpdateOne) SetLastSnapshotPublishedAt(v time.Time) *DivergenceEntryUpdateOne {
-	_u.mutation.SetLastSnapshotPublishedAt(v)
+// SetLastReportPublishedAt sets the "last_report_published_at" field.
+func (_u *DivergenceEntryUpdateOne) SetLastReportPublishedAt(v time.Time) *DivergenceEntryUpdateOne {
+	_u.mutation.SetLastReportPublishedAt(v)
 	return _u
 }
 
-// SetNillableLastSnapshotPublishedAt sets the "last_snapshot_published_at" field if the given value is not nil.
-func (_u *DivergenceEntryUpdateOne) SetNillableLastSnapshotPublishedAt(v *time.Time) *DivergenceEntryUpdateOne {
+// SetNillableLastReportPublishedAt sets the "last_report_published_at" field if the given value is not nil.
+func (_u *DivergenceEntryUpdateOne) SetNillableLastReportPublishedAt(v *time.Time) *DivergenceEntryUpdateOne {
 	if v != nil {
-		_u.SetLastSnapshotPublishedAt(*v)
+		_u.SetLastReportPublishedAt(*v)
 	}
 	return _u
 }
@@ -849,8 +849,8 @@ func (_u *DivergenceEntryUpdateOne) sqlSave(ctx context.Context) (_node *Diverge
 	if value, ok := _u.mutation.LastSeenAt(); ok {
 		_spec.SetField(divergenceentry.FieldLastSeenAt, field.TypeTime, value)
 	}
-	if value, ok := _u.mutation.LastSnapshotPublishedAt(); ok {
-		_spec.SetField(divergenceentry.FieldLastSnapshotPublishedAt, field.TypeTime, value)
+	if value, ok := _u.mutation.LastReportPublishedAt(); ok {
+		_spec.SetField(divergenceentry.FieldLastReportPublishedAt, field.TypeTime, value)
 	}
 	_node = &DivergenceEntry{config: _u.config}
 	_spec.Assign = _node.assignValues

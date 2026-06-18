@@ -36,6 +36,18 @@ type DivergenceGroup struct {
 	Accepted   int
 	Ignored    int
 	Rows       []DivergenceRow
+
+	// AlreadyPublished is true when there is a completed RegistryArtifact
+	// for this DC whose completed_at is later than the most recent resolution's
+	// decided_at — meaning the current set of resolutions has already been
+	// published. The row's per-DC Publish button is rendered in a permanent
+	// "Published" disabled state to enforce one-shot publish semantics
+	// (no other operator can re-trigger; republish goes through /export).
+	AlreadyPublished bool
+	// PublishedTag is the tag of the latest completed publish for this DC,
+	// surfaced in the disabled button's label (e.g. "Published v17"). Empty
+	// when AlreadyPublished is false.
+	PublishedTag string
 }
 
 type DivergenceReports struct {

@@ -16,7 +16,6 @@ import (
 	orbmw "github.com/armada/orbital/internal/middleware"
 	"github.com/armada/orbital/internal/orb"
 	"github.com/armada/orbital/internal/orbconfig"
-	"github.com/armada/orbital/internal/startupcheck"
 	orbweb "github.com/armada/orbital/web"
 	orbtemplates "github.com/armada/orbital/web/templates/orb"
 	"github.com/labstack/echo/v4"
@@ -185,15 +184,19 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 
 // Start begins the polling loop (OCI source only) then starts the HTTP server.
 func (s *Server) Start(ctx context.Context) error {
-	// Preflight: probe configured consumers. If ORB_CONSUMERS is set but any
-	// URL is unreachable, fail fast — better than silently dispatching every
-	// bundler layer to role=unknown for hours.
-	urls := make([]string, 0, len(s.cfg.Consumers))
-	for _, c := range s.cfg.Consumers {
-		urls = append(urls, c.URL)
-	}
-	if _, err := startupcheck.ProbeOrFatal(ctx, "ORB_CONSUMERS", urls, !s.cfg.Dev, s.logger); err != nil {
-		return fmt.Errorf("consumer preflight: %w", err)
+	// Log configured consumer URLs for operator visibility. We deliberately do
+	// NOT probe them — orb's core (intent serving, divergence intake) does not
+	// depend on consumer reachability at boot, and probing creates a startup
+	// race. Misconfigured URLs surface at dispatch time with the failing URL
+	// in the response.
+	if len(s.cfg.Consumers) == 0 {
+		s.logger.Info("ORB_CONSUMERS not configured — imported bundler layers will not be dispatched")
+	} else {
+		names := make([]string, 0, len(s.cfg.Consumers))
+		for _, c := range s.cfg.Consumers {
+			names = append(names, fmt.Sprintf("%s=%s", c.Name, c.URL))
+		}
+		s.logger.Info("ORB_CONSUMERS configured", "consumers", names)
 	}
 
 	if s.cfg.EnableOCIRegistry {

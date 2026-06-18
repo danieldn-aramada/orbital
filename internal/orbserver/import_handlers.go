@@ -106,6 +106,7 @@ func (s *Server) triggerImport(c echo.Context) error {
 			return ""
 		}
 		var layerRecords []orb.LayerRecord
+		var dispatchErrors int
 		importID := newImportID()
 		if len(artifact.ExtraLayers) > 0 && s.dispatcher != nil {
 			results := s.dispatcher.Dispatch(ctx, artifact.ExtraLayers, meta.Tag, meta.Digest, importID)
@@ -118,6 +119,8 @@ func (s *Server) triggerImport(c echo.Context) error {
 				role := orb.LayerRoleUnknown
 				if dr.StatusCode >= 200 && dr.StatusCode < 300 {
 					role = orb.LayerRoleDispatched
+				} else {
+					dispatchErrors++
 				}
 				layerRecords = append(layerRecords, orb.LayerRecord{
 					MediaType: dr.MediaType,
@@ -129,9 +132,19 @@ func (s *Server) triggerImport(c echo.Context) error {
 				})
 			}
 		}
-		if len(layerRecords) > 0 {
-			if err := orb.AppendLayersToLastHistory(s.cfg.DataDir, layerRecords); err != nil {
-				s.logger.Warn("append layers to history failed", "err", err)
+
+		// Status reflects the WHOLE import: graph apply + extra-layer dispatch.
+		// "done" only when both phases fully succeed. "partial" when graph
+		// applied but at least one dispatch failed — operator action likely
+		// needed. ("failed" is reserved for the graph-apply phase failing
+		// upstream, handled by setFailed above.)
+		status := "done"
+		if dispatchErrors > 0 {
+			status = "partial"
+		}
+		if len(layerRecords) > 0 || status != "done" {
+			if err := orb.FinalizeLastHistory(s.cfg.DataDir, layerRecords, status); err != nil {
+				s.logger.Warn("finalize history failed", "err", err)
 			}
 		}
 
@@ -141,7 +154,7 @@ func (s *Server) triggerImport(c echo.Context) error {
 			DCOrbID:      meta.DCOrbID,
 			ExportJobID:  meta.ExportJobID,
 			ImportedAt:   time.Now().UTC(),
-			Status:       "done",
+			Status:       status,
 			Verification: verification,
 		})
 	}()
@@ -480,20 +493,28 @@ func (s *Server) importArtifact(c echo.Context) error {
 		// layer is treated identically — orb has no built-in knowledge of any
 		// specific media type; consumers register themselves via ORB_CONSUMERS.
 		var layerRecords []orb.LayerRecord
+		var dispatchErrors int
 		if len(extraLayers) > 0 && s.dispatcher != nil {
 			results := s.dispatcher.Dispatch(ctx, extraLayers, tag, "", importID)
 			dispatched := make(map[string]bool, len(results))
 			for i := range results {
 				dr := results[i]
+				role := orb.LayerRoleUnknown
+				if dr.StatusCode >= 200 && dr.StatusCode < 300 {
+					role = orb.LayerRoleDispatched
+				} else {
+					dispatchErrors++
+				}
 				layerRecords = append(layerRecords, orb.LayerRecord{
 					MediaType: dr.MediaType,
-					Role:      orb.LayerRoleDispatched,
+					Role:      role,
 					Dispatch:  &dr,
 				})
 				dispatched[dr.MediaType] = true
 			}
 			for mt := range extraLayers {
 				if !dispatched[mt] {
+					dispatchErrors++
 					layerRecords = append(layerRecords, orb.LayerRecord{
 						MediaType: mt,
 						Role:      orb.LayerRoleUnknown,
@@ -501,16 +522,23 @@ func (s *Server) importArtifact(c echo.Context) error {
 				}
 			}
 		}
-		if len(layerRecords) > 0 {
-			if err := orb.AppendLayersToLastHistory(s.cfg.DataDir, layerRecords); err != nil {
-				s.logger.Warn("failed to append layer records to history", "err", err)
+
+		// Same status rollup as the OCI-poll path: "partial" if graph applied
+		// but at least one dispatch failed.
+		status := "done"
+		if dispatchErrors > 0 {
+			status = "partial"
+		}
+		if len(layerRecords) > 0 || status != "done" {
+			if err := orb.FinalizeLastHistory(s.cfg.DataDir, layerRecords, status); err != nil {
+				s.logger.Warn("finalize history failed", "err", err)
 			}
 		}
 
 		s.state.setDone(orb.ImportRecord{
 			Tag:        tag,
 			ImportedAt: time.Now().UTC(),
-			Status:     "done",
+			Status:     status,
 		})
 	}()
 

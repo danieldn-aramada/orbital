@@ -6,9 +6,9 @@ resources:
   - secrets.yaml  # gitignored — see README.md for how to create this file
 images:
   - name: armadaeksatest.azurecr.io/orbital
-    newTag: v0.0.19
+    newTag: v0.0.20
   - name: armadaeksatest.azurecr.io/configbundle-bundler
-    newTag: v0.0.1
+    newTag: v0.0.3
 
 patches:
   - path: deployment-patch.yaml

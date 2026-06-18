@@ -51,7 +51,7 @@ var (
 		{Name: "who", Type: field.TypeString},
 		{Name: "first_seen_at", Type: field.TypeTime},
 		{Name: "last_seen_at", Type: field.TypeTime},
-		{Name: "last_snapshot_published_at", Type: field.TypeTime},
+		{Name: "last_report_published_at", Type: field.TypeTime},
 	}
 	// DivergenceEntriesTable holds the schema information for the "divergence_entries" table.
 	DivergenceEntriesTable = &schema.Table{

@@ -76,7 +76,7 @@ Treat `ignore` as a deliberate operational choice, not a "skip this one" shortcu
 6. Orbital pushes the OCI artifact.
 7. Orb imports the bundle, dispatches cb-manifest to cb-controller. cb-controller reconciles; `local:admin` is evicted; cb-controller becomes sole manager.
 8. cb-controller's divergence reporter on the next tick sees no `local:*` on this field → no divergence emitted.
-9. Next orb snapshot omits the entry. Orbital ingester's stale sweep deletes the `divergence_entries` row AND the matching `divergence_resolutions` row in the same pass. See `internal/divergenceingest/store.go applySnapshot`.
+9. Next orb snapshot omits the entry. Orbital ingester's stale sweep deletes the `divergence_entries` row AND the matching `divergence_resolutions` row in the same pass. See `internal/divergenceingest/store.go applyReport`.
 10. Loop closed. Audit history of the decision lives in the `events` table (the `acceptDivergence`/`rejectDivergence` event recorded at step 3) — the resolution row itself is gone.
 
 **Orbital does NOT track edge propagation.** Its contract ends at "intent is captured and exposed via the export API." Whether the deployment layer actually applied a force is the edge's concern. If local admin re-overrides the same field after a Reject, orb reports a fresh divergence on the next tick and the operator re-decides from a clean slate — no inherited "pending propagation" state.
@@ -84,11 +84,23 @@ Treat `ignore` as a deliberate operational choice, not a "skip this one" shortcu
 **Ignore:**
 
 1. Admin clicks Ignore and submits. No DGraph change.
-2. `divergence_resolutions` row written with `action=ignore`. The row itself IS the persistent instruction.
-3. On every future bundle build, the deployment layer queries orbital for ignored divergences (`GET /api/v1/divergences?action=ignore`) and **filters those (orbId, field) pairs out** of its apply config projection. The field never appears in the apply config cb-controller receives.
-4. cb-controller releases the field (or never claimed it). `local:admin` retains sole ownership. Edge value unchanged.
-5. Reporter doesn't surface the field (not in cb's current `managedFields` for the object).
-6. Loop closed silently — no value change, no ownership change at the edge, no further audit.
+2. `divergence_resolutions` row written with `action=ignore`. The row itself IS the standing instruction.
+3. On every future bundle build, the deployment layer queries orbital for ignored divergences (`GET /api/v1/divergences?action=ignore`) and surfaces those `(orbId, field)` pairs as `spec.ignored[]` in the cb-manifest.
+4. cb-controller's apply omits the field's value from its own claim while still seeing it in `spec.ignored[]`. `local:admin` retains sole ownership. Edge value unchanged.
+5. Reporter keeps emitting divergence for the field every tick — it's still locally-owned at the edge, just with an attached `action=ignore` resolution that suppresses any further admin prompt in the UI.
+6. The standing instruction persists as long as the edge admin holds the field.
+
+**Ignore loop closure via edge handback (configbundle ADR-009):**
+
+The Ignore row is not strictly permanent. If the edge admin releases their SSA claim on the field, configbundle's ReclaimController fires, replays the last-imported manifest, and cb-controller becomes sole owner with the intent value. From orbital's perspective the loop then closes through the standard path:
+
+1. cb-controller is now sole manager of the field; value = intent.
+2. cb-controller's divergence reporter on the next tick sees no `local:*` on this field → no divergence emitted.
+3. Next orb snapshot omits the entry.
+4. Orbital ingester's stale sweep deletes the `divergence_entries` row AND the `divergence_resolutions` row (action=ignore) in the same pass.
+5. An audit `Event` is written with operation `closeIgnoreOnHandback` so the cloud admin sees the closure as an explicit edge-driven action, not a silent disappearance.
+
+This is identical to Accept/Reject loop closure (step 9 above) except for the trigger: Accept/Reject is cloud-initiated via `spec.takeover[]`; Ignore closure is edge-initiated via SSA release. Same ingester code path (`internal/divergenceingest/store.go applyReport`).
 
 ## orbital → deployment-layer contract
 
@@ -97,7 +109,7 @@ The deployment layer (today: cb-bundler) calls **one endpoint** with **two filte
 | Query | Returns | Lifecycle |
 |---|---|---|
 | `GET /api/v1/divergences?action=accept&action=reject` | divergences with an active accept or reject resolution | active until orb stops reporting the underlying divergence entry — at which point the ingester deletes entry + resolution together; the query no longer returns them. |
-| `GET /api/v1/divergences?action=ignore` | divergences whose resolution is ignore | **persistent** — every bundle build re-queries; the disengagement re-applies forever until the resolution is deleted |
+| `GET /api/v1/divergences?action=ignore` | divergences whose resolution is ignore | persistent while the field remains locally claimed at the edge; the disengagement re-applies on every bundle build. Closes via the ingester when cb-controller reclaims after an SSA release from `local:*` (configbundle ADR-009), at which point entry + resolution are deleted in the same pass — same code path as Accept/Reject. |
 
 The shape is filterable REST: one resource (`/divergences`), state-as-query-string. Filters are deployment-layer-neutral domain terms (`action`, `dc`). How the deployment layer USES these — `spec.takeover[]`, omission from cb-manifest, force-apply SSA, etc. — is the deployment layer's concern. See [`configbundle-integration.md`](../configbundle-integration.md) for ConfigBundle's specific interpretation.
 
@@ -110,7 +122,7 @@ PUT    /api/v1/divergences/:id/resolution        upsert resolution      body: {"
 DELETE /api/v1/divergences/:id/resolution        clear resolution
 ```
 
-**Resolution lifecycle is bound 1:1 with the active divergence entry.** The ingester deletes entry + resolution together on loop closure. Orbital's source of truth for "is this field still diverging?" is what orb's next snapshot shows — not bundler assertion. See `internal/divergenceingest/store.go applySnapshot`.
+**Resolution lifecycle is bound 1:1 with the active divergence entry.** The ingester deletes entry + resolution together on loop closure — both are wrapped in a single transaction so partial-failure can't leave an orphan resolution that would silently re-attach to a future re-divergence with the same `(entry_orb_id, field)` key. Orbital's source of truth for "is this field still diverging?" is what orb's next snapshot shows — not bundler assertion. See `internal/divergenceingest/store.go applyReport`.
 
 ## What the divergence reporter sees
 
@@ -226,9 +238,9 @@ When the override changes after a resolution exists, the ingester deletes the re
 - **Conventional REST API surface.** One resource (`/divergences`), standard verbs (GET, PUT, DELETE), query strings for filters. No coined nouns in URLs, no state-as-path-segment, no batch endpoint (client fires N parallel PUTs). ConfigBundle-specific terms ("takeover," "cb-manifest," "omission") live in the configbundle integration docs, not the divergence API contract.
 - **The List handler refuses to surface stale accept/reject resolutions to bundlers, checked per-FIELD by value comparison.** When `GET /api/v1/divergences?action=accept&action=reject` runs, for each resolution the handler queries DGraph for that field's current value and compares against the post-decision expectation: Reject expects `current == entry.intended_value` (admin chose to keep that intent); Accept expects `current == entry.override_value` (admin's mutation adopted the override). Mismatch ⇒ another cloud admin's edit has moved this field since the decision ⇒ exclude from the bundler list. Ignore is exempt (standing instruction, not one-shot). UI calls without `?action=` see all resolutions. Pinned by `TestList_ActionFilter_ExcludesStaleResolution` + `TestList_ActionFilter_BatchAcceptAndRejectOnSameConfigItem`.
 - **No co-ownership of VALUE fields.** cb-controller force-claims when values match local:*'s; bows out when values differ (override case → reported); always claims for `spec.takeover[]` (Accept/Reject) and never claims for `spec.ignored[]` (Ignore). Co-ownership of SSA structural fields (`listMapKey`, entry-presence, struct wrappers) is K8s-native and inert — both managers writing the same `orbId` is normal, doesn't trigger divergence reports, doesn't block force-apply. See configbundle ADR-008.
-- **Ignore is a standing instruction, not a suppression.** It stays surfaced as divergence in every report. The resolution row in orbital records the deliberate "leave to edge" decision; the bundler emits a parallel `spec.ignored[]` entry on every build. Ignore-resolved entries are NOT loop-closed by the ingester — they keep being reported because the field is still diverged (intent ≠ override at the edge), they just have an attached `action=ignore` resolution that suppresses any further admin prompt.
+- **Ignore is a standing instruction, not a suppression.** While the field remains locally claimed at the edge, it stays surfaced as divergence in every report. The resolution row in orbital records the deliberate "leave to edge" decision; the bundler emits a parallel `spec.ignored[]` entry on every build. The attached `action=ignore` resolution suppresses any further admin prompt in the UI but doesn't close the loop. Loop closure happens only when the edge admin releases their SSA claim — per configbundle ADR-009, cb-controller's ReclaimController then reclaims the field with intent value, the divergence reporter no longer sees `local:*`, and the next orb snapshot omits the entry, triggering the standard ingester cleanup (entry + resolution deleted together). The cleanup writes a `closeIgnoreOnHandback` audit event so the cloud admin sees the closure as an explicit edge-driven action, not silent disappearance.
 - **Per-FIELD, NOT per-ConfigItem — this matters for batch decisions.** ConfigItem's `version: Int!` bumps on any field edit, so using it as the staleness anchor would false-positive every batch resolution that touches multiple fields of the same ConfigItem (e.g., Accept `ipmiEnabled` + Reject `sshEnabled` on the same `IdracSettings`: the Accept's mutation increments version, which would silently invalidate the sibling Reject). The per-field VALUE check is precise: it catches genuine cross-admin contradictions while leaving batched decisions on sibling fields intact. The `intended_at_version` column on `divergence_resolutions` is retained for audit/debugging but is no longer the load-bearing staleness check.
 - **Orbital does NOT track edge propagation.** Its contract is "intent is captured and exposed via the export API." Whether the deployment layer applied a force is the edge's concern. There is no `propagated_at` column, no `?propagated` filter, no PATCH-for-recovery endpoint — those existed in an earlier draft and were removed (2026-06-15) because they violated the air-gap separation. If admin re-overrides after Reject, orb reports a fresh divergence on the next tick and the operator re-decides from a clean slate. Audit of every decision lives in the `events` table; the resolution row itself is bound 1:1 with the active entry and disappears with it on loop closure.
 - **Topology API does not annotate ignored fields.** Cloud intent is the API's contract; consumers needing ground truth join with `/api/v1/divergence`. Annotation is deferred until a real consumer needs it.
-- **Accept/reject resolutions and Ignore have different lifecycles.** Accept/reject rows are bound to their entry — both delete together on loop closure. Ignore rows are persistent: the row IS the standing instruction and re-applies on every bundle build until manually removed.
+- **Accept/reject resolutions and Ignore have similar lifecycle but different triggers.** All three actions' resolution rows are bound 1:1 to their entry and delete together on loop closure. The trigger differs: Accept/Reject closes when cb-controller successfully takes ownership via `spec.takeover[]` (cloud-initiated). Ignore closes when the edge admin releases their `local:*` claim and cb-controller's ReclaimController restores intent (edge-initiated, configbundle ADR-009). Until either trigger fires, the row is the standing instruction and re-applies on every bundle build. A third path — `DELETE /api/v1/divergences/:id/resolution` — also removes the row manually but doesn't close the entry (the entry stays pending until the next snapshot includes it again or the field is no longer reported).
 - **`intended_at_version` is captured at INSERT, never on UPDATE.** Refreshing it on re-ingest would silently disable the MVCC check that catches "admin edited intent between report and resolution." See the dedicated section above for the failure-mode walkthrough. This rule is load-bearing for race-condition correctness.

@@ -21,7 +21,6 @@ import (
 	"github.com/armada/orbital/internal/metrics"
 	orbmw "github.com/armada/orbital/internal/middleware"
 	"github.com/armada/orbital/internal/oci"
-	"github.com/armada/orbital/internal/startupcheck"
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	appversion "github.com/armada/orbital/internal/version"
 	webtemplates "github.com/armada/orbital/web/templates/orbital"
@@ -244,7 +243,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		api.GET("/oci/artifacts/:id/layers", ociH.ArtifactLayers)
 		api.GET("/oci/public-key", ociH.PublicKey)
 		api.POST("/oci/test-connection", ociH.TestConnection)
-		root.GET("/signed-artifacts", ui.EdgeDelivery)
+		root.GET("/publish-history", ui.EdgeDelivery)
 
 		if !s3Configured {
 			logger.Warn("S3 not configured (ORBITAL_S3_BUCKET, ORBITAL_S3_ACCESS_KEY, ORBITAL_S3_SECRET_KEY) — backup disabled")
@@ -345,6 +344,9 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 			AccessKey:    cfg.S3AccessKey,
 			SecretKey:    cfg.S3SecretKey,
 			PollInterval: cfg.DivergencePollInterval,
+			DGraphURL:    cfg.DGraphURL,
+			Registry:     cfg.OCIRegistry,
+			RepoPrefix:   cfg.OCIRepo,
 		}, logger)
 		if err != nil {
 			logger.Warn("divergence ingester init failed — ingest disabled", "err", err)
@@ -363,13 +365,15 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 }
 
 func (s *Server) Start(ctx context.Context) error {
-	// Preflight: probe configured downstream services. If BUNDLER_URLS is set
-	// but unreachable, fail fast in production — silent "publish skipped bundler"
-	// is the exact silent-failure mode we want to surface at boot. In dev (cfg.Dev
-	// true), downgrade to a WARN so `make run-orbital` succeeds even when
-	// cb-bundler isn't yet started.
-	if _, err := startupcheck.ProbeOrFatal(ctx, "ORBITAL_BUNDLER_URLS", s.cfg.BundlerURLs, !s.cfg.Dev, s.logger); err != nil {
-		return fmt.Errorf("bundler preflight: %w", err)
+	// Log configured bundler URLs for operator visibility. We deliberately do
+	// NOT probe them — orbital's core (intent reads, GraphQL, UI, audit) does
+	// not depend on cb-bundler, and probing creates a startup race with the
+	// in-pod sidecar that caused unnecessary restarts. Misconfigured URLs
+	// surface clearly at publish time with the failing URL in the response.
+	if len(s.cfg.BundlerURLs) == 0 {
+		s.logger.Info("ORBITAL_BUNDLER_URLS not configured — publish will skip bundler layers")
+	} else {
+		s.logger.Info("ORBITAL_BUNDLER_URLS configured", "urls", s.cfg.BundlerURLs)
 	}
 
 	errCh := make(chan error, 1)

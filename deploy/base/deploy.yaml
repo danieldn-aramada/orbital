@@ -82,7 +82,7 @@ spec:
             # in-pod cb-bundler sidecar so the manifest+mapping layers always
             # get added. JSON callers can still override per-request.
             - name: ORBITAL_BUNDLER_URLS
-              value: http://localhost:8020/bundle
+              value: configbundle-bundler=http://localhost:8020/bundle
             # Backup (Azure Blob)
             - name: ORBITAL_S3_ENDPOINT
               value: https://armadagalleonbackups.blob.core.windows.net
@@ -150,16 +150,23 @@ spec:
           env:
             - name: BUNDLER_PORT
               value: "8020"
-            - name: ORBITAL_GRAPHQL_URL
-              value: http://localhost:8001/graphql
+            # Mirror orbital's base path so the bundler's GraphQL URL stays in
+            # sync if it ever changes. K8s expands $(VAR) in env values.
+            # Single base URL — cb-bundler derives /graphql and /api/v1/...
+            # from this. Must include orbital's base path.
+            - name: ORBITAL_BASE_PATH
+              value: /orbital
+            - name: ORBITAL_BASE_URL
+              value: http://localhost:8001$(ORBITAL_BASE_PATH)
             # OAuth2 client credentials grant — cb-bundler mints its own bearer
             # token from Entra to call orbital's /graphql. See orbital ADR 010.
             # Same secret as the orbital container (single K8s Secret on both).
-            - name: ORBITAL_TENANT_ID
+            # Env var names must match what cb-bundler reads (ORBITAL_OIDC_*).
+            - name: ORBITAL_OIDC_TENANT_ID
               value: 8f231c2a-9551-4b40-be17-5b24afe5e890
-            - name: ORBITAL_CLIENT_ID
+            - name: ORBITAL_OIDC_CLIENT_ID
               value: 5fc832f6-843e-4207-93dd-b3c3a77c06f2
-            - name: ORBITAL_CLIENT_SECRET
+            - name: ORBITAL_OIDC_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: orbital-secrets

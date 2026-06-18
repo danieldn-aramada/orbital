@@ -33,7 +33,7 @@ type PulledArtifact struct {
 	LayerAnnotations map[string]map[string]string // mediaType → per-layer manifest annotations
 	// Per-layer descriptor fields captured from the OCI manifest, indexed by
 	// mediaType. Used by orb to surface size + digest in the import-history
-	// layers modal so it mirrors orbital's signed-artifacts modal.
+	// layers modal so it mirrors orbital's publish-history modal.
 	LayerDigests map[string]string // mediaType → digest (e.g. "sha256:abc…")
 	LayerSizes   map[string]int64  // mediaType → size in bytes
 	Annotations map[string]string

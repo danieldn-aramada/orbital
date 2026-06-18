@@ -16,6 +16,7 @@ import (
 	"github.com/armada/orbital/ent/backup"
 	"github.com/armada/orbital/ent/divergenceentry"
 	"github.com/armada/orbital/ent/divergenceresolution"
+	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/divergence"
 	appversion "github.com/armada/orbital/internal/version"
@@ -196,7 +197,7 @@ func (h *UI) buildMenuSections(path, userRole string) []layout.MenuSection {
 			Color: "has-text-warning",
 			Items: []layout.MenuItem{
 				{Label: "Export Subgraph", Href: bp + "/export", Active: path == bp+"/export"},
-				{Label: "Signed Artifacts", Href: bp + "/signed-artifacts", Active: path == bp+"/signed-artifacts"},
+				{Label: "Publish History", Href: bp + "/publish-history", Active: path == bp+"/publish-history"},
 				{Label: "Divergence Reports", Href: bp + "/divergence-reports", Active: path == bp+"/divergence-reports"},
 			},
 		},
@@ -304,6 +305,11 @@ func (h *UI) DivergenceReports(c echo.Context) error {
 		}
 
 		idx := map[string]int{}
+		// Tracks max(decided_at) per group as raw time.Time — used post-loop
+		// to determine whether this group's resolutions have already been
+		// covered by a completed publish (one-shot publish semantics from the
+		// per-row button on /divergence-reports).
+		lastDecidedByGroup := map[int]time.Time{}
 		for _, e := range entries {
 			row := page.DivergenceRow{
 				ID:            e.ID.String(),
@@ -354,6 +360,40 @@ func (h *UI) DivergenceReports(c echo.Context) error {
 			}
 			if row.LastSeenAt > g.LastSeenAt {
 				g.LastSeenAt = row.LastSeenAt
+			}
+			if err == nil && res.DecidedAt.After(lastDecidedByGroup[gi]) {
+				lastDecidedByGroup[gi] = res.DecidedAt
+			}
+		}
+
+		// AlreadyPublished check: for each group with no pending decisions,
+		// look up the most recent completed publish for this DC and compare
+		// its completed_at to the group's latest resolution. If the publish
+		// came after, the current resolutions are already covered — the row's
+		// Publish button stays disabled across sessions, enforcing one-shot
+		// publish semantics (republish goes via /export).
+		for gi := range groups {
+			g := &groups[gi]
+			if g.Pending > 0 {
+				continue
+			}
+			lastDecided := lastDecidedByGroup[gi]
+			if lastDecided.IsZero() {
+				continue
+			}
+			latest, err := h.db.RegistryArtifact.Query().
+				Where(
+					registryartifact.DatacenterID(g.DCOrbID),
+					registryartifact.StatusEQ(registryartifact.StatusCompleted),
+				).
+				Order(ent.Desc(registryartifact.FieldCompletedAt)).
+				First(ctx)
+			if err != nil {
+				continue
+			}
+			if latest.CompletedAt != nil && latest.CompletedAt.After(lastDecided) {
+				g.AlreadyPublished = true
+				g.PublishedTag = latest.Tag
 			}
 		}
 	}
@@ -424,9 +464,9 @@ func (h *UI) Export(c echo.Context) error {
 }
 
 func (h *UI) EdgeDelivery(c echo.Context) error {
-	return h.render(c, "signed-artifacts", page.EdgeDelivery{
+	return h.render(c, "publish-history", page.EdgeDelivery{
 		Base:          h.base(c),
-		PageTitle:     "Signed Artifacts",
+		PageTitle:     "Publish History",
 		OCIConfigured: h.ociConfigured,
 		OCIRegistry:   h.ociRegistry,
 		OCIRepo:       h.ociRepo,

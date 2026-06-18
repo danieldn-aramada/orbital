@@ -115,9 +115,9 @@ func LastSeenAt(v time.Time) predicate.DivergenceEntry {
 	return predicate.DivergenceEntry(sql.FieldEQ(FieldLastSeenAt, v))
 }
 
-// LastSnapshotPublishedAt applies equality check predicate on the "last_snapshot_published_at" field. It's identical to LastSnapshotPublishedAtEQ.
-func LastSnapshotPublishedAt(v time.Time) predicate.DivergenceEntry {
-	return predicate.DivergenceEntry(sql.FieldEQ(FieldLastSnapshotPublishedAt, v))
+// LastReportPublishedAt applies equality check predicate on the "last_report_published_at" field. It's identical to LastReportPublishedAtEQ.
+func LastReportPublishedAt(v time.Time) predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldEQ(FieldLastReportPublishedAt, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
@@ -845,44 +845,44 @@ func LastSeenAtLTE(v time.Time) predicate.DivergenceEntry {
 	return predicate.DivergenceEntry(sql.FieldLTE(FieldLastSeenAt, v))
 }
 
-// LastSnapshotPublishedAtEQ applies the EQ predicate on the "last_snapshot_published_at" field.
-func LastSnapshotPublishedAtEQ(v time.Time) predicate.DivergenceEntry {
-	return predicate.DivergenceEntry(sql.FieldEQ(FieldLastSnapshotPublishedAt, v))
+// LastReportPublishedAtEQ applies the EQ predicate on the "last_report_published_at" field.
+func LastReportPublishedAtEQ(v time.Time) predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldEQ(FieldLastReportPublishedAt, v))
 }
 
-// LastSnapshotPublishedAtNEQ applies the NEQ predicate on the "last_snapshot_published_at" field.
-func LastSnapshotPublishedAtNEQ(v time.Time) predicate.DivergenceEntry {
-	return predicate.DivergenceEntry(sql.FieldNEQ(FieldLastSnapshotPublishedAt, v))
+// LastReportPublishedAtNEQ applies the NEQ predicate on the "last_report_published_at" field.
+func LastReportPublishedAtNEQ(v time.Time) predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldNEQ(FieldLastReportPublishedAt, v))
 }
 
-// LastSnapshotPublishedAtIn applies the In predicate on the "last_snapshot_published_at" field.
-func LastSnapshotPublishedAtIn(vs ...time.Time) predicate.DivergenceEntry {
-	return predicate.DivergenceEntry(sql.FieldIn(FieldLastSnapshotPublishedAt, vs...))
+// LastReportPublishedAtIn applies the In predicate on the "last_report_published_at" field.
+func LastReportPublishedAtIn(vs ...time.Time) predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldIn(FieldLastReportPublishedAt, vs...))
 }
 
-// LastSnapshotPublishedAtNotIn applies the NotIn predicate on the "last_snapshot_published_at" field.
-func LastSnapshotPublishedAtNotIn(vs ...time.Time) predicate.DivergenceEntry {
-	return predicate.DivergenceEntry(sql.FieldNotIn(FieldLastSnapshotPublishedAt, vs...))
+// LastReportPublishedAtNotIn applies the NotIn predicate on the "last_report_published_at" field.
+func LastReportPublishedAtNotIn(vs ...time.Time) predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldNotIn(FieldLastReportPublishedAt, vs...))
 }
 
-// LastSnapshotPublishedAtGT applies the GT predicate on the "last_snapshot_published_at" field.
-func LastSnapshotPublishedAtGT(v time.Time) predicate.DivergenceEntry {
-	return predicate.DivergenceEntry(sql.FieldGT(FieldLastSnapshotPublishedAt, v))
+// LastReportPublishedAtGT applies the GT predicate on the "last_report_published_at" field.
+func LastReportPublishedAtGT(v time.Time) predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldGT(FieldLastReportPublishedAt, v))
 }
 
-// LastSnapshotPublishedAtGTE applies the GTE predicate on the "last_snapshot_published_at" field.
-func LastSnapshotPublishedAtGTE(v time.Time) predicate.DivergenceEntry {
-	return predicate.DivergenceEntry(sql.FieldGTE(FieldLastSnapshotPublishedAt, v))
+// LastReportPublishedAtGTE applies the GTE predicate on the "last_report_published_at" field.
+func LastReportPublishedAtGTE(v time.Time) predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldGTE(FieldLastReportPublishedAt, v))
 }
 
-// LastSnapshotPublishedAtLT applies the LT predicate on the "last_snapshot_published_at" field.
-func LastSnapshotPublishedAtLT(v time.Time) predicate.DivergenceEntry {
-	return predicate.DivergenceEntry(sql.FieldLT(FieldLastSnapshotPublishedAt, v))
+// LastReportPublishedAtLT applies the LT predicate on the "last_report_published_at" field.
+func LastReportPublishedAtLT(v time.Time) predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldLT(FieldLastReportPublishedAt, v))
 }
 
-// LastSnapshotPublishedAtLTE applies the LTE predicate on the "last_snapshot_published_at" field.
-func LastSnapshotPublishedAtLTE(v time.Time) predicate.DivergenceEntry {
-	return predicate.DivergenceEntry(sql.FieldLTE(FieldLastSnapshotPublishedAt, v))
+// LastReportPublishedAtLTE applies the LTE predicate on the "last_report_published_at" field.
+func LastReportPublishedAtLTE(v time.Time) predicate.DivergenceEntry {
+	return predicate.DivergenceEntry(sql.FieldLTE(FieldLastReportPublishedAt, v))
 }
 
 // And groups predicates with the AND operator between them.

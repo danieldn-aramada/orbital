@@ -6,7 +6,7 @@
   </header>
   <section class="modal-card-body">
     {{if .Layers}}
-    {{/* Columns mirror orbital's signed-artifacts layers-modal:
+    {{/* Columns mirror orbital's publish-history layers-modal:
          Producer | Media Type | Size | Digest. orbital-producer pill is
          light blue (is-info is-light); bundler-named producers stay neutral. */}}
     <table class="table is-fullwidth is-striped is-size-7">
@@ -31,14 +31,15 @@
           </td>
           <td class="is-family-monospace">{{.MediaType}}</td>
           <td class="is-nowrap">{{.SizeDisplay}}</td>
-          <td class="is-nowrap">
+          <td>
             {{if eq .Role "graph"}}
               <span class="has-text-grey">—</span>
             {{else if .Dispatch}}
               {{if eq .Role "dispatched"}}
-                <span class="tag is-success is-light" title="{{.Dispatch.ConsumerName}} {{.Dispatch.URL}}">{{.Dispatch.StatusCode}}{{if .Dispatch.ConsumerName}} · {{.Dispatch.ConsumerName}}{{end}}</span>
+                <span class="tag is-success is-light is-nowrap" title="{{.Dispatch.ConsumerName}} {{.Dispatch.URL}}">{{.Dispatch.StatusCode}}{{if .Dispatch.ConsumerName}} · {{.Dispatch.ConsumerName}}{{end}}</span>
               {{else}}
-                <span class="tag is-danger is-light" title="{{.Dispatch.Error}}">{{if .Dispatch.StatusCode}}{{.Dispatch.StatusCode}}{{else}}error{{end}}</span>
+                <span class="tag is-danger is-light is-nowrap">{{if .Dispatch.StatusCode}}{{.Dispatch.StatusCode}}{{else}}error{{end}}{{if .Dispatch.ConsumerName}} · {{.Dispatch.ConsumerName}}{{end}}</span>
+                {{if .Dispatch.Error}}<div class="has-text-danger is-size-7 mt-1" style="word-break:break-word; white-space:normal;">{{.Dispatch.Error}}</div>{{end}}
               {{end}}
             {{else}}
               <span class="has-text-grey">—</span>

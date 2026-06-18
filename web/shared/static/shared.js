@@ -482,6 +482,25 @@ export function dtWrapLengthSelect(api) {
   $(api.table().container()).find('div.dt-length select').wrap('<div class="select is-small"></div>')
 }
 
+// ipv4SortKey returns a zero-padded form of an IPv4 dotted-decimal address so
+// lexicographic sort matches numeric octet order. "10.20.21.41" → "010.020.021.041"
+// (sorts before "10.20.21.100" → "010.020.021.100"). Empty/non-IPv4 input passes
+// through unchanged so DataTables can still group it consistently.
+export function ipv4SortKey(addr) {
+  if (!addr) return ''
+  const parts = String(addr).split('.')
+  if (parts.length !== 4) return String(addr)
+  return parts.map((n) => n.padStart(3, '0')).join('.')
+}
+
+// dtIPv4Render is a DataTables `render` function (orthogonal data) for IPv4
+// columns. Returns the padded sort key for `type === 'sort'`/`'type'` and the
+// original string for display/filter. Apply via columns/columnDefs render.
+export function dtIPv4Render(data, type) {
+  if (type === 'sort' || type === 'type') return ipv4SortKey(data)
+  return data == null ? '' : data
+}
+
 export function initServerDetailTabs(root) {
   const tabContainer = root.querySelector('[id^="srv-detail-tabs-"]')
   if (!tabContainer) return
@@ -588,7 +607,10 @@ document.addEventListener('htmx:afterSettle', (evt) => {
         ordering: true,
         select: { style: 'os' },
         autoWidth: true,
-        columnDefs: [{ className: 'dt-left', targets: 5 }],
+        columnDefs: [
+          { className: 'dt-left', targets: 5 },
+          { targets: 0, render: dtIPv4Render }, // OOB IP column — numeric sort by octet
+        ],
         createdRow: function (row) { row.style.cursor = 'pointer'; row.title = 'Double-click to open' },
       })
     }
@@ -1284,7 +1306,7 @@ export function initServerListTable(opts = {}) {
     },
     columns: [
       { data: 'dataCenter' },
-      { data: 'oobIP' },
+      { data: 'oobIP', render: dtIPv4Render },
       { data: 'hostname' },
       { data: 'serviceTag' },
       { data: 'model' },

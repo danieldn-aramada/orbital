@@ -1482,31 +1482,31 @@ func (m *BackupMutation) ResetEdge(name string) error {
 // DivergenceEntryMutation represents an operation that mutates the DivergenceEntry nodes in the graph.
 type DivergenceEntryMutation struct {
 	config
-	op                         Op
-	typ                        string
-	id                         *uuid.UUID
-	created_at                 *time.Time
-	created_by                 *string
-	updated_at                 *time.Time
-	updated_by                 *string
-	dc_orb_id                  *string
-	entry_orb_id               *string
-	field                      *string
-	type_name                  *string
-	intended_value             *json.RawMessage
-	appendintended_value       json.RawMessage
-	override_value             *json.RawMessage
-	appendoverride_value       json.RawMessage
-	intended_at_version        *int
-	addintended_at_version     *int
-	who                        *string
-	first_seen_at              *time.Time
-	last_seen_at               *time.Time
-	last_snapshot_published_at *time.Time
-	clearedFields              map[string]struct{}
-	done                       bool
-	oldValue                   func(context.Context) (*DivergenceEntry, error)
-	predicates                 []predicate.DivergenceEntry
+	op                       Op
+	typ                      string
+	id                       *uuid.UUID
+	created_at               *time.Time
+	created_by               *string
+	updated_at               *time.Time
+	updated_by               *string
+	dc_orb_id                *string
+	entry_orb_id             *string
+	field                    *string
+	type_name                *string
+	intended_value           *json.RawMessage
+	appendintended_value     json.RawMessage
+	override_value           *json.RawMessage
+	appendoverride_value     json.RawMessage
+	intended_at_version      *int
+	addintended_at_version   *int
+	who                      *string
+	first_seen_at            *time.Time
+	last_seen_at             *time.Time
+	last_report_published_at *time.Time
+	clearedFields            map[string]struct{}
+	done                     bool
+	oldValue                 func(context.Context) (*DivergenceEntry, error)
+	predicates               []predicate.DivergenceEntry
 }
 
 var _ ent.Mutation = (*DivergenceEntryMutation)(nil)
@@ -2261,40 +2261,40 @@ func (m *DivergenceEntryMutation) ResetLastSeenAt() {
 	m.last_seen_at = nil
 }
 
-// SetLastSnapshotPublishedAt sets the "last_snapshot_published_at" field.
-func (m *DivergenceEntryMutation) SetLastSnapshotPublishedAt(t time.Time) {
-	m.last_snapshot_published_at = &t
+// SetLastReportPublishedAt sets the "last_report_published_at" field.
+func (m *DivergenceEntryMutation) SetLastReportPublishedAt(t time.Time) {
+	m.last_report_published_at = &t
 }
 
-// LastSnapshotPublishedAt returns the value of the "last_snapshot_published_at" field in the mutation.
-func (m *DivergenceEntryMutation) LastSnapshotPublishedAt() (r time.Time, exists bool) {
-	v := m.last_snapshot_published_at
+// LastReportPublishedAt returns the value of the "last_report_published_at" field in the mutation.
+func (m *DivergenceEntryMutation) LastReportPublishedAt() (r time.Time, exists bool) {
+	v := m.last_report_published_at
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldLastSnapshotPublishedAt returns the old "last_snapshot_published_at" field's value of the DivergenceEntry entity.
+// OldLastReportPublishedAt returns the old "last_report_published_at" field's value of the DivergenceEntry entity.
 // If the DivergenceEntry object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *DivergenceEntryMutation) OldLastSnapshotPublishedAt(ctx context.Context) (v time.Time, err error) {
+func (m *DivergenceEntryMutation) OldLastReportPublishedAt(ctx context.Context) (v time.Time, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldLastSnapshotPublishedAt is only allowed on UpdateOne operations")
+		return v, errors.New("OldLastReportPublishedAt is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldLastSnapshotPublishedAt requires an ID field in the mutation")
+		return v, errors.New("OldLastReportPublishedAt requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldLastSnapshotPublishedAt: %w", err)
+		return v, fmt.Errorf("querying old value for OldLastReportPublishedAt: %w", err)
 	}
-	return oldValue.LastSnapshotPublishedAt, nil
+	return oldValue.LastReportPublishedAt, nil
 }
 
-// ResetLastSnapshotPublishedAt resets all changes to the "last_snapshot_published_at" field.
-func (m *DivergenceEntryMutation) ResetLastSnapshotPublishedAt() {
-	m.last_snapshot_published_at = nil
+// ResetLastReportPublishedAt resets all changes to the "last_report_published_at" field.
+func (m *DivergenceEntryMutation) ResetLastReportPublishedAt() {
+	m.last_report_published_at = nil
 }
 
 // Where appends a list predicates to the DivergenceEntryMutation builder.
@@ -2374,8 +2374,8 @@ func (m *DivergenceEntryMutation) Fields() []string {
 	if m.last_seen_at != nil {
 		fields = append(fields, divergenceentry.FieldLastSeenAt)
 	}
-	if m.last_snapshot_published_at != nil {
-		fields = append(fields, divergenceentry.FieldLastSnapshotPublishedAt)
+	if m.last_report_published_at != nil {
+		fields = append(fields, divergenceentry.FieldLastReportPublishedAt)
 	}
 	return fields
 }
@@ -2413,8 +2413,8 @@ func (m *DivergenceEntryMutation) Field(name string) (ent.Value, bool) {
 		return m.FirstSeenAt()
 	case divergenceentry.FieldLastSeenAt:
 		return m.LastSeenAt()
-	case divergenceentry.FieldLastSnapshotPublishedAt:
-		return m.LastSnapshotPublishedAt()
+	case divergenceentry.FieldLastReportPublishedAt:
+		return m.LastReportPublishedAt()
 	}
 	return nil, false
 }
@@ -2452,8 +2452,8 @@ func (m *DivergenceEntryMutation) OldField(ctx context.Context, name string) (en
 		return m.OldFirstSeenAt(ctx)
 	case divergenceentry.FieldLastSeenAt:
 		return m.OldLastSeenAt(ctx)
-	case divergenceentry.FieldLastSnapshotPublishedAt:
-		return m.OldLastSnapshotPublishedAt(ctx)
+	case divergenceentry.FieldLastReportPublishedAt:
+		return m.OldLastReportPublishedAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown DivergenceEntry field %s", name)
 }
@@ -2561,12 +2561,12 @@ func (m *DivergenceEntryMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetLastSeenAt(v)
 		return nil
-	case divergenceentry.FieldLastSnapshotPublishedAt:
+	case divergenceentry.FieldLastReportPublishedAt:
 		v, ok := value.(time.Time)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetLastSnapshotPublishedAt(v)
+		m.SetLastReportPublishedAt(v)
 		return nil
 	}
 	return fmt.Errorf("unknown DivergenceEntry field %s", name)
@@ -2719,8 +2719,8 @@ func (m *DivergenceEntryMutation) ResetField(name string) error {
 	case divergenceentry.FieldLastSeenAt:
 		m.ResetLastSeenAt()
 		return nil
-	case divergenceentry.FieldLastSnapshotPublishedAt:
-		m.ResetLastSnapshotPublishedAt()
+	case divergenceentry.FieldLastReportPublishedAt:
+		m.ResetLastReportPublishedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown DivergenceEntry field %s", name)

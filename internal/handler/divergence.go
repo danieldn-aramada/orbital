@@ -19,7 +19,7 @@ import (
 )
 
 // DivergenceHandler exposes orbital's divergence ingestion + resolution API.
-// Orbital ingests snapshots from S3 (via internal/divergenceingest) and
+// Orbital ingests reports from S3 (via internal/divergenceingest) and
 // stores them in DivergenceEntry. Cloud admins resolve entries via Accept
 // (mutate orbital intent to match the override and record the decision),
 // Force (cb-bundler reads pending forces, emits spec.takeover[]), or
@@ -385,10 +385,15 @@ func (h *DivergenceHandler) applyResolution(ctx context.Context, id uuid.UUID, a
 	var intendedVal, overrideVal any
 	_ = json.Unmarshal(entry.IntendedValue, &intendedVal)
 	_ = json.Unmarshal(entry.OverrideValue, &overrideVal)
+	// resourceID is the underlying resource's orbId (e.g. the IdracSettings or
+	// Server that the divergence is on) — NOT a synthetic <orbId>:<field>
+	// compound. The orbId column must hold real, queryable orbIds; the field
+	// name lives in details. This makes the event filterable by the resource's
+	// audit panel (`?orbId=colo:CWJHDX3-idrac`) which is what operators expect.
 	writeAuditEvent(h.db, h.logger, "management", actor, "resolveDivergence",
 		[]string{string(action) + "Divergence"},
 		[]string{"DivergenceEntry"},
-		[]string{entry.EntryOrbID + ":" + entry.Field},
+		[]string{entry.EntryOrbID},
 		map[string]any{
 			"entryId":       entry.ID.String(),
 			"action":        string(action),
@@ -464,10 +469,10 @@ func (h *DivergenceHandler) currentValueMatches(ctx context.Context, typeName, o
 func (h *DivergenceHandler) dispatchAcceptMutation(ctx context.Context, entry *ent.DivergenceEntry, actor string) error {
 	if entry.TypeName == "" {
 		// Legacy entry ingested before mapping started carrying type info.
-		// The admin must update intent manually until the next snapshot
+		// The admin must update intent manually until the next report
 		// re-ingests the entry with a type.
 		return echo.NewHTTPError(http.StatusUnprocessableEntity,
-			"divergence entry is missing type info; update intent manually for this field, or wait for the next snapshot")
+			"divergence entry is missing type info; update intent manually for this field, or wait for the next report")
 	}
 	if h.gql == nil {
 		// Defensive: server.go must wire gql into DivergenceHandler.
@@ -538,7 +543,7 @@ func (h *DivergenceHandler) dispatchAcceptMutation(ctx context.Context, entry *e
 		"set":    set,
 	}
 
-	// The divergence entry already carries the intended value at snapshot
+	// The divergence entry already carries the intended value at report
 	// time — that's exactly what "before" is for the audit diff. No DGraph
 	// round-trip needed; we already paid for that read when ingesting.
 	var intended any
@@ -618,10 +623,12 @@ func (h *DivergenceHandler) Dismiss(c echo.Context) error {
 		return fmt.Errorf("delete entry: %w", err)
 	}
 
+	// Same rationale as resolveDivergence above: orbId column carries the real
+	// resource orbId, field name lives in details.
 	writeAuditEvent(h.db, h.logger, "management", actor, "dismissDivergence",
 		[]string{"dismissDivergence"},
 		[]string{"DivergenceEntry"},
-		[]string{entry.EntryOrbID + ":" + entry.Field},
+		[]string{entry.EntryOrbID},
 		map[string]any{
 			"entryId": entry.ID.String(),
 			"orbId":   entry.EntryOrbID,

@@ -130,7 +130,7 @@ dev-deps: ## Install host-side dev tools (dgraph wrapper for macOS). Re-run afte
 
 ## ── release / AKS ─────────────────────────────────────────────────────────────
 
-push: ## Build and push orbital image to ACR (requires: az acr login --name armadaeksatest)
+push: ## Build and push orbital image to ACR (set version; SERVER_VERSION=v0.0.20). Requires: az acr login --name armadaeksatest
 	docker buildx build --platform linux/amd64 --target=orbital --build-arg VERSION=$(SERVER_VERSION) -t $(IMAGE) --push .
 
 seed-aks: ## Seed AKS dev DGraph + Postgres admin user. CLEAN=1 drops DGraph first.

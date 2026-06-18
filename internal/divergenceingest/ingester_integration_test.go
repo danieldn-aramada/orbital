@@ -10,20 +10,21 @@ import (
 	"io"
 	"log"
 	"log/slog"
+	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/google/uuid"
 	_ "github.com/lib/pq"
 
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/divergenceentry"
 	"github.com/armada/orbital/ent/migrate"
-	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/internal/divergence"
 	"github.com/armada/orbital/internal/divergenceingest"
 	"github.com/armada/orbital/internal/testutil"
@@ -53,7 +54,17 @@ func setup() error {
 	if err := testutil.EnsureTestBucketE(); err != nil {
 		return fmt.Errorf("ensure test bucket: %w", err)
 	}
+	if err := testutil.ResetDGraphE(testutil.DGraphAdminURL(), schemaPath()); err != nil {
+		return fmt.Errorf("reset dgraph: %w", err)
+	}
 	return nil
+}
+
+// schemaPath locates the schema file relative to this test file. Avoids relying
+// on cwd, which differs between `go test ./...` and direct package runs.
+func schemaPath() string {
+	_, thisFile, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(thisFile), "..", "..", "schema", "schema.graphql")
 }
 
 // resetState wipes the DB and S3 bucket so each test starts from scratch.
@@ -63,36 +74,61 @@ func resetState(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	testutil.EmptyTestBucket(t)
-}
-
-// seedDC registers a RegistryArtifact in StatusCompleted so the ingester
-// will discover this datacenter on poll.
-func seedDC(t *testing.T, dcID, repo string) {
-	t.Helper()
-	ctx := context.Background()
-	_, err := testDB.RegistryArtifact.Create().
-		SetExportJobID(uuid.New()).
-		SetDatacenterID(dcID).
-		SetDatacenterName(dcID).
-		SetRegistry(testutil.TestOCIRegistry).
-		SetRepository(repo).
-		SetTag("latest").
-		SetStatus(registryartifact.StatusCompleted).
-		SetInitiatedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		t.Fatalf("seed registry artifact: %v", err)
+	if err := testutil.ResetDGraphE(testutil.DGraphAdminURL(), schemaPath()); err != nil {
+		t.Fatalf("reset dgraph: %v", err)
 	}
 }
 
-// putSnapshot writes a snapshot JSON to s3://orbital-test/divergence/<repo>/<ts>.json
+// seedDC creates a Namespace + DataCenter in DGraph with the given orbId and
+// name. The ingester discovers DCs by querying queryDataCenter, then computes
+// each one's report prefix via oci.RepoForDC — so name must slugify to the
+// expected repo path component (e.g. "colo-galleon" → repo "orbital/colo-galleon").
+func seedDC(t *testing.T, orbID, name string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	post := func(query string) {
+		body, _ := json.Marshal(map[string]string{"query": query})
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, testutil.DGraphURL(), bytes.NewReader(body))
+		if err != nil {
+			t.Fatalf("build dgraph request: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("dgraph request: %v", err)
+		}
+		defer resp.Body.Close()
+		raw, _ := io.ReadAll(resp.Body)
+		var r struct {
+			Errors []struct {
+				Message string `json:"message"`
+			} `json:"errors"`
+		}
+		_ = json.Unmarshal(raw, &r)
+		if len(r.Errors) > 0 {
+			t.Fatalf("dgraph: %s — query: %s", r.Errors[0].Message, query)
+		}
+	}
+
+	post(`mutation { addNamespace(input: [{ name: "test-ns" }]) { namespace { id } } }`)
+	post(fmt.Sprintf(`mutation { addDataCenter(input: [{
+		orbId: %q
+		name: %q
+		namespace: "test-ns"
+		version: 1
+	}]) { dataCenter { id } } }`, orbID, name))
+}
+
+// putReport writes a report JSON to s3://orbital-test/divergence/<repo>/<ts>.json
 // and returns the key. Uses keyTime as the filename component (RFC3339 with colons
 // preserved — the ingester only requires lexicographic sortability).
-func putSnapshot(t *testing.T, repo string, snap divergence.Snapshot, keyTime string) string {
+func putReport(t *testing.T, repo string, snap divergence.Report, keyTime string) string {
 	t.Helper()
 	body, err := json.Marshal(snap)
 	if err != nil {
-		t.Fatalf("marshal snapshot: %v", err)
+		t.Fatalf("marshal report: %v", err)
 	}
 	key := fmt.Sprintf("divergence/%s/%s.json", repo, keyTime)
 	client := newS3(t)
@@ -135,6 +171,9 @@ func newIngester(t *testing.T) *divergenceingest.Ingester {
 		AccessKey:    testutil.TestS3AccessKey,
 		SecretKey:    testutil.TestS3SecretKey,
 		PollInterval: time.Hour, // we only call Poll() directly
+		DGraphURL:    testutil.DGraphURL(),
+		Registry:     testutil.TestOCIRegistry,
+		RepoPrefix:   "orbital",
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatalf("ingester New: %v", err)
@@ -154,27 +193,27 @@ func listEntries(t *testing.T, dcID string) []*ent.DivergenceEntry {
 	return rows
 }
 
-func TestPoll_IngestsLatestSnapshot(t *testing.T) {
+func TestPoll_IngestsLatestReport(t *testing.T) {
 	resetState(t)
-	const dcID, repo = "netbox:colo-galleon", "orbital/colo-galleon"
-	seedDC(t, dcID, repo)
+	const dcID, repo, dcName = "netbox:colo-galleon", "orbital/colo-galleon", "colo-galleon"
+	seedDC(t, dcID, dcName)
 
-	// Two snapshots — only the latest should be applied.
-	older := divergence.Snapshot{
+	// Two reports — only the latest should be applied.
+	older := divergence.Report{
 		PublishedAt: "2026-06-01T00:00:00Z",
 		Overrides: []divergence.OverrideEntry{
 			{OrbID: "netbox:server-01", Field: "sshEnabled", IntendedValue: false, OverrideValue: true, Who: "local:admin", When: "2026-06-01T00:00:00Z"},
 		},
 	}
-	latest := divergence.Snapshot{
+	latest := divergence.Report{
 		PublishedAt: "2026-06-02T00:00:00Z",
 		Overrides: []divergence.OverrideEntry{
 			{OrbID: "netbox:server-01", Field: "sshEnabled", Type: "IdracSettings", IntendedValue: false, OverrideValue: true, Who: "local:admin", When: "2026-06-02T00:00:00Z"},
 			{OrbID: "netbox:server-02", Field: "powerLimit", Type: "Server", IntendedValue: 500, OverrideValue: 750, Who: "local:admin", When: "2026-06-02T00:00:00Z"},
 		},
 	}
-	putSnapshot(t, repo, older, "2026-06-01T000000Z")
-	putSnapshot(t, repo, latest, "2026-06-02T000000Z")
+	putReport(t, repo, older, "2026-06-01T000000Z")
+	putReport(t, repo, latest, "2026-06-02T000000Z")
 
 	ing := newIngester(t)
 	if err := ing.Poll(context.Background()); err != nil {
@@ -183,7 +222,7 @@ func TestPoll_IngestsLatestSnapshot(t *testing.T) {
 
 	rows := listEntries(t, dcID)
 	if len(rows) != 2 {
-		t.Fatalf("expected 2 entries from latest snapshot, got %d", len(rows))
+		t.Fatalf("expected 2 entries from latest report, got %d", len(rows))
 	}
 	if rows[0].Field != "powerLimit" || rows[0].EntryOrbID != "netbox:server-02" {
 		t.Errorf("row[0] mismatch: %+v", rows[0])
@@ -199,20 +238,20 @@ func TestPoll_IngestsLatestSnapshot(t *testing.T) {
 	}
 }
 
-func TestPoll_DeletesEntriesAbsentFromLatest(t *testing.T) {
+func TestPoll_DeletesEntriesAbsentFromLatestReport(t *testing.T) {
 	resetState(t)
-	const dcID, repo = "netbox:colo-galleon", "orbital/colo-galleon"
-	seedDC(t, dcID, repo)
+	const dcID, repo, dcName = "netbox:colo-galleon", "orbital/colo-galleon", "colo-galleon"
+	seedDC(t, dcID, dcName)
 
-	// First snapshot: two entries.
-	first := divergence.Snapshot{
+	// First report: two entries.
+	first := divergence.Report{
 		PublishedAt: "2026-06-01T00:00:00Z",
 		Overrides: []divergence.OverrideEntry{
 			{OrbID: "netbox:server-01", Field: "sshEnabled", IntendedValue: false, OverrideValue: true, Who: "local:admin", When: "2026-06-01T00:00:00Z"},
 			{OrbID: "netbox:server-02", Field: "powerLimit", IntendedValue: 500, OverrideValue: 750, Who: "local:admin", When: "2026-06-01T00:00:00Z"},
 		},
 	}
-	putSnapshot(t, repo, first, "2026-06-01T000000Z")
+	putReport(t, repo, first, "2026-06-01T000000Z")
 
 	ing := newIngester(t)
 	if err := ing.Poll(context.Background()); err != nil {
@@ -222,14 +261,14 @@ func TestPoll_DeletesEntriesAbsentFromLatest(t *testing.T) {
 		t.Fatalf("after first poll: expected 2 entries, got %d", got)
 	}
 
-	// Second snapshot: server-02 entry gone — should be deleted.
-	second := divergence.Snapshot{
+	// Second report: server-02 entry gone — should be deleted.
+	second := divergence.Report{
 		PublishedAt: "2026-06-02T00:00:00Z",
 		Overrides: []divergence.OverrideEntry{
 			{OrbID: "netbox:server-01", Field: "sshEnabled", IntendedValue: false, OverrideValue: true, Who: "local:admin", When: "2026-06-02T00:00:00Z"},
 		},
 	}
-	putSnapshot(t, repo, second, "2026-06-02T000000Z")
+	putReport(t, repo, second, "2026-06-02T000000Z")
 
 	if err := ing.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll #2: %v", err)
@@ -245,16 +284,16 @@ func TestPoll_DeletesEntriesAbsentFromLatest(t *testing.T) {
 
 func TestPoll_PreservesFirstSeenOnRepeatedEntry(t *testing.T) {
 	resetState(t)
-	const dcID, repo = "netbox:colo-galleon", "orbital/colo-galleon"
-	seedDC(t, dcID, repo)
+	const dcID, repo, dcName = "netbox:colo-galleon", "orbital/colo-galleon", "colo-galleon"
+	seedDC(t, dcID, dcName)
 
-	first := divergence.Snapshot{
+	first := divergence.Report{
 		PublishedAt: "2026-06-01T00:00:00Z",
 		Overrides: []divergence.OverrideEntry{
 			{OrbID: "netbox:server-01", Field: "sshEnabled", IntendedValue: false, OverrideValue: true, Who: "local:admin", When: "2026-06-01T00:00:00Z"},
 		},
 	}
-	putSnapshot(t, repo, first, "2026-06-01T000000Z")
+	putReport(t, repo, first, "2026-06-01T000000Z")
 
 	ing := newIngester(t)
 	if err := ing.Poll(context.Background()); err != nil {
@@ -266,14 +305,14 @@ func TestPoll_PreservesFirstSeenOnRepeatedEntry(t *testing.T) {
 	}
 	firstSeen := before[0].FirstSeenAt
 
-	// Re-emit the same entry under a newer snapshot — first_seen_at must not move.
-	second := divergence.Snapshot{
+	// Re-emit the same entry under a newer report — first_seen_at must not move.
+	second := divergence.Report{
 		PublishedAt: "2026-06-05T00:00:00Z",
 		Overrides: []divergence.OverrideEntry{
 			{OrbID: "netbox:server-01", Field: "sshEnabled", IntendedValue: false, OverrideValue: true, Who: "local:admin", When: "2026-06-05T00:00:00Z"},
 		},
 	}
-	putSnapshot(t, repo, second, "2026-06-05T000000Z")
+	putReport(t, repo, second, "2026-06-05T000000Z")
 
 	if err := ing.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll #2: %v", err)
@@ -295,14 +334,14 @@ func TestPoll_NoArtifactsMeansNoPoll(t *testing.T) {
 	const repo = "orbital/colo-galleon"
 	// No RegistryArtifact rows seeded — discoverDCs returns empty.
 
-	// Even with a snapshot present, no DC = no ingest.
-	snap := divergence.Snapshot{
+	// Even with a report present, no DC = no ingest.
+	snap := divergence.Report{
 		PublishedAt: "2026-06-01T00:00:00Z",
 		Overrides: []divergence.OverrideEntry{
 			{OrbID: "netbox:server-01", Field: "sshEnabled", IntendedValue: false, OverrideValue: true, Who: "local:admin", When: "2026-06-01T00:00:00Z"},
 		},
 	}
-	putSnapshot(t, repo, snap, "2026-06-01T000000Z")
+	putReport(t, repo, snap, "2026-06-01T000000Z")
 
 	ing := newIngester(t)
 	if err := ing.Poll(context.Background()); err != nil {

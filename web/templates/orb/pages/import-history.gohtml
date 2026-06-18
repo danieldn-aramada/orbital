@@ -27,6 +27,8 @@
           <td style="white-space:nowrap">
             {{if eq .Status "done"}}
             <span class="tag is-success is-light">done</span>
+            {{else if eq .Status "partial"}}
+            <span class="tag is-warning is-light" title="Graph imported, but one or more extra-layer dispatches failed">partial</span>
             {{else if eq .Status "failed"}}
             <span class="tag is-danger is-light">failed</span>
             {{else if eq .Status "running"}}

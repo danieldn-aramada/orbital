@@ -12,6 +12,24 @@ import (
 	"time"
 )
 
+// ParseSpec splits an `ORBITAL_BUNDLER_URLS` entry into a (name, url) pair.
+// Accepts both `name=url` (canonical) and bare URLs (back-compat; the name
+// falls back to "bundler"). The friendly name lands in OCI layer annotations
+// (`com.armada.orbital.producer`) so orb's UI can attribute layers to specific
+// producers.
+//
+// TODO(post-MVP): the `name=url` env DSL is custom and brittle. This parser
+// has already caused one bug (preflight bypassed it and probed the raw
+// `name=url` string as a URL). Refactor to either one env var per bundler
+// (`ORBITAL_BUNDLER_<NAME>=url`) or a ConfigMap-mounted YAML/JSON file. See
+// ROADMAP.md "Refactor bundler URL config away from name=url env DSL".
+func ParseSpec(spec string) (name, url string) {
+	if i := strings.Index(spec, "="); i >= 0 {
+		return spec[:i], spec[i+1:]
+	}
+	return "bundler", spec
+}
+
 // Request is the payload Orbital sends to a bundler before pushing an OCI artifact.
 // OrbID is the canonical DataCenter identifier — bundlers query Orbital's
 // GraphQL via this exact-match key (hash-indexed in DGraph, supports `eq`

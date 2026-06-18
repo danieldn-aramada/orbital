@@ -84,11 +84,11 @@ func TestPublisher_Publish_WritesToMinIO(t *testing.T) {
 		t.Errorf("key suffix mismatch: %q", key)
 	}
 
-	// Verify body is a valid Snapshot.
+	// Verify body is a valid Report.
 	body := getS3Object(t, key)
-	var snap Snapshot
+	var snap Report
 	if err := json.Unmarshal(body, &snap); err != nil {
-		t.Fatalf("unmarshal snapshot: %v", err)
+		t.Fatalf("unmarshal report: %v", err)
 	}
 	if snap.PublishedAt == "" {
 		t.Error("PublishedAt should be set")
@@ -108,9 +108,9 @@ func TestPublisher_Publish_EmptyEntries(t *testing.T) {
 	}
 
 	body := getS3Object(t, key)
-	var snap Snapshot
+	var snap Report
 	if err := json.Unmarshal(body, &snap); err != nil {
-		t.Fatalf("unmarshal snapshot: %v", err)
+		t.Fatalf("unmarshal report: %v", err)
 	}
 	if len(snap.Overrides) != 0 {
 		t.Errorf("expected 0 overrides, got %d", len(snap.Overrides))

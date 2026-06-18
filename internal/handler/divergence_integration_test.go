@@ -38,7 +38,7 @@ func seedDivergenceEntry(t *testing.T, dcID, orbID, field, typeName string, over
 		SetWho("local:admin").
 		SetFirstSeenAt(time.Now().UTC().Add(-2 * time.Hour)).
 		SetLastSeenAt(time.Now().UTC()).
-		SetLastSnapshotPublishedAt(time.Now().UTC()).
+		SetLastReportPublishedAt(time.Now().UTC()).
 		Save(ctx)
 	if err != nil {
 		t.Fatalf("seed divergence entry: %v", err)
@@ -322,7 +322,7 @@ func TestList_ActionFilter_ExcludesStaleResolution(t *testing.T) {
 		SetWho("local:admin").
 		SetFirstSeenAt(time.Now().UTC().Add(-1 * time.Hour)).
 		SetLastSeenAt(time.Now().UTC()).
-		SetLastSnapshotPublishedAt(time.Now().UTC()).
+		SetLastReportPublishedAt(time.Now().UTC()).
 		Save(ctx)
 	if err != nil {
 		t.Fatalf("seed entry: %v", err)
@@ -418,7 +418,7 @@ func TestList_ActionFilter_BatchAcceptAndRejectOnSameConfigItem(t *testing.T) {
 			SetWho("local:admin").
 			SetFirstSeenAt(time.Now().UTC().Add(-1 * time.Hour)).
 			SetLastSeenAt(time.Now().UTC()).
-			SetLastSnapshotPublishedAt(time.Now().UTC()).
+			SetLastReportPublishedAt(time.Now().UTC()).
 			Save(ctx)
 		if err != nil {
 			t.Fatalf("seed %s entry: %v", s.field, err)

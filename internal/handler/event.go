@@ -128,11 +128,16 @@ func (h *EventHandler) List(c echo.Context) error {
 		orbIDFilter = orbIDFilter[:maxOrbIDs]
 	}
 	if len(orbIDFilter) > 0 {
+		// Resource-scoped audit panels (DC, Server, etc.) must show only events
+		// whose event_resources include the queried orbId. Management events
+		// that affect a specific resource attach the resource as a resourceID
+		// (e.g. exportSubgraph attaches the DataCenter; restoreBackup attaches
+		// every affected DC; resolveDivergence attaches the resolved entity).
+		// Management events with no resource link (createBackup, authorizationDenied,
+		// updateUserRole) are system-wide and belong only on the global audit log.
+		// Auth events stay excluded from resource panels.
 		q = q.Where(
-			event.Or(
-				event.HasResourcesWith(eventresource.OrbIDIn(orbIDFilter...)),
-				event.EventCategoryEQ("management"),
-			),
+			event.HasResourcesWith(eventresource.OrbIDIn(orbIDFilter...)),
 			event.EventCategoryNEQ("auth"),
 		)
 	}

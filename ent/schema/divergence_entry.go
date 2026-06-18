@@ -10,9 +10,9 @@ import (
 )
 
 // DivergenceEntry is one current field-level divergence ingested from orb's
-// published snapshot in S3. The unique key (dc_orb_id, entry_orb_id, field)
+// published report in S3. The unique key (dc_orb_id, entry_orb_id, field)
 // means UPSERT semantics — repeated ingests update the existing row rather
-// than appending. A row that disappears from a subsequent snapshot is DELETEd
+// than appending. A row that disappears from a subsequent report is DELETEd
 // (resolved-by-disappearance).
 type DivergenceEntry struct {
 	ent.Schema
@@ -35,12 +35,12 @@ func (DivergenceEntry) Fields() []ent.Field {
 
 		// type_name is the orbital GraphQL type of entry_orb_id (e.g. "Server",
 		// "IdracSettings"). Carried from cb-bundler's mapping layer through orb
-		// into the published snapshot. Required for the Accept handler to dispatch
+		// into the published report. Required for the Accept handler to dispatch
 		// the matching `update{Type}` mutation; entries with empty type_name fall
 		// back to manual resolution.
 		field.String("type_name").Optional().Default(""),
 
-		// intended_value and override_value carried verbatim from the snapshot.
+		// intended_value and override_value carried verbatim from the report.
 		// JSON-typed because orbital field values can be any DGraph scalar/array.
 		field.JSON("intended_value", json.RawMessage{}).Optional(),
 		field.JSON("override_value", json.RawMessage{}).Optional(),
@@ -52,25 +52,25 @@ func (DivergenceEntry) Fields() []ent.Field {
 		// their edit. Nillable: legacy entries (pre-MVCC) and ConfigItems with
 		// null/missing version are accepted with a logged warning, not blocked.
 		// Captured ONLY on insert; never overwritten on UPSERT — the original
-		// snapshot moment is what matters for race detection.
+		// report moment is what matters for race detection.
 		field.Int("intended_at_version").Optional().Nillable(),
 
 		// who set the local override (e.g. "local:admin").
 		field.String("who").NotEmpty(),
 
-		// first_seen_at is the snapshot-entry `when` from the first snapshot
+		// first_seen_at is the report-entry `when` from the first report
 		// that included this (dc, orbId, field). Never updated after creation —
 		// preserves the true "since when" for the cloud admin.
 		field.Time("first_seen_at"),
 
-		// last_seen_at is the snapshot-entry `when` from the most recent
-		// snapshot that included this row. Updated on each ingest.
+		// last_seen_at is the report-entry `when` from the most recent
+		// report that included this row. Updated on each ingest.
 		field.Time("last_seen_at"),
 
-		// last_snapshot_published_at is the publishedAt of the snapshot we
-		// loaded this row from. Used for poller idempotency — skip a snapshot
+		// last_report_published_at is the publishedAt of the report we
+		// loaded this row from. Used for poller idempotency — skip a report
 		// whose publishedAt matches what we already ingested.
-		field.Time("last_snapshot_published_at"),
+		field.Time("last_report_published_at"),
 	}
 }
 

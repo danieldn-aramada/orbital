@@ -177,7 +177,7 @@ func (h *OCI) Publish(c echo.Context) error {
 	}
 	var bundlerClients []*bundler.Client
 	for _, spec := range bundlerSpecs {
-		name, url := parseBundlerSpec(spec)
+		name, url := bundler.ParseSpec(spec)
 		bundlerClients = append(bundlerClients, bundler.New(name, url, h.bundlerTimeout))
 	}
 
@@ -257,10 +257,20 @@ func (h *OCI) ListArtifacts(c echo.Context) error {
 // with an export job. Uses Repository (stable) — not DatacenterID, which is a
 // DGraph internal UID that changes on reseed/restore — and takes max+1 over
 // existing version numbers rather than counting rows.
+//
+// Filtered to StatusCompleted: failed attempts (bundler errors, push failures,
+// signing errors) never reached ACR, so the tag number they tentatively
+// claimed should be reusable. Counting them would burn a tag per failed retry
+// and create gaps in the ACR-visible sequence (v10, v11-FAILED, v12-FAILED,
+// v13 → ACR has v10 + v13 with no v11/v12). After this filter, retries reuse
+// the same tag until one succeeds.
 func (h *OCI) nextTagForJob(ctx context.Context, job *ent.ExportJob) (repoName, tag string, err error) {
 	repoName = oci.RepoForDC(h.cfg.Registry, h.cfg.Repo, job.DatacenterName)
 	existing, err := h.db.RegistryArtifact.Query().
-		Where(registryartifact.Repository(repoName)).
+		Where(
+			registryartifact.Repository(repoName),
+			registryartifact.StatusEQ(registryartifact.StatusCompleted),
+		).
 		Select(registryartifact.FieldTag).
 		All(ctx)
 	if err != nil {
@@ -361,21 +371,6 @@ func (h *OCI) GetArtifact(c echo.Context) error {
 	return c.JSON(http.StatusOK, toArtifactResponse(a))
 }
 
-// parseBundlerSpec splits a `ORBITAL_BUNDLER_URLS` entry into a (name, url)
-// pair. Accepts both `name=url` (canonical) and bare URLs (back-compat;
-// the name falls back to the URL host). The friendly name lands in OCI
-// layer annotations (`com.armada.orbital.producer`) so orb's UI can
-// attribute layers to specific producers.
-func parseBundlerSpec(spec string) (name, url string) {
-	if i := strings.Index(spec, "="); i >= 0 {
-		return spec[:i], spec[i+1:]
-	}
-	// Back-compat: bare URL → derive a fallback name from the host. Not pretty
-	// but better than empty-string in the annotation. Callers using the new
-	// format get clean names.
-	return "bundler", spec
-}
-
 type publishProgressData struct {
 	BasePath     string
 	ArtifactID   int
@@ -393,7 +388,7 @@ func (h *OCI) bundlerNamesLabel() string {
 	}
 	names := make([]string, 0, len(h.defaultBundlerURLs))
 	for _, spec := range h.defaultBundlerURLs {
-		name, _ := parseBundlerSpec(spec)
+		name, _ := bundler.ParseSpec(spec)
 		names = append(names, name)
 	}
 	return strings.Join(names, ", ")

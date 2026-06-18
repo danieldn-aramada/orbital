@@ -337,13 +337,22 @@ func TestEventList_EventCategoryInResponse(t *testing.T) {
 	}
 }
 
-func TestEventList_OrbIdFilterIncludesManagementEvents(t *testing.T) {
+// TestEventList_OrbIdFilterExcludesUnrelatedManagementEvents verifies that
+// resource-scoped audit panels (DC, Server) only show events whose resources
+// include the queried orbId. Management events with no resource link
+// (createBackup, authorizationDenied, updateUserRole) are system-wide and
+// belong only on the global audit log. Management events that DO attach a
+// resource (restoreBackup with per-DC resourceIDs, exportSubgraph, resolveDivergence)
+// match via HasResourcesWith — see _IncludesResource subtest.
+func TestEventList_OrbIdFilterExcludesUnrelatedManagementEvents(t *testing.T) {
 	ctx := context.Background()
 	clearEvents(ctx)
 
 	createEvent(t, "mgmt-filter-test", []string{"updateServer"}, []string{"Server"}, []string{"alaska:SRV-MGMT"}, "data")
-	createEvent(t, "mgmt-filter-test", []string{"restoreBackup"}, nil, nil, "management")
-	createEvent(t, "mgmt-filter-test", []string{"updateServer"}, nil, []string{"alaska:SRV-OTHER"}, "data")
+	createEvent(t, "mgmt-filter-test", []string{"createBackup"}, nil, nil, "management")              // system-wide, no resources
+	createEvent(t, "mgmt-filter-test", []string{"authorizationDenied"}, nil, nil, "management")       // system-wide, no resources
+	createEvent(t, "mgmt-filter-test", []string{"restoreBackup"}, []string{"DataCenter"}, []string{"alaska:DC-OTHER"}, "management") // affects different DC
+	createEvent(t, "mgmt-filter-test", []string{"updateServer"}, []string{"Server"}, []string{"alaska:SRV-OTHER"}, "data")
 	t.Cleanup(func() { clearEvents(ctx) })
 
 	h := newEventHandler(t)
@@ -357,19 +366,39 @@ func TestEventList_OrbIdFilterIncludesManagementEvents(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	events, _ := body["events"].([]any)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event (data event for alaska:SRV-MGMT only), got %d: %v", len(events), body)
+	}
+	m := events[0].(map[string]any)
+	ids, _ := m["resourceIds"].([]any)
+	if len(ids) == 0 || ids[0].(string) != "alaska:SRV-MGMT" {
+		t.Errorf("resourceIds: got %v, want [alaska:SRV-MGMT]", ids)
+	}
+}
+
+// TestEventList_OrbIdFilterIncludesResourcedManagementEvents verifies that
+// management events that DO attach a resourceID (restoreBackup with per-DC
+// resourceIDs, exportSubgraph, resolveDivergence) DO appear on that resource's
+// audit panel. The HasResourcesWith match is the only inclusion criterion.
+func TestEventList_OrbIdFilterIncludesResourcedManagementEvents(t *testing.T) {
+	ctx := context.Background()
+	clearEvents(ctx)
+
+	createEvent(t, "mgmt-resourced-test", []string{"restoreBackup"}, []string{"DataCenter"}, []string{"alaska:DC-A", "alaska:DC-B"}, "management")
+	createEvent(t, "mgmt-resourced-test", []string{"exportSubgraph"}, []string{"DataCenter"}, []string{"alaska:DC-A"}, "management")
+	t.Cleanup(func() { clearEvents(ctx) })
+
+	h := newEventHandler(t)
+	c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", map[string]string{"orbId": "alaska:DC-A"})
+	if err := h.List(c); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	var body map[string]any
+	json.Unmarshal(rec.Body.Bytes(), &body)
+	events, _ := body["events"].([]any)
 	if len(events) != 2 {
-		t.Fatalf("expected 2 events (1 data + 1 management), got %d: %v", len(events), body)
-	}
-	cats := map[string]bool{}
-	for _, ev := range events {
-		m := ev.(map[string]any)
-		cats[m["eventCategory"].(string)] = true
-	}
-	if !cats["data"] {
-		t.Error("expected data event in results")
-	}
-	if !cats["management"] {
-		t.Error("expected management event in results")
+		t.Fatalf("expected 2 management events (restoreBackup + exportSubgraph) for alaska:DC-A, got %d", len(events))
 	}
 }
 

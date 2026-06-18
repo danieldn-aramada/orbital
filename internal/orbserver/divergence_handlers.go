@@ -150,7 +150,7 @@ func (s *Server) getDivergence(c echo.Context) error {
 	return c.JSON(http.StatusOK, entries)
 }
 
-// POST /api/v1/divergence/publish — aggregates pending entries into a snapshot and writes to S3.
+// POST /api/v1/divergence/publish — aggregates pending entries into a report and writes to S3.
 func (s *Server) publishDivergence(c echo.Context) error {
 	if s.divPublisher == nil {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "Object store not configured")
@@ -159,7 +159,7 @@ func (s *Server) publishDivergence(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load reports")
 	}
-	// Refuse to publish an empty snapshot — it would pollute S3 with files
+	// Refuse to publish an empty report — it would pollute S3 with files
 	// that contain no information. Orbital reconciles state from non-empty
 	// publishes; absence of new keys does not need to be communicated.
 	if len(entries) == 0 {

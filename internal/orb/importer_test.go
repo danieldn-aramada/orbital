@@ -217,7 +217,7 @@ func TestImportRecord_Layers_RoundTrip(t *testing.T) {
 		{MediaType: dr1.MediaType, Role: LayerRoleDispatched, Dispatch: &dr1},
 		{MediaType: dr2.MediaType, Role: LayerRoleDispatched, Dispatch: &dr2},
 	}
-	if err := AppendLayersToLastHistory(dir, extra); err != nil {
+	if err := FinalizeLastHistory(dir, extra, ""); err != nil {
 		t.Fatalf("AppendLayersToLastHistory: %v", err)
 	}
 
@@ -241,7 +241,7 @@ func TestImportRecord_Layers_RoundTrip(t *testing.T) {
 	}
 }
 
-func TestAppendLayersToLastHistory_UpdatesLast(t *testing.T) {
+func TestFinalizeLastHistory_UpdatesLast(t *testing.T) {
 	dir := t.TempDir()
 	cfg := orbconfig.Config{DataDir: dir}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -258,7 +258,7 @@ func TestAppendLayersToLastHistory_UpdatesLast(t *testing.T) {
 
 	dr := DispatchResult{MediaType: "a/b", URL: "http://x", StatusCode: 200}
 	extra := []LayerRecord{{MediaType: "a/b", Role: LayerRoleDispatched, Dispatch: &dr}}
-	if err := AppendLayersToLastHistory(dir, extra); err != nil {
+	if err := FinalizeLastHistory(dir, extra, ""); err != nil {
 		t.Fatalf("AppendLayersToLastHistory: %v", err)
 	}
 
@@ -275,7 +275,7 @@ func TestAppendLayersToLastHistory_UpdatesLast(t *testing.T) {
 	}
 }
 
-func TestAppendLayersToLastHistory_EmptyLayers_NoOp(t *testing.T) {
+func TestFinalizeLastHistory_EmptyLayers_NoOp(t *testing.T) {
 	dir := t.TempDir()
 	cfg := orbconfig.Config{DataDir: dir}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -288,7 +288,7 @@ func TestAppendLayersToLastHistory_EmptyLayers_NoOp(t *testing.T) {
 		t.Fatalf("Import: %v", err)
 	}
 
-	if err := AppendLayersToLastHistory(dir, nil); err != nil {
+	if err := FinalizeLastHistory(dir, nil, ""); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	got, _ := LoadHistory(dir)
@@ -298,7 +298,7 @@ func TestAppendLayersToLastHistory_EmptyLayers_NoOp(t *testing.T) {
 	}
 }
 
-func TestAppendLayersToLastHistory_PreservesOtherFields(t *testing.T) {
+func TestFinalizeLastHistory_PreservesOtherFields(t *testing.T) {
 	dir := t.TempDir()
 	cfg := orbconfig.Config{DataDir: dir}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -313,7 +313,7 @@ func TestAppendLayersToLastHistory_PreservesOtherFields(t *testing.T) {
 	}
 
 	dr := DispatchResult{MediaType: "a/b", URL: "http://x", StatusCode: 200}
-	AppendLayersToLastHistory(dir, []LayerRecord{{MediaType: "a/b", Role: LayerRoleDispatched, Dispatch: &dr}})
+	FinalizeLastHistory(dir, []LayerRecord{{MediaType: "a/b", Role: LayerRoleDispatched, Dispatch: &dr}}, "")
 
 	got, _ := LoadHistory(dir)
 	if got[0].Tag != "v5" {

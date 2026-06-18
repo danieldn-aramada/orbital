@@ -84,8 +84,15 @@ type Config struct {
 	// controller from configbundle repo's `make run-controller`.
 	Consumers ConsumersConfig `envconfig:"ORB_CONSUMERS" default:"[{\"name\":\"cb-controller\",\"url\":\"http://localhost:8095/dispatch\"}]"`
 
-	// Polling — how often orb checks Zot for a newer artifact version (OCI source only)
-	PollInterval time.Duration `envconfig:"ORB_POLL_INTERVAL" default:"60s"`
+	// OCIPollInterval — how often orb checks the OCI registry for a newer
+	// artifact version. 30s default trades 2x more registry calls for half the
+	// banner-update lag on the Status page. Configurable via
+	// ORB_OCI_POLL_INTERVAL for environments that need different cadence
+	// (rate-limited registries, dev iteration, etc.). Named under the
+	// ORB_OCI_* namespace alongside ORB_OCI_REGISTRY/USERNAME/PASSWORD so a
+	// future second poll loop (e.g. consumer health checks) can claim its own
+	// mechanism-named env var without ambiguity.
+	PollInterval time.Duration `envconfig:"ORB_OCI_POLL_INTERVAL" default:"30s"`
 
 	// Data directory — holds import history and divergence reports
 	DataDir string `envconfig:"ORB_DATA_DIR" default:"./orb-data"`

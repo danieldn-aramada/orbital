@@ -33,9 +33,9 @@ type OverrideEntry struct {
 	When              string `json:"when"`
 }
 
-// Snapshot is the published divergence state — the full set of currently pending
+// Report is the published divergence state — the full set of currently pending
 // overrides at the time of publish. Written to S3 as a single JSON file.
-type Snapshot struct {
+type Report struct {
 	PublishedAt string          `json:"publishedAt"`
 	Overrides   []OverrideEntry `json:"overrides"`
 }
@@ -116,7 +116,7 @@ func (s *Store) LoadPublishRecord() (*PublishRecord, error) {
 	return &rec, nil
 }
 
-// Publisher writes divergence snapshots to S3-compatible or Azure Blob storage.
+// Publisher writes divergence reports to S3-compatible or Azure Blob storage.
 // The choice of backend is hidden behind blobstore.Store.
 type Publisher struct {
 	store   blobstore.Store
@@ -152,10 +152,10 @@ func (p *Publisher) Ping(ctx context.Context) error {
 	return p.store.Ping(ctx)
 }
 
-// Publish writes a snapshot of the given entries to storage and returns the key.
+// Publish writes a report of the given entries to storage and returns the key.
 func (p *Publisher) Publish(ctx context.Context, entries []OverrideEntry) (string, error) {
 	now := time.Now().UTC()
-	snap := Snapshot{
+	snap := Report{
 		PublishedAt: now.Format(time.RFC3339),
 		Overrides:   entries,
 	}
@@ -164,9 +164,9 @@ func (p *Publisher) Publish(ctx context.Context, entries []OverrideEntry) (strin
 		return "", fmt.Errorf("divergence publish marshal: %w", err)
 	}
 
-	// Slashes in oci-repo become natural prefix separators inside SnapshotKey.
+	// Slashes in oci-repo become natural prefix separators inside ReportKey.
 	ts := strings.ReplaceAll(now.Format("2006-01-02T15-04-05Z"), ":", "-")
-	key := SnapshotKey(p.ociRepo, ts)
+	key := ReportKey(p.ociRepo, ts)
 
 	if err := p.store.Put(ctx, key, bytes.NewReader(b), "application/json"); err != nil {
 		return "", fmt.Errorf("divergence publish put: %w", err)

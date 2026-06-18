@@ -42,8 +42,8 @@ const (
 	FieldFirstSeenAt = "first_seen_at"
 	// FieldLastSeenAt holds the string denoting the last_seen_at field in the database.
 	FieldLastSeenAt = "last_seen_at"
-	// FieldLastSnapshotPublishedAt holds the string denoting the last_snapshot_published_at field in the database.
-	FieldLastSnapshotPublishedAt = "last_snapshot_published_at"
+	// FieldLastReportPublishedAt holds the string denoting the last_report_published_at field in the database.
+	FieldLastReportPublishedAt = "last_report_published_at"
 	// Table holds the table name of the divergenceentry in the database.
 	Table = "divergence_entries"
 )
@@ -65,7 +65,7 @@ var Columns = []string{
 	FieldWho,
 	FieldFirstSeenAt,
 	FieldLastSeenAt,
-	FieldLastSnapshotPublishedAt,
+	FieldLastReportPublishedAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -163,7 +163,7 @@ func ByLastSeenAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldLastSeenAt, opts...).ToFunc()
 }
 
-// ByLastSnapshotPublishedAt orders the results by the last_snapshot_published_at field.
-func ByLastSnapshotPublishedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldLastSnapshotPublishedAt, opts...).ToFunc()
+// ByLastReportPublishedAt orders the results by the last_report_published_at field.
+func ByLastReportPublishedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLastReportPublishedAt, opts...).ToFunc()
 }

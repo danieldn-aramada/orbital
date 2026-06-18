@@ -53,7 +53,12 @@ func (s *importState) setRunning() {
 func (s *importState) setDone(record orb.ImportRecord) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.status = "done"
+	// status mirrors record.Status — usually "done", but "partial" when the
+	// graph imported cleanly but at least one extra-layer dispatch failed.
+	s.status = record.Status
+	if s.status == "" {
+		s.status = "done"
+	}
 	s.currentVersion = record.Tag
 	s.availableVersion = ""
 	s.lastImport = &record

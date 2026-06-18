@@ -199,11 +199,12 @@ const dcDeleteGQL = `
         oobIP { id address }
       }
       kubernetesClusters {
+        __typename
         id name
-        eksaConfig {
-          id
+        controlPlaneEndpoint { id }
+        nodes { id }
+        ... on EksaKubernetesCluster {
           tinkerbellIP { id }
-          controlPlaneIP { id }
         }
       }
     }
@@ -243,13 +244,14 @@ type dcDeleteRaw struct {
 		} `json:"oobIP"`
 	} `json:"servers"`
 	KubernetesClusters []struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-		EksaConfig *struct {
-			ID             string `json:"id"`
-			TinkerbellIP   *struct{ ID string `json:"id"` } `json:"tinkerbellIP"`
-			ControlPlaneIP *struct{ ID string `json:"id"` } `json:"controlPlaneIP"`
-		} `json:"eksaConfig"`
+		Typename             string `json:"__typename"`
+		ID                   string `json:"id"`
+		Name                 string `json:"name"`
+		ControlPlaneEndpoint *struct{ ID string `json:"id"` } `json:"controlPlaneEndpoint"`
+		Nodes                []struct {
+			ID string `json:"id"`
+		} `json:"nodes"`
+		TinkerbellIP *struct{ ID string `json:"id"` } `json:"tinkerbellIP,omitempty"`
 	} `json:"kubernetesClusters"`
 }
 
@@ -331,27 +333,29 @@ func (h *DeleteHandler) planDCDelete(ctx context.Context, id string) (*dcDeleteP
 		groups = append(groups, countGroup("Storage Volumes", volCount))
 	}
 
-	// Kubernetes clusters and EKS-A configs.
+	// Kubernetes clusters, their nodes, and provider-owned IP addresses.
 	k8sCount := len(dc.KubernetesClusters)
-	var eksaCount int
+	var k8sNodeCount int
 	for _, kc := range dc.KubernetesClusters {
 		uids = append(uids, kc.ID)
-		if kc.EksaConfig != nil && kc.EksaConfig.ID != "" {
-			eksaCount++
-			uids = append(uids, kc.EksaConfig.ID)
-			if kc.EksaConfig.TinkerbellIP != nil && kc.EksaConfig.TinkerbellIP.ID != "" {
-				uids = append(uids, kc.EksaConfig.TinkerbellIP.ID)
+		if kc.ControlPlaneEndpoint != nil && kc.ControlPlaneEndpoint.ID != "" {
+			uids = append(uids, kc.ControlPlaneEndpoint.ID)
+		}
+		for _, n := range kc.Nodes {
+			if n.ID != "" {
+				k8sNodeCount++
+				uids = append(uids, n.ID)
 			}
-			if kc.EksaConfig.ControlPlaneIP != nil && kc.EksaConfig.ControlPlaneIP.ID != "" {
-				uids = append(uids, kc.EksaConfig.ControlPlaneIP.ID)
-			}
+		}
+		if kc.TinkerbellIP != nil && kc.TinkerbellIP.ID != "" {
+			uids = append(uids, kc.TinkerbellIP.ID)
 		}
 	}
 	if k8sCount > 0 {
 		groups = append(groups, countGroup("Kubernetes Clusters", k8sCount))
 	}
-	if eksaCount > 0 {
-		groups = append(groups, countGroup("EKS-A Configs", eksaCount))
+	if k8sNodeCount > 0 {
+		groups = append(groups, countGroup("Kubernetes Nodes", k8sNodeCount))
 	}
 
 	return &dcDeletePlan{

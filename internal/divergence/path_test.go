@@ -2,25 +2,25 @@ package divergence
 
 import "testing"
 
-func TestSnapshotKey_MatchesIngesterPrefix(t *testing.T) {
+func TestReportKey_MatchesIngesterPrefix(t *testing.T) {
 	repoPath := "orbital/colo-galleon"
 	ts := "2026-06-13T23-28-13Z"
 
-	key := SnapshotKey(repoPath, ts)
+	key := ReportKey(repoPath, ts)
 	prefix := PrefixForRepo(repoPath)
 
 	if got, want := key, "divergence/orbital/colo-galleon/2026-06-13T23-28-13Z.json"; got != want {
-		t.Errorf("SnapshotKey = %q, want %q", got, want)
+		t.Errorf("ReportKey = %q, want %q", got, want)
 	}
 	if got, want := prefix, "divergence/orbital/colo-galleon/"; got != want {
 		t.Errorf("PrefixForRepo = %q, want %q", got, want)
 	}
 
-	// The boundary contract: any key produced by SnapshotKey must be discoverable
+	// The boundary contract: any key produced by ReportKey must be discoverable
 	// by listing PrefixForRepo. If this assertion fails, producer and consumer
 	// have drifted — exactly the bug class this package exists to prevent.
 	if got := key[:len(prefix)]; got != prefix {
-		t.Errorf("SnapshotKey prefix = %q, does not match PrefixForRepo = %q", got, prefix)
+		t.Errorf("ReportKey prefix = %q, does not match PrefixForRepo = %q", got, prefix)
 	}
 }
 

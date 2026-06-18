@@ -93,7 +93,7 @@ type ImportRecord struct {
 	DCOrbID      string        `json:"dcOrbId"`
 	ExportJobID  string        `json:"exportJobId"`
 	ImportedAt   time.Time     `json:"importedAt"`
-	Status       string        `json:"status"`       // "done" | "failed"
+	Status       string        `json:"status"`       // "done" | "partial" | "failed". "partial" means the graph import succeeded but at least one extra-layer dispatch failed.
 	Verification string        `json:"verification"` // Verification* constant
 	Error        string        `json:"error,omitempty"`
 	Layers       []LayerRecord `json:"layers,omitempty"`
@@ -289,12 +289,15 @@ func (i *Importer) recordHistory(meta ImportMeta, dataGZ, schemaGZ []byte, statu
 	return writeAtomic(path, data)
 }
 
-// AppendLayersToLastHistory appends extra layer records (dispatched + unknown) to the most
-// recent history entry. Called by the importArtifact handler after Import() writes the base
-// record (containing the two graph layers) and Dispatcher.Dispatch() completes.
+// FinalizeLastHistory appends extra-layer dispatch records and optionally
+// overrides the status on the most recent history entry. Called by the
+// importArtifact handler after Import() writes the base record (containing
+// the two graph layers + status="done") and Dispatcher.Dispatch() completes.
+// Pass status="" to leave the existing status untouched, or "partial"/"failed"
+// to override after dispatch.
 // Safe to call because the import state machine prevents concurrent imports (409 if running).
-func AppendLayersToLastHistory(dataDir string, layers []LayerRecord) error {
-	if len(layers) == 0 {
+func FinalizeLastHistory(dataDir string, layers []LayerRecord, status string) error {
+	if len(layers) == 0 && status == "" {
 		return nil
 	}
 	path := filepath.Join(dataDir, importHistoryFile)
@@ -309,7 +312,12 @@ func AppendLayersToLastHistory(dataDir string, layers []LayerRecord) error {
 	if len(records) == 0 {
 		return nil
 	}
-	records[len(records)-1].Layers = append(records[len(records)-1].Layers, layers...)
+	if len(layers) > 0 {
+		records[len(records)-1].Layers = append(records[len(records)-1].Layers, layers...)
+	}
+	if status != "" {
+		records[len(records)-1].Status = status
+	}
 	out, err := json.MarshalIndent(records, "", "  ")
 	if err != nil {
 		return err

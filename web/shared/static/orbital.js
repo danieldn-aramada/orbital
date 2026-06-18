@@ -24,6 +24,7 @@ import {
   initInventoryTable,
   initDatacenterTable,
   initServerListTable,
+  dtIPv4Render,
   loadDataCenterTab,
   loadServerListTab,
   saveServerTab,
@@ -327,7 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
 })
 
 // artifactsSkeletonHTML returns a 9-column skeleton row block matching the
-// signed-artifacts table's column count so the swap doesn't reflow when the
+// publish-history table's column count so the swap doesn't reflow when the
 // real content lands.
 function artifactsSkeletonHTML(rows = 5) {
   const s = () => `<span class="is-skeleton" style="display:block">&nbsp;</span>`
@@ -631,7 +632,7 @@ document.addEventListener('click', function (e) {
         initServerDetailTabs(target)
         const dcServersTable = target.querySelector('table[id^="dc-servers-table-"]')
         if (dcServersTable && !$.fn.DataTable.isDataTable(dcServersTable)) {
-          new DataTable(dcServersTable, { paging: false, searching: false, info: false, ordering: true, select: { style: 'os' }, autoWidth: true, columnDefs: [{ className: 'dt-left', targets: 5 }] })
+          new DataTable(dcServersTable, { paging: false, searching: false, info: false, ordering: true, select: { style: 'os' }, autoWidth: true, columnDefs: [{ className: 'dt-left', targets: 5 }, { targets: 0, render: dtIPv4Render }] })
         }
       }
       const defaultTabLink = target.querySelector('.detlinks.is-active')
@@ -1236,7 +1237,12 @@ function populateDivergenceConfirmModal(resolutions) {
 
   const warning = counts.reject > 0
     ? `<div class="notification is-danger is-light is-size-7 mt-3 mb-0" style="padding:0.75em 1em;">
-         <strong>Reject</strong> will signal a force-apply of orbital intent at the edge, overriding the edge admin's override on the next bundle.
+         <strong>Reject</strong> keeps orbital's current intent and signals the edge to overwrite the local override on the next publish. The edge admin's change will be lost.
+       </div>`
+    : ''
+  const ignoreInfo = counts.ignore > 0
+    ? `<div class="notification is-warning is-light is-size-7 mt-3 mb-0" style="padding:0.75em 1em;">
+         <strong>Ignore</strong> leaves orbital intent unchanged and allows the edge admin to retain ownership of this field. Divergence will continue to be reported until resolved differently.
        </div>`
     : ''
 
@@ -1265,6 +1271,7 @@ function populateDivergenceConfirmModal(resolutions) {
     <p class="mb-3">Submitting ${resolutions.length} decision${resolutions.length === 1 ? '' : 's'}:</p>
     <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">${tags.join('')}</div>
     ${warning}
+    ${ignoreInfo}
     ${listHTML}
   `
 }
@@ -1363,14 +1370,15 @@ function refreshDivergenceReports() {
 function divergenceSkeletonHTML() {
   const s = () => `<span class="is-skeleton" style="display:block">&nbsp;</span>`
   const row = () => `<tr>
-    <td>${s()}</td><td>${s()}</td><td>${s()}</td><td>${s()}</td><td>${s()}</td>
+    <td>${s()}</td><td>${s()}</td><td>${s()}</td><td>${s()}</td><td>${s()}</td><td>${s()}</td>
   </tr>`
   return `<table class="table is-striped is-fullwidth is-size-7" style="table-layout: fixed;">
     <colgroup>
       <col style="width: 2.5rem">
       <col style="width: 20%">
-      <col style="width: 20%">
-      <col style="width: 20%">
+      <col style="width: 18%">
+      <col style="width: 10%">
+      <col style="width: 18%">
       <col>
     </colgroup>
     <thead>
@@ -1380,10 +1388,130 @@ function divergenceSkeletonHTML() {
         <th>Last Seen</th>
         <th>Entries</th>
         <th>Status</th>
+        <th>Actions</th>
       </tr>
     </thead>
     <tbody>${[1, 2, 3].map(row).join('')}</tbody>
   </table>`
+}
+
+// One-click export-and-publish from a Divergence Reports row. Triggers an
+// export for the DC, polls until completed, then opens the existing
+// publish-confirm modal (same fragment as /export). Operator confirms in
+// the modal — the existing HTMX form does the actual publish. On success,
+// the refreshExportJobs HX-Trigger fires and the row's button switches to
+// the "Published" disabled state for the session. To republish, the
+// operator goes to /export (which reflects current published state).
+const divergencePublishedDCs = new Set()
+
+function divergencePublishForDC(button) {
+  const dcOrbId = button.dataset.dcOrbid
+  if (!dcOrbId || divergencePublishedDCs.has(dcOrbId)) return
+
+  const origHTML = button.innerHTML
+  const spinner = (text) => `<span class="icon"><i class="fa-solid fa-spinner fa-spin"></i></span><span>${text}</span>`
+  button.disabled = true
+  button.innerHTML = spinner('Exporting…')
+  hideDivergenceErr()
+
+  // 1) Export.
+  fetch(BASE + '/api/v1/export', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orbId: dcOrbId }),
+  })
+    .then(r => r.json())
+    .then(json => {
+      if (json.error) throw new Error(json.error)
+      // 2) Poll export job until terminal.
+      const pollExport = () => {
+        fetch(BASE + `/api/v1/export/jobs/${json.id}`)
+          .then(r => r.json())
+          .then(job => {
+            if (job.status === 'completed') {
+              button.innerHTML = spinner('Publishing…')
+              // 3) Open publish-confirm modal with summary fragment.
+              return openDivergencePublishModal(json.id, button, dcOrbId, origHTML)
+            } else if (job.status === 'failed') {
+              button.disabled = false
+              button.innerHTML = origHTML
+              showDivergenceErr('Export failed: ' + (job.error || 'unknown error'))
+            } else {
+              setTimeout(pollExport, 2000)
+            }
+          })
+          .catch(() => setTimeout(pollExport, 3000))
+      }
+      pollExport()
+    })
+    .catch(err => {
+      button.disabled = false
+      button.innerHTML = origHTML
+      showDivergenceErr('Export failed: ' + (err.message || 'unknown error'))
+    })
+}
+
+function openDivergencePublishModal(jobId, button, dcOrbId, origHTML) {
+  return fetch(BASE + `/api/v1/export/jobs/${jobId}/publish-modal`, { headers: { 'HX-Request': 'true' } })
+    .then(r => r.text())
+    .then(html => {
+      const body = document.getElementById('publish-modal-body')
+      body.innerHTML = html
+      htmx.process(body)
+      const modal = document.getElementById('publish-confirm-modal')
+      modal.classList.add('is-active')
+
+      // The server emits HX-Trigger: refreshExportJobs on ANY terminal state
+      // (completed OR failed — see oci.go renderArtifactFragment). We need to
+      // distinguish: only mark the button as "Published" when the modal body
+      // shows the success result. On failure the button stays enabled so the
+      // operator can retry.
+      const onTerminal = () => {
+        document.body.removeEventListener('refreshExportJobs', onTerminal)
+        const succeeded = body.querySelector('.message.is-success') !== null
+        if (succeeded) {
+          divergencePublishedDCs.add(dcOrbId)
+          button.disabled = true
+          button.classList.remove('is-link')
+          button.classList.add('is-success')
+          button.innerHTML = '<span class="icon"><i class="fa-solid fa-check"></i></span><span>Published</span>'
+        }
+        // On failure, the modal continues to show the error. When the user
+        // closes the modal, the MutationObserver below restores the button.
+      }
+      document.body.addEventListener('refreshExportJobs', onTerminal)
+
+      // Modal closed → restore the button (including the failure case where
+      // the modal showed an error and the user closed it).
+      const observer = new MutationObserver(() => {
+        if (modal.classList.contains('is-active')) return
+        observer.disconnect()
+        if (!divergencePublishedDCs.has(dcOrbId)) {
+          document.body.removeEventListener('refreshExportJobs', onTerminal)
+          button.disabled = false
+          button.innerHTML = origHTML
+        }
+      })
+      observer.observe(modal, { attributes: true, attributeFilter: ['class'] })
+    })
+    .catch(err => {
+      button.disabled = false
+      button.innerHTML = origHTML
+      showDivergenceErr('Open publish modal failed: ' + err.message)
+    })
+}
+
+function showDivergenceErr(msg) {
+  const el = document.getElementById('divergence-error')
+  if (!el) return
+  el.textContent = msg
+  el.style.display = ''
+}
+function hideDivergenceErr() {
+  const el = document.getElementById('divergence-error')
+  if (!el) return
+  el.style.display = 'none'
+  el.textContent = ''
 }
 
 // ─── Config-item delete modal (DataCenter / Server) ───────────────────────────
@@ -1513,3 +1641,4 @@ window.submitDivergenceBatch = submitDivergenceBatch
 window.confirmDivergenceBatch = confirmDivergenceBatch
 window.closeDivergenceConfirmModal = closeDivergenceConfirmModal
 window.refreshDivergenceReports = refreshDivergenceReports
+window.divergencePublishForDC = divergencePublishForDC

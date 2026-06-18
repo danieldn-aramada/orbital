@@ -13,28 +13,28 @@ import (
 	"github.com/armada/orbital/internal/divergence"
 )
 
-// applySnapshot writes the snapshot's overrides for one DC to the ent store:
-//   - UPSERT each entry (insert new, update last_seen_at / last_snapshot_published_at on existing)
-//   - DELETE entries previously stored for this DC that are not present in this snapshot
+// applyReport writes the report's overrides for one DC to the ent store:
+//   - UPSERT each entry (insert new, update last_seen_at / last_report_published_at on existing)
+//   - DELETE entries previously stored for this DC that are not present in this report
 //
 // Single read + per-entry UPSERT + bulk-delete-by-key — not transactional.
 // If the process dies between the UPSERT phase and the delete phase, the next
 // poll cycle is idempotent and converges to the right state.
 //
 // Resolved entries are write-protected: once an admin has decided an entry,
-// re-ingesting later snapshots refreshes only "we saw this again" timestamps
-// (last_seen_at, last_snapshot_published_at, type_name). The intended/override
-// values stay frozen at resolution time. Orb's snapshots reflect what orb
+// re-ingesting later reports refreshes only "we saw this again" timestamps
+// (last_seen_at, last_report_published_at, type_name). The intended/override
+// values stay frozen at resolution time. Orb's reports reflect what orb
 // believed intent was at report time — that's a stale view until orb imports
 // a fresh bundle, and we must not let it rewrite the history the admin
 // already decided against.
-func (i *Ingester) applySnapshot(ctx context.Context, dc dcRef, publishedAt time.Time, overrides []divergence.OverrideEntry) error {
-	// Track which (entry_orb_id, field) pairs appear in this snapshot so we
+func (i *Ingester) applyReport(ctx context.Context, dc dcRef, publishedAt time.Time, overrides []divergence.OverrideEntry) error {
+	// Track which (entry_orb_id, field) pairs appear in this report so we
 	// can delete the others below.
 	present := make(map[string]bool, len(overrides))
 
 	// Pre-fetch resolved (entryOrbId, field) pairs whose entryOrbIds appear in
-	// this snapshot. Narrowed by EntryOrbIDIn first to avoid scanning the
+	// this report. Narrowed by EntryOrbIDIn first to avoid scanning the
 	// whole resolutions table; field equality is checked in-memory below
 	// since orbital resolutions don't carry the DC identifier.
 	resolved := make(map[string]bool, len(overrides))
@@ -86,7 +86,7 @@ func (i *Ingester) applySnapshot(ctx context.Context, dc dcRef, publishedAt time
 				SetWho(ov.Who).
 				SetFirstSeenAt(when).
 				SetLastSeenAt(when).
-				SetLastSnapshotPublishedAt(publishedAt)
+				SetLastReportPublishedAt(publishedAt)
 			if ov.IntendedAtVersion != nil {
 				creator = creator.SetIntendedAtVersion(*ov.IntendedAtVersion)
 			}
@@ -126,7 +126,7 @@ func (i *Ingester) applySnapshot(ctx context.Context, dc dcRef, publishedAt time
 			u := existing.Update().
 				SetTypeName(ov.Type).
 				SetLastSeenAt(when).
-				SetLastSnapshotPublishedAt(publishedAt)
+				SetLastReportPublishedAt(publishedAt)
 			if shouldUpdateValues {
 				u = u.SetIntendedValue(intended).
 					SetOverrideValue(override).
@@ -139,7 +139,7 @@ func (i *Ingester) applySnapshot(ctx context.Context, dc dcRef, publishedAt time
 		present[entryKey] = true
 	}
 
-	// DELETE entries for this DC that are no longer in the snapshot.
+	// DELETE entries for this DC that are no longer in the report.
 	stale, err := i.db.DivergenceEntry.Query().
 		Where(divergenceentry.DcOrbID(dc.id)).
 		All(ctx)
@@ -173,30 +173,47 @@ func (i *Ingester) applySnapshot(ctx context.Context, dc dcRef, publishedAt time
 
 	deleted := 0
 	for _, e := range stale {
-		if !present[e.EntryOrbID+"|"+e.Field] {
-			// Loop closure: orb stopped reporting this divergence. Delete the
-			// entry AND any attached resolution — the resolution row is bound
-			// 1:1 with the active entry, never outlives it. Audit of the
-			// decision lives in the Event log. If local admin later re-applies
-			// the same override, orb reports a fresh divergence; the operator
-			// re-decides from a clean slate.
-			if _, err := i.db.DivergenceResolution.Delete().
-				Where(
-					divergenceresolution.EntryOrbID(e.EntryOrbID),
-					divergenceresolution.Field(e.Field),
-				).
-				Exec(ctx); err != nil {
-				i.logger.Warn("divergence ingester: delete resolution failed",
-					"dc", dc.id, "orbId", e.EntryOrbID, "field", e.Field, "err", err)
-				// Continue with entry delete — orphaning the entry is worse
-				// than a stale resolution row, which can be cleaned up later.
-			}
-			if err := i.db.DivergenceEntry.DeleteOne(e).Exec(ctx); err != nil {
-				i.logger.Warn("divergence ingester: delete stale entry failed",
-					"dc", dc.id, "orbId", e.EntryOrbID, "field", e.Field, "err", err)
-				continue
-			}
-			deleted++
+		if present[e.EntryOrbID+"|"+e.Field] {
+			continue
+		}
+		// Loop closure: orb stopped reporting this divergence. Delete the
+		// entry AND any attached resolution — the resolution row is bound
+		// 1:1 with the active entry, never outlives it. Audit of the
+		// decision lives in the Event log. If local admin later re-applies
+		// the same override, orb reports a fresh divergence; the operator
+		// re-decides from a clean slate.
+		//
+		// Pre-fetch the resolution's action (if any) BEFORE the delete so we
+		// can attribute the closure in audit. action=ignore loop-closure is
+		// load-bearing semantic: per configbundle ADR-009, it signals that
+		// the edge admin released their SSA claim and cb-controller's
+		// ReclaimController restored intent. The cloud admin should see this
+		// closure as an explicit edge-driven action (closeIgnoreOnHandback),
+		// not silent disappearance.
+		var prevAction string
+		if r, err := i.db.DivergenceResolution.Query().
+			Where(
+				divergenceresolution.EntryOrbID(e.EntryOrbID),
+				divergenceresolution.Field(e.Field),
+			).
+			Only(ctx); err == nil {
+			prevAction = string(r.Action)
+		}
+
+		// Transactional delete: resolution + entry as a single unit. If
+		// either fails, nothing is deleted and the next ingest tick retries.
+		// Avoids the orphan-resolution case where a deleted entry leaves
+		// behind a resolution that silently re-attaches to a future
+		// re-divergence with the same (entry_orb_id, field) key.
+		if err := i.deleteEntryWithResolution(ctx, e); err != nil {
+			i.logger.Warn("divergence ingester: transactional cleanup failed",
+				"dc", dc.id, "orbId", e.EntryOrbID, "field", e.Field, "err", err)
+			continue
+		}
+		deleted++
+
+		if prevAction == "ignore" {
+			i.writeHandbackAuditEvent(ctx, dc.id, e)
 		}
 	}
 	if deleted > 0 {
@@ -204,4 +221,78 @@ func (i *Ingester) applySnapshot(ctx context.Context, dc dcRef, publishedAt time
 			"dc", dc.id, "deleted", deleted)
 	}
 	return nil
+}
+
+// deleteEntryWithResolution removes a DivergenceEntry and its matching
+// DivergenceResolution (if any) atomically. Either both deletes succeed or
+// neither does — preventing the orphan-resolution case where a stale resolution
+// would silently auto-resolve a future re-divergence with the same key.
+func (i *Ingester) deleteEntryWithResolution(ctx context.Context, e *ent.DivergenceEntry) error {
+	tx, err := i.db.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	if _, err := tx.DivergenceResolution.Delete().
+		Where(
+			divergenceresolution.EntryOrbID(e.EntryOrbID),
+			divergenceresolution.Field(e.Field),
+		).
+		Exec(ctx); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("delete resolution: %w", err)
+	}
+	if err := tx.DivergenceEntry.DeleteOne(e).Exec(ctx); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("delete entry: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	return nil
+}
+
+// writeHandbackAuditEvent records that an active Ignore resolution closed via
+// the edge-handback path (configbundle ADR-009): local admin released their
+// SSA claim, cb-controller reclaimed the field with intent value, the
+// divergence reporter stopped emitting the entry, and this ingester is
+// removing the stale Ignore directive. Failures are logged and swallowed —
+// audit writes must never block or fail an ingest cycle.
+func (i *Ingester) writeHandbackAuditEvent(ctx context.Context, dcOrbID string, e *ent.DivergenceEntry) {
+	details := map[string]any{
+		"entryId":              e.ID.String(),
+		"dcOrbId":              dcOrbID,
+		"orbId":                e.EntryOrbID,
+		"field":                e.Field,
+		"prevResolutionAction": "ignore",
+		"trigger":              "edge-handback",
+	}
+	raw, _ := json.Marshal(details)
+	ev, err := i.db.Event.Create().
+		SetActor("system:ingester").
+		SetEventCategory("management").
+		SetOperations([]string{"closeIgnoreOnHandback"}).
+		SetDetails(raw).
+		Save(ctx)
+	if err != nil {
+		i.logger.Warn("divergence ingester: write handback audit event failed",
+			"dc", dcOrbID, "orbId", e.EntryOrbID, "field", e.Field, "err", err)
+		return
+	}
+	// Attach the underlying resource so the event is visible on the resource's
+	// audit panel (DC, Server, IdracSettings, etc.) — same pattern as
+	// resolveDivergence / dismissDivergence.
+	if _, err := i.db.EventResource.Create().
+		SetOrbID(e.EntryOrbID).
+		SetEvent(ev).
+		Save(ctx); err != nil {
+		i.logger.Warn("divergence ingester: attach event resource failed",
+			"dc", dcOrbID, "orbId", e.EntryOrbID, "field", e.Field, "err", err)
+	}
+	if _, err := i.db.EventResourceType.Create().
+		SetResourceType("DivergenceEntry").
+		SetEvent(ev).
+		Save(ctx); err != nil {
+		i.logger.Warn("divergence ingester: attach event resource_type failed",
+			"dc", dcOrbID, "orbId", e.EntryOrbID, "field", e.Field, "err", err)
+	}
 }

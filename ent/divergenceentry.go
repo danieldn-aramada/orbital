@@ -47,9 +47,9 @@ type DivergenceEntry struct {
 	FirstSeenAt time.Time `json:"first_seen_at,omitempty"`
 	// LastSeenAt holds the value of the "last_seen_at" field.
 	LastSeenAt time.Time `json:"last_seen_at,omitempty"`
-	// LastSnapshotPublishedAt holds the value of the "last_snapshot_published_at" field.
-	LastSnapshotPublishedAt time.Time `json:"last_snapshot_published_at,omitempty"`
-	selectValues            sql.SelectValues
+	// LastReportPublishedAt holds the value of the "last_report_published_at" field.
+	LastReportPublishedAt time.Time `json:"last_report_published_at,omitempty"`
+	selectValues          sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -63,7 +63,7 @@ func (*DivergenceEntry) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullInt64)
 		case divergenceentry.FieldCreatedBy, divergenceentry.FieldUpdatedBy, divergenceentry.FieldDcOrbID, divergenceentry.FieldEntryOrbID, divergenceentry.FieldField, divergenceentry.FieldTypeName, divergenceentry.FieldWho:
 			values[i] = new(sql.NullString)
-		case divergenceentry.FieldCreatedAt, divergenceentry.FieldUpdatedAt, divergenceentry.FieldFirstSeenAt, divergenceentry.FieldLastSeenAt, divergenceentry.FieldLastSnapshotPublishedAt:
+		case divergenceentry.FieldCreatedAt, divergenceentry.FieldUpdatedAt, divergenceentry.FieldFirstSeenAt, divergenceentry.FieldLastSeenAt, divergenceentry.FieldLastReportPublishedAt:
 			values[i] = new(sql.NullTime)
 		case divergenceentry.FieldID:
 			values[i] = new(uuid.UUID)
@@ -178,11 +178,11 @@ func (_m *DivergenceEntry) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.LastSeenAt = value.Time
 			}
-		case divergenceentry.FieldLastSnapshotPublishedAt:
+		case divergenceentry.FieldLastReportPublishedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field last_snapshot_published_at", values[i])
+				return fmt.Errorf("unexpected type %T for field last_report_published_at", values[i])
 			} else if value.Valid {
-				_m.LastSnapshotPublishedAt = value.Time
+				_m.LastReportPublishedAt = value.Time
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -266,8 +266,8 @@ func (_m *DivergenceEntry) String() string {
 	builder.WriteString("last_seen_at=")
 	builder.WriteString(_m.LastSeenAt.Format(time.ANSIC))
 	builder.WriteString(", ")
-	builder.WriteString("last_snapshot_published_at=")
-	builder.WriteString(_m.LastSnapshotPublishedAt.Format(time.ANSIC))
+	builder.WriteString("last_report_published_at=")
+	builder.WriteString(_m.LastReportPublishedAt.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }

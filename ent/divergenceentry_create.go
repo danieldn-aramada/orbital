@@ -154,9 +154,9 @@ func (_c *DivergenceEntryCreate) SetLastSeenAt(v time.Time) *DivergenceEntryCrea
 	return _c
 }
 
-// SetLastSnapshotPublishedAt sets the "last_snapshot_published_at" field.
-func (_c *DivergenceEntryCreate) SetLastSnapshotPublishedAt(v time.Time) *DivergenceEntryCreate {
-	_c.mutation.SetLastSnapshotPublishedAt(v)
+// SetLastReportPublishedAt sets the "last_report_published_at" field.
+func (_c *DivergenceEntryCreate) SetLastReportPublishedAt(v time.Time) *DivergenceEntryCreate {
+	_c.mutation.SetLastReportPublishedAt(v)
 	return _c
 }
 
@@ -266,8 +266,8 @@ func (_c *DivergenceEntryCreate) check() error {
 	if _, ok := _c.mutation.LastSeenAt(); !ok {
 		return &ValidationError{Name: "last_seen_at", err: errors.New(`ent: missing required field "DivergenceEntry.last_seen_at"`)}
 	}
-	if _, ok := _c.mutation.LastSnapshotPublishedAt(); !ok {
-		return &ValidationError{Name: "last_snapshot_published_at", err: errors.New(`ent: missing required field "DivergenceEntry.last_snapshot_published_at"`)}
+	if _, ok := _c.mutation.LastReportPublishedAt(); !ok {
+		return &ValidationError{Name: "last_report_published_at", err: errors.New(`ent: missing required field "DivergenceEntry.last_report_published_at"`)}
 	}
 	return nil
 }
@@ -360,9 +360,9 @@ func (_c *DivergenceEntryCreate) createSpec() (*DivergenceEntry, *sqlgraph.Creat
 		_spec.SetField(divergenceentry.FieldLastSeenAt, field.TypeTime, value)
 		_node.LastSeenAt = value
 	}
-	if value, ok := _c.mutation.LastSnapshotPublishedAt(); ok {
-		_spec.SetField(divergenceentry.FieldLastSnapshotPublishedAt, field.TypeTime, value)
-		_node.LastSnapshotPublishedAt = value
+	if value, ok := _c.mutation.LastReportPublishedAt(); ok {
+		_spec.SetField(divergenceentry.FieldLastReportPublishedAt, field.TypeTime, value)
+		_node.LastReportPublishedAt = value
 	}
 	return _node, _spec
 }

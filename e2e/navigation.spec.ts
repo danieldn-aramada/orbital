@@ -9,7 +9,7 @@ const pages: Array<{ path: string; heading?: string; testid?: boolean; tableId?:
   { path: '/inventory',          tableId: 'inventory-table' },
   { path: '/schema',             heading: 'Schema',             testid: true  },
   { path: '/export',             heading: 'Export Subgraph',    testid: true  },
-  { path: '/signed-artifacts',   heading: 'Signed Artifacts',   testid: true  },
+  { path: '/publish-history',    heading: 'Publish History',    testid: true  },
   { path: '/divergence-reports', heading: 'Divergence Reports', testid: true  },
   { path: '/audit-log',          heading: 'Audit Log',          testid: true  },
   { path: '/backups',            heading: 'Backup Graph',       testid: false },

@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -26,16 +27,17 @@ import (
 
 // RestoreHandler handles async DGraph restore operations.
 type RestoreHandler struct {
-	db              *ent.Client
-	storage         blobstore.Store
-	backend         RestoreBackend
-	dgraphAlterURL  string // e.g. http://dgraph-blue:8080/alter
-	dgraphSchemaURL string // e.g. http://dgraph-blue:8080/admin/schema
-	dgraphAlphaGRPC string // e.g. dgraph-blue-dgraph-alpha:9080
-	dgraphZeroGRPC  string // e.g. dgraph-blue-dgraph-zero:5080
-	schemaPath      string // path to the GraphQL SDL schema file
-	restoreTimeout  time.Duration
-	logger          *slog.Logger
+	db               *ent.Client
+	storage          blobstore.Store
+	backend          RestoreBackend
+	dgraphAlterURL   string // e.g. http://dgraph-blue:8080/alter
+	dgraphSchemaURL  string // e.g. http://dgraph-blue:8080/admin/schema
+	dgraphGraphQLURL string // e.g. http://dgraph-blue:8080/graphql — used to enumerate affected DCs post-restore
+	dgraphAlphaGRPC  string // e.g. dgraph-blue-dgraph-alpha:9080
+	dgraphZeroGRPC   string // e.g. dgraph-blue-dgraph-zero:5080
+	schemaPath       string // path to the GraphQL SDL schema file
+	restoreTimeout   time.Duration
+	logger           *slog.Logger
 }
 
 // RestoreConfig holds configuration for the restore handler.
@@ -67,17 +69,67 @@ func NewRestoreHandler(ctx context.Context, db *ent.Client, cfg RestoreConfig, b
 	base := strings.TrimSuffix(cfg.DGraphAdminURL, "/admin")
 
 	return &RestoreHandler{
-		db:              db,
-		storage:         store,
-		backend:         backend,
-		dgraphAlterURL:  base + "/alter",
-		dgraphSchemaURL: base + "/admin/schema",
-		dgraphAlphaGRPC: cfg.DGraphAlphaGRPC,
-		dgraphZeroGRPC:  cfg.DGraphZeroGRPC,
-		schemaPath:      cfg.SchemaPath,
-		restoreTimeout:  cfg.RestoreTimeout,
-		logger:          logger,
+		db:               db,
+		storage:          store,
+		backend:          backend,
+		dgraphAlterURL:   base + "/alter",
+		dgraphSchemaURL:  base + "/admin/schema",
+		dgraphGraphQLURL: base + "/graphql",
+		dgraphAlphaGRPC:  cfg.DGraphAlphaGRPC,
+		dgraphZeroGRPC:   cfg.DGraphZeroGRPC,
+		schemaPath:       cfg.SchemaPath,
+		restoreTimeout:   cfg.RestoreTimeout,
+		logger:           logger,
 	}, nil
+}
+
+// fetchAllDCOrbIDs queries the (just-restored) DGraph for every DataCenter
+// orbId. Used to attach affected resources to the restoreBackup audit event
+// so resource-scoped audit panels (DC, Server) show the restore as context.
+// Returns empty on error rather than failing the restore — losing the resource
+// attachment is worse UX than failing the operation.
+func (h *RestoreHandler) fetchAllDCOrbIDs(ctx context.Context) []string {
+	body, err := json.Marshal(map[string]string{
+		"query": "{ queryDataCenter { orbId } }",
+	})
+	if err != nil {
+		h.logger.Warn("restore audit: marshal DC query failed", "err", err)
+		return nil
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.dgraphGraphQLURL, bytes.NewReader(body))
+	if err != nil {
+		h.logger.Warn("restore audit: build DC query request failed", "err", err)
+		return nil
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		h.logger.Warn("restore audit: DC query request failed", "err", err)
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		h.logger.Warn("restore audit: DC query HTTP error", "status", resp.StatusCode)
+		return nil
+	}
+	var parsed struct {
+		Data struct {
+			QueryDataCenter []struct {
+				OrbID string `json:"orbId"`
+			} `json:"queryDataCenter"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		h.logger.Warn("restore audit: decode DC query failed", "err", err)
+		return nil
+	}
+	out := make([]string, 0, len(parsed.Data.QueryDataCenter))
+	for _, dc := range parsed.Data.QueryDataCenter {
+		if dc.OrbID != "" {
+			out = append(out, dc.OrbID)
+		}
+	}
+	return out
 }
 
 type restoreJobResponse struct {
@@ -394,10 +446,20 @@ func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 	}
 
 	log("Restore completed.")
+
+	// Attach every DataCenter in the restored graph to the audit event so that
+	// resource-scoped audit panels (DC, Server) show the restore as relevant
+	// context. Restore wipes + reloads DGraph, so by construction every DC in
+	// the restored snapshot was "affected" by this operation.
+	dcOrbIDs := h.fetchAllDCOrbIDs(ctx)
+	var resourceTypes []string
+	if len(dcOrbIDs) > 0 {
+		resourceTypes = []string{"DataCenter"}
+	}
 	writeAuditEvent(h.db, h.logger, "management", job.CreatedBy, "restoreBackup",
 		[]string{"restoreBackup"},
-		[]string{},
-		[]string{},
+		resourceTypes,
+		dcOrbIDs,
 		map[string]any{"id": jobID.String(), "backupKey": bk.S3Key},
 	)
 	if _, err := h.db.RestoreJob.UpdateOneID(jobID).
