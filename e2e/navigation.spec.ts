@@ -6,6 +6,7 @@ import { test, expect } from '@playwright/test';
 const pages: Array<{ path: string; heading?: string; testid?: boolean; tableId?: string }> = [
   { path: '/datacenters',        tableId: 'datacenter-table' },
   { path: '/servers',            tableId: 'server-list-table' },
+  { path: '/clusters',           tableId: 'cluster-table' },
   { path: '/inventory',          tableId: 'inventory-table' },
   { path: '/schema',             heading: 'Schema',             testid: true  },
   { path: '/export',             heading: 'Export Subgraph',    testid: true  },

@@ -17,3 +17,8 @@ type Servers struct {
 	layout.Base
 	PageTitle string
 }
+
+type Clusters struct {
+	layout.Base
+	PageTitle string
+}

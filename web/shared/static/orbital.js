@@ -24,12 +24,17 @@ import {
   initInventoryTable,
   initDatacenterTable,
   initServerListTable,
+  initClusterTable,
   dtIPv4Render,
   loadDataCenterTab,
   loadServerListTab,
+  loadClusterTab,
   saveServerTab,
+  saveClusterTab,
   initDatacenterTabRestoration,
   initServerListTabRestoration,
+  initClusterTabRestoration,
+  safeDomId,
 } from './shared.js'
 
 // ─── Server drill-down in DC tab (dblclick → HTMX load into tab) ─────────────
@@ -37,12 +42,12 @@ import {
 document.addEventListener('dblclick', function (e) {
   const row = e.target.closest('tr[data-server-id]')
   if (!row) return
-  const serverId = row.dataset.serverId
-  const dcId = row.dataset.dcId
-  const tabContent = document.getElementById('tab-content-' + dcId)
+  const serverOrbId = row.dataset.serverId
+  const dcOrbId = row.dataset.dcId
+  const tabContent = document.getElementById('tab-content-' + safeDomId(dcOrbId))
   if (!tabContent) return
   tabContent.dataset.loaded = ''
-  htmx.ajax('GET', BASE + '/servers/' + serverId + '?dcCtx=1', { target: '#tab-content-' + dcId, swap: 'innerHTML' })
+  htmx.ajax('GET', BASE + '/servers/' + encodeURIComponent(serverOrbId) + '?dcCtx=1', { target: tabContent, swap: 'innerHTML' })
 })
 
 // ─── Inventory page ───────────────────────────────────────────────────────────
@@ -55,14 +60,15 @@ document.addEventListener('DOMContentLoaded', () => {
   initDatacenterTable({
     onRowOpen: (data) => {
       const displayName = data.name
-      const id = data.id
-      const tab = document.getElementById(`tab-${id}`)
+      const orbId = data.orbId
+      const domId = safeDomId(orbId)
+      const tab = document.getElementById(`tab-${domId}`)
       if (tab) {
         tab.click()
       } else {
-        loadDataCenterTab(displayName, id)
-        saveTab(displayName, id)
-        document.getElementById(`tab-${id}`).click()
+        loadDataCenterTab(displayName, orbId)
+        saveTab(displayName, orbId)
+        document.getElementById(`tab-${domId}`).click()
       }
     },
   })
@@ -75,15 +81,16 @@ window.addEventListener('load', initDatacenterTabRestoration)
 document.addEventListener('DOMContentLoaded', () => {
   initServerListTable({
     onRowOpen: (data) => {
-      const id = data.id
+      const orbId = data.orbId
+      const domId = safeDomId(orbId)
       const displayName = data.hostname !== '—' ? data.hostname : data.serviceTag
-      const tab = document.getElementById(`tab-srv-${id}`)
+      const tab = document.getElementById(`tab-srv-${domId}`)
       if (tab) {
         tab.click()
       } else {
-        loadServerListTab(displayName, id)
-        saveServerTab(displayName, id)
-        document.getElementById(`tab-srv-${id}`).click()
+        loadServerListTab(displayName, orbId)
+        saveServerTab(displayName, orbId)
+        document.getElementById(`tab-srv-${domId}`).click()
       }
     },
   })
@@ -91,13 +98,65 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.addEventListener('load', initServerListTabRestoration)
 
-// Double-click on server row in DC detail panel → navigate to /servers?open=<id>
+// ─── Clusters page ────────────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  initClusterTable({
+    onRowOpen: (data) => {
+      const orbId = data.orbId
+      const domId = safeDomId(orbId)
+      const displayName = data.name
+      const tab = document.getElementById(`tab-cluster-${domId}`)
+      if (tab) {
+        tab.click()
+      } else {
+        loadClusterTab(displayName, orbId)
+        saveClusterTab(displayName, orbId)
+        document.getElementById(`tab-cluster-${domId}`).click()
+      }
+    },
+  })
+})
+
+window.addEventListener('load', initClusterTabRestoration)
+
+// Double-click on a node row inside a cluster tab → open that server's tab.
+document.addEventListener('dblclick', (e) => {
+  const row = e.target.closest('tr[data-server-orb-id]')
+  if (!row) return
+  const orbId = row.dataset.serverOrbId
+  const label = row.dataset.displayName || orbId
+  window.location.href = BASE + '/servers?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label)
+})
+
+// Cross-cluster navigation. Single-click on a .js-cluster-link (the
+// "Management Cluster" link in a workload's summary), and double-click on
+// a row in the Workload Clusters sub-tab — both deep-link to /clusters?open=
+// so initClusterTabRestoration opens the target cluster's tab.
+function navigateToClusterTab(orbId, label) {
+  window.location.href = BASE + '/clusters?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label || orbId)
+}
+
+document.addEventListener('click', (e) => {
+  const link = e.target.closest('.js-cluster-link[data-cluster-orb-id]')
+  if (!link) return
+  e.preventDefault()
+  navigateToClusterTab(link.dataset.clusterOrbId, link.dataset.displayName)
+})
+
+document.addEventListener('dblclick', (e) => {
+  const row = e.target.closest('tr[data-cluster-orb-id]')
+  if (!row) return
+  navigateToClusterTab(row.dataset.clusterOrbId, row.dataset.displayName)
+})
+
+// Double-click on server row in DC detail panel → navigate to /servers?open=<orbId>
 document.addEventListener('dblclick', (e) => {
   const row = e.target.closest('tr[data-server-id]')
   if (!row) return
-  const id = row.dataset.serverId
-  const label = row.dataset.displayName || id
-  window.location.href = BASE + '/servers?open=' + encodeURIComponent(id) + '&label=' + encodeURIComponent(label)
+  const orbId = row.dataset.serverId
+  const label = row.dataset.displayName || orbId
+  window.location.href = BASE + '/servers?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label)
 })
 
 // ─── Backups ──────────────────────────────────────────────────────────────────
@@ -544,9 +603,10 @@ document.addEventListener('click', function (e) {
           modal.classList.remove('is-active')
           document.documentElement.style.overflow = ''
           dcEditors.delete(id)
+          const orbId = modal.dataset.orbId || ''
           const _tabContent = document.getElementById('tab-content-' + id)
           if (_tabContent) {
-            fetch(BASE + '/datacenters/' + id, { headers: { 'HX-Request': 'true' } })
+            fetch(BASE + '/datacenters/' + encodeURIComponent(orbId), { headers: { 'HX-Request': 'true' } })
               .then(r => r.text())
               .then(html => {
                 _tabContent.innerHTML = html
@@ -584,21 +644,167 @@ document.addEventListener('click', function (e) {
   }
 })
 
+// ─── Cluster edit modal ───────────────────────────────────────────────────────
+
+const clusterEditors = new Map()
+window.clusterEditors = clusterEditors
+
+document.addEventListener('click', function (e) {
+  const editBtn = e.target.closest('[data-cluster-edit-id]')
+  if (editBtn) {
+    const id = editBtn.dataset.clusterEditId
+    const modal = document.getElementById('edit-modal-cluster-' + id)
+    if (!modal) return
+
+    if (!clusterEditors.has(id)) {
+      const dataEl = document.getElementById('cluster-edit-data-' + id)
+      const initialJSON = dataEl ? dataEl.textContent.trim() : '{}'
+      const editorTarget = document.getElementById('cluster-json-editor-' + id)
+      const editor = new window.JSONEditor({
+        target: editorTarget,
+        props: { mode: 'text', mainMenuBar: false },
+      })
+      editor.set({ text: JSON.stringify(JSON.parse(initialJSON), null, 2) })
+      clusterEditors.set(id, editor)
+
+      const errorEl = document.getElementById('cluster-edit-error-' + id)
+      const showError = (msg) => { errorEl.textContent = msg; errorEl.style.display = '' }
+      const clearError = () => { errorEl.textContent = ''; errorEl.style.display = 'none' }
+
+      document.getElementById('cluster-edit-submit-' + id).addEventListener('click', async () => {
+        const btn = document.getElementById('cluster-edit-submit-' + id)
+        clearError()
+        btn.classList.add('is-loading')
+        btn.disabled = true
+        try {
+          let vars
+          try { vars = JSON.parse(editor.get().text) } catch (_) {
+            showError('Invalid JSON — fix the syntax and try again.')
+            return
+          }
+          const typename = modal.dataset.typename || ''
+          if (typename !== 'EksaKubernetesCluster') {
+            showError(`Edit not supported for ${typename || 'this cluster type'} yet.`)
+            return
+          }
+          const currentVersion = parseInt(modal.dataset.version, 10) || 0
+          // Universal fields + EKSA-specific. controlPlaneEndpoint/tinkerbellIP
+          // are IPAddress refs — link by orbId once we have a UI for them. For
+          // now we only update scalar fields.
+          const resp = await fetch(BASE + '/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              query: `mutation UpdateEksaCluster(
+                $orbId: String!,
+                $kubernetesVersion: String, $cni: String, $environment: String,
+                $clusterType: String,
+                $version: Int, $updatedBy: String!, $updatedAt: DateTime!
+              ) {
+                updateEksaKubernetesCluster(input: {
+                  filter: { orbId: { eq: $orbId } }
+                  set: {
+                    kubernetesVersion: $kubernetesVersion,
+                    cni: $cni, environment: $environment,
+                    clusterType: $clusterType,
+                    version: $version, updatedBy: $updatedBy, updatedAt: $updatedAt
+                  }
+                }) {
+                  eksaKubernetesCluster { orbId name }
+                }
+              }`,
+              variables: {
+                orbId: modal.dataset.orbId || '',
+                kubernetesVersion: vars.kubernetesVersion ?? null,
+                cni: vars.cni ?? null,
+                environment: vars.environment ?? null,
+                clusterType: vars.clusterType ?? null,
+                version: currentVersion + 1,
+                updatedBy: modal.dataset.currentUser || '',
+                updatedAt: new Date().toISOString(),
+              },
+            }),
+          })
+          if (!resp.ok) {
+            if (resp.status === 409) {
+              const body = await resp.json().catch(() => ({}))
+              showError(body.error || 'Conflict — please reload and try again.')
+            } else {
+              showError(`Server error (${resp.status}) — try again.`)
+            }
+            return
+          }
+          const result = await resp.json()
+          const errMsg = window.gqlErrorMessage(result)
+          if (errMsg) { showError(errMsg); return }
+          modal.classList.remove('is-active')
+          document.documentElement.style.overflow = ''
+          clusterEditors.delete(id)
+          htmx.ajax('GET', BASE + modal.dataset.reloadUrl, { target: document.getElementById(modal.dataset.reloadTarget), swap: 'innerHTML' })
+        } catch (err) {
+          showError('Request failed — check your connection and try again.')
+        } finally {
+          btn.classList.remove('is-loading')
+          btn.disabled = false
+        }
+      })
+    }
+
+    const errorEl = document.getElementById('cluster-edit-error-' + id)
+    if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none' }
+    modal.classList.add('is-active')
+    document.documentElement.style.overflow = 'hidden'
+    return
+  }
+
+  const closeBtn = e.target.closest('[data-cluster-modal-close]')
+  if (closeBtn) {
+    const id = closeBtn.dataset.clusterModalClose
+    const modal = document.getElementById('edit-modal-cluster-' + id)
+    if (modal) {
+      modal.classList.remove('is-active')
+      document.documentElement.style.overflow = ''
+    }
+  }
+})
+
+// ─── Cluster reload button ────────────────────────────────────────────────────
+
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest('.js-cluster-reload')
+  if (!btn) return
+  const orbId = btn.dataset.clusterId
+  const domId = safeDomId(orbId)
+  const target = document.getElementById('tab-content-cluster-' + domId)
+  if (!target) return
+  btn.classList.add('is-loading')
+  fetch(BASE + '/clusters/' + encodeURIComponent(orbId), { headers: { 'HX-Request': 'true' } })
+    .then(r => r.text())
+    .then(html => {
+      target.innerHTML = html
+      htmx.process(target)
+      renderTimestamps(target)
+    })
+    .catch(() => {})
+    .finally(() => btn.classList.remove('is-loading'))
+})
+
 // ─── Tab reloads ──────────────────────────────────────────────────────────────
 
 document.addEventListener('click', function (e) {
   const btn = e.target.closest('.js-dc-reload')
   if (!btn) return
-  const id = btn.dataset.dcId
-  const target = document.getElementById('tab-content-' + id)
+  const orbId = btn.dataset.dcId
+  const domId = safeDomId(orbId)
+  const target = document.getElementById('tab-content-' + domId)
   if (!target) return
-  showDatacenterSkeleton(id)
-  fetchWithMinDelay('/datacenters/' + id)
+  showDatacenterSkeleton(orbId)
+  fetchWithMinDelay('/datacenters/' + encodeURIComponent(orbId))
     .then(html => {
       target.innerHTML = html
       htmx.process(target)
       renderTimestamps(target)
-      initDcDetailTabs(id)
+      initDcDetailTabs(domId)
       initServerDetailTabs(target)
     })
     .catch(() => {})
@@ -625,10 +831,10 @@ document.addEventListener('click', function (e) {
       }
       const dcDetailTabs = target.querySelector('[id^="dc-detail-tabs-"]')
       if (dcDetailTabs) {
-        const id = dcDetailTabs.id.replace('dc-detail-tabs-', '')
+        const domId = dcDetailTabs.id.replace('dc-detail-tabs-', '')
         target.dataset.loaded = 'true'
-        initDcDetailTabs(id)
-        dcEditors.delete(id)
+        initDcDetailTabs(domId)
+        dcEditors.delete(domId)
         initServerDetailTabs(target)
         const dcServersTable = target.querySelector('table[id^="dc-servers-table-"]')
         if (dcServersTable && !$.fn.DataTable.isDataTable(dcServersTable)) {
@@ -1590,16 +1796,28 @@ function hideDivergenceErr() {
       }
       closeCfgDeleteModal()
       if (type === 'DataCenter') {
-        const tabClose = document.querySelector('#tab-close-' + id)
+        const dcDomId = safeDomId(id)
+        const tabClose = document.getElementById('tab-close-' + dcDomId)
         if (tabClose) tabClose.click()
-        const reloadBtn = document.querySelector('#btn-reload-datacenters')
+        const reloadBtn = document.getElementById('btn-reload-datacenters')
+        if (reloadBtn) reloadBtn.click()
+      } else if (type === 'KubernetesCluster') {
+        const clusterDomId = safeDomId(id)
+        const tabClose = document.getElementById('tab-close-cluster-' + clusterDomId)
+        if (tabClose) tabClose.click()
+        const reloadBtn = document.getElementById('btn-reload-clusters')
         if (reloadBtn) reloadBtn.click()
       } else if (type === 'Server' && dcId) {
-        htmx.ajax('GET', BASE + '/datacenters/' + dcId, { target: '#tab-content-' + dcId, swap: 'innerHTML' })
+        const dcDomId = safeDomId(dcId)
+        const dcTarget = document.getElementById('tab-content-' + dcDomId)
+        if (dcTarget) {
+          htmx.ajax('GET', BASE + '/datacenters/' + encodeURIComponent(dcId), { target: dcTarget, swap: 'innerHTML' })
+        }
       } else {
-        const tabClose = document.querySelector('#tab-close-srv-' + id)
+        const srvDomId = safeDomId(id)
+        const tabClose = document.getElementById('tab-close-srv-' + srvDomId)
         if (tabClose) tabClose.click()
-        const reloadBtn = document.querySelector('#btn-reload-servers')
+        const reloadBtn = document.getElementById('btn-reload-servers')
         if (reloadBtn) reloadBtn.click()
       }
     } catch (err) {

@@ -58,8 +58,8 @@ type orbServerTabData struct {
 }
 
 const orbGetDataCenterQuery = `
-  query GetDataCenter($id: ID!) {
-    getDataCenter(id: $id) {
+  query GetDataCenter($orbId: String!) {
+    getDataCenter(orbId: $orbId) {
       id
       name
       orbId
@@ -141,18 +141,19 @@ func (s *Server) dcPage(c echo.Context) error {
 	return s.render(c, "datacenter", dcPageData{Base: b, PageTitle: "Data Center"})
 }
 
-// dcTab renders the datacenter detail fragment for the given id.
-// Called by the shared loadDataCenterTab() JS via HTMX GET /datacenters/:id.
+// dcTab renders the datacenter detail fragment for the given orbId.
+// Called by the shared loadDataCenterTab() JS via HTMX GET /datacenters/:orbId.
 func (s *Server) dcTab(c echo.Context) error {
 	if c.Request().Header.Get("HX-Request") != "true" {
 		return c.Redirect(http.StatusFound, "/datacenter")
 	}
 
-	id := c.Param("id")
+	// Path-param decoding is handled by middleware.DecodePathParams.
+	orbID := c.Param("orbId")
 
 	body, _ := json.Marshal(map[string]any{
 		"query":     orbGetDataCenterQuery,
-		"variables": map[string]any{"id": id},
+		"variables": map[string]any{"orbId": orbID},
 	})
 
 	resp, err := http.Post(s.cfg.DGraphURL, "application/json", bytes.NewReader(body))

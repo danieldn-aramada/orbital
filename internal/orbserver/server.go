@@ -61,6 +61,8 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	e.HideBanner = true
 	e.HidePort = true
 
+	e.Use(orbmw.DecodePathParams)
+
 	e.GET("/healthz", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})

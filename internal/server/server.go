@@ -49,6 +49,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	e.HidePort = true
 
 	e.Use(metrics.Middleware())
+	e.Use(orbmw.DecodePathParams)
 	e.GET("/metrics", metrics.Handler())
 	e.GET("/healthz", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
@@ -157,6 +158,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	root.GET("/inventory", ui.Index)
 	root.GET("/datacenters", ui.DataCenters)
 	root.GET("/servers", ui.Servers)
+	root.GET("/clusters", ui.Clusters)
 	root.GET("/backups", ui.Backups)
 	root.GET("/divergence-reports", ui.DivergenceReports)
 	root.GET("/audit-log", ui.AuditLog)
@@ -197,10 +199,13 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	}
 
 	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath)
-	root.GET("/datacenters/:id", dc.Tab)
+	root.GET("/datacenters/:orbId", dc.Tab)
 
 	srv := handler.NewServerHandler(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath)
-	root.GET("/servers/:id", srv.Tab)
+	root.GET("/servers/:orbId", srv.Tab)
+
+	cluster := handler.NewClusterHandler(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath)
+	root.GET("/clusters/:orbId", cluster.Tab)
 
 	delH := handler.NewDeleteHandler(cfg.DGraphURL, db, logger)
 	root.GET("/config-items/delete-preview", delH.Preview)

@@ -85,6 +85,7 @@ type Server implements ConfigItem {
     idracSettings: IdracSettings @hasInverse(field: server)
     serverConfigurationProfile: ServerConfigurationProfile @hasInverse(field: server)
     storageControllers: [StorageController] @hasInverse(field: server)
+    kubernetesNode: KubernetesNode @hasInverse(field: server)
 
     oobIP: IPAddress @hasInverse(field: serverOobIP)
 }
@@ -137,20 +138,35 @@ type StorageVolume implements ConfigItem {
     storageDevices: [StorageDevice] @hasInverse(field: storageVolumes)
 }
 
-type KubernetesCluster implements ConfigItem {
-    provider: String # eksa
+interface KubernetesCluster {
+    kubernetesVersion: String
+    controlPlaneEndpoint: IPAddress
+    cni: String @search(by: [term])         # cilium, calico, flannel
+    environment: String @search(by: [term]) # prod, staging, dev
+    description: String                     # free-text purpose ("Aramco ISV", "SpectroCloud POC")
+    provider: String @search(by: [term])    # eksa, maas, metal3 — canonical token, single source for UI display + filter
 
     dataCenter: DataCenter!
-    eksaConfig: EksaConfig @hasInverse(field: kubernetesCluster)
+    nodes: [KubernetesNode] @hasInverse(field: cluster)
 }
 
-type EksaConfig implements ConfigItem {
-    clusterType: String # management, workload
+type EksaKubernetesCluster implements KubernetesCluster & ConfigItem {
+    clusterType: String @search(by: [term]) # management, standalone, workload
+    tinkerbellIP: IPAddress
 
-    kubernetesCluster: KubernetesCluster!
+    managementCluster: EksaKubernetesCluster
+    workloadClusters: [EksaKubernetesCluster] @hasInverse(field: managementCluster)
+}
 
-    tinkerbellIP: IPAddress 
-    controlPlaneIP: IPAddress
+type KubernetesNode implements ConfigItem {
+    role: String @search(by: [term]) # control_plane, worker
+    ipv4: IPAddress                  # cluster-network IP (distinct from server.oobIP)
+    gpu: Boolean @search             # node contributes GPU resources to the cluster
+    owner: String @search(by: [term])
+    notes: String
+
+    cluster: KubernetesCluster!
+    server: Server!
 }
 
 
@@ -159,7 +175,11 @@ type IPAddress implements ConfigItem {
     address: String! @search(by: [hash])
     role: String @search(by: [term]) # oob, tinkerbell, k8s_api, k8s_node
 
+    # Reverse-pointer convention: <typeName-camelCase><FieldName-PascalCase>.
+    # Long but mechanically derived from the forward edge. Re-evaluate if 
+    # audit/divergence surfaces feel noisy.
     serverOobIP: Server
-    eksaConfigTinkerbellIP: EksaConfig
-    eksaControlPlaneIP: EksaConfig 
+    kubernetesClusterControlPlaneEndpoint: KubernetesCluster @hasInverse(field: controlPlaneEndpoint)
+    eksaKubernetesClusterTinkerbellIP: [EksaKubernetesCluster] @hasInverse(field: tinkerbellIP)
+    kubernetesNodeIpv4: KubernetesNode @hasInverse(field: ipv4)
 }

@@ -1,0 +1,29 @@
+# Seed clusters + nodes for the seattle-galleon data center.
+# Single standalone EKS-A cluster (g1). Source: kubectl get cluster /
+# TinkerbellDatacenterConfig / nodes / machines against the g1 context.
+# Servers referenced here must already exist in seattle-galleon.graphql.
+
+mutation SeedClusters {
+  addIPAddress(input: [
+    { orbId: "seattle:10.20.28.203" type: "ipv4" address: "10.20.28.203" role: "k8s_api" namespace: "seattle" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "seattle:10.20.28.204" type: "ipv4" address: "10.20.28.204" role: "tinkerbell" namespace: "seattle" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "seattle:10.20.28.214" type: "ipv4" address: "10.20.28.214" role: "k8s_node" namespace: "seattle" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "seattle:10.20.28.215" type: "ipv4" address: "10.20.28.215" role: "k8s_node" namespace: "seattle" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "seattle:10.20.28.227" type: "ipv4" address: "10.20.28.227" role: "k8s_node" namespace: "seattle" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" }
+  ], upsert: true) {
+    numUids
+  }
+
+  standalone: addEksaKubernetesCluster(input: [
+    {
+      orbId: "seattle:g1", name: "g1", namespace: "seattle", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "standalone", provider: "eksa", cni: "cilium", environment: "prod", dataCenter: { orbId: "seattle:seattle-galleon" version: 1 }, kubernetesVersion: "v1.30.14", controlPlaneEndpoint: { orbId: "seattle:10.20.28.203" version: 1 }, tinkerbellIP: { orbId: "seattle:10.20.28.204" version: 1 },
+      nodes: [
+          { orbId: "seattle:g1-cp5-09", namespace: "seattle", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g1-cp5-09", ipv4: { orbId: "seattle:10.20.28.215" version: 1 }, gpu: false, role: "control_plane", server: { orbId: "seattle:5L4P7Y3" version: 1 } },
+          { orbId: "seattle:g1-gpu-wk5-07", namespace: "seattle", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g1-gpu-wk5-07", ipv4: { orbId: "seattle:10.20.28.214" version: 1 }, gpu: true, role: "worker", server: { orbId: "seattle:FZ7P7Y3" version: 1 } },
+          { orbId: "seattle:g1-wk5", namespace: "seattle", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g1-wk5", ipv4: { orbId: "seattle:10.20.28.227" version: 1 }, gpu: false, role: "worker", server: { orbId: "seattle:HLP6K74" version: 1 } }
+        ]
+    }
+  ], upsert: true) {
+    numUids
+  }
+}

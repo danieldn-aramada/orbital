@@ -119,6 +119,26 @@ mutation {
       createdAt: "2026-05-11T00:00:00Z"
     },
     {
+      orbId: "seattle:10.20.33.80"
+      version: 1
+      address: "10.20.33.80"
+      name: "10.20.33.80"
+      role: "oob"
+      namespace: "seattle"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-06-18T00:00:00Z"
+    },
+    {
+      orbId: "seattle:10.20.33.81"
+      version: 1
+      address: "10.20.33.81"
+      name: "10.20.33.81"
+      role: "oob"
+      namespace: "seattle"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-06-18T00:00:00Z"
+    },
+    {
       orbId: "seattle:10.20.33.53"
       version: 1
       address: "10.20.33.53"
@@ -671,17 +691,28 @@ mutation {
       manufacturer: "Dell"
       orbId: "seattle:HLP6K74"
       version: 1
-      name: "r01-u17.seattle-galleon"
-      hostname: "r01-u17.seattle-galleon"
       model: "PowerEdge R450"
-      rackPosition: 17
-      oobIP: { orbId: "seattle:10.96.87.16" version: 1 }
+      oobIP: { orbId: "seattle:10.20.33.80" version: 1 }
       oobMAC: "e8:cf:83:27:aa:2b"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
       namespace: "seattle"
       dataCenter: { orbId: "seattle:seattle-galleon" version: 1 }
-      rack: { orbId: "seattle:Rack-1" version: 1 }
+      rack: { orbId: "seattle:Rack-5" version: 1 }
+    }
+    {
+      serviceTag: "D4MP6K74"
+      manufacturer: "Dell"
+      orbId: "seattle:D4MP6K74"
+      version: 1
+      model: "PowerEdge R450"
+      oobIP: { orbId: "seattle:10.20.33.81" version: 1 }
+      oobMAC: "d0:c1:b5:0c:bb:70"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-06-18T00:00:00Z"
+      namespace: "seattle"
+      dataCenter: { orbId: "seattle:seattle-galleon" version: 1 }
+      rack: { orbId: "seattle:Rack-5" version: 1 }
     }
     {
       serviceTag: "42TD3H4"

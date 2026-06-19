@@ -188,6 +188,7 @@ func (h *UI) buildMenuSections(path, userRole string) []layout.MenuSection {
 				{Label: "Inventory", Href: bp + "/", Active: path == bp+"/" || path == bp+"/inventory"},
 				{Label: "Data Centers", Href: bp + "/datacenters", Active: path == bp+"/datacenters"},
 				{Label: "Servers", Href: bp + "/servers", Active: path == bp+"/servers"},
+				{Label: "Clusters", Href: bp + "/clusters", Active: path == bp+"/clusters"},
 				{Label: "Schema Version", Href: bp + "/schema", Active: path == bp+"/schema"},
 			},
 		},
@@ -477,6 +478,13 @@ func (h *UI) Servers(c echo.Context) error {
 	return h.render(c, "servers", page.Servers{
 		Base:      h.base(c),
 		PageTitle: "Servers",
+	})
+}
+
+func (h *UI) Clusters(c echo.Context) error {
+	return h.render(c, "clusters", page.Clusters{
+		Base:      h.base(c),
+		PageTitle: "Clusters",
 	})
 }
 

@@ -2,6 +2,30 @@
 
 export const BASE = window.ORBITAL_BASE || ''
 
+// safeDomId converts an orbId into a DOM/CSS-selector-safe identifier.
+// orbIds typically contain ":" (e.g. "2f-uae:5HSC3D4"), which is a pseudo-class
+// operator in CSS selectors and breaks `$('#tab-...')` and querySelector. We
+// store the raw orbId in URL paths (encoded) and in data-orb-id attributes;
+// for DOM element IDs we map non-alphanumeric chars to "_".
+export function safeDomId(orbId) {
+  return String(orbId).replace(/[^A-Za-z0-9_-]/g, '_')
+}
+
+// Bump when the localStorage tab schema changes. Older entries keyed by
+// DGraph UID are dropped on first load post-migration so users don't see dead
+// tabs reopen against /datacenters/0x... URLs that no longer exist.
+const TAB_STATE_SCHEMA = 'v2-orbid'
+function migrateLegacyTabState() {
+  if (localStorage.tabStateSchema === TAB_STATE_SCHEMA) return
+  localStorage.removeItem('datacenterTabs')
+  localStorage.removeItem('serverTabs')
+  localStorage.removeItem('dcTabCurrent')
+  localStorage.removeItem('srvTabCurrent')
+  localStorage.removeItem('tabCurrent')
+  localStorage.tabStateSchema = TAB_STATE_SCHEMA
+}
+migrateLegacyTabState()
+
 // gqlErrorMessage formats GraphQL `errors[]` for display. Returns null on
 // clean responses, or a "message (path)" string otherwise. Multiple errors
 // are joined with "; ". Use this for both modal mutations and read queries —
@@ -39,46 +63,50 @@ export class TabItem {
   }
 }
 
-export function unloadTab(itemId) {
-  $(`#tab-${itemId}`).parent().remove()
-  $(`#tab-content-${itemId}`).remove()
+export function unloadTab(orbId) {
+  const domId = safeDomId(orbId)
+  document.getElementById(`tab-${domId}`)?.parentElement?.remove()
+  document.getElementById(`tab-content-${domId}`)?.remove()
 }
 
-export function loadTab(displayName, itemId) {
+export function loadTab(displayName, orbId) {
+  const domId = safeDomId(orbId)
+  const url = `${BASE}/servers/${encodeURIComponent(orbId)}`
   const html = `<li class="tab">
-    <a id="tab-${itemId}" data-target="tab-content-${itemId}" role="tab" aria-selected="false" tabindex="-1"
-      hx-get="${BASE}/servers/${itemId}" hx-trigger="click" hx-target="#tab-content-${itemId}" hx-swap="innerHTML">
+    <a id="tab-${domId}" data-target="tab-content-${domId}" role="tab" aria-selected="false" tabindex="-1"
+      hx-get="${url}" hx-trigger="click" hx-target="#tab-content-${domId}" hx-swap="innerHTML">
       ${displayName}
       <span class="pl-2">
-        <button id="tab-close-${itemId}">
+        <button id="tab-close-${domId}">
           <i class="fa-solid fa-xmark" style="font-size: 0.8em;"></i>
         </button>
       </span>
     </a>
   </li>`
 
-  const content = `<div class="tab-content" id="tab-content-${itemId}" role="tabpanel" style="display:none">`
+  const content = `<div class="tab-content" id="tab-content-${domId}" role="tabpanel" style="display:none">`
 
   $('#tablist').append(html)
   $('.app-main').append(content)
 
-  htmx.process(document.querySelector(`#tab-${itemId}`))
-  htmx.process(document.querySelector(`#tab-content-${itemId}`))
+  const tabLink = document.getElementById(`tab-${domId}`)
+  const tabContent = document.getElementById(`tab-content-${domId}`)
+  htmx.process(tabLink)
+  htmx.process(tabContent)
 
-  const tabLink = document.getElementById(`tab-${itemId}`)
   tabLink.addEventListener('click', () => {
     activateTab(tabLink.parentElement)
-    displayTabContent(`tab-content-${itemId}`)
-    setCurrentTab(`tab-${itemId}`)
+    displayTabContent(`tab-content-${domId}`)
+    setCurrentTab(`tab-${domId}`)
   })
 
-  const tabClose = document.getElementById(`tab-close-${itemId}`)
+  const tabClose = document.getElementById(`tab-close-${domId}`)
   tabClose.addEventListener('click', (event) => {
     event.stopPropagation()
-    unloadTab(itemId)
-    deleteTab(displayName, itemId)
+    unloadTab(orbId)
+    deleteTab(displayName, orbId)
     document.getElementById('tab-summary').click()
-    replaceCurrentTab(`tab-${itemId}`, 'tab-summary')
+    replaceCurrentTab(`tab-${domId}`, 'tab-summary')
   })
 }
 
@@ -107,9 +135,10 @@ export function saveTab(displayName, itemId) {
   }
 }
 
-export function closeTab(id) {
-  document.querySelector(`#tab-close-${id}`).click()
-  document.querySelector(`#btn-reload-servers`).click()
+export function closeTab(orbId) {
+  const domId = safeDomId(orbId)
+  document.getElementById(`tab-close-${domId}`)?.click()
+  document.getElementById(`btn-reload-servers`)?.click()
 }
 
 export function getTabStorageKey() {
@@ -284,8 +313,8 @@ export function openServerTab(tabId) {
 
 // ─── Skeletons + detail tab helpers ──────────────────────────────────────────
 
-export function showDatacenterSkeleton(id) {
-  const target = document.getElementById(`tab-content-${id}`)
+export function showDatacenterSkeleton(orbId) {
+  const target = document.getElementById(`tab-content-${safeDomId(orbId)}`)
   if (!target) return
   const s = () => `<span class="is-skeleton" style="display:block">&nbsp;</span>`
   const summary = ['Name', 'Servers', 'Racks', 'Asset Data']
@@ -617,6 +646,14 @@ document.addEventListener('htmx:afterSettle', (evt) => {
     return
   }
 
+  const clusterDetailTabs = target.querySelector('[id^="cluster-detail-tabs-"]')
+  if (clusterDetailTabs) {
+    const id = clusterDetailTabs.id.replace('cluster-detail-tabs-', '')
+    target.dataset.loaded = 'true'
+    initClusterDetailTabs(id)
+    return
+  }
+
   const srvDetailTabs = target.querySelector('[id^="srv-detail-tabs-"]')
   if (srvDetailTabs) {
     target.dataset.loaded = 'true'
@@ -799,41 +836,42 @@ document.addEventListener('DOMContentLoaded', initDeviceCodeCopy)
 // routes return an HTML fragment when HX-Request: true is sent — we use HTMX
 // to load that fragment into the new tab's content div.
 
-export function loadDataCenterTab(displayName, id) {
+export function loadDataCenterTab(displayName, orbId) {
+  const domId = safeDomId(orbId)
   const tabHtml = `<li class="tab">
-    <a id="tab-${id}" data-target="tab-content-${id}" role="tab" aria-selected="false" tabindex="-1">
+    <a id="tab-${domId}" data-target="tab-content-${domId}" role="tab" aria-selected="false" tabindex="-1">
       ${displayName}
       <span class="pl-2">
-        <button id="tab-close-${id}">
+        <button id="tab-close-${domId}">
           <i class="fa-solid fa-xmark" style="font-size: 0.8em;"></i>
         </button>
       </span>
     </a>
   </li>`
-  const contentHtml = `<div class="tab-content" id="tab-content-${id}" role="tabpanel" style="display:none"></div>`
+  const contentHtml = `<div class="tab-content" id="tab-content-${domId}" role="tabpanel" style="display:none"></div>`
 
   $('#tablist').append(tabHtml)
   $('.app-main').append(contentHtml)
 
-  const tabLink = document.getElementById(`tab-${id}`)
-  const tabContent = document.getElementById(`tab-content-${id}`)
+  const tabLink = document.getElementById(`tab-${domId}`)
+  const tabContent = document.getElementById(`tab-content-${domId}`)
 
   tabLink.addEventListener('click', () => {
     activateTab(tabLink.parentElement)
-    displayTabContent(`tab-content-${id}`)
-    setCurrentTab(`tab-${id}`)
+    displayTabContent(`tab-content-${domId}`)
+    setCurrentTab(`tab-${domId}`)
     if (!tabContent.dataset.loaded) {
-      htmx.ajax('GET', BASE + '/datacenters/' + id, { target: '#tab-content-' + id, swap: 'innerHTML' })
+      htmx.ajax('GET', BASE + '/datacenters/' + encodeURIComponent(orbId), { target: tabContent, swap: 'innerHTML' })
     }
   })
 
-  document.getElementById(`tab-close-${id}`).addEventListener('click', (event) => {
+  document.getElementById(`tab-close-${domId}`).addEventListener('click', (event) => {
     event.stopPropagation()
-    localStorage.removeItem(`dc-detail-tab-${id}`)
-    unloadTab(id)
-    deleteTab(displayName, id)
+    localStorage.removeItem(`dc-detail-tab-${domId}`)
+    unloadTab(orbId)
+    deleteTab(displayName, orbId)
     document.getElementById('tab-summary').click()
-    replaceCurrentTab(`tab-${id}`, 'tab-summary')
+    replaceCurrentTab(`tab-${domId}`, 'tab-summary')
   })
 }
 
@@ -851,38 +889,39 @@ export function deleteServerTab(displayName, id) {
   localStorage.serverTabs = JSON.stringify([...s])
 }
 
-export function loadServerListTab(displayName, id) {
+export function loadServerListTab(displayName, orbId) {
+  const domId = safeDomId(orbId)
   const tabHtml = `<li class="tab">
-    <a id="tab-srv-${id}" data-target="tab-content-srv-${id}" role="tab" aria-selected="false" tabindex="-1">
+    <a id="tab-srv-${domId}" data-target="tab-content-srv-${domId}" role="tab" aria-selected="false" tabindex="-1">
       ${displayName}
       <span class="pl-2">
-        <button id="tab-close-srv-${id}">
+        <button id="tab-close-srv-${domId}">
           <i class="fa-solid fa-xmark" style="font-size: 0.8em;"></i>
         </button>
       </span>
     </a>
   </li>`
-  const contentHtml = `<div class="tab-content" id="tab-content-srv-${id}" role="tabpanel" style="display:none"></div>`
+  const contentHtml = `<div class="tab-content" id="tab-content-srv-${domId}" role="tabpanel" style="display:none"></div>`
 
   $('#tablist').append(tabHtml)
   $('.app-main').append(contentHtml)
 
-  const tabLink = document.getElementById(`tab-srv-${id}`)
-  const tabContent = document.getElementById(`tab-content-srv-${id}`)
+  const tabLink = document.getElementById(`tab-srv-${domId}`)
+  const tabContent = document.getElementById(`tab-content-srv-${domId}`)
 
   tabLink.addEventListener('click', () => {
     activateTab(tabLink.parentElement)
-    displayTabContent(`tab-content-srv-${id}`)
-    setCurrentTab(`tab-srv-${id}`)
+    displayTabContent(`tab-content-srv-${domId}`)
+    setCurrentTab(`tab-srv-${domId}`)
     if (!tabContent.dataset.loaded) {
-      htmx.ajax('GET', BASE + '/servers/' + id, { target: '#tab-content-srv-' + id, swap: 'innerHTML' })
+      htmx.ajax('GET', BASE + '/servers/' + encodeURIComponent(orbId), { target: tabContent, swap: 'innerHTML' })
     }
   })
 
-  document.getElementById(`tab-close-srv-${id}`).addEventListener('click', (event) => {
+  document.getElementById(`tab-close-srv-${domId}`).addEventListener('click', (event) => {
     event.stopPropagation()
-    deleteServerTab(displayName, id)
-    replaceCurrentTab(`tab-srv-${id}`, 'tab-summary')
+    deleteServerTab(displayName, orbId)
+    replaceCurrentTab(`tab-srv-${domId}`, 'tab-summary')
     tabLink.parentElement.remove()
     tabContent.remove()
     document.getElementById('tab-summary').click()
@@ -950,11 +989,12 @@ export function initServerListTabRestoration() {
   const openLabel = params.get('label')
   if (openId) {
     const displayName = openLabel || openId
-    if (!document.getElementById(`tab-srv-${openId}`)) {
+    const openDomId = safeDomId(openId)
+    if (!document.getElementById(`tab-srv-${openDomId}`)) {
       loadServerListTab(displayName, openId)
       saveServerTab(displayName, openId)
     }
-    document.getElementById(`tab-srv-${openId}`)?.click()
+    document.getElementById(`tab-srv-${openDomId}`)?.click()
     history.replaceState(null, '', BASE + '/servers')
     return
   }
@@ -1362,5 +1402,445 @@ export function initServerListTable(opts = {}) {
   }
 
   return serverListTable
+}
+
+// initClusterTable initializes #cluster-table. opts.onRowOpen is called on
+// row double-click with the row's data object. Query uses the polymorphic
+// queryKubernetesCluster interface so future provider types appear without
+// JS changes (add a fragment to fetch the type-specific columns).
+export function initClusterTable(opts = {}) {
+  if (!document.getElementById('cluster-table')) return
+
+  document.querySelectorAll('li.tab a[data-target]').forEach((a) => {
+    a.addEventListener('click', () => {
+      activateTab(a.parentElement)
+      displayTabContent(a.dataset.target)
+      setCurrentTab(a.id)
+    })
+  })
+
+  // Same DC filter pattern as initServerListTable — populated from column 1
+  // (Data Center; column 0 is the expand toggle) on initComplete and persisted
+  // in localStorage.
+  const dcFilterEl = $('<div class="select is-small" style="margin-right:0.25rem"><select id="cluster-dc-select"><option value="">All Data Centers</option></select></div>')
+
+  // Builds the HTML for the workload child rows shown under an expanded
+  // management cluster. Returned as a string of <tr> elements; DataTables
+  // jQuery-parses multiple TRs and inserts each as a child row that aligns
+  // with the parent's columns.
+  const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[m]))
+  // Expand every parent row that has workload children. Called from
+  // initComplete (first load) and from the reload-button callback (every
+  // subsequent AJAX refresh — DataTables drops attached child rows when the
+  // underlying data is replaced, but the chevron column re-renders from
+  // row.children, so without re-expansion the chevron stays ▼ while the
+  // children disappear).
+  //
+  // Idempotent: if a child is already shown (e.g. on sort/filter/page-change
+  // where DataTables preserves child state), this no-ops for that row.
+  const expandAllClusterChildren = (api) => {
+    api.rows().every(function () {
+      const data = this.data()
+      if (data.children && data.children.length > 0 && !this.child.isShown()) {
+        this.child($(buildClusterChildTrs(data.children))).show()
+        $(this.node()).addClass('shown')
+      }
+    })
+  }
+
+  // Child rows mirror the parent column layout. Each cell sits under its
+  // corresponding parent column — alignment must match what DataTables applies
+  // to the parent row (see columnDefs above). Nodes is left-aligned per the
+  // dt-left columnDefs entry.
+  //
+  // .trim() on each TR is load-bearing: jQuery parses the joined string, and
+  // whitespace between TRs becomes text nodes that DataTables would render as
+  // blank child rows. Trim removes the surrounding whitespace; .join('') with
+  // no separator keeps the TRs adjacent so the parser sees only elements.
+  const buildClusterChildTrs = (children) => children.map(c => `
+    <tr class="cluster-child-row" data-cluster-orb-id="${escapeHtml(c.orbId)}" data-display-name="${escapeHtml(c.name)}" style="cursor:pointer; background:#fafafa" title="Double-click to open">
+      <td></td>
+      <td><span class="has-text-grey mr-1">└</span>${escapeHtml(c.name)}</td>
+      <td></td>
+      <td>${escapeHtml(c.provider)}</td>
+      <td>${escapeHtml(c.clusterType)}</td>
+      <td>${escapeHtml(c.kubernetesVersion)}</td>
+      <td>${escapeHtml(c.environment)}</td>
+      <td>${escapeHtml(c.cni)}</td>
+      <td>${escapeHtml(c.nodes)}</td>
+    </tr>
+  `.trim()).join('')
+
+  const clusterTable = new DataTable('#cluster-table', {
+    pageLength: 25,
+    layout: {
+      topStart: [
+        dcFilterEl,
+        { pageLength: { menu: [10, 25, 50] } },
+        { buttons: [
+          { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
+          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
+          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-clusters' } },
+        ] },
+      ],
+      topEnd: { search: { placeholder: 'Search clusters' } },
+    },
+    select: { style: 'os' },
+    autoWidth: true,
+    scrollX: true,
+    scrollY: 'calc(100vh - 340px)',
+    scrollCollapse: true,
+    // stateSave intentionally OFF while the cluster table column layout is
+    // still in flux — leaving it on caused header/body to misalign whenever
+    // the column count changed (e.g. adding the chevron column at index 0).
+    // Re-enable once the columns are stable.
+    stateSave: false,
+    // No initial sort: the data array is already pre-sorted in tree order
+    // (managements first, their workloads as child rows below). Without
+    // `order: []`, DataTables defaults to [[0,'asc']] and stamps a sort
+    // indicator on the (unorderable) chevron column header.
+    order: [],
+    language: {
+      infoEmpty: 'No clusters to show',
+      info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
+      entries: { _: 'clusters', 1: 'cluster' },
+    },
+    initComplete: function () {
+      dtWrapLengthSelect(this.api())
+
+      // DC filter targets column 2 (Name is now at column 1, DC moved to 2
+      // after the column swap).
+      const dcCol = this.api().column(2)
+      dcCol.data().unique().sort().each(function (dc) {
+        document.getElementById('cluster-dc-select').add(new Option(dc, dc))
+      })
+      const saved = localStorage.getItem('cluster-dc-filter')
+      if (saved) {
+        const el = document.getElementById('cluster-dc-select')
+        el.value = saved
+        dcCol.search(saved, { exact: true }).draw()
+      }
+      document.getElementById('cluster-dc-select').addEventListener('change', function () {
+        if (this.value) {
+          localStorage.setItem('cluster-dc-filter', this.value)
+        } else {
+          localStorage.removeItem('cluster-dc-filter')
+        }
+        dcCol.search(this.value, { exact: !!this.value }).draw()
+      })
+
+      expandAllClusterChildren(this.api())
+    },
+    columns: [
+      {
+        // Expand toggle column — only renders the icon for rows that have
+        // workload children (managements with workloads). Empty for workloads
+        // (they're already nested) and childless management/standalone rows.
+        data: null,
+        orderable: false,
+        searchable: false,
+        className: 'cluster-toggle-cell',
+        defaultContent: '',
+        width: '1%',
+        render: (data, type, row) => {
+          if (type !== 'display') return ''
+          if (!row.children || row.children.length === 0) return ''
+          return '<span class="cluster-toggle">▼</span>'
+        },
+      },
+      {
+        data: 'name',
+        // Orthogonal data: include child workload names in the search text so
+        // typing a workload name surfaces its (expanded) parent.
+        render: (data, type, row) => {
+          if (type === 'filter') return data + ' ' + (row.workloadSearchText || '')
+          return data
+        },
+      },
+      { data: 'dataCenter' },
+      { data: 'provider' },
+      { data: 'clusterType' },
+      { data: 'kubernetesVersion' },
+      { data: 'environment' },
+      { data: 'cni' },
+      { data: 'nodes' },
+      { data: 'id' },
+      { data: 'orbId' },
+    ],
+    // Column index map (after the toggle column at 0):
+    //   0 toggle  1 Name  2 Data Center  3 Provider  4 Cluster Type
+    //   5 K8s Version  6 Environment  7 CNI  8 Nodes  9 ID  10 Orb ID
+    // Tweak any column's width by adding/updating an entry below.
+    columnDefs: [
+      { targets: [9, 10], visible: false, searchable: true },
+      { targets: 1, width: '20%' },    // name
+      { targets: 2, width: '12%' },    // data center
+      { targets: 3, width: '8%' },     // provider
+      { targets: 4, width: '10%' },    // cluster type
+      { targets: 5, width: '100px' },
+      { targets: 6, width: '100px' },  // Environment — short values (dev/stage/prod)
+      { targets: 7, width: '8%' },     // CNI 
+      { targets: 8, className: 'dt-left dt-head-left' },  // Nodes — left-align to match other columns
+    ],
+    ajax: {
+      url: BASE + '/graphql',
+      type: 'POST',
+      contentType: 'application/json',
+      data: () => JSON.stringify({
+        query: `query LoadClusters {
+          queryKubernetesCluster {
+            __typename
+            kubernetesVersion
+            cni
+            environment
+            provider
+            dataCenter { name }
+            nodesAggregate { count }
+            ... on ConfigItem { id orbId name }
+            ... on EksaKubernetesCluster {
+              clusterType
+              managementCluster { orbId }
+            }
+          }
+        }`,
+      }),
+      dataSrc: (json) => {
+        if (!gqlSurfaceErrors(json, 'Load clusters')) return []
+        const mapRow = (c) => ({
+          id: c.id,
+          orbId: c.orbId ?? '—',
+          name: c.name ?? '—',
+          provider: c.provider ?? '—',
+          clusterType: c.clusterType ?? '—',
+          kubernetesVersion: c.kubernetesVersion ?? '—',
+          environment: c.environment ?? '—',
+          cni: c.cni ?? '—',
+          dataCenter: c.dataCenter?.name ?? '—',
+          nodes: c.nodesAggregate?.count ?? 0,
+          managementOrbId: c.managementCluster?.orbId || null,
+        })
+
+        const mapped = (json.data?.queryKubernetesCluster ?? []).map(mapRow)
+
+        // Bucket workloads by their parent orbId; everything else (management,
+        // standalone, orphaned workloads with no parent) goes to the top.
+        const byParent = {}
+        const tops = []
+        for (const r of mapped) {
+          if (r.managementOrbId) {
+            byParent[r.managementOrbId] = byParent[r.managementOrbId] || []
+            byParent[r.managementOrbId].push(r)
+          } else {
+            tops.push({ ...r, children: [] })
+          }
+        }
+        // Workloads whose parent isn't in the result set — surface at top level
+        // rather than dropping them silently.
+        for (const r of mapped) {
+          if (r.managementOrbId && !tops.find(t => t.orbId === r.managementOrbId)) {
+            // Orphan: parent not in this query result. Show as top-level row.
+            if (!tops.find(t => t.orbId === r.orbId)) {
+              tops.push({ ...r, children: [] })
+            }
+          }
+        }
+        for (const t of tops) {
+          t.children = byParent[t.orbId] || []
+          t.workloadSearchText = t.children.map(c => c.name).join(' ')
+        }
+        return tops
+      },
+    },
+    createdRow: function (row) { row.style.cursor = 'pointer'; row.title = 'Double-click to open' },
+  })
+
+  const reloadButton = clusterTable.button('reload:name').node()
+  clusterTable.button('reload:name').node().on('click', function () {
+    clusterTable.clear().draw()
+    reloadButton.addClass('is-loading')
+    setTimeout(() => {
+      clusterTable.ajax.reload(() => {
+        reloadButton.removeClass('is-loading')
+        // Re-expand parent rows — AJAX reload drops the child rows that were
+        // attached before the refresh.
+        expandAllClusterChildren(clusterTable)
+      })
+    }, 250)
+  })
+
+  // Toggle expand/collapse of workload children on click of the icon cell.
+  $('#cluster-table tbody').on('click', 'td.cluster-toggle-cell', function (e) {
+    e.stopPropagation()
+    const tr = $(this).closest('tr')
+    const row = clusterTable.row(tr)
+    const data = row.data()
+    if (!data || !data.children || data.children.length === 0) return
+    if (row.child.isShown()) {
+      row.child.hide()
+      tr.removeClass('shown')
+      $(this).find('.cluster-toggle').text('▶')
+    } else {
+      row.child($(buildClusterChildTrs(data.children))).show()
+      tr.addClass('shown')
+      $(this).find('.cluster-toggle').text('▼')
+    }
+  })
+
+  if (typeof opts.onRowOpen === 'function') {
+    // Double-click on a parent row → open via onRowOpen. Skip:
+    //   1. Child rows (cluster-child-row class) — handled by orbital.js's
+    //      data-cluster-orb-id global listener via /clusters?open=.
+    //   2. Toggle-cell targets — fast double-clicks on the chevron would
+    //      otherwise toggle twice AND open the row.
+    $('#cluster-table tbody').on('dblclick', 'tr', function (e) {
+      if (this.classList.contains('cluster-child-row')) return
+      if ($(e.target).closest('td').hasClass('cluster-toggle-cell')) return
+      const data = clusterTable.row(this).data()
+      if (!data) return
+      opts.onRowOpen(data, this)
+    })
+  }
+
+  return clusterTable
+}
+
+// loadClusterTab opens a cluster detail tab via HTMX swap into a new tab content
+// pane. Mirrors loadDataCenterTab / loadServerListTab structure.
+export function loadClusterTab(displayName, orbId) {
+  const domId = safeDomId(orbId)
+  const tabHtml = `<li class="tab">
+    <a id="tab-cluster-${domId}" data-target="tab-content-cluster-${domId}" role="tab" aria-selected="false" tabindex="-1">
+      ${displayName}
+      <span class="pl-2">
+        <button id="tab-close-cluster-${domId}">
+          <i class="fa-solid fa-xmark" style="font-size: 0.8em;"></i>
+        </button>
+      </span>
+    </a>
+  </li>`
+  const contentHtml = `<div class="tab-content" id="tab-content-cluster-${domId}" role="tabpanel" style="display:none"></div>`
+
+  $('#tablist').append(tabHtml)
+  $('.app-main').append(contentHtml)
+
+  const tabLink = document.getElementById(`tab-cluster-${domId}`)
+  const tabContent = document.getElementById(`tab-content-cluster-${domId}`)
+
+  tabLink.addEventListener('click', () => {
+    activateTab(tabLink.parentElement)
+    displayTabContent(`tab-content-cluster-${domId}`)
+    setCurrentTab(`tab-cluster-${domId}`)
+    if (!tabContent.dataset.loaded) {
+      htmx.ajax('GET', BASE + '/clusters/' + encodeURIComponent(orbId), { target: tabContent, swap: 'innerHTML' })
+    }
+  })
+
+  document.getElementById(`tab-close-cluster-${domId}`).addEventListener('click', (event) => {
+    event.stopPropagation()
+    deleteClusterTab(displayName, orbId)
+    replaceCurrentTab(`tab-cluster-${domId}`, 'tab-summary')
+    tabLink.parentElement.remove()
+    tabContent.remove()
+    document.getElementById('tab-summary').click()
+  })
+}
+
+export function saveClusterTab(displayName, orbId) {
+  const item = JSON.stringify(new TabItem(displayName, orbId))
+  const s = new Set(localStorage.clusterTabs ? JSON.parse(localStorage.clusterTabs) : [])
+  s.add(item)
+  localStorage.clusterTabs = JSON.stringify([...s])
+}
+
+export function deleteClusterTab(displayName, orbId) {
+  const item = JSON.stringify(new TabItem(displayName, orbId))
+  const s = new Set(localStorage.clusterTabs ? JSON.parse(localStorage.clusterTabs) : [])
+  s.delete(item)
+  localStorage.clusterTabs = JSON.stringify([...s])
+}
+
+// initClusterTabRestoration restores cluster tabs from localStorage on page
+// load AND handles ?open=<orbId>&label=<name> deep-links from cross-cluster
+// navigation (workload's "Management Cluster" link, "Workload Clusters" sub-tab
+// rows). Call on window.load on pages that have #cluster-table.
+export function initClusterTabRestoration() {
+  if (!document.getElementById('cluster-table')) return
+
+  clearTabStateOnFresh()
+
+  if (localStorage.clusterTabs) {
+    const tabSet = new Set(JSON.parse(localStorage.clusterTabs))
+    tabSet.forEach(tabData => {
+      const { displayName, id } = JSON.parse(tabData)
+      loadClusterTab(displayName, id)
+    })
+  }
+
+  const params = new URLSearchParams(window.location.search)
+  const openId = params.get('open')
+  const openLabel = params.get('label')
+  if (openId) {
+    const displayName = openLabel || openId
+    const openDomId = safeDomId(openId)
+    if (!document.getElementById(`tab-cluster-${openDomId}`)) {
+      loadClusterTab(displayName, openId)
+      saveClusterTab(displayName, openId)
+    }
+    document.getElementById(`tab-cluster-${openDomId}`)?.click()
+    history.replaceState(null, '', BASE + '/clusters')
+    return
+  }
+
+  const currentTabId = getCurrentTab()
+  if (currentTabId) document.getElementById(currentTabId)?.click()
+}
+
+// Detail-tab sub-tabs (Nodes / Audit Log) inside a cluster tab. Same shape as
+// initDcDetailTabs but scoped to `cluster-detail-tabs-…` / `cluster-panel-…`
+// element IDs.
+export function initClusterDetailTabs(domId) {
+  const tabContainer = document.getElementById(`cluster-detail-tabs-${domId}`)
+  if (!tabContainer) return
+
+  const tabs = tabContainer.querySelectorAll('li[data-panel]')
+  const storageKey = `cluster-detail-tab-${domId}`
+  const auditPanelId = `cluster-panel-audit-${domId}`
+
+  function loadAuditPanel() {
+    const tab = [...tabs].find(t => t.dataset.panel === auditPanelId)
+    if (!tab) return
+    const orbId = tab.dataset.orbId
+    if (!orbId) return
+    const panel = document.getElementById(auditPanelId)
+    if (!panel) return
+    fetch(BASE + '/api/v1/audit-log?orbId=' + encodeURIComponent(orbId) + '&limit=50', {
+      headers: { 'HX-Request': 'true' },
+    })
+      .then(r => r.text())
+      .then(html => { panel.innerHTML = html; renderTimestamps(panel) })
+      .catch(() => {})
+  }
+
+  function activatePanel(panelId) {
+    tabs.forEach(t => t.classList.remove('is-active'))
+    const active = [...tabs].find(t => t.dataset.panel === panelId)
+    if (active) active.classList.add('is-active')
+    tabContainer.parentElement.querySelectorAll('[id^="cluster-panel-"]').forEach(panel => {
+      panel.style.display = panel.id === panelId ? '' : 'none'
+    })
+    if (panelId === auditPanelId) loadAuditPanel()
+  }
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      localStorage.setItem(storageKey, tab.dataset.panel)
+      activatePanel(tab.dataset.panel)
+    })
+  })
+
+  const saved = localStorage.getItem(storageKey)
+  if (saved) activatePanel(saved)
 }
 

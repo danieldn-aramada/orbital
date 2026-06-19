@@ -1,20 +1,20 @@
-<div id="edit-modal-dc-{{.ID}}" class="modal modal-fx-3dRotateFromBottom" data-current-user="{{.CurrentUser}}" data-version="{{.Version}}" data-orb-id="{{.OrbID}}">
+<div id="edit-modal-dc-{{.DomID}}" class="modal modal-fx-3dRotateFromBottom" data-current-user="{{.CurrentUser}}" data-version="{{.Version}}" data-orb-id="{{.OrbID}}">
   <div class="modal-background"></div>
   <div class="modal-content modal-card is-large">
     <header class="modal-card-head">
       <p class="modal-card-title">Edit Data Center</p>
-      <button class="delete" aria-label="close" data-dc-modal-close="{{.ID}}"></button>
+      <button class="delete" aria-label="close" data-dc-modal-close="{{.DomID}}"></button>
     </header>
     <section class="modal-card-body">
-      <div id="dc-json-editor-{{.ID}}" style="min-height:200px"></div>
+      <div id="dc-json-editor-{{.DomID}}" style="min-height:200px"></div>
     </section>
     <footer class="modal-card-foot is-flex is-align-items-center" style="gap:0.75rem;">
       <div class="buttons" style="margin-bottom:0;">
-        <button class="button is-success" id="dc-edit-submit-{{.ID}}">Save</button>
-        <button class="button" data-dc-modal-close="{{.ID}}">Cancel</button>
+        <button class="button is-success" id="dc-edit-submit-{{.DomID}}">Save</button>
+        <button class="button" data-dc-modal-close="{{.DomID}}">Cancel</button>
       </div>
-      <span id="dc-edit-error-{{.ID}}" class="has-text-danger is-size-7" style="display:none; flex:1;"></span>
+      <span id="dc-edit-error-{{.DomID}}" class="has-text-danger is-size-7" style="display:none; flex:1;"></span>
     </footer>
   </div>
 </div>
-<script type="application/json" id="dc-edit-data-{{.ID}}">{{.EditDataJSON}}</script>
+<script type="application/json" id="dc-edit-data-{{.DomID}}">{{.EditDataJSON}}</script>

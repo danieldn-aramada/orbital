@@ -16,8 +16,8 @@ import (
 )
 
 const getServerQuery = `
-  query GetServer($id: ID!) {
-    getServer(id: $id) {
+  query GetServer($orbId: String!) {
+    getServer(orbId: $orbId) {
       id
       orbId
       name
@@ -34,7 +34,7 @@ const getServerQuery = `
       version
       namespace
       rack { id name }
-      dataCenter { id name }
+      dataCenter { id orbId name }
       oobIP { orbId address role }
       idracSettings {
         orbId
@@ -109,8 +109,9 @@ type serverQueryResponse struct {
 		Name string `json:"name"`
 	} `json:"rack"`
 	DataCenter struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
+		ID    string `json:"id"`
+		OrbID string `json:"orbId"`
+		Name  string `json:"name"`
 	} `json:"dataCenter"`
 	OobIP struct {
 		OrbID   string `json:"orbId"`
@@ -174,6 +175,7 @@ type storageControllerTabData struct {
 type serverTabDetailData struct {
 	ID                 string
 	OrbID              string
+	DomID              string // SafeDomID(OrbID)
 	Name               string
 	Hostname           string
 	Model              string
@@ -190,6 +192,8 @@ type serverTabDetailData struct {
 	Rack               struct{ ID, Name string }
 	Version            int
 	DataCenterID       string
+	DataCenterOrbID    string
+	DataCenterDomID    string // SafeDomID(DataCenterOrbID)
 	DataCenterName     string
 	ShowDCBack         bool // true when drilled from a DC tab
 	CurrentUser        string
@@ -242,11 +246,12 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 		time.Sleep(150 * time.Millisecond)
 	}
 
-	id := c.Param("id")
+	// Path-param decoding is handled by middleware.DecodePathParams.
+	orbID := c.Param("orbId")
 
 	body, _ := json.Marshal(map[string]any{
 		"query":     getServerQuery,
-		"variables": map[string]any{"id": id},
+		"variables": map[string]any{"orbId": orbID},
 	})
 
 	resp, err := http.Post(h.dgraphURL, "application/json", bytes.NewReader(body))
@@ -307,30 +312,33 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 	editJSON, _ := json.Marshal(editFields)
 
 	srv := serverTabDetailData{
-		ID:             raw.ID,
-		OrbID:          raw.OrbID,
-		Name:           raw.Name,
-		Hostname:       raw.Hostname,
-		Model:          raw.Model,
-		Manufacturer:   raw.Manufacturer,
-		ServiceTag:     raw.ServiceTag,
-		RackPosition:   raw.RackPosition,
-		OobIP:          raw.OobIP.Address,
-		OobMAC:         raw.OobMAC,
-		CreatedBy:      raw.CreatedBy,
-		CreatedAt:      raw.CreatedAt,
-		UpdatedBy:      raw.UpdatedBy,
-		UpdatedAt:      raw.UpdatedAt,
-		Namespace:      raw.Namespace,
-		Rack:           struct{ ID, Name string }{ID: raw.Rack.ID, Name: raw.Rack.Name},
-		Version:        raw.Version,
-		DataCenterID:   raw.DataCenter.ID,
-		DataCenterName: raw.DataCenter.Name,
-		ShowDCBack:     c.QueryParam("dcCtx") == "1",
-		CurrentUser:    currentUser,
-		EditDataJSON:   template.JS(editJSON),
-		BasePath:       h.basePath,
-		Actions:        layout.OrbitalActions(canMutate),
+		ID:              raw.ID,
+		OrbID:           raw.OrbID,
+		DomID:           SafeDomID(raw.OrbID),
+		Name:            raw.Name,
+		Hostname:        raw.Hostname,
+		Model:           raw.Model,
+		Manufacturer:    raw.Manufacturer,
+		ServiceTag:      raw.ServiceTag,
+		RackPosition:    raw.RackPosition,
+		OobIP:           raw.OobIP.Address,
+		OobMAC:          raw.OobMAC,
+		CreatedBy:       raw.CreatedBy,
+		CreatedAt:       raw.CreatedAt,
+		UpdatedBy:       raw.UpdatedBy,
+		UpdatedAt:       raw.UpdatedAt,
+		Namespace:       raw.Namespace,
+		Rack:            struct{ ID, Name string }{ID: raw.Rack.ID, Name: raw.Rack.Name},
+		Version:         raw.Version,
+		DataCenterID:    raw.DataCenter.ID,
+		DataCenterOrbID: raw.DataCenter.OrbID,
+		DataCenterDomID: SafeDomID(raw.DataCenter.OrbID),
+		DataCenterName:  raw.DataCenter.Name,
+		ShowDCBack:      c.QueryParam("dcCtx") == "1",
+		CurrentUser:     currentUser,
+		EditDataJSON:    template.JS(editJSON),
+		BasePath:        h.basePath,
+		Actions:         layout.OrbitalActions(canMutate),
 	}
 
 	if raw.IdracSettings != nil {

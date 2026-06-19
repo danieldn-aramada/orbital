@@ -1,0 +1,58 @@
+# Seed clusters + nodes for the alaska-dot-cruiser data center.
+# Source: kubectl get machines + machines.cluster + nodes -o wide on
+# adot-m and adot-w1 contexts. Server tags resolved via BMC IP join
+# against alaska-dot-cruiser.graphql.
+
+mutation SeedClusters {
+  addIPAddress(input: [
+    { orbId: "alaska-dot-cruiser:10.64.14.10" type: "ipv4" address: "10.64.14.10" role: "k8s_node" namespace: "alaska-dot-cruiser" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "alaska-dot-cruiser:10.64.14.11" type: "ipv4" address: "10.64.14.11" role: "k8s_node" namespace: "alaska-dot-cruiser" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "alaska-dot-cruiser:10.64.14.12" type: "ipv4" address: "10.64.14.12" role: "k8s_node" namespace: "alaska-dot-cruiser" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "alaska-dot-cruiser:10.64.14.13" type: "ipv4" address: "10.64.14.13" role: "k8s_node" namespace: "alaska-dot-cruiser" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "alaska-dot-cruiser:10.64.14.14" type: "ipv4" address: "10.64.14.14" role: "k8s_node" namespace: "alaska-dot-cruiser" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "alaska-dot-cruiser:10.64.14.15" type: "ipv4" address: "10.64.14.15" role: "k8s_node" namespace: "alaska-dot-cruiser" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "alaska-dot-cruiser:10.64.14.2" type: "ipv4" address: "10.64.14.2" role: "k8s_node" namespace: "alaska-dot-cruiser" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "alaska-dot-cruiser:10.64.14.3" type: "ipv4" address: "10.64.14.3" role: "k8s_node" namespace: "alaska-dot-cruiser" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "alaska-dot-cruiser:10.64.14.4" type: "ipv4" address: "10.64.14.4" role: "k8s_node" namespace: "alaska-dot-cruiser" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "alaska-dot-cruiser:10.64.14.5" type: "ipv4" address: "10.64.14.5" role: "k8s_node" namespace: "alaska-dot-cruiser" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "alaska-dot-cruiser:10.64.14.50" type: "ipv4" address: "10.64.14.50" role: "k8s_api" namespace: "alaska-dot-cruiser" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "alaska-dot-cruiser:10.64.14.51" type: "ipv4" address: "10.64.14.51" role: "tinkerbell" namespace: "alaska-dot-cruiser" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "alaska-dot-cruiser:10.64.14.52" type: "ipv4" address: "10.64.14.52" role: "k8s_api" namespace: "alaska-dot-cruiser" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "alaska-dot-cruiser:10.64.14.6" type: "ipv4" address: "10.64.14.6" role: "k8s_node" namespace: "alaska-dot-cruiser" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "alaska-dot-cruiser:10.64.14.9" type: "ipv4" address: "10.64.14.9" role: "k8s_node" namespace: "alaska-dot-cruiser" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" }
+  ], upsert: true) {
+    numUids
+  }
+
+  mgmt: addEksaKubernetesCluster(input: [
+    {
+      orbId: "alaska-dot-cruiser:adot-m", name: "adot-m", namespace: "alaska-dot-cruiser", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "prod", dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }, kubernetesVersion: "v1.34.3", controlPlaneEndpoint: { orbId: "alaska-dot-cruiser:10.64.14.50" version: 1 }, tinkerbellIP: { orbId: "alaska-dot-cruiser:10.64.14.51" version: 1 },
+      nodes: [
+          { orbId: "alaska-dot-cruiser:alaska-m-cp1", namespace: "alaska-dot-cruiser", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "alaska-m-cp1", ipv4: { orbId: "alaska-dot-cruiser:10.64.14.2" version: 1 }, gpu: false, role: "control_plane", server: { orbId: "alaska-dot-cruiser:DT36XB4" version: 1 } },
+          { orbId: "alaska-dot-cruiser:alaska-m-cp2", namespace: "alaska-dot-cruiser", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "alaska-m-cp2", ipv4: { orbId: "alaska-dot-cruiser:10.64.14.3" version: 1 }, gpu: false, role: "control_plane", server: { orbId: "alaska-dot-cruiser:1V36XB4" version: 1 } },
+          { orbId: "alaska-dot-cruiser:alaska-w-cp3", namespace: "alaska-dot-cruiser", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "alaska-w-cp3", ipv4: { orbId: "alaska-dot-cruiser:10.64.14.9" version: 1 }, gpu: false, role: "control_plane", server: { orbId: "alaska-dot-cruiser:3V36XB4" version: 1 } }
+        ]
+    }
+  ], upsert: true) {
+    numUids
+  }
+
+  workload: addEksaKubernetesCluster(input: [
+    {
+      orbId: "alaska-dot-cruiser:adot-w1", name: "adot-w1", namespace: "alaska-dot-cruiser", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "workload", provider: "eksa", cni: "cilium", environment: "prod", dataCenter: { orbId: "alaska-dot-cruiser:alaska-dot-cruiser" version: 1 }, kubernetesVersion: "v1.34.3", controlPlaneEndpoint: { orbId: "alaska-dot-cruiser:10.64.14.52" version: 1 }, tinkerbellIP: { orbId: "alaska-dot-cruiser:10.64.14.51" version: 1 }, managementCluster: { orbId: "alaska-dot-cruiser:adot-m" version: 1 },
+      nodes: [
+          { orbId: "alaska-dot-cruiser:alaska-m-cp3", namespace: "alaska-dot-cruiser", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "alaska-m-cp3", ipv4: { orbId: "alaska-dot-cruiser:10.64.14.5" version: 1 }, gpu: false, role: "control_plane", server: { orbId: "alaska-dot-cruiser:FT36XB4" version: 1 } },
+          { orbId: "alaska-dot-cruiser:alaska-m-cp4", namespace: "alaska-dot-cruiser", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "alaska-m-cp4", ipv4: { orbId: "alaska-dot-cruiser:10.64.14.4" version: 1 }, gpu: false, role: "control_plane", server: { orbId: "alaska-dot-cruiser:JT36XB4" version: 1 } },
+          { orbId: "alaska-dot-cruiser:alaska-w-cp1", namespace: "alaska-dot-cruiser", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "alaska-w-cp1", ipv4: { orbId: "alaska-dot-cruiser:10.64.14.6" version: 1 }, gpu: false, role: "control_plane", server: { orbId: "alaska-dot-cruiser:HT36XB4" version: 1 } },
+          { orbId: "alaska-dot-cruiser:alaska-w-gpu-wk1", namespace: "alaska-dot-cruiser", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "alaska-w-gpu-wk1", ipv4: { orbId: "alaska-dot-cruiser:10.64.14.14" version: 1 }, gpu: true, role: "worker", server: { orbId: "alaska-dot-cruiser:7FF6XB4" version: 1 } },
+          { orbId: "alaska-dot-cruiser:alaska-w-gpu-wk2", namespace: "alaska-dot-cruiser", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "alaska-w-gpu-wk2", ipv4: { orbId: "alaska-dot-cruiser:10.64.14.15" version: 1 }, gpu: true, role: "worker", server: { orbId: "alaska-dot-cruiser:2PR6YB4" version: 1 } },
+          { orbId: "alaska-dot-cruiser:alaska-w-wk1", namespace: "alaska-dot-cruiser", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "alaska-w-wk1", ipv4: { orbId: "alaska-dot-cruiser:10.64.14.10" version: 1 }, gpu: false, role: "worker", server: { orbId: "alaska-dot-cruiser:C8R6XB4" version: 1 } },
+          { orbId: "alaska-dot-cruiser:alaska-w-wk2", namespace: "alaska-dot-cruiser", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "alaska-w-wk2", ipv4: { orbId: "alaska-dot-cruiser:10.64.14.11" version: 1 }, gpu: false, role: "worker", server: { orbId: "alaska-dot-cruiser:F8R6XB4" version: 1 } },
+          { orbId: "alaska-dot-cruiser:alaska-w-wk3", namespace: "alaska-dot-cruiser", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "alaska-w-wk3", ipv4: { orbId: "alaska-dot-cruiser:10.64.14.12" version: 1 }, gpu: false, role: "worker", server: { orbId: "alaska-dot-cruiser:B9V6XB4" version: 1 } },
+          { orbId: "alaska-dot-cruiser:alaska-w-wk4", namespace: "alaska-dot-cruiser", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "alaska-w-wk4", ipv4: { orbId: "alaska-dot-cruiser:10.64.14.13" version: 1 }, gpu: false, role: "worker", server: { orbId: "alaska-dot-cruiser:D8R6XB4" version: 1 } }
+        ]
+    }
+  ], upsert: true) {
+    numUids
+  }
+}

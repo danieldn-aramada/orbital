@@ -1,4 +1,4 @@
-<p class="mb-2">This will permanently delete this {{if eq .Type "DataCenter"}}data center{{else}}server{{end}} and all associated records:</p>
+<p class="mb-2">This will permanently delete this {{if eq .Type "DataCenter"}}data center{{else if eq .Type "KubernetesCluster"}}Kubernetes cluster{{else}}server{{end}} and all associated records:</p>
 <ul class="is-size-7" style="list-style:disc;padding-left:1.25rem">
   {{range .Groups}}<li>{{.Count}} {{.Label}}</li>{{end}}
 </ul>

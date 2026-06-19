@@ -33,7 +33,10 @@ DQL can follow any predicate in reverse using `~`. Used for: finding all nodes i
 Same pattern used for `~ConfigItem.namespace` to find all nodes in a namespace. DQL can traverse any predicate by UID regardless of GraphQL type boundaries.
 
 ### IPAddress hub pattern (typed back-refs)
-`@hasInverse` in DGraph requires both sides to be the same **concrete type** — cannot use the `ConfigItem` interface as a back-ref target. Solution: explicit named back-ref fields on `IPAddress` for each concrete type that references it (`serverOobIP: Server`, `eksaConfigTinkerbellIP: EksaConfig`, `eksaControlPlaneIP: EksaConfig`). Adding a new type connected to an `IPAddress` requires a new back-ref field — this is a deliberate, versioned schema change.
+`@hasInverse` in DGraph requires both sides to be the same **concrete type** — cannot use the `ConfigItem` interface as a back-ref target. Solution: explicit named back-ref fields on `IPAddress` for each concrete type that references it. Adding a new type connected to an `IPAddress` requires a new back-ref field — this is a deliberate, versioned schema change.
+
+- **Back-ref naming**: `<typeName-camelCase><FieldName-PascalCase>` — e.g. `Server.oobIP` produces `IPAddress.serverOobIP`; `EksaKubernetesCluster.tinkerbellIP` produces `IPAddress.eksaKubernetesClusterTinkerbellIP`. Long but mechanically derived — never invent shorter aliases.
+- **Cardinality must match reality**: the back-ref field is `T` (singular) when at most one cluster/server/node can legitimately claim a given IPAddress, and `[T]` (list) when multiple can. EKS-A workload clusters reuse their management's tinkerbell stack — so `eksaKubernetesClusterTinkerbellIP` is `[EksaKubernetesCluster]`, not singular. Server OOB IPs are 1:1 per server — so `serverOobIP` stays singular. Wrong cardinality silently corrupts data (last-write-wins on the inverse); choose based on the operational relationship, not the schema's syntactic cleanliness.
 
 ### Cross-type IP queries
 GraphQL cannot traverse typed back-refs polymorphically. For queries like "is this IP already assigned anywhere?" use DQL via `/query` with tilde predicates (see above).

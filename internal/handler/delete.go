@@ -75,6 +75,12 @@ func (h *DeleteHandler) Preview(c echo.Context) error {
 			return err
 		}
 		preview = plan.preview
+	case "KubernetesCluster":
+		plan, err := h.planClusterDelete(ctx, id)
+		if err != nil {
+			return err
+		}
+		preview = plan.preview
 	default:
 		return echo.NewHTTPError(http.StatusBadRequest, "unsupported type")
 	}
@@ -109,6 +115,7 @@ func (h *DeleteHandler) Preview(c echo.Context) error {
 // @Failure     500 {object} map[string]string
 // @Router      /api/v1/config-items/{type}/{id} [delete]
 func (h *DeleteHandler) Execute(c echo.Context) error {
+	// Path-param decoding is handled by middleware.DecodePathParams.
 	id := c.Param("id")
 	if id == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "id required")
@@ -155,6 +162,25 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 		)
 		return c.JSON(http.StatusOK, map[string]any{"deleted": len(plan.uids)})
 
+	case "KubernetesCluster":
+		plan, err := h.planClusterDelete(ctx, id)
+		if err != nil {
+			return err
+		}
+		if err := h.bulkDelete(ctx, plan.uids); err != nil {
+			h.logger.Error("cluster delete failed", "orbId", plan.orbID, "err", err)
+			return fmt.Errorf("delete cluster: %w", err)
+		}
+		writeAuditEvent(h.db, h.logger, "data", actor, "deleteKubernetesCluster",
+			[]string{"deleteKubernetesCluster"}, []string{"KubernetesCluster"}, []string{plan.orbID},
+			map[string]any{
+				"input":  map[string]any{"orbId": plan.orbID},
+				"before": plan.before,
+				"result": map[string]any{"totalDeleted": len(plan.uids), "breakdown": plan.preview.Groups},
+			},
+		)
+		return c.JSON(http.StatusOK, map[string]any{"deleted": len(plan.uids)})
+
 	default:
 		return echo.NewHTTPError(http.StatusBadRequest, "unsupported type")
 	}
@@ -181,8 +207,8 @@ type serverDeletePlan struct {
 // ── DataCenter ────────────────────────────────────────────────────────────────
 
 const dcDeleteGQL = `
-  query GetDCForDelete($id: ID!) {
-    getDataCenter(id: $id) {
+  query GetDCForDelete($orbId: String!) {
+    getDataCenter(orbId: $orbId) {
       id name orbId namespace
       racks { id name }
       servers {
@@ -200,9 +226,9 @@ const dcDeleteGQL = `
       }
       kubernetesClusters {
         __typename
-        id name
         controlPlaneEndpoint { id }
         nodes { id }
+        ... on ConfigItem { id name }
         ... on EksaKubernetesCluster {
           tinkerbellIP { id }
         }
@@ -255,8 +281,8 @@ type dcDeleteRaw struct {
 	} `json:"kubernetesClusters"`
 }
 
-func (h *DeleteHandler) planDCDelete(ctx context.Context, id string) (*dcDeletePlan, error) {
-	data, err := h.gqlQuery(ctx, dcDeleteGQL, map[string]any{"id": id})
+func (h *DeleteHandler) planDCDelete(ctx context.Context, orbID string) (*dcDeletePlan, error) {
+	data, err := h.gqlQuery(ctx, dcDeleteGQL, map[string]any{"orbId": orbID})
 	if err != nil {
 		return nil, err
 	}
@@ -382,8 +408,8 @@ func (h *DeleteHandler) planDCDelete(ctx context.Context, id string) (*dcDeleteP
 // ── Server ────────────────────────────────────────────────────────────────────
 
 const srvDeleteGQL = `
-  query GetServerForDelete($id: ID!) {
-    getServer(id: $id) {
+  query GetServerForDelete($orbId: String!) {
+    getServer(orbId: $orbId) {
       id name orbId hostname
       idracSettings { id }
       serverConfigurationProfile { id }
@@ -425,8 +451,8 @@ type srvDeleteRaw struct {
 	} `json:"oobIP"`
 }
 
-func (h *DeleteHandler) planServerDelete(ctx context.Context, id string) (*serverDeletePlan, error) {
-	data, err := h.gqlQuery(ctx, srvDeleteGQL, map[string]any{"id": id})
+func (h *DeleteHandler) planServerDelete(ctx context.Context, orbID string) (*serverDeletePlan, error) {
+	data, err := h.gqlQuery(ctx, srvDeleteGQL, map[string]any{"orbId": orbID})
 	if err != nil {
 		return nil, err
 	}
@@ -508,6 +534,186 @@ func (h *DeleteHandler) planServerDelete(ctx context.Context, id string) (*serve
 		orbID:  s.OrbID,
 		name:   serverDisplayName(s.Hostname, s.Name),
 		before: srvBefore,
+	}, nil
+}
+
+// ── Kubernetes Cluster ───────────────────────────────────────────────────────
+
+// Cascade scope (settled): cluster + its nodes + control plane endpoint IP +
+// (EKSA) tinkerbell IP. Servers are preserved — they're independent inventory,
+// not owned by the cluster. The lookup goes through queryConfigItem because
+// orbId lives on ConfigItem, not on the KubernetesCluster sub-interface.
+const clusterDeleteGQL = `
+  query GetClusterForDelete($orbId: String!) {
+    queryConfigItem(filter: { orbId: { eq: $orbId } }, first: 1) {
+      __typename
+      ... on ConfigItem {
+        id orbId name namespace
+      }
+      ... on KubernetesCluster {
+        controlPlaneEndpoint { id address }
+        nodes {
+          orbId role
+          server { id orbId hostname serviceTag }
+        }
+      }
+      ... on EksaKubernetesCluster {
+        tinkerbellIP { id address }
+      }
+    }
+  }`
+
+type clusterDeleteRaw struct {
+	Typename  string `json:"__typename"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	OrbID     string `json:"orbId"`
+	Namespace string `json:"namespace"`
+	ControlPlaneEndpoint *struct {
+		ID      string `json:"id"`
+		Address string `json:"address"`
+	} `json:"controlPlaneEndpoint"`
+	Nodes []struct {
+		OrbID  string `json:"orbId"`
+		Role   string `json:"role"`
+		Server struct {
+			ID         string `json:"id"`
+			OrbID      string `json:"orbId"`
+			Hostname   string `json:"hostname"`
+			ServiceTag string `json:"serviceTag"`
+		} `json:"server"`
+	} `json:"nodes"`
+	TinkerbellIP *struct {
+		ID      string `json:"id"`
+		Address string `json:"address"`
+	} `json:"tinkerbellIP,omitempty"`
+}
+
+type clusterDeletePlan struct {
+	preview DeletePreview
+	uids    []string
+	orbID   string
+	name    string
+	before  map[string]any
+}
+
+func nodeUIDFromOrbID(ctx context.Context, h *DeleteHandler, orbID string) (string, error) {
+	// queryKubernetesNode → @id is orbId. Fetch the DGraph UID for one node.
+	data, err := h.gqlQuery(ctx, `query($orbId: String!) {
+		getKubernetesNode(orbId: $orbId) { id }
+	}`, map[string]any{"orbId": orbID})
+	if err != nil {
+		return "", err
+	}
+	var resp struct {
+		GetKubernetesNode *struct {
+			ID string `json:"id"`
+		} `json:"getKubernetesNode"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return "", err
+	}
+	if resp.GetKubernetesNode == nil {
+		return "", nil
+	}
+	return resp.GetKubernetesNode.ID, nil
+}
+
+func (h *DeleteHandler) planClusterDelete(ctx context.Context, orbID string) (*clusterDeletePlan, error) {
+	data, err := h.gqlQuery(ctx, clusterDeleteGQL, map[string]any{"orbId": orbID})
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		QueryConfigItem []clusterDeleteRaw `json:"queryConfigItem"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("decode cluster: %w", err)
+	}
+	if len(resp.QueryConfigItem) == 0 {
+		return nil, echo.NewHTTPError(http.StatusNotFound, "cluster not found")
+	}
+	c := resp.QueryConfigItem[0]
+	if c.Typename != "EksaKubernetesCluster" {
+		return nil, echo.NewHTTPError(http.StatusNotFound, "not a kubernetes cluster")
+	}
+	if c.ID == "" {
+		return nil, echo.NewHTTPError(http.StatusNotFound, "cluster not found")
+	}
+
+	var uids []string
+	var groups []DeleteGroup
+	var preserved []DeleteGroup
+
+	uids = append(uids, c.ID)
+
+	// Nodes — owned by cluster, deleted. Each node has @id orbId; resolve to
+	// DGraph UIDs in one round-trip per node (small N).
+	nodeUIDs := make([]string, 0, len(c.Nodes))
+	for _, n := range c.Nodes {
+		uid, err := nodeUIDFromOrbID(ctx, h, n.OrbID)
+		if err != nil {
+			return nil, fmt.Errorf("resolve node uid: %w", err)
+		}
+		if uid != "" {
+			nodeUIDs = append(nodeUIDs, uid)
+		}
+	}
+	if len(nodeUIDs) > 0 {
+		uids = append(uids, nodeUIDs...)
+		groups = append(groups, countGroup("Kubernetes Nodes", len(nodeUIDs)))
+	}
+
+	if c.ControlPlaneEndpoint != nil && c.ControlPlaneEndpoint.ID != "" {
+		uids = append(uids, c.ControlPlaneEndpoint.ID)
+		groups = append(groups, countGroup("Control plane endpoint IP", 1))
+	}
+	if c.TinkerbellIP != nil && c.TinkerbellIP.ID != "" {
+		uids = append(uids, c.TinkerbellIP.ID)
+		groups = append(groups, countGroup("Tinkerbell IP", 1))
+	}
+
+	// Servers are NOT deleted — they're independent inventory. List the names
+	// in the Preserved section so the operator sees what stays behind.
+	if len(c.Nodes) > 0 {
+		serverNames := make([]string, 0, len(c.Nodes))
+		for _, n := range c.Nodes {
+			name := n.Server.Hostname
+			if name == "" {
+				name = n.Server.ServiceTag
+			}
+			if name == "" {
+				name = n.Server.OrbID
+			}
+			if name != "" {
+				serverNames = append(serverNames, name)
+			}
+		}
+		if len(serverNames) > 0 {
+			preserved = append(preserved, namedGroup("Servers", serverNames))
+		}
+	}
+
+	before := map[string]any{
+		"name":      c.Name,
+		"orbId":     c.OrbID,
+		"namespace": c.Namespace,
+		"typename":  c.Typename,
+		"nodeCount": len(c.Nodes),
+	}
+
+	return &clusterDeletePlan{
+		preview: DeletePreview{
+			Name:       c.Name,
+			Type:       "KubernetesCluster",
+			TotalCount: len(uids),
+			Groups:     groups,
+			Preserved:  preserved,
+		},
+		uids:   uids,
+		orbID:  c.OrbID,
+		name:   c.Name,
+		before: before,
 	}, nil
 }
 

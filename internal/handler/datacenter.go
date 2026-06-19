@@ -15,8 +15,8 @@ import (
 )
 
 const getDataCenterQuery = `
-  query GetDataCenter($id: ID!) {
-    getDataCenter(id: $id) {
+  query GetDataCenter($orbId: String!) {
+    getDataCenter(orbId: $orbId) {
       id
       name
       orbId
@@ -116,6 +116,7 @@ type dcQueryResponse struct {
 type serverTabData struct {
 	ID           string
 	OrbID        string
+	DomID        string // SafeDomID(OrbID) — used for HTML id attrs / CSS selectors
 	Name         string
 	Hostname     string
 	ServiceTag   string
@@ -136,6 +137,7 @@ type rackTabData struct {
 type dataCenterTabData struct {
 	ID           string
 	OrbID        string
+	DomID        string // SafeDomID(OrbID)
 	Name         string
 	CreatedBy    string
 	CreatedAt    string
@@ -162,11 +164,12 @@ func (h *DataCenter) Tab(c echo.Context) error {
 		time.Sleep(150 * time.Millisecond)
 	}
 
-	id := c.Param("id")
+	// Path-param decoding is handled by middleware.DecodePathParams.
+	orbID := c.Param("orbId")
 
 	body, _ := json.Marshal(map[string]any{
 		"query":     getDataCenterQuery,
-		"variables": map[string]any{"id": id},
+		"variables": map[string]any{"orbId": orbID},
 	})
 
 	resp, err := http.Post(h.dgraphURL, "application/json", bytes.NewReader(body))
@@ -225,6 +228,7 @@ func (h *DataCenter) Tab(c echo.Context) error {
 	dc := dataCenterTabData{
 		ID:           raw.ID,
 		OrbID:        raw.OrbID,
+		DomID:        SafeDomID(raw.OrbID),
 		Name:         raw.Name,
 		CreatedBy:    raw.CreatedBy,
 		CreatedAt:    raw.CreatedAt,
@@ -251,6 +255,7 @@ func (h *DataCenter) Tab(c echo.Context) error {
 		dc.Servers = append(dc.Servers, serverTabData{
 			ID:           s.ID,
 			OrbID:        s.OrbID,
+			DomID:        SafeDomID(s.OrbID),
 			Name:         s.Name,
 			Hostname:     s.Hostname,
 			ServiceTag:   s.ServiceTag,

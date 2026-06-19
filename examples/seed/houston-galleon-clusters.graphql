@@ -1,0 +1,60 @@
+# Seed clusters + nodes for the houston-galleon data center.
+# Source: Cluster Resource Tracking (4).xlsx, sheet 'Houston-V3'.
+# Servers referenced here must already be in houston-galleon.graphql.
+
+mutation SeedClusters {
+  # 1. IPAddress nodes — control-plane, tinkerbell, and k8s-node IPs.
+  addIPAddress(input: [
+    { orbId: "houston:10.10.0.101" type: "ipv4" address: "10.10.0.101" role: "k8s_api" namespace: "houston" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "houston:10.10.0.102" type: "ipv4" address: "10.10.0.102" role: "tinkerbell" namespace: "houston" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "houston:10.10.0.103" type: "ipv4" address: "10.10.0.103" role: "k8s_api" namespace: "houston" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "houston:10.10.0.11" type: "ipv4" address: "10.10.0.11" role: "k8s_node" namespace: "houston" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "houston:10.10.0.112" type: "ipv4" address: "10.10.0.112" role: "k8s_node" namespace: "houston" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "houston:10.10.0.117" type: "ipv4" address: "10.10.0.117" role: "k8s_node" namespace: "houston" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "houston:10.10.0.118" type: "ipv4" address: "10.10.0.118" role: "k8s_node" namespace: "houston" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "houston:10.10.0.123" type: "ipv4" address: "10.10.0.123" role: "k8s_node" namespace: "houston" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "houston:10.10.0.124" type: "ipv4" address: "10.10.0.124" role: "k8s_node" namespace: "houston" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "houston:10.10.0.125" type: "ipv4" address: "10.10.0.125" role: "k8s_node" namespace: "houston" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "houston:10.10.0.15" type: "ipv4" address: "10.10.0.15" role: "k8s_node" namespace: "houston" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "houston:10.10.0.21" type: "ipv4" address: "10.10.0.21" role: "k8s_node" namespace: "houston" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "houston:10.10.0.22" type: "ipv4" address: "10.10.0.22" role: "k8s_node" namespace: "houston" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "houston:10.10.0.25" type: "ipv4" address: "10.10.0.25" role: "k8s_node" namespace: "houston" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "houston:10.10.0.9" type: "ipv4" address: "10.10.0.9" role: "k8s_node" namespace: "houston" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" }
+  ], upsert: true) {
+    numUids
+  }
+
+  # 2. EKSA management clusters (workload clusters reference these).
+  mgmt: addEksaKubernetesCluster(input: [
+    {
+      orbId: "houston:g2-m", name: "g2-m", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "prod", dataCenter: { orbId: "houston:houston-galleon" version: 1 }, controlPlaneEndpoint: { orbId: "houston:10.10.0.101" version: 1 }, tinkerbellIP: { orbId: "houston:10.10.0.102" version: 1 },
+      nodes: [
+          { orbId: "houston:g2-cp6-23", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g2-cp6-23", ipv4: { orbId: "houston:10.10.0.123" version: 1 }, gpu: false, role: "control_plane", server: { orbId: "houston:J452FZ3" version: 1 } },
+          { orbId: "houston:g2-cp6-24", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g2-cp6-24", ipv4: { orbId: "houston:10.10.0.124" version: 1 }, gpu: false, role: "control_plane", server: { orbId: "houston:1B22FZ3" version: 1 } },
+          { orbId: "houston:g2-cp5-22", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g2-cp5-22", ipv4: { orbId: "houston:10.10.0.22" version: 1 }, gpu: false, role: "control_plane", server: { orbId: "houston:6B22FZ3" version: 1 } },
+          { orbId: "houston:g2-wk5-15", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g2-wk5-15", ipv4: { orbId: "houston:10.10.0.15" version: 1 }, gpu: false, role: "worker", server: { orbId: "houston:CB52FZ3" version: 1 } }
+        ]
+    }
+  ], upsert: true) {
+    numUids
+  }
+
+  # 3. EKSA workload clusters — each links back to its management.
+  workload: addEksaKubernetesCluster(input: [
+    {
+      orbId: "houston:g2-w1", name: "g2-w1", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "workload", provider: "eksa", cni: "cilium", environment: "prod", dataCenter: { orbId: "houston:houston-galleon" version: 1 }, controlPlaneEndpoint: { orbId: "houston:10.10.0.103" version: 1 }, tinkerbellIP: { orbId: "houston:10.10.0.102" version: 1 }, managementCluster: { orbId: "houston:g2-m" version: 1 },
+      nodes: [
+          { orbId: "houston:g2-cp6-25", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g2-cp6-25", ipv4: { orbId: "houston:10.10.0.125" version: 1 }, gpu: false, role: "control_plane", server: { orbId: "houston:2B22FZ3" version: 1 } },
+          { orbId: "houston:g2-cp5-21", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g2-cp5-21", ipv4: { orbId: "houston:10.10.0.21" version: 1 }, gpu: false, role: "control_plane", server: { orbId: "houston:1552FZ3" version: 1 } },
+          { orbId: "houston:g2-cp5-25", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g2-cp5-25", ipv4: { orbId: "houston:10.10.0.25" version: 1 }, gpu: false, role: "control_plane", server: { orbId: "houston:5B22FZ3" version: 1 } },
+          { orbId: "houston:g2-wk6-17", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g2-wk6-17", ipv4: { orbId: "houston:10.10.0.117" version: 1 }, gpu: false, role: "worker", server: { orbId: "houston:6B52FZ3" version: 1 } },
+          { orbId: "houston:g2-wk6-18", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g2-wk6-18", ipv4: { orbId: "houston:10.10.0.118" version: 1 }, gpu: false, role: "worker", server: { orbId: "houston:8B52FZ3" version: 1 } },
+          { orbId: "houston:g2-gpu-wk6-12", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g2-gpu-wk6-12", ipv4: { orbId: "houston:10.10.0.112" version: 1 }, gpu: true, role: "worker", server: { orbId: "houston:6PJ1FZ3" version: 1 } },
+          { orbId: "houston:g2-gpu-wk5-09", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g2-gpu-wk5-09", ipv4: { orbId: "houston:10.10.0.9" version: 1 }, gpu: true, role: "worker", server: { orbId: "houston:7PJ1FZ3" version: 1 } },
+          { orbId: "houston:g2-gpu-wk5-11", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g2-gpu-wk5-11", ipv4: { orbId: "houston:10.10.0.11" version: 1 }, gpu: true, role: "worker", server: { orbId: "houston:4PJ1FZ3" version: 1 } }
+        ]
+    }
+  ], upsert: true) {
+    numUids
+  }
+}

@@ -15,8 +15,8 @@ import (
 // --- DGraph query ---
 
 const queryServerByIDFmt = `
-  query GetServer($id: ID!) {
-    getServer(id: $id) {
+  query GetServer($orbId: String!) {
+    getServer(orbId: $orbId) {
       id orbId hostname model manufacturer serviceTag rackPosition oobMAC
       createdAt updatedAt
       namespace
@@ -132,17 +132,18 @@ type orbSrvTabData struct {
 	Actions            layout.PageActions
 }
 
-// srvTab renders the server detail fragment for the given id.
-// Called by the shared loadServerListTab() JS via HTMX GET /servers/:id.
+// srvTab renders the server detail fragment for the given orbId.
+// Called by the shared loadServerListTab() JS via HTMX GET /servers/:orbId.
 func (s *Server) srvTab(c echo.Context) error {
 	if c.Request().Header.Get("HX-Request") != "true" {
 		return c.Redirect(http.StatusFound, "/servers")
 	}
 
-	id := c.Param("id")
+	// Path-param decoding is handled by middleware.DecodePathParams.
+	orbID := c.Param("orbId")
 	dcCtx := c.QueryParam("dcCtx") == "1"
 
-	raw, err := s.dgraphQuery(queryServerByIDFmt, map[string]any{"id": id})
+	raw, err := s.dgraphQuery(queryServerByIDFmt, map[string]any{"orbId": orbID})
 	if err != nil {
 		s.logger.Warn("dgraph server query failed", "err", err)
 	}

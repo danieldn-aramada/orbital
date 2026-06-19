@@ -1,0 +1,27 @@
+<div id="edit-modal-cluster-{{.DomID}}"
+  class="modal modal-fx-3dRotateFromBottom"
+  data-current-user="{{.CurrentUser}}"
+  data-version="{{.Version}}"
+  data-orb-id="{{.OrbID}}"
+  data-typename="{{.Typename}}"
+  data-reload-url="/clusters/{{.OrbID}}"
+  data-reload-target="tab-content-{{.DomID}}">
+  <div class="modal-background"></div>
+  <div class="modal-content modal-card is-large">
+    <header class="modal-card-head">
+      <p class="modal-card-title">Edit {{.Provider}}: {{.Name}}</p>
+      <button class="delete" aria-label="close" data-cluster-modal-close="{{.DomID}}"></button>
+    </header>
+    <section class="modal-card-body">
+      <div id="cluster-json-editor-{{.DomID}}" style="min-height:200px"></div>
+    </section>
+    <footer class="modal-card-foot is-flex is-align-items-center" style="gap:0.75rem;">
+      <div class="buttons" style="margin-bottom:0;">
+        <button class="button is-success" id="cluster-edit-submit-{{.DomID}}">Save</button>
+        <button class="button" data-cluster-modal-close="{{.DomID}}">Cancel</button>
+      </div>
+      <span id="cluster-edit-error-{{.DomID}}" class="has-text-danger is-size-7" style="display:none; flex:1;"></span>
+    </footer>
+  </div>
+</div>
+<script type="application/json" id="cluster-edit-data-{{.DomID}}">{{.EditDataJSON}}</script>

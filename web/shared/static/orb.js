@@ -12,6 +12,7 @@ import {
   saveServerTab,
   initDatacenterTabRestoration,
   initServerListTabRestoration,
+  safeDomId,
 } from './shared.js'
 
 // ─── Stale-state cleanup ──────────────────────────────────────────────────────
@@ -164,14 +165,15 @@ document.addEventListener('DOMContentLoaded', () => {
   initDatacenterTable({
     onRowOpen: (data) => {
       const displayName = data.name
-      const id = data.id
-      const tab = document.getElementById(`tab-${id}`)
+      const orbId = data.orbId
+      const domId = safeDomId(orbId)
+      const tab = document.getElementById(`tab-${domId}`)
       if (tab) {
         tab.click()
       } else {
-        loadDataCenterTab(displayName, id)
-        saveTab(displayName, id)
-        document.getElementById(`tab-${id}`).click()
+        loadDataCenterTab(displayName, orbId)
+        saveTab(displayName, orbId)
+        document.getElementById(`tab-${domId}`).click()
       }
     },
   })
@@ -180,15 +182,16 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('DOMContentLoaded', () => {
   initServerListTable({
     onRowOpen: (data) => {
-      const id = data.id
+      const orbId = data.orbId
+      const domId = safeDomId(orbId)
       const displayName = data.hostname !== '—' ? data.hostname : data.serviceTag
-      const tab = document.getElementById(`tab-srv-${id}`)
+      const tab = document.getElementById(`tab-srv-${domId}`)
       if (tab) {
         tab.click()
       } else {
-        loadServerListTab(displayName, id)
-        saveServerTab(displayName, id)
-        document.getElementById(`tab-srv-${id}`).click()
+        loadServerListTab(displayName, orbId)
+        saveServerTab(displayName, orbId)
+        document.getElementById(`tab-srv-${domId}`).click()
       }
     },
   })

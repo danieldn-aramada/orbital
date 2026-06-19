@@ -1,0 +1,197 @@
+# Seed clusters + nodes for the colo-galleon data center.
+# Source: Cluster Resource Tracking (4).xlsx, sheet 'Colo -V3'.
+# Servers referenced here must already be in colo-galleon.graphql.
+
+mutation SeedClusters {
+  # 1. IPAddress nodes — control-plane, tinkerbell, and k8s-node IPs.
+  addIPAddress(input: [
+    { orbId: "colo:10.20.22.105" type: "ipv4" address: "10.20.22.105" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.106" type: "ipv4" address: "10.20.22.106" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.107" type: "ipv4" address: "10.20.22.107" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.11" type: "ipv4" address: "10.20.22.11" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.110" type: "ipv4" address: "10.20.22.110" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.12" type: "ipv4" address: "10.20.22.12" role: "tinkerbell" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.13" type: "ipv4" address: "10.20.22.13" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.14" type: "ipv4" address: "10.20.22.14" role: "tinkerbell" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.143" type: "ipv4" address: "10.20.22.143" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.144" type: "ipv4" address: "10.20.22.144" role: "tinkerbell" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.155" type: "ipv4" address: "10.20.22.155" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.156" type: "ipv4" address: "10.20.22.156" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.157" type: "ipv4" address: "10.20.22.157" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.158" type: "ipv4" address: "10.20.22.158" role: "tinkerbell" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.159" type: "ipv4" address: "10.20.22.159" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.160" type: "ipv4" address: "10.20.22.160" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.161" type: "ipv4" address: "10.20.22.161" role: "tinkerbell" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.162" type: "ipv4" address: "10.20.22.162" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.164" type: "ipv4" address: "10.20.22.164" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.165" type: "ipv4" address: "10.20.22.165" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.173" type: "ipv4" address: "10.20.22.173" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.18" type: "ipv4" address: "10.20.22.18" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.180" type: "ipv4" address: "10.20.22.180" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.182" type: "ipv4" address: "10.20.22.182" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.184" type: "ipv4" address: "10.20.22.184" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.203" type: "ipv4" address: "10.20.22.203" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.204" type: "ipv4" address: "10.20.22.204" role: "tinkerbell" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.206" type: "ipv4" address: "10.20.22.206" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.207" type: "ipv4" address: "10.20.22.207" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.208" type: "ipv4" address: "10.20.22.208" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.209" type: "ipv4" address: "10.20.22.209" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.210" type: "ipv4" address: "10.20.22.210" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.212" type: "ipv4" address: "10.20.22.212" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.214" type: "ipv4" address: "10.20.22.214" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.216" type: "ipv4" address: "10.20.22.216" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.217" type: "ipv4" address: "10.20.22.217" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.220" type: "ipv4" address: "10.20.22.220" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.221" type: "ipv4" address: "10.20.22.221" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.222" type: "ipv4" address: "10.20.22.222" role: "tinkerbell" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.223" type: "ipv4" address: "10.20.22.223" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.224" type: "ipv4" address: "10.20.22.224" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.225" type: "ipv4" address: "10.20.22.225" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.226" type: "ipv4" address: "10.20.22.226" role: "tinkerbell" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.227" type: "ipv4" address: "10.20.22.227" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.228" type: "ipv4" address: "10.20.22.228" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.229" type: "ipv4" address: "10.20.22.229" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.230" type: "ipv4" address: "10.20.22.230" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.231" type: "ipv4" address: "10.20.22.231" role: "tinkerbell" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.232" type: "ipv4" address: "10.20.22.232" role: "tinkerbell" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.233" type: "ipv4" address: "10.20.22.233" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.236" type: "ipv4" address: "10.20.22.236" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.238" type: "ipv4" address: "10.20.22.238" role: "tinkerbell" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.239" type: "ipv4" address: "10.20.22.239" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.240" type: "ipv4" address: "10.20.22.240" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.243" type: "ipv4" address: "10.20.22.243" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.244" type: "ipv4" address: "10.20.22.244" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.245" type: "ipv4" address: "10.20.22.245" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.247" type: "ipv4" address: "10.20.22.247" role: "tinkerbell" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.248" type: "ipv4" address: "10.20.22.248" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.251" type: "ipv4" address: "10.20.22.251" role: "tinkerbell" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.253" type: "ipv4" address: "10.20.22.253" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.254" type: "ipv4" address: "10.20.22.254" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.31" type: "ipv4" address: "10.20.22.31" role: "k8s_api" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
+    { orbId: "colo:10.20.22.32" type: "ipv4" address: "10.20.22.32" role: "tinkerbell" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" }
+  ], upsert: true) {
+    numUids
+  }
+
+  # 2. EKSA management clusters (workload clusters reference these).
+  mgmt: addEksaKubernetesCluster(input: [
+    {
+      orbId: "colo:cluster-upgrade-sim", name: "cluster-upgrade-sim", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, controlPlaneEndpoint: { orbId: "colo:10.20.22.221" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.222" version: 1 }, description: "SpectroCloud POC",
+      nodes: [
+          { orbId: "colo:cluster-upgrade-sim-node-GJ32V64", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "cluster-upgrade-sim-node-GJ32V64", ipv4: { orbId: "colo:10.20.22.253" version: 1 }, gpu: false, owner: "Gokul / Ranjith", notes: "SpectroCloud POC", server: { orbId: "colo:GJ32V64" version: 1 } }
+        ]
+    },
+    { orbId: "colo:cluster-m2", name: "cluster-m2", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, controlPlaneEndpoint: { orbId: "colo:10.20.22.180" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.251" version: 1 } },
+    {
+      orbId: "colo:bare-mincluster", name: "bare-mincluster", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, controlPlaneEndpoint: { orbId: "colo:10.20.22.11" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.12" version: 1 }, description: "Aramco Backup and Restore Testing",
+      nodes: [
+          { orbId: "colo:bare-mincluster-node-4RK3V64", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "bare-mincluster-node-4RK3V64", ipv4: { orbId: "colo:10.20.22.110" version: 1 }, gpu: false, owner: "Arastu", notes: "Aramco Backup and Restore Testing", server: { orbId: "colo:4RK3V64" version: 1 } },
+          { orbId: "colo:bare-mincluster-node-7MP6K74", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "bare-mincluster-node-7MP6K74", ipv4: { orbId: "colo:10.20.22.173" version: 1 }, gpu: false, owner: "Arastu", notes: "Aramco Backup and Restore Testing", server: { orbId: "colo:7MP6K74" version: 1 } }
+        ]
+    },
+    { orbId: "colo:restore-cluster", name: "restore-cluster", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, controlPlaneEndpoint: { orbId: "colo:10.20.22.230" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.231" version: 1 } },
+    {
+      orbId: "colo:elos-m", name: "elos-m", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "stage", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, kubernetesVersion: "v1.33.7", controlPlaneEndpoint: { orbId: "colo:10.20.22.239" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.238" version: 1 }, description: "Management cluster attached to elos-w1, elos-w2 and slb-w ISV clusters",
+      nodes: [
+          { orbId: "colo:elos-cp-sp", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "elos-cp-sp", ipv4: { orbId: "colo:10.20.22.184" version: 1 }, gpu: false, owner: "Arastu", role: "control_plane", notes: "Management cluster attached to elos-w1, elos-w2 and slb-w ISV clusters", server: { orbId: "colo:HQK3V64" version: 1 } },
+          { orbId: "colo:elos-wk10-4", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "elos-wk10-4", ipv4: { orbId: "colo:10.20.22.227" version: 1 }, gpu: false, owner: "Arastu", role: "worker", notes: "Management cluster attached to elos-w1, elos-w2 and slb-w ISV clusters", server: { orbId: "colo:B4KS2Z3" version: 1 } }
+        ]
+    },
+    {
+      orbId: "colo:jh-m", name: "jh-m", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, controlPlaneEndpoint: { orbId: "colo:10.20.22.203" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.204" version: 1 },
+      nodes: [
+          { orbId: "colo:jh-m-node-1RK3V64", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "jh-m-node-1RK3V64", ipv4: { orbId: "colo:10.20.22.233" version: 1 }, gpu: false, owner: "Joey", server: { orbId: "colo:1RK3V64" version: 1 } }
+        ]
+    },
+    { orbId: "colo:sungho-m", name: "sungho-m", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, controlPlaneEndpoint: { orbId: "colo:10.20.22.13" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.14" version: 1 } },
+    { orbId: "colo:cluster-vgpu-m", name: "cluster-vgpu-m", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, controlPlaneEndpoint: { orbId: "colo:10.20.22.228" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.232" version: 1 } },
+    { orbId: "colo:cluster-gpu-m", name: "cluster-gpu-m", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, controlPlaneEndpoint: { orbId: "colo:10.20.22.207" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.226" version: 1 } },
+    {
+      orbId: "colo:aramco-m", name: "aramco-m", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, controlPlaneEndpoint: { orbId: "colo:10.20.22.157" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.158" version: 1 }, description: "Aramco ISV",
+      nodes: [
+          { orbId: "colo:aramco-m-node-6F206G4", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "aramco-m-node-6F206G4", ipv4: { orbId: "colo:10.20.22.155" version: 1 }, gpu: false, owner: "Gowtham/Arastu", notes: "Aramco ISV", server: { orbId: "colo:6F206G4" version: 1 } },
+          { orbId: "colo:aramco-m-node-7F206G4", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "aramco-m-node-7F206G4", ipv4: { orbId: "colo:10.20.22.156" version: 1 }, gpu: false, owner: "Gowtham/Arastu", notes: "Aramco ISV", server: { orbId: "colo:7F206G4" version: 1 } }
+        ]
+    },
+    {
+      orbId: "colo:mt-m", name: "mt-m", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, kubernetesVersion: "v1.34.3", controlPlaneEndpoint: { orbId: "colo:10.20.22.31" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.32" version: 1 }, description: "Multi-tenant ISV",
+      nodes: [
+          { orbId: "colo:mt-m-node-2RK3V64", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "mt-m-node-2RK3V64", ipv4: { orbId: "colo:10.20.22.182" version: 1 }, gpu: false, owner: "Sargun/Arastu", notes: "Multi-tenant ISV", server: { orbId: "colo:2RK3V64" version: 1 } },
+          { orbId: "colo:mt-m-node-1W8Y2Z3", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "mt-m-node-1W8Y2Z3", ipv4: { orbId: "colo:10.20.22.240" version: 1 }, gpu: false, owner: "Sargun/Arastu", notes: "Multi-tenant ISV", server: { orbId: "colo:1W8Y2Z3" version: 1 } },
+          { orbId: "colo:mt-m-node-2B52FZ3", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "mt-m-node-2B52FZ3", ipv4: { orbId: "colo:10.20.22.210" version: 1 }, gpu: false, owner: "Sargun/Arastu", notes: "Multi-tenant ISV", server: { orbId: "colo:2B52FZ3" version: 1 } },
+          { orbId: "colo:mt-m-node-5F206G4", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "mt-m-node-5F206G4", ipv4: { orbId: "colo:10.20.22.106" version: 1 }, gpu: false, owner: "Sargun/Arastu", notes: "Multi-tenant ISV", server: { orbId: "colo:5F206G4" version: 1 } },
+          { orbId: "colo:mt-m-node-JD206G4", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "mt-m-node-JD206G4", ipv4: { orbId: "colo:10.20.22.107" version: 1 }, gpu: false, owner: "Sargun/Arastu", notes: "Multi-tenant ISV", server: { orbId: "colo:JD206G4" version: 1 } }
+        ]
+    },
+    {
+      orbId: "colo:keystone-m", name: "keystone-m", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, kubernetesVersion: "v1.32.7", controlPlaneEndpoint: { orbId: "colo:10.20.22.143" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.144" version: 1 }, description: "Keystone ISV",
+      nodes: [
+          { orbId: "colo:keystone-w1", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "keystone-w1", ipv4: { orbId: "colo:10.20.22.243" version: 1 }, gpu: false, owner: "Arastu", role: "worker", notes: "Keystone ISV", server: { orbId: "colo:JQK3V64" version: 1 } },
+          { orbId: "colo:keystone-m-cp", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "keystone-m-cp", ipv4: { orbId: "colo:10.20.22.217" version: 1 }, gpu: false, owner: "Arastu", role: "control_plane", notes: "Keystone ISV", server: { orbId: "colo:BGMM3D4" version: 1 } }
+        ]
+    },
+    {
+      orbId: "colo:security-m", name: "security-m", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, kubernetesVersion: "v1.33.7", controlPlaneEndpoint: { orbId: "colo:10.20.22.160" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.161" version: 1 }, description: "Security Hardening Testing",
+      nodes: [
+          { orbId: "colo:security-m-node-HD206G4", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "security-m-node-HD206G4", ipv4: { orbId: "colo:10.20.22.159" version: 1 }, gpu: false, owner: "Ron/Arastu", notes: "Security Hardening Testing", server: { orbId: "colo:HD206G4" version: 1 } }
+        ]
+    },
+    {
+      orbId: "colo:opssafety-m", name: "opssafety-m", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, kubernetesVersion: "v1.32.3", controlPlaneEndpoint: { orbId: "colo:10.20.22.245" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.247" version: 1 }, description: "Opssafety team testing",
+      nodes: [
+          { orbId: "colo:opssafety-m-node-JV8Y2Z3", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "opssafety-m-node-JV8Y2Z3", ipv4: { orbId: "colo:10.20.22.209" version: 1 }, gpu: false, owner: "Opssafety team", notes: "Opssafety team using for testing", server: { orbId: "colo:JV8Y2Z3" version: 1 } }
+        ]
+    }
+  ], upsert: true) {
+    numUids
+  }
+
+  # 3. EKSA workload clusters — each links back to its management via managementCluster.
+  workload: addEksaKubernetesCluster(input: [
+    {
+      orbId: "colo:bare-mincluster-w1", name: "bare-mincluster-w1", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "workload", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, controlPlaneEndpoint: { orbId: "colo:10.20.22.18" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.12" version: 1 }, description: "Aramco Backup and Restore Testing", managementCluster: { orbId: "colo:bare-mincluster" version: 1 },
+      nodes: [
+          { orbId: "colo:bare-mincluster-w1-node-CWJHDX3", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "bare-mincluster-w1-node-CWJHDX3", ipv4: { orbId: "colo:10.20.22.216" version: 1 }, gpu: true, owner: "Arastu", notes: "Aramco Backup and Restore Testing", server: { orbId: "colo:CWJHDX3" version: 1 } },
+          { orbId: "colo:bare-mincluster-w1-node-GD206G4", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "bare-mincluster-w1-node-GD206G4", ipv4: { orbId: "colo:10.20.22.105" version: 1 }, gpu: false, owner: "Arastu", notes: "Aramco Backup and Restore Testing", server: { orbId: "colo:GD206G4" version: 1 } },
+          { orbId: "colo:bare-mincluster-w1-node-9MP6K74", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "bare-mincluster-w1-node-9MP6K74", ipv4: { orbId: "colo:10.20.22.244" version: 1 }, gpu: false, owner: "Arastu", notes: "Aramco Backup and Restore Testing", server: { orbId: "colo:9MP6K74" version: 1 } }
+        ]
+    },
+    {
+      orbId: "colo:dev-main", name: "dev-main", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "workload", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, kubernetesVersion: "v1.33.7", controlPlaneEndpoint: { orbId: "colo:10.20.22.208" version: 1 }, description: "Dev galleon actively used by multiple teams", managementCluster: { orbId: "colo:elos-m" version: 1 },
+      nodes: [
+          { orbId: "colo:dev-main-wk9-6", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "dev-main-wk9-6", ipv4: { orbId: "colo:10.20.22.229" version: 1 }, gpu: false, owner: "EDGE Platform", role: "worker", notes: "Dev galleon actively used by multiple teams", server: { orbId: "colo:CFRHDX3" version: 1 } },
+          { orbId: "colo:dev-main-cp9-7", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "dev-main-cp9-7", ipv4: { orbId: "colo:10.20.22.224" version: 1 }, gpu: false, owner: "EDGE Platform", role: "control_plane", server: { orbId: "colo:3V5Y2Z3" version: 1 } },
+          { orbId: "colo:dev-main-gpu-wk10-7", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "dev-main-gpu-wk10-7", ipv4: { orbId: "colo:10.20.22.225" version: 1 }, gpu: true, owner: "EDGE Platform", role: "worker", server: { orbId: "colo:5PJ1FZ3" version: 1 } }
+        ]
+    },
+    {
+      orbId: "colo:elos-w2", name: "elos-w2", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "workload", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, kubernetesVersion: "v1.33.7", controlPlaneEndpoint: { orbId: "colo:10.20.22.206" version: 1 }, description: "CP node in elos-w2 cluster; Sargun testing", managementCluster: { orbId: "colo:elos-m" version: 1 },
+      nodes: [
+          { orbId: "colo:elos-cp9-8", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "elos-cp9-8", ipv4: { orbId: "colo:10.20.22.236" version: 1 }, gpu: false, owner: "Sargun/Arastu", role: "control_plane", notes: "CP node in elos-w2 cluster", server: { orbId: "colo:2W8Y2Z3" version: 1 } },
+          { orbId: "colo:elosw2-gpu-wk10-13", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "elosw2-gpu-wk10-13", ipv4: { orbId: "colo:10.20.22.220" version: 1 }, gpu: true, owner: "Sargun/Arastu", role: "worker", notes: "Sargun testing", server: { orbId: "colo:6CVD664" version: 1 } }
+        ]
+    },
+    {
+      orbId: "colo:westone-w1", name: "westone-w1", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "workload", provider: "eksa", cni: "cilium", environment: "stage", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, kubernetesVersion: "v1.32.7", controlPlaneEndpoint: { orbId: "colo:10.20.22.223" version: 1 }, description: "WetStone ISV", managementCluster: { orbId: "colo:elos-m" version: 1 },
+      nodes: [
+          { orbId: "colo:westone-cp1", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "westone-cp1", ipv4: { orbId: "colo:10.20.22.214" version: 1 }, gpu: false, owner: "Andrew/Arastu", role: "control_plane", notes: "WetStone ISV", server: { orbId: "colo:9FRHDX3" version: 1 } }
+        ]
+    },
+    {
+      orbId: "colo:sf-w1", name: "sf-w1", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "workload", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, kubernetesVersion: "v1.32.7", controlPlaneEndpoint: { orbId: "colo:10.20.22.248" version: 1 }, description: "SecondFront ISV", managementCluster: { orbId: "colo:elos-m" version: 1 },
+      nodes: [
+          { orbId: "colo:sf-cp1", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "sf-cp1", ipv4: { orbId: "colo:10.20.22.254" version: 1 }, gpu: false, owner: "Sargun/Arastu", role: "control_plane", notes: "SecondFront ISV", server: { orbId: "colo:FJ32V64" version: 1 } },
+          { orbId: "colo:sf-wk1", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "sf-wk1", ipv4: { orbId: "colo:10.20.22.212" version: 1 }, gpu: false, owner: "Sargun/Arastu", role: "worker", notes: "SecondFront ISV", server: { orbId: "colo:5B52FZ3" version: 1 } }
+        ]
+    },
+    {
+      orbId: "colo:security-w1", name: "security-w1", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "workload", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, kubernetesVersion: "v1.33.7", controlPlaneEndpoint: { orbId: "colo:10.20.22.165" version: 1 }, description: "Security Hardening Testing", managementCluster: { orbId: "colo:security-m" version: 1 },
+      nodes: [
+          { orbId: "colo:security-w1-node-1F206G4", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "security-w1-node-1F206G4", ipv4: { orbId: "colo:10.20.22.162" version: 1 }, gpu: false, owner: "Ron/Arastu", notes: "Security Hardening Testing", server: { orbId: "colo:1F206G4" version: 1 } },
+          { orbId: "colo:security-w1-node-2F206G4", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "security-w1-node-2F206G4", ipv4: { orbId: "colo:10.20.22.164" version: 1 }, gpu: false, owner: "Ron/Arastu", notes: "Security Hardening Testing", server: { orbId: "colo:2F206G4" version: 1 } }
+        ]
+    }
+  ], upsert: true) {
+    numUids
+  }
+}
