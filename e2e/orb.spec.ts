@@ -11,6 +11,7 @@ const pages: Array<{ path: string; heading?: string; testid?: boolean; tableId?:
   { path: '/schema',         heading: 'Schema',              testid: true  },
   { path: '/datacenter',     tableId: 'datacenter-table'                   },
   { path: '/servers',        tableId: 'server-list-table'                  },
+  { path: '/clusters',       tableId: 'cluster-table'                      },
   { path: '/import',         heading: 'Import Subgraph',     testid: true  },
   { path: '/import-history', heading: 'Import History',      testid: false }, // p.is-size-4, no testid
   { path: '/divergence',     heading: 'Divergence Report',   testid: false }, // h1.title
@@ -69,6 +70,74 @@ test('orb app version badge is visible', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('app-version')).toBeVisible();
   await expect(page.getByTestId('app-version')).toContainText('Orb');
+});
+
+// --- Data center / server tab fragments ---
+//
+// These guard a specific regression class: HTMX fragment endpoints whose route
+// param name (e.g. `:orbId`) must match the c.Param() lookup in the handler.
+// A mismatch renders an empty page with status 200 and no log error — invisible
+// from the page-load smoke tests above, which only fetch the list page.
+
+test('datacenter tab fragment renders populated data', async ({ page }) => {
+  await page.goto('/datacenter');
+  const row = page.locator('#datacenter-table tbody tr', { hasText: 'colo-galleon' });
+  await expect(row).toBeVisible();
+  await row.dblclick();
+  await expect(
+    page.locator('[id^="tab-content-"] .button.is-loading')
+  ).not.toBeVisible({ timeout: 10000 });
+
+  const summary = page.locator('article', { hasText: 'Data Center Summary' });
+  await expect(summary.locator('td', { hasText: 'colo-galleon' })).toBeVisible();
+  const serverCount = summary.locator('tr', { hasText: 'Servers' }).locator('td').nth(1);
+  await expect(serverCount).not.toBeEmpty();
+  expect(parseInt((await serverCount.textContent()) ?? '0', 10)).toBeGreaterThan(0);
+});
+
+test('cluster tab fragment renders populated data', async ({ page }) => {
+  await page.goto('/clusters');
+  const row = page.locator('#cluster-table tbody tr').first();
+  await expect(row).toBeVisible();
+  await row.dblclick();
+  await expect(
+    page.locator('[id^="tab-content-cluster-"] .button.is-loading')
+  ).not.toBeVisible({ timeout: 10000 });
+
+  const summary = page.locator('article', { hasText: 'Cluster Summary' });
+  await expect(summary).toBeVisible();
+  await expect(summary.locator('tr', { hasText: 'Provider' }).locator('td').nth(1)).not.toBeEmpty();
+});
+
+test('orb cluster tab has no Edit / Delete controls', async ({ page }) => {
+  await page.goto('/clusters');
+  const row = page.locator('#cluster-table tbody tr').first();
+  await expect(row).toBeVisible();
+  await row.dblclick();
+  await expect(
+    page.locator('[id^="tab-content-cluster-"] .button.is-loading')
+  ).not.toBeVisible({ timeout: 10000 });
+
+  // Verifies the actions-injection: orb passes layout.OrbActions (Edit/Delete=false),
+  // so the shared cluster-tab template renders no edit/delete buttons inside the
+  // opened tab. Guards the seam at internal/handler/cluster.go::actions(c).
+  const tab = page.locator('[id^="tab-content-cluster-"]').last();
+  await expect(tab.locator('[data-cluster-edit-id]')).toHaveCount(0);
+  await expect(tab.locator('[data-cfg-delete-id]')).toHaveCount(0);
+});
+
+test('server tab fragment renders populated data', async ({ page }) => {
+  await page.goto('/servers');
+  const row = page.locator('#server-list-table tbody tr').first();
+  await expect(row).toBeVisible();
+  await row.dblclick();
+  await expect(
+    page.locator('[id^="tab-content-srv-"] .button.is-loading')
+  ).not.toBeVisible({ timeout: 10000 });
+
+  const summary = page.locator('article', { hasText: 'Server Summary' });
+  await expect(summary).toBeVisible();
+  await expect(summary.locator('tr', { hasText: 'Hostname' }).locator('td').nth(1)).not.toBeEmpty();
 });
 
 // --- Import page ---

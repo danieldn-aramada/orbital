@@ -6,6 +6,7 @@ MODULE := github.com/armada/orbital
 # Server: bare v* tags (e.g. v0.0.17). CLI: cli/v* tags. Orb: orb/v* tags.
 SERVER_VERSION ?= $(shell git describe --tags --exclude 'cli/*' --exclude 'orb/*' --dirty 2>/dev/null || echo "v0.0.0-dev")
 CLI_VERSION    ?= $(shell (git describe --tags --match 'cli/v*' --dirty 2>/dev/null || echo "cli/v0.0.0-dev") | sed 's|^cli/||')
+ORB_VERSION    ?= $(shell (git describe --tags --match 'orb/v*' --dirty 2>/dev/null || echo "orb/v0.0.0-dev") | sed 's|^orb/||')
 
 CLI_LDFLAGS    := -ldflags "-X $(MODULE)/internal/version.Version=$(CLI_VERSION)"
 
@@ -132,6 +133,9 @@ dev-deps: ## Install host-side dev tools (dgraph wrapper for macOS). Re-run afte
 
 push: ## Build and push orbital image to ACR (set version; SERVER_VERSION=v0.0.20). Requires: az acr login --name armadaeksatest
 	docker buildx build --platform linux/amd64 --target=orbital --build-arg VERSION=$(SERVER_VERSION) -t $(IMAGE) --push .
+
+push-orb: ## Build and push orb image to ACR (set version; ORB_VERSION=v0.0.1). Requires: az acr login --name armadaeksatest
+	docker buildx build --platform linux/amd64 --target=orb --build-arg VERSION=$(ORB_VERSION) -t $(ACR)/orb:$(ORB_VERSION) -t $(ACR)/orb:latest --push .
 
 seed-aks: ## Seed AKS dev DGraph + Postgres admin user. CLEAN=1 drops DGraph first.
 	@if [ "$(CLEAN)" = "1" ]; then \

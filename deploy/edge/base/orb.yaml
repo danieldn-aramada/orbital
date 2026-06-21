@@ -1,0 +1,101 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: orb
+spec:
+  selector:
+    app: orb
+  ports:
+    - port: 8010
+      targetPort: 8010
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orb
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: orb
+  template:
+    metadata:
+      labels:
+        app: orb
+    spec:
+      containers:
+        - name: orb
+          image: armadaeksatest.azurecr.io/orb
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8010
+          env:
+            - name: ORB_PORT
+              value: "8010"
+            - name: ORB_DEV
+              value: "false"
+            - name: ORB_DGRAPH_URL
+              value: http://dgraph-alpha:8080/graphql
+            - name: ORB_DGRAPH_ADMIN_URL
+              value: http://dgraph-alpha:8080/admin
+            - name: ORB_DGRAPH_ALPHA_GRPC
+              value: dgraph-alpha:9080
+            - name: ORB_DGRAPH_ZERO_GRPC
+              value: dgraph-zero:5080
+            - name: ORB_OCI_REGISTRY
+              value: zot:5000
+            - name: ORB_OCI_ALLOW_HTTP
+              value: "true"
+            - name: ORB_ENABLE_OCI_REGISTRY
+              value: "true"
+            - name: ORB_OCI_PUBLIC_KEY_PATH
+              value: /etc/orb/cosign.pub
+            - name: ORB_DATA_DIR
+              value: /var/lib/orb
+            # Divergence reports publish to Azure Blob — same storage account
+            # orbital reads from in AKS. Access key is the storage account name
+            # (public); secret key from the s3-credentials Secret.
+            - name: ORB_S3_ENDPOINT
+              value: https://armadagalleonbackups.blob.core.windows.net
+            - name: ORB_S3_BUCKET
+              value: orbital
+            - name: ORB_S3_ACCESS_KEY
+              value: armadagalleonbackups
+            - name: ORB_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: s3-credentials
+                  key: ORB_S3_SECRET_KEY
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          volumeMounts:
+            - name: cosign-pub
+              mountPath: /etc/orb
+              readOnly: true
+            - name: orb-data
+              mountPath: /var/lib/orb
+      volumes:
+        - name: cosign-pub
+          configMap:
+            name: cosign-pub
+        - name: orb-data
+          persistentVolumeClaim:
+            claimName: orb-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: orb-data
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: rook-ceph-block
+  resources:
+    requests:
+      storage: 1Gi

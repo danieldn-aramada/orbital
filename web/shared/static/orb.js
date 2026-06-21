@@ -6,12 +6,16 @@ import {
   initInventoryTable,
   initDatacenterTable,
   initServerListTable,
+  initClusterTable,
   loadDataCenterTab,
   loadServerListTab,
+  loadClusterTab,
   saveTab,
   saveServerTab,
+  saveClusterTab,
   initDatacenterTabRestoration,
   initServerListTabRestoration,
+  initClusterTabRestoration,
   safeDomId,
 } from './shared.js'
 
@@ -197,8 +201,50 @@ document.addEventListener('DOMContentLoaded', () => {
   })
 })
 
+document.addEventListener('DOMContentLoaded', () => {
+  initClusterTable({
+    onRowOpen: (data) => {
+      const orbId = data.orbId
+      const domId = safeDomId(orbId)
+      const displayName = data.name
+      const tab = document.getElementById(`tab-cluster-${domId}`)
+      if (tab) {
+        tab.click()
+      } else {
+        loadClusterTab(displayName, orbId)
+        saveClusterTab(displayName, orbId)
+        document.getElementById(`tab-cluster-${domId}`).click()
+      }
+    },
+  })
+})
+
 window.addEventListener('load', initDatacenterTabRestoration)
 window.addEventListener('load', initServerListTabRestoration)
+window.addEventListener('load', initClusterTabRestoration)
+
+// Cross-cluster navigation. The cluster table's workload child rows
+// (cluster-child-row class) are excluded from the main DataTable dblclick
+// handler in initClusterTable — they're explicitly delegated here. Both the
+// workload-row dblclick and the .js-cluster-link single-click inside an
+// open cluster tab deep-link to /clusters?open=<orbId> so
+// initClusterTabRestoration opens the target's tab on the next page load.
+function navigateToClusterTab(orbId, label) {
+  window.location.href = BASE + '/clusters?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label || orbId)
+}
+
+document.addEventListener('click', (e) => {
+  const link = e.target.closest('.js-cluster-link[data-cluster-orb-id]')
+  if (!link) return
+  e.preventDefault()
+  navigateToClusterTab(link.dataset.clusterOrbId, link.dataset.displayName)
+})
+
+document.addEventListener('dblclick', (e) => {
+  const row = e.target.closest('tr[data-cluster-orb-id]')
+  if (!row) return
+  navigateToClusterTab(row.dataset.clusterOrbId, row.dataset.displayName)
+})
 
 // ─── Orb divergence publish ───────────────────────────────────────────────────
 

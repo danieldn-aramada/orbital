@@ -1,0 +1,135 @@
+# Playbook: Add a new ConfigItem to orbital
+
+Use this when you're adding a new GraphQL type to `schema/schema.graphql` that
+implements the `ConfigItem` interface — i.e., something with an orbId that
+lives in the parent/child relationship graph (e.g. `EtcdBackup`, `IdracSettings`,
+a future `PvBackup`).
+
+**This used to be a 13-place touch-list with silent failure modes.** Today it's
+three steps because everything else is registry-driven.
+
+---
+
+## Step 1 — Declare in the schema
+
+Add the type to `schema/schema.graphql`:
+
+```graphql
+type MyNewKind implements ConfigItem {
+    enabled: Boolean
+    schedule: String
+
+    # Parent back-ref. Match @hasInverse cardinality to operational reality
+    # (singular T if 1:1, list [T] if 1:N — see docs/reference/DGRAPH.md).
+    clusterBackupMyNewKind: ClusterBackup @hasInverse(field: myNewKind)
+}
+```
+
+**Cardinality gotcha:** wrong `@hasInverse` cardinality silently corrupts data
+on the inverse side. If multiple parents can share this child, use `[T]`. See
+`docs/reference/DGRAPH.md` "reverse-pointer pattern".
+
+Bump `schema/VERSION` if this is a v→v+1 deployment-time schema change.
+
+---
+
+## Step 2 — Register in the registry
+
+Add one entry to `internal/configitems/registry.go::Types`:
+
+```go
+{
+    Name:         "MyNewKind",
+    OwnerType:    "ClusterBackup",          // parent type
+    OwnerField:   "clusterBackupMyNewKind", // @hasInverse field on this type
+    ChildField:   "myNewKind",              // field on the parent that points here
+    BeforeFields: "id orbId name version enabled schedule",
+    FormFields:   []string{"enabled", "schedule"},  // editor-exposed scalars
+    PayloadField: "myNewKind",              // response selection for add{Kind}
+},
+```
+
+**What this auto-wires:**
+
+- `knownMutationRe` (audit allowlist) — `add/update/delete MyNewKind` now records audit events
+- `typeBeforeFields` / `BeforeFields("MyNewKind")` — audit before-fetcher knows what to select
+- `BuildEditTargets(...)` — page handlers' edit modal includes this kind in its JSON editor + dispatches `update{Kind}` on edit / `add{Kind}` on first-time create
+- `configitem-editor.js` (the JS module) — consumes the registry-derived targets blob from any page that exports it; no JS edits needed
+
+Pin behavior with `internal/configitems/registry_test.go` — the parity test
+catches drift between the registry and what consumers see.
+
+---
+
+## Step 3 — Extend the parent handler's GraphQL query
+
+The page handler that renders the parent (e.g. `internal/handler/cluster.go`)
+needs to fetch the new child's fields so the JSON editor displays them. Add
+the new fields to the cluster's GraphQL `getCluster` query and to the
+response struct.
+
+This is the **only handler-side change required**. Everything downstream —
+audit pipeline, edit-target JSON, JS submit handler, diff rendering — picks
+it up automatically from the registry.
+
+If the new type is **a new owned child of an existing parent** (e.g. another
+sub-kind of ClusterBackup), the parent's `collect*RelatedOrbIDs` walker also
+needs to include the new child's orbId (so audit aggregation surfaces its
+events on the parent's Audit Log tab). This is currently still hand-written;
+the registry's `Children()` could drive it in a future refactor.
+
+---
+
+## What you do NOT need to touch (and shouldn't)
+
+These all derive from the registry — modifying them by hand will drift from
+the registry and produce silent bugs:
+
+- `knownMutationRe` — derived from `Types[].Name`
+- `typeBeforeFields` — derived from `Types[].BeforeFields`
+- `configitem-editor.js` mutation shapes — driven by the targets blob
+- Audit diff rendering — generic, no per-type code
+
+If your new type needs behavior the registry doesn't model today (e.g. a new
+relationship cardinality, a wrapper type pattern, computed fields), extend
+the registry struct + add the derivation logic in `registry.go`. **Don't
+fork off a parallel hand-maintained map** — that's the bug class this whole
+refactor exists to prevent.
+
+---
+
+## Validating end-to-end
+
+After the three steps:
+
+```bash
+go test ./internal/configitems/   # registry parity test catches the most common misses
+go build ./...
+make run-orbital                  # browser-test the edit modal
+```
+
+In the browser:
+
+1. Open the parent page, click Edit
+2. The new kind appears as a key in the JSON editor (under its `ChildField` path)
+3. Edit a field, save
+4. Audit Log tab shows `update<MyNewKind>` row with green/red field diff
+5. Delete the JSON key, save → `add<MyNewKind>` row on next configure (first-time create flow)
+
+If the audit row is **missing** → check `knownMutationRe` is picking it up
+(usually a registry typo).
+If the audit row appears but **shows no diff** → check `BeforeFields` includes
+the editable fields (the diff renderer needs both sides).
+If the new kind **doesn't appear in the editor** → check the parent handler's
+GraphQL query fetches the new fields, and that `BuildEditTargets` sees the
+new type as a child of the parent.
+
+---
+
+## Reference reading
+
+- `docs/reference/UI.md` — Edit pattern, JSON editor convention
+- `docs/reference/AUDIT.md` — audit pipeline architecture
+- `docs/reference/DGRAPH.md` — schema conventions, @hasInverse cardinality
+- `internal/configitems/registry.go` — the registry itself, with comments on each field
+- `web/shared/static/configitem-editor.js` — generic JS submit handler

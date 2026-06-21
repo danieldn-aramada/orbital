@@ -184,3 +184,36 @@ func TestDispatcher_LayerOrderingDeterministic(t *testing.T) {
 		t.Errorf("expected manifest first; got %q first", seen[0])
 	}
 }
+
+// 409 retry: cb-controller returns 409 on the mapping layer while the
+// manifest's ConfigBundle CR hasn't propagated to its informer yet. The
+// dispatcher must retry with exponential backoff and surface success once
+// the CR settles. Without this retry the user-visible flake is "import
+// failed with 409 first time, worked second time" — the bug class this
+// test pins. Pre-fix the budget was 4×500ms (~1.5s); current budget is
+// 5 attempts with exponential backoff capped at 2s → ~5.5s total.
+func TestDispatcher_RetriesOn409(t *testing.T) {
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts < 3 {
+			w.WriteHeader(http.StatusConflict)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	d := orb.NewDispatcher([]orbconfig.ConsumerConfig{{Name: "cb", URL: srv.URL}})
+	results := d.Dispatch(context.Background(), map[string][]byte{cbManifestMediaType: []byte("x")}, "v1", "", "")
+
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].StatusCode != http.StatusOK {
+		t.Errorf("expected final 200 after 409 retries, got %d (error: %s)", results[0].StatusCode, results[0].Error)
+	}
+	if attempts < 3 {
+		t.Errorf("expected at least 3 attempts (2 409s + 1 200), got %d", attempts)
+	}
+}

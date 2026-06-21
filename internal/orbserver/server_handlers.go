@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/web/data/layout"
 	orbtemplates "github.com/armada/orbital/web/templates/orb"
 	"github.com/labstack/echo/v4"
@@ -21,7 +22,7 @@ const queryServerByIDFmt = `
       createdAt updatedAt
       namespace
       rack { name }
-      dataCenter { id name }
+      dataCenter { id orbId name }
       oobIP { address }
       idracSettings {
         firmwareVersion sshEnabled ipmiEnabled lockdownModeEnabled
@@ -52,8 +53,9 @@ type orbServerQueryResponse struct {
 		Name string `json:"name"`
 	} `json:"rack"`
 	DataCenter struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
+		ID    string `json:"id"`
+		OrbID string `json:"orbId"`
+		Name  string `json:"name"`
 	} `json:"dataCenter"`
 	OobIP struct {
 		Address string `json:"address"`
@@ -107,9 +109,12 @@ type orbStorageControllerData struct {
 }
 
 // orbSrvTabData is the data model for the orb server-tab fragment.
+// DomID / DataCenterDomID are required by the shared server-tab template;
+// absence aborts render at the first {{.DomID}} reference.
 type orbSrvTabData struct {
 	ID                 string
 	OrbID              string
+	DomID              string
 	Hostname           string
 	Model              string
 	Manufacturer       string
@@ -124,6 +129,8 @@ type orbSrvTabData struct {
 	Namespace          string
 	Rack               struct{ Name string }
 	DataCenterID       string
+	DataCenterOrbID    string
+	DataCenterDomID    string
 	DataCenterName     string
 	ShowDCBack         bool
 	IdracSettings      *orbIdracData
@@ -158,24 +165,27 @@ func (s *Server) srvTab(c echo.Context) error {
 		if err := json.Unmarshal(raw, &result); err == nil {
 			r := result.Data.GetServer
 			srv = orbSrvTabData{
-				ID:             r.ID,
-				OrbID:          r.OrbID,
-				Hostname:       r.Hostname,
-				Model:          r.Model,
-				Manufacturer:   r.Manufacturer,
-				ServiceTag:     r.ServiceTag,
-				RackPosition:   r.RackPosition,
-				OobIP:          r.OobIP.Address,
-				OobMAC:         r.OobMAC,
-				CreatedAt:      r.CreatedAt,
-				UpdatedAt:      r.UpdatedAt,
-				Namespace:    r.Namespace,
-				Rack:           struct{ Name string }{Name: r.Rack.Name},
-				DataCenterID:   r.DataCenter.ID,
-				DataCenterName: r.DataCenter.Name,
-				ShowDCBack:     dcCtx,
-				BasePath:       "",
-				Actions:        layout.OrbActions,
+				ID:              r.ID,
+				OrbID:           r.OrbID,
+				DomID:           handler.SafeDomID(r.OrbID),
+				Hostname:        r.Hostname,
+				Model:           r.Model,
+				Manufacturer:    r.Manufacturer,
+				ServiceTag:      r.ServiceTag,
+				RackPosition:    r.RackPosition,
+				OobIP:           r.OobIP.Address,
+				OobMAC:          r.OobMAC,
+				CreatedAt:       r.CreatedAt,
+				UpdatedAt:       r.UpdatedAt,
+				Namespace:       r.Namespace,
+				Rack:            struct{ Name string }{Name: r.Rack.Name},
+				DataCenterID:    r.DataCenter.ID,
+				DataCenterOrbID: r.DataCenter.OrbID,
+				DataCenterDomID: handler.SafeDomID(r.DataCenter.OrbID),
+				DataCenterName:  r.DataCenter.Name,
+				ShowDCBack:      dcCtx,
+				BasePath:        "",
+				Actions:         layout.OrbActions,
 			}
 			if r.IdracSettings != nil {
 				srv.IdracSettings = &orbIdracData{

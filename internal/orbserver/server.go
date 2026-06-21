@@ -16,6 +16,7 @@ import (
 	orbmw "github.com/armada/orbital/internal/middleware"
 	"github.com/armada/orbital/internal/orb"
 	"github.com/armada/orbital/internal/orbconfig"
+	"github.com/armada/orbital/internal/web/data/layout"
 	orbweb "github.com/armada/orbital/web"
 	orbtemplates "github.com/armada/orbital/web/templates/orb"
 	"github.com/labstack/echo/v4"
@@ -153,9 +154,16 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	e.GET("/inventory", s.inventoryPage)
 	e.GET("/schema", s.schemaPage)
 	e.GET("/datacenter", s.dcPage)
-	e.GET("/datacenters/:id", s.dcTab)
+	e.GET("/datacenters/:orbId", s.dcTab)
 	e.GET("/servers", s.serversPage)
-	e.GET("/servers/:id", s.srvTab)
+	e.GET("/servers/:orbId", s.srvTab)
+	e.GET("/clusters", s.clustersPage)
+	// Reuse orbital's ClusterHandler — the same DGraph query + render path,
+	// with orb-specific PageActions injected (read-only, no audit tab). This
+	// is the model for collapsing the rest of the DC/Server parallel impls.
+	cluster := handler.NewClusterHandler(cfg.DGraphURL, cfg.Dev, logger, "",
+		func(echo.Context) layout.PageActions { return layout.OrbActions })
+	e.GET("/clusters/:orbId", cluster.Tab)
 	e.GET("/divergence", s.divergencePage)
 	e.GET("/import-history", s.importHistoryPage)
 

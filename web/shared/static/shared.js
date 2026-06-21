@@ -1204,8 +1204,6 @@ export function initDatacenterTable(opts = {}) {
       topStart: [
         { pageLength: { menu: [5, 10, 25, 50] } },
         { buttons: [
-          { extend: 'excel', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-excel"></i><span>Excel</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Excel' },
-          { extend: 'csv', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-text"></i><span>CSV</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV' },
           { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
           { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
           { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-datacenters' } },
@@ -1300,14 +1298,12 @@ export function initServerListTable(opts = {}) {
     layout: {
       topStart: [
         dcFilterEl,
+        { pageLength: { menu: [25, 50, 100, 250] } },
         { buttons: [
-          { extend: 'excel', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-excel"></i><span>Excel</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Excel' },
-          { extend: 'csv', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-file-text"></i><span>CSV</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'CSV' },
           { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
           { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
           { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-servers' } },
         ] },
-        { pageLength: { menu: [25, 50, 100, 250] } },
       ],
       topEnd: { search: { placeholder: 'Search servers' } },
     },
@@ -1463,7 +1459,7 @@ export function initClusterTable(opts = {}) {
     <tr class="cluster-child-row" data-cluster-orb-id="${escapeHtml(c.orbId)}" data-display-name="${escapeHtml(c.name)}" style="cursor:pointer; background:#fafafa" title="Double-click to open">
       <td></td>
       <td><span class="has-text-grey mr-1">└</span>${escapeHtml(c.name)}</td>
-      <td></td>
+      <td>${escapeHtml(c.dataCenter)}</td>
       <td>${escapeHtml(c.provider)}</td>
       <td>${escapeHtml(c.clusterType)}</td>
       <td>${escapeHtml(c.kubernetesVersion)}</td>
@@ -1811,11 +1807,18 @@ export function initClusterDetailTabs(domId) {
   function loadAuditPanel() {
     const tab = [...tabs].find(t => t.dataset.panel === auditPanelId)
     if (!tab) return
-    const orbId = tab.dataset.orbId
-    if (!orbId) return
+    // Templates can embed the full subgraph orbId list in data-related-orb-ids
+    // so the audit panel pulls events for the cluster AND its nested ConfigItems
+    // (nodes, backup wrapper, etcd/velero/s3sync) in one call. Falls back to
+    // data-orb-id when the related list is missing. Matches the DC + Server
+    // audit-tab pattern.
+    const related = (tab.dataset.relatedOrbIds || tab.dataset.orbId || '')
+      .split(',').map(s => s.trim()).filter(Boolean)
+    if (related.length === 0) return
     const panel = document.getElementById(auditPanelId)
     if (!panel) return
-    fetch(BASE + '/api/v1/audit-log?orbId=' + encodeURIComponent(orbId) + '&limit=50', {
+    const qs = related.map(id => `orbId=${encodeURIComponent(id)}`).join('&')
+    fetch(BASE + `/api/v1/audit-log?${qs}&limit=50`, {
       headers: { 'HX-Request': 'true' },
     })
       .then(r => r.text())

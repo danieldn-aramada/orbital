@@ -3,6 +3,21 @@
 # Servers referenced here must already be in colo-galleon.graphql.
 
 mutation SeedClusters {
+  # 0. Reset backup tree for clusters that declare one inline below.
+  #
+  # DGraph's `add{Type} upsert:true` only INSERTS new entities; it does not
+  # overwrite scalar fields on existing entities referenced by orbId. So when
+  # a seed file changes (e.g. updating a backup schedule), re-running `make
+  # seed` would leave the OLD values in place — the upsert no-ops on existing
+  # orbIds. Deleting the backup sub-tree before re-add makes the seed truly
+  # idempotent. Targeted only at backup entities (small blast radius); other
+  # ConfigItems remain upsert-only because they may legitimately diverge
+  # from seed via operator edits in dev environments.
+  deleteEtcdBackup(filter: {orbId: {in: ["colo:dev-main-etcd-backup"]}}) { numUids }
+  deleteVeleroBackup(filter: {orbId: {in: ["colo:dev-main-velero-backup"]}}) { numUids }
+  deleteS3Sync(filter: {orbId: {in: ["colo:dev-main-s3sync"]}}) { numUids }
+  deleteClusterBackup(filter: {orbId: {in: ["colo:dev-main-backup"]}}) { numUids }
+
   # 1. IPAddress nodes — control-plane, tinkerbell, and k8s-node IPs.
   addIPAddress(input: [
     { orbId: "colo:10.20.22.105" type: "ipv4" address: "10.20.22.105" role: "k8s_node" namespace: "colo" version: 1 createdBy: "admin@armada.ai" createdAt: "2026-06-18T00:00:00Z" },
@@ -158,6 +173,12 @@ mutation SeedClusters {
     },
     {
       orbId: "colo:dev-main", name: "dev-main", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "workload", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, kubernetesVersion: "v1.33.7", controlPlaneEndpoint: { orbId: "colo:10.20.22.208" version: 1 }, description: "Dev galleon actively used by multiple teams", managementCluster: { orbId: "colo:elos-m" version: 1 },
+      backup: {
+        orbId: "colo:dev-main-backup", name: "dev-main-backup", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z",
+        etcd:   { orbId: "colo:dev-main-etcd-backup",   name: "dev-main-etcd-backup",   namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", enabled: true,  schedule: "0 0 * * *",  location: "https://stgalbackupsdevccwus01.blob.core.windows.net/etcd-backups/colo/dev-main" },
+        velero: { orbId: "colo:dev-main-velero-backup", name: "dev-main-velero-backup", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", enabled: true,  schedule: "0 13 * * *", location: "https://stgalbackupsdevccwus01.blob.core.windows.net/velero/colo/dev-main/scheduled/all-namespaces-v2" },
+        s3Sync: { orbId: "colo:dev-main-s3sync",        name: "dev-main-s3sync",        namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", enabled: false }
+      },
       nodes: [
           { orbId: "colo:dev-main-wk9-6", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "dev-main-wk9-6", ipv4: { orbId: "colo:10.20.22.229" version: 1 }, gpu: false, owner: "EDGE Platform", role: "worker", notes: "Dev galleon actively used by multiple teams", server: { orbId: "colo:CFRHDX3" version: 1 } },
           { orbId: "colo:dev-main-cp9-7", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "dev-main-cp9-7", ipv4: { orbId: "colo:10.20.22.224" version: 1 }, gpu: false, owner: "EDGE Platform", role: "control_plane", server: { orbId: "colo:3V5Y2Z3" version: 1 } },

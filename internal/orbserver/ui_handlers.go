@@ -3,11 +3,9 @@ package orbserver
 import (
 	"encoding/json"
 	"html/template"
-	"os"
-	"path/filepath"
 	"time"
 
-	"github.com/armada/orbital/internal/orb"
+	"github.com/armada/orbital/internal/dgraphschema"
 	appversion "github.com/armada/orbital/internal/version"
 	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/labstack/echo/v4"
@@ -18,6 +16,7 @@ type statusPageData struct {
 	PageTitle        string
 	HasData          bool   // true after a successful import — DC identity is known
 	DCName           string // name of the imported data center, derived from DGraph
+	OCIEnabled       bool   // ORB_ENABLE_OCI_REGISTRY — gates pull-mode messaging on empty state
 	OCIRegistry      string
 	OCIRepo          string
 	CurrentVersion   string
@@ -30,8 +29,10 @@ const queryActiveDC = `{ queryDataCenter { name } }`
 
 type importPageData struct {
 	layout.Base
-	PageTitle  string
-	OCIEnabled bool
+	PageTitle   string
+	OCIEnabled  bool
+	OCIRegistry string // host of the registry orb polls (e.g. "zot.local:5000")
+	OCIRepo     string // repo path orb polls (e.g. "orbital/colo-galleon")
 }
 
 type inventoryPageData struct {
@@ -82,6 +83,7 @@ func (s *Server) buildOrbMenuSections(path string) []layout.MenuSection {
 				{Label: "Inventory", Href: "/inventory", Active: path == "/inventory"},
 				{Label: "Data Center", Href: "/datacenter", Active: path == "/datacenter"},
 				{Label: "Servers", Href: "/servers", Active: path == "/servers"},
+				{Label: "Clusters", Href: "/clusters", Active: path == "/clusters"},
 				{Label: "Schema Version", Href: "/schema", Active: path == "/schema"},
 			},
 		},
@@ -146,6 +148,7 @@ func (s *Server) statusPage(c echo.Context) error {
 	data := statusPageData{
 		Base:             b,
 		PageTitle:        "Status",
+		OCIEnabled:       s.cfg.EnableOCIRegistry,
 		OCIRegistry:      s.cfg.OCIRegistry,
 		OCIRepo:          s.cfg.OCIRepo,
 		CurrentVersion:   snap.CurrentVersion,
@@ -175,9 +178,11 @@ func (s *Server) statusPage(c echo.Context) error {
 
 func (s *Server) importPage(c echo.Context) error {
 	return s.render(c, "import", importPageData{
-		Base:       s.orbBase(c),
-		PageTitle:  "Import Subgraph",
-		OCIEnabled: s.cfg.EnableOCIRegistry,
+		Base:        s.orbBase(c),
+		PageTitle:   "Import Subgraph",
+		OCIEnabled:  s.cfg.EnableOCIRegistry,
+		OCIRegistry: s.cfg.OCIRegistry,
+		OCIRepo:     s.cfg.OCIRepo,
 	})
 }
 
@@ -188,12 +193,25 @@ func (s *Server) inventoryPage(c echo.Context) error {
 	})
 }
 
+type clustersPageData struct {
+	layout.Base
+	PageTitle string
+}
+
+func (s *Server) clustersPage(c echo.Context) error {
+	return s.render(c, "clusters", clustersPageData{
+		Base:      s.orbBase(c),
+		PageTitle: "Clusters",
+	})
+}
+
+// schemaPage queries orb's local DGraph for the active GraphQL schema and
+// renders it. Single source of truth — if DGraph was wiped, the page
+// correctly shows "no schema" instead of a stale sidecar copy.
 func (s *Server) schemaPage(c echo.Context) error {
-	schemaPath := filepath.Join(s.cfg.DataDir, orb.SchemaFile)
-	sdl := ""
-	if data, err := os.ReadFile(schemaPath); err == nil {
-		sdl = string(data)
-	}
+	sdl, _ := dgraphschema.Active(c.Request().Context(), s.cfg.DGraphAdminURL)
+	// Errors are non-fatal — empty SDL renders as the "Awaiting import" state,
+	// which is the right UX whether DGraph is unreachable or simply empty.
 	return s.render(c, "schema", schemaPageData{
 		Base:      s.orbBase(c),
 		PageTitle: "Schema",

@@ -15,12 +15,14 @@ import (
 
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/user"
+	"github.com/armada/orbital/internal/configitems"
 	"github.com/labstack/echo/v4"
 )
 
-// knownMutationRe matches any DGraph mutation call on a known ConfigItem type.
-// Catches addX, updateX, deleteX for all registered types regardless of operation name.
-var knownMutationRe = regexp.MustCompile(`(?i)\b(add|update|delete)(DataCenter|Server|IdracSettings|KubernetesCluster|EksaKubernetesCluster|KubernetesNode|IPAddress|Rack)\b`)
+// knownMutationRe matches any DGraph mutation call on a registered ConfigItem
+// type. Derived from `internal/configitems.Types` — adding a type to that
+// registry is the single source of truth; this regex updates automatically.
+var knownMutationRe = configitems.KnownMutationsRegex()
 
 // orbIdFilterRe extracts orbId values from inline GraphQL filter expressions:
 // e.g. filter: { orbId: { eq: "alaska-dot:GRTLY24" } }
@@ -30,32 +32,20 @@ var mutationOpRe = regexp.MustCompile(`(?i)^\s*mutation\s+(\w+)`)
 var queryOpRe = regexp.MustCompile(`(?i)^\s*query\s+(\w+)`)
 
 // beforeFetchOverrides maps an operation name to the resource type whose
-// `before` snapshot should be fetched. ONLY needed for compound or nested
-// mutations where the body's resource type is not the one we want to diff
-// against — e.g. iDRAC-only edits call addIdracSettings but the diff source
-// is the parent Server (idracSettings is nested in the Server snapshot).
+// `before` snapshot should be fetched. The default path derives the resource
+// type from the mutation body via extractOperations; this map is for the rare
+// case where the operation name implies a different resource than the body
+// alone would suggest.
 //
-// The default path (no override) derives the resource type from the mutation
-// body via extractOperations and fetches when variables carry `id` or `orbId`.
-// New simple `update{Type}($id, $set)` flows therefore audit with no edits
-// here — the override map shrinks to the entries that are genuine exceptions.
-var beforeFetchOverrides = map[string]string{
-	"UpdateServerAndIdrac": "Server", // body touches Server + IdracSettings; diff source is Server (idrac nested in snapshot).
-	"UpdateIdracSettings":  "Server", // body touches only IdracSettings; idrac variables carry no fetchable orbId — fetch parent Server, event.go's nested-idrac block consumes it.
-}
-
-// typeBeforeFields lists the DGraph fields to fetch in before-snapshots per type.
-var typeBeforeFields = map[string]string{
-	"DataCenter":        "id orbId name version assetDataV2",
-	"Server":            "id orbId name version hostname model manufacturer serviceTag rackPosition oobMAC idracSettings { firmwareVersion sshEnabled ipmiEnabled lockdownModeEnabled osToIdracPassThroughEnabled usbManagementPortEnabled dhcpEnabled racadmEnabled }",
-	// KubernetesCluster is the interface; this entry covers interface-level
-	// mutations (updateKubernetesCluster / deleteKubernetesCluster) which only
-	// reach universal fields. Concrete-type mutations (e.g.
-	// updateEksaKubernetesCluster) use their own entry below.
-	"KubernetesCluster":     "id orbId name version kubernetesVersion cni environment",
-	"EksaKubernetesCluster": "id orbId name version kubernetesVersion cni environment clusterType",
-	"KubernetesNode":        "id orbId name version role",
-}
+// Currently empty: every UI mutation now dispatches canonical
+// `update{Kind}($orbId, $set)` via configitem-editor.js, so extractOperations
+// finds the right type in the body. The legacy UpdateServerAndIdrac compound
+// mutation that required override entries is gone (Server edit now dispatches
+// parallel updateServer + updateIdracSettings).
+//
+// Keep this var as a hook; future compound mutations can register here without
+// reshaping the audit pipeline.
+var beforeFetchOverrides = map[string]string{}
 
 type GraphQL struct {
 	dgraphURL string
@@ -342,7 +332,7 @@ func (h *GraphQL) proxyRaw(c echo.Context, body []byte) error {
 }
 
 func (h *GraphQL) fetchBeforeByID(getter, resourceType, id string) (map[string]any, error) {
-	fields := typeBeforeFields[resourceType]
+	fields := configitems.BeforeFields(resourceType)
 	if fields == "" {
 		fields = "id orbId name version"
 	}
@@ -355,7 +345,7 @@ func (h *GraphQL) fetchBeforeByID(getter, resourceType, id string) (map[string]a
 }
 
 func (h *GraphQL) fetchBeforeByOrbID(querier, resourceType, orbID string) (map[string]any, error) {
-	fields := typeBeforeFields[resourceType]
+	fields := configitems.BeforeFields(resourceType)
 	if fields == "" {
 		fields = "id orbId name version"
 	}

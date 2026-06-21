@@ -1,5 +1,7 @@
 # SDD + Architectural Proposal + SSA Notes — Consolidated Context
 
+Read this before: questions about original design intent ("what does the SDD say about X?"), invariants that constrain new spikes, or SSA semantics. Grep this doc for the keyword rather than reading top-to-bottom — it's a reference lookup, not a doc to read sequentially.
+
 > **Purpose:** Single technical-context reference for `orbital`/`orb` work. Consolidates content from three foundational documents so future sessions can grep-and-read instead of re-extracting `.docx`/`.pdf` files.
 >
 > **Sources:**

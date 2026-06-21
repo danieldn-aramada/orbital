@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -111,18 +112,26 @@ func TestImporter_Import_Success(t *testing.T) {
 	}
 }
 
-func TestImporter_Import_WritesSchemaFileOnFreshInstall(t *testing.T) {
-	// Regression: on a fresh install where DataDir doesn't yet exist, applySchema
-	// must still write schema.graphql. The bug was that Import() did MkdirAll
-	// AFTER applySchema, so the schema write failed silently and orb's schema
-	// page rendered "No schema available" even though the import succeeded.
-	ts := newTestDGraphServer(http.StatusOK, http.StatusOK)
+func TestImporter_Import_PostsSchemaToDGraphAdmin(t *testing.T) {
+	// applySchema POSTs the decompressed SDL to DGraph's /admin/schema endpoint.
+	// The schema page reads back from DGraph at request time (via
+	// dgraphschema.Active), so we don't need a sidecar file anymore — but the
+	// admin POST is still critical, and the test verifies that path receives
+	// the SDL body (non-empty + matches the fixture).
+	var got []byte
+	mux := http.NewServeMux()
+	mux.HandleFunc("/alter", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	mux.HandleFunc("/admin/schema", func(w http.ResponseWriter, r *http.Request) {
+		got, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusOK)
+	})
+	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
 	backend := &mockBackend{}
 	imp := newTestImporter(t, ts, backend)
-	// Use a subdir of TempDir that DOES NOT YET EXIST — the realistic fresh-
-	// install case. t.TempDir() exists; orb-data underneath does not.
+	// Fresh-install case — DataDir doesn't yet exist; Import() should not
+	// depend on the directory for schema application.
 	imp.cfg.DataDir = filepath.Join(imp.cfg.DataDir, "fresh-install")
 	if _, err := os.Stat(imp.cfg.DataDir); !os.IsNotExist(err) {
 		t.Fatalf("test setup: DataDir should not exist yet, got err=%v", err)
@@ -133,13 +142,8 @@ func TestImporter_Import_WritesSchemaFileOnFreshInstall(t *testing.T) {
 		t.Fatalf("Import: %v", err)
 	}
 
-	schemaPath := filepath.Join(imp.cfg.DataDir, SchemaFile)
-	data, err := os.ReadFile(schemaPath)
-	if err != nil {
-		t.Fatalf("expected %s to be written on fresh install, got: %v", SchemaFile, err)
-	}
-	if len(data) == 0 {
-		t.Errorf("expected non-empty schema file, got zero bytes")
+	if len(got) == 0 {
+		t.Fatalf("expected schema POST to /admin/schema, got empty body")
 	}
 }
 

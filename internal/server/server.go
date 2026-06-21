@@ -23,6 +23,7 @@ import (
 	"github.com/armada/orbital/internal/oci"
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	appversion "github.com/armada/orbital/internal/version"
+	"github.com/armada/orbital/internal/web/data/layout"
 	webtemplates "github.com/armada/orbital/web/templates/orbital"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -149,6 +150,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	ui.SetSchemaPath(cfg.SchemaPath)
 	ui.SetRestoreAvailable(true)
 	ui.SetDGraphURL(cfg.DGraphURL)
+	ui.SetDGraphAdminURL(cfg.DGraphAdminURL)
 	ui.SetBackupCronSpec(cfg.BackupSchedule)
 	root.Static("/static", "web/shared/static")
 	if cfg.BasePath != "" {
@@ -204,7 +206,11 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	srv := handler.NewServerHandler(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath)
 	root.GET("/servers/:orbId", srv.Tab)
 
-	cluster := handler.NewClusterHandler(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath)
+	cluster := handler.NewClusterHandler(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath,
+		func(c echo.Context) layout.PageActions {
+			canMutate, _ := c.Get("can_mutate").(bool)
+			return layout.OrbitalActions(canMutate)
+		})
 	root.GET("/clusters/:orbId", cluster.Tab)
 
 	delH := handler.NewDeleteHandler(cfg.DGraphURL, db, logger)

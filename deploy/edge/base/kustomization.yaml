@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - dgraph.yaml
+  - zot.yaml
+  - orb.yaml
+
+configMapGenerator:
+  - name: cosign-pub
+    files:
+      - cosign.pub
+    options:
+      disableNameSuffixHash: true

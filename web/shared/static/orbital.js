@@ -1,5 +1,10 @@
 // orbital.js — orbital-specific page logic
 
+// configitem-editor.js: generic edit-modal submit handler. Imported for side
+// effect (registers window.initConfigItemEditor) so any page's modal shim
+// can call it without re-importing.
+import './configitem-editor.js'
+
 import {
   BASE,
   TabItem,
@@ -16,6 +21,7 @@ import {
   fetchWithMinDelay,
   initDcDetailTabs,
   initServerDetailTabs,
+  initClusterDetailTabs,
   dtWrapLengthSelect,
   openServerTab,
   initServerEventsTable,
@@ -548,77 +554,39 @@ document.addEventListener('click', function (e) {
       const showError = (msg) => { errorEl.textContent = msg; errorEl.style.display = '' }
       const clearError = () => { errorEl.textContent = ''; errorEl.style.display = 'none' }
 
+      // configitem-editor module handles snapshot/diff/dispatch. DC is the
+      // simplest case (no owned children today) but routing through the
+      // module keeps the pattern uniform across pages.
+      const targetsEl = document.getElementById('dc-edit-targets-' + id)
+      const targets = JSON.parse(targetsEl ? targetsEl.textContent.trim() : '[]')
+      const onSubmit = window.initConfigItemEditor({
+        modal,
+        editor,
+        initialState: JSON.parse(initialJSON),
+        targets,
+        reloadOrbId: modal.dataset.orbId,
+        reloadFn: (orbId) => {
+          const target = document.getElementById('tab-content-' + safeDomId(orbId))
+          if (target && window.htmx) {
+            window.htmx.ajax('GET', BASE + '/datacenters/' + encodeURIComponent(orbId), { target, swap: 'innerHTML' })
+            dcEditors.delete(id)
+          }
+          return Promise.resolve()
+        },
+        showError,
+        clearError,
+      })
+
       document.getElementById('dc-edit-submit-' + id).addEventListener('click', async () => {
         const btn = document.getElementById('dc-edit-submit-' + id)
-        clearError()
         btn.classList.add('is-loading')
         btn.disabled = true
         try {
-          let vars
-          try { vars = JSON.parse(editor.get().text) } catch (_) {
-            showError('Invalid JSON — fix the syntax and try again.')
-            return
+          const ok = await onSubmit()
+          if (ok) {
+            modal.classList.remove('is-active')
+            document.documentElement.style.overflow = ''
           }
-          if (vars.assetDataV2 !== undefined && vars.assetDataV2 !== null && typeof vars.assetDataV2 !== 'string') {
-            vars.assetDataV2 = JSON.stringify(vars.assetDataV2)
-          }
-          const currentVersion = parseInt(modal.dataset.version, 10) || 0
-          const resp = await fetch(BASE + '/graphql', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              query: `mutation UpdateDataCenter(
-                $orbId: String!, $name: String!, $assetDataV2: String,
-                $version: Int, $updatedBy: String!, $updatedAt: DateTime!
-              ) {
-                updateDataCenter(input: {
-                  filter: { orbId: { eq: $orbId } }
-                  set: { name: $name, assetDataV2: $assetDataV2, version: $version, updatedBy: $updatedBy, updatedAt: $updatedAt }
-                }) {
-                  dataCenter { orbId name }
-                }
-              }`,
-              variables: {
-                ...vars,
-                orbId: modal.dataset.orbId || '',
-                ifVersion: currentVersion,
-                version: currentVersion + 1,
-                updatedBy: modal.dataset.currentUser || '',
-                updatedAt: new Date().toISOString(),
-              },
-            }),
-          })
-          if (!resp.ok) {
-            if (resp.status === 409) {
-              const body = await resp.json().catch(() => ({}))
-              showError(body.error || 'Conflict — please reload and try again.')
-            } else {
-              showError(`Server error (${resp.status}) — try again.`)
-            }
-            return
-          }
-          const result = await resp.json()
-          const errMsg = window.gqlErrorMessage(result)
-          if (errMsg) { showError(errMsg); return }
-          modal.classList.remove('is-active')
-          document.documentElement.style.overflow = ''
-          dcEditors.delete(id)
-          const orbId = modal.dataset.orbId || ''
-          const _tabContent = document.getElementById('tab-content-' + id)
-          if (_tabContent) {
-            fetch(BASE + '/datacenters/' + encodeURIComponent(orbId), { headers: { 'HX-Request': 'true' } })
-              .then(r => r.text())
-              .then(html => {
-                _tabContent.innerHTML = html
-                htmx.process(_tabContent)
-                renderTimestamps(_tabContent)
-                initDcDetailTabs(id)
-                initServerDetailTabs(_tabContent)
-              })
-              .catch(() => {})
-          }
-        } catch (err) {
-          showError('Request failed — check your connection and try again.')
         } finally {
           btn.classList.remove('is-loading')
           btn.disabled = false
@@ -649,6 +617,37 @@ document.addEventListener('click', function (e) {
 const clusterEditors = new Map()
 window.clusterEditors = clusterEditors
 
+// reloadClusterFragment is the single entry point for re-rendering a cluster
+// detail tab's content. Every caller that wants the cluster fragment refreshed
+// (Reload button, modal-save success, backup save, backup delete) routes
+// through here so the post-swap setup stays consistent:
+//   1. fetch HX fragment for the cluster orbId
+//   2. swap into tab-content-cluster-<domId>
+//   3. htmx.process so any hx-* attrs on new DOM rebind
+//   4. renderTimestamps for any timestamp spans
+//   5. initClusterDetailTabs to rebind sub-tab click handlers
+//   6. clusterEditors.delete(domId) — the JSONEditor instance was attached to
+//      the now-removed DOM node; the next Edit click must rebuild fresh.
+// Forgetting any of (3-6) silently breaks an interaction (audit tab clicks dead,
+// timestamps frozen, Edit modal opens empty). Centralizing makes the contract
+// uniform across callers.
+export function reloadClusterFragment(orbId) {
+  const domId = safeDomId(orbId)
+  const target = document.getElementById('tab-content-cluster-' + domId)
+  if (!target) return Promise.resolve()
+  return fetch(BASE + '/clusters/' + encodeURIComponent(orbId), { headers: { 'HX-Request': 'true' } })
+    .then(r => r.text())
+    .then(html => {
+      target.innerHTML = html
+      htmx.process(target)
+      renderTimestamps(target)
+      initClusterDetailTabs(domId)
+      clusterEditors.delete(domId)
+    })
+    .catch(() => {})
+}
+window.reloadClusterFragment = reloadClusterFragment
+
 document.addEventListener('click', function (e) {
   const editBtn = e.target.closest('[data-cluster-edit-id]')
   if (editBtn) {
@@ -657,92 +656,50 @@ document.addEventListener('click', function (e) {
     if (!modal) return
 
     if (!clusterEditors.has(id)) {
+      // Initialize the JSON editor once per modal open. The configitem-editor.js
+      // module handles snapshot/diff/dispatch — this shim just builds the
+      // editor and wires the Save button to the module's submit handler.
       const dataEl = document.getElementById('cluster-edit-data-' + id)
-      const initialJSON = dataEl ? dataEl.textContent.trim() : '{}'
+      const targetsEl = document.getElementById('cluster-edit-targets-' + id)
+      const initialState = JSON.parse(dataEl ? dataEl.textContent.trim() : '{}')
+      const targets = JSON.parse(targetsEl ? targetsEl.textContent.trim() : '[]')
       const editorTarget = document.getElementById('cluster-json-editor-' + id)
       const editor = new window.JSONEditor({
         target: editorTarget,
         props: { mode: 'text', mainMenuBar: false },
       })
-      editor.set({ text: JSON.stringify(JSON.parse(initialJSON), null, 2) })
+      editor.set({ text: JSON.stringify(initialState, null, 2) })
       clusterEditors.set(id, editor)
 
       const errorEl = document.getElementById('cluster-edit-error-' + id)
       const showError = (msg) => { errorEl.textContent = msg; errorEl.style.display = '' }
       const clearError = () => { errorEl.textContent = ''; errorEl.style.display = 'none' }
 
+      // The configitem-editor module owns snapshot/diff/dispatch. It returns
+      // a submit handler closed over (modal, editor, targets) — the page
+      // wires it to the Save button. Server/DC edit will migrate next.
+      const onSubmit = window.initConfigItemEditor({
+        modal,
+        editor,
+        initialState,
+        targets,
+        reloadOrbId: modal.dataset.orbId,
+        reloadFn: reloadClusterFragment,
+        showError,
+        clearError,
+      })
+
       document.getElementById('cluster-edit-submit-' + id).addEventListener('click', async () => {
         const btn = document.getElementById('cluster-edit-submit-' + id)
-        clearError()
         btn.classList.add('is-loading')
         btn.disabled = true
         try {
-          let vars
-          try { vars = JSON.parse(editor.get().text) } catch (_) {
-            showError('Invalid JSON — fix the syntax and try again.')
-            return
+          const ok = await onSubmit()
+          if (ok) {
+            modal.classList.remove('is-active')
+            document.documentElement.style.overflow = ''
+            clusterEditors.delete(id)
           }
-          const typename = modal.dataset.typename || ''
-          if (typename !== 'EksaKubernetesCluster') {
-            showError(`Edit not supported for ${typename || 'this cluster type'} yet.`)
-            return
-          }
-          const currentVersion = parseInt(modal.dataset.version, 10) || 0
-          // Universal fields + EKSA-specific. controlPlaneEndpoint/tinkerbellIP
-          // are IPAddress refs — link by orbId once we have a UI for them. For
-          // now we only update scalar fields.
-          const resp = await fetch(BASE + '/graphql', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              query: `mutation UpdateEksaCluster(
-                $orbId: String!,
-                $kubernetesVersion: String, $cni: String, $environment: String,
-                $clusterType: String,
-                $version: Int, $updatedBy: String!, $updatedAt: DateTime!
-              ) {
-                updateEksaKubernetesCluster(input: {
-                  filter: { orbId: { eq: $orbId } }
-                  set: {
-                    kubernetesVersion: $kubernetesVersion,
-                    cni: $cni, environment: $environment,
-                    clusterType: $clusterType,
-                    version: $version, updatedBy: $updatedBy, updatedAt: $updatedAt
-                  }
-                }) {
-                  eksaKubernetesCluster { orbId name }
-                }
-              }`,
-              variables: {
-                orbId: modal.dataset.orbId || '',
-                kubernetesVersion: vars.kubernetesVersion ?? null,
-                cni: vars.cni ?? null,
-                environment: vars.environment ?? null,
-                clusterType: vars.clusterType ?? null,
-                version: currentVersion + 1,
-                updatedBy: modal.dataset.currentUser || '',
-                updatedAt: new Date().toISOString(),
-              },
-            }),
-          })
-          if (!resp.ok) {
-            if (resp.status === 409) {
-              const body = await resp.json().catch(() => ({}))
-              showError(body.error || 'Conflict — please reload and try again.')
-            } else {
-              showError(`Server error (${resp.status}) — try again.`)
-            }
-            return
-          }
-          const result = await resp.json()
-          const errMsg = window.gqlErrorMessage(result)
-          if (errMsg) { showError(errMsg); return }
-          modal.classList.remove('is-active')
-          document.documentElement.style.overflow = ''
-          clusterEditors.delete(id)
-          htmx.ajax('GET', BASE + modal.dataset.reloadUrl, { target: document.getElementById(modal.dataset.reloadTarget), swap: 'innerHTML' })
-        } catch (err) {
-          showError('Request failed — check your connection and try again.')
         } finally {
           btn.classList.remove('is-loading')
           btn.disabled = false
@@ -768,24 +725,14 @@ document.addEventListener('click', function (e) {
   }
 })
 
+
 // ─── Cluster reload button ────────────────────────────────────────────────────
 
 document.addEventListener('click', function (e) {
   const btn = e.target.closest('.js-cluster-reload')
   if (!btn) return
-  const orbId = btn.dataset.clusterId
-  const domId = safeDomId(orbId)
-  const target = document.getElementById('tab-content-cluster-' + domId)
-  if (!target) return
   btn.classList.add('is-loading')
-  fetch(BASE + '/clusters/' + encodeURIComponent(orbId), { headers: { 'HX-Request': 'true' } })
-    .then(r => r.text())
-    .then(html => {
-      target.innerHTML = html
-      htmx.process(target)
-      renderTimestamps(target)
-    })
-    .catch(() => {})
+  reloadClusterFragment(btn.dataset.clusterId)
     .finally(() => btn.classList.remove('is-loading'))
 })
 
@@ -893,146 +840,44 @@ document.addEventListener('click', function (e) {
       const showError = (msg) => { errorEl.textContent = msg; errorEl.style.display = '' }
       const clearError = () => { errorEl.textContent = ''; errorEl.style.display = 'none' }
 
+      // Build the targets list once, hand off to configitem-editor module.
+      // initConfigItemEditor returns a submit handler closure that does
+      // snapshot/diff/parallel-dispatch — same path as cluster edit.
+      const targetsEl = document.getElementById('srv-edit-targets-' + id)
+      const targets = JSON.parse(targetsEl ? targetsEl.textContent.trim() : '[]')
+      const onSubmit = window.initConfigItemEditor({
+        modal,
+        editor,
+        initialState: parsedInitial,
+        targets,
+        reloadOrbId: modal.dataset.orbId,
+        reloadFn: (orbId) => {
+          // Server reload-target is page-specific (dc context vs standalone).
+          // Reuse modal.dataset.reloadUrl + .reloadTarget set by the template.
+          const target = document.getElementById(modal.dataset.reloadTarget)
+          if (target && window.htmx) {
+            return new Promise((resolve) => {
+              window.htmx.ajax('GET', BASE + modal.dataset.reloadUrl, { target, swap: 'innerHTML' })
+              srvEditors.delete(id)
+              // htmx.ajax returns a promise in some versions; resolve immediately for the rest.
+              setTimeout(resolve, 0)
+            })
+          }
+        },
+        showError,
+        clearError,
+      })
+
       document.getElementById('srv-edit-submit-' + id).addEventListener('click', async () => {
         const btn = document.getElementById('srv-edit-submit-' + id)
-        clearError()
         btn.classList.add('is-loading')
         btn.disabled = true
         try {
-          let vars
-          try { vars = JSON.parse(editor.get().text) } catch (_) {
-            showError('Invalid JSON — fix the syntax and try again.')
-            return
-          }
-          const currentVersion = parseInt(modal.dataset.version, 10) || 0
-          const idracSettings = vars.idracSettings ?? {}
-          delete vars.idracSettings
-          // Diff against snapshots captured at modal open. Only fire the
-          // mutation(s) whose side actually changed — keeps the audit
-          // operations list honest (e.g. flipping sshEnabled records as
-          // addIdracSettings only, not updateServer + addIdracSettings).
-          const idracChanged = JSON.stringify(idracSettings) !== (modal.dataset.idracSnapshot || '{}')
-          const serverChanged = JSON.stringify(vars) !== (modal.dataset.serverSnapshot || '{}')
-
-          if (!serverChanged && !idracChanged) {
+          const ok = await onSubmit()
+          if (ok) {
             modal.classList.remove('is-active')
             document.documentElement.style.overflow = ''
-            return
           }
-
-          const idracOrbId = modal.dataset.idracOrbId || ''
-          const currentIdracVersion = parseInt(modal.dataset.idracVersion, 10) || 0
-          const now = new Date().toISOString()
-          const currentUser = modal.dataset.currentUser || ''
-
-          // Both halves are keyed by orbId (the @id field) — never by DGraph UID.
-          // orbId is the stable, restore-safe, cross-instance identifier.
-          // Both halves use updateX; the invariant "every Server has an
-          // IdracSettings" is enforced at the seed/create layer so
-          // updateIdracSettings always matches a row.
-          //
-          // variables.orbId is ALWAYS set — orbital's audit pipeline reads it
-          // for the before-fetch (Server snapshot) and entity-id extraction.
-          // The orbital GraphQL proxy strips orbId from variables before
-          // forwarding to DGraph if the query body doesn't declare $orbId
-          // (idrac-only edits), then restores it for audit.
-          //
-          // $orbId is DECLARED in queryArgs only when serverChanged — that's
-          // the branch whose body actually uses it. Declaring it
-          // unconditionally would make DGraph reject the idrac-only mutation
-          // for "Variable $orbId is never used."
-          const queryArgs = ['$updatedBy: String!', '$updatedAt: DateTime!']
-          const bodyParts = []
-          const variables = {
-            orbId: modal.dataset.orbId || '',
-            updatedBy: currentUser,
-            updatedAt: now,
-          }
-          if (serverChanged) {
-            queryArgs.push(
-              '$orbId: String!',
-              '$hostname: String', '$manufacturer: String', '$model: String',
-              '$oobMAC: String', '$rackPosition: Int', '$serviceTag: String',
-              '$version: Int',
-            )
-            bodyParts.push(`updateServer(input: {
-                  filter: { orbId: { eq: $orbId } }
-                  set: {
-                    hostname: $hostname, manufacturer: $manufacturer, model: $model,
-                    oobMAC: $oobMAC, rackPosition: $rackPosition, serviceTag: $serviceTag,
-                    version: $version, updatedBy: $updatedBy, updatedAt: $updatedAt
-                  }
-                }) {
-                  server { orbId hostname }
-                }`)
-            variables.ifVersion = currentVersion
-            variables.version = currentVersion + 1
-            variables.hostname = vars.hostname
-            variables.manufacturer = vars.manufacturer
-            variables.model = vars.model
-            variables.oobMAC = vars.oobMAC
-            variables.rackPosition = vars.rackPosition
-            variables.serviceTag = vars.serviceTag
-          }
-          if (idracChanged) {
-            queryArgs.push(
-              '$idracOrbId: String!', '$idracVersion: Int',
-              '$firmwareVersion: String', '$sshEnabled: Boolean', '$ipmiEnabled: Boolean',
-              '$lockdownModeEnabled: Boolean', '$osToIdracPassThroughEnabled: Boolean',
-              '$usbManagementPortEnabled: Boolean', '$dhcpEnabled: Boolean', '$racadmEnabled: Boolean',
-            )
-            bodyParts.push(`updateIdracSettings(input: {
-                  filter: { orbId: { eq: $idracOrbId } }
-                  set: {
-                    firmwareVersion: $firmwareVersion,
-                    sshEnabled: $sshEnabled, ipmiEnabled: $ipmiEnabled,
-                    lockdownModeEnabled: $lockdownModeEnabled,
-                    osToIdracPassThroughEnabled: $osToIdracPassThroughEnabled,
-                    usbManagementPortEnabled: $usbManagementPortEnabled,
-                    dhcpEnabled: $dhcpEnabled, racadmEnabled: $racadmEnabled,
-                    version: $idracVersion, updatedBy: $updatedBy, updatedAt: $updatedAt
-                  }
-                }) {
-                  idracSettings { orbId }
-                }`)
-            variables.idracOrbId = idracOrbId
-            variables.idracVersion = currentIdracVersion + 1
-            variables.firmwareVersion = idracSettings.firmwareVersion ?? null
-            variables.sshEnabled = idracSettings.sshEnabled ?? null
-            variables.ipmiEnabled = idracSettings.ipmiEnabled ?? null
-            variables.lockdownModeEnabled = idracSettings.lockdownModeEnabled ?? null
-            variables.osToIdracPassThroughEnabled = idracSettings.osToIdracPassThroughEnabled ?? null
-            variables.usbManagementPortEnabled = idracSettings.usbManagementPortEnabled ?? null
-            variables.dhcpEnabled = idracSettings.dhcpEnabled ?? null
-            variables.racadmEnabled = idracSettings.racadmEnabled ?? null
-          }
-          const opName = serverChanged && idracChanged ? 'UpdateServerAndIdrac'
-            : serverChanged ? 'UpdateServer'
-            : 'UpdateIdracSettings'
-          const query = `mutation ${opName}(${queryArgs.join(', ')}) { ${bodyParts.join(' ')} }`
-          const resp = await fetch(BASE + '/graphql', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query, variables }),
-          })
-          if (!resp.ok) {
-            if (resp.status === 409) {
-              const body = await resp.json().catch(() => ({}))
-              showError(body.error || 'Conflict — please reload and try again.')
-            } else {
-              showError(`Server error (${resp.status}) — try again.`)
-            }
-            return
-          }
-          const result = await resp.json()
-          const errMsg = window.gqlErrorMessage(result)
-          if (errMsg) { showError(errMsg); return }
-          modal.classList.remove('is-active')
-          document.documentElement.style.overflow = ''
-          srvEditors.delete(id)
-          htmx.ajax('GET', BASE + modal.dataset.reloadUrl, { target: '#' + modal.dataset.reloadTarget, swap: 'innerHTML' })
-        } catch (err) {
-          showError('Request failed — check your connection and try again.')
         } finally {
           btn.classList.remove('is-loading')
           btn.disabled = false
@@ -1667,40 +1512,55 @@ function openDivergencePublishModal(jobId, button, dcOrbId, origHTML) {
       const modal = document.getElementById('publish-confirm-modal')
       modal.classList.add('is-active')
 
-      // The server emits HX-Trigger: refreshExportJobs on ANY terminal state
-      // (completed OR failed — see oci.go renderArtifactFragment). We need to
-      // distinguish: only mark the button as "Published" when the modal body
-      // shows the success result. On failure the button stays enabled so the
-      // operator can retry.
+      // The export succeeded — this row's publish flow is COMMITTED for this
+      // session, regardless of whether the operator confirms the modal or
+      // cancels it. To re-export and re-publish, they must use /export.
+      // Mark the DC now so the modal-close observer never re-enables.
+      divergencePublishedDCs.add(dcOrbId)
+
+      // Update visual state on terminal publish (success or failure) so the
+      // row reflects what happened. HX-Trigger fires on every status
+      // transition the server records.
       const onTerminal = () => {
         document.body.removeEventListener('refreshExportJobs', onTerminal)
         const succeeded = body.querySelector('.message.is-success') !== null
+        button.classList.remove('is-link')
         if (succeeded) {
-          divergencePublishedDCs.add(dcOrbId)
-          button.disabled = true
-          button.classList.remove('is-link')
           button.classList.add('is-success')
-          button.innerHTML = '<span class="icon"><i class="fa-solid fa-check"></i></span><span>Published</span>'
+          button.onclick = () => { window.location.href = BASE + '/publish-history' }
+          button.innerHTML = '<span class="icon"><i class="fa-solid fa-check"></i></span><span>Published — View History</span>'
+        } else {
+          // Publish failed — row already locked; surface attempted state.
+          // Direct to Publish History first so the operator can see when/who
+          // last published successfully before retrying from the Export page.
+          button.classList.add('is-warning')
+          button.onclick = () => { window.location.href = BASE + '/publish-history' }
+          button.innerHTML = '<span class="icon"><i class="fa-solid fa-circle-xmark"></i></span><span>Go to Publish History</span>'
         }
-        // On failure, the modal continues to show the error. When the user
-        // closes the modal, the MutationObserver below restores the button.
       }
       document.body.addEventListener('refreshExportJobs', onTerminal)
 
-      // Modal closed → restore the button (including the failure case where
-      // the modal showed an error and the user closed it).
+      // Modal closed before any publish attempt (operator hit Cancel after the
+      // confirm modal appeared) — keep the button locked but make it clear no
+      // publish was attempted. Same rule: to retry, go to /export.
       const observer = new MutationObserver(() => {
         if (modal.classList.contains('is-active')) return
         observer.disconnect()
-        if (!divergencePublishedDCs.has(dcOrbId)) {
-          document.body.removeEventListener('refreshExportJobs', onTerminal)
-          button.disabled = false
-          button.innerHTML = origHTML
+        document.body.removeEventListener('refreshExportJobs', onTerminal)
+        // If onTerminal already updated the styling, leave it. Otherwise the
+        // operator closed before publish — direct them to Publish History.
+        if (!button.classList.contains('is-success') && !button.classList.contains('is-warning')) {
+          button.classList.remove('is-link')
+          button.classList.add('is-warning', 'is-light')
+          button.onclick = () => { window.location.href = BASE + '/publish-history' }
+          button.innerHTML = '<span class="icon"><i class="fa-solid fa-arrow-up-right-from-square"></i></span><span>Go to Publish History</span>'
         }
       })
       observer.observe(modal, { attributes: true, attributeFilter: ['class'] })
     })
     .catch(err => {
+      // Failure to even open the publish modal — re-enable so operator can
+      // retry from the row (no export-job/artifact was committed past here).
       button.disabled = false
       button.innerHTML = origHTML
       showDivergenceErr('Open publish modal failed: ' + err.message)

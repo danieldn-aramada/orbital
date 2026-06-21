@@ -28,11 +28,11 @@ gantt
 
 ## Recent accomplishments
 
+- **2026-06-20** — Orb↔orbital UI parity restored: shared `ClusterHandler` with injected `actions` resolver (ADR 011); orb DC/Server/Cluster tabs render fully (partial-render class fixed); workload-row dblclick + Publish History link wired; orb schema page queries DGraph directly (no sidecar).
 - **2026-06-18** — Cluster schema polymorphism (interface KubernetesCluster + EksaKubernetesCluster + KubernetesNode); 5-DC cluster catalog seeded with mgmt/workload tree view; orb partial-import lifecycle; publish-history rename; schema v3.
 - **2026-06-16** — Per-field MVCC pin on divergence resolutions; orb poller hardening + fresh-install schema-dir fix; configbundle `spec.ignored[]` CRD field (Ignore is standing instruction, not suppression); ADR-008 refinements.
 - **2026-06-15** — Divergence simplified: `propagated_at` removed end-to-end (resolutions now 1:1 with active entries); cb-controller full-release drops `f:spec` claim; integration tests restored; post-MVP forensics entry on ROADMAP.
 - **2026-06-14** — Divergence MVP closed end-to-end: server-side MVCC auto-increment, opt-in `ifVersion` race detection; cb-controller content-routed /dispatch rewrite; OCI producer-attribution annotations; takeover-release pass.
-- **2026-06-12** — Spike 22 divergence reporting (Phases A + A.1) closed: orbital S3 poller + REST handlers + server-rendered UI; Accept dispatches `update{Type}` GraphQL mutation; type carried orb→orbital through mapping; ROADMAP slimmed.
 
 ---
 
@@ -170,6 +170,7 @@ Benchmark DGraph query latency under realistic load, produce AKS node SKU cost e
 | `//go:embed` for orb templates and static assets | Orb reads templates from disk at runtime. Replace with `//go:embed` for a self-contained binary — required for air-gap edge deployment. Orbital (containerized AKS) does not need this. Scoped to Spike 14. |
 | DGraph client abstraction | 22+ raw `http.Post` calls across 7 handler files, no timeouts, no pooling. Extract `internal/dgraph/client.go`. Prerequisite for testing. See `docs/findings/maintainability.md` item 2.1. |
 | `internal/handler/` god package | 3,560 lines mixing HTTP, business logic, DGraph calls, file I/O. Decompose post-MVP. See `docs/findings/maintainability.md` item 5.4. |
+| Collapse parallel ConfigItem tab handlers (DC, Server) | Cluster handler is shared between orbital and orb via injected `actions` resolver (ADR 011, 2026-06-20). DC and Server still have parallel struct+handler pairs in `internal/handler/` and `internal/orbserver/`, which is the root cause of the silent-partial-render bug class (orbital adds a field to a shared template, orb's struct lacks it, template aborts mid-render returning 200 OK with a partial body). Apply the same actions-injection pattern to `DataCenterHandler` and `ServerHandler`; delete `internal/orbserver/dc_handlers.go::dcTab` and `internal/orbserver/server_handlers.go::srvTab`; orb registers orbital's handlers with `OrbActions`. See ADR 011 "Next" section. |
 | ~~`web/static/app.js` monolith~~ | ✅ Done (Spike 17, Jun 6). Replaced with `shared.js` + `orbital.js` + `orb.js` ES modules. |
 | ~~Export API uses DGraph UID instead of orbId~~ | ✅ Fixed 2026-06-02. `POST /api/v1/export` now accepts `{"orbId": "..."}` in the body. `fetchDCInfo` queries by orbId. UI select uses `dc.orbId`. |
 | ~~Backup/restore API alignment~~ | ✅ Fixed 2026-06-02. Routes renamed to match export convention: `POST /api/v1/backup`, `GET /api/v1/backup/jobs`, `GET /api/v1/backup/jobs/:jobId`, `GET /api/v1/backup/jobs/:jobId/download`, `DELETE /api/v1/backup/jobs/:jobId`, `POST /api/v1/backup/test-connection`, `POST /api/v1/restore`, `GET /api/v1/restore/jobs`, `GET /api/v1/restore/jobs/:jobId`. |

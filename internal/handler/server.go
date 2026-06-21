@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/armada/orbital/internal/configitems"
 	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/labstack/echo/v4"
 )
@@ -198,6 +199,7 @@ type serverTabDetailData struct {
 	ShowDCBack         bool // true when drilled from a DC tab
 	CurrentUser        string
 	EditDataJSON       template.JS
+	EditTargetsJSON    template.JS // configitem-editor.js consumes — see configitems.BuildEditTargets
 	IdracOrbID         string
 	IdracVersion       int
 	IdracSettings      *idracSettingsTabData
@@ -276,6 +278,15 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 	}
 
 	raw := result.Data.GetServer
+	// DGraph's `getServer(orbId: $x)` returns a missing record as an absent
+	// field in the JSON response, which unmarshals into a zero-value
+	// serverQueryResponse. Detect that and 404 instead of rendering a server
+	// tab with empty DomID/OrbID — those produce broken `id="edit-modal-srv-"`
+	// markup and silently-broken interactions. Mirrors the cluster handler's
+	// not-found check.
+	if raw.OrbID == "" {
+		return echo.NewHTTPError(http.StatusNotFound, "server not found")
+	}
 
 	currentUser := actorFromContext(c)
 	canMutate, _ := c.Get("can_mutate").(bool)
@@ -311,6 +322,15 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 	}
 	editJSON, _ := json.Marshal(editFields)
 
+	// Edit-target metadata for the configitem-editor JS module — registry-derived.
+	// Server has IdracSettings as a direct child (no wrapper), so targets contain
+	// the server root + idracSettings target.
+	editTargets := configitems.BuildEditTargets("Server", raw.OrbID, raw.Namespace, raw.Name)
+	if raw.IdracSettings != nil && raw.IdracSettings.OrbID != "" {
+		editTargets = configitems.OverrideEditTargetOrbID(editTargets, "IdracSettings", raw.IdracSettings.OrbID)
+	}
+	editTargetsJSON, _ := json.Marshal(editTargets)
+
 	srv := serverTabDetailData{
 		ID:              raw.ID,
 		OrbID:           raw.OrbID,
@@ -337,6 +357,7 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 		ShowDCBack:      c.QueryParam("dcCtx") == "1",
 		CurrentUser:     currentUser,
 		EditDataJSON:    template.JS(editJSON),
+		EditTargetsJSON: template.JS(editTargetsJSON),
 		BasePath:        h.basePath,
 		Actions:         layout.OrbitalActions(canMutate),
 	}

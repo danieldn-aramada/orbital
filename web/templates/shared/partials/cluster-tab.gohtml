@@ -87,13 +87,16 @@
             <li class="is-active" data-panel="cluster-panel-nodes-{{.DomID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-server"></i></span><span>Nodes</span></a>
             </li>
+            <li data-panel="cluster-panel-backups-{{.DomID}}">
+              <a><span class="icon is-small"><i class="fa-solid fa-floppy-disk"></i></span><span>Backups</span></a>
+            </li>
             {{if not .ManagementCluster}}
             <li data-panel="cluster-panel-workloads-{{.DomID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-sitemap"></i></span><span>Workload Clusters ({{len .WorkloadClusters}})</span></a>
             </li>
             {{end}}
             {{if .Actions.ShowAuditTab}}
-            <li data-panel="cluster-panel-audit-{{.DomID}}" data-orb-id="{{.OrbID}}">
+            <li data-panel="cluster-panel-audit-{{.DomID}}" data-orb-id="{{.OrbID}}" data-related-orb-ids="{{.RelatedOrbIDsCSV}}">
               <a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a>
             </li>
             {{end}}
@@ -131,6 +134,65 @@
           {{else}}
           <p class="is-size-7 has-text-grey p-2">No nodes registered yet.</p>
           {{end}}
+        </div>
+
+        <div id="cluster-panel-backups-{{.DomID}}" style="display:none">
+          {{/*
+            Backups follow the orbital convention for parent ConfigItems with
+            owned children: this tab is READ-ONLY display. To change anything,
+            click the Edit button at the top of the page — the JSON editor
+            includes the backup tree as a nested object. Mirrors Server →
+            IdracSettings. See docs/reference/UI.md "Edit pattern".
+          */}}
+          <div style="overflow-x:auto">
+          <table class="table is-striped is-hoverable is-size-7 mt-2">
+            <colgroup>
+              <col style="width:18%">
+              <col style="width:12%">
+              <col style="width:24%">
+              <col style="width:46%">
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Kind</th>
+                <th>Enabled</th>
+                <th>Schedule</th>
+                <th>Location</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>etcd</td>
+                {{if and .Backup .Backup.Etcd}}
+                <td>{{if .Backup.Etcd.Enabled}}<span class="has-text-success">✓</span>{{else}}<span class="has-text-danger">✗</span>{{end}}</td>
+                <td><code>{{if .Backup.Etcd.Schedule}}{{.Backup.Etcd.Schedule}}{{else}}—{{end}}</code></td>
+                <td><code>{{if .Backup.Etcd.Location}}{{.Backup.Etcd.Location}}{{else}}—{{end}}</code></td>
+                {{else}}
+                <td colspan="3"><span class="has-text-grey">Not configured</span></td>
+                {{end}}
+              </tr>
+              <tr>
+                <td>velero</td>
+                {{if and .Backup .Backup.Velero}}
+                <td>{{if .Backup.Velero.Enabled}}<span class="has-text-success">✓</span>{{else}}<span class="has-text-danger">✗</span>{{end}}</td>
+                <td><code>{{if .Backup.Velero.Schedule}}{{.Backup.Velero.Schedule}}{{else}}—{{end}}</code></td>
+                <td><code>{{if .Backup.Velero.Location}}{{.Backup.Velero.Location}}{{else}}—{{end}}</code></td>
+                {{else}}
+                <td colspan="3"><span class="has-text-grey">Not configured</span></td>
+                {{end}}
+              </tr>
+              <tr>
+                <td>s3-sync</td>
+                {{if and .Backup .Backup.S3Sync}}
+                <td>{{if .Backup.S3Sync.Enabled}}<span class="has-text-success">✓</span>{{else}}<span class="has-text-danger">✗</span>{{end}}</td>
+                <td colspan="2"><span class="has-text-grey">—</span></td>
+                {{else}}
+                <td colspan="3"><span class="has-text-grey">Not configured</span></td>
+                {{end}}
+              </tr>
+            </tbody>
+          </table>
+          </div>
         </div>
 
         {{if not .ManagementCluster}}

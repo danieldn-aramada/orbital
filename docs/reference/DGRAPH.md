@@ -26,17 +26,18 @@ DQL can follow any predicate in reverse using `~`. Used for: finding all nodes i
 { ip(func: eq(IPAddress.address, "10.0.1.15")) {
     uid IPAddress.address
     ~Server.oobIP { uid Server.hostname }
-    ~EksaConfig.tinkerbellIP { uid EksaConfig.clusterType }
-    ~EksaConfig.controlPlaneIP { uid EksaConfig.clusterType }
+    ~EksaKubernetesCluster.tinkerbellIP { uid EksaKubernetesCluster.clusterType }
+    ~KubernetesCluster.controlPlaneEndpoint { uid }
 } }
 ```
-Same pattern used for `~ConfigItem.namespace` to find all nodes in a namespace. DQL can traverse any predicate by UID regardless of GraphQL type boundaries.
+Same pattern used for `~ConfigItem.namespace` to find all nodes in a namespace. DQL can traverse any predicate by UID regardless of GraphQL type boundaries. **Use the current concrete-type names from `schema/schema.graphql`** — `EksaConfig` was renamed to `EksaKubernetesCluster` and `controlPlaneIP` to `controlPlaneEndpoint` during the cluster polymorphism refactor; DQL takes the raw predicate string, so a stale name silently returns zero results.
 
-### IPAddress hub pattern (typed back-refs)
-`@hasInverse` in DGraph requires both sides to be the same **concrete type** — cannot use the `ConfigItem` interface as a back-ref target. Solution: explicit named back-ref fields on `IPAddress` for each concrete type that references it. Adding a new type connected to an `IPAddress` requires a new back-ref field — this is a deliberate, versioned schema change.
+### Reverse-pointer pattern (typed back-refs)
+`@hasInverse` requires the back-ref target to **match the level where the forward edge is declared** — interface-level forward edge → interface back-ref; concrete-only forward edge → concrete back-ref. **Exception:** the top-level `ConfigItem` interface itself cannot be a `@hasInverse` target (too generic — DGraph can't reify a single back-edge predicate across every concrete type). For types like `IPAddress` referenced from many directions, the same rule applies per forward edge.
 
-- **Back-ref naming**: `<typeName-camelCase><FieldName-PascalCase>` — e.g. `Server.oobIP` produces `IPAddress.serverOobIP`; `EksaKubernetesCluster.tinkerbellIP` produces `IPAddress.eksaKubernetesClusterTinkerbellIP`. Long but mechanically derived — never invent shorter aliases.
-- **Cardinality must match reality**: the back-ref field is `T` (singular) when at most one cluster/server/node can legitimately claim a given IPAddress, and `[T]` (list) when multiple can. EKS-A workload clusters reuse their management's tinkerbell stack — so `eksaKubernetesClusterTinkerbellIP` is `[EksaKubernetesCluster]`, not singular. Server OOB IPs are 1:1 per server — so `serverOobIP` stays singular. Wrong cardinality silently corrupts data (last-write-wins on the inverse); choose based on the operational relationship, not the schema's syntactic cleanliness.
+- **Back-ref naming**: `<typeName-camelCase><FieldName-PascalCase>` — e.g. `Server.oobIP` → `IPAddress.serverOobIP`; `EksaKubernetesCluster.tinkerbellIP` → `IPAddress.eksaKubernetesClusterTinkerbellIP`; `KubernetesCluster.backup` → `ClusterBackup.kubernetesClusterBackup` (or `cluster` as a friendly alias when there's no ambiguity, as we did on `ClusterBackup.cluster`). Long but mechanically derived — never invent shorter aliases for the IPAddress hub.
+- **Cardinality must match reality**: the back-ref field is `T` (singular) when at most one cluster/server/node can legitimately claim a given target, and `[T]` (list) when multiple can. EKS-A workload clusters reuse their management's tinkerbell stack — so `eksaKubernetesClusterTinkerbellIP` is `[EksaKubernetesCluster]`, not singular. Server OOB IPs are 1:1 per server — so `serverOobIP` stays singular. Wrong cardinality silently corrupts data (last-write-wins on the inverse); choose based on the operational relationship, not the schema's syntactic cleanliness.
+- **Interface back-refs work when forward edge is interface-level**: `IPAddress.kubernetesClusterControlPlaneEndpoint: KubernetesCluster @hasInverse(field: controlPlaneEndpoint)` works because `controlPlaneEndpoint` is on the `KubernetesCluster` interface. Likewise `ClusterBackup.cluster: KubernetesCluster @hasInverse(field: backup)` works because `backup` is on the interface. Don't fork per concrete type unless the forward edge is concrete-only (like `tinkerbellIP`, which is `EksaKubernetesCluster`-specific).
 
 ### Cross-type IP queries
 GraphQL cannot traverse typed back-refs polymorphically. For queries like "is this IP already assigned anywhere?" use DQL via `/query` with tilde predicates (see above).
@@ -74,4 +75,4 @@ GraphQL cannot traverse typed back-refs polymorphically. For queries like "is th
 ## Redfish / hardware naming
 
 - Redfish model convention: `PowerEdge R650`, `PowerEdge XE9680` — no "Dell" prefix in the model field. Manufacturer (`Dell`) stored as a separate field.
-- Server summary field ordering: Data Center first (reflects DC→server hierarchy), then all remaining fields alphabetically.
+- Display-side field ordering rule (Server, IdracSettings, and any new detail view) is in `docs/reference/UI.md` under "Field-value row ordering": hierarchy → identity → alphabetical. Schema declaration order is NOT a display contract.

@@ -217,32 +217,29 @@ func TestValStr_JSONStringNormalized(t *testing.T) {
 	}
 }
 
-// idrac-only edits go through updateIdracSettings keyed by orbId. The
-// before-snapshot is the Server (resourceType == "Server") with idracSettings
-// nested. The Server top-level fields are unchanged — the diff must surface
-// ONLY the idrac field that changed, prefixed with "idrac:". The signal that
-// iDRAC was touched is variables["idracOrbId"] (the dispatch passes the
-// iDRAC's orbId here for both UpdateServerAndIdrac and UpdateIdracSettings).
-// Field-level after-values are top-level variables (not nested in idracInput).
+// iDRAC edits now go through canonical updateIdracSettings(orbId, set) via
+// the configitem-editor JS module. Before-snapshot is the IdracSettings row
+// itself (resourceType == "IdracSettings"); diff comes from variables["set"].
+// No more nested-iDRAC special case — the generic diff renderer handles it.
 func TestBuildDiffHTML_IdracOnlyChange(t *testing.T) {
 	before := map[string]any{
-		"hostname": "srv-a",
-		"idracSettings": map[string]any{
-			"firmwareVersion": "7.10.00.00",
-			"sshEnabled":      true,
-		},
+		"firmwareVersion": "7.10.00.00",
+		"sshEnabled":      true,
 	}
 	variables := map[string]any{
-		"idracOrbId":      "colo:3RK3V64-idrac",
-		"firmwareVersion": "7.10.90.00",
-		"sshEnabled":      true,
+		"orbId": "colo:3RK3V64-idrac",
+		"set": map[string]any{
+			"firmwareVersion": "7.10.90.00",
+			"sshEnabled":      true,
+		},
 	}
 	got := string(buildDiffHTML(before, variables))
 	if got == "" {
 		t.Fatal("expected non-empty diff for idrac-only change")
 	}
-	if !strings.Contains(got, "idrac: firmwareVersion") {
-		t.Errorf("expected 'idrac: firmwareVersion' label in diff, got: %s", got)
+	// Generic diff renderer labels fields by their bare name, no "idrac:" prefix.
+	if !strings.Contains(got, "<strong") || !strings.Contains(got, "firmwareVersion") {
+		t.Errorf("expected firmwareVersion field label in diff, got: %s", got)
 	}
 	if !strings.Contains(got, "-7.10.00.00") || !strings.Contains(got, "+7.10.90.00") {
 		t.Errorf("expected -/+ lines for firmwareVersion, got: %s", got)

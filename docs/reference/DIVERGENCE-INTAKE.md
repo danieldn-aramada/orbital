@@ -1,5 +1,7 @@
 # Orb Divergence Intake API
 
+Read this before: building a producer that submits divergence reports to orb (today: cb-controller), modifying `internal/orbserver/divergence_handlers.go`, or changing the `POST /api/v1/divergence` contract.
+
 > **Audience:** anyone building a producer that reports configuration divergence to orb. Today that's [cb-controller](../plans/divergence-cb-controller-contract.md); tomorrow it could be any edge component that knows what intent it was given and what it observes.
 
 ## Principle

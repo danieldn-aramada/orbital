@@ -33,7 +33,6 @@ const (
 	overridesFile     = "overrides.json"
 	historyMaxRecords = 25
 	scratchFile       = "data.json.gz"
-	SchemaFile        = "schema.graphql"
 
 	// Verification states for ImportRecord.Verification.
 	VerificationVerified      = "verified"       // cosign-verified via OCI pull
@@ -199,8 +198,13 @@ func (i *Importer) dropAll(ctx context.Context) error {
 	return nil
 }
 
-// applySchema decompresses schemaGZ, posts it to DGraph's admin schema endpoint,
-// and saves the decompressed SDL to {DataDir}/schema.graphql for the schema page.
+// applySchema decompresses schemaGZ and posts it to DGraph's admin schema
+// endpoint. The schema becomes the single source of truth — orb's schema page
+// queries `getGQLSchema` from DGraph at render time rather than reading a
+// sidecar file. Removed the previous {DataDir}/schema.graphql write 2026-06-20
+// because the sidecar file silently drifted from DGraph state when DGraph was
+// wiped out-of-band (e.g. `make down` + `make up`), leaving the file claiming
+// a schema was loaded while DGraph itself was empty.
 func (i *Importer) applySchema(ctx context.Context, schemaGZ []byte) error {
 	i.logger.Info("applying schema to local DGraph")
 	gr, err := gzip.NewReader(bytes.NewReader(schemaGZ))
@@ -226,19 +230,6 @@ func (i *Importer) applySchema(ctx context.Context, schemaGZ []byte) error {
 	if resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("schema apply returned %d: %s", resp.StatusCode, b)
-	}
-
-	// Ensure DataDir exists before writing; on a fresh install Import() hasn't
-	// done its MkdirAll yet when applySchema runs, so the write would fail
-	// silently and the schema page would show "No schema available" even
-	// though the import succeeded.
-	if err := os.MkdirAll(i.cfg.DataDir, 0o755); err != nil {
-		i.logger.Warn("failed to create data dir for schema file", "err", err)
-		return nil
-	}
-	schemaPath := filepath.Join(i.cfg.DataDir, SchemaFile)
-	if err := os.WriteFile(schemaPath, schema, 0o644); err != nil {
-		i.logger.Warn("failed to save schema to disk", "err", err)
 	}
 
 	return nil

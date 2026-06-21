@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/orb"
 	"github.com/armada/orbital/internal/web/data/layout"
 	orbtemplates "github.com/armada/orbital/web/templates/orb"
@@ -21,15 +22,19 @@ type dcPageData struct {
 }
 
 // dcTabData is the data model for the orb datacenter-tab fragment.
+// DomID is required by the shared template (web/templates/shared/partials/datacenter-tab.gohtml)
+// for the Racks/Audit inner tabs, server table id, and detail-tabs container.
+// Without it the template aborts mid-render at the first {{.DomID}} reference.
 type dcTabData struct {
 	ID          string
 	OrbID       string
+	DomID       string
 	Name        string
 	CreatedBy   string
 	CreatedAt   string
 	UpdatedBy   string
 	UpdatedAt   string
-	Namespace string
+	Namespace   string
 	ServerCount int
 	Racks       []orbRackTabData
 	Servers     []orbServerTabData
@@ -47,6 +52,7 @@ type orbRackTabData struct {
 type orbServerTabData struct {
 	ID           string
 	OrbID        string
+	DomID        string
 	Name         string
 	Hostname     string
 	ServiceTag   string
@@ -196,12 +202,13 @@ func (s *Server) dcTab(c echo.Context) error {
 	dc := dcTabData{
 		ID:          raw.ID,
 		OrbID:       raw.OrbID,
+		DomID:       handler.SafeDomID(raw.OrbID),
 		Name:        raw.Name,
 		CreatedBy:   raw.CreatedBy,
 		CreatedAt:   raw.CreatedAt,
 		UpdatedBy:   raw.UpdatedBy,
 		UpdatedAt:   raw.UpdatedAt,
-		Namespace: raw.Namespace,
+		Namespace:   raw.Namespace,
 		ServerCount: raw.ServersAggregate.Count,
 		AssetDataV2: prettyAssetData,
 		Actions:     layout.OrbActions,
@@ -218,6 +225,7 @@ func (s *Server) dcTab(c echo.Context) error {
 		dc.Servers = append(dc.Servers, orbServerTabData{
 			ID:           sv.ID,
 			OrbID:        sv.OrbID,
+			DomID:        handler.SafeDomID(sv.OrbID),
 			Name:         sv.Name,
 			Hostname:     sv.Hostname,
 			ServiceTag:   sv.ServiceTag,

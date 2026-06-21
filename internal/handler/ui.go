@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"os"
 	"path"
 	"time"
 
@@ -18,6 +17,7 @@ import (
 	"github.com/armada/orbital/ent/divergenceresolution"
 	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/ent/user"
+	"github.com/armada/orbital/internal/dgraphschema"
 	"github.com/armada/orbital/internal/divergence"
 	appversion "github.com/armada/orbital/internal/version"
 	"github.com/armada/orbital/internal/web/data/layout"
@@ -43,6 +43,7 @@ type UI struct {
 	schemaPath       string
 	restoreAvailable bool
 	dgraphURL        string
+	dgraphAdminURL   string
 	version          string
 	basePath         string
 	db               *ent.Client
@@ -87,6 +88,10 @@ func (h *UI) SetSchemaPath(path string) {
 
 func (h *UI) SetDGraphURL(url string) {
 	h.dgraphURL = url
+}
+
+func (h *UI) SetDGraphAdminURL(url string) {
+	h.dgraphAdminURL = url
 }
 
 func (h *UI) SetBackupCronSpec(spec string) {
@@ -521,22 +526,29 @@ func (h *UI) Restore(c echo.Context) error {
 	return h.render(c, "restore", p)
 }
 
+// Schema renders the GraphQL schema currently active in DGraph — the honest
+// source of truth, not the on-disk file. Version is still read from the
+// sibling schema/VERSION file because that label is human-set (bumped manually
+// per ADR 007) and isn't stored in DGraph; the file is the right home for it.
+// SDL comes from DGraph's `getGQLSchema` admin query, so a fresh / wiped
+// DGraph renders an "Awaiting import" state instead of lying about a schema
+// the file claims is loaded.
 func (h *UI) Schema(c echo.Context) error {
-	content, err := os.ReadFile(h.schemaPath)
+	sdl, err := dgraphschema.Active(c.Request().Context(), h.dgraphAdminURL)
 	if err != nil {
-		return fmt.Errorf("read schema: %w", err)
+		return fmt.Errorf("fetch active schema: %w", err)
 	}
-	sum := sha256.Sum256(content)
 	version, err := readSchemaVersion(h.schemaPath)
 	if err != nil {
 		return fmt.Errorf("read schema version: %w", err)
 	}
+	sum := sha256.Sum256([]byte(sdl))
 	return h.render(c, "schema", page.Schema{
 		Base:      h.base(c),
 		PageTitle: "Schema",
 		Version:   version,
 		Checksum:  fmt.Sprintf("%x", sum[:6]),
-		SDL:       string(content),
+		SDL:       sdl,
 	})
 }
 

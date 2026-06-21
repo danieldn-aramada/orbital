@@ -64,7 +64,10 @@
       {{else}}
 
       <div class="notification is-light mt-4" style="max-width: 560px;">
-        <p class="mb-3">No subgraph has been imported yet. Import a subgraph for a data center to view status and configuration.</p>
+        <p class="mb-3">
+          No subgraph has been imported yet.
+          Configured for <code>{{.OCIRepo}}</code>.
+        </p>
         <a class="button is-primary is-small" href="/import">
           <span class="icon"><i class="fa-solid fa-upload"></i></span>
           <span>Import Subgraph</span>

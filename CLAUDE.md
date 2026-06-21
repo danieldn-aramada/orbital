@@ -104,19 +104,26 @@ Start a new session after each natural milestone (feature done, spike complete, 
 
 ### Domain files
 
-Read the relevant file before starting work in that area. Each file contains settled decisions, patterns, and gotchas. **When a decision is made, document it in the domain file — not in CLAUDE.md.**
+Read the relevant doc(s) BEFORE writing code in that area — they encode conventions and silent footguns that the code alone doesn't surface. Each contains settled decisions, gotchas, and reference patterns. **When you settle a new decision, document it in the domain file — not in CLAUDE.md.**
+
+**Most common tasks at the top:**
 
 | Working on | File |
 |---|---|
-| DGraph schema, queries, mutations, export, seeding | `docs/reference/DGRAPH.md` |
-| UI templates, HTMX, JavaScript, CSS | `docs/reference/UI.md` |
-| Auth, sessions, OIDC, bearer tokens, keychain | `docs/reference/AUTH.md` |
-| Audit events, mutation recording, `graphql.go` | `docs/reference/AUDIT.md` |
-| OCI publish, export jobs, backup, restore | `docs/reference/OCI.md` |
-| Orb import pipeline, consumer dispatch, DGraphBackend, orb UI | `docs/reference/ORB.md` |
-| Divergence resolution semantics, accept/force/ignore actions, orbital→cb-bundler contract | `docs/reference/DIVERGENCE.md` |
+| **Adding a new ConfigItem type (schema → audit → UI)** — the canonical recipe | `docs/playbooks/add-configitem.md` |
+| Editing GraphQL schema, queries, DQL, export, seeding, blue-green | `docs/reference/DGRAPH.md` |
+| UI templates, HTMX, JavaScript, CSS, edit modals, JSON editor pattern | `docs/reference/UI.md` |
+| Audit events, mutation recording, diff rendering, `graphql.go` proxy | `docs/reference/AUDIT.md` |
+| Auth, sessions, OIDC, bearer tokens, role enforcement, orbctl credentials | `docs/reference/AUTH.md` |
+| OCI publish, signing, export jobs, backup, restore, bundler integration | `docs/reference/OCI.md` |
+| Orb-edge: import pipeline, consumer dispatch, DGraphBackend, orb UI, orb scan | `docs/reference/ORB.md` |
+| Divergence resolution semantics (accept/reject/ignore), MVCC, orbital→bundler contract | `docs/reference/DIVERGENCE.md` |
 | Producer-facing divergence intake API (orb-side) | `docs/reference/DIVERGENCE-INTAKE.md` |
+| OTel spans/logs, instrumentation, `internal/observability/` | `docs/reference/OBSERVABILITY.md` |
 | Planning or starting any spike | `ROADMAP.md` |
+| Historical context: SDD, architectural proposal, SSA notes | `docs/reference/SDD-CONTEXT.md` (lookup-only; grep for keywords) |
+
+**If unsure which doc fits**, grep the docs/reference directory for a noun in your task — every doc starts with `Read this before: ...` so the first 5 lines tell you whether you're in the right place. Settled decisions live under `## Settled Decisions` in each doc.
 
 ### Decision records
 

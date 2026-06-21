@@ -302,48 +302,13 @@ func buildDiffHTML(before, variables map[string]any) template.HTML {
 		sections.WriteString(`</pre></div>`)
 	}
 
-	// iDRAC diff — data-driven, not gated on resourceType. Fires whenever the
-	// before-snapshot includes idracSettings AND the mutation touched iDRAC.
-	// Touched signal: variables["idracOrbId"] is set by the UpdateServerAndIdrac
-	// / UpdateIdracSettings dispatch path. Each iDRAC field is read as a
-	// top-level variable (no nested idracInput array since the switch to
-	// updateIdracSettings).
-	{
-		beforeIdrac, hasBefore := before["idracSettings"].(map[string]any)
-		_, idracTouched := variables["idracOrbId"]
-		if hasBefore && idracTouched {
-			for _, field := range []string{
-				"firmwareVersion", "sshEnabled", "ipmiEnabled", "lockdownModeEnabled",
-				"osToIdracPassThroughEnabled", "usbManagementPortEnabled", "dhcpEnabled", "racadmEnabled",
-			} {
-				afterVal := variables[field]
-				beforeStr := valStr(beforeIdrac[field], afterVal)
-				afterStr := valStr(afterVal, afterVal)
-				if beforeStr == afterStr {
-					continue
-				}
-				diffLines := lineDiff(prettyLines(beforeStr), prettyLines(afterStr))
-				sections.WriteString(`<div style="margin-bottom:0.5rem">`)
-				sections.WriteString(`<strong style="font-size:0.7rem">idrac: ` + template.HTMLEscapeString(field) + `</strong>`)
-				sections.WriteString(`<pre style="font-size:0.7rem;margin:0.2rem 0 0;background:#fafafa;padding:0.4rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all">`)
-				for _, line := range diffLines {
-					if len(line) == 0 {
-						sections.WriteString("\n")
-						continue
-					}
-					switch line[0] {
-					case '+':
-						sections.WriteString(`<span style="color:#1a7f37">` + template.HTMLEscapeString(line) + `</span>` + "\n")
-					case '-':
-						sections.WriteString(`<span style="color:#cf222e;font-style:italic">` + template.HTMLEscapeString(line) + `</span>` + "\n")
-					default:
-						sections.WriteString(template.HTMLEscapeString(line) + "\n")
-					}
-				}
-				sections.WriteString(`</pre></div>`)
-			}
-		}
-	}
+	// (Historical: a hardcoded nested-iDRAC diff block lived here, required by
+	// the UpdateServerAndIdrac compound mutation that wrapped Server + iDRAC
+	// edits in a single body. The Server edit modal now dispatches parallel
+	// updateServer + updateIdracSettings via configitem-editor.js — each
+	// produces its own audit row with the generic diff above. The compound
+	// path is gone; the special-case block is gone. Same generic diff handles
+	// every type.)
 
 	result := sections.String()
 	if result == "" {

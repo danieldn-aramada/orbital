@@ -64,6 +64,7 @@ func Map(fsys fs.FS) map[string]*template.Template {
 		"schema":         parsePage(fsys, "schema", page("templates/orb/pages/schema.gohtml")),
 		"datacenter":     parsePage(fsys, "datacenter", page("templates/orb/pages/datacenter.gohtml")),
 		"servers":        parsePage(fsys, "servers", page("templates/orb/pages/servers.gohtml")),
+		"clusters":       parsePage(fsys, "clusters", page("templates/orb/pages/clusters.gohtml")),
 		"divergence":     parsePage(fsys, "divergence", page("templates/orb/pages/divergence.gohtml")),
 		"import-history": parsePage(fsys, "import-history", page("templates/orb/pages/import-history.gohtml")),
 
@@ -78,6 +79,8 @@ func Map(fsys fs.FS) map[string]*template.Template {
 			"templates/shared/partials/server-tab.gohtml",
 			"templates/shared/components/edit-modal-server.gohtml",
 		)),
+		// No "cluster-tab" entry — handler.ClusterHandler manages its own template
+		// parse cycle (parseClusterFragment) and is reused directly by orb's routes.
 	}
 }
 

@@ -144,18 +144,20 @@
                    action. Three states:
                      1. Pending decisions exist → disabled, "Resolve first" tooltip.
                      2. AlreadyPublished (current resolutions already covered by
-                        a completed publish, server-side check) → permanently
-                        disabled green "Published <tag>". Republish goes via
-                        /export.
+                        a completed publish, server-side check) → renders as a
+                        green link to Publish History so the operator can see
+                        when/who published before deciding to republish.
                      3. Otherwise → enabled outlined "Publish".
                    State (2) enforces one-shot publish semantics across all
                    operators / sessions. */}}
               {{if .AlreadyPublished}}
-              <button class="button is-success is-light is-small" disabled
-                      title="Already published — go to Export Subgraph to republish">
+              <a class="button is-success is-light is-small"
+                 href="{{.BasePath}}/publish-history"
+                 title="View publish history">
                 <span class="icon"><i class="fa-solid fa-check"></i></span>
                 <span>Published{{if .PublishedTag}} {{.PublishedTag}}{{end}}</span>
-              </button>
+                <span class="icon"><i class="fa-solid fa-arrow-up-right-from-square"></i></span>
+              </a>
               {{else}}
               <button class="button is-link is-outlined is-small divergence-publish-btn"
                       data-dc-orbid="{{$dcId}}"

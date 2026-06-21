@@ -148,6 +148,7 @@ interface KubernetesCluster {
 
     dataCenter: DataCenter!
     nodes: [KubernetesNode] @hasInverse(field: cluster)
+    backup: ClusterBackup
 }
 
 type EksaKubernetesCluster implements KubernetesCluster & ConfigItem {
@@ -167,6 +168,36 @@ type KubernetesNode implements ConfigItem {
 
     cluster: KubernetesCluster!
     server: Server!
+}
+
+type ClusterBackup implements ConfigItem {
+    etcd: EtcdBackup
+    velero: VeleroBackup
+    s3Sync: S3Sync
+
+    cluster: KubernetesCluster @hasInverse(field: backup)
+}
+
+type EtcdBackup implements ConfigItem {
+    enabled: Boolean @search   
+    schedule: String
+    location: String @search(by: [hash])
+
+    clusterBackupEtcd: ClusterBackup @hasInverse(field: etcd)
+}
+
+type VeleroBackup implements ConfigItem {
+    enabled: Boolean @search
+    schedule: String
+    location: String @search(by: [hash])
+
+    clusterBackupVelero: ClusterBackup @hasInverse(field: velero)
+}
+
+type S3Sync implements ConfigItem {
+    enabled: Boolean @search
+
+    clusterBackupS3Sync: ClusterBackup @hasInverse(field: s3Sync)
 }
 
 

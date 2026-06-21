@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/armada/orbital/internal/configitems"
 	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/labstack/echo/v4"
 )
@@ -150,7 +151,8 @@ type dataCenterTabData struct {
 	Version      int
 	AssetDataV2  string
 	CurrentUser  string
-	EditDataJSON template.JS // pre-serialized JSON for the edit modal
+	EditDataJSON    template.JS // pre-serialized JSON for the edit modal
+	EditTargetsJSON template.JS // configitem-editor.js targets list
 	BasePath     string
 	Actions      layout.PageActions
 }
@@ -194,6 +196,12 @@ func (h *DataCenter) Tab(c echo.Context) error {
 	}
 
 	raw := result.Data.GetDataCenter
+	// Missing DC unmarshals as zero-value (DGraph returns the field as absent);
+	// detect and 404 instead of rendering a broken tab with empty IDs. Mirrors
+	// the server + cluster handlers.
+	if raw.OrbID == "" {
+		return echo.NewHTTPError(http.StatusNotFound, "data center not found")
+	}
 	h.logger.Debug("dgraph decoded", "servers", len(raw.Servers), "racks", len(raw.Racks))
 
 	serversByRack := make(map[string]int)
@@ -224,6 +232,8 @@ func (h *DataCenter) Tab(c echo.Context) error {
 		}
 	}
 	editJSON, _ := json.Marshal(editFields)
+	editTargets := configitems.BuildEditTargets("DataCenter", raw.OrbID, raw.Namespace, raw.Name)
+	editTargetsJSON, _ := json.Marshal(editTargets)
 
 	dc := dataCenterTabData{
 		ID:           raw.ID,
@@ -238,10 +248,11 @@ func (h *DataCenter) Tab(c echo.Context) error {
 		ServerCount:  raw.ServersAggregate.Count,
 		Version:      raw.Version,
 		AssetDataV2:  prettyAssetData,
-		CurrentUser:  currentUser,
-		EditDataJSON: template.JS(editJSON),
-		BasePath:     h.basePath,
-		Actions:      layout.OrbitalActions(canMutate),
+		CurrentUser:     currentUser,
+		EditDataJSON:    template.JS(editJSON),
+		EditTargetsJSON: template.JS(editTargetsJSON),
+		BasePath:        h.basePath,
+		Actions:         layout.OrbitalActions(canMutate),
 	}
 	for _, r := range raw.Racks {
 		dc.Racks = append(dc.Racks, rackTabData{

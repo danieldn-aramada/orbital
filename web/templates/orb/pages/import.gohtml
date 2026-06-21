@@ -49,7 +49,10 @@
       {{if .OCIEnabled}}
       <hr class="mb-5">
 
-      <p class="is-size-5 mb-3">Pull from Registry</p>
+      <p class="is-size-5 mb-1">Pull from Registry</p>
+      <p class="has-text-grey mb-3" style="font-size: 0.8rem;">
+        Source: <code>{{.OCIRegistry}}/{{.OCIRepo}}</code>
+      </p>
 
       <div class="field is-grouped mb-4">
         <div class="control">

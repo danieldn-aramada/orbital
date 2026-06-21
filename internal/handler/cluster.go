@@ -8,8 +8,10 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/armada/orbital/internal/configitems"
 	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/labstack/echo/v4"
 )
@@ -42,6 +44,13 @@ const getClusterQuery = `
           role
           server { id orbId hostname serviceTag }
         }
+        backup {
+          id orbId name namespace version
+          createdBy createdAt updatedBy updatedAt
+          etcd { id orbId name namespace version createdBy createdAt updatedBy updatedAt enabled schedule location }
+          velero { id orbId name namespace version createdBy createdAt updatedBy updatedAt enabled schedule location }
+          s3Sync { id orbId name namespace version createdBy createdAt updatedBy updatedAt enabled }
+        }
       }
       ... on EksaKubernetesCluster {
         clusterType
@@ -67,15 +76,25 @@ type ClusterHandler struct {
 	fragment  *template.Template
 	logger    *slog.Logger
 	basePath  string
+	// actions resolves the per-request PageActions for this handler. orbital
+	// passes a closure that reads `can_mutate` from the context (set by the
+	// auth middleware); orb passes a const that returns layout.OrbActions.
+	// This is the seam that lets one handler serve two apps with different
+	// editability without duplicating the DGraph query + struct-builder.
+	actions func(echo.Context) layout.PageActions
 }
 
-func NewClusterHandler(dgraphURL string, dev bool, logger *slog.Logger, basePath string) *ClusterHandler {
+// NewClusterHandler builds a cluster Tab handler. `actions` is required:
+// the same DGraph query + render path serves orbital (role-based actions)
+// and orb (read-only OrbActions); the caller injects the policy.
+func NewClusterHandler(dgraphURL string, dev bool, logger *slog.Logger, basePath string, actions func(echo.Context) layout.PageActions) *ClusterHandler {
 	return &ClusterHandler{
 		dgraphURL: dgraphURL,
 		dev:       dev,
 		fragment:  parseClusterFragment(),
 		logger:    logger,
 		basePath:  basePath,
+		actions:   actions,
 	}
 }
 
@@ -140,7 +159,84 @@ type clusterQueryResponse struct {
 			Count int `json:"count"`
 		} `json:"nodesAggregate"`
 	} `json:"workloadClusters,omitempty"`
+
+	Backup *struct {
+		ID        string `json:"id"`
+		OrbID     string `json:"orbId"`
+		Name      string `json:"name"`
+		Namespace string `json:"namespace"`
+		Version   int    `json:"version"`
+		CreatedBy string `json:"createdBy"`
+		CreatedAt string `json:"createdAt"`
+		UpdatedBy string `json:"updatedBy"`
+		UpdatedAt string `json:"updatedAt"`
+		Etcd      *backupKindResponse   `json:"etcd"`
+		Velero    *backupKindResponse   `json:"velero"`
+		S3Sync    *backupS3SyncResponse `json:"s3Sync"`
+	} `json:"backup,omitempty"`
 }
+
+// backupKindResponse mirrors EtcdBackup/VeleroBackup (identical shape).
+type backupKindResponse struct {
+	ID        string `json:"id"`
+	OrbID     string `json:"orbId"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Version   int    `json:"version"`
+	CreatedBy string `json:"createdBy"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedBy string `json:"updatedBy"`
+	UpdatedAt string `json:"updatedAt"`
+	Enabled   bool   `json:"enabled"`
+	Schedule  string `json:"schedule"`
+	Location  string `json:"location"`
+}
+
+type backupS3SyncResponse struct {
+	ID        string `json:"id"`
+	OrbID     string `json:"orbId"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Version   int    `json:"version"`
+	CreatedBy string `json:"createdBy"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedBy string `json:"updatedBy"`
+	UpdatedAt string `json:"updatedAt"`
+	Enabled   bool   `json:"enabled"`
+}
+
+// collectClusterRelatedOrbIDs returns the cluster's orbId followed by every
+// nested ConfigItem orbId in the cluster's subgraph (nodes + backup tree).
+// Empty / zero values are skipped so the result is ready for the
+// data-related-orb-ids attribute. Order is stable: the cluster comes first,
+// then nodes, then the backup wrapper, then each backup sub-kind. Mirrors the
+// Server → collectRelatedOrbIDs pattern. See shared.js loadAuditPanel.
+func collectClusterRelatedOrbIDs(raw *clusterQueryResponse) []string {
+	out := make([]string, 0, 4+len(raw.Nodes))
+	add := func(id string) {
+		if id != "" {
+			out = append(out, id)
+		}
+	}
+	add(raw.OrbID)
+	for _, n := range raw.Nodes {
+		add(n.OrbID)
+	}
+	if raw.Backup != nil {
+		add(raw.Backup.OrbID)
+		if raw.Backup.Etcd != nil {
+			add(raw.Backup.Etcd.OrbID)
+		}
+		if raw.Backup.Velero != nil {
+			add(raw.Backup.Velero.OrbID)
+		}
+		if raw.Backup.S3Sync != nil {
+			add(raw.Backup.S3Sync.OrbID)
+		}
+	}
+	return out
+}
+
 
 type clusterNodeTabData struct {
 	OrbID            string
@@ -166,6 +262,33 @@ type clusterWorkloadRef struct {
 	Environment       string
 	KubernetesVersion string
 	NodeCount         int
+}
+
+// clusterBackupData is the cluster's ClusterBackup parent + its three nullable
+// sub-kinds. When the cluster has no backup configured at all, the parent
+// pointer (clusterTabData.Backup) is nil; the template renders an empty state.
+// When the parent exists but a sub-kind hasn't been configured, that sub-kind
+// pointer is nil and the table row shows "Not configured" + a Configure button.
+type clusterBackupData struct {
+	OrbID  string
+	DomID  string
+	Etcd   *backupKindTab
+	Velero *backupKindTab
+	S3Sync *backupS3SyncTab
+}
+
+type backupKindTab struct {
+	OrbID    string
+	DomID    string
+	Enabled  bool
+	Schedule string
+	Location string
+}
+
+type backupS3SyncTab struct {
+	OrbID   string
+	DomID   string
+	Enabled bool
 }
 
 type clusterTabData struct {
@@ -201,10 +324,22 @@ type clusterTabData struct {
 	ManagementCluster *clusterEdgeRef
 	WorkloadClusters  []clusterWorkloadRef
 
-	CurrentUser  string
-	EditDataJSON template.JS
-	BasePath     string
-	Actions      layout.PageActions
+	// Backup configuration. Nil when the cluster has no ClusterBackup yet —
+	// template renders the empty state.
+	Backup *clusterBackupData
+
+	CurrentUser     string
+	EditDataJSON    template.JS
+	EditTargetsJSON template.JS // configitem-editor.js consumes this — see buildClusterEditTargets
+	BasePath        string
+	Actions         layout.PageActions
+
+	// RelatedOrbIDsCSV is "<cluster-orbId>,<node-orbId>...,<backup-orbId>,<etcd-orbId>..."
+	// — every ConfigItem in the rendered cluster subgraph. The Audit Log tab
+	// reads this via data-related-orb-ids to pull events for the cluster AND
+	// its owned children (nodes, backup tree) in one query. Same pattern as
+	// Server → IdracSettings / StorageController / etc.
+	RelatedOrbIDsCSV string
 }
 
 func (h *ClusterHandler) Tab(c echo.Context) error {
@@ -255,7 +390,6 @@ func (h *ClusterHandler) Tab(c echo.Context) error {
 	}
 
 	currentUser := actorFromContext(c)
-	canMutate, _ := c.Get("can_mutate").(bool)
 
 	// Edit modal payload — universal fields always; EKSA-specific keys present
 	// only when the concrete type is EKSA so the form renders the right block.
@@ -276,7 +410,58 @@ func (h *ClusterHandler) Tab(c echo.Context) error {
 			editFields["tinkerbellIP"] = ""
 		}
 	}
+
+	// Backup tree — owned children nested in the JSON editor, same shape as
+	// Server → IdracSettings. Operator edits sub-kinds inline; a `null` key
+	// means "remove this kind"; a missing key means "leave unchanged." The
+	// orbital convention is: parent ConfigItem with owned children renders one
+	// JSON editor whose tree is the full intent.
+	backupEdit := map[string]any{}
+	if raw.Backup != nil {
+		if raw.Backup.Etcd != nil {
+			backupEdit["etcd"] = map[string]any{
+				"enabled":  raw.Backup.Etcd.Enabled,
+				"schedule": raw.Backup.Etcd.Schedule,
+				"location": raw.Backup.Etcd.Location,
+			}
+		}
+		if raw.Backup.Velero != nil {
+			backupEdit["velero"] = map[string]any{
+				"enabled":  raw.Backup.Velero.Enabled,
+				"schedule": raw.Backup.Velero.Schedule,
+				"location": raw.Backup.Velero.Location,
+			}
+		}
+		if raw.Backup.S3Sync != nil {
+			backupEdit["s3Sync"] = map[string]any{
+				"enabled": raw.Backup.S3Sync.Enabled,
+			}
+		}
+	}
+	editFields["backup"] = backupEdit
 	editJSON, _ := json.Marshal(editFields)
+
+	// Build the targets list the configitem-editor JS module consumes — one
+	// entry per editable entity in the JSON tree. Field lists, paths, and
+	// owner-link metadata are derived from the configitems registry; adding a
+	// new ConfigItem there auto-propagates here.
+	targets := configitems.BuildEditTargets(raw.Typename, raw.OrbID, raw.Namespace, raw.Name)
+	// Owned-child orbIds defaulted by BuildEditTargets follow the
+	// `<namespace>:<name>-<suffix>` convention. Override with actual orbIds
+	// when the parent's GraphQL response carries them (handles existing data
+	// that may use legacy orbId formats).
+	if raw.Backup != nil {
+		if raw.Backup.Etcd != nil && raw.Backup.Etcd.OrbID != "" {
+			targets = configitems.OverrideEditTargetOrbID(targets, "EtcdBackup", raw.Backup.Etcd.OrbID)
+		}
+		if raw.Backup.Velero != nil && raw.Backup.Velero.OrbID != "" {
+			targets = configitems.OverrideEditTargetOrbID(targets, "VeleroBackup", raw.Backup.Velero.OrbID)
+		}
+		if raw.Backup.S3Sync != nil && raw.Backup.S3Sync.OrbID != "" {
+			targets = configitems.OverrideEditTargetOrbID(targets, "S3Sync", raw.Backup.S3Sync.OrbID)
+		}
+	}
+	targetsJSON, _ := json.Marshal(targets)
 
 	tab := clusterTabData{
 		ID:                raw.ID,
@@ -301,8 +486,9 @@ func (h *ClusterHandler) Tab(c echo.Context) error {
 		ClusterType:       raw.ClusterType,
 		CurrentUser:       currentUser,
 		EditDataJSON:      template.JS(editJSON),
+		EditTargetsJSON:   template.JS(targetsJSON),
 		BasePath:          h.basePath,
-		Actions:           layout.OrbitalActions(canMutate),
+		Actions:           h.actions(c),
 	}
 	if raw.ControlPlaneEndpoint != nil {
 		tab.ControlPlaneEndpoint = raw.ControlPlaneEndpoint.Address
@@ -340,6 +526,40 @@ func (h *ClusterHandler) Tab(c echo.Context) error {
 			ServerServiceTag: n.Server.ServiceTag,
 		})
 	}
+
+	if raw.Backup != nil {
+		bd := &clusterBackupData{
+			OrbID: raw.Backup.OrbID,
+			DomID: SafeDomID(raw.Backup.OrbID),
+		}
+		if raw.Backup.Etcd != nil {
+			bd.Etcd = &backupKindTab{
+				OrbID:    raw.Backup.Etcd.OrbID,
+				DomID:    SafeDomID(raw.Backup.Etcd.OrbID),
+				Enabled:  raw.Backup.Etcd.Enabled,
+				Schedule: raw.Backup.Etcd.Schedule,
+				Location: raw.Backup.Etcd.Location,
+			}
+		}
+		if raw.Backup.Velero != nil {
+			bd.Velero = &backupKindTab{
+				OrbID:    raw.Backup.Velero.OrbID,
+				DomID:    SafeDomID(raw.Backup.Velero.OrbID),
+				Enabled:  raw.Backup.Velero.Enabled,
+				Schedule: raw.Backup.Velero.Schedule,
+				Location: raw.Backup.Velero.Location,
+			}
+		}
+		if raw.Backup.S3Sync != nil {
+			bd.S3Sync = &backupS3SyncTab{
+				OrbID:   raw.Backup.S3Sync.OrbID,
+				DomID:   SafeDomID(raw.Backup.S3Sync.OrbID),
+				Enabled: raw.Backup.S3Sync.Enabled,
+			}
+		}
+		tab.Backup = bd
+	}
+	tab.RelatedOrbIDsCSV = strings.Join(collectClusterRelatedOrbIDs(&raw), ",")
 
 	tmpl := h.fragment
 	if h.dev {

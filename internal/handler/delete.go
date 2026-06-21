@@ -556,6 +556,12 @@ const clusterDeleteGQL = `
           orbId role
           server { id orbId hostname serviceTag }
         }
+        backup {
+          id
+          etcd { id }
+          velero { id }
+          s3Sync { id }
+        }
       }
       ... on EksaKubernetesCluster {
         tinkerbellIP { id address }
@@ -587,6 +593,12 @@ type clusterDeleteRaw struct {
 		ID      string `json:"id"`
 		Address string `json:"address"`
 	} `json:"tinkerbellIP,omitempty"`
+	Backup *struct {
+		ID     string                  `json:"id"`
+		Etcd   *struct{ ID string `json:"id"` } `json:"etcd"`
+		Velero *struct{ ID string `json:"id"` } `json:"velero"`
+		S3Sync *struct{ ID string `json:"id"` } `json:"s3Sync"`
+	} `json:"backup,omitempty"`
 }
 
 type clusterDeletePlan struct {
@@ -671,6 +683,25 @@ func (h *DeleteHandler) planClusterDelete(ctx context.Context, orbID string) (*c
 	if c.TinkerbellIP != nil && c.TinkerbellIP.ID != "" {
 		uids = append(uids, c.TinkerbellIP.ID)
 		groups = append(groups, countGroup("Tinkerbell IP", 1))
+	}
+
+	// Backup configuration + sub-kinds — all owned by the cluster, cascade-deleted.
+	if c.Backup != nil && c.Backup.ID != "" {
+		uids = append(uids, c.Backup.ID)
+		backupKinds := 0
+		if c.Backup.Etcd != nil && c.Backup.Etcd.ID != "" {
+			uids = append(uids, c.Backup.Etcd.ID)
+			backupKinds++
+		}
+		if c.Backup.Velero != nil && c.Backup.Velero.ID != "" {
+			uids = append(uids, c.Backup.Velero.ID)
+			backupKinds++
+		}
+		if c.Backup.S3Sync != nil && c.Backup.S3Sync.ID != "" {
+			uids = append(uids, c.Backup.S3Sync.ID)
+			backupKinds++
+		}
+		groups = append(groups, countGroup("Backup configuration", 1+backupKinds))
 	}
 
 	// Servers are NOT deleted — they're independent inventory. List the names
