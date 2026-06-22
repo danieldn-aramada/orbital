@@ -3,10 +3,13 @@ package divergence
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -16,21 +19,14 @@ import (
 // OverrideEntry is a single field-level divergence between orbital's intent and
 // a locally observed override. This is the canonical format orb accepts and
 // orbital displays.
-//
-// IntendedAtVersion is populated by orb's intake handler from orb's local
-// DGraph at the moment the report arrives — producers (cb-controller, etc.)
-// do not need to send it. It anchors the observation to the ConfigItem
-// version orb believed intent was at when this report was observed, which
-// orbital uses for MVCC race detection at Accept time.
 type OverrideEntry struct {
-	OrbID             string `json:"orbId"`
-	Field             string `json:"field"`
-	Type              string `json:"type,omitempty"` // orbital GraphQL type name (e.g. "Server"); empty for legacy producers
-	IntendedValue     any    `json:"intendedValue"`
-	OverrideValue     any    `json:"overrideValue"`
-	IntendedAtVersion *int   `json:"intendedAtVersion,omitempty"`
-	Who               string `json:"who"`
-	When              string `json:"when"`
+	OrbID         string `json:"orbId"`
+	Field         string `json:"field"`
+	Type          string `json:"type,omitempty"` // orbital GraphQL type name (e.g. "Server"); empty for legacy producers
+	IntendedValue any    `json:"intendedValue"`
+	OverrideValue any    `json:"overrideValue"`
+	Who           string `json:"who"`
+	When          string `json:"when"`
 }
 
 // Report is the published divergence state — the full set of currently pending
@@ -40,10 +36,46 @@ type Report struct {
 	Overrides   []OverrideEntry `json:"overrides"`
 }
 
-// PublishRecord tracks the last successful publish.
+// PublishRecord tracks the last successful publish. ContentHash is the
+// canonical hash of the published entries (excluding the jittery `When`
+// timestamp) and is the key the publisher uses to short-circuit republishes
+// when nothing meaningful changed. Empty for legacy records — those records
+// always trigger a republish on the next attempt, which seeds the hash.
 type PublishRecord struct {
 	PublishedAt time.Time `json:"publishedAt"`
 	S3Key       string    `json:"s3Key"`
+	ContentHash string    `json:"contentHash,omitempty"`
+}
+
+// ContentHash computes a canonical hash of a report's divergence content,
+// stable across reports that differ only in their `When` timestamps. Two
+// reports producing the same hash describe the same field-level divergence
+// state from the edge's perspective and need not be republished.
+//
+// Sort key is (OrbID, Field); excluded from the hash: When.
+func ContentHash(entries []OverrideEntry) string {
+	sorted := make([]OverrideEntry, len(entries))
+	copy(sorted, entries)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].OrbID != sorted[j].OrbID {
+			return sorted[i].OrbID < sorted[j].OrbID
+		}
+		return sorted[i].Field < sorted[j].Field
+	})
+	canon := make([]map[string]any, len(sorted))
+	for i, e := range sorted {
+		canon[i] = map[string]any{
+			"orbId":         e.OrbID,
+			"field":         e.Field,
+			"type":          e.Type,
+			"intendedValue": e.IntendedValue,
+			"overrideValue": e.OverrideValue,
+			"who":           e.Who,
+		}
+	}
+	b, _ := json.Marshal(canon)
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
 }
 
 // Store manages divergence reports locally in DataDir/divergence/.

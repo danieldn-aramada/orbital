@@ -152,12 +152,17 @@
                    operators / sessions. */}}
               {{if .AlreadyPublished}}
               <a class="button is-success is-light is-small"
-                 href="{{.BasePath}}/publish-history"
+                 href="{{$.BasePath}}/publish-history"
                  title="View publish history">
                 <span class="icon"><i class="fa-solid fa-check"></i></span>
                 <span>Published{{if .PublishedTag}} {{.PublishedTag}}{{end}}</span>
                 <span class="icon"><i class="fa-solid fa-arrow-up-right-from-square"></i></span>
               </a>
+              {{else if .IgnoreOnly}}
+              {{/* Ignore doesn't drive edge actuation — cb-controller already
+                   respects local:admin's SSA ownership. Publishing the cloud
+                   ack is informational only; omit the button entirely. */}}
+              <span class="has-text-grey is-size-7">Ignored — no publish needed</span>
               {{else}}
               <button class="button is-link is-outlined is-small divergence-publish-btn"
                       data-dc-orbid="{{$dcId}}"
@@ -167,6 +172,18 @@
                 <span>Publish</span>
               </button>
               {{end}}
+              {{/* Break-glass: drops all entries + resolutions for this DC.
+                   Operator confirms in a modal. The next orb publish (or the
+                   next poll, since the ingester's idempotency tracker is also
+                   reset) will repopulate from scratch as fresh pending rows. */}}
+              <button class="button is-danger is-outlined is-small ml-2 divergence-delete-btn"
+                      data-dc-orbid="{{$dcId}}"
+                      data-entry-count="{{.Total}}"
+                      onclick="divergenceDeleteReportForDC(this)"
+                      title="Break-glass — orbital normally re-ingests on every orb publish. Only use when state is stuck.">
+                <span class="icon"><i class="fa-solid fa-trash"></i></span>
+                <span>Delete report</span>
+              </button>
             </td>
           </tr>
           <tr class="divergence-group-detail" data-dc="{{$dcId}}" style="display:none;">

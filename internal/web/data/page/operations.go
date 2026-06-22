@@ -48,6 +48,12 @@ type DivergenceGroup struct {
 	// surfaced in the disabled button's label (e.g. "Published v17"). Empty
 	// when AlreadyPublished is false.
 	PublishedTag string
+
+	// IgnoreOnly is true when every entry in the group has been decided AND
+	// every decision is Ignore. Ignore doesn't drive edge actuation — the
+	// publish-now button is irrelevant for these rows and hidden in the UI.
+	// True only when Total > 0 (an empty group is degenerate, not "ignore-only").
+	IgnoreOnly bool
 }
 
 type DivergenceReports struct {

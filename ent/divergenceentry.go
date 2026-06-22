@@ -39,8 +39,6 @@ type DivergenceEntry struct {
 	IntendedValue json.RawMessage `json:"intended_value,omitempty"`
 	// OverrideValue holds the value of the "override_value" field.
 	OverrideValue json.RawMessage `json:"override_value,omitempty"`
-	// IntendedAtVersion holds the value of the "intended_at_version" field.
-	IntendedAtVersion *int `json:"intended_at_version,omitempty"`
 	// Who holds the value of the "who" field.
 	Who string `json:"who,omitempty"`
 	// FirstSeenAt holds the value of the "first_seen_at" field.
@@ -59,8 +57,6 @@ func (*DivergenceEntry) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case divergenceentry.FieldIntendedValue, divergenceentry.FieldOverrideValue:
 			values[i] = new([]byte)
-		case divergenceentry.FieldIntendedAtVersion:
-			values[i] = new(sql.NullInt64)
 		case divergenceentry.FieldCreatedBy, divergenceentry.FieldUpdatedBy, divergenceentry.FieldDcOrbID, divergenceentry.FieldEntryOrbID, divergenceentry.FieldField, divergenceentry.FieldTypeName, divergenceentry.FieldWho:
 			values[i] = new(sql.NullString)
 		case divergenceentry.FieldCreatedAt, divergenceentry.FieldUpdatedAt, divergenceentry.FieldFirstSeenAt, divergenceentry.FieldLastSeenAt, divergenceentry.FieldLastReportPublishedAt:
@@ -153,13 +149,6 @@ func (_m *DivergenceEntry) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field override_value: %w", err)
 				}
 			}
-		case divergenceentry.FieldIntendedAtVersion:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field intended_at_version", values[i])
-			} else if value.Valid {
-				_m.IntendedAtVersion = new(int)
-				*_m.IntendedAtVersion = int(value.Int64)
-			}
 		case divergenceentry.FieldWho:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field who", values[i])
@@ -251,11 +240,6 @@ func (_m *DivergenceEntry) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("override_value=")
 	builder.WriteString(fmt.Sprintf("%v", _m.OverrideValue))
-	builder.WriteString(", ")
-	if v := _m.IntendedAtVersion; v != nil {
-		builder.WriteString("intended_at_version=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
 	builder.WriteString(", ")
 	builder.WriteString("who=")
 	builder.WriteString(_m.Who)

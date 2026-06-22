@@ -13,286 +13,174 @@ import (
 	"github.com/armada/orbital/internal/divergence"
 )
 
-// applyReport writes the report's overrides for one DC to the ent store:
-//   - UPSERT each entry (insert new, update last_seen_at / last_report_published_at on existing)
-//   - DELETE entries previously stored for this DC that are not present in this report
+// incomingEntry is a marshaled report entry, used for both the equality check
+// and the insert phase.
+type incomingEntry struct {
+	ov       divergence.OverrideEntry
+	intended json.RawMessage
+	override json.RawMessage
+	when     time.Time
+}
+
+// applyReport is the supersede-semantics ingest path (ADR 012).
 //
-// Single read + per-entry UPSERT + bulk-delete-by-key — not transactional.
-// If the process dies between the UPSERT phase and the delete phase, the next
-// poll cycle is idempotent and converges to the right state.
+// A divergence report's content is the set of (entry_orb_id, field,
+// override_value) tuples it carries. Two cases:
 //
-// Resolved entries are write-protected: once an admin has decided an entry,
-// re-ingesting later reports refreshes only "we saw this again" timestamps
-// (last_seen_at, last_report_published_at, type_name). The intended/override
-// values stay frozen at resolution time. Orb's reports reflect what orb
-// believed intent was at report time — that's a stale view until orb imports
-// a fresh bundle, and we must not let it rewrite the history the admin
-// already decided against.
+//   - Content matches existing entries for the DC → no state change. Touch
+//     last_seen_at and last_report_published_at on each row so the UI shows
+//     freshness, but leave resolutions and field values untouched.
+//   - Content differs (any added, removed, or value-changed tuple) → atomic
+//     supersede: drop all DC entries (and resolutions, in the same tx),
+//     insert the incoming set as fresh pending, emit one
+//     supersedeDivergenceReport audit event.
+//
+// Effects of the supersede choice are pinned in ADR 012. The page promises
+// single-report semantics; resolutions cannot survive a content-differing
+// report. Operator may re-decide previously-decided fields if any sibling
+// field's divergence content changes — that friction is bounded and the price
+// of UI inferrability.
 func (i *Ingester) applyReport(ctx context.Context, dc dcRef, publishedAt time.Time, overrides []divergence.OverrideEntry) error {
-	// Track which (entry_orb_id, field) pairs appear in this report so we
-	// can delete the others below.
-	present := make(map[string]bool, len(overrides))
-
-	// Pre-fetch resolved (entryOrbId, field) pairs whose entryOrbIds appear in
-	// this report. Narrowed by EntryOrbIDIn first to avoid scanning the
-	// whole resolutions table; field equality is checked in-memory below
-	// since orbital resolutions don't carry the DC identifier.
-	resolved := make(map[string]bool, len(overrides))
-	if len(overrides) > 0 {
-		orbIDs := make([]string, 0, len(overrides))
-		for _, ov := range overrides {
-			orbIDs = append(orbIDs, ov.OrbID)
-		}
-		rows, err := i.db.DivergenceResolution.Query().
-			Where(divergenceresolution.EntryOrbIDIn(orbIDs...)).
-			All(ctx)
-		if err != nil {
-			return fmt.Errorf("query resolutions for DC %s: %w", dc.id, err)
-		}
-		for _, r := range rows {
-			resolved[r.EntryOrbID+"|"+r.Field] = true
-		}
-	}
-
-	for _, ov := range overrides {
-		when, _ := time.Parse(time.RFC3339, ov.When) // best-effort; zero time if unparseable
+	incoming := make([]incomingEntry, len(overrides))
+	for idx, ov := range overrides {
 		intended, _ := json.Marshal(ov.IntendedValue)
 		override, _ := json.Marshal(ov.OverrideValue)
-		entryKey := ov.OrbID + "|" + ov.Field
-		isResolved := resolved[entryKey]
-
-		// UPSERT: find existing by (dc, orbId, field), update if present, insert otherwise.
-		existing, err := i.db.DivergenceEntry.Query().
-			Where(
-				divergenceentry.DcOrbID(dc.id),
-				divergenceentry.EntryOrbID(ov.OrbID),
-				divergenceentry.Field(ov.Field),
-			).
-			Only(ctx)
-
-		if ent.IsNotFound(err) {
-			// New entry — no prior decision frozen, take values from the report.
-			// IntendedAtVersion comes from the report itself (orb captured it
-			// at intake from its local read-only DGraph). Nil means "MVCC
-			// unavailable for this row" — orbital's Accept handler degrades to
-			// a value-based stale check.
-			creator := i.db.DivergenceEntry.Create().
-				SetDcOrbID(dc.id).
-				SetEntryOrbID(ov.OrbID).
-				SetField(ov.Field).
-				SetTypeName(ov.Type).
-				SetIntendedValue(intended).
-				SetOverrideValue(override).
-				SetWho(ov.Who).
-				SetFirstSeenAt(when).
-				SetLastSeenAt(when).
-				SetLastReportPublishedAt(publishedAt)
-			if ov.IntendedAtVersion != nil {
-				creator = creator.SetIntendedAtVersion(*ov.IntendedAtVersion)
-			}
-			if _, err := creator.Save(ctx); err != nil {
-				return fmt.Errorf("insert %s/%s.%s: %w", dc.id, ov.OrbID, ov.Field, err)
-			}
-		} else if err != nil {
-			return fmt.Errorf("query %s/%s.%s: %w", dc.id, ov.OrbID, ov.Field, err)
-		} else {
-			// Resolved entries follow one of two paths:
-			//   (1) New override == stored override → loop hasn't closed yet,
-			//       orb is echoing the same divergence we already decided on.
-			//       Freeze values; only refresh "we saw it again" timestamps.
-			//   (2) New override != stored override → edge state drifted to a
-			//       NEW value since the admin's decision. The decision was for
-			//       a different value and is now stale. Delete the resolution
-			//       so the entry reappears as pending and admin re-decides.
-			// The history of the prior decision remains in the audit events
-			// table (resolveDivergence + updateIdracSettings).
-			shouldUpdateValues := !isResolved
-			if isResolved && !bytes.Equal(override, existing.OverrideValue) {
-				if _, err := i.db.DivergenceResolution.Delete().
-					Where(
-						divergenceresolution.EntryOrbID(ov.OrbID),
-						divergenceresolution.Field(ov.Field),
-					).Exec(ctx); err != nil {
-					return fmt.Errorf("supersede resolution %s/%s.%s: %w", dc.id, ov.OrbID, ov.Field, err)
-				}
-				i.logger.Info("divergence ingester: superseded resolution — edge override changed since decision",
-					"dc", dc.id, "orbId", ov.OrbID, "field", ov.Field,
-					"priorOverride", string(existing.OverrideValue),
-					"newOverride", string(override),
-				)
-				shouldUpdateValues = true
-			}
-
-			u := existing.Update().
-				SetTypeName(ov.Type).
-				SetLastSeenAt(when).
-				SetLastReportPublishedAt(publishedAt)
-			if shouldUpdateValues {
-				u = u.SetIntendedValue(intended).
-					SetOverrideValue(override).
-					SetWho(ov.Who)
-			}
-			if _, err := u.Save(ctx); err != nil {
-				return fmt.Errorf("update %s/%s.%s: %w", dc.id, ov.OrbID, ov.Field, err)
-			}
+		when, _ := time.Parse(time.RFC3339, ov.When) // zero time if unparseable
+		incoming[idx] = incomingEntry{
+			ov:       ov,
+			intended: intended,
+			override: override,
+			when:     when,
 		}
-		present[entryKey] = true
 	}
 
-	// DELETE entries for this DC that are no longer in the report.
-	stale, err := i.db.DivergenceEntry.Query().
+	existing, err := i.db.DivergenceEntry.Query().
 		Where(divergenceentry.DcOrbID(dc.id)).
 		All(ctx)
 	if err != nil {
-		return fmt.Errorf("list %s entries: %w", dc.id, err)
+		return fmt.Errorf("query existing entries for %s: %w", dc.id, err)
 	}
-	var staleIDs []string
-	for _, e := range stale {
-		if !present[e.EntryOrbID+"|"+e.Field] {
-			staleIDs = append(staleIDs, e.ID.String())
+
+	if contentEqual(existing, incoming) {
+		// No state change. Touch timestamps so the UI reflects freshness, but
+		// leave every other column (and every resolution) alone.
+		for _, in := range incoming {
+			if _, err := i.db.DivergenceEntry.Update().
+				Where(
+					divergenceentry.DcOrbID(dc.id),
+					divergenceentry.EntryOrbID(in.ov.OrbID),
+					divergenceentry.Field(in.ov.Field),
+				).
+				SetLastSeenAt(in.when).
+				SetLastReportPublishedAt(publishedAt).
+				Save(ctx); err != nil {
+				return fmt.Errorf("touch %s/%s.%s: %w", dc.id, in.ov.OrbID, in.ov.Field, err)
+			}
 		}
-	}
-	if len(staleIDs) == 0 {
 		return nil
 	}
 
-	// Sanity log if more than half the existing entries are about to be deleted —
-	// could indicate cb-controller transiently produced an empty set. Doesn't
-	// block the delete; just visible in logs for investigation.
-	if len(staleIDs) > 0 && len(stale) > 0 {
-		ratio := float64(len(staleIDs)) / float64(len(stale))
-		if ratio > 0.5 && len(stale) >= 4 {
-			i.logger.Warn("divergence ingester: large drop in entry count",
-				"dc", dc.id,
-				"existing", len(stale),
-				"deleting", len(staleIDs),
-				"ratio", ratio,
-			)
-		}
-	}
-
-	deleted := 0
-	for _, e := range stale {
-		if present[e.EntryOrbID+"|"+e.Field] {
-			continue
-		}
-		// Loop closure: orb stopped reporting this divergence. Delete the
-		// entry AND any attached resolution — the resolution row is bound
-		// 1:1 with the active entry, never outlives it. Audit of the
-		// decision lives in the Event log. If local admin later re-applies
-		// the same override, orb reports a fresh divergence; the operator
-		// re-decides from a clean slate.
-		//
-		// Pre-fetch the resolution's action (if any) BEFORE the delete so we
-		// can attribute the closure in audit. action=ignore loop-closure is
-		// load-bearing semantic: per configbundle ADR-009, it signals that
-		// the edge admin released their SSA claim and cb-controller's
-		// ReclaimController restored intent. The cloud admin should see this
-		// closure as an explicit edge-driven action (closeIgnoreOnHandback),
-		// not silent disappearance.
-		var prevAction string
-		if r, err := i.db.DivergenceResolution.Query().
-			Where(
-				divergenceresolution.EntryOrbID(e.EntryOrbID),
-				divergenceresolution.Field(e.Field),
-			).
-			Only(ctx); err == nil {
-			prevAction = string(r.Action)
-		}
-
-		// Transactional delete: resolution + entry as a single unit. If
-		// either fails, nothing is deleted and the next ingest tick retries.
-		// Avoids the orphan-resolution case where a deleted entry leaves
-		// behind a resolution that silently re-attaches to a future
-		// re-divergence with the same (entry_orb_id, field) key.
-		if err := i.deleteEntryWithResolution(ctx, e); err != nil {
-			i.logger.Warn("divergence ingester: transactional cleanup failed",
-				"dc", dc.id, "orbId", e.EntryOrbID, "field", e.Field, "err", err)
-			continue
-		}
-		deleted++
-
-		if prevAction == "ignore" {
-			i.writeHandbackAuditEvent(ctx, dc.id, e)
-		}
-	}
-	if deleted > 0 {
-		i.logger.Info("divergence ingester: closed loop on resolved entries",
-			"dc", dc.id, "deleted", deleted)
-	}
-	return nil
-}
-
-// deleteEntryWithResolution removes a DivergenceEntry and its matching
-// DivergenceResolution (if any) atomically. Either both deletes succeed or
-// neither does — preventing the orphan-resolution case where a stale resolution
-// would silently auto-resolve a future re-divergence with the same key.
-func (i *Ingester) deleteEntryWithResolution(ctx context.Context, e *ent.DivergenceEntry) error {
+	// Content differs — atomic supersede.
 	tx, err := i.db.Tx(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	if _, err := tx.DivergenceResolution.Delete().
-		Where(
-			divergenceresolution.EntryOrbID(e.EntryOrbID),
-			divergenceresolution.Field(e.Field),
-		).
+
+	// Drop resolutions tied to this DC's existing entries. DivergenceResolution
+	// has no dc_orb_id column, so we target by (entry_orb_id, field) pairs we
+	// already know belong to this DC.
+	for _, e := range existing {
+		if _, err := tx.DivergenceResolution.Delete().
+			Where(
+				divergenceresolution.EntryOrbID(e.EntryOrbID),
+				divergenceresolution.Field(e.Field),
+			).Exec(ctx); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("delete resolutions: %w", err)
+		}
+	}
+
+	if _, err := tx.DivergenceEntry.Delete().
+		Where(divergenceentry.DcOrbID(dc.id)).
 		Exec(ctx); err != nil {
 		_ = tx.Rollback()
-		return fmt.Errorf("delete resolution: %w", err)
+		return fmt.Errorf("delete entries: %w", err)
 	}
-	if err := tx.DivergenceEntry.DeleteOne(e).Exec(ctx); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("delete entry: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit: %w", err)
-	}
-	return nil
-}
 
-// writeHandbackAuditEvent records that an active Ignore resolution closed via
-// the edge-handback path (configbundle ADR-009): local admin released their
-// SSA claim, cb-controller reclaimed the field with intent value, the
-// divergence reporter stopped emitting the entry, and this ingester is
-// removing the stale Ignore directive. Failures are logged and swallowed —
-// audit writes must never block or fail an ingest cycle.
-func (i *Ingester) writeHandbackAuditEvent(ctx context.Context, dcOrbID string, e *ent.DivergenceEntry) {
+	for _, in := range incoming {
+		if _, err := tx.DivergenceEntry.Create().
+			SetDcOrbID(dc.id).
+			SetEntryOrbID(in.ov.OrbID).
+			SetField(in.ov.Field).
+			SetTypeName(in.ov.Type).
+			SetIntendedValue(in.intended).
+			SetOverrideValue(in.override).
+			SetWho(in.ov.Who).
+			SetFirstSeenAt(in.when).
+			SetLastSeenAt(in.when).
+			SetLastReportPublishedAt(publishedAt).
+			Save(ctx); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("insert %s/%s.%s: %w", dc.id, in.ov.OrbID, in.ov.Field, err)
+		}
+	}
+
+	// One audit event per supersede. Forensic history of individual
+	// resolutions dropped lives in the prior resolveDivergence / Accept
+	// dispatch events in the event log.
 	details := map[string]any{
-		"entryId":              e.ID.String(),
-		"dcOrbId":              dcOrbID,
-		"orbId":                e.EntryOrbID,
-		"field":                e.Field,
-		"prevResolutionAction": "ignore",
-		"trigger":              "edge-handback",
+		"dcOrbId": dc.id,
+		"dropped": len(existing),
+		"added":   len(incoming),
 	}
 	raw, _ := json.Marshal(details)
-	ev, err := i.db.Event.Create().
+	ev, err := tx.Event.Create().
 		SetActor("system:ingester").
 		SetEventCategory("management").
-		SetOperations([]string{"closeIgnoreOnHandback"}).
+		SetOperations([]string{"supersedeDivergenceReport"}).
 		SetDetails(raw).
 		Save(ctx)
 	if err != nil {
-		i.logger.Warn("divergence ingester: write handback audit event failed",
-			"dc", dcOrbID, "orbId", e.EntryOrbID, "field", e.Field, "err", err)
-		return
+		_ = tx.Rollback()
+		return fmt.Errorf("audit event: %w", err)
 	}
-	// Attach the underlying resource so the event is visible on the resource's
-	// audit panel (DC, Server, IdracSettings, etc.) — same pattern as
-	// resolveDivergence / dismissDivergence.
-	if _, err := i.db.EventResource.Create().
-		SetOrbID(e.EntryOrbID).
-		SetEvent(ev).
-		Save(ctx); err != nil {
-		i.logger.Warn("divergence ingester: attach event resource failed",
-			"dc", dcOrbID, "orbId", e.EntryOrbID, "field", e.Field, "err", err)
+	if _, err := tx.EventResource.Create().SetOrbID(dc.id).SetEvent(ev).Save(ctx); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("audit event resource: %w", err)
 	}
-	if _, err := i.db.EventResourceType.Create().
-		SetResourceType("DivergenceEntry").
-		SetEvent(ev).
-		Save(ctx); err != nil {
-		i.logger.Warn("divergence ingester: attach event resource_type failed",
-			"dc", dcOrbID, "orbId", e.EntryOrbID, "field", e.Field, "err", err)
+	if _, err := tx.EventResourceType.Create().SetResourceType("DataCenter").SetEvent(ev).Save(ctx); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("audit event resource_type: %w", err)
 	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+
+	i.logger.Info("divergence ingester: superseded report",
+		"dc", dc.id, "dropped", len(existing), "added", len(incoming))
+	return nil
+}
+
+// contentEqual reports whether the existing entries for a DC match the
+// incoming report's content, where "content" is the set of
+// (entry_orb_id, field, override_value) tuples. Order-independent.
+func contentEqual(existing []*ent.DivergenceEntry, incoming []incomingEntry) bool {
+	if len(existing) != len(incoming) {
+		return false
+	}
+	byKey := make(map[string][]byte, len(existing))
+	for _, e := range existing {
+		byKey[e.EntryOrbID+"|"+e.Field] = bytes.TrimSpace(e.OverrideValue)
+	}
+	for _, in := range incoming {
+		current, ok := byKey[in.ov.OrbID+"|"+in.ov.Field]
+		if !ok {
+			return false
+		}
+		if !bytes.Equal(current, bytes.TrimSpace(in.override)) {
+			return false
+		}
+	}
+	return true
 }

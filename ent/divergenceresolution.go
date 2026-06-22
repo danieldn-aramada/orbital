@@ -35,10 +35,8 @@ type DivergenceResolution struct {
 	// Actor holds the value of the "actor" field.
 	Actor string `json:"actor,omitempty"`
 	// DecidedAt holds the value of the "decided_at" field.
-	DecidedAt time.Time `json:"decided_at,omitempty"`
-	// IntendedAtVersion holds the value of the "intended_at_version" field.
-	IntendedAtVersion *int `json:"intended_at_version,omitempty"`
-	selectValues      sql.SelectValues
+	DecidedAt    time.Time `json:"decided_at,omitempty"`
+	selectValues sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -46,8 +44,6 @@ func (*DivergenceResolution) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case divergenceresolution.FieldIntendedAtVersion:
-			values[i] = new(sql.NullInt64)
 		case divergenceresolution.FieldCreatedBy, divergenceresolution.FieldUpdatedBy, divergenceresolution.FieldEntryOrbID, divergenceresolution.FieldField, divergenceresolution.FieldAction, divergenceresolution.FieldActor:
 			values[i] = new(sql.NullString)
 		case divergenceresolution.FieldCreatedAt, divergenceresolution.FieldUpdatedAt, divergenceresolution.FieldDecidedAt:
@@ -130,13 +126,6 @@ func (_m *DivergenceResolution) assignValues(columns []string, values []any) err
 			} else if value.Valid {
 				_m.DecidedAt = value.Time
 			}
-		case divergenceresolution.FieldIntendedAtVersion:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field intended_at_version", values[i])
-			} else if value.Valid {
-				_m.IntendedAtVersion = new(int)
-				*_m.IntendedAtVersion = int(value.Int64)
-			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -201,11 +190,6 @@ func (_m *DivergenceResolution) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("decided_at=")
 	builder.WriteString(_m.DecidedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	if v := _m.IntendedAtVersion; v != nil {
-		builder.WriteString("intended_at_version=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
 	builder.WriteByte(')')
 	return builder.String()
 }

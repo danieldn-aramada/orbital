@@ -34,8 +34,6 @@ const (
 	FieldIntendedValue = "intended_value"
 	// FieldOverrideValue holds the string denoting the override_value field in the database.
 	FieldOverrideValue = "override_value"
-	// FieldIntendedAtVersion holds the string denoting the intended_at_version field in the database.
-	FieldIntendedAtVersion = "intended_at_version"
 	// FieldWho holds the string denoting the who field in the database.
 	FieldWho = "who"
 	// FieldFirstSeenAt holds the string denoting the first_seen_at field in the database.
@@ -61,7 +59,6 @@ var Columns = []string{
 	FieldTypeName,
 	FieldIntendedValue,
 	FieldOverrideValue,
-	FieldIntendedAtVersion,
 	FieldWho,
 	FieldFirstSeenAt,
 	FieldLastSeenAt,
@@ -141,11 +138,6 @@ func ByField(opts ...sql.OrderTermOption) OrderOption {
 // ByTypeName orders the results by the type_name field.
 func ByTypeName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTypeName, opts...).ToFunc()
-}
-
-// ByIntendedAtVersion orders the results by the intended_at_version field.
-func ByIntendedAtVersion(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldIntendedAtVersion, opts...).ToFunc()
 }
 
 // ByWho orders the results by the who field.

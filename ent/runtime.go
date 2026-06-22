@@ -61,7 +61,7 @@ func init() {
 	// divergenceentry.DefaultTypeName holds the default value on creation for the type_name field.
 	divergenceentry.DefaultTypeName = divergenceentryDescTypeName.Default.(string)
 	// divergenceentryDescWho is the schema descriptor for who field.
-	divergenceentryDescWho := divergenceentryFields[8].Descriptor()
+	divergenceentryDescWho := divergenceentryFields[7].Descriptor()
 	// divergenceentry.WhoValidator is a validator for the "who" field. It is called by the builders before save.
 	divergenceentry.WhoValidator = divergenceentryDescWho.Validators[0].(func(string) error)
 	// divergenceentryDescID is the schema descriptor for id field.

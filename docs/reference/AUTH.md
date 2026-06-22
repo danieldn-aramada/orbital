@@ -25,7 +25,8 @@ User identity and per-user audit are hard requirements for orbital. That require
 - **Admin role management UI at `/users`** — server-side rendered Go template (not DataTables). Button group per row (R/D/A), active role highlighted+disabled. Self-row fully disabled. Last-admin guard: `PUT /api/v1/users/:id/role` returns 409. Operation is idempotent (same role → 200 with no DB write).
 - **Readonly UI gating: `CanMutate bool` on `layout.Base`** — `true` for dev and admin. Pages gate action forms behind `{{if .CanMutate}}...{{else}}{{template "access-required" .}}{{end}}`. Pure-action pages (Restore): entire content gated. Mixed pages (Export, Backup, Signed Artifacts): list/table always visible, action form gated.
 - **`can_mutate` is derived from the session cookie, not a DB lookup** — computed in the global session middleware in `server.go` via `RoleAtLeast`. No DB call on GET requests. `RequireRole` is DB-backed on mutating methods (security enforcement boundary). `can_mutate` is a UI display hint only. Role changes take effect on next login. Do not re-add a separate `SetCanMutate` middleware or per-route `can_mutate` wiring.
-- **`ORBITAL_OIDC_DEVICE_CODE` defaults to `true`** — device code is the only viable browser SSO for this deployment (private DNS/ILB, no publicly resolvable redirect URI). Set `false` only if deploying on a public URL with a registered redirect URI. No auto-open: Azure AD's v1 `deviceauth` endpoint doesn't support `?otc=` pre-fill.
+- **`ORBITAL_OAUTH2_DEVICE_CODE` defaults to `true`** — device code is the only viable browser SSO for this deployment (private DNS/ILB, no publicly resolvable redirect URI). Set `false` only if deploying on a public URL with a registered redirect URI. No auto-open: Azure AD's v1 `deviceauth` endpoint doesn't support `?otc=` pre-fill. (Renamed from `ORBITAL_OIDC_DEVICE_CODE` — device code is OAuth 2.0 RFC 8628, not OIDC.)
+- **`ORBITAL_OIDC_*` env var naming is vendor namespace, not protocol claim.** The runtime flows orbital uses today are OAuth 2.0 — device code (RFC 8628) for browser SSO, Authorization Code + PKCE (RFC 8252) for orbctl. Neither requests `openid` scope; no `id_token` is ever issued. The `OIDC_*` prefix on env vars reflects (a) Azure AD's "OpenID Connect" app-registration vocabulary, and (b) that bearer-token validation uses OIDC infrastructure (discovery → JWKS → signature/issuer/audience checks via go-oidc). Issuance is OAuth 2.0; validation is OIDC-flavored. Don't read `OIDC_` in a variable name as "we use id_tokens" — we don't.
 - **`POST /auth/device/poll` sends `device_code` in the JSON body** — not as a query parameter. Query params appear in application logs, proxy logs, and browser history. `device_code` is a short-lived credential. Handler uses `c.Bind()`. Route is `POST`, not `GET`.
 - **`ResolveUser` middleware bridges bearer token auth to the user table** — wired after `RequireAuth()` and before `RequireRole()` in `server.go`. When `user_id` is 0 (bearer path: JWT validated but no session), finds or provisions the user by email from JWT claims. Without this, all bearer token requests were always-403. Do not remove or reorder it.
 
@@ -38,7 +39,7 @@ User identity and per-user audit are hard requirements for orbital. That require
 
 ## Device code browser SSO
 
-Activated by `ORBITAL_OIDC_DEVICE_CODE=true`. The login modal shows a "Sign in with Microsoft" button that uses the device code flow instead of the standard Authorization Code redirect.
+Activated by `ORBITAL_OAUTH2_DEVICE_CODE=true`. The login modal shows a "Sign in with Microsoft" button that uses the device code flow instead of the standard Authorization Code redirect.
 
 **Why device code for browser SSO** (not Authorization Code + PKCE):
 

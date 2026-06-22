@@ -1,11 +1,9 @@
 package handler
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -13,7 +11,6 @@ import (
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/divergenceentry"
 	"github.com/armada/orbital/ent/divergenceresolution"
-	"github.com/armada/orbital/internal/divergence"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
@@ -30,11 +27,26 @@ import (
 type DivergenceHandler struct {
 	db     *ent.Client
 	logger *slog.Logger
-	gql    *GraphQL
+	gql      *GraphQL
+	ingester DivergenceIngester // optional; nil when ingester subsystem isn't running
+}
+
+// DivergenceIngester is the subset of *divergenceingest.Ingester this handler
+// needs. Declared as an interface to avoid an import cycle and to keep the
+// handler testable without booting a real ingester.
+type DivergenceIngester interface {
+	ResetDC(dcID string)
 }
 
 func NewDivergenceHandler(db *ent.Client, logger *slog.Logger, gql *GraphQL) *DivergenceHandler {
 	return &DivergenceHandler{db: db, logger: logger, gql: gql}
+}
+
+// SetIngester wires the divergence ingester so ClearByDC can reset the
+// in-memory idempotency tracker after wiping DB rows. No-op when nil — the
+// handler still works (and tests don't need to mock an ingester).
+func (h *DivergenceHandler) SetIngester(ing DivergenceIngester) {
+	h.ingester = ing
 }
 
 // entryItem is the wire shape returned by the List endpoint and used by the UI.
@@ -109,40 +121,10 @@ func (h *DivergenceHandler) List(c echo.Context) error {
 		wantAction[parsed] = true
 	}
 
-	// Per-field staleness check for the action-filtered (bundler) query shape.
-	// Compares the field's current DGraph value to what the admin's resolution
-	// expects: for Reject, intent should still equal entry.intended_value (the
-	// admin decided to keep that intent); for Accept, intent should now equal
-	// entry.override_value (the admin's mutation adopted the override). If the
-	// current value differs, another admin's edit has moved this specific field
-	// since the decision — surface as stale, exclude from the bundler list.
-	//
-	// Per-FIELD (not per-ConfigItem) because batched decisions on sibling
-	// fields of the same ConfigItem (e.g., Accept ipmiEnabled + Reject
-	// sshEnabled on the same IdracSettings) must not invalidate each other.
-	// The version field on ConfigItem bumps for any sibling edit, which would
-	// false-positive every batch resolution that touches more than one field.
-	type cachedValMatches struct{ match bool; have bool }
-	currentValueMatchCache := map[string]cachedValMatches{}
-	currentValueMatchesExpected := func(typeName, orbID, field string, expected json.RawMessage) bool {
-		if typeName == "" || orbID == "" || field == "" || len(expected) == 0 {
-			return true // no anchor → can't check; allow through (degraded MVCC)
-		}
-		key := typeName + "|" + orbID + "|" + field + "|" + string(expected)
-		if c, ok := currentValueMatchCache[key]; ok && c.have {
-			return c.match
-		}
-		match, err := h.currentValueMatches(ctx, typeName, orbID, field, expected)
-		if err != nil {
-			h.logger.Warn("fetch current value for resolution staleness check failed",
-				"orbId", orbID, "type", typeName, "field", field, "err", err)
-			currentValueMatchCache[key] = cachedValMatches{match: true, have: true} // degrade to allow
-			return true
-		}
-		currentValueMatchCache[key] = cachedValMatches{match: match, have: true}
-		return match
-	}
-
+	// Per ADR 012: a resolution row IS the operator's decision. No version pin,
+	// no value-based staleness check — those concepts are gone. Resolutions
+	// are wiped at ingest time when orb publishes a content-differing report,
+	// so anything still in the table is by definition current.
 	out := make([]entryItem, 0, len(entries))
 	for _, e := range entries {
 		item := entryItem{
@@ -173,35 +155,12 @@ func (h *DivergenceHandler) List(c echo.Context) error {
 			h.logger.Warn("query resolution failed", "orbId", e.EntryOrbID, "field", e.Field, "err", err)
 		}
 
-		// Action filter requires a resolution and matching action.
 		if len(wantAction) > 0 {
 			if item.Resolution == nil {
 				continue
 			}
 			if !wantAction[divergenceresolution.Action(item.Resolution.Action)] {
 				continue
-			}
-			// MVCC: refuse to surface accept/reject resolutions whose field
-			// intent has been superseded by another cloud admin's edit since
-			// the decision. Reject expects DGraph current == entry.intended
-			// (admin chose to keep that intent); Accept expects DGraph current
-			// == entry.override (admin's mutation adopted the override). If
-			// current diverges from the expected post-decision value, surface
-			// as stale and exclude from the bundler list. Ignore is exempt —
-			// it's a standing instruction, not a one-shot enforcement.
-			if res != nil &&
-				(res.Action == divergenceresolution.ActionAccept || res.Action == divergenceresolution.ActionReject) {
-				var expected json.RawMessage
-				if res.Action == divergenceresolution.ActionReject {
-					expected = e.IntendedValue
-				} else {
-					expected = e.OverrideValue
-				}
-				if !currentValueMatchesExpected(e.TypeName, e.EntryOrbID, e.Field, expected) {
-					h.logger.Info("excluding stale resolution from action-filtered list",
-						"orbId", e.EntryOrbID, "field", e.Field, "action", res.Action)
-					continue
-				}
 			}
 		}
 		out = append(out, item)
@@ -349,26 +308,13 @@ func (h *DivergenceHandler) applyResolution(ctx context.Context, id uuid.UUID, a
 		return nil, fmt.Errorf("delete prior resolution: %w", err)
 	}
 
-	// Pin the DGraph intent version this decision was made against. The List
-	// handler later compares this against DGraph's current version to refuse
-	// surfacing the resolution if intent has moved (e.g., another cloud admin
-	// edited the field between this decision and the next bundle build).
-	// Accept's mutation already incremented intent by 1, so we pin the
-	// post-mutation version; Reject/Ignore leave intent untouched.
-	create := h.db.DivergenceResolution.Create().
+	res, err := h.db.DivergenceResolution.Create().
 		SetEntryOrbID(entry.EntryOrbID).
 		SetField(entry.Field).
 		SetAction(action).
 		SetActor(actor).
-		SetDecidedAt(time.Now().UTC())
-	if entry.IntendedAtVersion != nil {
-		v := *entry.IntendedAtVersion
-		if action == divergenceresolution.ActionAccept {
-			v++
-		}
-		create = create.SetIntendedAtVersion(v)
-	}
-	res, err := create.Save(ctx)
+		SetDecidedAt(time.Now().UTC()).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create resolution: %w", err)
 	}
@@ -414,54 +360,6 @@ func (h *DivergenceHandler) applyResolution(ctx context.Context, id uuid.UUID, a
 	}, nil
 }
 
-// currentValueMatches asks DGraph for the current value of one field on a
-// ConfigItem and compares it (as raw JSON bytes) against the supplied
-// expected JSON. Used as the value-based fallback in dispatchAcceptMutation
-// when intended_at_version is nil. Returns false if values disagree, true
-// if they match.
-//
-// Returns (false, err) on transport errors; caller should treat error as
-// "couldn't verify, proceed with logged warning" rather than blocking — same
-// fallback semantics as a missing version anchor.
-func (h *DivergenceHandler) currentValueMatches(ctx context.Context, typeName, orbID, field string, expected json.RawMessage) (bool, error) {
-	query := fmt.Sprintf(
-		`query CurrentValue($orbId: String!) { get%s(orbId: $orbId) { %s } }`,
-		typeName, field,
-	)
-	body, _ := json.Marshal(map[string]any{
-		"query":     query,
-		"variables": map[string]any{"orbId": orbID},
-	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.gql.DGraphURL(), bytes.NewReader(body))
-	if err != nil {
-		return false, fmt.Errorf("build query: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return false, fmt.Errorf("dgraph fetch: %w", err)
-	}
-	defer func() { _, _ = io.Copy(io.Discard, resp.Body); resp.Body.Close() }() //nolint:errcheck
-	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("dgraph returned %d", resp.StatusCode)
-	}
-	var result struct {
-		Data map[string]map[string]json.RawMessage `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return false, fmt.Errorf("decode: %w", err)
-	}
-	entity, ok := result.Data["get"+typeName]
-	if !ok || entity == nil {
-		return false, fmt.Errorf("entity not found")
-	}
-	currentRaw, ok := entity[field]
-	if !ok {
-		return false, fmt.Errorf("field %q absent in response", field)
-	}
-	return bytes.Equal(bytes.TrimSpace(currentRaw), bytes.TrimSpace(expected)), nil
-}
-
 // dispatchAcceptMutation issues `update{TypeName}(filter:{orbId},set:{field:value})`
 // through the GraphQL handler so the mutation lands in audit alongside any
 // user-driven mutation. Returns an HTTPError suitable for the caller to
@@ -482,65 +380,24 @@ func (h *DivergenceHandler) dispatchAcceptMutation(ctx context.Context, entry *e
 		return echo.NewHTTPError(http.StatusUnprocessableEntity, "override value is empty; cannot mutate intent")
 	}
 
-	// Stale-detection. Two layers:
-	//   1. Version-based (primary): if we captured intended_at_version at
-	//      intake, compare to current DGraph version. Catches ANY intervening
-	//      write (other admin's edit, prior accept, etc.).
-	//   2. Value-based (fallback when version anchor is nil): compare report's
-	//      stored intended_value to current DGraph value for the field. Less
-	//      precise — misses edit-then-revert cycles where value matches but
-	//      version moved — but catches the common case.
-	// Either failure mode surfaces as 409 so the admin re-reviews.
-	if entry.IntendedAtVersion != nil {
-		currentVersion, err := divergence.FetchCurrentVersion(ctx, h.gql.DGraphURL(), entry.TypeName, entry.EntryOrbID)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("could not verify intent version: %v", err))
-		}
-		if currentVersion != nil && *currentVersion != *entry.IntendedAtVersion {
-			h.logger.Info("accept-divergence stale — version moved since report",
-				"orbId", entry.EntryOrbID, "field", entry.Field,
-				"reportedAt", *entry.IntendedAtVersion, "current", *currentVersion)
-			return echo.NewHTTPError(http.StatusConflict,
-				"intent has changed since this divergence was reported — please re-review")
-		}
-	} else if entry.TypeName != "" {
-		// Value-based fallback. Less precise but better than nothing.
-		matches, err := h.currentValueMatches(ctx, entry.TypeName, entry.EntryOrbID, entry.Field, entry.IntendedValue)
-		if err != nil {
-			h.logger.Warn("accept-divergence value-fallback check failed; proceeding without stale check",
-				"orbId", entry.EntryOrbID, "field", entry.Field, "err", err)
-		} else if !matches {
-			h.logger.Info("accept-divergence stale — current intent value differs from report",
-				"orbId", entry.EntryOrbID, "field", entry.Field)
-			return echo.NewHTTPError(http.StatusConflict,
-				"intent has changed since this divergence was reported — please re-review")
-		}
-	}
-
 	var overrideVal any
 	if err := json.Unmarshal(entry.OverrideValue, &overrideVal); err != nil {
 		return echo.NewHTTPError(http.StatusUnprocessableEntity, fmt.Sprintf("invalid override value: %v", err))
 	}
 
-	// DGraph generates {Type}Filter and {Type}Patch input types from the @id
-	// schema. Sending filter + set as GraphQL variables (not inlined) lets the
-	// audit-log expanded row render the same "Input" block as user-driven
-	// mutations — so the cloud admin can see what was changed.
+	// Per ADR 012: Accept is last-writer-wins against orbital DGraph. We do
+	// not pre-check that intent hasn't moved since the report — if it has,
+	// the post-Accept divergence-ingest cycle catches it via the supersede
+	// path. Audit log records the dispatched mutation; any racing edit shows
+	// up there too. Version-bumping on the mutation's set clause is handled
+	// by orbital's general mutation pipeline, not by this handler.
 	mutation := fmt.Sprintf(
 		`mutation AcceptDivergence($filter: %sFilter!, $set: %sPatch!) { update%s(input: {filter: $filter, set: $set}) { numUids } }`,
 		entry.TypeName, entry.TypeName, entry.TypeName,
 	)
-	// Step 4 of the MVCC plan: bump version in the mutation. Without this,
-	// ConfigItem.version stays stale and the NEXT divergence accept against
-	// an entry captured at the same value would silently succeed. Mirrors how
-	// user-driven edits bump version (orbital.js:519).
-	set := map[string]any{entry.Field: overrideVal}
-	if entry.IntendedAtVersion != nil {
-		set["version"] = *entry.IntendedAtVersion + 1
-	}
 	variables := map[string]any{
 		"filter": map[string]any{"orbId": map[string]any{"eq": entry.EntryOrbID}},
-		"set":    set,
+		"set":    map[string]any{entry.Field: overrideVal},
 	}
 
 	// The divergence entry already carries the intended value at report
@@ -594,23 +451,15 @@ func (h *DivergenceHandler) Dismiss(c echo.Context) error {
 		return fmt.Errorf("get entry: %w", err)
 	}
 
-	// Re-check staleness at the moment of dismissal. Don't trust the page's
-	// view — a concurrent ingest may have refreshed the anchor.
-	stale, err := h.isStale(ctx, entry)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("could not verify staleness: %v", err))
-	}
-	if !stale {
-		return echo.NewHTTPError(http.StatusConflict,
-			"this divergence is not stale; accept, reject, or ignore it instead")
-	}
-
 	actor := actorFromContext(c)
 	if actor == "" {
 		return echo.NewHTTPError(http.StatusUnauthorized, "actor required")
 	}
 
-	// Cascade: delete the resolution row first (if any), then the entry.
+	// Per ADR 012: Dismiss is a straight delete — no staleness gate. Operator
+	// owns the call. The next supersede cycle would re-create this entry if
+	// orb keeps reporting it, so Dismiss is more "I want this gone now" than
+	// a permanent purge.
 	if _, err := h.db.DivergenceResolution.Delete().
 		Where(
 			divergenceresolution.EntryOrbID(entry.EntryOrbID),
@@ -623,8 +472,6 @@ func (h *DivergenceHandler) Dismiss(c echo.Context) error {
 		return fmt.Errorf("delete entry: %w", err)
 	}
 
-	// Same rationale as resolveDivergence above: orbId column carries the real
-	// resource orbId, field name lives in details.
 	writeAuditEvent(h.db, h.logger, "management", actor, "dismissDivergence",
 		[]string{"dismissDivergence"},
 		[]string{"DivergenceEntry"},
@@ -634,37 +481,9 @@ func (h *DivergenceHandler) Dismiss(c echo.Context) error {
 			"orbId":   entry.EntryOrbID,
 			"field":   entry.Field,
 			"dcOrbId": entry.DcOrbID,
-			"reason":  "stale — intent has changed since report",
 		},
 	)
 	return c.NoContent(http.StatusNoContent)
-}
-
-// isStale checks whether the entry's `intended_at_version` differs from the
-// current DGraph version for the target ConfigItem. Used by Dismiss to gate
-// the action. Value-based fallback (when version is nil) compares stored
-// intended_value to current DGraph value.
-func (h *DivergenceHandler) isStale(ctx context.Context, entry *ent.DivergenceEntry) (bool, error) {
-	if entry.TypeName == "" {
-		// Without a type we can't query — caller treats as fresh.
-		return false, nil
-	}
-	if entry.IntendedAtVersion != nil {
-		current, err := divergence.FetchCurrentVersion(ctx, h.gql.DGraphURL(), entry.TypeName, entry.EntryOrbID)
-		if err != nil {
-			return false, err
-		}
-		if current == nil {
-			return false, nil
-		}
-		return *current != *entry.IntendedAtVersion, nil
-	}
-	// Value-based fallback.
-	matches, err := h.currentValueMatches(ctx, entry.TypeName, entry.EntryOrbID, entry.Field, entry.IntendedValue)
-	if err != nil {
-		return false, err
-	}
-	return !matches, nil
 }
 
 // DeleteResolution handles DELETE /api/v1/divergences/:id/resolution.
@@ -704,6 +523,88 @@ func (h *DivergenceHandler) DeleteResolution(c echo.Context) error {
 		return fmt.Errorf("delete resolution: %w", err)
 	}
 	return c.NoContent(http.StatusNoContent)
+}
+
+// ClearByDC handles DELETE /api/v1/divergences?dcOrbId=<dc>.
+//
+// Break-glass for operators: drops ALL DivergenceEntry and DivergenceResolution
+// rows for a DC in one transaction, then resets the ingester's idempotency
+// tracker so the next poll re-processes the latest S3 report fresh.
+//
+// Audit-logged as `deleteDivergenceReport` with entry count. Role-gated to Dev
+// minimum by the api group middleware.
+//
+// @Summary  Clear all divergence state for a data center
+// @Tags     divergence
+// @Param    dcOrbId query string true "Data center orbId (e.g. colo:colo-galleon)"
+// @Success  200 {object} map[string]any
+// @Failure  400 {object} map[string]string
+// @Failure  401 {object} map[string]string
+// @Router   /api/v1/divergences [delete]
+func (h *DivergenceHandler) ClearByDC(c echo.Context) error {
+	dc := c.QueryParam("dcOrbId")
+	if dc == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "dcOrbId query param required")
+	}
+	actor := actorFromContext(c)
+	if actor == "" {
+		return echo.NewHTTPError(http.StatusUnauthorized, "actor required")
+	}
+
+	ctx := c.Request().Context()
+
+	entries, err := h.db.DivergenceEntry.Query().
+		Where(divergenceentry.DcOrbID(dc)).
+		All(ctx)
+	if err != nil {
+		return fmt.Errorf("query entries: %w", err)
+	}
+
+	tx, err := h.db.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	for _, e := range entries {
+		if _, err := tx.DivergenceResolution.Delete().
+			Where(
+				divergenceresolution.EntryOrbID(e.EntryOrbID),
+				divergenceresolution.Field(e.Field),
+			).Exec(ctx); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("delete resolutions: %w", err)
+		}
+	}
+	if _, err := tx.DivergenceEntry.Delete().
+		Where(divergenceentry.DcOrbID(dc)).
+		Exec(ctx); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("delete entries: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+
+	// Without this, the ingester's in-memory tracker would skip the
+	// (already-seen) latest S3 file and the operator would see an empty page
+	// until orb publishes something genuinely new.
+	if h.ingester != nil {
+		h.ingester.ResetDC(dc)
+	}
+
+	writeAuditEvent(h.db, h.logger, "management", actor, "deleteDivergenceReport",
+		[]string{"deleteDivergenceReport"},
+		[]string{"DataCenter"},
+		[]string{dc},
+		map[string]any{
+			"dcOrbId":        dc,
+			"entriesDropped": len(entries),
+		},
+	)
+
+	return c.JSON(http.StatusOK, map[string]any{
+		"dcOrbId":        dc,
+		"entriesDropped": len(entries),
+	})
 }
 
 // parseAction maps an external action string to the typed enum value.

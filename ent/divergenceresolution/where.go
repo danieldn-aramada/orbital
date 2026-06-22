@@ -95,11 +95,6 @@ func DecidedAt(v time.Time) predicate.DivergenceResolution {
 	return predicate.DivergenceResolution(sql.FieldEQ(FieldDecidedAt, v))
 }
 
-// IntendedAtVersion applies equality check predicate on the "intended_at_version" field. It's identical to IntendedAtVersionEQ.
-func IntendedAtVersion(v int) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldEQ(FieldIntendedAtVersion, v))
-}
-
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.DivergenceResolution {
 	return predicate.DivergenceResolution(sql.FieldEQ(FieldCreatedAt, v))
@@ -593,56 +588,6 @@ func DecidedAtLT(v time.Time) predicate.DivergenceResolution {
 // DecidedAtLTE applies the LTE predicate on the "decided_at" field.
 func DecidedAtLTE(v time.Time) predicate.DivergenceResolution {
 	return predicate.DivergenceResolution(sql.FieldLTE(FieldDecidedAt, v))
-}
-
-// IntendedAtVersionEQ applies the EQ predicate on the "intended_at_version" field.
-func IntendedAtVersionEQ(v int) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldEQ(FieldIntendedAtVersion, v))
-}
-
-// IntendedAtVersionNEQ applies the NEQ predicate on the "intended_at_version" field.
-func IntendedAtVersionNEQ(v int) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldNEQ(FieldIntendedAtVersion, v))
-}
-
-// IntendedAtVersionIn applies the In predicate on the "intended_at_version" field.
-func IntendedAtVersionIn(vs ...int) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldIn(FieldIntendedAtVersion, vs...))
-}
-
-// IntendedAtVersionNotIn applies the NotIn predicate on the "intended_at_version" field.
-func IntendedAtVersionNotIn(vs ...int) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldNotIn(FieldIntendedAtVersion, vs...))
-}
-
-// IntendedAtVersionGT applies the GT predicate on the "intended_at_version" field.
-func IntendedAtVersionGT(v int) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldGT(FieldIntendedAtVersion, v))
-}
-
-// IntendedAtVersionGTE applies the GTE predicate on the "intended_at_version" field.
-func IntendedAtVersionGTE(v int) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldGTE(FieldIntendedAtVersion, v))
-}
-
-// IntendedAtVersionLT applies the LT predicate on the "intended_at_version" field.
-func IntendedAtVersionLT(v int) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldLT(FieldIntendedAtVersion, v))
-}
-
-// IntendedAtVersionLTE applies the LTE predicate on the "intended_at_version" field.
-func IntendedAtVersionLTE(v int) predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldLTE(FieldIntendedAtVersion, v))
-}
-
-// IntendedAtVersionIsNil applies the IsNil predicate on the "intended_at_version" field.
-func IntendedAtVersionIsNil() predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldIsNull(FieldIntendedAtVersion))
-}
-
-// IntendedAtVersionNotNil applies the NotNil predicate on the "intended_at_version" field.
-func IntendedAtVersionNotNil() predicate.DivergenceResolution {
-	return predicate.DivergenceResolution(sql.FieldNotNull(FieldIntendedAtVersion))
 }
 
 // And groups predicates with the AND operator between them.

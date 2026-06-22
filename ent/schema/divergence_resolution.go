@@ -11,12 +11,11 @@ import (
 // Accept, Reject, or Ignore. The (entry_orb_id, field) pair uniquely identifies
 // the divergence being resolved; re-deciding REPLACES the existing row.
 //
-// Resolution lifecycle is bound 1:1 to the active DivergenceEntry: the row is
-// created on decision, replaced on re-decision, and deleted alongside the
-// entry on loop closure. Audit history of every decision lives in the Event
-// log — not this table.
-//
-// See docs/reference/DIVERGENCE.md for the full semantic model.
+// Resolution lifecycle is bound 1:1 to the active DivergenceEntry — and both
+// belong to the lifetime of a specific report ingest. When orbital ingests a
+// content-differing report from orb, all DC entries AND their resolutions are
+// dropped together. Audit history of every decision lives in the Event log —
+// not this table. See ADR 012 for the supersede semantics.
 //
 //   - Accept: cloud agrees with the edge override. Orbital intent is updated to
 //     match. The deployment layer re-takes ownership of the field with the new
@@ -28,11 +27,10 @@ import (
 //     deployment layer does NOT enforce intent for this field; local admin
 //     keeps sole ownership.
 //
-// Orbital does NOT track edge propagation. Whether the deployment layer
-// actually applied a force is the edge's concern — orbital's contract ends at
-// "intent is captured and exposed via the export API." If local admin
-// re-overrides after a Reject, the next divergence report surfaces it as a
-// fresh divergence on the same field; the operator re-decides.
+// Orbital does NOT track edge propagation. If local admin re-overrides after
+// a Reject, orb's next published report will contain that override; if its
+// content differs from the previously-ingested set, orbital supersedes —
+// surfacing it as a fresh pending entry for re-decision.
 type DivergenceResolution struct {
 	ent.Schema
 }
@@ -52,15 +50,6 @@ func (DivergenceResolution) Fields() []ent.Field {
 		field.String("actor").NotEmpty(),
 
 		field.Time("decided_at"),
-
-		// intended_at_version pins the DGraph intent version this decision was
-		// made against. Accept stores entry.intended_at_version + 1 (the new
-		// version after the mutation); Reject/Ignore store entry.intended_at_version
-		// (intent unchanged). At bundle build, the List handler refuses to surface
-		// the resolution if DGraph's current version has moved past this pin —
-		// preventing a cloud admin's intent edit from silently flipping what
-		// gets force-applied at the edge. Nullable for legacy rows pre-MVCC.
-		field.Int("intended_at_version").Optional().Nillable(),
 	}
 }
 

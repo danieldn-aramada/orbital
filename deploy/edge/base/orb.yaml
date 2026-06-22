@@ -15,6 +15,14 @@ metadata:
   name: orb
 spec:
   replicas: 1
+  # strategy: Recreate is required, not a preference. orb mounts the orb-data
+  # PVC (ReadWriteOnce, rook-ceph-block) — block storage can only be attached
+  # to one pod at a time. With RollingUpdate (maxSurge: 1), the new pod would
+  # try to mount before the old pod releases the PVC, blocking indefinitely.
+  # Recreate forces old-pod-terminates-then-new-pod-starts, accepting brief
+  # downtime as the cost of stateful single-replica deployment. To get
+  # zero-downtime rollouts you'd need ReadWriteMany storage (rook-ceph-filesystem)
+  # or split orb's persistent state into a separate component.
   strategy:
     type: Recreate
   selector:

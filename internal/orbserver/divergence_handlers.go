@@ -78,31 +78,6 @@ func (s *Server) receiveDivergence(c echo.Context) error {
 		}
 	}
 
-	// Version capture. Batched by orbId so a report with N fields on the same
-	// ConfigItem makes one lookup, not N. Failures degrade silently — leaves
-	// IntendedAtVersion nil for that override.
-	ctx := c.Request().Context()
-	versions := make(map[string]*int, len(payload.Overrides))
-	for _, ov := range payload.Overrides {
-		key := ov.Type + "|" + ov.OrbID
-		if _, seen := versions[key]; seen {
-			continue
-		}
-		v, err := divergence.FetchCurrentVersion(ctx, s.cfg.DGraphURL, ov.Type, ov.OrbID)
-		if err != nil {
-			s.logger.Warn("orb divergence intake: version lookup failed",
-				"orbId", ov.OrbID, "type", ov.Type, "err", err)
-			versions[key] = nil
-		} else {
-			versions[key] = v
-		}
-	}
-	for i := range payload.Overrides {
-		ov := &payload.Overrides[i]
-		key := ov.Type + "|" + ov.OrbID
-		ov.IntendedAtVersion = versions[key]
-	}
-
 	if err := s.divStore.Save(payload.Overrides); err != nil {
 		s.logger.Error("divergence store save failed", "err", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to store report")
@@ -165,6 +140,16 @@ func (s *Server) publishDivergence(c echo.Context) error {
 	if len(entries) == 0 {
 		return echo.NewHTTPError(http.StatusConflict, "nothing to publish")
 	}
+
+	// Content dedup: skip the S3 write when current content matches the last
+	// published record. Avoids re-triggering orbital's supersede ingest on
+	// no-op republishes (ADR 012 precondition).
+	hash := divergence.ContentHash(entries)
+	if last, err := s.divStore.LoadPublishRecord(); err == nil && last != nil && last.ContentHash != "" && last.ContentHash == hash {
+		s.logger.Info("divergence publish: content unchanged, skipping", "key", last.S3Key)
+		return c.JSON(http.StatusOK, map[string]string{"key": last.S3Key, "status": "unchanged"})
+	}
+
 	key, err := s.divPublisher.Publish(c.Request().Context(), entries)
 	if err != nil {
 		s.logger.Error("divergence publish failed", "err", err)
@@ -173,6 +158,7 @@ func (s *Server) publishDivergence(c echo.Context) error {
 	rec := divergence.PublishRecord{
 		PublishedAt: time.Now().UTC(),
 		S3Key:       key,
+		ContentHash: hash,
 	}
 	if err := s.divStore.SavePublishRecord(rec); err != nil {
 		s.logger.Warn("failed to save publish record", "err", err)

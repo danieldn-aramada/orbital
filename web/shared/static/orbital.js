@@ -1720,3 +1720,41 @@ window.confirmDivergenceBatch = confirmDivergenceBatch
 window.closeDivergenceConfirmModal = closeDivergenceConfirmModal
 window.refreshDivergenceReports = refreshDivergenceReports
 window.divergencePublishForDC = divergencePublishForDC
+
+// ─── Divergence break-glass: delete orbital's local report state for a DC ────
+//
+// Used when the divergence-report state is stuck (stale resolutions from an
+// earlier session, partial supersede edge case, etc.). Backend wipes the DB
+// rows in one transaction AND resets the ingester's idempotency tracker so
+// the next poll re-processes the latest S3 report fresh.
+function divergenceDeleteReportForDC(button) {
+  const dcOrbId = button.dataset.dcOrbid
+  const entryCount = button.dataset.entryCount || '?'
+  if (!dcOrbId) return
+  if (!window.confirm(
+    `Delete ${entryCount} divergence entries + decisions for ${dcOrbId}?\n\n` +
+    `Break-glass only — orbital normally re-ingests automatically. ` +
+    `orb's report and edge state are unchanged.`
+  )) {
+    return
+  }
+  const origHTML = button.innerHTML
+  button.disabled = true
+  button.innerHTML = '<span class="icon"><i class="fa-solid fa-spinner fa-spin"></i></span><span>Deleting…</span>'
+
+  fetch(BASE + '/api/v1/divergences?dcOrbId=' + encodeURIComponent(dcOrbId), {
+    method: 'DELETE',
+  })
+    .then(r => r.json().then(body => ({ ok: r.ok, status: r.status, body })))
+    .then(({ ok, status, body }) => {
+      if (!ok) throw new Error(body.message || `HTTP ${status}`)
+      // Hard-reload — page server-renders divergence state, so we need a fresh fetch.
+      window.location.reload()
+    })
+    .catch(err => {
+      button.disabled = false
+      button.innerHTML = origHTML
+      window.alert('Delete failed: ' + err.message)
+    })
+}
+window.divergenceDeleteReportForDC = divergenceDeleteReportForDC

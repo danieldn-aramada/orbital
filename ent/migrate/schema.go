@@ -47,7 +47,6 @@ var (
 		{Name: "type_name", Type: field.TypeString, Nullable: true, Default: ""},
 		{Name: "intended_value", Type: field.TypeJSON, Nullable: true},
 		{Name: "override_value", Type: field.TypeJSON, Nullable: true},
-		{Name: "intended_at_version", Type: field.TypeInt, Nullable: true},
 		{Name: "who", Type: field.TypeString},
 		{Name: "first_seen_at", Type: field.TypeTime},
 		{Name: "last_seen_at", Type: field.TypeTime},
@@ -67,7 +66,7 @@ var (
 			{
 				Name:    "divergenceentry_dc_orb_id_last_seen_at",
 				Unique:  false,
-				Columns: []*schema.Column{DivergenceEntriesColumns[5], DivergenceEntriesColumns[14]},
+				Columns: []*schema.Column{DivergenceEntriesColumns[5], DivergenceEntriesColumns[13]},
 			},
 		},
 	}
@@ -83,7 +82,6 @@ var (
 		{Name: "action", Type: field.TypeEnum, Enums: []string{"accept", "reject", "ignore"}},
 		{Name: "actor", Type: field.TypeString},
 		{Name: "decided_at", Type: field.TypeTime},
-		{Name: "intended_at_version", Type: field.TypeInt, Nullable: true},
 	}
 	// DivergenceResolutionsTable holds the schema information for the "divergence_resolutions" table.
 	DivergenceResolutionsTable = &schema.Table{

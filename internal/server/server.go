@@ -144,7 +144,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		logger.Warn("OCI publishing not configured (ORBITAL_OCI_REGISTRY and ORBITAL_OCI_SIGNING_KEY_PATH) — publish disabled")
 	}
 
-	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, cfg.OIDCDeviceCode, s3Configured, cfg.S3Endpoint, cfg.S3Bucket, cfg.BasePath, db)
+	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, cfg.OAuth2DeviceCode, s3Configured, cfg.S3Endpoint, cfg.S3Bucket, cfg.BasePath, db, logger)
 	ui.SetOCIConfig(ociConfigured, cfg.OCIRegistry, cfg.OCIRepo)
 	ui.SetExportDir(cfg.ExportDir)
 	ui.SetSchemaPath(cfg.SchemaPath)
@@ -168,6 +168,10 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	root.GET("/schema", ui.Schema)
 	root.GET("/export", ui.Export)
 
+	// Hoisted so the divergence ingester (constructed later) can be wired into
+	// the divergence handler after both exist.
+	var divHandler *handler.DivergenceHandler
+
 	if db != nil {
 		login := handler.NewLogin(db, cfg.SessionKeys(), webtemplates.LoginForm(), cfg.BasePath, logger)
 		root.POST("/user/login", login.Post)
@@ -185,14 +189,14 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 				cfg.BasePath,
 				logger,
 				cfg.AdminEmailSet(),
-				cfg.OIDCDeviceCode,
+				cfg.OAuth2DeviceCode,
 			)
 			if err != nil {
 				logger.Error("oidc provider init failed", "err", err)
 			} else {
 				root.GET("/auth/login", oidc.Login)
 				root.GET("/auth/callback", oidc.Callback)
-				if cfg.OIDCDeviceCode {
+				if cfg.OAuth2DeviceCode {
 					root.GET("/auth/device", oidc.DeviceCodeStart)
 					root.POST("/auth/device/poll", oidc.DeviceCodePoll)
 				}
@@ -326,9 +330,11 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		root.GET("/users", ui.Users)
 
 		dh := handler.NewDivergenceHandler(db, logger, gql)
+		divHandler = dh
 		api.GET("/divergences", dh.List)
 		api.GET("/divergences/:id", dh.Get)
 		api.DELETE("/divergences/:id", dh.Dismiss)
+		api.DELETE("/divergences", dh.ClearByDC)
 		api.PUT("/divergences/:id/resolution", dh.PutResolution)
 		api.DELETE("/divergences/:id/resolution", dh.DeleteResolution)
 	}
@@ -364,6 +370,13 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		} else {
 			divIngester = ig
 		}
+	}
+
+	// Wire the ingester into the divergence handler so ClearByDC can reset
+	// the in-memory idempotency tracker after wiping DB rows. Either may be
+	// nil (DB-less mode, S3 not configured); SetIngester handles nil safely.
+	if divHandler != nil && divIngester != nil {
+		divHandler.SetIngester(divIngester)
 	}
 
 	return &Server{

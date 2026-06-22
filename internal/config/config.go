@@ -56,7 +56,7 @@ type Config struct {
 	OIDCClientID           string        `envconfig:"ORBITAL_OIDC_CLIENT_ID"          default:"5fc832f6-843e-4207-93dd-b3c3a77c06f2"`
 	OIDCClientSecret       string        `envconfig:"ORBITAL_OIDC_CLIENT_SECRET"      default:""`
 	OIDCRedirectURL        string        `envconfig:"ORBITAL_OIDC_REDIRECT_URL"       default:"http://localhost:8001/auth/callback"`
-	OIDCDeviceCode         bool          `envconfig:"ORBITAL_OIDC_DEVICE_CODE"        default:"true"`   // enables device code flow for browser SSO; set false to use Authorization Code + PKCE (requires publicly resolvable redirect URI)
+	OAuth2DeviceCode       bool          `envconfig:"ORBITAL_OAUTH2_DEVICE_CODE"      default:"true"`   // enables device code flow for browser SSO; set false to use Authorization Code + PKCE (requires publicly resolvable redirect URI). RFC 8628 — OAuth 2.0, not OIDC despite living next to ORBITAL_OIDC_* settings.
 	// AppTokenAllowedAppIDs gates which app-only (client-credentials) bearer
 	// tokens orbital accepts on /api/v1 and /graphql. Defaults to allowing
 	// only the orbital app itself (in-pod cb-bundler authenticates as the

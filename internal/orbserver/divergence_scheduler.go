@@ -76,13 +76,22 @@ func (s *DivergenceScheduler) Start(ctx context.Context) {
 	s.mu.Unlock()
 }
 
-// fire publishes the current set to S3 unconditionally. Empty set is a valid
-// signal ("no divergence right now") — orbital reads the published-at and
-// interprets disappearance of entries as resolution-by-disappearance.
+// fire publishes the current set to S3 — but only when content differs from
+// the last published record. Empty set is still a valid signal (transitions
+// from "had divergence" to "none" must be communicated), but identical
+// content is suppressed to avoid re-triggering orbital's supersede ingest
+// path on no-op republishes (ADR 012 precondition).
 func (s *DivergenceScheduler) fire(ctx context.Context) {
 	entries, err := s.store.Load()
 	if err != nil {
 		s.logger.Error("divergence scheduler: load failed", "err", err)
+		return
+	}
+
+	hash := divergence.ContentHash(entries)
+	if last, err := s.store.LoadPublishRecord(); err == nil && last != nil && last.ContentHash != "" && last.ContentHash == hash {
+		s.logger.Debug("divergence scheduler: content unchanged, skipping publish",
+			"lastKey", last.S3Key, "entries", len(entries))
 		return
 	}
 
@@ -95,6 +104,7 @@ func (s *DivergenceScheduler) fire(ctx context.Context) {
 	if err := s.store.SavePublishRecord(divergence.PublishRecord{
 		PublishedAt: time.Now().UTC(),
 		S3Key:       key,
+		ContentHash: hash,
 	}); err != nil {
 		s.logger.Warn("divergence scheduler: save publish record failed", "err", err)
 	}

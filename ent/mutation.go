@@ -1497,8 +1497,6 @@ type DivergenceEntryMutation struct {
 	appendintended_value     json.RawMessage
 	override_value           *json.RawMessage
 	appendoverride_value     json.RawMessage
-	intended_at_version      *int
-	addintended_at_version   *int
 	who                      *string
 	first_seen_at            *time.Time
 	last_seen_at             *time.Time
@@ -2083,76 +2081,6 @@ func (m *DivergenceEntryMutation) ResetOverrideValue() {
 	delete(m.clearedFields, divergenceentry.FieldOverrideValue)
 }
 
-// SetIntendedAtVersion sets the "intended_at_version" field.
-func (m *DivergenceEntryMutation) SetIntendedAtVersion(i int) {
-	m.intended_at_version = &i
-	m.addintended_at_version = nil
-}
-
-// IntendedAtVersion returns the value of the "intended_at_version" field in the mutation.
-func (m *DivergenceEntryMutation) IntendedAtVersion() (r int, exists bool) {
-	v := m.intended_at_version
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldIntendedAtVersion returns the old "intended_at_version" field's value of the DivergenceEntry entity.
-// If the DivergenceEntry object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *DivergenceEntryMutation) OldIntendedAtVersion(ctx context.Context) (v *int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldIntendedAtVersion is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldIntendedAtVersion requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldIntendedAtVersion: %w", err)
-	}
-	return oldValue.IntendedAtVersion, nil
-}
-
-// AddIntendedAtVersion adds i to the "intended_at_version" field.
-func (m *DivergenceEntryMutation) AddIntendedAtVersion(i int) {
-	if m.addintended_at_version != nil {
-		*m.addintended_at_version += i
-	} else {
-		m.addintended_at_version = &i
-	}
-}
-
-// AddedIntendedAtVersion returns the value that was added to the "intended_at_version" field in this mutation.
-func (m *DivergenceEntryMutation) AddedIntendedAtVersion() (r int, exists bool) {
-	v := m.addintended_at_version
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ClearIntendedAtVersion clears the value of the "intended_at_version" field.
-func (m *DivergenceEntryMutation) ClearIntendedAtVersion() {
-	m.intended_at_version = nil
-	m.addintended_at_version = nil
-	m.clearedFields[divergenceentry.FieldIntendedAtVersion] = struct{}{}
-}
-
-// IntendedAtVersionCleared returns if the "intended_at_version" field was cleared in this mutation.
-func (m *DivergenceEntryMutation) IntendedAtVersionCleared() bool {
-	_, ok := m.clearedFields[divergenceentry.FieldIntendedAtVersion]
-	return ok
-}
-
-// ResetIntendedAtVersion resets all changes to the "intended_at_version" field.
-func (m *DivergenceEntryMutation) ResetIntendedAtVersion() {
-	m.intended_at_version = nil
-	m.addintended_at_version = nil
-	delete(m.clearedFields, divergenceentry.FieldIntendedAtVersion)
-}
-
 // SetWho sets the "who" field.
 func (m *DivergenceEntryMutation) SetWho(s string) {
 	m.who = &s
@@ -2331,7 +2259,7 @@ func (m *DivergenceEntryMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DivergenceEntryMutation) Fields() []string {
-	fields := make([]string, 0, 15)
+	fields := make([]string, 0, 14)
 	if m.created_at != nil {
 		fields = append(fields, divergenceentry.FieldCreatedAt)
 	}
@@ -2361,9 +2289,6 @@ func (m *DivergenceEntryMutation) Fields() []string {
 	}
 	if m.override_value != nil {
 		fields = append(fields, divergenceentry.FieldOverrideValue)
-	}
-	if m.intended_at_version != nil {
-		fields = append(fields, divergenceentry.FieldIntendedAtVersion)
 	}
 	if m.who != nil {
 		fields = append(fields, divergenceentry.FieldWho)
@@ -2405,8 +2330,6 @@ func (m *DivergenceEntryMutation) Field(name string) (ent.Value, bool) {
 		return m.IntendedValue()
 	case divergenceentry.FieldOverrideValue:
 		return m.OverrideValue()
-	case divergenceentry.FieldIntendedAtVersion:
-		return m.IntendedAtVersion()
 	case divergenceentry.FieldWho:
 		return m.Who()
 	case divergenceentry.FieldFirstSeenAt:
@@ -2444,8 +2367,6 @@ func (m *DivergenceEntryMutation) OldField(ctx context.Context, name string) (en
 		return m.OldIntendedValue(ctx)
 	case divergenceentry.FieldOverrideValue:
 		return m.OldOverrideValue(ctx)
-	case divergenceentry.FieldIntendedAtVersion:
-		return m.OldIntendedAtVersion(ctx)
 	case divergenceentry.FieldWho:
 		return m.OldWho(ctx)
 	case divergenceentry.FieldFirstSeenAt:
@@ -2533,13 +2454,6 @@ func (m *DivergenceEntryMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetOverrideValue(v)
 		return nil
-	case divergenceentry.FieldIntendedAtVersion:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetIntendedAtVersion(v)
-		return nil
 	case divergenceentry.FieldWho:
 		v, ok := value.(string)
 		if !ok {
@@ -2575,21 +2489,13 @@ func (m *DivergenceEntryMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *DivergenceEntryMutation) AddedFields() []string {
-	var fields []string
-	if m.addintended_at_version != nil {
-		fields = append(fields, divergenceentry.FieldIntendedAtVersion)
-	}
-	return fields
+	return nil
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *DivergenceEntryMutation) AddedField(name string) (ent.Value, bool) {
-	switch name {
-	case divergenceentry.FieldIntendedAtVersion:
-		return m.AddedIntendedAtVersion()
-	}
 	return nil, false
 }
 
@@ -2598,13 +2504,6 @@ func (m *DivergenceEntryMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *DivergenceEntryMutation) AddField(name string, value ent.Value) error {
 	switch name {
-	case divergenceentry.FieldIntendedAtVersion:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddIntendedAtVersion(v)
-		return nil
 	}
 	return fmt.Errorf("unknown DivergenceEntry numeric field %s", name)
 }
@@ -2630,9 +2529,6 @@ func (m *DivergenceEntryMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(divergenceentry.FieldOverrideValue) {
 		fields = append(fields, divergenceentry.FieldOverrideValue)
-	}
-	if m.FieldCleared(divergenceentry.FieldIntendedAtVersion) {
-		fields = append(fields, divergenceentry.FieldIntendedAtVersion)
 	}
 	return fields
 }
@@ -2665,9 +2561,6 @@ func (m *DivergenceEntryMutation) ClearField(name string) error {
 		return nil
 	case divergenceentry.FieldOverrideValue:
 		m.ClearOverrideValue()
-		return nil
-	case divergenceentry.FieldIntendedAtVersion:
-		m.ClearIntendedAtVersion()
 		return nil
 	}
 	return fmt.Errorf("unknown DivergenceEntry nullable field %s", name)
@@ -2706,9 +2599,6 @@ func (m *DivergenceEntryMutation) ResetField(name string) error {
 		return nil
 	case divergenceentry.FieldOverrideValue:
 		m.ResetOverrideValue()
-		return nil
-	case divergenceentry.FieldIntendedAtVersion:
-		m.ResetIntendedAtVersion()
 		return nil
 	case divergenceentry.FieldWho:
 		m.ResetWho()
@@ -2777,24 +2667,22 @@ func (m *DivergenceEntryMutation) ResetEdge(name string) error {
 // DivergenceResolutionMutation represents an operation that mutates the DivergenceResolution nodes in the graph.
 type DivergenceResolutionMutation struct {
 	config
-	op                     Op
-	typ                    string
-	id                     *uuid.UUID
-	created_at             *time.Time
-	created_by             *string
-	updated_at             *time.Time
-	updated_by             *string
-	entry_orb_id           *string
-	field                  *string
-	action                 *divergenceresolution.Action
-	actor                  *string
-	decided_at             *time.Time
-	intended_at_version    *int
-	addintended_at_version *int
-	clearedFields          map[string]struct{}
-	done                   bool
-	oldValue               func(context.Context) (*DivergenceResolution, error)
-	predicates             []predicate.DivergenceResolution
+	op            Op
+	typ           string
+	id            *uuid.UUID
+	created_at    *time.Time
+	created_by    *string
+	updated_at    *time.Time
+	updated_by    *string
+	entry_orb_id  *string
+	field         *string
+	action        *divergenceresolution.Action
+	actor         *string
+	decided_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*DivergenceResolution, error)
+	predicates    []predicate.DivergenceResolution
 }
 
 var _ ent.Mutation = (*DivergenceResolutionMutation)(nil)
@@ -3264,76 +3152,6 @@ func (m *DivergenceResolutionMutation) ResetDecidedAt() {
 	m.decided_at = nil
 }
 
-// SetIntendedAtVersion sets the "intended_at_version" field.
-func (m *DivergenceResolutionMutation) SetIntendedAtVersion(i int) {
-	m.intended_at_version = &i
-	m.addintended_at_version = nil
-}
-
-// IntendedAtVersion returns the value of the "intended_at_version" field in the mutation.
-func (m *DivergenceResolutionMutation) IntendedAtVersion() (r int, exists bool) {
-	v := m.intended_at_version
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldIntendedAtVersion returns the old "intended_at_version" field's value of the DivergenceResolution entity.
-// If the DivergenceResolution object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *DivergenceResolutionMutation) OldIntendedAtVersion(ctx context.Context) (v *int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldIntendedAtVersion is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldIntendedAtVersion requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldIntendedAtVersion: %w", err)
-	}
-	return oldValue.IntendedAtVersion, nil
-}
-
-// AddIntendedAtVersion adds i to the "intended_at_version" field.
-func (m *DivergenceResolutionMutation) AddIntendedAtVersion(i int) {
-	if m.addintended_at_version != nil {
-		*m.addintended_at_version += i
-	} else {
-		m.addintended_at_version = &i
-	}
-}
-
-// AddedIntendedAtVersion returns the value that was added to the "intended_at_version" field in this mutation.
-func (m *DivergenceResolutionMutation) AddedIntendedAtVersion() (r int, exists bool) {
-	v := m.addintended_at_version
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ClearIntendedAtVersion clears the value of the "intended_at_version" field.
-func (m *DivergenceResolutionMutation) ClearIntendedAtVersion() {
-	m.intended_at_version = nil
-	m.addintended_at_version = nil
-	m.clearedFields[divergenceresolution.FieldIntendedAtVersion] = struct{}{}
-}
-
-// IntendedAtVersionCleared returns if the "intended_at_version" field was cleared in this mutation.
-func (m *DivergenceResolutionMutation) IntendedAtVersionCleared() bool {
-	_, ok := m.clearedFields[divergenceresolution.FieldIntendedAtVersion]
-	return ok
-}
-
-// ResetIntendedAtVersion resets all changes to the "intended_at_version" field.
-func (m *DivergenceResolutionMutation) ResetIntendedAtVersion() {
-	m.intended_at_version = nil
-	m.addintended_at_version = nil
-	delete(m.clearedFields, divergenceresolution.FieldIntendedAtVersion)
-}
-
 // Where appends a list predicates to the DivergenceResolutionMutation builder.
 func (m *DivergenceResolutionMutation) Where(ps ...predicate.DivergenceResolution) {
 	m.predicates = append(m.predicates, ps...)
@@ -3368,7 +3186,7 @@ func (m *DivergenceResolutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DivergenceResolutionMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 9)
 	if m.created_at != nil {
 		fields = append(fields, divergenceresolution.FieldCreatedAt)
 	}
@@ -3396,9 +3214,6 @@ func (m *DivergenceResolutionMutation) Fields() []string {
 	if m.decided_at != nil {
 		fields = append(fields, divergenceresolution.FieldDecidedAt)
 	}
-	if m.intended_at_version != nil {
-		fields = append(fields, divergenceresolution.FieldIntendedAtVersion)
-	}
 	return fields
 }
 
@@ -3425,8 +3240,6 @@ func (m *DivergenceResolutionMutation) Field(name string) (ent.Value, bool) {
 		return m.Actor()
 	case divergenceresolution.FieldDecidedAt:
 		return m.DecidedAt()
-	case divergenceresolution.FieldIntendedAtVersion:
-		return m.IntendedAtVersion()
 	}
 	return nil, false
 }
@@ -3454,8 +3267,6 @@ func (m *DivergenceResolutionMutation) OldField(ctx context.Context, name string
 		return m.OldActor(ctx)
 	case divergenceresolution.FieldDecidedAt:
 		return m.OldDecidedAt(ctx)
-	case divergenceresolution.FieldIntendedAtVersion:
-		return m.OldIntendedAtVersion(ctx)
 	}
 	return nil, fmt.Errorf("unknown DivergenceResolution field %s", name)
 }
@@ -3528,13 +3339,6 @@ func (m *DivergenceResolutionMutation) SetField(name string, value ent.Value) er
 		}
 		m.SetDecidedAt(v)
 		return nil
-	case divergenceresolution.FieldIntendedAtVersion:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetIntendedAtVersion(v)
-		return nil
 	}
 	return fmt.Errorf("unknown DivergenceResolution field %s", name)
 }
@@ -3542,21 +3346,13 @@ func (m *DivergenceResolutionMutation) SetField(name string, value ent.Value) er
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *DivergenceResolutionMutation) AddedFields() []string {
-	var fields []string
-	if m.addintended_at_version != nil {
-		fields = append(fields, divergenceresolution.FieldIntendedAtVersion)
-	}
-	return fields
+	return nil
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *DivergenceResolutionMutation) AddedField(name string) (ent.Value, bool) {
-	switch name {
-	case divergenceresolution.FieldIntendedAtVersion:
-		return m.AddedIntendedAtVersion()
-	}
 	return nil, false
 }
 
@@ -3565,13 +3361,6 @@ func (m *DivergenceResolutionMutation) AddedField(name string) (ent.Value, bool)
 // type.
 func (m *DivergenceResolutionMutation) AddField(name string, value ent.Value) error {
 	switch name {
-	case divergenceresolution.FieldIntendedAtVersion:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddIntendedAtVersion(v)
-		return nil
 	}
 	return fmt.Errorf("unknown DivergenceResolution numeric field %s", name)
 }
@@ -3588,9 +3377,6 @@ func (m *DivergenceResolutionMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(divergenceresolution.FieldUpdatedBy) {
 		fields = append(fields, divergenceresolution.FieldUpdatedBy)
-	}
-	if m.FieldCleared(divergenceresolution.FieldIntendedAtVersion) {
-		fields = append(fields, divergenceresolution.FieldIntendedAtVersion)
 	}
 	return fields
 }
@@ -3614,9 +3400,6 @@ func (m *DivergenceResolutionMutation) ClearField(name string) error {
 		return nil
 	case divergenceresolution.FieldUpdatedBy:
 		m.ClearUpdatedBy()
-		return nil
-	case divergenceresolution.FieldIntendedAtVersion:
-		m.ClearIntendedAtVersion()
 		return nil
 	}
 	return fmt.Errorf("unknown DivergenceResolution nullable field %s", name)
@@ -3652,9 +3435,6 @@ func (m *DivergenceResolutionMutation) ResetField(name string) error {
 		return nil
 	case divergenceresolution.FieldDecidedAt:
 		m.ResetDecidedAt()
-		return nil
-	case divergenceresolution.FieldIntendedAtVersion:
-		m.ResetIntendedAtVersion()
 		return nil
 	}
 	return fmt.Errorf("unknown DivergenceResolution field %s", name)

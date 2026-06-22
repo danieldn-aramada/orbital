@@ -289,110 +289,13 @@ func TestList_ActionFilter_PartitionsIgnoreFromAcceptReject(t *testing.T) {
 	}
 }
 
-// TestList_ActionFilter_ExcludesStaleResolution pins the resolution-level MVCC
-// guard: when a cloud admin edits the SAME field after a Reject (or Accept)
-// decision, the field's current intent diverges from what the resolution
-// expects. The List handler must exclude such stale resolutions from the
-// action-filtered response so cb-bundler never emits a takeover that would
-// force-apply a value the rejecting admin didn't decide on.
-//
-// MUST be per-field (not per-ConfigItem): batched decisions across sibling
-// fields of the same ConfigItem (Accept ipmiEnabled + Reject sshEnabled on the
-// same IdracSettings) must not invalidate each other. A coarser per-ConfigItem
-// check would false-positive every batch resolution that touches >1 field.
-//
-// Regression class: a refactor that re-grain'd the staleness check to ConfigItem
-// (or that forgot to compare to entry.IntendedValue/OverrideValue) would silently
-// lose Reject decisions during batch flows — the user's exact bug.
-func TestList_ActionFilter_ExcludesStaleResolution(t *testing.T) {
-	ctx := context.Background()
-	dc := "colo:colo-stale-mvcc"
-	orbID := "colo:srv-stale-mvcc-idrac"
-
-	// Seed entry: intended=false, override=true. Reject = "keep intent at false".
-	intended, _ := json.Marshal(false)
-	override, _ := json.Marshal(true)
-	entry, err := testDB.DivergenceEntry.Create().
-		SetDcOrbID(dc).
-		SetEntryOrbID(orbID).
-		SetField("sshEnabled").
-		SetTypeName("IdracSettings").
-		SetIntendedValue(intended).
-		SetOverrideValue(override).
-		SetWho("local:admin").
-		SetFirstSeenAt(time.Now().UTC().Add(-1 * time.Hour)).
-		SetLastSeenAt(time.Now().UTC()).
-		SetLastReportPublishedAt(time.Now().UTC()).
-		Save(ctx)
-	if err != nil {
-		t.Fatalf("seed entry: %v", err)
-	}
-	t.Cleanup(func() {
-		_, _ = testDB.DivergenceResolution.Delete().
-			Where(divergenceresolution.EntryOrbID(orbID), divergenceresolution.Field("sshEnabled")).
-			Exec(ctx)
-		_ = testDB.DivergenceEntry.DeleteOneID(entry.ID).Exec(ctx)
-	})
-
-	if _, err := testDB.DivergenceResolution.Create().
-		SetEntryOrbID(orbID).
-		SetField("sshEnabled").
-		SetAction(divergenceresolution.ActionReject).
-		SetActor("admin-A@test.com").
-		SetDecidedAt(time.Now().UTC()).
-		Save(ctx); err != nil {
-		t.Fatalf("seed resolution: %v", err)
-	}
-
-	// Mock DGraph returning sshEnabled=true — meaning another admin moved intent
-	// to match the override. The reject's "keep intent at false" is now stale.
-	dgraph := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"data":{"getIdracSettings":{"sshEnabled":true}}}`)) //nolint:errcheck
-	}))
-	defer dgraph.Close()
-
-	gql := handler.NewGraphQL(dgraph.URL, testDB, slog.Default())
-	h := handler.NewDivergenceHandler(testDB, slog.Default(), gql)
-
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/divergences?action=accept&action=reject&dc="+dc, nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	if err := h.List(c); err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	var items []map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &items); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if len(items) != 0 {
-		t.Errorf("expected stale resolution excluded from action=accept|reject; got %d items: %v",
-			len(items), items)
-	}
-
-	// Same dataset under no-action-filter: the row must STILL be visible
-	// (UI calls without filter and should see the resolution regardless).
-	req = httptest.NewRequest(http.MethodGet, "/api/v1/divergences?dc="+dc, nil)
-	rec = httptest.NewRecorder()
-	c = e.NewContext(req, rec)
-	if err := h.List(c); err != nil {
-		t.Fatalf("List (no filter): %v", err)
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &items); err != nil {
-		t.Fatalf("decode (no filter): %v", err)
-	}
-	if len(items) != 1 {
-		t.Fatalf("UI-style List (no action filter) should show all entries; got %d", len(items))
-	}
-}
-
-// TestList_ActionFilter_BatchAcceptAndRejectOnSameConfigItem pins the regression
-// the per-field check fixes: an Accept and a Reject on sibling fields of the
-// same ConfigItem must NOT invalidate each other. The user's real-world bug —
-// Reject sshEnabled + Accept ipmiEnabled in one batch was filtered as stale
-// because Accept's mutation bumped ConfigItem.version, false-positiving the
-// per-ConfigItem version check.
+// TestList_ActionFilter_BatchAcceptAndRejectOnSameConfigItem pins that the
+// List handler returns batched decisions on sibling fields of the same
+// ConfigItem correctly. Under ADR 012, resolutions are not subject to any
+// post-decision staleness check — anything in the divergence_resolutions table
+// is by construction current (the ingester wipes resolutions on supersede).
+// The test exists to lock the action-filter contract: each row appears with
+// its own decision; sibling rows don't shadow each other.
 func TestList_ActionFilter_BatchAcceptAndRejectOnSameConfigItem(t *testing.T) {
 	ctx := context.Background()
 	dc := "colo:colo-batch-mvcc"

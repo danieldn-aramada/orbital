@@ -24,6 +24,7 @@ import (
 
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/divergenceentry"
+	"github.com/armada/orbital/ent/divergenceresolution"
 	"github.com/armada/orbital/ent/migrate"
 	"github.com/armada/orbital/internal/divergence"
 	"github.com/armada/orbital/internal/divergenceingest"
@@ -326,6 +327,150 @@ func TestPoll_PreservesFirstSeenOnRepeatedEntry(t *testing.T) {
 	}
 	if !after[0].LastSeenAt.After(firstSeen) {
 		t.Errorf("last_seen_at should advance: was %v now %v", firstSeen, after[0].LastSeenAt)
+	}
+}
+
+// TestPoll_SupersedesPriorResolutionsOnContentChange pins ADR 012: when a new
+// report's content (set of orbId/field/override tuples) differs from what
+// orbital has stored for the DC, all prior entries AND their resolutions are
+// dropped. The operator must re-decide every row in the new report.
+//
+// Regression class: a future change that decides to "merge" reports
+// (keeping resolutions for unchanged tuples) reintroduces the inferrability
+// bug — two identical-looking rows could end up with different decision
+// states without on-screen explanation.
+func TestPoll_SupersedesPriorResolutionsOnContentChange(t *testing.T) {
+	resetState(t)
+	ctx := context.Background()
+	const dcID, repo, dcName = "netbox:colo-galleon", "orbital/colo-galleon", "colo-galleon"
+	seedDC(t, dcID, dcName)
+
+	// First report: 2 entries. Operator resolves both.
+	first := divergence.Report{
+		PublishedAt: "2026-06-01T00:00:00Z",
+		Overrides: []divergence.OverrideEntry{
+			{OrbID: "netbox:server-01", Field: "sshEnabled", Type: "IdracSettings", IntendedValue: false, OverrideValue: true, Who: "local:admin", When: "2026-06-01T00:00:00Z"},
+			{OrbID: "netbox:server-01", Field: "ipmiEnabled", Type: "IdracSettings", IntendedValue: false, OverrideValue: true, Who: "local:admin", When: "2026-06-01T00:00:00Z"},
+		},
+	}
+	putReport(t, repo, first, "2026-06-01T000000Z")
+	ing := newIngester(t)
+	if err := ing.Poll(ctx); err != nil {
+		t.Fatalf("Poll #1: %v", err)
+	}
+	for _, f := range []string{"sshEnabled", "ipmiEnabled"} {
+		if _, err := testDB.DivergenceResolution.Create().
+			SetEntryOrbID("netbox:server-01").
+			SetField(f).
+			SetAction(divergenceresolution.ActionAccept).
+			SetActor("admin@test.com").
+			SetDecidedAt(time.Now().UTC()).
+			Save(ctx); err != nil {
+			t.Fatalf("seed %s resolution: %v", f, err)
+		}
+	}
+
+	// Second report has content-different shape (one entry has changed override).
+	// Under ADR 012 supersede: BOTH resolutions are dropped — operator must re-decide.
+	second := divergence.Report{
+		PublishedAt: "2026-06-02T00:00:00Z",
+		Overrides: []divergence.OverrideEntry{
+			{OrbID: "netbox:server-01", Field: "sshEnabled", Type: "IdracSettings", IntendedValue: false, OverrideValue: true, Who: "local:admin", When: "2026-06-02T00:00:00Z"},
+			{OrbID: "netbox:server-01", Field: "ipmiEnabled", Type: "IdracSettings", IntendedValue: false, OverrideValue: false, Who: "local:admin", When: "2026-06-02T00:00:00Z"},
+		},
+	}
+	putReport(t, repo, second, "2026-06-02T000000Z")
+	if err := ing.Poll(ctx); err != nil {
+		t.Fatalf("Poll #2: %v", err)
+	}
+
+	// Entries: 2, all fresh (first_seen advanced because supersede wiped + inserted).
+	rows := listEntries(t, dcID)
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 entries after supersede, got %d", len(rows))
+	}
+	expectedFirstSeen, _ := time.Parse(time.RFC3339, "2026-06-02T00:00:00Z")
+	for _, r := range rows {
+		if !r.FirstSeenAt.Equal(expectedFirstSeen) {
+			t.Errorf("supersede must reset first_seen_at; row %s.%s has %v, want %v",
+				r.EntryOrbID, r.Field, r.FirstSeenAt, expectedFirstSeen)
+		}
+	}
+
+	// Resolutions: both gone — including the sshEnabled one whose tuple was unchanged.
+	// Full supersede is the principle; partial preservation is explicitly rejected.
+	resolutionCount, err := testDB.DivergenceResolution.Query().Count(ctx)
+	if err != nil {
+		t.Fatalf("count resolutions: %v", err)
+	}
+	if resolutionCount != 0 {
+		t.Errorf("expected ALL resolutions dropped on supersede, got %d", resolutionCount)
+	}
+}
+
+// TestPoll_PreservesResolutionsOnIdenticalContent pins the no-op path of
+// ADR 012: when a new report's content matches what orbital has stored, the
+// ingester touches timestamps but doesn't drop resolutions. Operator's
+// decisions persist as long as orb keeps publishing the same divergence.
+func TestPoll_PreservesResolutionsOnIdenticalContent(t *testing.T) {
+	resetState(t)
+	ctx := context.Background()
+	const dcID, repo, dcName = "netbox:colo-galleon", "orbital/colo-galleon", "colo-galleon"
+	seedDC(t, dcID, dcName)
+
+	report := func(when string) divergence.Report {
+		return divergence.Report{
+			PublishedAt: when,
+			Overrides: []divergence.OverrideEntry{
+				{OrbID: "netbox:server-01", Field: "sshEnabled", Type: "IdracSettings", IntendedValue: false, OverrideValue: true, Who: "local:admin", When: when},
+			},
+		}
+	}
+	putReport(t, repo, report("2026-06-01T00:00:00Z"), "2026-06-01T000000Z")
+	ing := newIngester(t)
+	if err := ing.Poll(ctx); err != nil {
+		t.Fatalf("Poll #1: %v", err)
+	}
+
+	// Operator resolves.
+	if _, err := testDB.DivergenceResolution.Create().
+		SetEntryOrbID("netbox:server-01").
+		SetField("sshEnabled").
+		SetAction(divergenceresolution.ActionReject).
+		SetActor("admin@test.com").
+		SetDecidedAt(time.Now().UTC()).
+		Save(ctx); err != nil {
+		t.Fatalf("seed resolution: %v", err)
+	}
+
+	// Identical content republished — resolution must survive.
+	putReport(t, repo, report("2026-06-02T00:00:00Z"), "2026-06-02T000000Z")
+	if err := ing.Poll(ctx); err != nil {
+		t.Fatalf("Poll #2: %v", err)
+	}
+
+	resolutionCount, err := testDB.DivergenceResolution.Query().Count(ctx)
+	if err != nil {
+		t.Fatalf("count resolutions: %v", err)
+	}
+	if resolutionCount != 1 {
+		t.Errorf("identical content must preserve resolutions, got %d", resolutionCount)
+	}
+
+	// last_seen_at should advance (touch path), first_seen_at preserved.
+	rows := listEntries(t, dcID)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(rows))
+	}
+	expectedFirstSeen, _ := time.Parse(time.RFC3339, "2026-06-01T00:00:00Z")
+	if !rows[0].FirstSeenAt.Equal(expectedFirstSeen) {
+		t.Errorf("first_seen_at must not move on identical content; got %v, want %v",
+			rows[0].FirstSeenAt, expectedFirstSeen)
+	}
+	expectedLastSeen, _ := time.Parse(time.RFC3339, "2026-06-02T00:00:00Z")
+	if !rows[0].LastSeenAt.Equal(expectedLastSeen) {
+		t.Errorf("last_seen_at must advance to latest publish; got %v, want %v",
+			rows[0].LastSeenAt, expectedLastSeen)
 	}
 }
 

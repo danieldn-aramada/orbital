@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"path"
 	"time"
@@ -18,7 +19,6 @@ import (
 	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/dgraphschema"
-	"github.com/armada/orbital/internal/divergence"
 	appversion "github.com/armada/orbital/internal/version"
 	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/armada/orbital/internal/web/data/page"
@@ -47,10 +47,14 @@ type UI struct {
 	version          string
 	basePath         string
 	db               *ent.Client
+	logger           *slog.Logger
 	templates        map[string]*template.Template
 }
 
-func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, deviceCodeEnabled, backupEnabled bool, s3Endpoint, s3Bucket string, basePath string, db *ent.Client) *UI {
+func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, deviceCodeEnabled, backupEnabled bool, s3Endpoint, s3Bucket string, basePath string, db *ent.Client, logger *slog.Logger) *UI {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	return &UI{
 		dev:               dev,
 		ratelURL:          ratelURL,
@@ -62,6 +66,7 @@ func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, deviceCodeEn
 		s3Bucket:         s3Bucket,
 		basePath:         basePath,
 		db:               db,
+		logger:           logger,
 		version:          fmt.Sprintf("%d", time.Now().Unix()),
 		templates:        webtemplates.Map(),
 	}
@@ -274,42 +279,6 @@ func (h *UI) DivergenceReports(c echo.Context) error {
 			return fmt.Errorf("query divergence entries: %w", err)
 		}
 
-		// Staleness pre-computation. For entries with a captured version,
-		// query DGraph once per unique (typeName, orbId) and compare. Stale
-		// rows surface a "stale" badge and become eligible for dismissal.
-		// Nil-version rows stay Stale=false; Accept's value-based fallback
-		// catches their staleness at click time instead.
-		staleByEntryID := map[string]bool{}
-		if h.dgraphURL != "" {
-			currentVersions := map[string]*int{} // key: typeName|orbId
-			for _, e := range entries {
-				if e.IntendedAtVersion == nil || e.TypeName == "" {
-					continue
-				}
-				key := e.TypeName + "|" + e.EntryOrbID
-				if _, seen := currentVersions[key]; seen {
-					continue
-				}
-				v, err := divergence.FetchCurrentVersion(ctx, h.dgraphURL, e.TypeName, e.EntryOrbID)
-				if err != nil {
-					// Best-effort: page render shouldn't fail because of
-					// staleness check. Leave nil → row renders Stale=false.
-					currentVersions[key] = nil
-					continue
-				}
-				currentVersions[key] = v
-			}
-			for _, e := range entries {
-				if e.IntendedAtVersion == nil || e.TypeName == "" {
-					continue
-				}
-				current := currentVersions[e.TypeName+"|"+e.EntryOrbID]
-				if current != nil && *current != *e.IntendedAtVersion {
-					staleByEntryID[e.ID.String()] = true
-				}
-			}
-		}
-
 		idx := map[string]int{}
 		// Tracks max(decided_at) per group as raw time.Time — used post-loop
 		// to determine whether this group's resolutions have already been
@@ -328,8 +297,11 @@ func (h *UI) DivergenceReports(c echo.Context) error {
 				Who:           e.Who,
 				FirstSeenAt:   e.FirstSeenAt.UTC().Format("2006-01-02 15:04 UTC"),
 				LastSeenAt:    e.LastSeenAt.UTC().Format("2006-01-02 15:04 UTC"),
-				Stale:         staleByEntryID[e.ID.String()],
 			}
+			// Per ADR 012: resolutions in the table are the operator's current
+			// decision by construction. The ingester wipes them when orb
+			// publishes a content-differing report, so anything still here
+			// applies to the current snapshot.
 			res, err := h.db.DivergenceResolution.Query().
 				Where(
 					divergenceresolution.EntryOrbID(e.EntryOrbID),
@@ -370,6 +342,13 @@ func (h *UI) DivergenceReports(c echo.Context) error {
 			if err == nil && res.DecidedAt.After(lastDecidedByGroup[gi]) {
 				lastDecidedByGroup[gi] = res.DecidedAt
 			}
+		}
+
+		// IgnoreOnly: every entry decided, every decision Ignore. Hides the
+		// Publish button — Ignore doesn't drive edge actuation, no urgency.
+		for gi := range groups {
+			g := &groups[gi]
+			g.IgnoreOnly = g.Total > 0 && g.Pending == 0 && g.Forced == 0 && g.Accepted == 0
 		}
 
 		// AlreadyPublished check: for each group with no pending decisions,

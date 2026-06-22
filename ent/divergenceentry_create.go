@@ -122,20 +122,6 @@ func (_c *DivergenceEntryCreate) SetOverrideValue(v json.RawMessage) *Divergence
 	return _c
 }
 
-// SetIntendedAtVersion sets the "intended_at_version" field.
-func (_c *DivergenceEntryCreate) SetIntendedAtVersion(v int) *DivergenceEntryCreate {
-	_c.mutation.SetIntendedAtVersion(v)
-	return _c
-}
-
-// SetNillableIntendedAtVersion sets the "intended_at_version" field if the given value is not nil.
-func (_c *DivergenceEntryCreate) SetNillableIntendedAtVersion(v *int) *DivergenceEntryCreate {
-	if v != nil {
-		_c.SetIntendedAtVersion(*v)
-	}
-	return _c
-}
-
 // SetWho sets the "who" field.
 func (_c *DivergenceEntryCreate) SetWho(v string) *DivergenceEntryCreate {
 	_c.mutation.SetWho(v)
@@ -343,10 +329,6 @@ func (_c *DivergenceEntryCreate) createSpec() (*DivergenceEntry, *sqlgraph.Creat
 	if value, ok := _c.mutation.OverrideValue(); ok {
 		_spec.SetField(divergenceentry.FieldOverrideValue, field.TypeJSON, value)
 		_node.OverrideValue = value
-	}
-	if value, ok := _c.mutation.IntendedAtVersion(); ok {
-		_spec.SetField(divergenceentry.FieldIntendedAtVersion, field.TypeInt, value)
-		_node.IntendedAtVersion = &value
 	}
 	if value, ok := _c.mutation.Who(); ok {
 		_spec.SetField(divergenceentry.FieldWho, field.TypeString, value)

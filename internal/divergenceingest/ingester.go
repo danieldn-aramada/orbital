@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/armada/orbital/ent"
@@ -64,10 +65,21 @@ type Ingester struct {
 	// lastIngestedByDC tracks the report publishedAt timestamp of the most
 	// recent ingest per data center, so the poller skips reports it has
 	// already processed. Populated lazily — empty map on startup means the
-	// first tick re-ingests whatever is latest in storage (idempotent because
-	// of the (dc_orb_id, entry_orb_id, field) unique key — UPSERT preserves
-	// first_seen_at).
+	// first tick re-ingests whatever is latest in storage. Guarded by mu
+	// because ResetDC can mutate from an HTTP handler concurrently with the
+	// poll goroutine.
+	mu               sync.Mutex
 	lastIngestedByDC map[string]time.Time
+}
+
+// ResetDC forgets the last-ingested timestamp for a DC, causing the next poll
+// to re-process the latest S3 report fresh. Used by the orbital "clear
+// divergence" break-glass: HTTP handler wipes the DB rows, then calls this so
+// the ingester doesn't skip-as-already-seen.
+func (i *Ingester) ResetDC(dcID string) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	delete(i.lastIngestedByDC, dcID)
 }
 
 func New(ctx context.Context, db *ent.Client, cfg Config, logger *slog.Logger) (*Ingester, error) {
@@ -263,7 +275,10 @@ func (i *Ingester) pollDC(ctx context.Context, dc dcRef) error {
 	// Idempotency: skip if we already ingested this publishedAt for this DC.
 	// DEBUG-log the skip so operators can distinguish "ingestion working,
 	// nothing new" from "ingestion broken, no logs at all."
-	if last, ok := i.lastIngestedByDC[dc.id]; ok && !publishedAt.After(last) {
+	i.mu.Lock()
+	last, ok := i.lastIngestedByDC[dc.id]
+	i.mu.Unlock()
+	if ok && !publishedAt.After(last) {
 		i.logger.Debug("divergence ingester: report unchanged since last ingest",
 			"dc", dc.id, "publishedAt", snap.PublishedAt)
 		return nil
@@ -272,7 +287,9 @@ func (i *Ingester) pollDC(ctx context.Context, dc dcRef) error {
 	if err := i.applyReport(ctx, dc, publishedAt, snap.Overrides); err != nil {
 		return fmt.Errorf("apply report %s: %w", latestKey, err)
 	}
+	i.mu.Lock()
 	i.lastIngestedByDC[dc.id] = publishedAt
+	i.mu.Unlock()
 	i.logger.Info("divergence ingester: applied report",
 		"dc", dc.id,
 		"key", latestKey,
