@@ -84,6 +84,14 @@ type Type struct {
 	// them when asked about EksaKubernetesCluster because EksaKubernetesCluster
 	// implements KubernetesCluster. Schema source of truth.
 	Implements []string
+
+	// JSONStringFields lists FormFields whose schema type is `String` but
+	// whose VALUE is JSON. The page handler parses these before injecting
+	// into the JSON editor (so they display as nested structure); on submit,
+	// configitem-editor.js MUST stringify them again before they go into the
+	// mutation's `set`, or DGraph rejects with "cannot use as String".
+	// E.g. DataCenter.assetDataV2 — declared `String # json` in the schema.
+	JSONStringFields []string
 }
 
 // Types is THE registry. Adding a new ConfigItem starts here.
@@ -94,11 +102,12 @@ type Type struct {
 var Types = []Type{
 	// ── Inventory hierarchy ──────────────────────────────────────────────────
 	{
-		Name:         "DataCenter",
-		IsRoot:       true,
-		BeforeFields: "id orbId name version assetDataV2",
-		FormFields:   []string{"name", "assetDataV2"},
-		PayloadField: "dataCenter",
+		Name:             "DataCenter",
+		IsRoot:           true,
+		BeforeFields:     "id orbId name version assetDataV2",
+		FormFields:       []string{"name", "assetDataV2"},
+		JSONStringFields: []string{"assetDataV2"},
+		PayloadField:     "dataCenter",
 	},
 	{
 		Name:         "Rack",
@@ -320,6 +329,7 @@ type EditTarget struct {
 	Kind               string       `json:"kind"`
 	OrbID              string       `json:"orbId"`
 	Fields             []string     `json:"fields"`
+	JSONStringFields   []string     `json:"jsonStringFields,omitempty"`
 	PayloadField       string       `json:"payloadField"`
 	Namespace          string       `json:"namespace"`
 	ParentInverseField string       `json:"parentInverseField,omitempty"`
@@ -367,12 +377,13 @@ func BuildEditTargets(rootType, rootOrbID, namespace, name string) []EditTarget 
 	}
 
 	out := []EditTarget{{
-		Path:         []string{},
-		Kind:         rootT.Name,
-		OrbID:        rootOrbID,
-		Fields:       rootT.FormFields,
-		PayloadField: rootT.PayloadField,
-		Namespace:    namespace,
+		Path:             []string{},
+		Kind:             rootT.Name,
+		OrbID:            rootOrbID,
+		Fields:           rootT.FormFields,
+		JSONStringFields: rootT.JSONStringFields,
+		PayloadField:     rootT.PayloadField,
+		Namespace:        namespace,
 	}}
 
 	// Walk the owner graph one level down. Some children are themselves
@@ -396,6 +407,7 @@ func BuildEditTargets(rootType, rootOrbID, namespace, name string) []EditTarget 
 					Kind:               leaf.Name,
 					OrbID:              fmt.Sprintf("%s:%s-%s", namespace, name, leafSuffix(leaf.Name)),
 					Fields:             leaf.FormFields,
+					JSONStringFields:   leaf.JSONStringFields,
 					PayloadField:       leaf.PayloadField,
 					Namespace:          namespace,
 					ParentInverseField: leaf.OwnerField,
@@ -419,6 +431,7 @@ func BuildEditTargets(rootType, rootOrbID, namespace, name string) []EditTarget 
 			Kind:               child.Name,
 			OrbID:              fmt.Sprintf("%s:%s-%s", namespace, name, leafSuffix(child.Name)),
 			Fields:             child.FormFields,
+			JSONStringFields:   child.JSONStringFields,
 			PayloadField:       child.PayloadField,
 			Namespace:          namespace,
 			ParentInverseField: child.OwnerField,

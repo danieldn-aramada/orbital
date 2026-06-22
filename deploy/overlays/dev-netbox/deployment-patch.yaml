@@ -17,3 +17,5 @@ spec:
               value: "admin@armada.ai"
             - name: ORBITAL_BACKUP_SCHEDULE
               value: "0 8 * * *"  # daily at 08:00 UTC (midnight PT)
+            - name: ORBITAL_DIVERGENCE_POLL_INTERVAL
+              value: "5s"

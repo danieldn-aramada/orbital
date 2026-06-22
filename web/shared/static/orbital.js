@@ -1518,43 +1518,31 @@ function openDivergencePublishModal(jobId, button, dcOrbId, origHTML) {
       // Mark the DC now so the modal-close observer never re-enables.
       divergencePublishedDCs.add(dcOrbId)
 
-      // Update visual state on terminal publish (success or failure) so the
-      // row reflects what happened. HX-Trigger fires on every status
-      // transition the server records.
+      // Once any terminal state is reached (publish completed OK, failed, or
+      // operator closed the modal without confirming), collapse to a uniform
+      // "Go to Publish History" link. Same color (is-link, blue), same icon,
+      // same destination — the per-state distinction lives in the publish
+      // history page itself, not in this button.
+      const setToHistoryLink = () => {
+        button.disabled = false
+        button.onclick = () => { window.location.href = BASE + '/publish-history' }
+        button.innerHTML = '<span class="icon"><i class="fa-solid fa-arrow-up-right-from-square"></i></span><span>Go to Publish History</span>'
+      }
       const onTerminal = () => {
         document.body.removeEventListener('refreshExportJobs', onTerminal)
-        const succeeded = body.querySelector('.message.is-success') !== null
-        button.classList.remove('is-link')
-        if (succeeded) {
-          button.classList.add('is-success')
-          button.onclick = () => { window.location.href = BASE + '/publish-history' }
-          button.innerHTML = '<span class="icon"><i class="fa-solid fa-check"></i></span><span>Published — View History</span>'
-        } else {
-          // Publish failed — row already locked; surface attempted state.
-          // Direct to Publish History first so the operator can see when/who
-          // last published successfully before retrying from the Export page.
-          button.classList.add('is-warning')
-          button.onclick = () => { window.location.href = BASE + '/publish-history' }
-          button.innerHTML = '<span class="icon"><i class="fa-solid fa-circle-xmark"></i></span><span>Go to Publish History</span>'
-        }
+        setToHistoryLink()
       }
       document.body.addEventListener('refreshExportJobs', onTerminal)
 
       // Modal closed before any publish attempt (operator hit Cancel after the
-      // confirm modal appeared) — keep the button locked but make it clear no
-      // publish was attempted. Same rule: to retry, go to /export.
+      // confirm modal appeared) — same treatment. Row stays locked for the
+      // session per divergencePublishedDCs; operator's path forward is still
+      // the publish-history page.
       const observer = new MutationObserver(() => {
         if (modal.classList.contains('is-active')) return
         observer.disconnect()
         document.body.removeEventListener('refreshExportJobs', onTerminal)
-        // If onTerminal already updated the styling, leave it. Otherwise the
-        // operator closed before publish — direct them to Publish History.
-        if (!button.classList.contains('is-success') && !button.classList.contains('is-warning')) {
-          button.classList.remove('is-link')
-          button.classList.add('is-warning', 'is-light')
-          button.onclick = () => { window.location.href = BASE + '/publish-history' }
-          button.innerHTML = '<span class="icon"><i class="fa-solid fa-arrow-up-right-from-square"></i></span><span>Go to Publish History</span>'
-        }
+        setToHistoryLink()
       })
       observer.observe(modal, { attributes: true, attributeFilter: ['class'] })
     })

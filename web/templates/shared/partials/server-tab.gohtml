@@ -13,7 +13,7 @@
       {{end}}
       {{if .Actions.Reload}}
       <button class="button is-rounded is-small is-link mt-1 js-srv-reload"
-        data-srv-url="{{.BasePath}}/servers/{{.OrbID}}{{if .ShowDCBack}}?dcCtx=1{{end}}"
+        data-srv-url="/servers/{{.OrbID}}{{if .ShowDCBack}}?dcCtx=1{{end}}"
         data-srv-target="{{if .ShowDCBack}}tab-content-{{.DataCenterDomID}}{{else}}tab-content-srv-{{.DomID}}{{end}}">
         <span class="icon"><i class="fa-solid fa-refresh"></i></span>
         <span>Reload</span>

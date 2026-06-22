@@ -210,10 +210,23 @@ export function initConfigItemEditor({
     for (const ch of changes) {
       const t = ch.target
       const sub = ch.currentSub || {}
+      // Fields declared in the schema as `String # json` round-trip through
+      // the editor as nested objects (the page handler parses them for nice
+      // display); on submit they must be re-stringified or DGraph rejects with
+      // "cannot use as String". The set of such fields per target type is
+      // emitted by configitems.BuildEditTargets as JSONStringFields.
+      const jsonStrFields = new Set(t.jsonStringFields || [])
+      const valueForMutation = (f, v) => {
+        if (!jsonStrFields.has(f)) return v
+        // Already a string (operator left it as-is, or explicitly stringified)
+        // — pass through. Otherwise stringify the parsed shape.
+        return typeof v === 'string' ? v : JSON.stringify(v)
+      }
+
       if (ch.existed) {
         // EDIT — canonical update{Kind} with $orbId + $set triggers the diff renderer.
         const setObj = { updatedBy: currentUser, updatedAt: now }
-        for (const f of t.fields) if (f in sub) setObj[f] = sub[f]
+        for (const f of t.fields) if (f in sub) setObj[f] = valueForMutation(f, sub[f])
         calls.push(buildUpdateCall({ kind: t.kind, orbId: t.orbId, set: setObj, payloadField: t.payloadField }))
       } else {
         // CREATE — add{Kind} with parent link. Audit shows raw variables (no
@@ -224,7 +237,7 @@ export function initConfigItemEditor({
           createdBy: currentUser, createdAt: now,
           updatedBy: currentUser, updatedAt: now,
         }
-        for (const f of t.fields) if (f in sub) input[f] = sub[f]
+        for (const f of t.fields) if (f in sub) input[f] = valueForMutation(f, sub[f])
         if (t.parentInverseField && t.parentOrbId) {
           input[t.parentInverseField] = { orbId: t.parentOrbId }
         }

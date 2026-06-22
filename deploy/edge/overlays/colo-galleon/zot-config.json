@@ -20,7 +20,7 @@
         "urls": ["https://armadaeksatest.azurecr.io"],
         "onDemand": false,
         "tlsVerify": true,
-        "pollInterval": "30s",
+        "pollInterval": "10s",
         "content": [{
           "prefix": "orbital/colo-galleon/**"
         }]

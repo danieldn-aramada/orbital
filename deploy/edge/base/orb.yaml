@@ -58,6 +58,8 @@ spec:
               value: "true"
             - name: ORB_ENABLE_OCI_REGISTRY
               value: "true"
+            - name: ORB_OCI_POLL_INTERVAL
+              value: "10s"
             - name: ORB_OCI_PUBLIC_KEY_PATH
               value: /etc/orb/cosign.pub
             - name: ORB_DATA_DIR
