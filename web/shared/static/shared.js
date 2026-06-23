@@ -375,6 +375,64 @@ export function showDatacenterSkeleton(orbId) {
     </div>`
 }
 
+export function showClusterSkeleton(orbId) {
+  const domId = safeDomId(orbId)
+  const target = document.getElementById('tab-content-cluster-' + domId)
+  if (!target) return
+  const s = () => `<span class="is-skeleton" style="display:block">&nbsp;</span>`
+  const summary = [
+    'Name', 'Data Center', 'Provider', 'Cluster Type', 'Tinkerbell IP',
+    'K8s Version', 'Control Plane Endpoint', 'CNI', 'Environment', 'Nodes',
+  ].map(l => `<tr><td style="white-space:nowrap;width:1%">${l}</td><td>${s()}</td></tr>`).join('')
+  const meta = ['Namespace', 'Orb ID', 'Created By', 'Created At', 'Last Updated', 'Last Updated By']
+    .map(l => `<tr><td style="white-space:nowrap;width:1%">${l}</td><td>${s()}</td></tr>`).join('')
+
+  target.innerHTML = `
+    <div class="fixed-grid has-3-cols mb-0">
+      <div class="columns m-0">
+        <div class="column pt-0 pl-0">
+          <button class="button is-rounded is-small is-link mt-1 is-loading" disabled>
+            <span class="icon"><i class="fa-solid fa-refresh"></i></span><span>Reload</span>
+          </button>
+          <button class="button is-rounded is-small is-link mt-1" disabled>
+            <span class="icon"><i class="fa-solid fa-pen-to-square"></i></span><span>Edit</span>
+          </button>
+          <button class="button is-rounded is-small is-danger mt-1" disabled>
+            <span class="icon"><i class="fa-solid fa-trash"></i></span><span>Delete</span>
+          </button>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="cell is-col-span-2 is-row-span-1">
+          <article class="box">
+            <p class="is-size-4 pb-4">Cluster Summary</p>
+            <div style="overflow-x:auto"><table class="table is-fullwidth"><tbody>${summary}</tbody></table></div>
+          </article>
+        </div>
+        <div class="cell is-row-span-1">
+          <article class="box" style="height:100%">
+            <p class="is-size-4 mb-4">Metadata</p>
+            <div style="overflow-x:auto"><table class="table mb-0"><tbody>${meta}</tbody></table></div>
+          </article>
+        </div>
+        <div class="cell is-col-span-3">
+          <article class="box pb-2">
+            <p class="is-size-4 pb-4">Details</p>
+            <div class="tabs is-boxed">
+              <ul>
+                <li class="is-active"><a><span class="icon is-small"><i class="fa-solid fa-server"></i></span><span>Nodes</span></a></li>
+                <li><a><span class="icon is-small"><i class="fa-solid fa-floppy-disk"></i></span><span>Backups</span></a></li>
+                <li><a><span class="icon is-small"><i class="fa-solid fa-sitemap"></i></span><span>Workload Clusters</span></a></li>
+                <li><a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a></li>
+              </ul>
+            </div>
+            <div style="min-height:200px"><span class="is-skeleton" style="display:block;height:120px">&nbsp;</span></div>
+          </article>
+        </div>
+      </div>
+    </div>`
+}
+
 export function showServerSkeleton(targetId, variant) {
   const target = document.getElementById(targetId)
   if (!target) return

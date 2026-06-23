@@ -25,21 +25,24 @@ type incomingEntry struct {
 // applyReport is the supersede-semantics ingest path (ADR 012).
 //
 // A divergence report's content is the set of (entry_orb_id, field,
-// override_value) tuples it carries. Two cases:
+// override_value) tuples it carries. Three cases:
 //
-//   - Content matches existing entries for the DC → no state change. Touch
-//     last_seen_at and last_report_published_at on each row so the UI shows
-//     freshness, but leave resolutions and field values untouched.
+//   - Content matches AND no resolution has been submitted for any of the
+//     DC's entries → no state change. Touch last_seen_at and
+//     last_report_published_at on each row so the UI shows freshness, but
+//     leave entries intact (operator is mid-decision; staged decisions live
+//     client-side until Submit).
+//   - Content matches BUT one or more resolutions exist for the DC's entries
+//     → atomic supersede. Resolutions are bound to the report that triggered
+//     them; once Submit has dispatched a decision, the next identical-content
+//     report is a *new* divergence occurrence (cloud-admin and local-admin
+//     reproduced the same drift) and must clear prior decisions so the
+//     operator sees it as fresh pending.
 //   - Content differs (any added, removed, or value-changed tuple) → atomic
-//     supersede: drop all DC entries (and resolutions, in the same tx),
-//     insert the incoming set as fresh pending, emit one
-//     supersedeDivergenceReport audit event.
+//     supersede. Same as before.
 //
-// Effects of the supersede choice are pinned in ADR 012. The page promises
-// single-report semantics; resolutions cannot survive a content-differing
-// report. Operator may re-decide previously-decided fields if any sibling
-// field's divergence content changes — that friction is bounded and the price
-// of UI inferrability.
+// All supersede paths drop entries + resolutions in the same tx and emit one
+// supersedeDivergenceReport audit event.
 func (i *Ingester) applyReport(ctx context.Context, dc dcRef, publishedAt time.Time, overrides []divergence.OverrideEntry) error {
 	incoming := make([]incomingEntry, len(overrides))
 	for idx, ov := range overrides {
@@ -62,22 +65,32 @@ func (i *Ingester) applyReport(ctx context.Context, dc dcRef, publishedAt time.T
 	}
 
 	if contentEqual(existing, incoming) {
-		// No state change. Touch timestamps so the UI reflects freshness, but
-		// leave every other column (and every resolution) alone.
-		for _, in := range incoming {
-			if _, err := i.db.DivergenceEntry.Update().
-				Where(
-					divergenceentry.DcOrbID(dc.id),
-					divergenceentry.EntryOrbID(in.ov.OrbID),
-					divergenceentry.Field(in.ov.Field),
-				).
-				SetLastSeenAt(in.when).
-				SetLastReportPublishedAt(publishedAt).
-				Save(ctx); err != nil {
-				return fmt.Errorf("touch %s/%s.%s: %w", dc.id, in.ov.OrbID, in.ov.Field, err)
-			}
+		// Same content as DB. Whether to no-op or supersede depends on
+		// whether any resolution has been submitted for this DC's entries.
+		hasResolutions, err := i.dcHasResolutions(ctx, existing)
+		if err != nil {
+			return fmt.Errorf("check resolutions for %s: %w", dc.id, err)
 		}
-		return nil
+		if !hasResolutions {
+			// Operator still mid-decision (or untouched). Preserve entries +
+			// touch timestamps so the UI reflects freshness.
+			for _, in := range incoming {
+				if _, err := i.db.DivergenceEntry.Update().
+					Where(
+						divergenceentry.DcOrbID(dc.id),
+						divergenceentry.EntryOrbID(in.ov.OrbID),
+						divergenceentry.Field(in.ov.Field),
+					).
+					SetLastSeenAt(in.when).
+					SetLastReportPublishedAt(publishedAt).
+					Save(ctx); err != nil {
+					return fmt.Errorf("touch %s/%s.%s: %w", dc.id, in.ov.OrbID, in.ov.Field, err)
+				}
+			}
+			return nil
+		}
+		// Resolutions exist → fall through to supersede. The recurrence of
+		// identical drift after Submit is a new event.
 	}
 
 	// Content differs — atomic supersede.
@@ -160,6 +173,33 @@ func (i *Ingester) applyReport(ctx context.Context, dc dcRef, publishedAt time.T
 	i.logger.Info("divergence ingester: superseded report",
 		"dc", dc.id, "dropped", len(existing), "added", len(incoming))
 	return nil
+}
+
+// dcHasResolutions returns true if any DivergenceResolution row exists for
+// the (entry_orb_id, field) pairs of the given DC entries. Used by
+// applyReport to distinguish "operator hasn't decided yet (preserve)" from
+// "operator already submitted (supersede on recurrence)".
+func (i *Ingester) dcHasResolutions(ctx context.Context, existing []*ent.DivergenceEntry) (bool, error) {
+	if len(existing) == 0 {
+		return false, nil
+	}
+	orbIDs := make([]string, 0, len(existing))
+	seen := make(map[string]struct{}, len(existing))
+	for _, e := range existing {
+		if _, ok := seen[e.EntryOrbID]; ok {
+			continue
+		}
+		seen[e.EntryOrbID] = struct{}{}
+		orbIDs = append(orbIDs, e.EntryOrbID)
+	}
+	count, err := i.db.DivergenceResolution.Query().
+		Where(divergenceresolution.EntryOrbIDIn(orbIDs...)).
+		Limit(1).
+		Count(ctx)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 // contentEqual reports whether the existing entries for a DC match the

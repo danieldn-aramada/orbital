@@ -3,13 +3,10 @@ package divergence
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -36,46 +33,16 @@ type Report struct {
 	Overrides   []OverrideEntry `json:"overrides"`
 }
 
-// PublishRecord tracks the last successful publish. ContentHash is the
-// canonical hash of the published entries (excluding the jittery `When`
-// timestamp) and is the key the publisher uses to short-circuit republishes
-// when nothing meaningful changed. Empty for legacy records — those records
-// always trigger a republish on the next attempt, which seeds the hash.
+// PublishRecord tracks the last successful publish. Used purely for UI
+// display — "last published at X to key Y." Orb does not gate publishes on
+// it; orbital's ingester is the only side with authority to decide whether a
+// report represents a state change (see `internal/divergenceingest/store.go`
+// applyReport — same content as existing entries short-circuits, content
+// differing from existing supersedes). Adding an orb-side dedup hides
+// recurrences of identical drift after orbital has already resolved them.
 type PublishRecord struct {
 	PublishedAt time.Time `json:"publishedAt"`
 	S3Key       string    `json:"s3Key"`
-	ContentHash string    `json:"contentHash,omitempty"`
-}
-
-// ContentHash computes a canonical hash of a report's divergence content,
-// stable across reports that differ only in their `When` timestamps. Two
-// reports producing the same hash describe the same field-level divergence
-// state from the edge's perspective and need not be republished.
-//
-// Sort key is (OrbID, Field); excluded from the hash: When.
-func ContentHash(entries []OverrideEntry) string {
-	sorted := make([]OverrideEntry, len(entries))
-	copy(sorted, entries)
-	sort.Slice(sorted, func(i, j int) bool {
-		if sorted[i].OrbID != sorted[j].OrbID {
-			return sorted[i].OrbID < sorted[j].OrbID
-		}
-		return sorted[i].Field < sorted[j].Field
-	})
-	canon := make([]map[string]any, len(sorted))
-	for i, e := range sorted {
-		canon[i] = map[string]any{
-			"orbId":         e.OrbID,
-			"field":         e.Field,
-			"type":          e.Type,
-			"intendedValue": e.IntendedValue,
-			"overrideValue": e.OverrideValue,
-			"who":           e.Who,
-		}
-	}
-	b, _ := json.Marshal(canon)
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])
 }
 
 // Store manages divergence reports locally in DataDir/divergence/.

@@ -18,6 +18,7 @@ import {
   setCurrentTab,
   showDatacenterSkeleton,
   showServerSkeleton,
+  showClusterSkeleton,
   fetchWithMinDelay,
   initDcDetailTabs,
   initServerDetailTabs,
@@ -635,8 +636,10 @@ export function reloadClusterFragment(orbId) {
   const domId = safeDomId(orbId)
   const target = document.getElementById('tab-content-cluster-' + domId)
   if (!target) return Promise.resolve()
-  return fetch(BASE + '/clusters/' + encodeURIComponent(orbId), { headers: { 'HX-Request': 'true' } })
-    .then(r => r.text())
+  // Mirror the server-tab reload contract: paint a skeleton, then hold the
+  // spinner for a minimum render time so the reload doesn't feel like a flash.
+  showClusterSkeleton(orbId)
+  return fetchWithMinDelay('/clusters/' + encodeURIComponent(orbId))
     .then(html => {
       target.innerHTML = html
       htmx.process(target)
@@ -1017,7 +1020,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const reloadBtn = auditTable.button('reload:name').node()
   reloadBtn.on('click', function () {
     reloadBtn.addClass('is-loading')
-    auditTable.ajax.reload(() => { reloadBtn.removeClass('is-loading') }, false)
+    // Floor the spinner duration at 500ms — same contract as fetchWithMinDelay
+    // for the server/DC/cluster reload buttons.
+    const minDelay = new Promise(resolve => setTimeout(resolve, 500))
+    const reload = new Promise(resolve => auditTable.ajax.reload(() => resolve(), false))
+    Promise.all([minDelay, reload]).then(() => reloadBtn.removeClass('is-loading'))
   })
 })
 

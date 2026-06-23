@@ -141,15 +141,6 @@ func (s *Server) publishDivergence(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusConflict, "nothing to publish")
 	}
 
-	// Content dedup: skip the S3 write when current content matches the last
-	// published record. Avoids re-triggering orbital's supersede ingest on
-	// no-op republishes (ADR 012 precondition).
-	hash := divergence.ContentHash(entries)
-	if last, err := s.divStore.LoadPublishRecord(); err == nil && last != nil && last.ContentHash != "" && last.ContentHash == hash {
-		s.logger.Info("divergence publish: content unchanged, skipping", "key", last.S3Key)
-		return c.JSON(http.StatusOK, map[string]string{"key": last.S3Key, "status": "unchanged"})
-	}
-
 	key, err := s.divPublisher.Publish(c.Request().Context(), entries)
 	if err != nil {
 		s.logger.Error("divergence publish failed", "err", err)
@@ -158,7 +149,6 @@ func (s *Server) publishDivergence(c echo.Context) error {
 	rec := divergence.PublishRecord{
 		PublishedAt: time.Now().UTC(),
 		S3Key:       key,
-		ContentHash: hash,
 	}
 	if err := s.divStore.SavePublishRecord(rec); err != nil {
 		s.logger.Warn("failed to save publish record", "err", err)

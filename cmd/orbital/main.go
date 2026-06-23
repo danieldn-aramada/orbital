@@ -3,7 +3,6 @@
 // @description     API-first, graph-native source of truth for modular data centers.
 //
 // @tag.name         audit
-// @tag.name         graph
 // @tag.name         graphql
 // @tag.name         oci
 // @tag.name         subgraph

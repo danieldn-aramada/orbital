@@ -24,7 +24,13 @@ A snapshot is whole. Decisions on a snapshot do not survive a new snapshot. If o
 
 Adopt **report-supersedes** semantics. Resolutions are scoped to the lifetime of a specific report ingest; they end when orbital ingests a content-differing report.
 
-"Content" is the set of `(entry_orb_id, field, override_value)` tuples on the report. If the set is identical to what's already in `divergence_entries` for that DC, the ingest is a no-op for state (only `last_seen_at` / `last_report_published_at` advance). If the set differs in any way — added, removed, or value-changed tuples — the ingest atomically drops all `divergence_entries` and `divergence_resolutions` for that DC and inserts every tuple from the incoming report as fresh pending.
+"Content" is the set of `(entry_orb_id, field, override_value)` tuples on the report. The ingest behavior is:
+
+- **Set differs (any added, removed, or value-changed tuple)** — atomic supersede. Drop all `divergence_entries` and `divergence_resolutions` for the DC, insert every tuple from the incoming report as fresh pending.
+- **Set identical AND any resolution row exists for the DC's entries** — atomic supersede, same as above. A resolution row represents a dispatched Submit. Once the operator has submitted decisions, a subsequent identical-content report is a *new* divergence occurrence (cloud-admin and local-admin reproduced the same drift) and must clear prior decisions so the operator sees it as fresh pending. Without this rule, recurrence after Submit is silently glued onto a dead decision row.
+- **Set identical AND no resolution rows exist** — no-op for state. Touch `last_seen_at` / `last_report_published_at` so the UI shows freshness; leave entries intact. The operator may be mid-decision (staged decisions live client-side until Submit), and cb-controller heartbeats firing during a decision session should not blow away the entries they're staging against.
+
+Submit is the boundary. The presence of a resolution row is the signal that the operator has dispatched a decision; anything after that is a new event.
 
 The MVCC value-based staleness check is removed. `intended_at_version` is removed from both `divergence_entries` and `divergence_resolutions`. Accept's optimistic-concurrency guard (the one legitimate non-UI consumer of the version anchor) is removed; Accept becomes last-writer-wins against orbital DGraph, on the basis that concurrent cloud-admin races on the same field at the same second are rare enough to live with, and any such race is detectable in the audit log post-hoc.
 
@@ -32,7 +38,7 @@ The MVCC value-based staleness check is removed. `intended_at_version` is remove
 
 orbital's ingester is the authority for content comparison. **orb is allowed to be dumb** — it can publish identical content repeatedly without harm. orbital reads each incoming report, compares against the current `divergence_entries` set for the DC, and decides supersede-or-no-op locally. No coordination with orb is required; no orb-side change ships with this ADR.
 
-(orb-side dedup remains a future optimization for S3 bandwidth, not a correctness requirement.)
+**Do not add orb-side content dedup.** It looks like a free S3-bandwidth optimization but it isn't — it's a correctness regression. orb has no visibility into orbital's resolution state, so "same content as my last publish" is not the same predicate as "same content as what orbital currently has on file." After orbital resolves a divergence and the loop closes, orbital's rows are gone; orb republishing the same set is a legitimately new divergence event that orbital must see. An orb-side hash check would hide it. A short-lived `ContentHash` field on `PublishRecord` shipped briefly in 2026-06; removed after the recurrence-after-resolution failure mode surfaced in `colo-galleon`.
 
 ## Acceptance test
 
@@ -46,8 +52,10 @@ If the implementation produces a screen where two identical-looking rows have di
 
 1. Load incoming report → compute set of `(entry_orb_id, field, override_value)`
 2. Load existing entries for the DC → compute same set
-3. Set equal → touch `last_seen_at` / `last_report_published_at`, return
-4. Set different → in one transaction: delete all DC entries (resolutions cascade), insert all tuples from incoming report, emit audit event `supersedeDivergenceReport` with counts
+3. Set equal:
+   - If any `divergence_resolutions` row exists for the DC's entries → go to step 4 (supersede)
+   - Else → touch `last_seen_at` / `last_report_published_at`, return
+4. Supersede — in one transaction: delete all DC entries (resolutions cascade), insert all tuples from incoming report, emit audit event `supersedeDivergenceReport` with counts
 
 Atomicity is required: a partial supersede leaves orbital in a worse state than no supersede. Use a single ent transaction with rollback on any error.
 
@@ -76,6 +84,8 @@ The action-filter path in `List` reduces to a SQL filter on `resolution.action`.
 - Accept dispatch becomes last-writer-wins under concurrent cloud-admin edits to the same field. Mitigation: rare; audit trail surfaces post-hoc.
 
 **Rejected alternative — partial supersede.** Keep resolutions for `(orbId, field)` tuples that exist in both old and new reports with the same override value; wipe only the rest. Faster operator workflow, but **reintroduces the inferrability bug** under a different rule ("why did this row survive but not that one?"). The principle either holds or it doesn't. If full-supersede operator friction proves unacceptable in dogfooding, the correct response is tightening orb's publish discipline (so identical-content reports don't ship), not smuggling hidden cross-report state back into orbital.
+
+**Rejected alternative — always supersede on every ingest.** Considered briefly: any ingest (even pre-Submit) drops + re-inserts. Conceptually clean (one rule). But cb-controller heartbeats every ~5min would blow away rows the operator is mid-decision against; staged client-side decisions would lose their DOM anchors. Option B (Submit is the boundary) is the smallest change that captures recurrence-after-resolve without that UX cost. The presence of a resolution row is a cheap, monotonic, side-effect-free signal that Submit has happened — exactly what we need.
 
 ## References
 

@@ -351,6 +351,48 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "delete": {
+                "tags": [
+                    "divergence"
+                ],
+                "summary": "Clear all divergence state for a data center",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Data center orbId (e.g. colo:colo-galleon)",
+                        "name": "dcOrbId",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/api/v1/divergences/{id}": {
@@ -817,6 +859,271 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/import": {
+            "post": {
+                "description": "Starts an async OCI artifact pull and DGraph import for the requested tag. Returns 409 if an import is already running.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "import"
+                ],
+                "summary": "Trigger import",
+                "parameters": [
+                    {
+                        "description": "Import request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/import/artifact": {
+            "post": {
+                "description": "Accepts a zip bundle (data.json.gz + schema.gz + optional layers.json + layer blobs)",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "import"
+                ],
+                "summary": "Import OCI artifact bundle",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "Zip archive containing data.json.gz, schema.gz, and optionally layers.json + layer blobs",
+                        "name": "bundle",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/import/history": {
+            "get": {
+                "description": "Returns the rolling history of completed and failed imports from disk.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "import"
+                ],
+                "summary": "Import history",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/orb.ImportRecord"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/import/history/{tag}/layers": {
+            "get": {
+                "description": "Returns an HTML fragment rendering the layers modal for an import-history record, found by tag (newest match wins).",
+                "produces": [
+                    "text/html"
+                ],
+                "tags": [
+                    "import"
+                ],
+                "summary": "Import layers modal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Import tag",
+                        "name": "tag",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/import/status": {
+            "get": {
+                "description": "Returns the current import state snapshot including status, current version, and last import record.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "import"
+                ],
+                "summary": "Import status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/orbserver.importSnapshot"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/import/subgraph": {
+            "post": {
+                "description": "Accepts a zip bundle (data.json.gz + schema.gz) and imports it into local DGraph. Source-agnostic: use for courier (direct upload), ConfigBundle Controller delivery, or any caller with a subgraph zip.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "import"
+                ],
+                "summary": "Import subgraph bundle",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "Zip archive containing data.json.gz and schema.gz",
+                        "name": "bundle",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/import/tags": {
+            "get": {
+                "description": "Lists available OCI artifact tags from the configured registry for this data center, enriched with signature verification status and artifact size.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "import"
+                ],
+                "summary": "List import tags",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/orbserver.tagInfo"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/oci/artifacts": {
             "get": {
                 "description": "Returns the 100 most recent OCI artifacts ordered by publish time descending.",
@@ -1084,7 +1391,7 @@ const docTemplate = `{
         },
         "/graphql": {
             "post": {
-                "description": "POST: proxies GraphQL queries and mutations to DGraph. GET: serves the GraphiQL explorer UI.",
+                "description": "POST: proxies GraphQL queries to orb's local DGraph instance. GET: serves the GraphiQL explorer UI.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1097,7 +1404,7 @@ const docTemplate = `{
                 "summary": "GraphQL endpoint",
                 "parameters": [
                     {
-                        "example": "\"{\\\"query\\\": \\\"{ queryDataCenter { id name } }\\\"}\"",
+                        "example": "\"{\\\"query\\\": \\\"{ queryServer { id hostname } }\\\"}\"",
                         "description": "GraphQL request body",
                         "name": "body",
                         "in": "body",
@@ -1397,14 +1704,142 @@ const docTemplate = `{
                     "type": "integer"
                 }
             }
+        },
+        "orb.DispatchResult": {
+            "type": "object",
+            "properties": {
+                "consumerName": {
+                    "description": "name of the accepting consumer; empty if no 2xx",
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "mediaType": {
+                    "type": "string"
+                },
+                "statusCode": {
+                    "type": "integer"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "orb.ImportRecord": {
+            "type": "object",
+            "properties": {
+                "dcOrbId": {
+                    "type": "string"
+                },
+                "digest": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "exportJobId": {
+                    "type": "string"
+                },
+                "importedAt": {
+                    "type": "string"
+                },
+                "layers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/orb.LayerRecord"
+                    }
+                },
+                "status": {
+                    "description": "\"done\" | \"partial\" | \"failed\". \"partial\" means the graph import succeeded but at least one extra-layer dispatch failed.",
+                    "type": "string"
+                },
+                "tag": {
+                    "type": "string"
+                },
+                "verification": {
+                    "description": "Verification* constant",
+                    "type": "string"
+                }
+            }
+        },
+        "orb.LayerRecord": {
+            "type": "object",
+            "properties": {
+                "digest": {
+                    "type": "string"
+                },
+                "dispatch": {
+                    "description": "set when Role == LayerRoleDispatched",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/orb.DispatchResult"
+                        }
+                    ]
+                },
+                "mediaType": {
+                    "type": "string"
+                },
+                "producer": {
+                    "description": "from OCI annotation com.armada.orbital.producer (empty for legacy)",
+                    "type": "string"
+                },
+                "role": {
+                    "description": "LayerRole* constant",
+                    "type": "string"
+                },
+                "sizeBytes": {
+                    "type": "integer"
+                }
+            }
+        },
+        "orbserver.importSnapshot": {
+            "type": "object",
+            "properties": {
+                "availableVersion": {
+                    "type": "string"
+                },
+                "currentVersion": {
+                    "type": "string"
+                },
+                "lastChecked": {
+                    "type": "string"
+                },
+                "lastError": {
+                    "type": "string"
+                },
+                "lastImport": {
+                    "$ref": "#/definitions/orb.ImportRecord"
+                },
+                "lastPollErr": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "orbserver.tagInfo": {
+            "type": "object",
+            "properties": {
+                "digest": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sizeBytes": {
+                    "type": "integer"
+                },
+                "verified": {
+                    "type": "boolean"
+                }
+            }
         }
     },
     "tags": [
         {
             "name": "audit"
-        },
-        {
-            "name": "graph"
         },
         {
             "name": "graphql"

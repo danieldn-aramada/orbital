@@ -408,11 +408,13 @@ func TestPoll_SupersedesPriorResolutionsOnContentChange(t *testing.T) {
 	}
 }
 
-// TestPoll_PreservesResolutionsOnIdenticalContent pins the no-op path of
-// ADR 012: when a new report's content matches what orbital has stored, the
-// ingester touches timestamps but doesn't drop resolutions. Operator's
-// decisions persist as long as orb keeps publishing the same divergence.
-func TestPoll_PreservesResolutionsOnIdenticalContent(t *testing.T) {
+// TestPoll_PreservesEntriesWhenNoResolutionsYet pins the no-op path of
+// ADR 012 (post Option-B amendment): when a new report's content matches
+// what orbital has stored AND no resolution has been submitted yet, the
+// ingester touches timestamps and leaves entries intact so the operator's
+// in-flight (client-side staged) decisions don't get disrupted by
+// cb-controller heartbeats firing during a decision session.
+func TestPoll_PreservesEntriesWhenNoResolutionsYet(t *testing.T) {
 	resetState(t)
 	ctx := context.Background()
 	const dcID, repo, dcName = "netbox:colo-galleon", "orbital/colo-galleon", "colo-galleon"
@@ -432,7 +434,56 @@ func TestPoll_PreservesResolutionsOnIdenticalContent(t *testing.T) {
 		t.Fatalf("Poll #1: %v", err)
 	}
 
-	// Operator resolves.
+	// No operator action — resolution not seeded. Republish identical content.
+	putReport(t, repo, report("2026-06-02T00:00:00Z"), "2026-06-02T000000Z")
+	if err := ing.Poll(ctx); err != nil {
+		t.Fatalf("Poll #2: %v", err)
+	}
+
+	// Entry IDs and first_seen must be stable (touch-timestamps path).
+	rows := listEntries(t, dcID)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(rows))
+	}
+	expectedFirstSeen, _ := time.Parse(time.RFC3339, "2026-06-01T00:00:00Z")
+	if !rows[0].FirstSeenAt.Equal(expectedFirstSeen) {
+		t.Errorf("first_seen_at must not move on identical content w/o resolutions; got %v, want %v",
+			rows[0].FirstSeenAt, expectedFirstSeen)
+	}
+	expectedLastSeen, _ := time.Parse(time.RFC3339, "2026-06-02T00:00:00Z")
+	if !rows[0].LastSeenAt.Equal(expectedLastSeen) {
+		t.Errorf("last_seen_at must advance to latest publish; got %v, want %v",
+			rows[0].LastSeenAt, expectedLastSeen)
+	}
+}
+
+// TestPoll_SupersedesIdenticalContentWhenResolutionExists pins the recurrence
+// case (ADR 012, Option B): a resolution row marks "Submit dispatched." Any
+// subsequent ingest — even with identical content — is a new divergence
+// occurrence and must drop the prior resolution + re-pending the entries.
+// Without this, cloud-admin and local-admin reproducing the same drift
+// twice would be silently glued onto a dead decision row.
+func TestPoll_SupersedesIdenticalContentWhenResolutionExists(t *testing.T) {
+	resetState(t)
+	ctx := context.Background()
+	const dcID, repo, dcName = "netbox:colo-galleon", "orbital/colo-galleon", "colo-galleon"
+	seedDC(t, dcID, dcName)
+
+	report := func(when string) divergence.Report {
+		return divergence.Report{
+			PublishedAt: when,
+			Overrides: []divergence.OverrideEntry{
+				{OrbID: "netbox:server-01", Field: "sshEnabled", Type: "IdracSettings", IntendedValue: false, OverrideValue: true, Who: "local:admin", When: when},
+			},
+		}
+	}
+	putReport(t, repo, report("2026-06-01T00:00:00Z"), "2026-06-01T000000Z")
+	ing := newIngester(t)
+	if err := ing.Poll(ctx); err != nil {
+		t.Fatalf("Poll #1: %v", err)
+	}
+
+	// Operator Submits a decision. Resolution row represents the dispatched action.
 	if _, err := testDB.DivergenceResolution.Create().
 		SetEntryOrbID("netbox:server-01").
 		SetField("sshEnabled").
@@ -443,7 +494,7 @@ func TestPoll_PreservesResolutionsOnIdenticalContent(t *testing.T) {
 		t.Fatalf("seed resolution: %v", err)
 	}
 
-	// Identical content republished — resolution must survive.
+	// Identical content republished — must be treated as a NEW occurrence.
 	putReport(t, repo, report("2026-06-02T00:00:00Z"), "2026-06-02T000000Z")
 	if err := ing.Poll(ctx); err != nil {
 		t.Fatalf("Poll #2: %v", err)
@@ -453,24 +504,18 @@ func TestPoll_PreservesResolutionsOnIdenticalContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("count resolutions: %v", err)
 	}
-	if resolutionCount != 1 {
-		t.Errorf("identical content must preserve resolutions, got %d", resolutionCount)
+	if resolutionCount != 0 {
+		t.Errorf("identical content after Submit must drop resolutions, got %d", resolutionCount)
 	}
-
-	// last_seen_at should advance (touch path), first_seen_at preserved.
+	// Entry is re-inserted, so first_seen advances to the new report's `when`.
 	rows := listEntries(t, dcID)
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(rows))
 	}
-	expectedFirstSeen, _ := time.Parse(time.RFC3339, "2026-06-01T00:00:00Z")
-	if !rows[0].FirstSeenAt.Equal(expectedFirstSeen) {
-		t.Errorf("first_seen_at must not move on identical content; got %v, want %v",
-			rows[0].FirstSeenAt, expectedFirstSeen)
-	}
-	expectedLastSeen, _ := time.Parse(time.RFC3339, "2026-06-02T00:00:00Z")
-	if !rows[0].LastSeenAt.Equal(expectedLastSeen) {
-		t.Errorf("last_seen_at must advance to latest publish; got %v, want %v",
-			rows[0].LastSeenAt, expectedLastSeen)
+	expectedNew, _ := time.Parse(time.RFC3339, "2026-06-02T00:00:00Z")
+	if !rows[0].FirstSeenAt.Equal(expectedNew) {
+		t.Errorf("first_seen_at must reset on supersede; got %v, want %v",
+			rows[0].FirstSeenAt, expectedNew)
 	}
 }
 

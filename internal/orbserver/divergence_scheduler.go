@@ -76,22 +76,16 @@ func (s *DivergenceScheduler) Start(ctx context.Context) {
 	s.mu.Unlock()
 }
 
-// fire publishes the current set to S3 — but only when content differs from
-// the last published record. Empty set is still a valid signal (transitions
-// from "had divergence" to "none" must be communicated), but identical
-// content is suppressed to avoid re-triggering orbital's supersede ingest
-// path on no-op republishes (ADR 012 precondition).
+// fire publishes the current set to S3. No orb-side content dedup: orbital's
+// ingester (`internal/divergenceingest/store.go` applyReport) is the only
+// side that can correctly tell a state change from a no-op, because it knows
+// which divergences have been resolved and pruned. Cost is one extra S3
+// object per cb-controller heartbeat when nothing's changed — orbital
+// short-circuits those to a timestamp touch with no DB churn.
 func (s *DivergenceScheduler) fire(ctx context.Context) {
 	entries, err := s.store.Load()
 	if err != nil {
 		s.logger.Error("divergence scheduler: load failed", "err", err)
-		return
-	}
-
-	hash := divergence.ContentHash(entries)
-	if last, err := s.store.LoadPublishRecord(); err == nil && last != nil && last.ContentHash != "" && last.ContentHash == hash {
-		s.logger.Debug("divergence scheduler: content unchanged, skipping publish",
-			"lastKey", last.S3Key, "entries", len(entries))
 		return
 	}
 
@@ -104,7 +98,6 @@ func (s *DivergenceScheduler) fire(ctx context.Context) {
 	if err := s.store.SavePublishRecord(divergence.PublishRecord{
 		PublishedAt: time.Now().UTC(),
 		S3Key:       key,
-		ContentHash: hash,
 	}); err != nil {
 		s.logger.Warn("divergence scheduler: save publish record failed", "err", err)
 	}
