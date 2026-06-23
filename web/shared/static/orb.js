@@ -246,6 +246,27 @@ document.addEventListener('dblclick', (e) => {
   navigateToClusterTab(row.dataset.clusterOrbId, row.dataset.displayName)
 })
 
+// Server row in a cluster tab (nodes table) → open server tab.
+// Mirrors orbital.js; both apps use shared/partials/cluster-tab.gohtml which
+// emits tr[data-server-orb-id]. Without this handler orb's dblclick was inert.
+document.addEventListener('dblclick', (e) => {
+  const row = e.target.closest('tr[data-server-orb-id]')
+  if (!row) return
+  const orbId = row.dataset.serverOrbId
+  const label = row.dataset.displayName || orbId
+  window.location.href = BASE + '/servers?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label)
+})
+
+// Server row in a DC tab (servers list) → open server tab.
+// Mirrors orbital.js; shared/partials/datacenter-tab.gohtml emits tr[data-server-id].
+document.addEventListener('dblclick', (e) => {
+  const row = e.target.closest('tr[data-server-id]')
+  if (!row) return
+  const orbId = row.dataset.serverId
+  const label = row.dataset.displayName || orbId
+  window.location.href = BASE + '/servers?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label)
+})
+
 // ─── Orb divergence publish ───────────────────────────────────────────────────
 
 function publishDivergence() {

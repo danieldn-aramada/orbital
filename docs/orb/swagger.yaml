@@ -1,4 +1,20 @@
 definitions:
+  divergence.OverrideEntry:
+    properties:
+      field:
+        type: string
+      intendedValue: {}
+      orbId:
+        type: string
+      overrideValue: {}
+      type:
+        description: orbital GraphQL type name (e.g. "Server"); empty for legacy producers
+        type: string
+      when:
+        type: string
+      who:
+        type: string
+    type: object
   orb.DispatchResult:
     properties:
       consumerName:
@@ -30,7 +46,8 @@ definitions:
           $ref: '#/definitions/orb.LayerRecord'
         type: array
       status:
-        description: '"done" | "failed"'
+        description: '"done" | "partial" | "failed". "partial" means the graph import
+          succeeded but at least one extra-layer dispatch failed.'
         type: string
       tag:
         type: string
@@ -74,6 +91,13 @@ definitions:
       status:
         type: string
     type: object
+  orbserver.intakePayload:
+    properties:
+      overrides:
+        items:
+          $ref: '#/definitions/divergence.OverrideEntry'
+        type: array
+    type: object
   orbserver.tagInfo:
     properties:
       digest:
@@ -92,6 +116,124 @@ info:
   title: Orb API
   version: 0.0.0-dev
 paths:
+  /api/v1/divergence:
+    get:
+      description: Returns the current pending divergence set held by orb. This is
+        the same set that the next `publish` call would aggregate into a report.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/divergence.OverrideEntry'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get pending divergence entries
+      tags:
+      - divergence
+    post:
+      consumes:
+      - application/json
+      description: 'Producer-agnostic intake. Accepts an orbital-native divergence
+        set (replace-not-merge: the array is the full current state). Validates structural
+        correctness; orbital-domain validity is checked downstream on ingestion.'
+      parameters:
+      - description: Override entries
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/orbserver.intakePayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: integer
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Receive divergence report
+      tags:
+      - divergence
+  /api/v1/divergence/publish:
+    post:
+      description: Aggregates the current pending entries into a snapshot and writes
+        it to the configured object store (S3 or Azure Blob). Returns the storage
+        key. 503 if no object store is configured; 409 if there are no entries to
+        publish (orbital reconciles from non-empty publishes only).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Publish divergence report
+      tags:
+      - divergence
+  /api/v1/divergence/test-connection:
+    post:
+      description: 'Pings the configured object store (S3 or Azure Blob) used for
+        divergence report publishing. Returns JSON `{ok, error?}` by default, or an
+        inline HTML span when `HX-Request: true` is set. 503 if no object store is
+        configured.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Test divergence object store connection
+      tags:
+      - divergence
   /api/v1/import:
     post:
       consumes:
@@ -303,5 +445,6 @@ paths:
       - graphql
 swagger: "2.0"
 tags:
-- name: import
+- name: divergence
 - name: graphql
+- name: import

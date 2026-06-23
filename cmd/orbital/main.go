@@ -3,9 +3,13 @@
 // @description     API-first, graph-native source of truth for modular data centers.
 //
 // @tag.name         audit
+// @tag.name         backup
+// @tag.name         config-items
+// @tag.name         divergence
+// @tag.name         export
 // @tag.name         graphql
 // @tag.name         oci
-// @tag.name         subgraph
+// @tag.name         users
 
 package main
 

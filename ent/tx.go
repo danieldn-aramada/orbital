@@ -16,6 +16,8 @@ type Tx struct {
 	Backup *BackupClient
 	// DivergenceEntry is the client for interacting with the DivergenceEntry builders.
 	DivergenceEntry *DivergenceEntryClient
+	// DivergenceIngestCursor is the client for interacting with the DivergenceIngestCursor builders.
+	DivergenceIngestCursor *DivergenceIngestCursorClient
 	// DivergenceResolution is the client for interacting with the DivergenceResolution builders.
 	DivergenceResolution *DivergenceResolutionClient
 	// Event is the client for interacting with the Event builders.
@@ -167,6 +169,7 @@ func (tx *Tx) Client() *Client {
 func (tx *Tx) init() {
 	tx.Backup = NewBackupClient(tx.config)
 	tx.DivergenceEntry = NewDivergenceEntryClient(tx.config)
+	tx.DivergenceIngestCursor = NewDivergenceIngestCursorClient(tx.config)
 	tx.DivergenceResolution = NewDivergenceResolutionClient(tx.config)
 	tx.Event = NewEventClient(tx.config)
 	tx.EventResource = NewEventResourceClient(tx.config)

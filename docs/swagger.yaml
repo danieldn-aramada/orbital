@@ -167,6 +167,28 @@ definitions:
       status:
         type: string
     type: object
+  handler.updateRoleRequest:
+    properties:
+      role:
+        type: string
+    type: object
+  handler.userItem:
+    properties:
+      createdAt:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      note:
+        type: string
+      preferredUsername:
+        type: string
+      role:
+        type: string
+    type: object
   ocitype.ArtifactLayer:
     properties:
       digest:
@@ -186,93 +208,6 @@ definitions:
         type: string
       sizeBytes:
         type: integer
-    type: object
-  orb.DispatchResult:
-    properties:
-      consumerName:
-        description: name of the accepting consumer; empty if no 2xx
-        type: string
-      error:
-        type: string
-      mediaType:
-        type: string
-      statusCode:
-        type: integer
-      url:
-        type: string
-    type: object
-  orb.ImportRecord:
-    properties:
-      dcOrbId:
-        type: string
-      digest:
-        type: string
-      error:
-        type: string
-      exportJobId:
-        type: string
-      importedAt:
-        type: string
-      layers:
-        items:
-          $ref: '#/definitions/orb.LayerRecord'
-        type: array
-      status:
-        description: '"done" | "partial" | "failed". "partial" means the graph import
-          succeeded but at least one extra-layer dispatch failed.'
-        type: string
-      tag:
-        type: string
-      verification:
-        description: Verification* constant
-        type: string
-    type: object
-  orb.LayerRecord:
-    properties:
-      digest:
-        type: string
-      dispatch:
-        allOf:
-        - $ref: '#/definitions/orb.DispatchResult'
-        description: set when Role == LayerRoleDispatched
-      mediaType:
-        type: string
-      producer:
-        description: from OCI annotation com.armada.orbital.producer (empty for legacy)
-        type: string
-      role:
-        description: LayerRole* constant
-        type: string
-      sizeBytes:
-        type: integer
-    type: object
-  orbserver.importSnapshot:
-    properties:
-      availableVersion:
-        type: string
-      currentVersion:
-        type: string
-      lastChecked:
-        type: string
-      lastError:
-        type: string
-      lastImport:
-        $ref: '#/definitions/orb.ImportRecord'
-      lastPollErr:
-        type: string
-      status:
-        type: string
-    type: object
-  orbserver.tagInfo:
-    properties:
-      digest:
-        type: string
-      name:
-        type: string
-      sizeBytes:
-        type: integer
-      verified:
-        type: boolean
     type: object
 info:
   contact: {}
@@ -342,7 +277,7 @@ paths:
             type: object
       summary: Trigger backup
       tags:
-      - backup graph
+      - backup
   /api/v1/backup/jobs:
     get:
       description: Returns up to 50 backup records ordered by most recent first.
@@ -357,7 +292,7 @@ paths:
             type: array
       summary: List backups
       tags:
-      - backup graph
+      - backup
   /api/v1/backup/jobs/{jobId}:
     delete:
       description: Deletes the backup record and its archive from storage. Returns
@@ -387,7 +322,7 @@ paths:
             type: object
       summary: Delete backup
       tags:
-      - backup graph
+      - backup
     get:
       description: Returns the current status and metadata for a single backup job.
       parameters:
@@ -411,7 +346,7 @@ paths:
             type: object
       summary: Get backup status
       tags:
-      - backup graph
+      - backup
   /api/v1/backup/jobs/{jobId}/download:
     get:
       description: Returns a presigned URL (valid 15 minutes) to download the completed
@@ -439,7 +374,23 @@ paths:
             type: object
       summary: Download backup
       tags:
-      - backup graph
+      - backup
+  /api/v1/backup/test-connection:
+    post:
+      description: 'Pings the configured backup storage backend (S3-compatible or
+        Azure Blob). Returns JSON `{ok, error?}` by default, or an inline HTML span
+        when `HX-Request: true` is set.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Test backup storage connection
+      tags:
+      - backup
   /api/v1/config-items/{type}/{id}:
     delete:
       description: |-
@@ -707,7 +658,7 @@ paths:
             type: object
       summary: Trigger subgraph export
       tags:
-      - export subgraph
+      - export
   /api/v1/export/jobs:
     get:
       description: Returns the 50 most recent export jobs ordered by creation time.
@@ -722,7 +673,7 @@ paths:
             type: array
       summary: List export jobs
       tags:
-      - export subgraph
+      - export
   /api/v1/export/jobs/{jobId}:
     delete:
       description: Deletes an export job record and removes its local scratch file.
@@ -746,7 +697,7 @@ paths:
             type: object
       summary: Delete export job
       tags:
-      - export subgraph
+      - export
     get:
       description: Returns the current status of an export job.
       parameters:
@@ -766,7 +717,7 @@ paths:
           description: Not Found
       summary: Get export job status
       tags:
-      - export subgraph
+      - export
   /api/v1/export/jobs/{jobId}/download:
     get:
       description: Downloads the export artifact as a zip archive containing data.json.gz
@@ -786,7 +737,7 @@ paths:
           description: Not Found
       summary: Download export artifact
       tags:
-      - export subgraph
+      - export
   /api/v1/export/jobs/{jobId}/publish:
     post:
       description: Pushes a completed export job's artifact to the configured OCI
@@ -854,190 +805,6 @@ paths:
       summary: Get publish confirmation modal
       tags:
       - oci
-  /api/v1/import:
-    post:
-      consumes:
-      - application/json
-      description: Starts an async OCI artifact pull and DGraph import for the requested
-        tag. Returns 409 if an import is already running.
-      parameters:
-      - description: Import request
-        in: body
-        name: body
-        required: true
-        schema:
-          type: object
-      produces:
-      - application/json
-      responses:
-        "202":
-          description: Accepted
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: Conflict
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Trigger import
-      tags:
-      - import
-  /api/v1/import/artifact:
-    post:
-      consumes:
-      - multipart/form-data
-      description: Accepts a zip bundle (data.json.gz + schema.gz + optional layers.json
-        + layer blobs)
-      parameters:
-      - description: Zip archive containing data.json.gz, schema.gz, and optionally
-          layers.json + layer blobs
-        in: formData
-        name: bundle
-        required: true
-        type: file
-      produces:
-      - application/json
-      responses:
-        "202":
-          description: Accepted
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: Conflict
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Import OCI artifact bundle
-      tags:
-      - import
-  /api/v1/import/history:
-    get:
-      description: Returns the rolling history of completed and failed imports from
-        disk.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/orb.ImportRecord'
-            type: array
-      summary: Import history
-      tags:
-      - import
-  /api/v1/import/history/{tag}/layers:
-    get:
-      description: Returns an HTML fragment rendering the layers modal for an import-history
-        record, found by tag (newest match wins).
-      parameters:
-      - description: Import tag
-        in: path
-        name: tag
-        required: true
-        type: string
-      produces:
-      - text/html
-      responses:
-        "200":
-          description: OK
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Import layers modal
-      tags:
-      - import
-  /api/v1/import/status:
-    get:
-      description: Returns the current import state snapshot including status, current
-        version, and last import record.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/orbserver.importSnapshot'
-      summary: Import status
-      tags:
-      - import
-  /api/v1/import/subgraph:
-    post:
-      consumes:
-      - multipart/form-data
-      description: 'Accepts a zip bundle (data.json.gz + schema.gz) and imports it
-        into local DGraph. Source-agnostic: use for courier (direct upload), ConfigBundle
-        Controller delivery, or any caller with a subgraph zip.'
-      parameters:
-      - description: Zip archive containing data.json.gz and schema.gz
-        in: formData
-        name: bundle
-        required: true
-        type: file
-      produces:
-      - application/json
-      responses:
-        "202":
-          description: Accepted
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: Conflict
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Import subgraph bundle
-      tags:
-      - import
-  /api/v1/import/tags:
-    get:
-      description: Lists available OCI artifact tags from the configured registry
-        for this data center, enriched with signature verification status and artifact
-        size.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              items:
-                $ref: '#/definitions/orbserver.tagInfo'
-              type: array
-            type: object
-      summary: List import tags
-      tags:
-      - import
   /api/v1/oci/artifacts:
     get:
       description: Returns the 100 most recent OCI artifacts ordered by publish time
@@ -1176,7 +943,7 @@ paths:
             type: object
       summary: Trigger a DGraph restore
       tags:
-      - backup graph
+      - backup
   /api/v1/restore/jobs:
     get:
       description: Returns up to 50 restore jobs ordered by most recent first.
@@ -1191,7 +958,7 @@ paths:
             type: array
       summary: List restore jobs
       tags:
-      - backup graph
+      - backup
   /api/v1/restore/jobs/{jobId}:
     get:
       description: Returns the status of a specific restore job.
@@ -1216,16 +983,89 @@ paths:
             type: object
       summary: Get restore job status
       tags:
-      - backup graph
+      - backup
+  /api/v1/users:
+    get:
+      description: Returns all users in the orbital user table. Admin only.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List users
+      tags:
+      - users
+  /api/v1/users/{id}/role:
+    put:
+      consumes:
+      - application/json
+      description: Changes a user's role. Accepts `readonly`, `dev`, or `admin`. Admin
+        only. Returns 409 if changing the role would leave zero admins (last-admin
+        guard).
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: New role
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.updateRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.userItem'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update user role
+      tags:
+      - users
   /graphql:
     post:
       consumes:
       - application/json
-      description: 'POST: proxies GraphQL queries to orb''s local DGraph instance.
-        GET: serves the GraphiQL explorer UI.'
+      description: 'POST: proxies GraphQL queries and mutations to DGraph. GET: serves
+        the GraphiQL explorer UI.'
       parameters:
       - description: GraphQL request body
-        example: '"{\"query\": \"{ queryServer { id hostname } }\"}"'
+        example: '"{\"query\": \"{ queryDataCenter { id name } }\"}"'
         in: body
         name: body
         required: true
@@ -1245,6 +1085,10 @@ paths:
 swagger: "2.0"
 tags:
 - name: audit
+- name: backup
+- name: config-items
+- name: divergence
+- name: export
 - name: graphql
 - name: oci
-- name: subgraph
+- name: users

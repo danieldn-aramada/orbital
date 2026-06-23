@@ -7,6 +7,7 @@ import (
 
 	"github.com/armada/orbital/ent/backup"
 	"github.com/armada/orbital/ent/divergenceentry"
+	"github.com/armada/orbital/ent/divergenceingestcursor"
 	"github.com/armada/orbital/ent/divergenceresolution"
 	"github.com/armada/orbital/ent/event"
 	"github.com/armada/orbital/ent/exportjob"
@@ -68,6 +69,19 @@ func init() {
 	divergenceentryDescID := divergenceentryFields[0].Descriptor()
 	// divergenceentry.DefaultID holds the default value on creation for the id field.
 	divergenceentry.DefaultID = divergenceentryDescID.Default.(func() uuid.UUID)
+	divergenceingestcursorMixin := schema.DivergenceIngestCursor{}.Mixin()
+	divergenceingestcursorMixinFields0 := divergenceingestcursorMixin[0].Fields()
+	_ = divergenceingestcursorMixinFields0
+	divergenceingestcursorFields := schema.DivergenceIngestCursor{}.Fields()
+	_ = divergenceingestcursorFields
+	// divergenceingestcursorDescCreatedAt is the schema descriptor for created_at field.
+	divergenceingestcursorDescCreatedAt := divergenceingestcursorMixinFields0[0].Descriptor()
+	// divergenceingestcursor.DefaultCreatedAt holds the default value on creation for the created_at field.
+	divergenceingestcursor.DefaultCreatedAt = divergenceingestcursorDescCreatedAt.Default.(func() time.Time)
+	// divergenceingestcursorDescDcOrbID is the schema descriptor for dc_orb_id field.
+	divergenceingestcursorDescDcOrbID := divergenceingestcursorFields[0].Descriptor()
+	// divergenceingestcursor.DcOrbIDValidator is a validator for the "dc_orb_id" field. It is called by the builders before save.
+	divergenceingestcursor.DcOrbIDValidator = divergenceingestcursorDescDcOrbID.Validators[0].(func(string) error)
 	divergenceresolutionMixin := schema.DivergenceResolution{}.Mixin()
 	divergenceresolutionMixinFields0 := divergenceresolutionMixin[0].Fields()
 	_ = divergenceresolutionMixinFields0

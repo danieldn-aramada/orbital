@@ -459,7 +459,7 @@ func (h *OCI) renderArtifactFragment(c echo.Context, a *ent.RegistryArtifact) er
 //
 // @Summary     Delete export job
 // @Description Deletes an export job record and removes its local scratch file. Does not remove any published OCI artifacts from the registry.
-// @Tags        export subgraph
+// @Tags        export
 // @Produce     json
 // @Param       jobId path string true "Export job ID"
 // @Success     204

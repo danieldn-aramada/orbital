@@ -519,6 +519,59 @@ func TestPoll_SupersedesIdenticalContentWhenResolutionExists(t *testing.T) {
 	}
 }
 
+// TestPoll_RestartResilient_DoesNotReIngestAfterPodRestart pins the cursor
+// persistence guarantee: a fresh Ingester (modeling a redeploy) must NOT
+// re-ingest a report already applied by a prior instance, because re-ingest
+// triggers the supersede branch when resolutions exist and silently drops
+// operator decisions. Cursor lives in PG, not in-memory.
+func TestPoll_RestartResilient_DoesNotReIngestAfterPodRestart(t *testing.T) {
+	resetState(t)
+	ctx := context.Background()
+	const dcID, repo, dcName = "netbox:colo-galleon", "orbital/colo-galleon", "colo-galleon"
+	seedDC(t, dcID, dcName)
+
+	snap := divergence.Report{
+		PublishedAt: "2026-06-01T00:00:00Z",
+		Overrides: []divergence.OverrideEntry{
+			{OrbID: "netbox:server-01", Field: "sshEnabled", Type: "IdracSettings", IntendedValue: false, OverrideValue: true, Who: "local:admin", When: "2026-06-01T00:00:00Z"},
+		},
+	}
+	putReport(t, repo, snap, "2026-06-01T000000Z")
+
+	// First ingester instance — ingests the report normally.
+	ing1 := newIngester(t)
+	if err := ing1.Poll(ctx); err != nil {
+		t.Fatalf("Poll #1: %v", err)
+	}
+
+	// Operator Submits a decision. Resolution row represents the dispatched action.
+	if _, err := testDB.DivergenceResolution.Create().
+		SetEntryOrbID("netbox:server-01").
+		SetField("sshEnabled").
+		SetAction(divergenceresolution.ActionReject).
+		SetActor("admin@test.com").
+		SetDecidedAt(time.Now().UTC()).
+		Save(ctx); err != nil {
+		t.Fatalf("seed resolution: %v", err)
+	}
+
+	// Simulate orbital pod restart by constructing a fresh Ingester. Without
+	// a persisted cursor, the new instance's empty in-memory tracker would
+	// re-ingest the same S3 file, fire supersede, and drop the resolution.
+	ing2 := newIngester(t)
+	if err := ing2.Poll(ctx); err != nil {
+		t.Fatalf("Poll after restart: %v", err)
+	}
+
+	resolutionCount, err := testDB.DivergenceResolution.Query().Count(ctx)
+	if err != nil {
+		t.Fatalf("count resolutions: %v", err)
+	}
+	if resolutionCount != 1 {
+		t.Errorf("post-restart poll must not drop resolution; got %d resolutions", resolutionCount)
+	}
+}
+
 func TestPoll_NoArtifactsMeansNoPoll(t *testing.T) {
 	resetState(t)
 	const repo = "orbital/colo-galleon"

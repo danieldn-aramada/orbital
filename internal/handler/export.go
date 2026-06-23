@@ -82,7 +82,7 @@ type statusResponse struct {
 //
 // @Summary     Trigger subgraph export
 // @Description Triggers an async export of the data center's configuration subgraph. Returns immediately with a job ID. Returns 409 if an export is already in progress for this data center.
-// @Tags        export subgraph
+// @Tags        export
 // @Accept      json
 // @Produce     json
 // @Param       body body object true "Export request" SchemaExample({"orbId":"alaska:dc-01"})
@@ -171,7 +171,7 @@ func (h *Export) Trigger(c echo.Context) error {
 //
 // @Summary     List export jobs
 // @Description Returns the 50 most recent export jobs ordered by creation time.
-// @Tags        export subgraph
+// @Tags        export
 // @Produce     json
 // @Success     200 {array} statusResponse
 // @Router      /api/v1/export/jobs [get]
@@ -253,7 +253,7 @@ func (h *Export) List(c echo.Context) error {
 //
 // @Summary     Get export job status
 // @Description Returns the current status of an export job.
-// @Tags        export subgraph
+// @Tags        export
 // @Produce     json
 // @Param       jobId path string true "Job ID (UUID)"
 // @Success     200 {object} statusResponse
@@ -295,7 +295,7 @@ func (h *Export) Status(c echo.Context) error {
 //
 // @Summary     Download export artifact
 // @Description Downloads the export artifact as a zip archive containing data.json.gz and schema.gz.
-// @Tags        export subgraph
+// @Tags        export
 // @Produce     application/zip
 // @Param       jobId path string true "Job ID (UUID)"
 // @Success     200

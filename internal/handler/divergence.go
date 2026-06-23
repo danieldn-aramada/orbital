@@ -35,7 +35,7 @@ type DivergenceHandler struct {
 // needs. Declared as an interface to avoid an import cycle and to keep the
 // handler testable without booting a real ingester.
 type DivergenceIngester interface {
-	ResetDC(dcID string)
+	ResetDC(ctx context.Context, dcID string) error
 }
 
 func NewDivergenceHandler(db *ent.Client, logger *slog.Logger, gql *GraphQL) *DivergenceHandler {
@@ -584,11 +584,13 @@ func (h *DivergenceHandler) ClearByDC(c echo.Context) error {
 		return fmt.Errorf("commit: %w", err)
 	}
 
-	// Without this, the ingester's in-memory tracker would skip the
+	// Without this, the ingester's persisted cursor would skip the
 	// (already-seen) latest S3 file and the operator would see an empty page
 	// until orb publishes something genuinely new.
 	if h.ingester != nil {
-		h.ingester.ResetDC(dc)
+		if err := h.ingester.ResetDC(c.Request().Context(), dc); err != nil {
+			h.logger.Warn("reset ingester cursor failed", "dc", dc, "err", err)
+		}
 	}
 
 	writeAuditEvent(h.db, h.logger, "management", actor, "deleteDivergenceReport",

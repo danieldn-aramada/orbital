@@ -12,6 +12,9 @@ type Backup func(*sql.Selector)
 // DivergenceEntry is the predicate function for divergenceentry builders.
 type DivergenceEntry func(*sql.Selector)
 
+// DivergenceIngestCursor is the predicate function for divergenceingestcursor builders.
+type DivergenceIngestCursor func(*sql.Selector)
+
 // DivergenceResolution is the predicate function for divergenceresolution builders.
 type DivergenceResolution func(*sql.Selector)
 

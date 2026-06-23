@@ -180,7 +180,7 @@ func toRestoreJobResponse(j *ent.RestoreJob) restoreJobResponse {
 //
 // @Summary     Trigger a DGraph restore
 // @Description Restores DGraph blue from a stored backup. Blocked if any backup, export, or restore job is in progress.
-// @Tags        backup graph
+// @Tags        backup
 // @Accept      json
 // @Produce     json
 // @Param       body body object true "backupId (UUID)"
@@ -286,7 +286,7 @@ func (h *RestoreHandler) Trigger(c echo.Context) error {
 //
 // @Summary     List restore jobs
 // @Description Returns up to 50 restore jobs ordered by most recent first.
-// @Tags        backup graph
+// @Tags        backup
 // @Produce     json
 // @Success     200 {array} restoreJobResponse
 // @Router      /api/v1/restore/jobs [get]
@@ -321,7 +321,7 @@ func (h *RestoreHandler) List(c echo.Context) error {
 //
 // @Summary     Get restore job status
 // @Description Returns the status of a specific restore job.
-// @Tags        backup graph
+// @Tags        backup
 // @Produce     json
 // @Param       jobId path string true "Restore job ID"
 // @Success     200 {object} restoreJobResponse

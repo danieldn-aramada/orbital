@@ -25,7 +25,6 @@ import (
 	appversion "github.com/armada/orbital/internal/version"
 	"github.com/armada/orbital/internal/web/data/layout"
 	webtemplates "github.com/armada/orbital/web/templates/orbital"
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
 	echoswagger "github.com/swaggo/echo-swagger"
@@ -341,16 +340,6 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 
 	gqlGroup.Any("/graphql", gql.Handle)
 	root.GET("/swagger/*", echoswagger.WrapHandler)
-
-	// Stub: divergence report intake (Spike 14 will implement full handling).
-	api.POST("/reports", func(c echo.Context) error {
-		var payload map[string]any
-		if err := c.Bind(&payload); err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid payload"})
-		}
-		logger.Info("divergence report received", "payload", payload)
-		return c.JSON(http.StatusOK, map[string]string{"reportId": uuid.New().String()})
-	})
 
 	var divIngester *divergenceingest.Ingester
 	if cfg.DivergenceIngestEnabled && cfg.S3Bucket != "" {

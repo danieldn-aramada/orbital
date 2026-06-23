@@ -33,6 +33,14 @@ type userItem struct {
 }
 
 // List handles GET /api/v1/users — admin only.
+//
+// @Summary     List users
+// @Description Returns all users in the orbital user table. Admin only.
+// @Tags        users
+// @Produce     json
+// @Success     200 {object} map[string]any
+// @Failure     403 {object} map[string]string
+// @Router      /api/v1/users [get]
 func (h *UsersHandler) List(c echo.Context) error {
 	if err := h.enforceAdmin(c); err != nil {
 		return err
@@ -64,6 +72,20 @@ type updateRoleRequest struct {
 // UpdateRole handles PUT /api/v1/users/:id/role — admin only.
 // Accepts role values: "readonly", "dev", "admin".
 // Returns 409 if the change would leave zero admin users.
+//
+// @Summary     Update user role
+// @Description Changes a user's role. Accepts `readonly`, `dev`, or `admin`. Admin only. Returns 409 if changing the role would leave zero admins (last-admin guard).
+// @Tags        users
+// @Accept      json
+// @Produce     json
+// @Param       id   path  int               true "User ID"
+// @Param       body body  updateRoleRequest true "New role"
+// @Success     200  {object} userItem
+// @Failure     400  {object} map[string]string
+// @Failure     403  {object} map[string]string
+// @Failure     404  {object} map[string]string
+// @Failure     409  {object} map[string]string
+// @Router      /api/v1/users/{id}/role [put]
 func (h *UsersHandler) UpdateRole(c echo.Context) error {
 	// Validate parameters first so callers get 400 before any auth/DB check.
 	idStr := c.Param("id")

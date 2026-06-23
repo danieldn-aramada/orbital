@@ -159,10 +159,12 @@
                 <span class="icon"><i class="fa-solid fa-arrow-up-right-from-square"></i></span>
               </a>
               {{else if .IgnoreOnly}}
-              {{/* Ignore doesn't drive edge actuation — cb-controller already
-                   respects local:admin's SSA ownership. Publishing the cloud
-                   ack is informational only; omit the button entirely. */}}
-              <span class="has-text-grey is-size-7">Ignored — no publish needed</span>
+              {{/* Ignore-only resolutions can be deferred. cb-controller's
+                   default bow-out (omitAdminOwnedFields branch 2 in consume.go)
+                   preserves admin's stand while intent != live; spec.ignored[]
+                   propagates with the next publish via the bundler's
+                   QueryOmissions call. Publish is eventual, not urgent. */}}
+              <span class="has-text-grey is-size-7">Ignored - Immediate publish not necessary</span>
               {{else}}
               <button class="button is-link is-outlined is-small divergence-publish-btn"
                       data-dc-orbid="{{$dcId}}"

@@ -14,6 +14,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/armada/orbital/ent/backup"
 	"github.com/armada/orbital/ent/divergenceentry"
+	"github.com/armada/orbital/ent/divergenceingestcursor"
 	"github.com/armada/orbital/ent/divergenceresolution"
 	"github.com/armada/orbital/ent/event"
 	"github.com/armada/orbital/ent/eventresource"
@@ -83,17 +84,18 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			backup.Table:               backup.ValidColumn,
-			divergenceentry.Table:      divergenceentry.ValidColumn,
-			divergenceresolution.Table: divergenceresolution.ValidColumn,
-			event.Table:                event.ValidColumn,
-			eventresource.Table:        eventresource.ValidColumn,
-			eventresourcetype.Table:    eventresourcetype.ValidColumn,
-			exportjob.Table:            exportjob.ValidColumn,
-			orb.Table:                  orb.ValidColumn,
-			registryartifact.Table:     registryartifact.ValidColumn,
-			restorejob.Table:           restorejob.ValidColumn,
-			user.Table:                 user.ValidColumn,
+			backup.Table:                 backup.ValidColumn,
+			divergenceentry.Table:        divergenceentry.ValidColumn,
+			divergenceingestcursor.Table: divergenceingestcursor.ValidColumn,
+			divergenceresolution.Table:   divergenceresolution.ValidColumn,
+			event.Table:                  event.ValidColumn,
+			eventresource.Table:          eventresource.ValidColumn,
+			eventresourcetype.Table:      eventresourcetype.ValidColumn,
+			exportjob.Table:              exportjob.ValidColumn,
+			orb.Table:                    orb.ValidColumn,
+			registryartifact.Table:       registryartifact.ValidColumn,
+			restorejob.Table:             restorejob.ValidColumn,
+			user.Table:                   user.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

@@ -288,6 +288,13 @@ type backupResponse struct {
 // fragment ready to swap into a result slot. Other callers get JSON. The
 // fragment shape is the same on both backup and divergence pages — both read
 // from the same S3 storage backend, so one endpoint serves both UIs.
+//
+// @Summary     Test backup storage connection
+// @Description Pings the configured backup storage backend (S3-compatible or Azure Blob). Returns JSON `{ok, error?}` by default, or an inline HTML span when `HX-Request: true` is set.
+// @Tags        backup
+// @Produce     json
+// @Success     200 {object} map[string]any
+// @Router      /api/v1/backup/test-connection [post]
 func (h *BackupHandler) TestConnection(c echo.Context) error {
 	ctx, cancel := context.WithTimeout(c.Request().Context(), 10*time.Second)
 	defer cancel()
@@ -315,7 +322,7 @@ func renderTestConnectionFragment(c echo.Context, pingErr error) error {
 //
 // @Summary     Trigger backup
 // @Description Triggers an async DGraph backup to configured S3-compatible or Azure Blob storage. Returns immediately with a job ID. Returns 409 if a backup is already in progress.
-// @Tags        backup graph
+// @Tags        backup
 // @Produce     json
 // @Success     202 {object} triggerResponse
 // @Failure     409 {object} map[string]string
@@ -386,7 +393,7 @@ func (h *BackupHandler) Trigger(c echo.Context) error {
 //
 // @Summary     List backups
 // @Description Returns up to 50 backup records ordered by most recent first.
-// @Tags        backup graph
+// @Tags        backup
 // @Produce     json
 // @Success     200 {array}  backupResponse
 // @Router      /api/v1/backup/jobs [get]
@@ -421,7 +428,7 @@ func (h *BackupHandler) List(c echo.Context) error {
 //
 // @Summary     Get backup status
 // @Description Returns the current status and metadata for a single backup job.
-// @Tags        backup graph
+// @Tags        backup
 // @Produce     json
 // @Param       jobId path string true "Backup job ID"
 // @Success     200 {object} backupResponse
@@ -446,7 +453,7 @@ func (h *BackupHandler) Status(c echo.Context) error {
 //
 // @Summary     Download backup
 // @Description Returns a presigned URL (valid 15 minutes) to download the completed backup archive. Returns 404 if the job is not completed or has no archive.
-// @Tags        backup graph
+// @Tags        backup
 // @Produce     json
 // @Param       jobId path string true "Backup job ID"
 // @Success     200 {object} map[string]string
@@ -482,7 +489,7 @@ func (h *BackupHandler) Download(c echo.Context) error {
 //
 // @Summary     Delete backup
 // @Description Deletes the backup record and its archive from storage. Returns 409 if the backup is still running.
-// @Tags        backup graph
+// @Tags        backup
 // @Produce     json
 // @Param       jobId path string true "Backup job ID"
 // @Success     204

@@ -70,6 +70,22 @@ var (
 			},
 		},
 	}
+	// DivergenceIngestCursorsColumns holds the columns for the "divergence_ingest_cursors" table.
+	DivergenceIngestCursorsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_at", Type: field.TypeTime, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "dc_orb_id", Type: field.TypeString, Unique: true},
+		{Name: "last_published_at", Type: field.TypeTime},
+	}
+	// DivergenceIngestCursorsTable holds the schema information for the "divergence_ingest_cursors" table.
+	DivergenceIngestCursorsTable = &schema.Table{
+		Name:       "divergence_ingest_cursors",
+		Columns:    DivergenceIngestCursorsColumns,
+		PrimaryKey: []*schema.Column{DivergenceIngestCursorsColumns[0]},
+	}
 	// DivergenceResolutionsColumns holds the columns for the "divergence_resolutions" table.
 	DivergenceResolutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -291,6 +307,7 @@ var (
 	Tables = []*schema.Table{
 		BackupsTable,
 		DivergenceEntriesTable,
+		DivergenceIngestCursorsTable,
 		DivergenceResolutionsTable,
 		EventsTable,
 		EventResourcesTable,

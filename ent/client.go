@@ -18,6 +18,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/armada/orbital/ent/backup"
 	"github.com/armada/orbital/ent/divergenceentry"
+	"github.com/armada/orbital/ent/divergenceingestcursor"
 	"github.com/armada/orbital/ent/divergenceresolution"
 	"github.com/armada/orbital/ent/event"
 	"github.com/armada/orbital/ent/eventresource"
@@ -38,6 +39,8 @@ type Client struct {
 	Backup *BackupClient
 	// DivergenceEntry is the client for interacting with the DivergenceEntry builders.
 	DivergenceEntry *DivergenceEntryClient
+	// DivergenceIngestCursor is the client for interacting with the DivergenceIngestCursor builders.
+	DivergenceIngestCursor *DivergenceIngestCursorClient
 	// DivergenceResolution is the client for interacting with the DivergenceResolution builders.
 	DivergenceResolution *DivergenceResolutionClient
 	// Event is the client for interacting with the Event builders.
@@ -69,6 +72,7 @@ func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.Backup = NewBackupClient(c.config)
 	c.DivergenceEntry = NewDivergenceEntryClient(c.config)
+	c.DivergenceIngestCursor = NewDivergenceIngestCursorClient(c.config)
 	c.DivergenceResolution = NewDivergenceResolutionClient(c.config)
 	c.Event = NewEventClient(c.config)
 	c.EventResource = NewEventResourceClient(c.config)
@@ -168,19 +172,20 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:                  ctx,
-		config:               cfg,
-		Backup:               NewBackupClient(cfg),
-		DivergenceEntry:      NewDivergenceEntryClient(cfg),
-		DivergenceResolution: NewDivergenceResolutionClient(cfg),
-		Event:                NewEventClient(cfg),
-		EventResource:        NewEventResourceClient(cfg),
-		EventResourceType:    NewEventResourceTypeClient(cfg),
-		ExportJob:            NewExportJobClient(cfg),
-		Orb:                  NewOrbClient(cfg),
-		RegistryArtifact:     NewRegistryArtifactClient(cfg),
-		RestoreJob:           NewRestoreJobClient(cfg),
-		User:                 NewUserClient(cfg),
+		ctx:                    ctx,
+		config:                 cfg,
+		Backup:                 NewBackupClient(cfg),
+		DivergenceEntry:        NewDivergenceEntryClient(cfg),
+		DivergenceIngestCursor: NewDivergenceIngestCursorClient(cfg),
+		DivergenceResolution:   NewDivergenceResolutionClient(cfg),
+		Event:                  NewEventClient(cfg),
+		EventResource:          NewEventResourceClient(cfg),
+		EventResourceType:      NewEventResourceTypeClient(cfg),
+		ExportJob:              NewExportJobClient(cfg),
+		Orb:                    NewOrbClient(cfg),
+		RegistryArtifact:       NewRegistryArtifactClient(cfg),
+		RestoreJob:             NewRestoreJobClient(cfg),
+		User:                   NewUserClient(cfg),
 	}, nil
 }
 
@@ -198,19 +203,20 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:                  ctx,
-		config:               cfg,
-		Backup:               NewBackupClient(cfg),
-		DivergenceEntry:      NewDivergenceEntryClient(cfg),
-		DivergenceResolution: NewDivergenceResolutionClient(cfg),
-		Event:                NewEventClient(cfg),
-		EventResource:        NewEventResourceClient(cfg),
-		EventResourceType:    NewEventResourceTypeClient(cfg),
-		ExportJob:            NewExportJobClient(cfg),
-		Orb:                  NewOrbClient(cfg),
-		RegistryArtifact:     NewRegistryArtifactClient(cfg),
-		RestoreJob:           NewRestoreJobClient(cfg),
-		User:                 NewUserClient(cfg),
+		ctx:                    ctx,
+		config:                 cfg,
+		Backup:                 NewBackupClient(cfg),
+		DivergenceEntry:        NewDivergenceEntryClient(cfg),
+		DivergenceIngestCursor: NewDivergenceIngestCursorClient(cfg),
+		DivergenceResolution:   NewDivergenceResolutionClient(cfg),
+		Event:                  NewEventClient(cfg),
+		EventResource:          NewEventResourceClient(cfg),
+		EventResourceType:      NewEventResourceTypeClient(cfg),
+		ExportJob:              NewExportJobClient(cfg),
+		Orb:                    NewOrbClient(cfg),
+		RegistryArtifact:       NewRegistryArtifactClient(cfg),
+		RestoreJob:             NewRestoreJobClient(cfg),
+		User:                   NewUserClient(cfg),
 	}, nil
 }
 
@@ -240,9 +246,9 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Backup, c.DivergenceEntry, c.DivergenceResolution, c.Event, c.EventResource,
-		c.EventResourceType, c.ExportJob, c.Orb, c.RegistryArtifact, c.RestoreJob,
-		c.User,
+		c.Backup, c.DivergenceEntry, c.DivergenceIngestCursor, c.DivergenceResolution,
+		c.Event, c.EventResource, c.EventResourceType, c.ExportJob, c.Orb,
+		c.RegistryArtifact, c.RestoreJob, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -252,9 +258,9 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Backup, c.DivergenceEntry, c.DivergenceResolution, c.Event, c.EventResource,
-		c.EventResourceType, c.ExportJob, c.Orb, c.RegistryArtifact, c.RestoreJob,
-		c.User,
+		c.Backup, c.DivergenceEntry, c.DivergenceIngestCursor, c.DivergenceResolution,
+		c.Event, c.EventResource, c.EventResourceType, c.ExportJob, c.Orb,
+		c.RegistryArtifact, c.RestoreJob, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -267,6 +273,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Backup.mutate(ctx, m)
 	case *DivergenceEntryMutation:
 		return c.DivergenceEntry.mutate(ctx, m)
+	case *DivergenceIngestCursorMutation:
+		return c.DivergenceIngestCursor.mutate(ctx, m)
 	case *DivergenceResolutionMutation:
 		return c.DivergenceResolution.mutate(ctx, m)
 	case *EventMutation:
@@ -553,6 +561,139 @@ func (c *DivergenceEntryClient) mutate(ctx context.Context, m *DivergenceEntryMu
 		return (&DivergenceEntryDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown DivergenceEntry mutation op: %q", m.Op())
+	}
+}
+
+// DivergenceIngestCursorClient is a client for the DivergenceIngestCursor schema.
+type DivergenceIngestCursorClient struct {
+	config
+}
+
+// NewDivergenceIngestCursorClient returns a client for the DivergenceIngestCursor from the given config.
+func NewDivergenceIngestCursorClient(c config) *DivergenceIngestCursorClient {
+	return &DivergenceIngestCursorClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `divergenceingestcursor.Hooks(f(g(h())))`.
+func (c *DivergenceIngestCursorClient) Use(hooks ...Hook) {
+	c.hooks.DivergenceIngestCursor = append(c.hooks.DivergenceIngestCursor, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `divergenceingestcursor.Intercept(f(g(h())))`.
+func (c *DivergenceIngestCursorClient) Intercept(interceptors ...Interceptor) {
+	c.inters.DivergenceIngestCursor = append(c.inters.DivergenceIngestCursor, interceptors...)
+}
+
+// Create returns a builder for creating a DivergenceIngestCursor entity.
+func (c *DivergenceIngestCursorClient) Create() *DivergenceIngestCursorCreate {
+	mutation := newDivergenceIngestCursorMutation(c.config, OpCreate)
+	return &DivergenceIngestCursorCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of DivergenceIngestCursor entities.
+func (c *DivergenceIngestCursorClient) CreateBulk(builders ...*DivergenceIngestCursorCreate) *DivergenceIngestCursorCreateBulk {
+	return &DivergenceIngestCursorCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *DivergenceIngestCursorClient) MapCreateBulk(slice any, setFunc func(*DivergenceIngestCursorCreate, int)) *DivergenceIngestCursorCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &DivergenceIngestCursorCreateBulk{err: fmt.Errorf("calling to DivergenceIngestCursorClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*DivergenceIngestCursorCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &DivergenceIngestCursorCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for DivergenceIngestCursor.
+func (c *DivergenceIngestCursorClient) Update() *DivergenceIngestCursorUpdate {
+	mutation := newDivergenceIngestCursorMutation(c.config, OpUpdate)
+	return &DivergenceIngestCursorUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *DivergenceIngestCursorClient) UpdateOne(_m *DivergenceIngestCursor) *DivergenceIngestCursorUpdateOne {
+	mutation := newDivergenceIngestCursorMutation(c.config, OpUpdateOne, withDivergenceIngestCursor(_m))
+	return &DivergenceIngestCursorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *DivergenceIngestCursorClient) UpdateOneID(id int) *DivergenceIngestCursorUpdateOne {
+	mutation := newDivergenceIngestCursorMutation(c.config, OpUpdateOne, withDivergenceIngestCursorID(id))
+	return &DivergenceIngestCursorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for DivergenceIngestCursor.
+func (c *DivergenceIngestCursorClient) Delete() *DivergenceIngestCursorDelete {
+	mutation := newDivergenceIngestCursorMutation(c.config, OpDelete)
+	return &DivergenceIngestCursorDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *DivergenceIngestCursorClient) DeleteOne(_m *DivergenceIngestCursor) *DivergenceIngestCursorDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *DivergenceIngestCursorClient) DeleteOneID(id int) *DivergenceIngestCursorDeleteOne {
+	builder := c.Delete().Where(divergenceingestcursor.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &DivergenceIngestCursorDeleteOne{builder}
+}
+
+// Query returns a query builder for DivergenceIngestCursor.
+func (c *DivergenceIngestCursorClient) Query() *DivergenceIngestCursorQuery {
+	return &DivergenceIngestCursorQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeDivergenceIngestCursor},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a DivergenceIngestCursor entity by its id.
+func (c *DivergenceIngestCursorClient) Get(ctx context.Context, id int) (*DivergenceIngestCursor, error) {
+	return c.Query().Where(divergenceingestcursor.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *DivergenceIngestCursorClient) GetX(ctx context.Context, id int) *DivergenceIngestCursor {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *DivergenceIngestCursorClient) Hooks() []Hook {
+	return c.hooks.DivergenceIngestCursor
+}
+
+// Interceptors returns the client interceptors.
+func (c *DivergenceIngestCursorClient) Interceptors() []Interceptor {
+	return c.inters.DivergenceIngestCursor
+}
+
+func (c *DivergenceIngestCursorClient) mutate(ctx context.Context, m *DivergenceIngestCursorMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&DivergenceIngestCursorCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&DivergenceIngestCursorUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&DivergenceIngestCursorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&DivergenceIngestCursorDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown DivergenceIngestCursor mutation op: %q", m.Op())
 	}
 }
 
@@ -1820,13 +1961,13 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Backup, DivergenceEntry, DivergenceResolution, Event, EventResource,
-		EventResourceType, ExportJob, Orb, RegistryArtifact, RestoreJob,
+		Backup, DivergenceEntry, DivergenceIngestCursor, DivergenceResolution, Event,
+		EventResource, EventResourceType, ExportJob, Orb, RegistryArtifact, RestoreJob,
 		User []ent.Hook
 	}
 	inters struct {
-		Backup, DivergenceEntry, DivergenceResolution, Event, EventResource,
-		EventResourceType, ExportJob, Orb, RegistryArtifact, RestoreJob,
+		Backup, DivergenceEntry, DivergenceIngestCursor, DivergenceResolution, Event,
+		EventResource, EventResourceType, ExportJob, Orb, RegistryArtifact, RestoreJob,
 		User []ent.Interceptor
 	}
 )

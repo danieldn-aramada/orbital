@@ -33,6 +33,18 @@ func (f DivergenceEntryFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DivergenceEntryMutation", m)
 }
 
+// The DivergenceIngestCursorFunc type is an adapter to allow the use of ordinary
+// function as DivergenceIngestCursor mutator.
+type DivergenceIngestCursorFunc func(context.Context, *ent.DivergenceIngestCursorMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f DivergenceIngestCursorFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.DivergenceIngestCursorMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DivergenceIngestCursorMutation", m)
+}
+
 // The DivergenceResolutionFunc type is an adapter to allow the use of ordinary
 // function as DivergenceResolution mutator.
 type DivergenceResolutionFunc func(context.Context, *ent.DivergenceResolutionMutation) (ent.Value, error)

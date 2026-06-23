@@ -67,6 +67,17 @@ type intakePayload struct {
 // Lookup failures (orbId not in local DGraph, DGraph unreachable, version
 // field null) leave IntendedAtVersion as nil. Orbital's Accept handler
 // degrades to a value-based stale check when version is missing.
+//
+// @Summary     Receive divergence report
+// @Description Producer-agnostic intake. Accepts an orbital-native divergence set (replace-not-merge: the array is the full current state). Validates structural correctness; orbital-domain validity is checked downstream on ingestion.
+// @Tags        divergence
+// @Accept      json
+// @Produce     json
+// @Param       body body  intakePayload true "Override entries"
+// @Success     200  {object} map[string]int
+// @Failure     400  {object} map[string]string
+// @Failure     500  {object} map[string]string
+// @Router      /api/v1/divergence [post]
 func (s *Server) receiveDivergence(c echo.Context) error {
 	var payload intakePayload
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
@@ -117,6 +128,14 @@ func validateOverrideEntry(ov divergence.OverrideEntry) error {
 }
 
 // GET /api/v1/divergence — returns current pending entries.
+//
+// @Summary     Get pending divergence entries
+// @Description Returns the current pending divergence set held by orb. This is the same set that the next `publish` call would aggregate into a report.
+// @Tags        divergence
+// @Produce     json
+// @Success     200 {array} divergence.OverrideEntry
+// @Failure     500 {object} map[string]string
+// @Router      /api/v1/divergence [get]
 func (s *Server) getDivergence(c echo.Context) error {
 	entries, err := s.divStore.Load()
 	if err != nil {
@@ -126,6 +145,16 @@ func (s *Server) getDivergence(c echo.Context) error {
 }
 
 // POST /api/v1/divergence/publish — aggregates pending entries into a report and writes to S3.
+//
+// @Summary     Publish divergence report
+// @Description Aggregates the current pending entries into a snapshot and writes it to the configured object store (S3 or Azure Blob). Returns the storage key. 503 if no object store is configured; 409 if there are no entries to publish (orbital reconciles from non-empty publishes only).
+// @Tags        divergence
+// @Produce     json
+// @Success     200 {object} map[string]string
+// @Failure     409 {object} map[string]string
+// @Failure     500 {object} map[string]string
+// @Failure     503 {object} map[string]string
+// @Router      /api/v1/divergence/publish [post]
 func (s *Server) publishDivergence(c echo.Context) error {
 	if s.divPublisher == nil {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "Object store not configured")
@@ -164,6 +193,14 @@ func (s *Server) publishDivergence(c echo.Context) error {
 // single-span HTML fragment ready to swap into a result slot; other callers
 // get JSON. Returns 503 when S3 is not configured so the same gating used by
 // publish surfaces consistently.
+//
+// @Summary     Test divergence object store connection
+// @Description Pings the configured object store (S3 or Azure Blob) used for divergence report publishing. Returns JSON `{ok, error?}` by default, or an inline HTML span when `HX-Request: true` is set. 503 if no object store is configured.
+// @Tags        divergence
+// @Produce     json
+// @Success     200 {object} map[string]any
+// @Failure     503 {object} map[string]string
+// @Router      /api/v1/divergence/test-connection [post]
 func (s *Server) testDivergenceConnection(c echo.Context) error {
 	if s.divPublisher == nil {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "Object store not configured")

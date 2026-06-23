@@ -21,10 +21,10 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/armada/orbital/ent"
+	"github.com/armada/orbital/ent/divergenceingestcursor"
 	"github.com/armada/orbital/internal/blobstore"
 	"github.com/armada/orbital/internal/divergence"
 	"github.com/armada/orbital/internal/oci"
@@ -61,25 +61,20 @@ type Ingester struct {
 	registry   string
 	repoPrefix string
 	httpClient *http.Client
-
-	// lastIngestedByDC tracks the report publishedAt timestamp of the most
-	// recent ingest per data center, so the poller skips reports it has
-	// already processed. Populated lazily — empty map on startup means the
-	// first tick re-ingests whatever is latest in storage. Guarded by mu
-	// because ResetDC can mutate from an HTTP handler concurrently with the
-	// poll goroutine.
-	mu               sync.Mutex
-	lastIngestedByDC map[string]time.Time
 }
 
-// ResetDC forgets the last-ingested timestamp for a DC, causing the next poll
-// to re-process the latest S3 report fresh. Used by the orbital "clear
-// divergence" break-glass: HTTP handler wipes the DB rows, then calls this so
-// the ingester doesn't skip-as-already-seen.
-func (i *Ingester) ResetDC(dcID string) {
-	i.mu.Lock()
-	defer i.mu.Unlock()
-	delete(i.lastIngestedByDC, dcID)
+// ResetDC forgets the persisted last-ingested cursor for a DC, causing the
+// next poll to re-process the latest S3 report fresh. Used by the orbital
+// "clear divergence" break-glass: HTTP handler wipes the DB rows, then calls
+// this so the ingester doesn't skip-as-already-seen.
+func (i *Ingester) ResetDC(ctx context.Context, dcID string) error {
+	_, err := i.db.DivergenceIngestCursor.Delete().
+		Where(divergenceingestcursor.DcOrbID(dcID)).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("delete cursor for %s: %w", dcID, err)
+	}
+	return nil
 }
 
 func New(ctx context.Context, db *ent.Client, cfg Config, logger *slog.Logger) (*Ingester, error) {
@@ -106,16 +101,52 @@ func New(ctx context.Context, db *ent.Client, cfg Config, logger *slog.Logger) (
 		cfg.PollInterval = 5 * time.Minute
 	}
 	return &Ingester{
-		db:               db,
-		store:            store,
-		logger:           logger,
-		pollInterval:     cfg.PollInterval,
-		dgraphURL:        cfg.DGraphURL,
-		registry:         cfg.Registry,
-		repoPrefix:       cfg.RepoPrefix,
-		httpClient:       &http.Client{Timeout: 10 * time.Second},
-		lastIngestedByDC: make(map[string]time.Time),
+		db:           db,
+		store:        store,
+		logger:       logger,
+		pollInterval: cfg.PollInterval,
+		dgraphURL:    cfg.DGraphURL,
+		registry:     cfg.Registry,
+		repoPrefix:   cfg.RepoPrefix,
+		httpClient:   &http.Client{Timeout: 10 * time.Second},
 	}, nil
+}
+
+// readCursor returns the persisted publishedAt of the last successful ingest
+// for a DC, or zero + false if no cursor row exists yet.
+func (i *Ingester) readCursor(ctx context.Context, dcID string) (time.Time, bool, error) {
+	rec, err := i.db.DivergenceIngestCursor.Query().
+		Where(divergenceingestcursor.DcOrbID(dcID)).
+		First(ctx)
+	if ent.IsNotFound(err) {
+		return time.Time{}, false, nil
+	}
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("query cursor for %s: %w", dcID, err)
+	}
+	return rec.LastPublishedAt, true, nil
+}
+
+// writeCursor upserts the cursor for a DC. Single-replica ingest at MVP, so
+// the update-then-create race is acceptable.
+func (i *Ingester) writeCursor(ctx context.Context, dcID string, publishedAt time.Time) error {
+	n, err := i.db.DivergenceIngestCursor.Update().
+		Where(divergenceingestcursor.DcOrbID(dcID)).
+		SetLastPublishedAt(publishedAt).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("update cursor for %s: %w", dcID, err)
+	}
+	if n > 0 {
+		return nil
+	}
+	if _, err := i.db.DivergenceIngestCursor.Create().
+		SetDcOrbID(dcID).
+		SetLastPublishedAt(publishedAt).
+		Save(ctx); err != nil {
+		return fmt.Errorf("create cursor for %s: %w", dcID, err)
+	}
+	return nil
 }
 
 // Start runs the poll loop until ctx is cancelled. Call as a goroutine.
@@ -273,11 +304,14 @@ func (i *Ingester) pollDC(ctx context.Context, dc dcRef) error {
 	}
 
 	// Idempotency: skip if we already ingested this publishedAt for this DC.
-	// DEBUG-log the skip so operators can distinguish "ingestion working,
-	// nothing new" from "ingestion broken, no logs at all."
-	i.mu.Lock()
-	last, ok := i.lastIngestedByDC[dc.id]
-	i.mu.Unlock()
+	// Cursor is persisted in PG so it survives pod restarts — a redeploy must
+	// NOT cause re-ingest of an already-processed report, because re-ingest
+	// fires the supersede branch when resolutions exist and silently drops
+	// operator decisions.
+	last, ok, err := i.readCursor(ctx, dc.id)
+	if err != nil {
+		return fmt.Errorf("read cursor: %w", err)
+	}
 	if ok && !publishedAt.After(last) {
 		i.logger.Debug("divergence ingester: report unchanged since last ingest",
 			"dc", dc.id, "publishedAt", snap.PublishedAt)
@@ -287,9 +321,9 @@ func (i *Ingester) pollDC(ctx context.Context, dc dcRef) error {
 	if err := i.applyReport(ctx, dc, publishedAt, snap.Overrides); err != nil {
 		return fmt.Errorf("apply report %s: %w", latestKey, err)
 	}
-	i.mu.Lock()
-	i.lastIngestedByDC[dc.id] = publishedAt
-	i.mu.Unlock()
+	if err := i.writeCursor(ctx, dc.id, publishedAt); err != nil {
+		return fmt.Errorf("write cursor: %w", err)
+	}
 	i.logger.Info("divergence ingester: applied report",
 		"dc", dc.id,
 		"key", latestKey,
