@@ -154,9 +154,13 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	e.GET("/inventory", s.inventoryPage)
 	e.GET("/schema", s.schemaPage)
 	e.GET("/datacenter", s.dcPage)
-	e.GET("/datacenters/:orbId", s.dcTab)
+	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.Dev, logger, "",
+		func(echo.Context) layout.PageActions { return layout.OrbActions })
+	e.GET("/datacenters/:orbId", dc.Tab)
 	e.GET("/servers", s.serversPage)
-	e.GET("/servers/:orbId", s.srvTab)
+	srv := handler.NewServerHandler(cfg.DGraphURL, cfg.Dev, logger, "",
+		func(echo.Context) layout.PageActions { return layout.OrbActions })
+	e.GET("/servers/:orbId", srv.Tab)
 	e.GET("/clusters", s.clustersPage)
 	// Reuse orbital's ClusterHandler — the same DGraph query + render path,
 	// with orb-specific PageActions injected (read-only, no audit tab). This

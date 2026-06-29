@@ -131,6 +131,8 @@ One shared DGraph instance per test run. Drop-all + schema-apply + minimal seed 
 
 Use `ent/enttest` backed by the test PostgreSQL instance. Truncate all tables in `TestMain` before the suite runs. Individual tests that create records should use `t.Cleanup` to delete them, or rely on the next suite-level truncation.
 
+**When adding a new ent schema type, add its table to `truncateAll` in `internal/testutil/db.go`.** Missing tables leak cursor/state rows between tests and produce silent failures (tests skip work rather than error, so nothing fails loudly at the skip site).
+
 ### Playwright isolation strategy
 
 Tests share the same orbital instance and seeded DGraph. Tests that mutate data (e.g., edit a DC name) must restore original values in cleanup (`afterEach`) or use a value unlikely to conflict with other tests. The global `?fresh=1` URL parameter (which clears `localStorage` tab state) should be used at the start of any test that cares about tab state.

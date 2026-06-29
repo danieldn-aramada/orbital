@@ -9,12 +9,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/labstack/echo/v4"
 )
 
 func TestServerTab_NonHTMX_Redirects(t *testing.T) {
 	t.Chdir("../..")
-	h := NewServerHandler("http://localhost:8080/graphql", false, slog.Default(), "/app")
+	h := NewServerHandler("http://localhost:8080/graphql", false, slog.Default(), "/app", func(echo.Context) layout.PageActions { return layout.OrbActions })
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -39,7 +40,7 @@ func TestServerTab_DGraphUnreachable(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	srv.Close()
 
-	h := NewServerHandler(srv.URL, false, slog.Default(), "/app")
+	h := NewServerHandler(srv.URL, false, slog.Default(), "/app", func(echo.Context) layout.PageActions { return layout.OrbActions })
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -58,7 +59,7 @@ func TestServerTab_DGraphDecodeError(t *testing.T) {
 	t.Chdir("../..")
 	dgraph := newDGraphStub(t, "not json")
 
-	h := NewServerHandler(dgraph.URL, false, slog.Default(), "/app")
+	h := NewServerHandler(dgraph.URL, false, slog.Default(), "/app", func(echo.Context) layout.PageActions { return layout.OrbActions })
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -105,7 +106,7 @@ func TestServerTab_Success(t *testing.T) {
 	})
 	dgraph := newDGraphStub(t, string(body))
 
-	h := NewServerHandler(dgraph.URL, false, slog.Default(), "/app")
+	h := NewServerHandler(dgraph.URL, false, slog.Default(), "/app", func(echo.Context) layout.PageActions { return layout.OrbitalActions(false) })
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)

@@ -91,7 +91,38 @@ func ResetDGraphE(adminURL, schemaPath string) error {
 	if err := dgraphPost(ctx, adminURL, updatePayload); err != nil {
 		return fmt.Errorf("apply schema: %w", err)
 	}
-	return nil
+
+	// Poll until the schema is active. DGraph propagates schema changes
+	// asynchronously — the update mutation returns 200 before the schema
+	// is queryable. Without this, the next test that calls a GraphQL mutation
+	// may hit "There's no GraphQL schema in Dgraph" even though the update
+	// appeared to succeed.
+	graphqlURL := strings.TrimSuffix(adminURL, "/admin") + "/graphql"
+	probePayload, _ := json.Marshal(map[string]string{"query": "{ queryNamespace { id } }"})
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, graphqlURL, bytes.NewReader(probePayload))
+		if err != nil {
+			time.Sleep(200 * time.Millisecond)
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			time.Sleep(200 * time.Millisecond)
+			continue
+		}
+		var probe struct {
+			Errors []struct{ Message string } `json:"errors"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&probe)
+		resp.Body.Close()
+		if len(probe.Errors) == 0 {
+			return nil
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return fmt.Errorf("schema did not activate within 10s after reset")
 }
 
 // SeedMinimal creates one Namespace and DataCenter in DGraph and returns the

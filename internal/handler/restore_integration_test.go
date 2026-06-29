@@ -20,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/armada/orbital/ent/backup"
+	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/testutil"
 	"github.com/google/uuid"
@@ -319,6 +320,55 @@ func TestRestoreCompleted_WritesManagementAuditEvent(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected a management audit event with operation restoreBackup, got %d events: %v", len(events), events)
+	}
+}
+
+func TestRestorePage_RendersExpectedElements(t *testing.T) {
+	t.Chdir("../..")
+
+	userID := createTestUser(t, "restore-render@test.com", user.RoleAdmin)
+
+	ui := handler.NewUI(
+		false, "", "",
+		false, false,
+		true,
+		testutil.MinIOEndpoint(), testutil.TestS3Bucket,
+		"",
+		testDB,
+		slog.Default(),
+	)
+	ui.SetRestoreAvailable(true)
+	ui.SetSchemaPath(schemaPath())
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/restore", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("is_authn", true)
+	c.Set("user_id", userID)
+
+	if err := ui.Restore(c); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	html := rec.Body.String()
+	for _, want := range []string{
+		"Restore Graph",
+		"destructive",
+		`id="restore-tbody"`,
+		"From a local file",
+		"dgraph live",
+		`id="restore-log-modal"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("expected HTML to contain %q", want)
+		}
+	}
+	if strings.Contains(html, `id="restore-log-modal" class="modal is-active"`) {
+		t.Error("restore-log-modal must not be active on initial page load")
 	}
 }
 

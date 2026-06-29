@@ -49,7 +49,7 @@ interface ConfigItem {
 # Config Items
 ########################
 type DataCenter implements ConfigItem {
-    assetDataV2: String # json
+    assetDataV2: String @search(by: [regexp]) # json
 
     servers: [Server] @hasInverse(field: dataCenter)
     racks: [Rack] @hasInverse(field: dataCenter)

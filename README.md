@@ -96,7 +96,10 @@ short in four areas:
 ## Quick Start
 
 ```bash
-# Terminal 1 — start all dependencies
+# Once per machine — installs the dgraph host wrapper to ~/.local/bin
+make dev-deps
+
+# Terminal 1 — start all dependencies (DGraph, Postgres, MinIO, Zot, orb DGraph)
 make up
 
 # Terminal 2 — orbital (cloud)
@@ -107,15 +110,22 @@ make run-orb
 
 # Seed example data (run once, after orbital is up)
 make seed
+
+# When you're done
+make down
 ```
 
 Open both UIs side by side:
 - **Orbital** — http://localhost:8001
 - **Orb** — http://localhost:8010
 
+Login as `admin@armada.ai` / `admin`.
+
 Other endpoints:
 - GraphQL playground: http://localhost:8001/graphql
 - Swagger API docs: http://localhost:8001/swagger/index.html
+
+**Next:** Follow [`docs/getting-started.md`](docs/getting-started.md) for a guided 10-minute walkthrough that takes you from setup through a complete intent → export → import workflow across both orbital and orb.
 
 ## API Access
 

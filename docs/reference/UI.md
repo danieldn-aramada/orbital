@@ -18,6 +18,13 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
 ## Core rules
 
 - **JavaScript is split into ES modules — no bundler** — `web/shared/static/shared.js` (utilities used by both orbital and orb), `web/shared/static/orbital.js` (orbital-only features), `web/shared/static/orb.js` (orb-only features). `head.gohtml` conditionally loads `orbital.js` or `orb.js` based on `{{.UI.AppName}}`. Never inline `<script>` blocks in templates.
+- **Cross-app navigation and reload handlers live in `shared.js`** — `initRowNavigation()`, `initLinkNavigation()`, and `initReloadButtons(opts?)` are exported from `shared.js` and called by both `orbital.js` and `orb.js`. Any new navigation pattern (e.g. dblclick on a new resource type) belongs in these functions so both apps get it automatically. Orbital-only edit-modal handlers (`[data-*-edit-id]` click handlers) stay in `orbital.js` — they are gated on `Actions.Edit` and must not move to `shared.js`. `initReloadButtons` accepts an optional `opts` object: `onDcReloaded(domId)` and `onSrvReloaded(target)` callbacks let `orbital.js` clean up its editor Maps on tab reload; `orb.js` passes nothing. See ADR 011 for the full rationale.
+- **DataTables AJAX reload must guard the error path** — `dt.ajax.reload(callback)` only fires `callback` on success; errors swallow the spinner. Pattern:
+  ```js
+  const onError = () => reloadButton.removeClass('is-loading')
+  dt.one('error.dt', onError)
+  dt.ajax.reload(() => { dt.off('error.dt', onError); reloadButton.removeClass('is-loading') })
+  ```
 - **`window.*` bridge for `onclick` handlers** — ES modules don't expose functions to global scope. Functions called from template `onclick="fn()"` attributes must be explicitly assigned: `window.fn = fn` at the bottom of the relevant module. `DOMContentLoaded` listeners and delegated event handlers work fine without the bridge.
 - **`DOMContentLoaded` inside modules works correctly** — modules are deferred by default. Use delegated `document.addEventListener('click', e => { if (!e.target.closest('#id')) return; ... })` for button handlers. Never call `getElementById` at module top level.
 - **Go template + HTMX is the primary rendering pattern** — server renders HTML fragments (including `<select>` options, lists, previews); JS fetches HTML and sets `innerHTML`. Reserve JS for things Go templates cannot do: polling loops, DataTables init, JSON editors, tab lifecycle management. Never write JS to fetch data and build DOM that a Go template handler could render directly.

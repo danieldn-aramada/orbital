@@ -1321,7 +1321,12 @@ export function initDatacenterTable(opts = {}) {
     datacenterTable.clear().draw()
     reloadButton.addClass('is-loading')
     setTimeout(() => {
-      datacenterTable.ajax.reload(() => { reloadButton.removeClass('is-loading') })
+      const onError = () => reloadButton.removeClass('is-loading')
+      datacenterTable.one('error.dt', onError)
+      datacenterTable.ajax.reload(() => {
+        datacenterTable.off('error.dt', onError)
+        reloadButton.removeClass('is-loading')
+      })
     }, 250)
   })
 
@@ -1443,7 +1448,12 @@ export function initServerListTable(opts = {}) {
     serverListTable.clear().draw()
     reloadButton.addClass('is-loading')
     setTimeout(() => {
-      serverListTable.ajax.reload(() => { reloadButton.removeClass('is-loading') })
+      const onError = () => reloadButton.removeClass('is-loading')
+      serverListTable.one('error.dt', onError)
+      serverListTable.ajax.reload(() => {
+        serverListTable.off('error.dt', onError)
+        reloadButton.removeClass('is-loading')
+      })
     }, 250)
   })
 
@@ -1903,5 +1913,144 @@ export function initClusterDetailTabs(domId) {
 
   const saved = localStorage.getItem(storageKey)
   if (saved) activatePanel(saved)
+}
+
+// ─── Cross-app navigation handlers ───────────────────────────────────────────
+//
+// These three initializers wire the dblclick / click row-navigation and reload
+// handlers that must work identically in orbital and orb. Both app entry points
+// call all three; orbital-only edit-modal handlers stay in orbital.js.
+
+// initRowNavigation wires dblclick navigation for server and cluster rows that
+// appear in shared templates (cluster-tab.gohtml, datacenter-tab.gohtml).
+export function initRowNavigation() {
+  // Node row in a cluster tab → open that server's tab on the Servers page.
+  document.addEventListener('dblclick', (e) => {
+    const row = e.target.closest('tr[data-server-orb-id]')
+    if (!row) return
+    const orbId = row.dataset.serverOrbId
+    const label = row.dataset.displayName || orbId
+    window.location.href = BASE + '/servers?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label)
+  })
+
+  // Workload cluster row in a cluster tab → open that cluster's tab.
+  document.addEventListener('dblclick', (e) => {
+    const row = e.target.closest('tr[data-cluster-orb-id]')
+    if (!row) return
+    const orbId = row.dataset.clusterOrbId
+    const label = row.dataset.displayName || orbId
+    window.location.href = BASE + '/clusters?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label)
+  })
+
+  // Server row in a DC detail panel → navigate to the Servers page with that
+  // server's tab open. Both apps share datacenter-tab.gohtml which emits
+  // tr[data-server-id].
+  document.addEventListener('dblclick', (e) => {
+    const row = e.target.closest('tr[data-server-id]')
+    if (!row) return
+    const orbId = row.dataset.serverId
+    const label = row.dataset.displayName || orbId
+    window.location.href = BASE + '/servers?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label)
+  })
+}
+
+// initLinkNavigation wires the .js-cluster-link single-click handler that
+// appears inside cluster-tab.gohtml's Management Cluster summary field.
+export function initLinkNavigation() {
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('.js-cluster-link[data-cluster-orb-id]')
+    if (!link) return
+    e.preventDefault()
+    const orbId = link.dataset.clusterOrbId
+    const label = link.dataset.displayName || orbId
+    window.location.href = BASE + '/clusters?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label)
+  })
+}
+
+// initReloadButtons wires the three Reload buttons emitted by the shared
+// partials (datacenter-tab, server-tab, cluster-tab). Both apps call this;
+// orbital passes cleanup hooks for stale editor state, orb calls with no opts.
+//
+// opts.onDcReloaded(domId) — called after a successful DC tab reload.
+// opts.onSrvReloaded(target) — called after a successful server tab reload.
+export function initReloadButtons(opts = {}) {
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('.js-cluster-reload')
+    if (!btn) return
+    btn.classList.add('is-loading')
+    const clusterId = btn.dataset.clusterId
+    reloadClusterFragment(clusterId)
+      .catch(() => {
+        const target = document.getElementById('tab-content-cluster-' + safeDomId(clusterId))
+        if (target) target.innerHTML = '<div class="notification is-danger is-light is-size-7 m-4"><strong>Reload failed.</strong> Check your connection and try again.</div>'
+      })
+      .finally(() => btn.classList.remove('is-loading'))
+  })
+
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('.js-dc-reload')
+    if (!btn) return
+    const orbId = btn.dataset.dcId
+    const domId = safeDomId(orbId)
+    const target = document.getElementById('tab-content-' + domId)
+    if (!target) return
+    showDatacenterSkeleton(orbId)
+    fetchWithMinDelay(BASE + '/datacenters/' + encodeURIComponent(orbId))
+      .then(html => {
+        target.innerHTML = html
+        htmx.process(target)
+        renderTimestamps(target)
+        initDcDetailTabs(domId)
+        initServerDetailTabs(target)
+        opts.onDcReloaded?.(domId)
+      })
+      .catch(() => {
+        target.innerHTML = '<div class="notification is-danger is-light is-size-7 m-4"><strong>Reload failed.</strong> Check your connection and try again.</div>'
+      })
+      .finally(() => btn.classList.remove('is-loading'))
+  })
+
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('.js-srv-reload')
+    if (!btn) return
+    const url = btn.dataset.srvUrl
+    const targetId = btn.dataset.srvTarget
+    const target = document.getElementById(targetId)
+    if (!target) return
+    showServerSkeleton(targetId, btn.dataset.srvSkeleton)
+    fetchWithMinDelay(url)
+      .then(html => {
+        target.innerHTML = html
+        htmx.process(target)
+        renderTimestamps(target)
+        const srvDetailTabs = target.querySelector('[id^="srv-detail-tabs-"]')
+        if (srvDetailTabs) {
+          target.dataset.loaded = 'true'
+          initServerDetailTabs(target)
+        }
+        const dcDetailTabs = target.querySelector('[id^="dc-detail-tabs-"]')
+        if (dcDetailTabs) {
+          const domId = dcDetailTabs.id.replace('dc-detail-tabs-', '')
+          target.dataset.loaded = 'true'
+          initDcDetailTabs(domId)
+          initServerDetailTabs(target)
+          const dcServersTable = target.querySelector('table[id^="dc-servers-table-"]')
+          if (dcServersTable && !$.fn.DataTable.isDataTable(dcServersTable)) {
+            new DataTable(dcServersTable, { paging: false, searching: false, info: false, ordering: true, select: { style: 'os' }, autoWidth: true, columnDefs: [{ className: 'dt-left', targets: 5 }, { targets: 0, render: dtIPv4Render }] })
+          }
+        }
+        const defaultTabLink = target.querySelector('.detlinks.is-active')
+        if (defaultTabLink) openServerTab(defaultTabLink.id.replace(/-detlink$/, '-det'))
+        target.querySelectorAll('[id$="-ev"]').forEach(el => {
+          const serverId = el.id.split('-')[0]
+          setTimeout(() => initServerEventsTable(serverId), 100)
+        })
+        opts.onSrvReloaded?.(target)
+      })
+      .catch(() => {
+        target.innerHTML = '<div class="notification is-danger is-light is-size-7 m-4"><strong>Reload failed.</strong> Check your connection and try again.</div>'
+      })
+      .finally(() => btn.classList.remove('is-loading'))
+  })
 }
 

@@ -203,10 +203,18 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		}
 	}
 
-	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath)
+	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath,
+		func(c echo.Context) layout.PageActions {
+			canMutate, _ := c.Get("can_mutate").(bool)
+			return layout.OrbitalActions(canMutate)
+		})
 	root.GET("/datacenters/:orbId", dc.Tab)
 
-	srv := handler.NewServerHandler(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath)
+	srv := handler.NewServerHandler(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath,
+		func(c echo.Context) layout.PageActions {
+			canMutate, _ := c.Get("can_mutate").(bool)
+			return layout.OrbitalActions(canMutate)
+		})
 	root.GET("/servers/:orbId", srv.Tab)
 
 	cluster := handler.NewClusterHandler(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath,

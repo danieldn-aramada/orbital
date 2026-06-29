@@ -42,6 +42,9 @@ import {
   initServerListTabRestoration,
   initClusterTabRestoration,
   safeDomId,
+  initRowNavigation,
+  initLinkNavigation,
+  initReloadButtons,
 } from './shared.js'
 
 // ─── Server drill-down in DC tab (dblclick → HTMX load into tab) ─────────────
@@ -127,43 +130,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.addEventListener('load', initClusterTabRestoration)
 
-// Double-click on a node row inside a cluster tab → open that server's tab.
-document.addEventListener('dblclick', (e) => {
-  const row = e.target.closest('tr[data-server-orb-id]')
-  if (!row) return
-  const orbId = row.dataset.serverOrbId
-  const label = row.dataset.displayName || orbId
-  window.location.href = BASE + '/servers?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label)
-})
+// ─── Cross-app navigation and reload buttons ──────────────────────────────────
+// Shared handlers extracted from this file so orb.js gets them for free.
+// Edit-modal handlers (data-{dc,srv,cluster}-edit-id) stay below — they
+// only render when Actions.Edit is true, which is orbital-only.
 
-// Cross-cluster navigation. Single-click on a .js-cluster-link (the
-// "Management Cluster" link in a workload's summary), and double-click on
-// a row in the Workload Clusters sub-tab — both deep-link to /clusters?open=
-// so initClusterTabRestoration opens the target cluster's tab.
-function navigateToClusterTab(orbId, label) {
-  window.location.href = BASE + '/clusters?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label || orbId)
-}
-
-document.addEventListener('click', (e) => {
-  const link = e.target.closest('.js-cluster-link[data-cluster-orb-id]')
-  if (!link) return
-  e.preventDefault()
-  navigateToClusterTab(link.dataset.clusterOrbId, link.dataset.displayName)
-})
-
-document.addEventListener('dblclick', (e) => {
-  const row = e.target.closest('tr[data-cluster-orb-id]')
-  if (!row) return
-  navigateToClusterTab(row.dataset.clusterOrbId, row.dataset.displayName)
-})
-
-// Double-click on server row in DC detail panel → navigate to /servers?open=<orbId>
-document.addEventListener('dblclick', (e) => {
-  const row = e.target.closest('tr[data-server-id]')
-  if (!row) return
-  const orbId = row.dataset.serverId
-  const label = row.dataset.displayName || orbId
-  window.location.href = BASE + '/servers?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label)
+initRowNavigation()
+initLinkNavigation()
+initReloadButtons({
+  onDcReloaded: (domId) => dcEditors.delete(domId),
+  onSrvReloaded: (target) => {
+    const srvDetailTabs = target.querySelector('[id^="srv-detail-tabs-"]')
+    if (srvDetailTabs) srvEditors.delete(srvDetailTabs.id.replace('srv-detail-tabs-', ''))
+    const dcDetailTabs = target.querySelector('[id^="dc-detail-tabs-"]')
+    if (dcDetailTabs) dcEditors.delete(dcDetailTabs.id.replace('dc-detail-tabs-', ''))
+  },
 })
 
 // ─── Backups ──────────────────────────────────────────────────────────────────
@@ -728,78 +709,6 @@ document.addEventListener('click', function (e) {
   }
 })
 
-
-// ─── Cluster reload button ────────────────────────────────────────────────────
-
-document.addEventListener('click', function (e) {
-  const btn = e.target.closest('.js-cluster-reload')
-  if (!btn) return
-  btn.classList.add('is-loading')
-  reloadClusterFragment(btn.dataset.clusterId)
-    .finally(() => btn.classList.remove('is-loading'))
-})
-
-// ─── Tab reloads ──────────────────────────────────────────────────────────────
-
-document.addEventListener('click', function (e) {
-  const btn = e.target.closest('.js-dc-reload')
-  if (!btn) return
-  const orbId = btn.dataset.dcId
-  const domId = safeDomId(orbId)
-  const target = document.getElementById('tab-content-' + domId)
-  if (!target) return
-  showDatacenterSkeleton(orbId)
-  fetchWithMinDelay('/datacenters/' + encodeURIComponent(orbId))
-    .then(html => {
-      target.innerHTML = html
-      htmx.process(target)
-      renderTimestamps(target)
-      initDcDetailTabs(domId)
-      initServerDetailTabs(target)
-    })
-    .catch(() => {})
-})
-
-document.addEventListener('click', function (e) {
-  const btn = e.target.closest('.js-srv-reload')
-  if (!btn) return
-  const url = btn.dataset.srvUrl
-  const targetId = btn.dataset.srvTarget
-  const target = document.getElementById(targetId)
-  if (!target) return
-  showServerSkeleton(targetId, btn.dataset.srvSkeleton)
-  fetchWithMinDelay(url)
-    .then(html => {
-      target.innerHTML = html
-      htmx.process(target)
-      renderTimestamps(target)
-      const srvDetailTabs = target.querySelector('[id^="srv-detail-tabs-"]')
-      if (srvDetailTabs) {
-        target.dataset.loaded = 'true'
-        initServerDetailTabs(target)
-        srvEditors.delete(srvDetailTabs.id.replace('srv-detail-tabs-', ''))
-      }
-      const dcDetailTabs = target.querySelector('[id^="dc-detail-tabs-"]')
-      if (dcDetailTabs) {
-        const domId = dcDetailTabs.id.replace('dc-detail-tabs-', '')
-        target.dataset.loaded = 'true'
-        initDcDetailTabs(domId)
-        dcEditors.delete(domId)
-        initServerDetailTabs(target)
-        const dcServersTable = target.querySelector('table[id^="dc-servers-table-"]')
-        if (dcServersTable && !$.fn.DataTable.isDataTable(dcServersTable)) {
-          new DataTable(dcServersTable, { paging: false, searching: false, info: false, ordering: true, select: { style: 'os' }, autoWidth: true, columnDefs: [{ className: 'dt-left', targets: 5 }, { targets: 0, render: dtIPv4Render }] })
-        }
-      }
-      const defaultTabLink = target.querySelector('.detlinks.is-active')
-      if (defaultTabLink) openServerTab(defaultTabLink.id.replace(/-detlink$/, '-det'))
-      target.querySelectorAll('[id$="-ev"]').forEach(el => {
-        const serverId = el.id.split('-')[0]
-        setTimeout(() => initServerEventsTable(serverId), 100)
-      })
-    })
-    .catch(() => {})
-})
 
 // ─── HTMX afterSwap — orbital editor cleanup ──────────────────────────────────
 // shared.js handles tab init and timestamps; this listener cleans up editor state.

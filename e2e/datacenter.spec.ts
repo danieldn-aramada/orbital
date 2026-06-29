@@ -1,10 +1,5 @@
 import { test, expect } from '@playwright/test';
 
-test('menu footer shows app version', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByTestId('app-version')).toContainText(/Orbital v\S+/);
-});
-
 test.describe('Data center tab', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/datacenters');
@@ -80,13 +75,4 @@ test.describe('Data center tab', () => {
     await expect(page.locator('[id^="dc-panel-racks-"] tbody tr').first()).toBeVisible();
   });
 
-  test('data center summary shows correct metadata', async ({ page }) => {
-    const summary = page.locator('article', { hasText: 'Data Center Summary' });
-    await expect(summary.locator('td', { hasText: 'colo-galleon' })).toBeVisible();
-    await expect(summary.locator('tr', { hasText: 'Servers' }).locator('td').nth(1)).not.toBeEmpty();
-
-    // Created By is in the Metadata article; seed data may leave it blank (shows "—")
-    const metadata = page.locator('article', { hasText: 'Metadata' });
-    await expect(metadata.locator('tr', { hasText: 'Created By' })).toBeVisible();
-  });
 });

@@ -1,7 +1,7 @@
 # 011 — Shared ConfigItem handlers across orbital and orb
 
-**Status:** Proposed
-**Date:** 2026-06-20
+**Status:** Implemented
+**Date:** 2026-06-20 (cluster); 2026-06-25 (DC + Server + JS extraction)
 
 ## Context
 
@@ -150,9 +150,9 @@ The same spike that collapses `DataCenterHandler` and `ServerHandler` (today's p
 - orb gains read-only Clusters parity with orbital.
 - New regression tests pin the partial-render bug class.
 
-**Still owed:**
-- DC and Server still have parallel struct/handler pairs in orb.
-- Until those collapse, the silent partial-render class can re-appear there.
+**Also shipped (2026-06-25):**
+- `DataCenterHandler` and `ServerHandler` collapsed — same `actions` injection pattern as Cluster. orb's `dcTab`/`srvTab` and all parallel structs/queries deleted from `internal/orbserver/`.
+- `initRowNavigation()`, `initLinkNavigation()`, `initReloadButtons()` extracted to `shared.js` and exported. Both `orbital.js` and `orb.js` call all three. orb.js dead navigation handlers removed. DataTables reload buttons get `dt.one('error.dt', ...)` guard so spinner clears on AJAX error.
 
 ## Alternatives considered
 

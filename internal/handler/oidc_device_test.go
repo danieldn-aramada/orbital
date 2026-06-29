@@ -77,11 +77,12 @@ func TestDeviceCodeStart_RendersUserCode(t *testing.T) {
 		t.Error("expected head.gohtml content to be included (looked for htmx script tag); the {{template \"head.gohtml\" .}} directive did not resolve")
 	}
 
-	// Proves cache-busting works on this page — shared.js and main.css must
+	// Proves cache-busting works on this page — orbital.js and main.css must
 	// carry the ?v= query string so a redeploy bumps the URL. Without this,
 	// browsers serve stale JS forever (the bug that lost us hours on AKS).
-	if !strings.Contains(body, "shared.js?v=") {
-		t.Error("expected shared.js to have ?v= cache-bust query string")
+	// Note: shared.js is imported as a module by orbital.js, not loaded directly.
+	if !strings.Contains(body, "orbital.js?v=") {
+		t.Error("expected orbital.js to have ?v= cache-bust query string")
 	}
 	if !strings.Contains(body, "main.css?v=") {
 		t.Error("expected main.css to have ?v= cache-bust query string")

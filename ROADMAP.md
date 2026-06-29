@@ -28,11 +28,11 @@ gantt
 
 ## Recent accomplishments
 
+- **2026-06-29** — Test suite hardened: 15 new Playwright tests (DataTable sort/filter/expand, empty states); `make test-integration` fixed (cursor table leak, DGraph schema polling, -p 1, stale assertion); `assetDataV2` regexp index.
 - **2026-06-22** — ADR 012 supersede: Submit-boundary semantics (recurrence-after-Submit captured); orb-side dedup removed; Delete-report + IgnoreOnly UI; OAUTH2_DEVICE_CODE rename; reload min-delay UX.
 - **2026-06-20** — Orb↔orbital UI parity restored: shared `ClusterHandler` with injected `actions` resolver (ADR 011); orb DC/Server/Cluster tabs render fully (partial-render class fixed); workload-row dblclick + Publish History link wired; orb schema page queries DGraph directly (no sidecar).
 - **2026-06-18** — Cluster schema polymorphism (interface KubernetesCluster + EksaKubernetesCluster + KubernetesNode); 5-DC cluster catalog seeded with mgmt/workload tree view; orb partial-import lifecycle; publish-history rename; schema v3.
 - **2026-06-16** — Per-field MVCC pin on divergence resolutions; orb poller hardening + fresh-install schema-dir fix; configbundle `spec.ignored[]` CRD field (Ignore is standing instruction, not suppression); ADR-008 refinements.
-- **2026-06-15** — Divergence simplified: `propagated_at` removed end-to-end (resolutions now 1:1 with active entries); cb-controller full-release drops `f:spec` claim; integration tests restored; post-MVP forensics entry on ROADMAP.
 
 ---
 

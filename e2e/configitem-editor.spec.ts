@@ -12,6 +12,7 @@ import { test, expect, Page } from '@playwright/test'
 
 const CLUSTER_ORB_ID = 'colo:dev-main'
 const SERVER_ORB_ID  = '2f-uae:5HSC3D4'  // seeded R750 with iDRAC in 2f-uae namespace
+const DC_ORB_ID      = 'seattle:seattle-galleon'
 
 // safeDomId mirrors the Go helper; orbId → DOM-safe id (`:` → `_`).
 function safeDomId(orbId: string): string {
@@ -42,6 +43,37 @@ async function openServerEditModal(page: Page, orbId: string) {
   await page.waitForSelector(`#edit-modal-srv-${domId}`, { state: 'attached', timeout: 5_000 })
   await page.locator(`[data-srv-edit-id="${domId}"]`).first().click()
   await expect(page.locator(`#edit-modal-srv-${domId}`)).toHaveClass(/is-active/)
+  return domId
+}
+
+async function openDataCenterEditModal(page: Page, orbId: string) {
+  // DataCenter tabs have no ?open= deep-link. Must navigate to /datacenters,
+  // search for the DC in the DataTable (it may be paginated), dblclick the row
+  // to load the tab, wait for the fragment to settle, then open the edit modal.
+  const domId = safeDomId(orbId)
+  const dcName = orbId.split(':')[1]  // 'seattle:seattle-galleon' → 'seattle-galleon'
+  await page.goto('/datacenters')
+
+  // If initDatacenterTabRestoration restored the DC tab (saves to localStorage on
+  // first open), the summary tab content div is hidden. Click the summary tab to
+  // ensure the DataTable and its search input are visible before interacting.
+  const summaryTab = page.locator('#tab-summary')
+  if (await summaryTab.count() > 0) await summaryTab.click()
+
+  // Filter DataTable to surface the target row (table has pageLength=5, many DCs seeded).
+  const searchInput = page.locator('input[aria-controls="datacenter-table"]')
+  await expect(searchInput).toBeVisible({ timeout: 10_000 })
+  await searchInput.fill(dcName)
+
+  const row = page.locator('#datacenter-table tbody tr', { hasText: dcName })
+  await expect(row).toBeVisible({ timeout: 10_000 })
+  await row.dblclick()
+
+  // Dblclick → tab created → tab link clicked → HTMX load → afterSettle → data-loaded="true"
+  await page.waitForSelector(`#tab-content-${domId}[data-loaded="true"]`, { timeout: 15_000 })
+  await page.waitForSelector(`#edit-modal-dc-${domId}`, { state: 'attached', timeout: 5_000 })
+  await page.locator(`[data-dc-edit-id="${domId}"]`).first().click()
+  await expect(page.locator(`#edit-modal-dc-${domId}`)).toHaveClass(/is-active/)
   return domId
 }
 
@@ -177,6 +209,73 @@ test.describe('configitem-editor module — browser validation', () => {
     // audit log would say updateServer with a nested-blob.
     await expect(auditPanel).toContainText('updateIdracSettings', { timeout: 10_000 })
     await expect(auditPanel.locator('strong:has-text("firmwareVersion")').first()).toBeVisible()
+  })
+
+  test('datacenter edit: name change → updateDataCenter audit row with diff', async ({ page }) => {
+    const domId = await openDataCenterEditModal(page, DC_ORB_ID)
+
+    const initial = await readEditorJSON(page, `#dc-edit-data-${domId}`)
+    expect(initial.name).toBeTruthy()
+    const origName = initial.name
+    const newName = `seattle-galleon-${Date.now() % 10000}`
+
+    await page.evaluate(({ id, newState }) => {
+      const editor = (window as any).dcEditors.get(id)
+      editor.set({ text: JSON.stringify(newState, null, 2) })
+    }, { id: domId, newState: { ...initial, name: newName } })
+
+    await page.locator(`#dc-edit-submit-${domId}`).click()
+    await expect(page.locator(`#edit-modal-dc-${domId}`)).not.toHaveClass(/is-active/)
+
+    // DC Summary should reflect the new name after fragment reload.
+    await expect(page.locator('text=' + newName).first()).toBeVisible({ timeout: 10_000 })
+
+    // Click the Audit Log tab and verify updateDataCenter with a diff on `name`.
+    await page.locator(`[data-panel="dc-panel-audit-${domId}"]`).click()
+    const auditPanel = page.locator(`#dc-panel-audit-${domId}`)
+    await expect(auditPanel).toContainText('updateDataCenter', { timeout: 10_000 })
+    await expect(auditPanel.locator('strong:has-text("name")').first()).toBeVisible()
+
+    // Cleanup: restore original name.
+    await openDataCenterEditModal(page, DC_ORB_ID)
+    const current = await readEditorJSON(page, `#dc-edit-data-${domId}`)
+    await page.evaluate(({ id, newState }) => {
+      const editor = (window as any).dcEditors.get(id)
+      editor.set({ text: JSON.stringify(newState, null, 2) })
+    }, { id: domId, newState: { ...current, name: origName } })
+    await page.locator(`#dc-edit-submit-${domId}`).click()
+    await expect(page.locator(`#edit-modal-dc-${domId}`)).not.toHaveClass(/is-active/)
+  })
+
+  // ── NOT WIRED — edit modals not yet implemented for these ConfigItem types ──
+  //
+  // Rack, IPAddress, KubernetesNode, ServerConfigurationProfile have no FormFields
+  // in the configitem registry, no edit modal templates, and no JS handlers.
+  // These tests are skipped until the corresponding UI is wired up. Each skip is
+  // a product gap, not just a test gap — flag for future work.
+
+  test.skip('rack edit: name change → updateRack audit row with diff', async () => {
+    // NOT WIRED: Rack has no edit modal in the current UI. Racks tab (inside a DC
+    // tab) is read-only display only. No data-rack-edit-id trigger, no
+    // edit-modal-rack template, no updateRack JS dispatch path.
+    // Target: seattle:Rack-5 or any seeded rack in examples/seed/seattle-galleon.graphql
+  })
+
+  test.skip('ip address edit: address change → updateIPAddress audit row with diff', async () => {
+    // NOT WIRED: IPAddress has no edit modal in the current UI. No IP detail page,
+    // no data-ip-edit-id trigger, no updateIPAddress JS dispatch.
+    // Target: seeded IPs in examples/seed/seattle-galleon-storage.graphql
+  })
+
+  test.skip('kubernetes node edit: role change → updateKubernetesNode audit row with diff', async () => {
+    // NOT WIRED: KubernetesNode has no edit modal. Cluster Nodes sub-tab is
+    // read-only. No data-node-edit-id trigger, no updateKubernetesNode JS dispatch.
+    // Target: any seeded node in examples/seed/seattle-galleon-clusters.graphql
+  })
+
+  test.skip('server config profile: JSON field change → updateServerConfigurationProfile audit row with diff', async () => {
+    // NOT WIRED: ServerConfigurationProfile has no edit modal in the current UI.
+    // No data-profile-edit-id trigger, no updateServerConfigurationProfile JS dispatch.
   })
 
   // Regression guard: server / cluster / DC handlers must return 404 when the

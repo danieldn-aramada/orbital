@@ -15,11 +15,13 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/migrate"
+	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/testutil"
 	"github.com/google/uuid"
@@ -324,4 +326,63 @@ func readZipFiles(t *testing.T, path string) map[string][]byte {
 		out[f.Name] = buf.Bytes()
 	}
 	return out
+}
+
+func TestExportPage_RendersExpectedElements(t *testing.T) {
+	t.Chdir("../..")
+
+	userID := createTestUser(t, "export-render@test.com", user.RoleAdmin)
+
+	ui := handler.NewUI(
+		false, "", "",
+		false, false,
+		false,
+		"", "",
+		"",
+		testDB,
+		slog.Default(),
+	)
+	ui.SetDGraphURL(testutil.DGraphURL())
+	ui.SetExportDir(blueExportDir)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/export", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("is_authn", true)
+	c.Set("user_id", userID)
+
+	if err := ui.Export(c); err != nil {
+		t.Fatalf("Export: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	html := rec.Body.String()
+	for _, want := range []string{
+		"Export Subgraph",
+		"json.gz",
+		`id="export-datacenter-select"`,
+		`id="export-submit-btn"`,
+		`id="export-status-box"`,
+		`id="export-jobs-table"`,
+		`id="export-jobs-tbody"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("expected HTML to contain %q", want)
+		}
+	}
+	// Submit button must be disabled before a DC is selected
+	if !strings.Contains(html, `id="export-submit-btn"`) || !strings.Contains(html, `disabled`) {
+		t.Error("export-submit-btn must be present and disabled on initial load")
+	}
+	// Status box must be hidden on load
+	if !strings.Contains(html, `id="export-status-box"`) || !strings.Contains(html, `display:none`) {
+		t.Error("export-status-box must be hidden on initial load")
+	}
+	// Seeded DC must appear in the select (SeedMinimalE seeds "Test DC")
+	if !strings.Contains(html, "Test DC") {
+		t.Error("expected seeded data center 'Test DC' to appear in the export select")
+	}
 }

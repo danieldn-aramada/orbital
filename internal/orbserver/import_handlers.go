@@ -110,21 +110,17 @@ func (s *Server) triggerImport(c echo.Context) error {
 		importID := newImportID()
 		if len(artifact.ExtraLayers) > 0 && s.dispatcher != nil {
 			results := s.dispatcher.Dispatch(ctx, artifact.ExtraLayers, meta.Tag, meta.Digest, importID)
-			// With the broadcast Dispatcher, every layer produces a result.
-			// Role classification is now driven by the response:
-			//   - 2xx → "dispatched" (some consumer accepted it)
-			//   - non-2xx → "unknown" (no consumer claimed it)
+			// LayerRoleDispatched means a dispatch was attempted; Dispatch.Error
+			// records the outcome. LayerRoleUnknown is reserved for layers skipped
+			// entirely (no consumers configured at all).
 			for i := range results {
 				dr := results[i]
-				role := orb.LayerRoleUnknown
-				if dr.StatusCode >= 200 && dr.StatusCode < 300 {
-					role = orb.LayerRoleDispatched
-				} else {
+				if dr.StatusCode < 200 || dr.StatusCode >= 300 {
 					dispatchErrors++
 				}
 				layerRecords = append(layerRecords, orb.LayerRecord{
 					MediaType: dr.MediaType,
-					Role:      role,
+					Role:      orb.LayerRoleDispatched,
 					Producer:  producerFor(dr.MediaType),
 					SizeBytes: artifact.LayerSizes[dr.MediaType],
 					Digest:    artifact.LayerDigests[dr.MediaType],
@@ -133,11 +129,9 @@ func (s *Server) triggerImport(c echo.Context) error {
 			}
 		}
 
-		// Status reflects the WHOLE import: graph apply + extra-layer dispatch.
-		// "done" only when both phases fully succeed. "partial" when graph
-		// applied but at least one dispatch failed — operator action likely
-		// needed. ("failed" is reserved for the graph-apply phase failing
-		// upstream, handled by setFailed above.)
+		// "partial" when the graph applied but at least one consumer dispatch
+		// failed — operator may need to retry. "failed" is reserved for
+		// graph-apply failures (handled by setFailed above).
 		status := "done"
 		if dispatchErrors > 0 {
 			status = "partial"
@@ -493,28 +487,24 @@ func (s *Server) importArtifact(c echo.Context) error {
 		// layer is treated identically — orb has no built-in knowledge of any
 		// specific media type; consumers register themselves via ORB_CONSUMERS.
 		var layerRecords []orb.LayerRecord
-		var dispatchErrors int
 		if len(extraLayers) > 0 && s.dispatcher != nil {
 			results := s.dispatcher.Dispatch(ctx, extraLayers, tag, "", importID)
 			dispatched := make(map[string]bool, len(results))
 			for i := range results {
 				dr := results[i]
-				role := orb.LayerRoleUnknown
-				if dr.StatusCode >= 200 && dr.StatusCode < 300 {
-					role = orb.LayerRoleDispatched
-				} else {
-					dispatchErrors++
-				}
+				// Dispatch is best-effort: LayerRoleDispatched records that a
+				// dispatch was attempted regardless of the consumer's response.
+				// Consumer failures are surfaced in Dispatch.Error but do not
+				// degrade the import status — the graph apply succeeded.
 				layerRecords = append(layerRecords, orb.LayerRecord{
 					MediaType: dr.MediaType,
-					Role:      role,
+					Role:      orb.LayerRoleDispatched,
 					Dispatch:  &dr,
 				})
 				dispatched[dr.MediaType] = true
 			}
 			for mt := range extraLayers {
 				if !dispatched[mt] {
-					dispatchErrors++
 					layerRecords = append(layerRecords, orb.LayerRecord{
 						MediaType: mt,
 						Role:      orb.LayerRoleUnknown,
@@ -523,14 +513,10 @@ func (s *Server) importArtifact(c echo.Context) error {
 			}
 		}
 
-		// Same status rollup as the OCI-poll path: "partial" if graph applied
-		// but at least one dispatch failed.
-		status := "done"
-		if dispatchErrors > 0 {
-			status = "partial"
-		}
-		if len(layerRecords) > 0 || status != "done" {
-			if err := orb.FinalizeLastHistory(s.cfg.DataDir, layerRecords, status); err != nil {
+		// Consumer dispatch is best-effort: status is always "done" when the
+		// graph apply succeeds. Consumer errors are visible in layer records.
+		if len(layerRecords) > 0 {
+			if err := orb.FinalizeLastHistory(s.cfg.DataDir, layerRecords, "done"); err != nil {
 				s.logger.Warn("finalize history failed", "err", err)
 			}
 		}
@@ -538,7 +524,7 @@ func (s *Server) importArtifact(c echo.Context) error {
 		s.state.setDone(orb.ImportRecord{
 			Tag:        tag,
 			ImportedAt: time.Now().UTC(),
-			Status:     status,
+			Status:     "done",
 		})
 	}()
 

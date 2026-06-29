@@ -8,9 +8,11 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/testutil"
 	"github.com/google/uuid"
@@ -151,5 +153,56 @@ func TestBackupTrigger_ConflictWhenInProgress(t *testing.T) {
 	json.Unmarshal(rec1.Body.Bytes(), &resp) //nolint:errcheck
 	if jobID, err := uuid.Parse(resp.JobID); err == nil {
 		testutil.WaitForBackupJob(t, testDB, jobID, 90*time.Second)
+	}
+}
+
+func TestBackupsPage_RendersExpectedElements(t *testing.T) {
+	t.Chdir("../..")
+
+	userID := createTestUser(t, "backups-render@test.com", user.RoleAdmin)
+
+	ui := handler.NewUI(
+		false, "", "",
+		false, false,
+		true,
+		testutil.MinIOEndpoint(), testutil.TestS3Bucket,
+		"",
+		testDB,
+		slog.Default(),
+	)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/backups", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("is_authn", true)
+	c.Set("user_id", userID)
+
+	if err := ui.Backups(c); err != nil {
+		t.Fatalf("Backups: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	html := rec.Body.String()
+	for _, want := range []string{
+		"Backup Graph",
+		"object storage",
+		`id="backup-tbody"`,
+		`id="btn-backup"`,
+		`id="btn-test-backup-connection"`,
+		`id="delete-modal"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("expected HTML to contain %q", want)
+		}
+	}
+	if strings.Contains(html, `id="delete-modal" class="modal is-active"`) {
+		t.Error("delete-modal must not be active on initial page load")
+	}
+	// Storage location input must show endpoint/bucket, not the unconfigured placeholder
+	if !strings.Contains(html, testutil.MinIOEndpoint()) {
+		t.Errorf("expected storage location to contain MinIO endpoint %q", testutil.MinIOEndpoint())
 	}
 }

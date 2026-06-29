@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/labstack/echo/v4"
 )
 
@@ -23,7 +24,7 @@ func newDGraphStub(t *testing.T, body string) *httptest.Server {
 
 func TestDataCenterTab_NonHTMX_Redirects(t *testing.T) {
 	t.Chdir("../..")
-	h := NewDataCenter("http://localhost:8080/graphql", false, slog.Default(), "/app")
+	h := NewDataCenter("http://localhost:8080/graphql", false, slog.Default(), "/app", func(echo.Context) layout.PageActions { return layout.OrbActions })
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -50,7 +51,7 @@ func TestDataCenterTab_DGraphUnreachable(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	srv.Close()
 
-	h := NewDataCenter(srv.URL, false, slog.Default(), "/app")
+	h := NewDataCenter(srv.URL, false, slog.Default(), "/app", func(echo.Context) layout.PageActions { return layout.OrbActions })
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -71,7 +72,7 @@ func TestDataCenterTab_DGraphDecodeError(t *testing.T) {
 	// DGraph returns non-JSON — Unmarshal must fail.
 	dgraph := newDGraphStub(t, "not json")
 
-	h := NewDataCenter(dgraph.URL, false, slog.Default(), "/app")
+	h := NewDataCenter(dgraph.URL, false, slog.Default(), "/app", func(echo.Context) layout.PageActions { return layout.OrbActions })
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -105,7 +106,7 @@ func TestDataCenterTab_Success(t *testing.T) {
 	})
 	dgraph := newDGraphStub(t, string(body))
 
-	h := NewDataCenter(dgraph.URL, false, slog.Default(), "/app")
+	h := NewDataCenter(dgraph.URL, false, slog.Default(), "/app", func(echo.Context) layout.PageActions { return layout.OrbActions })
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)

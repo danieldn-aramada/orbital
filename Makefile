@@ -65,7 +65,7 @@ test-unit: ## Run unit tests with coverage summary (no external services require
 test-integration: ## Run integration tests against real services (requires: make up)
 	@docker compose -f $(COMPOSE_FILE) exec -T postgres psql -U orbital -c "CREATE DATABASE orbital_test;" 2>/dev/null || true
 	@echo "Running integration tests..."
-	@go test -v -count=1 -tags integration -timeout 10m $(TEST_PKGS)
+	@go test -count=1 -tags integration -timeout 10m -p 1 $(TEST_PKGS)
 	@echo "Reseeding DGraph for E2E tests..."
 	@bash scripts/seed.sh
 

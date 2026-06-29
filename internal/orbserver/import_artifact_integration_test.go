@@ -112,7 +112,7 @@ func TestImportArtifact_FullPipeline(t *testing.T) {
 	defer consumer.Close()
 
 	srv := newServerWithMockBackend(t, orbconfig.ConsumersConfig{
-		{MediaType: testMediaType, URL: consumer.URL},
+		{URL: consumer.URL},
 	})
 
 	// Build and POST the artifact zip.
@@ -246,7 +246,7 @@ func TestImportArtifact_ConsumerFails_StillDone(t *testing.T) {
 	defer consumer.Close()
 
 	srv := newServerWithMockBackend(t, orbconfig.ConsumersConfig{
-		{MediaType: testMediaType, URL: consumer.URL},
+		{URL: consumer.URL},
 	})
 
 	artifactZip := buildArtifactZipWithLayer(t, []byte("manifest: fail"), testMediaType, "cb-manifest.yaml")
@@ -326,7 +326,7 @@ func TestImportArtifact_NoExtraLayers_NoDispatch(t *testing.T) {
 	defer consumer.Close()
 
 	srv := newServerWithMockBackend(t, orbconfig.ConsumersConfig{
-		{MediaType: "application/vnd.armada.configbundle.manifest.v1+yaml", URL: consumer.URL},
+		{URL: consumer.URL},
 	})
 
 	// Zip with only graph layers — no layers.json, no extra blobs.

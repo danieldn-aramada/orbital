@@ -1,26 +1,6 @@
 # Contributing
 
-## First-time setup
-
-```bash
-make dev-deps     # once per machine — installs a host-side `dgraph` wrapper to ~/.local/bin
-                  # (orb's import and orbital's restore exec `dgraph live` as a subprocess;
-                  # dgraph is Linux-only, so on macOS the wrapper proxies to a container)
-                  # If ~/.local/bin isn't on PATH, the make output tells you what to add.
-
-make up           # Terminal 1 — start all dependencies (DGraph, Postgres, MinIO, Zot, orb DGraph)
-make run-orbital  # Terminal 2 — orbital on :8001
-make run-orb      # Terminal 3 — orb on :8010
-make seed         # once, after orbital is up — DGraph data + admin user
-```
-
-Both UIs should open without errors:
-- **Orbital** — http://localhost:8001
-- **Orb** — http://localhost:8010
-
-No `.env` sourcing required — all local defaults are baked into `config.go` and `orbconfig/config.go`. Login as `admin@armada.ai` / `admin`.
-
-When you're done: `make down` stops the local stack and wipes its volumes.
+> **New here?** Start with [`docs/getting-started.md`](docs/getting-started.md) — that's the hands-on onboarding doc covering first-time setup, the UI tour, and a guided end-to-end workflow. This file focuses on contributor workflow (PRs, tests, style, releases).
 
 ## Make commands at a glance
 
@@ -29,13 +9,16 @@ Run `make help` for the full list. The most-used:
 | Daily | Tests | As needed |
 |---|---|---|
 | `make up` / `make down` | `make test-unit` | `make docs` (regen Swagger for both apps) |
-| `make run-orbital` / `make run-orb` | `make test-integration` (needs `make up`) | `make build-css` / `make watch-css` (SCSS) |
+| `make run-orbital` / `make run-orb` | `make test-integration` (needs `make up`) | `make build-css` (compile SCSS once) |
 | `make seed` | `make test-e2e` (needs orbital + orb running) | `make build-orbctl` (compile the CLI) |
-| | `make release-check` (pre-release; see below) | `make edge-up` / `make edge-down` (test orb against AKS upstream; see below) |
+| | `make test-e2e-ui` (interactive Playwright UI mode) | `make edge-up` / `make edge-down` (test orb against AKS upstream; see below) |
+| | `make release-check` (pre-release; see below) | |
 
-`make run-orbital` / `make run-orb` use `go run` for fast iteration. The host wrapper at `~/.local/bin/dgraph` makes the orb import flow and orbital restore flow work under `go run` — ensure `~/.local/bin` is on your `PATH` or those paths fail with `dgraph: executable file not found`. `make release-check` exercises the same paths against the actual container images.
+`make run-orbital` / `make run-orb` use `go run` for fast iteration. The host wrapper at `~/.local/bin/dgraph` (installed by `make dev-deps`) makes the orb import flow and orbital restore flow work under `go run` — ensure `~/.local/bin` is on your `PATH` or those paths fail with `dgraph: executable file not found`. `make release-check` exercises the same paths against the actual container images.
 
 ### Divergence flow gotchas
+
+The full divergence workflow is covered in [`docs/getting-started.md`](docs/getting-started.md) and [`docs/reference/DIVERGENCE.md`](docs/reference/DIVERGENCE.md). Two recurring footguns when working on it locally:
 
 - **Orb doesn't auto-import.** Its poller only detects new tags; trigger imports with `POST /api/v1/import {"tag":"vN"}`.
 - **cb-controller's reporter defaults to 5 min.** For local dev, set `DIVERGENCE_REPORTER_INTERVAL=15s` when running it.
@@ -94,8 +77,7 @@ Orbital uses [Bulma](https://bulma.io/) compiled from SASS. **Do not edit `web/s
 Edit `web/sass/main.scss` instead, then rebuild:
 
 ```bash
-make build-css       # one-time compile
-make watch-css       # watch mode — recompiles on every save
+make build-css       # compile once
 ```
 
 Requires `npm install` once to install the `sass` compiler.

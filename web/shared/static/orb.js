@@ -17,6 +17,9 @@ import {
   initServerListTabRestoration,
   initClusterTabRestoration,
   safeDomId,
+  initRowNavigation,
+  initLinkNavigation,
+  initReloadButtons,
 } from './shared.js'
 
 // ─── Stale-state cleanup ──────────────────────────────────────────────────────
@@ -223,49 +226,11 @@ window.addEventListener('load', initDatacenterTabRestoration)
 window.addEventListener('load', initServerListTabRestoration)
 window.addEventListener('load', initClusterTabRestoration)
 
-// Cross-cluster navigation. The cluster table's workload child rows
-// (cluster-child-row class) are excluded from the main DataTable dblclick
-// handler in initClusterTable — they're explicitly delegated here. Both the
-// workload-row dblclick and the .js-cluster-link single-click inside an
-// open cluster tab deep-link to /clusters?open=<orbId> so
-// initClusterTabRestoration opens the target's tab on the next page load.
-function navigateToClusterTab(orbId, label) {
-  window.location.href = BASE + '/clusters?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label || orbId)
-}
+// ─── Cross-app navigation and reload buttons ──────────────────────────────────
 
-document.addEventListener('click', (e) => {
-  const link = e.target.closest('.js-cluster-link[data-cluster-orb-id]')
-  if (!link) return
-  e.preventDefault()
-  navigateToClusterTab(link.dataset.clusterOrbId, link.dataset.displayName)
-})
-
-document.addEventListener('dblclick', (e) => {
-  const row = e.target.closest('tr[data-cluster-orb-id]')
-  if (!row) return
-  navigateToClusterTab(row.dataset.clusterOrbId, row.dataset.displayName)
-})
-
-// Server row in a cluster tab (nodes table) → open server tab.
-// Mirrors orbital.js; both apps use shared/partials/cluster-tab.gohtml which
-// emits tr[data-server-orb-id]. Without this handler orb's dblclick was inert.
-document.addEventListener('dblclick', (e) => {
-  const row = e.target.closest('tr[data-server-orb-id]')
-  if (!row) return
-  const orbId = row.dataset.serverOrbId
-  const label = row.dataset.displayName || orbId
-  window.location.href = BASE + '/servers?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label)
-})
-
-// Server row in a DC tab (servers list) → open server tab.
-// Mirrors orbital.js; shared/partials/datacenter-tab.gohtml emits tr[data-server-id].
-document.addEventListener('dblclick', (e) => {
-  const row = e.target.closest('tr[data-server-id]')
-  if (!row) return
-  const orbId = row.dataset.serverId
-  const label = row.dataset.displayName || orbId
-  window.location.href = BASE + '/servers?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label)
-})
+initRowNavigation()
+initLinkNavigation()
+initReloadButtons()
 
 // ─── Orb divergence publish ───────────────────────────────────────────────────
 

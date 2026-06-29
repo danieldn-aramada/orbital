@@ -70,15 +70,19 @@ type ServerHandler struct {
 	fragment  *template.Template
 	logger    *slog.Logger
 	basePath  string
+	// actions resolves per-request PageActions. orbital passes a closure that
+	// reads can_mutate from the context; orb passes a const returning OrbActions.
+	actions func(echo.Context) layout.PageActions
 }
 
-func NewServerHandler(dgraphURL string, dev bool, logger *slog.Logger, basePath string) *ServerHandler {
+func NewServerHandler(dgraphURL string, dev bool, logger *slog.Logger, basePath string, actions func(echo.Context) layout.PageActions) *ServerHandler {
 	return &ServerHandler{
 		dgraphURL: dgraphURL,
 		dev:       dev,
 		fragment:  parseServerFragment(),
 		logger:    logger,
 		basePath:  basePath,
+		actions:   actions,
 	}
 }
 
@@ -289,7 +293,6 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 	}
 
 	currentUser := actorFromContext(c)
-	canMutate, _ := c.Get("can_mutate").(bool)
 
 	idracFields := map[string]any{
 		"firmwareVersion":             "",
@@ -359,7 +362,7 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 		EditDataJSON:    template.JS(editJSON),
 		EditTargetsJSON: template.JS(editTargetsJSON),
 		BasePath:        h.basePath,
-		Actions:         layout.OrbitalActions(canMutate),
+		Actions:         h.actions(c),
 	}
 
 	if raw.IdracSettings != nil {

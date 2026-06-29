@@ -60,6 +60,7 @@ func truncateAll(dsn string) error {
 		"backups",
 		"divergence_resolutions",
 		"divergence_entries",
+		"divergence_ingest_cursors",
 		"event_resource_types",
 		"event_resources",
 		"events",
