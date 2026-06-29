@@ -30,11 +30,29 @@ var ErrNotAuthenticated = errors.New("not authenticated")
 // in production is true (HTTPS-only). The HTTP-only AKS dev cluster sets it
 // false explicitly so the browser will accept the cookie over plain HTTP;
 // when AKS dev gains TLS this override comes back out.
+//
+// Construct with NewSessionKeys so the underlying cookie store is built once
+// and reused across requests. Zero-value SessionKeys (e.g. in tests) still
+// work — each auth function falls back to building its own store if store is nil.
 type SessionKeys struct {
 	HMACKey       string
 	EncryptionKey string // 32 bytes for AES-256; empty = no encryption
 	Dev           bool   // true in local dev; relaxes other dev-only behavior unrelated to cookies
 	Secure        bool   // true = Secure cookie attribute set (HTTPS-only)
+	store         *sessions.CookieStore
+}
+
+// NewSessionKeys constructs a SessionKeys with a pre-built cookie store so the
+// store is created once at startup and shared across all requests.
+func NewSessionKeys(hmacKey, encryptionKey string, dev, secure bool) SessionKeys {
+	keys := SessionKeys{
+		HMACKey:       hmacKey,
+		EncryptionKey: encryptionKey,
+		Dev:           dev,
+		Secure:        secure,
+	}
+	keys.store = newStore(keys)
+	return keys
 }
 
 func newStore(keys SessionKeys) *sessions.CookieStore {
@@ -54,8 +72,15 @@ func newStore(keys SessionKeys) *sessions.CookieStore {
 	return s
 }
 
+func getStore(keys SessionKeys) *sessions.CookieStore {
+	if keys.store != nil {
+		return keys.store
+	}
+	return newStore(keys)
+}
+
 func SetUserSession(keys SessionKeys, r *http.Request, w http.ResponseWriter, id int, name, email, role string) error {
-	store := newStore(keys)
+	store := getStore(keys)
 	session, err := store.Get(r, cookieName)
 	if err != nil {
 		session, _ = store.New(r, cookieName)
@@ -75,7 +100,7 @@ type UserSession struct {
 }
 
 func GetUserSession(keys SessionKeys, r *http.Request) (UserSession, error) {
-	store := newStore(keys)
+	store := getStore(keys)
 	session, err := store.Get(r, cookieName)
 	if err != nil {
 		return UserSession{}, ErrNotAuthenticated
@@ -99,7 +124,7 @@ func GetUserID(keys SessionKeys, r *http.Request) (int, error) {
 }
 
 func ClearSession(keys SessionKeys, r *http.Request, w http.ResponseWriter) error {
-	store := newStore(keys)
+	store := getStore(keys)
 	session, err := store.Get(r, cookieName)
 	if err != nil {
 		return nil
@@ -111,7 +136,7 @@ func ClearSession(keys SessionKeys, r *http.Request, w http.ResponseWriter) erro
 // GetOrCreateCSRF returns the CSRF token for the current session, creating one
 // if it doesn't exist yet. The token is stored in the session cookie.
 func GetOrCreateCSRF(keys SessionKeys, r *http.Request, w http.ResponseWriter) (string, error) {
-	store := newStore(keys)
+	store := getStore(keys)
 	session, err := store.Get(r, cookieName)
 	if err != nil {
 		session, _ = store.New(r, cookieName)
@@ -136,7 +161,7 @@ func GetOrCreateCSRF(keys SessionKeys, r *http.Request, w http.ResponseWriter) (
 
 // SetOIDCState stores a random state value in the session for OIDC callback verification.
 func SetOIDCState(keys SessionKeys, r *http.Request, w http.ResponseWriter, state string) error {
-	store := newStore(keys)
+	store := getStore(keys)
 	session, err := store.Get(r, cookieName)
 	if err != nil {
 		session, _ = store.New(r, cookieName)
@@ -147,7 +172,7 @@ func SetOIDCState(keys SessionKeys, r *http.Request, w http.ResponseWriter, stat
 
 // GetAndClearOIDCState returns the stored OIDC state and removes it from the session.
 func GetAndClearOIDCState(keys SessionKeys, r *http.Request, w http.ResponseWriter) (string, error) {
-	store := newStore(keys)
+	store := getStore(keys)
 	session, err := store.Get(r, cookieName)
 	if err != nil {
 		return "", errors.New("no session")
@@ -163,7 +188,7 @@ func GetAndClearOIDCState(keys SessionKeys, r *http.Request, w http.ResponseWrit
 
 // ValidateCSRF compares the submitted token against the one stored in the session.
 func ValidateCSRF(keys SessionKeys, r *http.Request, submitted string) bool {
-	store := newStore(keys)
+	store := getStore(keys)
 	session, err := store.Get(r, cookieName)
 	if err != nil {
 		return false

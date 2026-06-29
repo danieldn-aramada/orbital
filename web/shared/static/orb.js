@@ -277,7 +277,9 @@ function refreshOrbDivergence() {
       container.innerHTML = html
       if (typeof htmx !== 'undefined') htmx.process(container)
     })
-    .catch(() => {})
+    .catch(() => {
+      if (container) container.innerHTML = '<div class="notification is-danger is-light is-size-7 m-4"><strong>Reload failed.</strong> Check your connection and try again.</div>'
+    })
     .finally(() => { if (btn) btn.classList.remove('is-loading') })
 }
 

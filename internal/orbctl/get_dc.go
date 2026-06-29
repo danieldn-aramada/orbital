@@ -79,12 +79,12 @@ func queryByName(cmd *cobra.Command, base, token, name string) (*dcSummary, erro
 	var q string
 	var vars map[string]any
 	if namespaceFilter != "" {
-		q = `query($ns: String!) {
+		q = `query GetDataCenterByNamespace($ns: String!) {
   queryDataCenter(filter: {namespace: {eq: $ns}}) { ` + dcFields + ` }
 }`
 		vars = map[string]any{"ns": namespaceFilter}
 	} else {
-		q = `{ queryDataCenter { ` + dcFields + ` } }`
+		q = `query GetDataCenter { queryDataCenter { ` + dcFields + ` } }`
 	}
 	var result struct {
 		Data   struct{ QueryDataCenter []*dcSummary } `json:"data"`
@@ -261,14 +261,14 @@ func runGetDatacenters(cmd *cobra.Command, _ []string) error {
 	var q string
 	var vars map[string]any
 	if namespaceFilter != "" {
-		q = `query($ns: String!) {
+		q = `query GetDataCentersByNamespace($ns: String!) {
   queryDataCenter(filter: {namespace: {eq: $ns}}) {
     orbId name createdBy createdAt serversAggregate { count }
   }
 }`
 		vars = map[string]any{"ns": namespaceFilter}
 	} else {
-		q = `{ queryDataCenter { id orbId name createdBy createdAt serversAggregate { count } } }`
+		q = `query GetAllDataCenters { queryDataCenter { id orbId name createdBy createdAt serversAggregate { count } } }`
 	}
 
 	var result struct {

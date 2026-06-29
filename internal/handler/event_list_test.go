@@ -18,7 +18,7 @@ import (
 func newEventHandler(t *testing.T) *handler.EventHandler {
 	t.Helper()
 	t.Chdir("../..")
-	return handler.NewEventHandler(testDB, slog.Default())
+	return handler.NewEventHandler(testDB, slog.Default(), "")
 }
 
 func eventCtx(method, url string, query map[string]string) (echo.Context, *httptest.ResponseRecorder) {

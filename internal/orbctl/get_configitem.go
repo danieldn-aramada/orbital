@@ -34,14 +34,14 @@ func runGetConfigItems(cmd *cobra.Command, args []string) error {
 	var vars map[string]any
 
 	if namespaceFilter != "" {
-		query = `query($ns: String!) {
+		query = `query GetConfigItemsByNamespace($ns: String!) {
   queryConfigItem(filter: {namespace: {eq: $ns}}) {
     orbId name namespace createdBy createdAt __typename
   }
 }`
 		vars = map[string]any{"ns": namespaceFilter}
 	} else {
-		query = `{ queryConfigItem {
+		query = `query GetAllConfigItems { queryConfigItem {
   id orbId name namespace createdBy createdAt __typename
 } }`
 	}

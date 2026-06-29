@@ -43,6 +43,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	var backupHandler *handler.BackupHandler
 
 	handler.ReconcileAdminEmails(context.Background(), db, cfg.AdminEmailSet(), logger)
+	handler.ReconcileStaleJobs(context.Background(), db, logger)
 
 	e := echo.New()
 	e.HideBanner = true
@@ -231,6 +232,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	if db != nil {
 		exp := handler.NewExport(db, cfg.DGraphURL, cfg.DGraphScratchURL, cfg.DGraphScratchAdminURL, cfg.DGraphScratchZeroURL, cfg.ExportDir, cfg.DGraphScratchExportDir, cfg.SchemaPath, logger)
 		exp.SetBasePath(cfg.BasePath)
+		exp.SetTimeout(cfg.ExportTimeout)
 		api.POST("/export", exp.Trigger)
 		api.GET("/export/jobs", exp.List)
 
@@ -243,6 +245,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 			Username:      cfg.OCIUsername,
 			Password:      cfg.OCIPassword,
 			SigningKeyPath: cfg.OCISigningKeyPath,
+			Timeout:       cfg.OCIPublishTimeout,
 			AllowHTTP:     cfg.OCIAllowHTTP,
 		}
 		retryClient := retryablehttp.NewClient()
@@ -292,6 +295,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 				Version:           appversion.Version,
 				RawDB:             rawDB,
 				CronSpec:          cfg.BackupSchedule,
+				Timeout:           cfg.BackupTimeout,
 			}, logger)
 			if err != nil {
 				logger.Error("backup handler init failed", "err", err)
@@ -328,7 +332,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 			}
 		}
 
-		evh := handler.NewEventHandler(db, logger)
+		evh := handler.NewEventHandler(db, logger, cfg.BasePath)
 		api.GET("/audit-log", evh.List)
 
 		uh := handler.NewUsersHandler(db, logger)

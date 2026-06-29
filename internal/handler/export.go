@@ -36,11 +36,15 @@ type Export struct {
 	scratchExportDir      string // host-side mount of /dgraph/export in scratch container
 	schemaPath            string // path to the GraphQL schema file
 	logger                *slog.Logger
-	basePath              string // URL base path for fragment-rendered hx-* attributes
+	basePath              string        // URL base path for fragment-rendered hx-* attributes
+	timeout               time.Duration // max duration for the async export goroutine
 }
 
 // SetBasePath configures the URL base path used by HTML fragments rendered by this handler.
 func (h *Export) SetBasePath(bp string) { h.basePath = bp }
+
+// SetTimeout configures the maximum duration for the async export goroutine.
+func (h *Export) SetTimeout(d time.Duration) { h.timeout = d }
 
 func NewExport(db *ent.Client, dgraphURL, dgraphScratchURL, dgraphScratchAdminURL, dgraphScratchZeroURL, exportDir, scratchExportDir, schemaPath string, logger *slog.Logger) *Export {
 	if err := os.MkdirAll(exportDir, 0o755); err != nil {
@@ -332,7 +336,12 @@ func (h *Export) Download(c echo.Context) error {
 
 // runExport is the async goroutine that drives the export workflow.
 func (h *Export) runExport(jobID uuid.UUID) {
-	ctx := context.Background()
+	timeout := h.timeout
+	if timeout == 0 {
+		timeout = 30 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 	log := h.logger.With("jobId", jobID)
 
 	_, err := h.db.ExportJob.UpdateOneID(jobID).

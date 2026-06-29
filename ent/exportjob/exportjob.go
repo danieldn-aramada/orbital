@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/google/uuid"
 )
 
@@ -39,8 +40,17 @@ const (
 	FieldStartedAt = "started_at"
 	// FieldCompletedAt holds the string denoting the completed_at field in the database.
 	FieldCompletedAt = "completed_at"
+	// EdgeRegistryArtifacts holds the string denoting the registry_artifacts edge name in mutations.
+	EdgeRegistryArtifacts = "registry_artifacts"
 	// Table holds the table name of the exportjob in the database.
 	Table = "export_jobs"
+	// RegistryArtifactsTable is the table that holds the registry_artifacts relation/edge.
+	RegistryArtifactsTable = "registry_artifacts"
+	// RegistryArtifactsInverseTable is the table name for the RegistryArtifact entity.
+	// It exists in this package in order to avoid circular dependency with the "registryartifact" package.
+	RegistryArtifactsInverseTable = "registry_artifacts"
+	// RegistryArtifactsColumn is the table column denoting the registry_artifacts relation/edge.
+	RegistryArtifactsColumn = "export_job_id"
 )
 
 // Columns holds all SQL columns for exportjob fields.
@@ -169,4 +179,25 @@ func ByStartedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByCompletedAt orders the results by the completed_at field.
 func ByCompletedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCompletedAt, opts...).ToFunc()
+}
+
+// ByRegistryArtifactsCount orders the results by registry_artifacts count.
+func ByRegistryArtifactsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newRegistryArtifactsStep(), opts...)
+	}
+}
+
+// ByRegistryArtifacts orders the results by registry_artifacts terms.
+func ByRegistryArtifacts(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newRegistryArtifactsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newRegistryArtifactsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(RegistryArtifactsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, RegistryArtifactsTable, RegistryArtifactsColumn),
+	)
 }

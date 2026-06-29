@@ -1401,6 +1401,22 @@ func (c *ExportJobClient) GetX(ctx context.Context, id uuid.UUID) *ExportJob {
 	return obj
 }
 
+// QueryRegistryArtifacts queries the registry_artifacts edge of a ExportJob.
+func (c *ExportJobClient) QueryRegistryArtifacts(_m *ExportJob) *RegistryArtifactQuery {
+	query := (&RegistryArtifactClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(exportjob.Table, exportjob.FieldID, id),
+			sqlgraph.To(registryartifact.Table, registryartifact.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, exportjob.RegistryArtifactsTable, exportjob.RegistryArtifactsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *ExportJobClient) Hooks() []Hook {
 	return c.hooks.ExportJob
@@ -1665,6 +1681,22 @@ func (c *RegistryArtifactClient) GetX(ctx context.Context, id int) *RegistryArti
 		panic(err)
 	}
 	return obj
+}
+
+// QueryExportJob queries the export_job edge of a RegistryArtifact.
+func (c *RegistryArtifactClient) QueryExportJob(_m *RegistryArtifact) *ExportJobQuery {
+	query := (&ExportJobClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(registryartifact.Table, registryartifact.FieldID, id),
+			sqlgraph.To(exportjob.Table, exportjob.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, registryartifact.ExportJobTable, registryartifact.ExportJobColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
 }
 
 // Hooks returns the client hooks.

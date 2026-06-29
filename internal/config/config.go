@@ -84,6 +84,9 @@ type Config struct {
 	// accepted for back-compat; the name defaults to the URL host.
 	BundlerURLs              []string      `envconfig:"ORBITAL_BUNDLER_URLS"                default:"configbundle-bundler=http://localhost:8020/bundle"`
 	RestoreTimeout         time.Duration `envconfig:"ORBITAL_RESTORE_TIMEOUT"         default:"10m"`
+	ExportTimeout          time.Duration `envconfig:"ORBITAL_EXPORT_TIMEOUT"          default:"30m"`
+	BackupTimeout          time.Duration `envconfig:"ORBITAL_BACKUP_TIMEOUT"          default:"30m"`
+	OCIPublishTimeout      time.Duration `envconfig:"ORBITAL_OCI_PUBLISH_TIMEOUT"     default:"10m"`
 	// CookieSecure controls the session cookie's Secure attribute. Default false
 	// for local dev (HTTP-only). Production deploys MUST set this to "true" once
 	// the ingress has TLS — AKS dev sets it explicitly to "false" today because
@@ -93,6 +96,8 @@ type Config struct {
 	CookieSecure           bool          `envconfig:"ORBITAL_COOKIE_SECURE"           default:"false"`
 	DGraphAlphaGRPC        string        `envconfig:"ORBITAL_DGRAPH_ALPHA_GRPC"       default:"localhost:9080"`
 	DGraphZeroGRPC         string        `envconfig:"ORBITAL_DGRAPH_ZERO_GRPC"        default:"localhost:5080"`
+
+	sessionKeys auth.SessionKeys // built once in New(); returned by SessionKeys()
 }
 
 func New() (*Config, error) {
@@ -103,16 +108,15 @@ func New() (*Config, error) {
 	if cfg.SessionEncryptionKey != "" && len(cfg.SessionEncryptionKey) != 32 {
 		return nil, fmt.Errorf("ORBITAL_SESSION_ENCRYPTION_KEY must be exactly 32 bytes for AES-256, got %d", len(cfg.SessionEncryptionKey))
 	}
+	if !cfg.Dev && cfg.SessionHMACKey == "local-dev-hmac-key-change-in-prod" {
+		return nil, fmt.Errorf("ORBITAL_SESSION_HMAC_KEY must be set to a secret value in production (ORBITAL_DEV=false)")
+	}
+	cfg.sessionKeys = auth.NewSessionKeys(cfg.SessionHMACKey, cfg.SessionEncryptionKey, cfg.Dev, cfg.CookieSecure)
 	return &cfg, nil
 }
 
 func (c *Config) SessionKeys() auth.SessionKeys {
-	return auth.SessionKeys{
-		HMACKey:       c.SessionHMACKey,
-		EncryptionKey: c.SessionEncryptionKey,
-		Dev:           c.Dev,
-		Secure:        c.CookieSecure,
-	}
+	return c.sessionKeys
 }
 
 // AdminEmailSet parses ORBITAL_ADMIN_EMAILS into a lowercase set for O(1) lookup.

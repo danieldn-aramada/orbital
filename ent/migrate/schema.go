@@ -240,7 +240,6 @@ var (
 	// RegistryArtifactsColumns holds the columns for the "registry_artifacts" table.
 	RegistryArtifactsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "export_job_id", Type: field.TypeUUID},
 		{Name: "datacenter_id", Type: field.TypeString},
 		{Name: "datacenter_name", Type: field.TypeString, Default: ""},
 		{Name: "registry", Type: field.TypeString},
@@ -258,12 +257,21 @@ var (
 		{Name: "enriched", Type: field.TypeBool, Default: false},
 		{Name: "bundler_error", Type: field.TypeString, Nullable: true},
 		{Name: "layers", Type: field.TypeJSON, Nullable: true},
+		{Name: "export_job_id", Type: field.TypeUUID},
 	}
 	// RegistryArtifactsTable holds the schema information for the "registry_artifacts" table.
 	RegistryArtifactsTable = &schema.Table{
 		Name:       "registry_artifacts",
 		Columns:    RegistryArtifactsColumns,
 		PrimaryKey: []*schema.Column{RegistryArtifactsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "registry_artifacts_export_jobs_registry_artifacts",
+				Columns:    []*schema.Column{RegistryArtifactsColumns[18]},
+				RefColumns: []*schema.Column{ExportJobsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
 	}
 	// RestoreJobsColumns holds the columns for the "restore_jobs" table.
 	RestoreJobsColumns = []*schema.Column{
@@ -323,4 +331,5 @@ var (
 func init() {
 	EventResourcesTable.ForeignKeys[0].RefTable = EventsTable
 	EventResourceTypesTable.ForeignKeys[0].RefTable = EventsTable
+	RegistryArtifactsTable.ForeignKeys[0].RefTable = ExportJobsTable
 }

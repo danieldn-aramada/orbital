@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/internal/ocitype"
 	"github.com/google/uuid"
@@ -55,8 +56,31 @@ type RegistryArtifact struct {
 	// BundlerError holds the value of the "bundler_error" field.
 	BundlerError *string `json:"bundler_error,omitempty"`
 	// Layers holds the value of the "layers" field.
-	Layers       []ocitype.ArtifactLayer `json:"layers,omitempty"`
+	Layers []ocitype.ArtifactLayer `json:"layers,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the RegistryArtifactQuery when eager-loading is set.
+	Edges        RegistryArtifactEdges `json:"edges"`
 	selectValues sql.SelectValues
+}
+
+// RegistryArtifactEdges holds the relations/edges for other nodes in the graph.
+type RegistryArtifactEdges struct {
+	// ExportJob holds the value of the export_job edge.
+	ExportJob *ExportJob `json:"export_job,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// ExportJobOrErr returns the ExportJob value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e RegistryArtifactEdges) ExportJobOrErr() (*ExportJob, error) {
+	if e.ExportJob != nil {
+		return e.ExportJob, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: exportjob.Label}
+	}
+	return nil, &NotLoadedError{edge: "export_job"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -225,6 +249,11 @@ func (_m *RegistryArtifact) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (_m *RegistryArtifact) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
+}
+
+// QueryExportJob queries the "export_job" edge of the RegistryArtifact entity.
+func (_m *RegistryArtifact) QueryExportJob() *ExportJobQuery {
+	return NewRegistryArtifactClient(_m.config).QueryExportJob(_m)
 }
 
 // Update returns a builder for updating this RegistryArtifact.

@@ -535,7 +535,7 @@ export function initDcDetailTabs(id) {
     const panel = document.getElementById(auditPanelId)
     if (!panel) return
     const qs = related.map(id => `orbId=${encodeURIComponent(id)}`).join('&')
-    fetch(BASE + `/api/v1/audit-log?${qs}&limit=50`, {
+    fetch(BASE + `/api/v1/audit-log?${qs}&limit=200`, {
       headers: { 'HX-Request': 'true' },
     })
       .then(r => r.text())
@@ -615,7 +615,7 @@ export function initServerDetailTabs(root) {
     const panel = tabContainer.parentElement.querySelector('#' + CSS.escape(auditPanelId))
     if (!panel) return
     const qs = related.map(id => `orbId=${encodeURIComponent(id)}`).join('&')
-    fetch(BASE + `/api/v1/audit-log?${qs}&limit=50`, {
+    fetch(BASE + `/api/v1/audit-log?${qs}&limit=200`, {
       headers: { 'HX-Request': 'true' },
     })
       .then(r => r.text())
@@ -1725,7 +1725,10 @@ export function initClusterTable(opts = {}) {
     clusterTable.clear().draw()
     reloadButton.addClass('is-loading')
     setTimeout(() => {
+      const onError = () => reloadButton.removeClass('is-loading')
+      clusterTable.one('error.dt', onError)
       clusterTable.ajax.reload(() => {
+        clusterTable.off('error.dt', onError)
         reloadButton.removeClass('is-loading')
         // Re-expand parent rows — AJAX reload drops the child rows that were
         // attached before the refresh.
@@ -1886,7 +1889,7 @@ export function initClusterDetailTabs(domId) {
     const panel = document.getElementById(auditPanelId)
     if (!panel) return
     const qs = related.map(id => `orbId=${encodeURIComponent(id)}`).join('&')
-    fetch(BASE + `/api/v1/audit-log?${qs}&limit=50`, {
+    fetch(BASE + `/api/v1/audit-log?${qs}&limit=200`, {
       headers: { 'HX-Request': 'true' },
     })
       .then(r => r.text())

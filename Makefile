@@ -43,8 +43,8 @@ help: ## Show this help
 up: ## Start the local stack (DGraph, Postgres, MinIO, Zot, orb DGraph)
 	docker compose -f $(COMPOSE_FILE) up -d
 
-down: ## Stop the local stack
-	docker compose -f $(COMPOSE_FILE) down -v
+down: ## Stop the local stack (all profiles)
+	docker compose -f $(COMPOSE_FILE) --profile '*' down -v
 
 run-orbital: ## Run orbital server (go run; fast dev iteration). Restore requires dgraph in PATH
 	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orbital

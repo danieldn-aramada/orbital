@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
 )
@@ -32,5 +33,7 @@ func (ExportJob) Mixin() []ent.Mixin {
 }
 
 func (ExportJob) Edges() []ent.Edge {
-	return nil
+	return []ent.Edge{
+		edge.To("registry_artifacts", RegistryArtifact.Type),
+	}
 }

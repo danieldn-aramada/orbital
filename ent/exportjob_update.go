@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/predicate"
+	"github.com/armada/orbital/ent/registryartifact"
 )
 
 // ExportJobUpdate is the builder for updating ExportJob entities.
@@ -230,9 +231,45 @@ func (_u *ExportJobUpdate) ClearCompletedAt() *ExportJobUpdate {
 	return _u
 }
 
+// AddRegistryArtifactIDs adds the "registry_artifacts" edge to the RegistryArtifact entity by IDs.
+func (_u *ExportJobUpdate) AddRegistryArtifactIDs(ids ...int) *ExportJobUpdate {
+	_u.mutation.AddRegistryArtifactIDs(ids...)
+	return _u
+}
+
+// AddRegistryArtifacts adds the "registry_artifacts" edges to the RegistryArtifact entity.
+func (_u *ExportJobUpdate) AddRegistryArtifacts(v ...*RegistryArtifact) *ExportJobUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddRegistryArtifactIDs(ids...)
+}
+
 // Mutation returns the ExportJobMutation object of the builder.
 func (_u *ExportJobUpdate) Mutation() *ExportJobMutation {
 	return _u.mutation
+}
+
+// ClearRegistryArtifacts clears all "registry_artifacts" edges to the RegistryArtifact entity.
+func (_u *ExportJobUpdate) ClearRegistryArtifacts() *ExportJobUpdate {
+	_u.mutation.ClearRegistryArtifacts()
+	return _u
+}
+
+// RemoveRegistryArtifactIDs removes the "registry_artifacts" edge to RegistryArtifact entities by IDs.
+func (_u *ExportJobUpdate) RemoveRegistryArtifactIDs(ids ...int) *ExportJobUpdate {
+	_u.mutation.RemoveRegistryArtifactIDs(ids...)
+	return _u
+}
+
+// RemoveRegistryArtifacts removes "registry_artifacts" edges to RegistryArtifact entities.
+func (_u *ExportJobUpdate) RemoveRegistryArtifacts(v ...*RegistryArtifact) *ExportJobUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveRegistryArtifactIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -340,6 +377,51 @@ func (_u *ExportJobUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.CompletedAtCleared() {
 		_spec.ClearField(exportjob.FieldCompletedAt, field.TypeTime)
+	}
+	if _u.mutation.RegistryArtifactsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   exportjob.RegistryArtifactsTable,
+			Columns: []string{exportjob.RegistryArtifactsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(registryartifact.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedRegistryArtifactsIDs(); len(nodes) > 0 && !_u.mutation.RegistryArtifactsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   exportjob.RegistryArtifactsTable,
+			Columns: []string{exportjob.RegistryArtifactsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(registryartifact.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RegistryArtifactsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   exportjob.RegistryArtifactsTable,
+			Columns: []string{exportjob.RegistryArtifactsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(registryartifact.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -563,9 +645,45 @@ func (_u *ExportJobUpdateOne) ClearCompletedAt() *ExportJobUpdateOne {
 	return _u
 }
 
+// AddRegistryArtifactIDs adds the "registry_artifacts" edge to the RegistryArtifact entity by IDs.
+func (_u *ExportJobUpdateOne) AddRegistryArtifactIDs(ids ...int) *ExportJobUpdateOne {
+	_u.mutation.AddRegistryArtifactIDs(ids...)
+	return _u
+}
+
+// AddRegistryArtifacts adds the "registry_artifacts" edges to the RegistryArtifact entity.
+func (_u *ExportJobUpdateOne) AddRegistryArtifacts(v ...*RegistryArtifact) *ExportJobUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddRegistryArtifactIDs(ids...)
+}
+
 // Mutation returns the ExportJobMutation object of the builder.
 func (_u *ExportJobUpdateOne) Mutation() *ExportJobMutation {
 	return _u.mutation
+}
+
+// ClearRegistryArtifacts clears all "registry_artifacts" edges to the RegistryArtifact entity.
+func (_u *ExportJobUpdateOne) ClearRegistryArtifacts() *ExportJobUpdateOne {
+	_u.mutation.ClearRegistryArtifacts()
+	return _u
+}
+
+// RemoveRegistryArtifactIDs removes the "registry_artifacts" edge to RegistryArtifact entities by IDs.
+func (_u *ExportJobUpdateOne) RemoveRegistryArtifactIDs(ids ...int) *ExportJobUpdateOne {
+	_u.mutation.RemoveRegistryArtifactIDs(ids...)
+	return _u
+}
+
+// RemoveRegistryArtifacts removes "registry_artifacts" edges to RegistryArtifact entities.
+func (_u *ExportJobUpdateOne) RemoveRegistryArtifacts(v ...*RegistryArtifact) *ExportJobUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveRegistryArtifactIDs(ids...)
 }
 
 // Where appends a list predicates to the ExportJobUpdate builder.
@@ -703,6 +821,51 @@ func (_u *ExportJobUpdateOne) sqlSave(ctx context.Context) (_node *ExportJob, er
 	}
 	if _u.mutation.CompletedAtCleared() {
 		_spec.ClearField(exportjob.FieldCompletedAt, field.TypeTime)
+	}
+	if _u.mutation.RegistryArtifactsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   exportjob.RegistryArtifactsTable,
+			Columns: []string{exportjob.RegistryArtifactsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(registryartifact.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedRegistryArtifactsIDs(); len(nodes) > 0 && !_u.mutation.RegistryArtifactsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   exportjob.RegistryArtifactsTable,
+			Columns: []string{exportjob.RegistryArtifactsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(registryartifact.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RegistryArtifactsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   exportjob.RegistryArtifactsTable,
+			Columns: []string{exportjob.RegistryArtifactsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(registryartifact.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &ExportJob{config: _u.config}
 	_spec.Assign = _node.assignValues

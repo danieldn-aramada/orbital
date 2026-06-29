@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/internal/ocitype"
 	"github.com/google/uuid"
@@ -210,6 +211,11 @@ func (_c *RegistryArtifactCreate) SetLayers(v []ocitype.ArtifactLayer) *Registry
 	return _c
 }
 
+// SetExportJob sets the "export_job" edge to the ExportJob entity.
+func (_c *RegistryArtifactCreate) SetExportJob(v *ExportJob) *RegistryArtifactCreate {
+	return _c.SetExportJobID(v.ID)
+}
+
 // Mutation returns the RegistryArtifactMutation object of the builder.
 func (_c *RegistryArtifactCreate) Mutation() *RegistryArtifactMutation {
 	return _c.mutation
@@ -296,6 +302,9 @@ func (_c *RegistryArtifactCreate) check() error {
 	if _, ok := _c.mutation.Enriched(); !ok {
 		return &ValidationError{Name: "enriched", err: errors.New(`ent: missing required field "RegistryArtifact.enriched"`)}
 	}
+	if len(_c.mutation.ExportJobIDs()) == 0 {
+		return &ValidationError{Name: "export_job", err: errors.New(`ent: missing required edge "RegistryArtifact.export_job"`)}
+	}
 	return nil
 }
 
@@ -322,10 +331,6 @@ func (_c *RegistryArtifactCreate) createSpec() (*RegistryArtifact, *sqlgraph.Cre
 		_node = &RegistryArtifact{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(registryartifact.Table, sqlgraph.NewFieldSpec(registryartifact.FieldID, field.TypeInt))
 	)
-	if value, ok := _c.mutation.ExportJobID(); ok {
-		_spec.SetField(registryartifact.FieldExportJobID, field.TypeUUID, value)
-		_node.ExportJobID = value
-	}
 	if value, ok := _c.mutation.DatacenterID(); ok {
 		_spec.SetField(registryartifact.FieldDatacenterID, field.TypeString, value)
 		_node.DatacenterID = value
@@ -393,6 +398,23 @@ func (_c *RegistryArtifactCreate) createSpec() (*RegistryArtifact, *sqlgraph.Cre
 	if value, ok := _c.mutation.Layers(); ok {
 		_spec.SetField(registryartifact.FieldLayers, field.TypeJSON, value)
 		_node.Layers = value
+	}
+	if nodes := _c.mutation.ExportJobIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   registryartifact.ExportJobTable,
+			Columns: []string{registryartifact.ExportJobColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(exportjob.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.ExportJobID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -49,8 +50,17 @@ const (
 	FieldBundlerError = "bundler_error"
 	// FieldLayers holds the string denoting the layers field in the database.
 	FieldLayers = "layers"
+	// EdgeExportJob holds the string denoting the export_job edge name in mutations.
+	EdgeExportJob = "export_job"
 	// Table holds the table name of the registryartifact in the database.
 	Table = "registry_artifacts"
+	// ExportJobTable is the table that holds the export_job relation/edge.
+	ExportJobTable = "registry_artifacts"
+	// ExportJobInverseTable is the table name for the ExportJob entity.
+	// It exists in this package in order to avoid circular dependency with the "exportjob" package.
+	ExportJobInverseTable = "export_jobs"
+	// ExportJobColumn is the table column denoting the export_job relation/edge.
+	ExportJobColumn = "export_job_id"
 )
 
 // Columns holds all SQL columns for registryartifact fields.
@@ -213,4 +223,18 @@ func ByEnriched(opts ...sql.OrderTermOption) OrderOption {
 // ByBundlerError orders the results by the bundler_error field.
 func ByBundlerError(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBundlerError, opts...).ToFunc()
+}
+
+// ByExportJobField orders the results by export_job field.
+func ByExportJobField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newExportJobStep(), sql.OrderByField(field, opts...))
+	}
+}
+func newExportJobStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ExportJobInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, ExportJobTable, ExportJobColumn),
+	)
 }

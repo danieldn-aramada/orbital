@@ -28,11 +28,11 @@ gantt
 
 ## Recent accomplishments
 
+- **2026-06-29** — Codebase health (Track A): session singleton, stuck-job reaper, OCI rollback on sign fail, ent RegistryArtifact→ExportJob edge, named orbctl ops, audit cap 200; `make down` nuclear.
 - **2026-06-29** — Test suite hardened: 15 new Playwright tests (DataTable sort/filter/expand, empty states); `make test-integration` fixed (cursor table leak, DGraph schema polling, -p 1, stale assertion); `assetDataV2` regexp index.
 - **2026-06-22** — ADR 012 supersede: Submit-boundary semantics (recurrence-after-Submit captured); orb-side dedup removed; Delete-report + IgnoreOnly UI; OAUTH2_DEVICE_CODE rename; reload min-delay UX.
 - **2026-06-20** — Orb↔orbital UI parity restored: shared `ClusterHandler` with injected `actions` resolver (ADR 011); orb DC/Server/Cluster tabs render fully (partial-render class fixed); workload-row dblclick + Publish History link wired; orb schema page queries DGraph directly (no sidecar).
 - **2026-06-18** — Cluster schema polymorphism (interface KubernetesCluster + EksaKubernetesCluster + KubernetesNode); 5-DC cluster catalog seeded with mgmt/workload tree view; orb partial-import lifecycle; publish-history rename; schema v3.
-- **2026-06-16** — Per-field MVCC pin on divergence resolutions; orb poller hardening + fresh-install schema-dir fix; configbundle `spec.ignored[]` CRD field (Ignore is standing instruction, not suppression); ADR-008 refinements.
 
 ---
 
@@ -168,21 +168,52 @@ Benchmark DGraph query latency under realistic load, produce AKS node SKU cost e
 
 ## Technical Debt
 
+**Validation gate — before closing any item:** `go build ./...` + `make test-unit` for Go changes; `make test-integration` for anything touching PostgreSQL or DGraph; `make test-e2e` or manual browser verification for UI/JS changes; negative test (wrong config is actually rejected) for security-critical items.
+
+> Items originally tracked in `docs/findings/maintainability.md` (May 2026 audit) have been absorbed below. That file has been deleted.
+
+### Track A — fix now (no test harness required)
+
 | Item | Notes |
 |---|---|
-| `//go:embed` for orb templates and static assets | Orb reads templates from disk at runtime. Replace with `//go:embed` for a self-contained binary — required for air-gap edge deployment. Orbital (containerized AKS) does not need this. Scoped to Spike 14. |
-| DGraph client abstraction | 22+ raw `http.Post` calls across 7 handler files, no timeouts, no pooling. Extract `internal/dgraph/client.go`. Prerequisite for testing. See `docs/findings/maintainability.md` item 2.1. |
-| `internal/handler/` god package | 3,560 lines mixing HTTP, business logic, DGraph calls, file I/O. Decompose post-MVP. See `docs/findings/maintainability.md` item 5.4. |
-| Replace native `title=""` tooltips with a real library | Native HTML `title=` tooltips are browser-controlled — ~1s delay, system-font small text, no theming, no smart positioning. Unacceptable for app-class UI. Decision: stop using `title=` for any user-facing text; pick a tooltip mechanism and migrate existing usages (`web/templates/orbital/pages/{divergence-reports,users,publish-history}.gohtml`, `partials/backup-jobs-tbody.gohtml`, `shared/partials/cluster-tab.gohtml`). Options: (a) extend the existing `.tooltip` + `data-text=""` CSS in `web/sass/main.scss:187` (zero deps, limited to single-line right-positioned), (b) add Bulma tooltip extension (~5KB CSS, matches Bulma design language), (c) Tippy.js (~10KB JS, full feature set — convention for app UI like Linear/Vercel/Stripe). Recommended: Tippy.js. |
-| Orbital HA — pervasive single-replica assumptions | Orbital is deployed as `replicas: 1` with `strategy: Recreate` (`deploy/base/deploy.yaml`) and several subsystems assume single-leader semantics implicitly: divergence ingester (`lastIngestedByDC` is in-memory), backup scheduler (cron — would double-fire across replicas), publish-history ingester, audit-event writers. Going HA requires holistic redesign — not a per-subsystem fix. Options to evaluate: (a) leader election so only one replica owns the singleton goroutines, (b) per-subsystem distributed locking (postgres advisory locks per DC, per cron), (c) splitting ingest/scheduler into a dedicated single-replica deployment, or some mix. Until then: do NOT scale orbital past `replicas: 1`. Operators assuming HA based on K8s defaults would corrupt divergence state. |
-| Collapse parallel ConfigItem tab handlers (DC, Server) | Cluster handler is shared between orbital and orb via injected `actions` resolver (ADR 011, 2026-06-20). DC and Server still have parallel struct+handler pairs in `internal/handler/` and `internal/orbserver/`, which is the root cause of the silent-partial-render bug class (orbital adds a field to a shared template, orb's struct lacks it, template aborts mid-render returning 200 OK with a partial body). Apply the same actions-injection pattern to `DataCenterHandler` and `ServerHandler`; delete `internal/orbserver/dc_handlers.go::dcTab` and `internal/orbserver/server_handlers.go::srvTab`; orb registers orbital's handlers with `OrbActions`. See ADR 011 "Next" section. |
-| Reload buttons hang on any failure | All reload handlers leave the UI in a broken state on error (network down, 5xx, timeout). DataTables `ajax.reload(cb)` only fires the callback on success — `Promise.all([minDelay, reload]).then(() => removeClass('is-loading'))` never resolves if reload rejects, so the spinner spins forever. Fetch-based fragment reloads use `.catch(() => {})` which swallows silently, leaving the skeleton in place with no operator feedback. Fix shape: move spinner cleanup into `.finally()` (or DataTables' `dt.on('error.dt')` event); surface failure with an inline error banner so the operator knows to retry, not just "is it slow?". Affected sites: `web/shared/static/orbital.js` audit-log reload (~line 1020), `reloadClusterFragment` (~line 634), any other `reloadXFragment` helpers and DataTables `reload` buttons across orbital + orb. Discovered 2026-06-23 by network-down test. |
+| Replace `title=""` tooltips with Tippy.js | 9+ usages in `divergence-reports.gohtml`, `users.gohtml`, `backup-jobs-tbody.gohtml`, `cluster-tab.gohtml`. Native browser tooltips have ~1s delay, no theming, no positioning control. Stop using `title=` for user-facing text; migrate to Tippy.js (~10KB, matches Linear/Vercel/Stripe convention). |
+| Refactor bundler URL config DSL | `ORBITAL_BUNDLER_URLS=configbundle-bundler=http://...` is a custom micro-DSL in one env var; already caused one bug (preflight probed the raw `name=url` string as a URL). Better: one env var per bundler (`ORBITAL_BUNDLER_CONFIGBUNDLE=http://...`), or ConfigMap-mounted YAML for structured validation. |
+
+### Track B — DGraph client interface first (requires 15–20 min Opus design session before Sonnet implements)
+
+| Item | Notes |
+|---|---|
+| DGraph client abstraction | 22+ raw `http.Post` calls across 7 handler files, no timeouts, no connection pooling. Extract `internal/dgraph/client.go`. **Interface shape is a design decision** (transport-level vs. semantic-level) with long-term consequences — do NOT implement on Sonnet without a settled design. This is the primary unlock for Go integration testing. |
+| `internal/handler/` god package | ~3,500 lines mixing HTTP routing, business logic, DGraph calls, and file I/O. Decompose post-MVP in three incremental steps: (1) extract `internal/storage/` blob abstraction, (2) extract `internal/export/` domain logic, (3) extract `internal/backup/` domain logic. Each step makes the extracted package independently testable. Do NOT start before the MVP feature cut. |
+
+### Architecture — requires design discussion before any code
+
+| Item | Notes |
+|---|---|
+| Orbital HA — pervasive single-replica assumptions | Deployed as `replicas: 1` with `strategy: Recreate`. Several subsystems assume single-leader: divergence ingester (`lastIngestedByDC` is in-memory), backup scheduler (cron double-fires across replicas), publish-history ingester. Going HA requires holistic redesign — leader election, per-subsystem advisory locks, or a dedicated ingest deployment. **Do NOT scale past `replicas: 1`** until resolved; double-ingestion corrupts divergence state. |
+
+### Done
+
+| Item | |
+|---|---|
+| ~~Stuck-job reaper on startup~~ | ✅ Fixed 2026-06-29. `internal/handler/reaper.go` — `ReconcileStaleJobs` sweeps all three job tables on startup; pending/running rows → failed with "interrupted: server restarted". |
+| ~~Session store created per-request~~ | ✅ Fixed 2026-06-29. `auth.NewSessionKeys()` builds the `sessions.CookieStore` once; `config.SessionKeys()` returns a cached copy; nil guard in each auth function preserves backward compat with test literals. |
+| ~~OCI push rollback on signing failure~~ | ✅ Fixed 2026-06-29. `publisher.deleteManifest()` called when `sign` fails after `pushArtifact` succeeds; log warning if delete also fails so operators have the digest. |
+| ~~ent edge `RegistryArtifact` → `ExportJob`~~ | ✅ Fixed 2026-06-29. Added `edge.From("export_job"...)` on `RegistryArtifact` and `edge.To("registry_artifacts"...)` on `ExportJob`; `go generate ./ent` re-ran. |
+| ~~Name orbctl GraphQL operations~~ | ✅ Fixed 2026-06-29. Named all 8 anonymous query sites across `get_configitem.go`, `get_server.go`, `get_dc.go`. |
+| ~~Cap resource-tab Audit Log at 200 rows~~ | ✅ Fixed 2026-06-29. DC/Server/Cluster audit tabs now fetch `limit=200`; "Showing last N of M" + "View all in Audit Log →" link shown when capped. |
+| ~~Reload buttons hang on failure~~ | ✅ Fixed 2026-06-29. `error.dt` guard on cluster/DC/server/audit-log DataTable reload buttons; `reloadClusterFragment` shows inline error instead of swallowing; orb divergence refresh shows error instead of leaving skeleton. |
+| ~~Collapse parallel ConfigItem tab handlers (DC, Server)~~ | ✅ Done 2026-06-25 (ADR 011). `DataCenterHandler` and `ServerHandler` use injected `actions` resolver; orb's `dcTab`/`srvTab` and all parallel structs/queries deleted from `internal/orbserver/`. |
+| ~~Async goroutine timeouts~~ | ✅ Fixed 2026-06-29. `ORBITAL_EXPORT_TIMEOUT` (30m), `ORBITAL_BACKUP_TIMEOUT` (30m), `ORBITAL_OCI_PUBLISH_TIMEOUT` (10m). All three goroutines previously used `context.Background()` with no deadline. |
+| ~~Prod HMAC key safety check~~ | ✅ Fixed 2026-06-29. `config.New()` returns startup error if `ORBITAL_SESSION_HMAC_KEY` is the default value when `ORBITAL_DEV=false`. |
+| ~~Restore checksum verification~~ | ✅ Fixed 2026-06-29. SHA-256 hash of downloaded zip verified against `bk.Checksum` before `extractBackupZip` and before `drop_all` (point of no return). |
+| ~~Backup retention orphan S3 objects~~ | ✅ Fixed 2026-06-29. S3 delete failure now skips the DB delete so the record is not orphaned. Previously the DB row was deleted regardless of S3 outcome. |
+| ~~Dev-mode artificial sleeps~~ | ✅ Fixed 2026-06-29. Removed `time.Sleep(150ms)` from `datacenter.go` and `server.go` tab handlers. |
+| ~~No delete button for export jobs in UI~~ | ✅ Already present in `partials/export-jobs-tbody.gohtml`; `deleteExportJob()` wired in `orbital.js`. |
 | ~~`web/static/app.js` monolith~~ | ✅ Done (Spike 17, Jun 6). Replaced with `shared.js` + `orbital.js` + `orb.js` ES modules. |
-| ~~Export API uses DGraph UID instead of orbId~~ | ✅ Fixed 2026-06-02. `POST /api/v1/export` now accepts `{"orbId": "..."}` in the body. `fetchDCInfo` queries by orbId. UI select uses `dc.orbId`. |
-| ~~Backup/restore API alignment~~ | ✅ Fixed 2026-06-02. Routes renamed to match export convention: `POST /api/v1/backup`, `GET /api/v1/backup/jobs`, `GET /api/v1/backup/jobs/:jobId`, `GET /api/v1/backup/jobs/:jobId/download`, `DELETE /api/v1/backup/jobs/:jobId`, `POST /api/v1/backup/test-connection`, `POST /api/v1/restore`, `GET /api/v1/restore/jobs`, `GET /api/v1/restore/jobs/:jobId`. |
-| No delete button for export jobs in UI | `DELETE /api/v1/export/jobs/:jobId` exists but is API-only. Add a delete (trash) button to each row in the export jobs table on the Export page. |
-| Name every client-originated GraphQL operation | Spike-worthy follow-up. Anonymous shorthand queries (`{ queryFoo { ... } }`) leave `graphql.operation.name` empty in access logs, defeating per-operation observability/cost attribution. Three web queries fixed 2026-06-15 (`LoadInventory`/`LoadDataCenters`/`LoadServers`); orbctl still has ~5 anonymous `query($ns: String!) { ... }` sites in `internal/orbctl/get_configitem.go`, `get_server.go`, `get_dc.go`. Sweep them and add a lint/test that fails CI on any client `query`/`mutation` literal lacking an operation name. Follows GraphQL community convention (Apollo, GitHub, Hasura all recommend named operations). |
-| Quick wins (independent, any time) | `docs/findings/maintainability.md` items 3.1–3.7, 4.1, 4.2, 4.4 — none are blocking, all improve correctness or reduce duplication. |
+| ~~Export API uses DGraph UID instead of orbId~~ | ✅ Fixed 2026-06-02. |
+| ~~Backup/restore API alignment~~ | ✅ Fixed 2026-06-02. |
+| ~~`//go:embed` for orb templates and static assets~~ | ✅ Done (Spike 14, Jun 9). |
 
 ---
 

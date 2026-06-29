@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/armada/orbital/ent/predicate"
 	"github.com/google/uuid"
 )
@@ -823,6 +824,29 @@ func CompletedAtIsNil() predicate.ExportJob {
 // CompletedAtNotNil applies the NotNil predicate on the "completed_at" field.
 func CompletedAtNotNil() predicate.ExportJob {
 	return predicate.ExportJob(sql.FieldNotNull(FieldCompletedAt))
+}
+
+// HasRegistryArtifacts applies the HasEdge predicate on the "registry_artifacts" edge.
+func HasRegistryArtifacts() predicate.ExportJob {
+	return predicate.ExportJob(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, RegistryArtifactsTable, RegistryArtifactsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasRegistryArtifactsWith applies the HasEdge predicate on the "registry_artifacts" edge with a given conditions (other predicates).
+func HasRegistryArtifactsWith(preds ...predicate.RegistryArtifact) predicate.ExportJob {
+	return predicate.ExportJob(func(s *sql.Selector) {
+		step := newRegistryArtifactsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.

@@ -4,6 +4,8 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -411,6 +413,29 @@ func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 	if err := h.downloadToFile(ctx, bk.S3Key, zipPath); err != nil {
 		fail("download backup", err)
 		return
+	}
+
+	// Verify checksum before reaching the point of no return (drop_all).
+	if bk.Checksum != "" {
+		log("Verifying backup checksum...")
+		f, err := os.Open(zipPath)
+		if err != nil {
+			fail("open backup for checksum", err)
+			return
+		}
+		h256 := sha256.New()
+		if _, err := io.Copy(h256, f); err != nil {
+			f.Close()
+			fail("hash backup", err)
+			return
+		}
+		f.Close()
+		got := hex.EncodeToString(h256.Sum(nil))
+		if got != bk.Checksum {
+			fail("checksum mismatch", fmt.Errorf("expected %s, got %s", bk.Checksum, got))
+			return
+		}
+		log("Checksum verified.")
 	}
 
 	// Extract all three files from zip into temp dir

@@ -63,7 +63,8 @@ type BackupHandler struct {
 	s3Endpoint               string
 	retentionDays            int
 	retentionMinCount        int
-	cronSpec                 string // value of ORBITAL_BACKUP_SCHEDULE; empty = scheduler disabled
+	cronSpec                 string        // value of ORBITAL_BACKUP_SCHEDULE; empty = scheduler disabled
+	timeout                  time.Duration // max duration for the async backup goroutine
 	version                  string
 	logger                   *slog.Logger
 	cronJob                  *cron.Cron // nil when scheduler is stopped or disabled
@@ -84,9 +85,10 @@ type BackupConfig struct {
 	S3Prefix                 string
 	RetentionDays            int     // delete backups older than N days; 0 = no time-based pruning
 	RetentionMinCount        int     // always keep at least N backups regardless of age
-	CronSpec                 string  // cron expression for scheduler; empty = disabled; e.g. "0 8 * * *" = 08:00 UTC daily
-	RawDB                    *sql.DB // optional: underlying *sql.DB for pg_try_advisory_xact_lock
+	CronSpec                 string        // cron expression for scheduler; empty = disabled; e.g. "0 8 * * *" = 08:00 UTC daily
+	RawDB                    *sql.DB       // optional: underlying *sql.DB for pg_try_advisory_xact_lock
 	Version                  string
+	Timeout                  time.Duration // max duration for the async backup goroutine
 }
 
 func NewBackupHandler(ctx context.Context, db *ent.Client, cfg BackupConfig, logger *slog.Logger) (*BackupHandler, error) {
@@ -125,6 +127,7 @@ func NewBackupHandler(ctx context.Context, db *ent.Client, cfg BackupConfig, log
 		retentionDays:            cfg.RetentionDays,
 		retentionMinCount:        cfg.RetentionMinCount,
 		cronSpec:                 cfg.CronSpec,
+		timeout:                  cfg.Timeout,
 		version:                  cfg.Version,
 		logger:                   logger,
 	}, nil
@@ -525,7 +528,12 @@ func (h *BackupHandler) Delete(c echo.Context) error {
 // ── Async workflow ─────────────────────────────────────────────────────────────
 
 func (h *BackupHandler) runBackup(jobID uuid.UUID) {
-	ctx := context.Background()
+	timeout := h.timeout
+	if timeout == 0 {
+		timeout = 30 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 	log := h.logger.With("backupId", jobID)
 
 	_, err := h.db.Backup.UpdateOneID(jobID).
@@ -748,7 +756,8 @@ func (h *BackupHandler) enforceRetention(ctx context.Context, log *slog.Logger) 
 	for _, old := range toDelete {
 		if old.S3Key != "" {
 			if err := h.storage.Delete(ctx, old.S3Key); err != nil {
-				log.Warn("failed to delete old backup from storage", "key", old.S3Key, "err", err)
+				log.Warn("failed to delete old backup from storage; skipping DB delete to avoid orphan", "key", old.S3Key, "err", err)
+				continue
 			}
 		}
 		if err := h.db.Backup.DeleteOneID(old.ID).Exec(ctx); err != nil {

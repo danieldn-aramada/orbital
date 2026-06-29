@@ -21,6 +21,12 @@
   </tbody>
 </table>
 </div>
+{{if and .OrbIDQueryString (lt .ShownCount .Total)}}
+<p class="has-text-grey is-size-7 mt-2 px-1">
+  Showing last {{.ShownCount}} of {{.Total}} events.
+  <a href="{{.BasePath}}/audit-log?{{.OrbIDQueryString}}">View all in Audit Log &rarr;</a>
+</p>
+{{end}}
 {{else}}
 <p class="has-text-grey p-2">No audit events recorded yet.</p>
 {{end}}

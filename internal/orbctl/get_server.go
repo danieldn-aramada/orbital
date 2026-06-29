@@ -34,7 +34,7 @@ func runGetServers(cmd *cobra.Command, args []string) error {
 	var q string
 	var vars map[string]any
 	if namespaceFilter != "" {
-		q = `query($ns: String!) {
+		q = `query GetServersByNamespace($ns: String!) {
   queryServer(filter: {namespace: {eq: $ns}}) {
     id orbId hostname serviceTag model
     oobIP { address }
@@ -44,7 +44,7 @@ func runGetServers(cmd *cobra.Command, args []string) error {
 }`
 		vars = map[string]any{"ns": namespaceFilter}
 	} else {
-		q = `{ queryServer {
+		q = `query GetAllServers { queryServer {
       orbId hostname serviceTag model
       oobIP { address }
       rack { name }

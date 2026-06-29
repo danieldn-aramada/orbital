@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/armada/orbital/ent/predicate"
 	"github.com/google/uuid"
 )
@@ -153,26 +154,6 @@ func ExportJobIDIn(vs ...uuid.UUID) predicate.RegistryArtifact {
 // ExportJobIDNotIn applies the NotIn predicate on the "export_job_id" field.
 func ExportJobIDNotIn(vs ...uuid.UUID) predicate.RegistryArtifact {
 	return predicate.RegistryArtifact(sql.FieldNotIn(FieldExportJobID, vs...))
-}
-
-// ExportJobIDGT applies the GT predicate on the "export_job_id" field.
-func ExportJobIDGT(v uuid.UUID) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldGT(FieldExportJobID, v))
-}
-
-// ExportJobIDGTE applies the GTE predicate on the "export_job_id" field.
-func ExportJobIDGTE(v uuid.UUID) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldGTE(FieldExportJobID, v))
-}
-
-// ExportJobIDLT applies the LT predicate on the "export_job_id" field.
-func ExportJobIDLT(v uuid.UUID) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldLT(FieldExportJobID, v))
-}
-
-// ExportJobIDLTE applies the LTE predicate on the "export_job_id" field.
-func ExportJobIDLTE(v uuid.UUID) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldLTE(FieldExportJobID, v))
 }
 
 // DatacenterIDEQ applies the EQ predicate on the "datacenter_id" field.
@@ -1038,6 +1019,29 @@ func LayersIsNil() predicate.RegistryArtifact {
 // LayersNotNil applies the NotNil predicate on the "layers" field.
 func LayersNotNil() predicate.RegistryArtifact {
 	return predicate.RegistryArtifact(sql.FieldNotNull(FieldLayers))
+}
+
+// HasExportJob applies the HasEdge predicate on the "export_job" edge.
+func HasExportJob() predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, ExportJobTable, ExportJobColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasExportJobWith applies the HasEdge predicate on the "export_job" edge with a given conditions (other predicates).
+func HasExportJobWith(preds ...predicate.ExportJob) predicate.RegistryArtifact {
+	return predicate.RegistryArtifact(func(s *sql.Selector) {
+		step := newExportJobStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.

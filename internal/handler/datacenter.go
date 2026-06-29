@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/armada/orbital/internal/configitems"
 	"github.com/armada/orbital/internal/web/data/layout"
@@ -164,10 +163,6 @@ type dataCenterTabData struct {
 func (h *DataCenter) Tab(c echo.Context) error {
 	if c.Request().Header.Get("HX-Request") != "true" {
 		return c.Redirect(http.StatusFound, h.basePath+"/")
-	}
-
-	if h.dev {
-		time.Sleep(150 * time.Millisecond)
 	}
 
 	// Path-param decoding is handled by middleware.DecodePathParams.

@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"github.com/armada/orbital/internal/ocitype"
 	"github.com/google/uuid"
@@ -40,5 +41,11 @@ func (RegistryArtifact) Mixin() []ent.Mixin {
 }
 
 func (RegistryArtifact) Edges() []ent.Edge {
-	return nil
+	return []ent.Edge{
+		edge.From("export_job", ExportJob.Type).
+			Ref("registry_artifacts").
+			Field("export_job_id").
+			Unique().
+			Required(),
+	}
 }

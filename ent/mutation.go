@@ -5816,25 +5816,28 @@ func (m *EventResourceTypeMutation) ResetEdge(name string) error {
 // ExportJobMutation represents an operation that mutates the ExportJob nodes in the graph.
 type ExportJobMutation struct {
 	config
-	op                Op
-	typ               string
-	id                *uuid.UUID
-	created_at        *time.Time
-	created_by        *string
-	updated_at        *time.Time
-	updated_by        *string
-	datacenter_id     *string
-	datacenter_name   *string
-	datacenter_orb_id *string
-	status            *exportjob.Status
-	artifact_path     *string
-	error             *string
-	started_at        *time.Time
-	completed_at      *time.Time
-	clearedFields     map[string]struct{}
-	done              bool
-	oldValue          func(context.Context) (*ExportJob, error)
-	predicates        []predicate.ExportJob
+	op                        Op
+	typ                       string
+	id                        *uuid.UUID
+	created_at                *time.Time
+	created_by                *string
+	updated_at                *time.Time
+	updated_by                *string
+	datacenter_id             *string
+	datacenter_name           *string
+	datacenter_orb_id         *string
+	status                    *exportjob.Status
+	artifact_path             *string
+	error                     *string
+	started_at                *time.Time
+	completed_at              *time.Time
+	clearedFields             map[string]struct{}
+	registry_artifacts        map[int]struct{}
+	removedregistry_artifacts map[int]struct{}
+	clearedregistry_artifacts bool
+	done                      bool
+	oldValue                  func(context.Context) (*ExportJob, error)
+	predicates                []predicate.ExportJob
 }
 
 var _ ent.Mutation = (*ExportJobMutation)(nil)
@@ -6477,6 +6480,60 @@ func (m *ExportJobMutation) ResetCompletedAt() {
 	delete(m.clearedFields, exportjob.FieldCompletedAt)
 }
 
+// AddRegistryArtifactIDs adds the "registry_artifacts" edge to the RegistryArtifact entity by ids.
+func (m *ExportJobMutation) AddRegistryArtifactIDs(ids ...int) {
+	if m.registry_artifacts == nil {
+		m.registry_artifacts = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.registry_artifacts[ids[i]] = struct{}{}
+	}
+}
+
+// ClearRegistryArtifacts clears the "registry_artifacts" edge to the RegistryArtifact entity.
+func (m *ExportJobMutation) ClearRegistryArtifacts() {
+	m.clearedregistry_artifacts = true
+}
+
+// RegistryArtifactsCleared reports if the "registry_artifacts" edge to the RegistryArtifact entity was cleared.
+func (m *ExportJobMutation) RegistryArtifactsCleared() bool {
+	return m.clearedregistry_artifacts
+}
+
+// RemoveRegistryArtifactIDs removes the "registry_artifacts" edge to the RegistryArtifact entity by IDs.
+func (m *ExportJobMutation) RemoveRegistryArtifactIDs(ids ...int) {
+	if m.removedregistry_artifacts == nil {
+		m.removedregistry_artifacts = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.registry_artifacts, ids[i])
+		m.removedregistry_artifacts[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedRegistryArtifacts returns the removed IDs of the "registry_artifacts" edge to the RegistryArtifact entity.
+func (m *ExportJobMutation) RemovedRegistryArtifactsIDs() (ids []int) {
+	for id := range m.removedregistry_artifacts {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// RegistryArtifactsIDs returns the "registry_artifacts" edge IDs in the mutation.
+func (m *ExportJobMutation) RegistryArtifactsIDs() (ids []int) {
+	for id := range m.registry_artifacts {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetRegistryArtifacts resets all changes to the "registry_artifacts" edge.
+func (m *ExportJobMutation) ResetRegistryArtifacts() {
+	m.registry_artifacts = nil
+	m.clearedregistry_artifacts = false
+	m.removedregistry_artifacts = nil
+}
+
 // Where appends a list predicates to the ExportJobMutation builder.
 func (m *ExportJobMutation) Where(ps ...predicate.ExportJob) {
 	m.predicates = append(m.predicates, ps...)
@@ -6848,49 +6905,85 @@ func (m *ExportJobMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *ExportJobMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.registry_artifacts != nil {
+		edges = append(edges, exportjob.EdgeRegistryArtifacts)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *ExportJobMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case exportjob.EdgeRegistryArtifacts:
+		ids := make([]ent.Value, 0, len(m.registry_artifacts))
+		for id := range m.registry_artifacts {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *ExportJobMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.removedregistry_artifacts != nil {
+		edges = append(edges, exportjob.EdgeRegistryArtifacts)
+	}
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *ExportJobMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case exportjob.EdgeRegistryArtifacts:
+		ids := make([]ent.Value, 0, len(m.removedregistry_artifacts))
+		for id := range m.removedregistry_artifacts {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *ExportJobMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.clearedregistry_artifacts {
+		edges = append(edges, exportjob.EdgeRegistryArtifacts)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *ExportJobMutation) EdgeCleared(name string) bool {
+	switch name {
+	case exportjob.EdgeRegistryArtifacts:
+		return m.clearedregistry_artifacts
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *ExportJobMutation) ClearEdge(name string) error {
+	switch name {
+	}
 	return fmt.Errorf("unknown ExportJob unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *ExportJobMutation) ResetEdge(name string) error {
+	switch name {
+	case exportjob.EdgeRegistryArtifacts:
+		m.ResetRegistryArtifacts()
+		return nil
+	}
 	return fmt.Errorf("unknown ExportJob edge %s", name)
 }
 
@@ -7635,7 +7728,6 @@ type RegistryArtifactMutation struct {
 	op                      Op
 	typ                     string
 	id                      *int
-	export_job_id           *uuid.UUID
 	datacenter_id           *string
 	datacenter_name         *string
 	registry                *string
@@ -7657,6 +7749,8 @@ type RegistryArtifactMutation struct {
 	layers                  *[]ocitype.ArtifactLayer
 	appendlayers            []ocitype.ArtifactLayer
 	clearedFields           map[string]struct{}
+	export_job              *uuid.UUID
+	clearedexport_job       bool
 	done                    bool
 	oldValue                func(context.Context) (*RegistryArtifact, error)
 	predicates              []predicate.RegistryArtifact
@@ -7762,12 +7856,12 @@ func (m *RegistryArtifactMutation) IDs(ctx context.Context) ([]int, error) {
 
 // SetExportJobID sets the "export_job_id" field.
 func (m *RegistryArtifactMutation) SetExportJobID(u uuid.UUID) {
-	m.export_job_id = &u
+	m.export_job = &u
 }
 
 // ExportJobID returns the value of the "export_job_id" field in the mutation.
 func (m *RegistryArtifactMutation) ExportJobID() (r uuid.UUID, exists bool) {
-	v := m.export_job_id
+	v := m.export_job
 	if v == nil {
 		return
 	}
@@ -7793,7 +7887,7 @@ func (m *RegistryArtifactMutation) OldExportJobID(ctx context.Context) (v uuid.U
 
 // ResetExportJobID resets all changes to the "export_job_id" field.
 func (m *RegistryArtifactMutation) ResetExportJobID() {
-	m.export_job_id = nil
+	m.export_job = nil
 }
 
 // SetDatacenterID sets the "datacenter_id" field.
@@ -8570,6 +8664,33 @@ func (m *RegistryArtifactMutation) ResetLayers() {
 	delete(m.clearedFields, registryartifact.FieldLayers)
 }
 
+// ClearExportJob clears the "export_job" edge to the ExportJob entity.
+func (m *RegistryArtifactMutation) ClearExportJob() {
+	m.clearedexport_job = true
+	m.clearedFields[registryartifact.FieldExportJobID] = struct{}{}
+}
+
+// ExportJobCleared reports if the "export_job" edge to the ExportJob entity was cleared.
+func (m *RegistryArtifactMutation) ExportJobCleared() bool {
+	return m.clearedexport_job
+}
+
+// ExportJobIDs returns the "export_job" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ExportJobID instead. It exists only for internal usage by the builders.
+func (m *RegistryArtifactMutation) ExportJobIDs() (ids []uuid.UUID) {
+	if id := m.export_job; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetExportJob resets all changes to the "export_job" edge.
+func (m *RegistryArtifactMutation) ResetExportJob() {
+	m.export_job = nil
+	m.clearedexport_job = false
+}
+
 // Where appends a list predicates to the RegistryArtifactMutation builder.
 func (m *RegistryArtifactMutation) Where(ps ...predicate.RegistryArtifact) {
 	m.predicates = append(m.predicates, ps...)
@@ -8605,7 +8726,7 @@ func (m *RegistryArtifactMutation) Type() string {
 // AddedFields().
 func (m *RegistryArtifactMutation) Fields() []string {
 	fields := make([]string, 0, 18)
-	if m.export_job_id != nil {
+	if m.export_job != nil {
 		fields = append(fields, registryartifact.FieldExportJobID)
 	}
 	if m.datacenter_id != nil {
@@ -9070,19 +9191,28 @@ func (m *RegistryArtifactMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *RegistryArtifactMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.export_job != nil {
+		edges = append(edges, registryartifact.EdgeExportJob)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *RegistryArtifactMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case registryartifact.EdgeExportJob:
+		if id := m.export_job; id != nil {
+			return []ent.Value{*id}
+		}
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *RegistryArtifactMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
 	return edges
 }
 
@@ -9094,25 +9224,42 @@ func (m *RegistryArtifactMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *RegistryArtifactMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.clearedexport_job {
+		edges = append(edges, registryartifact.EdgeExportJob)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *RegistryArtifactMutation) EdgeCleared(name string) bool {
+	switch name {
+	case registryartifact.EdgeExportJob:
+		return m.clearedexport_job
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *RegistryArtifactMutation) ClearEdge(name string) error {
+	switch name {
+	case registryartifact.EdgeExportJob:
+		m.ClearExportJob()
+		return nil
+	}
 	return fmt.Errorf("unknown RegistryArtifact unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *RegistryArtifactMutation) ResetEdge(name string) error {
+	switch name {
+	case registryartifact.EdgeExportJob:
+		m.ResetExportJob()
+		return nil
+	}
 	return fmt.Errorf("unknown RegistryArtifact edge %s", name)
 }
 

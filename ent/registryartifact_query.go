@@ -11,17 +11,20 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/predicate"
 	"github.com/armada/orbital/ent/registryartifact"
+	"github.com/google/uuid"
 )
 
 // RegistryArtifactQuery is the builder for querying RegistryArtifact entities.
 type RegistryArtifactQuery struct {
 	config
-	ctx        *QueryContext
-	order      []registryartifact.OrderOption
-	inters     []Interceptor
-	predicates []predicate.RegistryArtifact
+	ctx           *QueryContext
+	order         []registryartifact.OrderOption
+	inters        []Interceptor
+	predicates    []predicate.RegistryArtifact
+	withExportJob *ExportJobQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -56,6 +59,28 @@ func (_q *RegistryArtifactQuery) Unique(unique bool) *RegistryArtifactQuery {
 func (_q *RegistryArtifactQuery) Order(o ...registryartifact.OrderOption) *RegistryArtifactQuery {
 	_q.order = append(_q.order, o...)
 	return _q
+}
+
+// QueryExportJob chains the current query on the "export_job" edge.
+func (_q *RegistryArtifactQuery) QueryExportJob() *ExportJobQuery {
+	query := (&ExportJobClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(registryartifact.Table, registryartifact.FieldID, selector),
+			sqlgraph.To(exportjob.Table, exportjob.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, registryartifact.ExportJobTable, registryartifact.ExportJobColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first RegistryArtifact entity from the query.
@@ -245,15 +270,27 @@ func (_q *RegistryArtifactQuery) Clone() *RegistryArtifactQuery {
 		return nil
 	}
 	return &RegistryArtifactQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]registryartifact.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.RegistryArtifact{}, _q.predicates...),
+		config:        _q.config,
+		ctx:           _q.ctx.Clone(),
+		order:         append([]registryartifact.OrderOption{}, _q.order...),
+		inters:        append([]Interceptor{}, _q.inters...),
+		predicates:    append([]predicate.RegistryArtifact{}, _q.predicates...),
+		withExportJob: _q.withExportJob.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
+}
+
+// WithExportJob tells the query-builder to eager-load the nodes that are connected to
+// the "export_job" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *RegistryArtifactQuery) WithExportJob(opts ...func(*ExportJobQuery)) *RegistryArtifactQuery {
+	query := (&ExportJobClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withExportJob = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -332,8 +369,11 @@ func (_q *RegistryArtifactQuery) prepareQuery(ctx context.Context) error {
 
 func (_q *RegistryArtifactQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*RegistryArtifact, error) {
 	var (
-		nodes = []*RegistryArtifact{}
-		_spec = _q.querySpec()
+		nodes       = []*RegistryArtifact{}
+		_spec       = _q.querySpec()
+		loadedTypes = [1]bool{
+			_q.withExportJob != nil,
+		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*RegistryArtifact).scanValues(nil, columns)
@@ -341,6 +381,7 @@ func (_q *RegistryArtifactQuery) sqlAll(ctx context.Context, hooks ...queryHook)
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &RegistryArtifact{config: _q.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -352,7 +393,43 @@ func (_q *RegistryArtifactQuery) sqlAll(ctx context.Context, hooks ...queryHook)
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := _q.withExportJob; query != nil {
+		if err := _q.loadExportJob(ctx, query, nodes, nil,
+			func(n *RegistryArtifact, e *ExportJob) { n.Edges.ExportJob = e }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (_q *RegistryArtifactQuery) loadExportJob(ctx context.Context, query *ExportJobQuery, nodes []*RegistryArtifact, init func(*RegistryArtifact), assign func(*RegistryArtifact, *ExportJob)) error {
+	ids := make([]uuid.UUID, 0, len(nodes))
+	nodeids := make(map[uuid.UUID][]*RegistryArtifact)
+	for i := range nodes {
+		fk := nodes[i].ExportJobID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(exportjob.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "export_job_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
 }
 
 func (_q *RegistryArtifactQuery) sqlCount(ctx context.Context) (int, error) {
@@ -379,6 +456,9 @@ func (_q *RegistryArtifactQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != registryartifact.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if _q.withExportJob != nil {
+			_spec.Node.AddColumnOnce(registryartifact.FieldExportJobID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

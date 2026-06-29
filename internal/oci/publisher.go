@@ -58,6 +58,8 @@ type Config struct {
 	Host string
 	// AllowHTTP enables plain-HTTP (non-TLS) registry connections. For local testing only.
 	AllowHTTP bool
+	// Timeout bounds the async Publish goroutine. Defaults to 10m if zero.
+	Timeout time.Duration
 }
 
 // Publisher pushes subgraph exports as signed OCI artifacts.
@@ -82,7 +84,12 @@ func New(db *ent.Client, cfg Config, logger *slog.Logger) *Publisher {
 // (operator controls the allowed bundler URL list). Per-request URLs are acceptable today
 // because the API requires Azure AD authn/authz and runs inside AKS on VPN.
 func (p *Publisher) Publish(artifactID int, job *ent.ExportJob, tag string, bundlers []*bundler.Client) {
-	ctx := context.Background()
+	timeout := p.cfg.Timeout
+	if timeout == 0 {
+		timeout = 10 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 	log := p.logger.With("artifactId", artifactID, "jobId", job.ID, "tag", tag)
 
 	// setPhase writes a transitional status so the UI's progress poll can show
@@ -202,6 +209,7 @@ func (p *Publisher) doPush(ctx context.Context, job *ent.ExportJob, tag string, 
 	setPhase(registryartifact.StatusSigning)
 	fingerprint, err = p.sign(ctx, repoName, digestStr, log)
 	if err != nil {
+		p.deleteManifest(ctx, repoName, manifestDesc, log)
 		return "", 0, "", nil, fmt.Errorf("sign: %w", err)
 	}
 	log.Info("artifact signed", "fingerprint", fingerprint)
@@ -338,6 +346,19 @@ func (p *Publisher) keyFingerprint() (string, error) {
 		return "", fmt.Errorf("get public key: %w", err)
 	}
 	return PublicKeyFingerprint(pub)
+}
+
+func (p *Publisher) deleteManifest(ctx context.Context, repoName string, desc ocispec.Descriptor, log *slog.Logger) {
+	repo, err := p.newRepo(repoName)
+	if err != nil {
+		log.Warn("publish rollback: cannot connect to registry to delete unsigned artifact", "err", err)
+		return
+	}
+	if err := repo.Delete(ctx, desc); err != nil {
+		log.Warn("publish rollback: failed to delete unsigned artifact from registry", "digest", desc.Digest.String(), "err", err)
+	} else {
+		log.Info("publish rollback: deleted unsigned artifact from registry", "digest", desc.Digest.String())
+	}
 }
 
 func (p *Publisher) newRepo(repoName string) (*remote.Repository, error) {

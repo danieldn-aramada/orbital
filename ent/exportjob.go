@@ -41,8 +41,29 @@ type ExportJob struct {
 	// StartedAt holds the value of the "started_at" field.
 	StartedAt *time.Time `json:"started_at,omitempty"`
 	// CompletedAt holds the value of the "completed_at" field.
-	CompletedAt  *time.Time `json:"completed_at,omitempty"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the ExportJobQuery when eager-loading is set.
+	Edges        ExportJobEdges `json:"edges"`
 	selectValues sql.SelectValues
+}
+
+// ExportJobEdges holds the relations/edges for other nodes in the graph.
+type ExportJobEdges struct {
+	// RegistryArtifacts holds the value of the registry_artifacts edge.
+	RegistryArtifacts []*RegistryArtifact `json:"registry_artifacts,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// RegistryArtifactsOrErr returns the RegistryArtifacts value or an error if the edge
+// was not loaded in eager-loading.
+func (e ExportJobEdges) RegistryArtifactsOrErr() ([]*RegistryArtifact, error) {
+	if e.loadedTypes[0] {
+		return e.RegistryArtifacts, nil
+	}
+	return nil, &NotLoadedError{edge: "registry_artifacts"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -166,6 +187,11 @@ func (_m *ExportJob) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (_m *ExportJob) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
+}
+
+// QueryRegistryArtifacts queries the "registry_artifacts" edge of the ExportJob entity.
+func (_m *ExportJob) QueryRegistryArtifacts() *RegistryArtifactQuery {
+	return NewExportJobClient(_m.config).QueryRegistryArtifacts(_m)
 }
 
 // Update returns a builder for updating this ExportJob.

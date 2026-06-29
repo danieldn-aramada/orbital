@@ -7,6 +7,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -72,8 +74,8 @@ func newRestoreHandlerWithBackend(t *testing.T, backend handler.RestoreBackend) 
 }
 
 // uploadTestBackupZip creates a minimal valid backup zip (data.json.gz + schema.gz + gql_schema.gz)
-// in MinIO and returns the S3 key.
-func uploadTestBackupZip(t *testing.T) string {
+// in MinIO and returns the S3 key and the SHA-256 hex checksum of the zip bytes.
+func uploadTestBackupZip(t *testing.T) (key, checksum string) {
 	t.Helper()
 
 	var buf bytes.Buffer
@@ -89,6 +91,10 @@ func uploadTestBackupZip(t *testing.T) string {
 		gz.Close()
 	}
 	zw.Close()
+
+	zipBytes := buf.Bytes()
+	h := sha256.Sum256(zipBytes)
+	checksum = hex.EncodeToString(h[:])
 
 	ctx := context.Background()
 	endpoint := testutil.MinIOEndpoint()
@@ -106,28 +112,28 @@ func uploadTestBackupZip(t *testing.T) string {
 		o.UsePathStyle = true
 	})
 
-	key := "test-restore-" + uuid.New().String() + ".zip"
-	body := bytes.NewReader(buf.Bytes())
+	key = "test-restore-" + uuid.New().String() + ".zip"
+	body := bytes.NewReader(zipBytes)
 	if _, err := client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        strPtr(testutil.TestS3Bucket),
 		Key:           &key,
 		Body:          body,
-		ContentLength: int64Ptr(int64(buf.Len())),
+		ContentLength: int64Ptr(int64(len(zipBytes))),
 	}); err != nil {
 		t.Fatalf("upload test backup zip: %v", err)
 	}
-	return key
+	return key, checksum
 }
 
-// createCompletedBackupWithKey inserts a completed backup record with a real S3 key.
-func createCompletedBackupWithKey(t *testing.T, s3Key string) uuid.UUID {
+// createCompletedBackupWithKey inserts a completed backup record with a real S3 key and checksum.
+func createCompletedBackupWithKey(t *testing.T, s3Key, checksum string) uuid.UUID {
 	t.Helper()
 	b, err := testDB.Backup.Create().
 		SetStatus(backup.StatusCompleted).
 		SetS3Key(s3Key).
 		SetS3Bucket(testutil.TestS3Bucket).
 		SetS3Endpoint(testutil.MinIOEndpoint()).
-		SetChecksum("deadbeef").
+		SetChecksum(checksum).
 		SetCreatedBy("test").
 		SetCompletedAt(time.Now()).
 		Save(context.Background())
@@ -140,7 +146,7 @@ func createCompletedBackupWithKey(t *testing.T, s3Key string) uuid.UUID {
 // createCompletedBackup inserts a completed backup record with a placeholder S3 key.
 // Use for tests that don't reach the download step.
 func createCompletedBackup(t *testing.T) uuid.UUID {
-	return createCompletedBackupWithKey(t, "placeholder-backup.zip")
+	return createCompletedBackupWithKey(t, "placeholder-backup.zip", "")
 }
 
 // triggerRestore calls the Trigger handler with the given backup ID.
@@ -207,8 +213,8 @@ func TestRestoreTrigger_BackupNotCompleted(t *testing.T) {
 
 func TestRestoreTrigger_CallsBackendRunLive(t *testing.T) {
 	// Upload a real backup zip to MinIO so the download + extract steps succeed.
-	s3Key := uploadTestBackupZip(t)
-	backupID := createCompletedBackupWithKey(t, s3Key)
+	s3Key, checksum := uploadTestBackupZip(t)
+	backupID := createCompletedBackupWithKey(t, s3Key, checksum)
 
 	mock := &mockRestoreBackend{}
 	h := newRestoreHandlerWithBackend(t, mock)
@@ -251,8 +257,8 @@ func TestRestoreTrigger_CallsBackendRunLive(t *testing.T) {
 }
 
 func TestRestoreTrigger_BackendRunLiveError_JobFails(t *testing.T) {
-	s3Key := uploadTestBackupZip(t)
-	backupID := createCompletedBackupWithKey(t, s3Key)
+	s3Key, checksum := uploadTestBackupZip(t)
+	backupID := createCompletedBackupWithKey(t, s3Key, checksum)
 
 	mock := &mockRestoreBackend{returnErr: fmt.Errorf("simulated dgraph live failure")}
 	h := newRestoreHandlerWithBackend(t, mock)
@@ -279,8 +285,8 @@ func TestRestoreCompleted_WritesManagementAuditEvent(t *testing.T) {
 	// Clean up any existing audit events so we can assert on the new one.
 	clearEvents(context.Background())
 
-	s3Key := uploadTestBackupZip(t)
-	backupID := createCompletedBackupWithKey(t, s3Key)
+	s3Key, checksum := uploadTestBackupZip(t)
+	backupID := createCompletedBackupWithKey(t, s3Key, checksum)
 
 	mock := &mockRestoreBackend{}
 	h := newRestoreHandlerWithBackend(t, mock)

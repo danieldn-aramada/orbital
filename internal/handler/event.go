@@ -24,13 +24,15 @@ type EventHandler struct {
 	db       *ent.Client
 	logger   *slog.Logger
 	fragment *template.Template
+	basePath string
 }
 
-func NewEventHandler(db *ent.Client, logger *slog.Logger) *EventHandler {
+func NewEventHandler(db *ent.Client, logger *slog.Logger, basePath string) *EventHandler {
 	return &EventHandler{
 		db:       db,
 		logger:   logger,
 		fragment: template.Must(template.ParseFiles("web/templates/orbital/partials/events-table.gohtml")),
+		basePath: basePath,
 	}
 }
 
@@ -71,8 +73,11 @@ var skipDiffFields = map[string]bool{
 }
 
 type eventsFragmentData struct {
-	Items []eventItem
-	Total int
+	Items            []eventItem
+	Total            int
+	ShownCount       int
+	OrbIDQueryString string
+	BasePath         string
 }
 
 var skipVarsSet = map[string]bool{
@@ -193,9 +198,22 @@ func (h *EventHandler) List(c echo.Context) error {
 	}
 
 	if c.Request().Header.Get("HX-Request") == "true" {
+		orbIDQS := strings.Join(func() []string {
+			parts := make([]string, 0, len(orbIDFilter))
+			for _, id := range orbIDFilter {
+				parts = append(parts, "orbId="+id)
+			}
+			return parts
+		}(), "&")
 		tmpl := h.fragment
 		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-		return tmpl.Execute(c.Response(), eventsFragmentData{Items: items, Total: total})
+		return tmpl.Execute(c.Response(), eventsFragmentData{
+			Items:            items,
+			Total:            total,
+			ShownCount:       len(items),
+			OrbIDQueryString: orbIDQS,
+			BasePath:         h.basePath,
+		})
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{

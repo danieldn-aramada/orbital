@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/armada/orbital/ent/exportjob"
+	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/google/uuid"
 )
 
@@ -179,6 +180,21 @@ func (_c *ExportJobCreate) SetNillableID(v *uuid.UUID) *ExportJobCreate {
 	return _c
 }
 
+// AddRegistryArtifactIDs adds the "registry_artifacts" edge to the RegistryArtifact entity by IDs.
+func (_c *ExportJobCreate) AddRegistryArtifactIDs(ids ...int) *ExportJobCreate {
+	_c.mutation.AddRegistryArtifactIDs(ids...)
+	return _c
+}
+
+// AddRegistryArtifacts adds the "registry_artifacts" edges to the RegistryArtifact entity.
+func (_c *ExportJobCreate) AddRegistryArtifacts(v ...*RegistryArtifact) *ExportJobCreate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddRegistryArtifactIDs(ids...)
+}
+
 // Mutation returns the ExportJobMutation object of the builder.
 func (_c *ExportJobCreate) Mutation() *ExportJobMutation {
 	return _c.mutation
@@ -325,6 +341,22 @@ func (_c *ExportJobCreate) createSpec() (*ExportJob, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CompletedAt(); ok {
 		_spec.SetField(exportjob.FieldCompletedAt, field.TypeTime, value)
 		_node.CompletedAt = &value
+	}
+	if nodes := _c.mutation.RegistryArtifactsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   exportjob.RegistryArtifactsTable,
+			Columns: []string{exportjob.RegistryArtifactsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(registryartifact.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

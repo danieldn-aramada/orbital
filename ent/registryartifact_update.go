@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
+	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/predicate"
 	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/internal/ocitype"
@@ -343,9 +344,20 @@ func (_u *RegistryArtifactUpdate) ClearLayers() *RegistryArtifactUpdate {
 	return _u
 }
 
+// SetExportJob sets the "export_job" edge to the ExportJob entity.
+func (_u *RegistryArtifactUpdate) SetExportJob(v *ExportJob) *RegistryArtifactUpdate {
+	return _u.SetExportJobID(v.ID)
+}
+
 // Mutation returns the RegistryArtifactMutation object of the builder.
 func (_u *RegistryArtifactUpdate) Mutation() *RegistryArtifactMutation {
 	return _u.mutation
+}
+
+// ClearExportJob clears the "export_job" edge to the ExportJob entity.
+func (_u *RegistryArtifactUpdate) ClearExportJob() *RegistryArtifactUpdate {
+	_u.mutation.ClearExportJob()
+	return _u
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -382,6 +394,9 @@ func (_u *RegistryArtifactUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "RegistryArtifact.status": %w`, err)}
 		}
 	}
+	if _u.mutation.ExportJobCleared() && len(_u.mutation.ExportJobIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "RegistryArtifact.export_job"`)
+	}
 	return nil
 }
 
@@ -396,9 +411,6 @@ func (_u *RegistryArtifactUpdate) sqlSave(ctx context.Context) (_node int, err e
 				ps[i](selector)
 			}
 		}
-	}
-	if value, ok := _u.mutation.ExportJobID(); ok {
-		_spec.SetField(registryartifact.FieldExportJobID, field.TypeUUID, value)
 	}
 	if value, ok := _u.mutation.DatacenterID(); ok {
 		_spec.SetField(registryartifact.FieldDatacenterID, field.TypeString, value)
@@ -485,6 +497,35 @@ func (_u *RegistryArtifactUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if _u.mutation.LayersCleared() {
 		_spec.ClearField(registryartifact.FieldLayers, field.TypeJSON)
+	}
+	if _u.mutation.ExportJobCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   registryartifact.ExportJobTable,
+			Columns: []string{registryartifact.ExportJobColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(exportjob.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ExportJobIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   registryartifact.ExportJobTable,
+			Columns: []string{registryartifact.ExportJobColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(exportjob.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -818,9 +859,20 @@ func (_u *RegistryArtifactUpdateOne) ClearLayers() *RegistryArtifactUpdateOne {
 	return _u
 }
 
+// SetExportJob sets the "export_job" edge to the ExportJob entity.
+func (_u *RegistryArtifactUpdateOne) SetExportJob(v *ExportJob) *RegistryArtifactUpdateOne {
+	return _u.SetExportJobID(v.ID)
+}
+
 // Mutation returns the RegistryArtifactMutation object of the builder.
 func (_u *RegistryArtifactUpdateOne) Mutation() *RegistryArtifactMutation {
 	return _u.mutation
+}
+
+// ClearExportJob clears the "export_job" edge to the ExportJob entity.
+func (_u *RegistryArtifactUpdateOne) ClearExportJob() *RegistryArtifactUpdateOne {
+	_u.mutation.ClearExportJob()
+	return _u
 }
 
 // Where appends a list predicates to the RegistryArtifactUpdate builder.
@@ -870,6 +922,9 @@ func (_u *RegistryArtifactUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "RegistryArtifact.status": %w`, err)}
 		}
 	}
+	if _u.mutation.ExportJobCleared() && len(_u.mutation.ExportJobIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "RegistryArtifact.export_job"`)
+	}
 	return nil
 }
 
@@ -901,9 +956,6 @@ func (_u *RegistryArtifactUpdateOne) sqlSave(ctx context.Context) (_node *Regist
 				ps[i](selector)
 			}
 		}
-	}
-	if value, ok := _u.mutation.ExportJobID(); ok {
-		_spec.SetField(registryartifact.FieldExportJobID, field.TypeUUID, value)
 	}
 	if value, ok := _u.mutation.DatacenterID(); ok {
 		_spec.SetField(registryartifact.FieldDatacenterID, field.TypeString, value)
@@ -990,6 +1042,35 @@ func (_u *RegistryArtifactUpdateOne) sqlSave(ctx context.Context) (_node *Regist
 	}
 	if _u.mutation.LayersCleared() {
 		_spec.ClearField(registryartifact.FieldLayers, field.TypeJSON)
+	}
+	if _u.mutation.ExportJobCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   registryartifact.ExportJobTable,
+			Columns: []string{registryartifact.ExportJobColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(exportjob.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ExportJobIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   registryartifact.ExportJobTable,
+			Columns: []string{registryartifact.ExportJobColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(exportjob.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &RegistryArtifact{config: _u.config}
 	_spec.Assign = _node.assignValues

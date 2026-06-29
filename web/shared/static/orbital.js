@@ -628,7 +628,9 @@ export function reloadClusterFragment(orbId) {
       initClusterDetailTabs(domId)
       clusterEditors.delete(domId)
     })
-    .catch(() => {})
+    .catch(() => {
+      target.innerHTML = '<div class="notification is-danger is-light is-size-7 m-4"><strong>Reload failed.</strong> Check your connection and try again.</div>'
+    })
 }
 window.reloadClusterFragment = reloadClusterFragment
 
@@ -929,11 +931,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const reloadBtn = auditTable.button('reload:name').node()
   reloadBtn.on('click', function () {
     reloadBtn.addClass('is-loading')
-    // Floor the spinner duration at 500ms — same contract as fetchWithMinDelay
-    // for the server/DC/cluster reload buttons.
-    const minDelay = new Promise(resolve => setTimeout(resolve, 500))
-    const reload = new Promise(resolve => auditTable.ajax.reload(() => resolve(), false))
-    Promise.all([minDelay, reload]).then(() => reloadBtn.removeClass('is-loading'))
+    const onError = () => reloadBtn.removeClass('is-loading')
+    auditTable.one('error.dt', onError)
+    auditTable.ajax.reload(() => {
+      auditTable.off('error.dt', onError)
+      reloadBtn.removeClass('is-loading')
+    }, false)
   })
 })
 
