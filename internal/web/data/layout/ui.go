@@ -1,5 +1,11 @@
 package layout
 
+// AuditPanelDefaultLimit is the row cap requested by in-page audit tabs
+// (DC / Server / Cluster detail panels). The list handler accepts up to 500;
+// this is the UI's chosen default and the single source of truth shared by
+// the Go templates and the JS that fetches the panel.
+const AuditPanelDefaultLimit = 200
+
 // UIConfig carries app-level UI configuration threaded into every page.
 type UIConfig struct {
 	AppName  string
@@ -16,6 +22,11 @@ type UIConfig struct {
 	// Both orbital and orb use "/graphql" — GraphQL is not URL-versioned,
 	// per convention (GitHub, GitLab, NetBox, Apollo). See CLAUDE.md.
 	GraphQLPath string
+	// AuditPanelLimit is rendered into window.ORBITAL_CONFIG and read by
+	// shared.js when fetching in-page audit tabs. Defaults to
+	// AuditPanelDefaultLimit; override per-page only if a panel genuinely
+	// needs a different cap.
+	AuditPanelLimit int
 	// MenuSections drives the sidebar menu. Handler builds this from the current path.
 	MenuSections []MenuSection
 }

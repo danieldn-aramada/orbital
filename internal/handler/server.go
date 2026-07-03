@@ -88,6 +88,7 @@ func NewServerHandler(dgraphURL string, dev bool, logger *slog.Logger, basePath 
 func parseServerFragment() *template.Template {
 	return template.Must(template.ParseFiles(
 		"web/templates/shared/partials/server-tab.gohtml",
+		"web/templates/shared/partials/audit-tab.gohtml",
 		"web/templates/shared/components/edit-modal-server.gohtml",
 	))
 }
@@ -213,8 +214,11 @@ type serverTabDetailData struct {
 	// RelatedOrbIDsCSV is "<server-orbId>,<idrac-orbId>,<scp-orbId>,..." —
 	// every ConfigItem in the rendered subgraph. The audit tab uses it to
 	// fetch events for the whole server-and-its-children in one call. See
-	// shared.js initServerDetailTabs.
+	// shared.js initDetailTabs / loadAuditPanelForTab.
 	RelatedOrbIDsCSV string
+	// AuditPanelID matches data-panel on the audit <li> and the id of the
+	// placeholder <div>. Consumed by the shared audit-tab partial.
+	AuditPanelID string
 }
 
 // collectRelatedOrbIDs returns the server's orbId followed by every nested
@@ -399,6 +403,7 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 	}
 
 	srv.RelatedOrbIDsCSV = strings.Join(collectRelatedOrbIDs(&raw), ",")
+	srv.AuditPanelID = "srv-panel-audit-" + srv.DomID
 
 	tmpl := h.fragment
 	if h.dev {

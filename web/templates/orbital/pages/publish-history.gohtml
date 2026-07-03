@@ -38,15 +38,15 @@
           <label class="label">Signing Public Key</label>
           <div class="control">
             <div class="is-flex is-align-items-center" style="gap: 0.5rem;">
-              <button id="btn-show-pubkey" class="button is-light is-small" onclick="togglePublicKey()">
+              <button id="btn-show-pubkey" class="button is-light is-small js-pubkey-toggle">
                 <span class="icon"><i class="fa-solid fa-key"></i></span>
                 <span>Show</span>
               </button>
-              <button id="btn-copy-pubkey" class="button is-light is-small" style="display:none;" onclick="copyPublicKey()">
+              <button id="btn-copy-pubkey" class="button is-light is-small js-pubkey-copy" style="display:none;">
                 <span class="icon"><i class="fas fa-copy"></i></span>
                 <span>Copy</span>
               </button>
-              <button id="btn-download-pubkey" class="button is-light is-small" style="display:none;" onclick="downloadPublicKey()">
+              <button id="btn-download-pubkey" class="button is-light is-small js-pubkey-download" style="display:none;">
                 <span class="icon"><i class="fas fa-download"></i></span>
                 <span>Download</span>
               </button>
@@ -56,7 +56,7 @@
               <p class="is-size-7 has-text-grey mb-1">Verify an artifact signature:</p>
               <div class="is-flex is-align-items-center" style="gap:0.5rem;">
                 <pre id="pubkey-verify-cmd-text" class="is-family-monospace is-size-7" style="background:#f5f5f5;padding:0.5rem 0.75rem;margin:0;flex:1;white-space:pre-wrap;word-break:break-all;"></pre>
-                <button class="button is-small is-white" title="Copy command" onclick="copyVerifyCmd()">
+                <button class="button is-small is-white js-pubkey-verify-cmd-copy" title="Copy command">
                   <span class="icon"><i class="fas fa-copy"></i></span>
                 </button>
               </div>
@@ -71,7 +71,7 @@
       <div class="mt-4">
         <div class="is-flex is-align-items-center mb-3" style="gap: 0.75rem;">
           <p class="is-size-5">Published Artifacts</p>
-          <button class="button is-small is-link" onclick="loadArtifactsTable(true)" title="Reload">
+          <button class="button is-small is-link js-artifacts-reload" title="Reload">
             <span class="icon"><i class="fa-solid fa-rotate-right"></i></span>
             <span>Reload</span>
           </button>

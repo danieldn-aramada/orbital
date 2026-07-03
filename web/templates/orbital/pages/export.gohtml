@@ -36,7 +36,7 @@
         {{if .OCIConfigured}}
         <div class="field mt-4">
           <div class="control is-flex is-align-items-center" style="gap: 0.75rem;">
-            <button id="btn-test-connection" class="button is-light is-small" onclick="testOCIConnection()">
+            <button id="btn-test-connection" class="button is-light is-small js-oci-test-connection">
               <span class="icon"><i class="fa-solid fa-plug"></i></span>
               <span>Test Connection</span>
             </button>
@@ -71,7 +71,7 @@
 
         <div class="field is-grouped mt-5">
           <div class="control">
-            <button id="export-submit-btn" class="button is-primary" type="button" disabled onclick="handleExportSubmit()">
+            <button id="export-submit-btn" class="button is-primary js-export-submit" type="button" disabled>
               <span class="icon"><i class="fa-solid fa-file-export"></i></span>
               <span>Export</span>
             </button>

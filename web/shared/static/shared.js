@@ -2,6 +2,11 @@
 
 export const BASE = window.ORBITAL_BASE || ''
 
+// AUDIT_PANEL_LIMIT mirrors layout.AuditPanelDefaultLimit from the Go side
+// (internal/web/data/layout/ui.go). Injected via window.ORBITAL_CONFIG in
+// base.gohtml; the fallback covers the no-template case (e.g. unit tests).
+const AUDIT_PANEL_LIMIT = (window.ORBITAL_CONFIG && window.ORBITAL_CONFIG.auditPanelLimit) || 200
+
 // safeDomId converts an orbId into a DOM/CSS-selector-safe identifier.
 // orbIds typically contain ":" (e.g. "2f-uae:5HSC3D4"), which is a pseudo-class
 // operator in CSS selectors and breaks `$('#tab-...')` and querySelector. We
@@ -514,54 +519,94 @@ export function fetchWithMinDelay(url, minMs = 500) {
   ]).then(([html]) => html)
 }
 
-export function initDcDetailTabs(id) {
-  const tabContainer = document.getElementById(`dc-detail-tabs-${id}`)
+// initDetailTabs wires the standard "detail-tabs with optional lazy-loaded
+// Audit Log tab" pattern used by DC, Server, and Cluster detail pages.
+//
+// Conventions enforced by this function:
+//   • tabContainer is the <div class="tabs is-boxed" id="…"> element.
+//   • Each tab <li> declares its panel target via data-panel="…", and the
+//     matching <div id="…"> lives as a sibling of tabContainer.
+//   • The audit tab is identified by carrying data-orb-id (no other tab does).
+//     Optional data-related-orb-ids carries a CSV of subgraph orbIds so the
+//     audit panel can aggregate events for the parent and its nested items.
+//   • Active-tab persistence is keyed off tabContainer.id, which is already
+//     unique on the page and already prefixed by page family.
+//
+// Options:
+//   scoped  — default true. When true, panel lookups scope to
+//             tabContainer.parentElement instead of document. This protects
+//             against the dual-rendering case where the same entity ID appears
+//             twice on the page (e.g. a server tab open both standalone and
+//             drilled in from a DC tab). Both DOM trees contain identically-
+//             ID'd panels; an unscoped getElementById would update the wrong
+//             one, leaving the visible tab nav out of sync with its content.
+//   storage — 'local' (default) or 'session'. The active tab is restored on
+//             page reload from the chosen storage.
+export function initDetailTabs(tabContainer, options = {}) {
   if (!tabContainer) return
+  const { scoped = true, storage = 'local' } = options
 
   const tabs = tabContainer.querySelectorAll('li[data-panel]')
-  const storageKey = `dc-detail-tab-${id}`
-  const auditPanelId = `dc-panel-audit-${id}`
+  const storageObj = storage === 'session' ? sessionStorage : localStorage
+  const storageKey = `tab-active:${tabContainer.id}`
+
+  const scope = tabContainer.parentElement
+  const findPanel = scoped
+    ? (id) => scope.querySelector('#' + CSS.escape(id))
+    : (id) => document.getElementById(id)
+
+  const auditTab = [...tabs].find(t => t.dataset.orbId)
+  const auditPanelId = auditTab ? auditTab.dataset.panel : null
+
+  const panelPairs = [...tabs].map(t => ({
+    tab: t,
+    panel: findPanel(t.dataset.panel),
+  })).filter(p => p.panel)
 
   function loadAuditPanel() {
-    const tab = [...tabs].find(t => t.dataset.panel === auditPanelId)
-    if (!tab) return
-    // Templates can embed the full subgraph orbId list in data-related-orb-ids
-    // so the audit panel pulls events for the parent AND its nested config
-    // items (e.g. Server + IdracSettings + StorageControllers) in one call.
-    // Falls back to data-orb-id when the related list is missing.
-    const related = (tab.dataset.relatedOrbIds || tab.dataset.orbId || '')
-      .split(',').map(s => s.trim()).filter(Boolean)
-    if (related.length === 0) return
-    const panel = document.getElementById(auditPanelId)
+    if (!auditTab) return
+    const panel = findPanel(auditPanelId)
     if (!panel) return
-    const qs = related.map(id => `orbId=${encodeURIComponent(id)}`).join('&')
-    fetch(BASE + `/api/v1/audit-log?${qs}&limit=200`, {
-      headers: { 'HX-Request': 'true' },
-    })
-      .then(r => r.text())
-      .then(html => { panel.innerHTML = html; renderTimestamps(panel) })
-      .catch(() => {})
+    loadAuditPanelForTab(auditTab, panel)
   }
 
   function activatePanel(panelId) {
-    tabs.forEach(t => t.classList.remove('is-active'))
-    const active = [...tabs].find(t => t.dataset.panel === panelId)
-    if (active) active.classList.add('is-active')
-    tabContainer.parentElement.querySelectorAll('[id^="dc-panel-"]').forEach(panel => {
-      panel.style.display = panel.id === panelId ? '' : 'none'
-    })
+    for (const { tab, panel } of panelPairs) {
+      if (tab.dataset.panel === panelId) {
+        tab.classList.add('is-active')
+        panel.style.removeProperty('display')
+      } else {
+        tab.classList.remove('is-active')
+        panel.style.setProperty('display', 'none')
+      }
+    }
     if (panelId === auditPanelId) loadAuditPanel()
+    storageObj.setItem(storageKey, panelId)
   }
 
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      localStorage.setItem(storageKey, tab.dataset.panel)
-      activatePanel(tab.dataset.panel)
-    })
-  })
+  for (const { tab } of panelPairs) {
+    tab.addEventListener('click', () => activatePanel(tab.dataset.panel))
+  }
 
-  const saved = localStorage.getItem(storageKey)
-  if (saved) activatePanel(saved)
+  const saved = storageObj.getItem(storageKey)
+  if (saved && panelPairs.some(p => p.tab.dataset.panel === saved)) {
+    activatePanel(saved)
+  }
+}
+
+function loadAuditPanelForTab(tab, panel) {
+  // data-related-orb-ids embeds the full subgraph (parent + nested ConfigItems)
+  // so one fetch pulls all relevant events. Falls back to data-orb-id alone.
+  const related = (tab.dataset.relatedOrbIds || tab.dataset.orbId || '')
+    .split(',').map(s => s.trim()).filter(Boolean)
+  if (related.length === 0) return
+  const qs = related.map(id => `orbId=${encodeURIComponent(id)}`).join('&')
+  fetch(BASE + `/api/v1/audit-log?${qs}&limit=${AUDIT_PANEL_LIMIT}`, {
+    headers: { 'HX-Request': 'true' },
+  })
+    .then(r => r.text())
+    .then(html => { panel.innerHTML = html; renderTimestamps(panel) })
+    .catch(() => {})
 }
 
 // DataTables renders the page-length <select> bare; Bulma requires a <div class="select"> wrapper.
@@ -588,83 +633,6 @@ export function dtIPv4Render(data, type) {
   return data == null ? '' : data
 }
 
-export function initServerDetailTabs(root) {
-  const tabContainer = root.querySelector('[id^="srv-detail-tabs-"]')
-  if (!tabContainer) return
-
-  const tabs = tabContainer.querySelectorAll('li[data-panel]')
-  const srvId = tabContainer.id.replace('srv-detail-tabs-', '')
-  const auditPanelId = `srv-panel-audit-${srvId}`
-
-  // Active panel persists across edit-then-reload cycles. Without this the
-  // post-submit htmx.ajax re-renders the fragment with iDRAC active (template
-  // default), bouncing the user off the tab they were on (e.g. Audit Log).
-  const activeKey = `srv-tab-active:${srvId}`
-
-  function loadAuditPanel() {
-    const tab = [...tabs].find(t => t.dataset.panel === auditPanelId)
-    if (!tab) return
-    // Templates can embed the full subgraph orbId list in data-related-orb-ids
-    // so the audit panel pulls events for the parent AND its nested config
-    // items (e.g. Server + IdracSettings + StorageControllers) in one call.
-    // Falls back to data-orb-id when the related list is missing.
-    const related = (tab.dataset.relatedOrbIds || tab.dataset.orbId || '')
-      .split(',').map(s => s.trim()).filter(Boolean)
-    if (related.length === 0) return
-    // Scoped lookup, not document.getElementById — see scope comment below.
-    const panel = tabContainer.parentElement.querySelector('#' + CSS.escape(auditPanelId))
-    if (!panel) return
-    const qs = related.map(id => `orbId=${encodeURIComponent(id)}`).join('&')
-    fetch(BASE + `/api/v1/audit-log?${qs}&limit=200`, {
-      headers: { 'HX-Request': 'true' },
-    })
-      .then(r => r.text())
-      .then(html => { panel.innerHTML = html; renderTimestamps(panel) })
-      .catch(() => {})
-  }
-
-  // Pair each tab li with its target panel element up front, scoped to the
-  // SAME article container as the tabs. SCOPING IS LOAD-BEARING: the user can
-  // have the same server open in TWO contexts simultaneously — once as a
-  // standalone server tab (tab-content-srv-X), and once as a drilled-in
-  // server from a DC tab (tab-content-{DCId}). Both contexts contain
-  // srv-panel-idrac-X et al. with IDENTICAL ids (HTML technically allows
-  // duplicate ids; modern browsers honor them with document.getElementById
-  // returning the first match). A global document.getElementById would grab
-  // the wrong panel and update display on the OTHER tab content — leaving
-  // the visible one at the template default (iDRAC active, audit hidden),
-  // even though the tab classes here update correctly. Result: tab nav says
-  // Audit but content stays iDRAC.
-  const scope = tabContainer.parentElement
-  const panelPairs = [...tabs].map(t => ({
-    tab: t,
-    panel: scope.querySelector('#' + CSS.escape(t.dataset.panel)),
-  })).filter(p => p.panel)
-
-  function activatePanel(panelId) {
-    for (const { tab, panel } of panelPairs) {
-      if (tab.dataset.panel === panelId) {
-        tab.classList.add('is-active')
-        panel.style.removeProperty('display')
-      } else {
-        tab.classList.remove('is-active')
-        panel.style.setProperty('display', 'none')
-      }
-    }
-    if (panelId === auditPanelId) loadAuditPanel()
-    sessionStorage.setItem(activeKey, panelId)
-  }
-
-  for (const { tab } of panelPairs) {
-    tab.addEventListener('click', () => activatePanel(tab.dataset.panel))
-  }
-
-  const saved = sessionStorage.getItem(activeKey)
-  if (saved && panelPairs.some(p => p.tab.dataset.panel === saved)) {
-    activatePanel(saved)
-  }
-}
-
 // ─── HTMX afterSettle — shared tab init and timestamp rendering ────────────────
 //
 // We listen on htmx:afterSettle, not htmx:afterSwap. Settle is htmx's phase
@@ -681,10 +649,10 @@ document.addEventListener('htmx:afterSettle', (evt) => {
 
   const dcDetailTabs = target.querySelector('[id^="dc-detail-tabs-"]')
   if (dcDetailTabs) {
-    const id = dcDetailTabs.id.replace('dc-detail-tabs-', '')
     target.dataset.loaded = 'true'
-    initDcDetailTabs(id)
-    initServerDetailTabs(target)
+    initDetailTabs(dcDetailTabs)
+    const embeddedSrvTabs = target.querySelector('[id^="srv-detail-tabs-"]')
+    if (embeddedSrvTabs) initDetailTabs(embeddedSrvTabs)
     const dcServersTable = target.querySelector('table[id^="dc-servers-table-"]')
     if (dcServersTable && !$.fn.DataTable.isDataTable(dcServersTable)) {
       new DataTable(dcServersTable, {
@@ -706,16 +674,15 @@ document.addEventListener('htmx:afterSettle', (evt) => {
 
   const clusterDetailTabs = target.querySelector('[id^="cluster-detail-tabs-"]')
   if (clusterDetailTabs) {
-    const id = clusterDetailTabs.id.replace('cluster-detail-tabs-', '')
     target.dataset.loaded = 'true'
-    initClusterDetailTabs(id)
+    initDetailTabs(clusterDetailTabs)
     return
   }
 
   const srvDetailTabs = target.querySelector('[id^="srv-detail-tabs-"]')
   if (srvDetailTabs) {
     target.dataset.loaded = 'true'
-    initServerDetailTabs(target)
+    initDetailTabs(srvDetailTabs)
     const defaultTabLink = target.querySelector('.detlinks.is-active')
     if (defaultTabLink) {
       openServerTab(defaultTabLink.id.replace(/-detlink$/, '-det'))
@@ -925,7 +892,7 @@ export function loadDataCenterTab(displayName, orbId) {
 
   document.getElementById(`tab-close-${domId}`).addEventListener('click', (event) => {
     event.stopPropagation()
-    localStorage.removeItem(`dc-detail-tab-${domId}`)
+    localStorage.removeItem(`tab-active:dc-detail-tabs-${domId}`)
     unloadTab(orbId)
     deleteTab(displayName, orbId)
     document.getElementById('tab-summary').click()
@@ -1864,60 +1831,6 @@ export function initClusterTabRestoration() {
   if (currentTabId) document.getElementById(currentTabId)?.click()
 }
 
-// Detail-tab sub-tabs (Nodes / Audit Log) inside a cluster tab. Same shape as
-// initDcDetailTabs but scoped to `cluster-detail-tabs-…` / `cluster-panel-…`
-// element IDs.
-export function initClusterDetailTabs(domId) {
-  const tabContainer = document.getElementById(`cluster-detail-tabs-${domId}`)
-  if (!tabContainer) return
-
-  const tabs = tabContainer.querySelectorAll('li[data-panel]')
-  const storageKey = `cluster-detail-tab-${domId}`
-  const auditPanelId = `cluster-panel-audit-${domId}`
-
-  function loadAuditPanel() {
-    const tab = [...tabs].find(t => t.dataset.panel === auditPanelId)
-    if (!tab) return
-    // Templates can embed the full subgraph orbId list in data-related-orb-ids
-    // so the audit panel pulls events for the cluster AND its nested ConfigItems
-    // (nodes, backup wrapper, etcd/velero/s3sync) in one call. Falls back to
-    // data-orb-id when the related list is missing. Matches the DC + Server
-    // audit-tab pattern.
-    const related = (tab.dataset.relatedOrbIds || tab.dataset.orbId || '')
-      .split(',').map(s => s.trim()).filter(Boolean)
-    if (related.length === 0) return
-    const panel = document.getElementById(auditPanelId)
-    if (!panel) return
-    const qs = related.map(id => `orbId=${encodeURIComponent(id)}`).join('&')
-    fetch(BASE + `/api/v1/audit-log?${qs}&limit=200`, {
-      headers: { 'HX-Request': 'true' },
-    })
-      .then(r => r.text())
-      .then(html => { panel.innerHTML = html; renderTimestamps(panel) })
-      .catch(() => {})
-  }
-
-  function activatePanel(panelId) {
-    tabs.forEach(t => t.classList.remove('is-active'))
-    const active = [...tabs].find(t => t.dataset.panel === panelId)
-    if (active) active.classList.add('is-active')
-    tabContainer.parentElement.querySelectorAll('[id^="cluster-panel-"]').forEach(panel => {
-      panel.style.display = panel.id === panelId ? '' : 'none'
-    })
-    if (panelId === auditPanelId) loadAuditPanel()
-  }
-
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      localStorage.setItem(storageKey, tab.dataset.panel)
-      activatePanel(tab.dataset.panel)
-    })
-  })
-
-  const saved = localStorage.getItem(storageKey)
-  if (saved) activatePanel(saved)
-}
-
 // ─── Cross-app navigation handlers ───────────────────────────────────────────
 //
 // These three initializers wire the dblclick / click row-navigation and reload
@@ -2003,8 +1916,10 @@ export function initReloadButtons(opts = {}) {
         target.innerHTML = html
         htmx.process(target)
         renderTimestamps(target)
-        initDcDetailTabs(domId)
-        initServerDetailTabs(target)
+        const dcDetailTabs = document.getElementById('dc-detail-tabs-' + domId)
+        if (dcDetailTabs) initDetailTabs(dcDetailTabs)
+        const embeddedSrvTabs = target.querySelector('[id^="srv-detail-tabs-"]')
+        if (embeddedSrvTabs) initDetailTabs(embeddedSrvTabs)
         opts.onDcReloaded?.(domId)
       })
       .catch(() => {
@@ -2029,14 +1944,14 @@ export function initReloadButtons(opts = {}) {
         const srvDetailTabs = target.querySelector('[id^="srv-detail-tabs-"]')
         if (srvDetailTabs) {
           target.dataset.loaded = 'true'
-          initServerDetailTabs(target)
+          initDetailTabs(srvDetailTabs)
         }
         const dcDetailTabs = target.querySelector('[id^="dc-detail-tabs-"]')
         if (dcDetailTabs) {
-          const domId = dcDetailTabs.id.replace('dc-detail-tabs-', '')
           target.dataset.loaded = 'true'
-          initDcDetailTabs(domId)
-          initServerDetailTabs(target)
+          initDetailTabs(dcDetailTabs)
+          const embeddedSrvTabs = target.querySelector('[id^="srv-detail-tabs-"]')
+          if (embeddedSrvTabs) initDetailTabs(embeddedSrvTabs)
           const dcServersTable = target.querySelector('table[id^="dc-servers-table-"]')
           if (dcServersTable && !$.fn.DataTable.isDataTable(dcServersTable)) {
             new DataTable(dcServersTable, { paging: false, searching: false, info: false, ordering: true, select: { style: 'os' }, autoWidth: true, columnDefs: [{ className: 'dt-left', targets: 5 }, { targets: 0, render: dtIPv4Render }] })

@@ -1,0 +1,27 @@
+{{/*
+audit-tab.gohtml — shared audit-tab markup used by detail pages (DC, Server,
+Cluster, …). Two define blocks:
+
+  - "audit-tab-li"         the <li> rendered inside the page's tabs <ul>
+  - "audit-tab-placeholder" the empty <div> initDetailTabs (shared.js) fills
+                             when the user clicks the audit tab
+
+Caller passes its full page-data context. Required fields:
+  .AuditPanelID       string  — e.g. "dc-panel-audit-{DomID}"; matches the
+                                 div id below and the data-panel here
+  .OrbID              string  — orbId of the primary entity
+  .RelatedOrbIDsCSV   string  — CSV of subgraph orbIds; empty is fine
+                                 (initDetailTabs falls back to .OrbID)
+  .Actions.ShowAuditTab bool  — gate from layout.PageActions
+*/}}
+{{define "audit-tab-li"}}
+{{if .Actions.ShowAuditTab}}
+<li data-panel="{{.AuditPanelID}}" data-orb-id="{{.OrbID}}" data-related-orb-ids="{{.RelatedOrbIDsCSV}}">
+  <a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a>
+</li>
+{{end}}
+{{end}}
+
+{{define "audit-tab-placeholder"}}
+<div id="{{.AuditPanelID}}" style="display:none"></div>
+{{end}}

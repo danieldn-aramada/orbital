@@ -1,9 +1,9 @@
 <div id="report-issue-modal" class="modal">
-  <div class="modal-background" onclick="closeReportIssueModal()"></div>
+  <div class="modal-background js-report-issue-close"></div>
   <div class="modal-card">
     <header class="modal-card-head">
       <p class="modal-card-title">Report an Issue</p>
-      <button class="delete" aria-label="close" onclick="closeReportIssueModal()"></button>
+      <button class="delete js-report-issue-close" aria-label="close"></button>
     </header>
     <section class="modal-card-body">
       <p class="mb-4">Before filing, please include the following so we can reproduce and fix quickly:</p>
@@ -23,29 +23,17 @@
     <footer class="modal-card-foot">
       <div class="buttons">
         {{if .NavBar.IssueTrackerURL}}
-        <a class="button is-link"
+        <a class="button is-link js-report-issue-close"
           href="{{.NavBar.IssueTrackerURL}}"
           target="_blank"
-          rel="noopener"
-          onclick="closeReportIssueModal()">
+          rel="noopener">
           <span class="icon"><i class="fa-solid fa-arrow-up-right-from-square"></i></span>
           <span>Open Issue Tracker</span>
         </a>
         {{end}}
-        <button class="button" onclick="closeReportIssueModal()">Cancel</button>
+        <button class="button js-report-issue-close">Cancel</button>
       </div>
     </footer>
   </div>
 </div>
-
-<script>
-  function openReportIssueModal() {
-    document.getElementById('report-issue-modal').classList.add('is-active')
-  }
-  function closeReportIssueModal() {
-    document.getElementById('report-issue-modal').classList.remove('is-active')
-  }
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeReportIssueModal()
-  })
-</script>
+{{/* Open/close + Escape-key handlers live in orbital.js (search: js-report-issue). */}}

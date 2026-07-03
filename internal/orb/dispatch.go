@@ -44,17 +44,14 @@ type Dispatcher struct {
 // NewDispatcher creates a Dispatcher with exponential-backoff retry on
 // transient consumer errors.
 //
-// Why retries are required: the manifest layer's ConfigBundle CR creation
-// (SSA-apply on the K8s API server) is asynchronous from cb-controller's
-// perspective — the apply returns 2xx as soon as the request is accepted,
-// but the CR may not be observable to the mapping handler's subsequent
-// OwnerReference write until the next informer sync. cb-controller returns
-// 409 on the mapping layer when that race window hasn't closed yet.
+// Why retries: consumer dispatch can race with downstream state that hasn't
+// settled yet (e.g. cb-controller's SSA-apply returns 2xx before the K8s
+// informer observes the resulting resource — a same-import follow-up write
+// can hit a transient 409 while that window is open). Retry lets these
+// transient conditions self-resolve without operator intervention.
 //
 // Retry policy: 5 attempts with exponential backoff (500ms doubling, capped
 // at 2s) — waits between attempts 500ms, 1s, 2s, 2s = ~5.5s total budget.
-// Tuned for typical K8s informer sync latency; a busier API server that
-// genuinely takes >5s to propagate a CR will fail and require manual retry.
 // Retries fire on 409, 5xx, 429, and transport errors. Other 4xx (real
 // client errors) fail immediately. Hand-rolled rather than go-retryablehttp
 // because the library eats the final response body on exhausted retries,
@@ -101,9 +98,8 @@ func backoffDelay(attempt int) time.Duration {
 // Dispatch broadcasts each non-graph layer to every registered consumer.
 // One DispatchResult per layer (consumer responses collapsed: first 2xx wins;
 // else the last 4xx/error). Layer-arrival ordering is stable — layers are
-// sorted by media type so the manifest layer (lexicographically earlier than
-// "mapping") is dispatched first, matching cb-controller's expectation that
-// the ConfigBundle CR exists before the mapping arrives.
+// sorted by media type before dispatch, so multi-layer bundles arrive in a
+// deterministic order per import.
 func (d *Dispatcher) Dispatch(ctx context.Context, layers map[string][]byte, tag, digest, importID string) []DispatchResult {
 	if len(d.consumers) == 0 || len(layers) == 0 {
 		return nil

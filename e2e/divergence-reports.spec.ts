@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Divergence Reports page', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/divergence-reports');
-    await expect(page.locator('#divergence-content table')).toBeVisible();
+    await expect(page.locator('#divergence-content table.is-striped')).toBeVisible();
   });
 
   test('reload button refreshes divergence report list', async ({ page }) => {
@@ -19,7 +19,7 @@ test.describe('Divergence Reports page', () => {
     await expect(btn).not.toHaveClass(/is-loading/);
 
     // Table structure must survive the swap (data rows or the empty-state row).
-    await expect(page.locator('#divergence-content table')).toBeVisible();
+    await expect(page.locator('#divergence-content table.is-striped')).toBeVisible();
 
     // No skeleton cells left — real content is in place.
     await expect(page.locator('#divergence-content .is-skeleton')).toHaveCount(0);

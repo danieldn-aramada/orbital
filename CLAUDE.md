@@ -140,7 +140,7 @@ Architecture decisions with full rationale. Read when the context would otherwis
 | Restore mechanism (why subprocess, not exec) | `docs/decisions/006-dgraph-restore-backend.md` |
 | DGraph schema migration (tooling landscape, sharp edges, production approach) | `docs/decisions/007-dgraph-schema-migration.md` |
 | Bundler / internal-service auth to orbital (OAuth2 client credentials) | `docs/decisions/010-bundler-service-auth.md` |
-| OCI bundler pipeline, ConfigBundle integration | `docs/configbundle-integration.md` |
+| OCI bundler pipeline, ConfigBundle integration | `docs/configbundle-integration.md` • Repo: [github.com/danieldn-aramada/configbundle](https://github.com/danieldn-aramada/configbundle) — check the repo's CURRENT `CLAUDE.md` and `ROADMAP.md` before making claims about the cross-project contract; orbital's docs about configbundle lag when configbundle ships breaking changes (see [[project_configbundle_contract_post_adr011]]) |
 
 ## Local Development
 

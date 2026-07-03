@@ -14,8 +14,8 @@
   </td>
   <td>
     <div class="buttons is-right" style="gap: 0.25rem; flex-wrap: nowrap;">
-      {{if .CanDownload}}<a data-testid="backup-download-btn" class="button is-small is-light" onclick="downloadBackup('{{.ID}}')" title="Download"><span class="icon"><i class="fas fa-download"></i></span></a>{{end}}
-      {{if .CanDelete}}<a class="button is-small is-light has-text-danger" onclick="openDeleteModal('{{.ID}}', '{{.InitiatedAt}}')" title="Delete"><span class="icon"><i class="fas fa-trash"></i></span></a>{{end}}
+      {{if .CanDownload}}<a data-testid="backup-download-btn" class="button is-small is-light js-backup-download" data-backup-id="{{.ID}}" title="Download"><span class="icon"><i class="fas fa-download"></i></span></a>{{end}}
+      {{if .CanDelete}}<a class="button is-small is-light has-text-danger js-backup-delete" data-backup-id="{{.ID}}" data-backup-label="{{.InitiatedAt}}" title="Delete"><span class="icon"><i class="fas fa-trash"></i></span></a>{{end}}
     </div>
   </td>
 </tr>

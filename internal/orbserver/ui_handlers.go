@@ -58,9 +58,10 @@ func (s *Server) orbBase(c echo.Context) layout.Base {
 			BasePath:     "",
 			Version:      s.version,
 			ShowAuth:     false,
-			APIDocPath:   "/swagger/index.html",
-			GraphQLPath:  "/graphql",
-			MenuSections: s.buildOrbMenuSections(path),
+			APIDocPath:      "/swagger/index.html",
+			GraphQLPath:     "/graphql",
+			AuditPanelLimit: layout.AuditPanelDefaultLimit,
+			MenuSections:    s.buildOrbMenuSections(path),
 		},
 	}
 }

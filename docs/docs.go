@@ -756,7 +756,7 @@ const docTemplate = `{
         },
         "/api/v1/export/jobs/{jobId}/download": {
             "get": {
-                "description": "Downloads the export artifact as a zip archive containing data.json.gz and schema.gz.",
+                "description": "Downloads a zip containing data.json.gz + schema.gz. When bundlers are configured, also includes bundler-produced layers + layers.json — the exact format orb's /import/artifact accepts.",
                 "produces": [
                     "application/zip"
                 ],
@@ -779,6 +779,9 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found"
+                    },
+                    "502": {
+                        "description": "Bad Gateway"
                     }
                 }
             }

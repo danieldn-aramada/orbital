@@ -89,11 +89,7 @@
             <li data-panel="srv-panel-storage-{{.DomID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-hard-drive"></i></span><span>Storage</span></a>
             </li>
-            {{if .Actions.ShowAuditTab}}
-            <li data-panel="srv-panel-audit-{{.DomID}}" data-orb-id="{{.OrbID}}" data-related-orb-ids="{{.RelatedOrbIDsCSV}}">
-              <a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a>
-            </li>
-            {{end}}
+            {{template "audit-tab-li" .}}
           </ul>
         </div>
 
@@ -154,7 +150,7 @@
           {{end}}
         </div>
 
-        <div id="srv-panel-audit-{{.DomID}}" style="display:none"></div>
+        {{template "audit-tab-placeholder" .}}
 
         </div>
       </article>

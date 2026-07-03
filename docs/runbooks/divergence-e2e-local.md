@@ -27,9 +27,10 @@ PATH="$HOME/.local/bin:$PATH"           # so dgraph wrapper resolves (for restor
 
 **orb** — pointing consumers at cb-controller:
 ```bash
-ORB_CONSUMERS='[{"mediaType":"application/vnd.armada.configbundle.manifest.v1+yaml","url":"http://localhost:8095/consume"},{"mediaType":"application/vnd.armada.configbundle.mapping.v1+json","url":"http://localhost:8095/mapping"}]'
+ORB_CONSUMERS='[{"name":"cb-controller","url":"http://localhost:8095/dispatch"}]'
 PATH="$HOME/.local/bin:$PATH"           # dgraph wrapper required for the `dgraph live` import subprocess
 ```
+Note: `ORB_CONSUMERS` uses the consumer-centric shape (name + single dispatch URL). cb-controller's `/dispatch` accepts the layer and routes internally by media type. Post-ADR-011 the bundler emits ONE layer (manifest.v1+yaml); the old two-endpoint shape (`/consume` + `/mapping`) is dead.
 
 **cb-controller** — connecting to orb's divergence intake with a fast reporter interval for testing:
 ```bash
@@ -58,7 +59,7 @@ DIVERGENCE_REPORTER_INTERVAL=10s        # default is 5min — too slow for inter
 
 ## Bundler gotchas
 
-- **If orbital is published without `ORBITAL_BUNDLER_URLS` set, the artifact has only 2 layers (dgraph data + schema), no manifest/mapping.** cb-controller's `/consume` is never called → no ConfigBundle CR appears → SSA test can't proceed. Always check the artifact's layer count after publish (expected: 4 — dgraph data, dgraph schema, configbundle manifest, configbundle mapping).
+- **If orbital is published without `ORBITAL_BUNDLER_URLS` set, the artifact has only 2 layers (dgraph data + schema), no manifest.** cb-controller's `/dispatch` is never called → no ConfigBundle CR appears → SSA test can't proceed. Always check the artifact's layer count after publish (expected: 3 — dgraph data, dgraph schema, configbundle manifest). Post-ADR-011 (2026-06-16) the bundler emits ONE layer only — orbIds are saturated directly on the ConfigBundle CR spec so no separate mapping layer is needed. If you see 4 layers, you're running a pre-ADR-011 cb-bundler image.
 - **Old artifacts in the registry may have been built before orbId emission**: if the CRD requires `orbId` as listMapKey (current state per `~/armada/configbundle/docs/plans/server-identity-orbid.md`) but you import an artifact built by the old bundler, cb-controller's apply errors with `duplicate entries for key [orbId=""]` (one per server). Always publish a FRESH artifact tag with the current bundler before testing — don't reuse old tags like `v1` that were produced by previous bundler versions.
 
 ## ConfigBundle/SSA gotchas
@@ -145,7 +146,7 @@ PATH="$HOME/.local/bin:$PATH" \
   make run-orbital
 
 # 3. Start orb with consumer URLs (terminal 2)
-ORB_CONSUMERS='[{"mediaType":"application/vnd.armada.configbundle.manifest.v1+yaml","url":"http://localhost:8095/consume"},{"mediaType":"application/vnd.armada.configbundle.mapping.v1+json","url":"http://localhost:8095/mapping"}]' \
+ORB_CONSUMERS='[{"name":"cb-controller","url":"http://localhost:8095/dispatch"}]' \
 PATH="$HOME/.local/bin:$PATH" \
   make run-orb
 

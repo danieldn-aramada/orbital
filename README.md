@@ -176,3 +176,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for running tests and editing styles.
 
 See [deploy/README.md](deploy/README.md) for local and AKS deployment instructions.
 
+## Related Projects
+
+- **[configbundle](https://github.com/danieldn-aramada/configbundle)** — ConfigBundle Custom Resource + Kubernetes controller + bundler service. Orbital's first downstream consumer via the OCI bundler pipeline: cb-bundler receives orbital's graph query, produces the ConfigBundle manifest layer that ships in orbital's OCI artifact; cb-controller applies it at the edge and reports drift back to orb. See [docs/configbundle-integration.md](docs/configbundle-integration.md) for the boundary contract.
+- **[homebrew-tools](https://github.com/danieldn-aramada/homebrew-tools)** — Homebrew tap for `orbctl`. Formula updated automatically on `cli/v*` releases.
+

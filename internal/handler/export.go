@@ -22,6 +22,7 @@ import (
 	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/ent/restorejob"
+	"github.com/armada/orbital/internal/bundler"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
@@ -38,6 +39,13 @@ type Export struct {
 	logger                *slog.Logger
 	basePath              string        // URL base path for fragment-rendered hx-* attributes
 	timeout               time.Duration // max duration for the async export goroutine
+	// Bundler settings for Download's on-the-fly bundle assembly. When set,
+	// Download calls each configured bundler and packages its layers alongside
+	// data.json.gz + schema.gz into a courier-ready zip. When empty, Download
+	// falls back to streaming the raw export zip (data + schema only).
+	defaultBundlerURLs []string
+	bundlerTimeout     time.Duration
+	bundlerOpts        []bundler.ClientOption
 }
 
 // SetBasePath configures the URL base path used by HTML fragments rendered by this handler.
@@ -45,6 +53,16 @@ func (h *Export) SetBasePath(bp string) { h.basePath = bp }
 
 // SetTimeout configures the maximum duration for the async export goroutine.
 func (h *Export) SetTimeout(d time.Duration) { h.timeout = d }
+
+// SetBundlers wires the same bundler config that OCI publish uses so Download
+// can call bundlers on the fly and package the result as a courier-ready zip.
+// urls is a slice of "name=url" specs (parsed via bundler.ParseSpec). Empty urls
+// keeps the plain-zip download behavior.
+func (h *Export) SetBundlers(urls []string, timeout time.Duration, opts ...bundler.ClientOption) {
+	h.defaultBundlerURLs = urls
+	h.bundlerTimeout = timeout
+	h.bundlerOpts = opts
+}
 
 func NewExport(db *ent.Client, dgraphURL, dgraphScratchURL, dgraphScratchAdminURL, dgraphScratchZeroURL, exportDir, scratchExportDir, schemaPath string, logger *slog.Logger) *Export {
 	if err := os.MkdirAll(exportDir, 0o755); err != nil {
@@ -295,15 +313,32 @@ func (h *Export) Status(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// Download handles GET /api/v1/export/jobs/:jobId/download
+// Download handles GET /api/v1/export/jobs/:jobId/download.
+//
+// When no bundlers are configured, streams the raw export zip
+// (data.json.gz + schema.gz) directly from disk — cheap and identical to the
+// pre-bundler behavior.
+//
+// When bundlers ARE configured, calls each on the fly and packages the result
+// as a courier-ready zip: data.json.gz + schema.gz + one file per bundler
+// layer + layers.json (media-type manifest). This zip is directly consumable
+// by orb's POST /api/v1/import/artifact endpoint, closing the courier flow
+// for air-gapped modular data centers.
+//
+// Design note: this endpoint does NOT go through the OCI registry or Cosign.
+// Courier trust model is "operator physically walked this in" — signature
+// verification is a separate feature (not yet implemented). If bundlers change
+// output between publish and download, the download reflects current graph
+// state, not the historical published bytes. See docs/reference/OCI.md.
 //
 // @Summary     Download export artifact
-// @Description Downloads the export artifact as a zip archive containing data.json.gz and schema.gz.
+// @Description Downloads a zip containing data.json.gz + schema.gz. When bundlers are configured, also includes bundler-produced layers + layers.json — the exact format orb's /import/artifact accepts.
 // @Tags        export
 // @Produce     application/zip
 // @Param       jobId path string true "Job ID (UUID)"
 // @Success     200
 // @Failure     404
+// @Failure     502
 // @Router      /api/v1/export/jobs/{jobId}/download [get]
 func (h *Export) Download(c echo.Context) error {
 	id, err := uuid.Parse(c.Param("jobId"))
@@ -323,15 +358,251 @@ func (h *Export) Download(c echo.Context) error {
 		return echo.ErrNotFound
 	}
 
-	f, err := os.Open(*job.ArtifactPath)
-	if err != nil {
-		return fmt.Errorf("open artifact: %w", err)
-	}
-	defer f.Close()
-
 	filename := fmt.Sprintf("%s-%s.zip", job.DatacenterName, job.ID)
 	c.Response().Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
-	return c.Stream(http.StatusOK, "application/zip", f)
+
+	// Fast path: no bundlers configured → stream the raw zip from disk.
+	// Same bytes the current Download has always produced.
+	if len(h.defaultBundlerURLs) == 0 {
+		f, err := os.Open(*job.ArtifactPath)
+		if err != nil {
+			return fmt.Errorf("open artifact: %w", err)
+		}
+		defer f.Close()
+		return c.Stream(http.StatusOK, "application/zip", f)
+	}
+
+	// Bundler path: assemble a courier-ready bundle. Extract raw payload,
+	// call each bundler, package everything into a new zip.
+	if job.DatacenterOrbID == nil {
+		h.logger.Warn("bundler-aware download skipped: export job missing DatacenterOrbID", "jobId", job.ID)
+		f, err := os.Open(*job.ArtifactPath)
+		if err != nil {
+			return fmt.Errorf("open artifact: %w", err)
+		}
+		defer f.Close()
+		return c.Stream(http.StatusOK, "application/zip", f)
+	}
+
+	dataGZ, schemaGZ, err := readRawExportZip(*job.ArtifactPath)
+	if err != nil {
+		return fmt.Errorf("read raw export: %w", err)
+	}
+
+	req := bundler.Request{OrbID: *job.DatacenterOrbID}
+	layers, err := h.callBundlers(c.Request().Context(), req)
+	if err != nil {
+		h.logger.Error("bundler-aware download failed", "jobId", job.ID, "err", err)
+		return c.JSON(http.StatusBadGateway, map[string]string{"error": "bundler call failed: " + err.Error()})
+	}
+
+	zipBytes, err := buildCourierZip(dataGZ, schemaGZ, layers)
+	if err != nil {
+		return fmt.Errorf("build courier zip: %w", err)
+	}
+
+	return c.Blob(http.StatusOK, "application/zip", zipBytes)
+}
+
+// callBundlers invokes every configured bundler and returns the combined
+// layers in a stable order (bundler order → layer order within each result).
+// Each layer is stamped with its bundler's friendly name via l.Producer.
+func (h *Export) callBundlers(ctx context.Context, req bundler.Request) ([]bundler.Layer, error) {
+	var all []bundler.Layer
+	for _, spec := range h.defaultBundlerURLs {
+		name, url := bundler.ParseSpec(spec)
+		client := bundler.New(name, url, h.bundlerTimeout, h.bundlerOpts...)
+		result, err := client.Enrich(ctx, req)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", name, err)
+		}
+		for i := range result.Layers {
+			result.Layers[i].Producer = name
+		}
+		all = append(all, result.Layers...)
+	}
+	return all, nil
+}
+
+// readRawExportZip extracts data.json.gz + schema.gz from the export's on-disk
+// zip. Same shape as oci.extractZip but re-implemented locally to avoid a
+// handler → oci import (oci already depends on handler in some paths, and
+// extractZip is a tiny helper).
+func readRawExportZip(zipPath string) (dataGZ, schemaGZ []byte, err error) {
+	zr, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("open zip: %w", err)
+	}
+	defer zr.Close()
+	for _, zf := range zr.File {
+		switch zf.Name {
+		case "data.json.gz":
+			rc, err := zf.Open()
+			if err != nil {
+				return nil, nil, fmt.Errorf("open data.json.gz: %w", err)
+			}
+			dataGZ, err = io.ReadAll(rc)
+			rc.Close()
+			if err != nil {
+				return nil, nil, fmt.Errorf("read data.json.gz: %w", err)
+			}
+		case "schema.gz":
+			rc, err := zf.Open()
+			if err != nil {
+				return nil, nil, fmt.Errorf("open schema.gz: %w", err)
+			}
+			schemaGZ, err = io.ReadAll(rc)
+			rc.Close()
+			if err != nil {
+				return nil, nil, fmt.Errorf("read schema.gz: %w", err)
+			}
+		}
+	}
+	if len(dataGZ) == 0 {
+		return nil, nil, fmt.Errorf("export zip missing data.json.gz")
+	}
+	if len(schemaGZ) == 0 {
+		return nil, nil, fmt.Errorf("export zip missing schema.gz")
+	}
+	return dataGZ, schemaGZ, nil
+}
+
+// courierLayerEntry mirrors the layers.json shape orb's /import/artifact expects
+// (see internal/orbserver/import_handlers.go:410). Filename is unique per zip;
+// mediaType is opaque to orbital — set by the bundler, consumed by orb's
+// consumer dispatch.
+type courierLayerEntry struct {
+	MediaType string `json:"mediaType"`
+	Filename  string `json:"filename"`
+	// Producer is a display-only hint. Not consumed by orb today; documented in
+	// the zip for operator debugging.
+	Producer string `json:"producer,omitempty"`
+}
+
+// ociBundlerLayerStart is the OCI manifest position where bundler-produced
+// layers begin. Positions 0 and 1 are always reserved for data.json.gz and
+// schema.gz respectively (see oci.buildLayerMeta). Keep this in sync with
+// that function's layout — the courier zip's filename numbering depends on it.
+const ociBundlerLayerStart = 2
+
+// buildCourierZip assembles the exact zip shape orb's /import/artifact accepts:
+// data.json.gz + schema.gz + layers.json + one file per layer.
+//
+// Bundler layer filenames follow OCI Image Spec ordering:
+//
+//	layer-<oci-position>-<producer>.<ext>
+//
+// where <oci-position> matches the layer's index in the OCI manifest
+// (positions 0/1 are data.json.gz + schema.gz; bundler layers start at 2)
+// and <ext> is derived from the layer's media type (`.yaml` for `+yaml`,
+// `.json` for `+json`, `.bin` fallback).
+//
+// Aligning zip filenames with OCI positions lets operators cross-reference
+// between the layers modal (which shows the same position) and the zip
+// contents without arithmetic. See docs/reference/OCI.md.
+func buildCourierZip(dataGZ, schemaGZ []byte, layers []bundler.Layer) ([]byte, error) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+
+	writeFile := func(name string, data []byte) error {
+		w, err := zw.Create(name)
+		if err != nil {
+			return fmt.Errorf("create %s: %w", name, err)
+		}
+		if _, err := w.Write(data); err != nil {
+			return fmt.Errorf("write %s: %w", name, err)
+		}
+		return nil
+	}
+
+	if err := writeFile("data.json.gz", dataGZ); err != nil {
+		return nil, err
+	}
+	if err := writeFile("schema.gz", schemaGZ); err != nil {
+		return nil, err
+	}
+
+	manifest := make([]courierLayerEntry, 0, len(layers))
+	for i, l := range layers {
+		producer := l.Producer
+		if producer == "" {
+			producer = "unknown"
+		}
+		filename := fmt.Sprintf("layer-%d-%s%s", ociBundlerLayerStart+i, sanitizeForFilename(producer), extensionForMediaType(l.MediaType))
+		if err := writeFile(filename, l.Data); err != nil {
+			return nil, err
+		}
+		manifest = append(manifest, courierLayerEntry{
+			MediaType: l.MediaType,
+			Filename:  filename,
+			Producer:  l.Producer,
+		})
+	}
+
+	manifestJSON, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal layers.json: %w", err)
+	}
+	if err := writeFile("layers.json", manifestJSON); err != nil {
+		return nil, err
+	}
+
+	if err := zw.Close(); err != nil {
+		return nil, fmt.Errorf("close zip: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
+// extensionForMediaType derives a file extension from a media type's structured
+// syntax suffix (RFC 6838 §4.2.8). The suffix is the part after '+' — e.g.
+// "application/vnd.armada.configbundle+yaml" → ".yaml". Media types without
+// a suffix or with an unrecognized suffix fall back to ".bin".
+//
+// Extension is display-only for operator UX. The authoritative content type
+// remains in layers.json; orb dispatches by media type, not filename.
+func extensionForMediaType(mt string) string {
+	plus := strings.LastIndex(mt, "+")
+	if plus < 0 {
+		return ".bin"
+	}
+	// Trim any parameters after ';' (e.g. "+yaml; charset=utf-8").
+	suffix := strings.ToLower(strings.TrimSpace(mt[plus+1:]))
+	if semi := strings.Index(suffix, ";"); semi >= 0 {
+		suffix = strings.TrimSpace(suffix[:semi])
+	}
+	switch suffix {
+	case "yaml", "yml":
+		return ".yaml"
+	case "json":
+		return ".json"
+	case "xml":
+		return ".xml"
+	case "gzip":
+		return ".gz"
+	case "zip":
+		return ".zip"
+	default:
+		return ".bin"
+	}
+}
+
+// sanitizeForFilename keeps producer names filesystem-safe. Alphanumerics + '-'
+// pass through; everything else becomes '-'. Empty input → "unknown".
+func sanitizeForFilename(s string) string {
+	if s == "" {
+		return "unknown"
+	}
+	b := make([]byte, 0, len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '-', c == '_':
+			b = append(b, c)
+		default:
+			b = append(b, '-')
+		}
+	}
+	return string(b)
 }
 
 // runExport is the async goroutine that drives the export workflow.

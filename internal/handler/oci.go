@@ -644,7 +644,13 @@ func (h *OCI) ArtifactLayers(c echo.Context) error {
 // Values are pre-formatted so the template needs no funcs.
 // Digest is the full digest (e.g. sha256:abc…64chars) — the layers modal is
 // the detail view, so we don't truncate.
+//
+// Position is the layer's index in the OCI manifest (index 0 = base, per OCI
+// Image Spec §manifest.md). Preserved through the display reversal so
+// operators can cross-reference a UI row with the courier zip filename
+// (`layer-<position>-<producer>.<ext>`) or with `oras manifest fetch` output.
 type artifactLayerRow struct {
+	Position        int
 	MediaType       string
 	SizeDisplay     string
 	Digest          string
@@ -709,9 +715,17 @@ func toArtifactFragRow(a *ent.RegistryArtifact, basePath string) artifactFragRow
 	if len(a.Layers) > 0 {
 		row.HasLayers = true
 		row.LayerRows = make([]artifactLayerRow, 0, len(a.Layers))
+		// Reverse-iterate for display: OCI stores layers base-first (index 0 =
+		// data.json.gz, last index = topmost bundler layer), but the UI shows a
+		// stack diagram with topmost at top and base at bottom — matching how
+		// operators visualize "bundler stuff added on top of the base subgraph."
+		// Position is preserved from the original manifest index so the UI's
+		// Position column matches the OCI manifest AND the courier zip
+		// filename (`layer-<Position>-<producer>.<ext>`).
 		for i := len(a.Layers) - 1; i >= 0; i-- {
 			l := a.Layers[i]
 			lr := artifactLayerRow{
+				Position:        i,
 				MediaType:       l.MediaType,
 				SizeDisplay:     fmtLayerBytes(l.SizeBytes),
 				Digest:          l.Digest,

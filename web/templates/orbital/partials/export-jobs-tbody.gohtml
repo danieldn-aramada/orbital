@@ -10,9 +10,9 @@
   <td>{{.CompletedAt}}</td>
   <td style="white-space:nowrap;">
     <div style="display:flex;gap:0.25rem;align-items:center;">
-      {{if .CanDownload}}<a data-testid="export-download-btn" class="button is-small is-link is-outlined" onclick="downloadExportJob(this, '{{.JobID}}')"><span class="icon"><i class="fa-solid fa-download"></i></span><span>Download</span></a>{{end}}
+      {{if .CanDownload}}<a data-testid="export-download-btn" class="button is-small is-link is-outlined js-export-download" data-export-job-id="{{.JobID}}"><span class="icon"><i class="fa-solid fa-download"></i></span><span>Download</span></a>{{end}}
       {{if and $.OCIConfigured .CanPublish}}<button class="button is-small is-warning is-outlined" hx-get="{{$.BasePath}}/api/v1/export/jobs/{{.JobID}}/publish-modal?republish={{.Published}}" hx-target="#publish-modal-body" hx-swap="innerHTML" onclick="document.getElementById('publish-confirm-modal').classList.add('is-active')"><span class="icon"><i class="fa-solid fa-box-archive"></i></span><span>{{if .Published}}Re-publish{{else}}Publish{{end}}</span></button>{{end}}
-      <button class="button is-small is-danger is-outlined" title="Delete" onclick="deleteExportJob('{{.JobID}}')"><span class="icon"><i class="fa-solid fa-trash"></i></span></button>
+      <button class="button is-small is-danger is-outlined js-export-delete" data-export-job-id="{{.JobID}}" title="Delete"><span class="icon"><i class="fa-solid fa-trash"></i></span></button>
     </div>
   </td>
 </tr>

@@ -9,9 +9,14 @@
     {{/* Producer comes from the OCI annotation com.armada.orbital.producer,
          declared by orbital at push time. Falls back to (unannotated) for
          legacy artifacts published before producer attribution shipped. */}}
+    {{/* Position is the OCI manifest index (0 = base = data.json.gz per
+         OCI Image Spec). Rows are reverse-ordered by the handler so the
+         topmost layer appears at the top of the table (stack diagram).
+         Cross-references the courier zip filename `layer-<Position>-...`. */}}
     <table class="table is-fullwidth is-striped is-size-7">
       <thead>
         <tr>
+          <th class="is-nowrap has-text-right" title="OCI manifest position (0 = base)">#</th>
           <th>Producer</th>
           <th>Media Type</th>
           <th class="is-nowrap">Size</th>
@@ -21,6 +26,7 @@
       <tbody>
         {{range .LayerRows}}
         <tr>
+          <td class="is-nowrap has-text-right has-text-grey">{{.Position}}</td>
           <td>
             {{if .Producer}}
               <span class="tag is-light{{if eq .Producer "orbital"}} is-info{{end}}">{{.Producer}}</span>

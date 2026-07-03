@@ -31,7 +31,7 @@
 
       <div class="field mb-4">
         <div class="control is-flex is-align-items-center" style="gap: 0.75rem;">
-          <button id="btn-refresh-divergence" class="button is-info is-small" onclick="refreshDivergenceReports()">
+          <button id="btn-refresh-divergence" class="button is-info is-small js-divergence-refresh">
             <span class="icon"><i class="fa-solid fa-rotate"></i></span>
             <span>Refresh</span>
           </button>
@@ -60,18 +60,18 @@
   </main>
 
   <div id="divergence-confirm-modal" class="modal">
-    <div class="modal-background" onclick="closeDivergenceConfirmModal()"></div>
+    <div class="modal-background js-divergence-confirm-close"></div>
     <div class="modal-card" style="max-width: 640px;">
       <header class="modal-card-head">
         <p class="modal-card-title is-size-6">Submit decisions</p>
-        <button class="delete" aria-label="close" onclick="closeDivergenceConfirmModal()"></button>
+        <button class="delete js-divergence-confirm-close" aria-label="close"></button>
       </header>
       <section class="modal-card-body">
         <div id="divergence-confirm-summary"></div>
       </section>
       <footer class="modal-card-foot is-flex is-justify-content-flex-end" style="gap:0.5rem;">
-        <button class="button" onclick="closeDivergenceConfirmModal()">Cancel</button>
-        <button id="divergence-confirm-btn" class="button is-primary" onclick="confirmDivergenceBatch()">Confirm</button>
+        <button class="button js-divergence-confirm-close">Cancel</button>
+        <button id="divergence-confirm-btn" class="button is-primary js-divergence-confirm-submit">Confirm</button>
       </footer>
     </div>
   </div>
@@ -98,7 +98,7 @@
 {{end}}
 
 {{define "divergence-content"}}
-      <form id="divergence-batch-form" onsubmit="event.preventDefault(); submitDivergenceBatch();">
+      <form id="divergence-batch-form">
       <table class="table is-striped is-hoverable is-fullwidth is-size-7" style="table-layout: fixed;">
         <colgroup>
           <col style="width: 2.5rem">  {{/* chevron */}}
@@ -121,7 +121,7 @@
         <tbody>
           {{range .Groups}}
           {{$dcId := .DCOrbID}}
-          <tr class="divergence-group-row" data-dc="{{$dcId}}" onclick="toggleDivergenceGroup('{{$dcId}}', this)" style="cursor: pointer;">
+          <tr class="divergence-group-row js-divergence-group-toggle" data-dc="{{$dcId}}" style="cursor: pointer;">
             <td><span class="icon is-small"><i class="fas fa-chevron-right divergence-chevron"></i></span></td>
             <td>{{.DCOrbID}}</td>
             <td>{{.LastSeenAt}}</td>
@@ -168,7 +168,6 @@
               {{else}}
               <button class="button is-link is-outlined is-small divergence-publish-btn"
                       data-dc-orbid="{{$dcId}}"
-                      onclick="divergencePublishForDC(this)"
                       {{if gt .Pending 0}}disabled title="Resolve pending decisions first"{{end}}>
                 <span class="icon"><i class="fa-solid fa-upload"></i></span>
                 <span>Publish</span>
@@ -181,7 +180,6 @@
               <button class="button is-danger is-outlined is-small ml-2 divergence-delete-btn"
                       data-dc-orbid="{{$dcId}}"
                       data-entry-count="{{.Total}}"
-                      onclick="divergenceDeleteReportForDC(this)"
                       title="Break-glass — orbital normally re-ingests on every orb publish. Only use when state is stuck.">
                 <span class="icon"><i class="fa-solid fa-trash"></i></span>
                 <span>Delete report</span>
@@ -237,24 +235,21 @@
                           type="button"
                           class="button is-small is-success is-outlined divergence-action-btn"
                           data-action="accept"
-                          onclick="toggleDivergenceAction(this)"
-                          title="Update orbital intent to match the override"
+title="Update orbital intent to match the override"
                           style="width:5rem;"
                         >Accept</button>
                         <button
                           type="button"
                           class="button is-small is-warning is-outlined divergence-action-btn"
                           data-action="ignore"
-                          onclick="toggleDivergenceAction(this)"
-                          title="Acknowledge without effect"
+title="Acknowledge without effect"
                           style="width:5rem;"
                         >Ignore</button>
                         <button
                           type="button"
                           class="button is-small is-danger is-outlined divergence-action-btn"
                           data-action="reject"
-                          onclick="toggleDivergenceAction(this)"
-                          title="Reject the override: cloud intent wins, edge resets, cb-controller takes ownership"
+title="Reject the override: cloud intent wins, edge resets, cb-controller takes ownership"
                           style="width:5rem;"
                         >Reject</button>
                       </div>

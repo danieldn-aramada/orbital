@@ -4,7 +4,7 @@
   <td>{{.BackupLabel}}</td>
   <td>{{.CreatedBy}}</td>
   <td>{{.Duration}}</td>
-  <td>{{if .HasLog}}<button class="button is-small is-light" data-log="{{.Log}}" data-error="{{.Error}}" onclick="openRestoreLogModal(this)">Log</button>{{end}}</td>
+  <td>{{if .HasLog}}<button class="button is-small is-light js-restore-log-open" data-log="{{.Log}}" data-error="{{.Error}}">Log</button>{{end}}</td>
 </tr>
 {{else}}<tr><td colspan="6" class="has-text-grey has-text-centered">No restore jobs yet.</td></tr>
 {{end}}

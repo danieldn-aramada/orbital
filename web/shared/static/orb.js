@@ -303,11 +303,18 @@ function orbDivergenceSkeletonHTML() {
   </div>`
 }
 
-// ─── window bridge for onclick handlers ──────────────────────────────────────
+// ─── Delegated click handlers ────────────────────────────────────────────────
+//
+// Default pattern across the codebase: document-level listener + .closest()
+// instead of inline onclick + window bridge. Survives HTMX swaps automatically.
+// See docs/reference/UI.md for the canonical rule and exceptions.
 
-window.handleOrbImport = handleOrbImport
-window.handleOrbImportLatest = handleOrbImportLatest
-window.loadOrbTags = loadOrbTags
-window.handleOrbCourierUpload = handleOrbCourierUpload
-window.publishDivergence = publishDivergence
-window.refreshOrbDivergence = refreshOrbDivergence
+document.addEventListener('click', (e) => {
+  const imp = e.target.closest('.js-orb-import')
+  if (imp) { handleOrbImport(imp.dataset.tag); return }
+  if (e.target.closest('.js-orb-import-latest')) { handleOrbImportLatest(); return }
+  if (e.target.closest('.js-orb-tags-refresh')) { loadOrbTags(); return }
+  if (e.target.closest('.js-orb-courier-upload')) { handleOrbCourierUpload(); return }
+  if (e.target.closest('.js-orb-divergence-publish')) { publishDivergence(); return }
+  if (e.target.closest('.js-orb-divergence-refresh')) { refreshOrbDivergence(); return }
+})

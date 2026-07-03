@@ -48,7 +48,7 @@
               <label class="label is-small">Backup</label>
               <div class="control">
                 <div class="select is-small is-fullwidth">
-                  <select id="restore-backup-select" data-current-schema="{{.CurrentSchemaVersion}}" onchange="onRestoreSelectChange(this)">
+                  <select id="restore-backup-select" class="js-restore-select" data-current-schema="{{.CurrentSchemaVersion}}">
                     {{if .CompletedBackups}}
                       <option value="">— select a backup —</option>
                       {{range .CompletedBackups}}
@@ -69,7 +69,7 @@
 
             <div class="field">
               <div class="control">
-                <button id="btn-restore" class="button is-danger is-small" onclick="triggerRestore()">
+                <button id="btn-restore" class="button is-danger is-small js-restore-trigger">
                   <span class="icon"><i class="fas fa-rotate-left"></i></span>
                   <span>Restore Now</span>
                 </button>
@@ -147,17 +147,17 @@ kubectl exec -n &lt;namespace&gt; &lt;alpha-pod&gt; -- \
 
   <!-- Restore log modal -->
   <div id="restore-log-modal" class="modal">
-    <div class="modal-background" onclick="closeRestoreLogModal()"></div>
+    <div class="modal-background js-restore-log-close"></div>
     <div class="modal-card" style="width: 720px;">
       <header class="modal-card-head">
         <p class="modal-card-title">Restore Log</p>
-        <button class="delete" aria-label="close" onclick="closeRestoreLogModal()"></button>
+        <button class="delete js-restore-log-close" aria-label="close"></button>
       </header>
       <section class="modal-card-body">
         <pre id="restore-log-content" style="font-size: 0.8rem; max-height: 400px; overflow-y: auto; white-space: pre-wrap;"></pre>
       </section>
       <footer class="modal-card-foot" style="justify-content: flex-end;">
-        <button class="button" onclick="closeRestoreLogModal()">Close</button>
+        <button class="button js-restore-log-close">Close</button>
       </footer>
     </div>
   </div>

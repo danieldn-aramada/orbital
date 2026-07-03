@@ -115,10 +115,10 @@ Any producer that can answer "what fields am I watching, what's their intended v
 
 1. **Maintain its own intent reference.** Whether by reading a manifest the producer last applied, querying a CRD, parsing a config file, or holding intent in memory — that's the producer's choice.
 2. **Observe the current local state.** Walk a K8s `managedFields`, read a file, query a daemon — producer's choice.
-3. **Translate to orbital-native.** If the producer's native vocabulary differs from orbital's (e.g. K8s field paths vs orbital orbIds), the producer carries the translation table. cb-bundler ships a mapping inside the OCI bundle that cb-controller uses for this purpose; other producers can use any mechanism.
+3. **Translate to orbital-native (if applicable).** If the producer's native vocabulary differs from orbital's (e.g. K8s field paths vs orbital orbIds), the producer is responsible for translation. Mechanism is up to the producer — some carry translation tables, others embed the orbital identity directly in the resource they observe. Post-ADR-011 in configbundle, cb-controller reads orbIds directly from `ConfigBundle` CR spec fields, so no separate translation layer is needed.
 4. **POST the full current set** on whatever cadence makes sense.
 
-The first producer (cb-controller) lives in the configbundle repo and handles its own configbundle-specific concerns (the bundle's mapping layer, walking `managedFields`, takeover-apply semantics) — none of which are part of this API.
+The first producer (cb-controller) lives in the configbundle repo and handles its own configbundle-specific concerns (walking `managedFields`, takeover-apply semantics) — none of which are part of this API.
 
 ## Recovery semantics — what producers MUST handle
 

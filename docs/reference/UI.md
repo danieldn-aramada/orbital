@@ -25,7 +25,22 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
   dt.one('error.dt', onError)
   dt.ajax.reload(() => { dt.off('error.dt', onError); reloadButton.removeClass('is-loading') })
   ```
-- **`window.*` bridge for `onclick` handlers** — ES modules don't expose functions to global scope. Functions called from template `onclick="fn()"` attributes must be explicitly assigned: `window.fn = fn` at the bottom of the relevant module. `DOMContentLoaded` listeners and delegated event handlers work fine without the bridge.
+- **Click handlers default to event delegation, NOT inline `onclick=""`** — convention across `orbital.js` and `orb.js`. Endorsed by Hypermedia Systems Ch. 10 ("`addEventListener` is preferable to `onclick` for many reasons"). Survives HTMX swaps automatically; keeps functions inside the module (no `window.*` bridge needed). Pattern:
+  ```html
+  <button class="js-divergence-publish" data-dc-orbid="{{$dcId}}">Publish</button>
+  ```
+  ```js
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.js-divergence-publish')
+    if (!btn) return
+    divergencePublishForDC(btn)
+  })
+  ```
+  Class form (`.js-feature-action`) is the in-house convention. Co-locate the listener block with the function it calls, in the relevant section of `orbital.js` / `orb.js`. **Three documented exceptions** where `onclick=""` / per-element `addEventListener` is allowed:
+  1. **Form-submit handlers inside per-instance modal init functions** — `dc-edit-submit-${id}`, `srv-edit-submit-${id}` etc. bind via `element.addEventListener('click', ...)` inside `initEditModal()` which is called from `htmx:afterSettle`, so the rebind happens automatically on every swap. Acceptable because the binding code captures local closure state (the JSONEditor instance, the modal id) cleanly.
+  2. **Inline browser-API calls** — `onclick="document.getElementById('foo').classList.remove('is-active')"`, `onclick="event.stopPropagation()"`, `onclick="navigator.clipboard.writeText('...')"`. These call browser APIs, not module functions; no bridge entry needed.
+  3. **Tab activation logic captured in init closures** — e.g. `tab.addEventListener('click', () => activatePanel(...))` inside `initDetailTabs`. The closure over `panelPairs` is the cleanest way to express the relationship; rebind happens automatically because `initDetailTabs` is called from afterSettle.
+- **Never add new `window.X = X` bridge entries** — the existing `window.dcEditors`, `window.clusterEditors`, `window.srvEditors`, `window.reloadClusterFragment` are legitimate non-bridge uses (e2e exports + cross-module callables). New code uses delegation per the rule above.
 - **`DOMContentLoaded` inside modules works correctly** — modules are deferred by default. Use delegated `document.addEventListener('click', e => { if (!e.target.closest('#id')) return; ... })` for button handlers. Never call `getElementById` at module top level.
 - **Go template + HTMX is the primary rendering pattern** — server renders HTML fragments (including `<select>` options, lists, previews); JS fetches HTML and sets `innerHTML`. Reserve JS for things Go templates cannot do: polling loops, DataTables init, JSON editors, tab lifecycle management. Never write JS to fetch data and build DOM that a Go template handler could render directly.
 - **All styles go in `web/sass/main.scss`** — never edit `web/shared/static/css/main.css` directly (generated). Rebuild: `make build-css` (one-time) or `make watch-css` (watch mode).
@@ -145,8 +160,34 @@ Action-result status (Publish succeeded, etc.) shows in an existing `<div id="*-
 
 ## Tab state conventions
 
-- DC detail tab state (Servers/Racks/Divergence) persists per DC under `localStorage.dc-detail-tab-{id}` — **cleared on tab close** so reopening always defaults to Servers. Do not persist across tab close/reopen.
+- **Detail-tab active panel persists under `localStorage.tab-active:{tabContainer.id}`** — e.g. `tab-active:dc-detail-tabs-{DomID}`, `tab-active:srv-detail-tabs-{DomID}`, `tab-active:cluster-detail-tabs-{DomID}`. Keys are wired automatically by `initDetailTabs` (in `shared.js`); do not write them by hand. On DC tab close (`tab-close-${domId}` handler) the matching key is cleared so reopening defaults to the first panel.
 - Servers page tabs persist under `localStorage.serverTabs`; DC tabs under `localStorage.tabs` — separate keys, same `TabItem` class pattern.
+
+## Detail tabs with audit log — canonical pattern
+
+All detail pages (DC, Server, Cluster, future) share one JS function — `initDetailTabs(tabContainer, options?)` in `shared.js` — and one set of template conventions. **Adding a new detail page is one Go template + one line of JS.**
+
+**Template conventions** (mirrored across `datacenter-tab.gohtml`, `server-tab.gohtml`, `cluster-tab.gohtml`):
+
+- Tab container: `<div class="tabs is-boxed" id="{prefix}-detail-tabs-{{.DomID}}">` — `{prefix}` is page-specific (`dc`, `srv`, `cluster`, …). The DOM `id` is the storage key namespace; keep it unique per entity.
+- Each tab: `<li data-panel="{prefix}-panel-X-{{.DomID}}">…</li>`. First tab carries `class="is-active"`.
+- Audit tab: `<li data-panel="{prefix}-panel-audit-{{.DomID}}" data-orb-id="{{.OrbID}}" data-related-orb-ids="{{.RelatedOrbIDsCSV}}">` — **the `data-orb-id` attribute is how `initDetailTabs` detects the audit tab**, so do not put `data-orb-id` on any non-audit `<li>`. `data-related-orb-ids` is optional; when present it aggregates events across the parent + nested ConfigItems.
+- Panel divs: `<div id="{prefix}-panel-X-{{.DomID}}">…</div>` as siblings of the tab container. Non-default panels carry `style="display:none"`.
+- Audit panel placeholder: `<div id="{prefix}-panel-audit-{{.DomID}}" style="display:none"></div>` — empty; `initDetailTabs` fills it on first activation.
+
+**JS call site:**
+```js
+const tabContainer = root.querySelector('[id^="newprefix-detail-tabs-"]')
+if (tabContainer) initDetailTabs(tabContainer)
+```
+
+Options (all default to safe values):
+- `scoped` (default `true`) — panel lookups scope to `tabContainer.parentElement` instead of `document`. Protects against the dual-rendering case where the same entity ID appears twice on the page (e.g. a server tab open both standalone and drilled in from a DC tab). Leave true unless you can prove only one rendering exists.
+- `storage` (default `'local'`) — `'local'` persists active tab across browser sessions; `'session'` resets per browser tab. Default matches user expectation ("I had Audit open; reopen the page and it's still Audit").
+
+**Audit panel row cap** — `AUDIT_PANEL_LIMIT` in `shared.js`, sourced from `layout.AuditPanelDefaultLimit` (Go) via `window.ORBITAL_CONFIG.auditPanelLimit`. Single source of truth.
+
+**Outstanding cleanup (future phase):** the audit `<li>` declaration and audit `<div>` placeholder are still copy-pasted across `datacenter-tab.gohtml` / `server-tab.gohtml` / `cluster-tab.gohtml`. Extracting them into a shared `audit-tab.gohtml` partial requires either a `FuncMap` (`dict`) or per-handler `AuditPanelID` field. Worth doing if a 4th detail page lands.
 
 ## Template conventions
 

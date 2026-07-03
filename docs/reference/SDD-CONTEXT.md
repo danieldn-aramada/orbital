@@ -174,7 +174,7 @@ Notable SDD types not yet in this repo: `PxeDevice`, `Chassis`, `PowerSystem`, `
 
 ## 11. ConfigBundle Repo (`~/armada/configbundle`)
 
-The companion repo exists and is partway through implementation. Module path `github.com/armada/configbundle`. kubebuilder-based. **Read its `CLAUDE.md` and `ROADMAP.md` before designing anything that crosses the boundary.**
+The companion repo exists and is partway through implementation. GitHub URL: [github.com/danieldn-aramada/configbundle](https://github.com/danieldn-aramada/configbundle). Go module path: `github.com/armada/configbundle` (used in `import`; distinct from the browsable URL). kubebuilder-based. **Read its `CLAUDE.md` and `ROADMAP.md` before designing anything that crosses the boundary — orbital's docs about configbundle can lag when configbundle ships breaking changes.**
 
 ### 11.1 Architecture as it actually shipped (differs from the original SDD/Proposal in key ways)
 

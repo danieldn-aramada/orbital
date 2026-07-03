@@ -311,16 +311,25 @@ func (s *Server) importHistoryLayers(c echo.Context) error {
 	if err != nil {
 		return fmt.Errorf("parse layers-modal: %w", err)
 	}
-	reversed := make([]orb.LayerRecord, len(match.Layers))
+	// Reverse for display (stack diagram: topmost at top, base at bottom) but
+	// keep the original OCI manifest position on each row so operators can
+	// cross-reference the UI with the courier zip filename
+	// (`layer-<position>-<producer>.<ext>`) or with `oras manifest fetch`.
+	// See docs/reference/OCI.md.
+	type layerRow struct {
+		orb.LayerRecord
+		Position int
+	}
+	rows := make([]layerRow, len(match.Layers))
 	for i, l := range match.Layers {
-		reversed[len(match.Layers)-1-i] = l
+		rows[len(match.Layers)-1-i] = layerRow{LayerRecord: l, Position: i}
 	}
 	viewModel := struct {
 		Tag    string
-		Layers []orb.LayerRecord
+		Layers []layerRow
 	}{
 		Tag:    match.Tag,
-		Layers: reversed,
+		Layers: rows,
 	}
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	return tmpl.ExecuteTemplate(c.Response(), "layers-modal", viewModel)

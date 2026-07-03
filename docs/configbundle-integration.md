@@ -1,6 +1,8 @@
 # ConfigBundle Integration Design
 
-This document defines the integration contract between **Orbital** (cloud CMDB), **Orb** (edge service), and **ConfigBundle** — the first downstream consumer of Orbital's enrichment pipeline. It is the source of truth for both repositories.
+**Repo:** [github.com/danieldn-aramada/configbundle](https://github.com/danieldn-aramada/configbundle) — kubebuilder-based; contains cb-bundler + cb-controller. Go module path is `github.com/armada/configbundle` (used in imports), distinct from the GitHub URL.
+
+This document defines the integration contract between **Orbital** (cloud CMDB), **Orb** (edge service), and **ConfigBundle** — the first downstream consumer of Orbital's enrichment pipeline. It is a source of truth for the orbital side of that contract; **the configbundle repo's own `CLAUDE.md` and `ROADMAP.md` are authoritative for the ConfigBundle side.** When they diverge, the configbundle repo wins — orbital's docs about configbundle lag when configbundle ships breaking changes (e.g. ADR-011 in 2026-06-16 eliminated the mapping layer that was previously part of this contract).
 
 ---
 

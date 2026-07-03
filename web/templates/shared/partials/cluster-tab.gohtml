@@ -95,11 +95,7 @@
               <a><span class="icon is-small"><i class="fa-solid fa-sitemap"></i></span><span>Workload Clusters ({{len .WorkloadClusters}})</span></a>
             </li>
             {{end}}
-            {{if .Actions.ShowAuditTab}}
-            <li data-panel="cluster-panel-audit-{{.DomID}}" data-orb-id="{{.OrbID}}" data-related-orb-ids="{{.RelatedOrbIDsCSV}}">
-              <a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a>
-            </li>
-            {{end}}
+            {{template "audit-tab-li" .}}
           </ul>
         </div>
 
@@ -232,7 +228,7 @@
         </div>
         {{end}}
 
-        <div id="cluster-panel-audit-{{.DomID}}" style="display:none"></div>
+        {{template "audit-tab-placeholder" .}}
         </div>
 
       </article>

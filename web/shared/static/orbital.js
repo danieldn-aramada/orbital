@@ -1,4 +1,31 @@
-// orbital.js — orbital-specific page logic
+// orbital.js — orbital-specific page logic.
+//
+// ─── Sections (Cmd-F any header text below) ──────────────────────────────────
+//   Server drill-down in DC tab (dblclick → HTMX load into tab)
+//   Inventory page
+//   Data Centers page
+//   Servers page
+//   Clusters page
+//   Cross-app navigation and reload buttons
+//   Backups
+//   Export page
+//   Edge Delivery page
+//   DC edit modal
+//   Cluster edit modal
+//   HTMX afterSwap — orbital editor cleanup
+//   Server edit modal
+//   Audit log page
+//   Restore
+//   Users page
+//   Divergence reports page         ← includes break-glass delete
+//   Config-item delete modal (DataCenter / Server)
+//   Report Issue modal
+//   Module exports to window (e2e + cross-module only)   ← last; not a bridge
+//
+// Section ordering rule: feature sections come first, then the exports block
+// at the bottom. Do NOT add code after that block — it's the file's closing
+// boundary between module logic and global registration. (Click handlers
+// stay inside their feature section as delegated listeners — see UI.md.)
 
 // configitem-editor.js: generic edit-modal submit handler. Imported for side
 // effect (registers window.initConfigItemEditor) so any page's modal shim
@@ -20,9 +47,7 @@ import {
   showServerSkeleton,
   showClusterSkeleton,
   fetchWithMinDelay,
-  initDcDetailTabs,
-  initServerDetailTabs,
-  initClusterDetailTabs,
+  initDetailTabs,
   dtWrapLengthSelect,
   openServerTab,
   initServerEventsTable,
@@ -253,6 +278,18 @@ document.addEventListener('DOMContentLoaded', () => {
   loadBackups()
 })
 
+// Delegated handlers for Backups page + delete modal. Listeners on document
+// survive HTMX swaps of backup-jobs-tbody. See docs/reference/UI.md.
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.js-backup-trigger')) { triggerBackup(); return }
+  const dl = e.target.closest('.js-backup-download')
+  if (dl) { downloadBackup(dl.dataset.backupId); return }
+  const del = e.target.closest('.js-backup-delete')
+  if (del) { openDeleteModal(del.dataset.backupId, del.dataset.backupLabel); return }
+  if (e.target.closest('.js-delete-modal-close')) { closeDeleteModal(); return }
+  if (e.target.closest('.js-delete-confirm')) { confirmDelete(); return }
+})
+
 // Test Connection buttons are declarative — see backups.gohtml and
 // divergence-reports.gohtml. The button posts to /api/v1/backup/test-connection
 // with HX-Request: true and the server returns an HTML fragment swapped into
@@ -367,6 +404,15 @@ function deleteExportJob(jobId) {
     .catch(() => alert('Failed to delete job.'))
 }
 
+// Delegated handlers for Export page (page-level + tbody buttons that re-render via HTMX swap).
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.js-export-submit')) { handleExportSubmit(); return }
+  const dl = e.target.closest('.js-export-download')
+  if (dl) { downloadExportJob(dl, dl.dataset.exportJobId); return }
+  const del = e.target.closest('.js-export-delete')
+  if (del) { deleteExportJob(del.dataset.exportJobId); return }
+})
+
 // ─── Edge Delivery page ───────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -386,7 +432,7 @@ function artifactsSkeletonHTML(rows = 5) {
 function loadArtifactsTable(showSpinner = false) {
   const tbody = document.getElementById('artifacts-tbody')
   if (!tbody) return
-  const btn = document.querySelector('button[onclick="loadArtifactsTable(true)"]')
+  const btn = document.querySelector('.js-artifacts-reload')
   if (showSpinner) {
     if (btn) btn.classList.add('is-loading')
     tbody.innerHTML = artifactsSkeletonHTML()
@@ -509,6 +555,16 @@ function copyVerifyCmd() {
   })
 }
 
+// Delegated handlers for Edge Delivery / Publish History buttons.
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.js-oci-test-connection')) { testOCIConnection(); return }
+  if (e.target.closest('.js-pubkey-toggle')) { togglePublicKey(); return }
+  if (e.target.closest('.js-pubkey-copy')) { copyPublicKey(); return }
+  if (e.target.closest('.js-pubkey-download')) { downloadPublicKey(); return }
+  if (e.target.closest('.js-pubkey-verify-cmd-copy')) { copyVerifyCmd(); return }
+  if (e.target.closest('.js-artifacts-reload')) { loadArtifactsTable(true); return }
+})
+
 // ─── DC edit modal ────────────────────────────────────────────────────────────
 
 const dcEditors = new Map()
@@ -607,7 +663,7 @@ window.clusterEditors = clusterEditors
 //   2. swap into tab-content-cluster-<domId>
 //   3. htmx.process so any hx-* attrs on new DOM rebind
 //   4. renderTimestamps for any timestamp spans
-//   5. initClusterDetailTabs to rebind sub-tab click handlers
+//   5. initDetailTabs to rebind sub-tab click handlers
 //   6. clusterEditors.delete(domId) — the JSONEditor instance was attached to
 //      the now-removed DOM node; the next Edit click must rebuild fresh.
 // Forgetting any of (3-6) silently breaks an interaction (audit tab clicks dead,
@@ -625,7 +681,8 @@ export function reloadClusterFragment(orbId) {
       target.innerHTML = html
       htmx.process(target)
       renderTimestamps(target)
-      initClusterDetailTabs(domId)
+      const clusterDetailTabs = target.querySelector('[id^="cluster-detail-tabs-"]')
+      if (clusterDetailTabs) initDetailTabs(clusterDetailTabs)
       clusterEditors.delete(domId)
     })
     .catch(() => {
@@ -965,7 +1022,7 @@ function onRestoreSelectChange(sel) {
   } else {
     warning.style.display = 'none'
   }
-  if (btn) { btn.textContent = 'Restore Now'; btn.setAttribute('onclick', 'triggerRestore()') }
+  if (btn) { btn.textContent = 'Restore Now'; delete btn.dataset.confirmMismatch }
 }
 
 function triggerRestore(confirm) {
@@ -997,16 +1054,16 @@ function triggerRestore(confirm) {
         msg.style.display = ''
         if (data.requiresConfirmation) {
           btn.textContent = 'Confirm Restore'
-          btn.setAttribute('onclick', 'triggerRestore(true)')
+          btn.dataset.confirmMismatch = 'true'
           btn.disabled = false
         } else {
           btn.textContent = 'Restore Now'
-          btn.setAttribute('onclick', 'triggerRestore()')
+          delete btn.dataset.confirmMismatch
           btn.disabled = false
         }
       } else {
         btn.textContent = 'Restore Now'
-        btn.setAttribute('onclick', 'triggerRestore()')
+        delete btn.dataset.confirmMismatch
         loadRestoreJobs()
         pollRestore(data.id)
       }
@@ -1052,6 +1109,23 @@ document.addEventListener('DOMContentLoaded', () => {
   loadRestoreJobs()
 })
 
+// Delegated handlers for Restore page. Log buttons re-render via HTMX swap so
+// the listener must be on document, not the button.
+document.addEventListener('click', (e) => {
+  const trig = e.target.closest('.js-restore-trigger')
+  if (trig) {
+    triggerRestore(trig.dataset.confirmMismatch === 'true')
+    return
+  }
+  const log = e.target.closest('.js-restore-log-open')
+  if (log) { openRestoreLogModal(log); return }
+  if (e.target.closest('.js-restore-log-close')) { closeRestoreLogModal(); return }
+})
+document.addEventListener('change', (e) => {
+  const sel = e.target.closest('.js-restore-select')
+  if (sel) onRestoreSelectChange(sel)
+})
+
 // ─── Users page ───────────────────────────────────────────────────────────────
 
 function setUserRole(userId, role, btn) {
@@ -1078,6 +1152,12 @@ function setUserRole(userId, role, btn) {
       }
     })
 }
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.js-user-role-set')
+  if (!btn) return
+  setUserRole(btn.dataset.userId, btn.dataset.role, btn)
+})
 
 // ─── Divergence reports page ──────────────────────────────────────────────────
 //
@@ -1487,6 +1567,65 @@ function hideDivergenceErr() {
   el.textContent = ''
 }
 
+// Break-glass: delete orbital's local divergence-report state for a DC.
+// Used when state is stuck (stale resolutions from an earlier session,
+// partial supersede edge case, etc.). Backend wipes the DB rows in one
+// transaction AND resets the ingester's idempotency tracker so the next
+// poll re-processes the latest S3 report fresh.
+function divergenceDeleteReportForDC(button) {
+  const dcOrbId = button.dataset.dcOrbid
+  const entryCount = button.dataset.entryCount || '?'
+  if (!dcOrbId) return
+  if (!window.confirm(
+    `Delete ${entryCount} divergence entries + decisions for ${dcOrbId}?\n\n` +
+    `Break-glass only — orbital normally re-ingests automatically. ` +
+    `orb's report and edge state are unchanged.`
+  )) {
+    return
+  }
+  const origHTML = button.innerHTML
+  button.disabled = true
+  button.innerHTML = '<span class="icon"><i class="fa-solid fa-spinner fa-spin"></i></span><span>Deleting…</span>'
+
+  fetch(BASE + '/api/v1/divergences?dcOrbId=' + encodeURIComponent(dcOrbId), {
+    method: 'DELETE',
+  })
+    .then(r => r.json().then(body => ({ ok: r.ok, status: r.status, body })))
+    .then(({ ok, status, body }) => {
+      if (!ok) throw new Error(body.message || `HTTP ${status}`)
+      // Hard-reload — page server-renders divergence state, so we need a fresh fetch.
+      window.location.reload()
+    })
+    .catch(err => {
+      button.disabled = false
+      button.innerHTML = origHTML
+      window.alert('Delete failed: ' + err.message)
+    })
+}
+
+// Delegated handlers for Divergence Reports page. All buttons live inside
+// #divergence-content which is innerHTML-swapped on refresh, so document-level
+// listeners are the only ones that survive.
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.js-divergence-refresh')) { refreshDivergenceReports(); return }
+  if (e.target.closest('.js-divergence-confirm-close')) { closeDivergenceConfirmModal(); return }
+  if (e.target.closest('.js-divergence-confirm-submit')) { confirmDivergenceBatch(); return }
+  const group = e.target.closest('.js-divergence-group-toggle')
+  if (group) { toggleDivergenceGroup(group.dataset.dc); return }
+  const pub = e.target.closest('.divergence-publish-btn')
+  if (pub) { divergencePublishForDC(pub); return }
+  const del = e.target.closest('.divergence-delete-btn')
+  if (del) { divergenceDeleteReportForDC(del); return }
+  const act = e.target.closest('.divergence-action-btn')
+  if (act) { toggleDivergenceAction(act); return }
+})
+document.addEventListener('submit', (e) => {
+  if (e.target.closest('#divergence-batch-form')) {
+    e.preventDefault()
+    submitDivergenceBatch()
+  }
+})
+
 // ─── Config-item delete modal (DataCenter / Server) ───────────────────────────
 
 ;(function () {
@@ -1597,71 +1736,29 @@ function hideDivergenceErr() {
   })
 })()
 
-// ─── window bridge for onclick handlers ──────────────────────────────────────
-// ES modules don't expose functions to global scope by default.
+// ─── Report Issue modal ──────────────────────────────────────────────────────
 
-window.triggerBackup = triggerBackup
-window.downloadBackup = downloadBackup
-window.openDeleteModal = openDeleteModal
-window.closeDeleteModal = closeDeleteModal
-window.confirmDelete = confirmDelete
-window.handleExportSubmit = handleExportSubmit
-window.downloadExportJob = downloadExportJob
-window.deleteExportJob = deleteExportJob
-window.loadArtifactsTable = loadArtifactsTable
-window.testOCIConnection = testOCIConnection
-window.togglePublicKey = togglePublicKey
-window.copyPublicKey = copyPublicKey
-window.downloadPublicKey = downloadPublicKey
-window.copyVerifyCmd = copyVerifyCmd
-window.triggerRestore = triggerRestore
-window.onRestoreSelectChange = onRestoreSelectChange
-window.openRestoreLogModal = openRestoreLogModal
-window.closeRestoreLogModal = closeRestoreLogModal
-window.setUserRole = setUserRole
-window.toggleDivergenceGroup = toggleDivergenceGroup
-window.toggleDivergenceAction = toggleDivergenceAction
-window.updateDivergenceBatchCounter = updateDivergenceBatchCounter
-window.submitDivergenceBatch = submitDivergenceBatch
-window.confirmDivergenceBatch = confirmDivergenceBatch
-window.closeDivergenceConfirmModal = closeDivergenceConfirmModal
-window.refreshDivergenceReports = refreshDivergenceReports
-window.divergencePublishForDC = divergencePublishForDC
-
-// ─── Divergence break-glass: delete orbital's local report state for a DC ────
-//
-// Used when the divergence-report state is stuck (stale resolutions from an
-// earlier session, partial supersede edge case, etc.). Backend wipes the DB
-// rows in one transaction AND resets the ingester's idempotency tracker so
-// the next poll re-processes the latest S3 report fresh.
-function divergenceDeleteReportForDC(button) {
-  const dcOrbId = button.dataset.dcOrbid
-  const entryCount = button.dataset.entryCount || '?'
-  if (!dcOrbId) return
-  if (!window.confirm(
-    `Delete ${entryCount} divergence entries + decisions for ${dcOrbId}?\n\n` +
-    `Break-glass only — orbital normally re-ingests automatically. ` +
-    `orb's report and edge state are unchanged.`
-  )) {
-    return
-  }
-  const origHTML = button.innerHTML
-  button.disabled = true
-  button.innerHTML = '<span class="icon"><i class="fa-solid fa-spinner fa-spin"></i></span><span>Deleting…</span>'
-
-  fetch(BASE + '/api/v1/divergences?dcOrbId=' + encodeURIComponent(dcOrbId), {
-    method: 'DELETE',
-  })
-    .then(r => r.json().then(body => ({ ok: r.ok, status: r.status, body })))
-    .then(({ ok, status, body }) => {
-      if (!ok) throw new Error(body.message || `HTTP ${status}`)
-      // Hard-reload — page server-renders divergence state, so we need a fresh fetch.
-      window.location.reload()
-    })
-    .catch(err => {
-      button.disabled = false
-      button.innerHTML = origHTML
-      window.alert('Delete failed: ' + err.message)
-    })
+function openReportIssueModal() {
+  document.getElementById('report-issue-modal').classList.add('is-active')
 }
-window.divergenceDeleteReportForDC = divergenceDeleteReportForDC
+function closeReportIssueModal() {
+  document.getElementById('report-issue-modal').classList.remove('is-active')
+}
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.js-report-issue-open')) { openReportIssueModal(); return }
+  if (e.target.closest('.js-report-issue-close')) { closeReportIssueModal(); return }
+})
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeReportIssueModal()
+})
+
+// ─── Module exports to window (e2e + cross-module only) ─────────────────────
+// All click handlers use class-based delegation (see docs/reference/UI.md);
+// the entries below are NOT a bridge for inline onclick. They exist for two
+// reasons only:
+//   1. e2e tests assert on JSONEditor instance maps (dcEditors / clusterEditors
+//      / srvEditors) — exposed so Playwright can read them.
+//   2. Cross-module callables (reloadClusterFragment) — invoked from contexts
+//      that can't import the module symbol directly.
+// Do NOT add new entries here to support a new onclick — use delegation.
+

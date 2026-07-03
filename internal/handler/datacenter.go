@@ -75,6 +75,7 @@ func NewDataCenter(dgraphURL string, dev bool, logger *slog.Logger, basePath str
 func parseDataCenterFragment() *template.Template {
 	return template.Must(template.ParseFiles(
 		"web/templates/shared/partials/datacenter-tab.gohtml",
+		"web/templates/shared/partials/audit-tab.gohtml",
 		"web/templates/shared/components/edit-modal-datacenter.gohtml",
 	))
 }
@@ -158,6 +159,12 @@ type dataCenterTabData struct {
 	EditTargetsJSON template.JS // configitem-editor.js targets list
 	BasePath     string
 	Actions      layout.PageActions
+	// AuditPanelID + RelatedOrbIDsCSV are consumed by the shared audit-tab
+	// partial (web/templates/shared/partials/audit-tab.gohtml). DC's audit
+	// panel does NOT aggregate child events, so RelatedOrbIDsCSV stays empty
+	// and initDetailTabs falls back to data-orb-id.
+	AuditPanelID     string
+	RelatedOrbIDsCSV string
 }
 
 func (h *DataCenter) Tab(c echo.Context) error {
@@ -233,10 +240,12 @@ func (h *DataCenter) Tab(c echo.Context) error {
 	editTargets := configitems.BuildEditTargets("DataCenter", raw.OrbID, raw.Namespace, raw.Name)
 	editTargetsJSON, _ := json.Marshal(editTargets)
 
+	domID := SafeDomID(raw.OrbID)
 	dc := dataCenterTabData{
 		ID:           raw.ID,
 		OrbID:        raw.OrbID,
-		DomID:        SafeDomID(raw.OrbID),
+		DomID:        domID,
+		AuditPanelID: "dc-panel-audit-" + domID,
 		Name:         raw.Name,
 		CreatedBy:    raw.CreatedBy,
 		CreatedAt:    raw.CreatedAt,

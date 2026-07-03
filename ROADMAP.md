@@ -28,11 +28,11 @@ gantt
 
 ## Recent accomplishments
 
+- **2026-07-02** — Delegation default (35 bridge entries deleted, UI.md rule); bundler-aware courier download (courier-ready zip w/ OCI-positioned layer filenames); layers modal Position column; post-ADR-011 configbundle cleanup; orb SQLite migration Phase 0 verified.
 - **2026-06-29** — Codebase health (Track A): session singleton, stuck-job reaper, OCI rollback on sign fail, ent RegistryArtifact→ExportJob edge, named orbctl ops, audit cap 200; `make down` nuclear.
 - **2026-06-29** — Test suite hardened: 15 new Playwright tests (DataTable sort/filter/expand, empty states); `make test-integration` fixed (cursor table leak, DGraph schema polling, -p 1, stale assertion); `assetDataV2` regexp index.
 - **2026-06-22** — ADR 012 supersede: Submit-boundary semantics (recurrence-after-Submit captured); orb-side dedup removed; Delete-report + IgnoreOnly UI; OAUTH2_DEVICE_CODE rename; reload min-delay UX.
 - **2026-06-20** — Orb↔orbital UI parity restored: shared `ClusterHandler` with injected `actions` resolver (ADR 011); orb DC/Server/Cluster tabs render fully (partial-render class fixed); workload-row dblclick + Publish History link wired; orb schema page queries DGraph directly (no sidecar).
-- **2026-06-18** — Cluster schema polymorphism (interface KubernetesCluster + EksaKubernetesCluster + KubernetesNode); 5-DC cluster catalog seeded with mgmt/workload tree view; orb partial-import lifecycle; publish-history rename; schema v3.
 
 ---
 

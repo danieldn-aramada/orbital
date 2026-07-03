@@ -257,6 +257,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 			bundler.WithHTTPClient(retryClient.StandardClient()),
 			bundler.WithMaxResponseBytes(cfg.BundlerMaxResponseBytes),
 		}
+		exp.SetBundlers(cfg.BundlerURLs, cfg.BundlerTimeout, bundlerOpts...)
 		ociH := handler.NewOCI(db, ociCfg, cfg.DGraphScratchExportDir, logger, cfg.BundlerTimeout, cfg.BundlerURLs, bundlerOpts...)
 		ociH.SetBasePath(cfg.BasePath)
 		api.GET("/export/jobs/:jobId/publish-modal", ociH.PublishModal)

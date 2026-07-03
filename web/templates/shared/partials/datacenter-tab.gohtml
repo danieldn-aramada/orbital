@@ -74,11 +74,7 @@
             <li data-panel="dc-panel-racks-{{.DomID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-table-cells"></i></span><span>Racks</span></a>
             </li>
-            {{if .Actions.ShowAuditTab}}
-            <li data-panel="dc-panel-audit-{{.DomID}}" data-orb-id="{{.OrbID}}">
-              <a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a>
-            </li>
-            {{end}}
+            {{template "audit-tab-li" .}}
           </ul>
         </div>
 
@@ -148,7 +144,7 @@
           {{end}}
         </div>
 
-        <div id="dc-panel-audit-{{.DomID}}" style="display:none"></div>
+        {{template "audit-tab-placeholder" .}}
         </div>
 
       </article>

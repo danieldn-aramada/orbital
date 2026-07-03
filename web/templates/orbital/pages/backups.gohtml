@@ -35,7 +35,7 @@
           <div class="field mt-5">
             <div class="control is-flex is-align-items-center" style="gap: 0.75rem;">
               {{if .BackupEnabled}}
-                <button id="btn-backup" class="button is-primary is-small" onclick="triggerBackup()">
+                <button id="btn-backup" class="button is-primary is-small js-backup-trigger">
                   <span class="icon"><i class="fas fa-database"></i></span>
                   <span>Backup Now</span>
                 </button>
@@ -97,11 +97,11 @@
 
   <!-- Delete confirmation modal -->
   <div id="delete-modal" class="modal">
-    <div class="modal-background" onclick="closeDeleteModal()"></div>
+    <div class="modal-background js-delete-modal-close"></div>
     <div class="modal-card">
       <header class="modal-card-head">
         <p class="modal-card-title">Delete Backup</p>
-        <button class="delete" aria-label="close" onclick="closeDeleteModal()"></button>
+        <button class="delete js-delete-modal-close" aria-label="close"></button>
       </header>
       <section class="modal-card-body">
         <p>Are you sure you want to delete this backup?</p>
@@ -109,8 +109,8 @@
         <p class="has-text-danger is-size-7 mt-3">This will permanently remove the backup from storage and cannot be undone.</p>
       </section>
       <footer class="modal-card-foot" style="justify-content: flex-end; gap: 0.5rem;">
-        <button class="button" onclick="closeDeleteModal()">Cancel</button>
-        <button id="delete-confirm-btn" class="button is-danger" onclick="confirmDelete()">Delete</button>
+        <button class="button js-delete-modal-close">Cancel</button>
+        <button id="delete-confirm-btn" class="button is-danger js-delete-confirm">Delete</button>
       </footer>
     </div>
   </div>

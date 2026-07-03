@@ -101,6 +101,7 @@ func NewClusterHandler(dgraphURL string, dev bool, logger *slog.Logger, basePath
 func parseClusterFragment() *template.Template {
 	return template.Must(template.ParseFiles(
 		"web/templates/shared/partials/cluster-tab.gohtml",
+		"web/templates/shared/partials/audit-tab.gohtml",
 		"web/templates/shared/components/edit-modal-cluster.gohtml",
 	))
 }
@@ -340,6 +341,9 @@ type clusterTabData struct {
 	// its owned children (nodes, backup tree) in one query. Same pattern as
 	// Server → IdracSettings / StorageController / etc.
 	RelatedOrbIDsCSV string
+	// AuditPanelID matches data-panel on the audit <li> and the id of the
+	// placeholder <div>. Consumed by the shared audit-tab partial.
+	AuditPanelID string
 }
 
 func (h *ClusterHandler) Tab(c echo.Context) error {
@@ -560,6 +564,7 @@ func (h *ClusterHandler) Tab(c echo.Context) error {
 		tab.Backup = bd
 	}
 	tab.RelatedOrbIDsCSV = strings.Join(collectClusterRelatedOrbIDs(&raw), ",")
+	tab.AuditPanelID = "cluster-panel-audit-" + tab.DomID
 
 	tmpl := h.fragment
 	if h.dev {
