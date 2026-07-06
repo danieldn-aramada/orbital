@@ -4,10 +4,18 @@
 # Without --target the default is `orbital` (kept last so existing CI/`make push` keeps working).
 
 # ---- Build stage ----
-FROM golang:1.26.4-alpine AS builder
+# Pinned to $BUILDPLATFORM so the Go compiler runs natively on the host arch
+# (e.g. arm64 on Apple Silicon) and cross-compiles for $TARGETPLATFORM via
+# GOOS/GOARCH. Without this, `--platform linux/amd64` builds on an arm64 host
+# would QEMU-emulate the compiler itself — ~5-10× slower with no benefit
+# (CGO_ENABLED=0 so Go's cross-compiler needs no target-arch toolchain).
+FROM --platform=$BUILDPLATFORM golang:1.26.4-alpine AS builder
+ARG TARGETOS TARGETARCH
 
 WORKDIR /app
-ENV CGO_ENABLED=0
+ENV CGO_ENABLED=0 \
+    GOOS=$TARGETOS \
+    GOARCH=$TARGETARCH
 
 # Cache deps
 COPY go.mod go.sum ./
