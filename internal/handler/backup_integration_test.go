@@ -4,13 +4,20 @@ package handler_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/handler"
@@ -93,6 +100,71 @@ func TestBackupPipeline_EndToEnd(t *testing.T) {
 	}
 	if job.S3Key == "" {
 		t.Error("completed backup has no S3 key")
+	}
+}
+
+// TestBackupChecksum_RoundTripsWithS3Object guards a real production regression:
+// backup.go used to compute SHA-256 of the raw data.json.gz bytes but upload a
+// zip containing data.json.gz + schema.gz + gql_schema.gz + manifest.json.
+// Restore then verified the S3 zip against the stored checksum and failed with
+// "checksum mismatch" on every real backup. The bug was invisible to unit tests
+// because restore_integration_test.go's helper computed the zip's checksum (the
+// value restore expects), never exercising backup.go's actual write path.
+//
+// This test drives a real backup, then downloads the S3 object and asserts its
+// SHA-256 matches the stored Checksum. If someone accidentally moves the
+// checksum computation back to dataGZ (or any intermediate byte slice), this
+// fails immediately.
+func TestBackupChecksum_RoundTripsWithS3Object(t *testing.T) {
+	h := newBackupHandler(t)
+	jobID := triggerBackup(t, h)
+
+	status := testutil.WaitForBackupJob(t, testDB, jobID, 90*time.Second)
+	if string(status) != "completed" {
+		t.Fatalf("backup did not complete: %q", status)
+	}
+
+	job, err := testDB.Backup.Get(context.Background(), jobID)
+	if err != nil {
+		t.Fatalf("get backup: %v", err)
+	}
+	if job.Checksum == "" {
+		t.Fatal("completed backup has no checksum")
+	}
+
+	// Download the S3 object and hash it — must equal what backup stored.
+	ctx := context.Background()
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
+		awsconfig.WithRegion(testutil.TestS3Region),
+		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			testutil.TestS3AccessKey, testutil.TestS3SecretKey, "",
+		)),
+	)
+	if err != nil {
+		t.Fatalf("aws config: %v", err)
+	}
+	endpoint := testutil.MinIOEndpoint()
+	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+		o.BaseEndpoint = &endpoint
+		o.UsePathStyle = true
+	})
+	out, err := client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &[]string{testutil.TestS3Bucket}[0],
+		Key:    &job.S3Key,
+	})
+	if err != nil {
+		t.Fatalf("S3 GetObject %q: %v", job.S3Key, err)
+	}
+	defer out.Body.Close()
+
+	hash := sha256.New()
+	if _, err := io.Copy(hash, out.Body); err != nil {
+		t.Fatalf("hash S3 body: %v", err)
+	}
+	got := hex.EncodeToString(hash.Sum(nil))
+
+	if got != job.Checksum {
+		t.Fatalf("checksum mismatch — stored=%s s3=%s (backup.go stored a hash that doesn't match the uploaded object; restore will always fail)", job.Checksum, got)
 	}
 }
 

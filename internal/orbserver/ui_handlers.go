@@ -102,7 +102,8 @@ func (s *Server) buildOrbMenuSections(path string) []layout.MenuSection {
 			Icon:  "fa-solid fa-code-branch",
 			Color: "has-text-danger",
 			Items: []layout.MenuItem{
-				{Label: "Divergence Report", Href: "/divergence", Active: path == "/divergence"},
+				{Label: "Publish Report", Href: "/divergence", Active: path == "/divergence"},
+				{Label: "Publish History", Href: "/publish-history", Active: path == "/publish-history"},
 			},
 		},
 	}

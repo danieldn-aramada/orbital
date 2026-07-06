@@ -137,47 +137,44 @@ test('pre-release checklist: backup → export → publish → orb import → mu
   const backupRecordId: string = backupJob.id;
   console.log(`[smoke] Backup completed — id=${backupRecordId} s3Key=${backupJob.s3Key}`);
 
-  // ── Step 2: Export ─────────────────────────────────────────────────────────
-  console.log('\n[smoke] ── Step 2: Export ──────────────────────────────────');
+  // ── Step 2: Atomic export + publish ────────────────────────────────────────
+  // POST /api/v1/export with download=false (default) chains export → publish
+  // in a single job. The separate /publish endpoint was removed in the atomic
+  // refactor; the job's `.published` bool signals completion of the OCI push.
+  console.log('\n[smoke] ── Step 2: Atomic export + publish ─────────────');
   const exportTrigger = await page.request.post('/api/v1/export', {
     data: { orbId: DC_ORB_ID },
   });
   expect(exportTrigger.status(), 'export trigger: expect 202').toBe(202);
   const { id: exportJobId } = await exportTrigger.json();
   expect(exportJobId, 'export trigger: expect id').toBeTruthy();
-  console.log(`[smoke] Export job created: ${exportJobId}`);
+  console.log(`[smoke] Atomic job created: ${exportJobId}`);
 
   const exportJob = await pollUntil(
     async () => (await page.request.get(`/api/v1/export/jobs/${exportJobId}`)).json(),
     j => ['completed', 'failed'].includes(j.status),
-    120_000,
+    180_000, // atomic path includes bundler + OCI push + sign
   );
   expect(
     exportJob.status,
-    `export job ${exportJobId} must reach "completed" (got "${exportJob.status}"${exportJob.error ? ': ' + exportJob.error : ''})`,
+    `atomic export+publish job ${exportJobId} must reach "completed" (got "${exportJob.status}"${exportJob.error ? ': ' + exportJob.error : ''})`,
   ).toBe('completed');
-  console.log(`[smoke] Export completed — jobId=${exportJobId}`);
+  expect(exportJob.published, 'atomic flow must have published=true').toBe(true);
+  console.log(`[smoke] Export + publish completed — jobId=${exportJobId}`);
 
-  // ── Step 3: Publish to Zot ─────────────────────────────────────────────────
-  console.log('\n[smoke] ── Step 3: Publish ─────────────────────────────────');
-  const publishResp = await page.request.post(`/api/v1/export/jobs/${exportJobId}/publish`);
-  expect(publishResp.status(), 'publish: expect 202').toBe(202);
-  const { artifactId, tag } = await publishResp.json();
-  expect(artifactId, 'publish response: expect artifactId').toBeTruthy();
-  expect(tag, 'publish response: expect tag').toBeTruthy();
-  console.log(`[smoke] Publish job created: artifactId=${artifactId} tag=${tag}`);
-
-  const artifact = await pollUntil(
-    async () => (await page.request.get(`/api/v1/oci/artifacts/${artifactId}`)).json(),
-    a => ['completed', 'failed'].includes(a.status),
-    120_000,
-  );
-  expect(
-    artifact.status,
-    `artifact ${artifactId} must reach "completed" (got "${artifact.status}"${artifact.error ? ': ' + artifact.error : ''})`,
-  ).toBe('completed');
-  expect(artifact.digest, 'completed artifact must have digest').toBeTruthy();
-  expect(artifact.signed, 'completed artifact must be signed').toBe(true);
+  // ── Step 3: Look up the artifact record for this jobId ─────────────────────
+  console.log('\n[smoke] ── Step 3: Fetch artifact record ────────────────');
+  const artifactsResp = await page.request.get('/api/v1/oci/artifacts');
+  expect(artifactsResp.status(), 'list artifacts: expect 200').toBe(200);
+  const artifacts: any[] = await artifactsResp.json();
+  const artifact = artifacts.find((a: any) => a.exportJobId === exportJobId);
+  expect(artifact, `must find published artifact for exportJobId ${exportJobId}`).toBeTruthy();
+  const { id: artifactId, tag } = artifact;
+  expect(artifactId, 'artifact record: expect id').toBeTruthy();
+  expect(tag, 'artifact record: expect tag').toBeTruthy();
+  expect(artifact.status, 'artifact status must be completed').toBe('completed');
+  expect(artifact.digest, 'artifact must have digest').toBeTruthy();
+  expect(artifact.signed, 'artifact must be signed').toBe(true);
   console.log(`[smoke] Published — tag=${tag} digest=${artifact.digest}`);
 
   // ── Step 4: Count ConfigItems in orbital DGraph ────────────────────────────
@@ -197,17 +194,27 @@ test('pre-release checklist: backup → export → publish → orb import → mu
   expect(orbImportTrigger.status(), 'orb import trigger: expect 202').toBe(202);
   console.log(`[smoke] Orb import started (tag=${tag})...`);
 
+  // Orb's import status is terminal at "done", "partial", or "failed".
+  // "partial" = graph applied successfully but one or more non-orbital-native
+  // layers were passed through without a consumer registered — this is the
+  // expected outcome in the atomic-refactor world where orb no longer applies
+  // configbundle-produced (non-orbital) layers directly.
   const orbImportState = await pollUntil(
     async () => (await page.request.get(`${ORB_BASE}/api/v1/import/status`)).json(),
-    s => s.status === 'done' || s.status === 'failed',
+    s => ['done', 'partial', 'failed'].includes(s.status),
     300_000, // 5 min — dgraph live loader is slow
     5000,
   );
   expect(
     orbImportState.status,
-    `orb import must reach "done" (got "${orbImportState.status}"${orbImportState.error ? ': ' + orbImportState.error : ''})`,
-  ).toBe('done');
-  console.log('[smoke] Orb import completed');
+    `orb import must reach "done" or "partial" (got "${orbImportState.status}"${orbImportState.error ? ': ' + orbImportState.error : ''})`,
+  ).not.toBe('failed');
+  // Verification must succeed regardless of partial vs done.
+  expect(
+    orbImportState.lastImport?.verification,
+    'orb import: signature verification must succeed',
+  ).toBe('verified');
+  console.log(`[smoke] Orb import completed (status=${orbImportState.status})`);
 
   // ── Step 6: Assert orb ConfigItem count matches orbital ───────────────────
   console.log('\n[smoke] ── Step 6: Compare ConfigItem counts ───────────────');

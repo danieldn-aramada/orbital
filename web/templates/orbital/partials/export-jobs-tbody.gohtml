@@ -1,9 +1,12 @@
+{{/* Retained Downloads rows — only completed download-flow jobs with an
+     on-disk zip. Publish button removed (atomic flow subsumes it via
+     /export?download=false). Delete = artifact-only removal via the new
+     DELETE /api/v1/export/jobs/:jobId/artifact endpoint; the job row
+     itself stays as audit history. */}}
 {{range .Rows}}<tr>
-  <td style="font-family:monospace;font-size:0.7rem;">{{.JobID}}</td>
   <td>{{.DataCenter}}</td>
   <td data-testid="export-job-status">
     <span class="tag {{.StatusClass}}">{{.Status}}</span>
-    {{if .Published}}<span class="tag is-primary is-light ml-1">published</span>{{end}}
   </td>
   <td>{{.CreatedAt}}</td>
   <td>{{.CreatedBy}}</td>
@@ -11,10 +14,9 @@
   <td style="white-space:nowrap;">
     <div style="display:flex;gap:0.25rem;align-items:center;">
       {{if .CanDownload}}<a data-testid="export-download-btn" class="button is-small is-link is-outlined js-export-download" data-export-job-id="{{.JobID}}"><span class="icon"><i class="fa-solid fa-download"></i></span><span>Download</span></a>{{end}}
-      {{if and $.OCIConfigured .CanPublish}}<button class="button is-small is-warning is-outlined" hx-get="{{$.BasePath}}/api/v1/export/jobs/{{.JobID}}/publish-modal?republish={{.Published}}" hx-target="#publish-modal-body" hx-swap="innerHTML" onclick="document.getElementById('publish-confirm-modal').classList.add('is-active')"><span class="icon"><i class="fa-solid fa-box-archive"></i></span><span>{{if .Published}}Re-publish{{else}}Publish{{end}}</span></button>{{end}}
-      <button class="button is-small is-danger is-outlined js-export-delete" data-export-job-id="{{.JobID}}" title="Delete"><span class="icon"><i class="fa-solid fa-trash"></i></span></button>
+      <button class="button is-small is-danger is-outlined js-export-artifact-delete" data-export-job-id="{{.JobID}}" title="Delete retained zip (keeps audit row)"><span class="icon"><i class="fa-solid fa-trash"></i></span></button>
     </div>
   </td>
 </tr>
-{{else}}<tr><td colspan="7" class="has-text-grey">No export jobs yet.</td></tr>
+{{else}}<tr><td colspan="6" class="has-text-grey">No retained downloads.</td></tr>
 {{end}}

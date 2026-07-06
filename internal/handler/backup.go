@@ -579,10 +579,6 @@ func (h *BackupHandler) doBackup(ctx context.Context, jobID uuid.UUID, log *slog
 		return fmt.Errorf("read data.json.gz: %w", err)
 	}
 
-	sum := sha256.Sum256(dataGZ)
-	checksum := hex.EncodeToString(sum[:])
-	log.Info("computed checksum", "sha256", checksum)
-
 	dqlSchemaGZPath, err := h.findExportFile(dataGZPath, ".schema.gz")
 	if err != nil {
 		return fmt.Errorf("find dql schema export: %w", err)
@@ -626,6 +622,16 @@ func (h *BackupHandler) doBackup(ctx context.Context, jobID uuid.UUID, log *slog
 		return fmt.Errorf("write zip: %w", err)
 	}
 	defer os.Remove(zipPath)
+
+	// Checksum the exact bytes uploaded to S3 — this is what restore reads back
+	// and verifies. Hashing dataGZ alone (as before) produced a value that
+	// couldn't match the zip's hash on the read side, so every real backup was
+	// un-restorable. See internal/handler/restore.go zip-hash verification.
+	checksum, err := sha256File(zipPath)
+	if err != nil {
+		return fmt.Errorf("checksum zip: %w", err)
+	}
+	log.Info("computed checksum", "sha256", checksum)
 
 	storageKey := fmt.Sprintf("%s%s", h.s3Prefix, zipName)
 	log.Info("uploading backup", "bucket", h.s3Bucket, "key", storageKey)
@@ -840,6 +846,22 @@ func toBackupFragRow(j *ent.Backup) backupFragRow {
 		row.ChecksumShort = j.Checksum
 	}
 	return row
+}
+
+// sha256File returns the hex-encoded SHA-256 of the file at path. Streams the
+// file through the hasher so a multi-gigabyte backup zip doesn't need to fit
+// in memory.
+func sha256File(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 func fmtBytes(n *int64) string {

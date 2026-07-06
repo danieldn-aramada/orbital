@@ -73,7 +73,7 @@ func newServerWithMockBackend(t *testing.T, consumers orbconfig.ConsumersConfig)
 	}
 
 	// Replace the importer's backend with a mock that always succeeds.
-	srv.imp = orb.NewImporter(*cfg, srv.logger, &mockDGraphBackend{})
+	srv.imp = orb.NewImporter(*cfg, srv.logger, &mockDGraphBackend{}, srv.db)
 
 	return srv
 }

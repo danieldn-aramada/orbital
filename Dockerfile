@@ -4,7 +4,7 @@
 # Without --target the default is `orbital` (kept last so existing CI/`make push` keeps working).
 
 # ---- Build stage ----
-FROM golang:1.25.5-alpine AS builder
+FROM golang:1.26.4-alpine AS builder
 
 WORKDIR /app
 ENV CGO_ENABLED=0
@@ -33,7 +33,7 @@ FROM dgraph/dgraph:v25.3.1 AS dgraph-tools
 # ---- Shared runtime base ----
 # Common alpine + tools + web/schema layout used by both images. Anything that
 # both apps need at runtime goes here so the two final images stay in lockstep.
-FROM alpine:3.21 AS runtime-base
+FROM alpine:3.23 AS runtime-base
 
 RUN apk add --no-cache \
     curl \

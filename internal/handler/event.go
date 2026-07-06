@@ -94,7 +94,10 @@ var skipVarsSet = map[string]bool{
 // @Produce     json
 // @Param       limit          query int    false "Max results (default 100, max 500)"
 // @Param       offset         query int    false "Pagination offset"
-// @Param       orbId          query string false "Filter by resource orbId (e.g. alaska-dot:GRTLY24)"
+// @Param       orbId          query string false "Filter by resource orbId (e.g. alaska-dot:GRTLY24). Repeatable, max 32."
+// @Param       namespace      query string false "Filter by namespace prefix (e.g. \"colo\" matches every orbId starting with \"colo:\"). Cheap DC-scope filter that avoids enumerating child orbIds."
+// @Param       since          query string false "RFC3339 lower bound (exclusive) on event timestamp"
+// @Param       until          query string false "RFC3339 upper bound (inclusive) on event timestamp"
 // @Param       resource_id    query string false "Filter by resource ID"
 // @Param       resource_type  query string false "Filter by resource type (e.g. Server, DataCenter)"
 // @Param       operation_name query string false "Filter by operation name (e.g. UpdateServer)"
@@ -151,6 +154,41 @@ func (h *EventHandler) List(c echo.Context) error {
 	}
 	if rt := c.QueryParam("resource_type"); rt != "" {
 		q = q.Where(event.HasResourceTypesWith(eventresourcetype.ResourceTypeEQ(rt)))
+	}
+	if cat := c.QueryParam("event_category"); cat != "" {
+		// event_category=data restricts to intent mutations (used by the
+		// publish-changes panel to exclude the surrounding system events
+		// like `export` from the diff itself).
+		q = q.Where(event.EventCategoryEQ(cat))
+	}
+
+	// Namespace prefix filter. Orbital's schema convention is "orbId =
+	// namespace:name" with each DC owning one namespace, so matching orb_id
+	// LIKE 'colo:%' captures every event on every entity under DC "colo:*"
+	// without enumerating servers/idracs/clusters/etc. Auth events stay
+	// excluded (they belong on the global audit log, not a resource panel).
+	if ns := c.QueryParam("namespace"); ns != "" {
+		q = q.Where(
+			event.HasResourcesWith(eventresource.OrbIDHasPrefix(ns+":")),
+			event.EventCategoryNEQ("auth"),
+		)
+	}
+
+	// Timestamp window. `since` is exclusive, `until` is inclusive — pick
+	// consecutive windows and no event is counted twice on the boundary.
+	if v := c.QueryParam("since"); v != "" {
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "since must be RFC3339: "+err.Error())
+		}
+		q = q.Where(event.TimestampGT(t))
+	}
+	if v := c.QueryParam("until"); v != "" {
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "until must be RFC3339: "+err.Error())
+		}
+		q = q.Where(event.TimestampLTE(t))
 	}
 
 	total, err := q.Clone().Count(c.Request().Context())

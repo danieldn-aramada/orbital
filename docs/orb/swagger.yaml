@@ -211,6 +211,31 @@ paths:
       summary: Publish divergence report
       tags:
       - divergence
+  /api/v1/divergence/publish-history:
+    get:
+      description: Returns history of divergence reports published to object storage,
+        newest first. Supports pagination via limit (max 200) and offset. HX-Request
+        callers receive an HTML fragment for direct swap into the divergence page.
+      parameters:
+      - description: Rows per page (default 25, max 200)
+        in: query
+        name: limit
+        type: integer
+      - description: Row offset (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List published divergence reports
+      tags:
+      - divergence
   /api/v1/divergence/test-connection:
     post:
       description: 'Pings the configured object store (S3 or Azure Blob) used for

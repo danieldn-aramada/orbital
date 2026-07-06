@@ -13,7 +13,7 @@ test('orb sidebar nav links navigate correctly', async ({ page }) => {
   await page.click('a.app-menu-link:has-text("Import Subgraph")');
   await expect(page).toHaveURL(/\/import/);
 
-  await page.click('a.app-menu-link:has-text("Divergence Report")');
+  await page.click('a.app-menu-link:has-text("Publish Report")');
   await expect(page).toHaveURL(/\/divergence/);
 });
 

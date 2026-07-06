@@ -1,0 +1,117 @@
+{{define "page"}}
+<main class="app-main-grid">
+  <div class="app-menu">
+    {{template "menu.gohtml" .}}
+  </div>
+  <div class="app-main p-5">
+
+    <p class="is-size-4 mb-2">Publish History</p>
+    <p class="has-text-grey mb-4" style="font-size: 0.875rem;">
+      Successful divergence report publishes to object storage. Newest first. Trigger a new publish from <a href="{{.BasePath}}/divergence">Publish Report</a>.
+    </p>
+
+    <div id="publish-history-content">
+      {{template "publish-history-content" .}}
+    </div>
+
+  </div>
+</main>
+{{end}}
+
+{{define "publish-history-content"}}
+  {{with .PublishHistory}}
+    {{if not .Rows}}
+    <article class="box">
+      <p class="has-text-grey">No publishes yet. Publish a divergence report to start the history.</p>
+    </article>
+    {{else}}
+    <div class="table-container">
+      <table class="table is-fullwidth is-hoverable is-striped is-size-7">
+        <thead>
+          <tr>
+            <th style="width: 2rem"></th>
+            <th style="white-space:nowrap">Published At</th>
+            <th style="white-space:nowrap">Entry Count</th>
+            <th>Object Key</th>
+            <th style="white-space:nowrap">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range $i, $row := .Rows}}
+          <tr>
+            <td>
+              <button type="button" class="button is-small is-white js-orb-publish-expand" aria-label="Toggle detail">
+                <span class="icon"><i class="fas fa-chevron-right"></i></span>
+              </button>
+            </td>
+            <td style="white-space:nowrap"><span data-timestamp="{{.PublishedAt.Format "2006-01-02T15:04:05Z07:00"}}">{{.PublishedAt.Format "2006-01-02 15:04"}}</span></td>
+            <td>{{.EntryCount}}</td>
+            <td><code class="is-size-7">{{.S3Key}}</code></td>
+            <td>
+              {{if eq .Status "published"}}
+              <span class="tag is-success is-light">published</span>
+              {{else if eq .Status "superseded"}}
+              <span class="tag is-light">superseded</span>
+              {{else}}
+              <span class="tag is-light">{{.Status}}</span>
+              {{end}}
+            </td>
+          </tr>
+          <tr class="js-orb-publish-detail is-hidden">
+            <td></td>
+            <td colspan="4">
+              {{if .Entries}}
+              <table class="table is-narrow is-size-7 has-background-white-bis" style="margin: 0 0 0.5rem 0; width: 100%;">
+                <thead>
+                  <tr>
+                    <th>Orb ID</th>
+                    <th>Field</th>
+                    <th>Intended</th>
+                    <th>Override</th>
+                    <th style="white-space:nowrap">Who</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {{range .Entries}}
+                  <tr>
+                    <td>{{.OrbID}}</td>
+                    <td>{{.Field}}</td>
+                    <td><code>{{.IntendedValue}}</code></td>
+                    <td><code>{{.OverrideValue}}</code></td>
+                    <td>{{.Who}}</td>
+                  </tr>
+                  {{end}}
+                </tbody>
+              </table>
+              {{else}}
+              <p class="has-text-grey is-size-7 mb-2">No entry detail captured for this publish.</p>
+              {{end}}
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+
+    <nav class="is-flex is-align-items-center is-justify-content-flex-end mt-3" style="gap: 1rem;" role="navigation" aria-label="pagination">
+      <span class="has-text-grey is-size-7">Showing {{.FirstRow}}–{{.LastRow}} of {{.Total}}</span>
+      <div class="buttons has-addons is-small mb-0">
+        <button type="button" class="button is-small"
+                {{if .HasPrev}}hx-get="{{$.BasePath}}/api/v1/divergence/publish-history?limit={{.Limit}}&offset={{.PrevOffset}}"
+                hx-target="#publish-history-content"
+                hx-swap="innerHTML"{{else}}disabled{{end}}>
+          <span class="icon is-small"><i class="fas fa-chevron-left"></i></span>
+          <span>Previous</span>
+        </button>
+        <button type="button" class="button is-small"
+                {{if .HasNext}}hx-get="{{$.BasePath}}/api/v1/divergence/publish-history?limit={{.Limit}}&offset={{.NextOffset}}"
+                hx-target="#publish-history-content"
+                hx-swap="innerHTML"{{else}}disabled{{end}}>
+          <span>Next</span>
+          <span class="icon is-small"><i class="fas fa-chevron-right"></i></span>
+        </button>
+      </div>
+    </nav>
+    {{end}}
+  {{end}}
+{{end}}

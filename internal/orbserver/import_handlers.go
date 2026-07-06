@@ -137,7 +137,7 @@ func (s *Server) triggerImport(c echo.Context) error {
 			status = "partial"
 		}
 		if len(layerRecords) > 0 || status != "done" {
-			if err := orb.FinalizeLastHistory(s.cfg.DataDir, layerRecords, status); err != nil {
+			if err := orb.FinalizeLastHistory(ctx, s.db, layerRecords, status); err != nil {
 				s.logger.Warn("finalize history failed", "err", err)
 			}
 		}
@@ -269,7 +269,7 @@ func (s *Server) importTags(c echo.Context) error {
 // @Success     200 {array}  orb.ImportRecord
 // @Router      /api/v1/import/history [get]
 func (s *Server) importHistory(c echo.Context) error {
-	records, err := orb.LoadHistory(s.cfg.DataDir)
+	records, err := orb.LoadHistory(c.Request().Context(), s.db)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -292,7 +292,7 @@ func (s *Server) importHistoryLayers(c echo.Context) error {
 	if tag == "" {
 		return echo.ErrBadRequest
 	}
-	records, err := orb.LoadHistory(s.cfg.DataDir)
+	records, err := orb.LoadHistory(c.Request().Context(), s.db)
 	if err != nil {
 		return fmt.Errorf("load history: %w", err)
 	}
@@ -525,7 +525,7 @@ func (s *Server) importArtifact(c echo.Context) error {
 		// Consumer dispatch is best-effort: status is always "done" when the
 		// graph apply succeeds. Consumer errors are visible in layer records.
 		if len(layerRecords) > 0 {
-			if err := orb.FinalizeLastHistory(s.cfg.DataDir, layerRecords, "done"); err != nil {
+			if err := orb.FinalizeLastHistory(ctx, s.db, layerRecords, "done"); err != nil {
 				s.logger.Warn("finalize history failed", "err", err)
 			}
 		}

@@ -302,66 +302,111 @@ let exportPollTimer = null
 document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('export-jobs-tbody')) return
 
-  const select = document.getElementById('export-datacenter-select')
+  const dcSelect = document.getElementById('export-datacenter-select')
+  const destSelect = document.getElementById('export-destination-select')
   const submitBtn = document.getElementById('export-submit-btn')
-  if (select && submitBtn) {
-    select.addEventListener('change', () => { submitBtn.disabled = !select.value })
+  const testRow = document.getElementById('test-connection-row')
+  const ociOption = destSelect?.querySelector('option[data-oci="true"]')
+  const ociPrefix = destSelect?.dataset.ociRegistryPrefix || ''
+
+  // Refresh the OCI destination option's label to include the selected DC's
+  // NAME (not orbId — the registry path uses the human name). Preserves
+  // "{datacenter-name}" placeholder when no DC selected.
+  const refreshOciLabel = () => {
+    if (!ociOption) return
+    const selected = dcSelect?.selectedOptions?.[0]
+    const dcName = selected?.dataset?.name || '{datacenter-name}'
+    if (ociPrefix) {
+      ociOption.textContent = ociPrefix + dcName
+    }
   }
+
+  const refreshTestConnectionVisibility = () => {
+    if (!testRow) return
+    testRow.style.display = destSelect?.value === 'oci' ? 'flex' : 'none'
+  }
+
+  const refreshSubmitEnabled = () => {
+    if (!submitBtn) return
+    submitBtn.disabled = !dcSelect?.value || !destSelect?.value
+  }
+
+  const onAnyChange = () => {
+    refreshOciLabel()
+    refreshTestConnectionVisibility()
+    refreshSubmitEnabled()
+  }
+
+  dcSelect?.addEventListener('change', onAnyChange)
+  destSelect?.addEventListener('change', onAnyChange)
+  onAnyChange()
 
   document.body.addEventListener('refreshExportJobs', () => loadExportJobsTable())
 
   loadExportJobsTable()
 })
 
-function handleExportSubmit() {
+// handleExportSubmit posts the atomic export request. Destination comes from
+// the destination dropdown: "oci" → publish to OCI, zip discarded; "download"
+// → export only, zip retained for download. Server auto-infers download=true
+// when OCI is unconfigured.
+function handleExportSubmit(btn) {
   const select = document.getElementById('export-datacenter-select')
-  const id = select.value
+  const id = select?.value
   if (!id) return
 
-  const submitBtn = document.getElementById('export-submit-btn')
-  submitBtn.classList.add('is-loading')
-  submitBtn.disabled = true
+  const dest = document.getElementById('export-destination-select')?.value
+  if (!dest) return
+  const download = dest === 'download'
+
+  const buttons = document.querySelectorAll('.js-export-submit')
+  buttons.forEach(b => { b.disabled = true })
+  if (btn) btn.classList.add('is-loading')
 
   fetch(BASE + '/api/v1/export', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ orbId: id }),
+    body: JSON.stringify({ orbId: id, download }),
   })
     .then(r => r.json())
     .then(json => {
-      submitBtn.classList.remove('is-loading')
-      submitBtn.disabled = false
+      buttons.forEach(b => { b.disabled = false })
+      if (btn) btn.classList.remove('is-loading')
       if (json.error) {
         showExportStatus('is-warning', 'fa-triangle-exclamation', json.error)
         return
       }
-      showExportStatus('is-info', 'fa-spinner fa-spin', 'Export started…')
-      pollExportStatus(json.id)
+      const msg = download ? 'Export started (download flow)…' : 'Export + publish started…'
+      showExportStatus('is-info', 'fa-spinner fa-spin', msg)
+      pollExportStatus(json.id, download)
       loadExportJobsTable()
     })
     .catch(() => {
-      submitBtn.classList.remove('is-loading')
-      submitBtn.disabled = false
+      buttons.forEach(b => { b.disabled = false })
+      if (btn) btn.classList.remove('is-loading')
       showExportStatus('is-danger', 'fa-circle-xmark', 'Failed to start export.')
     })
 }
 
-function pollExportStatus(jobId) {
+function pollExportStatus(jobId, download) {
   clearTimeout(exportPollTimer)
   fetch(BASE + `/api/v1/export/jobs/${jobId}`)
     .then(r => r.json())
     .then(job => {
       loadExportJobsTable()
       if (job.status === 'completed') {
-        showExportStatus('is-success', 'fa-circle-check', 'Export complete.')
+        const successMsg = download
+          ? 'Export complete. Available in Retained Downloads.'
+          : 'Export + publish complete. See Publish History.'
+        showExportStatus('is-success', 'fa-circle-check', successMsg)
       } else if (job.status === 'failed') {
         showExportStatus('is-danger', 'fa-circle-xmark', `Export failed: ${job.error ?? 'unknown error'}`)
       } else {
-        exportPollTimer = setTimeout(() => pollExportStatus(jobId), 2000)
-        showExportStatus('is-info', 'fa-spinner fa-spin', job.status === 'running' ? 'Exporting…' : 'Pending…')
+        exportPollTimer = setTimeout(() => pollExportStatus(jobId, download), 2000)
+        showExportStatus('is-info', 'fa-spinner fa-spin', job.status === 'running' ? 'Working…' : 'Pending…')
       }
     })
-    .catch(() => { exportPollTimer = setTimeout(() => pollExportStatus(jobId), 3000) })
+    .catch(() => { exportPollTimer = setTimeout(() => pollExportStatus(jobId, download), 3000) })
 }
 
 function showExportStatus(colorClass, iconClass, text) {
@@ -394,23 +439,28 @@ function downloadExportJob(btn, jobId) {
   setTimeout(() => { btn.disabled = false; btn.innerHTML = orig }, 2000)
 }
 
-function deleteExportJob(jobId) {
-  if (!confirm('Delete this export job and its local artifact file?\n\nThis does not remove any published OCI artifacts from the registry.')) return
-  fetch(BASE + `/api/v1/export/jobs/${jobId}`, { method: 'DELETE' })
+// deleteExportArtifact removes the retained zip for a download-flow job.
+// The ExportJob row stays as audit history — only the on-disk artifact and
+// the artifact_path pointer are cleared.
+function deleteExportArtifact(jobId) {
+  if (!confirm('Delete this retained zip?\n\nThe audit record for this export stays intact — only the on-disk file is removed.')) return
+  fetch(BASE + `/api/v1/export/jobs/${jobId}/artifact`, { method: 'DELETE' })
     .then(r => {
       if (r.ok) loadExportJobsTable()
       else r.json().then(j => alert(`Delete failed: ${j.error ?? 'unknown'}`))
     })
-    .catch(() => alert('Failed to delete job.'))
+    .catch(() => alert('Failed to delete artifact.'))
 }
 
 // Delegated handlers for Export page (page-level + tbody buttons that re-render via HTMX swap).
 document.addEventListener('click', (e) => {
-  if (e.target.closest('.js-export-submit')) { handleExportSubmit(); return }
+  const submit = e.target.closest('.js-export-submit')
+  if (submit) { handleExportSubmit(submit); return }
   const dl = e.target.closest('.js-export-download')
   if (dl) { downloadExportJob(dl, dl.dataset.exportJobId); return }
-  const del = e.target.closest('.js-export-delete')
-  if (del) { deleteExportJob(del.dataset.exportJobId); return }
+  const del = e.target.closest('.js-export-artifact-delete')
+  if (del) { deleteExportArtifact(del.dataset.exportJobId); return }
+  if (e.target.closest('.js-retained-reload')) { loadExportJobsTable(); return }
 })
 
 // ─── Edge Delivery page ───────────────────────────────────────────────────────
@@ -603,13 +653,16 @@ document.addEventListener('click', function (e) {
         initialState: JSON.parse(initialJSON),
         targets,
         reloadOrbId: modal.dataset.orbId,
-        reloadFn: (orbId) => {
+        reloadFn: async (orbId) => {
           const target = document.getElementById('tab-content-' + safeDomId(orbId))
           if (target && window.htmx) {
-            window.htmx.ajax('GET', BASE + '/datacenters/' + encodeURIComponent(orbId), { target, swap: 'innerHTML' })
+            // htmx.ajax returns a Promise that resolves after the swap
+            // completes. Awaiting it prevents a race where the next
+            // interaction sees stale DOM elements before the fragment
+            // has been swapped in (caught by e2e datacenter-edit spec).
+            await window.htmx.ajax('GET', BASE + '/datacenters/' + encodeURIComponent(orbId), { target, swap: 'innerHTML' })
             dcEditors.delete(id)
           }
-          return Promise.resolve()
         },
         showError,
         clearError,
@@ -1445,13 +1498,11 @@ function divergenceSkeletonHTML() {
   </table>`
 }
 
-// One-click export-and-publish from a Divergence Reports row. Triggers an
-// export for the DC, polls until completed, then opens the existing
-// publish-confirm modal (same fragment as /export). Operator confirms in
-// the modal — the existing HTMX form does the actual publish. On success,
-// the refreshExportJobs HX-Trigger fires and the row's button switches to
-// the "Published" disabled state for the session. To republish, the
-// operator goes to /export (which reflects current published state).
+// One-click atomic export-and-publish from a Divergence Reports row. The
+// unified `POST /api/v1/export` (download=false) does the whole flow in a
+// single async job — no separate publish call, no confirmation modal. Poll
+// until terminal; on success, flip the button to a "Go to Publish History"
+// link so the operator can inspect the published artifact.
 const divergencePublishedDCs = new Set()
 
 function divergencePublishForDC(button) {
@@ -1461,97 +1512,52 @@ function divergencePublishForDC(button) {
   const origHTML = button.innerHTML
   const spinner = (text) => `<span class="icon"><i class="fa-solid fa-spinner fa-spin"></i></span><span>${text}</span>`
   button.disabled = true
-  button.innerHTML = spinner('Exporting…')
+  button.innerHTML = spinner('Publishing…')
   hideDivergenceErr()
 
-  // 1) Export.
+  // Atomic call — server exports subgraph then pushes to OCI in one goroutine.
   fetch(BASE + '/api/v1/export', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ orbId: dcOrbId }),
+    body: JSON.stringify({ orbId: dcOrbId, download: false }),
   })
     .then(r => r.json())
     .then(json => {
       if (json.error) throw new Error(json.error)
-      // 2) Poll export job until terminal.
-      const pollExport = () => {
-        fetch(BASE + `/api/v1/export/jobs/${json.id}`)
-          .then(r => r.json())
-          .then(job => {
-            if (job.status === 'completed') {
-              button.innerHTML = spinner('Publishing…')
-              // 3) Open publish-confirm modal with summary fragment.
-              return openDivergencePublishModal(json.id, button, dcOrbId, origHTML)
-            } else if (job.status === 'failed') {
-              button.disabled = false
-              button.innerHTML = origHTML
-              showDivergenceErr('Export failed: ' + (job.error || 'unknown error'))
-            } else {
-              setTimeout(pollExport, 2000)
-            }
-          })
-          .catch(() => setTimeout(pollExport, 3000))
-      }
-      pollExport()
+      // Row is committed to the atomic flow — subsequent clicks stay silent.
+      divergencePublishedDCs.add(dcOrbId)
+      pollDivergencePublish(json.id, button)
     })
     .catch(err => {
       button.disabled = false
       button.innerHTML = origHTML
-      showDivergenceErr('Export failed: ' + (err.message || 'unknown error'))
+      showDivergenceErr('Publish failed: ' + (err.message || 'unknown error'))
     })
 }
 
-function openDivergencePublishModal(jobId, button, dcOrbId, origHTML) {
-  return fetch(BASE + `/api/v1/export/jobs/${jobId}/publish-modal`, { headers: { 'HX-Request': 'true' } })
-    .then(r => r.text())
-    .then(html => {
-      const body = document.getElementById('publish-modal-body')
-      body.innerHTML = html
-      htmx.process(body)
-      const modal = document.getElementById('publish-confirm-modal')
-      modal.classList.add('is-active')
-
-      // The export succeeded — this row's publish flow is COMMITTED for this
-      // session, regardless of whether the operator confirms the modal or
-      // cancels it. To re-export and re-publish, they must use /export.
-      // Mark the DC now so the modal-close observer never re-enables.
-      divergencePublishedDCs.add(dcOrbId)
-
-      // Once any terminal state is reached (publish completed OK, failed, or
-      // operator closed the modal without confirming), collapse to a uniform
-      // "Go to Publish History" link. Same color (is-link, blue), same icon,
-      // same destination — the per-state distinction lives in the publish
-      // history page itself, not in this button.
-      const setToHistoryLink = () => {
-        button.disabled = false
-        button.onclick = () => { window.location.href = BASE + '/publish-history' }
-        button.innerHTML = '<span class="icon"><i class="fa-solid fa-arrow-up-right-from-square"></i></span><span>Go to Publish History</span>'
-      }
-      const onTerminal = () => {
-        document.body.removeEventListener('refreshExportJobs', onTerminal)
-        setToHistoryLink()
-      }
-      document.body.addEventListener('refreshExportJobs', onTerminal)
-
-      // Modal closed before any publish attempt (operator hit Cancel after the
-      // confirm modal appeared) — same treatment. Row stays locked for the
-      // session per divergencePublishedDCs; operator's path forward is still
-      // the publish-history page.
-      const observer = new MutationObserver(() => {
-        if (modal.classList.contains('is-active')) return
-        observer.disconnect()
-        document.body.removeEventListener('refreshExportJobs', onTerminal)
-        setToHistoryLink()
+function pollDivergencePublish(jobId, button) {
+  const setToHistoryLink = () => {
+    button.disabled = false
+    button.onclick = () => { window.location.href = BASE + '/publish-history' }
+    button.innerHTML = '<span class="icon"><i class="fa-solid fa-arrow-up-right-from-square"></i></span><span>Go to Publish History</span>'
+  }
+  const tick = () => {
+    fetch(BASE + `/api/v1/export/jobs/${jobId}`)
+      .then(r => r.json())
+      .then(job => {
+        if (job.status === 'completed') {
+          setToHistoryLink()
+        } else if (job.status === 'failed') {
+          button.disabled = false
+          button.innerHTML = '<span class="icon has-text-danger"><i class="fa-solid fa-triangle-exclamation"></i></span><span>Publish failed</span>'
+          showDivergenceErr('Publish failed: ' + (job.error || 'unknown error'))
+        } else {
+          setTimeout(tick, 2000)
+        }
       })
-      observer.observe(modal, { attributes: true, attributeFilter: ['class'] })
-    })
-    .catch(err => {
-      // Failure to even open the publish modal — re-enable so operator can
-      // retry from the row (no export-job/artifact was committed past here).
-      button.disabled = false
-      button.innerHTML = origHTML
-      showDivergenceErr('Open publish modal failed: ' + err.message)
-    })
+      .catch(() => setTimeout(tick, 3000))
+  }
+  tick()
 }
 
 function showDivergenceErr(msg) {
@@ -1611,13 +1617,34 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('.js-divergence-confirm-close')) { closeDivergenceConfirmModal(); return }
   if (e.target.closest('.js-divergence-confirm-submit')) { confirmDivergenceBatch(); return }
   const group = e.target.closest('.js-divergence-group-toggle')
-  if (group) { toggleDivergenceGroup(group.dataset.dc); return }
+  // Whole-row toggle, but skip if the click landed on an interactive child
+  // so button/link clicks inside the row reach their own delegated handlers.
+  if (group && !e.target.closest('button, a, input, select, textarea, label')) {
+    toggleDivergenceGroup(group.dataset.dc); return
+  }
   const pub = e.target.closest('.divergence-publish-btn')
   if (pub) { divergencePublishForDC(pub); return }
   const del = e.target.closest('.divergence-delete-btn')
   if (del) { divergenceDeleteReportForDC(del); return }
   const act = e.target.closest('.divergence-action-btn')
   if (act) { toggleDivergenceAction(act); return }
+
+  // Publish-history: expand row shows audit events between this publish
+  // and the previous one for the same DC. Detail row markup is emitted
+  // server-side with hx-trigger="revealed once" — first expand fires the
+  // HTMX fetch, subsequent toggles just flip visibility.
+  const chg = e.target.closest('.js-publish-changes-expand')
+  if (chg) {
+    const row = chg.closest('tr')
+    const next = row?.nextElementSibling
+    if (next?.classList.contains('js-publish-changes-detail')) {
+      next.classList.toggle('is-hidden')
+      const ico = chg.querySelector('.icon i')
+      ico?.classList.toggle('fa-chevron-right')
+      ico?.classList.toggle('fa-chevron-down')
+    }
+    return
+  }
 })
 document.addEventListener('submit', (e) => {
   if (e.target.closest('#divergence-batch-form')) {

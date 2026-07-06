@@ -260,9 +260,13 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		exp.SetBundlers(cfg.BundlerURLs, cfg.BundlerTimeout, bundlerOpts...)
 		ociH := handler.NewOCI(db, ociCfg, cfg.DGraphScratchExportDir, logger, cfg.BundlerTimeout, cfg.BundlerURLs, bundlerOpts...)
 		ociH.SetBasePath(cfg.BasePath)
-		api.GET("/export/jobs/:jobId/publish-modal", ociH.PublishModal)
-		api.POST("/export/jobs/:jobId/publish", ociH.Publish)
-		api.DELETE("/export/jobs/:jobId", ociH.DeleteJob)
+		// Wire the atomic-flow publish callback into the Export handler ONLY
+		// when OCI publishing is configured. When unconfigured, publishFn
+		// stays nil and Export.Trigger auto-infers download-only mode.
+		if ociH.IsPublisherConfigured() {
+			exp.SetPublishFn(ociH.PublishExportedJob)
+		}
+		api.DELETE("/export/jobs/:jobId/artifact", ociH.DeleteArtifact)
 		api.GET("/oci/artifacts", ociH.ListArtifacts)
 
 		api.GET("/oci/artifacts/:id", ociH.GetArtifact)

@@ -15,6 +15,7 @@ import (
 	"github.com/armada/orbital/internal/handler"
 	orbmw "github.com/armada/orbital/internal/middleware"
 	"github.com/armada/orbital/internal/orb"
+	"github.com/armada/orbital/internal/orb/store"
 	"github.com/armada/orbital/internal/orbconfig"
 	"github.com/armada/orbital/internal/web/data/layout"
 	orbweb "github.com/armada/orbital/web"
@@ -22,6 +23,7 @@ import (
 	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
 	echoswagger "github.com/swaggo/echo-swagger"
+	"path/filepath"
 )
 
 // Server is the orb edge web server.
@@ -32,6 +34,7 @@ type Server struct {
 	state        *importState
 	imp          *orb.Importer
 	dispatcher   *orb.Dispatcher        // nil if no consumers configured
+	db           *store.Client
 	divStore     *divergence.Store
 	divPublisher *divergence.Publisher // nil if S3 not configured
 	templates    map[string]*template.Template
@@ -80,8 +83,20 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 		SkipExactPaths: []string{"/favicon.ico", "/healthz"},
 	}))
 
+	// SQLite store — required for import history + divergence persistence.
+	// Fail-fast on error.
+	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create data dir %q: %w", cfg.DataDir, err)
+	}
+	dbPath := filepath.Join(cfg.DataDir, "orb.db")
+	db, err := store.New(context.Background(), dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("open orb store: %w", err)
+	}
+	logger.Info("orb store opened", "path", dbPath)
+
 	state := newImportState()
-	if records, err := orb.LoadHistory(cfg.DataDir); err != nil {
+	if records, err := orb.LoadHistory(context.Background(), db); err != nil {
 		logger.Warn("load import history at startup failed — status page will show no last import", "err", err)
 	} else {
 		state.hydrateFromHistory(records)
@@ -92,9 +107,9 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 		ZeroGRPC:  cfg.DGraphZeroGRPC,
 	}
 
-	imp := orb.NewImporter(*cfg, logger, backend)
+	imp := orb.NewImporter(*cfg, logger, backend, db)
 	dispatcher := orb.NewDispatcher(cfg.Consumers)
-	divStore := divergence.NewStore(cfg.DataDir)
+	divStore := divergence.NewStore(db)
 
 	var divPublisher *divergence.Publisher
 	if cfg.S3Endpoint != "" && cfg.S3Bucket != "" {
@@ -119,6 +134,7 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 		state:        state,
 		imp:          imp,
 		dispatcher:   dispatcher,
+		db:           db,
 		divStore:     divStore,
 		divPublisher: divPublisher,
 		templates:    orbtemplates.Map(webFS),
@@ -128,7 +144,7 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	}
 
 	// Seed currentVersion from history on startup.
-	if history, err := orb.LoadHistory(cfg.DataDir); err == nil && len(history) > 0 {
+	if history, err := orb.LoadHistory(context.Background(), db); err == nil && len(history) > 0 {
 		for i := len(history) - 1; i >= 0; i-- {
 			if history[i].Status == "done" {
 				state.currentVersion = history[i].Tag
@@ -169,6 +185,7 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 		func(echo.Context) layout.PageActions { return layout.OrbActions })
 	e.GET("/clusters/:orbId", cluster.Tab)
 	e.GET("/divergence", s.divergencePage)
+	e.GET("/publish-history", s.publishHistoryPage)
 	e.GET("/import-history", s.importHistoryPage)
 
 	// GraphQL proxy — browser-side DataTables calls go here.
@@ -191,6 +208,7 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	api.POST("/divergence", s.receiveDivergence)
 	api.GET("/divergence", s.getDivergence)
 	api.POST("/divergence/publish", s.publishDivergence)
+	api.GET("/divergence/publish-history", s.publishHistory)
 	api.POST("/divergence/test-connection", s.testDivergenceConnection)
 
 	return s, nil

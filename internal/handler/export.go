@@ -27,6 +27,23 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// PublishExportedResult is returned by the atomic-flow publish callback when
+// the OCI push succeeds. Enriches the single `export` audit event without a
+// second DB round-trip.
+type PublishExportedResult struct {
+	ArtifactID int
+	Tag        string
+	Digest     string
+	SizeBytes  int64
+	LayerCount int
+}
+
+// PublishExportedFunc runs the publish half of the atomic export → publish
+// flow synchronously. Called from Export.runExport when download=false AND
+// OCI is configured. Returns non-nil error on any failure (bundler, push,
+// sign); the caller marks the ExportJob failed and cleans up the zip.
+type PublishExportedFunc func(ctx context.Context, jobID uuid.UUID, actor string) (*PublishExportedResult, error)
+
 type Export struct {
 	db                    *ent.Client
 	dgraphURL             string // blue GraphQL
@@ -46,6 +63,11 @@ type Export struct {
 	defaultBundlerURLs []string
 	bundlerTimeout     time.Duration
 	bundlerOpts        []bundler.ClientOption
+	// publishFn is the atomic-flow publish callback. nil = OCI not configured
+	// → server infers download-only mode. Set by server.go once the OCI
+	// handler exists (handler → oci → handler cycle is avoided by injecting
+	// the closure rather than a handler ref).
+	publishFn PublishExportedFunc
 }
 
 // SetBasePath configures the URL base path used by HTML fragments rendered by this handler.
@@ -62,6 +84,14 @@ func (h *Export) SetBundlers(urls []string, timeout time.Duration, opts ...bundl
 	h.defaultBundlerURLs = urls
 	h.bundlerTimeout = timeout
 	h.bundlerOpts = opts
+}
+
+// SetPublishFn wires the atomic-flow publish callback. Called from server.go
+// after the OCI handler exists. When unset, Export operates in
+// download-only mode and any request with download=false is treated as
+// download=true (server-inferred; matches "orbital-w/o-OCI" deployment).
+func (h *Export) SetPublishFn(fn PublishExportedFunc) {
+	h.publishFn = fn
 }
 
 func NewExport(db *ent.Client, dgraphURL, dgraphScratchURL, dgraphScratchAdminURL, dgraphScratchZeroURL, exportDir, scratchExportDir, schemaPath string, logger *slog.Logger) *Export {
@@ -103,17 +133,18 @@ type statusResponse struct {
 // Trigger handles POST /api/v1/export
 //
 // @Summary     Trigger subgraph export
-// @Description Triggers an async export of the data center's configuration subgraph. Returns immediately with a job ID. Returns 409 if an export is already in progress for this data center.
+// @Description Triggers an async atomic export of the data center's configuration subgraph. When download=false (default) AND OCI is configured, the export chains into an OCI publish and the zip is discarded on completion. When download=true (or OCI is not configured), the export runs in download-only mode and the zip is retained on disk for the client to fetch via GET /api/v1/export/jobs/{jobId}/download. Returns 202 with a job ID immediately; poll GET /api/v1/export/jobs/{jobId} until terminal state. Returns 409 if an export or restore is already in progress.
 // @Tags        export
 // @Accept      json
 // @Produce     json
-// @Param       body body object true "Export request" SchemaExample({"orbId":"alaska:dc-01"})
+// @Param       body body object true "Export request" SchemaExample({"orbId":"alaska:dc-01","download":false})
 // @Success     202 {object} triggerResponse
 // @Failure     409 {object} map[string]string
 // @Router      /api/v1/export [post]
 func (h *Export) Trigger(c echo.Context) error {
 	var req struct {
-		OrbID string `json:"orbId"`
+		OrbID    string `json:"orbId"`
+		Download bool   `json:"download"`
 	}
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
@@ -122,6 +153,15 @@ func (h *Export) Trigger(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "orbId is required")
 	}
 	datacenterID := req.OrbID
+
+	// Server-inferred download mode when OCI is not configured — orbital
+	// deployed without an OCI registry only supports the download flow.
+	// Client stays deployment-agnostic (same request body regardless of
+	// whether OCI is wired up on the server).
+	download := req.Download
+	if !download && h.publishFn == nil {
+		download = true
+	}
 
 	dcName, dcOrbID, _, err := h.fetchDCInfo(c.Request().Context(), datacenterID)
 	if err != nil {
@@ -171,17 +211,10 @@ func (h *Export) Trigger(c echo.Context) error {
 		return fmt.Errorf("create export job: %w", err)
 	}
 
-	go h.runExport(job.ID)
-	writeAuditEvent(h.db, h.logger, "management", actor, "exportSubgraph",
-		[]string{"exportSubgraph"},
-		[]string{"DataCenter"},
-		[]string{dcOrbID},
-		map[string]any{
-			"id":             job.ID.String(),
-			"datacenterId":   datacenterID,
-			"datacenterName": dcName,
-		},
-	)
+	// Audit event fires from runExport on completion — the atomic flow
+	// produces ONE `export` event with the actual outcome (mode, publishedToOCI)
+	// rather than a per-phase trail.
+	go h.runExport(job.ID, download, actor, dcOrbID)
 
 	return c.JSON(http.StatusAccepted, triggerResponse{
 		JobID:  job.ID.String(),
@@ -237,9 +270,22 @@ func (h *Export) List(c echo.Context) error {
 
 	if c.Request().Header.Get("HX-Request") == "true" {
 		ociConfigured := c.QueryParam("ociConfigured") == "true"
+		// UI fragment renders ONLY retained-download rows: completed jobs
+		// with a retained zip on disk AND no linked RegistryArtifact
+		// (i.e. download-flow, not publish-flow). The full list is still
+		// available via JSON API for troubleshooting.
 		rows := make([]exportJobFragRow, 0, len(jobs))
 		for _, job := range jobs {
-			rows = append(rows, toExportJobFragRow(job, publishedJobIDs[job.ID]))
+			if publishedJobIDs[job.ID] {
+				continue // publish-flow — audit history lives at /publish-history
+			}
+			if job.ArtifactPath == nil {
+				continue // no retained zip
+			}
+			if job.Status != exportjob.StatusCompleted {
+				continue // in-progress or failed — nothing to download
+			}
+			rows = append(rows, toExportJobFragRow(job, false))
 		}
 		tmpl, err := template.ParseFiles("web/templates/orbital/partials/export-jobs-tbody.gohtml")
 		if err != nil {
@@ -295,10 +341,23 @@ func (h *Export) Status(c echo.Context) error {
 		return fmt.Errorf("get job: %w", err)
 	}
 
+	// Derive published from registry_artifacts (same convention as the list
+	// endpoint at line 255). Without this the single-job endpoint always
+	// returns published=false even after a successful atomic publish, breaking
+	// clients that need to distinguish "export done but publish pending" from
+	// "atomic export+publish complete".
+	published, err := h.db.RegistryArtifact.Query().
+		Where(registryartifact.ExportJobID(job.ID)).
+		Exist(c.Request().Context())
+	if err != nil {
+		return fmt.Errorf("check published: %w", err)
+	}
+
 	resp := statusResponse{
 		JobID:      job.ID.String(),
 		DataCenter: job.DatacenterName,
 		Status:     string(job.Status),
+		Published:  published,
 		CreatedBy:  job.CreatedBy,
 		CreatedAt:  job.CreatedAt.Format(time.RFC3339),
 	}
@@ -605,33 +664,120 @@ func sanitizeForFilename(s string) string {
 	return string(b)
 }
 
-// runExport is the async goroutine that drives the export workflow.
-func (h *Export) runExport(jobID uuid.UUID) {
+// runExport is the async goroutine that drives the atomic export workflow.
+// download=true means "export only, retain zip for download." download=false
+// means "export then publish to OCI, discard zip." Emits a single `export`
+// audit event on success, capturing mode + publishedToOCI. On failure, the
+// zip is deleted (never retained through a failed atomic flow).
+func (h *Export) runExport(jobID uuid.UUID, download bool, actor string, dcOrbID string) {
 	timeout := h.timeout
 	if timeout == 0 {
 		timeout = 30 * time.Minute
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	log := h.logger.With("jobId", jobID)
+	log := h.logger.With("jobId", jobID, "download", download)
 
-	_, err := h.db.ExportJob.UpdateOneID(jobID).
+	// retainZip is true only when the whole atomic flow succeeded AND the
+	// mode was download. Publish-mode success also cleans up the zip
+	// (OCI has authoritative bytes; no reason to keep a local copy).
+	var retainZip bool
+	defer func() {
+		if retainZip {
+			return
+		}
+		// Cleanup: remove zip on disk + clear ArtifactPath. Fetches the row
+		// once, ignores not-found (job may have been deleted mid-flight).
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		job, err := h.db.ExportJob.Get(cleanupCtx, jobID)
+		if err != nil {
+			return
+		}
+		if job.ArtifactPath != nil {
+			if rmErr := os.Remove(*job.ArtifactPath); rmErr != nil && !os.IsNotExist(rmErr) {
+				log.Warn("cleanup: remove zip failed", "path", *job.ArtifactPath, "err", rmErr)
+			}
+			if _, upErr := h.db.ExportJob.UpdateOneID(jobID).ClearArtifactPath().Save(cleanupCtx); upErr != nil {
+				log.Warn("cleanup: clear artifact_path failed", "err", upErr)
+			}
+		}
+	}()
+
+	if _, err := h.db.ExportJob.UpdateOneID(jobID).
 		SetStatus(exportjob.StatusRunning).
 		SetStartedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
+		Save(ctx); err != nil {
 		log.Error("failed to mark job running", "err", err)
 		return
 	}
 
 	if err := h.doExport(ctx, jobID, log); err != nil {
 		log.Error("export failed", "err", err)
-		errStr := err.Error()
-		h.db.ExportJob.UpdateOneID(jobID). //nolint:errcheck
+		h.markFailed(ctx, jobID, err.Error())
+		return
+	}
+
+	// Export phase complete — zip is on disk, ArtifactPath is set, job.status
+	// is Completed. Now branch on mode.
+	if download {
+		// Download flow: emit audit event, retain zip, done.
+		h.emitExportEvent(actor, dcOrbID, jobID, "download", nil)
+		retainZip = true
+		return
+	}
+
+	// Publish flow: chain into the OCI push. publishFn is non-nil here —
+	// Trigger already inferred download=true when it was nil.
+	result, err := h.publishFn(ctx, jobID, actor)
+	if err != nil {
+		log.Error("publish failed after export", "err", err)
+		h.markFailed(ctx, jobID, "publish: "+err.Error())
+		// retainZip stays false → defer removes the zip. No half-states.
+		return
+	}
+
+	h.emitExportEvent(actor, dcOrbID, jobID, "publish", result)
+	// retainZip stays false → defer removes the zip. OCI has the bytes.
+}
+
+// markFailed writes the terminal failure state for the ExportJob row.
+func (h *Export) markFailed(ctx context.Context, jobID uuid.UUID, errStr string) {
+	h.db.ExportJob.UpdateOneID(jobID). //nolint:errcheck
 						SetStatus(exportjob.StatusFailed).
 						SetError(errStr).
 						Save(ctx)
+}
+
+// emitExportEvent records the successful atomic-flow outcome to the audit
+// log. Single event per user action (Option 2 from the audit-events design
+// discussion). Publish-mode fills the OCI fields; download-mode leaves them
+// zero-valued but sets mode + publishedToOCI=false.
+func (h *Export) emitExportEvent(actor, dcOrbID string, jobID uuid.UUID, mode string, publishResult *PublishExportedResult) {
+	details := map[string]any{
+		"exportJobId":     jobID.String(),
+		"mode":            mode,
+		"publishedToOCI":  publishResult != nil,
+		"datacenterOrbId": dcOrbID,
 	}
+	if publishResult != nil {
+		details["artifactId"] = publishResult.ArtifactID
+		details["tag"] = publishResult.Tag
+		details["ociDigest"] = publishResult.Digest
+		details["sizeBytes"] = publishResult.SizeBytes
+		details["layerCount"] = publishResult.LayerCount
+	}
+	var resourceIDs []string
+	if dcOrbID != "" {
+		resourceIDs = []string{dcOrbID}
+	}
+	writeAuditEvent(h.db, h.logger,
+		"management", actor, "export",
+		[]string{"export"},
+		[]string{"DataCenter"},
+		resourceIDs,
+		details,
+	)
 }
 
 func (h *Export) doExport(ctx context.Context, jobID uuid.UUID, log *slog.Logger) error {

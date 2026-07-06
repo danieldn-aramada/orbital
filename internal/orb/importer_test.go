@@ -10,10 +10,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/armada/orbital/internal/orb/store"
 	"github.com/armada/orbital/internal/orbconfig"
 )
 
@@ -64,6 +64,16 @@ func newTestDGraphServer(alterStatus, schemaStatus int) *httptest.Server {
 	return httptest.NewServer(mux)
 }
 
+func newTestStoreClient(t *testing.T) *store.Client {
+	t.Helper()
+	c, err := store.New(context.Background(), ":memory:")
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	return c
+}
+
 func newTestImporter(t *testing.T, ts *httptest.Server, backend DGraphBackend) *Importer {
 	t.Helper()
 	cfg := orbconfig.Config{
@@ -71,7 +81,7 @@ func newTestImporter(t *testing.T, ts *httptest.Server, backend DGraphBackend) *
 		DataDir:        t.TempDir(),
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	return NewImporter(cfg, logger, backend)
+	return NewImporter(cfg, logger, backend, newTestStoreClient(t))
 }
 
 func TestImporter_Import_Success(t *testing.T) {
@@ -93,7 +103,7 @@ func TestImporter_Import_Success(t *testing.T) {
 		t.Errorf("expected data path to end with %q, got %q", scratchFile, backend.dataPath)
 	}
 
-	records, err := LoadHistory(imp.cfg.DataDir)
+	records, err := LoadHistory(context.Background(), imp.db)
 	if err != nil {
 		t.Fatalf("LoadHistory: %v", err)
 	}
@@ -130,12 +140,6 @@ func TestImporter_Import_PostsSchemaToDGraphAdmin(t *testing.T) {
 
 	backend := &mockBackend{}
 	imp := newTestImporter(t, ts, backend)
-	// Fresh-install case — DataDir doesn't yet exist; Import() should not
-	// depend on the directory for schema application.
-	imp.cfg.DataDir = filepath.Join(imp.cfg.DataDir, "fresh-install")
-	if _, err := os.Stat(imp.cfg.DataDir); !os.IsNotExist(err) {
-		t.Fatalf("test setup: DataDir should not exist yet, got err=%v", err)
-	}
 
 	meta := ImportMeta{Tag: "v1", Digest: "sha256:abc", Verification: VerificationVerified}
 	if err := imp.Import(context.Background(), fakeDataGZ(t), fakeSchemaGZ(t), meta); err != nil {
@@ -202,14 +206,10 @@ func TestImporter_Import_BackendError(t *testing.T) {
 }
 
 func TestImportRecord_Layers_RoundTrip(t *testing.T) {
-	dir := t.TempDir()
-	cfg := orbconfig.Config{DataDir: dir}
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+	ts := newTestDGraphServer(http.StatusOK, http.StatusOK)
 	defer ts.Close()
-	cfg.DGraphAdminURL = ts.URL + "/admin"
 
-	imp := NewImporter(cfg, logger, &mockBackend{})
+	imp := newTestImporter(t, ts, &mockBackend{})
 	meta := ImportMeta{Tag: "v1", Digest: "sha256:abc", Verification: VerificationVerified}
 	if err := imp.Import(context.Background(), fakeDataGZ(t), fakeSchemaGZ(t), meta); err != nil {
 		t.Fatalf("Import: %v", err)
@@ -221,11 +221,11 @@ func TestImportRecord_Layers_RoundTrip(t *testing.T) {
 		{MediaType: dr1.MediaType, Role: LayerRoleDispatched, Dispatch: &dr1},
 		{MediaType: dr2.MediaType, Role: LayerRoleDispatched, Dispatch: &dr2},
 	}
-	if err := FinalizeLastHistory(dir, extra, ""); err != nil {
-		t.Fatalf("AppendLayersToLastHistory: %v", err)
+	if err := FinalizeLastHistory(context.Background(), imp.db, extra, ""); err != nil {
+		t.Fatalf("FinalizeLastHistory: %v", err)
 	}
 
-	got, err := LoadHistory(dir)
+	got, err := LoadHistory(context.Background(), imp.db)
 	if err != nil {
 		t.Fatalf("LoadHistory: %v", err)
 	}
@@ -246,14 +246,10 @@ func TestImportRecord_Layers_RoundTrip(t *testing.T) {
 }
 
 func TestFinalizeLastHistory_UpdatesLast(t *testing.T) {
-	dir := t.TempDir()
-	cfg := orbconfig.Config{DataDir: dir}
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+	ts := newTestDGraphServer(http.StatusOK, http.StatusOK)
 	defer ts.Close()
-	cfg.DGraphAdminURL = ts.URL + "/admin"
 
-	imp := NewImporter(cfg, logger, &mockBackend{})
+	imp := newTestImporter(t, ts, &mockBackend{})
 	for _, tag := range []string{"v1", "v2"} {
 		if err := imp.Import(context.Background(), fakeDataGZ(t), fakeSchemaGZ(t), ImportMeta{Tag: tag}); err != nil {
 			t.Fatalf("Import %s: %v", tag, err)
@@ -262,11 +258,17 @@ func TestFinalizeLastHistory_UpdatesLast(t *testing.T) {
 
 	dr := DispatchResult{MediaType: "a/b", URL: "http://x", StatusCode: 200}
 	extra := []LayerRecord{{MediaType: "a/b", Role: LayerRoleDispatched, Dispatch: &dr}}
-	if err := FinalizeLastHistory(dir, extra, ""); err != nil {
-		t.Fatalf("AppendLayersToLastHistory: %v", err)
+	if err := FinalizeLastHistory(context.Background(), imp.db, extra, ""); err != nil {
+		t.Fatalf("FinalizeLastHistory: %v", err)
 	}
 
-	got, _ := LoadHistory(dir)
+	got, err := LoadHistory(context.Background(), imp.db)
+	if err != nil {
+		t.Fatalf("LoadHistory: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 records, got %d", len(got))
+	}
 	// First record: only the 2 base graph layers
 	for _, l := range got[0].Layers {
 		if l.Role != LayerRoleGraph {
@@ -280,22 +282,18 @@ func TestFinalizeLastHistory_UpdatesLast(t *testing.T) {
 }
 
 func TestFinalizeLastHistory_EmptyLayers_NoOp(t *testing.T) {
-	dir := t.TempDir()
-	cfg := orbconfig.Config{DataDir: dir}
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+	ts := newTestDGraphServer(http.StatusOK, http.StatusOK)
 	defer ts.Close()
-	cfg.DGraphAdminURL = ts.URL + "/admin"
 
-	imp := NewImporter(cfg, logger, &mockBackend{})
+	imp := newTestImporter(t, ts, &mockBackend{})
 	if err := imp.Import(context.Background(), fakeDataGZ(t), fakeSchemaGZ(t), ImportMeta{Tag: "v1"}); err != nil {
 		t.Fatalf("Import: %v", err)
 	}
 
-	if err := FinalizeLastHistory(dir, nil, ""); err != nil {
+	if err := FinalizeLastHistory(context.Background(), imp.db, nil, ""); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	got, _ := LoadHistory(dir)
+	got, _ := LoadHistory(context.Background(), imp.db)
 	// Should still have only the 2 base graph layers
 	if len(got[0].Layers) != 2 {
 		t.Errorf("expected 2 base graph layers, got %d", len(got[0].Layers))
@@ -303,23 +301,21 @@ func TestFinalizeLastHistory_EmptyLayers_NoOp(t *testing.T) {
 }
 
 func TestFinalizeLastHistory_PreservesOtherFields(t *testing.T) {
-	dir := t.TempDir()
-	cfg := orbconfig.Config{DataDir: dir}
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+	ts := newTestDGraphServer(http.StatusOK, http.StatusOK)
 	defer ts.Close()
-	cfg.DGraphAdminURL = ts.URL + "/admin"
 
-	imp := NewImporter(cfg, logger, &mockBackend{})
+	imp := newTestImporter(t, ts, &mockBackend{})
 	meta := ImportMeta{Tag: "v5", Digest: "sha256:abc", Verification: VerificationVerified}
 	if err := imp.Import(context.Background(), fakeDataGZ(t), fakeSchemaGZ(t), meta); err != nil {
 		t.Fatalf("Import: %v", err)
 	}
 
 	dr := DispatchResult{MediaType: "a/b", URL: "http://x", StatusCode: 200}
-	FinalizeLastHistory(dir, []LayerRecord{{MediaType: "a/b", Role: LayerRoleDispatched, Dispatch: &dr}}, "")
+	if err := FinalizeLastHistory(context.Background(), imp.db, []LayerRecord{{MediaType: "a/b", Role: LayerRoleDispatched, Dispatch: &dr}}, ""); err != nil {
+		t.Fatalf("FinalizeLastHistory: %v", err)
+	}
 
-	got, _ := LoadHistory(dir)
+	got, _ := LoadHistory(context.Background(), imp.db)
 	if got[0].Tag != "v5" {
 		t.Errorf("Tag changed: got %q", got[0].Tag)
 	}
@@ -341,24 +337,16 @@ func TestFinalizeLastHistory_PreservesOtherFields(t *testing.T) {
 }
 
 func TestImporter_LoadHistory_VerificationRoundtrip(t *testing.T) {
-	dir := t.TempDir()
-	cfg := orbconfig.Config{DataDir: dir}
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
+	ts := newTestDGraphServer(http.StatusOK, http.StatusOK)
 	defer ts.Close()
-	cfg.DGraphAdminURL = ts.URL + "/admin"
 
-	imp := NewImporter(cfg, logger, &mockBackend{})
-
+	imp := newTestImporter(t, ts, &mockBackend{})
 	meta := ImportMeta{Tag: "v2", Digest: "sha256:deadbeef", Verification: VerificationVerified}
 	if err := imp.Import(context.Background(), fakeDataGZ(t), fakeSchemaGZ(t), meta); err != nil {
 		t.Fatalf("Import: %v", err)
 	}
 
-	records, err := LoadHistory(dir)
+	records, err := LoadHistory(context.Background(), imp.db)
 	if err != nil {
 		t.Fatalf("LoadHistory: %v", err)
 	}
@@ -367,45 +355,5 @@ func TestImporter_LoadHistory_VerificationRoundtrip(t *testing.T) {
 	}
 	if records[0].Verification != VerificationVerified {
 		t.Errorf("Verification not persisted: got %q, want %q", records[0].Verification, VerificationVerified)
-	}
-
-	data, _ := os.ReadFile(filepath.Join(dir, importHistoryFile))
-	if !strings.Contains(string(data), `"verification": "verified"`) {
-		t.Errorf("expected verification:verified in history JSON, got: %s", data)
-	}
-}
-
-// TestWriteAtomic_LeavesNoTmpFile verifies the helper renames the tmp away.
-// A leftover .tmp file is a sign the rename failed silently.
-func TestWriteAtomic_LeavesNoTmpFile(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "state.json")
-	if err := writeAtomic(path, []byte(`{"k":"v"}`)); err != nil {
-		t.Fatalf("writeAtomic: %v", err)
-	}
-	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
-		t.Errorf("expected tmp file to be renamed away, but it still exists")
-	}
-	data, _ := os.ReadFile(path)
-	if string(data) != `{"k":"v"}` {
-		t.Errorf("final file mismatch: %s", data)
-	}
-}
-
-// TestWriteAtomic_OverwriteIsAtomic simulates the recovery scenario: when a
-// new write completes successfully, the old content is fully replaced and no
-// partial state lingers. (Pre-existing content is overwritten via rename.)
-func TestWriteAtomic_OverwriteIsAtomic(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "state.json")
-	if err := os.WriteFile(path, []byte(`old`), 0o644); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	if err := writeAtomic(path, []byte(`new`)); err != nil {
-		t.Fatalf("writeAtomic: %v", err)
-	}
-	data, _ := os.ReadFile(path)
-	if string(data) != `new` {
-		t.Errorf("expected new content, got: %s", data)
 	}
 }

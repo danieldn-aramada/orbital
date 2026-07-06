@@ -39,7 +39,7 @@ type importHistoryPageData struct {
 }
 
 func (s *Server) importHistoryPage(c echo.Context) error {
-	history, err := orb.LoadHistory(s.cfg.DataDir)
+	history, err := orb.LoadHistory(c.Request().Context(), s.db)
 	if err != nil {
 		s.logger.Warn("failed to load import history", "err", err)
 		history = nil

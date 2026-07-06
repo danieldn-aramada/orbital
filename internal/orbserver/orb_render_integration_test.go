@@ -78,7 +78,8 @@ func TestOrbPages_AllPathsReturn200(t *testing.T) {
 		{"/clusters", srv.clustersPage, `id="cluster-table"`},
 		{"/import", srv.importPage, `data-testid="page-heading"`},
 		{"/import-history", srv.importHistoryPage, `Import History`},
-		{"/divergence", srv.divergencePage, `Divergence Report`},
+		{"/divergence", srv.divergencePage, `Publish Report`},
+		{"/publish-history", srv.publishHistoryPage, `Publish History`},
 	}
 
 	for _, p := range pages {

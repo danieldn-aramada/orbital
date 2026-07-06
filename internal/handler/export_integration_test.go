@@ -362,7 +362,6 @@ func TestExportPage_RendersExpectedElements(t *testing.T) {
 	html := rec.Body.String()
 	for _, want := range []string{
 		"Export Subgraph",
-		"json.gz",
 		`id="export-datacenter-select"`,
 		`id="export-submit-btn"`,
 		`id="export-status-box"`,

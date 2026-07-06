@@ -16,7 +16,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/armada/orbital/internal/ocitype"
+	"github.com/armada/orbital/internal/orb/store"
+	"github.com/armada/orbital/internal/orb/store/importrecord"
 	"github.com/armada/orbital/internal/orbconfig"
 )
 
@@ -29,15 +33,12 @@ func ociDigest(b []byte) string {
 }
 
 const (
-	importHistoryFile = "import-history.json"
-	overridesFile     = "overrides.json"
-	historyMaxRecords = 25
-	scratchFile       = "data.json.gz"
+	scratchFile = "data.json.gz"
 
 	// Verification states for ImportRecord.Verification.
 	VerificationVerified      = "verified"       // cosign-verified via OCI pull
-	VerificationUnverified    = "unverified"      // OCI pull but verification failed
-	VerificationNotApplicable = "not-applicable"  // courier/API upload — no signature available
+	VerificationUnverified    = "unverified"     // OCI pull but verification failed
+	VerificationNotApplicable = "not-applicable" // courier/API upload — no signature available
 
 	// Layer roles for LayerRecord.Role.
 	LayerRoleGraph      = "graph"      // consumed by DGraph (always)
@@ -114,11 +115,14 @@ type Importer struct {
 	cfg     orbconfig.Config
 	logger  *slog.Logger
 	backend DGraphBackend
+	db      *store.Client
 }
 
-// NewImporter creates an Importer with the given config, logger, and DGraph backend.
-func NewImporter(cfg orbconfig.Config, logger *slog.Logger, backend DGraphBackend) *Importer {
-	return &Importer{cfg: cfg, logger: logger, backend: backend}
+// NewImporter creates an Importer with the given config, logger, DGraph
+// backend, and orb store client. `db` is required — import history is
+// persisted through it; nil is a programming error.
+func NewImporter(cfg orbconfig.Config, logger *slog.Logger, backend DGraphBackend, db *store.Client) *Importer {
+	return &Importer{cfg: cfg, logger: logger, backend: backend, db: db}
 }
 
 // Import executes the full import sequence for a pulled artifact:
@@ -126,8 +130,7 @@ func NewImporter(cfg orbconfig.Config, logger *slog.Logger, backend DGraphBacken
 //  2. Apply schema.gz to DGraph admin
 //  3. Write data.json.gz to scratch volume
 //  4. Exec: dgraph live -f /tmp/orb-import/data.json.gz -a localhost:9080 inside dgraph-orb-alpha
-//  5. Clear overrides.json (new import resets all local overrides)
-//  6. Record import in history file
+//  5. Record import in history (SQLite)
 func (i *Importer) Import(ctx context.Context, dataGZ, schemaGZ []byte, meta ImportMeta) error {
 	shortDigest := meta.Digest
 	if len(shortDigest) > 12 {
@@ -159,16 +162,7 @@ func (i *Importer) Import(ctx context.Context, dataGZ, schemaGZ []byte, meta Imp
 	}
 	i.logger.Info("dgraph live completed", "output_len", len(out))
 
-	// New import resets all local overrides — the imported intent is now authoritative.
-	overridesPath := filepath.Join(i.cfg.DataDir, overridesFile)
-	if _, err := os.Stat(overridesPath); err == nil {
-		i.logger.Warn("clearing overrides.json — new import resets all local overrides")
-		if err := os.Remove(overridesPath); err != nil {
-			i.logger.Warn("failed to clear overrides.json", "err", err)
-		}
-	}
-
-	if err := i.recordHistory(meta, dataGZ, schemaGZ, "done", ""); err != nil {
+	if err := i.recordHistory(ctx, meta, dataGZ, schemaGZ, "done", ""); err != nil {
 		i.logger.Warn("failed to record import history", "err", err)
 	}
 
@@ -235,112 +229,142 @@ func (i *Importer) applySchema(ctx context.Context, schemaGZ []byte) error {
 	return nil
 }
 
-
-// recordHistory appends an ImportRecord to the rolling history file.
+// recordHistory inserts one ImportRecord row into orb's SQLite store.
 // dataGZ + schemaGZ are passed in so Size + Digest can be populated on the
 // graph layer records — these are the same bytes Import() applied to DGraph,
 // so their sha256 equals the OCI layer descriptor digest captured at pull time.
-func (i *Importer) recordHistory(meta ImportMeta, dataGZ, schemaGZ []byte, status, errMsg string) error {
-	path := filepath.Join(i.cfg.DataDir, importHistoryFile)
-
-	var records []ImportRecord
-	if data, err := os.ReadFile(path); err == nil {
-		json.Unmarshal(data, &records) //nolint:errcheck
+func (i *Importer) recordHistory(ctx context.Context, meta ImportMeta, dataGZ, schemaGZ []byte, status, errMsg string) error {
+	layers := []LayerRecord{
+		// Graph layers are by definition produced by orbital. Using the canonical
+		// "orbital" producer string keeps orb's UI consistent with the annotation
+		// value that the publisher writes on the same layers.
+		{MediaType: layerMediaTypeData, Role: LayerRoleGraph, Producer: ocitype.ProducerOrbital, SizeBytes: int64(len(dataGZ)), Digest: ociDigest(dataGZ)},
+		{MediaType: layerMediaTypeSchema, Role: LayerRoleGraph, Producer: ocitype.ProducerOrbital, SizeBytes: int64(len(schemaGZ)), Digest: ociDigest(schemaGZ)},
 	}
-
-	records = append(records, ImportRecord{
-		Tag:         meta.Tag,
-		Digest:      meta.Digest,
-		DCOrbID:     meta.DCOrbID,
-		ExportJobID: meta.ExportJobID,
-		ImportedAt:  time.Now().UTC(),
-		Status:      status,
-		Verification: meta.Verification,
-		Error:       errMsg,
-		Layers: []LayerRecord{
-			// Graph layers are by definition produced by orbital. We don't need
-			// to read the OCI annotation for these — orbital is the only thing
-			// that can produce dgraph-loaded subgraph layers. Using the canonical
-			// "orbital" string keeps orb's UI consistent with the annotation
-			// value that the publisher writes on the same layers.
-			{MediaType: layerMediaTypeData, Role: LayerRoleGraph, Producer: ocitype.ProducerOrbital, SizeBytes: int64(len(dataGZ)), Digest: ociDigest(dataGZ)},
-			{MediaType: layerMediaTypeSchema, Role: LayerRoleGraph, Producer: ocitype.ProducerOrbital, SizeBytes: int64(len(schemaGZ)), Digest: ociDigest(schemaGZ)},
-		},
-	})
-
-	// Rolling window — keep newest historyMaxRecords entries.
-	if len(records) > historyMaxRecords {
-		records = records[len(records)-historyMaxRecords:]
-	}
-
-	data, err := json.MarshalIndent(records, "", "  ")
+	layersJSON, err := json.Marshal(layers)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal layers: %w", err)
 	}
-	return writeAtomic(path, data)
+
+	create := i.db.ImportRecord.Create().
+		SetID(uuid.New()).
+		SetTag(meta.Tag).
+		SetDigest(meta.Digest).
+		SetDcOrbID(meta.DCOrbID).
+		SetExportJobID(meta.ExportJobID).
+		SetImportedAt(time.Now().UTC()).
+		SetStatus(importRecordStatus(status)).
+		SetLayersJSON(string(layersJSON))
+	if v := importRecordVerification(meta.Verification); v != "" {
+		create = create.SetVerification(v)
+	}
+	if errMsg != "" {
+		create = create.SetError(errMsg)
+	}
+	if _, err := create.Save(ctx); err != nil {
+		return fmt.Errorf("insert import record: %w", err)
+	}
+	return nil
 }
 
-// FinalizeLastHistory appends extra-layer dispatch records and optionally
-// overrides the status on the most recent history entry. Called by the
-// importArtifact handler after Import() writes the base record (containing
-// the two graph layers + status="done") and Dispatcher.Dispatch() completes.
-// Pass status="" to leave the existing status untouched, or "partial"/"failed"
-// to override after dispatch.
-// Safe to call because the import state machine prevents concurrent imports (409 if running).
-func FinalizeLastHistory(dataDir string, layers []LayerRecord, status string) error {
+// FinalizeLastHistory appends dispatch layer records and optionally overrides
+// the status on the most recent ImportRecord row. Called by the importArtifact
+// handler after Import() writes the base record and Dispatcher.Dispatch()
+// completes. Pass status="" to leave the existing status untouched.
+// Safe to call because the import state machine prevents concurrent imports.
+func FinalizeLastHistory(ctx context.Context, db *store.Client, layers []LayerRecord, status string) error {
 	if len(layers) == 0 && status == "" {
 		return nil
 	}
-	path := filepath.Join(dataDir, importHistoryFile)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("read history: %w", err)
-	}
-	var records []ImportRecord
-	if err := json.Unmarshal(data, &records); err != nil {
-		return fmt.Errorf("unmarshal history: %w", err)
-	}
-	if len(records) == 0 {
+	row, err := db.ImportRecord.Query().
+		Order(store.Desc(importrecord.FieldImportedAt)).
+		First(ctx)
+	if store.IsNotFound(err) {
 		return nil
 	}
+	if err != nil {
+		return fmt.Errorf("load last history: %w", err)
+	}
+
+	var existing []LayerRecord
+	if row.LayersJSON != "" {
+		if err := json.Unmarshal([]byte(row.LayersJSON), &existing); err != nil {
+			return fmt.Errorf("unmarshal layers_json: %w", err)
+		}
+	}
 	if len(layers) > 0 {
-		records[len(records)-1].Layers = append(records[len(records)-1].Layers, layers...)
+		existing = append(existing, layers...)
 	}
+	newLayers, err := json.Marshal(existing)
+	if err != nil {
+		return fmt.Errorf("marshal layers: %w", err)
+	}
+	upd := db.ImportRecord.UpdateOneID(row.ID).SetLayersJSON(string(newLayers))
 	if status != "" {
-		records[len(records)-1].Status = status
+		upd = upd.SetStatus(importRecordStatus(status))
 	}
-	out, err := json.MarshalIndent(records, "", "  ")
+	if _, err := upd.Save(ctx); err != nil {
+		return fmt.Errorf("update history row: %w", err)
+	}
+	return nil
+}
+
+// LoadHistory returns import history rows in ascending imported_at order
+// (oldest first, matching the pre-migration file-append contract). Callers
+// that want newest-first reverse the slice at their layer.
+func LoadHistory(ctx context.Context, db *store.Client) ([]ImportRecord, error) {
+	rows, err := db.ImportRecord.Query().
+		Order(store.Asc(importrecord.FieldImportedAt)).
+		All(ctx)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("load history: %w", err)
 	}
-	return writeAtomic(path, out)
+	out := make([]ImportRecord, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, importRecordFromRow(r))
+	}
+	return out, nil
 }
 
-// LoadHistory reads the import history from disk. Returns empty slice if none exists.
-func LoadHistory(dataDir string) ([]ImportRecord, error) {
-	path := filepath.Join(dataDir, importHistoryFile)
-	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		return nil, nil
+func importRecordFromRow(r *store.ImportRecord) ImportRecord {
+	rec := ImportRecord{
+		Tag:          r.Tag,
+		Digest:       r.Digest,
+		DCOrbID:      r.DcOrbID,
+		ExportJobID:  r.ExportJobID,
+		ImportedAt:   r.ImportedAt,
+		Status:       string(r.Status),
+		Verification: string(r.Verification),
+		Error:        r.Error,
 	}
-	if err != nil {
-		return nil, err
+	if r.LayersJSON != "" {
+		_ = json.Unmarshal([]byte(r.LayersJSON), &rec.Layers)
 	}
-	var records []ImportRecord
-	if err := json.Unmarshal(data, &records); err != nil {
-		return nil, err
-	}
-	return records, nil
+	return rec
 }
 
-// writeAtomic writes data to path via a tmp+rename so a crash mid-write can't
-// leave a truncated/corrupt file. POSIX rename is atomic on the same filesystem.
-// Edge runtimes lose power unexpectedly — this matters more than for cloud state.
-func writeAtomic(path string, data []byte) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return err
+func importRecordStatus(s string) importrecord.Status {
+	switch s {
+	case "done":
+		return importrecord.StatusDone
+	case "partial":
+		return importrecord.StatusPartial
+	case "failed":
+		return importrecord.StatusFailed
+	default:
+		return importrecord.StatusDone
 	}
-	return os.Rename(tmp, path)
 }
 
+func importRecordVerification(v string) importrecord.Verification {
+	switch v {
+	case VerificationVerified:
+		return importrecord.VerificationVerified
+	case VerificationUnverified:
+		return importrecord.VerificationUnverified
+	case VerificationNotApplicable:
+		return importrecord.VerificationNotApplicable
+	default:
+		return ""
+	}
+}

@@ -317,4 +317,20 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('.js-orb-courier-upload')) { handleOrbCourierUpload(); return }
   if (e.target.closest('.js-orb-divergence-publish')) { publishDivergence(); return }
   if (e.target.closest('.js-orb-divergence-refresh')) { refreshOrbDivergence(); return }
+
+  // Publish-history row expand — toggles the sibling detail row and swaps
+  // the chevron direction. Detail row markup is emitted server-side; this
+  // handler only manages visibility, so it survives HTMX pagination swaps.
+  const exp = e.target.closest('.js-orb-publish-expand')
+  if (exp) {
+    const row = exp.closest('tr')
+    const next = row?.nextElementSibling
+    if (next?.classList.contains('js-orb-publish-detail')) {
+      next.classList.toggle('is-hidden')
+      const ico = exp.querySelector('.icon i')
+      ico?.classList.toggle('fa-chevron-right')
+      ico?.classList.toggle('fa-chevron-down')
+    }
+    return
+  }
 })

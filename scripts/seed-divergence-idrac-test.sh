@@ -17,7 +17,7 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-PSQL="${PSQL_CMD:-psql postgres://orbital:orbital@localhost:5432/orbital}"
+PSQL="${PSQL_CMD:-psql postgres://orbital:orbital-local-dev-secret@localhost:5432/orbital}"
 MC_IMAGE="minio/mc:RELEASE.2025-08-13T08-35-41Z"
 COMPOSE_NETWORK="${COMPOSE_NETWORK:-local_default}"
 S3_BUCKET="${S3_BUCKET:-orbital}"
@@ -143,7 +143,7 @@ Expected:
   - divergence_entries row for ${FIELD}: override_value UNCHANGED (${OVERRIDE}), last_seen_at advanced
 
 Verify:
-  psql postgres://orbital:orbital@localhost:5432/orbital -c "
+  psql postgres://orbital:orbital-local-dev-secret@localhost:5432/orbital -c "
     SELECT e.field, e.override_value::text, e.who, e.last_seen_at,
            (SELECT action FROM divergence_resolutions r
             WHERE r.entry_orb_id = e.entry_orb_id AND r.field = e.field) AS resolution
@@ -161,7 +161,7 @@ Expected:
   - orbital logs: "divergence ingester: superseded resolution — edge override changed since decision"
 
 Verify:
-  psql postgres://orbital:orbital@localhost:5432/orbital -c "
+  psql postgres://orbital:orbital-local-dev-secret@localhost:5432/orbital -c "
     SELECT e.field, e.override_value::text, e.who, e.last_seen_at,
            (SELECT action FROM divergence_resolutions r
             WHERE r.entry_orb_id = e.entry_orb_id AND r.field = e.field) AS resolution

@@ -19,7 +19,7 @@ func TestDatabaseURL() string {
 	if v := os.Getenv("TEST_DATABASE_URL"); v != "" {
 		return v
 	}
-	return "postgres://orbital:orbital@localhost:5432/orbital_test?sslmode=disable"
+	return "postgres://orbital:orbital-local-dev-secret@localhost:5432/orbital_test?sslmode=disable"
 }
 
 // NewTestDB opens an ent client against the test PostgreSQL instance and runs

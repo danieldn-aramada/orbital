@@ -22,7 +22,7 @@ type Config struct {
 	DGraphScratchURL       string        `envconfig:"DGRAPH_SCRATCH_URL"              default:"http://localhost:8081/graphql"`
 	DGraphScratchAdminURL  string        `envconfig:"DGRAPH_SCRATCH_ADMIN_URL"        default:"http://localhost:8081/admin"`
 	DGraphScratchZeroURL   string        `envconfig:"DGRAPH_SCRATCH_ZERO_URL"         default:"http://localhost:6081"`
-	DatabaseURL            string        `envconfig:"DATABASE_URL"                    default:"postgres://orbital:orbital@localhost:5432/orbital?sslmode=disable"`
+	DatabaseURL            string        `envconfig:"DATABASE_URL"                    default:"postgres://orbital:orbital-local-dev-secret@localhost:5432/orbital?sslmode=disable"`
 	ExportDir              string        `envconfig:"ORBITAL_EXPORT_DIR"              default:"./subgraph-exports"`
 	DGraphScratchExportDir string        `envconfig:"DGRAPH_SCRATCH_EXPORT_DIR"       default:"/tmp/orbital-test-scratch"`
 	SchemaPath             string        `envconfig:"ORBITAL_SCHEMA_PATH"             default:"schema/schema.graphql"`

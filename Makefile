@@ -47,7 +47,14 @@ down: ## Stop the local stack (all profiles)
 	docker compose -f $(COMPOSE_FILE) --profile '*' down -v
 
 run-orbital: ## Run orbital server (go run; fast dev iteration). Restore requires dgraph in PATH
-	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orbital
+	@# DOCKER_CONFIG isolation: prevents cosign's go-containerregistry keychain
+	@# from spawning docker-credential-* helpers (which on macOS live inside
+	@# /Applications/Docker.app/). Spawning from iTerm's process tree triggers
+	@# a macOS "iTerm would like to access data from other apps" permission
+	@# dialog per credential lookup. Prod containers don't have this problem
+	@# (no ~/.docker/config.json, no helpers), so this workaround stays here
+	@# in the dev-only Makefile target, not in orbital's code.
+	DOCKER_CONFIG=$$(mktemp -d) go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orbital
 
 run-orb: ## Run orb edge service (go run; fast dev iteration). Import requires dgraph in PATH
 	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orb start
@@ -80,9 +87,17 @@ e2e-divergence: ## E2E divergence flow: export→publish→orb import→SSA over
 
 release-check: ## Build images, start containers, perform e2e (set version; VERSION=v0.0.18)
 	@echo "Building orbital + orb images at VERSION=$(VERSION)"
-	docker build --target=orbital -t orbital:local -t orbital:$(VERSION) --build-arg VERSION=$(VERSION) .
-	docker build --target=orb     -t orb:local     -t orb:$(VERSION)     --build-arg VERSION=$(VERSION) .
-	docker compose -f $(COMPOSE_FILE) --profile orbital --profile orb up -d orbital orb
+	@# DOCKER_CONFIG isolation: same footgun as run-orbital — Docker Desktop's
+	@# credsStore spawns docker-credential-desktop for every image pull/build,
+	@# triggering iTerm's macOS Automation permission dialog. We point DOCKER_CONFIG
+	@# at a fresh dir with NO config.json (so credsStore isn't loaded) but WITH a
+	@# cli-plugins symlink so buildx (a CLI plugin) stays discoverable — the
+	@# Dockerfile uses --mount=type=cache which requires BuildKit.
+	@TMP=$$(mktemp -d); \
+		ln -s $$HOME/.docker/cli-plugins $$TMP/cli-plugins; \
+		DOCKER_CONFIG=$$TMP docker build --target=orbital -t orbital:local -t orbital:$(VERSION) --build-arg VERSION=$(VERSION) . && \
+		DOCKER_CONFIG=$$TMP docker build --target=orb     -t orb:local     -t orb:$(VERSION)     --build-arg VERSION=$(VERSION) . && \
+		DOCKER_CONFIG=$$TMP docker compose -f $(COMPOSE_FILE) --profile orbital --profile orb up -d orbital orb
 	@echo "Waiting for orbital + orb to be ready..."
 	@until curl -fs http://localhost:8001/healthz >/dev/null && curl -fs http://localhost:8010/healthz >/dev/null; do sleep 1; done
 	bash scripts/seed.sh

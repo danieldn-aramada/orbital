@@ -2,20 +2,17 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"log/slog"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent"
-	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/internal/bundler"
 	"github.com/armada/orbital/internal/oci"
@@ -47,6 +44,11 @@ type OCI struct {
 // SetBasePath configures the URL base path used by HTML fragments rendered by this handler.
 func (h *OCI) SetBasePath(bp string) { h.basePath = bp }
 
+// IsPublisherConfigured reports whether OCI publishing is configured. Used
+// by server.go to gate wiring the atomic-flow publish callback into the
+// Export handler — when unconfigured, Export operates in download-only mode.
+func (h *OCI) IsPublisherConfigured() bool { return h.publisher != nil }
+
 // NewOCI creates an OCI handler. publisher may be nil when OCI is not configured.
 // bundlerTimeout and bundlerOpts are applied when constructing per-request bundler clients.
 // defaultBundlerURLs supplies a fallback list when the publish request omits `bundlers`.
@@ -65,13 +67,6 @@ func NewOCI(db *ent.Client, cfg oci.Config, scratchExportDir string, logger *slo
 		bundlerOpts:        bundlerOpts,
 		defaultBundlerURLs: defaultBundlerURLs,
 	}
-}
-
-type publishResponse struct {
-	ArtifactID int    `json:"artifactId"`
-	Status     string `json:"status"`
-	Tag        string `json:"tag"`
-	Repository string `json:"repository"`
 }
 
 type artifactResponse struct {
@@ -95,57 +90,34 @@ type artifactResponse struct {
 	Layers        []ocitype.ArtifactLayer  `json:"layers,omitempty"`
 }
 
-// Publish handles POST /api/v1/export/jobs/:jobId/publish
+// PublishExportedJob runs the OCI publish half of the atomic export→publish
+// flow synchronously. Called by handler.Export as its `publishFn` callback
+// after the export goroutine has produced an on-disk zip. Returns non-nil
+// error on any failure (bundler, push, sign); caller marks the ExportJob
+// failed and cleans up the zip.
 //
-// @Summary     Publish export as OCI artifact
-// @Description Pushes a completed export job's artifact to the configured OCI registry as a signed artifact. Returns 503 if OCI publishing is not configured, 422 if the job is not completed or its artifact file is missing.
-// @Tags        oci
-// @Produce     json
-// @Param       jobId path string true "Export job ID"
-// @Success     202 {object} publishResponse
-// @Failure     404 {object} map[string]string
-// @Failure     422 {object} map[string]string
-// @Failure     503 {object} map[string]string
-// @Router      /api/v1/export/jobs/{jobId}/publish [post]
-func (h *OCI) Publish(c echo.Context) error {
+// This is NOT an HTTP handler — no *echo.Context. It's a package-internal
+// entry point wired via server.go's SetPublishFn.
+func (h *OCI) PublishExportedJob(ctx context.Context, jobID uuid.UUID, actor string) (*PublishExportedResult, error) {
 	if h.publisher == nil {
-		return c.JSON(http.StatusServiceUnavailable, map[string]string{
-			"error": "OCI publishing is not configured (ORBITAL_OCI_REGISTRY and ORBITAL_OCI_SIGNING_KEY_PATH required)",
-		})
+		return nil, fmt.Errorf("OCI publishing is not configured")
 	}
 
-	jobID, err := uuid.Parse(c.Param("jobId"))
+	job, err := h.db.ExportJob.Get(ctx, jobID)
 	if err != nil {
-		return echo.ErrBadRequest
+		return nil, fmt.Errorf("get job: %w", err)
 	}
-
-	job, err := h.db.ExportJob.Get(c.Request().Context(), jobID)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return echo.ErrNotFound
-		}
-		return fmt.Errorf("get job: %w", err)
+	if job.ArtifactPath == nil {
+		return nil, fmt.Errorf("export job has no artifact path")
 	}
-
-	if job.Status != exportjob.StatusCompleted || job.ArtifactPath == nil {
-		return c.JSON(http.StatusUnprocessableEntity, map[string]string{
-			"error": "export job is not in completed state or has no artifact",
-		})
-	}
-
-	// Verify the artifact file still exists (not stale).
 	if _, err := os.Stat(*job.ArtifactPath); os.IsNotExist(err) {
-		return c.JSON(http.StatusUnprocessableEntity, map[string]string{
-			"error": "export artifact file no longer exists",
-		})
+		return nil, fmt.Errorf("export artifact file no longer exists")
 	}
 
-	repoName, tag, err := h.nextTagForJob(c.Request().Context(), job)
+	repoName, tag, err := h.nextTagForJob(ctx, job)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("compute tag: %w", err)
 	}
-
-	userID, _ := c.Get("user_id").(int)
 
 	artifact, err := h.db.RegistryArtifact.Create().
 		SetExportJobID(job.ID).
@@ -155,67 +127,86 @@ func (h *OCI) Publish(c echo.Context) error {
 		SetRepository(repoName).
 		SetTag(tag).
 		SetStatus(registryartifact.StatusPending).
-		SetNillableInitiatedBy(nillableInt(userID)).
 		SetInitiatedAt(time.Now()).
-		Save(c.Request().Context())
+		Save(ctx)
 	if err != nil {
-		return fmt.Errorf("create artifact record: %w", err)
+		return nil, fmt.Errorf("create artifact record: %w", err)
 	}
 
-	// Parse optional bundler URLs from the request body. The UI publish form
-	// sends form-encoded data (no JSON), so this Decode silently fails and
-	// req.Bundlers stays nil — the defaultBundlerURLs fallback below covers
-	// that path. JSON callers (curl, scripts) can still override per-request.
-	var req struct {
-		Bundlers []string `json:"bundlers"`
-	}
-	_ = json.NewDecoder(c.Request().Body).Decode(&req) // empty body is valid
-
-	bundlerSpecs := req.Bundlers
-	if len(bundlerSpecs) == 0 {
-		bundlerSpecs = h.defaultBundlerURLs
-	}
+	// Build bundler clients from configured defaults. Per-request bundler
+	// override (which the old POST /api/v1/export/jobs/:id/publish endpoint
+	// supported) is dropped — the atomic flow is UI-triggered, and the UI
+	// doesn't need per-request bundler selection.
 	var bundlerClients []*bundler.Client
-	for _, spec := range bundlerSpecs {
+	for _, spec := range h.defaultBundlerURLs {
 		name, url := bundler.ParseSpec(spec)
 		bundlerClients = append(bundlerClients, bundler.New(name, url, h.bundlerTimeout))
 	}
 
-	// Stamp the first real phase synchronously so the immediate progress
-	// fragment renders something more useful than `pending`. The goroutine
-	// will overwrite this within microseconds, but if it raced ahead we'd
-	// otherwise show three hollow circles for the first frame.
+	// Stamp the first real phase so any poller sees "bundling" or "pushing"
+	// instead of the transient "pending" state.
 	firstPhase := registryartifact.StatusPushing
 	if len(bundlerClients) > 0 {
 		firstPhase = registryartifact.StatusBundling
 	}
-	if _, err := h.db.RegistryArtifact.UpdateOneID(artifact.ID).SetStatus(firstPhase).Save(c.Request().Context()); err == nil {
+	if _, err := h.db.RegistryArtifact.UpdateOneID(artifact.ID).SetStatus(firstPhase).Save(ctx); err == nil {
 		artifact.Status = firstPhase
 	}
 
-	go h.publisher.Publish(artifact.ID, job, tag, bundlerClients)
+	// Actor is unused here — audit event fires from the caller (export.go)
+	// with the correct actor already known.
+	_ = actor
 
-	if c.Request().Header.Get("HX-Request") == "true" {
-		tmpl, err := template.ParseFiles("web/templates/orbital/partials/publish-modal-progress.gohtml")
-		if err != nil {
-			return fmt.Errorf("parse publish-modal-progress: %w", err)
-		}
-		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-		c.Response().Header().Set("HX-Trigger", "refreshExportJobs")
-		return tmpl.ExecuteTemplate(c.Response(), "publish-modal-progress", publishProgressData{
-			BasePath:     h.basePath,
-			ArtifactID:   artifact.ID,
-			Phase:        string(artifact.Status),
-			BundlerNames: h.bundlerNamesLabel(),
-		})
+	result, err := h.publisher.Publish(ctx, artifact.ID, job, tag, bundlerClients)
+	if err != nil {
+		return nil, err
 	}
 
-	return c.JSON(http.StatusAccepted, publishResponse{
+	return &PublishExportedResult{
 		ArtifactID: artifact.ID,
-		Status:     string(artifact.Status),
 		Tag:        tag,
-		Repository: repoName,
-	})
+		Digest:     result.Digest,
+		SizeBytes:  result.SizeBytes,
+		LayerCount: result.LayerCount,
+	}, nil
+}
+
+// DeleteArtifact handles DELETE /api/v1/export/jobs/:jobId/artifact.
+// Removes the on-disk zip and nullifies artifact_path on the ExportJob row;
+// the job row itself stays as an audit record. Used by the UI's Retained
+// Downloads section for operator-initiated cleanup of zips retained by the
+// download flow.
+//
+// @Summary     Delete export artifact
+// @Description Removes the retained zip for a download-flow export. The ExportJob row remains for audit; only the on-disk artifact and artifact_path are cleared. 404 if job or artifact does not exist.
+// @Tags        export
+// @Produce     json
+// @Param       jobId path string true "Job ID (UUID)"
+// @Success     204
+// @Failure     404 {object} map[string]string
+// @Router      /api/v1/export/jobs/{jobId}/artifact [delete]
+func (h *OCI) DeleteArtifact(c echo.Context) error {
+	jobID, err := uuid.Parse(c.Param("jobId"))
+	if err != nil {
+		return echo.ErrBadRequest
+	}
+	job, err := h.db.ExportJob.Get(c.Request().Context(), jobID)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return echo.ErrNotFound
+		}
+		return fmt.Errorf("get job: %w", err)
+	}
+	if job.ArtifactPath == nil {
+		return echo.ErrNotFound
+	}
+	if rmErr := os.Remove(*job.ArtifactPath); rmErr != nil && !os.IsNotExist(rmErr) {
+		h.logger.Warn("delete artifact: remove failed", "path", *job.ArtifactPath, "err", rmErr)
+	}
+	if _, err := h.db.ExportJob.UpdateOneID(jobID).ClearArtifactPath().Save(c.Request().Context()); err != nil {
+		return fmt.Errorf("clear artifact_path: %w", err)
+	}
+	return c.NoContent(http.StatusNoContent)
 }
 
 // ListArtifacts handles GET /api/v1/oci/artifacts
@@ -230,6 +221,7 @@ func (h *OCI) ListArtifacts(c echo.Context) error {
 	artifacts, err := h.db.RegistryArtifact.Query().
 		Order(registryartifact.ByInitiatedAt(sql.OrderDesc())).
 		Limit(100).
+		WithExportJob().
 		All(c.Request().Context())
 	if err != nil {
 		return fmt.Errorf("list artifacts: %w", err)
@@ -239,6 +231,7 @@ func (h *OCI) ListArtifacts(c echo.Context) error {
 		for _, a := range artifacts {
 			rows = append(rows, toArtifactFragRow(a, h.basePath))
 		}
+		enrichPreviousCompleted(rows)
 		tmpl, err := template.ParseFiles("web/templates/orbital/partials/artifacts-tbody.gohtml")
 		if err != nil {
 			return fmt.Errorf("parse artifacts fragment: %w", err)
@@ -251,6 +244,44 @@ func (h *OCI) ListArtifacts(c echo.Context) error {
 		out = append(out, toArtifactResponse(a))
 	}
 	return c.JSON(http.StatusOK, out)
+}
+
+// enrichPreviousCompleted fills PreviousExportedAtRFC3339 + HasPrevious on
+// each COMPLETED row. "Previous" is defined by SNAPSHOT chronology (export
+// completed_at), not display order, so the "publish out of order" case
+// (v2 pushed before v1 for the same DC) still produces correct diffs.
+//
+// For each row we scan all other completed rows in the same DC and pick
+// the one whose ExportedAt is the greatest value strictly less than this
+// row's ExportedAt. First publish of a DC (no earlier export) stays unset —
+// the template renders an empty-state message; the mutations captured by
+// the first publish are visible on the DC's own audit tab.
+func enrichPreviousCompleted(rows []artifactFragRow) {
+	for i := range rows {
+		if rows[i].Status != "completed" || rows[i].ExportedAtRFC3339 == "" {
+			continue
+		}
+		var bestPrev string
+		for j := range rows {
+			if i == j || rows[j].Status != "completed" || rows[j].ExportedAtRFC3339 == "" {
+				continue
+			}
+			if rows[j].DatacenterOrbID == "" || rows[j].DatacenterOrbID != rows[i].DatacenterOrbID {
+				continue
+			}
+			// Lexical compare works — RFC3339 timestamps sort chronologically.
+			if rows[j].ExportedAtRFC3339 >= rows[i].ExportedAtRFC3339 {
+				continue
+			}
+			if bestPrev == "" || rows[j].ExportedAtRFC3339 > bestPrev {
+				bestPrev = rows[j].ExportedAtRFC3339
+			}
+		}
+		if bestPrev != "" {
+			rows[i].PreviousExportedAtRFC3339 = bestPrev
+			rows[i].HasPrevious = true
+		}
+	}
 }
 
 // nextTagForJob computes the suggested next tag for the data center associated
@@ -279,68 +310,6 @@ func (h *OCI) nextTagForJob(ctx context.Context, job *ent.ExportJob) (repoName, 
 	return repoName, oci.NextTagAfter(existing), nil
 }
 
-type publishModalData struct {
-	BasePath       string
-	JobID          string
-	DataCenterName string
-	ExportedAt     string
-	SuggestedTag   string
-	Repository     string
-	BundlerNames   string
-	Republish      bool
-}
-
-// PublishModal handles GET /api/v1/export/jobs/:jobId/publish-modal
-//
-// @Summary     Get publish confirmation modal
-// @Description Returns an HTML fragment containing the publish confirmation modal body (summary + confirm form). UI-only endpoint — always returns HTML.
-// @Tags        oci
-// @Produce     html
-// @Param       jobId     path  string true  "Export job ID (UUID)"
-// @Param       republish query bool   false "Set to true when re-publishing an already-published artifact"
-// @Success     200
-// @Failure     404 {object} map[string]string
-// @Router      /api/v1/export/jobs/{jobId}/publish-modal [get]
-func (h *OCI) PublishModal(c echo.Context) error {
-	id, err := uuid.Parse(c.Param("jobId"))
-	if err != nil {
-		return echo.ErrBadRequest
-	}
-	job, err := h.db.ExportJob.Get(c.Request().Context(), id)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return echo.ErrNotFound
-		}
-		return fmt.Errorf("get job: %w", err)
-	}
-
-	repoName, suggestedTag, err := h.nextTagForJob(c.Request().Context(), job)
-	if err != nil {
-		return err
-	}
-
-	exportedAt := job.CreatedAt.Format(time.RFC3339)
-	if job.CompletedAt != nil {
-		exportedAt = job.CompletedAt.Format(time.RFC3339)
-	}
-
-	tmpl, err := template.ParseFiles("web/templates/orbital/partials/publish-modal-summary.gohtml")
-	if err != nil {
-		return fmt.Errorf("parse publish-modal-summary: %w", err)
-	}
-	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return tmpl.ExecuteTemplate(c.Response(), "publish-modal-summary", publishModalData{
-		BasePath:       h.basePath,
-		JobID:          job.ID.String(),
-		DataCenterName: job.DatacenterName,
-		ExportedAt:     exportedAt,
-		SuggestedTag:   suggestedTag,
-		Repository:     repoName,
-		BundlerNames:   h.bundlerNamesLabel(),
-		Republish:      c.QueryParam("republish") == "true",
-	})
-}
-
 // GetArtifact handles GET /api/v1/oci/artifacts/:id
 //
 // @Summary     Get OCI artifact
@@ -365,138 +334,7 @@ func (h *OCI) GetArtifact(c echo.Context) error {
 		return fmt.Errorf("get artifact: %w", err)
 	}
 
-	if c.Request().Header.Get("HX-Request") == "true" {
-		return h.renderArtifactFragment(c, a)
-	}
 	return c.JSON(http.StatusOK, toArtifactResponse(a))
-}
-
-type publishProgressData struct {
-	BasePath     string
-	ArtifactID   int
-	Phase        string // current registry_artifact.status: pending|bundling|pushing|signing
-	BundlerNames string // comma-joined names from ORBITAL_BUNDLER_URLS (e.g. "configbundle-bundler"), surfaced in the bundling step label
-}
-
-// bundlerNamesLabel parses the configured ORBITAL_BUNDLER_URLS into a
-// human-readable label for the publish progress modal. Multiple bundlers are
-// joined with ", ". Empty defaults yield "bundler" so the label degrades
-// gracefully rather than collapsing to nothing.
-func (h *OCI) bundlerNamesLabel() string {
-	if len(h.defaultBundlerURLs) == 0 {
-		return "bundler"
-	}
-	names := make([]string, 0, len(h.defaultBundlerURLs))
-	for _, spec := range h.defaultBundlerURLs {
-		name, _ := bundler.ParseSpec(spec)
-		names = append(names, name)
-	}
-	return strings.Join(names, ", ")
-}
-
-type publishResultData struct {
-	Failed       bool
-	ErrorMessage string
-	Tag          string
-	Digest       string
-	Signed       bool
-	Layers       int
-}
-
-// renderArtifactFragment returns the publish-modal-progress fragment for
-// in-progress artifacts (keeps HTMX polling), or publish-modal-result for
-// terminal (completed/failed) states (stops polling). When the state is
-// terminal the response carries HX-Trigger: refreshExportJobs so the export
-// jobs table reloads in the background.
-func (h *OCI) renderArtifactFragment(c echo.Context, a *ent.RegistryArtifact) error {
-	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-
-	terminal := a.Status == registryartifact.StatusCompleted || a.Status == registryartifact.StatusFailed
-	if !terminal {
-		tmpl, err := template.ParseFiles("web/templates/orbital/partials/publish-modal-progress.gohtml")
-		if err != nil {
-			return fmt.Errorf("parse publish-modal-progress: %w", err)
-		}
-		return tmpl.ExecuteTemplate(c.Response(), "publish-modal-progress", publishProgressData{
-			BasePath:     h.basePath,
-			ArtifactID:   a.ID,
-			Phase:        string(a.Status),
-			BundlerNames: h.bundlerNamesLabel(),
-		})
-	}
-
-	c.Response().Header().Set("HX-Trigger", "refreshExportJobs")
-	data := publishResultData{Failed: a.Status == registryartifact.StatusFailed}
-	if data.Failed {
-		// Two distinct failure surfaces: push errors land in `error`, bundler
-		// errors (cb-bundler unreachable, bundler returned non-2xx, etc.) land
-		// in `bundler_error`. Either populates the result modal — fall back to
-		// the generic field when the specific one is empty.
-		switch {
-		case a.Error != nil && *a.Error != "":
-			data.ErrorMessage = *a.Error
-		case a.BundlerError != nil && *a.BundlerError != "":
-			data.ErrorMessage = "bundler error: " + *a.BundlerError
-		default:
-			data.ErrorMessage = "publish failed with no recorded error — check orbital logs"
-		}
-	} else {
-		data.Tag = a.Tag
-		if a.Digest != nil {
-			data.Digest = *a.Digest
-		}
-		data.Signed = a.Signed
-		data.Layers = len(a.Layers)
-	}
-	tmpl, err := template.ParseFiles("web/templates/orbital/partials/publish-modal-result.gohtml")
-	if err != nil {
-		return fmt.Errorf("parse publish-modal-result: %w", err)
-	}
-	return tmpl.ExecuteTemplate(c.Response(), "publish-modal-result", data)
-}
-
-// DeleteJob handles DELETE /api/v1/export/jobs/:jobId
-//
-// @Summary     Delete export job
-// @Description Deletes an export job record and removes its local scratch file. Does not remove any published OCI artifacts from the registry.
-// @Tags        export
-// @Produce     json
-// @Param       jobId path string true "Export job ID"
-// @Success     204
-// @Failure     404 {object} map[string]string
-// @Router      /api/v1/export/jobs/{jobId} [delete]
-func (h *OCI) DeleteJob(c echo.Context) error {
-	jobID, err := uuid.Parse(c.Param("jobId"))
-	if err != nil {
-		return echo.ErrBadRequest
-	}
-
-	job, err := h.db.ExportJob.Get(c.Request().Context(), jobID)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return echo.ErrNotFound
-		}
-		return fmt.Errorf("get job: %w", err)
-	}
-
-	// Remove the export zip if present.
-	if job.ArtifactPath != nil {
-		if removeErr := os.Remove(*job.ArtifactPath); removeErr != nil && !os.IsNotExist(removeErr) {
-			h.logger.Warn("failed to remove artifact file", "path", *job.ArtifactPath, "err", removeErr)
-		}
-	}
-
-	// Remove the job's scratch export directory (e.g. subgraph-exports/scratch/<jobID>/).
-	scratchDir := filepath.Join(h.scratchExportDir, jobID.String())
-	if removeErr := os.RemoveAll(scratchDir); removeErr != nil {
-		h.logger.Warn("failed to remove scratch dir", "path", scratchDir, "err", removeErr)
-	}
-
-	if err := h.db.ExportJob.DeleteOneID(jobID).Exec(c.Request().Context()); err != nil {
-		return fmt.Errorf("delete job: %w", err)
-	}
-
-	return c.NoContent(http.StatusNoContent)
 }
 
 // PublicKey handles GET /api/v1/oci/public-key
@@ -585,13 +423,6 @@ func toArtifactResponse(a *ent.RegistryArtifact) artifactResponse {
 	return r
 }
 
-func nillableInt(v int) *int {
-	if v == 0 {
-		return nil
-	}
-	return &v
-}
-
 func testRegistryConnection(registry, username, password string, allowHTTP bool) error {
 	reg, err := remote.NewRegistry(registry)
 	if err != nil {
@@ -662,6 +493,13 @@ type artifactFragRow struct {
 	BasePath       string // for declarative HTMX hx-* attrs that need a full URL
 	ID             int
 	DatacenterName string
+	// DatacenterOrbID is sourced from the ExportJob edge — used as the
+	// `namespace` filter in the audit-log fetch on row expand.
+	DatacenterOrbID string
+	// datacenterNamespace is the "namespace" segment of DatacenterOrbID
+	// (everything before the first ":"). Used verbatim as the `namespace=`
+	// query param when building the changes-panel hx-get URL.
+	DatacenterNamespace string
 	Repository     string
 	Tag            string
 	Digest         string
@@ -673,9 +511,27 @@ type artifactFragRow struct {
 	Status         string
 	StatusClass    string
 	InitiatedAt    string
-	Error          string
-	LayerRows      []artifactLayerRow
-	HasLayers      bool
+	// CompletedAtRFC3339 is the OCI-push completion time. Display-only.
+	CompletedAtRFC3339 string
+	// ExportedAtRFC3339 is the export_job.completed_at — the moment the
+	// DGraph snapshot in this artifact was frozen. This is the correct
+	// anchor for the changes-diff window: an artifact's CONTENT is
+	// determined by when its subgraph was captured, not when the OCI push
+	// happened (which may be hours later, out of order, etc.). Used as the
+	// `until` bound on the audit-log fetch.
+	ExportedAtRFC3339 string
+	// PreviousExportedAtRFC3339 is the RFC3339 export_job.completed_at of
+	// the latest prior completed artifact for the same DatacenterOrbID
+	// whose export snapshot pre-dates this one. Latest-by-content, not
+	// latest-by-publish — handles the "publish out of export order" case.
+	// Empty when this is the first successful publish for this DC.
+	PreviousExportedAtRFC3339 string
+	// HasPrevious signals that the changes-panel row should fetch instead
+	// of rendering the "first publish" empty state.
+	HasPrevious bool
+	Error       string
+	LayerRows   []artifactLayerRow
+	HasLayers   bool
 }
 
 func toArtifactFragRow(a *ent.RegistryArtifact, basePath string) artifactFragRow {
@@ -696,6 +552,21 @@ func toArtifactFragRow(a *ent.RegistryArtifact, basePath string) artifactFragRow
 		Status:         string(a.Status),
 		StatusClass:    statusClass,
 		InitiatedAt:    a.InitiatedAt.UTC().Format("2006-01-02 15:04:05"),
+	}
+	// DatacenterOrbID + Namespace come from the ExportJob edge (loaded via
+	// .WithExportJob() at query time). Namespace is the segment before the
+	// first ":" — used as the `namespace` filter on the audit-log fetch.
+	if a.Edges.ExportJob != nil && a.Edges.ExportJob.DatacenterOrbID != nil {
+		row.DatacenterOrbID = *a.Edges.ExportJob.DatacenterOrbID
+		if idx := strings.IndexByte(row.DatacenterOrbID, ':'); idx > 0 {
+			row.DatacenterNamespace = row.DatacenterOrbID[:idx]
+		}
+	}
+	if a.CompletedAt != nil {
+		row.CompletedAtRFC3339 = a.CompletedAt.UTC().Format(time.RFC3339)
+	}
+	if a.Edges.ExportJob != nil && a.Edges.ExportJob.CompletedAt != nil {
+		row.ExportedAtRFC3339 = a.Edges.ExportJob.CompletedAt.UTC().Format(time.RFC3339)
 	}
 	if a.Digest != nil {
 		row.Digest = *a.Digest

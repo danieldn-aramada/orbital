@@ -1,43 +1,74 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Export workflow', () => {
-  test('triggering an export creates a completed job with a download link', async ({ page }) => {
+test.describe('Export workflow (atomic)', () => {
+  // OCI is the default destination on load (99% use case). Button is gated
+  // on DC selection only (destination is pre-selected). Test the download
+  // path — deployment-independent — and assert the atomic flow reaches a
+  // terminal status.
+  test('Export with destination=download triggers atomic flow', async ({ page }) => {
     await page.goto('/export');
 
-    // Wait for real DC options and select the first
-    const select = page.locator('#export-datacenter-select');
-    const realOption = select.locator('option:not([disabled])').first();
-    await expect(realOption).toBeAttached({ timeout: 8000 });
-    const value = await realOption.getAttribute('value');
-    await select.selectOption(value!);
-
-    // Trigger the export — wait for the API response before asserting
     const submitBtn = page.locator('#export-submit-btn');
+    // Initially disabled — no DC selected yet (destination is already OCI).
+    await expect(submitBtn).toBeDisabled();
+
+    const dcSelect = page.locator('#export-datacenter-select');
+    const dcOption = dcSelect.locator('option[data-name]').first();
+    await expect(dcOption).toBeAttached({ timeout: 8000 });
+    const dcOrbId = await dcOption.getAttribute('value');
+    const dcName = await dcOption.getAttribute('data-name');
+    await dcSelect.selectOption(dcOrbId!);
+
+    // OCI destination option's label should now include the DC name (verify
+    // the dynamic-label plumbing works).
+    const ociOption = page.locator('#export-destination-select option[data-oci="true"]');
+    await expect(ociOption).toContainText(dcName!);
+
+    // Switch to download and confirm Test Connection hides, button enables.
+    await page.locator('#export-destination-select').selectOption('download');
+    await expect(page.locator('#test-connection-row')).toBeHidden();
     await expect(submitBtn).toBeEnabled();
+
     await Promise.all([
       page.waitForResponse(
-        resp => resp.url().includes('/api/v1/export') && !resp.url().includes('/jobs') && resp.status() === 202,
+        resp =>
+          resp.url().includes('/api/v1/export') &&
+          !resp.url().includes('/jobs') &&
+          resp.request().method() === 'POST' &&
+          resp.status() === 202,
       ),
       submitBtn.click(),
     ]);
 
-    // Status box becomes visible quickly
     await expect(page.locator('#export-status-box')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#export-status-box')).toContainText(
+      /Export complete|Export failed/,
+      { timeout: 60_000 },
+    );
+  });
 
-    // Wait for the job to reach a terminal state (completed or failed)
-    await expect(page.locator('#export-status-box')).toContainText(/Export complete|Export failed/, { timeout: 60_000 });
+  // On page load: OCI is pre-selected (when configured), so Test Connection
+  // is visible immediately. Switching destinations toggles it.
+  test('Test Connection button toggles with destination selection', async ({ page }) => {
+    await page.goto('/export');
 
-    // At least one job row should now appear in the table
-    const statusCells = page.locator('[data-testid="export-job-status"]');
-    await expect(statusCells.first()).toBeVisible({ timeout: 10_000 });
+    const testRow = page.locator('#test-connection-row');
+    const destSelect = page.locator('#export-destination-select');
 
-    // The first job's status should be "completed" (or "failed" if DGraph unavailable)
-    const statusText = await statusCells.first().textContent();
-    expect(['completed', 'failed']).toContain(statusText?.trim());
-
-    // If completed, the download button should be present
-    if (statusText?.trim() === 'completed') {
-      await expect(page.locator('[data-testid="export-download-btn"]').first()).toBeVisible();
+    const ociEnabled = await destSelect.locator('option[value="oci"]:not([disabled])').count();
+    if (ociEnabled === 0) {
+      test.skip(true, 'OCI destination is disabled in this deployment');
     }
+
+    // OCI pre-selected → Test Connection visible.
+    await expect(testRow).toBeVisible();
+
+    // Switch to download → hides.
+    await destSelect.selectOption('download');
+    await expect(testRow).toBeHidden();
+
+    // Switch back to OCI → visible again.
+    await destSelect.selectOption('oci');
+    await expect(testRow).toBeVisible();
   });
 });

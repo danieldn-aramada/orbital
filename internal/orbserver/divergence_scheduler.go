@@ -95,10 +95,10 @@ func (s *DivergenceScheduler) fire(ctx context.Context) {
 		return
 	}
 
-	if err := s.store.SavePublishRecord(divergence.PublishRecord{
+	if err := s.store.SavePublishRow(divergence.PublishRecord{
 		PublishedAt: time.Now().UTC(),
 		S3Key:       key,
-	}); err != nil {
+	}, publishDCOrbID(entries), entries); err != nil {
 		s.logger.Warn("divergence scheduler: save publish record failed", "err", err)
 	}
 	s.logger.Info("divergence scheduler: published", "s3Key", key, "entries", len(entries))

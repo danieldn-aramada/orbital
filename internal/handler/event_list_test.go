@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -425,6 +427,101 @@ func TestEventList_OrbIdFilterExcludesAuthEvents(t *testing.T) {
 	m := events[0].(map[string]any)
 	if m["eventCategory"].(string) != "data" {
 		t.Errorf("expected data event, got %q", m["eventCategory"])
+	}
+}
+
+// TestEventList_FilterByNamespace verifies orb_id LIKE '<ns>:%' prefix
+// matching. Underlying use case: publish-changes panel needs "every event
+// under DC X" without enumerating every server/idrac/cluster orbId.
+func TestEventList_FilterByNamespace(t *testing.T) {
+	ctx := context.Background()
+	clearEvents(ctx)
+
+	createEvent(t, "ns-test", []string{"updateServer"}, []string{"Server"}, []string{"colo:srv-01"}, "data")
+	createEvent(t, "ns-test", []string{"updateIdrac"}, []string{"IdracSettings"}, []string{"colo:srv-01-idrac"}, "data")
+	createEvent(t, "ns-test", []string{"updateServer"}, []string{"Server"}, []string{"aws:srv-99"}, "data")
+	createEvent(t, "ns-test", []string{"loginSuccess"}, nil, nil, "auth")
+	t.Cleanup(func() { clearEvents(ctx) })
+
+	h := newEventHandler(t)
+	c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", map[string]string{"namespace": "colo"})
+	if err := h.List(c); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	var body map[string]any
+	json.Unmarshal(rec.Body.Bytes(), &body)
+	events, _ := body["events"].([]any)
+	if len(events) != 2 {
+		t.Fatalf("expected 2 colo events (server + idrac); got %d: %+v", len(events), events)
+	}
+	for _, ev := range events {
+		m := ev.(map[string]any)
+		ids, _ := m["resourceIds"].([]any)
+		if len(ids) == 0 {
+			t.Errorf("event missing resourceIds: %v", m)
+			continue
+		}
+		if !strings.HasPrefix(ids[0].(string), "colo:") {
+			t.Errorf("non-colo event leaked into namespace filter: %v", ids)
+		}
+	}
+}
+
+// TestEventList_FilterByTimestampWindow verifies `since` (exclusive) and
+// `until` (inclusive). Consecutive windows [t0..t1] and (t1..t2] must not
+// double-count the event at t1.
+func TestEventList_FilterByTimestampWindow(t *testing.T) {
+	ctx := context.Background()
+	clearEvents(ctx)
+
+	base := time.Now().UTC().Truncate(time.Second)
+	for i, off := range []time.Duration{-3 * time.Minute, -2 * time.Minute, -1 * time.Minute, 0} {
+		ev := testDB.Event.Create().
+			SetActor("ts-test").
+			SetOperations([]string{"op"}).
+			SetTimestamp(base.Add(off)).
+			SetEventCategory("data").
+			SaveX(ctx)
+		testDB.EventResource.Create().SetOrbID("ns:ts-" + strconv.Itoa(i)).SetEventID(ev.ID).ExecX(ctx)
+	}
+	t.Cleanup(func() { clearEvents(ctx) })
+
+	// Window: (-2m, -1m] → only the event at -1m is included.
+	since := base.Add(-2 * time.Minute).Format(time.RFC3339)
+	until := base.Add(-1 * time.Minute).Format(time.RFC3339)
+
+	h := newEventHandler(t)
+	c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", map[string]string{
+		"since": since,
+		"until": until,
+	})
+	if err := h.List(c); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	var body map[string]any
+	json.Unmarshal(rec.Body.Bytes(), &body)
+	events, _ := body["events"].([]any)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event in (%s, %s], got %d", since, until, len(events))
+	}
+	m := events[0].(map[string]any)
+	ids, _ := m["resourceIds"].([]any)
+	if len(ids) == 0 || ids[0].(string) != "ns:ts-2" {
+		t.Errorf("wrong event in window; got %v, want ns:ts-2", ids)
+	}
+}
+
+func TestEventList_FilterByTimestamp_MalformedReturns400(t *testing.T) {
+	h := newEventHandler(t)
+	c, _ := eventCtx(http.MethodGet, "/api/v1/audit-log", map[string]string{"since": "not-a-timestamp"})
+	err := h.List(c)
+	if err == nil {
+		t.Fatal("expected 400 for malformed since; got nil")
+	}
+	if he, ok := err.(*echo.HTTPError); !ok || he.Code != http.StatusBadRequest {
+		t.Errorf("expected *echo.HTTPError 400, got %T %v", err, err)
 	}
 }
 

@@ -65,8 +65,9 @@ func Map(fsys fs.FS) map[string]*template.Template {
 		"datacenter":     parsePage(fsys, "datacenter", page("templates/orb/pages/datacenter.gohtml")),
 		"servers":        parsePage(fsys, "servers", page("templates/orb/pages/servers.gohtml")),
 		"clusters":       parsePage(fsys, "clusters", page("templates/orb/pages/clusters.gohtml")),
-		"divergence":     parsePage(fsys, "divergence", page("templates/orb/pages/divergence.gohtml")),
-		"import-history": parsePage(fsys, "import-history", page("templates/orb/pages/import-history.gohtml")),
+		"divergence":      parsePage(fsys, "divergence", page("templates/orb/pages/divergence.gohtml")),
+		"import-history":  parsePage(fsys, "import-history", page("templates/orb/pages/import-history.gohtml")),
+		"publish-history": parsePage(fsys, "publish-history", page("templates/orb/pages/publish-history.gohtml")),
 
 		// Standalone fragments — rendered directly (no base layout).
 		// Base name must equal the file basename so tmpl.Execute picks up the

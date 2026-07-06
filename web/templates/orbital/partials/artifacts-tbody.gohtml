@@ -1,4 +1,14 @@
 {{range .}}<tr>
+  <td>
+    {{/* Chevron toggles the sibling detail row — audit events between this
+         publish and the previous one for the same DC. Only renders when the
+         artifact completed; failed/pending rows have nothing to anchor. */}}
+    {{if eq .Status "completed"}}
+    <button type="button" class="button is-small is-white js-publish-changes-expand" aria-label="Toggle changes since previous publish">
+      <span class="icon"><i class="fas fa-chevron-right"></i></span>
+    </button>
+    {{end}}
+  </td>
   <td>{{.DatacenterName}}</td>
   <td class="is-family-monospace is-size-7">{{.Repository}}</td>
   <td><span class="tag is-light">{{.Tag}}</span></td>
@@ -29,5 +39,32 @@
   <td>{{.InitiatedAt}}</td>
   <td class="has-text-danger is-size-7">{{.Error}}</td>
 </tr>
-{{else}}<tr><td colspan="9" class="has-text-grey">No artifacts yet.</td></tr>
+{{if eq .Status "completed"}}
+{{/* Detail row: hidden by default. Toggled by the chevron above via delegated
+     handler in orbital.js. HTMX-lazily fetches audit events between the
+     previous and current publish's completed_at, scoped to the DC by
+     namespace prefix (see /api/v1/audit-log ?namespace=&since=&until=). */}}
+<tr class="js-publish-changes-detail is-hidden">
+  <td></td>
+  <td colspan="9" style="background: #fafafa;">
+    {{if .HasPrevious}}
+    <div class="mb-2">
+      <span class="has-text-grey is-size-7">Changes in this snapshot vs previous
+        <span class="is-family-monospace">{{.PreviousExportedAtRFC3339}}</span>
+        <span class="has-text-grey-light">(compares export snapshots, not publish timestamps — an artifact's content is fixed at export time)</span></span>
+    </div>
+    <div hx-get="{{.BasePath}}/api/v1/audit-log?namespace={{.DatacenterNamespace}}&since={{.PreviousExportedAtRFC3339}}&until={{.ExportedAtRFC3339}}&event_category=data&limit=200"
+         hx-trigger="revealed once"
+         hx-target="this"
+         hx-swap="innerHTML"
+         hx-headers='{"HX-Request":"true"}'>
+      <p class="has-text-grey is-size-7"><span class="icon is-small"><i class="fas fa-spinner fa-spin"></i></span> Loading changes…</p>
+    </div>
+    {{else}}
+    <p class="has-text-grey is-size-7">No previous publish for <strong>{{.DatacenterName}}</strong> — this is the first successful publish in the visible history.</p>
+    {{end}}
+  </td>
+</tr>
+{{end}}
+{{else}}<tr><td colspan="10" class="has-text-grey">No artifacts yet.</td></tr>
 {{end}}

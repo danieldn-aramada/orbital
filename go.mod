@@ -1,6 +1,6 @@
 module github.com/armada/orbital
 
-go 1.25.5
+go 1.26.4
 
 require (
 	entgo.io/ent v0.14.6
@@ -29,8 +29,9 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/swaggo/echo-swagger v1.5.2
 	github.com/swaggo/swag v1.16.6
-	golang.org/x/crypto v0.46.0
+	golang.org/x/crypto v0.51.0
 	golang.org/x/oauth2 v0.36.0
+	modernc.org/sqlite v1.53.0
 	oras.land/oras-go/v2 v2.6.0
 )
 
@@ -174,6 +175,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/mozillazg/docker-credential-acr-helper v0.4.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/nozzle/throttler v0.0.0-20180817012639-2ea982251481 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/oleiade/reflections v1.1.0 // indirect
@@ -184,6 +186,7 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.67.4 // indirect
 	github.com/prometheus/procfs v0.17.0 // indirect
+	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/sagikazarmark/locafero v0.11.0 // indirect
 	github.com/sassoftware/relic v7.2.1+incompatible // indirect
@@ -232,14 +235,14 @@ require (
 	go.uber.org/zap v1.27.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/mod v0.30.0 // indirect
-	golang.org/x/net v0.48.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/term v0.38.0 // indirect
-	golang.org/x/text v0.32.0 // indirect
+	golang.org/x/mod v0.36.0 // indirect
+	golang.org/x/net v0.54.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/term v0.43.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
-	golang.org/x/tools v0.39.0 // indirect
+	golang.org/x/tools v0.45.0 // indirect
 	google.golang.org/api v0.257.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251022142026-3a174f9686a8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251213004720-97cd9d5aeac2 // indirect
@@ -256,6 +259,9 @@ require (
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b // indirect
 	k8s.io/utils v0.0.0-20250820121507-0af2bda4dd1d // indirect
+	modernc.org/libc v1.73.4 // indirect
+	modernc.org/mathutil v1.7.1 // indirect
+	modernc.org/memory v1.11.0 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/release-utils v0.12.2 // indirect

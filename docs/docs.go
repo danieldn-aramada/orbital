@@ -40,8 +40,26 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Filter by resource orbId (e.g. alaska-dot:GRTLY24)",
+                        "description": "Filter by resource orbId (e.g. alaska-dot:GRTLY24). Repeatable, max 32.",
                         "name": "orbId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by namespace prefix (e.g. \\",
+                        "name": "namespace",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "RFC3339 lower bound (exclusive) on event timestamp",
+                        "name": "since",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "RFC3339 upper bound (inclusive) on event timestamp",
+                        "name": "until",
                         "in": "query"
                     },
                     {
@@ -625,7 +643,7 @@ const docTemplate = `{
         },
         "/api/v1/export": {
             "post": {
-                "description": "Triggers an async export of the data center's configuration subgraph. Returns immediately with a job ID. Returns 409 if an export is already in progress for this data center.",
+                "description": "Triggers an async atomic export of the data center's configuration subgraph. When download=false (default) AND OCI is configured, the export chains into an OCI publish and the zip is discarded on completion. When download=true (or OCI is not configured), the export runs in download-only mode and the zip is retained on disk for the client to fetch via GET /api/v1/export/jobs/{jobId}/download. Returns 202 with a job ID immediately; poll GET /api/v1/export/jobs/{jobId} until terminal state. Returns 409 if an export or restore is already in progress.",
                 "consumes": [
                     "application/json"
                 ],
@@ -719,20 +737,22 @@ const docTemplate = `{
                         "description": "Not Found"
                     }
                 }
-            },
+            }
+        },
+        "/api/v1/export/jobs/{jobId}/artifact": {
             "delete": {
-                "description": "Deletes an export job record and removes its local scratch file. Does not remove any published OCI artifacts from the registry.",
+                "description": "Removes the retained zip for a download-flow export. The ExportJob row remains for audit; only the on-disk artifact and artifact_path are cleared. 404 if job or artifact does not exist.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "export"
                 ],
-                "summary": "Delete export job",
+                "summary": "Delete export artifact",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Export job ID",
+                        "description": "Job ID (UUID)",
                         "name": "jobId",
                         "in": "path",
                         "required": true
@@ -782,103 +802,6 @@ const docTemplate = `{
                     },
                     "502": {
                         "description": "Bad Gateway"
-                    }
-                }
-            }
-        },
-        "/api/v1/export/jobs/{jobId}/publish": {
-            "post": {
-                "description": "Pushes a completed export job's artifact to the configured OCI registry as a signed artifact. Returns 503 if OCI publishing is not configured, 422 if the job is not completed or its artifact file is missing.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "oci"
-                ],
-                "summary": "Publish export as OCI artifact",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Export job ID",
-                        "name": "jobId",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "202": {
-                        "description": "Accepted",
-                        "schema": {
-                            "$ref": "#/definitions/handler.publishResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Unprocessable Entity",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "503": {
-                        "description": "Service Unavailable",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/export/jobs/{jobId}/publish-modal": {
-            "get": {
-                "description": "Returns an HTML fragment containing the publish confirmation modal body (summary + confirm form). UI-only endpoint — always returns HTML.",
-                "produces": [
-                    "text/html"
-                ],
-                "tags": [
-                    "oci"
-                ],
-                "summary": "Get publish confirmation modal",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Export job ID (UUID)",
-                        "name": "jobId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Set to true when re-publishing an already-published artifact",
-                        "name": "republish",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK"
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
                     }
                 }
             }
@@ -1426,23 +1349,6 @@ const docTemplate = `{
                     ]
                 },
                 "who": {
-                    "type": "string"
-                }
-            }
-        },
-        "handler.publishResponse": {
-            "type": "object",
-            "properties": {
-                "artifactId": {
-                    "type": "integer"
-                },
-                "repository": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "tag": {
                     "type": "string"
                 }
             }

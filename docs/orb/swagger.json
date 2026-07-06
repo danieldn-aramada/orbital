@@ -142,6 +142,41 @@
                 }
             }
         },
+        "/api/v1/divergence/publish-history": {
+            "get": {
+                "description": "Returns history of divergence reports published to object storage, newest first. Supports pagination via limit (max 200) and offset. HX-Request callers receive an HTML fragment for direct swap into the divergence page.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "divergence"
+                ],
+                "summary": "List published divergence reports",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Rows per page (default 25, max 200)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Row offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/divergence/test-connection": {
             "post": {
                 "description": "Pings the configured object store (S3 or Azure Blob) used for divergence report publishing. Returns JSON `{ok, error?}` by default, or an inline HTML span when `HX-Request: true` is set. 503 if no object store is configured.",

@@ -82,7 +82,7 @@ services:
     image: postgres:18.3-alpine3.23
     environment:
       POSTGRES_USER: orbital
-      POSTGRES_PASSWORD: orbital
+      POSTGRES_PASSWORD: orbital-local-dev-secret
       POSTGRES_DB: orbital
     ports:
       - "5432:5432"
@@ -145,7 +145,7 @@ services:
       DGRAPH_SCRATCH_ADMIN_URL: http://dgraph-alpha-scratch:8080/admin
       DGRAPH_SCRATCH_ZERO_URL: http://dgraph-zero-scratch:6080
       DGRAPH_EXPORT_DIR: /dgraph/export
-      DATABASE_URL: postgres://orbital:orbital@postgres:5432/orbital?sslmode=disable
+      DATABASE_URL: postgres://orbital:orbital-local-dev-secret@postgres:5432/orbital?sslmode=disable
       ORBITAL_S3_ENDPOINT: http://minio:9000
       ORBITAL_S3_BUCKET: orbital
       ORBITAL_S3_ACCESS_KEY: minioadmin
@@ -155,6 +155,12 @@ services:
       ORBITAL_DGRAPH_ALPHA_GRPC: dgraph-alpha:9080
       ORBITAL_DGRAPH_ZERO_GRPC: dgraph-zero:5080
       ORBITAL_DEV: "true"
+      # Route the containerized orbital's bundler calls to cb-bundler running on the host.
+      # `localhost` inside the container refers to the container itself; `host.docker.internal`
+      # resolves to the host's loopback interface on Docker Desktop.
+      ORBITAL_BUNDLER_URLS: configbundle-bundler=http://host.docker.internal:8020/bundle
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - /tmp/orbital-test-blue:/dgraph/export
       - /tmp/orbital-test-scratch:/tmp/orbital-test-scratch
@@ -190,6 +196,12 @@ services:
       ORB_ENABLE_OCI_REGISTRY: "true"
       ORB_DATA_DIR: /var/lib/orb
       ORB_DEV: "true"
+      # S3 for divergence report publishing — points at the compose network's
+      # minio service (localhost inside the container is the container itself).
+      ORB_S3_ENDPOINT: http://minio:9000
+      ORB_S3_BUCKET: orbital
+      ORB_S3_ACCESS_KEY: minioadmin
+      ORB_S3_SECRET_KEY: minioadmin
     volumes:
       - ./cosign.pub:/app/deploy/local/cosign.pub:ro
     depends_on:

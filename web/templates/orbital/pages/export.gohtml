@@ -13,40 +13,9 @@
       {{if not .CanMutate}}{{template "access-required" .}}{{end}}
 
       <p class="is-size-4 mb-2" data-testid="page-heading">Export Subgraph</p>
-      <p class="has-text-grey mb-5" style="font-size: 0.875rem;">
-        Export a data center's configuration subgraph as a portable archive (<code>json.gz</code> + <code>schema.gz</code>).
-      </p>
 
       {{if .CanMutate}}
-      <div style="max-width: 480px;" class="mb-6">
-        <div class="field">
-          <label class="label">OCI Registry</label>
-          <div class="control has-icons-right">
-            {{if .OCIConfigured}}
-              <input class="input is-small has-background-light has-text-grey-dark" type="text" value="{{.OCIRegistry}}/{{.OCIRepo}}/{datacenter-name}" readonly style="cursor: default;">
-              <span class="icon is-small is-right has-text-grey-light"><i class="fas fa-lock"></i></span>
-            {{else}}
-              <input class="input is-small is-danger" type="text" value="OCI not configured" readonly style="cursor: default;">
-              <p class="help is-danger">Set ORBITAL_OCI_REGISTRY and ORBITAL_OCI_SIGNING_KEY_PATH</p>
-            {{end}}
-          </div>
-          {{if .OCIConfigured}}<p class="help has-text-grey-light">Configurable only via environment variable</p>{{end}}
-        </div>
-
-        {{if .OCIConfigured}}
-        <div class="field mt-4">
-          <div class="control is-flex is-align-items-center" style="gap: 0.75rem;">
-            <button id="btn-test-connection" class="button is-light is-small js-oci-test-connection">
-              <span class="icon"><i class="fa-solid fa-plug"></i></span>
-              <span>Test Connection</span>
-            </button>
-            <span id="test-connection-result" class="is-size-7"></span>
-          </div>
-        </div>
-        {{end}}
-      </div>
-
-      <form id="form-export-subgraph">
+      <form id="form-export-subgraph" style="max-width: 520px;">
         <div class="field">
           <label class="label">
             Data Center
@@ -58,7 +27,7 @@
                 {{if .DataCenters}}
                   <option value="" disabled selected>— select a data center —</option>
                   {{range .DataCenters}}
-                    <option value="{{.OrbID}}">{{.Name}}</option>
+                    <option value="{{.OrbID}}" data-name="{{.Name}}">{{.Name}}</option>
                   {{end}}
                 {{else}}
                   <option value="" disabled selected>No data centers found</option>
@@ -66,14 +35,53 @@
               </select>
             </div>
           </div>
-          <p class="help">Select the data center whose subgraph you want to export.</p>
+        </div>
+
+        <div class="field mt-4">
+          <label class="label">
+            Destination
+            <span class="has-text-danger">*</span>
+          </label>
+          <div class="control">
+            <div class="select">
+              {{/* Destination options carry the target URL/label as their
+                   visible text. OCI option's label is templated with the
+                   selected DC name at page-render time (blank until DC is
+                   picked) and re-rendered by JS whenever the DC changes.
+                   data-oci-registry-prefix drives that JS. */}}
+              <select id="export-destination-select" name="destination"
+                      data-oci-registry-prefix="{{if .OCIConfigured}}{{.OCIRegistry}}/{{.OCIRepo}}/{{end}}">
+                {{/* OCI is pre-selected when configured (the 99% case).
+                     Non-OCI deployments fall back to Download by default —
+                     Publish isn't reachable there anyway. */}}
+                {{if .OCIConfigured}}
+                <option value="oci" data-oci="true" selected>{{.OCIRegistry}}/{{.OCIRepo}}/{datacenter-name}</option>
+                <option value="download">Download zip locally</option>
+                {{else}}
+                <option value="oci" data-oci="true" disabled>Publish to OCI (not configured)</option>
+                <option value="download" selected>Download zip locally</option>
+                {{end}}
+              </select>
+            </div>
+          </div>
+          {{/* Test Connection appears here only when OCI destination is
+               selected. Plain inline styles (no Bulma is-flex) so JS can
+               toggle display without a specificity/!important collision.
+               Row is hidden by default; JS shows it as inline-flex. */}}
+          <div id="test-connection-row" class="control mt-2" style="display: none; gap: 0.75rem; align-items: center;">
+            <button id="btn-test-connection" type="button" class="button is-light is-small js-oci-test-connection">
+              <span class="icon"><i class="fa-solid fa-plug"></i></span>
+              <span>Test Connection</span>
+            </button>
+            <span id="test-connection-result" class="is-size-7"></span>
+          </div>
         </div>
 
         <div class="field is-grouped mt-5">
           <div class="control">
             <button id="export-submit-btn" class="button is-primary js-export-submit" type="button" disabled>
               <span class="icon"><i class="fa-solid fa-file-export"></i></span>
-              <span>Export</span>
+              <span>Export Subgraph</span>
             </button>
           </div>
           <div class="control">
@@ -92,8 +100,20 @@
       </div>
       {{end}}
 
+      {{/* Retained Downloads section — shows completed download-flow jobs whose
+           on-disk zip is still available. Publish-flow rows are gone from this
+           table (publish history lives at /publish-history). */}}
       <div class="mt-6">
-        <p class="is-size-5 mb-3">Export Jobs</p>
+        <div class="is-flex is-align-items-center mb-3" style="gap: 0.75rem;">
+          <p class="is-size-5">Retained Downloads</p>
+          <button class="button is-small is-link js-retained-reload" title="Reload">
+            <span class="icon"><i class="fa-solid fa-rotate-right"></i></span>
+            <span>Reload</span>
+          </button>
+        </div>
+        <p class="has-text-grey mb-3" style="font-size: 0.8125rem;">
+          Zips retained from Export &amp; Download. Each takes disk space until you download or delete it.
+        </p>
         <div style="overflow-x: auto">
           <table
             id="export-jobs-table"
@@ -102,7 +122,6 @@
           >
             <thead>
               <tr>
-                <th>Job ID</th>
                 <th>Data Center</th>
                 <th>Status</th>
                 <th>Created At</th>
@@ -112,7 +131,7 @@
               </tr>
             </thead>
             <tbody id="export-jobs-tbody">
-              <tr><td colspan="7" class="has-text-grey">No export jobs yet.</td></tr>
+              <tr><td colspan="6" class="has-text-grey">No retained downloads.</td></tr>
             </tbody>
           </table>
         </div>
@@ -121,21 +140,4 @@
       {{end}}
     </div>
   </main>
-
-  <!-- Publish confirmation modal — body fragments served by /api/v1/export/jobs/:jobId/publish-modal -->
-  <div id="publish-confirm-modal" class="modal">
-    <div class="modal-background" onclick="document.getElementById('publish-confirm-modal').classList.remove('is-active')"></div>
-    <div class="modal-card">
-      <header class="modal-card-head">
-        <p class="modal-card-title">Publish Export</p>
-        <button class="delete" aria-label="close" onclick="document.getElementById('publish-confirm-modal').classList.remove('is-active')"></button>
-      </header>
-      <section class="modal-card-body">
-        <div id="publish-modal-body"></div>
-      </section>
-      <footer class="modal-card-foot">
-        <button class="button" onclick="document.getElementById('publish-confirm-modal').classList.remove('is-active')">Close</button>
-      </footer>
-    </div>
-  </div>
 {{end}}

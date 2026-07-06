@@ -5,7 +5,7 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-PSQL="${PSQL_CMD:-psql postgres://orbital:orbital@localhost:5432/orbital}"
+PSQL="${PSQL_CMD:-psql postgres://orbital:orbital-local-dev-secret@localhost:5432/orbital}"
 
 bash scripts/seed-dgraph.sh
 

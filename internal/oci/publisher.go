@@ -74,22 +74,25 @@ func New(db *ent.Client, cfg Config, logger *slog.Logger) *Publisher {
 	return &Publisher{db: db, cfg: cfg, logger: logger}
 }
 
-// Publish executes a publish for the given registry_artifact row.
+// PublishResult carries the metadata a successful publish produced. Callers
+// (currently the atomic export flow in handler.Export) use it to enrich the
+// single `export` audit event without re-querying the DB.
+type PublishResult struct {
+	Digest     string
+	SizeBytes  int64
+	LayerCount int
+}
+
+// Publish executes a publish for the given registry_artifact row synchronously.
 // bundlers are caller-supplied per-request bundler clients (may be nil/empty).
 // All bundlers must succeed before the OCI push — partial pushes are never produced.
-// If any bundler fails, the job is marked failed and nothing is pushed.
-// Intended to be called as a goroutine; updates the row in PostgreSQL as it progresses.
+// Returns a non-nil error on any failure (bundler, push, sign). Row status is
+// still updated for observability on failure paths.
 //
 // TODO(future): consider switching to named server-side bundlers for stricter governance
 // (operator controls the allowed bundler URL list). Per-request URLs are acceptable today
 // because the API requires Azure AD authn/authz and runs inside AKS on VPN.
-func (p *Publisher) Publish(artifactID int, job *ent.ExportJob, tag string, bundlers []*bundler.Client) {
-	timeout := p.cfg.Timeout
-	if timeout == 0 {
-		timeout = 10 * time.Minute
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
+func (p *Publisher) Publish(ctx context.Context, artifactID int, job *ent.ExportJob, tag string, bundlers []*bundler.Client) (*PublishResult, error) {
 	log := p.logger.With("artifactId", artifactID, "jobId", job.ID, "tag", tag)
 
 	// setPhase writes a transitional status so the UI's progress poll can show
@@ -106,18 +109,17 @@ func (p *Publisher) Publish(artifactID int, job *ent.ExportJob, tag string, bund
 
 	// Call bundlers before pushing. All must succeed — partial push is not allowed.
 	var extraLayers []bundler.Layer
-	var consumedResolutionIDs []string
 	if len(bundlers) > 0 {
 		setPhase(registryartifact.StatusBundling)
 		if job.DatacenterOrbID == nil {
-			log.Error("bundler call requires DatacenterOrbID but export job has none")
 			errStr := "bundler failed: export job is missing DatacenterOrbID; re-run export"
+			log.Error("bundler call requires DatacenterOrbID but export job has none")
 			p.db.RegistryArtifact.UpdateOneID(artifactID). //nolint:errcheck
 				SetStatus(registryartifact.StatusFailed).
 				SetBundlerError(errStr).
 				SetCompletedAt(time.Now()).
 				Save(ctx)
-			return
+			return nil, fmt.Errorf("%s", errStr)
 		}
 		req := bundler.Request{OrbID: *job.DatacenterOrbID}
 		for _, b := range bundlers {
@@ -130,7 +132,7 @@ func (p *Publisher) Publish(artifactID int, job *ent.ExportJob, tag string, bund
 					SetBundlerError(errStr).
 					SetCompletedAt(time.Now()).
 					Save(ctx)
-				return
+				return nil, fmt.Errorf("%s", errStr)
 			}
 			// Stamp producer on each layer so push-time annotation writes can
 			// attribute it. Wire shape doesn't carry producer; orbital sets
@@ -139,9 +141,8 @@ func (p *Publisher) Publish(artifactID int, job *ent.ExportJob, tag string, bund
 				result.Layers[i].Producer = b.Name()
 			}
 			extraLayers = append(extraLayers, result.Layers...)
-			consumedResolutionIDs = append(consumedResolutionIDs, result.ConsumedResolutionIDs...)
 		}
-		log.Info("bundlers produced layers", "count", len(extraLayers), "consumedResolutionIDs", len(consumedResolutionIDs))
+		log.Info("bundlers produced layers", "count", len(extraLayers))
 	}
 
 	setPhase(registryartifact.StatusPushing)
@@ -154,7 +155,7 @@ func (p *Publisher) Publish(artifactID int, job *ent.ExportJob, tag string, bund
 			SetError(errStr).
 			SetCompletedAt(time.Now()).
 			Save(ctx)
-		return
+		return nil, err
 	}
 
 	// Layer media types are opaque from orbital's perspective. Consumers must NOT interpret
@@ -175,14 +176,14 @@ func (p *Publisher) Publish(artifactID int, job *ent.ExportJob, tag string, bund
 		log.Error("failed to mark artifact completed", "err", err)
 	}
 
-	// Note: divergence-resolution propagation is tracked by the divergence
-	// ingester, not here. When the next orb snapshot omits a previously
-	// reported field (loop closed at the edge), the ingester sweeps the entry
-	// and sets `propagated_at` on any associated resolution. Bundlers MAY
-	// return `consumedResolutionIds` for forward compatibility; we ignore
-	// it — observation is the source of truth, not consumer assertion.
-	// See docs/reference/DIVERGENCE.md.
-	_ = consumedResolutionIDs
+	// Audit event fires from the caller (handler.Export.runExport) once the
+	// full atomic export → publish flow completes. Publisher stays focused on
+	// the OCI mechanics and doesn't own the audit trail anymore.
+	return &PublishResult{
+		Digest:     digest,
+		SizeBytes:  sizeBytes,
+		LayerCount: len(layers),
+	}, nil
 }
 
 func (p *Publisher) doPush(ctx context.Context, job *ent.ExportJob, tag string, extraLayers []bundler.Layer, log *slog.Logger, setPhase func(registryartifact.Status)) (digest string, sizeBytes int64, fingerprint string, layers []ocitype.ArtifactLayer, err error) {

@@ -103,8 +103,11 @@ test('divergence pipeline: orb intake → S3 publish → orbital ingest', async 
   console.log('[divergence] ── Step 4: wait for orbital ingester ──');
   const ingestedEntries = await pollUntil(
     async () => {
+      // Endpoint is /divergences (plural) — orbital's REST convention for
+      // collections. Do NOT collapse to /divergence: the singular form 404s and
+      // silently masks a working ingest pipeline as "empty result".
       const r = await page.request.get(
-        `/api/v1/divergence?orbId=${encodeURIComponent(ENTRY_ORB_ID)}`,
+        `/api/v1/divergences?orbId=${encodeURIComponent(ENTRY_ORB_ID)}`,
       );
       if (!r.ok()) return [];
       const body = await r.json();

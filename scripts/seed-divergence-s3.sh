@@ -17,7 +17,7 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-PSQL="${PSQL_CMD:-psql postgres://orbital:orbital@localhost:5432/orbital}"
+PSQL="${PSQL_CMD:-psql postgres://orbital:orbital-local-dev-secret@localhost:5432/orbital}"
 MC_IMAGE="minio/mc:RELEASE.2025-08-13T08-35-41Z"
 COMPOSE_NETWORK="${COMPOSE_NETWORK:-local_default}"
 S3_BUCKET="${S3_BUCKET:-orbital}"
