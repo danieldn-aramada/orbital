@@ -5,7 +5,6 @@ package divergence
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -76,12 +75,9 @@ func TestPublisher_Publish_WritesToMinIO(t *testing.T) {
 		t.Fatalf("Publish: %v", err)
 	}
 
-	// Key format: divergence/{oci-repo}/{timestamp}.json
-	if !strings.HasPrefix(key, "divergence/orbital/colo-galleon/") {
-		t.Errorf("key prefix mismatch: %q", key)
-	}
-	if !strings.HasSuffix(key, ".json") {
-		t.Errorf("key suffix mismatch: %q", key)
+	// Stable-key contract: overwrite-in-place at a fixed filename per repo.
+	if want := "divergence/orbital/colo-galleon/report.json"; key != want {
+		t.Errorf("key = %q, want %q", key, want)
 	}
 
 	// Verify body is a valid Report.
@@ -95,6 +91,44 @@ func TestPublisher_Publish_WritesToMinIO(t *testing.T) {
 	}
 	if len(snap.Overrides) != 1 || snap.Overrides[0].OrbID != "netbox:server-01" {
 		t.Errorf("overrides mismatch: %+v", snap.Overrides)
+	}
+}
+
+// Regression guard for the Terraform-state pattern: two consecutive publishes
+// must produce (a) the same key and (b) the second call's body in storage.
+// Without this test, someone could reintroduce timestamped keys and every
+// other test would still pass.
+func TestPublisher_Publish_OverwritesAtFixedKey(t *testing.T) {
+	testutil.EnsureTestBucket(t)
+	p := newTestPublisher(t)
+	ctx := context.Background()
+
+	firstEntries := []OverrideEntry{
+		{OrbID: "netbox:server-01", Field: "sshEnabled", IntendedValue: false, OverrideValue: true, Who: "local:admin", When: "2026-06-01T00:00:00Z"},
+	}
+	secondEntries := []OverrideEntry{
+		{OrbID: "netbox:server-02", Field: "ipmiEnabled", IntendedValue: true, OverrideValue: false, Who: "local:admin", When: "2026-06-02T00:00:00Z"},
+	}
+
+	firstKey, err := p.Publish(ctx, firstEntries)
+	if err != nil {
+		t.Fatalf("first Publish: %v", err)
+	}
+	secondKey, err := p.Publish(ctx, secondEntries)
+	if err != nil {
+		t.Fatalf("second Publish: %v", err)
+	}
+	if firstKey != secondKey {
+		t.Fatalf("key drift: first=%q second=%q — publish is not overwrite-in-place", firstKey, secondKey)
+	}
+
+	body := getS3Object(t, secondKey)
+	var snap Report
+	if err := json.Unmarshal(body, &snap); err != nil {
+		t.Fatalf("unmarshal report: %v", err)
+	}
+	if len(snap.Overrides) != 1 || snap.Overrides[0].OrbID != "netbox:server-02" {
+		t.Fatalf("second publish did not overwrite: got %+v", snap.Overrides)
 	}
 }
 

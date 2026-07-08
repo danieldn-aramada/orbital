@@ -13,16 +13,56 @@
         Edge service status for data center <strong>{{.DCName}}</strong>.
       </p>
 
+      {{/* Auto-import failure banner: shown when the most recent import was
+           auto-triggered AND failed. Persists until a subsequent successful
+           import (auto or manual) clears the alert by making the latest
+           record not-failed. Failures here are user-actionable ONLY via
+           Import History — inline retry isn't offered because the failure
+           has already been recorded and the poller will chase the next tag
+           on its own. */}}
+      {{if .AutoImportFailure}}
+      <div class="notification is-danger mb-4" style="max-width: 620px;">
+        <span class="icon-text">
+          <span class="icon"><i class="fa-solid fa-circle-xmark"></i></span>
+          <span>Auto-import of <strong>{{.AutoImportFailure.Tag}}</strong> failed{{if .AutoImportFailure.Error}}: {{.AutoImportFailure.Error}}{{end}}</span>
+        </span>
+        <div class="mt-3">
+          <a class="button is-small" href="{{.BasePath}}/import-history">
+            <span>View in Import History</span>
+          </a>
+        </div>
+      </div>
+      {{end}}
+
       {{if .AvailableVersion}}
-      <div class="notification is-info is-light mb-4" style="max-width: 620px;">
+      {{/* When auto-import is ENABLED, the banner is informational only —
+           the poller will pick up new versions automatically. When DISABLED,
+           the banner is the primary call-to-action for the operator to
+           trigger the import. Both cases keep the Details link for full
+           context (previous imports, layer list, etc). */}}
+      <div id="orb-status-import-banner"
+           class="notification is-info is-light mb-4"
+           style="max-width: 620px;"
+           data-tag="{{.AvailableVersion}}">
         <span class="icon-text">
           <span class="icon has-text-info"><i class="fa-solid fa-circle-up"></i></span>
-          <span>New version available: <strong>{{.AvailableVersion}}</strong></span>
+          <span>
+            New version available: <strong>{{.AvailableVersion}}</strong>
+            {{if .AutoImportEnabled}}<span class="has-text-grey is-size-7 ml-2">(auto-import will apply)</span>{{end}}
+          </span>
         </span>
-        <a class="button is-info is-small ml-4" href="/import">
-          <span class="icon"><i class="fa-solid fa-upload"></i></span>
-          <span>Go to Import</span>
-        </a>
+        <div class="mt-3">
+          {{if not .AutoImportEnabled}}
+          <button class="button is-info is-small js-orb-status-import"
+                  data-tag="{{.AvailableVersion}}">
+            <span class="icon"><i class="fa-solid fa-upload"></i></span>
+            <span>Import {{.AvailableVersion}}</span>
+          </button>
+          {{end}}
+          <a class="button is-light is-small{{if not .AutoImportEnabled}} ml-2{{end}}" href="{{.BasePath}}/import">
+            <span>Details</span>
+          </a>
+        </div>
       </div>
       {{end}}
 
@@ -41,18 +81,39 @@
         </div>
         <div class="column is-half">
           <div class="box" style="height: 100%;">
-            <p class="heading">Current Version</p>
+            <p class="heading">
+              Current Version
+              {{if .AutoImportEnabled}}
+              <span class="tag is-info is-light is-small ml-2" title="ORB_AUTO_IMPORT_ENABLED=true — orb applies newer signed versions automatically">Auto-import: ON</span>
+              {{end}}
+            </p>
             <p class="title is-5" id="status-current-version">
               {{if .CurrentVersion}}{{.CurrentVersion}}{{else}}<span class="has-text-grey">—</span>{{end}}
             </p>
+            {{/* Sub-line: shows who triggered the last import and how long ago.
+                 Absent when no import has ever happened OR the last-import tag
+                 doesn't match current (rare mid-flight state). Relative time is
+                 rendered client-side by renderTimestamps() in shared.js — the
+                 title attribute keeps the exact UTC on hover. */}}
+            {{if and .LastImport (eq .LastImport.Tag .CurrentVersion)}}
+            <p class="is-size-7 has-text-grey mt-1">
+              imported
+              {{if eq .LastImport.InitiatedBy "auto"}}
+              <span class="has-text-info">(auto)</span>
+              {{else}}
+              (manual)
+              {{end}}
+              · <span data-timestamp="{{.LastImport.ImportedAt.UTC.Format "2006-01-02T15:04:05Z07:00"}}"></span>
+            </p>
+            {{end}}
           </div>
         </div>
         <div class="column is-half">
           <div class="box" style="height: 100%;">
             <p class="heading">Last Import</p>
             <p class="title is-5">
-              {{if .HasLastImport}}
-                <span class="is-size-6">{{.LastImportAt.UTC.Format "2006-01-02 15:04 UTC"}}</span>
+              {{if .LastImport}}
+                <span class="is-size-6">{{.LastImport.ImportedAt.UTC.Format "2006-01-02 15:04 UTC"}}</span>
               {{else}}
                 <span class="has-text-grey">—</span>
               {{end}}

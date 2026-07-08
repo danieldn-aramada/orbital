@@ -123,6 +123,20 @@ func (_c *ImportRecordCreate) SetNillableError(v *string) *ImportRecordCreate {
 	return _c
 }
 
+// SetInitiatedBy sets the "initiated_by" field.
+func (_c *ImportRecordCreate) SetInitiatedBy(v importrecord.InitiatedBy) *ImportRecordCreate {
+	_c.mutation.SetInitiatedBy(v)
+	return _c
+}
+
+// SetNillableInitiatedBy sets the "initiated_by" field if the given value is not nil.
+func (_c *ImportRecordCreate) SetNillableInitiatedBy(v *importrecord.InitiatedBy) *ImportRecordCreate {
+	if v != nil {
+		_c.SetInitiatedBy(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *ImportRecordCreate) SetID(v uuid.UUID) *ImportRecordCreate {
 	_c.mutation.SetID(v)
@@ -176,6 +190,10 @@ func (_c *ImportRecordCreate) defaults() {
 		v := importrecord.DefaultImportedAt()
 		_c.mutation.SetImportedAt(v)
 	}
+	if _, ok := _c.mutation.InitiatedBy(); !ok {
+		v := importrecord.DefaultInitiatedBy
+		_c.mutation.SetInitiatedBy(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := importrecord.DefaultID()
 		_c.mutation.SetID(v)
@@ -204,6 +222,14 @@ func (_c *ImportRecordCreate) check() error {
 	if v, ok := _c.mutation.Verification(); ok {
 		if err := importrecord.VerificationValidator(v); err != nil {
 			return &ValidationError{Name: "verification", err: fmt.Errorf(`store: validator failed for field "ImportRecord.verification": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.InitiatedBy(); !ok {
+		return &ValidationError{Name: "initiated_by", err: errors.New(`store: missing required field "ImportRecord.initiated_by"`)}
+	}
+	if v, ok := _c.mutation.InitiatedBy(); ok {
+		if err := importrecord.InitiatedByValidator(v); err != nil {
+			return &ValidationError{Name: "initiated_by", err: fmt.Errorf(`store: validator failed for field "ImportRecord.initiated_by": %w`, err)}
 		}
 	}
 	return nil
@@ -276,6 +302,10 @@ func (_c *ImportRecordCreate) createSpec() (*ImportRecord, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.Error(); ok {
 		_spec.SetField(importrecord.FieldError, field.TypeString, value)
 		_node.Error = value
+	}
+	if value, ok := _c.mutation.InitiatedBy(); ok {
+		_spec.SetField(importrecord.FieldInitiatedBy, field.TypeEnum, value)
+		_node.InitiatedBy = value
 	}
 	return _node, _spec
 }

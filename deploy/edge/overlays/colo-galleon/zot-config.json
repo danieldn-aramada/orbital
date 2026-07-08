@@ -18,9 +18,10 @@
       "credentialsFile": "/etc/zot/sync-creds.json",
       "registries": [{
         "urls": ["https://armadaeksatest.azurecr.io"],
-        "onDemand": false,
+        "onDemand": true,
         "tlsVerify": true,
-        "pollInterval": "10s",
+        "pollInterval": "5s",
+        "SyncLegacyCosignTags": false,
         "content": [{
           "prefix": "orbital/colo-galleon/**"
         }]

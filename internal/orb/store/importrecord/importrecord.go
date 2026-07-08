@@ -33,6 +33,8 @@ const (
 	FieldLayersJSON = "layers_json"
 	// FieldError holds the string denoting the error field in the database.
 	FieldError = "error"
+	// FieldInitiatedBy holds the string denoting the initiated_by field in the database.
+	FieldInitiatedBy = "initiated_by"
 	// Table holds the table name of the importrecord in the database.
 	Table = "import_records"
 )
@@ -49,6 +51,7 @@ var Columns = []string{
 	FieldVerification,
 	FieldLayersJSON,
 	FieldError,
+	FieldInitiatedBy,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -116,6 +119,32 @@ func VerificationValidator(v Verification) error {
 	}
 }
 
+// InitiatedBy defines the type for the "initiated_by" enum field.
+type InitiatedBy string
+
+// InitiatedByManual is the default value of the InitiatedBy enum.
+const DefaultInitiatedBy = InitiatedByManual
+
+// InitiatedBy values.
+const (
+	InitiatedByManual InitiatedBy = "manual"
+	InitiatedByAuto   InitiatedBy = "auto"
+)
+
+func (ib InitiatedBy) String() string {
+	return string(ib)
+}
+
+// InitiatedByValidator is a validator for the "initiated_by" field enum values. It is called by the builders before save.
+func InitiatedByValidator(ib InitiatedBy) error {
+	switch ib {
+	case InitiatedByManual, InitiatedByAuto:
+		return nil
+	default:
+		return fmt.Errorf("importrecord: invalid enum value for initiated_by field: %q", ib)
+	}
+}
+
 // OrderOption defines the ordering options for the ImportRecord queries.
 type OrderOption func(*sql.Selector)
 
@@ -167,4 +196,9 @@ func ByLayersJSON(opts ...sql.OrderTermOption) OrderOption {
 // ByError orders the results by the error field.
 func ByError(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldError, opts...).ToFunc()
+}
+
+// ByInitiatedBy orders the results by the initiated_by field.
+func ByInitiatedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInitiatedBy, opts...).ToFunc()
 }

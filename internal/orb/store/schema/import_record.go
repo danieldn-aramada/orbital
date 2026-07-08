@@ -29,6 +29,10 @@ func (ImportRecord) Fields() []ent.Field {
 			Optional(),
 		field.Text("layers_json").Optional(),
 		field.Text("error").Optional(),
+		// Distinguishes operator-triggered imports from those triggered by
+		// the auto-import poller (ORB_AUTO_IMPORT_ENABLED). Default "manual"
+		// preserves legacy rows written before the flag existed.
+		field.Enum("initiated_by").Values("manual", "auto").Default("manual"),
 	}
 }
 

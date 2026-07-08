@@ -147,14 +147,17 @@ Orbital's GraphQL topology API (`getServer`, `getIdracSettings`, etc.) returns *
 
 ## Re-ingesting an already-resolved entry
 
-Two cases at the ingester (`internal/divergenceingest/store.go applySnapshot`):
+Three branches at the ingester (`internal/divergenceingest/store.go applyReport`, ADR 012):
 
-- **Same override as stored** → orb is still echoing the same divergence because the loop hasn't closed yet (bundle hasn't shipped, or just shipped and orb hasn't republished a clean snapshot). Refresh `last_seen_at`, `last_snapshot_published_at`, `type_name`. **Freeze** `intended_value`, `override_value`, `who` — the admin decided based on those exact values.
-- **Different override than stored** → edge state drifted to a new value since the admin's decision. The prior decision was for a different override and is now stale. **Delete the `divergence_resolutions` row** and update the entry's values normally. The entry reappears as pending; admin re-decides on the new state.
+- **Content matches AND no resolutions for this DC's entries** → no-op. Orb is still echoing the same divergence because the operator hasn't decided yet (staged decisions live client-side until Submit). Touch `last_seen_at` and `last_report_published_at` so the UI shows freshness; leave entries otherwise intact.
+- **Content matches BUT one or more resolutions exist for this DC's entries** → **atomic supersede**. Resolutions are bound to the report that triggered them; once Submit has dispatched a decision, the next identical-content report is treated as a *new* divergence occurrence (cloud-admin and local-admin reproduced the same drift). Drop entries + resolutions in one transaction and reinsert the incoming set as fresh pending. Ingest-time supersede assumes the identical-content report arrived AFTER propagation of the prior decision — respecting that invariant is the scheduler-cadence constraint (see Settled Decisions).
+- **Content differs (any added, removed, or value-changed tuple)** → **atomic supersede**. Same drop-and-replace as above.
 
-Audit history of the prior resolution stays in the `events` table (`acceptDivergence` / `rejectDivergence` / `ignoreDivergence` + any dispatched `update{Type}`). The `divergence_resolutions` table holds the **current** decision only and is empty whenever there is no active divergence entry to act on.
+All supersede paths emit one `supersedeDivergenceReport` management audit event with `{dcOrbId, dropped, added}` counts. Forensic history of individual dropped resolutions lives in the prior `resolveDivergence` / `acceptDivergence` / etc. events — the resolution row itself is gone from `divergence_resolutions`.
 
-See also: [AUDIT.md "Resolved divergence entries freeze on re-ingest WHEN the override matches; supersede when it changes"](./AUDIT.md).
+Content equality is checked on the tuple `(entry_orb_id, field, override_value)`, order-independent (`contentEqual` in the same file). `intended_value`, `who`, and `first_seen_at` do not participate in the equality test — the admin's decision was against `override_value`, and that's the field that determines whether the operator is looking at the same problem or a new one.
+
+See also: [AUDIT.md "Resolved divergence freeze-vs-supersede behavior on re-ingest"](./AUDIT.md).
 
 ## Open questions / deferred
 
@@ -163,71 +166,41 @@ See also: [AUDIT.md "Resolved divergence entries freeze on re-ingest WHEN the ov
 - **Audit of persistent ignore effect.** A single `ignoreDivergence` event fires at decision time. Every future bundle then quietly omits the field. There's no per-bundle audit event recording "this bundle omitted field F because of resolution R." Likely fine — the resolution row + the single event are the trail. Add per-bundle logging if it becomes investigation-worthy.
 - **Bulk operations.** Accept-all-pending, ignore-by-pattern, etc. Useful when one local admin makes 50 overrides in an incident. Out of MVP scope; current UI is per-row + batch-submit.
 
-## MVCC and version handling
+## Version handling — Accept, Dismiss, staleness
 
-### The version field
+Orbital's general MVCC (auto-increment `version: Int!` on every ConfigItem, opt-in `ifVersion` for user-driven UI edits) applies to the DGraph mutation orbital dispatches inside Accept. But **the divergence path itself carries no version anchor** — no `intended_at_version` column on `divergence_entries` or `divergence_resolutions`, no version-based staleness gate on Accept or Dismiss. Per ADR 012, staleness on the ingest side is handled by supersede, and staleness on the bundler-filter side is handled by per-field value comparison. Both are described below.
 
-Every ConfigItem in DGraph has `version: Int!` — a monotonically increasing counter. Two independent concerns:
+### Auto-increment (general MVCC, still true)
 
-- **Auto-increment** (mandatory, server-managed). Orbital's GraphQL proxy (`internal/handler/graphql.go Handle`) injects `version: before.version + 1` on every UPDATE through the canonical `set: $set` pattern, and `version: 1` on every ADD through the `input: [$input]` pattern. Clients don't need to track or send version. The proxy fetches the current entity before any single-entity update anyway (for MVCC + audit before-snapshot); the inject is one extra map write.
-- **MVCC race detection** (opt-in via `ifVersion`). When a client wants strict optimistic-concurrency semantics, they include `ifVersion: <currentVersion>` in the mutation variables. The proxy compares to the actual current version and returns 409 on mismatch. UI Edit modals send it. Raw GraphQL / Ratel users may omit and get last-writer-wins. **This is deliberate**: ifVersion-required-everywhere is K8s-strict (fine for K8s, friction-heavy for our usage pattern); opt-in matches HTTP ETags / DynamoDB conditional-update conventions and is enough for the actual race classes orbital faces.
+Orbital's GraphQL proxy (`internal/handler/graphql.go Handle`) injects `version: before.version + 1` on every UPDATE through the canonical `set: $set` pattern, and `version: 1` on every ADD through the `input: [$input]` pattern. Applies to every mutation orbital dispatches — including the one Accept fires — so `updateServer`, `updateIdracSettings`, etc., all bump the target ConfigItem's version. Clients don't need to track or send version.
 
-### Divergence-specific MVCC: `intended_at_version`
+### `ifVersion` (general MVCC, opt-in, still true)
 
-Each `divergence_entries` row carries `intended_at_version` (nullable int) — a snapshot of the target ConfigItem's DGraph `version` field as orb's local DGraph saw it at the moment the divergence was first reported. Anchors the observation in time so the resolution path can detect intervening intent edits.
+When a UI Edit modal wants strict optimistic-concurrency semantics, it includes `ifVersion: <currentVersion>` in the mutation variables. The proxy compares to the actual current version and returns 409 on mismatch. Raw GraphQL / Ratel users may omit and get last-writer-wins. This is deliberate: `ifVersion`-required-everywhere is K8s-strict (fine for K8s, friction-heavy for our usage pattern); opt-in matches HTTP ETags / DynamoDB conditional-update conventions and is enough for the actual race classes orbital faces.
 
-**Where the value comes from:** orb's intake handler (`internal/orbserver/divergence_handlers.go receiveDivergence`). When a divergence report arrives, orb looks up each target ConfigItem's `version` in its local DGraph and stamps it on each override before persisting. Orb's DGraph is read-only outside of `orb import`, so the value captured at intake is what was actually current when the producer observed the drift. Producers (cb-controller) do NOT send version themselves.
+### Accept is last-writer-wins (per ADR 012)
 
-**The invariant on the orbital side: capture at INSERT only. Never touch it on UPDATE.**
+`dispatchAcceptMutation` (`internal/handler/divergence.go`) does NOT pre-check that intent has moved since the divergence was reported. It dispatches the `update{Type}` mutation unconditionally. If another cloud admin edited the same field between report and Accept, the Accept's mutation still fires and overwrites. Rationale: whatever the admin just wrote is authoritative, and the ingester's supersede path catches any content-diverging state on the next report.
 
-```
-T0:  DGraph intent.F = false, version = 5.
-T1:  Local admin sets edge.F = true.
-T2:  Orb reports divergence — looks up local version (5), POSTs to orbital
-     with intendedAtVersion=5 per override. Orbital INSERTs divergence row.
-T3:  Another cloud admin edits intent.F to true via the regular Edit UI.
-     DGraph version bumps to 6.
-T4:  Orb's next snapshot still reports the same divergence (orb hasn't
-     imported a new bundle, still sees its local version as 5). Orbital
-     UPDATEs last_seen_at. MUST NOT touch intended_at_version (stays 5).
-T5:  Admin clicks Accept. MVCC check: captured=5, current=6 → 409 "intent
-     has changed since this divergence was reported — please re-review."
-     Admin reloads → page shows row as STALE → dismisses it.
-```
+The Accept mutation, like any other, bumps the target ConfigItem's DGraph version by one. That version bump lands in the audit log alongside the resolution decision — anyone auditing "what changed on this ConfigItem" can see the Accept-dispatched update and any concurrent admin edit ordered by version.
 
-If T4 had refreshed `intended_at_version` to 6, T5 would have been 6==6 → no conflict → silent overwrite. The whole point of the column is to catch the T3 edit; refreshing it on UPDATE blinds the check.
+### Dismiss is a straight delete (per ADR 012)
 
-### Why orb does the lookup (and not cb-controller)
+`Dismiss` (`internal/handler/divergence.go:440`) is `DELETE /api/v1/divergences/:id` — hard-deletes the entry and its resolution row. No staleness gate, no "stale badge" precondition, no re-validation query. Operator owns the call. If orb keeps reporting the same divergence, the next ingest cycle re-creates the entry (fresh UUID) via supersede. Dismiss is "I want this gone now," not "purge permanently." Audit-logged as `dismissDivergence`.
 
-Producer contract stays minimal — cb-controller (or any future producer) sends only `{orbId, field, intendedValue, overrideValue, who, when, type}`. Orb owns the lookup because:
-- Orb's DGraph is the source of truth for "what was orbital's published intent at the moment the producer observed" — it's read-only outside of `orb import`, so the lookup is race-free relative to the observation.
-- Future non-cb-controller producers don't need to learn about the orbital-domain `version` field.
-- Single point of failure handling for "version unavailable" cases.
+### Bundler-filter staleness is per-FIELD value comparison
 
-### Two-layer stale-detection at Accept time
+The List handler at `/api/v1/divergences?action=accept&action=reject` refuses to surface stale resolutions to the deployment layer. For each candidate resolution the handler queries DGraph for that field's current value and compares against the post-decision expectation: Reject expects `current == entry.intended_value` (admin chose to keep that intent); Accept expects `current == entry.override_value` (admin's mutation adopted the override). Mismatch ⇒ another cloud admin's edit has moved this field since the decision ⇒ exclude from the bundler list. Ignore is exempt (standing instruction, not one-shot). UI calls without `?action=` see all resolutions.
 
-1. **Version-based (primary).** If `intended_at_version` is non-nil, compare to current DGraph version. Precise — catches any intervening write.
-2. **Value-based (fallback).** If `intended_at_version` is nil (legacy entry, orb couldn't look up version, ConfigItem absent from orb's local DGraph), query the current value of the field directly and compare to the report's stored `intended_value`. Less precise — misses edit-then-revert cycles where value matches but version moved — but catches the common case.
-
-Both surface as 409 with the same message, so the UI behavior is uniform.
-
-### Dismissal
-
-When a row's `intended_at_version` differs from current (or the value-based check disagrees), the UI renders a "stale" badge. Stale rows are eligible for `DELETE /api/v1/divergences/:id` (`Dismiss`), which hard-deletes the entry + its resolution. Audit-logged as `dismissDivergence`. The dismiss handler re-validates staleness at request time (one extra DGraph query) to close any race between page render and click.
-
-Non-stale rows cannot be dismissed — admin must accept, reject, or ignore them.
+Per-field value comparison replaces an earlier version-based staleness anchor. See Settled Decisions below for why version-based failed.
 
 ### Implementation pins
 
-- `internal/divergence/version.go FetchCurrentVersion` — single-entity version lookup, used by orb intake + orbital UI/handler.
-- `internal/divergenceingest/store.go applySnapshot` — INSERT-only capture; UPDATE never touches intended_at_version.
-- `internal/handler/divergence.go dispatchAcceptMutation` — version-based primary + value-based fallback.
-- `internal/handler/divergence.go isStale + currentValueMatches` — shared stale check for Dismiss.
-- `internal/handler/graphql.go Handle` — auto-increment logic for both UPDATE (`set` map) and ADD (`input` array) patterns.
-
-### Supersede edge case (not a bug, worth knowing)
-
-When the override changes after a resolution exists, the ingester deletes the resolution but **preserves** `intended_at_version`. A subsequent Accept will then 409 because the prior Accept bumped DGraph version. Admin re-reviews and re-clicks. Strictly correct ("intent HAS changed since this divergence was reported — by your own prior accept"), slightly chatty UX. The right fix if it ever bothers people is on the resolve path (retry transparently after MVCC failure when the row was superseded), not on the ingest path.
+- `internal/handler/graphql.go Handle` — auto-increment + opt-in `ifVersion` (still active).
+- `internal/handler/divergence.go dispatchAcceptMutation` — last-writer-wins Accept dispatch.
+- `internal/handler/divergence.go Dismiss` — no-gate delete.
+- `internal/handler/divergence.go List` — per-field value staleness check for `?action=accept&action=reject`.
+- `internal/divergenceingest/store.go applyReport` — three-branch supersede on ingest (see "Re-ingesting an already-resolved entry" above).
 
 ## Settled Decisions
 
@@ -239,8 +212,8 @@ When the override changes after a resolution exists, the ingester deletes the re
 - **The List handler refuses to surface stale accept/reject resolutions to bundlers, checked per-FIELD by value comparison.** When `GET /api/v1/divergences?action=accept&action=reject` runs, for each resolution the handler queries DGraph for that field's current value and compares against the post-decision expectation: Reject expects `current == entry.intended_value` (admin chose to keep that intent); Accept expects `current == entry.override_value` (admin's mutation adopted the override). Mismatch ⇒ another cloud admin's edit has moved this field since the decision ⇒ exclude from the bundler list. Ignore is exempt (standing instruction, not one-shot). UI calls without `?action=` see all resolutions. Pinned by `TestList_ActionFilter_ExcludesStaleResolution` + `TestList_ActionFilter_BatchAcceptAndRejectOnSameConfigItem`.
 - **No co-ownership of VALUE fields.** cb-controller force-claims when values match local:*'s; bows out when values differ (override case → reported); always claims for `spec.takeover[]` (Accept/Reject) and never claims for `spec.ignored[]` (Ignore). Co-ownership of SSA structural fields (`listMapKey`, entry-presence, struct wrappers) is K8s-native and inert — both managers writing the same `orbId` is normal, doesn't trigger divergence reports, doesn't block force-apply. See configbundle ADR-008.
 - **Ignore is a standing instruction, not a suppression.** While the field remains locally claimed at the edge, it stays surfaced as divergence in every report. The resolution row in orbital records the deliberate "leave to edge" decision; the bundler emits a parallel `spec.ignored[]` entry on every build. The attached `action=ignore` resolution suppresses any further admin prompt in the UI but doesn't close the loop. Loop closure happens only when the edge admin releases their SSA claim — per configbundle ADR-009, cb-controller's ReclaimController then reclaims the field with intent value, the divergence reporter no longer sees `local:*`, and the next orb snapshot omits the entry, triggering the standard ingester cleanup (entry + resolution deleted together). The cleanup writes a `closeIgnoreOnHandback` audit event so the cloud admin sees the closure as an explicit edge-driven action, not silent disappearance.
-- **Per-FIELD, NOT per-ConfigItem — this matters for batch decisions.** ConfigItem's `version: Int!` bumps on any field edit, so using it as the staleness anchor would false-positive every batch resolution that touches multiple fields of the same ConfigItem (e.g., Accept `ipmiEnabled` + Reject `sshEnabled` on the same `IdracSettings`: the Accept's mutation increments version, which would silently invalidate the sibling Reject). The per-field VALUE check is precise: it catches genuine cross-admin contradictions while leaving batched decisions on sibling fields intact. The `intended_at_version` column on `divergence_resolutions` is retained for audit/debugging but is no longer the load-bearing staleness check.
+- **Bundler-filter staleness is per-FIELD by value, NOT per-ConfigItem by version.** Earlier drafts used ConfigItem `version: Int!` as the staleness anchor. It false-positives every batch resolution that touches multiple fields of the same ConfigItem (e.g., Accept `ipmiEnabled` + Reject `sshEnabled` on the same `IdracSettings`: the Accept's mutation increments the shared version, which silently invalidated the sibling Reject). The current per-field VALUE check catches genuine cross-admin contradictions while leaving batched decisions on sibling fields intact. No `intended_at_version` column exists on `divergence_entries` or `divergence_resolutions` — the version anchor was removed entirely, not demoted to audit.
 - **Orbital does NOT track edge propagation.** Its contract is "intent is captured and exposed via the export API." Whether the deployment layer applied a force is the edge's concern. There is no `propagated_at` column, no `?propagated` filter, no PATCH-for-recovery endpoint — those existed in an earlier draft and were removed (2026-06-15) because they violated the air-gap separation. If admin re-overrides after Reject, orb reports a fresh divergence on the next tick and the operator re-decides from a clean slate. Audit of every decision lives in the `events` table; the resolution row itself is bound 1:1 with the active entry and disappears with it on loop closure.
 - **Topology API does not annotate ignored fields.** Cloud intent is the API's contract; consumers needing ground truth join with `/api/v1/divergence`. Annotation is deferred until a real consumer needs it.
 - **Accept/reject resolutions and Ignore have similar lifecycle but different triggers.** All three actions' resolution rows are bound 1:1 to their entry and delete together on loop closure. The trigger differs: Accept/Reject closes when cb-controller successfully takes ownership via `spec.takeover[]` (cloud-initiated). Ignore closes when the edge admin releases their `local:*` claim and cb-controller's ReclaimController restores intent (edge-initiated, configbundle ADR-009). Until either trigger fires, the row is the standing instruction and re-applies on every bundle build. A third path — `DELETE /api/v1/divergences/:id/resolution` — also removes the row manually but doesn't close the entry (the entry stays pending until the next snapshot includes it again or the field is no longer reported).
-- **`intended_at_version` is captured at INSERT, never on UPDATE.** Refreshing it on re-ingest would silently disable the MVCC check that catches "admin edited intent between report and resolution." See the dedicated section above for the failure-mode walkthrough. This rule is load-bearing for race-condition correctness.
+- **Scheduler cadence must exceed worst-case propagation SLA.** The `applyReport` supersede branch treats "identical content + resolution exists" as a re-emergence event — dropping the resolution and requiring re-decision. This is correct when the identical-content report arrives AFTER the prior decision has propagated to the edge (loop should have closed but didn't → local admin reproduced the drift → fresh decision). It is INCORRECT when the identical-content report arrives BEFORE propagation lands (cb-controller still sees `local:*`, keeps reporting → orb re-publishes → supersede wipes an in-flight decision). Manual publish stays the primary path; scheduler (opt-in via `ORB_DIVERGENCE_PUBLISH_SCHEDULE`) is a safety net for "operator forgot," default off, minimum interval should be much larger than bundle-build + push + import + reconcile time (24h is safe for the colo-galleon deployment; faster cadences require explicit propagation-SLA analysis).

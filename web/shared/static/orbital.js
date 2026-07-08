@@ -373,18 +373,19 @@ function handleExportSubmit(btn) {
       buttons.forEach(b => { b.disabled = false })
       if (btn) btn.classList.remove('is-loading')
       if (json.error) {
-        showExportStatus('is-warning', 'fa-triangle-exclamation', json.error)
+        showExportBox('is-warning')
+        setExportSummary(json.error, 'is-warning')
         return
       }
-      const msg = download ? 'Export started (download flow)…' : 'Export + publish started…'
-      showExportStatus('is-info', 'fa-spinner fa-spin', msg)
+      startExportPhases(download)
       pollExportStatus(json.id, download)
       loadExportJobsTable()
     })
     .catch(() => {
       buttons.forEach(b => { b.disabled = false })
       if (btn) btn.classList.remove('is-loading')
-      showExportStatus('is-danger', 'fa-circle-xmark', 'Failed to start export.')
+      showExportBox('is-danger')
+      setExportSummary('Failed to start export.', 'is-danger')
     })
 }
 
@@ -394,30 +395,89 @@ function pollExportStatus(jobId, download) {
     .then(r => r.json())
     .then(job => {
       loadExportJobsTable()
+      renderExportPhases(job, download)
       if (job.status === 'completed') {
         const successMsg = download
           ? 'Export complete. Available in Retained Downloads.'
           : 'Export + publish complete. See Publish History.'
-        showExportStatus('is-success', 'fa-circle-check', successMsg)
+        setExportSummary(successMsg, 'is-success')
+        showExportBox('is-success')
       } else if (job.status === 'failed') {
-        showExportStatus('is-danger', 'fa-circle-xmark', `Export failed: ${job.error ?? 'unknown error'}`)
+        setExportSummary(`Export failed: ${job.error ?? 'unknown error'}`, 'is-danger')
+        showExportBox('is-danger')
       } else {
         exportPollTimer = setTimeout(() => pollExportStatus(jobId, download), 2000)
-        showExportStatus('is-info', 'fa-spinner fa-spin', job.status === 'running' ? 'Working…' : 'Pending…')
       }
     })
     .catch(() => { exportPollTimer = setTimeout(() => pollExportStatus(jobId, download), 3000) })
 }
 
-function showExportStatus(colorClass, iconClass, text) {
-  const article = document.getElementById('export-status-article')
-  const icon = document.getElementById('export-status-icon')
-  const textEl = document.getElementById('export-status-text')
+// Phase list = ordered steps the atomic export+publish goroutine transitions
+// through. In download mode, only the first (Exporting subgraph) applies —
+// the `.js-oci-only` items are hidden so the operator doesn't see steps that
+// will never run.
+const EXPORT_PHASES = ['exporting', 'bundling', 'pushing', 'signing']
+const OCI_ONLY_PHASES = new Set(['bundling', 'pushing', 'signing'])
 
-  article.className = `message ${colorClass}`
-  icon.innerHTML = `<i class="fa-solid ${iconClass}"></i>`
-  textEl.textContent = text
+function startExportPhases(download) {
+  document.querySelectorAll('.js-oci-only').forEach(el => {
+    el.style.display = download ? 'none' : ''
+  })
+  // Reset every step to pending grey, spinner on the first step so there's
+  // an initial signal before the first poll response arrives.
+  document.querySelectorAll('#export-phase-list .js-phase').forEach((li, idx) => {
+    setPhaseIcon(li, idx === 0 ? 'current' : 'upcoming')
+  })
+  document.getElementById('export-status-summary').style.display = 'none'
+  showExportBox('is-info')
+}
+
+function renderExportPhases(job, download) {
+  const activePhases = download ? EXPORT_PHASES.filter(p => !OCI_ONLY_PHASES.has(p)) : EXPORT_PHASES
+  const phase = job.phase || 'exporting'
+  const failed = job.status === 'failed'
+  const completed = job.status === 'completed'
+
+  const currentIdx = activePhases.indexOf(phase)
+  document.querySelectorAll('#export-phase-list .js-phase').forEach(li => {
+    const p = li.dataset.phase
+    if (download && OCI_ONLY_PHASES.has(p)) return // stays hidden by startExportPhases
+    const idx = activePhases.indexOf(p)
+    if (completed) return setPhaseIcon(li, 'done')
+    if (idx < 0) return setPhaseIcon(li, 'upcoming')  // unknown phase: leave grey
+    if (idx < currentIdx) return setPhaseIcon(li, 'done')
+    if (idx === currentIdx) return setPhaseIcon(li, failed ? 'failed' : 'current')
+    setPhaseIcon(li, 'upcoming')
+  })
+}
+
+// setPhaseIcon updates a phase list item's leading icon. State drives both
+// the icon shape (check, spinner, xmark, circle) and its color class.
+function setPhaseIcon(li, state) {
+  const icon = li.querySelector('.icon')
+  if (!icon) return
+  const map = {
+    done:     ['fa-solid fa-check',        'has-text-success'],
+    current:  ['fa-solid fa-spinner fa-spin', 'has-text-info'],
+    failed:   ['fa-solid fa-xmark',        'has-text-danger'],
+    upcoming: ['fa-regular fa-circle',     'has-text-grey-light'],
+  }
+  const [iconClass, colorClass] = map[state] || map.upcoming
+  icon.innerHTML = `<i class="${iconClass} ${colorClass}"></i>`
+}
+
+function showExportBox(colorClass) {
+  const article = document.getElementById('export-status-article')
+  if (article) article.className = `message ${colorClass}`
   document.getElementById('export-status-box').style.display = ''
+}
+
+function setExportSummary(text, colorClass) {
+  const el = document.getElementById('export-status-summary')
+  if (!el) return
+  el.textContent = text
+  el.className = `mt-2 has-text-weight-semibold ${colorClass ? 'has-text-' + colorClass.replace('is-', '') : ''}`
+  el.style.display = ''
 }
 
 function loadExportJobsTable() {

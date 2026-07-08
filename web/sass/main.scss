@@ -733,7 +733,8 @@ div.dt-container:has(#audit-log-table) {
 // appear top-aligned and visually disconnected from their row.
 #export-jobs-table td,
 #artifacts-table td,
-#import-history-table td {
+#import-history-table td,
+#publish-history-table td {
   vertical-align: middle;
 }
 

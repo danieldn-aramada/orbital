@@ -610,6 +610,26 @@ func ErrorContainsFold(v string) predicate.ImportRecord {
 	return predicate.ImportRecord(sql.FieldContainsFold(FieldError, v))
 }
 
+// InitiatedByEQ applies the EQ predicate on the "initiated_by" field.
+func InitiatedByEQ(v InitiatedBy) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldEQ(FieldInitiatedBy, v))
+}
+
+// InitiatedByNEQ applies the NEQ predicate on the "initiated_by" field.
+func InitiatedByNEQ(v InitiatedBy) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldNEQ(FieldInitiatedBy, v))
+}
+
+// InitiatedByIn applies the In predicate on the "initiated_by" field.
+func InitiatedByIn(vs ...InitiatedBy) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldIn(FieldInitiatedBy, vs...))
+}
+
+// InitiatedByNotIn applies the NotIn predicate on the "initiated_by" field.
+func InitiatedByNotIn(vs ...InitiatedBy) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldNotIn(FieldInitiatedBy, vs...))
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.ImportRecord) predicate.ImportRecord {
 	return predicate.ImportRecord(sql.AndPredicates(predicates...))

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/armada/orbital/internal/oci"
+	"github.com/armada/orbital/internal/orb"
 )
 
 // pollLoop runs on a background goroutine for the lifetime of the server.
@@ -68,17 +69,31 @@ func (s *Server) poll(ctx context.Context) {
 
 	snap := s.state.snapshot()
 	currentN, currentOK := parseVersionTag(snap.CurrentVersion)
+	newer := false
 	switch {
 	case !currentOK:
 		// Current is empty (never imported) or non-version — any version is newer.
 		s.logger.Info("new version available", "available", highest, "current", snap.CurrentVersion)
 		s.state.setAvailable(highest)
+		newer = true
 	case highestN > currentN:
 		s.logger.Info("new version available", "available", highest, "current", snap.CurrentVersion)
 		s.state.setAvailable(highest)
+		newer = true
 	default:
 		// highestN <= currentN: orb is at or ahead of the registry's highest tag.
 		s.state.setAvailable("")
+	}
+
+	// Auto-import: if enabled AND a newer version is available AND no import
+	// is currently running, trigger the import via the same code path as the
+	// manual button — cosign verify remains the trust boundary. Failure just
+	// logs; poller will not retry the same tag (chase-highest semantics: on
+	// next poll, if orbital publishes v(N+1), we jump to that instead).
+	if newer && s.cfg.AutoImportEnabled {
+		if s.startImport(highest, orb.InitiatedByAuto) {
+			s.logger.Info("auto-import triggered", "tag", highest, "from", snap.CurrentVersion)
+		}
 	}
 }
 

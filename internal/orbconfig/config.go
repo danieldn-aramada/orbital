@@ -93,6 +93,14 @@ type Config struct {
 	// mechanism-named env var without ambiguity.
 	PollInterval time.Duration `envconfig:"ORB_OCI_POLL_INTERVAL" default:"30s"`
 
+	// AutoImportEnabled — when true, the poller automatically triggers an
+	// import when it detects a newer signed version in the registry (chases
+	// the highest v<N> available, no operator click needed). Cosign verify
+	// remains the trust boundary — a signature-verify failure aborts the
+	// import and logs. Default false (manual apply); enable only in
+	// dev/staging/demo environments or trusted-low-touch production edge.
+	AutoImportEnabled bool `envconfig:"ORB_AUTO_IMPORT_ENABLED" default:"false"`
+
 	// Data directory — holds import history and divergence reports
 	DataDir string `envconfig:"ORB_DATA_DIR" default:"./orb-data"`
 

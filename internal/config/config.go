@@ -62,7 +62,7 @@ type Config struct {
 	// only the orbital app itself (in-pod cb-bundler authenticates as the
 	// orbital app via client credentials). Set explicitly to widen for other
 	// internal callers, or empty to allow any AAD app token bound to the
-	// orbital audience. See docs/decisions/010-bundler-service-auth.md.
+	// orbital audience. See docs/reference/AUTH.md § App Caller Authorization.
 	AppTokenAllowedAppIDs  []string      `envconfig:"ORBITAL_APP_TOKEN_ALLOWED_APPIDS" default:"5fc832f6-843e-4207-93dd-b3c3a77c06f2"`
 	AdminEmails            string        `envconfig:"ORBITAL_ADMIN_EMAILS"            default:"admin@armada.ai"` // comma-separated emails promoted to admin on first OIDC login
 	OCIRegistry            string        `envconfig:"ORBITAL_OCI_REGISTRY"            default:"localhost:5001"`

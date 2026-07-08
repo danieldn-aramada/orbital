@@ -40,6 +40,10 @@ const (
 	VerificationUnverified    = "unverified"     // OCI pull but verification failed
 	VerificationNotApplicable = "not-applicable" // courier/API upload — no signature available
 
+	// InitiatedBy values for ImportRecord.InitiatedBy.
+	InitiatedByManual = "manual" // operator-triggered via the UI or POST /api/v1/import
+	InitiatedByAuto   = "auto"   // poller-triggered under ORB_AUTO_IMPORT_ENABLED
+
 	// Layer roles for LayerRecord.Role.
 	LayerRoleGraph      = "graph"      // consumed by DGraph (always)
 	LayerRoleDispatched = "dispatched" // dispatched to a registered consumer
@@ -58,6 +62,7 @@ type ImportMeta struct {
 	ExportJobID  string
 	CreatedAt    time.Time
 	Verification string // one of the Verification* constants
+	InitiatedBy  string // "manual" (default) or "auto" (from poller)
 }
 
 // LayerRecord describes one layer in an imported artifact.
@@ -95,6 +100,7 @@ type ImportRecord struct {
 	ImportedAt   time.Time     `json:"importedAt"`
 	Status       string        `json:"status"`       // "done" | "partial" | "failed". "partial" means the graph import succeeded but at least one extra-layer dispatch failed.
 	Verification string        `json:"verification"` // Verification* constant
+	InitiatedBy  string        `json:"initiatedBy"`  // "manual" (default) or "auto"
 	Error        string        `json:"error,omitempty"`
 	Layers       []LayerRecord `json:"layers,omitempty"`
 }
@@ -258,6 +264,9 @@ func (i *Importer) recordHistory(ctx context.Context, meta ImportMeta, dataGZ, s
 	if v := importRecordVerification(meta.Verification); v != "" {
 		create = create.SetVerification(v)
 	}
+	if init := importRecordInitiatedBy(meta.InitiatedBy); init != "" {
+		create = create.SetInitiatedBy(init)
+	}
 	if errMsg != "" {
 		create = create.SetError(errMsg)
 	}
@@ -335,12 +344,30 @@ func importRecordFromRow(r *store.ImportRecord) ImportRecord {
 		ImportedAt:   r.ImportedAt,
 		Status:       string(r.Status),
 		Verification: string(r.Verification),
+		InitiatedBy:  string(r.InitiatedBy),
 		Error:        r.Error,
 	}
 	if r.LayersJSON != "" {
 		_ = json.Unmarshal([]byte(r.LayersJSON), &rec.Layers)
 	}
 	return rec
+}
+
+// LatestImportRecord returns the most recent import record (across all
+// statuses and initiators). Returns nil, nil if the history is empty.
+// Callers use it to detect auto-import failures on the status page.
+func LatestImportRecord(ctx context.Context, db *store.Client) (*ImportRecord, error) {
+	row, err := db.ImportRecord.Query().
+		Order(store.Desc(importrecord.FieldImportedAt)).
+		First(ctx)
+	if err != nil {
+		if store.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("latest import record: %w", err)
+	}
+	rec := importRecordFromRow(row)
+	return &rec, nil
 }
 
 func importRecordStatus(s string) importrecord.Status {
@@ -353,6 +380,17 @@ func importRecordStatus(s string) importrecord.Status {
 		return importrecord.StatusFailed
 	default:
 		return importrecord.StatusDone
+	}
+}
+
+func importRecordInitiatedBy(v string) importrecord.InitiatedBy {
+	switch v {
+	case InitiatedByAuto:
+		return importrecord.InitiatedByAuto
+	case InitiatedByManual:
+		return importrecord.InitiatedByManual
+	default:
+		return "" // let ent's schema default ("manual") apply
 	}
 }
 

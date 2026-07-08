@@ -4,12 +4,14 @@ import "testing"
 
 func TestReportKey_MatchesIngesterPrefix(t *testing.T) {
 	repoPath := "orbital/colo-galleon"
-	ts := "2026-06-13T23-28-13Z"
 
-	key := ReportKey(repoPath, ts)
+	key := ReportKey(repoPath)
 	prefix := PrefixForRepo(repoPath)
 
-	if got, want := key, "divergence/orbital/colo-galleon/2026-06-13T23-28-13Z.json"; got != want {
+	// Stable-key contract: ReportKey MUST be pure — same repoPath, same key.
+	// The overwrite-in-place scheme depends on this. If a caller ever
+	// reintroduces a timestamp or nonce, this assertion holds it accountable.
+	if got, want := key, "divergence/orbital/colo-galleon/report.json"; got != want {
 		t.Errorf("ReportKey = %q, want %q", got, want)
 	}
 	if got, want := prefix, "divergence/orbital/colo-galleon/"; got != want {

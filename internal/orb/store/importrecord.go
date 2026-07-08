@@ -35,7 +35,9 @@ type ImportRecord struct {
 	// LayersJSON holds the value of the "layers_json" field.
 	LayersJSON string `json:"layers_json,omitempty"`
 	// Error holds the value of the "error" field.
-	Error        string `json:"error,omitempty"`
+	Error string `json:"error,omitempty"`
+	// InitiatedBy holds the value of the "initiated_by" field.
+	InitiatedBy  importrecord.InitiatedBy `json:"initiated_by,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -44,7 +46,7 @@ func (*ImportRecord) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case importrecord.FieldTag, importrecord.FieldDigest, importrecord.FieldDcOrbID, importrecord.FieldExportJobID, importrecord.FieldStatus, importrecord.FieldVerification, importrecord.FieldLayersJSON, importrecord.FieldError:
+		case importrecord.FieldTag, importrecord.FieldDigest, importrecord.FieldDcOrbID, importrecord.FieldExportJobID, importrecord.FieldStatus, importrecord.FieldVerification, importrecord.FieldLayersJSON, importrecord.FieldError, importrecord.FieldInitiatedBy:
 			values[i] = new(sql.NullString)
 		case importrecord.FieldImportedAt:
 			values[i] = new(sql.NullTime)
@@ -125,6 +127,12 @@ func (_m *ImportRecord) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Error = value.String
 			}
+		case importrecord.FieldInitiatedBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field initiated_by", values[i])
+			} else if value.Valid {
+				_m.InitiatedBy = importrecord.InitiatedBy(value.String)
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -187,6 +195,9 @@ func (_m *ImportRecord) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("error=")
 	builder.WriteString(_m.Error)
+	builder.WriteString(", ")
+	builder.WriteString("initiated_by=")
+	builder.WriteString(fmt.Sprintf("%v", _m.InitiatedBy))
 	builder.WriteByte(')')
 	return builder.String()
 }

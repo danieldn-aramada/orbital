@@ -184,6 +184,20 @@ func (_u *ImportRecordUpdate) ClearError() *ImportRecordUpdate {
 	return _u
 }
 
+// SetInitiatedBy sets the "initiated_by" field.
+func (_u *ImportRecordUpdate) SetInitiatedBy(v importrecord.InitiatedBy) *ImportRecordUpdate {
+	_u.mutation.SetInitiatedBy(v)
+	return _u
+}
+
+// SetNillableInitiatedBy sets the "initiated_by" field if the given value is not nil.
+func (_u *ImportRecordUpdate) SetNillableInitiatedBy(v *importrecord.InitiatedBy) *ImportRecordUpdate {
+	if v != nil {
+		_u.SetInitiatedBy(*v)
+	}
+	return _u
+}
+
 // Mutation returns the ImportRecordMutation object of the builder.
 func (_u *ImportRecordUpdate) Mutation() *ImportRecordMutation {
 	return _u.mutation
@@ -226,6 +240,11 @@ func (_u *ImportRecordUpdate) check() error {
 	if v, ok := _u.mutation.Verification(); ok {
 		if err := importrecord.VerificationValidator(v); err != nil {
 			return &ValidationError{Name: "verification", err: fmt.Errorf(`store: validator failed for field "ImportRecord.verification": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.InitiatedBy(); ok {
+		if err := importrecord.InitiatedByValidator(v); err != nil {
+			return &ValidationError{Name: "initiated_by", err: fmt.Errorf(`store: validator failed for field "ImportRecord.initiated_by": %w`, err)}
 		}
 	}
 	return nil
@@ -284,6 +303,9 @@ func (_u *ImportRecordUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if _u.mutation.ErrorCleared() {
 		_spec.ClearField(importrecord.FieldError, field.TypeString)
+	}
+	if value, ok := _u.mutation.InitiatedBy(); ok {
+		_spec.SetField(importrecord.FieldInitiatedBy, field.TypeEnum, value)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -461,6 +483,20 @@ func (_u *ImportRecordUpdateOne) ClearError() *ImportRecordUpdateOne {
 	return _u
 }
 
+// SetInitiatedBy sets the "initiated_by" field.
+func (_u *ImportRecordUpdateOne) SetInitiatedBy(v importrecord.InitiatedBy) *ImportRecordUpdateOne {
+	_u.mutation.SetInitiatedBy(v)
+	return _u
+}
+
+// SetNillableInitiatedBy sets the "initiated_by" field if the given value is not nil.
+func (_u *ImportRecordUpdateOne) SetNillableInitiatedBy(v *importrecord.InitiatedBy) *ImportRecordUpdateOne {
+	if v != nil {
+		_u.SetInitiatedBy(*v)
+	}
+	return _u
+}
+
 // Mutation returns the ImportRecordMutation object of the builder.
 func (_u *ImportRecordUpdateOne) Mutation() *ImportRecordMutation {
 	return _u.mutation
@@ -516,6 +552,11 @@ func (_u *ImportRecordUpdateOne) check() error {
 	if v, ok := _u.mutation.Verification(); ok {
 		if err := importrecord.VerificationValidator(v); err != nil {
 			return &ValidationError{Name: "verification", err: fmt.Errorf(`store: validator failed for field "ImportRecord.verification": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.InitiatedBy(); ok {
+		if err := importrecord.InitiatedByValidator(v); err != nil {
+			return &ValidationError{Name: "initiated_by", err: fmt.Errorf(`store: validator failed for field "ImportRecord.initiated_by": %w`, err)}
 		}
 	}
 	return nil
@@ -591,6 +632,9 @@ func (_u *ImportRecordUpdateOne) sqlSave(ctx context.Context) (_node *ImportReco
 	}
 	if _u.mutation.ErrorCleared() {
 		_spec.ClearField(importrecord.FieldError, field.TypeString)
+	}
+	if value, ok := _u.mutation.InitiatedBy(); ok {
+		_spec.SetField(importrecord.FieldInitiatedBy, field.TypeEnum, value)
 	}
 	_node = &ImportRecord{config: _u.config}
 	_spec.Assign = _node.assignValues

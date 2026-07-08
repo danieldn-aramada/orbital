@@ -20,6 +20,7 @@ var (
 		{Name: "verification", Type: field.TypeEnum, Nullable: true, Enums: []string{"verified", "unverified", "not-applicable"}},
 		{Name: "layers_json", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "error", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "initiated_by", Type: field.TypeEnum, Enums: []string{"manual", "auto"}, Default: "manual"},
 	}
 	// ImportRecordsTable holds the schema information for the "import_records" table.
 	ImportRecordsTable = &schema.Table{

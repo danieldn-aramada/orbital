@@ -125,22 +125,13 @@ Read the relevant doc(s) BEFORE writing code in that area — they encode conven
 
 **If unsure which doc fits**, grep the docs/reference directory for a noun in your task — every doc starts with `Read this before: ...` so the first 5 lines tell you whether you're in the right place. Settled decisions live under `## Settled Decisions` in each doc.
 
-### Decision records
-
-Architecture decisions with full rationale. Read when the context would otherwise be invisible from the code.
+### Cross-project references
 
 | When working on | Read |
 |---|---|
-| Any new REST endpoint | `docs/decisions/002-api-design-philosophy.md` |
-| Audit mutation recording, orbId extraction | `docs/decisions/001-mutation-audit-recording.md` |
-| Audit event_category, operation names | `docs/decisions/003-audit-event-categories.md` |
-| DGraph schema migration (namespace edge) | `docs/decisions/004-namespace-id-scalar-migration.md` |
-| Security/audit logging (OWASP/NIST alignment) | `docs/decisions/004-security-logging.md` |
-| Backup scheduler design | `docs/decisions/005-backup-scheduler.md` |
-| Restore mechanism (why subprocess, not exec) | `docs/decisions/006-dgraph-restore-backend.md` |
-| DGraph schema migration (tooling landscape, sharp edges, production approach) | `docs/decisions/007-dgraph-schema-migration.md` |
-| Bundler / internal-service auth to orbital (OAuth2 client credentials) | `docs/decisions/010-bundler-service-auth.md` |
 | OCI bundler pipeline, ConfigBundle integration | `docs/configbundle-integration.md` • Repo: [github.com/danieldn-aramada/configbundle](https://github.com/danieldn-aramada/configbundle) — check the repo's CURRENT `CLAUDE.md` and `ROADMAP.md` before making claims about the cross-project contract; orbital's docs about configbundle lag when configbundle ships breaking changes (see [[project_configbundle_contract_post_adr011]]) |
+
+**Note on decision rationale:** design decisions and their rationale are inlined into the relevant `docs/reference/<DOMAIN>.md`'s "Settled Decisions" section (dated where non-obvious). The old `docs/decisions/` ADR directory was removed 2026-07-07 — the cross-referencing between reference docs and ADRs created a discoverability gap ("I'm reading AUTH.md, don't know to check decisions/010"). Historical ADRs are recoverable from `git log docs/decisions/` if deep rationale is ever needed.
 
 ## Local Development
 
@@ -179,7 +170,7 @@ make release-check     # pre-release: build images, start containers, full publi
 
 ## Repository Structure
 
-`cmd/` — entry points (`orbital/`, `orb/`). `internal/` — all application logic (`handler/`, `auth/`, `graph/`, `server/`, `config/`). `web/templates/` — Go templates split by app (`orbital/`, `orb/`, `shared/`). `web/shared/static/` — JS modules, CSS, vendor libs. `schema/` — DGraph GraphQL schema. `ent/` — PostgreSQL schema + generated client. `deploy/local/` — docker-compose dev stack. `docs/reference/` — domain reference files. `docs/decisions/` — ADRs. `e2e/` — Playwright tests.
+`cmd/` — entry points (`orbital/`, `orb/`). `internal/` — all application logic (`handler/`, `auth/`, `graph/`, `server/`, `config/`). `web/templates/` — Go templates split by app (`orbital/`, `orb/`, `shared/`). `web/shared/static/` — JS modules, CSS, vendor libs. `schema/` — DGraph GraphQL schema. `ent/` — PostgreSQL schema + generated client. `deploy/local/` — docker-compose dev stack. `docs/reference/` — domain reference files (Settled Decisions live here, inline). `e2e/` — Playwright tests.
 
 ## Working Style
 
@@ -225,14 +216,14 @@ These are cross-cutting platform decisions. Domain-specific decisions live in th
 - **Orbital is the sole OCI producer** — no downstream system needs registry write credentials. See `docs/reference/OCI.md` for bundler/signing details.
 - **Product naming: "Orbital" (cloud) / "Orb" (edge) — this is the north star.** Do not use "Orbital Edge" or conflate the two. Orb is a purpose-built edge agent, not a deployment variant of Orbital. `AppName: "Orbital"` in orbital handlers; `AppName: "Orb"` in orb handlers.
 - **`actorFromContext(c echo.Context) string` is the canonical identity helper** — in `internal/handler/actor.go`. Prefers email over display name. All handlers recording "created by" or "actor" must call this. Never inline `c.Get("user_name")` / `c.Get("user_email")` in new handlers. `ui.go` is the only legitimate exception.
-- **REST API convention: operation-centric triggers, resource-centric jobs** — orbital is GraphQL-first for CRUD; REST endpoints exist only for async operational workflows. Trigger endpoints create a job and return a job ID. Do not create resource-centric paths for operations that have no corresponding GET/PUT/DELETE. Rationale: `docs/decisions/002-api-design-philosophy.md`.
+- **REST API convention: operation-centric triggers, resource-centric jobs** — orbital is GraphQL-first for CRUD; REST endpoints exist only for async operational workflows. Trigger endpoints create a job and return a job ID. Do not create resource-centric paths for operations that have no corresponding GET/PUT/DELETE.
 - **Local dev defaults must point to local services** — `OCIRegistry`, `S3Endpoint`, `S3Bucket`, `S3AccessKey`, `S3SecretKey` all default to local Docker Compose services. Production credentials must never appear as code defaults.
 - **All Docker Compose images must use pinned versions** — no `latest` tags. Look up the actual release tag from the project's GitHub releases.
 - **`cosign.key` lives at `deploy/local/cosign.key`** — never at the project root. Local dev secrets live alongside local dev config. Gitignored via `deploy/local/*.key`. The compose file mounts it at `./cosign.key:/app/deploy/local/cosign.key:ro`.
-- **`schema/VERSION` is the authoritative schema version label** — single line (e.g. `v1`). Bumped manually on DGraph-relevant schema changes only. Comments, whitespace, and formatting changes to `schema/schema.graphql` do NOT bump it. See `docs/decisions/007-dgraph-schema-migration.md`.
+- **`schema/VERSION` is the authoritative schema version label** — single line (e.g. `v1`). Bumped manually on DGraph-relevant schema changes only. Comments, whitespace, and formatting changes to `schema/schema.graphql` do NOT bump it.
 - **`schema/schema.graphql` is the production schema** — was `schema-demo.graphql`; renamed 2026-06-07. All references must use `cfg.SchemaPath` (env: `ORBITAL_SCHEMA_PATH`, default `schema/schema.graphql`). Never hardcode the path.
 - **GraphQL proxy strips `orbId` from variables only when the query doesn't declare `$orbId`** — `orbIdIsQueryVar := strings.Contains(req.Query, "$orbId")` controls this. If the query declares `$orbId`, stripping it causes a DGraph "must be defined" error. Both inline-literal and declared-variable patterns must work.
-- **Per-component versioning across binaries** — server tags as `v*` (existing lineage), orbctl as `cli/v*`, orb as `orb/v*`. Makefile derives each via `git describe --match`/`--exclude`. Each build target injects its own value into `internal/version.Version` at link time. Same package var, different injected values per binary. Rationale: `docs/decisions/009-per-component-versioning.md`. Do NOT re-unify under a single tag scheme — CLI version conflation with server version was the problem this solves.
+- **Per-component versioning across binaries** — server tags as `v*` (existing lineage), orbctl as `cli/v*`, orb as `orb/v*`. Makefile derives each via `git describe --match`/`--exclude`. Each build target injects its own value into `internal/version.Version` at link time. Same package var, different injected values per binary. Do NOT re-unify under a single tag scheme — CLI version conflation with server version was the problem this solves.
 - **CLI binary is `orbctl`, source lives in `cmd/orbctl/` and `internal/orbctl/`** — follows the `kubectl`/`istioctl`/`etcdctl` convention. Distinguishes the CLI from the `orbital` cloud daemon and the `orb` edge daemon. One CLI targets both — there is no per-app CLI. Future auth divergence (e.g. orb gaining its own IdP) is handled via context profiles in `orbctl`, not a forked binary. Tag scheme stays `cli/v*` (don't churn tag history).
 - **K8s probes: readiness only, always-200 `/healthz`** — both orbital and orb expose `GET /healthz` that returns `{"status":"ok"}` 200, registered before any auth middleware. K8s manifests configure `readinessProbe` against it. Do NOT add `livenessProbe` and do NOT make `/healthz` depend on downstream services (DB, DGraph). Probes are footguns: a DB-checking liveness causes restart loops on transient backend failures, making debugging impossible. Readiness toggles traffic; liveness kills the process. The right separation is K8s observing reachability, while orbital handlers surface backend health to the caller.
 - **GraphQL endpoint is `/graphql` in both apps** — orbital and orb both register the proxy at `/graphql`. This follows the GraphQL community convention (GitHub, GitLab, NetBox, Apollo): GraphQL is not versioned by URL because schemas evolve via field deprecation. `/api/v1/` is reserved for REST endpoints where version semantics matter. `GraphQLPath` in `layout.UIConfig` must match. Do NOT put GraphQL under `/api/v1/`.

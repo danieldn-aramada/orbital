@@ -95,17 +95,20 @@ short in four areas:
 
 ## Quick Start
 
+**Prerequisites:** Go 1.26+, Docker + Docker Compose, Make. Node.js only if editing CSS.
+
 ```bash
-# Once per machine — installs the dgraph host wrapper to ~/.local/bin
+# Once per machine — installs the dgraph host wrapper to ~/.local/bin.
+# Ensure ~/.local/bin is on PATH — check with `which dgraph`.
 make dev-deps
 
 # Terminal 1 — start all dependencies (DGraph, Postgres, MinIO, Zot, orb DGraph)
 make up
 
-# Terminal 2 — orbital (cloud)
+# Terminal 2 — orbital (cloud, http://localhost:8001)
 make run-orbital
 
-# Terminal 3 — orb (edge)
+# Terminal 3 — orb (edge, http://localhost:8010)
 make run-orb
 
 # Seed example data (run once, after orbital is up)
@@ -115,17 +118,34 @@ make seed
 make down
 ```
 
-Open both UIs side by side:
-- **Orbital** — http://localhost:8001
-- **Orb** — http://localhost:8010
+Open both UIs side by side. Log in as `admin@armada.ai` / `admin` (or read-only `user@armada.ai` / `user`).
 
-Login as `admin@armada.ai` / `admin`.
+| URL | What |
+|---|---|
+| http://localhost:8001 | Orbital UI |
+| http://localhost:8010 | Orb UI |
+| http://localhost:8001/graphql | GraphQL playground |
+| http://localhost:8001/swagger/index.html | Orbital Swagger |
+| http://localhost:8010/swagger/index.html | Orb Swagger |
 
-Other endpoints:
-- GraphQL playground: http://localhost:8001/graphql
-- Swagger API docs: http://localhost:8001/swagger/index.html
+### Troubleshooting
 
-**Next:** Follow [`docs/getting-started.md`](docs/getting-started.md) for a guided 10-minute walkthrough that takes you from setup through a complete intent → export → import workflow across both orbital and orb.
+- `dgraph: executable file not found` → `make dev-deps` didn't finish, or `~/.local/bin` isn't on PATH.
+- Port already in use (`:8001`, `:8010`, `:8080`, `:5432`, `:5001`, `:9000`) → `lsof -ti :<port> | xargs kill -9` before retrying.
+- Seed fails with schema mismatch → `make down && make up && make seed`.
+- Orb import shows "no tags" → run an Export in orbital first, then refresh.
+
+### Where to go next
+
+| Task | Doc |
+|---|---|
+| Contribute code, run tests, cut releases | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| Understand the divergence model | [`docs/reference/DIVERGENCE.md`](docs/reference/DIVERGENCE.md) |
+| Work on UI / HTMX / templates | [`docs/reference/UI.md`](docs/reference/UI.md) |
+| Edit the DGraph schema | [`docs/reference/DGRAPH.md`](docs/reference/DGRAPH.md) |
+| Set up auth / OIDC | [`docs/auth.md`](docs/auth.md) |
+| Deploy to AKS | [`deploy/README.md`](deploy/README.md) |
+| See the roadmap and current state | [`ROADMAP.md`](ROADMAP.md) |
 
 ## API Access
 
@@ -169,8 +189,6 @@ curl -H "Authorization: Bearer $ORBITAL_TOKEN" \
 ```
 
 For long-running services that need automatic token refresh inside their own code, see the **[Developer quickstart](docs/auth.md#developer-quickstart--calling-orbital-from-your-own-code)** in `docs/auth.md` — covers MSAL / On-Behalf-Of patterns with a Go example.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for running tests and editing styles.
 
 ## Deploy
 

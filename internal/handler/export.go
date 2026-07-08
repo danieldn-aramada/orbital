@@ -123,6 +123,12 @@ type statusResponse struct {
 	JobID       string  `json:"id"`
 	DataCenter  string  `json:"dataCenter"`
 	Status      string  `json:"status"`
+	// Phase surfaces the fine-grained step the atomic goroutine is on, for
+	// clients that want to render a per-step progress list. Coarse `status`
+	// stays authoritative for terminal-state gating. Values: pending,
+	// exporting, bundling, pushing, signing, completed, failed. Empty
+	// only if derivation raced with the initial insert.
+	Phase       string  `json:"phase,omitempty"`
 	Published   bool    `json:"published"`
 	CreatedBy   string  `json:"createdBy"`
 	Error       *string `json:"error,omitempty"`
@@ -346,18 +352,24 @@ func (h *Export) Status(c echo.Context) error {
 	// returns published=false even after a successful atomic publish, breaking
 	// clients that need to distinguish "export done but publish pending" from
 	// "atomic export+publish complete".
-	published, err := h.db.RegistryArtifact.Query().
+	//
+	// We fetch (not just Exist) so we can read the artifact's phase for the
+	// UI's per-step progress renderer — the atomic goroutine transitions this
+	// through pending → bundling → pushing → signing → completed as work
+	// progresses (see internal/oci/publisher.go setPhase calls).
+	artifact, err := h.db.RegistryArtifact.Query().
 		Where(registryartifact.ExportJobID(job.ID)).
-		Exist(c.Request().Context())
-	if err != nil {
-		return fmt.Errorf("check published: %w", err)
+		First(c.Request().Context())
+	if err != nil && !ent.IsNotFound(err) {
+		return fmt.Errorf("fetch artifact: %w", err)
 	}
 
 	resp := statusResponse{
 		JobID:      job.ID.String(),
 		DataCenter: job.DatacenterName,
 		Status:     string(job.Status),
-		Published:  published,
+		Phase:      derivePhase(job, artifact),
+		Published:  artifact != nil,
 		CreatedBy:  job.CreatedBy,
 		CreatedAt:  job.CreatedAt.Format(time.RFC3339),
 	}
@@ -747,6 +759,49 @@ func (h *Export) markFailed(ctx context.Context, jobID uuid.UUID, errStr string)
 						SetStatus(exportjob.StatusFailed).
 						SetError(errStr).
 						Save(ctx)
+}
+
+// derivePhase collapses ExportJob + RegistryArtifact state into a single
+// user-facing phase string for the /export progress UI. Coarse job.Status
+// is authoritative for terminal transitions; per-step phase only refines
+// the running window into exporting → bundling → pushing → signing.
+//
+//   pending    → job created, goroutine not yet running
+//   exporting  → job.status=running AND no artifact yet (DGraph export step)
+//   bundling|pushing|signing → artifact.status mirrors the atomic publish leg
+//   completed  → job.status=completed
+//   failed     → job.status=failed (error carries the phase context in text)
+func derivePhase(job *ent.ExportJob, artifact *ent.RegistryArtifact) string {
+	switch job.Status {
+	case exportjob.StatusCompleted:
+		return "completed"
+	case exportjob.StatusFailed:
+		return "failed"
+	case exportjob.StatusPending:
+		return "pending"
+	case exportjob.StatusRunning:
+		if artifact == nil {
+			return "exporting"
+		}
+		switch artifact.Status {
+		case registryartifact.StatusBundling:
+			return "bundling"
+		case registryartifact.StatusPushing:
+			return "pushing"
+		case registryartifact.StatusSigning:
+			return "signing"
+		case registryartifact.StatusCompleted:
+			// Artifact done but ExportJob not yet marked completed — very
+			// narrow race. Report the coarse view.
+			return "signing"
+		default:
+			// StatusPending on the artifact means the record was inserted
+			// but no phase has been stamped yet — that hand-off happens in
+			// PublishExportedJob within milliseconds of creation.
+			return "exporting"
+		}
+	}
+	return ""
 }
 
 // emitExportEvent records the successful atomic-flow outcome to the audit

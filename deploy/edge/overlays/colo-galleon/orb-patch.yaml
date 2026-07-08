@@ -12,3 +12,15 @@ spec:
               value: orbital/colo-galleon
             - name: ORB_CONSUMERS
               value: '[{"name":"configbundle-controller","url":"http://configbundle-controller.configbundle-system:8095/dispatch"}]'
+            # 5s poll — pod-to-pod within the cluster, no rate-limit or
+            # egress cost. Aligns with zot's own 5s poll to ACR so max
+            # end-to-end lag from orbital publish → orb sees the new tag
+            # is ~10s (zot pulls from ACR + orb detects from zot).
+            - name: ORB_OCI_POLL_INTERVAL
+              value: "5s"
+            # Auto-import: poller triggers import automatically when a
+            # newer signed version is available. Cosign verify remains
+            # the trust boundary — signature-verify failures abort the
+            # import and surface via the failure banner + Import History.
+            - name: ORB_AUTO_IMPORT_ENABLED
+              value: "true"

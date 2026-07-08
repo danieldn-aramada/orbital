@@ -47,6 +47,7 @@ type ImportRecordMutation struct {
 	verification  *importrecord.Verification
 	layers_json   *string
 	error         *string
+	initiated_by  *importrecord.InitiatedBy
 	clearedFields map[string]struct{}
 	done          bool
 	oldValue      func(context.Context) (*ImportRecord, error)
@@ -546,6 +547,42 @@ func (m *ImportRecordMutation) ResetError() {
 	delete(m.clearedFields, importrecord.FieldError)
 }
 
+// SetInitiatedBy sets the "initiated_by" field.
+func (m *ImportRecordMutation) SetInitiatedBy(ib importrecord.InitiatedBy) {
+	m.initiated_by = &ib
+}
+
+// InitiatedBy returns the value of the "initiated_by" field in the mutation.
+func (m *ImportRecordMutation) InitiatedBy() (r importrecord.InitiatedBy, exists bool) {
+	v := m.initiated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInitiatedBy returns the old "initiated_by" field's value of the ImportRecord entity.
+// If the ImportRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImportRecordMutation) OldInitiatedBy(ctx context.Context) (v importrecord.InitiatedBy, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInitiatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInitiatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInitiatedBy: %w", err)
+	}
+	return oldValue.InitiatedBy, nil
+}
+
+// ResetInitiatedBy resets all changes to the "initiated_by" field.
+func (m *ImportRecordMutation) ResetInitiatedBy() {
+	m.initiated_by = nil
+}
+
 // Where appends a list predicates to the ImportRecordMutation builder.
 func (m *ImportRecordMutation) Where(ps ...predicate.ImportRecord) {
 	m.predicates = append(m.predicates, ps...)
@@ -580,7 +617,7 @@ func (m *ImportRecordMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ImportRecordMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
 	if m.tag != nil {
 		fields = append(fields, importrecord.FieldTag)
 	}
@@ -608,6 +645,9 @@ func (m *ImportRecordMutation) Fields() []string {
 	if m.error != nil {
 		fields = append(fields, importrecord.FieldError)
 	}
+	if m.initiated_by != nil {
+		fields = append(fields, importrecord.FieldInitiatedBy)
+	}
 	return fields
 }
 
@@ -634,6 +674,8 @@ func (m *ImportRecordMutation) Field(name string) (ent.Value, bool) {
 		return m.LayersJSON()
 	case importrecord.FieldError:
 		return m.Error()
+	case importrecord.FieldInitiatedBy:
+		return m.InitiatedBy()
 	}
 	return nil, false
 }
@@ -661,6 +703,8 @@ func (m *ImportRecordMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldLayersJSON(ctx)
 	case importrecord.FieldError:
 		return m.OldError(ctx)
+	case importrecord.FieldInitiatedBy:
+		return m.OldInitiatedBy(ctx)
 	}
 	return nil, fmt.Errorf("unknown ImportRecord field %s", name)
 }
@@ -732,6 +776,13 @@ func (m *ImportRecordMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetError(v)
+		return nil
+	case importrecord.FieldInitiatedBy:
+		v, ok := value.(importrecord.InitiatedBy)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInitiatedBy(v)
 		return nil
 	}
 	return fmt.Errorf("unknown ImportRecord field %s", name)
@@ -841,6 +892,9 @@ func (m *ImportRecordMutation) ResetField(name string) error {
 		return nil
 	case importrecord.FieldError:
 		m.ResetError()
+		return nil
+	case importrecord.FieldInitiatedBy:
+		m.ResetInitiatedBy()
 		return nil
 	}
 	return fmt.Errorf("unknown ImportRecord field %s", name)

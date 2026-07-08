@@ -99,6 +99,73 @@ function pollOrbImport() {
     .catch(() => { orbImportPollTimer = setTimeout(pollOrbImport, 3000) })
 }
 
+// handleStatusPageImport wires the "Import v<N>" button on orb's Status page
+// (banner shown when a new version is available). Triggers the same
+// POST /api/v1/import + polling flow as the Import page, but updates the
+// banner IN PLACE — spinner while running, then a terminal success/fail
+// message with a link to /import-history for details. See
+// web/templates/orb/pages/status.gohtml for the banner markup.
+function handleStatusPageImport(tag) {
+  const banner = document.getElementById('orb-status-import-banner')
+  if (!banner) return
+  renderStatusBanner(banner, 'is-info', 'fa-spinner fa-spin', `Importing ${tag}…`, null)
+  fetch(BASE + '/api/v1/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tag }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        renderStatusBanner(banner, 'is-warning', 'fa-triangle-exclamation', data.error, '/import-history')
+        return
+      }
+      pollStatusPageImport(banner, tag)
+    })
+    .catch(() => renderStatusBanner(banner, 'is-danger', 'fa-circle-xmark', 'Failed to start import.', '/import-history'))
+}
+
+let statusPagePollTimer = null
+
+function pollStatusPageImport(banner, tag) {
+  clearTimeout(statusPagePollTimer)
+  fetch(BASE + '/api/v1/import/status')
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'done') {
+        // Import replaced local DGraph; cached inventory is stale on tabs.
+        sessionStorage.removeItem(INVENTORY_CACHE_KEY)
+        clearStaleTabState()
+        renderStatusBanner(banner, 'is-success', 'fa-circle-check', `Imported ${data.currentVersion} successfully.`, '/import-history')
+      } else if (data.status === 'partial') {
+        sessionStorage.removeItem(INVENTORY_CACHE_KEY)
+        clearStaleTabState()
+        renderStatusBanner(banner, 'is-warning', 'fa-circle-exclamation', `Imported ${data.currentVersion} with dispatch errors.`, '/import-history')
+      } else if (data.status === 'failed') {
+        renderStatusBanner(banner, 'is-danger', 'fa-circle-xmark', `Import failed: ${data.lastError || 'unknown error'}`, '/import-history')
+      } else {
+        renderStatusBanner(banner, 'is-info', 'fa-spinner fa-spin', `Importing ${tag}…`, null)
+        statusPagePollTimer = setTimeout(() => pollStatusPageImport(banner, tag), 2000)
+      }
+    })
+    .catch(() => { statusPagePollTimer = setTimeout(() => pollStatusPageImport(banner, tag), 3000) })
+}
+
+function renderStatusBanner(banner, colorClass, iconClass, text, historyLink) {
+  banner.className = `notification ${colorClass} mb-4`
+  banner.style.maxWidth = '620px'
+  const link = historyLink
+    ? `<div class="mt-3"><a class="button is-small" href="${BASE}${historyLink}"><span>View in Import History</span></a></div>`
+    : ''
+  banner.innerHTML = `
+    <span class="icon-text">
+      <span class="icon"><i class="fa-solid ${iconClass}"></i></span>
+      <span>${text}</span>
+    </span>
+    ${link}
+  `
+}
+
 function orbShowImportStatus(colorClass, iconClass, text) {
   const box = document.getElementById('orb-import-status-box')
   const article = document.getElementById('orb-import-status-article')
@@ -111,22 +178,37 @@ function orbShowImportStatus(colorClass, iconClass, text) {
   box.style.display = ''
 }
 
-function loadOrbTags() {
-  const tbody = document.getElementById('orb-tags-tbody')
+// loadOrbTags fetches the tags-content fragment and swaps it into
+// #orb-tags-content. Pagination nav inside the fragment is HTMX-driven —
+// clicks fire fetches with new offsets and re-swap the same container, so
+// this function is only called for initial load and Refresh button clicks.
+// refresh=true appends ?refresh=1 which busts the server-side verify cache;
+// operator affordance for "trust nothing, re-verify everything." Pagination
+// nav clicks do NOT bust cache.
+function loadOrbTags(refresh = false) {
+  const container = document.getElementById('orb-tags-content')
   const btn = document.getElementById('btn-refresh-tags')
-  if (!tbody) return
+  if (!container) return
   if (btn) btn.classList.add('is-loading')
   const s = () => `<span class="is-skeleton" style="display:block">&nbsp;</span>`
-  tbody.innerHTML = [1, 2, 3].map(() =>
+  container.innerHTML = `
+    <div style="overflow-x: auto">
+      <table class="table is-striped is-hoverable is-fullwidth is-size-7">
+        <thead><tr><th>Tag</th><th>Signature</th><th>Digest</th><th>Size</th><th></th></tr></thead>
+        <tbody>${[1, 2, 3].map(() =>
     `<tr><td style="width:8%">${s()}</td><td style="width:12%">${s()}</td><td style="width:60%">${s()}</td><td style="width:8%">${s()}</td><td style="width:10%">${s()}</td></tr>`
-  ).join('')
-  Promise.all([
-    fetch(BASE + '/api/v1/import/tags', { headers: { 'HX-Request': 'true' } }).then(r => r.text()),
-    new Promise(resolve => setTimeout(resolve, 500)),
-  ])
-    .then(([html]) => { tbody.innerHTML = html })
+  ).join('')}</tbody>
+      </table>
+    </div>`
+  const url = BASE + '/api/v1/import/tags' + (refresh ? '?refresh=1' : '')
+  fetch(url, { headers: { 'HX-Request': 'true' } })
+    .then(r => r.text())
+    .then(html => {
+      container.innerHTML = html
+      if (window.htmx) htmx.process(container)  // activate hx-get on pagination nav
+    })
     .catch(() => {
-      if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="has-text-danger">Failed to load tags.</td></tr>'
+      container.innerHTML = '<p class="has-text-danger">Failed to load tags.</p>'
     })
     .finally(() => { if (btn) btn.classList.remove('is-loading') })
 }
@@ -148,7 +230,10 @@ async function handleOrbCourierUpload() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  if (!document.getElementById('orb-tags-tbody')) return
+  // Guard against non-import pages. #orb-tags-content is the outer wrapper
+  // and is present in the initial-render HTML; #orb-tags-tbody only appears
+  // AFTER the fragment swap, so it's not a reliable init signal.
+  if (!document.getElementById('orb-tags-content')) return
   loadOrbTags()
 
   const fileInput = document.getElementById('orb-courier-file')
@@ -312,8 +397,10 @@ function orbDivergenceSkeletonHTML() {
 document.addEventListener('click', (e) => {
   const imp = e.target.closest('.js-orb-import')
   if (imp) { handleOrbImport(imp.dataset.tag); return }
+  const statusImp = e.target.closest('.js-orb-status-import')
+  if (statusImp) { handleStatusPageImport(statusImp.dataset.tag); return }
   if (e.target.closest('.js-orb-import-latest')) { handleOrbImportLatest(); return }
-  if (e.target.closest('.js-orb-tags-refresh')) { loadOrbTags(); return }
+  if (e.target.closest('.js-orb-tags-refresh')) { loadOrbTags(true); return }
   if (e.target.closest('.js-orb-courier-upload')) { handleOrbCourierUpload(); return }
   if (e.target.closest('.js-orb-divergence-publish')) { publishDivergence(); return }
   if (e.target.closest('.js-orb-divergence-refresh')) { refreshOrbDivergence(); return }

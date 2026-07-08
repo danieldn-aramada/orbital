@@ -152,7 +152,23 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	ui.SetDGraphURL(cfg.DGraphURL)
 	ui.SetDGraphAdminURL(cfg.DGraphAdminURL)
 	ui.SetBackupCronSpec(cfg.BackupSchedule)
-	root.Static("/static", "web/shared/static")
+	// Aggressive caching for versioned static assets. head.gohtml's import
+	// map (see web/templates/shared/layouts/head.gohtml) rewrites every ES
+	// module URL to a ?v={{.Version}} variant on each deploy, so responses
+	// carrying a `v` query param are safe to cache forever — the URL itself
+	// changes when the version does. Un-versioned requests keep default
+	// cache semantics (last-modified based revalidation). This is what
+	// prevents "old browser cache serves stale shared.js after a deploy
+	// added new exports" — the class caught by v0.0.23 → v0.0.24 hand-off.
+	staticCacheMW := func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if c.QueryParam("v") != "" {
+				c.Response().Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			}
+			return next(c)
+		}
+	}
+	root.Group("/static", staticCacheMW).Static("/", "web/shared/static")
 	if cfg.BasePath != "" {
 		root.GET("", ui.Index)
 	}

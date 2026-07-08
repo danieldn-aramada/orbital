@@ -4,8 +4,7 @@ Read this before: adding new spans, changing the OTel SDK init, touching
 `internal/observability/`, adding instrumentation to a new handler or job,
 or modifying `/metrics`.
 
-Full rationale: `docs/decisions/008-observability.md`. Stack survey:
-`docs/findings/monitoring-stack.md`.
+Stack survey: `docs/findings/monitoring-stack.md`.
 
 ---
 

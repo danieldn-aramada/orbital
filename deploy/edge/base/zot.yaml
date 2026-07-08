@@ -9,13 +9,31 @@ spec:
     - port: 5000
       targetPort: 5000
 ---
+# Single-replica edge zot. Deployment (not StatefulSet) because:
+#   - one pod per edge site; no per-pod identity or clustering needed
+#   - zot writes to /var/lib/registry; strategy: Recreate ensures the old pod
+#     releases the PVC before the new one attaches (RWO storage class)
+#   - if we ever add replicas > 1 for HA, migrate back to StatefulSet with
+#     volumeClaimTemplates — Deployment + shared RWX PVC would race writers
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-data
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: rook-ceph-block
+  resources:
+    requests:
+      storage: 5Gi
+---
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
   name: zot
 spec:
-  serviceName: zot
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: zot
@@ -26,7 +44,7 @@ spec:
     spec:
       containers:
         - name: zot
-          image: ghcr.io/project-zot/zot-linux-amd64:v2.1.9
+          image: ghcr.io/project-zot/zot-linux-amd64:v2.1.18
           imagePullPolicy: Always
           command: ["/usr/local/bin/zot-linux-amd64", "serve", "/etc/zot/config.json"]
           ports:
@@ -58,12 +76,6 @@ spec:
             items:
               - key: sync-creds.json
                 path: sync-creds.json
-  volumeClaimTemplates:
-    - metadata:
-        name: registry-data
-      spec:
-        accessModes: [ReadWriteOnce]
-        storageClassName: rook-ceph-block
-        resources:
-          requests:
-            storage: 5Gi
+        - name: registry-data
+          persistentVolumeClaim:
+            claimName: registry-data

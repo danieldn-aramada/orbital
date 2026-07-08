@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/armada/orbital/internal/blobstore"
@@ -310,10 +309,12 @@ func (p *Publisher) Ping(ctx context.Context) error {
 }
 
 // Publish writes a report of the given entries to storage and returns the key.
+// Overwrite-in-place at a stable key per repoPath (see path.go). Repeated
+// publishes replace prior contents rather than accumulating timestamped
+// objects — the Terraform remote-state pattern.
 func (p *Publisher) Publish(ctx context.Context, entries []OverrideEntry) (string, error) {
-	now := time.Now().UTC()
 	snap := Report{
-		PublishedAt: now.Format(time.RFC3339),
+		PublishedAt: time.Now().UTC().Format(time.RFC3339),
 		Overrides:   entries,
 	}
 	b, err := json.MarshalIndent(snap, "", "  ")
@@ -321,10 +322,7 @@ func (p *Publisher) Publish(ctx context.Context, entries []OverrideEntry) (strin
 		return "", fmt.Errorf("divergence publish marshal: %w", err)
 	}
 
-	// Slashes in oci-repo become natural prefix separators inside ReportKey.
-	ts := strings.ReplaceAll(now.Format("2006-01-02T15-04-05Z"), ":", "-")
-	key := ReportKey(p.ociRepo, ts)
-
+	key := ReportKey(p.ociRepo)
 	if err := p.store.Put(ctx, key, bytes.NewReader(b), "application/json"); err != nil {
 		return "", fmt.Errorf("divergence publish put: %w", err)
 	}

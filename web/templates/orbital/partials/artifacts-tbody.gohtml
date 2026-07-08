@@ -49,9 +49,8 @@
   <td colspan="9" style="background: #fafafa;">
     {{if .HasPrevious}}
     <div class="mb-2">
-      <span class="has-text-grey is-size-7">Changes in this snapshot vs previous
-        <span class="is-family-monospace">{{.PreviousExportedAtRFC3339}}</span>
-        <span class="has-text-grey-light">(compares export snapshots, not publish timestamps — an artifact's content is fixed at export time)</span></span>
+      <span class="has-text-grey is-size-7">Changes since
+        <span class="is-family-monospace">{{.PreviousExportedAtRFC3339}}</span></span>
     </div>
     <div hx-get="{{.BasePath}}/api/v1/audit-log?namespace={{.DatacenterNamespace}}&since={{.PreviousExportedAtRFC3339}}&until={{.ExportedAtRFC3339}}&event_category=data&limit=200"
          hx-trigger="revealed once"

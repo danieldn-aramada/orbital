@@ -1,6 +1,6 @@
 # Contributing
 
-> **New here?** Start with [`docs/getting-started.md`](docs/getting-started.md) — that's the hands-on onboarding doc covering first-time setup, the UI tour, and a guided end-to-end workflow. This file focuses on contributor workflow (PRs, tests, style, releases).
+> **New here?** [README.md's Quick Start](README.md#quick-start) covers first-time setup and login. This file is the contributor reference: PRs, tests, code style, releases, tooling.
 
 ## Make commands at a glance
 
@@ -102,8 +102,17 @@ Never hand-edit files under `docs/swagger.*` or `docs/orb/swagger.*` — they ar
 
 Run `claude` in the repo root. `CLAUDE.md` is loaded automatically — architecture, conventions, and settled decisions are already in context.
 
-- **`CLAUDE.md`** — the source of truth for AI behavior in this repo. Update it when architectural decisions or conventions change.
-- **`AI.md`** — append a row when AI assistance was used in a PR.
+- **`CLAUDE.md`** — source of truth for AI behavior in this repo. Update it when architectural decisions or conventions change.
+
+Common commands the team uses heavily:
+
+| Command | When |
+|---|---|
+| `/effort max` | Before a session that settles a new design decision (switches to Opus). |
+| `/effort normal` | After the design lands (switches back to Sonnet for implementation). |
+| `/wrap-up` | End-of-session housekeeping — updates CLAUDE.md, saves memories, appends to ROADMAP.md's recent accomplishments. Run before closing any significant session. |
+| `/rename` | Rename the current session for later findability. Run it early. |
+| `/compact` | Compress context when the window grows large. Run when response quality drifts. |
 
 See [claude.ai/code](https://claude.ai/code) for install and setup.
 

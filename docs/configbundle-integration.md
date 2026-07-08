@@ -219,9 +219,9 @@ The full semantic model is in [`docs/reference/DIVERGENCE.md`](./reference/DIVER
 
 cb-bundler queries `/api/v1/divergences` per bundle build, twice, with different filters. The same endpoint serves both the actionable set and the disengaged set — orbital doesn't expose state-named sub-paths.
 
-#### Actionable: `GET /api/v1/divergences?action=accept&action=reject&propagated=false`
+#### Actionable: `GET /api/v1/divergences?action=accept&action=reject`
 
-Returns divergences whose resolution is accept or reject AND has not yet been observed-as-propagated. Each entry must be added to `spec.takeover[]` in the cb-manifest so cb-controller's reconciler does a `force: true` SSA apply — evicting `local:*` managers from `managedFields`.
+Returns divergences whose resolution is accept or reject. Each entry must be added to `spec.takeover[]` in the cb-manifest so cb-controller's reconciler does a `force: true` SSA apply — evicting `local:*` managers from `managedFields`.
 
 Each entry includes the embedded `resolution`:
 
@@ -241,19 +241,19 @@ Each entry includes the embedded `resolution`:
       "id": "...",
       "action": "accept",
       "actor": "admin@armada.ai",
-      "decidedAt": "2026-06-14T07:46:01Z",
-      "propagatedAt": null
+      "decidedAt": "2026-06-14T07:46:01Z"
     }
   }
 ]
 ```
 
 - `resolution.action` distinguishes accept vs. reject. Both go in `spec.takeover[]`; the difference is which value cb-controller applies (the current intent, which for accept equals the former override, and for reject equals the original intent). cb-bundler doesn't need to compute the value — it comes from the published subgraph.
-- **Observation-driven lifecycle.** cb-bundler does NOT report back which IDs it included. Orbital marks `propagated_at` automatically when the next orb snapshot omits the diverged field. Between decision and propagation, the same entries will keep appearing in this query — cb-bundler should treat that as "still pending," not duplicate work.
+- **Stale filter is server-side and value-based.** Orbital's List handler queries DGraph for each candidate field's current value and drops resolutions whose expected post-decision value no longer matches (indicating another cloud admin has edited the field since the decision). See [`docs/reference/DIVERGENCE.md`](./reference/DIVERGENCE.md) "Bundler-filter staleness."
+- **No propagation tracking.** Orbital does not observe or record whether the deployment layer has applied a decision. Between decision and loop closure, the same entries keep appearing — cb-bundler treats that as "still pending," not duplicate work. Loop closes when orb's next snapshot no longer includes the entry, at which point orbital's ingester deletes entry + resolution together in one transaction.
 
 #### Disengaged: `GET /api/v1/divergences?action=ignore`
 
-Returns divergences whose resolution is `ignore`, regardless of `propagated_at`. For each `(entryOrbId, field)` pair, **remove that field from the cb-manifest's SSA apply config** — do not include it in the patch cb-controller receives.
+Returns divergences whose resolution is `ignore`. For each `(entryOrbId, field)` pair, **remove that field from the cb-manifest's SSA apply config** — do not include it in the patch cb-controller receives.
 
 - **Persistent**: re-queried every bundle build, no "consume" signal.
 - Why omission is the mechanic: a normal apply with `manager: cb-controller` adds cb-controller to the field's manager set (co-owner with `local:admin`). The divergence reporter detects co-ownership and re-reports forever. The only way to keep `local:admin` as sole manager is to never include the field in cb-controller's apply config.
@@ -268,26 +268,14 @@ Returns divergences whose resolution is `ignore`, regardless of `propagated_at`.
 }
 ```
 
-Just layers. No `consumedResolutionIds`. Orbital observes propagation from orb snapshots; the deployment layer never asserts state back to orbital.
-
-#### `PATCH /api/v1/divergences/:id/resolution` — operator recovery only
-
-Manually mark a resolution as propagated. NOT part of normal flow — orbital observes propagation automatically. Use this only when the observation can't happen (orb stuck, snapshot publishing broken) and an operator wants to unblock a stuck row.
-
-```
-PATCH /api/v1/divergences/b955774d-fcfc-4919-abe4-b95397c755d2/resolution
-Content-Type: application/json
-
-{ "propagatedAt": "now" }      # or an RFC3339 timestamp
-→ 200 { "id": "...", "action": "accept", ..., "propagatedAt": "2026-06-14T07:46:01Z" }
-```
+Just layers. No `consumedResolutionIds`. cb-bundler does not assert state back to orbital.
 
 ### Sequencing in a bundle build
 
 ```
 1. cb-bundler reads orbital state (single point-in-time):
-     GET /api/v1/divergences?action=accept&action=reject&propagated=false   → actionable
-     GET /api/v1/divergences?action=ignore                                   → disengaged
+     GET /api/v1/divergences?action=accept&action=reject   → actionable
+     GET /api/v1/divergences?action=ignore                 → disengaged
 2. cb-bundler computes cb-manifest:
      a. start from the published subgraph (intent)
      b. for each disengaged entry: drop the field from the apply config
@@ -296,22 +284,23 @@ Content-Type: application/json
 4. orbital publishes the OCI artifact
 5. orb imports, dispatches cb-manifest to cb-controller
 6. cb-controller reconciles: force-apply takeover entries, normal apply for the rest
-7. (Later) cb-controller's divergence reporter sees no `local:*` on those fields → orb's next snapshot doesn't include them → orbital's ingester sweeps the entries → sets propagated_at on the resolutions
+7. (Later) cb-controller's divergence reporter sees no `local:*` on those fields → orb's next snapshot omits the entries → orbital's ingester supersedes; entries + resolutions are deleted together in one transaction (loop closed)
 ```
 
 ### Full orbital API surface for divergence
 
-For reference, the entire surface — 5 endpoints under `/api/v1/divergences`:
+For reference, the entire surface — 4 endpoints under `/api/v1/divergences`:
 
 ```
-GET    /api/v1/divergences                       list, with ?action=&propagated=&dc= filters
+GET    /api/v1/divergences                       list, with ?action=&dc= filters
 GET    /api/v1/divergences/:id                   one (resolution embedded)
 PUT    /api/v1/divergences/:id/resolution        upsert resolution (body: {action})
 DELETE /api/v1/divergences/:id/resolution        clear resolution
-PATCH  /api/v1/divergences/:id/resolution        operator-recovery: set propagatedAt manually
 ```
 
-Direction is one-way: orbital pulls from cb-bundler (`POST /bundle`). cb-bundler never initiates a request to orbital. Propagation state is observed at orbital, not asserted by cb-bundler.
+Plus `DELETE /api/v1/divergences/:id` (Dismiss) — hard-deletes entry + resolution together; operator recovery when a row should be gone regardless of what orb reports next.
+
+Direction is one-way: orbital pulls from cb-bundler (`POST /bundle`). cb-bundler never initiates a request to orbital. Orbital does not model propagation state; loop closure is observed via the absence of an entry in orb's next report.
 
 ### cb-controller-side expectations
 

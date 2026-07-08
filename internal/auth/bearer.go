@@ -22,7 +22,7 @@ type BearerVerifier struct {
 	// allowedAppIDs, when non-empty, restricts which appid claims are accepted
 	// for app-only tokens. Empty means "any app token bound to the configured
 	// audience is allowed" — useful in dev but more permissive than typical
-	// production posture. See docs/decisions/010-bundler-service-auth.md.
+	// production posture. See docs/reference/AUTH.md § App Caller Authorization.
 	allowedAppIDs map[string]struct{}
 }
 

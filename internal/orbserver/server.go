@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	_ "github.com/armada/orbital/docs/orb"
@@ -41,6 +42,13 @@ type Server struct {
 	webFS        fs.FS // embedded in production; os.DirFS("web") in dev for hot-reload
 	devMode      bool
 	version      string // stable per-restart; exposed to JS so the client can wipe stale tab state on orb restart
+
+	// verifyCache memoizes oci.Verify results by digest for the Import Subgraph
+	// tags table. Digests are content-addressed, so a hit is mathematically
+	// still-valid within a pod lifetime (cosign key changes require restart).
+	// Cleared on process restart (in-memory only) and on the Refresh button
+	// via ?refresh=1. Values are bool (verified/not).
+	verifyCache sync.Map
 }
 
 // templateMap rebuilds the template map — used in dev mode for hot reload.

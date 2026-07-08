@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/armada/orbital/internal/oci"
@@ -38,12 +40,20 @@ func (s *Server) triggerImport(c echo.Context) error {
 	if err := c.Bind(&req); err != nil || req.Tag == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "tag is required"})
 	}
-
-	snap := s.state.snapshot()
-	if snap.Status == "running" {
+	if !s.startImport(req.Tag, orb.InitiatedByManual) {
 		return c.JSON(http.StatusConflict, map[string]string{"error": "import already running"})
 	}
+	return c.JSON(http.StatusAccepted, map[string]string{"status": "started", "tag": req.Tag})
+}
 
+// startImport kicks off the pull/verify/import goroutine for the given tag.
+// Returns false if an import is already running (state machine gate) — caller
+// should surface that as a 409 (HTTP) or a skipped-poll-cycle (auto). The
+// initiatedBy value is persisted on the ImportRecord row for audit.
+func (s *Server) startImport(tag, initiatedBy string) bool {
+	if s.state.snapshot().Status == "running" {
+		return false
+	}
 	s.state.setRunning()
 
 	go func() {
@@ -57,7 +67,7 @@ func (s *Server) triggerImport(c echo.Context) error {
 			AllowHTTP: s.cfg.OCIAllowHTTP,
 		}
 
-		artifact, err := oci.Pull(ctx, pullCfg, req.Tag)
+		artifact, err := oci.Pull(ctx, pullCfg, tag)
 		if err != nil {
 			s.state.setFailed("pull: " + err.Error())
 			return
@@ -86,6 +96,7 @@ func (s *Server) triggerImport(c echo.Context) error {
 			ExportJobID:  artifact.Annotations["com.armada.orbital.export-job-id"],
 			CreatedAt:    time.Now().UTC(),
 			Verification: verification,
+			InitiatedBy:  initiatedBy,
 		}
 
 		if err := s.imp.Import(ctx, artifact.DataGZ, artifact.SchemaGZ, meta); err != nil {
@@ -153,7 +164,7 @@ func (s *Server) triggerImport(c echo.Context) error {
 		})
 	}()
 
-	return c.JSON(http.StatusAccepted, map[string]string{"status": "started", "tag": req.Tag})
+	return true
 }
 
 // @Summary     Import status
@@ -181,6 +192,7 @@ type tagInfo struct {
 // @Router      /api/v1/import/tags [get]
 func (s *Server) importTags(c echo.Context) error {
 	ctx := c.Request().Context()
+	reqStart := time.Now()
 	pullCfg := oci.PullConfig{
 		Registry:  s.cfg.OCIRegistry,
 		Repo:      s.cfg.OCIRepo,
@@ -188,7 +200,20 @@ func (s *Server) importTags(c echo.Context) error {
 		Password:  s.cfg.OCIPassword,
 		AllowHTTP: s.cfg.OCIAllowHTTP,
 	}
+
+	// ?refresh=1 clears the verify cache before processing. Wired to the
+	// Refresh button so operators have an explicit "trust nothing, re-verify
+	// everything" affordance without needing to restart orb (which also
+	// clears the cache, but is heavier). Any truthy value except "0"/"false".
+	refreshed := false
+	if r := c.QueryParam("refresh"); r != "" && r != "0" && r != "false" {
+		s.verifyCache.Clear()
+		refreshed = true
+	}
+
+	listStart := time.Now()
 	allTags, err := oci.ListTags(ctx, pullCfg)
+	listElapsed := time.Since(listStart)
 	if err != nil {
 		s.logger.Warn("list tags failed", "err", err)
 		if c.Request().Header.Get("HX-Request") == "true" {
@@ -207,59 +232,201 @@ func (s *Server) importTags(c echo.Context) error {
 
 	allTags = sortTagsByVersionDesc(allTags)
 
-	if c.Request().Header.Get("HX-Request") == "true" {
-		var rows []orbTagFragRow
-		for _, t := range allTags {
-			if strings.HasSuffix(t, ".sig") {
-				continue
-			}
-			row := orbTagFragRow{Name: t}
-			meta, err := oci.ResolveTag(ctx, pullCfg, t)
-			if err != nil {
-				s.logger.Warn("resolve tag failed", "tag", t, "err", err)
-				rows = append(rows, row)
-				continue
-			}
-			row.Size = fmtOrbTagSize(meta.TotalSize)
-			row.Digest = meta.Digest
-			row.HasDigest = meta.Digest != ""
-			if result, err := oci.Verify(ctx, verifyCfg, repoRef, meta.Digest, s.logger); err == nil {
-				row.Verified = result.Verified
-			}
-			rows = append(rows, row)
+	// Filter .sig BEFORE pagination so limit/offset count only importable
+	// tags, matching what the operator actually sees rendered.
+	realTags := make([]string, 0, len(allTags))
+	for _, t := range allTags {
+		if !strings.HasSuffix(t, ".sig") {
+			realTags = append(realTags, t)
 		}
-		tmpl, err := template.ParseFiles("web/templates/orb/partials/orb-tags-tbody.gohtml")
+	}
+	total := len(realTags)
+	limit, offset := parseTagsPagination(c)
+	pageTags := realTags[min(offset, total):min(offset+limit, total)]
+
+	// Verify only what's on the visible page. Combined with the digest cache,
+	// cold-load cost is bounded by page-size, not total tag count.
+	rvStart := time.Now()
+	resolved := s.resolveAndVerifyTags(ctx, pageTags, pullCfg, verifyCfg, repoRef)
+	rvElapsed := time.Since(rvStart)
+
+	// Diagnostic log to prove or disprove cache effectiveness. Hits/misses
+	// are counted inside verifyWithCache via the returned counters below.
+	s.logger.Info("import tags served",
+		"tags_total", total,
+		"page_size", limit,
+		"refreshed", refreshed,
+		"list_took", listElapsed.String(),
+		"resolve_verify_took", rvElapsed.String(),
+		"total_took", time.Since(reqStart).String(),
+	)
+
+	if c.Request().Header.Get("HX-Request") == "true" {
+		rows := make([]orbTagFragRow, 0, len(resolved))
+		for _, r := range resolved {
+			rows = append(rows, orbTagFragRow{
+				Name:      r.name,
+				Size:      fmtOrbTagSize(r.sizeBytes),
+				Digest:    r.digest,
+				HasDigest: r.digest != "",
+				Verified:  r.verified,
+			})
+		}
+		data := orbTagsContentData{
+			Rows:       rows,
+			Total:      total,
+			Limit:      limit,
+			Offset:     offset,
+			FirstRow:   offset + 1,
+			LastRow:    offset + len(rows),
+			HasPrev:    offset > 0,
+			HasNext:    offset+len(rows) < total,
+			PrevOffset: max(0, offset-limit),
+			NextOffset: offset + limit,
+		}
+		if len(rows) == 0 {
+			data.FirstRow = 0
+		}
+		tmpl, err := template.ParseFiles("web/templates/orb/partials/orb-tags-content.gohtml")
 		if err != nil {
 			return fmt.Errorf("parse orb tags fragment: %w", err)
 		}
 		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-		return tmpl.Execute(c.Response(), rows)
+		return tmpl.Execute(c.Response(), data)
 	}
 
 	// JSON path uses the same descending-version order as the HTMX rows so
-	// callers don't have to re-sort.
-	var infos []tagInfo
-	for _, t := range allTags {
-		// Skip cosign signature tags — not importable artifacts.
-		if strings.HasSuffix(t, ".sig") {
-			continue
-		}
-		info := tagInfo{Name: t}
-		meta, err := oci.ResolveTag(ctx, pullCfg, t)
-		if err != nil {
-			s.logger.Warn("resolve tag failed", "tag", t, "err", err)
-			infos = append(infos, info)
-			continue
-		}
-		info.SizeBytes = meta.TotalSize
-		info.Digest = meta.Digest
-		result, err := oci.Verify(ctx, verifyCfg, repoRef, meta.Digest, s.logger)
-		if err == nil {
-			info.Verified = result.Verified
-		}
-		infos = append(infos, info)
+	// callers don't have to re-sort. Pagination metadata mirrors what the
+	// existing publish-history endpoint returns.
+	infos := make([]tagInfo, 0, len(resolved))
+	for _, r := range resolved {
+		infos = append(infos, tagInfo{
+			Name:      r.name,
+			SizeBytes: r.sizeBytes,
+			Digest:    r.digest,
+			Verified:  r.verified,
+		})
 	}
-	return c.JSON(http.StatusOK, map[string][]tagInfo{"tags": infos})
+	return c.JSON(http.StatusOK, map[string]any{
+		"tags":   infos,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
+// parseTagsPagination extracts limit/offset with sane bounds. Default 10 rows
+// per page — small enough to keep cold-cache load fast (10 tags at 8-worker
+// parallel ≈ one batch of Verify calls). Max 200 caps worst-case work per
+// request. Negative or non-numeric values fall back to defaults.
+func parseTagsPagination(c echo.Context) (limit, offset int) {
+	limit = 10
+	if v, err := strconv.Atoi(c.QueryParam("limit")); err == nil && v > 0 {
+		limit = v
+		if limit > 200 {
+			limit = 200
+		}
+	}
+	if v, err := strconv.Atoi(c.QueryParam("offset")); err == nil && v > 0 {
+		offset = v
+	}
+	return
+}
+
+// resolvedTag carries per-tag metadata gathered from the registry. Fields
+// stay zero-valued on any lookup error so the row still renders (the UI
+// treats an empty digest as "unknown"); the error is logged, not surfaced.
+type resolvedTag struct {
+	name      string
+	sizeBytes int64
+	digest    string
+	verified  bool
+}
+
+// resolveAndVerifyTags fans out ResolveTag + Verify per tag across a bounded
+// worker pool, preserving the input order. Caller is responsible for
+// filtering out .sig tags — this function verifies every tag it's given.
+//
+// Sequential fetches at 33+ tags took 10-20s of wall time; the crypto step
+// dominates because sig blobs are fetched fresh each time. Parallel with 8
+// workers collapses that to bounded-by-slowest-tag.
+//
+// ResolveTag stays UNCACHED — tag pointers can move (re-push, wipe+republish)
+// so fresh manifest resolution per call is required to learn the current
+// digest. Verify results ARE cached by digest via s.verifyCache: given a
+// stable public key, Verify(digest, key) is a deterministic function of
+// immutable inputs (digest is content-addressed), so a hit is mathematically
+// still-valid within the pod lifetime.
+func (s *Server) resolveAndVerifyTags(
+	ctx context.Context,
+	tags []string,
+	pullCfg oci.PullConfig,
+	verifyCfg oci.VerifyConfig,
+	repoRef string,
+) []resolvedTag {
+	results := make([]resolvedTag, len(tags))
+	sem := make(chan struct{}, 8)
+	var wg sync.WaitGroup
+	var hits, misses atomic.Int64
+	var resolveTotal, verifyTotal atomic.Int64 // nanoseconds
+	for i, t := range tags {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int, t string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			row := resolvedTag{name: t}
+			resolveStart := time.Now()
+			meta, err := oci.ResolveTag(ctx, pullCfg, t)
+			resolveTotal.Add(int64(time.Since(resolveStart)))
+			if err != nil {
+				s.logger.Warn("resolve tag failed", "tag", t, "err", err)
+				results[i] = row
+				return
+			}
+			row.sizeBytes = meta.TotalSize
+			row.digest = meta.Digest
+			verifyStart := time.Now()
+			hit := false
+			row.verified, hit = s.verifyWithCache(ctx, verifyCfg, repoRef, meta.Digest)
+			verifyTotal.Add(int64(time.Since(verifyStart)))
+			if hit {
+				hits.Add(1)
+			} else {
+				misses.Add(1)
+			}
+			results[i] = row
+		}(i, t)
+	}
+	wg.Wait()
+	s.logger.Info("resolve+verify tag batch",
+		"tags", len(tags),
+		"cache_hits", hits.Load(),
+		"cache_misses", misses.Load(),
+		"resolve_cpu_sum", time.Duration(resolveTotal.Load()).String(),
+		"verify_cpu_sum", time.Duration(verifyTotal.Load()).String(),
+	)
+	return results
+}
+
+// verifyWithCache consults s.verifyCache before falling back to oci.Verify.
+// Empty digest short-circuits to false (nothing to verify). Verify errors
+// are logged upstream by oci.Verify and result in false; NOT cached, so a
+// transient registry hiccup won't stick as "unverified" forever.
+// Returns (verified, wasCacheHit) so callers can count hit rate.
+func (s *Server) verifyWithCache(ctx context.Context, verifyCfg oci.VerifyConfig, repoRef, digest string) (bool, bool) {
+	if digest == "" {
+		return false, false
+	}
+	if v, ok := s.verifyCache.Load(digest); ok {
+		return v.(bool), true
+	}
+	result, err := oci.Verify(ctx, verifyCfg, repoRef, digest, s.logger)
+	if err != nil {
+		return false, false
+	}
+	s.verifyCache.Store(digest, result.Verified)
+	return result.Verified, false
 }
 
 // @Summary     Import history
@@ -641,6 +808,24 @@ type orbTagFragRow struct {
 	Digest    string
 	HasDigest bool
 	Size      string
+}
+
+// orbTagsContentData is the shape passed to the orb-tags-content fragment.
+// Rows is the current page's slice; the pagination fields drive the nav
+// footer rendered inside the same fragment (same-swap-target as the rows,
+// so nav clicks re-render both together, mirroring publish-history).
+type orbTagsContentData struct {
+	Rows       []orbTagFragRow
+	Total      int
+	Limit      int
+	Offset     int
+	FirstRow   int  // 1-indexed for display
+	LastRow    int  // 1-indexed for display
+	HasPrev    bool
+	HasNext    bool
+	PrevOffset int
+	NextOffset int
+	BasePath   string
 }
 
 func fmtOrbTagSize(n int64) string {

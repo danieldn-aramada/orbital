@@ -4,6 +4,31 @@
 
 <script>window.ORBITAL_BASE = '{{.BasePath}}';</script>
 
+{{/* Import map: remaps every ES-module URL to a ?v={{.Version}} variant so
+     that a deploy invalidates cached JS in all browsers. ES module
+     specifiers are static — `import from './shared.js'` can't be
+     templated inside the JS file itself, and browsers cache the resolved
+     URL forever. Without this map, orbital.js is cache-busted via ?v=
+     on its <script> tag, but its transitive imports of shared.js /
+     configitem-editor.js hit stale browser cache, producing "does not
+     provide an export named X" errors after a deploy that added exports.
+     Keys are the absolute post-resolution URLs (matching what the browser
+     computes when resolving relative imports from JS files under
+     /static/*), NOT relative paths (which resolve against the HTML
+     document, not the importing module). Must appear BEFORE any
+     <script type="module"> that would use it — browser fixes the map at
+     first-module-load time. */}}
+<script type="importmap">
+{
+  "imports": {
+    "{{.BasePath}}/static/shared.js": "{{.BasePath}}/static/shared.js?v={{.Version}}",
+    "{{.BasePath}}/static/configitem-editor.js": "{{.BasePath}}/static/configitem-editor.js?v={{.Version}}",
+    "{{.BasePath}}/static/bulma-toast.js": "{{.BasePath}}/static/bulma-toast.js?v={{.Version}}",
+    "{{.BasePath}}/static/vanilla-jsoneditor/standalone.js": "{{.BasePath}}/static/vanilla-jsoneditor/standalone.js?v={{.Version}}"
+  }
+}
+</script>
+
 <script type="text/javascript" src="{{.BasePath}}/static/datatables/jquery-3.7.1.js"></script>
 <script src="{{.BasePath}}/static/htmx-2.0.2.min.js"></script>
 <link rel="stylesheet" href="{{.BasePath}}/static/font-awesome-6.6.0/css/all.min.css">

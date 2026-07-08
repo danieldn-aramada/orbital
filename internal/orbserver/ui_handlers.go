@@ -3,9 +3,9 @@ package orbserver
 import (
 	"encoding/json"
 	"html/template"
-	"time"
 
 	"github.com/armada/orbital/internal/dgraphschema"
+	"github.com/armada/orbital/internal/orb"
 	appversion "github.com/armada/orbital/internal/version"
 	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/labstack/echo/v4"
@@ -13,16 +13,17 @@ import (
 
 type statusPageData struct {
 	layout.Base
-	PageTitle        string
-	HasData          bool   // true after a successful import — DC identity is known
-	DCName           string // name of the imported data center, derived from DGraph
-	OCIEnabled       bool   // ORB_ENABLE_OCI_REGISTRY — gates pull-mode messaging on empty state
-	OCIRegistry      string
-	OCIRepo          string
-	CurrentVersion   string
-	AvailableVersion string
-	HasLastImport    bool
-	LastImportAt     time.Time
+	PageTitle         string
+	HasData           bool   // true after a successful import — DC identity is known
+	DCName            string // name of the imported data center, derived from DGraph
+	OCIEnabled        bool   // ORB_ENABLE_OCI_REGISTRY — gates pull-mode messaging on empty state
+	OCIRegistry       string
+	OCIRepo           string
+	CurrentVersion    string
+	AvailableVersion  string
+	LastImport        *orb.ImportRecord // most recent import row; carries Tag, ImportedAt, InitiatedBy, Status
+	AutoImportEnabled bool              // ORB_AUTO_IMPORT_ENABLED
+	AutoImportFailure *orb.ImportRecord // most recent import IF it was auto AND failed (else nil)
 }
 
 const queryActiveDC = `{ queryDataCenter { name } }`
@@ -148,17 +149,23 @@ func (s *Server) statusPage(c echo.Context) error {
 	snap := s.state.snapshot()
 	b := s.orbBase(c)
 	data := statusPageData{
-		Base:             b,
-		PageTitle:        "Status",
-		OCIEnabled:       s.cfg.EnableOCIRegistry,
-		OCIRegistry:      s.cfg.OCIRegistry,
-		OCIRepo:          s.cfg.OCIRepo,
-		CurrentVersion:   snap.CurrentVersion,
-		AvailableVersion: snap.AvailableVersion,
+		Base:              b,
+		PageTitle:         "Status",
+		OCIEnabled:        s.cfg.EnableOCIRegistry,
+		OCIRegistry:       s.cfg.OCIRegistry,
+		OCIRepo:           s.cfg.OCIRepo,
+		CurrentVersion:    snap.CurrentVersion,
+		AvailableVersion:  snap.AvailableVersion,
+		AutoImportEnabled: s.cfg.AutoImportEnabled,
 	}
-	if snap.LastImport != nil {
-		data.HasLastImport = true
-		data.LastImportAt = snap.LastImport.ImportedAt
+	data.LastImport = snap.LastImport
+	// If the most recent import was auto AND failed, surface it as a banner.
+	// A subsequent successful import (auto or manual) clears the alert by
+	// making the latest row not-failed.
+	if latest, err := orb.LatestImportRecord(c.Request().Context(), s.db); err == nil && latest != nil {
+		if latest.InitiatedBy == orb.InitiatedByAuto && latest.Status == "failed" {
+			data.AutoImportFailure = latest
+		}
 	}
 	// Derive DC identity from the imported graph. After a successful import there
 	// is exactly one DataCenter node (import is sudo: drop_all + full reload).
