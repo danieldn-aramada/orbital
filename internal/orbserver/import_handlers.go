@@ -161,6 +161,14 @@ func (s *Server) startImport(tag, initiatedBy string) bool {
 			ImportedAt:   time.Now().UTC(),
 			Status:       status,
 			Verification: verification,
+			// InitiatedBy MUST match what recordHistory persisted on the DB
+			// row. Omitting it here leaves the in-memory snapshot's field
+			// empty, and the Status page's "imported (auto)/(manual)" sub-line
+			// falls through to the manual branch for auto-imports done in
+			// this process lifetime. After a pod restart, hydrateFromHistory
+			// re-reads from the DB and repopulates correctly — so the bug is
+			// invisible unless you observe the flow WITHIN one pod lifetime.
+			InitiatedBy:  initiatedBy,
 		})
 	}()
 

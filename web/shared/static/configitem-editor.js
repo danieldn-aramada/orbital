@@ -157,23 +157,48 @@ export function initConfigItemEditor({
       return true
     }
 
-    // First-time-create of a child entity may require linking its parent
-    // wrapper to the root first (e.g. EtcdBackup needs ClusterBackup, which
-    // needs to be attached to EksaKubernetesCluster.backup). The page-level
-    // target metadata declares `parentWrapper` when this is needed. We
-    // collect wrappers from all new-create changes and emit one update on
-    // the root for each wrapper that doesn't already exist.
+    // Fields declared in the schema as `String # json` round-trip through
+    // the editor as nested objects (the page handler parses them for nice
+    // display); on submit they must be re-stringified or DGraph rejects with
+    // "cannot use as String". The set of such fields per target type is
+    // emitted by configitems.BuildEditTargets as JSONStringFields.
+    const valueForMutation = (t, f, v) => {
+      const jsonStrFields = new Set(t.jsonStringFields || [])
+      if (!jsonStrFields.has(f)) return v
+      return typeof v === 'string' ? v : JSON.stringify(v)
+    }
+    // Build the `set` map (for update) or `input` map (for add) of scalar field
+    // values from a target's currentSub — the JSON editor's post-submit shape.
+    const scalarPayload = (t, sub) => {
+      const out = {}
+      for (const f of t.fields) if (f in sub) out[f] = valueForMutation(t, f, sub[f])
+      return out
+    }
+    // Standard ConfigItem interface fields orbital's ent schema requires on
+    // every insert. `version: 1` is what a fresh @id gets; the GraphQL proxy
+    // auto-bumps on subsequent updates.
+    const configItemDefaults = () => ({
+      version: 1,
+      createdBy: currentUser, createdAt: now,
+      updatedBy: currentUser, updatedAt: now,
+    })
+
+    // First-time-create of a child entity requires its wrapper (e.g.
+    // ClusterBackup) to exist before the child can link to it. Prior design
+    // dispatched wrapper-link + child-add in parallel, which raced DGraph
+    // into auto-creating a partial wrapper node (fails NotEmpty on
+    // namespace). Fix: fold the wrapper + all its new children into ONE
+    // nested update{Root} mutation. DGraph's nested-write semantics create
+    // the whole subtree atomically. Editing existing children is unaffected
+    // — they still get targeted update{Kind} mutations.
     //
-    // To detect "wrapper already exists" we check whether ANY existed-true
-    // change shares the same parentOrbId — if any sibling under the same
-    // wrapper was edited (not newly added), the wrapper exists.
+    // A wrapper "needs creation" if NO sibling under the same parentOrbId
+    // was present in the pre-submit snapshot.
     const wrappersNeeded = new Map() // wrapper.orbId → wrapper
     for (const ch of changes) {
       if (ch.existed) continue
       const w = ch.target.parentWrapper
       if (!w) continue
-      // Check if any sibling under same wrapper existed in snapshot — if so,
-      // wrapper already exists; no link needed.
       const siblingExisted = targets.some(other =>
         other !== ch.target &&
         other.parentOrbId === ch.target.parentOrbId &&
@@ -184,60 +209,79 @@ export function initConfigItemEditor({
       }
     }
 
-    // Build the call list. Order doesn't matter for audit; they all fire in
-    // parallel and each becomes its own audit row attributed to its concrete
-    // resource type.
-    const calls = []
-
-    // 1. Wrapper-link mutations (rare — only first-time configure)
+    // Compose the root's update set: root scalar edits (if the root itself
+    // changed) plus one nested subtree per wrapper that needs creation.
+    // Whether or not this rootSet ends up non-empty determines if we emit
+    // an update{Root} mutation at all.
+    const rootTarget = targets.find(t => t.path.length === 0)
+    let rootSet = null
+    const rootChange = changes.find(ch => ch.target.path.length === 0)
+    if (rootChange) {
+      rootSet = { updatedBy: currentUser, updatedAt: now, ...scalarPayload(rootChange.target, rootChange.currentSub || {}) }
+    }
+    // Children folded into rootSet — tracked so the per-target loop skips
+    // them (otherwise we'd double-emit them as separate add mutations).
+    const foldedOrbIds = new Set()
     for (const w of wrappersNeeded.values()) {
-      calls.push({
-        query: `mutation Link${w.kind}($orbId: String!, $set: EksaKubernetesClusterPatch!) {
-          updateEksaKubernetesCluster(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { eksaKubernetesCluster { orbId } }
-        }`,
-        variables: {
-          orbId: reloadOrbId,
-          set: {
-            [w.parentField]: { orbId: w.orbId, name: w.name, namespace: w.namespace, version: 1, createdBy: currentUser, createdAt: now },
-            updatedBy: currentUser,
-            updatedAt: now,
-          },
-        },
-      })
+      if (rootSet === null) {
+        rootSet = { updatedBy: currentUser, updatedAt: now }
+      }
+      // Wrapper metadata. `@hasInverse` on wrapper.cluster fills back to root
+      // automatically when root sets `[w.parentField] = wrapper`, so we don't
+      // need to set the wrapper's back-reference here.
+      const wrapperNode = {
+        orbId: w.orbId, name: w.name, namespace: w.namespace,
+        ...configItemDefaults(),
+      }
+      // Fold every new child of this wrapper as a nested object. Field name
+      // on the wrapper for each child = last segment of the child's path
+      // (e.g. path=["backup","velero"] → "velero"). DGraph @hasInverse fills
+      // the child's back-reference automatically.
+      for (const ch of changes) {
+        if (ch.existed) continue
+        if (ch.target.parentOrbId !== w.orbId) continue
+        const t = ch.target
+        const childField = t.path[t.path.length - 1]
+        wrapperNode[childField] = {
+          orbId: t.orbId, name: deriveName(t),
+          namespace: t.namespace || '',
+          ...configItemDefaults(),
+          ...scalarPayload(t, ch.currentSub || {}),
+        }
+        foldedOrbIds.add(t.orbId)
+      }
+      rootSet[w.parentField] = wrapperNode
     }
 
-    // 2. Per-target mutations — update{Kind} for existing, add{Kind} for new.
+    // Build the call list. Root subtree (if any) plus per-target mutations
+    // for everything not folded above. Everything is independent at this
+    // point — no cross-call ordering dependencies — so parallel is safe.
+    const calls = []
+    if (rootSet !== null) {
+      calls.push(buildUpdateCall({
+        kind: rootTarget.kind, orbId: reloadOrbId, set: rootSet, payloadField: rootTarget.payloadField,
+      }))
+    }
     for (const ch of changes) {
       const t = ch.target
+      if (t.path.length === 0) continue     // root already handled
+      if (foldedOrbIds.has(t.orbId)) continue // subtree-folded into root update
       const sub = ch.currentSub || {}
-      // Fields declared in the schema as `String # json` round-trip through
-      // the editor as nested objects (the page handler parses them for nice
-      // display); on submit they must be re-stringified or DGraph rejects with
-      // "cannot use as String". The set of such fields per target type is
-      // emitted by configitems.BuildEditTargets as JSONStringFields.
-      const jsonStrFields = new Set(t.jsonStringFields || [])
-      const valueForMutation = (f, v) => {
-        if (!jsonStrFields.has(f)) return v
-        // Already a string (operator left it as-is, or explicitly stringified)
-        // — pass through. Otherwise stringify the parsed shape.
-        return typeof v === 'string' ? v : JSON.stringify(v)
-      }
-
       if (ch.existed) {
-        // EDIT — canonical update{Kind} with $orbId + $set triggers the diff renderer.
-        const setObj = { updatedBy: currentUser, updatedAt: now }
-        for (const f of t.fields) if (f in sub) setObj[f] = valueForMutation(f, sub[f])
-        calls.push(buildUpdateCall({ kind: t.kind, orbId: t.orbId, set: setObj, payloadField: t.payloadField }))
+        // EDIT — canonical update{Kind} triggers the diff renderer.
+        calls.push(buildUpdateCall({
+          kind: t.kind, orbId: t.orbId, payloadField: t.payloadField,
+          set: { updatedBy: currentUser, updatedAt: now, ...scalarPayload(t, sub) },
+        }))
       } else {
-        // CREATE — add{Kind} with parent link. Audit shows raw variables (no
-        // before-state to diff against).
+        // CREATE under an already-existing wrapper (sibling exists). Safe
+        // to parallelize — the wrapper is in DGraph, this is just a link.
         const input = {
           orbId: t.orbId, name: deriveName(t),
-          namespace: t.namespace || '', version: 1,
-          createdBy: currentUser, createdAt: now,
-          updatedBy: currentUser, updatedAt: now,
+          namespace: t.namespace || '',
+          ...configItemDefaults(),
+          ...scalarPayload(t, sub),
         }
-        for (const f of t.fields) if (f in sub) input[f] = valueForMutation(f, sub[f])
         if (t.parentInverseField && t.parentOrbId) {
           input[t.parentInverseField] = { orbId: t.parentOrbId }
         }

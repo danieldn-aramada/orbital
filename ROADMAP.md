@@ -28,11 +28,11 @@ gantt
 
 ## Recent accomplishments
 
+- **2026-07-12** — Nested-writes refactor in `configitem-editor.js` for first-time wrapper+child create (one `update{Root}` with folded subtree, fixes DGraph race); orb `setDone` in-memory `InitiatedBy` matches DB (auto-import label was showing manual within pod lifetime); divergence Last-published shows relative time.
 - **2026-07-07** — Orb import-tags perf (parallel + cache + pagination); auto-import Status UI (indicator + sub-line + failure banner); Terraform overwrite-in-place divergence S3 key; export phase-list UI; DIVERGENCE docs reconciled.
 - **2026-07-05** — Atomic export+publish flow (single `POST /api/v1/export` with `download` bool); orb SQLite migration complete (`orb.db` + ent replaces 3 legacy JSON files); Publish History its own page under Divergence; Spike 25 publish-provenance changeset panel.
 - **2026-07-05** — Go 1.26.4 + Alpine 3.23 upgrade validated; fixed real backup zip-checksum bug (was hashing dataGZ, uploading zip); divergence e2e URL typo (`/divergence` → `/divergences`); `release-check` DOCKER_CONFIG isolation; postgres password → FIPS-compliant.
 - **2026-07-02** — Delegation default (35 bridge entries deleted, UI.md rule); bundler-aware courier download (courier-ready zip w/ OCI-positioned layer filenames); layers modal Position column; post-ADR-011 configbundle cleanup; orb SQLite migration Phase 0 verified.
-- **2026-06-29** — Codebase health (Track A): session singleton, stuck-job reaper, OCI rollback on sign fail, ent RegistryArtifact→ExportJob edge, named orbctl ops, audit cap 200; `make down` nuclear.
 
 ---
 
