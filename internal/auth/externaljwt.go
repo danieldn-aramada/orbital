@@ -40,16 +40,25 @@ import (
 // role is resolved from the DB by RequireRole via the session's user_id.
 type ExternalJWTVerifier struct {
 	verifier    *gooidc.IDTokenVerifier
+	issuer      string
 	clientID    string
 	defaultRole string
+
+	// fallback verifies bearers whose `iss` is NOT this verifier's issuer —
+	// e.g. the in-pod cb-bundler's AAD client-credentials service token. This
+	// keeps internal service-to-service auth working: external-jwt ADDS
+	// Keycloak-user acceptance, it does not replace the AAD service path.
+	// nil means no fallback (bearers from other issuers are rejected).
+	fallback *BearerVerifier
 }
 
 // ExternalJWTConfig captures the runtime parameters wired from Config.
 type ExternalJWTConfig struct {
 	IssuerURL   string
 	Audience    string
-	ClientID    string // required `azp` claim value (RFC 9068 client_id)
-	DefaultRole string // "readonly" | "dev" | "admin"
+	ClientID    string          // required `azp` claim value (RFC 9068 client_id)
+	DefaultRole string          // "readonly" | "dev" | "admin"
+	Fallback    *BearerVerifier // optional: verifies bearers from other issuers (AAD service tokens)
 }
 
 func NewExternalJWTVerifier(ctx context.Context, cfg ExternalJWTConfig) (*ExternalJWTVerifier, error) {
@@ -59,8 +68,10 @@ func NewExternalJWTVerifier(ctx context.Context, cfg ExternalJWTConfig) (*Extern
 	}
 	return &ExternalJWTVerifier{
 		verifier:    provider.Verifier(&gooidc.Config{ClientID: cfg.Audience}),
+		issuer:      cfg.IssuerURL,
 		clientID:    cfg.ClientID,
 		defaultRole: cfg.DefaultRole,
+		fallback:    cfg.Fallback,
 	}, nil
 }
 
@@ -72,6 +83,17 @@ func (v *ExternalJWTVerifier) RequireAuth() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			if rawToken, ok := strings.CutPrefix(c.Request().Header.Get("Authorization"), "Bearer "); ok {
+				// Route by (unverified) issuer. Bearers from a different issuer
+				// than this verifier's — e.g. the in-pod bundler's AAD service
+				// token — go to the fallback verifier so internal service auth
+				// keeps working. Keycloak-issued bearers are verified here. The
+				// iss peek is unverified but only selects WHICH verifier runs;
+				// the chosen verifier still fully validates the signature.
+				if v.fallback != nil {
+					if claims, err := parseUnverifiedClaims(rawToken); err == nil && claims.Iss != "" && claims.Iss != v.issuer {
+						return v.fallback.verifyBearer(c, next, rawToken)
+					}
+				}
 				return v.verifyBearer(c, next, rawToken)
 			}
 			// No bearer — fall back to the session cookie set by the global
@@ -198,6 +220,7 @@ func (v *ExternalJWTVerifier) deny(c echo.Context, code, description string) err
 }
 
 type externalJWTClaims struct {
+	Iss               string `json:"iss"`
 	Sub               string `json:"sub"`
 	AZP               string `json:"azp"`
 	Email             string `json:"email"`

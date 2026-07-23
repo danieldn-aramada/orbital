@@ -91,6 +91,13 @@ func ResolveUser(db *ent.Client, adminEmails map[string]struct{}) echo.Middlewar
 			if id, _ := c.Get("user_id").(int); id != 0 {
 				return next(c) // session auth already resolved
 			}
+			// External-JWT callers (ORBITAL_AUTH_MODE=external-jwt) carry a
+			// pre-mapped role and are intentionally NOT provisioned into the
+			// users table. Skip the lookup/provision so RequireRole's role
+			// short-circuit governs them.
+			if role, _ := c.Get("role").(string); role != "" {
+				return next(c)
+			}
 			// App-only (client credentials) tokens have no email and no users-table
 			// row, by design — the appid allowlist in BearerVerifier is the authz
 			// gate. Pass through without a DB lookup. See ADR 010.

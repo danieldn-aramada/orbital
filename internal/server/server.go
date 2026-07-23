@@ -115,18 +115,31 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	var apiAuth []echo.MiddlewareFunc
 	switch {
 	case externalJWTMode:
+		// Build the AAD bearer verifier as a fallback so internal service
+		// callers (in-pod cb-bundler, AAD client-credentials) keep working.
+		// external-jwt ADDS Keycloak-user acceptance; it must not remove the
+		// AAD service-token path the bundler's publish callback depends on.
+		var fallback *auth.BearerVerifier
+		if cfg.OIDCIssuerURL != "" {
+			if bv, err := auth.NewBearerVerifier(context.Background(), cfg.OIDCIssuerURL, cfg.OIDCClientID, cfg.AppTokenAllowedAppIDs); err != nil {
+				logger.Warn("external-jwt: AAD fallback verifier init failed — internal service callers (bundler) will fail auth", "err", err)
+			} else {
+				fallback = bv
+			}
+		}
 		ejv, err := auth.NewExternalJWTVerifier(context.Background(), auth.ExternalJWTConfig{
 			IssuerURL:   cfg.JWTIssuer,
 			Audience:    cfg.JWTAudience,
 			ClientID:    cfg.JWTClientID,
 			DefaultRole: cfg.JWTDefaultRole,
+			Fallback:    fallback,
 		})
 		if err != nil {
 			logger.Error("external-jwt verifier init failed — API auth disabled", "err", err)
 		} else {
-			logger.Warn("ORBITAL_AUTH_MODE=external-jwt — every valid bearer maps to role "+cfg.JWTDefaultRole+". Intended for demo/dev; do not use in production without per-user role mapping.",
-				"issuer", cfg.JWTIssuer, "audience", cfg.JWTAudience, "client_id", cfg.JWTClientID)
-			apiAuth = []echo.MiddlewareFunc{ejv.RequireAuth()}
+			logger.Warn("ORBITAL_AUTH_MODE=external-jwt — Keycloak bearers (issuer "+cfg.JWTIssuer+") map to role "+cfg.JWTDefaultRole+"; other issuers fall back to AAD bearer auth. Intended for demo/dev; do not use in production without per-user role mapping.",
+				"issuer", cfg.JWTIssuer, "audience", cfg.JWTAudience, "client_id", cfg.JWTClientID, "aad_fallback", fallback != nil)
+			apiAuth = []echo.MiddlewareFunc{ejv.RequireAuth(), handler.ResolveUser(db, cfg.AdminEmailSet())}
 		}
 	case cfg.OIDCIssuerURL != "":
 		bv, err := auth.NewBearerVerifier(context.Background(), cfg.OIDCIssuerURL, cfg.OIDCClientID, cfg.AppTokenAllowedAppIDs)

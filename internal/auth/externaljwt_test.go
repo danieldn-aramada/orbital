@@ -448,6 +448,89 @@ func TestParseUnverifiedClaims(t *testing.T) {
 	})
 }
 
+// TestExternalJWT_FallbackRoutesByIssuer pins the regression that broke the
+// demo publish: external-jwt mode must NOT drop the AAD service-token path the
+// in-pod bundler depends on. A Keycloak-issued bearer is verified by the
+// external-jwt verifier (role stamped); a bearer from a different issuer (an
+// AAD service token) is routed to the fallback BearerVerifier so internal
+// service auth keeps working. If someone removes the fallback or the
+// issuer-routing, this test fails.
+func TestExternalJWT_FallbackRoutesByIssuer(t *testing.T) {
+	kcIssuer, kcSign := newTestOIDCServer(t)   // Keycloak sim
+	aadIssuer, aadSign := newTestOIDCServer(t) // AAD sim (the fallback's issuer)
+
+	const appID = "5fc832f6-843e-4207-93dd-b3c3a77c06f2"
+	bv, err := NewBearerVerifier(context.Background(), aadIssuer, "aad-audience", []string{appID})
+	if err != nil {
+		t.Fatalf("NewBearerVerifier (fallback): %v", err)
+	}
+	ejv, err := NewExternalJWTVerifier(context.Background(), ExternalJWTConfig{
+		IssuerURL:   kcIssuer,
+		Audience:    "account",
+		ClientID:    "aep-fleet-commander",
+		DefaultRole: "admin",
+		Fallback:    bv,
+	})
+	if err != nil {
+		t.Fatalf("NewExternalJWTVerifier: %v", err)
+	}
+
+	t.Run("keycloak issuer → external-jwt verifier (role stamped)", func(t *testing.T) {
+		token := kcSign(map[string]any{
+			"iss":                kcIssuer,
+			"aud":                "account",
+			"azp":                "aep-fleet-commander",
+			"sub":                "u1",
+			"exp":                time.Now().Add(time.Hour).Unix(),
+			"preferred_username": "user@example.com",
+		})
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		c, _ := echoCtx(req)
+
+		called := false
+		_ = ejv.RequireAuth()(func(c echo.Context) error {
+			called = true
+			if c.Get("role") != "admin" {
+				t.Errorf("keycloak caller should get role=admin; got %v", c.Get("role"))
+			}
+			return nil
+		})(c)
+		if !called {
+			t.Error("expected next called for keycloak token")
+		}
+	})
+
+	t.Run("AAD issuer → fallback verifier (bundler service token)", func(t *testing.T) {
+		// AAD app-only token: appid allowlisted, no user identity.
+		token := aadSign(map[string]any{
+			"iss":   aadIssuer,
+			"aud":   "aad-audience",
+			"sub":   appID,
+			"exp":   time.Now().Add(time.Hour).Unix(),
+			"appid": appID,
+		})
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		c, _ := echoCtx(req)
+
+		called := false
+		_ = ejv.RequireAuth()(func(c echo.Context) error {
+			called = true
+			if got := c.Get("user_name"); got != AppPrincipalPrefix+appID {
+				t.Errorf("AAD app token should route to fallback (user_name=%s...); got %v", AppPrincipalPrefix, got)
+			}
+			if c.Get("role") != nil {
+				t.Errorf("fallback (AAD) caller must NOT get a stamped role; got %v", c.Get("role"))
+			}
+			return nil
+		})(c)
+		if !called {
+			t.Error("expected next called for AAD service token via fallback")
+		}
+	})
+}
+
 func TestExternalJWT_DefaultRoleDev(t *testing.T) {
 	issuerURL, sign := newTestOIDCServer(t)
 	v := buildExternalJWTVerifier(t, issuerURL, "account", "aep-fleet-commander", "dev")
