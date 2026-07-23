@@ -23,20 +23,24 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// importRequest is the POST /api/v1/import body.
+type importRequest struct {
+	// Tag is the OCI artifact tag to pull and import. Required.
+	Tag string `json:"tag" example:"v3" validate:"required"`
+}
+
 // @Summary     Trigger import
 // @Description Starts an async OCI artifact pull and DGraph import for the requested tag. Returns 409 if an import is already running.
 // @Tags        import
 // @Accept      json
 // @Produce     json
-// @Param       body body object true "Import request" SchemaExample({"tag":"v3"})
+// @Param       body body importRequest true "Import request"
 // @Success     202 {object} map[string]string
 // @Failure     400 {object} map[string]string
 // @Failure     409 {object} map[string]string
 // @Router      /api/v1/import [post]
 func (s *Server) triggerImport(c echo.Context) error {
-	var req struct {
-		Tag string `json:"tag"`
-	}
+	var req importRequest
 	if err := c.Bind(&req); err != nil || req.Tag == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "tag is required"})
 	}

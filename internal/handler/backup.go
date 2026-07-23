@@ -321,12 +321,21 @@ func renderTestConnectionFragment(c echo.Context, pingErr error) error {
 	return c.HTML(http.StatusOK, `<span class="has-text-success"><i class="fa-solid fa-circle-check"></i> Connected</span>`)
 }
 
+// backupRequest is the optional POST /api/v1/backup body.
+type backupRequest struct {
+	// Trigger records what initiated the backup: "manual" (default) or
+	// "scheduled". Optional — an empty body is treated as "manual".
+	Trigger string `json:"trigger" example:"manual"`
+}
+
 // Trigger handles POST /api/v1/backup
 //
 // @Summary     Trigger backup
 // @Description Triggers an async DGraph backup to configured S3-compatible or Azure Blob storage. Returns immediately with a job ID. Returns 409 if a backup is already in progress.
 // @Tags        backup
+// @Accept      json
 // @Produce     json
+// @Param       body body backupRequest false "Backup request (optional; defaults trigger=manual)"
 // @Success     202 {object} triggerResponse
 // @Failure     409 {object} map[string]string
 // @Router      /api/v1/backup [post]
@@ -359,9 +368,7 @@ func (h *BackupHandler) Trigger(c echo.Context) error {
 	initiatedBy := actorFromContext(c)
 
 	// Optional body: {"trigger":"scheduled"} — defaults to "manual".
-	var body struct {
-		Trigger string `json:"trigger"`
-	}
+	var body backupRequest
 	_ = c.Bind(&body)
 	triggerVal := backup.TriggerManual
 	if body.Trigger == string(backup.TriggerScheduled) {

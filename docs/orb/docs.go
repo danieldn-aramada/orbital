@@ -235,7 +235,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/orbserver.importRequest"
                         }
                     }
                 ],
@@ -580,6 +580,10 @@ const docTemplate = `{
                 "importedAt": {
                     "type": "string"
                 },
+                "initiatedBy": {
+                    "description": "\"manual\" (default) or \"auto\"",
+                    "type": "string"
+                },
                 "layers": {
                     "type": "array",
                     "items": {
@@ -626,6 +630,19 @@ const docTemplate = `{
                 },
                 "sizeBytes": {
                     "type": "integer"
+                }
+            }
+        },
+        "orbserver.importRequest": {
+            "type": "object",
+            "required": [
+                "tag"
+            ],
+            "properties": {
+                "tag": {
+                    "description": "Tag is the OCI artifact tag to pull and import. Required.",
+                    "type": "string",
+                    "example": "v3"
                 }
             }
         },

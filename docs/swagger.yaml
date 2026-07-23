@@ -40,6 +40,15 @@ definitions:
       tag:
         type: string
     type: object
+  handler.backupRequest:
+    properties:
+      trigger:
+        description: |-
+          Trigger records what initiated the backup: "manual" (default) or
+          "scheduled". Optional — an empty body is treated as "manual".
+        example: manual
+        type: string
+    type: object
   handler.backupResponse:
     properties:
       checksum:
@@ -89,6 +98,23 @@ definitions:
       who:
         type: string
     type: object
+  handler.exportRequest:
+    properties:
+      download:
+        description: |-
+          Download selects the mode. false (default) exports and publishes to OCI,
+          discarding the zip on completion. true exports only and retains the zip
+          for GET /api/v1/export/jobs/{jobId}/download.
+        example: false
+        type: boolean
+      orbId:
+        description: OrbID identifies the data center to export, in "namespace:name"
+          form. Required.
+        example: alaska:dc-01
+        type: string
+    required:
+    - orbId
+    type: object
   handler.putResolutionBody:
     properties:
       action:
@@ -130,6 +156,22 @@ definitions:
       status:
         type: string
     type: object
+  handler.restoreRequest:
+    properties:
+      backupId:
+        description: BackupID is the UUID of the stored backup to restore from. Required.
+        example: a1b2c3d4-0000-0000-0000-000000000000
+        type: string
+      confirmSchemaMismatch:
+        description: |-
+          ConfirmSchemaMismatch must be true to proceed when the backup's schema
+          version differs from the running schema. false (default) makes such a
+          restore fail fast rather than risk a mismatched load.
+        example: false
+        type: boolean
+    required:
+    - backupId
+    type: object
   handler.statusResponse:
     properties:
       completedAt:
@@ -143,6 +185,14 @@ definitions:
       error:
         type: string
       id:
+        type: string
+      phase:
+        description: |-
+          Phase surfaces the fine-grained step the atomic goroutine is on, for
+          clients that want to render a per-step progress list. Coarse `status`
+          stays authoritative for terminal-state gating. Values: pending,
+          exporting, bundling, pushing, signing, completed, failed. Empty
+          only if derivation raced with the initial insert.
         type: string
       published:
         type: boolean
@@ -261,9 +311,17 @@ paths:
       - audit
   /api/v1/backup:
     post:
+      consumes:
+      - application/json
       description: Triggers an async DGraph backup to configured S3-compatible or
         Azure Blob storage. Returns immediately with a job ID. Returns 409 if a backup
         is already in progress.
+      parameters:
+      - description: Backup request (optional; defaults trigger=manual)
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/handler.backupRequest'
       produces:
       - application/json
       responses:
@@ -648,7 +706,7 @@ paths:
         name: body
         required: true
         schema:
-          type: object
+          $ref: '#/definitions/handler.exportRequest'
       produces:
       - application/json
       responses:
@@ -860,12 +918,12 @@ paths:
       description: Restores DGraph blue from a stored backup. Blocked if any backup,
         export, or restore job is in progress.
       parameters:
-      - description: backupId (UUID)
+      - description: Restore request
         in: body
         name: body
         required: true
         schema:
-          type: object
+          $ref: '#/definitions/handler.restoreRequest'
       produces:
       - application/json
       responses:

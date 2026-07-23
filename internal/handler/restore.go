@@ -178,6 +178,16 @@ func toRestoreJobResponse(j *ent.RestoreJob) restoreJobResponse {
 	return r
 }
 
+// restoreRequest is the POST /api/v1/restore body.
+type restoreRequest struct {
+	// BackupID is the UUID of the stored backup to restore from. Required.
+	BackupID string `json:"backupId" example:"a1b2c3d4-0000-0000-0000-000000000000" validate:"required"`
+	// ConfirmSchemaMismatch must be true to proceed when the backup's schema
+	// version differs from the running schema. false (default) makes such a
+	// restore fail fast rather than risk a mismatched load.
+	ConfirmSchemaMismatch bool `json:"confirmSchemaMismatch" example:"false"`
+}
+
 // Trigger handles POST /api/v1/restore
 //
 // @Summary     Trigger a DGraph restore
@@ -185,16 +195,13 @@ func toRestoreJobResponse(j *ent.RestoreJob) restoreJobResponse {
 // @Tags        backup
 // @Accept      json
 // @Produce     json
-// @Param       body body object true "backupId (UUID)"
+// @Param       body body restoreRequest true "Restore request"
 // @Success     202 {object} triggerResponse
 // @Failure     400 {object} map[string]string
 // @Failure     409 {object} map[string]string
 // @Router      /api/v1/restore [post]
 func (h *RestoreHandler) Trigger(c echo.Context) error {
-	var req struct {
-		BackupID              string `json:"backupId"`
-		ConfirmSchemaMismatch bool   `json:"confirmSchemaMismatch"`
-	}
+	var req restoreRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.ErrBadRequest
 	}

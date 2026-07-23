@@ -41,6 +41,9 @@ definitions:
         type: string
       importedAt:
         type: string
+      initiatedBy:
+        description: '"manual" (default) or "auto"'
+        type: string
       layers:
         items:
           $ref: '#/definitions/orb.LayerRecord'
@@ -73,6 +76,15 @@ definitions:
         type: string
       sizeBytes:
         type: integer
+    type: object
+  orbserver.importRequest:
+    properties:
+      tag:
+        description: Tag is the OCI artifact tag to pull and import. Required.
+        example: v3
+        type: string
+    required:
+    - tag
     type: object
   orbserver.importSnapshot:
     properties:
@@ -271,7 +283,7 @@ paths:
         name: body
         required: true
         schema:
-          type: object
+          $ref: '#/definitions/orbserver.importRequest'
       produces:
       - application/json
       responses:

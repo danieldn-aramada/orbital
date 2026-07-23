@@ -138,20 +138,27 @@ type statusResponse struct {
 
 // Trigger handles POST /api/v1/export
 //
+// exportRequest is the POST /api/v1/export body.
+type exportRequest struct {
+	// OrbID identifies the data center to export, in "namespace:name" form. Required.
+	OrbID string `json:"orbId" example:"alaska:dc-01" validate:"required"`
+	// Download selects the mode. false (default) exports and publishes to OCI,
+	// discarding the zip on completion. true exports only and retains the zip
+	// for GET /api/v1/export/jobs/{jobId}/download.
+	Download bool `json:"download" example:"false"`
+}
+
 // @Summary     Trigger subgraph export
 // @Description Triggers an async atomic export of the data center's configuration subgraph. When download=false (default) AND OCI is configured, the export chains into an OCI publish and the zip is discarded on completion. When download=true (or OCI is not configured), the export runs in download-only mode and the zip is retained on disk for the client to fetch via GET /api/v1/export/jobs/{jobId}/download. Returns 202 with a job ID immediately; poll GET /api/v1/export/jobs/{jobId} until terminal state. Returns 409 if an export or restore is already in progress.
 // @Tags        export
 // @Accept      json
 // @Produce     json
-// @Param       body body object true "Export request" SchemaExample({"orbId":"alaska:dc-01","download":false})
+// @Param       body body exportRequest true "Export request"
 // @Success     202 {object} triggerResponse
 // @Failure     409 {object} map[string]string
 // @Router      /api/v1/export [post]
 func (h *Export) Trigger(c echo.Context) error {
-	var req struct {
-		OrbID    string `json:"orbId"`
-		Download bool   `json:"download"`
-	}
+	var req exportRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}

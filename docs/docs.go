@@ -95,6 +95,9 @@ const docTemplate = `{
         "/api/v1/backup": {
             "post": {
                 "description": "Triggers an async DGraph backup to configured S3-compatible or Azure Blob storage. Returns immediately with a job ID. Returns 409 if a backup is already in progress.",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -102,6 +105,16 @@ const docTemplate = `{
                     "backup"
                 ],
                 "summary": "Trigger backup",
+                "parameters": [
+                    {
+                        "description": "Backup request (optional; defaults trigger=manual)",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/handler.backupRequest"
+                        }
+                    }
+                ],
                 "responses": {
                     "202": {
                         "description": "Accepted",
@@ -661,7 +674,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/handler.exportRequest"
                         }
                     }
                 ],
@@ -973,12 +986,12 @@ const docTemplate = `{
                 "summary": "Trigger a DGraph restore",
                 "parameters": [
                     {
-                        "description": "backupId (UUID)",
+                        "description": "Restore request",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/handler.restoreRequest"
                         }
                     }
                 ],
@@ -1278,6 +1291,16 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.backupRequest": {
+            "type": "object",
+            "properties": {
+                "trigger": {
+                    "description": "Trigger records what initiated the backup: \"manual\" (default) or\n\"scheduled\". Optional — an empty body is treated as \"manual\".",
+                    "type": "string",
+                    "example": "manual"
+                }
+            }
+        },
         "handler.backupResponse": {
             "type": "object",
             "properties": {
@@ -1353,6 +1376,24 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.exportRequest": {
+            "type": "object",
+            "required": [
+                "orbId"
+            ],
+            "properties": {
+                "download": {
+                    "description": "Download selects the mode. false (default) exports and publishes to OCI,\ndiscarding the zip on completion. true exports only and retains the zip\nfor GET /api/v1/export/jobs/{jobId}/download.",
+                    "type": "boolean",
+                    "example": false
+                },
+                "orbId": {
+                    "description": "OrbID identifies the data center to export, in \"namespace:name\" form. Required.",
+                    "type": "string",
+                    "example": "alaska:dc-01"
+                }
+            }
+        },
         "handler.putResolutionBody": {
             "type": "object",
             "properties": {
@@ -1415,6 +1456,24 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.restoreRequest": {
+            "type": "object",
+            "required": [
+                "backupId"
+            ],
+            "properties": {
+                "backupId": {
+                    "description": "BackupID is the UUID of the stored backup to restore from. Required.",
+                    "type": "string",
+                    "example": "a1b2c3d4-0000-0000-0000-000000000000"
+                },
+                "confirmSchemaMismatch": {
+                    "description": "ConfirmSchemaMismatch must be true to proceed when the backup's schema\nversion differs from the running schema. false (default) makes such a\nrestore fail fast rather than risk a mismatched load.",
+                    "type": "boolean",
+                    "example": false
+                }
+            }
+        },
         "handler.statusResponse": {
             "type": "object",
             "properties": {
@@ -1434,6 +1493,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "id": {
+                    "type": "string"
+                },
+                "phase": {
+                    "description": "Phase surfaces the fine-grained step the atomic goroutine is on, for\nclients that want to render a per-step progress list. Coarse ` + "`" + `status` + "`" + `\nstays authoritative for terminal-state gating. Values: pending,\nexporting, bundling, pushing, signing, completed, failed. Empty\nonly if derivation raced with the initial insert.",
                     "type": "string"
                 },
                 "published": {
