@@ -87,6 +87,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		},
 	}))
 
+	externalJWTMode := cfg.AuthMode == "external-jwt"
 	oidcEnabled := cfg.OIDCIssuerURL != "" && cfg.OIDCClientSecret != ""
 	if cfg.OIDCIssuerURL != "" && cfg.OIDCClientSecret == "" {
 		logger.Warn("ORBITAL_OIDC_CLIENT_SECRET is not set — SSO login disabled")
@@ -98,16 +99,36 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	// endpoint. Built once and reused so /graphql and the rest of the
 	// API surface stay in sync.
 	//
-	// Dev mode (cfg.Dev=true) leaves apiAuth empty so machine-to-machine
-	// callers like cb-bundler can query /graphql plain-HTTP without an OAuth2
-	// token. UI flows still work because the session-cookie middleware higher
-	// up already populates user_id/user_email from the cookie, and the
-	// per-handler authz (RequireRole on /api/v1, handler-level isMutation
-	// check on /graphql) reads those directly. SSO is unaffected —
-	// /auth/login and /auth/callback aren't on apiAuth. Production
-	// (Dev=false) keeps strict bearer verification.
+	// Three modes:
+	//   - external-jwt (ORBITAL_AUTH_MODE=external-jwt): API/GraphQL requests
+	//     accept a bearer signed by ORBITAL_JWT_ISSUER (assigned
+	//     ORBITAL_JWT_DEFAULT_ROLE via context) OR a session cookie (role
+	//     resolved from the DB). The session fallback keeps orbital's own UI
+	//     usable — humans sign in via local/OIDC login; AEP's proxied calls
+	//     carry a bearer. Login routes stay registered (oidcEnabled unchanged).
+	//     See AUTH.md § External JWT mode.
+	//   - Dev (cfg.Dev=true): apiAuth stays empty so machine-to-machine
+	//     callers like cb-bundler can query /graphql plain-HTTP. Session
+	//     middleware still populates user info for the UI.
+	//   - Production OIDC (Dev=false, OIDCIssuerURL set): strict bearer
+	//     verification + user resolution against PostgreSQL.
 	var apiAuth []echo.MiddlewareFunc
-	if cfg.OIDCIssuerURL != "" {
+	switch {
+	case externalJWTMode:
+		ejv, err := auth.NewExternalJWTVerifier(context.Background(), auth.ExternalJWTConfig{
+			IssuerURL:   cfg.JWTIssuer,
+			Audience:    cfg.JWTAudience,
+			ClientID:    cfg.JWTClientID,
+			DefaultRole: cfg.JWTDefaultRole,
+		})
+		if err != nil {
+			logger.Error("external-jwt verifier init failed — API auth disabled", "err", err)
+		} else {
+			logger.Warn("ORBITAL_AUTH_MODE=external-jwt — every valid bearer maps to role "+cfg.JWTDefaultRole+". Intended for demo/dev; do not use in production without per-user role mapping.",
+				"issuer", cfg.JWTIssuer, "audience", cfg.JWTAudience, "client_id", cfg.JWTClientID)
+			apiAuth = []echo.MiddlewareFunc{ejv.RequireAuth()}
+		}
+	case cfg.OIDCIssuerURL != "":
 		bv, err := auth.NewBearerVerifier(context.Background(), cfg.OIDCIssuerURL, cfg.OIDCClientID, cfg.AppTokenAllowedAppIDs)
 		if err != nil {
 			logger.Warn("bearer verifier init failed — API auth disabled", "err", err)
@@ -119,7 +140,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		} else {
 			apiAuth = []echo.MiddlewareFunc{bv.RequireAuth(), handler.ResolveUser(db, cfg.AdminEmailSet())}
 		}
-	} else {
+	default:
 		logger.Warn("ORBITAL_OIDC_ISSUER_URL is not set — API auth disabled")
 	}
 

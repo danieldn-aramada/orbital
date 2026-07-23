@@ -138,6 +138,24 @@ func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 			if db == nil {
 				return next(c)
 			}
+			// External-JWT callers (ORBITAL_AUTH_MODE=external-jwt) carry a
+			// pre-mapped role from the middleware, since they aren't provisioned
+			// into orbital's users table. Trust it directly and skip the DB
+			// lookup below.
+			if roleStr, _ := c.Get("role").(string); roleStr != "" {
+				if RoleAtLeast(user.Role(roleStr), minRole) {
+					return next(c)
+				}
+				slog.Default().Warn("authorization denied",
+					"actor", actorFromContext(c),
+					"method", c.Request().Method,
+					"uri", c.Request().URL.Path,
+					"required_role", string(minRole),
+					"user_role", roleStr,
+					"reason", "external_jwt_role_below_required",
+				)
+				return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("role %q is below required %q for this action", roleStr, minRole))
+			}
 			// App-only (client credentials) callers were authenticated by the
 			// BearerVerifier allowlist (ORBITAL_APP_TOKEN_ALLOWED_APPIDS). MVP
 			// policy: any allowlist-passed app caller is treated as `dev`-

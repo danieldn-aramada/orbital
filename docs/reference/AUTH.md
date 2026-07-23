@@ -65,6 +65,39 @@ Activated by `ORBITAL_OAUTH2_DEVICE_CODE=true`. The login modal shows a "Sign in
 - **Bearer token audience is the bare client GUID** — Azure AD v2 sets `aud` to bare GUID (e.g. `5fc832f6-...`), not `api://5fc832f6-...`. Configure `go-oidc` with `cfg.OIDCClientID` directly, not `"api://"+cfg.OIDCClientID`.
 - **`internal/auth/bearer.go` validates signature, issuer, and audience only — not `scp`/`scope`.** Authorization is enforced downstream by `RequireRole` against the local `users.role` column. Adding scope-based checks would duplicate logic and tie us to Azure AD specifics.
 
+## External JWT mode (`ORBITAL_AUTH_MODE=external-jwt`)
+
+An alternative auth stack that trusts bearer tokens issued by an external OIDC provider (e.g. AEP's Keycloak `aep-fleet-commander` client) instead of running orbital's own login flow. Intended for API-only integrations where an upstream service has already authenticated the user and is proxying to orbital.
+
+**Config:**
+
+| Var | Purpose |
+|---|---|
+| `ORBITAL_AUTH_MODE=external-jwt` | Enables this mode. Mutually exclusive with the normal OIDC + session flow. |
+| `ORBITAL_JWT_ISSUER` | The OIDC issuer URL. JWKS discovered via `/.well-known/openid-configuration`. |
+| `ORBITAL_JWT_AUDIENCE` | Required `aud` claim value. |
+| `ORBITAL_JWT_CLIENT_ID` | Required `azp` claim value — the trust anchor. See below. |
+| `ORBITAL_JWT_DEFAULT_ROLE` | Role every valid token maps to: `readonly`, `dev`, or `admin` (default `admin`). |
+
+**What the middleware does per request:** if a `Bearer` token is present, validates signature via JWKS, checks `iss`/`aud`/`exp` (standard OIDC), checks `azp == ORBITAL_JWT_CLIENT_ID`, extracts `email`/`preferred_username`/`name`/`sub` onto context, sets `role` = configured default. No PostgreSQL provisioning — external users don't appear in orbital's `users` table; `RequireRole` reads `role` from context and grants directly. If NO bearer is present, it falls back to session-cookie auth (see below).
+
+**UI still works — session fallback.** A browser can't attach a bearer to a plain page navigation, so external-jwt mode does NOT disable orbital's own login. The middleware accepts a bearer OR an authenticated session cookie. Humans sign in via local login (or OIDC if configured) and browse the UI with a session; AEP's proxied API calls carry a bearer. Session callers get their role from the DB (`RequireRole` looks it up by `user_id`) — the `ORBITAL_JWT_DEFAULT_ROLE` applies only to bearer callers. Login routes, session, and CSRF stay registered exactly as in the default mode.
+
+**Why `azp` is load-bearing (do not remove):** the demo config accepts `aud: "account"` because that's what Keycloak's built-in generic audience is, and we can't require the AEP team to add a custom orbital-scoped audience mapper to their `aep-fleet-commander` client for a demo. `aud` therefore doesn't identify *which* Keycloak client the token was minted for. Without the `azp` check, any token signed by the realm (including future clients registered by unrelated teams) would validate as an orbital admin. `azp` bounds trust to a specific client. RFC 9068 §4 explicitly requires client-id validation when authorization depends on client identity.
+
+**Post-demo cleanup path:** if AEP adds an audience mapper that includes `orbital` in the token's `aud`, set `ORBITAL_JWT_AUDIENCE=orbital` and the `azp` check becomes redundant defense-in-depth (safe to keep, safe to relax). Do not remove the config field — it lets future integrations use the same fallback pattern.
+
+**Non-goals of this mode:**
+- Not for per-user role granularity *on bearer callers*. Every valid token maps to `ORBITAL_JWT_DEFAULT_ROLE`. If you need finer control, register a role mapper in the upstream OIDC provider and switch to the normal OIDC flow. (Session/UI users still get per-user roles from the DB.)
+- Not silent SSO between AEP and orbital's UI. A human visiting orbital's UI directly logs in the normal way (local/OIDC); they do not inherit AEP's Keycloak session. Silent SSO would require registering orbital as a Keycloak client — deferred post-demo.
+- Not production-safe as configured for the demo (all tokens → admin). Startup logs a WARN — heed it.
+
+**Auth-failure logging attributes identity ONLY when the signature is valid.** An expired token (go-oidc checks `exp` *after* signature/iss/aud) and an `azp` mismatch (checked after `Verify()` succeeds) log `subject` (the stable, authoritative `sub`) + `user_email` — the claims are cryptographically authentic. Signature/issuer/malformed failures log the reason + source IP only, never the purported identity: those claims are attacker-controllable, and logging them as identity is a log-forging vector. Do NOT "simplify" this to always decode-and-log claims. Pinned by `TestExternalJWT_ExpiredToken_LogsIdentity`. Every auth-failure WARN carries `request.id` to correlate with the access-log line.
+
+**The human identifier is email-preferred, matching `actorFromContext`.** Both the success path (`user_email` on context) and the failure logs use `externalJWTClaims.actorEmail()` — email, falling back to `preferred_username`. Same value everywhere so an operator grepping an email finds successful audit events AND auth failures. `preferred_username` alone is wrong here: OIDC does not guarantee it is unique or stable, and orbital keys identity on email.
+
+**Regression guard:** `internal/auth/externaljwt_test.go` covers all reject paths (missing bearer, expired, wrong `aud`, wrong `azp`, missing `azp`) and the identity-logging convention. If you weaken any check, expect one of those tests to catch it.
+
 ## Third-party API clients
 
 Orbital is an OAuth **resource server**, not an identity provider. Client applications authenticate with Azure AD directly and present the resulting JWT to orbital. Orbital does not issue tokens, proxy auth, or expose a device-code endpoint for external clients — `/auth/device` is for orbital's own browser UI.

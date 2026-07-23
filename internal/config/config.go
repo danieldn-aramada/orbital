@@ -65,6 +65,16 @@ type Config struct {
 	// orbital audience. See docs/reference/AUTH.md § App Caller Authorization.
 	AppTokenAllowedAppIDs  []string      `envconfig:"ORBITAL_APP_TOKEN_ALLOWED_APPIDS" default:"5fc832f6-843e-4207-93dd-b3c3a77c06f2"`
 	AdminEmails            string        `envconfig:"ORBITAL_ADMIN_EMAILS"            default:"admin@armada.ai"` // comma-separated emails promoted to admin on first OIDC login
+	// AuthMode selects the authentication stack. Empty (default) keeps today's
+	// behavior — session cookie + optional OIDC bearer per OIDCIssuerURL. Set to
+	// "external-jwt" to trust bearer tokens issued by an external OIDC provider
+	// (e.g. AEP's Keycloak client) instead of orbital's own login flow. See
+	// docs/reference/AUTH.md § External JWT Mode.
+	AuthMode               string        `envconfig:"ORBITAL_AUTH_MODE"               default:""`
+	JWTIssuer              string        `envconfig:"ORBITAL_JWT_ISSUER"              default:""` // e.g. https://keycloak.example.com/realms/foo
+	JWTAudience            string        `envconfig:"ORBITAL_JWT_AUDIENCE"            default:""` // expected `aud` claim
+	JWTClientID            string        `envconfig:"ORBITAL_JWT_CLIENT_ID"           default:""` // required `azp` claim — the trust anchor when aud is a generic default like "account"
+	JWTDefaultRole         string        `envconfig:"ORBITAL_JWT_DEFAULT_ROLE"        default:"admin"` // role every valid token maps to: readonly | dev | admin
 	OCIRegistry            string        `envconfig:"ORBITAL_OCI_REGISTRY"            default:"localhost:5001"`
 	OCIRepo                string        `envconfig:"ORBITAL_OCI_REPO"                default:"orbital"`
 	OCIUsername            string        `envconfig:"ORBITAL_OCI_USERNAME"            default:""`
@@ -110,6 +120,18 @@ func New() (*Config, error) {
 	}
 	if !cfg.Dev && cfg.SessionHMACKey == "local-dev-hmac-key-change-in-prod" {
 		return nil, fmt.Errorf("ORBITAL_SESSION_HMAC_KEY must be set to a secret value in production (ORBITAL_DEV=false)")
+	}
+	if cfg.AuthMode == "external-jwt" {
+		if cfg.JWTIssuer == "" || cfg.JWTAudience == "" || cfg.JWTClientID == "" {
+			return nil, fmt.Errorf("ORBITAL_AUTH_MODE=external-jwt requires ORBITAL_JWT_ISSUER, ORBITAL_JWT_AUDIENCE, ORBITAL_JWT_CLIENT_ID")
+		}
+		switch cfg.JWTDefaultRole {
+		case "readonly", "dev", "admin":
+		default:
+			return nil, fmt.Errorf("ORBITAL_JWT_DEFAULT_ROLE must be one of readonly|dev|admin, got %q", cfg.JWTDefaultRole)
+		}
+	} else if cfg.AuthMode != "" {
+		return nil, fmt.Errorf("ORBITAL_AUTH_MODE must be empty or \"external-jwt\", got %q", cfg.AuthMode)
 	}
 	cfg.sessionKeys = auth.NewSessionKeys(cfg.SessionHMACKey, cfg.SessionEncryptionKey, cfg.Dev, cfg.CookieSecure)
 	return &cfg, nil
