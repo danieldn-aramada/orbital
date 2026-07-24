@@ -139,6 +139,7 @@ Open both UIs side by side. Log in as `admin@armada.ai` / `admin` (or read-only 
 
 | Task | Doc |
 |---|---|
+| Call the API (common queries + REST) | [`docs/api-cheatsheet.md`](docs/api-cheatsheet.md) |
 | Contribute code, run tests, cut releases | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 | Understand the divergence model | [`docs/reference/DIVERGENCE.md`](docs/reference/DIVERGENCE.md) |
 | Work on UI / HTMX / templates | [`docs/reference/UI.md`](docs/reference/UI.md) |

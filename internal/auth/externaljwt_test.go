@@ -529,6 +529,40 @@ func TestExternalJWT_FallbackRoutesByIssuer(t *testing.T) {
 			t.Error("expected next called for AAD service token via fallback")
 		}
 	})
+
+	t.Run("AAD issuer, USER token → fallback (orbctl login) sets user_email, no blanket role", func(t *testing.T) {
+		// orbctl login produces an AAD user token (email claim, no appid).
+		// In external-jwt mode it must route to the AAD fallback, get its
+		// identity extracted, and NOT receive the blanket ORBITAL_JWT_DEFAULT_ROLE
+		// — its role is resolved from the users table downstream (ResolveUser +
+		// RequireRole). This guards orbctl compatibility.
+		token := aadSign(map[string]any{
+			"iss":                aadIssuer,
+			"aud":                "aad-audience",
+			"sub":                "u-orbctl",
+			"exp":                time.Now().Add(time.Hour).Unix(),
+			"name":               "CLI User",
+			"preferred_username": "cli.user@armada.ai",
+		})
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		c, _ := echoCtx(req)
+
+		called := false
+		_ = ejv.RequireAuth()(func(c echo.Context) error {
+			called = true
+			if got := c.Get("user_email"); got != "cli.user@armada.ai" {
+				t.Errorf("orbctl AAD user token should set user_email via fallback; got %v", got)
+			}
+			if c.Get("role") != nil {
+				t.Errorf("AAD user must NOT get the blanket external-jwt role (users table governs); got %v", c.Get("role"))
+			}
+			return nil
+		})(c)
+		if !called {
+			t.Error("expected next called for AAD user token via fallback (orbctl compat)")
+		}
+	})
 }
 
 func TestExternalJWT_DefaultRoleDev(t *testing.T) {

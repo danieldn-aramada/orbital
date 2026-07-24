@@ -182,6 +182,31 @@ Benchmark DGraph query latency under realistic load, produce AKS node SKU cost e
 | Replace `title=""` tooltips with Tippy.js | 9+ usages in `divergence-reports.gohtml`, `users.gohtml`, `backup-jobs-tbody.gohtml`, `cluster-tab.gohtml`. Native browser tooltips have ~1s delay, no theming, no positioning control. Stop using `title=` for user-facing text; migrate to Tippy.js (~10KB, matches Linear/Vercel/Stripe convention). |
 | Refactor bundler URL config DSL | `ORBITAL_BUNDLER_URLS=configbundle-bundler=http://...` is a custom micro-DSL in one env var; already caused one bug (preflight probed the raw `name=url` string as a URL). Better: one env var per bundler (`ORBITAL_BUNDLER_CONFIGBUNDLE=http://...`), or ConfigMap-mounted YAML for structured validation. |
 
+### Audit backlog — May 2026 audit, triaged 2026-07-23
+
+> Open items from `docs/findings/additional-findings.md` + `docs/findings/security-and-deployment-findings.md`, each verified against current code and absorbed here; both files deleted. The security audit's two **Critical** findings (unauthenticated `/graphql` → full mutation surface; missing readiness probe) and "RBAC defined but not enforced" were already **FIXED** (Spike 11 + the single authenticated `/graphql` group + `/healthz` probe) — not carried over. **No item below is an OSS release-blocker.**
+
+| Item | Notes |
+|---|---|
+| OIDC config leaks real prod identifiers | Remove real Azure AD tenant + app-ID defaults; add fail-on-default-when-`!Dev` assertions (mirror the HMAC check) — `config.go:55-66,121`. (A.1) |
+| Rate limiting absent | Per-IP on `/graphql`, tighter on `/user/login` (credential stuffing) — `server.go`. (S.12) |
+| No request body size limit | `middleware.BodyLimit`; unbounded `io.ReadAll` at `graphql.go:89` = memory-exhaustion DoS. (S.7) |
+| OIDC-unreachable degrades to no-auth | Fail startup instead of Warn + nil `apiAuth` — an air-gap deploy can boot unauthenticated — `server.go:144-158`. (S.16, security-relevant) |
+| No audit on destructive deletes | Add audit events to `BackupHandler.Delete` (`backup.go:509`) and `OCI.DeleteArtifact` (`oci.go:188`). (S.10) |
+| MVCC silent-pass on bad version type | `toFloat64` → `(float64, ok)`; unparseable version = 409, not silent pass — `graphql.go:173,623-634`. (A.3) |
+| OIDC nonce + constant-time state | Add `nonce` binding; `subtle.ConstantTimeCompare` for state — `oidc.go:95`. (S.14, S.15) |
+| Export/restore job-creation TOCTOU | Serialize (mutex or unique partial index); concurrent triggers both pass the pending-job check → scratch-DGraph corruption — `export.go:216-230`. (S.8) |
+| Async jobs orphaned on shutdown | Track goroutines (WaitGroup + cancellable ctx); SIGTERM mid-restore can leave DGraph wiped — `server.go`, `restore.go:286`. (S.9) |
+| Orb registration not unique | Unique indexes on `datacenter_id` + `public_key` — `ent/schema/orb.go`. (S.11) |
+| Job-status columns unindexed | `index.Fields("status")` on ExportJob/Backup/RestoreJob; conflict queries are full table scans. (A.7) |
+| Backup zip in `/tmp`, defer-only cleanup | Write to a controlled dir + orphan reaper — `backup.go:627-631`. (A.2) |
+| Export scratch-dir leak | `defer os.RemoveAll(jobScratchDir)` after MkdirAll — `export.go:900`. (A.4) |
+| `orb scan` fabricates success | Return "not implemented" instead of hardcoded "Found 3 BMC interfaces" until Spike 2 real discovery — `scan.go:16`. (A.6) |
+| GET `/export/jobs` writes to DB | Move `StatusStale` marking out of the List handler (HTTP-safety violation; also swallows the write error) — `export.go:255-262`. (S.18) |
+| OCI push/sign dual credential stacks | Unify ORAS + go-containerregistry creds, or document the coupling — `publisher.go:316-318,371-373`. (A.5) |
+| DGraph query string interpolation | Parameterize interpolated queries (`%q`-quoted, low practical risk) — `export.go:963,1049,1223`. (S.17) |
+| Orbital templates not embedded | orbital handlers still `ParseFiles` from disk; orb already embeds. Deployment note, non-security — `web/embed.go`. (D.1) |
+
 ### Track B — DGraph client interface first (requires 15–20 min Opus design session before Sonnet implements)
 
 | Item | Notes |
