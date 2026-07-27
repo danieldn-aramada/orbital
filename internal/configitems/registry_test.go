@@ -203,8 +203,8 @@ func TestParity_WithLegacyHandMaintainedValues(t *testing.T) {
 		"EksaKubernetesCluster": "id orbId name version kubernetesVersion cni environment clusterType",
 		"KubernetesNode":        "id orbId name version role",
 		"ClusterBackup":         "id orbId name version",
-		"EtcdBackup":            "id orbId name version enabled schedule location",
-		"VeleroBackup":          "id orbId name version enabled schedule location",
+		"EtcdBackup":            "id orbId name version enabled schedule location retentionDays",
+		"VeleroBackup":          "id orbId name version enabled schedule location retentionDays",
 		"S3Sync":                "id orbId name version enabled",
 	}
 	for name, want := range legacyBeforeFields {

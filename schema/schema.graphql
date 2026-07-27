@@ -133,7 +133,7 @@ interface KubernetesCluster {
     cni: String @search(by: [term])         # cilium, calico, flannel
     environment: String @search(by: [term]) # prod, staging, dev
     description: String                     # free-text purpose ("Aramco ISV", "SpectroCloud POC")
-    provider: String @search(by: [term])    # eksa, maas, metal3 — canonical token, single source for UI display + filter
+    provider: String @search(by: [term, hash])    # eksa, maas, metal3 — canonical token, single source for UI display + filter
 
     dataCenter: DataCenter!
     nodes: [KubernetesNode] @hasInverse(field: cluster)
@@ -171,6 +171,7 @@ type EtcdBackup implements ConfigItem {
     enabled: Boolean @search   
     schedule: String
     location: String @search(by: [hash])
+    retentionDays: Int
 
     clusterBackupEtcd: ClusterBackup @hasInverse(field: etcd)
 }
@@ -179,6 +180,7 @@ type VeleroBackup implements ConfigItem {
     enabled: Boolean @search
     schedule: String
     location: String @search(by: [hash])
+    retentionDays: Int
 
     clusterBackupVelero: ClusterBackup @hasInverse(field: velero)
 }

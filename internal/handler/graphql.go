@@ -107,15 +107,8 @@ func (h *GraphQL) Handle(c echo.Context) error {
 	}
 
 	// Enforce dev-or-admin role for all GraphQL mutations.
-	if h.db != nil {
-		userID, _ := c.Get("user_id").(int)
-		if userID == 0 {
-			return c.JSON(http.StatusForbidden, map[string]string{"error": "dev or admin role required for mutations"})
-		}
-		u, err := h.db.User.Get(c.Request().Context(), userID)
-		if err != nil || !RoleAtLeast(u.Role, user.RoleDev) {
-			return c.JSON(http.StatusForbidden, map[string]string{"error": "dev or admin role required for mutations"})
-		}
+	if !h.authorizeMutation(c) {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "dev or admin role required for mutations"})
 	}
 
 	touchesKnownType := knownMutationRe.MatchString(req.Query)
@@ -535,6 +528,31 @@ func collectOrbIDs(v any, add func(string)) {
 			collectOrbIDs(item, add)
 		}
 	}
+}
+
+// authorizeMutation reports whether the caller may run a GraphQL mutation
+// (dev role minimum). Three caller shapes, checked in order:
+//   - External-JWT callers (ORBITAL_AUTH_MODE=external-jwt) carry a pre-mapped
+//     role in context and have NO users-table row, so there's no user_id to
+//     look up — honor the context role directly. Mirrors the short-circuit in
+//     RequireRole (authz.go); without it, AEP/Keycloak clients get 403 on every
+//     config mutation even though they map to admin.
+//   - Session / AAD-bearer callers resolve to a users-table row (user_id) and
+//     the role is read from PostgreSQL.
+//   - Dev mode (nil db, no context role) passes — no authz backend.
+func (h *GraphQL) authorizeMutation(c echo.Context) bool {
+	if roleStr, _ := c.Get("role").(string); roleStr != "" {
+		return RoleAtLeast(user.Role(roleStr), user.RoleDev)
+	}
+	if h.db == nil {
+		return true
+	}
+	userID, _ := c.Get("user_id").(int)
+	if userID == 0 {
+		return false
+	}
+	u, err := h.db.User.Get(c.Request().Context(), userID)
+	return err == nil && RoleAtLeast(u.Role, user.RoleDev)
 }
 
 // isMutation reports whether a GraphQL request body contains a mutation

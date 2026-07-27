@@ -210,8 +210,8 @@ var Types = []Type{
 		OwnerType:    "ClusterBackup",
 		OwnerField:   "clusterBackupEtcd",
 		ChildField:   "etcd",
-		BeforeFields: "id orbId name version enabled schedule location",
-		FormFields:   []string{"enabled", "schedule", "location"},
+		BeforeFields: "id orbId name version enabled schedule location retentionDays",
+		FormFields:   []string{"enabled", "schedule", "location", "retentionDays"},
 		PayloadField: "etcdBackup",
 	},
 	{
@@ -219,8 +219,8 @@ var Types = []Type{
 		OwnerType:    "ClusterBackup",
 		OwnerField:   "clusterBackupVelero",
 		ChildField:   "velero",
-		BeforeFields: "id orbId name version enabled schedule location",
-		FormFields:   []string{"enabled", "schedule", "location"},
+		BeforeFields: "id orbId name version enabled schedule location retentionDays",
+		FormFields:   []string{"enabled", "schedule", "location", "retentionDays"},
 		PayloadField: "veleroBackup",
 	},
 	{

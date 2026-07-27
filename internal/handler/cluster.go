@@ -47,8 +47,8 @@ const getClusterQuery = `
         backup {
           id orbId name namespace version
           createdBy createdAt updatedBy updatedAt
-          etcd { id orbId name namespace version createdBy createdAt updatedBy updatedAt enabled schedule location }
-          velero { id orbId name namespace version createdBy createdAt updatedBy updatedAt enabled schedule location }
+          etcd { id orbId name namespace version createdBy createdAt updatedBy updatedAt enabled schedule location retentionDays }
+          velero { id orbId name namespace version createdBy createdAt updatedBy updatedAt enabled schedule location retentionDays }
           s3Sync { id orbId name namespace version createdBy createdAt updatedBy updatedAt enabled }
         }
       }
@@ -188,9 +188,10 @@ type backupKindResponse struct {
 	CreatedAt string `json:"createdAt"`
 	UpdatedBy string `json:"updatedBy"`
 	UpdatedAt string `json:"updatedAt"`
-	Enabled   bool   `json:"enabled"`
-	Schedule  string `json:"schedule"`
-	Location  string `json:"location"`
+	Enabled       bool   `json:"enabled"`
+	Schedule      string `json:"schedule"`
+	Location      string `json:"location"`
+	RetentionDays *int   `json:"retentionDays"` // nullable — null = backend default (never 0)
 }
 
 type backupS3SyncResponse struct {
@@ -424,16 +425,18 @@ func (h *ClusterHandler) Tab(c echo.Context) error {
 	if raw.Backup != nil {
 		if raw.Backup.Etcd != nil {
 			backupEdit["etcd"] = map[string]any{
-				"enabled":  raw.Backup.Etcd.Enabled,
-				"schedule": raw.Backup.Etcd.Schedule,
-				"location": raw.Backup.Etcd.Location,
+				"enabled":       raw.Backup.Etcd.Enabled,
+				"schedule":      raw.Backup.Etcd.Schedule,
+				"location":      raw.Backup.Etcd.Location,
+				"retentionDays": raw.Backup.Etcd.RetentionDays,
 			}
 		}
 		if raw.Backup.Velero != nil {
 			backupEdit["velero"] = map[string]any{
-				"enabled":  raw.Backup.Velero.Enabled,
-				"schedule": raw.Backup.Velero.Schedule,
-				"location": raw.Backup.Velero.Location,
+				"enabled":       raw.Backup.Velero.Enabled,
+				"schedule":      raw.Backup.Velero.Schedule,
+				"location":      raw.Backup.Velero.Location,
+				"retentionDays": raw.Backup.Velero.RetentionDays,
 			}
 		}
 		if raw.Backup.S3Sync != nil {

@@ -143,10 +143,11 @@
           <div style="overflow-x:auto">
           <table class="table is-striped is-hoverable is-size-7 mt-2">
             <colgroup>
-              <col style="width:18%">
-              <col style="width:12%">
-              <col style="width:24%">
-              <col style="width:46%">
+              <col style="width:16%">
+              <col style="width:10%">
+              <col style="width:22%">
+              <col style="width:38%">
+              <col style="width:14%">
             </colgroup>
             <thead>
               <tr>
@@ -154,6 +155,7 @@
                 <th>Enabled</th>
                 <th>Schedule</th>
                 <th>Location</th>
+                <th>Retention</th>
               </tr>
             </thead>
             <tbody>
@@ -163,8 +165,9 @@
                 <td>{{if .Backup.Etcd.Enabled}}<span class="has-text-success">✓</span>{{else}}<span class="has-text-danger">✗</span>{{end}}</td>
                 <td><code>{{if .Backup.Etcd.Schedule}}{{.Backup.Etcd.Schedule}}{{else}}—{{end}}</code></td>
                 <td><code>{{if .Backup.Etcd.Location}}{{.Backup.Etcd.Location}}{{else}}—{{end}}</code></td>
+                <td>{{if .Backup.Etcd.RetentionDays}}{{.Backup.Etcd.RetentionDays}} days{{else}}<span class="has-text-grey">default</span>{{end}}</td>
                 {{else}}
-                <td colspan="3"><span class="has-text-grey">Not configured</span></td>
+                <td colspan="4"><span class="has-text-grey">Not configured</span></td>
                 {{end}}
               </tr>
               <tr>
@@ -173,8 +176,9 @@
                 <td>{{if .Backup.Velero.Enabled}}<span class="has-text-success">✓</span>{{else}}<span class="has-text-danger">✗</span>{{end}}</td>
                 <td><code>{{if .Backup.Velero.Schedule}}{{.Backup.Velero.Schedule}}{{else}}—{{end}}</code></td>
                 <td><code>{{if .Backup.Velero.Location}}{{.Backup.Velero.Location}}{{else}}—{{end}}</code></td>
+                <td>{{if .Backup.Velero.RetentionDays}}{{.Backup.Velero.RetentionDays}} days{{else}}<span class="has-text-grey">default</span>{{end}}</td>
                 {{else}}
-                <td colspan="3"><span class="has-text-grey">Not configured</span></td>
+                <td colspan="4"><span class="has-text-grey">Not configured</span></td>
                 {{end}}
               </tr>
               <tr>

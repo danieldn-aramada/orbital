@@ -218,7 +218,11 @@ html {
 
 .app-main-grid {
   display: grid;
-  grid-template-columns: 12em 1fr;
+  /* minmax(0, 1fr), not 1fr: a bare 1fr track is minmax(auto, 1fr) whose auto
+     minimum blows the content column out to its widest child, defeating any
+     inner overflow:auto. Capping the min at 0 lets the column shrink so inner
+     scroll containers (e.g. the /schema <pre>) actually scroll. */
+  grid-template-columns: 12em minmax(0, 1fr);
   border-top: 1px solid transparent;
   border-bottom: 1px solid transparent;
   border-color: hsl(var(--bulma-scheme-h), var(--bulma-scheme-s), calc(var(--bulma-scheme-main-l) + -6%));
@@ -254,6 +258,10 @@ html {
   }
 
   .tab-content {
+    /* Bulma flex columns default to min-width:auto and expand to their widest
+       child — which defeats a child's overflow:auto (nothing to scroll, the
+       column just grows). Let them shrink so e.g. the /schema <pre> scrolls. */
+    .column { min-width: 0; }
     .box{
       padding: 1.5em;
       // box-shadow: 0 0.5em 1em -0.125em hsla(var(--bulma-shadow-h), var(--bulma-shadow-s), var(--bulma-shadow-l), 0.1), 0 0px 0 1px hsla(var(--bulma-shadow-h), var(--bulma-shadow-s), var(--bulma-shadow-l), 0.02);

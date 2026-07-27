@@ -157,6 +157,16 @@ sequenceDiagram
 - Returns `[{mediaType, data}]` where `data` is base64-encoded
 - Stateless — no push credentials, no registry access required
 
+### Backup retention — canonical model owned by Orbital
+
+Orbital owns the **canonical retention vocabulary**: `EtcdBackup.retentionDays` and `VeleroBackup.retentionDays` (nullable `Int`, unit = days; `null` = defer to the backend default, never `0`). This follows the settled boundary — *ConfigBundle is designed around Orbital's model, not the inverse* — so retention is expressed once, in days, at the intent layer.
+
+**Downstream owns dialect translation, not semantics.** The bundler must select `retentionDays` in its GraphQL query and carry it into the BackupConfig spec; the controller translates it per backend:
+- **velero** → `Schedule --ttl {retentionDays * 24}h`
+- **etcd** → prune snapshots older than `retentionDays` days (or, if the tool is count-only, derive keep-last-N from `retentionDays ÷ schedule interval`)
+
+This is *format* translation (days → hours / age / count), never re-inventing intent. If a future backend needs a retention knob days can't express, add a new canonical field in Orbital (e.g. `retentionCount`) — do not push undefined intent downstream. **Sequencing:** the bundler cannot select `retentionDays` until Orbital's deployed schema exposes it, or the query fails and (bundling being all-or-nothing) every publish fails — Orbital ships the field first.
+
 ### Orb (edge)
 
 - Pulls full artifact from registry (OCI source mode) or receives via `POST /import/artifact`

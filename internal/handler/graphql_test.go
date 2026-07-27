@@ -2,9 +2,50 @@ package handler
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"testing"
+
+	"github.com/labstack/echo/v4"
 )
+
+// TestAuthorizeMutation_ExternalJWTRole pins the regression where external-jwt
+// callers (ORBITAL_AUTH_MODE=external-jwt) were 403'd on every GraphQL mutation:
+// they have no users-table row, so the old user_id→DB check always failed. The
+// mutation gate must honor the pre-mapped context role instead. No DB needed —
+// the external-jwt path never touches h.db.
+func TestAuthorizeMutation_ExternalJWTRole(t *testing.T) {
+	h := &GraphQL{} // db nil — external-jwt path is role-only
+	for _, tc := range []struct {
+		role string
+		want bool
+	}{
+		{"admin", true},     // AEP default (ORBITAL_JWT_DEFAULT_ROLE) — must be allowed
+		{"dev", true},       // minimum for mutations
+		{"readonly", false}, // below dev — denied even via external-jwt
+	} {
+		t.Run(tc.role, func(t *testing.T) {
+			e := echo.New()
+			c := e.NewContext(httptest.NewRequest(http.MethodPost, "/graphql", nil), httptest.NewRecorder())
+			c.Set("role", tc.role)
+			if got := h.authorizeMutation(c); got != tc.want {
+				t.Errorf("authorizeMutation(role=%q) = %v, want %v", tc.role, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestAuthorizeMutation_DevModeNoDB confirms the nil-db dev path still passes
+// (no authz backend), unchanged by the external-jwt short-circuit.
+func TestAuthorizeMutation_DevModeNoDB(t *testing.T) {
+	h := &GraphQL{} // db nil, no context role
+	e := echo.New()
+	c := e.NewContext(httptest.NewRequest(http.MethodPost, "/graphql", nil), httptest.NewRecorder())
+	if !h.authorizeMutation(c) {
+		t.Error("dev mode (nil db, no context role) should allow mutations")
+	}
+}
 
 func TestToFloat64(t *testing.T) {
 	tests := []struct {
