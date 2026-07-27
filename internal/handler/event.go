@@ -245,7 +245,7 @@ func (h *EventHandler) List(c echo.Context) error {
 		}(), "&")
 		tmpl := h.fragment
 		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-		return tmpl.Execute(c.Response(), eventsFragmentData{
+		return renderHTML(c, tmpl, "", eventsFragmentData{
 			Items:            items,
 			Total:            total,
 			ShownCount:       len(items),

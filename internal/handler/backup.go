@@ -425,7 +425,7 @@ func (h *BackupHandler) List(c echo.Context) error {
 			return fmt.Errorf("parse backup fragment: %w", err)
 		}
 		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-		return tmpl.Execute(c.Response(), rows)
+		return renderHTML(c, tmpl, "", rows)
 	}
 	out := make([]backupResponse, 0, len(jobs))
 	for _, j := range jobs {

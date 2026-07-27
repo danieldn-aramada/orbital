@@ -206,7 +206,7 @@ func (h *OIDC) DeviceCodeStart(c echo.Context) error {
 	}
 
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return h.deviceCodeTmpl.ExecuteTemplate(c.Response(), "device-code", deviceCodePageData{
+	return renderHTML(c, h.deviceCodeTmpl, "device-code", deviceCodePageData{
 		BasePath:        h.basePath,
 		UserCode:        dc.UserCode,
 		VerificationURI: dc.VerificationURI,

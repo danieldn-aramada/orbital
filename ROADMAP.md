@@ -28,11 +28,11 @@ gantt
 
 ## Recent accomplishments
 
+- **2026-07-27** — external-jwt bearer auth validated on AKS dev; fixed cluster-edit truncation (retentionDays render-struct drift); hardened all template rendering to buffer-then-write (drift fails loud, not silent); auth-mode + FIPS startup logs.
 - **2026-07-23** — External-JWT auth mode (`ORBITAL_AUTH_MODE=external-jwt`) for AEP demo: validates Keycloak bearer via JWKS + `azp` trust anchor, session-cookie fallback keeps UI usable, RFC 6750 error bodies, signature-aware failure logging (identity only when authentic); deploy v0.0.24 to AKS dev.
 - **2026-07-12** — Nested-writes refactor in `configitem-editor.js` for first-time wrapper+child create (one `update{Root}` with folded subtree, fixes DGraph race); orb `setDone` in-memory `InitiatedBy` matches DB (auto-import label was showing manual within pod lifetime); divergence Last-published shows relative time.
 - **2026-07-07** — Orb import-tags perf (parallel + cache + pagination); auto-import Status UI (indicator + sub-line + failure banner); Terraform overwrite-in-place divergence S3 key; export phase-list UI; DIVERGENCE docs reconciled.
 - **2026-07-05** — Atomic export+publish flow (single `POST /api/v1/export` with `download` bool); orb SQLite migration complete (`orb.db` + ent replaces 3 legacy JSON files); Publish History its own page under Divergence; Spike 25 publish-provenance changeset panel.
-- **2026-07-05** — Go 1.26.4 + Alpine 3.23 upgrade validated; fixed real backup zip-checksum bug (was hashing dataGZ, uploading zip); divergence e2e URL typo (`/divergence` → `/divergences`); `release-check` DOCKER_CONFIG isolation; postgres password → FIPS-compliant.
 
 ---
 
@@ -181,6 +181,7 @@ Benchmark DGraph query latency under realistic load, produce AKS node SKU cost e
 |---|---|
 | Replace `title=""` tooltips with Tippy.js | 9+ usages in `divergence-reports.gohtml`, `users.gohtml`, `backup-jobs-tbody.gohtml`, `cluster-tab.gohtml`. Native browser tooltips have ~1s delay, no theming, no positioning control. Stop using `title=` for user-facing text; migrate to Tippy.js (~10KB, matches Linear/Vercel/Stripe convention). |
 | Refactor bundler URL config DSL | `ORBITAL_BUNDLER_URLS=configbundle-bundler=http://...` is a custom micro-DSL in one env var; already caused one bug (preflight probed the raw `name=url` string as a URL). Better: one env var per bundler (`ORBITAL_BUNDLER_CONFIGBUNDLE=http://...`), or ConfigMap-mounted YAML for structured validation. |
+| Collapse duplicate cluster backup structs | `backupKindResponse` (DGraph JSON decode) and `backupKindTab` (template view struct) are hand-synced — adding a backup field means updating both or the cluster tab truncates mid-render (the 2026-07-27 `retentionDays` "Edit button does nothing" bug). Now *caught* by `TestClusterTab_BackupWithRetentionRendersFullFragment` + buffered `renderHTML` (fails loud, not silent), but the drift is still possible. Eliminate it: render the template off the query struct directly (supply `DomID` via a method or embedding) so a new field lands in exactly one place. `internal/handler/cluster.go`. |
 
 ### Audit backlog — May 2026 audit, triaged 2026-07-23
 
@@ -219,6 +220,7 @@ Benchmark DGraph query latency under realistic load, produce AKS node SKU cost e
 | Item | Notes |
 |---|---|
 | Orbital HA — pervasive single-replica assumptions | Deployed as `replicas: 1` with `strategy: Recreate`. Several subsystems assume single-leader: divergence ingester (`lastIngestedByDC` is in-memory), backup scheduler (cron double-fires across replicas), publish-history ingester. Going HA requires holistic redesign — leader election, per-subsystem advisory locks, or a dedicated ingest deployment. **Do NOT scale past `replicas: 1`** until resolved; double-ingestion corrupts divergence state. |
+| Auto-apply DGraph GraphQL schema on startup (kill the manual schema-deploy step) | Today orbital does NOT apply `schema.graphql` to DGraph on boot, so a schema-bumping image deploy silently drifts until someone manually POSTs to `/admin/schema` — the 2026-07-27 AKS burn (v0.0.25 queried `retentionDays`, DGraph still v3 → every cluster 404'd). **Proposed fix (mine, not yet researched): orbital applies the schema additively on startup**, mirroring what it already does for PostgreSQL via ent auto-migrate — makes `schema.graphql:6`'s existing (currently false) "applied on startup" claim true, and removes the deploy-runbook step. Conventional shape for schema-as-code; DGraph has no SQL-migration-framework equivalent (Atlas/goose are relational). **Design points before code:** (1) re-scopes the "schema migration automation out of MVP" settled decision — additive SDL apply is arguably the ent-auto-migrate analog, not a migration tool; (2) blue-green — apply to active/blue on boot (scratch already gets it via export); (3) additive-only guard (schema rules already forbid destructive changes); (4) multi-replica racing is harmless (DGraph serializes) but confirm; (5) **fix the `schema.graphql:6` vs `DGRAPH.md` doc contradiction** whichever way this lands. Alternatives: kustomize initContainer, or GitOps PreSync Job. Consider grounding with standards-research first. Triggered by the 2026-07-27 cluster-404 burn. |
 
 ### Done
 

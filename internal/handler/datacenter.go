@@ -291,6 +291,6 @@ func (h *DataCenter) Tab(c echo.Context) error {
 	}
 
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return tmpl.Execute(c.Response(), dc)
+	return renderHTML(c, tmpl, "", dc)
 }
 

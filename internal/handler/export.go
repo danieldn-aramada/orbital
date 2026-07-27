@@ -305,7 +305,7 @@ func (h *Export) List(c echo.Context) error {
 			return fmt.Errorf("parse export fragment: %w", err)
 		}
 		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-		return tmpl.Execute(c.Response(), exportJobsFragData{Rows: rows, OCIConfigured: ociConfigured, BasePath: h.basePath})
+		return renderHTML(c, tmpl, "", exportJobsFragData{Rows: rows, OCIConfigured: ociConfigured, BasePath: h.basePath})
 	}
 
 	out := make([]statusResponse, 0, len(jobs))

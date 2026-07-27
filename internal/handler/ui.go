@@ -112,7 +112,7 @@ func (h *UI) render(c echo.Context, name string, data any) error {
 		return echo.ErrNotFound
 	}
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return tmpl.ExecuteTemplate(c.Response(), "base.gohtml", data)
+	return renderHTML(c, tmpl, "base.gohtml", data)
 }
 
 // renderFragment executes a single named {{define}} block within a page's
@@ -127,7 +127,7 @@ func (h *UI) renderFragment(c echo.Context, page, fragment string, data any) err
 		return echo.ErrNotFound
 	}
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return tmpl.ExecuteTemplate(c.Response(), fragment, data)
+	return renderHTML(c, tmpl, fragment, data)
 }
 
 func (h *UI) base(c echo.Context) layout.Base {

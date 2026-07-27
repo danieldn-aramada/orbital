@@ -237,7 +237,7 @@ func (h *OCI) ListArtifacts(c echo.Context) error {
 			return fmt.Errorf("parse artifacts fragment: %w", err)
 		}
 		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-		return tmpl.Execute(c.Response(), rows)
+		return renderHTML(c, tmpl, "", rows)
 	}
 	out := make([]artifactResponse, 0, len(artifacts))
 	for _, a := range artifacts {
@@ -466,7 +466,7 @@ func (h *OCI) ArtifactLayers(c echo.Context) error {
 		return fmt.Errorf("parse layers-modal: %w", err)
 	}
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return tmpl.ExecuteTemplate(c.Response(), "layers-modal", row)
+	return renderHTML(c, tmpl, "layers-modal", row)
 }
 
 // ── Fragment renderer ─────────────────────────────────────────────────────────

@@ -280,11 +280,12 @@ type clusterBackupData struct {
 }
 
 type backupKindTab struct {
-	OrbID    string
-	DomID    string
-	Enabled  bool
-	Schedule string
-	Location string
+	OrbID         string
+	DomID         string
+	Enabled       bool
+	Schedule      string
+	Location      string
+	RetentionDays *int // nullable — null renders as "default" (see cluster-tab.gohtml)
 }
 
 type backupS3SyncTab struct {
@@ -541,20 +542,22 @@ func (h *ClusterHandler) Tab(c echo.Context) error {
 		}
 		if raw.Backup.Etcd != nil {
 			bd.Etcd = &backupKindTab{
-				OrbID:    raw.Backup.Etcd.OrbID,
-				DomID:    SafeDomID(raw.Backup.Etcd.OrbID),
-				Enabled:  raw.Backup.Etcd.Enabled,
-				Schedule: raw.Backup.Etcd.Schedule,
-				Location: raw.Backup.Etcd.Location,
+				OrbID:         raw.Backup.Etcd.OrbID,
+				DomID:         SafeDomID(raw.Backup.Etcd.OrbID),
+				Enabled:       raw.Backup.Etcd.Enabled,
+				Schedule:      raw.Backup.Etcd.Schedule,
+				Location:      raw.Backup.Etcd.Location,
+				RetentionDays: raw.Backup.Etcd.RetentionDays,
 			}
 		}
 		if raw.Backup.Velero != nil {
 			bd.Velero = &backupKindTab{
-				OrbID:    raw.Backup.Velero.OrbID,
-				DomID:    SafeDomID(raw.Backup.Velero.OrbID),
-				Enabled:  raw.Backup.Velero.Enabled,
-				Schedule: raw.Backup.Velero.Schedule,
-				Location: raw.Backup.Velero.Location,
+				OrbID:         raw.Backup.Velero.OrbID,
+				DomID:         SafeDomID(raw.Backup.Velero.OrbID),
+				Enabled:       raw.Backup.Velero.Enabled,
+				Schedule:      raw.Backup.Velero.Schedule,
+				Location:      raw.Backup.Velero.Location,
+				RetentionDays: raw.Backup.Velero.RetentionDays,
 			}
 		}
 		if raw.Backup.S3Sync != nil {
@@ -575,5 +578,5 @@ func (h *ClusterHandler) Tab(c echo.Context) error {
 	}
 
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return tmpl.Execute(c.Response(), tab)
+	return renderHTML(c, tmpl, "", tab)
 }

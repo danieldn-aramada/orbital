@@ -30,7 +30,7 @@ func NewLogin(db *ent.Client, sessionKeys auth.SessionKeys, formTmpl *template.T
 func (h *Login) renderForm(c echo.Context, errMsg string) error {
 	csrfToken, _ := c.Get("csrf_token").(string)
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return h.formTmpl.ExecuteTemplate(c.Response(), "login-form.gohtml", fragment.LoginForm{
+	return renderHTML(c, h.formTmpl, "login-form.gohtml", fragment.LoginForm{
 		CsrfToken: csrfToken,
 		ErrorMsg:  errMsg,
 		BasePath:  h.basePath,

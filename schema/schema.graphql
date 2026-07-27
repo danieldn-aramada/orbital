@@ -3,8 +3,14 @@
 # Rules:
 #   - Schema changes must be backwards compatible. Orbs may be on older versions.
 #   - New types and nullable fields are safe. Removing or renaming fields is not.
-#   - Schema is managed by orbital and applied via the DGraph admin API on startup.
-#   - Do not apply this manually — orbital tracks the active version in PostgreSQL.
+#   - Schema is NOT auto-applied on startup (yet — auto-apply is a tracked ROADMAP item).
+#     It is applied only by `make seed`, restore, export-to-scratch, and orb import. On any
+#     schema-version bump you MUST apply it to the target DGraph as a deploy step — see
+#     docs/reference/DGRAPH.md "Schema rules". A schema-bumping image deploy does NOT reach
+#     the running DGraph by itself.
+#   - orbital tracks the active schema version in PostgreSQL, but a direct /admin/schema
+#     apply does NOT update that record — reconcile via a backup/restore cycle if the
+#     /schema page shows a version mismatch.
 #
 # DGraph directives used:
 #   @search     — enables filtering/querying on a field
