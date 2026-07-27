@@ -157,6 +157,25 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		logger.Warn("ORBITAL_OIDC_ISSUER_URL is not set — API auth disabled")
 	}
 
+	// Single authoritative summary of the effective auth posture, logged
+	// unconditionally and stated positively. Operators must never have to
+	// infer the active mode from the presence/absence of a mode-specific
+	// banner above — an empty apiAuth means unauthenticated requests are
+	// accepted, which is the most dangerous state and must be loud.
+	authMode := "oidc"
+	switch {
+	case externalJWTMode:
+		authMode = "external-jwt"
+	case !oidcEnabled:
+		authMode = "none"
+	}
+	if len(apiAuth) == 0 {
+		logger.Warn("auth: API AUTHENTICATION DISABLED — /graphql and /api/v1 accept unauthenticated requests; only session-identity mutations are gated",
+			"mode", authMode, "enabled", false, "dev", cfg.Dev)
+	} else {
+		logger.Info("auth: API authentication enabled", "mode", authMode, "enabled", true)
+	}
+
 	// Default API group — dev+ required for mutating methods (POST/PUT/PATCH/DELETE).
 	// RequireRole passes GET/HEAD/OPTIONS through unconditionally.
 	api := root.Group("/api/v1", append(apiAuth, handler.RequireRole(db, user.RoleDev))...)

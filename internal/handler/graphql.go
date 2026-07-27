@@ -107,7 +107,9 @@ func (h *GraphQL) Handle(c echo.Context) error {
 	}
 
 	// Enforce dev-or-admin role for all GraphQL mutations.
-	if !h.authorizeMutation(c) {
+	if ok, reason := h.authorizeMutation(c); !ok {
+		h.logger.Warn("graphql mutation denied", "reason", reason,
+			"actor", actorFromContext(c), "request.id", c.Response().Header().Get(echo.HeaderXRequestID))
 		return c.JSON(http.StatusForbidden, map[string]string{"error": "dev or admin role required for mutations"})
 	}
 
@@ -540,19 +542,31 @@ func collectOrbIDs(v any, add func(string)) {
 //   - Session / AAD-bearer callers resolve to a users-table row (user_id) and
 //     the role is read from PostgreSQL.
 //   - Dev mode (nil db, no context role) passes — no authz backend.
-func (h *GraphQL) authorizeMutation(c echo.Context) bool {
+func (h *GraphQL) authorizeMutation(c echo.Context) (bool, string) {
 	if roleStr, _ := c.Get("role").(string); roleStr != "" {
-		return RoleAtLeast(user.Role(roleStr), user.RoleDev)
+		if RoleAtLeast(user.Role(roleStr), user.RoleDev) {
+			return true, ""
+		}
+		return false, "context role " + roleStr + " below dev"
 	}
 	if h.db == nil {
-		return true
+		return true, ""
 	}
 	userID, _ := c.Get("user_id").(int)
 	if userID == 0 {
-		return false
+		// No context role and no resolved user: either auth is disabled
+		// (apiAuth empty) or the caller presented no identity. See the
+		// "auth: API AUTHENTICATION DISABLED" startup log.
+		return false, "no context role and no authenticated user (auth may be disabled — check startup auth mode)"
 	}
 	u, err := h.db.User.Get(c.Request().Context(), userID)
-	return err == nil && RoleAtLeast(u.Role, user.RoleDev)
+	if err != nil {
+		return false, "user lookup failed"
+	}
+	if !RoleAtLeast(u.Role, user.RoleDev) {
+		return false, "user role " + string(u.Role) + " below dev"
+	}
+	return true, ""
 }
 
 // isMutation reports whether a GraphQL request body contains a mutation

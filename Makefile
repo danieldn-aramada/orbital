@@ -56,6 +56,19 @@ run-orbital: ## Run orbital server (go run; fast dev iteration). Restore require
 	@# in the dev-only Makefile target, not in orbital's code.
 	DOCKER_CONFIG=$$(mktemp -d) go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orbital
 
+run-orbital-aep: ## Run orbital in external-jwt mode (accepts AEP/Keycloak bearers as admin) on :8001
+	@# Vars are set IN the recipe so they always reach the process — no
+	@# fragile shell-prefix env that breaks when pasted across lines.
+	@# For SSO login / bundler publish, `export ORBITAL_OIDC_CLIENT_SECRET=...`
+	@# (and ORBITAL_BUNDLER_URLS=...) first — the recipe inherits them.
+	DOCKER_CONFIG=$$(mktemp -d) \
+	ORBITAL_AUTH_MODE=external-jwt \
+	ORBITAL_JWT_ISSUER=https://keycloak.devnew.armada.ai/realms/armada \
+	ORBITAL_JWT_AUDIENCE=account \
+	ORBITAL_JWT_CLIENT_ID=aep-fleet-commander \
+	ORBITAL_JWT_DEFAULT_ROLE=admin \
+	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orbital
+
 run-orb: ## Run orb edge service (go run; fast dev iteration). Import requires dgraph in PATH
 	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orb start
 

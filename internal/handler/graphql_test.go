@@ -29,7 +29,7 @@ func TestAuthorizeMutation_ExternalJWTRole(t *testing.T) {
 			e := echo.New()
 			c := e.NewContext(httptest.NewRequest(http.MethodPost, "/graphql", nil), httptest.NewRecorder())
 			c.Set("role", tc.role)
-			if got := h.authorizeMutation(c); got != tc.want {
+			if got, _ := h.authorizeMutation(c); got != tc.want {
 				t.Errorf("authorizeMutation(role=%q) = %v, want %v", tc.role, got, tc.want)
 			}
 		})
@@ -42,7 +42,7 @@ func TestAuthorizeMutation_DevModeNoDB(t *testing.T) {
 	h := &GraphQL{} // db nil, no context role
 	e := echo.New()
 	c := e.NewContext(httptest.NewRequest(http.MethodPost, "/graphql", nil), httptest.NewRecorder())
-	if !h.authorizeMutation(c) {
+	if ok, _ := h.authorizeMutation(c); !ok {
 		t.Error("dev mode (nil db, no context role) should allow mutations")
 	}
 }
