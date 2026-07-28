@@ -20,6 +20,10 @@ curl -s -X POST $ORBITAL_URL/graphql -H "Authorization: Bearer $TOKEN" -H "Conte
 -d '{"query":"query { queryDataCenter { orbId name } }"}' | jq .
 ```
 
+**Reads** send only `query`. **Mutations** send two fields — `query` **and** `variables`: the `query` holds the operation with `$orbId`/`$set` placeholders; `variables` holds the values. Always put `orbId` (and the `set` payload) in **`variables`**, never inline in the query — an inline `orbId` skips orbital's `version` bump and `updatedAt`/`updatedBy` stamping.
+
+The `-d` body is JSON and may span multiple lines for readability — only the `query` string stays on one line. A mutation's returned entity confirms the write: the server stamps `updatedAt`/`updatedBy` (**no milliseconds**) and bumps `version`.
+
 ---
 
 ## Example schema 
@@ -59,13 +63,15 @@ query {
 ```
 
 ### Update iDRAC settings — by the `idracSettings.orbId` from the fetch above
+query
 ```graphql
-mutation {
-  updateIdracSettings(input: {
-    filter: { orbId: { eq: "houston:BB52FZ3-idrac" } }
-    set:    { sshEnabled: false }
-  }) { numUids }
+mutation UpdateIdracSettings($orbId: String!, $set: IdracSettingsPatch!) {
+  updateIdracSettings(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids }
 }
+```
+variables
+```json
+{ "orbId": "houston:BB52FZ3-idrac", "set": { "sshEnabled": false } }
 ```
 
 ## Clusters
@@ -95,15 +101,45 @@ query {
 ```
 
 ### Update a backup config — by the `etcd`/`velero` orbId from the fetch above
+query
 ```graphql
-mutation {
-  updateEtcdBackup(input: {
-    filter: { orbId: { eq: "colo:dev-main-etcd-backup" } }
-    set:    { schedule: "0 */6 * * *", retentionDays: 7 }
-  }) { numUids }
+mutation UpdateEtcdBackup($orbId: String!, $set: EtcdBackupPatch!) {
+  updateEtcdBackup(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids }
 }
 ```
-Same shape for `updateVeleroBackup` (orbId `…-velero-backup`).
+variables
+```json
+{ "orbId": "colo:dev-main-etcd-backup", "set": { "schedule": "0 */6 * * *", "retentionDays": 7 } }
+```
+
+Example using curl
+```bash
+curl -s -X POST $ORBITAL_URL/graphql -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+-d '{
+  "query": "mutation UpdateVeleroBackup($orbId: String!, $set: VeleroBackupPatch!) { updateVeleroBackup(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids veleroBackup { orbId retentionDays version updatedAt updatedBy } } }",
+  "variables": { "orbId": "colo:dev-main-velero-backup", "set": { "retentionDays": 14 } }
+}' | jq .
+```
+Response
+```json
+{
+  "data": {
+    "updateVeleroBackup": {
+      "numUids": 1,
+      "veleroBackup": [
+        {
+          "orbId": "colo:dev-main-velero-backup",
+          "retentionDays": 14,
+          "version": 30,
+          "updatedAt": "2026-07-28T19:13:50Z",
+          "updatedBy": "daniel.nguyen@armada.ai"
+        }
+      ]
+    }
+  }
+}
+```
+`updatedAt` has no milliseconds and `updatedBy` is the authenticated caller — both server-stamped (the client never sent them).
 
 ## Export + publish a data center (REST)
 ```bash

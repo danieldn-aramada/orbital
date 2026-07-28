@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/user"
@@ -179,16 +180,28 @@ func (h *GraphQL) Handle(c echo.Context) error {
 	//     entry that lacks one. The variable name doesn't matter (callers use
 	//     `input`, `idracInput`, etc.) — every array-of-maps payload is treated
 	//     as an add/upsert input. Caller-set version is preserved.
+	// Server-authoritative audit metadata. `version` is the OCC counter;
+	// `updatedBy`/`updatedAt` (and `createdBy`/`createdAt` on create) are stamped
+	// from the authenticated identity + server clock so they are consistent and
+	// unspoofable for EVERY caller — orbital's own UI, orbctl, and direct API
+	// clients alike. Clients must NOT supply these. See docs/reference/AUDIT.md.
+	now := time.Now().UTC().Format(time.RFC3339)
 	autoIncremented := false
+	// UPDATE: `set` is a map. Gated on before!=nil, which means we resolved a
+	// single versioned ConfigItem — the only shape that owns these fields.
 	if before != nil {
 		if setMap, ok := req.Variables["set"].(map[string]any); ok {
 			if _, has := setMap["version"]; !has {
 				setMap["version"] = int(toFloat64(before["version"])) + 1
-				req.Variables["set"] = setMap
-				autoIncremented = true
 			}
+			setMap["updatedBy"] = actor
+			setMap["updatedAt"] = now
+			req.Variables["set"] = setMap
+			autoIncremented = true
 		}
 	}
+	// ADD: any array-of-maps input is an add/upsert of ConfigItem(s). Stamp both
+	// created and updated (updatedAt == createdAt on insert).
 	for _, v := range req.Variables {
 		arr, ok := v.([]any)
 		if !ok {
@@ -201,8 +214,12 @@ func (h *GraphQL) Handle(c echo.Context) error {
 			}
 			if _, has := m["version"]; !has {
 				m["version"] = 1
-				autoIncremented = true
 			}
+			m["createdBy"] = actor
+			m["createdAt"] = now
+			m["updatedBy"] = actor
+			m["updatedAt"] = now
+			autoIncremented = true
 		}
 	}
 

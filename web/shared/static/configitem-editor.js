@@ -174,9 +174,12 @@ export function initConfigItemEditor({
       for (const f of t.fields) if (f in sub) out[f] = valueForMutation(t, f, sub[f])
       return out
     }
-    // Standard ConfigItem interface fields orbital's ent schema requires on
-    // every insert. `version: 1` is what a fresh @id gets; the GraphQL proxy
-    // auto-bumps on subsequent updates.
+    // Metadata for entities created as a NESTED subtree inside an update{Root}
+    // `set` (first-time wrapper + children). The GraphQL proxy stamps
+    // createdBy/At + updatedBy/At + version on top-level update `set` maps and
+    // top-level add inputs, but does NOT recurse into nested objects within a
+    // set — so these nested nodes must carry their own. Do NOT remove: top-level
+    // edits/adds are server-stamped (see graphql.go), nested creates are not.
     const configItemDefaults = () => ({
       version: 1,
       createdBy: currentUser, createdAt: now,
@@ -217,14 +220,14 @@ export function initConfigItemEditor({
     let rootSet = null
     const rootChange = changes.find(ch => ch.target.path.length === 0)
     if (rootChange) {
-      rootSet = { updatedBy: currentUser, updatedAt: now, ...scalarPayload(rootChange.target, rootChange.currentSub || {}) }
+      rootSet = { ...scalarPayload(rootChange.target, rootChange.currentSub || {}) }
     }
     // Children folded into rootSet — tracked so the per-target loop skips
     // them (otherwise we'd double-emit them as separate add mutations).
     const foldedOrbIds = new Set()
     for (const w of wrappersNeeded.values()) {
       if (rootSet === null) {
-        rootSet = { updatedBy: currentUser, updatedAt: now }
+        rootSet = {}
       }
       // Wrapper metadata. `@hasInverse` on wrapper.cluster fills back to root
       // automatically when root sets `[w.parentField] = wrapper`, so we don't
@@ -271,7 +274,7 @@ export function initConfigItemEditor({
         // EDIT — canonical update{Kind} triggers the diff renderer.
         calls.push(buildUpdateCall({
           kind: t.kind, orbId: t.orbId, payloadField: t.payloadField,
-          set: { updatedBy: currentUser, updatedAt: now, ...scalarPayload(t, sub) },
+          set: { ...scalarPayload(t, sub) },
         }))
       } else {
         // CREATE under an already-existing wrapper (sibling exists). Safe
