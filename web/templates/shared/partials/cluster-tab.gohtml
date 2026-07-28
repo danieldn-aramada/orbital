@@ -155,7 +155,7 @@
                 <th>Enabled</th>
                 <th>Schedule</th>
                 <th>Location</th>
-                <th>Retention</th>
+                <th>Retention Days</th>
               </tr>
             </thead>
             <tbody>
@@ -165,7 +165,7 @@
                 <td>{{if .Backup.Etcd.Enabled}}<span class="has-text-success">✓</span>{{else}}<span class="has-text-danger">✗</span>{{end}}</td>
                 <td><code>{{if .Backup.Etcd.Schedule}}{{.Backup.Etcd.Schedule}}{{else}}—{{end}}</code></td>
                 <td><code>{{if .Backup.Etcd.Location}}{{.Backup.Etcd.Location}}{{else}}—{{end}}</code></td>
-                <td>{{if .Backup.Etcd.RetentionDays}}{{.Backup.Etcd.RetentionDays}} days{{else}}<span class="has-text-grey">default</span>{{end}}</td>
+                <td>{{if .Backup.Etcd.RetentionDays}}{{.Backup.Etcd.RetentionDays}}{{else}}—{{end}}</td>
                 {{else}}
                 <td colspan="4"><span class="has-text-grey">Not configured</span></td>
                 {{end}}
@@ -176,7 +176,7 @@
                 <td>{{if .Backup.Velero.Enabled}}<span class="has-text-success">✓</span>{{else}}<span class="has-text-danger">✗</span>{{end}}</td>
                 <td><code>{{if .Backup.Velero.Schedule}}{{.Backup.Velero.Schedule}}{{else}}—{{end}}</code></td>
                 <td><code>{{if .Backup.Velero.Location}}{{.Backup.Velero.Location}}{{else}}—{{end}}</code></td>
-                <td>{{if .Backup.Velero.RetentionDays}}{{.Backup.Velero.RetentionDays}} days{{else}}<span class="has-text-grey">default</span>{{end}}</td>
+                <td>{{if .Backup.Velero.RetentionDays}}{{.Backup.Velero.RetentionDays}}{{else}}—{{end}}</td>
                 {{else}}
                 <td colspan="4"><span class="has-text-grey">Not configured</span></td>
                 {{end}}

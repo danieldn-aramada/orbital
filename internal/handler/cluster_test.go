@@ -76,9 +76,10 @@ func TestClusterTab_BackupWithRetentionRendersFullFragment(t *testing.T) {
 		t.Errorf("expected 200, got %d", rec.Code)
 	}
 	out := rec.Body.String()
-	for _, want := range []string{"7 days", "14 days"} {
+	// Retention cells render the bare Int value (header carries the "Days" unit).
+	for _, want := range []string{"<td>7</td>", "<td>14</td>"} {
 		if !strings.Contains(out, want) {
-			t.Errorf("rendered cluster tab missing retention value %q (backupKindTab.RetentionDays not wired?)", want)
+			t.Errorf("rendered cluster tab missing retention cell %q (backupKindTab.RetentionDays not wired?)", want)
 		}
 	}
 	// The edit modal is the last thing in cluster-tab.gohtml — its presence proves
