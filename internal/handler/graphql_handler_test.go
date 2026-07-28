@@ -195,7 +195,7 @@ func captureRequests(t *testing.T, response string) (*httptest.Server, *[][]byte
 
 func TestHandle_ProxyRawQuery(t *testing.T) {
 	srv := mockDGraph(t, `{"data":{"queryDataCenter":[{"id":"dc1"}]}}`)
-	h := NewGraphQL(srv.URL, nil, slog.Default())
+	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
 
 	c, rec := newGQLCtx(t, map[string]any{
 		"query": `{ queryDataCenter { id } }`,
@@ -211,7 +211,7 @@ func TestHandle_ProxyRawQuery(t *testing.T) {
 
 func TestHandle_MutationProxied(t *testing.T) {
 	srv := mockDGraph(t, `{"data":{"addServer":{"server":[{"orbId":"alaska:SRV001"}]}}}`)
-	h := NewGraphQL(srv.URL, nil, slog.Default())
+	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
 
 	c, rec := newGQLCtx(t, map[string]any{
 		"query": `mutation { addServer(input:[]) { server { orbId } } }`,
@@ -227,7 +227,7 @@ func TestHandle_MutationProxied(t *testing.T) {
 
 func TestHandle_IfVersionStrippedBeforeProxy(t *testing.T) {
 	srv, bodies := captureRequests(t, `{"data":{}}`)
-	h := NewGraphQL(srv.URL, nil, slog.Default())
+	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
 
 	c, _ := newGQLCtx(t, map[string]any{
 		"query":         `mutation { addServer(input:[]) { server { id } } }`,
@@ -265,7 +265,7 @@ func TestHandle_MVCCConflict(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	h := NewGraphQL(srv.URL, nil, slog.Default())
+	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
 
 	c, rec := newGQLCtx(t, map[string]any{
 		"query":         `mutation UpdateServer { updateServer(input:{}) { server { id } } }`,
@@ -297,7 +297,7 @@ func TestHandle_MVCCVersionMatch(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	h := NewGraphQL(srv.URL, nil, slog.Default())
+	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
 
 	c, rec := newGQLCtx(t, map[string]any{
 		"query":         `mutation UpdateServer { updateServer(input:{}) { server { orbId } } }`,
@@ -340,7 +340,7 @@ func TestHandle_AutoIncrementVersionOnUpdate(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	h := NewGraphQL(srv.URL, nil, slog.Default())
+	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
 	c, _ := newGQLCtx(t, map[string]any{
 		"query":         `mutation UpdateServer($set: ServerPatch!) { updateServer(input: { filter: { orbId: { eq: "x" } }, set: $set }) { server { orbId version } } }`,
 		"operationName": "UpdateServer",
@@ -357,7 +357,7 @@ func TestHandle_AutoIncrementVersionOnUpdate(t *testing.T) {
 func TestHandle_AutoIncrementVersionOnAdd(t *testing.T) {
 	// addServer with input array → proxy injects version: 1 into each entry that omits it.
 	srv, bodies := captureRequests(t, `{"data":{"addServer":{"server":[{"orbId":"x"}]}}}`)
-	h := NewGraphQL(srv.URL, nil, slog.Default())
+	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
 
 	c, _ := newGQLCtx(t, map[string]any{
 		"query": `mutation { addServer(input: $input) { server { orbId } } }`,
@@ -394,7 +394,7 @@ func TestHandle_AutoIncrementInjectsIntoAnyArrayVariable(t *testing.T) {
 	// the literal "input" key, so DGraph rejected addIdracSettings with
 	// "variable.idracInput.0.version must be defined".
 	srv, bodies := captureRequests(t, `{"data":{}}`)
-	h := NewGraphQL(srv.URL, nil, slog.Default())
+	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
 
 	c, _ := newGQLCtx(t, map[string]any{
 		"query": `mutation { addIdracSettings(input: $idracInput, upsert: true) { numUids } }`,
@@ -425,7 +425,7 @@ func TestHandle_GQLErrorsSuppressAudit(t *testing.T) {
 	// With db=nil, any attempt to writeAuditEvent would panic — so if this test
 	// passes without a nil-pointer panic, audit was correctly suppressed.
 	srv := mockDGraph(t, `{"errors":[{"message":"something went wrong"}]}`)
-	h := NewGraphQL(srv.URL, nil, slog.Default())
+	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
 
 	c, rec := newGQLCtx(t, map[string]any{
 		"query": `mutation { addServer(input:[]) { server { id } } }`,

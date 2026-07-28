@@ -98,6 +98,23 @@ definitions:
       who:
         type: string
     type: object
+  handler.errorResponse:
+    properties:
+      code:
+        example: FORBIDDEN
+        type: string
+      docUrl:
+        type: string
+      error:
+        example: dev or admin role required for mutations
+        type: string
+      hint:
+        example: Ask an admin to grant you the dev role.
+        type: string
+      httpStatus:
+        example: 403
+        type: integer
+    type: object
   handler.exportRequest:
     properties:
       download:
@@ -332,9 +349,7 @@ paths:
         "409":
           description: Conflict
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Trigger backup
       tags:
       - backup
@@ -371,15 +386,11 @@ paths:
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
         "409":
           description: Conflict
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Delete backup
       tags:
       - backup
@@ -401,9 +412,7 @@ paths:
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Get backup status
       tags:
       - backup
@@ -429,9 +438,7 @@ paths:
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Download backup
       tags:
       - backup
@@ -483,15 +490,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
         "500":
           description: Internal Server Error
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Cascade-delete a config item (UI flow)
       tags:
       - config-items
@@ -512,15 +515,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
         "401":
           description: Unauthorized
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Clear all divergence state for a data center
       tags:
       - divergence
@@ -567,21 +566,15 @@ paths:
         "400":
           description: Bad Request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
         "409":
           description: Not stale — accept/reject/ignore instead
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Dismiss a stale divergence
       tags:
       - divergence
@@ -602,15 +595,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Get one divergence by ID
       tags:
       - divergence
@@ -628,15 +617,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Clear a divergence resolution
       tags:
       - divergence
@@ -665,27 +650,19 @@ paths:
         "400":
           description: Bad Request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
         "401":
           description: Unauthorized
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
         "409":
           description: MVCC conflict — intent changed since report
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Record a divergence resolution
       tags:
       - divergence
@@ -717,9 +694,7 @@ paths:
         "409":
           description: Conflict
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Trigger subgraph export
       tags:
       - export
@@ -778,9 +753,7 @@ paths:
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Delete export artifact
       tags:
       - export
@@ -842,9 +815,7 @@ paths:
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Get OCI artifact
       tags:
       - oci
@@ -866,9 +837,7 @@ paths:
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Get layers for an OCI artifact
       tags:
       - oci
@@ -884,9 +853,7 @@ paths:
         "503":
           description: Service Unavailable
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Get OCI signing public key
       tags:
       - oci
@@ -905,9 +872,7 @@ paths:
         "503":
           description: Service Unavailable
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Test OCI registry connection
       tags:
       - oci
@@ -934,15 +899,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
         "409":
           description: Conflict
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Trigger a DGraph restore
       tags:
       - backup
@@ -980,9 +941,7 @@ paths:
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Get restore job status
       tags:
       - backup
@@ -1000,9 +959,7 @@ paths:
         "403":
           description: Forbidden
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: List users
       tags:
       - users
@@ -1035,27 +992,19 @@ paths:
         "400":
           description: Bad Request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
         "403":
           description: Forbidden
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
         "409":
           description: Conflict
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handler.errorResponse'
       summary: Update user role
       tags:
       - users

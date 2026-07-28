@@ -199,7 +199,7 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	// GraphQL proxy — browser-side DataTables calls go here.
 	// Registered at /graphql (not /api/v1/graphql) — GraphQL is not URL-versioned,
 	// per convention (GitHub, GitLab, NetBox, Apollo). See CLAUDE.md.
-	gql := handler.NewGraphQL(cfg.DGraphURL, nil, logger)
+	gql := handler.NewGraphQL(cfg.DGraphURL, nil, logger, true)
 	e.Any("/graphql", gql.Handle)
 
 	// API.

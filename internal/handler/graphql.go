@@ -52,10 +52,14 @@ type GraphQL struct {
 	dgraphURL string
 	db        *ent.Client
 	logger    *slog.Logger
+	// rejectInlineSelectors, when true, 400s single-entity update mutations whose
+	// selector/set are inline literals instead of variables — the shape the proxy
+	// can't stamp. See docs/reference/ERROR-RESPONSES.md.
+	rejectInlineSelectors bool
 }
 
-func NewGraphQL(dgraphURL string, db *ent.Client, logger *slog.Logger) *GraphQL {
-	return &GraphQL{dgraphURL: dgraphURL, db: db, logger: logger}
+func NewGraphQL(dgraphURL string, db *ent.Client, logger *slog.Logger, rejectInlineSelectors bool) *GraphQL {
+	return &GraphQL{dgraphURL: dgraphURL, db: db, logger: logger, rejectInlineSelectors: rejectInlineSelectors}
 }
 
 // DGraphURL exposes the configured DGraph endpoint for adjacent handlers that
@@ -111,7 +115,9 @@ func (h *GraphQL) Handle(c echo.Context) error {
 	if ok, reason := h.authorizeMutation(c); !ok {
 		h.logger.Warn("graphql mutation denied", "reason", reason,
 			"actor", actorFromContext(c), "request.id", c.Response().Header().Get(echo.HeaderXRequestID))
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "dev or admin role required for mutations"})
+		return writeError(c, http.StatusForbidden, CodeForbidden,
+			"dev or admin role required for mutations",
+			"Ask an admin to grant you the dev role.")
 	}
 
 	touchesKnownType := knownMutationRe.MatchString(req.Query)
@@ -130,6 +136,40 @@ func (h *GraphQL) Handle(c echo.Context) error {
 	c.Set("graphql.operation.type", "mutation")
 
 	actor := actorFromContext(c)
+
+	// Reject single-entity UPDATE mutations that use inline literals instead of
+	// variables. Stamping (version/updatedAt/updatedBy) only fires when the proxy
+	// can resolve the target via a variable orbId/id AND inject into a variable
+	// `set` map; an inline selector or inline set silently bypasses it. Rather than
+	// write an unstamped record, refuse loudly and hand back the variable form.
+	// Reads and adds are unaffected. Kill switch: ORBITAL_INLINE_SELECTOR_REJECT.
+	// Note: this inline detection is regex-based (extractOperations) — the standing
+	// intent is to replace the hand-rolled request parsing with a real GraphQL AST
+	// parse; see ROADMAP. See docs/reference/ERROR-RESPONSES.md.
+	if h.rejectInlineSelectors {
+		ops, _ := extractOperations(req.Query)
+		for _, op := range ops {
+			if !strings.HasPrefix(op, "update") {
+				continue // add/delete use different (or no) stamping paths
+			}
+			entityID, _ := req.Variables["id"].(string)
+			orbID, _ := req.Variables["orbId"].(string)
+			_, setIsVar := req.Variables["set"].(map[string]any)
+			if (entityID != "" || orbID != "") && setIsVar {
+				continue // variable form — stamping will fire
+			}
+			h.logger.Warn("inline-selector update rejected — bypasses server-side stamping",
+				"op", op, "actor", actor,
+				"request.id", c.Response().Header().Get(echo.HeaderXRequestID))
+			// Build a copy-pasteable variable-form example for the caller's actual
+			// type (op is "update<Kind>", e.g. updateIdracSettings → IdracSettings).
+			kind := strings.TrimPrefix(op, "update")
+			hint := fmt.Sprintf(`Rewrite with variables — query: mutation Update%s($orbId: String!, $set: %sPatch!) { update%s(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids } } — variables: { "orbId": "namespace:name", "set": { ...fields to change... } }`, kind, kind, kind)
+			return writeError(c, http.StatusBadRequest, CodeVariableFormRequired,
+				fmt.Sprintf("update%s must pass both orbId and set as GraphQL variables, not inline literals: orbital resolves the row via orbId to bump version, and stamps updatedAt/updatedBy into set — it can't do either against inline values.", kind),
+				hint)
+		}
+	}
 
 	// Fetch before-state for any single-entity mutation (used for MVCC and audit diff).
 	//
@@ -167,9 +207,8 @@ func (h *GraphQL) Handle(c echo.Context) error {
 	ifVersion, hasIfVersion := req.Variables["ifVersion"]
 	if hasIfVersion && before != nil {
 		if int(toFloat64(before["version"])) != int(toFloat64(ifVersion)) {
-			return c.JSON(http.StatusConflict, map[string]string{
-				"error": "This record was modified by someone else. Please reload and try again.",
-			})
+			return writeError(c, http.StatusConflict, CodeMVCCConflict,
+				"This record was modified by someone else. Please reload and try again.", "")
 		}
 	}
 

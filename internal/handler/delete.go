@@ -111,8 +111,8 @@ func (h *DeleteHandler) Preview(c echo.Context) error {
 // @Param       type path string true "Config item type" Enums(DataCenter, Server)
 // @Param       id   path string true "DGraph node id"
 // @Success     200 {object} map[string]int "{ \"deleted\": N }"
-// @Failure     400 {object} map[string]string
-// @Failure     500 {object} map[string]string
+// @Failure     400 {object} errorResponse
+// @Failure     500 {object} errorResponse
 // @Router      /api/v1/config-items/{type}/{id} [delete]
 func (h *DeleteHandler) Execute(c echo.Context) error {
 	// Path-param decoding is handled by middleware.DecodePathParams.

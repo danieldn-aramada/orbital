@@ -114,6 +114,7 @@ Read the relevant doc(s) BEFORE writing code in that area — they encode conven
 | Editing GraphQL schema, queries, DQL, export, seeding, blue-green | `docs/reference/DGRAPH.md` |
 | UI templates, HTMX, JavaScript, CSS, edit modals, JSON editor pattern | `docs/reference/UI.md` |
 | Audit events, mutation recording, diff rendering, `graphql.go` proxy | `docs/reference/AUDIT.md` |
+| Error responses — envelope (`error`/`code`/`httpStatus`/`hint`), `code` registry, HTTP-status mapping | `docs/reference/ERROR-RESPONSES.md` |
 | Auth, sessions, OIDC, bearer tokens, role enforcement, orbctl credentials | `docs/reference/AUTH.md` |
 | OCI publish, signing, export jobs, backup, restore, bundler integration | `docs/reference/OCI.md` |
 | Orb-edge: import pipeline, consumer dispatch, DGraphBackend, orb UI, orb scan | `docs/reference/ORB.md` |

@@ -183,7 +183,7 @@ func (h *OCI) PublishExportedJob(ctx context.Context, jobID uuid.UUID, actor str
 // @Produce     json
 // @Param       jobId path string true "Job ID (UUID)"
 // @Success     204
-// @Failure     404 {object} map[string]string
+// @Failure     404 {object} errorResponse
 // @Router      /api/v1/export/jobs/{jobId}/artifact [delete]
 func (h *OCI) DeleteArtifact(c echo.Context) error {
 	jobID, err := uuid.Parse(c.Param("jobId"))
@@ -318,7 +318,7 @@ func (h *OCI) nextTagForJob(ctx context.Context, job *ent.ExportJob) (repoName, 
 // @Produce     json
 // @Param       id path int true "Artifact ID"
 // @Success     200 {object} artifactResponse
-// @Failure     404 {object} map[string]string
+// @Failure     404 {object} errorResponse
 // @Router      /api/v1/oci/artifacts/{id} [get]
 func (h *OCI) GetArtifact(c echo.Context) error {
 	id := 0
@@ -344,13 +344,11 @@ func (h *OCI) GetArtifact(c echo.Context) error {
 // @Tags        oci
 // @Produce     application/x-pem-file
 // @Success     200
-// @Failure     503 {object} map[string]string
+// @Failure     503 {object} errorResponse
 // @Router      /api/v1/oci/public-key [get]
 func (h *OCI) PublicKey(c echo.Context) error {
 	if h.cfg.SigningKeyPath == "" {
-		return c.JSON(http.StatusServiceUnavailable, map[string]string{
-			"error": "signing key not configured",
-		})
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "signing key not configured")
 	}
 	pubPEM, err := oci.PublicKeyPEM(h.cfg.SigningKeyPath)
 	if err != nil {
@@ -367,11 +365,11 @@ func (h *OCI) PublicKey(c echo.Context) error {
 // @Tags        oci
 // @Produce     json
 // @Success     200 {object} map[string]any
-// @Failure     503 {object} map[string]string
+// @Failure     503 {object} errorResponse
 // @Router      /api/v1/oci/test-connection [post]
 func (h *OCI) TestConnection(c echo.Context) error {
 	if h.cfg.Registry == "" {
-		return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "registry not configured"})
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "registry not configured")
 	}
 	// Attempt a simple registry ping via oras registry resolution.
 	// This is intentionally minimal — just validates credentials/reachability.
@@ -446,7 +444,7 @@ func testRegistryConnection(registry, username, password string, allowHTTP bool)
 // @Produce     html
 // @Param       id path int true "Artifact ID"
 // @Success     200
-// @Failure     404 {object} map[string]string
+// @Failure     404 {object} errorResponse
 // @Router      /api/v1/oci/artifacts/{id}/layers [get]
 func (h *OCI) ArtifactLayers(c echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))

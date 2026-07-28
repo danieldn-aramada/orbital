@@ -107,7 +107,7 @@ func ResolveUser(db *ent.Client, adminEmails map[string]struct{}) echo.Middlewar
 			email, _ := c.Get("user_email").(string)
 			email = strings.ToLower(strings.TrimSpace(email))
 			if email == "" {
-				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+				return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 			}
 			ctx := c.Request().Context()
 			u, err := db.User.Query().Where(user.Email(email)).Only(ctx)
@@ -122,7 +122,7 @@ func ResolveUser(db *ent.Client, adminEmails map[string]struct{}) echo.Middlewar
 					Save(ctx)
 				if err != nil {
 					slog.Default().Warn("ResolveUser: failed to provision user", "email", email, "err", err)
-					return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+					return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 				}
 			}
 			c.Set("user_id", u.ID)

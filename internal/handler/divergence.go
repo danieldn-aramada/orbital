@@ -175,8 +175,8 @@ func (h *DivergenceHandler) List(c echo.Context) error {
 // @Produce  json
 // @Param    id path string true "Divergence entry UUID"
 // @Success  200 {object} entryItem
-// @Failure  400 {object} map[string]string
-// @Failure  404 {object} map[string]string
+// @Failure  400 {object} errorResponse
+// @Failure  404 {object} errorResponse
 // @Router   /api/v1/divergences/{id} [get]
 func (h *DivergenceHandler) Get(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -243,10 +243,10 @@ type putResolutionBody struct {
 // @Param    id   path string            true "Divergence entry UUID"
 // @Param    body body putResolutionBody true "Decision payload"
 // @Success  200  {object} resolutionItem
-// @Failure  400  {object} map[string]string
-// @Failure  401  {object} map[string]string
-// @Failure  404  {object} map[string]string
-// @Failure  409  {object} map[string]string  "MVCC conflict — intent changed since report"
+// @Failure  400  {object} errorResponse
+// @Failure  401  {object} errorResponse
+// @Failure  404  {object} errorResponse
+// @Failure  409  {object} errorResponse  "MVCC conflict — intent changed since report"
 // @Router   /api/v1/divergences/{id}/resolution [put]
 func (h *DivergenceHandler) PutResolution(c echo.Context) error {
 	id, err := uuid.Parse(c.Param("id"))
@@ -433,9 +433,9 @@ func (h *DivergenceHandler) dispatchAcceptMutation(ctx context.Context, entry *e
 // @Tags     divergence
 // @Param    id path string true "Divergence entry UUID"
 // @Success  204
-// @Failure  400 {object} map[string]string
-// @Failure  404 {object} map[string]string
-// @Failure  409 {object} map[string]string "Not stale — accept/reject/ignore instead"
+// @Failure  400 {object} errorResponse
+// @Failure  404 {object} errorResponse
+// @Failure  409 {object} errorResponse "Not stale — accept/reject/ignore instead"
 // @Router   /api/v1/divergences/{id} [delete]
 func (h *DivergenceHandler) Dismiss(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -498,8 +498,8 @@ func (h *DivergenceHandler) Dismiss(c echo.Context) error {
 // @Tags     divergence
 // @Param    id path string true "Divergence entry UUID"
 // @Success  204
-// @Failure  400 {object} map[string]string
-// @Failure  404 {object} map[string]string
+// @Failure  400 {object} errorResponse
+// @Failure  404 {object} errorResponse
 // @Router   /api/v1/divergences/{id}/resolution [delete]
 func (h *DivergenceHandler) DeleteResolution(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -538,8 +538,8 @@ func (h *DivergenceHandler) DeleteResolution(c echo.Context) error {
 // @Tags     divergence
 // @Param    dcOrbId query string true "Data center orbId (e.g. colo:colo-galleon)"
 // @Success  200 {object} map[string]any
-// @Failure  400 {object} map[string]string
-// @Failure  401 {object} map[string]string
+// @Failure  400 {object} errorResponse
+// @Failure  401 {object} errorResponse
 // @Router   /api/v1/divergences [delete]
 func (h *DivergenceHandler) ClearByDC(c echo.Context) error {
 	dc := c.QueryParam("dcOrbId")

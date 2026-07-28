@@ -197,8 +197,8 @@ type restoreRequest struct {
 // @Produce     json
 // @Param       body body restoreRequest true "Restore request"
 // @Success     202 {object} triggerResponse
-// @Failure     400 {object} map[string]string
-// @Failure     409 {object} map[string]string
+// @Failure     400 {object} errorResponse
+// @Failure     409 {object} errorResponse
 // @Router      /api/v1/restore [post]
 func (h *RestoreHandler) Trigger(c echo.Context) error {
 	var req restoreRequest
@@ -207,7 +207,7 @@ func (h *RestoreHandler) Trigger(c echo.Context) error {
 	}
 	backupUUID, err := uuid.Parse(req.BackupID)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid backupId"})
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid backupId")
 	}
 
 	ctx := c.Request().Context()
@@ -219,9 +219,7 @@ func (h *RestoreHandler) Trigger(c echo.Context) error {
 		return fmt.Errorf("check backup jobs: %w", err)
 	}
 	if existingBackup != nil {
-		return c.JSON(http.StatusConflict, map[string]string{
-			"error": fmt.Sprintf("backup in progress (id: %s)", existingBackup.ID),
-		})
+		return echo.NewHTTPError(http.StatusConflict, fmt.Sprintf("backup in progress (id: %s)", existingBackup.ID))
 	}
 
 	existingExport, err := h.db.ExportJob.Query().
@@ -231,9 +229,7 @@ func (h *RestoreHandler) Trigger(c echo.Context) error {
 		return fmt.Errorf("check export jobs: %w", err)
 	}
 	if existingExport != nil {
-		return c.JSON(http.StatusConflict, map[string]string{
-			"error": fmt.Sprintf("export in progress (id: %s)", existingExport.ID),
-		})
+		return echo.NewHTTPError(http.StatusConflict, fmt.Sprintf("export in progress (id: %s)", existingExport.ID))
 	}
 
 	existingRestore, err := h.db.RestoreJob.Query().
@@ -243,24 +239,21 @@ func (h *RestoreHandler) Trigger(c echo.Context) error {
 		return fmt.Errorf("check restore jobs: %w", err)
 	}
 	if existingRestore != nil {
-		return c.JSON(http.StatusConflict, map[string]string{
-			"error": fmt.Sprintf("restore already in progress (id: %s)", existingRestore.ID),
-			"id":    existingRestore.ID.String(),
-		})
+		return echo.NewHTTPError(http.StatusConflict, fmt.Sprintf("restore already in progress (id: %s)", existingRestore.ID))
 	}
 
 	bk, err := h.db.Backup.Get(ctx, backupUUID)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "backup not found"})
+			return echo.NewHTTPError(http.StatusBadRequest, "backup not found")
 		}
 		return fmt.Errorf("get backup: %w", err)
 	}
 	if bk.Status != backup.StatusCompleted {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "backup is not in completed status"})
+		return echo.NewHTTPError(http.StatusBadRequest, "backup is not in completed status")
 	}
 	if bk.S3Key == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "backup has no stored file"})
+		return echo.NewHTTPError(http.StatusBadRequest, "backup has no stored file")
 	}
 
 	if bk.SchemaVersion != "" && !req.ConfirmSchemaMismatch {
@@ -334,7 +327,7 @@ func (h *RestoreHandler) List(c echo.Context) error {
 // @Produce     json
 // @Param       jobId path string true "Restore job ID"
 // @Success     200 {object} restoreJobResponse
-// @Failure     404 {object} map[string]string
+// @Failure     404 {object} errorResponse
 // @Router      /api/v1/restore/jobs/{jobId} [get]
 func (h *RestoreHandler) Status(c echo.Context) error {
 	id, err := uuid.Parse(c.Param("jobId"))

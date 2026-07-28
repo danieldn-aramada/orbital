@@ -48,7 +48,7 @@ func mockDGraphSuccess(t *testing.T) *httptest.Server {
 func TestGraphQL_ReadonlyCanQuery(t *testing.T) {
 	userID := createTestUser(t, "readonly-gql@authztest.com", user.RoleReadonly)
 	srv := mockDGraphSuccess(t)
-	h := handler.NewGraphQL(srv.URL, testDB, slog.Default())
+	h := handler.NewGraphQL(srv.URL, testDB, slog.Default(), false)
 
 	c, rec := newAuthzGQLContext(t, userID, `{"query":"{ queryDataCenter { id name } }"}`)
 	if err := h.Handle(c); err != nil {
@@ -62,7 +62,7 @@ func TestGraphQL_ReadonlyCanQuery(t *testing.T) {
 func TestGraphQL_ReadonlyMutationBlocked(t *testing.T) {
 	userID := createTestUser(t, "readonly-mut@authztest.com", user.RoleReadonly)
 	srv := mockDGraphSuccess(t)
-	h := handler.NewGraphQL(srv.URL, testDB, slog.Default())
+	h := handler.NewGraphQL(srv.URL, testDB, slog.Default(), false)
 
 	c, rec := newAuthzGQLContext(t, userID, `{"query":"mutation { addServer(input:[]) { server { id } } }"}`)
 	if err := h.Handle(c); err != nil {
@@ -74,6 +74,11 @@ func TestGraphQL_ReadonlyMutationBlocked(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "dev or admin") {
 		t.Errorf("403 body should explain role requirement, got: %s", rec.Body.String())
 	}
+	// The machine code is the client contract — a typo in CodeForbidden would
+	// break callers that branch on it while the human message still reads fine.
+	if !strings.Contains(rec.Body.String(), `"code":"FORBIDDEN"`) {
+		t.Errorf("403 body should carry code FORBIDDEN, got: %s", rec.Body.String())
+	}
 }
 
 func TestGraphQL_ReadonlyMutationBypassAttemptBlocked(t *testing.T) {
@@ -82,7 +87,7 @@ func TestGraphQL_ReadonlyMutationBypassAttemptBlocked(t *testing.T) {
 	// readonly user is correctly blocked.
 	userID := createTestUser(t, "readonly-bypass@authztest.com", user.RoleReadonly)
 	srv := mockDGraphSuccess(t)
-	h := handler.NewGraphQL(srv.URL, testDB, slog.Default())
+	h := handler.NewGraphQL(srv.URL, testDB, slog.Default(), false)
 
 	body := `{"query":"# looks like a query\nmutation Bar { addServer(input:[]) { server { id } } }"}`
 	c, rec := newAuthzGQLContext(t, userID, body)
@@ -104,7 +109,7 @@ func TestGraphQL_DevCanMutate(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	h := handler.NewGraphQL(srv.URL, testDB, slog.Default())
+	h := handler.NewGraphQL(srv.URL, testDB, slog.Default(), false)
 	c, rec := newAuthzGQLContext(t, userID, `{"query":"mutation { addServer(input:[]) { server { id } } }"}`)
 	if err := h.Handle(c); err != nil {
 		t.Fatalf("Handle: %v", err)
@@ -123,7 +128,7 @@ func TestGraphQL_AdminCanMutate(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	h := handler.NewGraphQL(srv.URL, testDB, slog.Default())
+	h := handler.NewGraphQL(srv.URL, testDB, slog.Default(), false)
 	c, rec := newAuthzGQLContext(t, userID, `{"query":"mutation { updateDataCenter(input:{}) { dataCenter { id } } }"}`)
 	if err := h.Handle(c); err != nil {
 		t.Fatalf("Handle: %v", err)
@@ -138,7 +143,7 @@ func TestGraphQL_UnauthenticatedMutationBlocked(t *testing.T) {
 	// (or pre-resolution). The handler's defensive check at graphql.go:93-96
 	// should still reject mutations.
 	srv := mockDGraphSuccess(t)
-	h := handler.NewGraphQL(srv.URL, testDB, slog.Default())
+	h := handler.NewGraphQL(srv.URL, testDB, slog.Default(), false)
 
 	c, rec := newAuthzGQLContext(t, 0, `{"query":"mutation { addServer(input:[]) { server { id } } }"}`)
 	if err := h.Handle(c); err != nil {

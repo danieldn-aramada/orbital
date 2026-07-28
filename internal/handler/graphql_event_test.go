@@ -59,7 +59,7 @@ func TestGraphQL_MutationWritesAuditEvent(t *testing.T) {
 
 	// Mock DGraph returns a successful mutation response with an orbId.
 	dgraph := mockDGraphSrv(t, `{"data":{"addServer":{"server":[{"orbId":"alaska:SRV999"}]}}}`)
-	h := handler.NewGraphQL(dgraph.URL, testDB, slog.Default())
+	h := handler.NewGraphQL(dgraph.URL, testDB, slog.Default(), false)
 
 	e := echo.New()
 	body, _ := json.Marshal(map[string]any{
@@ -103,7 +103,7 @@ func TestGraphQL_GQLErrorsSuppressAuditEvent(t *testing.T) {
 
 	// DGraph returns errors — audit must not be written.
 	dgraph := mockDGraphSrv(t, `{"errors":[{"message":"something went wrong"}]}`)
-	h := handler.NewGraphQL(dgraph.URL, testDB, slog.Default())
+	h := handler.NewGraphQL(dgraph.URL, testDB, slog.Default(), false)
 
 	e := echo.New()
 	body, _ := json.Marshal(map[string]any{

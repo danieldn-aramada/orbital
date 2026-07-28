@@ -82,7 +82,7 @@ func TestAccept_EmptyTypeReturns422(t *testing.T) {
 		w.Write([]byte(`{"data":{}}`)) //nolint:errcheck
 	}))
 	defer dgraph.Close()
-	gql := handler.NewGraphQL(dgraph.URL, testDB, slog.Default())
+	gql := handler.NewGraphQL(dgraph.URL, testDB, slog.Default(), false)
 	h := handler.NewDivergenceHandler(testDB, slog.Default(), gql)
 
 	c, _ := newPutResolutionRequest(t, entryID, "accept", adminID, "accept-empty-type@test.com")
@@ -121,7 +121,7 @@ func TestAccept_DispatchesMutationAndRecordsResolution(t *testing.T) {
 		w.Write([]byte(`{"data":{"updateServer":{"numUids":1}}}`)) //nolint:errcheck
 	}))
 	defer dgraph.Close()
-	gql := handler.NewGraphQL(dgraph.URL, testDB, slog.Default())
+	gql := handler.NewGraphQL(dgraph.URL, testDB, slog.Default(), false)
 	h := handler.NewDivergenceHandler(testDB, slog.Default(), gql)
 
 	c, _ := newPutResolutionRequest(t, entryID, "accept", adminID, "accept-success@test.com")
@@ -171,7 +171,7 @@ func TestAccept_MutationFailureLeavesNoResolution(t *testing.T) {
 		w.Write([]byte(`{"errors":[{"message":"resolver error: server not found"}]}`)) //nolint:errcheck
 	}))
 	defer dgraph.Close()
-	gql := handler.NewGraphQL(dgraph.URL, testDB, slog.Default())
+	gql := handler.NewGraphQL(dgraph.URL, testDB, slog.Default(), false)
 	h := handler.NewDivergenceHandler(testDB, slog.Default(), gql)
 
 	c, _ := newPutResolutionRequest(t, entryID, "accept", adminID, "accept-fail@test.com")
@@ -238,7 +238,7 @@ func TestList_ActionFilter_PartitionsIgnoreFromAcceptReject(t *testing.T) {
 		}
 	}
 
-	gql := handler.NewGraphQL("http://unused", testDB, slog.Default())
+	gql := handler.NewGraphQL("http://unused", testDB, slog.Default(), false)
 	h := handler.NewDivergenceHandler(testDB, slog.Default(), gql)
 
 	listForActions := func(t *testing.T, query string) map[string]bool {
@@ -359,7 +359,7 @@ func TestList_ActionFilter_BatchAcceptAndRejectOnSameConfigItem(t *testing.T) {
 	}))
 	defer dgraph.Close()
 
-	gql := handler.NewGraphQL(dgraph.URL, testDB, slog.Default())
+	gql := handler.NewGraphQL(dgraph.URL, testDB, slog.Default(), false)
 	h := handler.NewDivergenceHandler(testDB, slog.Default(), gql)
 
 	e := echo.New()

@@ -175,14 +175,18 @@ func TestResolveUser_EmptyEmail_NoAppPrincipal_Unauthorized(t *testing.T) {
 	c.Set("user_email", "")
 	// no user_name → not an app principal
 
-	if err := h(c); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	// ResolveUser now returns an *echo.HTTPError; the central ErrorHandler
+	// (registered on the real server) renders it as the errorResponse envelope.
+	err := h(c)
+	if err == nil {
+		t.Fatal("expected an error for empty-email non-app caller")
+	}
+	he, ok := err.(*echo.HTTPError)
+	if !ok || he.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 *echo.HTTPError, got %v", err)
 	}
 	if called {
 		t.Error("handler should NOT have been called for empty-email non-app caller")
-	}
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401, got %d", rec.Code)
 	}
 }
 

@@ -39,7 +39,7 @@ type userItem struct {
 // @Tags        users
 // @Produce     json
 // @Success     200 {object} map[string]any
-// @Failure     403 {object} map[string]string
+// @Failure     403 {object} errorResponse
 // @Router      /api/v1/users [get]
 func (h *UsersHandler) List(c echo.Context) error {
 	if err := h.enforceAdmin(c); err != nil {
@@ -81,10 +81,10 @@ type updateRoleRequest struct {
 // @Param       id   path  int               true "User ID"
 // @Param       body body  updateRoleRequest true "New role"
 // @Success     200  {object} userItem
-// @Failure     400  {object} map[string]string
-// @Failure     403  {object} map[string]string
-// @Failure     404  {object} map[string]string
-// @Failure     409  {object} map[string]string
+// @Failure     400  {object} errorResponse
+// @Failure     403  {object} errorResponse
+// @Failure     404  {object} errorResponse
+// @Failure     409  {object} errorResponse
 // @Router      /api/v1/users/{id}/role [put]
 func (h *UsersHandler) UpdateRole(c echo.Context) error {
 	// Validate parameters first so callers get 400 before any auth/DB check.

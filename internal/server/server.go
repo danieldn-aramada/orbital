@@ -48,6 +48,10 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
+	// Render every returned error as the errorResponse envelope (one shape, with
+	// a machine code) instead of Echo's default {"message": ...}.
+	// See docs/reference/ERROR-RESPONSES.md.
+	e.HTTPErrorHandler = handler.ErrorHandler
 
 	e.Use(metrics.Middleware())
 	e.Use(orbmw.DecodePathParams)
@@ -190,7 +194,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	gqlGroup := root.Group("", apiAuth...)
 	// Constructed once at outer scope so the DivergenceHandler can borrow it
 	// for the Accept-mutation dispatch (see internal/handler/divergence.go).
-	gql := handler.NewGraphQL(cfg.DGraphURL, db, logger)
+	gql := handler.NewGraphQL(cfg.DGraphURL, db, logger, cfg.InlineSelectorReject)
 	s3Configured := cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != ""
 	ociConfigured := cfg.OCIConfigured()
 	if !ociConfigured {

@@ -155,7 +155,7 @@ type exportRequest struct {
 // @Produce     json
 // @Param       body body exportRequest true "Export request"
 // @Success     202 {object} triggerResponse
-// @Failure     409 {object} map[string]string
+// @Failure     409 {object} errorResponse
 // @Router      /api/v1/export [post]
 func (h *Export) Trigger(c echo.Context) error {
 	var req exportRequest
@@ -178,7 +178,7 @@ func (h *Export) Trigger(c echo.Context) error {
 
 	dcName, dcOrbID, _, err := h.fetchDCInfo(c.Request().Context(), datacenterID)
 	if err != nil {
-		return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "could not resolve datacenter: " + err.Error()})
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "could not resolve datacenter: "+err.Error())
 	}
 
 	// Scratch DGraph is shared — only one export can run at a time across all data centers.
@@ -189,10 +189,7 @@ func (h *Export) Trigger(c echo.Context) error {
 		return fmt.Errorf("check existing job: %w", err)
 	}
 	if existing != nil {
-		return c.JSON(http.StatusConflict, map[string]string{
-			"error": fmt.Sprintf("export already in progress (id: %s)", existing.ID),
-			"id":    existing.ID.String(),
-		})
+		return echo.NewHTTPError(http.StatusConflict, fmt.Sprintf("export already in progress (id: %s)", existing.ID))
 	}
 
 	existingRestore, err := h.db.RestoreJob.Query().
@@ -202,9 +199,7 @@ func (h *Export) Trigger(c echo.Context) error {
 		return fmt.Errorf("check restore jobs: %w", err)
 	}
 	if existingRestore != nil {
-		return c.JSON(http.StatusConflict, map[string]string{
-			"error": fmt.Sprintf("restore in progress (id: %s)", existingRestore.ID),
-		})
+		return echo.NewHTTPError(http.StatusConflict, fmt.Sprintf("restore in progress (id: %s)", existingRestore.ID))
 	}
 
 	actor := actorFromContext(c)
@@ -471,7 +466,7 @@ func (h *Export) Download(c echo.Context) error {
 	layers, err := h.callBundlers(c.Request().Context(), req)
 	if err != nil {
 		h.logger.Error("bundler-aware download failed", "jobId", job.ID, "err", err)
-		return c.JSON(http.StatusBadGateway, map[string]string{"error": "bundler call failed: " + err.Error()})
+		return echo.NewHTTPError(http.StatusBadGateway, "bundler call failed: "+err.Error())
 	}
 
 	zipBytes, err := buildCourierZip(dataGZ, schemaGZ, layers)

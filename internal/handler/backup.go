@@ -337,7 +337,7 @@ type backupRequest struct {
 // @Produce     json
 // @Param       body body backupRequest false "Backup request (optional; defaults trigger=manual)"
 // @Success     202 {object} triggerResponse
-// @Failure     409 {object} map[string]string
+// @Failure     409 {object} errorResponse
 // @Router      /api/v1/backup [post]
 func (h *BackupHandler) Trigger(c echo.Context) error {
 	existing, err := h.db.Backup.Query().
@@ -347,10 +347,7 @@ func (h *BackupHandler) Trigger(c echo.Context) error {
 		return fmt.Errorf("check existing backup: %w", err)
 	}
 	if existing != nil {
-		return c.JSON(http.StatusConflict, map[string]string{
-			"error": fmt.Sprintf("backup already in progress (id: %s)", existing.ID),
-			"id":    existing.ID.String(),
-		})
+		return echo.NewHTTPError(http.StatusConflict, fmt.Sprintf("backup already in progress (id: %s)", existing.ID))
 	}
 
 	existingRestore, err := h.db.RestoreJob.Query().
@@ -360,9 +357,7 @@ func (h *BackupHandler) Trigger(c echo.Context) error {
 		return fmt.Errorf("check restore jobs: %w", err)
 	}
 	if existingRestore != nil {
-		return c.JSON(http.StatusConflict, map[string]string{
-			"error": fmt.Sprintf("restore in progress (id: %s)", existingRestore.ID),
-		})
+		return echo.NewHTTPError(http.StatusConflict, fmt.Sprintf("restore in progress (id: %s)", existingRestore.ID))
 	}
 
 	initiatedBy := actorFromContext(c)
@@ -442,7 +437,7 @@ func (h *BackupHandler) List(c echo.Context) error {
 // @Produce     json
 // @Param       jobId path string true "Backup job ID"
 // @Success     200 {object} backupResponse
-// @Failure     404 {object} map[string]string
+// @Failure     404 {object} errorResponse
 // @Router      /api/v1/backup/jobs/{jobId} [get]
 func (h *BackupHandler) Status(c echo.Context) error {
 	id, err := uuid.Parse(c.Param("jobId"))
@@ -467,7 +462,7 @@ func (h *BackupHandler) Status(c echo.Context) error {
 // @Produce     json
 // @Param       jobId path string true "Backup job ID"
 // @Success     200 {object} map[string]string
-// @Failure     404 {object} map[string]string
+// @Failure     404 {object} errorResponse
 // @Router      /api/v1/backup/jobs/{jobId}/download [get]
 func (h *BackupHandler) Download(c echo.Context) error {
 	id, err := uuid.Parse(c.Param("jobId"))
@@ -503,8 +498,8 @@ func (h *BackupHandler) Download(c echo.Context) error {
 // @Produce     json
 // @Param       jobId path string true "Backup job ID"
 // @Success     204
-// @Failure     404 {object} map[string]string
-// @Failure     409 {object} map[string]string
+// @Failure     404 {object} errorResponse
+// @Failure     409 {object} errorResponse
 // @Router      /api/v1/backup/jobs/{jobId} [delete]
 func (h *BackupHandler) Delete(c echo.Context) error {
 	id, err := uuid.Parse(c.Param("jobId"))
@@ -519,7 +514,7 @@ func (h *BackupHandler) Delete(c echo.Context) error {
 		return fmt.Errorf("get backup: %w", err)
 	}
 	if j.Status == backup.StatusRunning || j.Status == backup.StatusPending {
-		return c.JSON(http.StatusConflict, map[string]string{"error": "cannot delete a backup that is in progress"})
+		return echo.NewHTTPError(http.StatusConflict, "cannot delete a backup that is in progress")
 	}
 	if j.S3Key != "" {
 		if err := h.storage.Delete(c.Request().Context(), j.S3Key); err != nil {

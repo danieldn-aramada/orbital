@@ -45,6 +45,11 @@ type Config struct {
 	// Production AKS overrides interval via deploy/base/deploy.yaml.
 	DivergenceIngestEnabled bool          `envconfig:"ORBITAL_DIVERGENCE_INGEST_ENABLED" default:"true"`
 	DivergencePollInterval  time.Duration `envconfig:"ORBITAL_DIVERGENCE_POLL_INTERVAL"  default:"10s"`
+	// InlineSelectorReject rejects single-entity update mutations that pass their
+	// selector/set inline instead of as GraphQL variables — the shape the proxy
+	// can't stamp version/updatedAt/updatedBy into. Default on; a kill switch for
+	// ops if an unanticipated caller surfaces. See docs/reference/ERROR-RESPONSES.md.
+	InlineSelectorReject bool `envconfig:"ORBITAL_INLINE_SELECTOR_REJECT" default:"true"`
 	// OIDCIssuerURL defaults to the Azure AD tenant URL so the SSO login button
 	// is available in `make run-orbital` for daily UI work (provided the user
 	// also sets ORBITAL_OIDC_CLIENT_SECRET). In dev mode (ORBITAL_DEV=true),
