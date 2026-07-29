@@ -17,7 +17,7 @@ const docTemplate = `{
     "paths": {
         "/api/v1/audit-log": {
             "get": {
-                "description": "Returns recorded mutation events. Supports limit/offset pagination and optional filtering by orbId, resource_type, resource_id, or operation_name. Returns JSON by default; returns an HTML table fragment when the HX-Request header is present.",
+                "description": "Read-only, immutable audit trail of intent mutations, newest first.\n\n**Scope a query** by combining filters: ` + "`" + `orbId` + "`" + ` (repeatable, max 32) for a specific resource; ` + "`" + `namespace` + "`" + ` for a whole data center; ` + "`" + `resource_type` + "`" + `/` + "`" + `operation_name` + "`" + ` to narrow. To see everything under a server/cluster, fetch its subtree orbIds from the GraphQL Topology API and pass them as repeatable ` + "`" + `orbId` + "`" + ` params (there is no single \"cluster\" scope — a child mutation records the child's orbId, not the parent's).\n\n**Render a diff:** when an event is a clean single-entity update it carries a ` + "`" + `changes` + "`" + ` array (` + "`" + `[{field, before, after}]` + "`" + `) with metadata and DGraph UIDs already excluded — render it directly. When ` + "`" + `changes` + "`" + ` is absent (bulk add, create, or a multi-operation event), there is no field diff; fall back to showing ` + "`" + `operations` + "`" + ` + ` + "`" + `resourceIds` + "`" + `. The raw ` + "`" + `details` + "`" + ` (with ` + "`" + `before` + "`" + `/` + "`" + `variables` + "`" + `) is always included for callers that want it.\n\nReturns JSON by default; returns an HTML table fragment when the ` + "`" + `HX-Request` + "`" + ` header is present (used by orbital's own UI). See docs/api-cheatsheet.md § \"Audit log\".",
                 "produces": [
                     "application/json"
                 ],
@@ -39,8 +39,12 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "type": "string",
-                        "description": "Filter by resource orbId (e.g. alaska-dot:GRTLY24). Repeatable, max 32.",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Filter by resource orbId (e.g. alaska-dot:GRTLY24). Repeatable (pass multiple), max 32 — matches events touching ANY of them.",
                         "name": "orbId",
                         "in": "query"
                     },
@@ -76,7 +80,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Filter by operation name (e.g. UpdateServer)",
+                        "description": "Filter to events containing this operation (exact, case-sensitive; stored form is verb-lowercased, e.g. updateVeleroBackup)",
                         "name": "operation_name",
                         "in": "query"
                     }
@@ -85,8 +89,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/handler.auditLogResponse"
                         }
                     }
                 }
@@ -1189,6 +1192,22 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.auditLogResponse": {
+            "type": "object",
+            "properties": {
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.eventItem"
+                    }
+                },
+                "total": {
+                    "description": "Total is the count of events matching the filters, ignoring limit/offset.",
+                    "type": "integer",
+                    "example": 42
+                }
+            }
+        },
         "handler.backupRequest": {
             "type": "object",
             "properties": {
@@ -1298,6 +1317,60 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.eventItem": {
+            "type": "object",
+            "properties": {
+                "actor": {
+                    "type": "string",
+                    "example": "asharma@armada.ai"
+                },
+                "changes": {
+                    "description": "Changes is the pre-computed field-level diff. **Present ONLY for a clean\nsingle-entity update** (omitted otherwise via omitempty) — so its presence\nis the client's signal that a field diff is available; no need to inspect\noperations/before. Server-managed metadata (version/updatedAt/updatedBy/…)\nand DGraph UIDs are already excluded. Same data the UI's colored diff renders.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.fieldChange"
+                    }
+                },
+                "details": {
+                    "description": "raw {operationName, query, variables, before}",
+                    "type": "object"
+                },
+                "eventCategory": {
+                    "description": "data | management | auth",
+                    "type": "string",
+                    "example": "data"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "3d6bb15f-8c4c-45f0-8a6c-939b6f9cc512"
+                },
+                "operations": {
+                    "description": "DGraph mutation fields, e.g. [\"updateVeleroBackup\"]",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "resourceIds": {
+                    "description": "orbIds touched",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "resourceTypes": {
+                    "description": "ConfigItem types touched, e.g. [\"VeleroBackup\"]",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "timestamp": {
+                    "type": "string",
+                    "example": "2026-07-29T17:26:55Z"
+                }
+            }
+        },
         "handler.exportRequest": {
             "type": "object",
             "required": [
@@ -1313,6 +1386,23 @@ const docTemplate = `{
                     "description": "OrbID identifies the data center to export, in \"namespace:name\" form. Required.",
                     "type": "string",
                     "example": "alaska:dc-01"
+                }
+            }
+        },
+        "handler.fieldChange": {
+            "type": "object",
+            "properties": {
+                "after": {
+                    "description": "new value (e.g. 15)",
+                    "type": "object"
+                },
+                "before": {
+                    "description": "old value (e.g. 7)",
+                    "type": "object"
+                },
+                "field": {
+                    "type": "string",
+                    "example": "retentionDays"
                 }
             }
         },

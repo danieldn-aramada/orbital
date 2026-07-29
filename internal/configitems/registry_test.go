@@ -55,11 +55,13 @@ func TestBeforeFields_ReturnsForEveryRegisteredType(t *testing.T) {
 			t.Errorf("BeforeFields(%q) is empty; audit diff will not render for this type", typ.Name)
 			continue
 		}
-		// Every BeforeFields selection must include id+orbId+version — id for
-		// before-fetch, orbId for entity identity, version for MVCC + auto-
-		// increment. Sanity check: skip the check if BeforeFields is empty
+		// Every BeforeFields selection must include orbId+version — orbId for
+		// entity identity, version for MVCC + auto-increment. `id` (the DGraph
+		// UID) is intentionally NOT required: it's stripped from the persisted
+		// before-state (stripDGraphIDs) so it never leaks to the audit API, and
+		// nothing downstream reads it. Sanity check: skip if BeforeFields is empty
 		// (covered above).
-		for _, required := range []string{"id", "orbId", "version"} {
+		for _, required := range []string{"orbId", "version"} {
 			if !strings.Contains(got, required) {
 				t.Errorf("BeforeFields(%q) missing required field %q (full selection: %q)",
 					typ.Name, required, got)

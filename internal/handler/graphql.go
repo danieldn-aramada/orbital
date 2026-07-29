@@ -453,9 +453,36 @@ func (h *GraphQL) writeEvent(opName string, operations, resourceTypes, resourceI
 		"variables":     variables,
 	}
 	if before != nil {
-		details["before"] = before
+		details["before"] = stripDGraphIDs(before)
 	}
 	writeAuditEvent(h.db, h.logger, "data", actor, opName, operations, resourceTypes, resourceIDs, details)
+}
+
+// stripDGraphIDs returns a deep copy of v with every "id" key removed. DGraph
+// UIDs are internal and reassigned on restore/reimport, so they must never be
+// persisted to the audit event or exposed via the API — clients key on orbId.
+// Copy-based so the caller's before-state map is left intact (writeEvent runs in
+// a goroutine); recurses into nested maps and arrays.
+func stripDGraphIDs(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, val := range t {
+			if k == "id" {
+				continue
+			}
+			out[k] = stripDGraphIDs(val)
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, val := range t {
+			out[i] = stripDGraphIDs(val)
+		}
+		return out
+	default:
+		return v
+	}
 }
 
 // extractOperations returns deduplicated DGraph operation names and resource type

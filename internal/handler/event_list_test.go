@@ -88,6 +88,51 @@ func TestEventList_EmptyDB(t *testing.T) {
 	}
 }
 
+// TestEventList_OperationNameFilter pins the operation_name filter (JSONB
+// array-membership). The regression class is the containment predicate: it must
+// match an event whose `operations` array *contains* the value — including
+// compound multi-op events — and exclude events that don't. A broken predicate
+// 500s or returns the wrong set; neither is visible without a real Postgres.
+func TestEventList_OperationNameFilter(t *testing.T) {
+	ctx := context.Background()
+	clearEvents(ctx)
+
+	createEvent(t, "a@x.com", []string{"updateVeleroBackup"}, []string{"VeleroBackup"}, []string{"colo:dev-main-velero-backup"}, "data")
+	createEvent(t, "a@x.com", []string{"updateEtcdBackup"}, []string{"EtcdBackup"}, []string{"colo:dev-main-etcd-backup"}, "data")
+	// Compound event: array-membership must still match, not just single-element arrays.
+	createEvent(t, "a@x.com", []string{"updateServer", "updateVeleroBackup"}, []string{"Server", "VeleroBackup"}, []string{"colo:srv-1"}, "data")
+	t.Cleanup(func() { clearEvents(ctx) })
+
+	h := newEventHandler(t)
+	c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", map[string]string{"operation_name": "updateVeleroBackup"})
+	if err := h.List(c); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	events, _ := body["events"].([]any)
+	if len(events) != 2 {
+		t.Fatalf("operation_name=updateVeleroBackup should match the pure + compound events (2), got %d: %s", len(events), rec.Body.String())
+	}
+	for _, item := range events {
+		ops, _ := item.(map[string]any)["operations"].([]any)
+		found := false
+		for _, o := range ops {
+			if o == "updateVeleroBackup" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("returned event lacks updateVeleroBackup in operations: %v", ops)
+		}
+	}
+}
+
 func TestEventList_ReturnsEventsWithRequiredFields(t *testing.T) {
 	ctx := context.Background()
 	clearEvents(ctx)

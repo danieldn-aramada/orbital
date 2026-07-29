@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/event"
 	"github.com/armada/orbital/ent/eventresource"
@@ -36,17 +37,40 @@ func NewEventHandler(db *ent.Client, logger *slog.Logger, basePath string) *Even
 	}
 }
 
+// auditLogResponse is the JSON body of GET /api/v1/audit-log.
+type auditLogResponse struct {
+	Events []eventItem `json:"events"`
+	// Total is the count of events matching the filters, ignoring limit/offset.
+	Total int `json:"total" example:"42"`
+}
+
+// eventItem is one audit event in the audit-log response.
 type eventItem struct {
-	ID            string          `json:"id"`
-	Operations    []string        `json:"operations"`
-	ResourceTypes []string        `json:"resourceTypes"`
-	ResourceIDs   []string        `json:"resourceIds"`
-	Actor         string          `json:"actor"`
-	Timestamp     string          `json:"timestamp"`
-	Details       json.RawMessage `json:"details,omitempty"`
-	EventCategory string          `json:"eventCategory"`
-	VarSummary    template.HTML   `json:"-"`
-	DiffHTML      template.HTML   `json:"-"`
+	ID            string          `json:"id"            example:"3d6bb15f-8c4c-45f0-8a6c-939b6f9cc512"`
+	Operations    []string        `json:"operations"`                    // DGraph mutation fields, e.g. ["updateVeleroBackup"]
+	ResourceTypes []string        `json:"resourceTypes"`                 // ConfigItem types touched, e.g. ["VeleroBackup"]
+	ResourceIDs   []string        `json:"resourceIds"`                   // orbIds touched
+	Actor         string          `json:"actor"         example:"asharma@armada.ai"`
+	Timestamp     string          `json:"timestamp"     example:"2026-07-29T17:26:55Z"`
+	Details       json.RawMessage `json:"details,omitempty" swaggertype:"object"` // raw {operationName, query, variables, before}
+	EventCategory string          `json:"eventCategory" example:"data"`  // data | management | auth
+	// Changes is the pre-computed field-level diff. **Present ONLY for a clean
+	// single-entity update** (omitted otherwise via omitempty) — so its presence
+	// is the client's signal that a field diff is available; no need to inspect
+	// operations/before. Server-managed metadata (version/updatedAt/updatedBy/…)
+	// and DGraph UIDs are already excluded. Same data the UI's colored diff renders.
+	Changes    []fieldChange `json:"changes,omitempty"`
+	VarSummary template.HTML `json:"-"`
+	DiffHTML   template.HTML `json:"-"`
+}
+
+// fieldChange is one changed field in an event's diff: the field name plus its
+// old and new values (raw JSON types — number, bool, string, object). Emitted in
+// the `changes` array; also what the HTML panel renders.
+type fieldChange struct {
+	Field  string `json:"field"  example:"retentionDays"`
+	Before any    `json:"before" swaggertype:"object"` // old value (e.g. 7)
+	After  any    `json:"after"  swaggertype:"object"` // new value (e.g. 15)
 }
 
 type eventDetails struct {
@@ -89,19 +113,25 @@ var skipVarsSet = map[string]bool{
 // List returns a paginated list of audit events ordered by timestamp desc.
 //
 // @Summary     List audit events
-// @Description Returns recorded mutation events. Supports limit/offset pagination and optional filtering by orbId, resource_type, resource_id, or operation_name. Returns JSON by default; returns an HTML table fragment when the HX-Request header is present.
+// @Description Read-only, immutable audit trail of intent mutations, newest first.
+// @Description
+// @Description **Scope a query** by combining filters: `orbId` (repeatable, max 32) for a specific resource; `namespace` for a whole data center; `resource_type`/`operation_name` to narrow. To see everything under a server/cluster, fetch its subtree orbIds from the GraphQL Topology API and pass them as repeatable `orbId` params (there is no single "cluster" scope — a child mutation records the child's orbId, not the parent's).
+// @Description
+// @Description **Render a diff:** when an event is a clean single-entity update it carries a `changes` array (`[{field, before, after}]`) with metadata and DGraph UIDs already excluded — render it directly. When `changes` is absent (bulk add, create, or a multi-operation event), there is no field diff; fall back to showing `operations` + `resourceIds`. The raw `details` (with `before`/`variables`) is always included for callers that want it.
+// @Description
+// @Description Returns JSON by default; returns an HTML table fragment when the `HX-Request` header is present (used by orbital's own UI). See docs/api-cheatsheet.md § "Audit log".
 // @Tags        audit
 // @Produce     json
 // @Param       limit          query int    false "Max results (default 100, max 500)"
 // @Param       offset         query int    false "Pagination offset"
-// @Param       orbId          query string false "Filter by resource orbId (e.g. alaska-dot:GRTLY24). Repeatable, max 32."
+// @Param       orbId          query []string false "Filter by resource orbId (e.g. alaska-dot:GRTLY24). Repeatable (pass multiple), max 32 — matches events touching ANY of them."
 // @Param       namespace      query string false "Filter by namespace prefix (e.g. \"colo\" matches every orbId starting with \"colo:\"). Cheap DC-scope filter that avoids enumerating child orbIds."
 // @Param       since          query string false "RFC3339 lower bound (exclusive) on event timestamp"
 // @Param       until          query string false "RFC3339 upper bound (inclusive) on event timestamp"
 // @Param       resource_id    query string false "Filter by resource ID"
 // @Param       resource_type  query string false "Filter by resource type (e.g. Server, DataCenter)"
-// @Param       operation_name query string false "Filter by operation name (e.g. UpdateServer)"
-// @Success     200 {object} map[string]interface{}
+// @Param       operation_name query string false "Filter to events containing this operation (exact, case-sensitive; stored form is verb-lowercased, e.g. updateVeleroBackup)"
+// @Success     200 {object} auditLogResponse
 // @Router      /api/v1/audit-log [get]
 func (h *EventHandler) List(c echo.Context) error {
 	limit := 100
@@ -160,6 +190,15 @@ func (h *EventHandler) List(c echo.Context) error {
 		// publish-changes panel to exclude the surrounding system events
 		// like `export` from the diff itself).
 		q = q.Where(event.EventCategoryEQ(cat))
+	}
+	if op := strings.TrimSpace(c.QueryParam("operation_name")); op != "" {
+		// `operations` is a JSON array column; match events whose array contains
+		// op. Postgres: operations::jsonb @> '"<op>"'. Exact and case-sensitive —
+		// callers pass the stored form (verb lowercased + Type, e.g.
+		// updateVeleroBackup), which is exactly what the `operations` field returns.
+		q = q.Where(func(s *sql.Selector) {
+			s.Where(sqljson.ValueContains(event.FieldOperations, op))
+		})
 	}
 
 	// Namespace prefix filter. Orbital's schema convention is "orbId =
@@ -220,11 +259,16 @@ func (h *EventHandler) List(c echo.Context) error {
 			Details:       e.Details,
 			EventCategory: e.EventCategory,
 		}
+		var d eventDetails
+		if len(e.Details) > 0 {
+			json.Unmarshal(e.Details, &d) //nolint:errcheck
+		}
+		// Structured diff for the JSON API — present only for a clean
+		// single-entity update (same guard the HTML panel uses below).
+		if d.Before != nil && len(resTypes) > 0 {
+			item.Changes = computeChanges(d.Before, d.Variables)
+		}
 		if c.Request().Header.Get("HX-Request") == "true" {
-			var d eventDetails
-			if len(e.Details) > 0 {
-				json.Unmarshal(e.Details, &d) //nolint:errcheck
-			}
 			if d.Before != nil && len(resTypes) > 0 {
 				item.DiffHTML = buildDiffHTML(d.Before, d.Variables)
 			}
@@ -254,10 +298,7 @@ func (h *EventHandler) List(c echo.Context) error {
 		})
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{
-		"events": items,
-		"total":  total,
-	})
+	return c.JSON(http.StatusOK, auditLogResponse{Events: items, Total: total})
 }
 
 func buildVarSummary(raw json.RawMessage) template.HTML {
@@ -294,24 +335,22 @@ func buildVarSummary(raw json.RawMessage) template.HTML {
 	return template.HTML(strings.Join(parts, "<br>"))
 }
 
-// buildDiffHTML computes a before/after line diff and returns colored HTML.
-// Returns "" when nothing changed.
-//
-// Generic across resource types — no allowlist gating. The top-level field
-// loop diffs every field present in BOTH before and after (minus skipDiffFields
-// metadata). The nested-iDRAC block at the bottom fires whenever the before
-// snapshot includes idracSettings AND the mutation included idracInput. New
-// ConfigItem types produce diffs automatically without any edits here.
+// computeChanges is the single source of truth for "what changed" in a
+// single-entity mutation: the fields present in BOTH before and after (minus
+// skipDiffFields metadata) whose value actually changed, sorted by field name.
+// Returns raw typed values so the JSON `changes` array carries real before/after
+// (numbers, bools, strings). Both the API (`changes`) and the HTML audit panel
+// (buildDiffHTML) derive from this, so they can never disagree about a diff.
 //
 // Patch-style mutations (`update{Type}(input: {filter, set: $set})`) keep
-// after-values nested under variables["set"]; user-driven flat-shape edits
-// keep them at the top level. Both shapes work.
-func buildDiffHTML(before, variables map[string]any) template.HTML {
+// after-values nested under variables["set"]; user-driven flat-shape edits keep
+// them at the top level. Both shapes work. Generic across resource types — new
+// ConfigItem types diff automatically with no edits here.
+func computeChanges(before, variables map[string]any) []fieldChange {
 	after := variables
 	if set, ok := variables["set"].(map[string]any); ok {
 		after = set
 	}
-
 	// Intersection of before and after keys, stable-sorted, metadata excluded.
 	fields := make([]string, 0, len(before))
 	for k := range before {
@@ -325,21 +364,32 @@ func buildDiffHTML(before, variables map[string]any) template.HTML {
 	}
 	sort.Strings(fields)
 
-	var sections strings.Builder
+	var changes []fieldChange
 	for _, field := range fields {
-		bv := before[field]
-		av := after[field]
-		beforeStr := valStr(bv, av)
-		afterStr := valStr(av, av)
-		if beforeStr == afterStr {
-			continue
+		bv, av := before[field], after[field]
+		if valStr(bv, av) == valStr(av, av) {
+			continue // present in the set but not actually changed
 		}
+		changes = append(changes, fieldChange{Field: field, Before: bv, After: av})
+	}
+	return changes
+}
+
+// buildDiffHTML renders the field-level diff (computeChanges) as the colored HTML
+// the audit panel shows. Returns "" when nothing changed. It is a pure renderer
+// over computeChanges — the field selection lives there, so the HTML and the JSON
+// `changes` array always agree.
+func buildDiffHTML(before, variables map[string]any) template.HTML {
+	var sections strings.Builder
+	for _, c := range computeChanges(before, variables) {
+		beforeStr := valStr(c.Before, c.After)
+		afterStr := valStr(c.After, c.After)
 		beforeLines := prettyLines(beforeStr)
 		afterLines := prettyLines(afterStr)
 		diffLines := lineDiff(beforeLines, afterLines)
 
 		sections.WriteString(`<div style="margin-bottom:0.5rem">`)
-		sections.WriteString(`<strong style="font-size:0.7rem">` + template.HTMLEscapeString(field) + `</strong>`)
+		sections.WriteString(`<strong style="font-size:0.7rem">` + template.HTMLEscapeString(c.Field) + `</strong>`)
 		sections.WriteString(`<pre style="font-size:0.7rem;margin:0.2rem 0 0;background:#fafafa;padding:0.4rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all">`)
 		for _, line := range diffLines {
 			if len(line) == 0 {
@@ -357,14 +407,6 @@ func buildDiffHTML(before, variables map[string]any) template.HTML {
 		}
 		sections.WriteString(`</pre></div>`)
 	}
-
-	// (Historical: a hardcoded nested-iDRAC diff block lived here, required by
-	// the UpdateServerAndIdrac compound mutation that wrapped Server + iDRAC
-	// edits in a single body. The Server edit modal now dispatches parallel
-	// updateServer + updateIdracSettings via configitem-editor.js — each
-	// produces its own audit row with the generic diff above. The compound
-	// path is gone; the special-case block is gone. Same generic diff handles
-	// every type.)
 
 	result := sections.String()
 	if result == "" {

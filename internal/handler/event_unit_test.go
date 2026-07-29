@@ -268,3 +268,50 @@ func TestBuildDiffHTML_UnchangedJSONFieldSuppressed(t *testing.T) {
 		t.Errorf("name change should appear in diff, got: %s", got)
 	}
 }
+
+// ── computeChanges (the JSON `changes` core) ──────────────────────────────────
+
+// TestComputeChanges pins the diff core that feeds both the JSON `changes` field
+// and the HTML panel: only actually-changed fields, raw typed values (not
+// stringified), metadata/UID excluded even when present in the set.
+func TestComputeChanges(t *testing.T) {
+	before := map[string]any{
+		"id":            "0xc28",     // DGraph UID — never a change
+		"orbId":         "colo:x",    // not in set → excluded
+		"retentionDays": float64(7),  // CHANGED → included
+		"schedule":      "0 5 * * *", // in set but unchanged → excluded
+		"enabled":       true,        // not in set → excluded
+	}
+	variables := map[string]any{
+		"orbId": "colo:x",
+		"set": map[string]any{
+			"retentionDays": float64(15),
+			"schedule":      "0 5 * * *", // same value → not a change
+			"version":       float64(2),  // metadata (skipDiffFields) → excluded
+		},
+	}
+	got := computeChanges(before, variables)
+	if len(got) != 1 {
+		t.Fatalf("expected exactly 1 change (retentionDays), got %d: %#v", len(got), got)
+	}
+	if got[0].Field != "retentionDays" {
+		t.Errorf("field: got %q, want retentionDays", got[0].Field)
+	}
+	// Values are raw typed (float64), not stringified — so the JSON carries real types.
+	if bv, ok := got[0].Before.(float64); !ok || bv != 7 {
+		t.Errorf("before: got %#v, want float64(7)", got[0].Before)
+	}
+	if av, ok := got[0].After.(float64); !ok || av != 15 {
+		t.Errorf("after: got %#v, want float64(15)", got[0].After)
+	}
+}
+
+// TestComputeChanges_NoChange returns nil so the JSON `changes` key is omitted
+// (omitempty) — the client's signal that no field diff is available.
+func TestComputeChanges_NoChange(t *testing.T) {
+	before := map[string]any{"retentionDays": float64(7)}
+	variables := map[string]any{"set": map[string]any{"retentionDays": float64(7)}}
+	if got := computeChanges(before, variables); got != nil {
+		t.Errorf("expected nil (no change → omitted), got %#v", got)
+	}
+}

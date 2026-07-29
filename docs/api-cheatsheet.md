@@ -7,6 +7,7 @@ Copy-paste GraphQL + REST for backend services talking to Orbital on **AKS dev**
 - Base URL (AKS dev): `http://ilb.devnew.armada.internal/orbital`
   - GraphQL: `/graphql`
   - REST: `/api/v1`
+  - Swagger — authoritative reference for every REST endpoint's params (types, required/optional): `$ORBITAL_URL/swagger/index.html`
 - `orbId` = `namespace:name` — the stable key (don't cache DGraph UIDs)
 - Auth: every request needs `Authorization: Bearer <token>`
   - AEP / Keycloak: forward the user's bearer token
@@ -140,6 +141,83 @@ Response
 }
 ```
 `updatedAt` has no milliseconds and `updatedBy` is the authenticated caller — both server-stamped (the client never sent them).
+
+## Audit log (REST)
+
+Every intent mutation is recorded as an immutable audit event. Read them at `GET /api/v1/audit-log` (JSON). Events are written by orbital as a side effect of the mutation.
+
+Filter by the resource's `orbId`. For example, to see the trail for the velero backup edits:
+```bash
+curl -s "$ORBITAL_URL/api/v1/audit-log?orbId=colo:dev-main-velero-backup&operation_name=updateVeleroBackup&limit=50" \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+Example response
+```json
+{
+  "events": [
+    {
+      "id": "e671bfb1-88b8-4af1-881d-9a268b39150c",
+      "operations": [
+        "updateVeleroBackup"
+      ],
+      "resourceTypes": [
+        "VeleroBackup"
+      ],
+      "resourceIds": [
+        "colo:dev-main-velero-backup"
+      ],
+      "actor": "admin@armada.ai",
+      "timestamp": "2026-07-29T19:40:50Z",
+      ... 
+      "changes": [
+        {
+          "field": "retentionDays",
+          "before": 14,
+          "after": 13
+        }
+      ]
+    }
+  ],
+  "total": 37
+}
+```
+
+All filters are **optional** and **combinable** — omit them all for the full log (newest first)
+- `orbId=colo:dev-main-velero-backup` — events touching a resource (repeatable, max 32)
+- `operation_name=updateVeleroBackup` — one operation (must match a value in the event's `operations` array, e.g. `updateVeleroBackup`)
+- `namespace=colo` — everything under a data center (`colo:*`)
+- `since` / `until` — RFC3339 window; `limit` / `offset` — pagination (`limit` ≤ 500)
+
+### Response shape + rendering a diff
+```json
+{
+  "events": [
+    {
+      "id": "3d6bb15f-8c4c-45f0-8a6c-939b6f9cc512",
+      "timestamp": "2026-07-28T19:13:50Z",
+      "actor": "asharma@armada.ai",
+      "operations": ["updateVeleroBackup"],
+      "resourceTypes": ["VeleroBackup"],
+      "resourceIds": ["colo:dev-main-velero-backup"],
+      "eventCategory": "data",
+      "changes": [ { "field": "retentionDays", "before": 7, "after": 15 } ],
+      "details": { "operationName": "UpdateVeleroBackup", "before": { … }, "variables": { "set": { … } } }
+    }
+  ],
+  "total": 42
+}
+```
+Diff can be rendered via `changes`. Each entry is `{ field, before, after }` with raw typed values (numbers, bools, strings). 
+
+`changes` is present only for a clean single-entity update. It is omitted for bulk adds, creates, and multi-operation events (which have no single before/after). Its presence is the signal — no need to inspect `operations` or `before`:
+
+```js
+if (event.changes) event.changes.forEach(c => renderRow(c.field, c.before, c.after))
+else               renderSummary(event.operations, event.resourceIds)   // no field diff available
+```
+
+The raw `details` (`before` + `variables.set`) is always included if you'd rather compute the diff yourself — but `changes` already does it, matching exactly what orbital's own UI renders. 
+
 
 ## Export + publish a data center (REST)
 ```bash
