@@ -17,6 +17,7 @@ import (
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/configitems"
+	"github.com/armada/orbital/internal/metrics"
 	"github.com/labstack/echo/v4"
 )
 
@@ -285,7 +286,9 @@ func (h *GraphQL) Handle(c echo.Context) error {
 		}
 	}
 
+	dgStart := time.Now()
 	resp, err := http.Post(h.dgraphURL, "application/json", bytes.NewReader(bodyBytes))
+	metrics.ObserveDGraphCall("mutation", time.Since(dgStart))
 	if err != nil {
 		return fmt.Errorf("proxy to dgraph: %w", err)
 	}
@@ -372,7 +375,9 @@ func firstGQLError(body []byte) string {
 }
 
 func (h *GraphQL) proxyRaw(c echo.Context, body []byte) error {
+	dgStart := time.Now()
 	resp, err := http.Post(h.dgraphURL, "application/json", bytes.NewReader(body))
+	metrics.ObserveDGraphCall("query", time.Since(dgStart))
 	if err != nil {
 		return fmt.Errorf("proxy to dgraph: %w", err)
 	}

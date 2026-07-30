@@ -13,6 +13,15 @@ spec:
     metadata:
       labels:
         app: orbital
+      annotations:
+        # Istio (prometheusMerge) reads these, scrapes orbital's /metrics, and
+        # merges it into the sidecar's :15020 endpoint — which Azure Managed
+        # Prometheus (ama-metrics `kubernetespods` job) scrapes cluster-wide via
+        # prometheus.io/scrape. This is how orbital_*/http_* metrics reach Grafana
+        # inside the mesh; a ServiceMonitor to :8001 would fail on mTLS.
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
         - name: orbital

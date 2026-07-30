@@ -1,0 +1,110 @@
+# Standalone OpenTelemetry Collector for orbital's metrics — mirrors the pattern
+# used by armada-galleon-svc / application-svc in this cluster.
+#
+# It scrapes orbital's /metrics (:8001) and remote-writes to Cortex
+# (commander-metrics), so orbital's metrics land in commander-grafana alongside
+# the rest of the Armada app ecosystem. This is a self-owned path: it does NOT
+# depend on the ama-metrics -> Azure Monitor workspace pipeline, which silently
+# drops orbital's target despite an otherwise-correct scrape config.
+#
+# devcc-only: the Cortex endpoint is specific to this cluster, so this lives in
+# the overlay rather than deploy/base. namespace (netbox) is applied by the
+# overlay's kustomization namespace transformer.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orbital-otel-collector
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: orbital-otel-collector
+rules:
+  # kubernetes_sd role: service needs to list/watch services (+ endpoints).
+  - apiGroups: [""]
+    resources: [services, endpoints]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: orbital-otel-collector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: orbital-otel-collector
+subjects:
+  - kind: ServiceAccount
+    name: orbital-otel-collector
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbital-otel-collector-config
+data:
+  config.yaml: |
+    receivers:
+      prometheus:
+        config:
+          scrape_configs:
+            - job_name: scrape-orbital
+              scrape_interval: 30s
+              metrics_path: /metrics
+              kubernetes_sd_configs:
+                - role: service
+                  namespaces:
+                    own_namespace: true
+              relabel_configs:
+                # keep only orbital's Service, port 8001
+                - source_labels: [__meta_kubernetes_service_name]
+                  action: keep
+                  regex: orbital
+                - source_labels: [__meta_kubernetes_service_port_number]
+                  action: keep
+                  regex: "8001"
+    exporters:
+      debug:
+        verbosity: basic
+      prometheusremotewrite:
+        endpoint: http://commander-metrics-cortex-nginx.commander-metrics/api/v1/push
+    service:
+      pipelines:
+        metrics:
+          receivers: [prometheus]
+          exporters: [prometheusremotewrite, debug]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orbital-otel-collector
+  labels:
+    app: orbital-otel-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orbital-otel-collector
+  template:
+    metadata:
+      labels:
+        app: orbital-otel-collector
+    spec:
+      serviceAccountName: orbital-otel-collector
+      containers:
+        - name: otel-collector
+          image: armada.azurecr.io/chainguard/opentelemetry-collector-contrib-fips:0.154
+          args: ["--config=/etc/otel-collector/config.yaml"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 200Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otel-collector
+      volumes:
+        - name: config
+          configMap:
+            name: orbital-otel-collector-config

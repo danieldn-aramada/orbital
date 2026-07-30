@@ -4,9 +4,10 @@ namespace: netbox
 resources:
   - ../../base
   - secrets.yaml  # gitignored — see README.md for how to create this file
+  - otel-collector.yaml  # scrapes orbital /metrics -> Cortex (commander-grafana); self-owned metrics path
 images:
   - name: armadaeksatest.azurecr.io/orbital
-    newTag: v0.0.27
+    newTag: v0.0.28
   - name: armadaeksatest.azurecr.io/configbundle-bundler
     newTag: v0.0.7
 
