@@ -28,6 +28,12 @@ type ImportRecord struct {
 	ExportJobID string `json:"export_job_id,omitempty"`
 	// ImportedAt holds the value of the "imported_at" field.
 	ImportedAt time.Time `json:"imported_at,omitempty"`
+	// BuildAt holds the value of the "build_at" field.
+	BuildAt *time.Time `json:"build_at,omitempty"`
+	// ZotPushAt holds the value of the "zot_push_at" field.
+	ZotPushAt *time.Time `json:"zot_push_at,omitempty"`
+	// DispatchedAt holds the value of the "dispatched_at" field.
+	DispatchedAt *time.Time `json:"dispatched_at,omitempty"`
 	// Status holds the value of the "status" field.
 	Status importrecord.Status `json:"status,omitempty"`
 	// Verification holds the value of the "verification" field.
@@ -48,7 +54,7 @@ func (*ImportRecord) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case importrecord.FieldTag, importrecord.FieldDigest, importrecord.FieldDcOrbID, importrecord.FieldExportJobID, importrecord.FieldStatus, importrecord.FieldVerification, importrecord.FieldLayersJSON, importrecord.FieldError, importrecord.FieldInitiatedBy:
 			values[i] = new(sql.NullString)
-		case importrecord.FieldImportedAt:
+		case importrecord.FieldImportedAt, importrecord.FieldBuildAt, importrecord.FieldZotPushAt, importrecord.FieldDispatchedAt:
 			values[i] = new(sql.NullTime)
 		case importrecord.FieldID:
 			values[i] = new(uuid.UUID)
@@ -102,6 +108,27 @@ func (_m *ImportRecord) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field imported_at", values[i])
 			} else if value.Valid {
 				_m.ImportedAt = value.Time
+			}
+		case importrecord.FieldBuildAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field build_at", values[i])
+			} else if value.Valid {
+				_m.BuildAt = new(time.Time)
+				*_m.BuildAt = value.Time
+			}
+		case importrecord.FieldZotPushAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field zot_push_at", values[i])
+			} else if value.Valid {
+				_m.ZotPushAt = new(time.Time)
+				*_m.ZotPushAt = value.Time
+			}
+		case importrecord.FieldDispatchedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field dispatched_at", values[i])
+			} else if value.Valid {
+				_m.DispatchedAt = new(time.Time)
+				*_m.DispatchedAt = value.Time
 			}
 		case importrecord.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -183,6 +210,21 @@ func (_m *ImportRecord) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("imported_at=")
 	builder.WriteString(_m.ImportedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	if v := _m.BuildAt; v != nil {
+		builder.WriteString("build_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.ZotPushAt; v != nil {
+		builder.WriteString("zot_push_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.DispatchedAt; v != nil {
+		builder.WriteString("dispatched_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Status))

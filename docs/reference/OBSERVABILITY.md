@@ -86,6 +86,38 @@ nil function.
 
 ---
 
+## Edge metrics scraping (orb + Zot) — colo clusters
+
+The edge clusters (e.g. colo-dev-main) run **kube-prometheus-stack** (Prometheus
+Operator), helm release **`kube-prometheus-stack`** in ns **`monitoring`**; Grafana is
+`grafana.dev-main.dev.armadaapps.io`. **The scrape convention is `ServiceMonitor`,
+not pod annotations** — matching how the cluster's other apps (velero, rook-ceph)
+are scraped. Do NOT use `prometheus.io/scrape` annotations for edge components.
+
+- orb + Zot `ServiceMonitor`s live in `deploy/edge/overlays/colo-galleon/servicemonitor.yaml`;
+  the Services (`deploy/edge/base/{orb,zot}.yaml`) carry an `app:` metadata label
+  and a **named** `http` port (a ServiceMonitor selects Services by label and
+  references the port by name — an unnamed port can't be targeted).
+- orb serves `/metrics` on **:8010**, Zot on **:5000** — both on the main HTTP
+  port, unauthenticated (like `/healthz`). Zot needs `extensions.metrics.enable:
+  true` in its config (added to the colo overlay's `zot-config.json`).
+- **Footgun — the `release: prometheus-stack` label is load-bearing.** A
+  ServiceMonitor whose labels don't match the Prometheus's `serviceMonitorSelector`
+  is **ignored with no error, no metrics**. kube-prometheus-stack's default
+  selector matches `release: <helm-release>`; on colo-dev-main the live selector
+  is **`release: kube-prometheus-stack`** (verified 2026-08-03 — NOT the
+  `prometheus-stack` that a stale `application_set.yaml` suggested), so every edge
+  ServiceMonitor MUST carry `release: kube-prometheus-stack`. Always confirm the
+  LIVE selector, don't trust the deploy repo:
+  `kubectl -n monitoring get prometheus -o jsonpath='{.items[*].spec.serviceMonitorSelector}'`.
+- SMs live in the app namespace (`orb`), not `monitoring` — the Operator watches
+  all namespaces (proven by velero's SM living in ns `velero` and working).
+- Verify after apply (allow ~30–60s): in Grafana, `up{namespace="orb"}` should
+  show the orb + Zot targets; then `orb_artifact_propagation_seconds`,
+  `orb_imports_total`, `zot_repo_uploads_total{repo="orbital/colo-galleon"}`.
+
+---
+
 ## How to add a new span
 
 1. Get the tracer:
@@ -189,9 +221,12 @@ After deploy, validate the pipeline with:
 2. **Logs** — Grafana → Loki data source →
    `{service_name="orbital"} |= "export"`. Should return slog lines with
    `trace_id` attributes that match the App Insights trace IDs.
-3. **Metrics** — Grafana → Mimir →
-   `rate(http_requests_total{service="orbital"}[5m])`. Confirms the
-   ServiceMonitor and Prometheus Agent picked up the scrape target.
+3. **Metrics** — in devcc, orbital's reliable metrics path is the self-owned
+   `orbital-otel-collector` → Cortex; view in `commander-grafana` on the Cortex
+   data source (e.g. `sum by (path) (rate(http_requests_total{job="scrape-orbital"}[5m]))`).
+   The AMW/ama-metrics path silently drops orbital's target after each redeploy —
+   see `docs/reference/monitoring-stack.md` (Metrics + Grafana) for the verified
+   topology, the known ama-metrics defect, and the dashboard JSON.
 
 ---
 

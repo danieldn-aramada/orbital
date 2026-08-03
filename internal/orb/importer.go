@@ -56,13 +56,40 @@ const (
 
 // ImportMeta carries metadata for a pulled or uploaded artifact.
 type ImportMeta struct {
-	Tag          string
-	Digest       string
-	DCOrbID      string
-	ExportJobID  string
-	CreatedAt    time.Time
+	Tag         string
+	Digest      string
+	DCOrbID     string
+	ExportJobID string
+	// CreatedAt is the artifact BUILD/publish time (OCI
+	// org.opencontainers.image.created). Zero for upload/courier imports that
+	// carry no build annotation. Persisted as ImportRecord.build_at.
+	CreatedAt time.Time
+	// ZotPushAt is when the edge Zot mirrored the tag (search-ext
+	// PushTimestamp). Zero when the registry has no search extension or the
+	// artifact wasn't pulled from Zot. Persisted as ImportRecord.zot_push_at.
+	ZotPushAt    time.Time
 	Verification string // one of the Verification* constants
 	InitiatedBy  string // "manual" (default) or "auto" (from poller)
+}
+
+// annotationImageCreated is the OCI standard build-time annotation orbital
+// stamps on the manifest (RFC3339). See internal/oci/publisher.go.
+const annotationImageCreated = "org.opencontainers.image.created"
+
+// ParseBuildTime extracts the artifact build/publish time from OCI manifest
+// annotations. Returns the zero time when the annotation is absent or
+// unparseable — callers treat zero as "unknown" (no build_at persisted, no
+// publish→edge hop observed).
+func ParseBuildTime(annotations map[string]string) time.Time {
+	s := annotations[annotationImageCreated]
+	if s == "" {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339Nano, s)
+	if err != nil {
+		return time.Time{}
+	}
+	return t.UTC()
 }
 
 // LayerRecord describes one layer in an imported artifact.
@@ -103,6 +130,12 @@ type ImportRecord struct {
 	InitiatedBy  string        `json:"initiatedBy"`  // "manual" (default) or "auto"
 	Error        string        `json:"error,omitempty"`
 	Layers       []LayerRecord `json:"layers,omitempty"`
+	// Propagation anchors — nil when unknown (upload imports, or a registry
+	// without the search extension). Deltas: zotPushAt−buildAt = publish→edge,
+	// importedAt−zotPushAt = edge→import, dispatchedAt−importedAt = import→dispatch.
+	BuildAt      *time.Time `json:"buildAt,omitempty"`
+	ZotPushAt    *time.Time `json:"zotPushAt,omitempty"`
+	DispatchedAt *time.Time `json:"dispatchedAt,omitempty"`
 }
 
 // DispatchErrors returns all dispatch error strings across layers, for use in templates.
@@ -261,6 +294,12 @@ func (i *Importer) recordHistory(ctx context.Context, meta ImportMeta, dataGZ, s
 		SetImportedAt(time.Now().UTC()).
 		SetStatus(importRecordStatus(status)).
 		SetLayersJSON(string(layersJSON))
+	if !meta.CreatedAt.IsZero() {
+		create = create.SetBuildAt(meta.CreatedAt)
+	}
+	if !meta.ZotPushAt.IsZero() {
+		create = create.SetZotPushAt(meta.ZotPushAt)
+	}
 	if v := importRecordVerification(meta.Verification); v != "" {
 		create = create.SetVerification(v)
 	}
@@ -308,7 +347,11 @@ func FinalizeLastHistory(ctx context.Context, db *store.Client, layers []LayerRe
 	if err != nil {
 		return fmt.Errorf("marshal layers: %w", err)
 	}
-	upd := db.ImportRecord.UpdateOneID(row.ID).SetLayersJSON(string(newLayers))
+	// Finalize runs immediately after consumer dispatch completes, so now is
+	// the dispatch-completion anchor for the import_to_dispatch hop.
+	upd := db.ImportRecord.UpdateOneID(row.ID).
+		SetLayersJSON(string(newLayers)).
+		SetDispatchedAt(time.Now().UTC())
 	if status != "" {
 		upd = upd.SetStatus(importRecordStatus(status))
 	}
@@ -346,6 +389,9 @@ func importRecordFromRow(r *store.ImportRecord) ImportRecord {
 		Verification: string(r.Verification),
 		InitiatedBy:  string(r.InitiatedBy),
 		Error:        r.Error,
+		BuildAt:      r.BuildAt,
+		ZotPushAt:    r.ZotPushAt,
+		DispatchedAt: r.DispatchedAt,
 	}
 	if r.LayersJSON != "" {
 		_ = json.Unmarshal([]byte(r.LayersJSON), &rec.Layers)

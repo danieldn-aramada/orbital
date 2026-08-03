@@ -42,7 +42,7 @@ type PublishExportedResult struct {
 // flow synchronously. Called from Export.runExport when download=false AND
 // OCI is configured. Returns non-nil error on any failure (bundler, push,
 // sign); the caller marks the ExportJob failed and cleans up the zip.
-type PublishExportedFunc func(ctx context.Context, jobID uuid.UUID, actor string) (*PublishExportedResult, error)
+type PublishExportedFunc func(ctx context.Context, jobID uuid.UUID) (*PublishExportedResult, error)
 
 type Export struct {
 	db                    *ent.Client
@@ -743,7 +743,7 @@ func (h *Export) runExport(jobID uuid.UUID, download bool, actor string, dcOrbID
 
 	// Publish flow: chain into the OCI push. publishFn is non-nil here —
 	// Trigger already inferred download=true when it was nil.
-	result, err := h.publishFn(ctx, jobID, actor)
+	result, err := h.publishFn(ctx, jobID)
 	if err != nil {
 		log.Error("publish failed after export", "err", err)
 		h.markFailed(ctx, jobID, "publish: "+err.Error())

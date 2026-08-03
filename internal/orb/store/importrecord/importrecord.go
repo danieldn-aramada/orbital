@@ -25,6 +25,12 @@ const (
 	FieldExportJobID = "export_job_id"
 	// FieldImportedAt holds the string denoting the imported_at field in the database.
 	FieldImportedAt = "imported_at"
+	// FieldBuildAt holds the string denoting the build_at field in the database.
+	FieldBuildAt = "build_at"
+	// FieldZotPushAt holds the string denoting the zot_push_at field in the database.
+	FieldZotPushAt = "zot_push_at"
+	// FieldDispatchedAt holds the string denoting the dispatched_at field in the database.
+	FieldDispatchedAt = "dispatched_at"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldVerification holds the string denoting the verification field in the database.
@@ -47,6 +53,9 @@ var Columns = []string{
 	FieldDcOrbID,
 	FieldExportJobID,
 	FieldImportedAt,
+	FieldBuildAt,
+	FieldZotPushAt,
+	FieldDispatchedAt,
 	FieldStatus,
 	FieldVerification,
 	FieldLayersJSON,
@@ -176,6 +185,21 @@ func ByExportJobID(opts ...sql.OrderTermOption) OrderOption {
 // ByImportedAt orders the results by the imported_at field.
 func ByImportedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldImportedAt, opts...).ToFunc()
+}
+
+// ByBuildAt orders the results by the build_at field.
+func ByBuildAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBuildAt, opts...).ToFunc()
+}
+
+// ByZotPushAt orders the results by the zot_push_at field.
+func ByZotPushAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldZotPushAt, opts...).ToFunc()
+}
+
+// ByDispatchedAt orders the results by the dispatched_at field.
+func ByDispatchedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDispatchedAt, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

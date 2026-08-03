@@ -20,6 +20,7 @@ import (
 	"github.com/armada/orbital/internal/oci"
 	"github.com/armada/orbital/internal/ocitype"
 	"github.com/armada/orbital/internal/orb"
+	"github.com/armada/orbital/internal/orbmetrics"
 	"github.com/labstack/echo/v4"
 )
 
@@ -93,20 +94,38 @@ func (s *Server) startImport(tag, initiatedBy string) bool {
 		if result.Verified {
 			verification = orb.VerificationVerified
 		}
+
+		// Propagation anchors (best-effort): build time from the OCI annotation,
+		// edge-landing time from Zot's search extension. Neither may fail the
+		// import — a missing anchor just drops the corresponding hop metric.
+		buildAt := orb.ParseBuildTime(artifact.Annotations)
+		var zotPushAt time.Time
+		if zm, zerr := oci.GetImageMeta(ctx, pullCfg, tag); zerr != nil {
+			s.logger.Warn("zot search-ext meta unavailable — propagation metrics degraded", "tag", tag, "err", zerr)
+		} else {
+			zotPushAt = zm.PushTimestamp
+			if buildAt.IsZero() {
+				buildAt = zm.LastUpdated // fallback: build time via search-ext config `created`
+			}
+		}
+
 		meta := orb.ImportMeta{
 			Tag:          artifact.Tag,
 			Digest:       artifact.Digest,
 			DCOrbID:      artifact.Annotations["com.armada.orbital.datacenter-id"],
 			ExportJobID:  artifact.Annotations["com.armada.orbital.export-job-id"],
-			CreatedAt:    time.Now().UTC(),
+			CreatedAt:    buildAt,
+			ZotPushAt:    zotPushAt,
 			Verification: verification,
 			InitiatedBy:  initiatedBy,
 		}
 
 		if err := s.imp.Import(ctx, artifact.DataGZ, artifact.SchemaGZ, meta); err != nil {
+			orbmetrics.IncImport("failed", initiatedBy)
 			s.state.setFailed("import: " + err.Error())
 			return
 		}
+		importAt := time.Now().UTC()
 
 		// Best-effort consumer dispatch for all non-graph layers. Every extra
 		// layer is treated identically — orb has no built-in knowledge of any
@@ -151,11 +170,19 @@ func (s *Server) startImport(tag, initiatedBy string) bool {
 		if dispatchErrors > 0 {
 			status = "partial"
 		}
-		if len(layerRecords) > 0 || status != "done" {
-			if err := orb.FinalizeLastHistory(ctx, s.db, layerRecords, status); err != nil {
-				s.logger.Warn("finalize history failed", "err", err)
-			}
+		// Always finalize so dispatched_at (the import_to_dispatch anchor) is
+		// recorded on this import's row, even with no extra layers to dispatch.
+		if err := orb.FinalizeLastHistory(ctx, s.db, layerRecords, status); err != nil {
+			s.logger.Warn("finalize history failed", "err", err)
 		}
+		dispatchAt := time.Now().UTC()
+
+		// Emit per-artifact propagation metrics. Anchors are best-effort — a
+		// missing build/push timestamp drops only the hops that touch it.
+		for hop, d := range orbmetrics.Hops(buildAt, zotPushAt, importAt, dispatchAt) {
+			orbmetrics.ObserveHop(hop, d)
+		}
+		orbmetrics.IncImport(status, initiatedBy)
 
 		s.state.setDone(orb.ImportRecord{
 			Tag:          meta.Tag,
@@ -663,7 +690,6 @@ func (s *Server) importArtifact(c echo.Context) error {
 		ctx := context.Background()
 		meta := orb.ImportMeta{
 			Tag:          tag,
-			CreatedAt:    time.Now().UTC(),
 			Verification: orb.VerificationNotApplicable,
 		}
 		if err := s.imp.Import(ctx, dataGZ, schemaGZ, meta); err != nil {
@@ -793,7 +819,6 @@ func (s *Server) importSubgraph(c echo.Context) error {
 	go func() {
 		meta := orb.ImportMeta{
 			Tag:          tag,
-			CreatedAt:    time.Now().UTC(),
 			Verification: orb.VerificationNotApplicable,
 		}
 		if err := s.imp.Import(context.Background(), dataGZ, schemaGZ, meta); err != nil {

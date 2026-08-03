@@ -17,6 +17,7 @@
     "ui": { "enable": true },
     "search": { "enable": true },
     "trust": { "enable": true, "cosign": true },
+    "metrics": { "enable": true, "prometheus": { "path": "/metrics" } },
     "sync": {
       "credentialsFile": "/etc/zot/sync-creds.json",
       "registries": [{

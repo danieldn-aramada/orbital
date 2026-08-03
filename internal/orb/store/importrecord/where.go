@@ -80,6 +80,21 @@ func ImportedAt(v time.Time) predicate.ImportRecord {
 	return predicate.ImportRecord(sql.FieldEQ(FieldImportedAt, v))
 }
 
+// BuildAt applies equality check predicate on the "build_at" field. It's identical to BuildAtEQ.
+func BuildAt(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldEQ(FieldBuildAt, v))
+}
+
+// ZotPushAt applies equality check predicate on the "zot_push_at" field. It's identical to ZotPushAtEQ.
+func ZotPushAt(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldEQ(FieldZotPushAt, v))
+}
+
+// DispatchedAt applies equality check predicate on the "dispatched_at" field. It's identical to DispatchedAtEQ.
+func DispatchedAt(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldEQ(FieldDispatchedAt, v))
+}
+
 // LayersJSON applies equality check predicate on the "layers_json" field. It's identical to LayersJSONEQ.
 func LayersJSON(v string) predicate.ImportRecord {
 	return predicate.ImportRecord(sql.FieldEQ(FieldLayersJSON, v))
@@ -408,6 +423,156 @@ func ImportedAtLT(v time.Time) predicate.ImportRecord {
 // ImportedAtLTE applies the LTE predicate on the "imported_at" field.
 func ImportedAtLTE(v time.Time) predicate.ImportRecord {
 	return predicate.ImportRecord(sql.FieldLTE(FieldImportedAt, v))
+}
+
+// BuildAtEQ applies the EQ predicate on the "build_at" field.
+func BuildAtEQ(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldEQ(FieldBuildAt, v))
+}
+
+// BuildAtNEQ applies the NEQ predicate on the "build_at" field.
+func BuildAtNEQ(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldNEQ(FieldBuildAt, v))
+}
+
+// BuildAtIn applies the In predicate on the "build_at" field.
+func BuildAtIn(vs ...time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldIn(FieldBuildAt, vs...))
+}
+
+// BuildAtNotIn applies the NotIn predicate on the "build_at" field.
+func BuildAtNotIn(vs ...time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldNotIn(FieldBuildAt, vs...))
+}
+
+// BuildAtGT applies the GT predicate on the "build_at" field.
+func BuildAtGT(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldGT(FieldBuildAt, v))
+}
+
+// BuildAtGTE applies the GTE predicate on the "build_at" field.
+func BuildAtGTE(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldGTE(FieldBuildAt, v))
+}
+
+// BuildAtLT applies the LT predicate on the "build_at" field.
+func BuildAtLT(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldLT(FieldBuildAt, v))
+}
+
+// BuildAtLTE applies the LTE predicate on the "build_at" field.
+func BuildAtLTE(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldLTE(FieldBuildAt, v))
+}
+
+// BuildAtIsNil applies the IsNil predicate on the "build_at" field.
+func BuildAtIsNil() predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldIsNull(FieldBuildAt))
+}
+
+// BuildAtNotNil applies the NotNil predicate on the "build_at" field.
+func BuildAtNotNil() predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldNotNull(FieldBuildAt))
+}
+
+// ZotPushAtEQ applies the EQ predicate on the "zot_push_at" field.
+func ZotPushAtEQ(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldEQ(FieldZotPushAt, v))
+}
+
+// ZotPushAtNEQ applies the NEQ predicate on the "zot_push_at" field.
+func ZotPushAtNEQ(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldNEQ(FieldZotPushAt, v))
+}
+
+// ZotPushAtIn applies the In predicate on the "zot_push_at" field.
+func ZotPushAtIn(vs ...time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldIn(FieldZotPushAt, vs...))
+}
+
+// ZotPushAtNotIn applies the NotIn predicate on the "zot_push_at" field.
+func ZotPushAtNotIn(vs ...time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldNotIn(FieldZotPushAt, vs...))
+}
+
+// ZotPushAtGT applies the GT predicate on the "zot_push_at" field.
+func ZotPushAtGT(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldGT(FieldZotPushAt, v))
+}
+
+// ZotPushAtGTE applies the GTE predicate on the "zot_push_at" field.
+func ZotPushAtGTE(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldGTE(FieldZotPushAt, v))
+}
+
+// ZotPushAtLT applies the LT predicate on the "zot_push_at" field.
+func ZotPushAtLT(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldLT(FieldZotPushAt, v))
+}
+
+// ZotPushAtLTE applies the LTE predicate on the "zot_push_at" field.
+func ZotPushAtLTE(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldLTE(FieldZotPushAt, v))
+}
+
+// ZotPushAtIsNil applies the IsNil predicate on the "zot_push_at" field.
+func ZotPushAtIsNil() predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldIsNull(FieldZotPushAt))
+}
+
+// ZotPushAtNotNil applies the NotNil predicate on the "zot_push_at" field.
+func ZotPushAtNotNil() predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldNotNull(FieldZotPushAt))
+}
+
+// DispatchedAtEQ applies the EQ predicate on the "dispatched_at" field.
+func DispatchedAtEQ(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldEQ(FieldDispatchedAt, v))
+}
+
+// DispatchedAtNEQ applies the NEQ predicate on the "dispatched_at" field.
+func DispatchedAtNEQ(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldNEQ(FieldDispatchedAt, v))
+}
+
+// DispatchedAtIn applies the In predicate on the "dispatched_at" field.
+func DispatchedAtIn(vs ...time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldIn(FieldDispatchedAt, vs...))
+}
+
+// DispatchedAtNotIn applies the NotIn predicate on the "dispatched_at" field.
+func DispatchedAtNotIn(vs ...time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldNotIn(FieldDispatchedAt, vs...))
+}
+
+// DispatchedAtGT applies the GT predicate on the "dispatched_at" field.
+func DispatchedAtGT(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldGT(FieldDispatchedAt, v))
+}
+
+// DispatchedAtGTE applies the GTE predicate on the "dispatched_at" field.
+func DispatchedAtGTE(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldGTE(FieldDispatchedAt, v))
+}
+
+// DispatchedAtLT applies the LT predicate on the "dispatched_at" field.
+func DispatchedAtLT(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldLT(FieldDispatchedAt, v))
+}
+
+// DispatchedAtLTE applies the LTE predicate on the "dispatched_at" field.
+func DispatchedAtLTE(v time.Time) predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldLTE(FieldDispatchedAt, v))
+}
+
+// DispatchedAtIsNil applies the IsNil predicate on the "dispatched_at" field.
+func DispatchedAtIsNil() predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldIsNull(FieldDispatchedAt))
+}
+
+// DispatchedAtNotNil applies the NotNil predicate on the "dispatched_at" field.
+func DispatchedAtNotNil() predicate.ImportRecord {
+	return predicate.ImportRecord(sql.FieldNotNull(FieldDispatchedAt))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.

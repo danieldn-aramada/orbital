@@ -26,7 +26,6 @@ func (RegistryArtifact) Fields() []ent.Field {
 		field.Bool("signed").Default(false),
 		field.String("signing_key_fingerprint").Optional().Nillable(),
 		field.Enum("status").Values("pending", "bundling", "pushing", "signing", "completed", "failed"),
-		field.Int("initiated_by").Optional().Nillable(),
 		field.Time("initiated_at"),
 		field.Time("completed_at").Optional().Nillable(),
 		field.String("error").Optional().Nillable(),

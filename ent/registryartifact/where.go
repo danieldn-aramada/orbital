@@ -106,11 +106,6 @@ func SigningKeyFingerprint(v string) predicate.RegistryArtifact {
 	return predicate.RegistryArtifact(sql.FieldEQ(FieldSigningKeyFingerprint, v))
 }
 
-// InitiatedBy applies equality check predicate on the "initiated_by" field. It's identical to InitiatedByEQ.
-func InitiatedBy(v int) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldEQ(FieldInitiatedBy, v))
-}
-
 // InitiatedAt applies equality check predicate on the "initiated_at" field. It's identical to InitiatedAtEQ.
 func InitiatedAt(v time.Time) predicate.RegistryArtifact {
 	return predicate.RegistryArtifact(sql.FieldEQ(FieldInitiatedAt, v))
@@ -709,56 +704,6 @@ func StatusIn(vs ...Status) predicate.RegistryArtifact {
 // StatusNotIn applies the NotIn predicate on the "status" field.
 func StatusNotIn(vs ...Status) predicate.RegistryArtifact {
 	return predicate.RegistryArtifact(sql.FieldNotIn(FieldStatus, vs...))
-}
-
-// InitiatedByEQ applies the EQ predicate on the "initiated_by" field.
-func InitiatedByEQ(v int) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldEQ(FieldInitiatedBy, v))
-}
-
-// InitiatedByNEQ applies the NEQ predicate on the "initiated_by" field.
-func InitiatedByNEQ(v int) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldNEQ(FieldInitiatedBy, v))
-}
-
-// InitiatedByIn applies the In predicate on the "initiated_by" field.
-func InitiatedByIn(vs ...int) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldIn(FieldInitiatedBy, vs...))
-}
-
-// InitiatedByNotIn applies the NotIn predicate on the "initiated_by" field.
-func InitiatedByNotIn(vs ...int) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldNotIn(FieldInitiatedBy, vs...))
-}
-
-// InitiatedByGT applies the GT predicate on the "initiated_by" field.
-func InitiatedByGT(v int) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldGT(FieldInitiatedBy, v))
-}
-
-// InitiatedByGTE applies the GTE predicate on the "initiated_by" field.
-func InitiatedByGTE(v int) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldGTE(FieldInitiatedBy, v))
-}
-
-// InitiatedByLT applies the LT predicate on the "initiated_by" field.
-func InitiatedByLT(v int) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldLT(FieldInitiatedBy, v))
-}
-
-// InitiatedByLTE applies the LTE predicate on the "initiated_by" field.
-func InitiatedByLTE(v int) predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldLTE(FieldInitiatedBy, v))
-}
-
-// InitiatedByIsNil applies the IsNil predicate on the "initiated_by" field.
-func InitiatedByIsNil() predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldIsNull(FieldInitiatedBy))
-}
-
-// InitiatedByNotNil applies the NotNil predicate on the "initiated_by" field.
-func InitiatedByNotNil() predicate.RegistryArtifact {
-	return predicate.RegistryArtifact(sql.FieldNotNull(FieldInitiatedBy))
 }
 
 // InitiatedAtEQ applies the EQ predicate on the "initiated_at" field.

@@ -43,8 +43,6 @@ type RegistryArtifact struct {
 	SigningKeyFingerprint *string `json:"signing_key_fingerprint,omitempty"`
 	// Status holds the value of the "status" field.
 	Status registryartifact.Status `json:"status,omitempty"`
-	// InitiatedBy holds the value of the "initiated_by" field.
-	InitiatedBy *int `json:"initiated_by,omitempty"`
 	// InitiatedAt holds the value of the "initiated_at" field.
 	InitiatedAt time.Time `json:"initiated_at,omitempty"`
 	// CompletedAt holds the value of the "completed_at" field.
@@ -92,7 +90,7 @@ func (*RegistryArtifact) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case registryartifact.FieldSigned, registryartifact.FieldEnriched:
 			values[i] = new(sql.NullBool)
-		case registryartifact.FieldID, registryartifact.FieldSizeBytes, registryartifact.FieldInitiatedBy:
+		case registryartifact.FieldID, registryartifact.FieldSizeBytes:
 			values[i] = new(sql.NullInt64)
 		case registryartifact.FieldDatacenterID, registryartifact.FieldDatacenterName, registryartifact.FieldRegistry, registryartifact.FieldRepository, registryartifact.FieldTag, registryartifact.FieldDigest, registryartifact.FieldSigningKeyFingerprint, registryartifact.FieldStatus, registryartifact.FieldError, registryartifact.FieldBundlerError:
 			values[i] = new(sql.NullString)
@@ -189,13 +187,6 @@ func (_m *RegistryArtifact) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				_m.Status = registryartifact.Status(value.String)
-			}
-		case registryartifact.FieldInitiatedBy:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field initiated_by", values[i])
-			} else if value.Valid {
-				_m.InitiatedBy = new(int)
-				*_m.InitiatedBy = int(value.Int64)
 			}
 		case registryartifact.FieldInitiatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -317,11 +308,6 @@ func (_m *RegistryArtifact) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Status))
-	builder.WriteString(", ")
-	if v := _m.InitiatedBy; v != nil {
-		builder.WriteString("initiated_by=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
 	builder.WriteString(", ")
 	builder.WriteString("initiated_at=")
 	builder.WriteString(_m.InitiatedAt.Format(time.ANSIC))

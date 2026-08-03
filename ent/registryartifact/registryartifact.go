@@ -36,8 +36,6 @@ const (
 	FieldSigningKeyFingerprint = "signing_key_fingerprint"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
-	// FieldInitiatedBy holds the string denoting the initiated_by field in the database.
-	FieldInitiatedBy = "initiated_by"
 	// FieldInitiatedAt holds the string denoting the initiated_at field in the database.
 	FieldInitiatedAt = "initiated_at"
 	// FieldCompletedAt holds the string denoting the completed_at field in the database.
@@ -77,7 +75,6 @@ var Columns = []string{
 	FieldSigned,
 	FieldSigningKeyFingerprint,
 	FieldStatus,
-	FieldInitiatedBy,
 	FieldInitiatedAt,
 	FieldCompletedAt,
 	FieldError,
@@ -193,11 +190,6 @@ func BySigningKeyFingerprint(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
-}
-
-// ByInitiatedBy orders the results by the initiated_by field.
-func ByInitiatedBy(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldInitiatedBy, opts...).ToFunc()
 }
 
 // ByInitiatedAt orders the results by the initiated_at field.

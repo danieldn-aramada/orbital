@@ -62,44 +62,63 @@ know the workspace — the gateway owns the credentials.
 
 ---
 
-## Metrics — Prometheus Agent + Mimir
+## Metrics — AMW (ama-metrics) + self-owned Cortex
 
-### Topology
+Verified in devcc (`aks-applz-devcc-westus3`, ns `netbox`) on 2026-08-03. The
+original "Prometheus Agent + Mimir + ServiceMonitor" plan was **not** what
+shipped: orbital is discovered by pod annotations (no `ServiceMonitor`), and
+its `/metrics` (:8001) is consumed by **two independent scrape paths**.
 
-- **Prometheus Agent** runs in the `monitoring` namespace in remote_write-only
-  mode (no local storage, no querying — it scrapes and forwards).
-- **Mimir** (`prometheus-mimir-monitoring`) is the likely remote_write target —
-  it is the cluster's long-term metrics store. Grafana queries against Mimir,
-  not against the Prometheus Agent.
+### Path 1 — AMW (org-standard, but currently unreliable for orbital)
 
-### Service discovery
+The AKS Managed-Prometheus addon `ama-metrics` (kube-system) scrapes any pod
+with `prometheus.io/scrape=true` cluster-wide. Orbital is meshed, so Istio's
+prometheus-merge rewrites the pod annotation to `:15020/stats/prometheus` and
+merges orbital's app metrics with the envoy/istio metrics; ama-metrics scrapes
+`:15020` → AMW `defaultazuremonitorworkspace-wus3` → the devcc **Azure Managed
+Grafana** `grafana-2025100194459-w` (where the org's ~300 dashboards live).
+The `prometheus.io/scrape|port|path` annotations must be on the pod template
+at injection time — they are, in `deploy/base/deploy.yaml`.
 
-The Prometheus Agent scrapes targets discovered via `ServiceMonitor` CRDs
-(prometheus-operator). **No `ServiceMonitor` exists for the netbox namespace
-yet** — adding one is part of the orbital observability spike.
+> **KNOWN DEFECT (verified 2026-08-03): ama-metrics silently drops orbital's
+> `:15020` target on redeploy and does not recover.** Reproduced — orbital
+> flowed into AMW continuously until a redeploy, then stopped dead and stayed
+> gone 95+ min while the live pod served valid metrics on `:15020`.
+> ama-metrics kept scraping dgraph and the orbital-otel-collector (identical
+> annotations/labels/namespace, same node pool) — only orbital's app pod is
+> absent from its target set (no `up` series at all). Root cause is inside
+> ama-metrics' discovery/sharding (observability-team infra, not an orbital
+> misconfig); a candidate factor is orbital's unusually large `:15020` payload
+> (~257 KB, 238 `envoy_cluster` series). **Consequence: after every redeploy,
+> AMW loses orbital's app metrics AND `istio_requests_total{reporter=
+> "destination"}`.** Do not treat AMW as orbital's metrics home until the
+> observability team fixes this.
 
-**Unknown:** the namespace selector on the Prometheus Agent's
-`prometheusagent.spec.serviceMonitorNamespaceSelector`. We could not exec into
-the agent pod to read its config. The spike should confirm this before
-authoring the ServiceMonitor, or use `release: prometheus-monitoring` labels
-in the ServiceMonitor metadata (the convention used elsewhere in the cluster)
-and observe whether the agent picks it up.
+### Path 2 — self-owned Cortex (orbital's reliable path)
 
-### Orbital's metrics endpoint
+`orbital-otel-collector` (`deploy/overlays/dev-netbox/otel-collector.yaml`)
+scrapes `orbital.netbox.svc:8001` **directly** via its own service-discovery
+(independent of ama-metrics and istio-merge) and remote-writes to the
+`commander-metrics` Cortex (`job=scrape-orbital`). Verified fresh (0-min
+staleness) for the live pod; the collector runs clean (0 restarts over 3d+, no
+remote-write errors). Same `otel-collector → Cortex` convention as
+`scrape-armada-galleon-svc`, the starlink family, etc. **This is orbital's
+reliable metrics path in devcc and must not be retired while the ama-metrics
+defect stands.** Nothing downstream consumes it (`metrics-api` does not
+reference orbital) — it exists to feed dashboards.
 
-`internal/metrics/metrics.go` already exposes `/metrics` in Prometheus text
-format with the following series:
+### Orbital's series (verified from live :8001)
 
-| Series | Labels |
-|---|---|
-| `http_requests_total` | `method`, `path`, `status` |
-| `http_request_duration_seconds` | `method`, `path` |
-| `graphql_operation_errors_total` | `operation` |
+| Series | Type | Labels |
+|---|---|---|
+| `http_requests_total` | counter | `method`, `path`, `status` |
+| `http_request_duration_seconds` | histogram | `method`, `path` |
+| `orbital_graphql_operation_duration_seconds` | histogram | `operation`, `type` |
+| `orbital_dgraph_request_duration_seconds` | histogram | `kind` |
 
-The orbital Deployment does **not** currently have annotations or a Service
-exposing port 8001 with the appropriate `prometheus.io/scrape` labels for
-auto-discovery. The ServiceMonitor approach (CRD-based) is preferred over
-pod annotations — the cluster is already configured for it.
+`orbital_graphql_*` gives per-operation GraphQL latency; `orbital_dgraph_*`
+isolates the DGraph round-trip from orbital's own overhead (the gap between
+`/graphql` `http_request_duration` and `orbital_dgraph_request_duration`).
 
 ---
 
@@ -147,13 +166,41 @@ LogQL but do not blow up the index.
 
 ---
 
-## Grafana
+## Grafana — orbital's own dashboard (Cortex)
 
-`commander-grafana` in `commander-metrics` is the main cluster Grafana.
-Already configured with Mimir and Loki as data sources. Orbital does not need
-to provision dashboards as part of the integration spike — a single
-"orbital overview" dashboard can be built in the UI after metrics start
-flowing. Dashboards-as-code is post-MVP.
+Orbital's metrics are reliable only on Cortex (Path 2). The org's Azure Managed
+Grafana has no Cortex data source and Cortex isn't externally exposed in devcc;
+`commander-grafana` has the data source but ephemeral storage + no dashboard
+sidecar (a UI import is lost on restart) and lives in a namespace orbital does
+not own. So orbital runs its **own small Grafana** in the overlay — fully
+as-code, durable, and reading Cortex without writing to anyone else's namespace.
+
+**`orbital-grafana`** ([`deploy/overlays/dev-netbox/orbital-grafana.yaml`](../../deploy/overlays/dev-netbox/orbital-grafana.yaml))
+— a 1-replica Grafana in `netbox` that provisions, on every boot:
+- a **Cortex** data source pointed at the in-cluster query gateway
+  (`http://commander-metrics-cortex-nginx.commander-metrics/prometheus` — query
+  only; it writes nothing to `commander-metrics`), and
+- the **orbital dashboard** ([`orbital-dashboard.json`](../../deploy/overlays/dev-netbox/orbital-dashboard.json))
+  via a file provider.
+
+Both come from ConfigMaps (kustomize generators), so a pod restart can never
+lose them — no PVC needed. The admin password is a gitignored `secretGenerator`
+env (`grafana-admin.env`); anonymous **Viewer** is on, so port-forward users see
+dashboards without logging in. devcc/dev-netbox overlay only.
+
+**Reach it (port-forward only, no ingress):**
+```
+kubectl -n netbox port-forward deploy/orbital-grafana 3000:3000   # → http://localhost:3000
+```
+
+**Dashboard** (9 panels): HTTP RED (rate / 5xx ratio / p50-p95-p99),
+per-operation GraphQL latency, the orbital-overhead-vs-DGraph split, and Go
+runtime. It uses a `datasource` template variable, so it's portable to AMW if
+that path is ever fixed. Every query was validated against live Cortex.
+
+This is orbital's durable interim home. The org-standard, **discoverable**
+endgame is still ama-metrics → AMW → the Azure Grafana, once the observability
+team fixes the drop (see the known defect above).
 
 ---
 

@@ -211,33 +211,6 @@ func (_u *RegistryArtifactUpdate) SetNillableStatus(v *registryartifact.Status) 
 	return _u
 }
 
-// SetInitiatedBy sets the "initiated_by" field.
-func (_u *RegistryArtifactUpdate) SetInitiatedBy(v int) *RegistryArtifactUpdate {
-	_u.mutation.ResetInitiatedBy()
-	_u.mutation.SetInitiatedBy(v)
-	return _u
-}
-
-// SetNillableInitiatedBy sets the "initiated_by" field if the given value is not nil.
-func (_u *RegistryArtifactUpdate) SetNillableInitiatedBy(v *int) *RegistryArtifactUpdate {
-	if v != nil {
-		_u.SetInitiatedBy(*v)
-	}
-	return _u
-}
-
-// AddInitiatedBy adds value to the "initiated_by" field.
-func (_u *RegistryArtifactUpdate) AddInitiatedBy(v int) *RegistryArtifactUpdate {
-	_u.mutation.AddInitiatedBy(v)
-	return _u
-}
-
-// ClearInitiatedBy clears the value of the "initiated_by" field.
-func (_u *RegistryArtifactUpdate) ClearInitiatedBy() *RegistryArtifactUpdate {
-	_u.mutation.ClearInitiatedBy()
-	return _u
-}
-
 // SetInitiatedAt sets the "initiated_at" field.
 func (_u *RegistryArtifactUpdate) SetInitiatedAt(v time.Time) *RegistryArtifactUpdate {
 	_u.mutation.SetInitiatedAt(v)
@@ -453,15 +426,6 @@ func (_u *RegistryArtifactUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(registryartifact.FieldStatus, field.TypeEnum, value)
-	}
-	if value, ok := _u.mutation.InitiatedBy(); ok {
-		_spec.SetField(registryartifact.FieldInitiatedBy, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedInitiatedBy(); ok {
-		_spec.AddField(registryartifact.FieldInitiatedBy, field.TypeInt, value)
-	}
-	if _u.mutation.InitiatedByCleared() {
-		_spec.ClearField(registryartifact.FieldInitiatedBy, field.TypeInt)
 	}
 	if value, ok := _u.mutation.InitiatedAt(); ok {
 		_spec.SetField(registryartifact.FieldInitiatedAt, field.TypeTime, value)
@@ -726,33 +690,6 @@ func (_u *RegistryArtifactUpdateOne) SetNillableStatus(v *registryartifact.Statu
 	return _u
 }
 
-// SetInitiatedBy sets the "initiated_by" field.
-func (_u *RegistryArtifactUpdateOne) SetInitiatedBy(v int) *RegistryArtifactUpdateOne {
-	_u.mutation.ResetInitiatedBy()
-	_u.mutation.SetInitiatedBy(v)
-	return _u
-}
-
-// SetNillableInitiatedBy sets the "initiated_by" field if the given value is not nil.
-func (_u *RegistryArtifactUpdateOne) SetNillableInitiatedBy(v *int) *RegistryArtifactUpdateOne {
-	if v != nil {
-		_u.SetInitiatedBy(*v)
-	}
-	return _u
-}
-
-// AddInitiatedBy adds value to the "initiated_by" field.
-func (_u *RegistryArtifactUpdateOne) AddInitiatedBy(v int) *RegistryArtifactUpdateOne {
-	_u.mutation.AddInitiatedBy(v)
-	return _u
-}
-
-// ClearInitiatedBy clears the value of the "initiated_by" field.
-func (_u *RegistryArtifactUpdateOne) ClearInitiatedBy() *RegistryArtifactUpdateOne {
-	_u.mutation.ClearInitiatedBy()
-	return _u
-}
-
 // SetInitiatedAt sets the "initiated_at" field.
 func (_u *RegistryArtifactUpdateOne) SetInitiatedAt(v time.Time) *RegistryArtifactUpdateOne {
 	_u.mutation.SetInitiatedAt(v)
@@ -998,15 +935,6 @@ func (_u *RegistryArtifactUpdateOne) sqlSave(ctx context.Context) (_node *Regist
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(registryartifact.FieldStatus, field.TypeEnum, value)
-	}
-	if value, ok := _u.mutation.InitiatedBy(); ok {
-		_spec.SetField(registryartifact.FieldInitiatedBy, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedInitiatedBy(); ok {
-		_spec.AddField(registryartifact.FieldInitiatedBy, field.TypeInt, value)
-	}
-	if _u.mutation.InitiatedByCleared() {
-		_spec.ClearField(registryartifact.FieldInitiatedBy, field.TypeInt)
 	}
 	if value, ok := _u.mutation.InitiatedAt(); ok {
 		_spec.SetField(registryartifact.FieldInitiatedAt, field.TypeTime, value)

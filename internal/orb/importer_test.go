@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/armada/orbital/internal/orb/store"
 	"github.com/armada/orbital/internal/orbconfig"
@@ -355,5 +356,94 @@ func TestImporter_LoadHistory_VerificationRoundtrip(t *testing.T) {
 	}
 	if records[0].Verification != VerificationVerified {
 		t.Errorf("Verification not persisted: got %q, want %q", records[0].Verification, VerificationVerified)
+	}
+}
+
+// TestImportRecord_PropagationTimestamps_RoundTrip guards the new persistence:
+// build_at + zot_push_at (set at import) and dispatched_at (set at finalize)
+// must survive write→read through SQLite. Catches silent serialization loss if
+// the schema/mapping drifts. Uses Unix seconds to be robust to SQLite time
+// precision/timezone storage.
+func TestImportRecord_PropagationTimestamps_RoundTrip(t *testing.T) {
+	ts := newTestDGraphServer(http.StatusOK, http.StatusOK)
+	defer ts.Close()
+	imp := newTestImporter(t, ts, &mockBackend{})
+
+	build := time.Now().UTC().Add(-90 * time.Second).Truncate(time.Second)
+	push := time.Now().UTC().Add(-82 * time.Second).Truncate(time.Second)
+	meta := ImportMeta{Tag: "v9", Digest: "sha256:x", CreatedAt: build, ZotPushAt: push}
+	if err := imp.Import(context.Background(), fakeDataGZ(t), fakeSchemaGZ(t), meta); err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	dr := DispatchResult{MediaType: "a/b", URL: "http://x", StatusCode: 200}
+	if err := FinalizeLastHistory(context.Background(), imp.db, []LayerRecord{{MediaType: "a/b", Role: LayerRoleDispatched, Dispatch: &dr}}, "done"); err != nil {
+		t.Fatalf("FinalizeLastHistory: %v", err)
+	}
+
+	got, err := LoadHistory(context.Background(), imp.db)
+	if err != nil {
+		t.Fatalf("LoadHistory: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want 1 record, got %d", len(got))
+	}
+	r := got[0]
+	if r.BuildAt == nil || r.BuildAt.Unix() != build.Unix() {
+		t.Errorf("build_at round-trip: got %v, want %v", r.BuildAt, build)
+	}
+	if r.ZotPushAt == nil || r.ZotPushAt.Unix() != push.Unix() {
+		t.Errorf("zot_push_at round-trip: got %v, want %v", r.ZotPushAt, push)
+	}
+	if r.DispatchedAt == nil {
+		t.Error("dispatched_at should be set after FinalizeLastHistory")
+	}
+}
+
+// TestImportRecord_NoAnchors_Nil guards the degradation path: an import with no
+// build/push anchors (upload/courier, or a registry without search-ext) must
+// persist NULL, not a bogus timestamp — else upload rows would report a fake
+// propagation latency.
+func TestImportRecord_NoAnchors_Nil(t *testing.T) {
+	ts := newTestDGraphServer(http.StatusOK, http.StatusOK)
+	defer ts.Close()
+	imp := newTestImporter(t, ts, &mockBackend{})
+
+	if err := imp.Import(context.Background(), fakeDataGZ(t), fakeSchemaGZ(t), ImportMeta{Tag: "up1"}); err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	got, _ := LoadHistory(context.Background(), imp.db)
+	if len(got) != 1 {
+		t.Fatalf("want 1 record, got %d", len(got))
+	}
+	if got[0].BuildAt != nil || got[0].ZotPushAt != nil {
+		t.Errorf("no-anchor import must persist nil timestamps, got build=%v push=%v", got[0].BuildAt, got[0].ZotPushAt)
+	}
+}
+
+func TestParseBuildTime(t *testing.T) {
+	cases := []struct {
+		name     string
+		in       string
+		wantZero bool
+	}{
+		{"valid rfc3339", "2026-08-03T20:18:27Z", false},
+		{"valid nano", "2026-08-03T20:18:27.123456789Z", false},
+		{"empty", "", true},
+		{"malformed", "not-a-time", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ann := map[string]string{}
+			if c.in != "" {
+				ann[annotationImageCreated] = c.in
+			}
+			got := ParseBuildTime(ann)
+			if got.IsZero() != c.wantZero {
+				t.Errorf("ParseBuildTime(%q).IsZero()=%v, want %v", c.in, got.IsZero(), c.wantZero)
+			}
+		})
+	}
+	if !ParseBuildTime(nil).IsZero() {
+		t.Error("ParseBuildTime(nil) must be zero")
 	}
 }

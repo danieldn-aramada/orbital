@@ -1,0 +1,45 @@
+# Prometheus Operator scrape config for orb + Zot, following the cluster
+# convention (kube-prometheus-stack, helm release `kube-prometheus-stack` in ns
+# `monitoring`; velero/rook-ceph are scraped the same way).
+#
+# The `release: kube-prometheus-stack` label is REQUIRED: kube-prometheus-stack's
+# default serviceMonitorSelector matches that label. Without it the Operator
+# silently ignores the ServiceMonitor (no error, no metrics). Confirm the live
+# selector before trusting this — see the note in the deploy handoff.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: orb
+  labels:
+    app: orb
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - orb
+  selector:
+    matchLabels:
+      app: orb
+  endpoints:
+    - port: http          # named Service port (orb :8010)
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: zot
+  labels:
+    app: zot
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - orb
+  selector:
+    matchLabels:
+      app: zot
+  endpoints:
+    - port: http          # named Service port (zot :5000)
+      path: /metrics
+      interval: 30s

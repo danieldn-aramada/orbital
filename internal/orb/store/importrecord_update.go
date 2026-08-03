@@ -110,6 +110,66 @@ func (_u *ImportRecordUpdate) SetNillableImportedAt(v *time.Time) *ImportRecordU
 	return _u
 }
 
+// SetBuildAt sets the "build_at" field.
+func (_u *ImportRecordUpdate) SetBuildAt(v time.Time) *ImportRecordUpdate {
+	_u.mutation.SetBuildAt(v)
+	return _u
+}
+
+// SetNillableBuildAt sets the "build_at" field if the given value is not nil.
+func (_u *ImportRecordUpdate) SetNillableBuildAt(v *time.Time) *ImportRecordUpdate {
+	if v != nil {
+		_u.SetBuildAt(*v)
+	}
+	return _u
+}
+
+// ClearBuildAt clears the value of the "build_at" field.
+func (_u *ImportRecordUpdate) ClearBuildAt() *ImportRecordUpdate {
+	_u.mutation.ClearBuildAt()
+	return _u
+}
+
+// SetZotPushAt sets the "zot_push_at" field.
+func (_u *ImportRecordUpdate) SetZotPushAt(v time.Time) *ImportRecordUpdate {
+	_u.mutation.SetZotPushAt(v)
+	return _u
+}
+
+// SetNillableZotPushAt sets the "zot_push_at" field if the given value is not nil.
+func (_u *ImportRecordUpdate) SetNillableZotPushAt(v *time.Time) *ImportRecordUpdate {
+	if v != nil {
+		_u.SetZotPushAt(*v)
+	}
+	return _u
+}
+
+// ClearZotPushAt clears the value of the "zot_push_at" field.
+func (_u *ImportRecordUpdate) ClearZotPushAt() *ImportRecordUpdate {
+	_u.mutation.ClearZotPushAt()
+	return _u
+}
+
+// SetDispatchedAt sets the "dispatched_at" field.
+func (_u *ImportRecordUpdate) SetDispatchedAt(v time.Time) *ImportRecordUpdate {
+	_u.mutation.SetDispatchedAt(v)
+	return _u
+}
+
+// SetNillableDispatchedAt sets the "dispatched_at" field if the given value is not nil.
+func (_u *ImportRecordUpdate) SetNillableDispatchedAt(v *time.Time) *ImportRecordUpdate {
+	if v != nil {
+		_u.SetDispatchedAt(*v)
+	}
+	return _u
+}
+
+// ClearDispatchedAt clears the value of the "dispatched_at" field.
+func (_u *ImportRecordUpdate) ClearDispatchedAt() *ImportRecordUpdate {
+	_u.mutation.ClearDispatchedAt()
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *ImportRecordUpdate) SetStatus(v importrecord.Status) *ImportRecordUpdate {
 	_u.mutation.SetStatus(v)
@@ -283,6 +343,24 @@ func (_u *ImportRecordUpdate) sqlSave(ctx context.Context) (_node int, err error
 	if value, ok := _u.mutation.ImportedAt(); ok {
 		_spec.SetField(importrecord.FieldImportedAt, field.TypeTime, value)
 	}
+	if value, ok := _u.mutation.BuildAt(); ok {
+		_spec.SetField(importrecord.FieldBuildAt, field.TypeTime, value)
+	}
+	if _u.mutation.BuildAtCleared() {
+		_spec.ClearField(importrecord.FieldBuildAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ZotPushAt(); ok {
+		_spec.SetField(importrecord.FieldZotPushAt, field.TypeTime, value)
+	}
+	if _u.mutation.ZotPushAtCleared() {
+		_spec.ClearField(importrecord.FieldZotPushAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.DispatchedAt(); ok {
+		_spec.SetField(importrecord.FieldDispatchedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DispatchedAtCleared() {
+		_spec.ClearField(importrecord.FieldDispatchedAt, field.TypeTime)
+	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(importrecord.FieldStatus, field.TypeEnum, value)
 	}
@@ -406,6 +484,66 @@ func (_u *ImportRecordUpdateOne) SetNillableImportedAt(v *time.Time) *ImportReco
 	if v != nil {
 		_u.SetImportedAt(*v)
 	}
+	return _u
+}
+
+// SetBuildAt sets the "build_at" field.
+func (_u *ImportRecordUpdateOne) SetBuildAt(v time.Time) *ImportRecordUpdateOne {
+	_u.mutation.SetBuildAt(v)
+	return _u
+}
+
+// SetNillableBuildAt sets the "build_at" field if the given value is not nil.
+func (_u *ImportRecordUpdateOne) SetNillableBuildAt(v *time.Time) *ImportRecordUpdateOne {
+	if v != nil {
+		_u.SetBuildAt(*v)
+	}
+	return _u
+}
+
+// ClearBuildAt clears the value of the "build_at" field.
+func (_u *ImportRecordUpdateOne) ClearBuildAt() *ImportRecordUpdateOne {
+	_u.mutation.ClearBuildAt()
+	return _u
+}
+
+// SetZotPushAt sets the "zot_push_at" field.
+func (_u *ImportRecordUpdateOne) SetZotPushAt(v time.Time) *ImportRecordUpdateOne {
+	_u.mutation.SetZotPushAt(v)
+	return _u
+}
+
+// SetNillableZotPushAt sets the "zot_push_at" field if the given value is not nil.
+func (_u *ImportRecordUpdateOne) SetNillableZotPushAt(v *time.Time) *ImportRecordUpdateOne {
+	if v != nil {
+		_u.SetZotPushAt(*v)
+	}
+	return _u
+}
+
+// ClearZotPushAt clears the value of the "zot_push_at" field.
+func (_u *ImportRecordUpdateOne) ClearZotPushAt() *ImportRecordUpdateOne {
+	_u.mutation.ClearZotPushAt()
+	return _u
+}
+
+// SetDispatchedAt sets the "dispatched_at" field.
+func (_u *ImportRecordUpdateOne) SetDispatchedAt(v time.Time) *ImportRecordUpdateOne {
+	_u.mutation.SetDispatchedAt(v)
+	return _u
+}
+
+// SetNillableDispatchedAt sets the "dispatched_at" field if the given value is not nil.
+func (_u *ImportRecordUpdateOne) SetNillableDispatchedAt(v *time.Time) *ImportRecordUpdateOne {
+	if v != nil {
+		_u.SetDispatchedAt(*v)
+	}
+	return _u
+}
+
+// ClearDispatchedAt clears the value of the "dispatched_at" field.
+func (_u *ImportRecordUpdateOne) ClearDispatchedAt() *ImportRecordUpdateOne {
+	_u.mutation.ClearDispatchedAt()
 	return _u
 }
 
@@ -611,6 +749,24 @@ func (_u *ImportRecordUpdateOne) sqlSave(ctx context.Context) (_node *ImportReco
 	}
 	if value, ok := _u.mutation.ImportedAt(); ok {
 		_spec.SetField(importrecord.FieldImportedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.BuildAt(); ok {
+		_spec.SetField(importrecord.FieldBuildAt, field.TypeTime, value)
+	}
+	if _u.mutation.BuildAtCleared() {
+		_spec.ClearField(importrecord.FieldBuildAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ZotPushAt(); ok {
+		_spec.SetField(importrecord.FieldZotPushAt, field.TypeTime, value)
+	}
+	if _u.mutation.ZotPushAtCleared() {
+		_spec.ClearField(importrecord.FieldZotPushAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.DispatchedAt(); ok {
+		_spec.SetField(importrecord.FieldDispatchedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DispatchedAtCleared() {
+		_spec.ClearField(importrecord.FieldDispatchedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(importrecord.FieldStatus, field.TypeEnum, value)

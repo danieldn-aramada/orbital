@@ -5,9 +5,25 @@ resources:
   - ../../base
   - secrets.yaml  # gitignored — see README.md for how to create this file
   - otel-collector.yaml  # scrapes orbital /metrics -> Cortex (commander-grafana); self-owned metrics path
+  - orbital-grafana.yaml  # small orbital-owned Grafana reading Cortex; durable dashboard (port-forward only)
+
+configMapGenerator:
+  - name: orbital-grafana-provisioning
+    files:
+      - grafana/datasources.yaml
+      - grafana/dashboards.yaml
+  - name: orbital-grafana-dashboards
+    files:
+      - orbital-dashboard.json
+
+secretGenerator:
+  - name: orbital-grafana-admin
+    envs:
+      - grafana-admin.env  # gitignored — kustomize generates the Secret
+
 images:
   - name: armadaeksatest.azurecr.io/orbital
-    newTag: v0.0.28
+    newTag: v0.0.29
   - name: armadaeksatest.azurecr.io/configbundle-bundler
     newTag: v0.0.7
 

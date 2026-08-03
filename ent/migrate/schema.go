@@ -250,7 +250,6 @@ var (
 		{Name: "signed", Type: field.TypeBool, Default: false},
 		{Name: "signing_key_fingerprint", Type: field.TypeString, Nullable: true},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "bundling", "pushing", "signing", "completed", "failed"}},
-		{Name: "initiated_by", Type: field.TypeInt, Nullable: true},
 		{Name: "initiated_at", Type: field.TypeTime},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "error", Type: field.TypeString, Nullable: true},
@@ -267,7 +266,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "registry_artifacts_export_jobs_registry_artifacts",
-				Columns:    []*schema.Column{RegistryArtifactsColumns[18]},
+				Columns:    []*schema.Column{RegistryArtifactsColumns[17]},
 				RefColumns: []*schema.Column{ExportJobsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},

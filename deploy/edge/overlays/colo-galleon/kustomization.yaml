@@ -6,10 +6,11 @@ namespace: orb
 resources:
   - ../../base
   - registry-data-demo.yaml  # fresh PVC for clean-room v70+ filter test; keeps registry-data as rollback anchor
+  - servicemonitor.yaml      # Prometheus Operator scrape config for orb + zot /metrics
 
 images:
   - name: armadaeksatest.azurecr.io/orb
-    newTag: v0.0.2
+    newTag: v0.0.3
 
 configMapGenerator:
   - name: zot-config

@@ -129,20 +129,6 @@ func (_c *RegistryArtifactCreate) SetStatus(v registryartifact.Status) *Registry
 	return _c
 }
 
-// SetInitiatedBy sets the "initiated_by" field.
-func (_c *RegistryArtifactCreate) SetInitiatedBy(v int) *RegistryArtifactCreate {
-	_c.mutation.SetInitiatedBy(v)
-	return _c
-}
-
-// SetNillableInitiatedBy sets the "initiated_by" field if the given value is not nil.
-func (_c *RegistryArtifactCreate) SetNillableInitiatedBy(v *int) *RegistryArtifactCreate {
-	if v != nil {
-		_c.SetInitiatedBy(*v)
-	}
-	return _c
-}
-
 // SetInitiatedAt sets the "initiated_at" field.
 func (_c *RegistryArtifactCreate) SetInitiatedAt(v time.Time) *RegistryArtifactCreate {
 	_c.mutation.SetInitiatedAt(v)
@@ -370,10 +356,6 @@ func (_c *RegistryArtifactCreate) createSpec() (*RegistryArtifact, *sqlgraph.Cre
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(registryartifact.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
-	}
-	if value, ok := _c.mutation.InitiatedBy(); ok {
-		_spec.SetField(registryartifact.FieldInitiatedBy, field.TypeInt, value)
-		_node.InitiatedBy = &value
 	}
 	if value, ok := _c.mutation.InitiatedAt(); ok {
 		_spec.SetField(registryartifact.FieldInitiatedAt, field.TypeTime, value)

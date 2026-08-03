@@ -75,6 +75,48 @@ func (_c *ImportRecordCreate) SetNillableImportedAt(v *time.Time) *ImportRecordC
 	return _c
 }
 
+// SetBuildAt sets the "build_at" field.
+func (_c *ImportRecordCreate) SetBuildAt(v time.Time) *ImportRecordCreate {
+	_c.mutation.SetBuildAt(v)
+	return _c
+}
+
+// SetNillableBuildAt sets the "build_at" field if the given value is not nil.
+func (_c *ImportRecordCreate) SetNillableBuildAt(v *time.Time) *ImportRecordCreate {
+	if v != nil {
+		_c.SetBuildAt(*v)
+	}
+	return _c
+}
+
+// SetZotPushAt sets the "zot_push_at" field.
+func (_c *ImportRecordCreate) SetZotPushAt(v time.Time) *ImportRecordCreate {
+	_c.mutation.SetZotPushAt(v)
+	return _c
+}
+
+// SetNillableZotPushAt sets the "zot_push_at" field if the given value is not nil.
+func (_c *ImportRecordCreate) SetNillableZotPushAt(v *time.Time) *ImportRecordCreate {
+	if v != nil {
+		_c.SetZotPushAt(*v)
+	}
+	return _c
+}
+
+// SetDispatchedAt sets the "dispatched_at" field.
+func (_c *ImportRecordCreate) SetDispatchedAt(v time.Time) *ImportRecordCreate {
+	_c.mutation.SetDispatchedAt(v)
+	return _c
+}
+
+// SetNillableDispatchedAt sets the "dispatched_at" field if the given value is not nil.
+func (_c *ImportRecordCreate) SetNillableDispatchedAt(v *time.Time) *ImportRecordCreate {
+	if v != nil {
+		_c.SetDispatchedAt(*v)
+	}
+	return _c
+}
+
 // SetStatus sets the "status" field.
 func (_c *ImportRecordCreate) SetStatus(v importrecord.Status) *ImportRecordCreate {
 	_c.mutation.SetStatus(v)
@@ -286,6 +328,18 @@ func (_c *ImportRecordCreate) createSpec() (*ImportRecord, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.ImportedAt(); ok {
 		_spec.SetField(importrecord.FieldImportedAt, field.TypeTime, value)
 		_node.ImportedAt = value
+	}
+	if value, ok := _c.mutation.BuildAt(); ok {
+		_spec.SetField(importrecord.FieldBuildAt, field.TypeTime, value)
+		_node.BuildAt = &value
+	}
+	if value, ok := _c.mutation.ZotPushAt(); ok {
+		_spec.SetField(importrecord.FieldZotPushAt, field.TypeTime, value)
+		_node.ZotPushAt = &value
+	}
+	if value, ok := _c.mutation.DispatchedAt(); ok {
+		_spec.SetField(importrecord.FieldDispatchedAt, field.TypeTime, value)
+		_node.DispatchedAt = &value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(importrecord.FieldStatus, field.TypeEnum, value)

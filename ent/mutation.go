@@ -7739,8 +7739,6 @@ type RegistryArtifactMutation struct {
 	signed                  *bool
 	signing_key_fingerprint *string
 	status                  *registryartifact.Status
-	initiated_by            *int
-	addinitiated_by         *int
 	initiated_at            *time.Time
 	completed_at            *time.Time
 	error                   *string
@@ -8310,76 +8308,6 @@ func (m *RegistryArtifactMutation) ResetStatus() {
 	m.status = nil
 }
 
-// SetInitiatedBy sets the "initiated_by" field.
-func (m *RegistryArtifactMutation) SetInitiatedBy(i int) {
-	m.initiated_by = &i
-	m.addinitiated_by = nil
-}
-
-// InitiatedBy returns the value of the "initiated_by" field in the mutation.
-func (m *RegistryArtifactMutation) InitiatedBy() (r int, exists bool) {
-	v := m.initiated_by
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldInitiatedBy returns the old "initiated_by" field's value of the RegistryArtifact entity.
-// If the RegistryArtifact object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *RegistryArtifactMutation) OldInitiatedBy(ctx context.Context) (v *int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldInitiatedBy is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldInitiatedBy requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldInitiatedBy: %w", err)
-	}
-	return oldValue.InitiatedBy, nil
-}
-
-// AddInitiatedBy adds i to the "initiated_by" field.
-func (m *RegistryArtifactMutation) AddInitiatedBy(i int) {
-	if m.addinitiated_by != nil {
-		*m.addinitiated_by += i
-	} else {
-		m.addinitiated_by = &i
-	}
-}
-
-// AddedInitiatedBy returns the value that was added to the "initiated_by" field in this mutation.
-func (m *RegistryArtifactMutation) AddedInitiatedBy() (r int, exists bool) {
-	v := m.addinitiated_by
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ClearInitiatedBy clears the value of the "initiated_by" field.
-func (m *RegistryArtifactMutation) ClearInitiatedBy() {
-	m.initiated_by = nil
-	m.addinitiated_by = nil
-	m.clearedFields[registryartifact.FieldInitiatedBy] = struct{}{}
-}
-
-// InitiatedByCleared returns if the "initiated_by" field was cleared in this mutation.
-func (m *RegistryArtifactMutation) InitiatedByCleared() bool {
-	_, ok := m.clearedFields[registryartifact.FieldInitiatedBy]
-	return ok
-}
-
-// ResetInitiatedBy resets all changes to the "initiated_by" field.
-func (m *RegistryArtifactMutation) ResetInitiatedBy() {
-	m.initiated_by = nil
-	m.addinitiated_by = nil
-	delete(m.clearedFields, registryartifact.FieldInitiatedBy)
-}
-
 // SetInitiatedAt sets the "initiated_at" field.
 func (m *RegistryArtifactMutation) SetInitiatedAt(t time.Time) {
 	m.initiated_at = &t
@@ -8725,7 +8653,7 @@ func (m *RegistryArtifactMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *RegistryArtifactMutation) Fields() []string {
-	fields := make([]string, 0, 18)
+	fields := make([]string, 0, 17)
 	if m.export_job != nil {
 		fields = append(fields, registryartifact.FieldExportJobID)
 	}
@@ -8758,9 +8686,6 @@ func (m *RegistryArtifactMutation) Fields() []string {
 	}
 	if m.status != nil {
 		fields = append(fields, registryartifact.FieldStatus)
-	}
-	if m.initiated_by != nil {
-		fields = append(fields, registryartifact.FieldInitiatedBy)
 	}
 	if m.initiated_at != nil {
 		fields = append(fields, registryartifact.FieldInitiatedAt)
@@ -8810,8 +8735,6 @@ func (m *RegistryArtifactMutation) Field(name string) (ent.Value, bool) {
 		return m.SigningKeyFingerprint()
 	case registryartifact.FieldStatus:
 		return m.Status()
-	case registryartifact.FieldInitiatedBy:
-		return m.InitiatedBy()
 	case registryartifact.FieldInitiatedAt:
 		return m.InitiatedAt()
 	case registryartifact.FieldCompletedAt:
@@ -8855,8 +8778,6 @@ func (m *RegistryArtifactMutation) OldField(ctx context.Context, name string) (e
 		return m.OldSigningKeyFingerprint(ctx)
 	case registryartifact.FieldStatus:
 		return m.OldStatus(ctx)
-	case registryartifact.FieldInitiatedBy:
-		return m.OldInitiatedBy(ctx)
 	case registryartifact.FieldInitiatedAt:
 		return m.OldInitiatedAt(ctx)
 	case registryartifact.FieldCompletedAt:
@@ -8955,13 +8876,6 @@ func (m *RegistryArtifactMutation) SetField(name string, value ent.Value) error 
 		}
 		m.SetStatus(v)
 		return nil
-	case registryartifact.FieldInitiatedBy:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetInitiatedBy(v)
-		return nil
 	case registryartifact.FieldInitiatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -9015,9 +8929,6 @@ func (m *RegistryArtifactMutation) AddedFields() []string {
 	if m.addsize_bytes != nil {
 		fields = append(fields, registryartifact.FieldSizeBytes)
 	}
-	if m.addinitiated_by != nil {
-		fields = append(fields, registryartifact.FieldInitiatedBy)
-	}
 	return fields
 }
 
@@ -9028,8 +8939,6 @@ func (m *RegistryArtifactMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case registryartifact.FieldSizeBytes:
 		return m.AddedSizeBytes()
-	case registryartifact.FieldInitiatedBy:
-		return m.AddedInitiatedBy()
 	}
 	return nil, false
 }
@@ -9045,13 +8954,6 @@ func (m *RegistryArtifactMutation) AddField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddSizeBytes(v)
-		return nil
-	case registryartifact.FieldInitiatedBy:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddInitiatedBy(v)
 		return nil
 	}
 	return fmt.Errorf("unknown RegistryArtifact numeric field %s", name)
@@ -9069,9 +8971,6 @@ func (m *RegistryArtifactMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(registryartifact.FieldSigningKeyFingerprint) {
 		fields = append(fields, registryartifact.FieldSigningKeyFingerprint)
-	}
-	if m.FieldCleared(registryartifact.FieldInitiatedBy) {
-		fields = append(fields, registryartifact.FieldInitiatedBy)
 	}
 	if m.FieldCleared(registryartifact.FieldCompletedAt) {
 		fields = append(fields, registryartifact.FieldCompletedAt)
@@ -9107,9 +9006,6 @@ func (m *RegistryArtifactMutation) ClearField(name string) error {
 		return nil
 	case registryartifact.FieldSigningKeyFingerprint:
 		m.ClearSigningKeyFingerprint()
-		return nil
-	case registryartifact.FieldInitiatedBy:
-		m.ClearInitiatedBy()
 		return nil
 	case registryartifact.FieldCompletedAt:
 		m.ClearCompletedAt()
@@ -9163,9 +9059,6 @@ func (m *RegistryArtifactMutation) ResetField(name string) error {
 		return nil
 	case registryartifact.FieldStatus:
 		m.ResetStatus()
-		return nil
-	case registryartifact.FieldInitiatedBy:
-		m.ResetInitiatedBy()
 		return nil
 	case registryartifact.FieldInitiatedAt:
 		m.ResetInitiatedAt()

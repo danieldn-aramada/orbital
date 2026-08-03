@@ -98,7 +98,7 @@ type artifactResponse struct {
 //
 // This is NOT an HTTP handler — no *echo.Context. It's a package-internal
 // entry point wired via server.go's SetPublishFn.
-func (h *OCI) PublishExportedJob(ctx context.Context, jobID uuid.UUID, actor string) (*PublishExportedResult, error) {
+func (h *OCI) PublishExportedJob(ctx context.Context, jobID uuid.UUID) (*PublishExportedResult, error) {
 	if h.publisher == nil {
 		return nil, fmt.Errorf("OCI publishing is not configured")
 	}
@@ -152,10 +152,6 @@ func (h *OCI) PublishExportedJob(ctx context.Context, jobID uuid.UUID, actor str
 	if _, err := h.db.RegistryArtifact.UpdateOneID(artifact.ID).SetStatus(firstPhase).Save(ctx); err == nil {
 		artifact.Status = firstPhase
 	}
-
-	// Actor is unused here — audit event fires from the caller (export.go)
-	// with the correct actor already known.
-	_ = actor
 
 	result, err := h.publisher.Publish(ctx, artifact.ID, job, tag, bundlerClients)
 	if err != nil {

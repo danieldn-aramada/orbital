@@ -1,0 +1,128 @@
+# Small, orbital-owned Grafana for the devcc (dev-netbox) environment.
+#
+# Why this exists: orbital's reliable metrics path in devcc is the self-owned
+# Cortex (see otel-collector.yaml + docs/reference/monitoring-stack.md). AMW is
+# unreliable for orbital (ama-metrics drops its :15020 target on redeploy), and
+# the org's Azure Grafana has no Cortex datasource. commander-grafana has the
+# datasource but ephemeral storage + no dashboard sidecar, so a UI import there
+# is lost on restart. This gives orbital a durable, fully-owned dashboard: all
+# state is provisioned from ConfigMaps on boot, so nothing is lost on restart
+# and no PVC is needed. It only READS Cortex (query gateway) — it writes nothing
+# to the commander-metrics namespace.
+#
+# devcc-only: the Cortex URL is cluster-specific, so this lives in the overlay
+# (paired with the collector), not deploy/base. Access is port-forward only:
+#   kubectl -n netbox port-forward deploy/orbital-grafana 3000:3000
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orbital-grafana
+  labels:
+    app: orbital-grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orbital-grafana
+  template:
+    metadata:
+      labels:
+        app: orbital-grafana
+    spec:
+      # grafana-fips runs as uid/gid 472; fsGroup makes the emptyDir below
+      # writable so grafana can create grafana.db. Mirrors commander-grafana.
+      securityContext:
+        runAsUser: 472
+        runAsGroup: 472
+        fsGroup: 472
+        runAsNonRoot: true
+      containers:
+        - name: grafana
+          image: armada.azurecr.io/chainguard/grafana-fips:13.1.1
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            # Anonymous viewer so port-forward users see dashboards without a
+            # login; admin credentials are only needed to edit.
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: "Viewer"
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+            - name: GF_ANALYTICS_REPORTING_ENABLED
+              value: "false"
+            - name: GF_ANALYTICS_CHECK_FOR_UPDATES
+              value: "false"
+            - name: GF_SECURITY_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: orbital-grafana-admin
+                  key: admin-user
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: orbital-grafana-admin
+                  key: admin-password
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: 200m
+              memory: 512Mi  # grafana's working set is ~400Mi (cf. commander-grafana); 256Mi OOMKills on login/render
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            # Two provisioning files from one ConfigMap, each into its own
+            # Grafana provisioning subdir via subPath.
+            - name: provisioning
+              mountPath: /etc/grafana/provisioning/datasources/datasources.yaml
+              subPath: datasources.yaml
+              readOnly: true
+            - name: provisioning
+              mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml
+              subPath: dashboards.yaml
+              readOnly: true
+            # The dashboard JSON, loaded by the file provider above.
+            - name: dashboards
+              mountPath: /etc/orbital-dashboards
+              readOnly: true
+            # grafana.db + runtime state; ephemeral by design (all real state
+            # is provisioned from the ConfigMaps above).
+            - name: storage
+              mountPath: /var/lib/grafana
+      volumes:
+        - name: provisioning
+          configMap:
+            name: orbital-grafana-provisioning
+        - name: dashboards
+          configMap:
+            name: orbital-grafana-dashboards
+        - name: storage
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orbital-grafana
+  labels:
+    app: orbital-grafana
+spec:
+  selector:
+    app: orbital-grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http

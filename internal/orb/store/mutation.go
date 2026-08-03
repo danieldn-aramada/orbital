@@ -43,6 +43,9 @@ type ImportRecordMutation struct {
 	dc_orb_id     *string
 	export_job_id *string
 	imported_at   *time.Time
+	build_at      *time.Time
+	zot_push_at   *time.Time
+	dispatched_at *time.Time
 	status        *importrecord.Status
 	verification  *importrecord.Verification
 	layers_json   *string
@@ -364,6 +367,153 @@ func (m *ImportRecordMutation) ResetImportedAt() {
 	m.imported_at = nil
 }
 
+// SetBuildAt sets the "build_at" field.
+func (m *ImportRecordMutation) SetBuildAt(t time.Time) {
+	m.build_at = &t
+}
+
+// BuildAt returns the value of the "build_at" field in the mutation.
+func (m *ImportRecordMutation) BuildAt() (r time.Time, exists bool) {
+	v := m.build_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBuildAt returns the old "build_at" field's value of the ImportRecord entity.
+// If the ImportRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImportRecordMutation) OldBuildAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBuildAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBuildAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBuildAt: %w", err)
+	}
+	return oldValue.BuildAt, nil
+}
+
+// ClearBuildAt clears the value of the "build_at" field.
+func (m *ImportRecordMutation) ClearBuildAt() {
+	m.build_at = nil
+	m.clearedFields[importrecord.FieldBuildAt] = struct{}{}
+}
+
+// BuildAtCleared returns if the "build_at" field was cleared in this mutation.
+func (m *ImportRecordMutation) BuildAtCleared() bool {
+	_, ok := m.clearedFields[importrecord.FieldBuildAt]
+	return ok
+}
+
+// ResetBuildAt resets all changes to the "build_at" field.
+func (m *ImportRecordMutation) ResetBuildAt() {
+	m.build_at = nil
+	delete(m.clearedFields, importrecord.FieldBuildAt)
+}
+
+// SetZotPushAt sets the "zot_push_at" field.
+func (m *ImportRecordMutation) SetZotPushAt(t time.Time) {
+	m.zot_push_at = &t
+}
+
+// ZotPushAt returns the value of the "zot_push_at" field in the mutation.
+func (m *ImportRecordMutation) ZotPushAt() (r time.Time, exists bool) {
+	v := m.zot_push_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldZotPushAt returns the old "zot_push_at" field's value of the ImportRecord entity.
+// If the ImportRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImportRecordMutation) OldZotPushAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldZotPushAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldZotPushAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldZotPushAt: %w", err)
+	}
+	return oldValue.ZotPushAt, nil
+}
+
+// ClearZotPushAt clears the value of the "zot_push_at" field.
+func (m *ImportRecordMutation) ClearZotPushAt() {
+	m.zot_push_at = nil
+	m.clearedFields[importrecord.FieldZotPushAt] = struct{}{}
+}
+
+// ZotPushAtCleared returns if the "zot_push_at" field was cleared in this mutation.
+func (m *ImportRecordMutation) ZotPushAtCleared() bool {
+	_, ok := m.clearedFields[importrecord.FieldZotPushAt]
+	return ok
+}
+
+// ResetZotPushAt resets all changes to the "zot_push_at" field.
+func (m *ImportRecordMutation) ResetZotPushAt() {
+	m.zot_push_at = nil
+	delete(m.clearedFields, importrecord.FieldZotPushAt)
+}
+
+// SetDispatchedAt sets the "dispatched_at" field.
+func (m *ImportRecordMutation) SetDispatchedAt(t time.Time) {
+	m.dispatched_at = &t
+}
+
+// DispatchedAt returns the value of the "dispatched_at" field in the mutation.
+func (m *ImportRecordMutation) DispatchedAt() (r time.Time, exists bool) {
+	v := m.dispatched_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDispatchedAt returns the old "dispatched_at" field's value of the ImportRecord entity.
+// If the ImportRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImportRecordMutation) OldDispatchedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDispatchedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDispatchedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDispatchedAt: %w", err)
+	}
+	return oldValue.DispatchedAt, nil
+}
+
+// ClearDispatchedAt clears the value of the "dispatched_at" field.
+func (m *ImportRecordMutation) ClearDispatchedAt() {
+	m.dispatched_at = nil
+	m.clearedFields[importrecord.FieldDispatchedAt] = struct{}{}
+}
+
+// DispatchedAtCleared returns if the "dispatched_at" field was cleared in this mutation.
+func (m *ImportRecordMutation) DispatchedAtCleared() bool {
+	_, ok := m.clearedFields[importrecord.FieldDispatchedAt]
+	return ok
+}
+
+// ResetDispatchedAt resets all changes to the "dispatched_at" field.
+func (m *ImportRecordMutation) ResetDispatchedAt() {
+	m.dispatched_at = nil
+	delete(m.clearedFields, importrecord.FieldDispatchedAt)
+}
+
 // SetStatus sets the "status" field.
 func (m *ImportRecordMutation) SetStatus(i importrecord.Status) {
 	m.status = &i
@@ -617,7 +767,7 @@ func (m *ImportRecordMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ImportRecordMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 13)
 	if m.tag != nil {
 		fields = append(fields, importrecord.FieldTag)
 	}
@@ -632,6 +782,15 @@ func (m *ImportRecordMutation) Fields() []string {
 	}
 	if m.imported_at != nil {
 		fields = append(fields, importrecord.FieldImportedAt)
+	}
+	if m.build_at != nil {
+		fields = append(fields, importrecord.FieldBuildAt)
+	}
+	if m.zot_push_at != nil {
+		fields = append(fields, importrecord.FieldZotPushAt)
+	}
+	if m.dispatched_at != nil {
+		fields = append(fields, importrecord.FieldDispatchedAt)
 	}
 	if m.status != nil {
 		fields = append(fields, importrecord.FieldStatus)
@@ -666,6 +825,12 @@ func (m *ImportRecordMutation) Field(name string) (ent.Value, bool) {
 		return m.ExportJobID()
 	case importrecord.FieldImportedAt:
 		return m.ImportedAt()
+	case importrecord.FieldBuildAt:
+		return m.BuildAt()
+	case importrecord.FieldZotPushAt:
+		return m.ZotPushAt()
+	case importrecord.FieldDispatchedAt:
+		return m.DispatchedAt()
 	case importrecord.FieldStatus:
 		return m.Status()
 	case importrecord.FieldVerification:
@@ -695,6 +860,12 @@ func (m *ImportRecordMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldExportJobID(ctx)
 	case importrecord.FieldImportedAt:
 		return m.OldImportedAt(ctx)
+	case importrecord.FieldBuildAt:
+		return m.OldBuildAt(ctx)
+	case importrecord.FieldZotPushAt:
+		return m.OldZotPushAt(ctx)
+	case importrecord.FieldDispatchedAt:
+		return m.OldDispatchedAt(ctx)
 	case importrecord.FieldStatus:
 		return m.OldStatus(ctx)
 	case importrecord.FieldVerification:
@@ -748,6 +919,27 @@ func (m *ImportRecordMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetImportedAt(v)
+		return nil
+	case importrecord.FieldBuildAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBuildAt(v)
+		return nil
+	case importrecord.FieldZotPushAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetZotPushAt(v)
+		return nil
+	case importrecord.FieldDispatchedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDispatchedAt(v)
 		return nil
 	case importrecord.FieldStatus:
 		v, ok := value.(importrecord.Status)
@@ -820,6 +1012,15 @@ func (m *ImportRecordMutation) ClearedFields() []string {
 	if m.FieldCleared(importrecord.FieldExportJobID) {
 		fields = append(fields, importrecord.FieldExportJobID)
 	}
+	if m.FieldCleared(importrecord.FieldBuildAt) {
+		fields = append(fields, importrecord.FieldBuildAt)
+	}
+	if m.FieldCleared(importrecord.FieldZotPushAt) {
+		fields = append(fields, importrecord.FieldZotPushAt)
+	}
+	if m.FieldCleared(importrecord.FieldDispatchedAt) {
+		fields = append(fields, importrecord.FieldDispatchedAt)
+	}
 	if m.FieldCleared(importrecord.FieldVerification) {
 		fields = append(fields, importrecord.FieldVerification)
 	}
@@ -848,6 +1049,15 @@ func (m *ImportRecordMutation) ClearField(name string) error {
 		return nil
 	case importrecord.FieldExportJobID:
 		m.ClearExportJobID()
+		return nil
+	case importrecord.FieldBuildAt:
+		m.ClearBuildAt()
+		return nil
+	case importrecord.FieldZotPushAt:
+		m.ClearZotPushAt()
+		return nil
+	case importrecord.FieldDispatchedAt:
+		m.ClearDispatchedAt()
 		return nil
 	case importrecord.FieldVerification:
 		m.ClearVerification()
@@ -880,6 +1090,15 @@ func (m *ImportRecordMutation) ResetField(name string) error {
 		return nil
 	case importrecord.FieldImportedAt:
 		m.ResetImportedAt()
+		return nil
+	case importrecord.FieldBuildAt:
+		m.ResetBuildAt()
+		return nil
+	case importrecord.FieldZotPushAt:
+		m.ResetZotPushAt()
+		return nil
+	case importrecord.FieldDispatchedAt:
+		m.ResetDispatchedAt()
 		return nil
 	case importrecord.FieldStatus:
 		m.ResetStatus()

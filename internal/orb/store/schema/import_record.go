@@ -23,6 +23,14 @@ func (ImportRecord) Fields() []ent.Field {
 		field.String("dc_orb_id").Optional(),
 		field.String("export_job_id").Optional(),
 		field.Time("imported_at").Default(time.Now),
+		// Propagation anchors for the config-artifact round-trip (orbital→ACR→Zot→orb).
+		// build_at = artifact build/publish time (OCI `org.opencontainers.image.created`);
+		// zot_push_at = when the edge Zot mirrored it (search-ext PushTimestamp);
+		// dispatched_at = when orb finished consumer dispatch. All optional: absent for
+		// courier/upload imports (no Zot landing) or registries without the search extension.
+		field.Time("build_at").Optional().Nillable(),
+		field.Time("zot_push_at").Optional().Nillable(),
+		field.Time("dispatched_at").Optional().Nillable(),
 		field.Enum("status").Values("done", "partial", "failed"),
 		field.Enum("verification").
 			Values("verified", "unverified", "not-applicable").

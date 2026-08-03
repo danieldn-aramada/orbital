@@ -1,0 +1,16 @@
+# Grafana datasource provisioning — orbital's reliable metrics live in the
+# self-owned Cortex (fed by orbital-otel-collector). This reads Cortex through
+# its nginx gateway (query only; writes nothing to commander-metrics). The nginx
+# injects the tenant header, so no X-Scope-OrgID is needed here.
+apiVersion: 1
+datasources:
+  - name: Cortex
+    uid: cortex
+    type: prometheus
+    access: proxy
+    url: http://commander-metrics-cortex-nginx.commander-metrics/prometheus
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      timeInterval: 30s  # matches the collector's scrape_interval

@@ -18,6 +18,7 @@ import (
 	"github.com/armada/orbital/internal/orb"
 	"github.com/armada/orbital/internal/orb/store"
 	"github.com/armada/orbital/internal/orbconfig"
+	"github.com/armada/orbital/internal/orbmetrics"
 	"github.com/armada/orbital/internal/web/data/layout"
 	orbweb "github.com/armada/orbital/web"
 	orbtemplates "github.com/armada/orbital/web/templates/orb"
@@ -79,6 +80,9 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
 
+	// Prometheus metrics — unauthenticated like /healthz; scraped at the edge.
+	e.GET("/metrics", orbmetrics.Handler())
+
 	// RequestID must precede AccessLog so the middleware has an ID to log.
 	// Honors inbound X-Request-ID header; generates one when absent.
 	e.Use(echomw.RequestID())
@@ -90,6 +94,10 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 		SkipPrefixes:   []string{"/static/"},
 		SkipExactPaths: []string{"/favicon.ico", "/healthz"},
 	}))
+
+	// HTTP RED metrics (http_requests_total / http_request_duration_seconds)
+	// for every route — continuous signal, mirrors orbital's internal/metrics.
+	e.Use(orbmetrics.Middleware())
 
 	// SQLite store — required for import history + divergence persistence.
 	// Fail-fast on error.
