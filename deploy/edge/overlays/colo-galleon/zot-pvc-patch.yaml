@@ -1,0 +1,16 @@
+# Point Zot at the fresh registry-data-demo PVC (see registry-data-demo.yaml).
+# Strategic-merge on the `registry-data` volume by name — only the claimName
+# changes; the zot-config and acr-creds volumes are untouched.
+# ROLLBACK: delete this patch from kustomization.yaml (Zot remounts the original
+# full-mirror `registry-data` PVC) and revert zot-config.json if needed.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zot
+spec:
+  template:
+    spec:
+      volumes:
+        - name: registry-data
+          persistentVolumeClaim:
+            claimName: registry-data-demo

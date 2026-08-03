@@ -28,11 +28,11 @@ gantt
 
 ## Recent accomplishments
 
+- **2026-08-03** — Cut colo-dev-main edge propagation ~9min→~8s (Zot mirror scoped to v70+ tag filter + CPU/worker bump + SyncLegacyCosignTags for sigs); redesigned Publish History columns — failure error moved out of the Status badge into its own column.
 - **2026-07-29** — Audit-log API readied for AEP (orbital's first client): `operation_name` JSONB filter, pre-computed `changes` diff field (present iff single-entity), DGraph UIDs stripped from audit before-state, typed Swagger response + cheatsheet "Audit log" recipes.
 - **2026-07-28** — Standard error envelope (`error`/`code`/`httpStatus`/`hint`) via a central Echo `ErrorHandler` + code registry, retiring Echo's `{"message"}`; Spike 31 done — inline single-entity mutations rejected `400 VARIABLE_FORM_REQUIRED` (default on, kill switch).
 - **2026-07-27** — external-jwt bearer auth validated on AKS dev; fixed cluster-edit truncation (retentionDays render-struct drift); hardened all template rendering to buffer-then-write (drift fails loud, not silent); auth-mode + FIPS startup logs.
 - **2026-07-23** — External-JWT auth mode (`ORBITAL_AUTH_MODE=external-jwt`) for AEP demo: validates Keycloak bearer via JWKS + `azp` trust anchor, session-cookie fallback keeps UI usable, RFC 6750 error bodies, signature-aware failure logging (identity only when authentic); deploy v0.0.24 to AKS dev.
-- **2026-07-12** — Nested-writes refactor in `configitem-editor.js` for first-time wrapper+child create (one `update{Root}` with folded subtree, fixes DGraph race); orb `setDone` in-memory `InitiatedBy` matches DB (auto-import label was showing manual within pod lifetime); divergence Last-published shows relative time.
 
 ---
 
@@ -182,6 +182,7 @@ Benchmark DGraph query latency under realistic load, produce AKS node SKU cost e
 
 | Item | Notes |
 |---|---|
+| **Priority (do first) — Publish History error visibility** | On a failed publish you must scroll the table far right to read the error: `Error` and `Repository` are wide fixed-width end columns, so the failure reason sits off-screen. Hit for real **2026-08-03, ~1h before a demo** — v82's cosign-sign timed out and the error was unreadable without scrolling. Fix: cap column widths (Repository/Error `max-width` + ellipsis, full text on hover/expand) and/or a compact failure indicator on the row that's visible without scrolling (truncated error next to Status; full text in the expand row). This reconsiders the deliberate "wide end column, accept horizontal scroll" choice from the 2026-08-03 table redesign — that tradeoff fails precisely for the urgent-error case. `web/templates/orbital/pages/publish-history.gohtml` + `partials/artifacts-tbody.gohtml`. |
 | Replace `title=""` tooltips with Tippy.js | 9+ usages in `divergence-reports.gohtml`, `users.gohtml`, `backup-jobs-tbody.gohtml`, `cluster-tab.gohtml`. Native browser tooltips have ~1s delay, no theming, no positioning control. Stop using `title=` for user-facing text; migrate to Tippy.js (~10KB, matches Linear/Vercel/Stripe convention). |
 | Refactor bundler URL config DSL | `ORBITAL_BUNDLER_URLS=configbundle-bundler=http://...` is a custom micro-DSL in one env var; already caused one bug (preflight probed the raw `name=url` string as a URL). Better: one env var per bundler (`ORBITAL_BUNDLER_CONFIGBUNDLE=http://...`), or ConfigMap-mounted YAML for structured validation. |
 | Collapse duplicate cluster backup structs | `backupKindResponse` (DGraph JSON decode) and `backupKindTab` (template view struct) are hand-synced — adding a backup field means updating both or the cluster tab truncates mid-render (the 2026-07-27 `retentionDays` "Edit button does nothing" bug). Now *caught* by `TestClusterTab_BackupWithRetentionRendersFullFragment` + buffered `renderHTML` (fails loud, not silent), but the drift is still possible. Eliminate it: render the template off the query struct directly (supply `DomID` via a method or embedding) so a new field lands in exactly one place. `internal/handler/cluster.go`. |

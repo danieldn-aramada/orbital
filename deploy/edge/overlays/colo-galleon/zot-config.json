@@ -8,7 +8,10 @@
     "port": "5000"
   },
   "log": {
-    "level": "info"
+    "level": "warn"
+  },
+  "scheduler": {
+    "numWorkers": 3
   },
   "extensions": {
     "ui": { "enable": true },
@@ -18,12 +21,15 @@
       "credentialsFile": "/etc/zot/sync-creds.json",
       "registries": [{
         "urls": ["https://armadaeksatest.azurecr.io"],
-        "onDemand": true,
+        "onDemand": false,
         "tlsVerify": true,
-        "pollInterval": "5s",
-        "SyncLegacyCosignTags": false,
+        "pollInterval": "10s",
+        "SyncLegacyCosignTags": true,
         "content": [{
-          "prefix": "orbital/colo-galleon/**"
+          "prefix": "orbital/colo-galleon/**",
+          "tags": {
+            "regex": "^v(7[0-9]|[89][0-9]|[1-9][0-9]{2,})$"
+          }
         }]
       }]
     }

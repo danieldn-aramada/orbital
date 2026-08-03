@@ -5,6 +5,7 @@ namespace: orb
 
 resources:
   - ../../base
+  - registry-data-demo.yaml  # fresh PVC for clean-room v70+ filter test; keeps registry-data as rollback anchor
 
 images:
   - name: armadaeksatest.azurecr.io/orb
@@ -19,3 +20,4 @@ configMapGenerator:
 
 patches:
   - path: orb-patch.yaml
+  - path: zot-pvc-patch.yaml  # point Zot at registry-data-demo (fresh PVC)

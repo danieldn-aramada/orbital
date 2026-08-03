@@ -51,11 +51,11 @@ spec:
             - containerPort: 5000
           resources:
             requests:
-              cpu: "100m"
-              memory: "128Mi"
+              cpu: "250m"
+              memory: "256Mi"
             limits:
-              cpu: "500m"
-              memory: "512Mi"
+              cpu: "1000m"
+              memory: "1Gi"
           volumeMounts:
             - name: zot-config
               mountPath: /etc/zot/config.json

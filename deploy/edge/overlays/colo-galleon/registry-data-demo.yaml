@@ -1,0 +1,16 @@
+# Fresh, empty PVC for colo-galleon so Zot re-syncs from scratch under the
+# v70+ filter + SyncLegacyCosignTags — a clean-room test that the filter mirrors
+# only recent versions AND their cosign signatures (nothing pre-synced to mask
+# the behavior). The original `registry-data` PVC (base) is left intact and
+# detached as a rollback anchor: revert zot-pvc-patch.yaml to switch back to the
+# full mirror + known-good state. Overlay-scoped — does not affect other sites.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-data-demo
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: rook-ceph-block
+  resources:
+    requests:
+      storage: 5Gi

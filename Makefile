@@ -59,8 +59,11 @@ run-orbital: ## Run orbital server (go run; fast dev iteration). Restore require
 run-orbital-aep: ## Run orbital in external-jwt mode (accepts AEP/Keycloak bearers as admin) on :8001
 	@# Vars are set IN the recipe so they always reach the process — no
 	@# fragile shell-prefix env that breaks when pasted across lines.
-	@# For SSO login / bundler publish, `export ORBITAL_OIDC_CLIENT_SECRET=...`
-	@# (and ORBITAL_BUNDLER_URLS=...) first — the recipe inherits them.
+	@# SSO login + bundler publish need env you export YOURSELF first (both talk
+	@# to external processes, so you decide when they're on):
+	@#   export ORBITAL_OIDC_CLIENT_SECRET=...    # Keycloak client secret
+	@#   export ORBITAL_BUNDLER_URLS=configbundle-bundler=http://localhost:8020/bundle
+	@# The recipe inherits exported vars; omit them and orbital still runs.
 	DOCKER_CONFIG=$$(mktemp -d) \
 	ORBITAL_AUTH_MODE=external-jwt \
 	ORBITAL_JWT_ISSUER=https://keycloak.devnew.armada.ai/realms/armada \

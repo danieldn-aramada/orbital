@@ -1,24 +1,16 @@
 {{range .}}<tr>
   <td>
-    {{/* Chevron toggles the sibling detail row — audit events between this
-         publish and the previous one for the same DC. Only renders when the
-         artifact completed; failed/pending rows have nothing to anchor. */}}
-    {{if eq .Status "completed"}}
-    <button type="button" class="button is-small is-white js-publish-changes-expand" aria-label="Toggle changes since previous publish">
+    {{/* Chevron toggles the sibling detail row (Digest, plus — for completed
+         publishes — the changeset since the previous publish). Shown on every
+         row so any publish can be expanded to see its digest. */}}
+    <button type="button" class="button is-small is-white js-publish-changes-expand" aria-label="Toggle publish details">
       <span class="icon"><i class="fas fa-chevron-right"></i></span>
     </button>
-    {{end}}
   </td>
   <td>{{.DatacenterName}}</td>
-  <td class="is-family-monospace is-size-7">{{.Repository}}</td>
   <td><span class="tag is-light">{{.Tag}}</span></td>
-  <td class="is-nowrap">
-    {{if .HasDigest}}<div class="is-flex is-align-items-center" style="gap:0.25rem;">
-      <span class="is-family-monospace is-size-7">{{.DigestShort}}…</span>
-      <button class="button is-small is-white" title="Copy digest" data-copy-value="{{.Digest}}"><span class="icon"><i class="fas fa-copy"></i></span></button>
-    </div>{{else}}—{{end}}
-  </td>
-  <td>{{if .Signed}}<span class="tag is-success is-light">signed</span>{{else}}<span class="tag is-light">unsigned</span>{{end}}</td>
+  <td><span class="tag {{.StatusClass}}">{{.Status}}</span></td>
+  <td class="is-nowrap">{{.InitiatedAt}}</td>
   <td class="is-nowrap">
     {{if .HasLayers}}
       <div class="is-flex is-align-items-center" style="gap:0.25rem;">
@@ -33,20 +25,31 @@
       </div>
     {{else if .Enriched}}<span class="tag is-info is-light is-small">bundled</span>
     {{else}}—{{end}}
-    {{if .BundlerError}}<p class="has-text-danger is-size-7 mt-1">{{.BundlerError}}</p>{{end}}
   </td>
-  <td><span class="tag {{.StatusClass}}">{{.Status}}</span></td>
-  <td>{{.InitiatedAt}}</td>
-  <td class="has-text-danger is-size-7">{{.Error}}</td>
+  <td>{{if .Signed}}<span class="tag is-success is-light">signed</span>{{else}}<span class="tag is-light">unsigned</span>{{end}}</td>
+  <td class="is-family-monospace is-size-7" style="word-break: break-all;">{{.Repository}}</td>
+  {{/* Full failure reason lives in its own end column (not conflated into the
+       Status badge). Both error fields render here; empty for successful rows. */}}
+  <td class="has-text-danger is-size-7" style="overflow-wrap:anywhere;">
+    {{if .Error}}<div>{{.Error}}</div>{{end}}
+    {{if .BundlerError}}<div>{{.BundlerError}}</div>{{end}}
+  </td>
 </tr>
-{{if eq .Status "completed"}}
-{{/* Detail row: hidden by default. Toggled by the chevron above via delegated
-     handler in orbital.js. HTMX-lazily fetches audit events between the
-     previous and current publish's completed_at, scoped to the DC by
-     namespace prefix (see /api/v1/audit-log ?namespace=&since=&until=). */}}
+{{/* Detail row: hidden until the chevron toggles it (delegated handler in
+     orbital.js). Carries the Digest; completed publishes also HTMX-lazily fetch
+     audit events since the previous publish
+     (see /api/v1/audit-log ?namespace=&since=&until=). */}}
 <tr class="js-publish-changes-detail is-hidden">
   <td></td>
-  <td colspan="9" style="background: #fafafa;">
+  <td colspan="8" style="background: #fafafa;">
+    <div class="mb-2 is-flex is-align-items-center" style="gap:0.35rem;">
+      <span class="has-text-grey is-size-7">Digest:</span>
+      {{if .HasDigest}}
+      <span class="is-family-monospace is-size-7">{{.Digest}}</span>
+      <button class="button is-small is-white" title="Copy digest" data-copy-value="{{.Digest}}"><span class="icon"><i class="fas fa-copy"></i></span></button>
+      {{else}}<span class="is-size-7">—</span>{{end}}
+    </div>
+    {{if eq .Status "completed"}}
     {{if .HasPrevious}}
     <div class="mb-2">
       <span class="has-text-grey is-size-7">Changes since
@@ -62,8 +65,8 @@
     {{else}}
     <p class="has-text-grey is-size-7">No previous publish for <strong>{{.DatacenterName}}</strong> — this is the first successful publish in the visible history.</p>
     {{end}}
+    {{end}}
   </td>
 </tr>
-{{end}}
-{{else}}<tr><td colspan="10" class="has-text-grey">No artifacts yet.</td></tr>
+{{else}}<tr><td colspan="9" class="has-text-grey">No artifacts yet.</td></tr>
 {{end}}

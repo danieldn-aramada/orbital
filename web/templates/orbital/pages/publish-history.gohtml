@@ -80,23 +80,40 @@
              cap in OCI.ListArtifacts), the page doesn't grow unbounded.
              Sticky <thead> keeps column headers visible while scrolling inside. */}}
         <div style="overflow:auto; max-height: calc(100vh - 420px); border: 1px solid #f5f5f5;">
-          <table id="artifacts-table" class="table is-striped is-hoverable is-fullwidth is-size-7 mb-0">
+          <table id="artifacts-table" class="table is-striped is-hoverable is-fullwidth is-size-7 mb-0" style="table-layout: fixed;">
+            {{/* Column order: identity (Data Center, Tag) → outcome (Status) →
+                 when (Published At) → Layers, Signed. Repository and the full
+                 Error message are wide end columns you scroll right to reach —
+                 a deliberate tradeoff (full detail, no truncation, at the cost
+                 of horizontal scroll). Digest moved to the expandable child row.
+                 Fixed rem widths push the table wider than the container so the
+                 end columns overflow into a scroll. 9 cols = 9 <th> = 9 <td>. */}}
+            <colgroup>
+              <col style="width: 2.5rem">  {{/* chevron */}}
+              <col style="width: 9rem">    {{/* Data Center */}}
+              <col style="width: 4.5rem">  {{/* Tag */}}
+              <col style="width: 7rem">    {{/* Status */}}
+              <col style="width: 11rem">   {{/* Published At */}}
+              <col style="width: 6rem">    {{/* Layers */}}
+              <col style="width: 7rem">    {{/* Signed */}}
+              <col style="width: 22rem">   {{/* Repository */}}
+              <col style="width: 26rem">   {{/* Error */}}
+            </colgroup>
             <thead style="position: sticky; top: 0; background-color: white; z-index: 1; box-shadow: 0 1px 0 #dbdbdb;">
               <tr>
-                <th style="width: 2rem"></th>
+                <th></th>
                 <th>Data Center</th>
-                <th>Repository</th>
                 <th>Tag</th>
-                <th>Digest</th>
-                <th>Signed</th>
-                <th>Layers</th>
                 <th>Status</th>
                 <th>Published At</th>
+                <th>Layers</th>
+                <th>Signed</th>
+                <th>Repository</th>
                 <th>Error</th>
               </tr>
             </thead>
             <tbody id="artifacts-tbody">
-              <tr><td colspan="10" class="has-text-grey">No artifacts yet.</td></tr>
+              <tr><td colspan="9" class="has-text-grey">No artifacts yet.</td></tr>
             </tbody>
           </table>
         </div>
