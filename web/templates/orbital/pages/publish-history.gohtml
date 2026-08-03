@@ -87,13 +87,14 @@
                  a deliberate tradeoff (full detail, no truncation, at the cost
                  of horizontal scroll). Digest moved to the expandable child row.
                  Fixed rem widths push the table wider than the container so the
-                 end columns overflow into a scroll. 9 cols = 9 <th> = 9 <td>. */}}
+                 end columns overflow into a scroll. 10 cols = 10 <th> = 10 <td>. */}}
             <colgroup>
               <col style="width: 2.5rem">  {{/* chevron */}}
               <col style="width: 9rem">    {{/* Data Center */}}
               <col style="width: 4.5rem">  {{/* Tag */}}
               <col style="width: 7rem">    {{/* Status */}}
               <col style="width: 11rem">   {{/* Published At */}}
+              <col style="width: 13rem">   {{/* Published By */}}
               <col style="width: 6rem">    {{/* Layers */}}
               <col style="width: 7rem">    {{/* Signed */}}
               <col style="width: 22rem">   {{/* Repository */}}
@@ -105,7 +106,8 @@
                 <th>Data Center</th>
                 <th>Tag</th>
                 <th>Status</th>
-                <th>Published At</th>
+                <th>Published At (UTC)</th>
+                <th>Published By</th>
                 <th>Layers</th>
                 <th>Signed</th>
                 <th>Repository</th>
@@ -113,7 +115,7 @@
               </tr>
             </thead>
             <tbody id="artifacts-tbody">
-              <tr><td colspan="9" class="has-text-grey">No artifacts yet.</td></tr>
+              <tr><td colspan="10" class="has-text-grey">No artifacts yet.</td></tr>
             </tbody>
           </table>
         </div>

@@ -509,6 +509,10 @@ type artifactFragRow struct {
 	Status         string
 	StatusClass    string
 	InitiatedAt    string
+	// PublishedBy is the actor (email) who triggered the export→publish,
+	// sourced from the ExportJob edge's created_by. Empty for legacy rows
+	// whose export job predates actor capture — the template renders "—".
+	PublishedBy    string
 	// CompletedAtRFC3339 is the OCI-push completion time. Display-only.
 	CompletedAtRFC3339 string
 	// ExportedAtRFC3339 is the export_job.completed_at — the moment the
@@ -559,6 +563,9 @@ func toArtifactFragRow(a *ent.RegistryArtifact, basePath string) artifactFragRow
 		if idx := strings.IndexByte(row.DatacenterOrbID, ':'); idx > 0 {
 			row.DatacenterNamespace = row.DatacenterOrbID[:idx]
 		}
+	}
+	if a.Edges.ExportJob != nil {
+		row.PublishedBy = a.Edges.ExportJob.CreatedBy
 	}
 	if a.CompletedAt != nil {
 		row.CompletedAtRFC3339 = a.CompletedAt.UTC().Format(time.RFC3339)

@@ -11,6 +11,7 @@
   <td><span class="tag is-light">{{.Tag}}</span></td>
   <td><span class="tag {{.StatusClass}}">{{.Status}}</span></td>
   <td class="is-nowrap">{{.InitiatedAt}}</td>
+  <td class="is-size-7" style="overflow-wrap:anywhere;">{{if .PublishedBy}}{{.PublishedBy}}{{else}}<span class="has-text-grey">—</span>{{end}}</td>
   <td class="is-nowrap">
     {{if .HasLayers}}
       <div class="is-flex is-align-items-center" style="gap:0.25rem;">
@@ -41,7 +42,7 @@
      (see /api/v1/audit-log ?namespace=&since=&until=). */}}
 <tr class="js-publish-changes-detail is-hidden">
   <td></td>
-  <td colspan="8" style="background: #fafafa;">
+  <td colspan="9" style="background: #fafafa;">
     <div class="mb-2 is-flex is-align-items-center" style="gap:0.35rem;">
       <span class="has-text-grey is-size-7">Digest:</span>
       {{if .HasDigest}}
@@ -68,5 +69,5 @@
     {{end}}
   </td>
 </tr>
-{{else}}<tr><td colspan="9" class="has-text-grey">No artifacts yet.</td></tr>
+{{else}}<tr><td colspan="10" class="has-text-grey">No artifacts yet.</td></tr>
 {{end}}
