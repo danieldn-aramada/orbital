@@ -1,0 +1,177 @@
+{
+  "title": "Orbital Edge - Orb + Zot",
+  "uid": "orbital-edge-roundtrip",
+  "tags": ["orbital", "orb", "zot", "edge"],
+  "schemaVersion": 39,
+  "editable": true,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "refresh": 1,
+        "hide": 0,
+        "current": {}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Scrape targets up (orb + zot)",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "sum(up{namespace=\"orb\"})", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" } }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "yellow", "value": 1 }, { "color": "green", "value": 2 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "publish → edge (avg, latest)",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "orb_artifact_propagation_seconds_sum{hop=\"publish_to_edge\"} / orb_artifact_propagation_seconds_count{hop=\"publish_to_edge\"}", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" } }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Imports by status",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "sum by (status) (orb_imports_total)", "legendFormat": "{{status}}", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" } }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Zot reconcile write-rate (churn)",
+      "description": "rate of zot manifest writes — reflects full-catalog re-sync churn every pollInterval, NOT new-artifact landings (Zot re-registers all matching manifests each reconcile). For real landings see 'Imports by status' (orb). High/rising = reconcile pressure.",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(zot_repo_uploads_total{repo=\"orbital/colo-galleon\"}[5m]))", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" } }
+      ],
+      "fieldConfig": { "defaults": { "unit": "wps" }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Config round-trip latency — avg per hop",
+      "description": "orb_artifact_propagation_seconds sum/count by hop. publish_to_edge = orbital publish → Zot mirror; edge_to_import = Zot mirror → orb import; import_to_dispatch = orb import → consumer dispatch. Cross-machine wall-clock — NTP-dependent.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "orb_artifact_propagation_seconds_sum / orb_artifact_propagation_seconds_count", "legendFormat": "{{hop}}", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" } }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "showPoints": "always", "spanNulls": true } }, "overrides": [] }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Config round-trip latency — p95 per hop",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le, hop) (rate(orb_artifact_propagation_seconds_bucket[1h])))", "legendFormat": "{{hop}}", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" } }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "showPoints": "auto" } }, "overrides": [] }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Zot — manifest write rate (reconcile churn, NOT new artifacts)",
+      "description": "rate(zot_repo_uploads_total). Zot re-registers all matching manifests each pollInterval reconcile, so this measures reconcile churn, not new-artifact arrivals. A steady baseline is normal; spikes/growth track reconcile load. 'New artifacts landed' = orb_imports_total.",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "sum by (repo) (rate(zot_repo_uploads_total{job=\"zot\"}[5m]))", "legendFormat": "{{repo}}", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" } }
+      ],
+      "fieldConfig": { "defaults": { "unit": "wps", "custom": { "drawStyle": "line", "showPoints": "auto" } }, "overrides": [] }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Zot — scheduler pressure (queue + workers)",
+      "description": "Sync runs as scheduler tasks — queue depth / worker saturation is the signal for whether the mirror is keeping up.",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "zot_scheduler_tasksqueue_length{job=\"zot\"}", "legendFormat": "queue p{{priority}}", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" } },
+        { "refId": "B", "expr": "zot_scheduler_workers{job=\"zot\"}", "legendFormat": "workers {{state}}", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" } }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line" } }, "overrides": [] }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Zot — storage per repo",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "zot_repo_storage_bytes{job=\"zot\"}", "legendFormat": "{{repo}}", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" } }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "drawStyle": "line" } }, "overrides": [] }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "orb — request rate by route/status (RED)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "sum by (path, status) (rate(http_requests_total{job=\"orb\"}[5m]))", "legendFormat": "{{path}} {{status}}", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" } }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line" } }, "overrides": [] }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "orb — p95 request latency by route",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le, path) (rate(http_request_duration_seconds_bucket{job=\"orb\"}[5m])))", "legendFormat": "{{path}}", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" } }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line" } }, "overrides": [] }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "orb — runtime (memory + goroutines)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "process_resident_memory_bytes{job=\"orb\"}", "legendFormat": "resident memory", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" } },
+        { "refId": "B", "expr": "go_goroutines{job=\"orb\"}", "legendFormat": "goroutines", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" } }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "drawStyle": "line" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "resident memory" }, "properties": [ { "id": "unit", "value": "bytes" } ] }
+        ]
+      }
+    }
+  ]
+}

@@ -113,8 +113,16 @@ are scraped. Do NOT use `prometheus.io/scrape` annotations for edge components.
 - SMs live in the app namespace (`orb`), not `monitoring` — the Operator watches
   all namespaces (proven by velero's SM living in ns `velero` and working).
 - Verify after apply (allow ~30–60s): in Grafana, `up{namespace="orb"}` should
-  show the orb + Zot targets; then `orb_artifact_propagation_seconds`,
-  `orb_imports_total`, `zot_repo_uploads_total{repo="orbital/colo-galleon"}`.
+  show the orb + Zot targets (=1 each); then the **real "new artifact landed"
+  signals**: `orb_imports_total` and `orb_artifact_propagation_seconds` — these
+  fire exactly once per genuine import.
+- **Do NOT read `zot_repo_uploads_total` as "artifacts landed."** It is a
+  cumulative counter of Zot manifest *writes*, and Zot re-registers every matching
+  manifest on each pollInterval reconcile — so it climbs continuously (~tags per
+  reconcile ÷ interval, e.g. ~2/sec here) even with zero new publishes. Its raw
+  total means nothing; only `rate(...)` is meaningful, and even then it measures
+  **reconcile churn** (a proxy for reconcile load / the latency-tuning concern),
+  not new arrivals. Confirmed 2026-08-04: 1530 in ~13 min of uptime, no publishes.
 
 ---
 

@@ -11,11 +11,11 @@
 
 ## Recent accomplishments
 
+- **2026-08-04** — Orb edge observability: `/metrics` (dedicated registry) with round-trip propagation + RED, scraped via ServiceMonitor → colo-dev-main Grafana dashboard; fixed sig-sync regression (edge Zot tag-regex now matches cosign `.sig`).
 - **2026-08-03** — Cut colo-dev-main edge propagation ~9min→~8s (Zot mirror scoped to v70+ tag filter + CPU/worker bump + SyncLegacyCosignTags for sigs); redesigned Publish History columns — failure error moved out of the Status badge into its own column.
 - **2026-07-29** — Audit-log API readied for AEP (orbital's first client): `operation_name` JSONB filter, pre-computed `changes` diff field (present iff single-entity), DGraph UIDs stripped from audit before-state, typed Swagger response + cheatsheet "Audit log" recipes.
 - **2026-07-28** — Standard error envelope (`error`/`code`/`httpStatus`/`hint`) via a central Echo `ErrorHandler` + code registry, retiring Echo's `{"message"}`; Spike 31 done — inline single-entity mutations rejected `400 VARIABLE_FORM_REQUIRED` (default on, kill switch).
 - **2026-07-27** — external-jwt bearer auth validated on AKS dev; fixed cluster-edit truncation (retentionDays render-struct drift); hardened all template rendering to buffer-then-write (drift fails loud, not silent); auth-mode + FIPS startup logs.
-- **2026-07-23** — External-JWT auth mode (`ORBITAL_AUTH_MODE=external-jwt`) for AEP demo: validates Keycloak bearer via JWKS + `azp` trust anchor, session-cookie fallback keeps UI usable, RFC 6750 error bodies, signature-aware failure logging (identity only when authentic); deploy v0.0.24 to AKS dev.
 
 ---
 
