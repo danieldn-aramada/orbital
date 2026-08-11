@@ -51,11 +51,11 @@
                 <span>Download</span>
               </button>
             </div>
-            <pre id="pubkey-display" class="is-family-monospace is-size-7 mt-2" style="display:none;background:#f5f5f5;padding:0.75rem;white-space:pre-wrap;word-break:break-all;"></pre>
+            <pre id="pubkey-display" class="is-family-monospace is-size-7 mt-2" style="display:none;background:var(--bulma-background);padding:0.75rem;white-space:pre-wrap;word-break:break-all;"></pre>
             <div id="pubkey-verify-cmd" style="display:none;" class="mt-3">
               <p class="is-size-7 has-text-grey mb-1">Verify an artifact signature:</p>
               <div class="is-flex is-align-items-center" style="gap:0.5rem;">
-                <pre id="pubkey-verify-cmd-text" class="is-family-monospace is-size-7" style="background:#f5f5f5;padding:0.5rem 0.75rem;margin:0;flex:1;white-space:pre-wrap;word-break:break-all;"></pre>
+                <pre id="pubkey-verify-cmd-text" class="is-family-monospace is-size-7" style="background:var(--bulma-background);padding:0.5rem 0.75rem;margin:0;flex:1;white-space:pre-wrap;word-break:break-all;"></pre>
                 <button class="button is-small is-white js-pubkey-verify-cmd-copy" title="Copy command">
                   <span class="icon"><i class="fas fa-copy"></i></span>
                 </button>
@@ -79,7 +79,7 @@
         {{/* Bounded scroll container: even with 100 history rows (the server-side
              cap in OCI.ListArtifacts), the page doesn't grow unbounded.
              Sticky <thead> keeps column headers visible while scrolling inside. */}}
-        <div style="overflow:auto; max-height: calc(100vh - 420px); border: 1px solid #f5f5f5;">
+        <div style="overflow:auto; max-height: calc(100vh - 420px); border: 1px solid var(--bulma-border);">
           <table id="artifacts-table" class="table is-striped is-hoverable is-fullwidth is-size-7 mb-0" style="table-layout: fixed;">
             {{/* Column order: identity (Data Center, Tag) → outcome (Status) →
                  when (Published At) → Layers, Signed. Repository and the full
@@ -100,7 +100,7 @@
               <col style="width: 22rem">   {{/* Repository */}}
               <col style="width: 26rem">   {{/* Error */}}
             </colgroup>
-            <thead style="position: sticky; top: 0; background-color: white; z-index: 1; box-shadow: 0 1px 0 #dbdbdb;">
+            <thead style="position: sticky; top: 0; background-color: var(--bulma-scheme-main); z-index: 1; box-shadow: 0 1px 0 var(--bulma-border);">
               <tr>
                 <th></th>
                 <th>Data Center</th>

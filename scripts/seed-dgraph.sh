@@ -63,7 +63,7 @@ curl -sf -X POST "${DGRAPH}/graphql" \
 # devices/adapters/ports/edges don't linger under upsert (mirrors the IPAddress delete above).
 curl -sf -X POST "${DGRAPH}/graphql" \
   -H "Content-Type: application/json" \
-  -d '{"query": "mutation { deleteNetworkPort(filter: { has: orbId }) { numUids } deleteNetworkAdapter(filter: { has: orbId }) { numUids } deleteNetworkDevice(filter: { has: orbId }) { numUids } }"}' >/dev/null
+  -d '{"query": "mutation { deleteNetworkInterface(filter: { has: orbId }) { numUids } deleteNetworkAdapter(filter: { has: orbId }) { numUids } deleteNetworkDevice(filter: { has: orbId }) { numUids } }"}' >/dev/null
 
 seed_file() {
   local f="$1"

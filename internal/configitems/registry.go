@@ -177,8 +177,8 @@ var Types = []Type{
 	{
 		Name:         "NetworkDevice",
 		IsRoot:       true,
-		BeforeFields: "id orbId name version manufacturer model serial role macAddress",
-		FormFields:   []string{"manufacturer", "model", "serial", "role", "macAddress"},
+		BeforeFields: "id orbId name version manufacturer model serial role macAddress rackPosition platform face vcPosition vcPriority",
+		FormFields:   []string{"manufacturer", "model", "serial", "role", "macAddress", "rackPosition", "platform", "face", "vcPosition", "vcPriority"},
 		PayloadField: "networkDevice",
 	},
 
@@ -192,12 +192,12 @@ var Types = []Type{
 		PayloadField: "networkAdapter",
 	},
 	{
-		Name:         "NetworkPort",
+		Name:         "NetworkInterface",
 		OwnerType:    "NetworkAdapter",
 		OwnerField:   "networkAdapter",
-		ChildField:   "networkPorts",
+		ChildField:   "networkInterfaces",
 		BeforeFields: "id orbId name version",
-		PayloadField: "networkPort",
+		PayloadField: "networkInterface",
 	},
 
 	// ── Kubernetes cluster hierarchy ─────────────────────────────────────────

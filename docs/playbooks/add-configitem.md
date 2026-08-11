@@ -31,6 +31,8 @@ on the inverse side. If multiple parents can share this child, use `[T]`. See
 
 Bump `schema/VERSION` if this is a v→v+1 deployment-time schema change.
 
+**Define this type's `orbId` convention** — `<namespace>:<kind>-<natural-key>` (kebab-case type name + a stable natural key; never random/UUID). Add a row to the per-type table in `docs/reference/DGRAPH.md`. See CLAUDE.md Settled Decisions for the rule.
+
 ---
 
 ## Step 2 — Register in the registry

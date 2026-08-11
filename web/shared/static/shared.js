@@ -31,6 +31,19 @@ function migrateLegacyTabState() {
 }
 migrateLegacyTabState()
 
+// Mirror the OS `prefers-color-scheme` onto <html class="dark"> — the hook
+// DataTables' bundled CSS keys its dark theme on (`html.dark ...` /
+// `:root[data-bs-theme=dark]`). Orbital drives dark mode via prefers-color-scheme,
+// so without this the DataTables-provided chrome (sort arrows, responsive detail
+// modal, child-row borders) stays light while the rest of the page flips. Runs at
+// module load — before any DOMContentLoaded DataTables init.
+{
+  const mq = window.matchMedia('(prefers-color-scheme: dark)')
+  const apply = () => document.documentElement.classList.toggle('dark', mq.matches)
+  apply()
+  mq.addEventListener('change', apply)
+}
+
 // gqlErrorMessage formats GraphQL `errors[]` for display. Returns null on
 // clean responses, or a "message (path)" string otherwise. Multiple errors
 // are joined with "; ". Use this for both modal mutations and read queries —
@@ -676,6 +689,13 @@ document.addEventListener('htmx:afterSettle', (evt) => {
   if (clusterDetailTabs) {
     target.dataset.loaded = 'true'
     initDetailTabs(clusterDetailTabs)
+    return
+  }
+
+  const networkDeviceDetailTabs = target.querySelector('[id^="network-device-detail-tabs-"]')
+  if (networkDeviceDetailTabs) {
+    target.dataset.loaded = 'true'
+    initDetailTabs(networkDeviceDetailTabs)
     return
   }
 
@@ -1491,7 +1511,7 @@ export function initClusterTable(opts = {}) {
   // blank child rows. Trim removes the surrounding whitespace; .join('') with
   // no separator keeps the TRs adjacent so the parser sees only elements.
   const buildClusterChildTrs = (children) => children.map(c => `
-    <tr class="cluster-child-row" data-cluster-orb-id="${escapeHtml(c.orbId)}" data-display-name="${escapeHtml(c.name)}" style="cursor:pointer; background:#fafafa" title="Double-click to open">
+    <tr class="cluster-child-row" data-cluster-orb-id="${escapeHtml(c.orbId)}" data-display-name="${escapeHtml(c.name)}" style="cursor:pointer; background:var(--bulma-background)" title="Double-click to open">
       <td></td>
       <td><span class="has-text-grey mr-1">└</span>${escapeHtml(c.name)}</td>
       <td>${escapeHtml(c.dataCenter)}</td>
@@ -1846,7 +1866,7 @@ export function initNetworkDeviceTable(opts = {}) {
     })
   })
 
-  const dcFilterEl = $('<div class="select is-small" style="margin-right:0.25rem"><select id="netdev-dc-select"><option value="">All Data Centers</option></select></div>')
+  const dcFilterEl = $('<div class="select is-small" style="margin-right:0.25rem"><select id="network-device-dc-select"><option value="">All Data Centers</option></select></div>')
 
   const deviceTable = new DataTable('#network-device-table', {
     pageLength: 25,
@@ -1877,33 +1897,35 @@ export function initNetworkDeviceTable(opts = {}) {
       dtWrapLengthSelect(this.api())
       const dcCol = this.api().column(1)
       dcCol.data().unique().sort().each(function (dc) {
-        if (dc && dc !== '—') document.getElementById('netdev-dc-select').add(new Option(dc, dc))
+        if (dc && dc !== '—') document.getElementById('network-device-dc-select').add(new Option(dc, dc))
       })
-      const saved = localStorage.getItem('netdev-dc-filter')
+      const saved = localStorage.getItem('network-device-dc-filter')
       if (saved) {
-        document.getElementById('netdev-dc-select').value = saved
+        document.getElementById('network-device-dc-select').value = saved
         dcCol.search(saved, { exact: true }).draw()
       }
-      document.getElementById('netdev-dc-select').addEventListener('change', function () {
-        if (this.value) localStorage.setItem('netdev-dc-filter', this.value)
-        else localStorage.removeItem('netdev-dc-filter')
+      document.getElementById('network-device-dc-select').addEventListener('change', function () {
+        if (this.value) localStorage.setItem('network-device-dc-filter', this.value)
+        else localStorage.removeItem('network-device-dc-filter')
         dcCol.search(this.value, { exact: !!this.value }).draw()
       })
     },
     columns: [
       { data: 'name' },
       { data: 'dataCenter' },
+      { data: 'rack' },
       { data: 'role' },
       { data: 'manufacturer' },
       { data: 'model' },
       { data: 'serial' },
       { data: 'macAddress' },
-      { data: 'connected' },
+      { data: 'servers' },
+      { data: 'devices' },
       { data: 'orbId' },
     ],
     columnDefs: [
-      { targets: 8, visible: false, searchable: true }, // Orb ID hidden but searchable
-      { targets: 7, className: 'dt-left dt-head-left' }, // Connected count
+      { targets: 10, visible: false, searchable: true }, // Orb ID hidden but searchable
+      { targets: [8, 9], className: 'dt-left dt-head-left' }, // Servers / Devices counts
     ],
     ajax: {
       url: BASE + '/graphql',
@@ -1914,8 +1936,10 @@ export function initNetworkDeviceTable(opts = {}) {
           queryNetworkDevice {
             id orbId name role manufacturer model serial macAddress
             dataCenter { name }
-            networkPortConnectedNetworkDevice {
-              networkAdapter { server { orbId } }
+            rack { name }
+            networkInterfaceConnectedNetworkDevice {
+              server { orbId }
+              networkDevice { orbId }
             }
           }
         }`,
@@ -1924,9 +1948,10 @@ export function initNetworkDeviceTable(opts = {}) {
         if (!gqlSurfaceErrors(json, 'Load network devices')) return []
         return (json.data?.queryNetworkDevice ?? []).map((d) => {
           const servers = new Set()
-          for (const p of d.networkPortConnectedNetworkDevice ?? []) {
-            const orb = p.networkAdapter?.server?.orbId
-            if (orb) servers.add(orb)
+          const devices = new Set()
+          for (const p of d.networkInterfaceConnectedNetworkDevice ?? []) {
+            if (p.server?.orbId) servers.add(p.server.orbId)
+            else if (p.networkDevice?.orbId) devices.add(p.networkDevice.orbId)
           }
           return {
             id: d.id,
@@ -1938,7 +1963,9 @@ export function initNetworkDeviceTable(opts = {}) {
             serial: d.serial ?? '—',
             macAddress: d.macAddress ?? '—',
             dataCenter: d.dataCenter?.name ?? '—',
-            connected: servers.size,
+            rack: d.rack?.name ?? '—',
+            servers: servers.size,
+            devices: devices.size,
           }
         })
       },
@@ -1976,36 +2003,36 @@ export function initNetworkDeviceTable(opts = {}) {
 export function loadNetworkDeviceTab(displayName, orbId) {
   const domId = safeDomId(orbId)
   const tabHtml = `<li class="tab">
-    <a id="tab-netdev-${domId}" data-target="tab-content-netdev-${domId}" role="tab" aria-selected="false" tabindex="-1">
+    <a id="tab-network-device-${domId}" data-target="tab-content-network-device-${domId}" role="tab" aria-selected="false" tabindex="-1">
       ${displayName}
       <span class="pl-2">
-        <button id="tab-close-netdev-${domId}">
+        <button id="tab-close-network-device-${domId}">
           <i class="fa-solid fa-xmark" style="font-size: 0.8em;"></i>
         </button>
       </span>
     </a>
   </li>`
-  const contentHtml = `<div class="tab-content" id="tab-content-netdev-${domId}" role="tabpanel" style="display:none"></div>`
+  const contentHtml = `<div class="tab-content" id="tab-content-network-device-${domId}" role="tabpanel" style="display:none"></div>`
 
   $('#tablist').append(tabHtml)
   $('.app-main').append(contentHtml)
 
-  const tabLink = document.getElementById(`tab-netdev-${domId}`)
-  const tabContent = document.getElementById(`tab-content-netdev-${domId}`)
+  const tabLink = document.getElementById(`tab-network-device-${domId}`)
+  const tabContent = document.getElementById(`tab-content-network-device-${domId}`)
 
   tabLink.addEventListener('click', () => {
     activateTab(tabLink.parentElement)
-    displayTabContent(`tab-content-netdev-${domId}`)
-    setCurrentTab(`tab-netdev-${domId}`)
+    displayTabContent(`tab-content-network-device-${domId}`)
+    setCurrentTab(`tab-network-device-${domId}`)
     if (!tabContent.dataset.loaded) {
       htmx.ajax('GET', BASE + '/network/' + encodeURIComponent(orbId), { target: tabContent, swap: 'innerHTML' })
     }
   })
 
-  document.getElementById(`tab-close-netdev-${domId}`).addEventListener('click', (event) => {
+  document.getElementById(`tab-close-network-device-${domId}`).addEventListener('click', (event) => {
     event.stopPropagation()
     deleteNetworkDeviceTab(displayName, orbId)
-    replaceCurrentTab(`tab-netdev-${domId}`, 'tab-summary')
+    replaceCurrentTab(`tab-network-device-${domId}`, 'tab-summary')
     tabLink.parentElement.remove()
     tabContent.remove()
     document.getElementById('tab-summary').click()
@@ -2045,11 +2072,11 @@ export function initNetworkDeviceTabRestoration() {
   if (openId) {
     const displayName = openLabel || openId
     const openDomId = safeDomId(openId)
-    if (!document.getElementById(`tab-netdev-${openDomId}`)) {
+    if (!document.getElementById(`tab-network-device-${openDomId}`)) {
       loadNetworkDeviceTab(displayName, openId)
       saveNetworkDeviceTab(displayName, openId)
     }
-    document.getElementById(`tab-netdev-${openDomId}`)?.click()
+    document.getElementById(`tab-network-device-${openDomId}`)?.click()
     history.replaceState(null, '', BASE + '/network')
     return
   }

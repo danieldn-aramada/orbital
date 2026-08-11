@@ -158,7 +158,7 @@ html {
 .modal-card-head {
   padding: 2em;
   background-color: var(--bulma-modal-card-foot-background-color); // prefer matching footer
-  border-bottom: 1px solid #dbdbdb;
+  border-bottom: 1px solid var(--bulma-border);
   box-shadow: none;
   // box-shadow: 0 0.05em 0.1em hsla(var(--bulma-scheme-h), var(--bulma-scheme-s), var(--bulma-scheme-invert-l), 0.1);
 }
@@ -170,7 +170,7 @@ html {
 
 .modal-card-foot {
   padding: 2em;
-  border-top: 1px solid #dbdbdb;
+  border-top: 1px solid var(--bulma-border);
 }
 
 .form-cluster-create {
@@ -207,7 +207,11 @@ html {
   white-space: nowrap;
   font-weight: 400;
   font-size: small;
-  background-color: rgb(255, 249, 235);
+  // Scheme-derived surface (was a hardcoded cream that never flipped, leaving
+  // light text on a light box in dark mode). Explicit text color guarantees
+  // contrast regardless of the inherited color at the hover site.
+  background-color: hsl(var(--bulma-scheme-h), var(--bulma-scheme-s), calc(var(--bulma-scheme-main-l) - 3%));
+  color: var(--bulma-text-strong);
 
   display:none; // hide by default
 }
@@ -272,12 +276,22 @@ html {
   }
 }
 
+// Bulma modals: `.modal-content` is a transparent wrapper — the inner `.box` /
+// `.modal-card` is the surface. DataTables' responsive bundle ships a generic
+// `div.modal-content{background:white;padding:20px}` that hijacks the shared
+// class name and frames the dark card in white in dark mode. Re-assert Bulma's
+// intent; `.modal .modal-content` out-specifies DataTables' `div.modal-content`.
+.modal .modal-content {
+  background: transparent;
+  padding: 0;
+}
+
 .notification {
     &:hover {
         background-color: hsl(var(--bulma-notification-h), var(--bulma-notification-s), calc(var(--bulma-notification-background-l) + var(--bulma-hover-background-l-delta)));
     }
     a:not(.button) {
-        color: blue !important;
+        color: var(--bulma-link-text) !important;
         text-decoration: none !important;
     }
 }
@@ -293,7 +307,7 @@ html {
 
 .th, .td {
   padding: 8px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--bulma-border);
   text-overflow: ellipsis;
   white-space: nowrap;
   overflow: hidden;
@@ -771,17 +785,19 @@ div.dt-container:has(#audit-log-table) {
   // border: none;
   // line-height: 1.3;
   // font-size: 0.8em;
-  color: #004ed0;
+  // Bulma *-on-scheme colors are tuned for text-on-background contrast and flip
+  // with the color scheme (was hardcoded literals that stayed dark in dark mode).
+  color: var(--bulma-link-on-scheme);
 }
 
 /* only color the text */
 .diff-added {
-  color: rgb(0, 128, 0);
+  color: var(--bulma-success-on-scheme);
   margin-left: 20px;
 }
 
 .diff-removed {
-  color: rgb(255, 0, 0); 
+  color: var(--bulma-danger-on-scheme);
   margin-left: 20px;
   font-style: italic;
 }

@@ -142,6 +142,97 @@ Response
 ```
 `updatedAt` has no milliseconds and `updatedBy` is the authenticated caller — both server-stamped (the client never sent them).
 
+## Network devices
+
+NICs are modeled as `NetworkAdapter` (the card) → `NetworkInterface` (the interface, carries the MAC + `linkSpeedMbps`), and switches/firewalls/routers as `NetworkDevice`. The **BMC/iDRAC is a `NetworkInterface` too** (`mgmtOnly: true`, **no** `networkAdapter` — it's a Redfish *Manager*, not a NIC card), owned by the server directly. Adapters and interfaces are **read-only** (Redfish-sourced, owned by the server); only `NetworkDevice` is directly mutable.
+
+- **Redfish convention (server side).** `NetworkAdapter` = Redfish/DMTF `NetworkAdapter` (the physical NIC card / FRU); `NetworkInterface` collapses Redfish `Port` ⇄ `EthernetInterface` (1:1, joined on MAC). A port links to its `Server` **directly** — mirroring Redfish's `EthernetInterface`-under-`ComputerSystem` — *and* to its card via `networkAdapter`, mirroring `Port`-under-`NetworkAdapter`. The card layer is optional (absent for LAGs, NetBox-only sources, and the BMC/iDRAC). `mgmtOnly: true` flags the management-plane interface (the BMC), mirroring NetBox `interface.mgmt_only`; `macAddress` is an indexed field (not a node) — the cross-source join key.
+- **NetBox convention (network side).** `NetworkDevice` = the DCIM *device + `role`* (`tor` / `firewall` / `router` / …), enumerated from a site's NetBox device inventory. `connectedNetworkDevice` / `connectedNetworkDevicePort` mirror NetBox `connected_endpoints` — a *cabled-to* reference (singular per physical port), **not** ownership. `macAddress` is the cross-source join key between Redfish (server side) and NetBox (switch side).
+
+### List a server's NICs (data + management) — by server orbId
+```graphql
+query {
+  getServer(orbId: "colo:CFRHDX3") {
+    orbId name
+    # data NICs — grouped under their NetworkAdapter (the card)
+    networkAdapters {
+      orbId name manufacturer model serialNumber
+      networkInterfaces {
+        orbId name macAddress portType linkSpeedMbps
+        connectedNetworkDevicePort
+        connectedNetworkDevice { orbId name role }
+      }
+    }
+    # BMC / iDRAC — a mgmtOnly interface with no adapter; filter to the mgmt plane
+    networkInterfaces(filter: { mgmtOnly: true }) {
+      orbId name macAddress portType linkSpeedMbps mgmtOnly
+    }
+  }
+}
+```
+
+### List network devices in a data center — by DC orbId
+```graphql
+query {
+  getDataCenter(orbId: "colo:colo-galleon") {
+    networkDevices { orbId name manufacturer model serial role macAddress }
+  }
+}
+```
+
+### Fetch one device + its connected servers (blast radius) — by device orbId
+```graphql
+query {
+  getNetworkDevice(orbId: "colo:network-device-XH3123090344") {
+    orbId name manufacturer model serial role macAddress
+    dataCenter { orbId name }
+    networkInterfaceConnectedNetworkDevice {
+      connectedNetworkDevicePort
+      networkAdapter { server { orbId name } }
+    }
+  }
+}
+```
+
+### Edit a network device — by its orbId (variable form, required)
+query
+```graphql
+mutation UpdateNetworkDevice($orbId: String!, $set: NetworkDevicePatch!) {
+  updateNetworkDevice(input: { filter: { orbId: { eq: $orbId } }, set: $set }) {
+    numUids networkDevice { orbId role version updatedBy }
+  }
+}
+```
+variables
+```json
+{ "orbId": "colo:network-device-XH3123090344", "set": { "role": "core" } }
+```
+
+### Add a new network device — orbital stamps `version`/`createdBy`/`createdAt`
+Pass the input as a **variable** (array-of-maps) so the proxy injects `version: 1` and stamps the create-metadata; `dataCenter` links to the existing DC by `orbId`.
+query
+```graphql
+mutation AddNetworkDevice($input: [AddNetworkDeviceInput!]!) {
+  addNetworkDevice(input: $input) {
+    numUids networkDevice { orbId version createdBy createdAt }
+  }
+}
+```
+variables
+```json
+{ "input": [ {
+  "orbId": "colo:network-device-JX3623130496",
+  "namespace": "colo",
+  "name": "Colo_OOB_SW1",
+  "manufacturer": "Juniper",
+  "model": "EX2300-48T",
+  "serial": "JX3623130496",
+  "role": "tor",
+  "macAddress": "C8:13:37:AA:F0:27",
+  "dataCenter": { "orbId": "colo:colo-galleon" }
+} ] }
+```
+
 ## Audit log (REST)
 
 Every intent mutation is recorded as an immutable audit event. Read them at `GET /api/v1/audit-log` (JSON). Events are written by orbital as a side effect of the mutation.

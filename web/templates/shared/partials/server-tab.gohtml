@@ -154,7 +154,7 @@
         </div>
 
         <div id="srv-panel-network-{{.DomID}}" style="display:none">
-          {{if .NetworkAdapters}}
+          {{if or .NetworkAdapters .MgmtInterfaces}}
           <div style="overflow-x:auto">
           <table class="table is-striped is-hoverable is-fullwidth">
             <thead>
@@ -171,7 +171,7 @@
             <tbody>
               {{range .NetworkAdapters}}
               {{$adapter := .Name}}
-              {{range .NetworkPorts}}
+              {{range .NetworkInterfaces}}
               <tr>
                 <td>{{$adapter}}</td>
                 <td>{{if .Name}}{{.Name}}{{else}}—{{end}}</td>
@@ -182,6 +182,17 @@
                 <td>{{if .RemotePort}}<code>{{.RemotePort}}</code>{{else}}—{{end}}</td>
               </tr>
               {{end}}
+              {{end}}
+              {{range .MgmtInterfaces}}
+              <tr>
+                <td>—</td>
+                <td>{{if .Name}}{{.Name}}{{else}}—{{end}} <span class="tag is-warning is-light">mgmt</span></td>
+                <td>{{if .MacAddress}}<code>{{.MacAddress}}</code>{{else}}—{{end}}</td>
+                <td>{{if .PortType}}{{.PortType}}{{else}}—{{end}}</td>
+                <td>{{if .LinkSpeedMbps}}{{.LinkSpeedMbps}}{{else}}—{{end}}</td>
+                <td>{{if .DeviceName}}{{.DeviceName}}{{if .DeviceRole}} ({{.DeviceRole}}){{end}}{{else}}—{{end}}</td>
+                <td>{{if .RemotePort}}<code>{{.RemotePort}}</code>{{else}}—{{end}}</td>
+              </tr>
               {{end}}
             </tbody>
           </table>

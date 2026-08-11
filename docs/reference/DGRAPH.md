@@ -19,6 +19,20 @@ Read this before: DGraph schema changes, query/mutation work, export/import, see
 - **1:1 between Namespace and DataCenter** — enforced by orbital's application layer, not DGraph. Never allow multiple data centers per namespace or add config fields to `Namespace`.
 - The `namespace: Namespace!` field on every `ConfigItem` is a direct reference kept for query performance — always set to the same namespace as the data center. Avoids traversing up through `DataCenter` to reach the namespace boundary.
 
+## orbId convention
+
+`orbId` is `@id` on the `ConfigItem` interface → **globally unique across every implementing type**. It is **always derivable, never random**: **`<namespace>:<kind>-<natural-key>`**. This makes upserts idempotent (same input → same id) and lets clients construct ids without a lookup. The rule lives in CLAUDE.md Settled Decisions; **adding a new type means adding a row here.**
+
+| Type | `orbId` | Natural key |
+|---|---|---|
+| `NetworkDevice` | `<ns>:network-device-<serial>` | switch/firewall serial |
+| `NetworkAdapter` | `<ns>:network-adapter-<serverTag>-<FQDD>` | owner serviceTag + Redfish adapter FQDD |
+| `NetworkInterface` (server NIC) | `<ns>:network-interface-<serverTag>-<FQDD>` | owner serviceTag + Redfish interface FQDD |
+| `NetworkInterface` (BMC) | `<ns>:network-interface-<serverTag>-iDRAC` | owner serviceTag + `iDRAC` |
+| `NetworkInterface` (device port) | `<ns>:network-interface-<deviceSerial>-<port>` | device serial + port (`ge-0/0/0`) |
+
+**Legacy (pre-convention — migrate when next touched, don't treat network types as the special case):** `Server` = `<ns>:<serviceTag>`, `IPAddress` = `<ns>:<address>`, `Rack` = `<ns>:<rackName>`, `IdracSettings` = `<ns>:<serviceTag>-idrac`, cluster children = `<ns>:<clusterName>-<kind>`.
+
 ## Query patterns
 
 ### DQL tilde traversal (reverse edges)

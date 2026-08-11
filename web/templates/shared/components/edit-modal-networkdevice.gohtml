@@ -10,19 +10,19 @@
   <div class="modal-content modal-card is-large">
     <header class="modal-card-head">
       <p class="modal-card-title">Edit Network Device: {{.Name}}</p>
-      <button class="delete" aria-label="close" data-netdev-modal-close="{{.DomID}}"></button>
+      <button class="delete" aria-label="close" data-network-device-modal-close="{{.DomID}}"></button>
     </header>
     <section class="modal-card-body">
-      <div id="netdev-json-editor-{{.DomID}}" style="min-height:200px"></div>
+      <div id="network-device-json-editor-{{.DomID}}" style="min-height:200px"></div>
     </section>
     <footer class="modal-card-foot is-flex is-align-items-center" style="gap:0.75rem;">
       <div class="buttons" style="margin-bottom:0;">
-        <button class="button is-success" id="netdev-edit-submit-{{.DomID}}">Save</button>
-        <button class="button" data-netdev-modal-close="{{.DomID}}">Cancel</button>
+        <button class="button is-success" id="network-device-edit-submit-{{.DomID}}">Save</button>
+        <button class="button" data-network-device-modal-close="{{.DomID}}">Cancel</button>
       </div>
-      <span id="netdev-edit-error-{{.DomID}}" class="has-text-danger is-size-7" style="display:none; flex:1;"></span>
+      <span id="network-device-edit-error-{{.DomID}}" class="has-text-danger is-size-7" style="display:none; flex:1;"></span>
     </footer>
   </div>
 </div>
-<script type="application/json" id="netdev-edit-data-{{.DomID}}">{{.EditDataJSON}}</script>
-<script type="application/json" id="netdev-edit-targets-{{.DomID}}">{{.EditTargetsJSON}}</script>
+<script type="application/json" id="network-device-edit-data-{{.DomID}}">{{.EditDataJSON}}</script>
+<script type="application/json" id="network-device-edit-targets-{{.DomID}}">{{.EditTargetsJSON}}</script>

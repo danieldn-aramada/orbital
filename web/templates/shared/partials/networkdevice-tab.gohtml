@@ -3,14 +3,14 @@
   <div class="columns m-0">
     <div class="column pt-0 pl-0">
       {{if .Actions.Reload}}
-      <button class="button is-rounded is-small is-link mt-1 js-netdev-reload"
-        data-netdev-id="{{.OrbID}}">
+      <button class="button is-rounded is-small is-link mt-1 js-network-device-reload"
+        data-network-device-id="{{.OrbID}}">
         <span class="icon"><i class="fa-solid fa-refresh"></i></span>
         <span>Reload</span>
       </button>
       {{end}}
       {{if .Actions.Edit}}
-      <button class="button is-rounded is-small is-link mt-1" data-netdev-edit-id="{{.DomID}}">
+      <button class="button is-rounded is-small is-link mt-1" data-network-device-edit-id="{{.DomID}}">
         <span class="icon"><i class="fa-solid fa-pen-to-square"></i></span>
         <span>Edit</span>
       </button>
@@ -38,9 +38,18 @@
             <tr><td style="white-space:nowrap">Name</td><td>{{if .Name}}{{.Name}}{{else}}—{{end}}</td></tr>
             <tr><td style="white-space:nowrap">Manufacturer</td><td>{{if .Manufacturer}}{{.Manufacturer}}{{else}}—{{end}}</td></tr>
             <tr><td style="white-space:nowrap">Model</td><td>{{if .Model}}{{.Model}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Platform</td><td>{{if .Platform}}{{.Platform}}{{else}}—{{end}}</td></tr>
             <tr><td style="white-space:nowrap">Serial</td><td>{{if .Serial}}{{.Serial}}{{else}}—{{end}}</td></tr>
             <tr><td style="white-space:nowrap">MAC Address</td><td>{{if .MacAddress}}{{.MacAddress}}{{else}}—{{end}}</td></tr>
             <tr><td style="white-space:nowrap">Role</td><td>{{if .Role}}{{.Role}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Rack</td><td>{{if .RackName}}{{.RackName}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Rack Position</td><td>{{if .RackPosition}}{{.RackPosition}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Face</td><td>{{if .Face}}{{.Face}}{{else}}—{{end}}</td></tr>
+            {{if .VcPriority}}
+            <tr><td style="white-space:nowrap">VC Position</td><td>{{.VcPosition}}</td></tr>
+            <tr><td style="white-space:nowrap">VC Priority</td><td>{{.VcPriority}}</td></tr>
+            {{end}}
+            {{if .VirtualChassisName}}<tr><td style="white-space:nowrap">VC Master</td><td>{{.VirtualChassisName}}</td></tr>{{end}}
           </tbody>
         </table>
         </div>
@@ -68,44 +77,75 @@
     <div class="cell is-col-span-3 is-fullheight">
       <article class="box pb-2">
         <p class="is-size-4 pb-4">Details</p>
-        <div class="tabs is-boxed" id="netdev-detail-tabs-{{.DomID}}">
+        <div class="tabs is-boxed" id="network-device-detail-tabs-{{.DomID}}">
           <ul>
-            <li class="is-active" data-panel="netdev-panel-servers-{{.DomID}}">
-              <a><span class="icon is-small"><i class="fa-solid fa-server"></i></span><span>Connected Servers</span></a>
+            <li class="is-active" data-panel="network-device-panel-connections-{{.DomID}}">
+              <a><span class="icon is-small"><i class="fa-solid fa-diagram-project"></i></span><span>Connections{{if .Connections}} ({{len .Connections}}){{end}}</span></a>
+            </li>
+            <li data-panel="network-device-panel-servers-{{.DomID}}">
+              <a><span class="icon is-small"><i class="fa-solid fa-server"></i></span><span>Servers</span></a>
             </li>
             {{template "audit-tab-li" .}}
           </ul>
         </div>
 
         <div style="min-height: 300px">
-        <div id="netdev-panel-servers-{{.DomID}}">
+        {{/* Connections — the interface-level wiring: every cabled port, server or device on the remote end */}}
+        <div id="network-device-panel-connections-{{.DomID}}">
+          {{if .Connections}}
+          <div style="overflow-x:auto">
+          <table class="table is-striped is-hoverable is-size-7 mt-2">
+            <colgroup>
+              <col style="width:36%"><col style="width:20%"><col style="width:22%"><col style="width:22%">
+            </colgroup>
+            <thead>
+              <tr><th>Connected To</th><th>Type</th><th>Local Port</th><th>Remote Port</th></tr>
+            </thead>
+            <tbody>
+              {{range .Connections}}
+              {{if eq .RemoteType "server"}}
+              <tr data-server-orb-id="{{.RemoteOrbID}}" data-display-name="{{.RemoteName}}" style="cursor:pointer" title="Double-click to open server">
+                <td>{{.RemoteName}}</td>
+                <td><span class="tag is-light">Server</span></td>
+                <td>{{if .LocalPort}}<code>{{.LocalPort}}</code>{{else}}—{{end}}</td>
+                <td>{{if .RemotePort}}<code>{{.RemotePort}}</code>{{else}}—{{end}}</td>
+              </tr>
+              {{else}}
+              <tr>
+                <td>{{.RemoteName}}</td>
+                <td><span class="tag is-warning is-light">NetworkDevice</span></td>
+                <td>{{if .LocalPort}}<code>{{.LocalPort}}</code>{{else}}—{{end}}</td>
+                <td>{{if .RemotePort}}<code>{{.RemotePort}}</code>{{else}}—{{end}}</td>
+              </tr>
+              {{end}}
+              {{end}}
+            </tbody>
+          </table>
+          </div>
+          {{else}}
+          <p class="is-size-7 has-text-grey p-2">No connections on this device.</p>
+          {{end}}
+        </div>
+
+        {{/* Servers — the blast-radius rollup: distinct servers with cluster/role */}}
+        <div id="network-device-panel-servers-{{.DomID}}" style="display:none">
           {{if .ConnectedServers}}
           <div style="overflow-x:auto">
           <table class="table is-striped is-hoverable is-size-7 mt-2">
             <colgroup>
-              <col style="width:30%">
-              <col style="width:20%">
-              <col style="width:17%">
-              <col style="width:13%">
-              <col style="width:20%">
+              <col style="width:26%"><col style="width:22%"><col style="width:20%"><col style="width:16%"><col style="width:16%">
             </colgroup>
             <thead>
-              <tr>
-                <th>Server</th>
-                <th>Server Port</th>
-                <th>MAC</th>
-                <th>Device Port</th>
-                <th>Orb ID</th>
-              </tr>
+              <tr><th>Server</th><th>Cluster</th><th>Node Role</th><th>Server Port</th><th>Device Port</th></tr>
             </thead>
             <tbody>
               {{range .ConnectedServers}}
               <tr data-server-orb-id="{{.ServerOrbID}}" data-display-name="{{.ServerName}}" style="cursor:pointer" title="Double-click to open server">
                 <td>{{if .ServerName}}{{.ServerName}}{{else}}—{{end}}</td>
+                <td>{{if .ClusterName}}<span class="tag is-info is-light">{{.ClusterName}}</span>{{else}}<span class="has-text-grey">—</span>{{end}}</td>
+                <td>{{if .NodeRole}}{{.NodeRole}}{{else}}<span class="has-text-grey">—</span>{{end}}{{if .Gpu}} <span class="tag is-success is-light">GPU</span>{{end}}</td>
                 <td>{{if .PortName}}{{.PortName}}{{else}}—{{end}}</td>
-                <td>{{if .PortMac}}<code>{{.PortMac}}</code>{{else}}—{{end}}</td>
                 <td>{{if .RemotePort}}<code>{{.RemotePort}}</code>{{else}}—{{end}}</td>
-                <td>{{if .ServerOrbID}}{{.ServerOrbID}}{{else}}—{{end}}</td>
               </tr>
               {{end}}
             </tbody>

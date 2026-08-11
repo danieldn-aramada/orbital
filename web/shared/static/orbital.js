@@ -167,13 +167,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const orbId = data.orbId
       const domId = safeDomId(orbId)
       const displayName = data.name
-      const tab = document.getElementById(`tab-netdev-${domId}`)
+      const tab = document.getElementById(`tab-network-device-${domId}`)
       if (tab) {
         tab.click()
       } else {
         loadNetworkDeviceTab(displayName, orbId)
         saveNetworkDeviceTab(displayName, orbId)
-        document.getElementById(`tab-netdev-${domId}`).click()
+        document.getElementById(`tab-network-device-${domId}`).click()
       }
     },
   })
@@ -183,21 +183,21 @@ window.addEventListener('load', initNetworkDeviceTabRestoration)
 
 // ─── Network device edit modal ────────────────────────────────────────────────
 
-const netdevEditors = new Map()
-window.netdevEditors = netdevEditors
+const networkDeviceEditors = new Map()
+window.networkDeviceEditors = networkDeviceEditors
 
 function reloadNetworkDeviceFragment(orbId) {
   const domId = safeDomId(orbId)
-  const target = document.getElementById('tab-content-netdev-' + domId)
+  const target = document.getElementById('tab-content-network-device-' + domId)
   if (!target) return Promise.resolve()
   return fetchWithMinDelay('/network/' + encodeURIComponent(orbId))
     .then(html => {
       target.innerHTML = html
       htmx.process(target)
       renderTimestamps(target)
-      const detailTabs = target.querySelector('[id^="netdev-detail-tabs-"]')
+      const detailTabs = target.querySelector('[id^="network-device-detail-tabs-"]')
       if (detailTabs) initDetailTabs(detailTabs)
-      netdevEditors.delete(domId)
+      networkDeviceEditors.delete(domId)
     })
     .catch(() => {
       target.innerHTML = '<div class="notification is-danger is-light is-size-7 m-4"><strong>Reload failed.</strong> Check your connection and try again.</div>'
@@ -206,33 +206,33 @@ function reloadNetworkDeviceFragment(orbId) {
 
 // Reload button on the device detail page.
 document.addEventListener('click', (e) => {
-  const btn = e.target.closest('.js-netdev-reload')
+  const btn = e.target.closest('.js-network-device-reload')
   if (!btn) return
   btn.classList.add('is-loading')
-  reloadNetworkDeviceFragment(btn.dataset.netdevId).finally(() => btn.classList.remove('is-loading'))
+  reloadNetworkDeviceFragment(btn.dataset.networkDeviceId).finally(() => btn.classList.remove('is-loading'))
 })
 
 document.addEventListener('click', function (e) {
-  const editBtn = e.target.closest('[data-netdev-edit-id]')
+  const editBtn = e.target.closest('[data-network-device-edit-id]')
   if (editBtn) {
-    const id = editBtn.dataset.netdevEditId
+    const id = editBtn.dataset.networkDeviceEditId
     const modal = document.getElementById('edit-modal-networkdevice-' + id)
     if (!modal) return
 
-    if (!netdevEditors.has(id)) {
-      const dataEl = document.getElementById('netdev-edit-data-' + id)
-      const targetsEl = document.getElementById('netdev-edit-targets-' + id)
+    if (!networkDeviceEditors.has(id)) {
+      const dataEl = document.getElementById('network-device-edit-data-' + id)
+      const targetsEl = document.getElementById('network-device-edit-targets-' + id)
       const initialState = JSON.parse(dataEl ? dataEl.textContent.trim() : '{}')
       const targets = JSON.parse(targetsEl ? targetsEl.textContent.trim() : '[]')
-      const editorTarget = document.getElementById('netdev-json-editor-' + id)
+      const editorTarget = document.getElementById('network-device-json-editor-' + id)
       const editor = new window.JSONEditor({
         target: editorTarget,
         props: { mode: 'text', mainMenuBar: false },
       })
       editor.set({ text: JSON.stringify(initialState, null, 2) })
-      netdevEditors.set(id, editor)
+      networkDeviceEditors.set(id, editor)
 
-      const errorEl = document.getElementById('netdev-edit-error-' + id)
+      const errorEl = document.getElementById('network-device-edit-error-' + id)
       const showError = (msg) => { errorEl.textContent = msg; errorEl.style.display = '' }
       const clearError = () => { errorEl.textContent = ''; errorEl.style.display = 'none' }
 
@@ -247,8 +247,8 @@ document.addEventListener('click', function (e) {
         clearError,
       })
 
-      document.getElementById('netdev-edit-submit-' + id).addEventListener('click', async () => {
-        const btn = document.getElementById('netdev-edit-submit-' + id)
+      document.getElementById('network-device-edit-submit-' + id).addEventListener('click', async () => {
+        const btn = document.getElementById('network-device-edit-submit-' + id)
         btn.classList.add('is-loading')
         btn.disabled = true
         try {
@@ -264,16 +264,16 @@ document.addEventListener('click', function (e) {
       })
     }
 
-    const errorEl = document.getElementById('netdev-edit-error-' + id)
+    const errorEl = document.getElementById('network-device-edit-error-' + id)
     if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none' }
     modal.classList.add('is-active')
     document.documentElement.style.overflow = 'hidden'
     return
   }
 
-  const closeBtn = e.target.closest('[data-netdev-modal-close]')
+  const closeBtn = e.target.closest('[data-network-device-modal-close]')
   if (closeBtn) {
-    const id = closeBtn.dataset.netdevModalClose
+    const id = closeBtn.dataset.networkDeviceModalClose
     const modal = document.getElementById('edit-modal-networkdevice-' + id)
     if (modal) {
       modal.classList.remove('is-active')
@@ -1152,15 +1152,15 @@ function renderPayload(details) {
     )
     const opName = `<p style="font-size:0.7rem;margin:0 0 0.4rem"><span style="font-weight:600">Operation:</span> ${d.operationName || '—'}</p>`
     const varsBlock = `<p style="font-size:0.7rem;font-weight:600;margin:0 0 0.25rem">Input</p>
-      <pre style="font-size:0.72rem;background:#f5f5f5;padding:0.75rem;white-space:pre-wrap;margin:0 0 0.75rem">${JSON.stringify(vars, null, 2)}</pre>`
+      <pre style="font-size:0.72rem;background:var(--bulma-background);padding:0.75rem;white-space:pre-wrap;margin:0 0 0.75rem">${JSON.stringify(vars, null, 2)}</pre>`
     const queryBlock = `<p style="font-size:0.7rem;font-weight:600;margin:0 0 0.25rem">Query</p>
-      <pre style="font-size:0.72rem;background:#f5f5f5;padding:0.75rem;white-space:pre-wrap;word-break:break-word;margin:0;max-height:400px;overflow-y:auto">${formatGQL(d.query)}</pre>`
+      <pre style="font-size:0.72rem;background:var(--bulma-background);padding:0.75rem;white-space:pre-wrap;word-break:break-word;margin:0;max-height:400px;overflow-y:auto">${formatGQL(d.query)}</pre>`
     return `<div style="padding:0.5rem 1rem 0.75rem">${opName}${varsBlock}${queryBlock}</div>`
   }
 
   if (Object.keys(d).length === 0) return null
   return `<div style="padding:0.5rem 1rem 0.75rem">
-    <pre style="font-size:0.72rem;background:#f5f5f5;padding:0.75rem;white-space:pre-wrap;word-break:break-word;margin:0;max-height:400px;overflow-y:auto">${JSON.stringify(d, null, 2)}</pre>
+    <pre style="font-size:0.72rem;background:var(--bulma-background);padding:0.75rem;white-space:pre-wrap;word-break:break-word;margin:0;max-height:400px;overflow-y:auto">${JSON.stringify(d, null, 2)}</pre>
   </div>`
 }
 

@@ -21595,13 +21595,13 @@ has-background-danger.is-hoverable:active {
 .modal-card-head {
   padding: 2em;
   background-color: var(--bulma-modal-card-foot-background-color);
-  border-bottom: 1px solid #dbdbdb;
+  border-bottom: 1px solid var(--bulma-border);
   box-shadow: none;
 }
 
 .modal-card-foot {
   padding: 2em;
-  border-top: 1px solid #dbdbdb;
+  border-top: 1px solid var(--bulma-border);
 }
 
 .form-cluster-create {
@@ -21631,7 +21631,8 @@ has-background-danger.is-hoverable:active {
   white-space: nowrap;
   font-weight: 400;
   font-size: small;
-  background-color: rgb(255, 249, 235);
+  background-color: hsl(var(--bulma-scheme-h), var(--bulma-scheme-s), calc(var(--bulma-scheme-main-l) - 3%));
+  color: var(--bulma-text-strong);
   display: none;
 }
 
@@ -21679,11 +21680,16 @@ has-background-danger.is-hoverable:active {
   background-color: hsl(var(--bulma-scheme-h), var(--bulma-scheme-s), calc(var(--bulma-scheme-main-l) - 1%));
 }
 
+.modal .modal-content {
+  background: transparent;
+  padding: 0;
+}
+
 .notification:hover {
   background-color: hsl(var(--bulma-notification-h), var(--bulma-notification-s), calc(var(--bulma-notification-background-l) + var(--bulma-hover-background-l-delta)));
 }
 .notification a:not(.button) {
-  color: blue !important;
+  color: var(--bulma-link-text) !important;
   text-decoration: none !important;
 }
 
@@ -21696,7 +21702,7 @@ has-background-danger.is-hoverable:active {
 
 .th, .td {
   padding: 8px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--bulma-border);
   text-overflow: ellipsis;
   white-space: nowrap;
   overflow: hidden;
@@ -21917,17 +21923,17 @@ div.dt-container:has(#audit-log-table) .dt-paging .pagination-link {
 .diff-output {
   background: inherit !important;
   padding: 0px;
-  color: #004ed0;
+  color: var(--bulma-link-on-scheme);
 }
 
 /* only color the text */
 .diff-added {
-  color: rgb(0, 128, 0);
+  color: var(--bulma-success-on-scheme);
   margin-left: 20px;
 }
 
 .diff-removed {
-  color: rgb(255, 0, 0);
+  color: var(--bulma-danger-on-scheme);
   margin-left: 20px;
   font-style: italic;
 }

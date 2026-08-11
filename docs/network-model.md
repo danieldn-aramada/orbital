@@ -1,6 +1,6 @@
 # Design Proposal: Network topology (NICs, ports, switches) in orbital
 
-**Status:** Design record. Reflects decisions through 2026-08-10. Network types (`NetworkAdapter` / `NetworkPort` / `NetworkDevice`) are in `schema/schema.graphql` and seeded for the Colo reference (`CFRHDX3`).
+**Status:** Design record. Reflects decisions through 2026-08-10. Network types (`NetworkAdapter` / `NetworkInterface` / `NetworkDevice`) are in `schema/schema.graphql` and seeded for the Colo reference (`CFRHDX3`).
 
 **Scope:** Server network hardware (NIC cards, ports, MACs) and server↔switch adjacency, modeled as **design intent** in orbital's DGraph. Reverses the settled decision *"Network infrastructure config items are out of v1 scope"* for this server-side + first-hop-switch slice only. Still **excluded**: IPAM (pools/subnets/allocation/overlap), switch internal config, VLAN databases, routing, fabric interior.
 
@@ -11,7 +11,7 @@
 Two layers, held strictly apart:
 
 - **Schema design = generic, vendor-agnostic, follows upstream standards.** Orbital is a general config-management product; an adopter may not run NetBox — or Redfish, or anything we use. The node types/names must stand on their own.
-  - Server hardware follows **Redfish / DMTF** (vendor-neutral: `NetworkAdapter`, `Port`) — the same reason Redfish underpins orbital's storage types (`StorageController`, etc.).
+  - **Name each node after the standard whose *scope* matches it** (settled 2026-08-11). Whole-domain concepts — the **interface**, which exists on servers *and* switches *and* the BMC — follow **NetBox/DCIM** (`Interface` → orbital `NetworkInterface`). Server-only hardware FRUs — the **NIC card** — follow **Redfish/DMTF** (`NetworkAdapter`), the same standard behind orbital's `StorageController`. A MAC-bearing entity is an *interface*, not a *port* (Redfish puts the MAC on `EthernetInterface`, not `Port`) — the rename `NetworkPort → NetworkInterface` reflects that.
   - The switch follows the generic **DCIM "device + role"** abstraction — Redfish does not model switches at all (it is a *server* management standard).
 - **Data sourcing = whatever an adopter actually has.** For us today: **NetBox supplies the values; Redfish cross-checks / enriches.** Orbital is the system of record. NetBox is an *input to reconcile from*, not the authority — it is inconsistent (see §4).
 
@@ -23,17 +23,18 @@ Two layers, held strictly apart:
 
 | Node | Follows | Notes |
 |---|---|---|
-| `NetworkAdapter` | Redfish/DMTF `NetworkAdapter` | Physical NIC card (a FRU). **Optional** — filled from Redfish, absent for flat-only sources. |
-| `NetworkPort` | Redfish `Port` ⇄ `EthernetInterface` (1:1, collapsed to one node) | The port/interface. Carries the **MAC** (the cross-source join key). Always linked to `Server`. |
+| `NetworkAdapter` | Redfish/DMTF `NetworkAdapter` | Physical NIC-card FRU. **Server-only** (switches have no adapter abstraction). **Optional** — filled from Redfish; absent for flat-only sources *and* for the BMC (a Manager, not a card — its identity is `IdracSettings`). |
+| `NetworkInterface` | NetBox/DCIM `Interface` (whole-domain) | The MAC-bearing interface — server NIC, switch port, LAG, **or BMC/iDRAC**. Owner = `Server` **XOR** `NetworkDevice`. `networkAdapter` optional (null for LAGs, switch ports, and the BMC). `mgmtOnly: true` marks the management plane (mirrors NetBox `interface.mgmt_only`). Collapses Redfish `Port` ⇄ `EthernetInterface` (1:1; breaks only under NPAR/shared-LOM — not this fleet). |
 | `NetworkDevice` | Generic DCIM device + role | Minimal identity anchor for **network gear** (switch/router/firewall/sd-wan), role-differentiated. Values from NetBox. `macAddress` is the device MAC. |
 
-**Link aggregation (bonds / LAGs) — modeled as design intent.** Bonding *can be* a design decision ("these two NICs shall be LACP-bonded to the ToR pair"), so it belongs in the intent store. Following NetBox's convention (and OpenConfig / IEEE 802.1AX): a LAG **is an interface with member interfaces**, not a separate entity. So a bond is a `NetworkPort` (`portType: "LAG"`, no adapter, logical) whose physical members reference it via a self-referential `lag` edge (mirrors NetBox `interface.lag`; same pattern as `EksaKubernetesCluster.managementCluster`/`workloadClusters`). Sourced from NetBox where authored; whether the OS *realizes* the bond stays observed/runtime, outside our sourcing.
+**Link aggregation (bonds / LAGs) — modeled as design intent.** Bonding *can be* a design decision ("these two NICs shall be LACP-bonded to the ToR pair"), so it belongs in the intent store. Following NetBox's convention (and OpenConfig / IEEE 802.1AX): a LAG **is an interface with member interfaces**, not a separate entity. So a bond is a `NetworkInterface` (`portType: "LAG"`, no adapter, logical) whose physical members reference it via a self-referential `lag` edge (mirrors NetBox `interface.lag`; same pattern as `EksaKubernetesCluster.managementCluster`/`workloadClusters`). Sourced from NetBox where authored; whether the OS *realizes* the bond stays observed/runtime, outside our sourcing.
 
 **Deliberately NOT modeled:**
 
 - **`NetworkSwitchMember` (VC/FPC)** — no vendor-agnostic convention exists (Juniper VC / Cisco StackWise / Arista MLAG are all vendor-specific), Redfish doesn't model switches, and VC-vs-modular-chassis failure domains are **unverifiable** from server-side data. The FPC signal survives losslessly inside `connectedNetworkDevicePort` (`"xe-1/0/28"`); parse it at query time if a redundancy check ever needs it.
-- **Switch-port nodes** — the remote port is a string label on `NetworkPort`, not a node. Blast radius traverses `NetworkDevice → NetworkPort → Server` without them.
+- **Switch-port nodes** — the remote port is a string label on `NetworkInterface`, not a node. Blast radius traverses `NetworkDevice → NetworkInterface → Server` without them.
 - **IPAM, cable inventory, NPAR** — deferred. NPAR is a documented future extension (insert a Redfish `NetworkDeviceFunction` level between port and its functions if partitioning is ever enabled; capable but not enabled on examined hardware).
+- **`MACAddress` as a node** (settled 2026-08-11) — a MAC is an intrinsic 1:1 attribute of its interface (burned-in, no roles, no other referrers), so it's an **indexed field** (`macAddress @search`), not a node. Contrast `IPAddress`, which *is* a node because many config items reference one reassignable, role-bearing IP — *fan-out* justifies a node; uniqueness alone does not. The cross-source join is a seed-time field-match, not a graph hop. Promote later only if multi/reassignable MACs per interface appear (NetBox 4.2+ pattern).
 
 **Graph shape (rooted at `DataCenter`):**
 
@@ -42,14 +43,14 @@ graph TD
     DC["DataCenter"]
     SRV["Server"]
     NA["NetworkAdapter<br/>NIC card · optional"]
-    NP["NetworkPort<br/>port / interface / LAG"]
+    NP["NetworkInterface<br/>port / interface / LAG"]
     SW["NetworkDevice<br/>switch / router / firewall"]
 
     DC -->|servers| SRV
     DC -->|networkDevices| SW
     SRV -->|networkAdapters| NA
-    SRV -->|networkPorts| NP
-    NA -->|networkPorts| NP
+    SRV -->|networkInterfaces| NP
+    NA -->|networkInterfaces| NP
     NP -->|connectedNetworkDevice| SW
     NP -->|"lag / lagMembers (self)"| NP
 
@@ -59,7 +60,7 @@ graph TD
     class NA,NP,SW added;
 ```
 
-Blue nodes are new; grey are existing. A `NetworkPort` attaches to its `Server` directly (always) and to a `NetworkAdapter` when a source provides the card (optional); the `lag` self-edge groups member ports into a bond.
+Blue nodes are new; grey are existing. A `NetworkInterface` attaches to its `Server` directly (always) and to a `NetworkAdapter` when a source provides the card (optional); the `lag` self-edge groups member ports into a bond.
 
 ---
 
@@ -73,7 +74,7 @@ How the conventional sources name "the switch a server port connects to":
 
 The field is **design-intent about a cabled connection** (not observed link state), so the DCIM cabling convention fits best: **`connectedNetworkDevice` / `connectedNetworkDevicePort`** (mirrors NetBox `connected_endpoints`). Vendor-agnostic and unambiguous. *Alternative:* `neighborSwitch` (LLDP's term) if a discovery-flavored name is preferred.
 
-**Singular, despite NetBox's plural.** NetBox renamed `connected_endpoint` → `connected_endpoints` (a list) to support cable-path *tracing* through patch panels / breakout cables. A single physical NIC port is point-to-point — it cables to exactly one switch port — so `connectedNetworkDevice` stays singular. Breakouts (one QSFP → N SFP), if they ever appear, are modeled as separate `NetworkPort`s, each with its own singular `connectedNetworkDevice`.
+**Singular, despite NetBox's plural.** NetBox renamed `connected_endpoint` → `connected_endpoints` (a list) to support cable-path *tracing* through patch panels / breakout cables. A single physical NIC port is point-to-point — it cables to exactly one switch port — so `connectedNetworkDevice` stays singular. Breakouts (one QSFP → N SFP), if they ever appear, are modeled as separate `NetworkInterface`s, each with its own singular `connectedNetworkDevice`.
 
 ---
 
@@ -101,17 +102,17 @@ Investigated the Colo R650 (`eksa-control-04`, iDRAC `10.20.21.44`, serviceTag `
 Lives in **`schema/schema.graphql`** 
 
 - **`NetworkAdapter`** — the physical NIC card (a FRU: model / manufacturer / serial / part). Optional, Redfish-authoritative.
-- **`NetworkPort`** — a port/interface, physical *or* a logical LAG. Carries the `macAddress` (the cross-source join key), `linkSpeedMbps` (the **negotiated** link speed from Redfish, null when down), the `connectedNetworkDevice` / `connectedNetworkDevicePort` adjacency, and the `lag` / `lagMembers` self-edge for bonds.
+- **`NetworkInterface`** — a port/interface, physical *or* a logical LAG. Carries the `macAddress` (the cross-source join key), `linkSpeedMbps` (the **negotiated** link speed from Redfish, null when down), the `connectedNetworkDevice` / `connectedNetworkDevicePort` adjacency, and the `lag` / `lagMembers` self-edge for bonds.
 - **`NetworkDevice`** — a minimal network-gear identity anchor (`model` / `serial` / `role` / `macAddress`), role-differentiated (switch/router/firewall/sd-wan). Values from NetBox; not an editable config item.
-- **New edges on existing types** — `Server.networkAdapters`, `Server.networkPorts`, `DataCenter.networkDevices`.
+- **New edges on existing types** — `Server.networkAdapters`, `Server.networkInterfaces`, `DataCenter.networkDevices`.
 
-**orbId** extends the existing `namespace:serviceTag-<id>` pattern — e.g. adapter `colo:CFRHDX3-NIC.Integrated.1`, port `colo:CFRHDX3-NIC.Integrated.1-1`, switch (no serviceTag → key on serial) `colo:netdev-XH3123021901`. `macAddress` is the cross-source reconciliation key regardless of orbId.
+**orbId** follows the platform convention **`<namespace>:<kind>-<natural-key>`** (see CLAUDE.md Settled Decisions + `docs/reference/DGRAPH.md`): `colo:network-adapter-CFRHDX3-NIC.Integrated.1` (adapter, key = owner serviceTag + FQDD), `colo:network-interface-CFRHDX3-NIC.Integrated.1-1` (interface, same), `colo:network-device-XH3123021901` (device, key = serial). `macAddress` is the cross-source reconciliation key regardless of orbId.
 
 ### Example: a bonded pair (LAG + physical members)
 
-A LAG is just a `NetworkPort` with `portType: "LAG"`, no `networkAdapter`, and a `lagMembers` list that fills itself from whichever ports set `lag` to it — **you only ever set `lag` on the members, never `lagMembers` directly.** Below: the Colo R650 `CFRHDX3` with its two 25G ports bonded.
+A LAG is just a `NetworkInterface` with `portType: "LAG"`, no `networkAdapter`, and a `lagMembers` list that fills itself from whichever ports set `lag` to it — **you only ever set `lag` on the members, never `lagMembers` directly.** Below: the Colo R650 `CFRHDX3` with its two 25G ports bonded.
 
-**LAG `NetworkPort`** (`bond0`):
+**LAG `NetworkInterface`** (`bond0`):
 
 ```
 orbId:               "colo:CFRHDX3-bond0"
@@ -127,16 +128,16 @@ lagMembers:          [ NIC.Integrated.1-1, NIC.Slot.1-1 ]   # auto (@hasInverse)
 server:              → "colo:CFRHDX3"
 ```
 
-**Physical `NetworkPort`** (a member — real media, points up via `lag`):
+**Physical `NetworkInterface`** (a member — real media, points up via `lag`):
 
 ```
-orbId:               "colo:CFRHDX3-NIC.Integrated.1-1"
+orbId:               "colo:network-interface-CFRHDX3-NIC.Integrated.1-1"
 name:                "NIC.Integrated.1-1"
 portType:            "Ethernet"
 macAddress:          "14:23:F2:30:8F:B0"
 linkSpeedMbps:       10000          # negotiated — a 25G-rated port linked at 10G
-networkAdapter:      → "colo:CFRHDX3-NIC.Integrated.1"
-connectedNetworkDevice: → "colo:netdev-XH3123021901"
+networkAdapter:      → "colo:network-adapter-CFRHDX3-NIC.Integrated.1"
+connectedNetworkDevice: → "colo:network-device-XH3123021901"
 connectedNetworkDevicePort: "xe-1/0/28"
 lag:                 → "colo:CFRHDX3-bond0"
 server:              → "colo:CFRHDX3"
@@ -150,11 +151,11 @@ As seed GraphQL (edges are nested `orbId` refs — create the LAG before its mem
 { orbId: "colo:CFRHDX3-bond0", name: "bond0", namespace: "colo", version: 1,
   portType: "LAG", linkSpeedMbps: 20000, server: { orbId: "colo:CFRHDX3" } }
 
-{ orbId: "colo:CFRHDX3-NIC.Integrated.1-1", name: "NIC.Integrated.1-1", namespace: "colo", version: 1,
+{ orbId: "colo:network-interface-CFRHDX3-NIC.Integrated.1-1", name: "NIC.Integrated.1-1", namespace: "colo", version: 1,
   macAddress: "14:23:F2:30:8F:B0", portType: "Ethernet", linkSpeedMbps: 10000,
   server: { orbId: "colo:CFRHDX3" },
-  networkAdapter: { orbId: "colo:CFRHDX3-NIC.Integrated.1" },
-  connectedNetworkDevice: { orbId: "colo:netdev-XH3123021901" }, connectedNetworkDevicePort: "xe-1/0/28",
+  networkAdapter: { orbId: "colo:network-adapter-CFRHDX3-NIC.Integrated.1" },
+  connectedNetworkDevice: { orbId: "colo:network-device-XH3123021901" }, connectedNetworkDevicePort: "xe-1/0/28",
   lag: { orbId: "colo:CFRHDX3-bond0" } }
 ```
 
@@ -162,9 +163,9 @@ As seed GraphQL (edges are nested `orbId` refs — create the LAG before its mem
 
 ## 6. Anchor queries (validated against the final schema)
 
-1. **Which servers share a device / blast radius** — start at the network device: `NetworkDevice → networkPortConnectedNetworkDevice → server (→ kubernetesNode → cluster)`. Clean traversal; complete at the leaf/ToR layer (no fabric interior modeled, by design).
+1. **Which servers share a device / blast radius** — start at the network device: `NetworkDevice → networkInterfaceConnectedNetworkDevice → server (→ kubernetesNode → cluster)`. Clean traversal; complete at the leaf/ToR layer (no fabric interior modeled, by design).
 2. **Cabling / redundancy validation** — compare intended `connectedNetworkDevice` / `connectedNetworkDevicePort` against the Redfish LLDP observation. Bond membership is now **declared intent** (`lagMembers`), so the check asserts *"the intended LAG's member ports land on ≥2 distinct switches"* — no need to guess which ports are bonded. Two caveats remain: (a) VC (real redundancy) vs. modular chassis (fake) is indistinguishable without switch-plane data, so it reports *likely* not proven redundancy; (b) whether the OS **realizes** the intended bond is runtime/observed, outside our sourcing. State both wherever the check is built.
-3. **Provisioning lookup** — `macAddress` is `@search(by:[hash])`: `queryNetworkPort(filter:{macAddress:{eq:...}}) → server`. No MAC node required.
+3. **Provisioning lookup** — `macAddress` is `@search(by:[hash])`: `queryNetworkInterface(filter:{macAddress:{eq:...}}) → server`. No MAC node required.
 
 ---
 
@@ -175,4 +176,36 @@ As seed GraphQL (edges are nested `orbId` refs — create the LAG before its mem
 - **`NetworkDevice` generalization — DONE.** Switches, routers, firewalls, and SD-WAN are modeled as one `NetworkDevice` + `role` (superseding the switch-only `NetworkSwitch`). Only `role: "tor"` is seeded so far (the Colo ToRs); other roles get added as they're sourced from NetBox.
 - **XE9680 / GPU spot-check** — only an R650 was examined; RoCE/IB ports may differ (`portType` future-proofs it). Re-validate before GA.
 - **NPAR** — not modeled (capable, not enabled on examined hardware); future `NetworkDeviceFunction` level if enabled.
-- **Documentation on acceptance** — record the scoped reversal of "network out of scope" + these conventions in `docs/reference/DGRAPH.md`; register `NetworkAdapter` / `NetworkPort` as editable config items per `docs/playbooks/add-configitem.md`, but **not** `NetworkDevice` (identity anchor, like `IPAddress` — no editor).
+- **Documentation on acceptance** — record the scoped reversal of "network out of scope" + these conventions in `docs/reference/DGRAPH.md`; register `NetworkAdapter` / `NetworkInterface` as editable config items per `docs/playbooks/add-configitem.md`, but **not** `NetworkDevice` (identity anchor, like `IPAddress` — no editor).
+
+---
+
+## 8. Fabric extension — device↔device topology (schema landed; discovery/seed = Spike 32)
+
+**Context.** orbital's network schema is now an **API contract**: the network team's edge clients *discover* devices, cloud clients *mutate* topology (replacing manual NetBox). A complete twin — and their clients — need the **fabric interior**: switch↔switch links, switch-side ports. §1–§7 only cover the server side + first hop.
+
+**The gap it closed.** `NetworkInterface.server: Server!` was required → every port had to belong to a Server → a switch (`NetworkDevice`, not `Server`) couldn't own ports → no link whose *both* ends are network gear. The switch side of a cable was only a string.
+
+**Schema (landed in v5, applies clean).** The chain `NetworkDevice ↔ NetworkInterface ↔(cable)↔ NetworkInterface ↔ NetworkAdapter ↔ Server`:
+- `NetworkInterface.server` relaxed `Server!`→optional; `+networkDevice: NetworkDevice` (a switch owns its ports); `+NetworkDevice.networkInterfaces` inverse. **Owner = `server` XOR `networkDevice`** — DGraph can't enforce XOR, so it's app-checked.
+- `+NetworkInterface.connectedNetworkInterface: NetworkInterface` — the **canonical** cabling model (both ends real ports; set on both ends); works for server-NIC↔switch AND switch↔switch. `connectedNetworkDevice`(+string) stays **transitionally** (what the server-side seed populates today; derivable via `connectedNetworkInterface.networkDevice`; retired once switch ports are seeded).
+- **Reuse, not a new node** — one `NetworkInterface` concept for both sides; LAG (`lag`/`lagMembers`) works on the switch side for free.
+
+**Decisions (orbital owns the contract — settled):**
+- Cabling is an **edge**, not a `Cable` node — no cable media / length in v1 (clean v2 add if ever needed).
+- Switch-port `orbId` = `colo:network-interface-<serial>-<portName>` (`portName` may contain `/`, e.g. `xe-0/0/47`).
+- VLAN / L2 / IP / IPAM / MTU / VRF stay **OUT** (external-owned, not populated in colo).
+- **Management plane (BMC/iDRAC)** (settled + **landed 2026-08-11**) — the BMC is a `NetworkInterface` with **`mgmtOnly: true`** (mirrors NetBox `mgmt_only`; `portType` stays `Ethernet` — that's media type, not role), `macAddress = oobMAC`, owned by `server`, **no `networkAdapter`** (the BMC is a Redfish *Manager*, not a NIC-card FRU — sourced from `Managers/iDRAC.Embedded.1/EthernetInterfaces/NIC.1`, joined by MAC, never by name). **Done this pass:** schema `mgmtOnly` field; 46 BMC interfaces seeded (`colo:<tag>-iDRAC`, mac = `oobMAC`); server NICs-tab renders it as a flat row with a `mgmt` tag; `OOB_SW1.role` corrected `tor`→`mgmt`. **Deferred (Phase B):** the `connectedNetworkInterface` cable iDRAC→OOB. Do NOT keep the BMC as a scalar with a separate `oobPort` edge; it fragments the model.
+- **"Uplink" is derived, not stored** (settled 2026-08-11) — link direction is a **read-time label** computed from the `role` at each end of `connectedNetworkInterface` (TOR→firewall = uplink; server→TOR = host/downlink; **TOR↔TOR = peer/VCP, NOT an uplink**). No `isUplink` field: it's lossy (can't express the VCP peer case) and NetBox exposes interface *type*, not link direction — a stored flag forces discovery clients to compute what NetBox never gave them. Add an **optional** `NetworkInterface.linkRole` (`uplink|downlink|peer|host|management`) **only** if operators must *assert* a direction role-hierarchy can't derive (e.g. primary vs backup uplink); topology queries never depend on it.
+
+**Deferred to Spike 32 (server-side data NICs + BMC interfaces are populated; the *fabric* — switch-owned ports + all cabling — is not):**
+1. **Switch/cable discovery** — a NetBox pass (switches don't speak Redfish): `/dcim/interfaces` → switch `NetworkInterface`s owned by `networkDevice`; `/dcim/cables` → resolve **both** terminations to orbital port `orbId`s and set `connectedNetworkInterface` on both ends. Resolution: **switch end** → construct `network-interface-<serial>-<name>`; **server end** → **join by MAC** (orbital keys server ports by Redfish FQDD, not NetBox name). **Includes the management plane** — iDRAC/IPMI → OOB_SW1 cables resolve the server end via `oobMAC` to the server's BMC `NetworkInterface`.
+2. Colo switch-port + cable **seed**.
+3. **UI** — switch ports + fabric links on the `NetworkDevice` detail.
+4. **Mutation/upsert** verification (idempotent re-push).
+
+**NetBox → orbital (fabric additions):** `interface` on a device → `NetworkInterface` owned by `networkDevice`; `interface.lag` (`ae0`) → `NetworkInterface.lag`; `cable` (both terminations) → `NetworkInterface.connectedNetworkInterface` (both ends).
+
+**Colo fabric to seed (from NetBox):** `TOR-Primary xe-0/0/47 ↔ SRX xe-0/0/17` (cable 569, the `ae0` uplink); `TOR6 ↔ TOR7` VCP inter-member links; server↔ToR links join by NIC MAC.
+
+**Fabric roles (colo, confirmed against NetBox 2026-08-11).** Three devices, two planes: **TOR Primary/Backup** (EX4650 virtual chassis) = *data* plane (server NICs); **OOB_SW1** (EX2300) = *management* plane, aggregating every server's iDRAC/BMC (**38 cables**); **SRX1** (SRX1500) = **firewall / edge gateway**, uplinking **both** TORs *and* the OOB switch (the pod's north-south front door). So the "device↔device gap" is really **one interconnect layer** with two sub-parts, both the same `connectedNetworkInterface` primitive: **BMC↔device** (iDRAC→OOB, management plane) and **device↔device** (OOB↔SRX↔TOR uplinks + TOR↔TOR VCP peer links). Seeding only the data plane leaves OOB_SW1 a node with no edges — the switch whose whole job is iDRAC aggregation would be invisible in the twin.

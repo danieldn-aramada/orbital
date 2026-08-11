@@ -299,12 +299,12 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		})
 	root.GET("/clusters/:orbId", cluster.Tab)
 
-	netdev := handler.NewNetworkDeviceHandler(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath,
+	networkDevice := handler.NewNetworkDeviceHandler(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath,
 		func(c echo.Context) layout.PageActions {
 			canMutate, _ := c.Get("can_mutate").(bool)
 			return layout.OrbitalActions(canMutate)
 		})
-	root.GET("/network/:orbId", netdev.Tab)
+	root.GET("/network/:orbId", networkDevice.Tab)
 
 	delH := handler.NewDeleteHandler(cfg.DGraphURL, db, logger)
 	root.GET("/config-items/delete-preview", delH.Preview)

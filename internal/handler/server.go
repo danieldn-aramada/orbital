@@ -66,7 +66,7 @@ const getServerQuery = `
         model
         manufacturer
         serialNumber
-        networkPorts {
+        networkInterfaces {
           orbId
           name
           macAddress
@@ -75,6 +75,15 @@ const getServerQuery = `
           connectedNetworkDevicePort
           connectedNetworkDevice { orbId name role }
         }
+      }
+      networkInterfaces(filter: { mgmtOnly: true }) {
+        orbId
+        name
+        macAddress
+        portType
+        linkSpeedMbps
+        connectedNetworkDevicePort
+        connectedNetworkDevice { orbId name role }
       }
     }
   }`
@@ -167,12 +176,12 @@ type serverQueryResponse struct {
 		} `json:"storageDevices"`
 	} `json:"storageControllers"`
 	NetworkAdapters []struct {
-		OrbID        string `json:"orbId"`
-		Name         string `json:"name"`
-		Model        string `json:"model"`
-		Manufacturer string `json:"manufacturer"`
-		SerialNumber string `json:"serialNumber"`
-		NetworkPorts []struct {
+		OrbID             string `json:"orbId"`
+		Name              string `json:"name"`
+		Model             string `json:"model"`
+		Manufacturer      string `json:"manufacturer"`
+		SerialNumber      string `json:"serialNumber"`
+		NetworkInterfaces []struct {
 			OrbID                  string `json:"orbId"`
 			Name                   string `json:"name"`
 			MacAddress             string `json:"macAddress"`
@@ -184,8 +193,23 @@ type serverQueryResponse struct {
 				Name  string `json:"name"`
 				Role  string `json:"role"`
 			} `json:"connectedNetworkDevice"`
-		} `json:"networkPorts"`
+		} `json:"networkInterfaces"`
 	} `json:"networkAdapters"`
+	// Management-plane interfaces (BMC/iDRAC) — owned by the server directly, no
+	// NetworkAdapter FRU. Fetched via the mgmtOnly filter on server.networkInterfaces.
+	MgmtInterfaces []struct {
+		OrbID                  string `json:"orbId"`
+		Name                   string `json:"name"`
+		MacAddress             string `json:"macAddress"`
+		PortType               string `json:"portType"`
+		LinkSpeedMbps          int    `json:"linkSpeedMbps"`
+		RemotePort             string `json:"connectedNetworkDevicePort"`
+		ConnectedNetworkDevice *struct {
+			OrbID string `json:"orbId"`
+			Name  string `json:"name"`
+			Role  string `json:"role"`
+		} `json:"connectedNetworkDevice"`
+	} `json:"networkInterfaces"`
 }
 
 type idracSettingsTabData struct {
@@ -213,7 +237,7 @@ type storageControllerTabData struct {
 	StorageDevices []storageDeviceTabData
 }
 
-type networkPortTabData struct {
+type networkInterfaceTabData struct {
 	Name          string
 	MacAddress    string
 	PortType      string
@@ -225,12 +249,12 @@ type networkPortTabData struct {
 }
 
 type networkAdapterTabData struct {
-	OrbID        string
-	Name         string
-	Model        string
-	Manufacturer string
-	SerialNumber string
-	NetworkPorts []networkPortTabData
+	OrbID             string
+	Name              string
+	Model             string
+	Manufacturer      string
+	SerialNumber      string
+	NetworkInterfaces []networkInterfaceTabData
 }
 
 type serverTabDetailData struct {
@@ -266,6 +290,7 @@ type serverTabDetailData struct {
 	ConfigProfileJSON  string
 	StorageControllers []storageControllerTabData
 	NetworkAdapters    []networkAdapterTabData
+	MgmtInterfaces     []networkInterfaceTabData
 	BasePath           string
 	Actions            layout.PageActions
 	// RelatedOrbIDsCSV is "<server-orbId>,<idrac-orbId>,<scp-orbId>,..." —
@@ -302,9 +327,12 @@ func collectRelatedOrbIDs(raw *serverQueryResponse) []string {
 	}
 	for _, na := range raw.NetworkAdapters {
 		add(na.OrbID)
-		for _, p := range na.NetworkPorts {
+		for _, p := range na.NetworkInterfaces {
 			add(p.OrbID)
 		}
+	}
+	for _, p := range raw.MgmtInterfaces {
+		add(p.OrbID)
 	}
 	return out
 }
@@ -473,8 +501,8 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 			Manufacturer: na.Manufacturer,
 			SerialNumber: na.SerialNumber,
 		}
-		for _, p := range na.NetworkPorts {
-			port := networkPortTabData{
+		for _, p := range na.NetworkInterfaces {
+			port := networkInterfaceTabData{
 				Name:          p.Name,
 				MacAddress:    p.MacAddress,
 				PortType:      p.PortType,
@@ -486,9 +514,25 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 				port.DeviceOrbID = p.ConnectedNetworkDevice.OrbID
 				port.DeviceRole = p.ConnectedNetworkDevice.Role
 			}
-			adp.NetworkPorts = append(adp.NetworkPorts, port)
+			adp.NetworkInterfaces = append(adp.NetworkInterfaces, port)
 		}
 		srv.NetworkAdapters = append(srv.NetworkAdapters, adp)
+	}
+
+	for _, p := range raw.MgmtInterfaces {
+		port := networkInterfaceTabData{
+			Name:          p.Name,
+			MacAddress:    p.MacAddress,
+			PortType:      p.PortType,
+			LinkSpeedMbps: p.LinkSpeedMbps,
+			RemotePort:    p.RemotePort,
+		}
+		if p.ConnectedNetworkDevice != nil {
+			port.DeviceName = p.ConnectedNetworkDevice.Name
+			port.DeviceOrbID = p.ConnectedNetworkDevice.OrbID
+			port.DeviceRole = p.ConnectedNetworkDevice.Role
+		}
+		srv.MgmtInterfaces = append(srv.MgmtInterfaces, port)
 	}
 
 	srv.RelatedOrbIDsCSV = strings.Join(collectRelatedOrbIDs(&raw), ",")

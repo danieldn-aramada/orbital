@@ -163,6 +163,15 @@ Both are needed together in a grid-of-flex layout (`.app-main` grid item has `mi
 - **`stateSave: true` on all main page tables** — persists length/search/sort/position in localStorage across navigations. Applied to: inventory, datacenter, server list, audit log tables. Exclude embedded per-tab tables (e.g. `dc-servers-table`) — they reinit on every tab load.
 - `.field` adds `margin-bottom` that breaks flex alignment in DataTables toolbar — avoid in toolbar layouts. `vertical-align` on `dt-length` is also ignored in flex context.
 
+## Dark mode
+
+Dark mode is **`prefers-color-scheme`-driven through Bulma's `--bulma-*` scheme variables** — no manual toggle. Bulma flips its scheme vars at `:root` under `@media (prefers-color-scheme: dark)` and all its own components follow automatically.
+
+- **Never hardcode a color literal in custom CSS / templates / inline styles.** A fixed `#fafafa` / `background:white` / `#666` does NOT flip — it's right in one mode and unreadable in the other (was the clusters child-row + login-modal bug). Derive from scheme vars: `var(--bulma-background)`, `var(--bulma-text)` / `-strong` / `-weak`, `var(--bulma-border)`, the `*-on-scheme` colors, or `hsl(var(--bulma-scheme-h) var(--bulma-scheme-s) calc(var(--bulma-scheme-main-l) ± N%))` for a scheme-relative tint. Target WCAG AA (≥4.5:1) in both modes.
+- **DataTables' bundled CSS assumes a light page and does NOT honor `prefers-color-scheme`.** Two burns:
+  - `responsive-*.bulma.min.css` ships a generic `div.modal-content{background:white}` that **collides with Bulma's modal** (shared class, out-specifies `.modal-content`) → white frame around dark modals. Neutralized by `.modal .modal-content{background:transparent;padding:0}` in `main.scss`. Do NOT edit the vendored min.css — override in `main.scss`.
+  - DataTables gates its own dark theme on `html.dark` / `:root[data-bs-theme=dark]`, which we never set. `shared.js` syncs `prefers-color-scheme:dark` → `<html class="dark">` at module load so DataTables' shipped dark rules (sort arrows, responsive detail modal, child-row borders) actually fire. Do NOT remove that sync.
+
 ## Storage conventions
 
 - **sessionStorage** → API response data (e.g. inventory rows) — clears on tab close, always fresh on new session. Data copies go here.
