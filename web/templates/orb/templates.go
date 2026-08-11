@@ -58,13 +58,13 @@ func parsePage(fsys fs.FS, name string, files []string) *template.Template {
 // (either the embedded web.FS or os.DirFS("web") for dev hot-reload).
 func Map(fsys fs.FS) map[string]*template.Template {
 	return map[string]*template.Template{
-		"status":         parsePage(fsys, "status", page("templates/orb/pages/status.gohtml")),
-		"import":         parsePage(fsys, "import", page("templates/orb/pages/import.gohtml")),
-		"inventory":      parsePage(fsys, "inventory", page("templates/orb/pages/inventory.gohtml")),
-		"schema":         parsePage(fsys, "schema", page("templates/orb/pages/schema.gohtml")),
-		"datacenter":     parsePage(fsys, "datacenter", page("templates/orb/pages/datacenter.gohtml")),
-		"servers":        parsePage(fsys, "servers", page("templates/orb/pages/servers.gohtml")),
-		"clusters":       parsePage(fsys, "clusters", page("templates/orb/pages/clusters.gohtml")),
+		"status":          parsePage(fsys, "status", page("templates/orb/pages/status.gohtml")),
+		"import":          parsePage(fsys, "import", page("templates/orb/pages/import.gohtml")),
+		"inventory":       parsePage(fsys, "inventory", page("templates/orb/pages/inventory.gohtml")),
+		"schema":          parsePage(fsys, "schema", page("templates/orb/pages/schema.gohtml")),
+		"datacenter":      parsePage(fsys, "datacenter", page("templates/orb/pages/datacenter.gohtml")),
+		"servers":         parsePage(fsys, "servers", page("templates/orb/pages/servers.gohtml")),
+		"clusters":        parsePage(fsys, "clusters", page("templates/orb/pages/clusters.gohtml")),
 		"divergence":      parsePage(fsys, "divergence", page("templates/orb/pages/divergence.gohtml")),
 		"import-history":  parsePage(fsys, "import-history", page("templates/orb/pages/import-history.gohtml")),
 		"publish-history": parsePage(fsys, "publish-history", page("templates/orb/pages/publish-history.gohtml")),

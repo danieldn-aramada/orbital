@@ -32,23 +32,23 @@ type UI struct {
 	issueTrackerURL   string
 	oidcEnabled       bool
 	deviceCodeEnabled bool
-	backupEnabled    bool
-	backupCronSpec   string
-	s3Endpoint       string
-	s3Bucket         string
-	ociConfigured    bool
-	ociRegistry      string
-	ociRepo          string
-	exportDir        string
-	schemaPath       string
-	restoreAvailable bool
-	dgraphURL        string
-	dgraphAdminURL   string
-	version          string
-	basePath         string
-	db               *ent.Client
-	logger           *slog.Logger
-	templates        map[string]*template.Template
+	backupEnabled     bool
+	backupCronSpec    string
+	s3Endpoint        string
+	s3Bucket          string
+	ociConfigured     bool
+	ociRegistry       string
+	ociRepo           string
+	exportDir         string
+	schemaPath        string
+	restoreAvailable  bool
+	dgraphURL         string
+	dgraphAdminURL    string
+	version           string
+	basePath          string
+	db                *ent.Client
+	logger            *slog.Logger
+	templates         map[string]*template.Template
 }
 
 func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, deviceCodeEnabled, backupEnabled bool, s3Endpoint, s3Bucket string, basePath string, db *ent.Client, logger *slog.Logger) *UI {
@@ -61,14 +61,14 @@ func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, deviceCodeEn
 		issueTrackerURL:   issueTrackerURL,
 		oidcEnabled:       oidcEnabled,
 		deviceCodeEnabled: deviceCodeEnabled,
-		backupEnabled:    backupEnabled,
-		s3Endpoint:       s3Endpoint,
-		s3Bucket:         s3Bucket,
-		basePath:         basePath,
-		db:               db,
-		logger:           logger,
-		version:          fmt.Sprintf("%d", time.Now().Unix()),
-		templates:        webtemplates.Map(),
+		backupEnabled:     backupEnabled,
+		s3Endpoint:        s3Endpoint,
+		s3Bucket:          s3Bucket,
+		basePath:          basePath,
+		db:                db,
+		logger:            logger,
+		version:           fmt.Sprintf("%d", time.Now().Unix()),
+		templates:         webtemplates.Map(),
 	}
 }
 
@@ -171,11 +171,11 @@ func (h *UI) base(c echo.Context) layout.Base {
 		BasePath:          h.basePath,
 		CurrentPath:       c.Request().URL.Path,
 		UI: layout.UIConfig{
-			AppName:     "Orbital",
-			Tagline:     []string{"Graph-native source of truth", "for modular data centers"},
-			BasePath:    h.basePath,
-			Version:     version,
-			ShowAuth:    true,
+			AppName:         "Orbital",
+			Tagline:         []string{"Graph-native source of truth", "for modular data centers"},
+			BasePath:        h.basePath,
+			Version:         version,
+			ShowAuth:        true,
 			APIDocPath:      h.basePath + "/swagger/index.html",
 			GraphQLPath:     "/graphql",
 			AuditPanelLimit: layout.AuditPanelDefaultLimit,
@@ -200,6 +200,7 @@ func (h *UI) buildMenuSections(path, userRole string) []layout.MenuSection {
 				{Label: "Data Centers", Href: bp + "/datacenters", Active: path == bp+"/datacenters"},
 				{Label: "Servers", Href: bp + "/servers", Active: path == bp+"/servers"},
 				{Label: "Clusters", Href: bp + "/clusters", Active: path == bp+"/clusters"},
+				{Label: "Network Devices", Href: bp + "/network", Active: path == bp+"/network"},
 				{Label: "Schema Version", Href: bp + "/schema", Active: path == bp+"/schema"},
 			},
 		},
@@ -470,6 +471,13 @@ func (h *UI) Clusters(c echo.Context) error {
 	return h.render(c, "clusters", page.Clusters{
 		Base:      h.base(c),
 		PageTitle: "Clusters",
+	})
+}
+
+func (h *UI) NetworkDevices(c echo.Context) error {
+	return h.render(c, "network", page.NetworkDevices{
+		Base:      h.base(c),
+		PageTitle: "Network Devices",
 	})
 }
 

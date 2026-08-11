@@ -58,12 +58,12 @@ type DivergenceGroup struct {
 
 type DivergenceReports struct {
 	layout.Base
-	PageTitle      string
-	Groups         []DivergenceGroup
-	CanResolve     bool
-	BackupEnabled  bool // true when ORBITAL_S3_BUCKET et al are set
-	S3Endpoint     string
-	S3Bucket       string
+	PageTitle     string
+	Groups        []DivergenceGroup
+	CanResolve    bool
+	BackupEnabled bool // true when ORBITAL_S3_BUCKET et al are set
+	S3Endpoint    string
+	S3Bucket      string
 }
 
 type AuditLog struct {

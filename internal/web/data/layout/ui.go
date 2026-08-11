@@ -15,7 +15,7 @@ type UIConfig struct {
 	// Each slice entry is one line.
 	Tagline []string
 	// MoreLinks is the list of items rendered in the "More" dropdown in the navbar.
-	MoreLinks []NavItem
+	MoreLinks  []NavItem
 	ShowAuth   bool
 	APIDocPath string
 	// GraphQLPath is the navbar link target for the GraphQL endpoint.

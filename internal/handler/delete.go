@@ -246,9 +246,9 @@ type dcDeleteRaw struct {
 		Name string `json:"name"`
 	} `json:"racks"`
 	Servers []struct {
-		ID       string `json:"id"`
-		Name     string `json:"name"`
-		Hostname string `json:"hostname"`
+		ID            string `json:"id"`
+		Name          string `json:"name"`
+		Hostname      string `json:"hostname"`
 		IdracSettings *struct {
 			ID string `json:"id"`
 		} `json:"idracSettings"`
@@ -273,11 +273,15 @@ type dcDeleteRaw struct {
 		Typename             string `json:"__typename"`
 		ID                   string `json:"id"`
 		Name                 string `json:"name"`
-		ControlPlaneEndpoint *struct{ ID string `json:"id"` } `json:"controlPlaneEndpoint"`
-		Nodes                []struct {
+		ControlPlaneEndpoint *struct {
+			ID string `json:"id"`
+		} `json:"controlPlaneEndpoint"`
+		Nodes []struct {
 			ID string `json:"id"`
 		} `json:"nodes"`
-		TinkerbellIP *struct{ ID string `json:"id"` } `json:"tinkerbellIP,omitempty"`
+		TinkerbellIP *struct {
+			ID string `json:"id"`
+		} `json:"tinkerbellIP,omitempty"`
 	} `json:"kubernetesClusters"`
 }
 
@@ -425,10 +429,10 @@ const srvDeleteGQL = `
   }`
 
 type srvDeleteRaw struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	OrbID    string `json:"orbId"`
-	Hostname string `json:"hostname"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	OrbID         string `json:"orbId"`
+	Hostname      string `json:"hostname"`
 	IdracSettings *struct {
 		ID string `json:"id"`
 	} `json:"idracSettings"`
@@ -436,8 +440,8 @@ type srvDeleteRaw struct {
 		ID string `json:"id"`
 	} `json:"serverConfigurationProfile"`
 	StorageControllers []struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
+		ID             string `json:"id"`
+		Name           string `json:"name"`
 		StorageDevices []struct {
 			ID             string `json:"id"`
 			StorageVolumes []struct {
@@ -570,11 +574,11 @@ const clusterDeleteGQL = `
   }`
 
 type clusterDeleteRaw struct {
-	Typename  string `json:"__typename"`
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	OrbID     string `json:"orbId"`
-	Namespace string `json:"namespace"`
+	Typename             string `json:"__typename"`
+	ID                   string `json:"id"`
+	Name                 string `json:"name"`
+	OrbID                string `json:"orbId"`
+	Namespace            string `json:"namespace"`
 	ControlPlaneEndpoint *struct {
 		ID      string `json:"id"`
 		Address string `json:"address"`
@@ -594,10 +598,16 @@ type clusterDeleteRaw struct {
 		Address string `json:"address"`
 	} `json:"tinkerbellIP,omitempty"`
 	Backup *struct {
-		ID     string                  `json:"id"`
-		Etcd   *struct{ ID string `json:"id"` } `json:"etcd"`
-		Velero *struct{ ID string `json:"id"` } `json:"velero"`
-		S3Sync *struct{ ID string `json:"id"` } `json:"s3Sync"`
+		ID   string `json:"id"`
+		Etcd *struct {
+			ID string `json:"id"`
+		} `json:"etcd"`
+		Velero *struct {
+			ID string `json:"id"`
+		} `json:"velero"`
+		S3Sync *struct {
+			ID string `json:"id"`
+		} `json:"s3Sync"`
 	} `json:"backup,omitempty"`
 }
 
@@ -759,7 +769,7 @@ func (h *DeleteHandler) gqlQuery(ctx context.Context, query string, variables ma
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
 	var result struct {
-		Data   json.RawMessage `json:"data"`
+		Data   json.RawMessage            `json:"data"`
 		Errors []struct{ Message string } `json:"errors"`
 	}
 	if err := json.Unmarshal(raw, &result); err != nil {

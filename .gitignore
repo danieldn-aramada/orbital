@@ -64,3 +64,6 @@ coverage.html
 # release artifacts (uploaded to GitHub Releases, not committed)
 dist/
 deploy/local/*-credentials.*
+
+# Local-only artifacts — kept on disk, never committed (reconcile reports, scratch notes, scan output)
+.local/

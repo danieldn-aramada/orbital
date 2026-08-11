@@ -17,9 +17,9 @@ func (Backup) Fields() []ent.Field {
 		field.Enum("status").Values("pending", "running", "completed", "skipped", "failed"),
 		field.Enum("trigger").Values("manual", "scheduled").Default("manual"),
 		field.String("s3_bucket").Optional(),
-		field.String("s3_key").Optional(),        // object key within the bucket
-		field.String("s3_endpoint").Optional(),   // custom endpoint; empty = AWS S3
-		field.String("checksum").Optional(),      // SHA-256 of json.gz; used for dedup
+		field.String("s3_key").Optional(),      // object key within the bucket
+		field.String("s3_endpoint").Optional(), // custom endpoint; empty = AWS S3
+		field.String("checksum").Optional(),    // SHA-256 of json.gz; used for dedup
 		field.String("schema_version").Optional(),
 		field.String("binary_version").Optional(),
 		field.Int64("size_bytes").Optional().Nillable(),

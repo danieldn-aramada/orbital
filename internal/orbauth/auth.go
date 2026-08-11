@@ -106,7 +106,7 @@ func BrowserLogin(ctx context.Context, w io.Writer, store Store) (*Credentials, 
 	})
 
 	srv := &http.Server{Handler: mux}
-	go srv.Serve(listener) //nolint:errcheck
+	go srv.Serve(listener)                   //nolint:errcheck
 	defer srv.Shutdown(context.Background()) //nolint:errcheck
 
 	fmt.Fprintf(w, "\n    If your browser doesn't open, visit:\n    %s\n\n", authURL)

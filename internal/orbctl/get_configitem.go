@@ -49,7 +49,7 @@ func runGetConfigItems(cmd *cobra.Command, args []string) error {
 	var result struct {
 		Data struct {
 			QueryConfigItem []struct {
-			OrbID     string `json:"orbId"`
+				OrbID     string `json:"orbId"`
 				Name      string `json:"name"`
 				Namespace string `json:"namespace"`
 				CreatedBy string `json:"createdBy"`

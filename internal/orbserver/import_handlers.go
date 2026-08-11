@@ -199,7 +199,7 @@ func (s *Server) startImport(tag, initiatedBy string) bool {
 			// this process lifetime. After a pod restart, hydrateFromHistory
 			// re-reads from the DB and repopulates correctly — so the bug is
 			// invisible unless you observe the flow WITHIN one pod lifetime.
-			InitiatedBy:  initiatedBy,
+			InitiatedBy: initiatedBy,
 		})
 	}()
 
@@ -856,8 +856,8 @@ type orbTagsContentData struct {
 	Total      int
 	Limit      int
 	Offset     int
-	FirstRow   int  // 1-indexed for display
-	LastRow    int  // 1-indexed for display
+	FirstRow   int // 1-indexed for display
+	LastRow    int // 1-indexed for display
 	HasPrev    bool
 	HasNext    bool
 	PrevOffset int

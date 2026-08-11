@@ -37,11 +37,11 @@ func newTestOIDCServer(t *testing.T) (issuerURL string, sign func(claims map[str
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
 			"issuer":                                srv.URL,
-			"authorization_endpoint":               srv.URL + "/auth",
-			"token_endpoint":                       srv.URL + "/token",
-			"jwks_uri":                             srv.URL + "/jwks",
-			"response_types_supported":             []string{"code"},
-			"subject_types_supported":              []string{"public"},
+			"authorization_endpoint":                srv.URL + "/auth",
+			"token_endpoint":                        srv.URL + "/token",
+			"jwks_uri":                              srv.URL + "/jwks",
+			"response_types_supported":              []string{"code"},
+			"subject_types_supported":               []string{"public"},
 			"id_token_signing_alg_values_supported": []string{"RS256"},
 		})
 	})

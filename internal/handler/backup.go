@@ -85,8 +85,8 @@ type BackupConfig struct {
 	S3Prefix                 string
 	RetentionDays            int     // delete backups older than N days; 0 = no time-based pruning
 	RetentionMinCount        int     // always keep at least N backups regardless of age
-	CronSpec                 string        // cron expression for scheduler; empty = disabled; e.g. "0 8 * * *" = 08:00 UTC daily
-	RawDB                    *sql.DB       // optional: underlying *sql.DB for pg_try_advisory_xact_lock
+	CronSpec                 string  // cron expression for scheduler; empty = disabled; e.g. "0 8 * * *" = 08:00 UTC daily
+	RawDB                    *sql.DB // optional: underlying *sql.DB for pg_try_advisory_xact_lock
 	Version                  string
 	Timeout                  time.Duration // max duration for the async backup goroutine
 }
@@ -827,17 +827,17 @@ func toBackupFragRow(j *ent.Backup) backupFragRow {
 		triggerClass = "is-info is-light"
 	}
 	row := backupFragRow{
-		ID:          j.ID.String(),
-		InitiatedAt: j.CreatedAt.UTC().Format("2006-01-02 15:04:05"),
-		Status:      string(j.Status),
-		StatusClass: statusClass,
-		Trigger:     string(j.Trigger),
+		ID:           j.ID.String(),
+		InitiatedAt:  j.CreatedAt.UTC().Format("2006-01-02 15:04:05"),
+		Status:       string(j.Status),
+		StatusClass:  statusClass,
+		Trigger:      string(j.Trigger),
 		TriggerClass: triggerClass,
-		InitiatedBy: j.CreatedBy,
-		SizeBytes:   fmtBytes(j.SizeBytes),
-		Checksum:    j.Checksum,
-		CanDownload: j.Status == backup.StatusCompleted && j.S3Key != "",
-		CanDelete:   j.Status != backup.StatusRunning && j.Status != backup.StatusPending,
+		InitiatedBy:  j.CreatedBy,
+		SizeBytes:    fmtBytes(j.SizeBytes),
+		Checksum:     j.Checksum,
+		CanDownload:  j.Status == backup.StatusCompleted && j.S3Key != "",
+		CanDelete:    j.Status != backup.StatusRunning && j.Status != backup.StatusPending,
 	}
 	if j.Error != nil {
 		row.StatusError = *j.Error

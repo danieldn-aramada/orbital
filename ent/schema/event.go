@@ -20,7 +20,7 @@ func (Event) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).Default(uuid.New),
 		field.JSON("operations", []string{}).Optional(), // DGraph operation names found in query, e.g. ["updateServer"]
-		field.String("actor"),                            // user name or email
+		field.String("actor"),                           // user name or email
 		field.Time("timestamp").Default(time.Now),
 		field.JSON("details", json.RawMessage{}).Optional(), // {operationName, query, variables}
 		field.String("event_category").Default("data"),      // "data", "management", or "auth"

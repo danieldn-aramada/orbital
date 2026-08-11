@@ -60,6 +60,22 @@ const getServerQuery = `
           wwn
         }
       }
+      networkAdapters {
+        orbId
+        name
+        model
+        manufacturer
+        serialNumber
+        networkPorts {
+          orbId
+          name
+          macAddress
+          portType
+          linkSpeedMbps
+          connectedNetworkDevicePort
+          connectedNetworkDevice { orbId name role }
+        }
+      }
     }
   }`
 
@@ -108,8 +124,8 @@ type serverQueryResponse struct {
 	UpdatedBy    string `json:"updatedBy"`
 	UpdatedAt    string `json:"updatedAt"`
 	Version      int    `json:"version"`
-	Namespace string `json:"namespace"`
-	Rack      struct {
+	Namespace    string `json:"namespace"`
+	Rack         struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
 	} `json:"rack"`
@@ -150,6 +166,26 @@ type serverQueryResponse struct {
 			WWN           string `json:"wwn"`
 		} `json:"storageDevices"`
 	} `json:"storageControllers"`
+	NetworkAdapters []struct {
+		OrbID        string `json:"orbId"`
+		Name         string `json:"name"`
+		Model        string `json:"model"`
+		Manufacturer string `json:"manufacturer"`
+		SerialNumber string `json:"serialNumber"`
+		NetworkPorts []struct {
+			OrbID                  string `json:"orbId"`
+			Name                   string `json:"name"`
+			MacAddress             string `json:"macAddress"`
+			PortType               string `json:"portType"`
+			LinkSpeedMbps          int    `json:"linkSpeedMbps"`
+			RemotePort             string `json:"connectedNetworkDevicePort"`
+			ConnectedNetworkDevice *struct {
+				OrbID string `json:"orbId"`
+				Name  string `json:"name"`
+				Role  string `json:"role"`
+			} `json:"connectedNetworkDevice"`
+		} `json:"networkPorts"`
+	} `json:"networkAdapters"`
 }
 
 type idracSettingsTabData struct {
@@ -175,6 +211,26 @@ type storageControllerTabData struct {
 	OrbID          string
 	Name           string
 	StorageDevices []storageDeviceTabData
+}
+
+type networkPortTabData struct {
+	Name          string
+	MacAddress    string
+	PortType      string
+	LinkSpeedMbps int
+	RemotePort    string
+	DeviceName    string
+	DeviceOrbID   string
+	DeviceRole    string
+}
+
+type networkAdapterTabData struct {
+	OrbID        string
+	Name         string
+	Model        string
+	Manufacturer string
+	SerialNumber string
+	NetworkPorts []networkPortTabData
 }
 
 type serverTabDetailData struct {
@@ -209,6 +265,7 @@ type serverTabDetailData struct {
 	IdracSettings      *idracSettingsTabData
 	ConfigProfileJSON  string
 	StorageControllers []storageControllerTabData
+	NetworkAdapters    []networkAdapterTabData
 	BasePath           string
 	Actions            layout.PageActions
 	// RelatedOrbIDsCSV is "<server-orbId>,<idrac-orbId>,<scp-orbId>,..." —
@@ -242,6 +299,12 @@ func collectRelatedOrbIDs(raw *serverQueryResponse) []string {
 	add(raw.OobIP.OrbID)
 	for _, sc := range raw.StorageControllers {
 		add(sc.OrbID)
+	}
+	for _, na := range raw.NetworkAdapters {
+		add(na.OrbID)
+		for _, p := range na.NetworkPorts {
+			add(p.OrbID)
+		}
 	}
 	return out
 }
@@ -314,13 +377,13 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 		idracFields["racadmEnabled"] = raw.IdracSettings.RacadmEnabled
 	}
 	editFields := map[string]any{
-		"hostname":        raw.Hostname,
-		"manufacturer":    raw.Manufacturer,
-		"model":           raw.Model,
-		"oobMAC":          raw.OobMAC,
-		"rackPosition":    raw.RackPosition,
-		"serviceTag":      raw.ServiceTag,
-		"idracSettings":   idracFields,
+		"hostname":      raw.Hostname,
+		"manufacturer":  raw.Manufacturer,
+		"model":         raw.Model,
+		"oobMAC":        raw.OobMAC,
+		"rackPosition":  raw.RackPosition,
+		"serviceTag":    raw.ServiceTag,
+		"idracSettings": idracFields,
 	}
 	editJSON, _ := json.Marshal(editFields)
 
@@ -400,6 +463,32 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 			})
 		}
 		srv.StorageControllers = append(srv.StorageControllers, ctrl)
+	}
+
+	for _, na := range raw.NetworkAdapters {
+		adp := networkAdapterTabData{
+			OrbID:        na.OrbID,
+			Name:         na.Name,
+			Model:        na.Model,
+			Manufacturer: na.Manufacturer,
+			SerialNumber: na.SerialNumber,
+		}
+		for _, p := range na.NetworkPorts {
+			port := networkPortTabData{
+				Name:          p.Name,
+				MacAddress:    p.MacAddress,
+				PortType:      p.PortType,
+				LinkSpeedMbps: p.LinkSpeedMbps,
+				RemotePort:    p.RemotePort,
+			}
+			if p.ConnectedNetworkDevice != nil {
+				port.DeviceName = p.ConnectedNetworkDevice.Name
+				port.DeviceOrbID = p.ConnectedNetworkDevice.OrbID
+				port.DeviceRole = p.ConnectedNetworkDevice.Role
+			}
+			adp.NetworkPorts = append(adp.NetworkPorts, port)
+		}
+		srv.NetworkAdapters = append(srv.NetworkAdapters, adp)
 	}
 
 	srv.RelatedOrbIDsCSV = strings.Join(collectRelatedOrbIDs(&raw), ",")

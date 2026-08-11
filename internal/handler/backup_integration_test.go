@@ -30,17 +30,17 @@ import (
 func newBackupHandler(t *testing.T) *handler.BackupHandler {
 	t.Helper()
 	h, err := handler.NewBackupHandler(context.Background(), testDB, handler.BackupConfig{
-		DGraphAdminURL:  testutil.DGraphAdminURL(),
-		DGraphExportDir: blueExportDir,
-		SchemaPath:      schemaPath(),
-		S3Endpoint:      testutil.MinIOEndpoint(),
-		S3Region:        testutil.TestS3Region,
-		S3Bucket:        testutil.TestS3Bucket,
-		S3AccessKey:     testutil.TestS3AccessKey,
-		S3SecretKey:     testutil.TestS3SecretKey,
+		DGraphAdminURL:    testutil.DGraphAdminURL(),
+		DGraphExportDir:   blueExportDir,
+		SchemaPath:        schemaPath(),
+		S3Endpoint:        testutil.MinIOEndpoint(),
+		S3Region:          testutil.TestS3Region,
+		S3Bucket:          testutil.TestS3Bucket,
+		S3AccessKey:       testutil.TestS3AccessKey,
+		S3SecretKey:       testutil.TestS3SecretKey,
 		RetentionDays:     30,
 		RetentionMinCount: 3,
-		Version:         "test",
+		Version:           "test",
 	}, slog.Default())
 	if err != nil {
 		t.Fatalf("NewBackupHandler: %v", err)

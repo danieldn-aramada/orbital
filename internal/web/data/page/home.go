@@ -22,3 +22,8 @@ type Clusters struct {
 	layout.Base
 	PageTitle string
 }
+
+type NetworkDevices struct {
+	layout.Base
+	PageTitle string
+}

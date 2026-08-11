@@ -16,12 +16,12 @@ func TestClient_Enrich(t *testing.T) {
 	fakeB64 := base64.StdEncoding.EncodeToString(fakePayload)
 
 	tests := []struct {
-		name        string
-		handler     http.HandlerFunc
-		opts        []ClientOption
-		wantLayers  int
-		wantData    []byte
-		wantErrSub  string
+		name       string
+		handler    http.HandlerFunc
+		opts       []ClientOption
+		wantLayers int
+		wantData   []byte
+		wantErrSub string
 	}{
 		{
 			name: "single layer returned",
@@ -187,4 +187,3 @@ func TestClient_Timeout(t *testing.T) {
 		t.Fatal("expected timeout error, got nil")
 	}
 }
-

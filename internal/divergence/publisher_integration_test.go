@@ -7,10 +7,10 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/armada/orbital/internal/testutil"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/armada/orbital/internal/testutil"
 )
 
 func newTestPublisher(t *testing.T) *Publisher {

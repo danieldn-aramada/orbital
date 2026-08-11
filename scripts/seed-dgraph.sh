@@ -59,6 +59,11 @@ curl -sf -X POST "${DGRAPH}/graphql" \
 curl -sf -X POST "${DGRAPH}/graphql" \
   -H "Content-Type: application/json" \
   -d '{"query": "mutation { deleteIPAddress(filter: { has: orbId }) { numUids } }"}' >/dev/null
+# Network nodes are fully regenerated from *-network.graphql each seed → delete-all so removed
+# devices/adapters/ports/edges don't linger under upsert (mirrors the IPAddress delete above).
+curl -sf -X POST "${DGRAPH}/graphql" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "mutation { deleteNetworkPort(filter: { has: orbId }) { numUids } deleteNetworkAdapter(filter: { has: orbId }) { numUids } deleteNetworkDevice(filter: { has: orbId }) { numUids } }"}' >/dev/null
 
 seed_file() {
   local f="$1"
@@ -77,14 +82,14 @@ seed_file() {
 echo "==> Seeding DGraph (base)..."
 for f in examples/seed/*.graphql; do
   case "$(basename "$f" .graphql)" in
-    *-idrac|*-storage|*-clusters) continue ;;
+    *-idrac|*-storage|*-clusters|*-network) continue ;;
   esac
   seed_file "$f"
 done
 
 echo "==> Seeding DGraph (supplementary)..."
 # Clusters must come after base — they reference DataCenters + Servers seeded above.
-for f in examples/seed/*-idrac.graphql examples/seed/*-storage.graphql examples/seed/*-clusters.graphql; do
+for f in examples/seed/*-idrac.graphql examples/seed/*-storage.graphql examples/seed/*-clusters.graphql examples/seed/*-network.graphql; do
   [ -f "$f" ] || continue
   seed_file "$f"
 done

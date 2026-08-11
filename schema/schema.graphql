@@ -60,6 +60,7 @@ type DataCenter implements ConfigItem {
     servers: [Server] @hasInverse(field: dataCenter)
     racks: [Rack] @hasInverse(field: dataCenter)
     kubernetesClusters: [KubernetesCluster] @hasInverse(field: dataCenter)
+    networkDevices: [NetworkDevice] @hasInverse(field: dataCenter)
 }
 
 type Rack implements ConfigItem {
@@ -80,6 +81,8 @@ type Server implements ConfigItem {
     idracSettings: IdracSettings @hasInverse(field: server)
     serverConfigurationProfile: ServerConfigurationProfile @hasInverse(field: server)
     storageControllers: [StorageController] @hasInverse(field: server)
+    networkAdapters: [NetworkAdapter] @hasInverse(field: server)
+    networkPorts: [NetworkPort] @hasInverse(field: server)
     kubernetesNode: KubernetesNode @hasInverse(field: server)
 
     oobIP: IPAddress @hasInverse(field: serverOobIP)
@@ -131,6 +134,44 @@ type StorageVolume implements ConfigItem {
 
     storageController: StorageController!
     storageDevices: [StorageDevice] @hasInverse(field: storageVolumes)
+}
+
+type NetworkAdapter implements ConfigItem {
+    # NIC card (FRU). Redfish-authoritative; OPTIONAL (absent for flat-only sources).
+    # name = adapter FQDD, e.g. "NIC.Integrated.1"
+    model: String @search(by: [term])
+    manufacturer: String @search(by: [hash])
+    serialNumber: String @search(by: [hash])
+    partNumber: String @search(by: [hash])
+
+    server: Server!
+    networkPorts: [NetworkPort] @hasInverse(field: networkAdapter)
+}
+
+type NetworkPort implements ConfigItem {
+    # Port/interface (physical OR logical LAG). name = source ifname/FQDD.
+    macAddress: String @search(by: [hash])  # cross-source join key (MAC)
+    portType: String @search(by: [term])  # Ethernet | InfiniBand | FibreChannel | LAG
+    linkSpeedMbps: Int  # negotiated link speed (Redfish CurrentLinkSpeedMbps); null when link down
+
+    server: Server!
+    networkAdapter: NetworkAdapter         # physical ports only (null for a LAG)
+    connectedNetworkDevice: NetworkDevice   # intended cabling far-end (switch/router/firewall)
+    connectedNetworkDevicePort: String      # remote port label, e.g. "xe-1/0/28"
+    lag: NetworkPort                       # link aggregation group
+    lagMembers: [NetworkPort] @hasInverse(field: lag)
+}
+
+type NetworkDevice implements ConfigItem {
+    # Network gear (switch / router / firewall / sd-wan), role-differentiated. NetBox-sourced identity anchor.
+    manufacturer: String @search(by: [hash])
+    model: String @search(by: [term])
+    serial: String @search(by: [hash])
+    role: String @search(by: [term])       # tor | core | mgmt | edge | leaf | spine | router | firewall | sd-wan
+    macAddress: String @search(by: [hash])  # device MAC (identity, from NetBox)
+
+    dataCenter: DataCenter!
+    networkPortConnectedNetworkDevice: [NetworkPort] @hasInverse(field: connectedNetworkDevice)
 }
 
 interface KubernetesCluster {

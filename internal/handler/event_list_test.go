@@ -172,7 +172,6 @@ func TestEventList_ReturnsEventsWithRequiredFields(t *testing.T) {
 	}
 }
 
-
 func TestEventList_FilterByOrbId(t *testing.T) {
 	ctx := context.Background()
 	clearEvents(ctx)
@@ -396,8 +395,8 @@ func TestEventList_OrbIdFilterExcludesUnrelatedManagementEvents(t *testing.T) {
 	clearEvents(ctx)
 
 	createEvent(t, "mgmt-filter-test", []string{"updateServer"}, []string{"Server"}, []string{"alaska:SRV-MGMT"}, "data")
-	createEvent(t, "mgmt-filter-test", []string{"createBackup"}, nil, nil, "management")              // system-wide, no resources
-	createEvent(t, "mgmt-filter-test", []string{"authorizationDenied"}, nil, nil, "management")       // system-wide, no resources
+	createEvent(t, "mgmt-filter-test", []string{"createBackup"}, nil, nil, "management")                                             // system-wide, no resources
+	createEvent(t, "mgmt-filter-test", []string{"authorizationDenied"}, nil, nil, "management")                                      // system-wide, no resources
 	createEvent(t, "mgmt-filter-test", []string{"restoreBackup"}, []string{"DataCenter"}, []string{"alaska:DC-OTHER"}, "management") // affects different DC
 	createEvent(t, "mgmt-filter-test", []string{"updateServer"}, []string{"Server"}, []string{"alaska:SRV-OTHER"}, "data")
 	t.Cleanup(func() { clearEvents(ctx) })

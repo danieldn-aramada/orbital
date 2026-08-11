@@ -70,7 +70,7 @@ func shouldRetry(result DispatchResult) bool {
 		return true // transport-layer error (connection refused, timeout, etc.)
 	}
 	switch result.StatusCode {
-	case http.StatusConflict,           // 409 — cb-controller SSA-observe race
+	case http.StatusConflict, // 409 — cb-controller SSA-observe race
 		http.StatusTooManyRequests,     // 429
 		http.StatusInternalServerError, // 500
 		http.StatusBadGateway,          // 502

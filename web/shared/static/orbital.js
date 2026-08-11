@@ -66,6 +66,10 @@ import {
   initDatacenterTabRestoration,
   initServerListTabRestoration,
   initClusterTabRestoration,
+  initNetworkDeviceTable,
+  loadNetworkDeviceTab,
+  saveNetworkDeviceTab,
+  initNetworkDeviceTabRestoration,
   safeDomId,
   initRowNavigation,
   initLinkNavigation,
@@ -154,6 +158,129 @@ document.addEventListener('DOMContentLoaded', () => {
 })
 
 window.addEventListener('load', initClusterTabRestoration)
+
+// ─── Network devices page ─────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  initNetworkDeviceTable({
+    onRowOpen: (data) => {
+      const orbId = data.orbId
+      const domId = safeDomId(orbId)
+      const displayName = data.name
+      const tab = document.getElementById(`tab-netdev-${domId}`)
+      if (tab) {
+        tab.click()
+      } else {
+        loadNetworkDeviceTab(displayName, orbId)
+        saveNetworkDeviceTab(displayName, orbId)
+        document.getElementById(`tab-netdev-${domId}`).click()
+      }
+    },
+  })
+})
+
+window.addEventListener('load', initNetworkDeviceTabRestoration)
+
+// ─── Network device edit modal ────────────────────────────────────────────────
+
+const netdevEditors = new Map()
+window.netdevEditors = netdevEditors
+
+function reloadNetworkDeviceFragment(orbId) {
+  const domId = safeDomId(orbId)
+  const target = document.getElementById('tab-content-netdev-' + domId)
+  if (!target) return Promise.resolve()
+  return fetchWithMinDelay('/network/' + encodeURIComponent(orbId))
+    .then(html => {
+      target.innerHTML = html
+      htmx.process(target)
+      renderTimestamps(target)
+      const detailTabs = target.querySelector('[id^="netdev-detail-tabs-"]')
+      if (detailTabs) initDetailTabs(detailTabs)
+      netdevEditors.delete(domId)
+    })
+    .catch(() => {
+      target.innerHTML = '<div class="notification is-danger is-light is-size-7 m-4"><strong>Reload failed.</strong> Check your connection and try again.</div>'
+    })
+}
+
+// Reload button on the device detail page.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.js-netdev-reload')
+  if (!btn) return
+  btn.classList.add('is-loading')
+  reloadNetworkDeviceFragment(btn.dataset.netdevId).finally(() => btn.classList.remove('is-loading'))
+})
+
+document.addEventListener('click', function (e) {
+  const editBtn = e.target.closest('[data-netdev-edit-id]')
+  if (editBtn) {
+    const id = editBtn.dataset.netdevEditId
+    const modal = document.getElementById('edit-modal-networkdevice-' + id)
+    if (!modal) return
+
+    if (!netdevEditors.has(id)) {
+      const dataEl = document.getElementById('netdev-edit-data-' + id)
+      const targetsEl = document.getElementById('netdev-edit-targets-' + id)
+      const initialState = JSON.parse(dataEl ? dataEl.textContent.trim() : '{}')
+      const targets = JSON.parse(targetsEl ? targetsEl.textContent.trim() : '[]')
+      const editorTarget = document.getElementById('netdev-json-editor-' + id)
+      const editor = new window.JSONEditor({
+        target: editorTarget,
+        props: { mode: 'text', mainMenuBar: false },
+      })
+      editor.set({ text: JSON.stringify(initialState, null, 2) })
+      netdevEditors.set(id, editor)
+
+      const errorEl = document.getElementById('netdev-edit-error-' + id)
+      const showError = (msg) => { errorEl.textContent = msg; errorEl.style.display = '' }
+      const clearError = () => { errorEl.textContent = ''; errorEl.style.display = 'none' }
+
+      const onSubmit = window.initConfigItemEditor({
+        modal,
+        editor,
+        initialState,
+        targets,
+        reloadOrbId: modal.dataset.orbId,
+        reloadFn: reloadNetworkDeviceFragment,
+        showError,
+        clearError,
+      })
+
+      document.getElementById('netdev-edit-submit-' + id).addEventListener('click', async () => {
+        const btn = document.getElementById('netdev-edit-submit-' + id)
+        btn.classList.add('is-loading')
+        btn.disabled = true
+        try {
+          const ok = await onSubmit()
+          if (ok) {
+            modal.classList.remove('is-active')
+            document.documentElement.style.overflow = ''
+          }
+        } finally {
+          btn.classList.remove('is-loading')
+          btn.disabled = false
+        }
+      })
+    }
+
+    const errorEl = document.getElementById('netdev-edit-error-' + id)
+    if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none' }
+    modal.classList.add('is-active')
+    document.documentElement.style.overflow = 'hidden'
+    return
+  }
+
+  const closeBtn = e.target.closest('[data-netdev-modal-close]')
+  if (closeBtn) {
+    const id = closeBtn.dataset.netdevModalClose
+    const modal = document.getElementById('edit-modal-networkdevice-' + id)
+    if (modal) {
+      modal.classList.remove('is-active')
+      document.documentElement.style.overflow = ''
+    }
+  }
+})
 
 // ─── Cross-app navigation and reload buttons ──────────────────────────────────
 // Shared handlers extracted from this file so orb.js gets them for free.

@@ -120,9 +120,9 @@ type triggerResponse struct {
 }
 
 type statusResponse struct {
-	JobID       string  `json:"id"`
-	DataCenter  string  `json:"dataCenter"`
-	Status      string  `json:"status"`
+	JobID      string `json:"id"`
+	DataCenter string `json:"dataCenter"`
+	Status     string `json:"status"`
 	// Phase surfaces the fine-grained step the atomic goroutine is on, for
 	// clients that want to render a per-step progress list. Coarse `status`
 	// stays authoritative for terminal-state gating. Values: pending,
@@ -252,8 +252,8 @@ func (h *Export) List(c echo.Context) error {
 		if job.Status == exportjob.StatusCompleted && job.ArtifactPath != nil {
 			if _, statErr := os.Stat(*job.ArtifactPath); os.IsNotExist(statErr) {
 				h.db.ExportJob.UpdateOneID(job.ID). //nolint:errcheck
-					SetStatus(exportjob.StatusStale).
-					Save(c.Request().Context())
+									SetStatus(exportjob.StatusStale).
+									Save(c.Request().Context())
 				job.Status = exportjob.StatusStale
 			}
 		}
@@ -768,11 +768,11 @@ func (h *Export) markFailed(ctx context.Context, jobID uuid.UUID, errStr string)
 // is authoritative for terminal transitions; per-step phase only refines
 // the running window into exporting → bundling → pushing → signing.
 //
-//   pending    → job created, goroutine not yet running
-//   exporting  → job.status=running AND no artifact yet (DGraph export step)
-//   bundling|pushing|signing → artifact.status mirrors the atomic publish leg
-//   completed  → job.status=completed
-//   failed     → job.status=failed (error carries the phase context in text)
+//	pending    → job created, goroutine not yet running
+//	exporting  → job.status=running AND no artifact yet (DGraph export step)
+//	bundling|pushing|signing → artifact.status mirrors the atomic publish leg
+//	completed  → job.status=completed
+//	failed     → job.status=failed (error carries the phase context in text)
 func derivePhase(job *ent.ExportJob, artifact *ent.RegistryArtifact) string {
 	switch job.Status {
 	case exportjob.StatusCompleted:

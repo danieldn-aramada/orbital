@@ -69,8 +69,8 @@ func TestGraphQL_MutationWritesAuditEvent(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.Set("user_id", adminUser)     // role enforcement requires an authenticated admin
-	c.Set("user_email", actor)      // actorFromContext sources the audit actor here
+	c.Set("user_id", adminUser) // role enforcement requires an authenticated admin
+	c.Set("user_email", actor)  // actorFromContext sources the audit actor here
 
 	if err := h.Handle(c); err != nil {
 		t.Fatalf("Handle: %v", err)

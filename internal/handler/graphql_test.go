@@ -179,4 +179,3 @@ func TestExtractResourceIDs(t *testing.T) {
 		})
 	}
 }
-

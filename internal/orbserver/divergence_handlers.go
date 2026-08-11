@@ -22,13 +22,13 @@ const publishHistoryPageSize = 25
 
 type divergencePageData struct {
 	layout.Base
-	PageTitle       string
-	Entries         []divergence.OverrideEntry
-	LastPublish     *divergence.PublishRecord
-	S3Configured    bool
-	S3Endpoint      string
-	S3Bucket        string
-	PublishHistory  publishHistoryView
+	PageTitle      string
+	Entries        []divergence.OverrideEntry
+	LastPublish    *divergence.PublishRecord
+	S3Configured   bool
+	S3Endpoint     string
+	S3Bucket       string
+	PublishHistory publishHistoryView
 }
 
 // publishHistoryView is the render-model for the Publish History page. FirstRow

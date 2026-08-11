@@ -1,0 +1,28 @@
+<div id="edit-modal-networkdevice-{{.DomID}}"
+  class="modal modal-fx-3dRotateFromBottom"
+  data-current-user="{{.CurrentUser}}"
+  data-version="{{.Version}}"
+  data-orb-id="{{.OrbID}}"
+  data-typename="{{.Typename}}"
+  data-reload-url="/network/{{.OrbID}}"
+  data-reload-target="tab-content-{{.DomID}}">
+  <div class="modal-background"></div>
+  <div class="modal-content modal-card is-large">
+    <header class="modal-card-head">
+      <p class="modal-card-title">Edit Network Device: {{.Name}}</p>
+      <button class="delete" aria-label="close" data-netdev-modal-close="{{.DomID}}"></button>
+    </header>
+    <section class="modal-card-body">
+      <div id="netdev-json-editor-{{.DomID}}" style="min-height:200px"></div>
+    </section>
+    <footer class="modal-card-foot is-flex is-align-items-center" style="gap:0.75rem;">
+      <div class="buttons" style="margin-bottom:0;">
+        <button class="button is-success" id="netdev-edit-submit-{{.DomID}}">Save</button>
+        <button class="button" data-netdev-modal-close="{{.DomID}}">Cancel</button>
+      </div>
+      <span id="netdev-edit-error-{{.DomID}}" class="has-text-danger is-size-7" style="display:none; flex:1;"></span>
+    </footer>
+  </div>
+</div>
+<script type="application/json" id="netdev-edit-data-{{.DomID}}">{{.EditDataJSON}}</script>
+<script type="application/json" id="netdev-edit-targets-{{.DomID}}">{{.EditTargetsJSON}}</script>

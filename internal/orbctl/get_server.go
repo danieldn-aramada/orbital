@@ -55,10 +55,10 @@ func runGetServers(cmd *cobra.Command, args []string) error {
 	var result struct {
 		Data struct {
 			QueryServer []struct {
-			OrbID      string `json:"orbId"`
-				Hostname   string `json:"hostname"`
-				ServiceTag string `json:"serviceTag"`
-				Model      string `json:"model"`
+				OrbID      string                   `json:"orbId"`
+				Hostname   string                   `json:"hostname"`
+				ServiceTag string                   `json:"serviceTag"`
+				Model      string                   `json:"model"`
 				OobIP      struct{ Address string } `json:"oobIP"`
 				Rack       struct{ Name string }    `json:"rack"`
 				DataCenter struct{ Name string }    `json:"dataCenter"`

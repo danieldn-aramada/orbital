@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/armada/orbital/internal/web/data/layout"
 	orbweb "github.com/armada/orbital/web"
 	orbtemplates "github.com/armada/orbital/web/templates/orb"
-	"github.com/armada/orbital/internal/web/data/layout"
 )
 
 type statusPageData struct {

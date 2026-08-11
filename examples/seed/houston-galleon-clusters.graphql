@@ -43,6 +43,10 @@ mutation SeedClusters {
   workload: addEksaKubernetesCluster(input: [
     {
       orbId: "houston:g2-w1", name: "g2-w1", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "workload", provider: "eksa", cni: "cilium", environment: "prod", dataCenter: { orbId: "houston:houston-galleon" version: 1 }, controlPlaneEndpoint: { orbId: "houston:10.10.0.103" version: 1 }, tinkerbellIP: { orbId: "houston:10.10.0.102" version: 1 }, managementCluster: { orbId: "houston:g2-m" version: 1 },
+      backup: {
+        orbId: "houston:g2-w1-backup", name: "g2-w1-backup", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z",
+        etcd: { orbId: "houston:g2-w1-etcd-backup", name: "g2-w1-etcd-backup", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", enabled: true, schedule: "0 7 * * *", location: "https://stgalbackupsdevccwus01.blob.core.windows.net/etcd-demo/houston/g2-w1" }
+      },
       nodes: [
           { orbId: "houston:g2-cp6-25", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g2-cp6-25", ipv4: { orbId: "houston:10.10.0.125" version: 1 }, gpu: false, role: "control_plane", server: { orbId: "houston:2B22FZ3" version: 1 } },
           { orbId: "houston:g2-cp5-21", namespace: "houston", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g2-cp5-21", ipv4: { orbId: "houston:10.10.0.21" version: 1 }, gpu: false, role: "control_plane", server: { orbId: "houston:1552FZ3" version: 1 } },

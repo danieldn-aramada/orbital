@@ -55,13 +55,13 @@ func AccessLog(cfg AccessLogConfig) echo.MiddlewareFunc {
 			}
 			return slices.Contains(cfg.SkipExactPaths, p)
 		},
-		LogMethod:        true,
-		LogURI:           true,
-		LogStatus:        true,
-		LogLatency:       true,
-		LogRemoteIP:      true,
-		LogResponseSize:  true,
-		LogRequestID:     true,
+		LogMethod:       true,
+		LogURI:          true,
+		LogStatus:       true,
+		LogLatency:      true,
+		LogRemoteIP:     true,
+		LogResponseSize: true,
+		LogRequestID:    true,
 		LogValuesFunc: func(c echo.Context, v echomw.RequestLoggerValues) error {
 			attrs := []any{
 				"http.request.method", v.Method,

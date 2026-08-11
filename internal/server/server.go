@@ -10,23 +10,23 @@ import (
 	"os"
 	"time"
 
-	_ "github.com/lib/pq" // postgres driver for database/sql
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/auth"
-	"github.com/armada/orbital/internal/config"
 	"github.com/armada/orbital/internal/bundler"
+	"github.com/armada/orbital/internal/config"
 	"github.com/armada/orbital/internal/divergenceingest"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/metrics"
 	orbmw "github.com/armada/orbital/internal/middleware"
 	"github.com/armada/orbital/internal/oci"
-	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	appversion "github.com/armada/orbital/internal/version"
 	"github.com/armada/orbital/internal/web/data/layout"
 	webtemplates "github.com/armada/orbital/web/templates/orbital"
+	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
+	_ "github.com/lib/pq" // postgres driver for database/sql
 	echoswagger "github.com/swaggo/echo-swagger"
 )
 
@@ -34,8 +34,8 @@ type Server struct {
 	cfg                *config.Config
 	echo               *echo.Echo
 	logger             *slog.Logger
-	backupHandler      *handler.BackupHandler          // non-nil when S3 is configured; started in Start()
-	divergenceIngester *divergenceingest.Ingester      // non-nil when ORBITAL_DIVERGENCE_INGEST_ENABLED=true and S3 reachable; started in Start()
+	backupHandler      *handler.BackupHandler     // non-nil when S3 is configured; started in Start()
+	divergenceIngester *divergenceingest.Ingester // non-nil when ORBITAL_DIVERGENCE_INGEST_ENABLED=true and S3 reachable; started in Start()
 }
 
 func New(cfg *config.Config, db *ent.Client) *Server {
@@ -234,6 +234,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	root.GET("/datacenters", ui.DataCenters)
 	root.GET("/servers", ui.Servers)
 	root.GET("/clusters", ui.Clusters)
+	root.GET("/network", ui.NetworkDevices)
 	root.GET("/backups", ui.Backups)
 	root.GET("/divergence-reports", ui.DivergenceReports)
 	root.GET("/audit-log", ui.AuditLog)
@@ -298,6 +299,13 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		})
 	root.GET("/clusters/:orbId", cluster.Tab)
 
+	netdev := handler.NewNetworkDeviceHandler(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath,
+		func(c echo.Context) layout.PageActions {
+			canMutate, _ := c.Get("can_mutate").(bool)
+			return layout.OrbitalActions(canMutate)
+		})
+	root.GET("/network/:orbId", netdev.Tab)
+
 	delH := handler.NewDeleteHandler(cfg.DGraphURL, db, logger)
 	root.GET("/config-items/delete-preview", delH.Preview)
 	api.DELETE("/config-items/:type/:id", delH.Execute)
@@ -313,13 +321,13 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		api.GET("/export/jobs/:jobId/download", exp.Download)
 
 		ociCfg := oci.Config{
-			Registry:      cfg.OCIRegistry,
-			Repo:          cfg.OCIRepo,
-			Username:      cfg.OCIUsername,
-			Password:      cfg.OCIPassword,
+			Registry:       cfg.OCIRegistry,
+			Repo:           cfg.OCIRepo,
+			Username:       cfg.OCIUsername,
+			Password:       cfg.OCIPassword,
 			SigningKeyPath: cfg.OCISigningKeyPath,
-			Timeout:       cfg.OCIPublishTimeout,
-			AllowHTTP:     cfg.OCIAllowHTTP,
+			Timeout:        cfg.OCIPublishTimeout,
+			AllowHTTP:      cfg.OCIAllowHTTP,
 		}
 		retryClient := retryablehttp.NewClient()
 		retryClient.RetryMax = cfg.BundlerMaxAttempts - 1
@@ -523,4 +531,3 @@ func (s *Server) Start(ctx context.Context) error {
 
 	return nil
 }
-

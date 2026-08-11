@@ -685,5 +685,3 @@ func toRestoreFragRow(j *ent.RestoreJob) restoreFragRow {
 
 // ListRows handles GET /api/v1/restore/jobs/rows
 // Returns an HTML fragment containing the restore jobs tbody rows.
-
-

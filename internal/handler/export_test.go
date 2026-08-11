@@ -243,4 +243,3 @@ func TestFetchNamespaceSubgraph_DQLUsesNamespaceScalar(t *testing.T) {
 		t.Error("subgraph DQL must use eq(ConfigItem.namespace, ...) scalar filter")
 	}
 }
-

@@ -82,9 +82,9 @@ type Result struct {
 // *retryablehttp.Client.StandardClient() for retry/backoff behaviour in production.
 // The default is a plain net/http.Client with the given timeout.
 type Client struct {
-	name           string // friendly producer name; surfaces in OCI layer annotations
-	url            string
-	httpClient     *http.Client
+	name             string // friendly producer name; surfaces in OCI layer annotations
+	url              string
+	httpClient       *http.Client
 	maxResponseBytes int64
 }
 

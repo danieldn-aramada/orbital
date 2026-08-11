@@ -29,8 +29,8 @@ func (RegistryArtifact) Fields() []ent.Field {
 		field.Time("initiated_at"),
 		field.Time("completed_at").Optional().Nillable(),
 		field.String("error").Optional().Nillable(),
-		field.Bool("enriched").Default(false),                  // true if all bundlers ran and their layers are included
-		field.String("bundler_error").Optional().Nillable(),   // set if any bundler failed (job will also be failed)
+		field.Bool("enriched").Default(false),                      // true if all bundlers ran and their layers are included
+		field.String("bundler_error").Optional().Nillable(),        // set if any bundler failed (job will also be failed)
 		field.JSON("layers", []ocitype.ArtifactLayer{}).Optional(), // per-layer metadata captured at push time; nil for legacy artifacts
 	}
 }

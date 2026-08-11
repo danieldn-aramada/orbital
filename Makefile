@@ -32,7 +32,7 @@ TEST_PKGS := $(shell go list ./... | grep -vE '(/ent$$|/ent/|/docs$$)')
 ACR          := armadaeksatest.azurecr.io
 IMAGE        := $(ACR)/orbital:$(SERVER_VERSION)
 
-.PHONY: help up down run-orbital run-orb seed test-unit test-integration test-e2e test-e2e-ui release-check release-check-down edge-up edge-down docs build-css build-orbctl push seed-aks smoke-aks dev-deps
+.PHONY: help up down run-orbital run-orb seed fmt build test-unit test-integration test-e2e test-e2e-ui release-check release-check-down edge-up edge-down docs build-css build-orbctl push seed-aks seed-aks-dgraph seed-aks-postgres smoke-aks dev-deps
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -46,7 +46,7 @@ up: ## Start the local stack (DGraph, Postgres, MinIO, Zot, orb DGraph)
 down: ## Stop the local stack (all profiles)
 	docker compose -f $(COMPOSE_FILE) --profile '*' down -v
 
-run-orbital: ## Run orbital server (go run; fast dev iteration). Restore requires dgraph in PATH
+run-orbital: fmt ## Run orbital server (go run; fast dev iteration). Restore requires dgraph in PATH
 	@# DOCKER_CONFIG isolation: prevents cosign's go-containerregistry keychain
 	@# from spawning docker-credential-* helpers (which on macOS live inside
 	@# /Applications/Docker.app/). Spawning from iTerm's process tree triggers
@@ -56,7 +56,7 @@ run-orbital: ## Run orbital server (go run; fast dev iteration). Restore require
 	@# in the dev-only Makefile target, not in orbital's code.
 	DOCKER_CONFIG=$$(mktemp -d) go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orbital
 
-run-orbital-aep: ## Run orbital in external-jwt mode (accepts AEP/Keycloak bearers as admin) on :8001
+run-orbital-aep: fmt ## Run orbital in external-jwt mode (accepts AEP/Keycloak bearers as admin) on :8001
 	@# Vars are set IN the recipe so they always reach the process — no
 	@# fragile shell-prefix env that breaks when pasted across lines.
 	@# SSO login + bundler publish need env you export YOURSELF first (both talk
@@ -72,13 +72,19 @@ run-orbital-aep: ## Run orbital in external-jwt mode (accepts AEP/Keycloak beare
 	ORBITAL_JWT_DEFAULT_ROLE=admin \
 	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orbital
 
-run-orb: ## Run orb edge service (go run; fast dev iteration). Import requires dgraph in PATH
+run-orb: fmt ## Run orb edge service (go run; fast dev iteration). Import requires dgraph in PATH
 	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orb start
 
 seed: ## Seed DGraph with example data + admin user (local)
 	bash scripts/seed.sh
 
 ## ── tests ─────────────────────────────────────────────────────────────────────
+
+fmt: ## Format all Go code (gofmt -w)
+	@gofmt -w -l .
+
+build: fmt ## Format + compile all Go packages
+	@go build ./...
 
 test-unit: ## Run unit tests with coverage summary (no external services required)
 	@echo "Running unit tests..."
@@ -150,7 +156,7 @@ build-css: ## Compile web/sass/main.scss → web/shared/static/css/main.css (req
 	npm run build-css
 
 
-build-orbctl: ## Build the orbctl CLI → bin/orbctl
+build-orbctl: fmt ## Build the orbctl CLI → bin/orbctl
 	go build $(CLI_LDFLAGS) -o $(BIN_DIR)/orbctl ./cmd/orbctl
 
 dev-deps: ## Install host-side dev tools (dgraph wrapper for macOS). Re-run after pulling changes.
@@ -168,13 +174,20 @@ push: ## Build and push orbital image to ACR (set version; SERVER_VERSION=v0.0.2
 push-orb: ## Build and push orb image to ACR (set version; ORB_VERSION=v0.0.1). Requires: az acr login --name armadaeksatest
 	docker buildx build --platform linux/amd64 --target=orb --build-arg VERSION=$(ORB_VERSION) -t $(ACR)/orb:$(ORB_VERSION) -t $(ACR)/orb:latest --push .
 
-seed-aks: ## Seed AKS dev DGraph + Postgres admin user. CLEAN=1 drops DGraph first.
+# Target namespace for AKS seeding — pick the orbital instance (e.g. NAMESPACE=orbital-green). Default: netbox.
+NAMESPACE ?= netbox
+
+seed-aks-dgraph: ## Seed AKS DGraph only (no Postgres). NAMESPACE=<ns> (default netbox); CLEAN=1 drops DGraph first.
 	@if [ "$(CLEAN)" = "1" ]; then \
-		bash scripts/seed-aks.sh --clean; \
+		bash scripts/seed-aks.sh --namespace $(NAMESPACE) --clean; \
 	else \
-		bash scripts/seed-aks.sh; \
+		bash scripts/seed-aks.sh --namespace $(NAMESPACE); \
 	fi
-	bash scripts/seed-aks-postgres.sh
+
+seed-aks-postgres: ## Seed AKS Postgres admin/readonly users. NAMESPACE=<ns> (default netbox).
+	bash scripts/seed-aks-postgres.sh --namespace $(NAMESPACE)
+
+seed-aks: seed-aks-dgraph seed-aks-postgres ## Seed AKS DGraph + Postgres users (full bootstrap). NAMESPACE=<ns> (default netbox); CLEAN=1.
 
 smoke-aks: ## Smoke tests against AKS dev (requires: kubectl port-forward svc/orbital 8001:8001 -n orbital)
 	npx playwright test --config=playwright.release-check.config.ts

@@ -89,6 +89,9 @@
             <li data-panel="srv-panel-storage-{{.DomID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-hard-drive"></i></span><span>Storage</span></a>
             </li>
+            <li data-panel="srv-panel-network-{{.DomID}}">
+              <a><span class="icon is-small"><i class="fa-solid fa-network-wired"></i></span><span>Network</span></a>
+            </li>
             {{template "audit-tab-li" .}}
           </ul>
         </div>
@@ -147,6 +150,44 @@
           </div>
           {{else}}
           <p class="has-text-grey p-2">No storage discovered yet.</p>
+          {{end}}
+        </div>
+
+        <div id="srv-panel-network-{{.DomID}}" style="display:none">
+          {{if .NetworkAdapters}}
+          <div style="overflow-x:auto">
+          <table class="table is-striped is-hoverable is-fullwidth">
+            <thead>
+              <tr>
+                <th>Adapter</th>
+                <th>Port</th>
+                <th>MAC</th>
+                <th>Type</th>
+                <th>Link Speed (Mbps)</th>
+                <th>Connected Device</th>
+                <th>Device Port</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .NetworkAdapters}}
+              {{$adapter := .Name}}
+              {{range .NetworkPorts}}
+              <tr>
+                <td>{{$adapter}}</td>
+                <td>{{if .Name}}{{.Name}}{{else}}—{{end}}</td>
+                <td>{{if .MacAddress}}<code>{{.MacAddress}}</code>{{else}}—{{end}}</td>
+                <td>{{if .PortType}}{{.PortType}}{{else}}—{{end}}</td>
+                <td>{{if .LinkSpeedMbps}}{{.LinkSpeedMbps}}{{else}}—{{end}}</td>
+                <td>{{if .DeviceName}}{{.DeviceName}}{{if .DeviceRole}} ({{.DeviceRole}}){{end}}{{else}}—{{end}}</td>
+                <td>{{if .RemotePort}}<code>{{.RemotePort}}</code>{{else}}—{{end}}</td>
+              </tr>
+              {{end}}
+              {{end}}
+            </tbody>
+          </table>
+          </div>
+          {{else}}
+          <p class="has-text-grey p-2">No network adapters discovered yet.</p>
           {{end}}
         </div>
 

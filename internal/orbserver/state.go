@@ -115,11 +115,11 @@ func (s *importState) snapshot() importSnapshot {
 }
 
 type importSnapshot struct {
-	Status           string             `json:"status"`
-	CurrentVersion   string             `json:"currentVersion,omitempty"`
-	AvailableVersion string             `json:"availableVersion,omitempty"`
-	LastImport       *orb.ImportRecord  `json:"lastImport,omitempty"`
-	LastError        string             `json:"lastError,omitempty"`
-	LastChecked      time.Time          `json:"lastChecked,omitempty"`
-	LastPollErr      string             `json:"lastPollErr,omitempty"`
+	Status           string            `json:"status"`
+	CurrentVersion   string            `json:"currentVersion,omitempty"`
+	AvailableVersion string            `json:"availableVersion,omitempty"`
+	LastImport       *orb.ImportRecord `json:"lastImport,omitempty"`
+	LastError        string            `json:"lastError,omitempty"`
+	LastChecked      time.Time         `json:"lastChecked,omitempty"`
+	LastPollErr      string            `json:"lastPollErr,omitempty"`
 }

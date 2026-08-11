@@ -74,7 +74,6 @@ func runGetDatacenter(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-
 func queryByName(cmd *cobra.Command, base, token, name string) (*dcSummary, error) {
 	var q string
 	var vars map[string]any
@@ -199,16 +198,16 @@ type dcSummary struct {
 		Count int `json:"count"`
 	} `json:"serversAggregate"`
 	Servers []struct {
-		ID           string `json:"id"`
-		OrbID        string `json:"orbId"`
-		Name         string `json:"name"`
-		Hostname     string `json:"hostname"`
-		ServiceTag   string `json:"serviceTag"`
-		Model        string `json:"model"`
+		ID           string                   `json:"id"`
+		OrbID        string                   `json:"orbId"`
+		Name         string                   `json:"name"`
+		Hostname     string                   `json:"hostname"`
+		ServiceTag   string                   `json:"serviceTag"`
+		Model        string                   `json:"model"`
 		OobIP        struct{ Address string } `json:"oobIP"`
-		OobMAC       string `json:"oobMAC"`
-		RackPosition int    `json:"rackPosition"`
-		Rack         struct{ Name string } `json:"rack"`
+		OobMAC       string                   `json:"oobMAC"`
+		RackPosition int                      `json:"rackPosition"`
+		Rack         struct{ Name string }    `json:"rack"`
 	} `json:"servers"`
 }
 
@@ -274,10 +273,10 @@ func runGetDatacenters(cmd *cobra.Command, _ []string) error {
 	var result struct {
 		Data struct {
 			QueryDataCenter []struct {
-				Name      string `json:"name"`
-				OrbID     string `json:"orbId"`
-				CreatedBy string `json:"createdBy"`
-				CreatedAt string `json:"createdAt"`
+				Name             string `json:"name"`
+				OrbID            string `json:"orbId"`
+				CreatedBy        string `json:"createdBy"`
+				CreatedAt        string `json:"createdAt"`
 				ServersAggregate struct {
 					Count int `json:"count"`
 				} `json:"serversAggregate"`

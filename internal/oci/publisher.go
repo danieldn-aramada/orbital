@@ -25,8 +25,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	godigest "github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	cosigncli "github.com/sigstore/cosign/v2/cmd/cosign/cli/sign"
 	cosignopt "github.com/sigstore/cosign/v2/cmd/cosign/cli/options"
+	cosigncli "github.com/sigstore/cosign/v2/cmd/cosign/cli/sign"
 	cosign "github.com/sigstore/cosign/v2/pkg/cosign"
 	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content/memory"
@@ -49,10 +49,10 @@ const (
 
 // Config holds OCI publishing configuration derived from env vars.
 type Config struct {
-	Registry      string
-	Repo          string
-	Username      string
-	Password      string
+	Registry       string
+	Repo           string
+	Username       string
+	Password       string
 	SigningKeyPath string
 	// Host is the orbital server's external hostname for the public key hint annotation (optional).
 	Host string
@@ -115,10 +115,10 @@ func (p *Publisher) Publish(ctx context.Context, artifactID int, job *ent.Export
 			errStr := "bundler failed: export job is missing DatacenterOrbID; re-run export"
 			log.Error("bundler call requires DatacenterOrbID but export job has none")
 			p.db.RegistryArtifact.UpdateOneID(artifactID). //nolint:errcheck
-				SetStatus(registryartifact.StatusFailed).
-				SetBundlerError(errStr).
-				SetCompletedAt(time.Now()).
-				Save(ctx)
+									SetStatus(registryartifact.StatusFailed).
+									SetBundlerError(errStr).
+									SetCompletedAt(time.Now()).
+									Save(ctx)
 			return nil, fmt.Errorf("%s", errStr)
 		}
 		req := bundler.Request{OrbID: *job.DatacenterOrbID}
@@ -128,10 +128,10 @@ func (p *Publisher) Publish(ctx context.Context, artifactID int, job *ent.Export
 				log.Error("bundler failed — aborting publish", "err", err)
 				errStr := fmt.Sprintf("bundler failed: %s", err.Error())
 				p.db.RegistryArtifact.UpdateOneID(artifactID). //nolint:errcheck
-					SetStatus(registryartifact.StatusFailed).
-					SetBundlerError(errStr).
-					SetCompletedAt(time.Now()).
-					Save(ctx)
+										SetStatus(registryartifact.StatusFailed).
+										SetBundlerError(errStr).
+										SetCompletedAt(time.Now()).
+										Save(ctx)
 				return nil, fmt.Errorf("%s", errStr)
 			}
 			// Stamp producer on each layer so push-time annotation writes can
@@ -151,10 +151,10 @@ func (p *Publisher) Publish(ctx context.Context, artifactID int, job *ent.Export
 		log.Error("publish failed", "err", err)
 		errStr := err.Error()
 		p.db.RegistryArtifact.UpdateOneID(artifactID). //nolint:errcheck
-			SetStatus(registryartifact.StatusFailed).
-			SetError(errStr).
-			SetCompletedAt(time.Now()).
-			Save(ctx)
+								SetStatus(registryartifact.StatusFailed).
+								SetError(errStr).
+								SetCompletedAt(time.Now()).
+								Save(ctx)
 		return nil, err
 	}
 

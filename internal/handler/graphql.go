@@ -508,7 +508,7 @@ func extractOperations(query string) (operations []string, resourceTypes []strin
 	seenType := map[string]bool{}
 	for _, m := range matches {
 		op := strings.ToLower(m[1]) + m[2] // e.g. "update" + "Server" → "updateServer"
-		t := m[2]                           // e.g. "Server"
+		t := m[2]                          // e.g. "Server"
 		if !seenOp[op] {
 			seenOp[op] = true
 			operations = append(operations, op)

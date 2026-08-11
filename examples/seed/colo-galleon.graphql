@@ -883,7 +883,7 @@ mutation UpsertAll {
       hostname: "r10-u22.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 22
-      oobIP: { orbId: "colo:10.20.21.70" version: 1 }
+      oobIP: { orbId: "colo:10.20.21.74" version: 1 }
       oobMAC: "e8:cf:83:27:a3:f3"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
@@ -951,7 +951,7 @@ mutation UpsertAll {
       hostname: "r10-u26.colo-galleon"
       model: "PowerEdge R450"
       rackPosition: 26
-      oobIP: { orbId: "colo:10.20.21.74" version: 1 }
+      oobIP: { orbId: "colo:10.20.21.70" version: 1 }
       oobMAC: "d0:c1:b5:0c:b2:00"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"

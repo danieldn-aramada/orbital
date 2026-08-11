@@ -94,9 +94,9 @@ func TestDataCenterTab_Success(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{
 		"data": map[string]any{
 			"getDataCenter": map[string]any{
-				"id":    "0x1",
-				"name":  "Test DC",
-				"orbId": "test:dc01",
+				"id":               "0x1",
+				"name":             "Test DC",
+				"orbId":            "test:dc01",
 				"namespace":        "test-ns",
 				"racks":            []any{},
 				"servers":          []any{},

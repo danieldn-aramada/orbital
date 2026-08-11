@@ -4,26 +4,22 @@
 
 - **Phase:** MVP capabilities substantially complete → hardening toward GA.
 - **Timeline:** Prototyping (Apr–May 2026, done) · MVP (Jun–Jul 2026) · GA target ~Aug 2026. *All future dates subject to change.*
-- **Remaining MVP items:** orb deployment packaging (Spike 14); orb registry is post-MVP.
+- **Remaining MVP items:** none blocking — orb deployment packaging is done (Spike 14); orb registry is post-MVP.
 - Dated capability log lives in **Recent accomplishments** (below); the full completed list is in **Shipped** (bottom).
 
 ---
 
 ## Recent accomplishments
 
+- **2026-08-11** — Network topology shipped: NetworkDevice/Adapter/Port schema, 46 colo servers seeded (Redfish × NetBox-inventory reconcile), editable Network Devices UI + Server NICs tab, negotiated linkSpeedMbps; live on AKS dev v0.0.30.
+- **2026-08-10** — Closed Spike 14 (orb deployment model): edge deploy is kustomize-native (`deploy/edge/base` + `colo-galleon` overlay — orb + edge DGraph + Zot ACR mirror), demo-proven on colo-galleon. The "orb Helm chart" line was superseded by the canonical kustomize overlays. Sole remaining edge item — a default-deny NetworkPolicy — deferred to security hardening (pre-GA).
 - **2026-08-04** — Orb edge observability: `/metrics` (dedicated registry) with round-trip propagation + RED, scraped via ServiceMonitor → colo-dev-main Grafana dashboard; fixed sig-sync regression (edge Zot tag-regex now matches cosign `.sig`).
 - **2026-08-03** — Cut colo-dev-main edge propagation ~9min→~8s (Zot mirror scoped to v70+ tag filter + CPU/worker bump + SyncLegacyCosignTags for sigs); redesigned Publish History columns — failure error moved out of the Status badge into its own column.
 - **2026-07-29** — Audit-log API readied for AEP (orbital's first client): `operation_name` JSONB filter, pre-computed `changes` diff field (present iff single-entity), DGraph UIDs stripped from audit before-state, typed Swagger response + cheatsheet "Audit log" recipes.
-- **2026-07-28** — Standard error envelope (`error`/`code`/`httpStatus`/`hint`) via a central Echo `ErrorHandler` + code registry, retiring Echo's `{"message"}`; Spike 31 done — inline single-entity mutations rejected `400 VARIABLE_FORM_REQUIRED` (default on, kill switch).
-- **2026-07-27** — external-jwt bearer auth validated on AKS dev; fixed cluster-edit truncation (retentionDays render-struct drift); hardened all template rendering to buffer-then-write (drift fails loud, not silent); auth-mode + FIPS startup logs.
 
 ---
 
 ## Now / In flight
-
-**Spike 14 — Orb deployment model** · *In progress*
-What does orb look like deployed at the edge — topology, runtime deps, air-gap constraints?
-> **Done:** local edge sim (orb DGraph + Zot ACR mirror); orb Dockerfile (unified single Dockerfile, two targets, dgraph binary baked in); orb `//go:embed` templates+static; `SubprocessBackend` replaces idle-pod `K8sBackend`; orbital `/healthz` readiness probe; `make release-check` orchestrator; kustomize overlays canonical. **Remaining:** Helm chart for orb; NetworkPolicy manifest (default-deny + allow cb-controller/cb-agent/kube-system).
 
 **Spike 21 — Observability / Monitoring integration** · *In progress (partial)*
 How does orbital produce traces, logs, and metrics into the AKS cluster's existing OTel + Mimir + Loki stack without coupling code to backends?
@@ -81,7 +77,7 @@ Let clients see what would change in the next bundle BEFORE clicking export/publ
 - **Deployment:** ingress architecture, dedicated hostnames, TLS, internal vs external LB; production namespace layout, resource limits; Ratel via dedicated DNS + Istio VirtualService. Depends on infra-team input + auth/ingress architecture — not resolvable in prototype spikes alone. (orbital `//go:embed` pending if/when needed.)
 - **CI/CD:** GitHub Actions workflow — `.github/` exists but has no workflow files yet (build/tag/push on merge to main; deploy to AKS dev on tag).
 - **AKS smoke suite:** `make smoke-aks` exists but is shallow — expand to run the read-only Playwright projects against the AKS deployment.
-- **Security hardening:** fix critical/high items before staging/prod exposure — see **Known debt → Audit backlog**.
+- **Security hardening:** fix critical/high items before staging/prod exposure — see **Known debt → Audit backlog**. Includes the edge orb NetworkPolicy (default-deny + allow cb-controller/cb-agent/kube-system) deferred from Spike 14 — `deploy/edge/base` currently ships no NetworkPolicy, so the edge relies on cluster-level isolation until this lands.
 - **Perf & cost:** benchmark DGraph query latency under realistic load; AKS node SKU cost estimate; Grafana dashboard + ≥1 alert (error rate / memory). Valkey cache-aside (Spike 9b) is post-MVP — baseline first.
 
 ---
@@ -173,6 +169,7 @@ One line per completed spike/capability. Implementation detail is in git history
 | 11 · Authorization | Jun 5 | `readonly<dev<admin`, `RequireRole`/`RequireAdmin`, `/users` admin UI + last-admin guard, `ORBITAL_ADMIN_EMAILS` bootstrap, readonly UI gating, single authenticated `/graphql`. See `AUTH.md`. |
 | 12 · Orb import API | — | OCI puller (oras-go v2), cosign verify, `dgraph live` subprocess, polling loop; consumer dispatch on both import paths; import history UI |
 | 13 · Divergence intake (orb) | May 24 | `POST /api/v1/divergence` replaces pending set; `/divergence/publish` writes snapshot to S3 |
+| 14 · Orb deployment model | Aug 10 | Kustomize-native edge deploy (`deploy/edge/base` + `colo-galleon` overlay): orb + edge DGraph + Zot ACR mirror; unified Dockerfile (two targets, dgraph baked in); `//go:embed` templates/static; `SubprocessBackend`; `/healthz` readiness; `make release-check`. Demo-proven on colo-galleon. Helm superseded by kustomize (canonical); default-deny NetworkPolicy deferred to security hardening. |
 | 15 · Orb API surface & authN/Z | Jun 7 | MVP: no in-process auth; NetworkPolicy is the gate. Post-MVP: SA + TokenReview. See `ORB.md §Auth`. |
 | 16 · Orb UI | May 24 | Orbital + orb share template infra, different nav/capability surfaces |
 | 17 · ES module split of app.js | Jun 6 | `app.js` → `shared.js` + `orbital.js` + `orb.js`; conditional load in `head.gohtml`; `window.*` bridge; web dir cleanup |

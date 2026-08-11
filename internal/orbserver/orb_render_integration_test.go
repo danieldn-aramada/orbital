@@ -28,15 +28,15 @@ func newOrbServer(t *testing.T, ociEnabled bool) *Server {
 	t.Cleanup(dgraph.Close)
 
 	cfg := &orbconfig.Config{
-		Port:                "0",
-		DGraphURL:           dgraph.URL + "/graphql",
-		DGraphAdminURL:      dgraph.URL + "/admin",
-		DGraphAlphaGRPC:     "localhost:9082",
-		DataDir:             t.TempDir(),
-		EnableOCIRegistry:   ociEnabled,
-		OCIRegistry:         "registry.test",
-		OCIRepo:             "test/repo",
-		LogLevel:            "error",
+		Port:              "0",
+		DGraphURL:         dgraph.URL + "/graphql",
+		DGraphAdminURL:    dgraph.URL + "/admin",
+		DGraphAlphaGRPC:   "localhost:9082",
+		DataDir:           t.TempDir(),
+		EnableOCIRegistry: ociEnabled,
+		OCIRegistry:       "registry.test",
+		OCIRepo:           "test/repo",
+		LogLevel:          "error",
 	}
 
 	srv, err := New(cfg)
@@ -265,13 +265,13 @@ func newServerFragmentDGraph(t *testing.T) *httptest.Server {
 	body, _ := json.Marshal(map[string]any{
 		"data": map[string]any{
 			"getServer": map[string]any{
-				"id":          "0x3",
-				"orbId":       "test-server",
-				"name":        "Test Server",
-				"hostname":    "test-server-01",
-				"serviceTag":  "ABC123",
-				"model":       "PowerEdge R750",
-				"dataCenter":  map[string]any{"id": "0x1", "orbId": "test-dc", "name": "Test DC"},
+				"id":         "0x3",
+				"orbId":      "test-server",
+				"name":       "Test Server",
+				"hostname":   "test-server-01",
+				"serviceTag": "ABC123",
+				"model":      "PowerEdge R750",
+				"dataCenter": map[string]any{"id": "0x1", "orbId": "test-dc", "name": "Test DC"},
 			},
 		},
 	})

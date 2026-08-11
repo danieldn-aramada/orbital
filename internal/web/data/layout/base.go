@@ -9,17 +9,17 @@ type Base struct {
 
 	UI UIConfig
 
-	Domain      string // default localhost:8080, production console.com
-	Links       []string
+	Domain            string // default localhost:8080, production console.com
+	Links             []string
 	IsAuthn           bool
 	OIDCEnabled       bool
 	DeviceCodeEnabled bool
-	CsrfToken   string
-	AppVersion  string
-	BasePath    string
-	CurrentPath string
-	CanMutate   bool
-	AdminEmails []string
+	CsrfToken         string
+	AppVersion        string
+	BasePath          string
+	CurrentPath       string
+	CanMutate         bool
+	AdminEmails       []string
 
 	User
 }

@@ -91,8 +91,8 @@ type dcQueryResponse struct {
 	UpdatedAt   string `json:"updatedAt"`
 	Version     int    `json:"version"`
 	AssetDataV2 string `json:"assetDataV2"`
-	Namespace string `json:"namespace"`
-	Racks     []struct {
+	Namespace   string `json:"namespace"`
+	Racks       []struct {
 		ID    string `json:"id"`
 		OrbID string `json:"orbId"`
 		Name  string `json:"name"`
@@ -101,13 +101,13 @@ type dcQueryResponse struct {
 		Count int `json:"count"`
 	} `json:"serversAggregate"`
 	Servers []struct {
-		ID           string `json:"id"`
-		OrbID        string `json:"orbId"`
-		Name         string `json:"name"`
-		Hostname     string `json:"hostname"`
-		ServiceTag   string `json:"serviceTag"`
-		Model        string `json:"model"`
-		OobIP        struct {
+		ID         string `json:"id"`
+		OrbID      string `json:"orbId"`
+		Name       string `json:"name"`
+		Hostname   string `json:"hostname"`
+		ServiceTag string `json:"serviceTag"`
+		Model      string `json:"model"`
+		OobIP      struct {
 			Address string `json:"address"`
 		} `json:"oobIP"`
 		OobMAC       string `json:"oobMAC"`
@@ -140,25 +140,25 @@ type rackTabData struct {
 }
 
 type dataCenterTabData struct {
-	ID           string
-	OrbID        string
-	DomID        string // SafeDomID(OrbID)
-	Name         string
-	CreatedBy    string
-	CreatedAt    string
-	UpdatedBy    string
-	UpdatedAt    string
-	Namespace   string
-	ServerCount int
-	Racks        []rackTabData
-	Servers      []serverTabData
-	Version      int
-	AssetDataV2  string
-	CurrentUser  string
+	ID              string
+	OrbID           string
+	DomID           string // SafeDomID(OrbID)
+	Name            string
+	CreatedBy       string
+	CreatedAt       string
+	UpdatedBy       string
+	UpdatedAt       string
+	Namespace       string
+	ServerCount     int
+	Racks           []rackTabData
+	Servers         []serverTabData
+	Version         int
+	AssetDataV2     string
+	CurrentUser     string
 	EditDataJSON    template.JS // pre-serialized JSON for the edit modal
 	EditTargetsJSON template.JS // configitem-editor.js targets list
-	BasePath     string
-	Actions      layout.PageActions
+	BasePath        string
+	Actions         layout.PageActions
 	// AuditPanelID + RelatedOrbIDsCSV are consumed by the shared audit-tab
 	// partial (web/templates/shared/partials/audit-tab.gohtml). DC's audit
 	// panel does NOT aggregate child events, so RelatedOrbIDsCSV stays empty
@@ -242,19 +242,19 @@ func (h *DataCenter) Tab(c echo.Context) error {
 
 	domID := SafeDomID(raw.OrbID)
 	dc := dataCenterTabData{
-		ID:           raw.ID,
-		OrbID:        raw.OrbID,
-		DomID:        domID,
-		AuditPanelID: "dc-panel-audit-" + domID,
-		Name:         raw.Name,
-		CreatedBy:    raw.CreatedBy,
-		CreatedAt:    raw.CreatedAt,
-		UpdatedBy:    raw.UpdatedBy,
-		UpdatedAt:    raw.UpdatedAt,
-		Namespace:   raw.Namespace,
-		ServerCount:  raw.ServersAggregate.Count,
-		Version:      raw.Version,
-		AssetDataV2:  prettyAssetData,
+		ID:              raw.ID,
+		OrbID:           raw.OrbID,
+		DomID:           domID,
+		AuditPanelID:    "dc-panel-audit-" + domID,
+		Name:            raw.Name,
+		CreatedBy:       raw.CreatedBy,
+		CreatedAt:       raw.CreatedAt,
+		UpdatedBy:       raw.UpdatedBy,
+		UpdatedAt:       raw.UpdatedAt,
+		Namespace:       raw.Namespace,
+		ServerCount:     raw.ServersAggregate.Count,
+		Version:         raw.Version,
+		AssetDataV2:     prettyAssetData,
 		CurrentUser:     currentUser,
 		EditDataJSON:    template.JS(editJSON),
 		EditTargetsJSON: template.JS(editTargetsJSON),
@@ -293,4 +293,3 @@ func (h *DataCenter) Tab(c echo.Context) error {
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	return renderHTML(c, tmpl, "", dc)
 }
-

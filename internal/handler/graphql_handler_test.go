@@ -76,10 +76,10 @@ func TestHasGQLErrors(t *testing.T) {
 
 func TestExtractOperations(t *testing.T) {
 	tests := []struct {
-		name       string
-		query      string
-		wantOps    []string
-		wantTypes  []string
+		name      string
+		query     string
+		wantOps   []string
+		wantTypes []string
 	}{
 		{
 			name:      "single update",

@@ -47,13 +47,13 @@ type auditLogResponse struct {
 // eventItem is one audit event in the audit-log response.
 type eventItem struct {
 	ID            string          `json:"id"            example:"3d6bb15f-8c4c-45f0-8a6c-939b6f9cc512"`
-	Operations    []string        `json:"operations"`                    // DGraph mutation fields, e.g. ["updateVeleroBackup"]
-	ResourceTypes []string        `json:"resourceTypes"`                 // ConfigItem types touched, e.g. ["VeleroBackup"]
-	ResourceIDs   []string        `json:"resourceIds"`                   // orbIds touched
+	Operations    []string        `json:"operations"`    // DGraph mutation fields, e.g. ["updateVeleroBackup"]
+	ResourceTypes []string        `json:"resourceTypes"` // ConfigItem types touched, e.g. ["VeleroBackup"]
+	ResourceIDs   []string        `json:"resourceIds"`   // orbIds touched
 	Actor         string          `json:"actor"         example:"asharma@armada.ai"`
 	Timestamp     string          `json:"timestamp"     example:"2026-07-29T17:26:55Z"`
 	Details       json.RawMessage `json:"details,omitempty" swaggertype:"object"` // raw {operationName, query, variables, before}
-	EventCategory string          `json:"eventCategory" example:"data"`  // data | management | auth
+	EventCategory string          `json:"eventCategory" example:"data"`           // data | management | auth
 	// Changes is the pre-computed field-level diff. **Present ONLY for a clean
 	// single-entity update** (omitted otherwise via omitempty) — so its presence
 	// is the client's signal that a field diff is available; no need to inspect
@@ -85,15 +85,15 @@ type eventDetails struct {
 // requires no changes here; divergence-accept / DispatchMutation diffs work
 // out of the box.
 var skipDiffFields = map[string]bool{
-	"id":         true,
-	"version":    true,
-	"orbId":      true,
-	"namespace":  true,
-	"createdAt":  true,
-	"createdBy":  true,
-	"updatedAt":  true,
-	"updatedBy":  true,
-	"ifVersion":  true,
+	"id":        true,
+	"version":   true,
+	"orbId":     true,
+	"namespace": true,
+	"createdAt": true,
+	"createdBy": true,
+	"updatedAt": true,
+	"updatedBy": true,
+	"ifVersion": true,
 }
 
 type eventsFragmentData struct {

@@ -6,8 +6,8 @@ import (
 
 type EdgeDelivery struct {
 	layout.Base
-	PageTitle    string
+	PageTitle     string
 	OCIConfigured bool
-	OCIRegistry  string
-	OCIRepo      string
+	OCIRegistry   string
+	OCIRepo       string
 }

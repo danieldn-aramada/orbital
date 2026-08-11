@@ -1,7 +1,7 @@
 // Package configitems is orbital's single source of truth for the set of
 // ConfigItem types declared in schema/schema.graphql.
 //
-// Background — why this exists
+// # Background — why this exists
 //
 // Adding a ConfigItem to orbital used to touch ~13 places: GraphQL queries,
 // before-fetch maps, audit allowlist regexes, related-orbId walkers, cascade
@@ -12,12 +12,13 @@
 //
 // This registry centralizes the wiring metadata. Every other layer DERIVES
 // from this single declaration. Adding a new ConfigItem now requires:
-//   1. Declare it in schema/schema.graphql
-//   2. Add a Type entry below
+//  1. Declare it in schema/schema.graphql
+//  2. Add a Type entry below
+//
 // That's it. The Go audit pipeline, before-fetcher, and (via the
 // configitem-editor JS module) the front-end editor all pick it up.
 //
-// Boundaries
+// # Boundaries
 //
 // This registry describes only ConfigItem-shaped types — entities with an
 // orbId and a place in the parent/child relationship graph. It does NOT
@@ -170,6 +171,33 @@ var Types = []Type{
 		Name:         "IPAddress",
 		BeforeFields: "id orbId name version address type role",
 		PayloadField: "ipAddress",
+	},
+
+	// ── Network devices (switch / router / firewall / sd-wan) ────────────────
+	{
+		Name:         "NetworkDevice",
+		IsRoot:       true,
+		BeforeFields: "id orbId name version manufacturer model serial role macAddress",
+		FormFields:   []string{"manufacturer", "model", "serial", "role", "macAddress"},
+		PayloadField: "networkDevice",
+	},
+
+	// ── Server NICs (read-only, like storage — owned children for cascade) ───
+	{
+		Name:         "NetworkAdapter",
+		OwnerType:    "Server",
+		OwnerField:   "server",
+		ChildField:   "networkAdapters",
+		BeforeFields: "id orbId name version",
+		PayloadField: "networkAdapter",
+	},
+	{
+		Name:         "NetworkPort",
+		OwnerType:    "NetworkAdapter",
+		OwnerField:   "networkAdapter",
+		ChildField:   "networkPorts",
+		BeforeFields: "id orbId name version",
+		PayloadField: "networkPort",
 	},
 
 	// ── Kubernetes cluster hierarchy ─────────────────────────────────────────

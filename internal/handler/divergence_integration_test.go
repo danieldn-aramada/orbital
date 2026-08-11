@@ -396,4 +396,3 @@ func TestList_ActionFilter_BatchAcceptAndRejectOnSameConfigItem(t *testing.T) {
 		t.Errorf("ipmiEnabled should be accept, got %q", gotFields["ipmiEnabled"])
 	}
 }
-

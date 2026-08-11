@@ -37,9 +37,9 @@ func newExportListHandler(t *testing.T) *handler.Export {
 	return handler.NewExport(
 		testDB,
 		"", "", "", "", // DGraph URLs — unused by List/Status
-		t.TempDir(),    // exportDir
-		t.TempDir(),    // scratchExportDir
-		"",             // schemaPath
+		t.TempDir(), // exportDir
+		t.TempDir(), // scratchExportDir
+		"",          // schemaPath
 		slog.Default(),
 	)
 }
@@ -257,8 +257,8 @@ func TestExportTrigger_ConflictWhenJobRunning(t *testing.T) {
 	dcResp, _ := json.Marshal(map[string]any{
 		"data": map[string]any{
 			"getDataCenter": map[string]any{
-				"name":        "Test DC",
-				"orbId":       "test:dc01",
+				"name":      "Test DC",
+				"orbId":     "test:dc01",
 				"namespace": "test-ns",
 			},
 		},

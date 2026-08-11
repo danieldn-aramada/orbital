@@ -18,13 +18,13 @@ import (
 	"testing"
 	"time"
 
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/armada/orbital/ent/backup"
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/testutil"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
@@ -268,7 +268,9 @@ func TestRestoreTrigger_BackendRunLiveError_JobFails(t *testing.T) {
 		t.Fatalf("expected 202, got %d: %s", code, respBody)
 	}
 
-	var resp struct{ JobID string `json:"id"` }
+	var resp struct {
+		JobID string `json:"id"`
+	}
 	json.Unmarshal(respBody, &resp)
 	jobID, _ := uuid.Parse(resp.JobID)
 
@@ -296,7 +298,9 @@ func TestRestoreCompleted_WritesManagementAuditEvent(t *testing.T) {
 		t.Fatalf("expected 202, got %d: %s", code, respBody)
 	}
 
-	var resp struct{ JobID string `json:"id"` }
+	var resp struct {
+		JobID string `json:"id"`
+	}
 	json.Unmarshal(respBody, &resp)
 	jobID, _ := uuid.Parse(resp.JobID)
 
@@ -379,4 +383,4 @@ func TestRestorePage_RendersExpectedElements(t *testing.T) {
 }
 
 func int64Ptr(i int64) *int64 { return &i }
-func strPtr(s string) *string  { return &s }
+func strPtr(s string) *string { return &s }

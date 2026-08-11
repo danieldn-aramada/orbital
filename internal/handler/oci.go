@@ -19,8 +19,8 @@ import (
 	"github.com/armada/orbital/internal/ocitype"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
-	orasauth "oras.land/oras-go/v2/registry/remote/auth"
 	"oras.land/oras-go/v2/registry/remote"
+	orasauth "oras.land/oras-go/v2/registry/remote/auth"
 	"oras.land/oras-go/v2/registry/remote/retry"
 )
 
@@ -70,24 +70,24 @@ func NewOCI(db *ent.Client, cfg oci.Config, scratchExportDir string, logger *slo
 }
 
 type artifactResponse struct {
-	ID                   int     `json:"id"`
-	ExportJobID          string  `json:"exportJobId"`
-	DatacenterID         string  `json:"datacenterId"`
-	DatacenterName       string  `json:"datacenterName"`
-	Registry             string  `json:"registry"`
-	Repository           string  `json:"repository"`
-	Tag                  string  `json:"tag"`
-	Digest               *string `json:"digest,omitempty"`
-	SizeBytes            *int64  `json:"sizeBytes,omitempty"`
-	Signed               bool    `json:"signed"`
-	SigningKeyFingerprint *string `json:"signingKeyFingerprint,omitempty"`
-	Status               string  `json:"status"`
-	InitiatedAt          string  `json:"initiatedAt"`
-	CompletedAt          *string `json:"completedAt,omitempty"`
-	Error         *string                  `json:"error,omitempty"`
-	Enriched      bool                     `json:"enriched"`
-	BundlerError  *string                  `json:"bundlerError,omitempty"`
-	Layers        []ocitype.ArtifactLayer  `json:"layers,omitempty"`
+	ID                    int                     `json:"id"`
+	ExportJobID           string                  `json:"exportJobId"`
+	DatacenterID          string                  `json:"datacenterId"`
+	DatacenterName        string                  `json:"datacenterName"`
+	Registry              string                  `json:"registry"`
+	Repository            string                  `json:"repository"`
+	Tag                   string                  `json:"tag"`
+	Digest                *string                 `json:"digest,omitempty"`
+	SizeBytes             *int64                  `json:"sizeBytes,omitempty"`
+	Signed                bool                    `json:"signed"`
+	SigningKeyFingerprint *string                 `json:"signingKeyFingerprint,omitempty"`
+	Status                string                  `json:"status"`
+	InitiatedAt           string                  `json:"initiatedAt"`
+	CompletedAt           *string                 `json:"completedAt,omitempty"`
+	Error                 *string                 `json:"error,omitempty"`
+	Enriched              bool                    `json:"enriched"`
+	BundlerError          *string                 `json:"bundlerError,omitempty"`
+	Layers                []ocitype.ArtifactLayer `json:"layers,omitempty"`
 }
 
 // PublishExportedJob runs the OCI publish half of the atomic export→publish
@@ -385,11 +385,11 @@ func toArtifactResponse(a *ent.RegistryArtifact) artifactResponse {
 		DatacenterID:   a.DatacenterID,
 		DatacenterName: a.DatacenterName,
 		Registry:       a.Registry,
-		Repository:  a.Repository,
-		Tag:         a.Tag,
-		Signed:      a.Signed,
-		Status:      string(a.Status),
-		InitiatedAt: a.InitiatedAt.Format(time.RFC3339),
+		Repository:     a.Repository,
+		Tag:            a.Tag,
+		Signed:         a.Signed,
+		Status:         string(a.Status),
+		InitiatedAt:    a.InitiatedAt.Format(time.RFC3339),
 	}
 	if a.Digest != nil {
 		r.Digest = a.Digest
@@ -494,21 +494,21 @@ type artifactFragRow struct {
 	// (everything before the first ":"). Used verbatim as the `namespace=`
 	// query param when building the changes-panel hx-get URL.
 	DatacenterNamespace string
-	Repository     string
-	Tag            string
-	Digest         string
-	DigestShort    string
-	HasDigest      bool
-	Signed         bool
-	Enriched       bool
-	BundlerError   string
-	Status         string
-	StatusClass    string
-	InitiatedAt    string
+	Repository          string
+	Tag                 string
+	Digest              string
+	DigestShort         string
+	HasDigest           bool
+	Signed              bool
+	Enriched            bool
+	BundlerError        string
+	Status              string
+	StatusClass         string
+	InitiatedAt         string
 	// PublishedBy is the actor (email) who triggered the export→publish,
 	// sourced from the ExportJob edge's created_by. Empty for legacy rows
 	// whose export job predates actor capture — the template renders "—".
-	PublishedBy    string
+	PublishedBy string
 	// CompletedAtRFC3339 is the OCI-push completion time. Display-only.
 	CompletedAtRFC3339 string
 	// ExportedAtRFC3339 is the export_job.completed_at — the moment the
@@ -621,4 +621,3 @@ func fmtLayerBytes(n int64) string {
 		return fmt.Sprintf("%d B", n)
 	}
 }
-

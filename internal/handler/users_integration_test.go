@@ -103,7 +103,9 @@ func TestUpdateRole_PromoteToAdmin(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	var resp struct{ Role string `json:"role"` }
+	var resp struct {
+		Role string `json:"role"`
+	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -134,7 +136,9 @@ func TestUpdateRole_PromoteToDev(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	var resp struct{ Role string `json:"role"` }
+	var resp struct {
+		Role string `json:"role"`
+	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -196,7 +200,9 @@ func TestUpdateRole_AlreadySameRole_Idempotent(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
-	var resp struct{ Role string `json:"role"` }
+	var resp struct {
+		Role string `json:"role"`
+	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}

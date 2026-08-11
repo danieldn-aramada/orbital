@@ -42,15 +42,15 @@ func TestCollectClusterRelatedOrbIDs(t *testing.T) {
 		}{OrbID: "colo:dev-main-wk9-3"})
 
 		raw.Backup = &struct {
-			ID        string `json:"id"`
-			OrbID     string `json:"orbId"`
-			Name      string `json:"name"`
-			Namespace string `json:"namespace"`
-			Version   int    `json:"version"`
-			CreatedBy string `json:"createdBy"`
-			CreatedAt string `json:"createdAt"`
-			UpdatedBy string `json:"updatedBy"`
-			UpdatedAt string `json:"updatedAt"`
+			ID        string                `json:"id"`
+			OrbID     string                `json:"orbId"`
+			Name      string                `json:"name"`
+			Namespace string                `json:"namespace"`
+			Version   int                   `json:"version"`
+			CreatedBy string                `json:"createdBy"`
+			CreatedAt string                `json:"createdAt"`
+			UpdatedBy string                `json:"updatedBy"`
+			UpdatedAt string                `json:"updatedAt"`
 			Etcd      *backupKindResponse   `json:"etcd"`
 			Velero    *backupKindResponse   `json:"velero"`
 			S3Sync    *backupS3SyncResponse `json:"s3Sync"`
@@ -80,15 +80,15 @@ func TestCollectClusterRelatedOrbIDs(t *testing.T) {
 		raw := &clusterQueryResponse{}
 		raw.OrbID = "colo:dev-main"
 		raw.Backup = &struct {
-			ID        string `json:"id"`
-			OrbID     string `json:"orbId"`
-			Name      string `json:"name"`
-			Namespace string `json:"namespace"`
-			Version   int    `json:"version"`
-			CreatedBy string `json:"createdBy"`
-			CreatedAt string `json:"createdAt"`
-			UpdatedBy string `json:"updatedBy"`
-			UpdatedAt string `json:"updatedAt"`
+			ID        string                `json:"id"`
+			OrbID     string                `json:"orbId"`
+			Name      string                `json:"name"`
+			Namespace string                `json:"namespace"`
+			Version   int                   `json:"version"`
+			CreatedBy string                `json:"createdBy"`
+			CreatedAt string                `json:"createdAt"`
+			UpdatedBy string                `json:"updatedBy"`
+			UpdatedAt string                `json:"updatedAt"`
 			Etcd      *backupKindResponse   `json:"etcd"`
 			Velero    *backupKindResponse   `json:"velero"`
 			S3Sync    *backupS3SyncResponse `json:"s3Sync"`
@@ -117,15 +117,15 @@ func TestCollectClusterRelatedOrbIDs(t *testing.T) {
 		raw := &clusterQueryResponse{}
 		raw.OrbID = "colo:dev-main"
 		raw.Backup = &struct {
-			ID        string `json:"id"`
-			OrbID     string `json:"orbId"`
-			Name      string `json:"name"`
-			Namespace string `json:"namespace"`
-			Version   int    `json:"version"`
-			CreatedBy string `json:"createdBy"`
-			CreatedAt string `json:"createdAt"`
-			UpdatedBy string `json:"updatedBy"`
-			UpdatedAt string `json:"updatedAt"`
+			ID        string                `json:"id"`
+			OrbID     string                `json:"orbId"`
+			Name      string                `json:"name"`
+			Namespace string                `json:"namespace"`
+			Version   int                   `json:"version"`
+			CreatedBy string                `json:"createdBy"`
+			CreatedAt string                `json:"createdAt"`
+			UpdatedBy string                `json:"updatedBy"`
+			UpdatedAt string                `json:"updatedAt"`
 			Etcd      *backupKindResponse   `json:"etcd"`
 			Velero    *backupKindResponse   `json:"velero"`
 			S3Sync    *backupS3SyncResponse `json:"s3Sync"`

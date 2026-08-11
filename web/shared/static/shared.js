@@ -1831,6 +1831,233 @@ export function initClusterTabRestoration() {
   if (currentTabId) document.getElementById(currentTabId)?.click()
 }
 
+// ─── Network devices table (orbital list page) ───────────────────────────────
+// Mirrors initClusterTable but simpler — NetworkDevices have no child-row tree.
+// Data is loaded via GraphQL queryNetworkDevice; "Connected" is the distinct
+// count of servers cabled to the device (the blast-radius teaser).
+export function initNetworkDeviceTable(opts = {}) {
+  if (!document.getElementById('network-device-table')) return
+
+  document.querySelectorAll('li.tab a[data-target]').forEach((a) => {
+    a.addEventListener('click', () => {
+      activateTab(a.parentElement)
+      displayTabContent(a.dataset.target)
+      setCurrentTab(a.id)
+    })
+  })
+
+  const dcFilterEl = $('<div class="select is-small" style="margin-right:0.25rem"><select id="netdev-dc-select"><option value="">All Data Centers</option></select></div>')
+
+  const deviceTable = new DataTable('#network-device-table', {
+    pageLength: 25,
+    layout: {
+      topStart: [
+        dcFilterEl,
+        { pageLength: { menu: [10, 25, 50] } },
+        { buttons: [
+          { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
+          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
+          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-network' } },
+        ] },
+      ],
+      topEnd: { search: { placeholder: 'Search devices' } },
+    },
+    autoWidth: true,
+    scrollX: true,
+    scrollY: 'calc(100vh - 340px)',
+    scrollCollapse: true,
+    stateSave: true,
+    order: [[0, 'asc']],
+    language: {
+      infoEmpty: 'No network devices to show',
+      info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
+      entries: { _: 'devices', 1: 'device' },
+    },
+    initComplete: function () {
+      dtWrapLengthSelect(this.api())
+      const dcCol = this.api().column(1)
+      dcCol.data().unique().sort().each(function (dc) {
+        if (dc && dc !== '—') document.getElementById('netdev-dc-select').add(new Option(dc, dc))
+      })
+      const saved = localStorage.getItem('netdev-dc-filter')
+      if (saved) {
+        document.getElementById('netdev-dc-select').value = saved
+        dcCol.search(saved, { exact: true }).draw()
+      }
+      document.getElementById('netdev-dc-select').addEventListener('change', function () {
+        if (this.value) localStorage.setItem('netdev-dc-filter', this.value)
+        else localStorage.removeItem('netdev-dc-filter')
+        dcCol.search(this.value, { exact: !!this.value }).draw()
+      })
+    },
+    columns: [
+      { data: 'name' },
+      { data: 'dataCenter' },
+      { data: 'role' },
+      { data: 'manufacturer' },
+      { data: 'model' },
+      { data: 'serial' },
+      { data: 'macAddress' },
+      { data: 'connected' },
+      { data: 'orbId' },
+    ],
+    columnDefs: [
+      { targets: 8, visible: false, searchable: true }, // Orb ID hidden but searchable
+      { targets: 7, className: 'dt-left dt-head-left' }, // Connected count
+    ],
+    ajax: {
+      url: BASE + '/graphql',
+      type: 'POST',
+      contentType: 'application/json',
+      data: () => JSON.stringify({
+        query: `query LoadNetworkDevices {
+          queryNetworkDevice {
+            id orbId name role manufacturer model serial macAddress
+            dataCenter { name }
+            networkPortConnectedNetworkDevice {
+              networkAdapter { server { orbId } }
+            }
+          }
+        }`,
+      }),
+      dataSrc: (json) => {
+        if (!gqlSurfaceErrors(json, 'Load network devices')) return []
+        return (json.data?.queryNetworkDevice ?? []).map((d) => {
+          const servers = new Set()
+          for (const p of d.networkPortConnectedNetworkDevice ?? []) {
+            const orb = p.networkAdapter?.server?.orbId
+            if (orb) servers.add(orb)
+          }
+          return {
+            id: d.id,
+            orbId: d.orbId ?? '—',
+            name: d.name ?? '—',
+            role: d.role ?? '—',
+            manufacturer: d.manufacturer ?? '—',
+            model: d.model ?? '—',
+            serial: d.serial ?? '—',
+            macAddress: d.macAddress ?? '—',
+            dataCenter: d.dataCenter?.name ?? '—',
+            connected: servers.size,
+          }
+        })
+      },
+    },
+    createdRow: function (row) { row.style.cursor = 'pointer'; row.title = 'Double-click to open' },
+  })
+
+  const reloadButton = deviceTable.button('reload:name').node()
+  deviceTable.button('reload:name').node().on('click', function () {
+    deviceTable.clear().draw()
+    reloadButton.addClass('is-loading')
+    setTimeout(() => {
+      const onError = () => reloadButton.removeClass('is-loading')
+      deviceTable.one('error.dt', onError)
+      deviceTable.ajax.reload(() => {
+        deviceTable.off('error.dt', onError)
+        reloadButton.removeClass('is-loading')
+      })
+    }, 250)
+  })
+
+  if (typeof opts.onRowOpen === 'function') {
+    $('#network-device-table tbody').on('dblclick', 'tr', function () {
+      const data = deviceTable.row(this).data()
+      if (!data) return
+      opts.onRowOpen(data, this)
+    })
+  }
+
+  return deviceTable
+}
+
+// loadNetworkDeviceTab opens a device detail tab via HTMX swap. Mirrors
+// loadClusterTab.
+export function loadNetworkDeviceTab(displayName, orbId) {
+  const domId = safeDomId(orbId)
+  const tabHtml = `<li class="tab">
+    <a id="tab-netdev-${domId}" data-target="tab-content-netdev-${domId}" role="tab" aria-selected="false" tabindex="-1">
+      ${displayName}
+      <span class="pl-2">
+        <button id="tab-close-netdev-${domId}">
+          <i class="fa-solid fa-xmark" style="font-size: 0.8em;"></i>
+        </button>
+      </span>
+    </a>
+  </li>`
+  const contentHtml = `<div class="tab-content" id="tab-content-netdev-${domId}" role="tabpanel" style="display:none"></div>`
+
+  $('#tablist').append(tabHtml)
+  $('.app-main').append(contentHtml)
+
+  const tabLink = document.getElementById(`tab-netdev-${domId}`)
+  const tabContent = document.getElementById(`tab-content-netdev-${domId}`)
+
+  tabLink.addEventListener('click', () => {
+    activateTab(tabLink.parentElement)
+    displayTabContent(`tab-content-netdev-${domId}`)
+    setCurrentTab(`tab-netdev-${domId}`)
+    if (!tabContent.dataset.loaded) {
+      htmx.ajax('GET', BASE + '/network/' + encodeURIComponent(orbId), { target: tabContent, swap: 'innerHTML' })
+    }
+  })
+
+  document.getElementById(`tab-close-netdev-${domId}`).addEventListener('click', (event) => {
+    event.stopPropagation()
+    deleteNetworkDeviceTab(displayName, orbId)
+    replaceCurrentTab(`tab-netdev-${domId}`, 'tab-summary')
+    tabLink.parentElement.remove()
+    tabContent.remove()
+    document.getElementById('tab-summary').click()
+  })
+}
+
+export function saveNetworkDeviceTab(displayName, orbId) {
+  const item = JSON.stringify(new TabItem(displayName, orbId))
+  const s = new Set(localStorage.networkTabs ? JSON.parse(localStorage.networkTabs) : [])
+  s.add(item)
+  localStorage.networkTabs = JSON.stringify([...s])
+}
+
+export function deleteNetworkDeviceTab(displayName, orbId) {
+  const item = JSON.stringify(new TabItem(displayName, orbId))
+  const s = new Set(localStorage.networkTabs ? JSON.parse(localStorage.networkTabs) : [])
+  s.delete(item)
+  localStorage.networkTabs = JSON.stringify([...s])
+}
+
+export function initNetworkDeviceTabRestoration() {
+  if (!document.getElementById('network-device-table')) return
+
+  clearTabStateOnFresh()
+
+  if (localStorage.networkTabs) {
+    const tabSet = new Set(JSON.parse(localStorage.networkTabs))
+    tabSet.forEach(tabData => {
+      const { displayName, id } = JSON.parse(tabData)
+      loadNetworkDeviceTab(displayName, id)
+    })
+  }
+
+  const params = new URLSearchParams(window.location.search)
+  const openId = params.get('open')
+  const openLabel = params.get('label')
+  if (openId) {
+    const displayName = openLabel || openId
+    const openDomId = safeDomId(openId)
+    if (!document.getElementById(`tab-netdev-${openDomId}`)) {
+      loadNetworkDeviceTab(displayName, openId)
+      saveNetworkDeviceTab(displayName, openId)
+    }
+    document.getElementById(`tab-netdev-${openDomId}`)?.click()
+    history.replaceState(null, '', BASE + '/network')
+    return
+  }
+
+  const currentTabId = getCurrentTab()
+  if (currentTabId) document.getElementById(currentTabId)?.click()
+}
+
 // ─── Cross-app navigation handlers ───────────────────────────────────────────
 //
 // These three initializers wire the dblclick / click row-navigation and reload

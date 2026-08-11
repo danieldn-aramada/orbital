@@ -162,15 +162,15 @@ type clusterQueryResponse struct {
 	} `json:"workloadClusters,omitempty"`
 
 	Backup *struct {
-		ID        string `json:"id"`
-		OrbID     string `json:"orbId"`
-		Name      string `json:"name"`
-		Namespace string `json:"namespace"`
-		Version   int    `json:"version"`
-		CreatedBy string `json:"createdBy"`
-		CreatedAt string `json:"createdAt"`
-		UpdatedBy string `json:"updatedBy"`
-		UpdatedAt string `json:"updatedAt"`
+		ID        string                `json:"id"`
+		OrbID     string                `json:"orbId"`
+		Name      string                `json:"name"`
+		Namespace string                `json:"namespace"`
+		Version   int                   `json:"version"`
+		CreatedBy string                `json:"createdBy"`
+		CreatedAt string                `json:"createdAt"`
+		UpdatedBy string                `json:"updatedBy"`
+		UpdatedAt string                `json:"updatedAt"`
 		Etcd      *backupKindResponse   `json:"etcd"`
 		Velero    *backupKindResponse   `json:"velero"`
 		S3Sync    *backupS3SyncResponse `json:"s3Sync"`
@@ -179,15 +179,15 @@ type clusterQueryResponse struct {
 
 // backupKindResponse mirrors EtcdBackup/VeleroBackup (identical shape).
 type backupKindResponse struct {
-	ID        string `json:"id"`
-	OrbID     string `json:"orbId"`
-	Name      string `json:"name"`
-	Namespace string `json:"namespace"`
-	Version   int    `json:"version"`
-	CreatedBy string `json:"createdBy"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedBy string `json:"updatedBy"`
-	UpdatedAt string `json:"updatedAt"`
+	ID            string `json:"id"`
+	OrbID         string `json:"orbId"`
+	Name          string `json:"name"`
+	Namespace     string `json:"namespace"`
+	Version       int    `json:"version"`
+	CreatedBy     string `json:"createdBy"`
+	CreatedAt     string `json:"createdAt"`
+	UpdatedBy     string `json:"updatedBy"`
+	UpdatedAt     string `json:"updatedAt"`
 	Enabled       bool   `json:"enabled"`
 	Schedule      string `json:"schedule"`
 	Location      string `json:"location"`
@@ -238,7 +238,6 @@ func collectClusterRelatedOrbIDs(raw *clusterQueryResponse) []string {
 	}
 	return out
 }
-
 
 type clusterNodeTabData struct {
 	OrbID            string

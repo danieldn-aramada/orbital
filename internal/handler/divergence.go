@@ -25,8 +25,8 @@ import (
 // gql is used by Accept to dispatch the `update{Type}` mutation through the
 // existing GraphQL audit path. May be nil in tests that don't exercise Accept.
 type DivergenceHandler struct {
-	db     *ent.Client
-	logger *slog.Logger
+	db       *ent.Client
+	logger   *slog.Logger
 	gql      *GraphQL
 	ingester DivergenceIngester // optional; nil when ingester subsystem isn't running
 }

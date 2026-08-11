@@ -35,7 +35,7 @@ type Server struct {
 	logger       *slog.Logger
 	state        *importState
 	imp          *orb.Importer
-	dispatcher   *orb.Dispatcher        // nil if no consumers configured
+	dispatcher   *orb.Dispatcher // nil if no consumers configured
 	db           *store.Client
 	divStore     *divergence.Store
 	divPublisher *divergence.Publisher // nil if S3 not configured

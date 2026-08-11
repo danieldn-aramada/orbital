@@ -31,10 +31,10 @@ var oidcSessionKeys = auth.SessionKeys{HMACKey: "oidc-test-hmac-key"}
 // DeviceTokenError controls the error returned by /oauth2/v2.0/devicecode polling.
 // When empty, the token endpoint returns a signed id_token using TokenClaims.
 type oidcProvider struct {
-	Server          *httptest.Server
-	TokenClaims     map[string]any
+	Server           *httptest.Server
+	TokenClaims      map[string]any
 	DeviceTokenError string // e.g. "authorization_pending", "expired_token"; empty = success
-	sign            func(claims map[string]any) string
+	sign             func(claims map[string]any) string
 }
 
 func newOIDCProvider(t *testing.T) *oidcProvider {
@@ -80,11 +80,11 @@ func newOIDCProvider(t *testing.T) *oidcProvider {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
 			"issuer":                                srv.URL,
-			"authorization_endpoint":               srv.URL + "/auth",
-			"token_endpoint":                       srv.URL + "/token",
-			"jwks_uri":                             srv.URL + "/jwks",
-			"response_types_supported":             []string{"code"},
-			"subject_types_supported":              []string{"public"},
+			"authorization_endpoint":                srv.URL + "/auth",
+			"token_endpoint":                        srv.URL + "/token",
+			"jwks_uri":                              srv.URL + "/jwks",
+			"response_types_supported":              []string{"code"},
+			"subject_types_supported":               []string{"public"},
 			"id_token_signing_alg_values_supported": []string{"RS256"},
 		})
 	})
