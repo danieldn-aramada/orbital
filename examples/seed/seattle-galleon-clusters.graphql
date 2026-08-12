@@ -18,9 +18,9 @@ mutation SeedClusters {
     {
       orbId: "seattle:g1", name: "g1", namespace: "seattle", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "standalone", provider: "eksa", cni: "cilium", environment: "prod", dataCenter: { orbId: "seattle:seattle-galleon" version: 1 }, kubernetesVersion: "v1.30.14", controlPlaneEndpoint: { orbId: "seattle:10.20.28.203" version: 1 }, tinkerbellIP: { orbId: "seattle:10.20.28.204" version: 1 },
       nodes: [
-          { orbId: "seattle:g1-cp5-09", namespace: "seattle", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g1-cp5-09", ipv4: { orbId: "seattle:10.20.28.215" version: 1 }, gpu: false, role: "control_plane", server: { orbId: "seattle:5L4P7Y3" version: 1 } },
-          { orbId: "seattle:g1-gpu-wk5-07", namespace: "seattle", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g1-gpu-wk5-07", ipv4: { orbId: "seattle:10.20.28.214" version: 1 }, gpu: true, role: "worker", server: { orbId: "seattle:FZ7P7Y3" version: 1 } },
-          { orbId: "seattle:g1-wk5", namespace: "seattle", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g1-wk5", ipv4: { orbId: "seattle:10.20.28.227" version: 1 }, gpu: false, role: "worker", server: { orbId: "seattle:HLP6K74" version: 1 } }
+          { orbId: "seattle:g1-cp5-09", namespace: "seattle", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g1-cp5-09", ipv4: { orbId: "seattle:10.20.28.215" version: 1 }, gpu: false, role: "control_plane", server: { orbId: "seattle:server-5L4P7Y3" version: 1 } },
+          { orbId: "seattle:g1-gpu-wk5-07", namespace: "seattle", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g1-gpu-wk5-07", ipv4: { orbId: "seattle:10.20.28.214" version: 1 }, gpu: true, role: "worker", server: { orbId: "seattle:server-FZ7P7Y3" version: 1 } },
+          { orbId: "seattle:g1-wk5", namespace: "seattle", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "g1-wk5", ipv4: { orbId: "seattle:10.20.28.227" version: 1 }, gpu: false, role: "worker", server: { orbId: "seattle:server-HLP6K74" version: 1 } }
         ]
     }
   ], upsert: true) {

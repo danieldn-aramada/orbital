@@ -388,7 +388,7 @@ mutation {
     {
       serviceTag: "6PJ1FZ3"
       manufacturer: "Dell"
-      orbId: "houston:6PJ1FZ3"
+      orbId: "houston:server-6PJ1FZ3"
       version: 1
       name: "r06-u12.houston-galleon"
       hostname: "r06-u12.houston-galleon"
@@ -405,7 +405,7 @@ mutation {
     {
       serviceTag: "9B52FZ3"
       manufacturer: "Dell"
-      orbId: "houston:9B52FZ3"
+      orbId: "houston:server-9B52FZ3"
       version: 1
       name: "r06-u14.houston-galleon"
       hostname: "r06-u14.houston-galleon"
@@ -422,7 +422,7 @@ mutation {
     {
       serviceTag: "BB52FZ3"
       manufacturer: "Dell"
-      orbId: "houston:BB52FZ3"
+      orbId: "houston:server-BB52FZ3"
       version: 1
       name: "r06-u15.houston-galleon"
       hostname: "r06-u15.houston-galleon"
@@ -439,7 +439,7 @@ mutation {
     {
       serviceTag: "DB52FZ3"
       manufacturer: "Dell"
-      orbId: "houston:DB52FZ3"
+      orbId: "houston:server-DB52FZ3"
       version: 1
       name: "r06-u16.houston-galleon"
       hostname: "r06-u16.houston-galleon"
@@ -456,7 +456,7 @@ mutation {
     {
       serviceTag: "6B52FZ3"
       manufacturer: "Dell"
-      orbId: "houston:6B52FZ3"
+      orbId: "houston:server-6B52FZ3"
       version: 1
       name: "r06-u17.houston-galleon"
       hostname: "r06-u17.houston-galleon"
@@ -473,7 +473,7 @@ mutation {
     {
       serviceTag: "8B52FZ3"
       manufacturer: "Dell"
-      orbId: "houston:8B52FZ3"
+      orbId: "houston:server-8B52FZ3"
       version: 1
       name: "r06-u18.houston-galleon"
       hostname: "r06-u18.houston-galleon"
@@ -490,7 +490,7 @@ mutation {
     {
       serviceTag: "J922FZ3"
       manufacturer: "Dell"
-      orbId: "houston:J922FZ3"
+      orbId: "houston:server-J922FZ3"
       version: 1
       name: "r06-u22.houston-galleon"
       hostname: "r06-u22.houston-galleon"
@@ -507,7 +507,7 @@ mutation {
     {
       serviceTag: "J452FZ3"
       manufacturer: "Dell"
-      orbId: "houston:J452FZ3"
+      orbId: "houston:server-J452FZ3"
       version: 1
       name: "r06-u23.houston-galleon"
       hostname: "r06-u23.houston-galleon"
@@ -524,7 +524,7 @@ mutation {
     {
       serviceTag: "1B22FZ3"
       manufacturer: "Dell"
-      orbId: "houston:1B22FZ3"
+      orbId: "houston:server-1B22FZ3"
       version: 1
       name: "r06-u24.houston-galleon"
       hostname: "r06-u24.houston-galleon"
@@ -541,7 +541,7 @@ mutation {
     {
       serviceTag: "2B22FZ3"
       manufacturer: "Dell"
-      orbId: "houston:2B22FZ3"
+      orbId: "houston:server-2B22FZ3"
       version: 1
       name: "r06-u25.houston-galleon"
       hostname: "r06-u25.houston-galleon"
@@ -558,7 +558,7 @@ mutation {
     {
       serviceTag: "4B22FZ3"
       manufacturer: "Dell"
-      orbId: "houston:4B22FZ3"
+      orbId: "houston:server-4B22FZ3"
       version: 1
       name: "r06-u26.houston-galleon"
       hostname: "r06-u26.houston-galleon"
@@ -575,7 +575,7 @@ mutation {
     {
       serviceTag: "53RKHZ3"
       manufacturer: "Dell"
-      orbId: "houston:53RKHZ3"
+      orbId: "houston:server-53RKHZ3"
       version: 1
       name: "r06-u27.houston-galleon"
       hostname: "r06-u27.houston-galleon"
@@ -592,7 +592,7 @@ mutation {
     {
       serviceTag: "7PJ1FZ3"
       manufacturer: "Dell"
-      orbId: "houston:7PJ1FZ3"
+      orbId: "houston:server-7PJ1FZ3"
       version: 1
       name: "r05-u09.houston-galleon"
       hostname: "r05-u09.houston-galleon"
@@ -609,7 +609,7 @@ mutation {
     {
       serviceTag: "4PJ1FZ3"
       manufacturer: "Dell"
-      orbId: "houston:4PJ1FZ3"
+      orbId: "houston:server-4PJ1FZ3"
       version: 1
       name: "r05-u11.houston-galleon"
       hostname: "r05-u11.houston-galleon"
@@ -626,7 +626,7 @@ mutation {
     {
       serviceTag: "3B52FZ3"
       manufacturer: "Dell"
-      orbId: "houston:3B52FZ3"
+      orbId: "houston:server-3B52FZ3"
       version: 1
       name: "r05-u14.houston-galleon"
       hostname: "r05-u14.houston-galleon"
@@ -643,7 +643,7 @@ mutation {
     {
       serviceTag: "CB52FZ3"
       manufacturer: "Dell"
-      orbId: "houston:CB52FZ3"
+      orbId: "houston:server-CB52FZ3"
       version: 1
       name: "r05-u15.houston-galleon"
       hostname: "r05-u15.houston-galleon"
@@ -660,7 +660,7 @@ mutation {
     {
       serviceTag: "7B52FZ3"
       manufacturer: "Dell"
-      orbId: "houston:7B52FZ3"
+      orbId: "houston:server-7B52FZ3"
       version: 1
       name: "r05-u16.houston-galleon"
       hostname: "r05-u16.houston-galleon"
@@ -677,7 +677,7 @@ mutation {
     {
       serviceTag: "FB52FZ3"
       manufacturer: "Dell"
-      orbId: "houston:FB52FZ3"
+      orbId: "houston:server-FB52FZ3"
       version: 1
       name: "r05-u17.houston-galleon"
       hostname: "r05-u17.houston-galleon"
@@ -694,7 +694,7 @@ mutation {
     {
       serviceTag: "1552FZ3"
       manufacturer: "Dell"
-      orbId: "houston:1552FZ3"
+      orbId: "houston:server-1552FZ3"
       version: 1
       name: "r05-u21.houston-galleon"
       hostname: "r05-u21.houston-galleon"
@@ -711,7 +711,7 @@ mutation {
     {
       serviceTag: "6B22FZ3"
       manufacturer: "Dell"
-      orbId: "houston:6B22FZ3"
+      orbId: "houston:server-6B22FZ3"
       version: 1
       name: "r05-u22.houston-galleon"
       hostname: "r05-u22.houston-galleon"
@@ -728,7 +728,7 @@ mutation {
     {
       serviceTag: "3B22FZ3"
       manufacturer: "Dell"
-      orbId: "houston:3B22FZ3"
+      orbId: "houston:server-3B22FZ3"
       version: 1
       name: "r05-u23.houston-galleon"
       hostname: "r05-u23.houston-galleon"
@@ -745,7 +745,7 @@ mutation {
     {
       serviceTag: "7B22FZ3"
       manufacturer: "Dell"
-      orbId: "houston:7B22FZ3"
+      orbId: "houston:server-7B22FZ3"
       version: 1
       name: "r05-u24.houston-galleon"
       hostname: "r05-u24.houston-galleon"
@@ -762,7 +762,7 @@ mutation {
     {
       serviceTag: "5B22FZ3"
       manufacturer: "Dell"
-      orbId: "houston:5B22FZ3"
+      orbId: "houston:server-5B22FZ3"
       version: 1
       name: "r05-u25.houston-galleon"
       hostname: "r05-u25.houston-galleon"
@@ -779,7 +779,7 @@ mutation {
     {
       serviceTag: "F9J1X54"
       manufacturer: "Dell"
-      orbId: "houston:F9J1X54"
+      orbId: "houston:server-F9J1X54"
       version: 1
       name: "r03-u09.houston-galleon"
       hostname: "r03-u09.houston-galleon"
@@ -796,7 +796,7 @@ mutation {
     {
       serviceTag: "D9J1X54"
       manufacturer: "Dell"
-      orbId: "houston:D9J1X54"
+      orbId: "houston:server-D9J1X54"
       version: 1
       name: "r03-u11.houston-galleon"
       hostname: "r03-u11.houston-galleon"
@@ -813,7 +813,7 @@ mutation {
     {
       serviceTag: "H9J1X54"
       manufacturer: "Dell"
-      orbId: "houston:H9J1X54"
+      orbId: "houston:server-H9J1X54"
       version: 1
       name: "r03-u13.houston-galleon"
       hostname: "r03-u13.houston-galleon"
@@ -830,7 +830,7 @@ mutation {
     {
       serviceTag: "G9J1X54"
       manufacturer: "Dell"
-      orbId: "houston:G9J1X54"
+      orbId: "houston:server-G9J1X54"
       version: 1
       name: "r03-u15.houston-galleon"
       hostname: "r03-u15.houston-galleon"
@@ -847,7 +847,7 @@ mutation {
     {
       serviceTag: "C9J1X54"
       manufacturer: "Dell"
-      orbId: "houston:C9J1X54"
+      orbId: "houston:server-C9J1X54"
       version: 1
       name: "r03-u17.houston-galleon"
       hostname: "r03-u17.houston-galleon"
@@ -864,7 +864,7 @@ mutation {
     {
       serviceTag: "8N4VW54"
       manufacturer: "Dell"
-      orbId: "houston:8N4VW54"
+      orbId: "houston:server-8N4VW54"
       version: 1
       name: "r03-u20.houston-galleon"
       hostname: "r03-u20.houston-galleon"
@@ -881,7 +881,7 @@ mutation {
     {
       serviceTag: "9N4VW54"
       manufacturer: "Dell"
-      orbId: "houston:9N4VW54"
+      orbId: "houston:server-9N4VW54"
       version: 1
       name: "r03-u22.houston-galleon"
       hostname: "r03-u22.houston-galleon"
@@ -898,7 +898,7 @@ mutation {
     {
       serviceTag: "CN4VW54"
       manufacturer: "Dell"
-      orbId: "houston:CN4VW54"
+      orbId: "houston:server-CN4VW54"
       version: 1
       name: "r03-u24.houston-galleon"
       hostname: "r03-u24.houston-galleon"
@@ -915,7 +915,7 @@ mutation {
     {
       serviceTag: "BN4VW54"
       manufacturer: "Dell"
-      orbId: "houston:BN4VW54"
+      orbId: "houston:server-BN4VW54"
       version: 1
       name: "r03-u26.houston-galleon"
       hostname: "r03-u26.houston-galleon"
@@ -932,7 +932,7 @@ mutation {
     {
       serviceTag: "J9J1X54"
       manufacturer: "Dell"
-      orbId: "houston:J9J1X54"
+      orbId: "houston:server-J9J1X54"
       version: 1
       name: "r03-u28.houston-galleon"
       hostname: "r03-u28.houston-galleon"

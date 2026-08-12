@@ -71,7 +71,7 @@ mutation {
     {
       serviceTag: "505CK74"
       manufacturer: "Dell"
-      orbId: "grayling:505CK74"
+      orbId: "grayling:server-505CK74"
       version: 1
       name: "r02-u03.grayling-galleon"
       hostname: "r02-u03.grayling-galleon"
@@ -88,7 +88,7 @@ mutation {
     {
       serviceTag: "B5WVM34"
       manufacturer: "Dell"
-      orbId: "grayling:B5WVM34"
+      orbId: "grayling:server-B5WVM34"
       version: 1
       name: "r02-u06.grayling-galleon"
       hostname: "r02-u06.grayling-galleon"
@@ -105,7 +105,7 @@ mutation {
     {
       serviceTag: "JY69K74"
       manufacturer: "Dell"
-      orbId: "grayling:JY69K74"
+      orbId: "grayling:server-JY69K74"
       version: 1
       name: "r02-u08.grayling-galleon"
       hostname: "r02-u08.grayling-galleon"
@@ -122,7 +122,7 @@ mutation {
     {
       serviceTag: "BLP6K74"
       manufacturer: "Dell"
-      orbId: "grayling:BLP6K74"
+      orbId: "grayling:server-BLP6K74"
       version: 1
       name: "r02-u12.grayling-galleon"
       hostname: "r02-u12.grayling-galleon"
@@ -139,7 +139,7 @@ mutation {
     {
       serviceTag: "CLP6K74"
       manufacturer: "Dell"
-      orbId: "grayling:CLP6K74"
+      orbId: "grayling:server-CLP6K74"
       version: 1
       name: "r02-u13.grayling-galleon"
       hostname: "r02-u13.grayling-galleon"
@@ -156,7 +156,7 @@ mutation {
     {
       serviceTag: "8LP6K74"
       manufacturer: "Dell"
-      orbId: "grayling:8LP6K74"
+      orbId: "grayling:server-8LP6K74"
       version: 1
       name: "r02-u14.grayling-galleon"
       hostname: "r02-u14.grayling-galleon"
@@ -173,7 +173,7 @@ mutation {
     {
       serviceTag: "3LP6K74"
       manufacturer: "Dell"
-      orbId: "grayling:3LP6K74"
+      orbId: "grayling:server-3LP6K74"
       version: 1
       name: "r02-u15.grayling-galleon"
       hostname: "r02-u15.grayling-galleon"
@@ -190,7 +190,7 @@ mutation {
     {
       serviceTag: "9LP6K74"
       manufacturer: "Dell"
-      orbId: "grayling:9LP6K74"
+      orbId: "grayling:server-9LP6K74"
       version: 1
       name: "r02-u16.grayling-galleon"
       hostname: "r02-u16.grayling-galleon"
@@ -207,7 +207,7 @@ mutation {
     {
       serviceTag: "6LP6K74"
       manufacturer: "Dell"
-      orbId: "grayling:6LP6K74"
+      orbId: "grayling:server-6LP6K74"
       version: 1
       name: "r02-u17.grayling-galleon"
       hostname: "r02-u17.grayling-galleon"
@@ -224,7 +224,7 @@ mutation {
     {
       serviceTag: "7LP6K74"
       manufacturer: "Dell"
-      orbId: "grayling:7LP6K74"
+      orbId: "grayling:server-7LP6K74"
       version: 1
       name: "r02-u18.grayling-galleon"
       hostname: "r02-u18.grayling-galleon"
@@ -241,7 +241,7 @@ mutation {
     {
       serviceTag: "5LP6K74"
       manufacturer: "Dell"
-      orbId: "grayling:5LP6K74"
+      orbId: "grayling:server-5LP6K74"
       version: 1
       name: "r02-u19.grayling-galleon"
       hostname: "r02-u19.grayling-galleon"
@@ -258,7 +258,7 @@ mutation {
     {
       serviceTag: "4LP6K74"
       manufacturer: "Dell"
-      orbId: "grayling:4LP6K74"
+      orbId: "grayling:server-4LP6K74"
       version: 1
       name: "r02-u20.grayling-galleon"
       hostname: "r02-u20.grayling-galleon"
@@ -275,7 +275,7 @@ mutation {
     {
       serviceTag: "D5MP6K74"
       manufacturer: "Dell"
-      orbId: "grayling:D5MP6K74"
+      orbId: "grayling:server-D5MP6K74"
       version: 1
       name: "r02-u25.grayling-galleon"
       hostname: "r02-u25.grayling-galleon"

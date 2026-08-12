@@ -199,7 +199,7 @@ mutation {
     {
       serviceTag: "2XQKQ54"
       manufacturer: "Dell"
-      orbId: "navy-cruiser:2XQKQ54"
+      orbId: "navy-cruiser:server-2XQKQ54"
       version: 1
       name: "r03-u05.navy-cruiser"
       model: "PowerEdge R650"
@@ -216,7 +216,7 @@ mutation {
     {
       serviceTag: "1XQKQ54"
       manufacturer: "Dell"
-      orbId: "navy-cruiser:1XQKQ54"
+      orbId: "navy-cruiser:server-1XQKQ54"
       version: 1
       name: "r03-u06.navy-cruiser"
       model: "PowerEdge R650"
@@ -233,7 +233,7 @@ mutation {
     {
       serviceTag: "3XQKQ54"
       manufacturer: "Dell"
-      orbId: "navy-cruiser:3XQKQ54"
+      orbId: "navy-cruiser:server-3XQKQ54"
       version: 1
       name: "r03-u07.navy-cruiser"
       model: "PowerEdge R650"
@@ -250,7 +250,7 @@ mutation {
     {
       serviceTag: "GWQKQ54"
       manufacturer: "Dell"
-      orbId: "navy-cruiser:GWQKQ54"
+      orbId: "navy-cruiser:server-GWQKQ54"
       version: 1
       name: "r03-u08.navy-cruiser"
       model: "PowerEdge R650"
@@ -267,7 +267,7 @@ mutation {
     {
       serviceTag: "HWQKQ54"
       manufacturer: "Dell"
-      orbId: "navy-cruiser:HWQKQ54"
+      orbId: "navy-cruiser:server-HWQKQ54"
       version: 1
       name: "r03-u09.navy-cruiser"
       model: "PowerEdge R650"
@@ -284,7 +284,7 @@ mutation {
     {
       serviceTag: "JWQKQ54"
       manufacturer: "Dell"
-      orbId: "navy-cruiser:JWQKQ54"
+      orbId: "navy-cruiser:server-JWQKQ54"
       version: 1
       name: "r03-u10.navy-cruiser"
       model: "PowerEdge R650"
@@ -301,7 +301,7 @@ mutation {
     {
       serviceTag: "44KPW54"
       manufacturer: "Dell"
-      orbId: "navy-cruiser:44KPW54"
+      orbId: "navy-cruiser:server-44KPW54"
       version: 1
       name: "r03-u17.navy-cruiser"
       model: "PowerEdge R450"
@@ -318,7 +318,7 @@ mutation {
     {
       serviceTag: "84KPW54"
       manufacturer: "Dell"
-      orbId: "navy-cruiser:84KPW54"
+      orbId: "navy-cruiser:server-84KPW54"
       version: 1
       name: "r03-u18.navy-cruiser"
       model: "PowerEdge R450"
@@ -335,7 +335,7 @@ mutation {
     {
       serviceTag: "94KPW54"
       manufacturer: "Dell"
-      orbId: "navy-cruiser:94KPW54"
+      orbId: "navy-cruiser:server-94KPW54"
       version: 1
       name: "r03-u19.navy-cruiser"
       model: "PowerEdge R450"
@@ -352,7 +352,7 @@ mutation {
     {
       serviceTag: "B4KPW54"
       manufacturer: "Dell"
-      orbId: "navy-cruiser:B4KPW54"
+      orbId: "navy-cruiser:server-B4KPW54"
       version: 1
       name: "r03-u20.navy-cruiser"
       model: "PowerEdge R450"
@@ -369,7 +369,7 @@ mutation {
     {
       serviceTag: "14KPW54"
       manufacturer: "Dell"
-      orbId: "navy-cruiser:14KPW54"
+      orbId: "navy-cruiser:server-14KPW54"
       version: 1
       name: "r03-u21.navy-cruiser"
       model: "PowerEdge R450"
@@ -386,7 +386,7 @@ mutation {
     {
       serviceTag: "54KPW54"
       manufacturer: "Dell"
-      orbId: "navy-cruiser:54KPW54"
+      orbId: "navy-cruiser:server-54KPW54"
       version: 1
       name: "r03-u22.navy-cruiser"
       model: "PowerEdge R450"
@@ -403,7 +403,7 @@ mutation {
     {
       serviceTag: "64KPW54"
       manufacturer: "Dell"
-      orbId: "navy-cruiser:64KPW54"
+      orbId: "navy-cruiser:server-64KPW54"
       version: 1
       name: "r03-u23.navy-cruiser"
       model: "PowerEdge R450"
@@ -420,7 +420,7 @@ mutation {
     {
       serviceTag: "24KPW54"
       manufacturer: "Dell"
-      orbId: "navy-cruiser:24KPW54"
+      orbId: "navy-cruiser:server-24KPW54"
       version: 1
       name: "r03-u24.navy-cruiser"
       model: "PowerEdge R450"
@@ -437,7 +437,7 @@ mutation {
     {
       serviceTag: "34KPW54"
       manufacturer: "Dell"
-      orbId: "navy-cruiser:34KPW54"
+      orbId: "navy-cruiser:server-34KPW54"
       version: 1
       name: "r03-u25.navy-cruiser"
       model: "PowerEdge R450"
@@ -454,7 +454,7 @@ mutation {
     {
       serviceTag: "74KPW54"
       manufacturer: "Dell"
-      orbId: "navy-cruiser:74KPW54"
+      orbId: "navy-cruiser:server-74KPW54"
       version: 1
       name: "r03-u26.navy-cruiser"
       model: "PowerEdge R450"

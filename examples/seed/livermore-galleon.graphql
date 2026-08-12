@@ -77,7 +77,7 @@ mutation {
     {
       serviceTag: "FY69K74"
       manufacturer: "Dell"
-      orbId: "livermore:FY69K74"
+      orbId: "livermore:server-FY69K74"
       version: 1
       name: "r01-u07.livermore-galleon"
       hostname: "r01-u07.livermore-galleon"
@@ -94,7 +94,7 @@ mutation {
     {
       serviceTag: "8Y69K74"
       manufacturer: "Dell"
-      orbId: "livermore:8Y69K74"
+      orbId: "livermore:server-8Y69K74"
       version: 1
       name: "r01-u08.livermore-galleon"
       hostname: "r01-u08.livermore-galleon"
@@ -111,7 +111,7 @@ mutation {
     {
       serviceTag: "1Z69K74"
       manufacturer: "Dell"
-      orbId: "livermore:1Z69K74"
+      orbId: "livermore:server-1Z69K74"
       version: 1
       name: "r01-u09.livermore-galleon"
       hostname: "r01-u09.livermore-galleon"
@@ -128,7 +128,7 @@ mutation {
     {
       serviceTag: "2Z69K74"
       manufacturer: "Dell"
-      orbId: "livermore:2Z69K74"
+      orbId: "livermore:server-2Z69K74"
       version: 1
       name: "r01-u10.livermore-galleon"
       hostname: "r01-u10.livermore-galleon"
@@ -145,7 +145,7 @@ mutation {
     {
       serviceTag: "6Z69K74"
       manufacturer: "Dell"
-      orbId: "livermore:6Z69K74"
+      orbId: "livermore:server-6Z69K74"
       version: 1
       name: "r01-u11.livermore-galleon"
       hostname: "r01-u11.livermore-galleon"
@@ -162,7 +162,7 @@ mutation {
     {
       serviceTag: "3Z69K74"
       manufacturer: "Dell"
-      orbId: "livermore:3Z69K74"
+      orbId: "livermore:server-3Z69K74"
       version: 1
       name: "r01-u12.livermore-galleon"
       hostname: "r01-u12.livermore-galleon"
@@ -179,7 +179,7 @@ mutation {
     {
       serviceTag: "4Z69K74"
       manufacturer: "Dell"
-      orbId: "livermore:4Z69K74"
+      orbId: "livermore:server-4Z69K74"
       version: 1
       name: "r01-u13.livermore-galleon"
       hostname: "r01-u13.livermore-galleon"
@@ -196,7 +196,7 @@ mutation {
     {
       serviceTag: "5Z69K74"
       manufacturer: "Dell"
-      orbId: "livermore:5Z69K74"
+      orbId: "livermore:server-5Z69K74"
       version: 1
       name: "r01-u14.livermore-galleon"
       hostname: "r01-u14.livermore-galleon"
@@ -213,7 +213,7 @@ mutation {
     {
       serviceTag: "9CZZ5G4"
       manufacturer: "Dell"
-      orbId: "livermore:9CZZ5G4"
+      orbId: "livermore:server-9CZZ5G4"
       version: 1
       name: "r01-u19.livermore-galleon"
       hostname: "r01-u19.livermore-galleon"
@@ -230,7 +230,7 @@ mutation {
     {
       serviceTag: "BCZZ5G4"
       manufacturer: "Dell"
-      orbId: "livermore:BCZZ5G4"
+      orbId: "livermore:server-BCZZ5G4"
       version: 1
       name: "r01-u20.livermore-galleon"
       hostname: "r01-u20.livermore-galleon"
@@ -247,7 +247,7 @@ mutation {
     {
       serviceTag: "6CZZ5G4"
       manufacturer: "Dell"
-      orbId: "livermore:6CZZ5G4"
+      orbId: "livermore:server-6CZZ5G4"
       version: 1
       name: "r01-u21.livermore-galleon"
       hostname: "r01-u21.livermore-galleon"
@@ -264,7 +264,7 @@ mutation {
     {
       serviceTag: "8CZZ5G4"
       manufacturer: "Dell"
-      orbId: "livermore:8CZZ5G4"
+      orbId: "livermore:server-8CZZ5G4"
       version: 1
       name: "r01-u22.livermore-galleon"
       hostname: "r01-u22.livermore-galleon"
@@ -281,7 +281,7 @@ mutation {
     {
       serviceTag: "7CZZ5G4"
       manufacturer: "Dell"
-      orbId: "livermore:7CZZ5G4"
+      orbId: "livermore:server-7CZZ5G4"
       version: 1
       name: "r01-u23.livermore-galleon"
       hostname: "r01-u23.livermore-galleon"
@@ -298,7 +298,7 @@ mutation {
     {
       serviceTag: "3KLN3D4"
       manufacturer: "Dell"
-      orbId: "livermore:3KLN3D4"
+      orbId: "livermore:server-3KLN3D4"
       version: 1
       name: "r01-u24.livermore-galleon"
       hostname: "r01-u24.livermore-galleon"
@@ -315,7 +315,7 @@ mutation {
     {
       serviceTag: "HJLN3D4"
       manufacturer: "Dell"
-      orbId: "livermore:HJLN3D4"
+      orbId: "livermore:server-HJLN3D4"
       version: 1
       name: "r01-u25.livermore-galleon"
       hostname: "r01-u25.livermore-galleon"
@@ -332,7 +332,7 @@ mutation {
     {
       serviceTag: "JJLN3D4"
       manufacturer: "Dell"
-      orbId: "livermore:JJLN3D4"
+      orbId: "livermore:server-JJLN3D4"
       version: 1
       name: "r01-u26.livermore-galleon"
       hostname: "r01-u26.livermore-galleon"
@@ -349,7 +349,7 @@ mutation {
     {
       serviceTag: "5KLN3D4"
       manufacturer: "Dell"
-      orbId: "livermore:5KLN3D4"
+      orbId: "livermore:server-5KLN3D4"
       version: 1
       name: "r01-u27.livermore-galleon"
       hostname: "r01-u27.livermore-galleon"
@@ -366,7 +366,7 @@ mutation {
     {
       serviceTag: "4KLN3D4"
       manufacturer: "Dell"
-      orbId: "livermore:4KLN3D4"
+      orbId: "livermore:server-4KLN3D4"
       version: 1
       name: "r01-u28.livermore-galleon"
       hostname: "r01-u28.livermore-galleon"
@@ -383,7 +383,7 @@ mutation {
     {
       serviceTag: "3TFRMC4"
       manufacturer: "Dell"
-      orbId: "livermore:3TFRMC4"
+      orbId: "livermore:server-3TFRMC4"
       version: 1
       name: "r01-u29.livermore-galleon"
       hostname: "r01-u29.livermore-galleon"

@@ -7,7 +7,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:FY69K74" version: 1 }
+      server: { orbId: "livermore:server-FY69K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -24,7 +24,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:8Y69K74" version: 1 }
+      server: { orbId: "livermore:server-8Y69K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -41,7 +41,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:1Z69K74" version: 1 }
+      server: { orbId: "livermore:server-1Z69K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -58,7 +58,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:2Z69K74" version: 1 }
+      server: { orbId: "livermore:server-2Z69K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -75,7 +75,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:6Z69K74" version: 1 }
+      server: { orbId: "livermore:server-6Z69K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -92,7 +92,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:3Z69K74" version: 1 }
+      server: { orbId: "livermore:server-3Z69K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -109,7 +109,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:4Z69K74" version: 1 }
+      server: { orbId: "livermore:server-4Z69K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -126,7 +126,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:5Z69K74" version: 1 }
+      server: { orbId: "livermore:server-5Z69K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -143,7 +143,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:9CZZ5G4" version: 1 }
+      server: { orbId: "livermore:server-9CZZ5G4" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -160,7 +160,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:BCZZ5G4" version: 1 }
+      server: { orbId: "livermore:server-BCZZ5G4" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -177,7 +177,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:6CZZ5G4" version: 1 }
+      server: { orbId: "livermore:server-6CZZ5G4" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -194,7 +194,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:8CZZ5G4" version: 1 }
+      server: { orbId: "livermore:server-8CZZ5G4" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -211,7 +211,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:7CZZ5G4" version: 1 }
+      server: { orbId: "livermore:server-7CZZ5G4" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -228,7 +228,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:3KLN3D4" version: 1 }
+      server: { orbId: "livermore:server-3KLN3D4" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -245,7 +245,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:HJLN3D4" version: 1 }
+      server: { orbId: "livermore:server-HJLN3D4" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -262,7 +262,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:JJLN3D4" version: 1 }
+      server: { orbId: "livermore:server-JJLN3D4" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -279,7 +279,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:5KLN3D4" version: 1 }
+      server: { orbId: "livermore:server-5KLN3D4" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -296,7 +296,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:4KLN3D4" version: 1 }
+      server: { orbId: "livermore:server-4KLN3D4" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -313,7 +313,7 @@ mutation UpsertIdracSettings {
       namespace: "livermore"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "livermore:3TFRMC4" version: 1 }
+      server: { orbId: "livermore:server-3TFRMC4" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false

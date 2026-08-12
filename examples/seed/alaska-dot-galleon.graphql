@@ -170,7 +170,7 @@ mutation {
     {
       serviceTag: "GRTLY24"
       manufacturer: "Dell"
-      orbId: "alaska-dot:GRTLY24"
+      orbId: "alaska-dot:server-GRTLY24"
       version: 1
       name: "r05-u03.alaska-dot-galleon"
       hostname: "r01-u03.alaska-dot-galleon"
@@ -187,7 +187,7 @@ mutation {
     {
       serviceTag: "55W8K44"
       manufacturer: "Dell"
-      orbId: "alaska-dot:55W8K44"
+      orbId: "alaska-dot:server-55W8K44"
       version: 1
       name: "r05-u10.alaska-dot-galleon"
       hostname: "r01-u10.alaska-dot-galleon"
@@ -204,7 +204,7 @@ mutation {
     {
       serviceTag: "75W8K44"
       manufacturer: "Dell"
-      orbId: "alaska-dot:75W8K44"
+      orbId: "alaska-dot:server-75W8K44"
       version: 1
       name: "r05-u11.alaska-dot-galleon"
       hostname: "r01-u11.alaska-dot-galleon"
@@ -221,7 +221,7 @@ mutation {
     {
       serviceTag: "65W8K44"
       manufacturer: "Dell"
-      orbId: "alaska-dot:65W8K44"
+      orbId: "alaska-dot:server-65W8K44"
       version: 1
       name: "r05-u12.alaska-dot-galleon"
       hostname: "r01-u12.alaska-dot-galleon"
@@ -238,7 +238,7 @@ mutation {
     {
       serviceTag: "85W8K44"
       manufacturer: "Dell"
-      orbId: "alaska-dot:85W8K44"
+      orbId: "alaska-dot:server-85W8K44"
       version: 1
       name: "r05-u13.alaska-dot-galleon"
       hostname: "r01-u13.alaska-dot-galleon"
@@ -255,7 +255,7 @@ mutation {
     {
       serviceTag: "6FK8K44"
       manufacturer: "Dell"
-      orbId: "alaska-dot:6FK8K44"
+      orbId: "alaska-dot:server-6FK8K44"
       version: 1
       name: "r05-u15.alaska-dot-galleon"
       hostname: "r01-u15.alaska-dot-galleon"
@@ -272,7 +272,7 @@ mutation {
     {
       serviceTag: "3FK8K44"
       manufacturer: "Dell"
-      orbId: "alaska-dot:3FK8K44"
+      orbId: "alaska-dot:server-3FK8K44"
       version: 1
       name: "r05-u16.alaska-dot-galleon"
       hostname: "r01-u16.alaska-dot-galleon"
@@ -289,7 +289,7 @@ mutation {
     {
       serviceTag: "1FK8K44"
       manufacturer: "Dell"
-      orbId: "alaska-dot:1FK8K44"
+      orbId: "alaska-dot:server-1FK8K44"
       version: 1
       name: "r05-u17.alaska-dot-galleon"
       hostname: "r01-u17.alaska-dot-galleon"
@@ -306,7 +306,7 @@ mutation {
     {
       serviceTag: "5FK8K44"
       manufacturer: "Dell"
-      orbId: "alaska-dot:5FK8K44"
+      orbId: "alaska-dot:server-5FK8K44"
       version: 1
       name: "r05-u18.alaska-dot-galleon"
       hostname: "r01-u18.alaska-dot-galleon"
@@ -323,7 +323,7 @@ mutation {
     {
       serviceTag: "4FK8K44"
       manufacturer: "Dell"
-      orbId: "alaska-dot:4FK8K44"
+      orbId: "alaska-dot:server-4FK8K44"
       version: 1
       name: "r05-u19.alaska-dot-galleon"
       hostname: "r01-u19.alaska-dot-galleon"
@@ -339,7 +339,7 @@ mutation {
     {
       serviceTag: "JDK8K44"
       manufacturer: "Dell"
-      orbId: "alaska-dot:JDK8K44"
+      orbId: "alaska-dot:server-JDK8K44"
       version: 1
       name: "r05-u20.alaska-dot-galleon"
       hostname: "r01-u20.alaska-dot-galleon"
@@ -356,7 +356,7 @@ mutation {
     {
       serviceTag: "2FK8K44"
       manufacturer: "Dell"
-      orbId: "alaska-dot:2FK8K44"
+      orbId: "alaska-dot:server-2FK8K44"
       version: 1
       name: "r05-u21.alaska-dot-galleon"
       hostname: "r01-u21.alaska-dot-galleon"
@@ -373,7 +373,7 @@ mutation {
     {
       serviceTag: "3H3V564"
       manufacturer: "Dell"
-      orbId: "alaska-dot:3H3V564"
+      orbId: "alaska-dot:server-3H3V564"
       version: 1
       name: "r05-u25.alaska-dot-galleon"
       hostname: "r01-u25.alaska-dot-galleon"

@@ -7,7 +7,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:6PJ1FZ3" version: 1 }
+      server: { orbId: "houston:server-6PJ1FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -24,7 +24,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:9B52FZ3" version: 1 }
+      server: { orbId: "houston:server-9B52FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -41,7 +41,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:BB52FZ3" version: 1 }
+      server: { orbId: "houston:server-BB52FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -58,7 +58,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:DB52FZ3" version: 1 }
+      server: { orbId: "houston:server-DB52FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -75,7 +75,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:6B52FZ3" version: 1 }
+      server: { orbId: "houston:server-6B52FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -92,7 +92,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:8B52FZ3" version: 1 }
+      server: { orbId: "houston:server-8B52FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -109,7 +109,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:J922FZ3" version: 1 }
+      server: { orbId: "houston:server-J922FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -126,7 +126,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:J452FZ3" version: 1 }
+      server: { orbId: "houston:server-J452FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -143,7 +143,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:1B22FZ3" version: 1 }
+      server: { orbId: "houston:server-1B22FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -160,7 +160,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:2B22FZ3" version: 1 }
+      server: { orbId: "houston:server-2B22FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -177,7 +177,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:4B22FZ3" version: 1 }
+      server: { orbId: "houston:server-4B22FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -194,7 +194,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:53RKHZ3" version: 1 }
+      server: { orbId: "houston:server-53RKHZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -211,7 +211,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:7PJ1FZ3" version: 1 }
+      server: { orbId: "houston:server-7PJ1FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -228,7 +228,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:4PJ1FZ3" version: 1 }
+      server: { orbId: "houston:server-4PJ1FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -245,7 +245,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:3B52FZ3" version: 1 }
+      server: { orbId: "houston:server-3B52FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -262,7 +262,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:CB52FZ3" version: 1 }
+      server: { orbId: "houston:server-CB52FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -279,7 +279,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:7B52FZ3" version: 1 }
+      server: { orbId: "houston:server-7B52FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -296,7 +296,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:FB52FZ3" version: 1 }
+      server: { orbId: "houston:server-FB52FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -313,7 +313,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:1552FZ3" version: 1 }
+      server: { orbId: "houston:server-1552FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -330,7 +330,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:6B22FZ3" version: 1 }
+      server: { orbId: "houston:server-6B22FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -347,7 +347,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:3B22FZ3" version: 1 }
+      server: { orbId: "houston:server-3B22FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -364,7 +364,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:7B22FZ3" version: 1 }
+      server: { orbId: "houston:server-7B22FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -381,7 +381,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:5B22FZ3" version: 1 }
+      server: { orbId: "houston:server-5B22FZ3" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -398,7 +398,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:F9J1X54" version: 1 }
+      server: { orbId: "houston:server-F9J1X54" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -415,7 +415,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:D9J1X54" version: 1 }
+      server: { orbId: "houston:server-D9J1X54" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -432,7 +432,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:H9J1X54" version: 1 }
+      server: { orbId: "houston:server-H9J1X54" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -449,7 +449,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:G9J1X54" version: 1 }
+      server: { orbId: "houston:server-G9J1X54" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -466,7 +466,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:C9J1X54" version: 1 }
+      server: { orbId: "houston:server-C9J1X54" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -483,7 +483,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:8N4VW54" version: 1 }
+      server: { orbId: "houston:server-8N4VW54" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -500,7 +500,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:9N4VW54" version: 1 }
+      server: { orbId: "houston:server-9N4VW54" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -517,7 +517,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:CN4VW54" version: 1 }
+      server: { orbId: "houston:server-CN4VW54" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -534,7 +534,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:BN4VW54" version: 1 }
+      server: { orbId: "houston:server-BN4VW54" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -551,7 +551,7 @@ mutation UpsertIdracSettings {
       namespace: "houston"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "houston:J9J1X54" version: 1 }
+      server: { orbId: "houston:server-J9J1X54" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false

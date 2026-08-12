@@ -7,7 +7,7 @@ mutation UpsertIdracSettings {
       namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "navy-cruiser:2XQKQ54" version: 1 }
+      server: { orbId: "navy-cruiser:server-2XQKQ54" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -24,7 +24,7 @@ mutation UpsertIdracSettings {
       namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "navy-cruiser:1XQKQ54" version: 1 }
+      server: { orbId: "navy-cruiser:server-1XQKQ54" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -41,7 +41,7 @@ mutation UpsertIdracSettings {
       namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "navy-cruiser:3XQKQ54" version: 1 }
+      server: { orbId: "navy-cruiser:server-3XQKQ54" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -58,7 +58,7 @@ mutation UpsertIdracSettings {
       namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "navy-cruiser:GWQKQ54" version: 1 }
+      server: { orbId: "navy-cruiser:server-GWQKQ54" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -75,7 +75,7 @@ mutation UpsertIdracSettings {
       namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "navy-cruiser:HWQKQ54" version: 1 }
+      server: { orbId: "navy-cruiser:server-HWQKQ54" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -92,7 +92,7 @@ mutation UpsertIdracSettings {
       namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "navy-cruiser:JWQKQ54" version: 1 }
+      server: { orbId: "navy-cruiser:server-JWQKQ54" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -109,7 +109,7 @@ mutation UpsertIdracSettings {
       namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "navy-cruiser:44KPW54" version: 1 }
+      server: { orbId: "navy-cruiser:server-44KPW54" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -126,7 +126,7 @@ mutation UpsertIdracSettings {
       namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "navy-cruiser:84KPW54" version: 1 }
+      server: { orbId: "navy-cruiser:server-84KPW54" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -143,7 +143,7 @@ mutation UpsertIdracSettings {
       namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "navy-cruiser:94KPW54" version: 1 }
+      server: { orbId: "navy-cruiser:server-94KPW54" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -160,7 +160,7 @@ mutation UpsertIdracSettings {
       namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "navy-cruiser:B4KPW54" version: 1 }
+      server: { orbId: "navy-cruiser:server-B4KPW54" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -177,7 +177,7 @@ mutation UpsertIdracSettings {
       namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "navy-cruiser:14KPW54" version: 1 }
+      server: { orbId: "navy-cruiser:server-14KPW54" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -194,7 +194,7 @@ mutation UpsertIdracSettings {
       namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "navy-cruiser:54KPW54" version: 1 }
+      server: { orbId: "navy-cruiser:server-54KPW54" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -211,7 +211,7 @@ mutation UpsertIdracSettings {
       namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "navy-cruiser:64KPW54" version: 1 }
+      server: { orbId: "navy-cruiser:server-64KPW54" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -228,7 +228,7 @@ mutation UpsertIdracSettings {
       namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "navy-cruiser:24KPW54" version: 1 }
+      server: { orbId: "navy-cruiser:server-24KPW54" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -245,7 +245,7 @@ mutation UpsertIdracSettings {
       namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "navy-cruiser:34KPW54" version: 1 }
+      server: { orbId: "navy-cruiser:server-34KPW54" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -262,7 +262,7 @@ mutation UpsertIdracSettings {
       namespace: "navy-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "navy-cruiser:74KPW54" version: 1 }
+      server: { orbId: "navy-cruiser:server-74KPW54" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false

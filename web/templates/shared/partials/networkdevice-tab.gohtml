@@ -107,15 +107,15 @@
               <tr data-server-orb-id="{{.RemoteOrbID}}" data-display-name="{{.RemoteName}}" style="cursor:pointer" title="Double-click to open server">
                 <td>{{.RemoteName}}</td>
                 <td><span class="tag is-light">Server</span></td>
-                <td>{{if .LocalPort}}<code>{{.LocalPort}}</code>{{else}}—{{end}}</td>
-                <td>{{if .RemotePort}}<code>{{.RemotePort}}</code>{{else}}—{{end}}</td>
+                <td>{{if .LocalPort}}{{.LocalPort}}{{else}}—{{end}}</td>
+                <td>{{if .RemotePort}}{{.RemotePort}}{{else}}—{{end}}</td>
               </tr>
               {{else}}
               <tr>
                 <td>{{.RemoteName}}</td>
-                <td><span class="tag is-warning is-light">NetworkDevice</span></td>
-                <td>{{if .LocalPort}}<code>{{.LocalPort}}</code>{{else}}—{{end}}</td>
-                <td>{{if .RemotePort}}<code>{{.RemotePort}}</code>{{else}}—{{end}}</td>
+                <td><span class="tag is-info is-light">NetworkDevice</span></td>
+                <td>{{if .LocalPort}}{{.LocalPort}}{{else}}—{{end}}</td>
+                <td>{{if .RemotePort}}{{.RemotePort}}{{else}}—{{end}}</td>
               </tr>
               {{end}}
               {{end}}
@@ -142,10 +142,10 @@
               {{range .ConnectedServers}}
               <tr data-server-orb-id="{{.ServerOrbID}}" data-display-name="{{.ServerName}}" style="cursor:pointer" title="Double-click to open server">
                 <td>{{if .ServerName}}{{.ServerName}}{{else}}—{{end}}</td>
-                <td>{{if .ClusterName}}<span class="tag is-info is-light">{{.ClusterName}}</span>{{else}}<span class="has-text-grey">—</span>{{end}}</td>
-                <td>{{if .NodeRole}}{{.NodeRole}}{{else}}<span class="has-text-grey">—</span>{{end}}{{if .Gpu}} <span class="tag is-success is-light">GPU</span>{{end}}</td>
+                <td>{{if .ClusterName}}{{.ClusterName}}{{else}}—{{end}}</td>
+                <td>{{if .NodeRole}}{{.NodeRole}}{{if .Gpu}} · GPU{{end}}{{else if .Gpu}}GPU{{else}}—{{end}}</td>
                 <td>{{if .PortName}}{{.PortName}}{{else}}—{{end}}</td>
-                <td>{{if .RemotePort}}<code>{{.RemotePort}}</code>{{else}}—{{end}}</td>
+                <td>{{if .RemotePort}}{{.RemotePort}}{{else}}—{{end}}</td>
               </tr>
               {{end}}
             </tbody>

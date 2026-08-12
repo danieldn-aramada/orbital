@@ -1,11 +1,11 @@
 mutation {
   addStorageController(input: [
-    { orbId: "seattle:FZ7P7Y3-PERC_H755_Front", version: 1, name: "PERC_H755_Front", namespace: "seattle", createdBy: "admin@armada.ai", createdAt: "2026-05-15T00:00:00Z", server: { orbId: "seattle:FZ7P7Y3" version: 1 } }
-    { orbId: "seattle:FZ7P7Y3-BOSS-S2", version: 1, name: "BOSS-S2", namespace: "seattle", createdBy: "admin@armada.ai", createdAt: "2026-05-15T00:00:00Z", server: { orbId: "seattle:FZ7P7Y3" version: 1 } }
-    { orbId: "seattle:5L4P7Y3-PERC_H755_Front", version: 1, name: "PERC_H755_Front", namespace: "seattle", createdBy: "admin@armada.ai", createdAt: "2026-05-15T00:00:00Z", server: { orbId: "seattle:5L4P7Y3" version: 1 } }
-    { orbId: "seattle:5L4P7Y3-BOSS-S2", version: 1, name: "BOSS-S2", namespace: "seattle", createdBy: "admin@armada.ai", createdAt: "2026-05-15T00:00:00Z", server: { orbId: "seattle:5L4P7Y3" version: 1 } }
-    { orbId: "seattle:7L4P7Y3-PERC_H755_Front", version: 1, name: "PERC_H755_Front", namespace: "seattle", createdBy: "admin@armada.ai", createdAt: "2026-05-15T00:00:00Z", server: { orbId: "seattle:7L4P7Y3" version: 1 } }
-    { orbId: "seattle:7L4P7Y3-BOSS-S2", version: 1, name: "BOSS-S2", namespace: "seattle", createdBy: "admin@armada.ai", createdAt: "2026-05-15T00:00:00Z", server: { orbId: "seattle:7L4P7Y3" version: 1 } }
+    { orbId: "seattle:FZ7P7Y3-PERC_H755_Front", version: 1, name: "PERC_H755_Front", namespace: "seattle", createdBy: "admin@armada.ai", createdAt: "2026-05-15T00:00:00Z", server: { orbId: "seattle:server-FZ7P7Y3" version: 1 } }
+    { orbId: "seattle:FZ7P7Y3-BOSS-S2", version: 1, name: "BOSS-S2", namespace: "seattle", createdBy: "admin@armada.ai", createdAt: "2026-05-15T00:00:00Z", server: { orbId: "seattle:server-FZ7P7Y3" version: 1 } }
+    { orbId: "seattle:5L4P7Y3-PERC_H755_Front", version: 1, name: "PERC_H755_Front", namespace: "seattle", createdBy: "admin@armada.ai", createdAt: "2026-05-15T00:00:00Z", server: { orbId: "seattle:server-5L4P7Y3" version: 1 } }
+    { orbId: "seattle:5L4P7Y3-BOSS-S2", version: 1, name: "BOSS-S2", namespace: "seattle", createdBy: "admin@armada.ai", createdAt: "2026-05-15T00:00:00Z", server: { orbId: "seattle:server-5L4P7Y3" version: 1 } }
+    { orbId: "seattle:7L4P7Y3-PERC_H755_Front", version: 1, name: "PERC_H755_Front", namespace: "seattle", createdBy: "admin@armada.ai", createdAt: "2026-05-15T00:00:00Z", server: { orbId: "seattle:server-7L4P7Y3" version: 1 } }
+    { orbId: "seattle:7L4P7Y3-BOSS-S2", version: 1, name: "BOSS-S2", namespace: "seattle", createdBy: "admin@armada.ai", createdAt: "2026-05-15T00:00:00Z", server: { orbId: "seattle:server-7L4P7Y3" version: 1 } }
   ], upsert: true) { numUids }
   addStorageVolume(input: [
     { orbId: "seattle:FZ7P7Y3-Virtual_Disk238", version: 1, name: "Virtual_Disk238", namespace: "seattle", createdBy: "admin@armada.ai", createdAt: "2026-05-15T00:00:00Z", storageController: { orbId: "seattle:FZ7P7Y3-PERC_H755_Front" version: 1 } }

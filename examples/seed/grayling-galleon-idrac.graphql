@@ -7,7 +7,7 @@ mutation UpsertIdracSettings {
       namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "grayling:505CK74" version: 1 }
+      server: { orbId: "grayling:server-505CK74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -24,7 +24,7 @@ mutation UpsertIdracSettings {
       namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "grayling:B5WVM34" version: 1 }
+      server: { orbId: "grayling:server-B5WVM34" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -41,7 +41,7 @@ mutation UpsertIdracSettings {
       namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "grayling:JY69K74" version: 1 }
+      server: { orbId: "grayling:server-JY69K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -58,7 +58,7 @@ mutation UpsertIdracSettings {
       namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "grayling:BLP6K74" version: 1 }
+      server: { orbId: "grayling:server-BLP6K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -75,7 +75,7 @@ mutation UpsertIdracSettings {
       namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "grayling:CLP6K74" version: 1 }
+      server: { orbId: "grayling:server-CLP6K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -92,7 +92,7 @@ mutation UpsertIdracSettings {
       namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "grayling:8LP6K74" version: 1 }
+      server: { orbId: "grayling:server-8LP6K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -109,7 +109,7 @@ mutation UpsertIdracSettings {
       namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "grayling:3LP6K74" version: 1 }
+      server: { orbId: "grayling:server-3LP6K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -126,7 +126,7 @@ mutation UpsertIdracSettings {
       namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "grayling:9LP6K74" version: 1 }
+      server: { orbId: "grayling:server-9LP6K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -143,7 +143,7 @@ mutation UpsertIdracSettings {
       namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "grayling:6LP6K74" version: 1 }
+      server: { orbId: "grayling:server-6LP6K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -160,7 +160,7 @@ mutation UpsertIdracSettings {
       namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "grayling:7LP6K74" version: 1 }
+      server: { orbId: "grayling:server-7LP6K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -177,7 +177,7 @@ mutation UpsertIdracSettings {
       namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "grayling:5LP6K74" version: 1 }
+      server: { orbId: "grayling:server-5LP6K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -194,7 +194,7 @@ mutation UpsertIdracSettings {
       namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "grayling:4LP6K74" version: 1 }
+      server: { orbId: "grayling:server-4LP6K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false
@@ -211,7 +211,7 @@ mutation UpsertIdracSettings {
       namespace: "grayling"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "grayling:D5MP6K74" version: 1 }
+      server: { orbId: "grayling:server-D5MP6K74" version: 1 }
       firmwareVersion: "7.20.10.05"
       sshEnabled: false
       ipmiEnabled: false

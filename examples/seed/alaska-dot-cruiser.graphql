@@ -199,7 +199,7 @@ mutation {
     {
       serviceTag: "2V36XB4"
       manufacturer: "Dell"
-      orbId: "alaska-dot-cruiser:2V36XB4"
+      orbId: "alaska-dot-cruiser:server-2V36XB4"
       version: 1
       name: "r02-u20.alaska-dot-cruiser"
       model: "PowerEdge R450"
@@ -216,7 +216,7 @@ mutation {
     {
       serviceTag: "DT36XB4"
       manufacturer: "Dell"
-      orbId: "alaska-dot-cruiser:DT36XB4"
+      orbId: "alaska-dot-cruiser:server-DT36XB4"
       version: 1
       name: "r02-u19.alaska-dot-cruiser"
       model: "PowerEdge R450"
@@ -233,7 +233,7 @@ mutation {
     {
       serviceTag: "1V36XB4"
       manufacturer: "Dell"
-      orbId: "alaska-dot-cruiser:1V36XB4"
+      orbId: "alaska-dot-cruiser:server-1V36XB4"
       version: 1
       name: "r02-u18.alaska-dot-cruiser"
       model: "PowerEdge R450"
@@ -250,7 +250,7 @@ mutation {
     {
       serviceTag: "JT36XB4"
       manufacturer: "Dell"
-      orbId: "alaska-dot-cruiser:JT36XB4"
+      orbId: "alaska-dot-cruiser:server-JT36XB4"
       version: 1
       name: "r02-u17.alaska-dot-cruiser"
       model: "PowerEdge R450"
@@ -267,7 +267,7 @@ mutation {
     {
       serviceTag: "FT36XB4"
       manufacturer: "Dell"
-      orbId: "alaska-dot-cruiser:FT36XB4"
+      orbId: "alaska-dot-cruiser:server-FT36XB4"
       version: 1
       name: "r01-u20.alaska-dot-cruiser"
       model: "PowerEdge R450"
@@ -284,7 +284,7 @@ mutation {
     {
       serviceTag: "HT36XB4"
       manufacturer: "Dell"
-      orbId: "alaska-dot-cruiser:HT36XB4"
+      orbId: "alaska-dot-cruiser:server-HT36XB4"
       version: 1
       name: "r01-u19.alaska-dot-cruiser"
       model: "PowerEdge R450"
@@ -301,7 +301,7 @@ mutation {
     {
       serviceTag: "GT36XB4"
       manufacturer: "Dell"
-      orbId: "alaska-dot-cruiser:GT36XB4"
+      orbId: "alaska-dot-cruiser:server-GT36XB4"
       version: 1
       name: "r01-u18.alaska-dot-cruiser"
       model: "PowerEdge R450"
@@ -318,7 +318,7 @@ mutation {
     {
       serviceTag: "3V36XB4"
       manufacturer: "Dell"
-      orbId: "alaska-dot-cruiser:3V36XB4"
+      orbId: "alaska-dot-cruiser:server-3V36XB4"
       version: 1
       name: "r01-u17.alaska-dot-cruiser"
       model: "PowerEdge R450"
@@ -335,7 +335,7 @@ mutation {
     {
       serviceTag: "C8R6XB4"
       manufacturer: "Dell"
-      orbId: "alaska-dot-cruiser:C8R6XB4"
+      orbId: "alaska-dot-cruiser:server-C8R6XB4"
       version: 1
       name: "r01-u13.alaska-dot-cruiser"
       model: "PowerEdge R660"
@@ -352,7 +352,7 @@ mutation {
     {
       serviceTag: "F8R6XB4"
       manufacturer: "Dell"
-      orbId: "alaska-dot-cruiser:F8R6XB4"
+      orbId: "alaska-dot-cruiser:server-F8R6XB4"
       version: 1
       name: "r01-u14.alaska-dot-cruiser"
       model: "PowerEdge R660"
@@ -369,7 +369,7 @@ mutation {
     {
       serviceTag: "B9V6XB4"
       manufacturer: "Dell"
-      orbId: "alaska-dot-cruiser:B9V6XB4"
+      orbId: "alaska-dot-cruiser:server-B9V6XB4"
       version: 1
       name: "r02-u13.alaska-dot-cruiser"
       model: "PowerEdge R660"
@@ -386,7 +386,7 @@ mutation {
     {
       serviceTag: "D8R6XB4"
       manufacturer: "Dell"
-      orbId: "alaska-dot-cruiser:D8R6XB4"
+      orbId: "alaska-dot-cruiser:server-D8R6XB4"
       version: 1
       name: "r02-u14.alaska-dot-cruiser"
       model: "PowerEdge R660"
@@ -403,7 +403,7 @@ mutation {
     {
       serviceTag: "7FF6XB4"
       manufacturer: "Dell"
-      orbId: "alaska-dot-cruiser:7FF6XB4"
+      orbId: "alaska-dot-cruiser:server-7FF6XB4"
       version: 1
       name: "r01-u07.alaska-dot-cruiser"
       model: "PowerEdge R760"
@@ -420,7 +420,7 @@ mutation {
     {
       serviceTag: "2PR6YB4"
       manufacturer: "Dell"
-      orbId: "alaska-dot-cruiser:2PR6YB4"
+      orbId: "alaska-dot-cruiser:server-2PR6YB4"
       version: 1
       name: "r02-u07.alaska-dot-cruiser"
       model: "PowerEdge R760"
@@ -437,7 +437,7 @@ mutation {
     {
       serviceTag: "DCT36XB4"
       manufacturer: "Dell"
-      orbId: "alaska-dot-cruiser:DCT36XB4"
+      orbId: "alaska-dot-cruiser:server-DCT36XB4"
       version: 1
       name: "r02-u24.alaska-dot-cruiser"
       model: "PowerEdge R450"

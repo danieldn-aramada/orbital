@@ -7,7 +7,7 @@ mutation UpsertIdracSettings {
       namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "alaska-dot-cruiser:1V36XB4" version: 1 }
+      server: { orbId: "alaska-dot-cruiser:server-1V36XB4" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -24,7 +24,7 @@ mutation UpsertIdracSettings {
       namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "alaska-dot-cruiser:JT36XB4" version: 1 }
+      server: { orbId: "alaska-dot-cruiser:server-JT36XB4" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -41,7 +41,7 @@ mutation UpsertIdracSettings {
       namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "alaska-dot-cruiser:FT36XB4" version: 1 }
+      server: { orbId: "alaska-dot-cruiser:server-FT36XB4" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -58,7 +58,7 @@ mutation UpsertIdracSettings {
       namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "alaska-dot-cruiser:HT36XB4" version: 1 }
+      server: { orbId: "alaska-dot-cruiser:server-HT36XB4" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -75,7 +75,7 @@ mutation UpsertIdracSettings {
       namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "alaska-dot-cruiser:GT36XB4" version: 1 }
+      server: { orbId: "alaska-dot-cruiser:server-GT36XB4" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -92,7 +92,7 @@ mutation UpsertIdracSettings {
       namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "alaska-dot-cruiser:3V36XB4" version: 1 }
+      server: { orbId: "alaska-dot-cruiser:server-3V36XB4" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -109,7 +109,7 @@ mutation UpsertIdracSettings {
       namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "alaska-dot-cruiser:C8R6XB4" version: 1 }
+      server: { orbId: "alaska-dot-cruiser:server-C8R6XB4" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -126,7 +126,7 @@ mutation UpsertIdracSettings {
       namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "alaska-dot-cruiser:2PR6YB4" version: 1 }
+      server: { orbId: "alaska-dot-cruiser:server-2PR6YB4" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false
@@ -143,7 +143,7 @@ mutation UpsertIdracSettings {
       namespace: "alaska-dot-cruiser"
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-15T00:00:00Z"
-      server: { orbId: "alaska-dot-cruiser:DCT36XB4" version: 1 }
+      server: { orbId: "alaska-dot-cruiser:server-DCT36XB4" version: 1 }
       firmwareVersion: "7.30.10.50"
       sshEnabled: false
       ipmiEnabled: false

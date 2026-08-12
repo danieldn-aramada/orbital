@@ -25,13 +25,14 @@ Read this before: DGraph schema changes, query/mutation work, export/import, see
 
 | Type | `orbId` | Natural key |
 |---|---|---|
+| `Server` | `<ns>:server-<serial>` | **Redfish System SerialNumber** — Dell Service Tag (`BFRHDX3`) and Supermicro (`S447008X3823034`) are both just this; it's also the `<serverTag>` in the network-* ids below. **Never `asset_tag`** — that's org-assigned and can be null (was null for the A100), which breaks scan-idempotency. |
 | `NetworkDevice` | `<ns>:network-device-<serial>` | switch/firewall serial |
-| `NetworkAdapter` | `<ns>:network-adapter-<serverTag>-<FQDD>` | owner serviceTag + Redfish adapter FQDD |
-| `NetworkInterface` (server NIC) | `<ns>:network-interface-<serverTag>-<FQDD>` | owner serviceTag + Redfish interface FQDD |
-| `NetworkInterface` (BMC) | `<ns>:network-interface-<serverTag>-iDRAC` | owner serviceTag + `iDRAC` |
+| `NetworkAdapter` | `<ns>:network-adapter-<serverTag>-<FQDD>` | owner serial + Redfish adapter FQDD |
+| `NetworkInterface` (server NIC) | `<ns>:network-interface-<serverTag>-<FQDD>` | owner serial + Redfish interface FQDD |
+| `NetworkInterface` (BMC) | `<ns>:network-interface-<serverTag>-<mgmt>` | owner serial + Redfish Manager name: `iDRAC` (Dell) / `IPMI` (Supermicro) |
 | `NetworkInterface` (device port) | `<ns>:network-interface-<deviceSerial>-<port>` | device serial + port (`ge-0/0/0`) |
 
-**Legacy (pre-convention — migrate when next touched, don't treat network types as the special case):** `Server` = `<ns>:<serviceTag>`, `IPAddress` = `<ns>:<address>`, `Rack` = `<ns>:<rackName>`, `IdracSettings` = `<ns>:<serviceTag>-idrac`, cluster children = `<ns>:<clusterName>-<kind>`.
+**Legacy (pre-convention — migrate when next touched, don't treat network types as the special case):** `IPAddress` = `<ns>:<address>`, `Rack` = `<ns>:<rackName>`, `IdracSettings` = `<ns>:<serviceTag>-idrac`, cluster children = `<ns>:<clusterName>-<kind>`. (`Server` migrated to `server-<serial>` 2026-08-12.)
 
 ## Query patterns
 
