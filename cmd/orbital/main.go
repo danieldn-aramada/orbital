@@ -68,7 +68,10 @@ func main() {
 		log.Fatalf("migrate: %v", err)
 	}
 
-	srv := server.New(cfg, db)
+	srv, err := server.New(cfg, db)
+	if err != nil {
+		log.Fatalf("server: %v", err)
+	}
 
 	if err := srv.Start(ctx); err != nil {
 		log.Fatal(err)

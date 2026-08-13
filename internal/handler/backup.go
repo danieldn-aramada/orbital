@@ -524,6 +524,12 @@ func (h *BackupHandler) Delete(c echo.Context) error {
 	if err := h.db.Backup.DeleteOneID(id).Exec(c.Request().Context()); err != nil {
 		return fmt.Errorf("delete backup record: %w", err)
 	}
+	writeAuditEvent(h.db, h.logger, "management", actorFromContext(c), "deleteBackup",
+		[]string{"deleteBackup"},
+		nil,
+		nil,
+		map[string]any{"id": j.ID.String(), "s3Key": j.S3Key},
+	)
 	return c.NoContent(http.StatusNoContent)
 }
 

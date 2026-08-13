@@ -207,7 +207,16 @@ func (h *GraphQL) Handle(c echo.Context) error {
 	// opt-in layer on top. See docs/reference/DIVERGENCE.md "MVCC" section.
 	ifVersion, hasIfVersion := req.Variables["ifVersion"]
 	if hasIfVersion && before != nil {
-		if int(toFloat64(before["version"])) != int(toFloat64(ifVersion)) {
+		want, ok := toFloat64(ifVersion)
+		if !ok {
+			// A malformed concurrency token is a client error, not a conflict —
+			// 409 would tell the caller to reload and retry, but retrying the
+			// same garbage loops forever. Reject as bad input. (audit A.3)
+			return writeError(c, http.StatusBadRequest, CodeBadUserInput,
+				"ifVersion must be an integer", "")
+		}
+		cur, _ := toFloat64(before["version"]) // server-stamped, reliably numeric
+		if int(cur) != int(want) {
 			return writeError(c, http.StatusConflict, CodeMVCCConflict,
 				"This record was modified by someone else. Please reload and try again.", "")
 		}
@@ -232,7 +241,8 @@ func (h *GraphQL) Handle(c echo.Context) error {
 	if before != nil {
 		if setMap, ok := req.Variables["set"].(map[string]any); ok {
 			if _, has := setMap["version"]; !has {
-				setMap["version"] = int(toFloat64(before["version"])) + 1
+				cur, _ := toFloat64(before["version"])
+				setMap["version"] = int(cur) + 1
 			}
 			setMap["updatedBy"] = actor
 			setMap["updatedAt"] = now
@@ -740,15 +750,19 @@ func hasGQLErrors(body []byte) bool {
 	return json.Unmarshal(body, &r) == nil && len(r.Errors) > 0
 }
 
-func toFloat64(v any) float64 {
+// toFloat64 coerces a JSON-decoded numeric value to float64. The second return
+// is false when v is not a numeric type (nil, string, bool) or is a json.Number
+// that fails to parse. Callers MUST check it — treating a failed parse as 0
+// silently passes the MVCC check on a malformed ifVersion (audit A.3).
+func toFloat64(v any) (float64, bool) {
 	switch n := v.(type) {
 	case float64:
-		return n
+		return n, true
 	case int:
-		return float64(n)
+		return float64(n), true
 	case json.Number:
-		f, _ := n.Float64()
-		return f
+		f, err := n.Float64()
+		return f, err == nil
 	}
-	return 0
+	return 0, false
 }

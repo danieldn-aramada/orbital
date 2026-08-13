@@ -72,9 +72,9 @@ Let clients see what would change in the next bundle BEFORE clicking export/publ
 
 ---
 
-**Spike 32 — Network fabric (device↔device topology)** · *Schema landed; discovery/seed not started*
+**Network topology rollout — remaining DCs** · *Data migration, not a spike*
 
-> Schema primitives are in (`docs/network-model.md §8`): reuse-`NetworkInterface` — `server` relaxed to optional + `networkDevice` owner + `connectedNetworkInterface` (port↔port cabling) + `NetworkDevice.networkInterfaces`. **Remaining:** a NetBox-driven switch/cable discovery pass (the current generator is server/iDRAC-only) → colo switch-port + cable seed → UI (fabric links on the device detail) → mutation/upsert verification. Unblocks the network team's edge-discovery + cloud-mutation clients (orbital owns the contract). Cabling = edge (no `Cable` node); VLAN/IP/MTU stay OUT. Discovery algorithm + colo examples in §8.
+> Colo is fully modeled + reconciled (Spike 32, shipped below). The same NetBox × Redfish reconcile is repeated per remaining data center to seed its fabric into orbital — bounded data-migration work, no open design question. **Endpoint:** once a DC is migrated, orbital is its network source of truth and NetBox is retired for it. Join keys + slow-API gotchas in `docs/reference/NETBOX.md`; discovery algorithm + colo examples in `docs/network-model.md §8`. Cabling = edge (no `Cable` node); VLAN/IP/MTU stay OUT.
 
 ## Production readiness (pre-GA)
 
@@ -106,12 +106,12 @@ Let clients see what would change in the next bundle BEFORE clicking export/publ
 
 | Item | Notes |
 |---|---|
-| OIDC config leaks real prod identifiers | Remove real Azure AD tenant + app-ID defaults; fail-on-default-when-`!Dev` (mirror the HMAC check) — `config.go:55-66,121`. (A.1) |
-| Rate limiting absent | Per-IP on `/graphql`, tighter on `/user/login` — `server.go`. (S.12) |
-| No request body size limit | `middleware.BodyLimit`; unbounded `io.ReadAll` at `graphql.go:89` = DoS. (S.7) |
-| OIDC-unreachable degrades to no-auth | Fail startup instead of Warn + nil `apiAuth` — an air-gap deploy can boot unauthenticated — `server.go:144-158`. (S.16) |
-| No audit on destructive deletes | Add audit events to `BackupHandler.Delete` (`backup.go:509`) and `OCI.DeleteArtifact` (`oci.go:188`). (S.10) |
-| MVCC silent-pass on bad version type | `toFloat64` → `(float64, ok)`; unparseable version = 409, not silent pass — `graphql.go:173,623-634`. (A.3) |
+| OIDC config ships real Armada identifiers as defaults | **Pre-OSS deletion pass, not a code condition.** Blank the real tenant/app-ID/allowlist/`admin@armada.ai` defaults to `""` — `config.go:60-72`. The *fail-closed* half is already handled generically by S.16 (`server.go` refuses to boot in prod when `apiAuth` is empty); do NOT add an Armada-specific `== "<tenant-guid>"` boot check (rejected 2026-08-13 — vendor cruft that doesn't serve OSS). Once defaults are empty, a prod deploy that forgets to configure OIDC fails the boot via S.16. (A.1) |
+| ~~Rate limiting absent~~ **DONE 2026-08-13** | Per-IP token buckets (in-memory, single-replica), opt-in via `ORBITAL_RATE_LIMIT_ENABLED` (off in dev/AKS-dev, prod enables); tighter bucket on `/user/login`; denials render the `RATE_LIMITED`/429 envelope + `Retry-After`. `server.go`. (S.12) |
+| ~~No request body size limit~~ **DONE 2026-08-13** | Global `echomw.BodyLimit(ORBITAL_MAX_REQUEST_BODY, default 10M)` bounds the unbounded `io.ReadAll` on `/graphql`; over-limit renders the `CONTENT_TOO_LARGE`/413 envelope. No file-upload endpoints, so global is safe. `server.go`. (S.7) |
+| ~~OIDC-unreachable degrades to no-auth~~ **DONE 2026-08-13** | `server.New` now returns an error and refuses to boot when `!Dev && len(apiAuth)==0` — covers unreachable OIDC discovery, verifier-init failure, and unset issuer in one generic guard. Dev unaffected (`!Dev`-gated). `server.go`. (S.16) |
+| ~~No audit on destructive deletes~~ **DONE 2026-08-13** | `BackupHandler.Delete` → `deleteBackup` and `OCI.DeleteArtifact` → `deleteArtifact` management events (actor via `actorFromContext`, `writeAuditEvent`). Test gap: integration guard (`//go:build integration`, needs `make up`) asserting each delete writes its event — add via `newBackupHandler` + `testDB.Event.Query()` when the stack is up. (S.10) |
+| ~~MVCC silent-pass on bad version type~~ **DONE 2026-08-13** | `toFloat64` now returns `(float64, ok)`; a malformed `ifVersion` is rejected `400 BAD_USER_INPUT` (a garbage concurrency token is a client error, not a "reload and retry" 409 — deviates from the finding's suggested 409, deliberately). Unit-pinned by `TestToFloat64` !ok cases. `graphql.go`. (A.3) |
 | OIDC nonce + constant-time state | Add `nonce` binding; `subtle.ConstantTimeCompare` for state — `oidc.go:95`. (S.14, S.15) |
 | Export/restore job-creation TOCTOU | Serialize (mutex or unique partial index); concurrent triggers corrupt scratch-DGraph — `export.go:216-230`. (S.8) |
 | Async jobs orphaned on shutdown | Track goroutines (WaitGroup + cancellable ctx); SIGTERM mid-restore can leave DGraph wiped — `server.go`, `restore.go:286`. (S.9) |
@@ -181,6 +181,7 @@ One line per completed spike/capability. Implementation detail is in git history
 | 20 · DGraph schema versioning + backup manifest | Jun 9 | `schema/VERSION`; versioned backup filenames + `manifest.json`; restore 409 on schema mismatch + `confirmSchemaMismatch` override |
 | 24 · Divergence MVCC + storage split | Jun 14 | Divergence/resolution stay in PostgreSQL (graph move rejected); `ConfigItem.version` auto-increment, `ifVersion` opt-in race detection |
 | 31 · Reject inline single-entity mutations | Jul 28 | Option D — `rejectInlineSelectors` guard 400s `update{Kind}` lacking a variable selector; `VARIABLE_FORM_REQUIRED` with copy-pasteable hint |
+| 32 · Network fabric (device↔device) | Aug 12 | `NetworkDevice`/`NetworkAdapter`/`NetworkInterface` (interface reused for server NICs, BMC, and switch/firewall ports); colo fabric (OOB↔SRX↔ToR) + server↔switch cabling seeded from NetBox × Redfish; Network Devices UI + Connections tab; `server-<serial>` orbId migration; colo 100% reconciled incl. Supermicro A100. Other-DC rollout = data migration (see Next). |
 | orbctl | May 11 → Jun 9 | `get datacenter[s]`, bearer auth, macOS keychain, kubectl-style output; Homebrew tap; per-component `cli/v*` versioning (ADR-009); pure-Go build; silent token refresh |
 | Config Export + OCI pipeline | May 9 – 18 | Scratch-based scoped export (dedicated scratch DGraph per job), oras-go v2 + cosign signing, air-gap-safe publish |
 | Audit Log System | May 5 – 13 | GraphQL mutation interceptor, before/after field diff, three-source orbId extraction, per-entity audit tabs. See `AUDIT.md`. |

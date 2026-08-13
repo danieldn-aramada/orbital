@@ -32,6 +32,8 @@ func TestErrorHandler(t *testing.T) {
 		{"bad gateway → unavailable", echo.NewHTTPError(http.StatusBadGateway, "upstream"), http.MethodPost, 502, CodeUnavailable, "upstream", ""},
 		{"unauthorized", echo.NewHTTPError(http.StatusUnauthorized, "who"), http.MethodPost, 401, CodeUnauthenticated, "who", ""},
 		{"bad request default", echo.NewHTTPError(http.StatusBadRequest, "bad"), http.MethodPost, 400, CodeBadUserInput, "bad", ""},
+		{"content too large", echo.NewHTTPError(http.StatusRequestEntityTooLarge, "Request Entity Too Large"), http.MethodPost, 413, CodeContentTooLarge, "Request Entity Too Large", ""},
+		{"too many requests", echo.NewHTTPError(http.StatusTooManyRequests, "rate limit exceeded"), http.MethodPost, 429, CodeRateLimited, "rate limit exceeded", ""},
 		{"echo sentinel", echo.ErrNotFound, http.MethodGet, 404, CodeNotFound, "", ""},
 		{"raw error genericized, no leak", errors.New("secret dsn user:pw@db leaked"), http.MethodPost, 500, CodeInternal, "", "secret dsn"},
 	}

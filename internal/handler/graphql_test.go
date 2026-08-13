@@ -49,25 +49,30 @@ func TestAuthorizeMutation_DevModeNoDB(t *testing.T) {
 
 func TestToFloat64(t *testing.T) {
 	tests := []struct {
-		name  string
-		input any
-		want  float64
+		name   string
+		input  any
+		want   float64
+		wantOK bool
 	}{
-		{name: "float64", input: float64(3.14), want: 3.14},
-		{name: "zero float64", input: float64(0), want: 0},
-		{name: "int", input: int(7), want: 7},
-		{name: "json.Number integer", input: json.Number("42"), want: 42},
-		{name: "json.Number float", input: json.Number("1.5"), want: 1.5},
-		{name: "nil returns zero", input: nil, want: 0},
-		{name: "string returns zero", input: "not a number", want: 0},
-		{name: "bool returns zero", input: true, want: 0},
+		{name: "float64", input: float64(3.14), want: 3.14, wantOK: true},
+		{name: "zero float64", input: float64(0), want: 0, wantOK: true},
+		{name: "int", input: int(7), want: 7, wantOK: true},
+		{name: "json.Number integer", input: json.Number("42"), want: 42, wantOK: true},
+		{name: "json.Number float", input: json.Number("1.5"), want: 1.5, wantOK: true},
+		// The !ok cases are the A.3 regression guard: an unparseable version must
+		// report ok=false so the MVCC check rejects it instead of coercing to 0
+		// and silently passing.
+		{name: "json.Number invalid is not ok", input: json.Number("not a number"), want: 0, wantOK: false},
+		{name: "nil is not ok", input: nil, want: 0, wantOK: false},
+		{name: "string is not ok", input: "not a number", want: 0, wantOK: false},
+		{name: "bool is not ok", input: true, want: 0, wantOK: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := toFloat64(tt.input)
-			if got != tt.want {
-				t.Errorf("toFloat64(%v) = %v, want %v", tt.input, got, tt.want)
+			got, ok := toFloat64(tt.input)
+			if got != tt.want || ok != tt.wantOK {
+				t.Errorf("toFloat64(%v) = (%v, %v), want (%v, %v)", tt.input, got, ok, tt.want, tt.wantOK)
 			}
 		})
 	}

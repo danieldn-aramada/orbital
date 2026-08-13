@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/armada/orbital/ent"
@@ -28,6 +29,7 @@ import (
 	echomw "github.com/labstack/echo/v4/middleware"
 	_ "github.com/lib/pq" // postgres driver for database/sql
 	echoswagger "github.com/swaggo/echo-swagger"
+	"golang.org/x/time/rate"
 )
 
 type Server struct {
@@ -38,7 +40,7 @@ type Server struct {
 	divergenceIngester *divergenceingest.Ingester // non-nil when ORBITAL_DIVERGENCE_INGEST_ENABLED=true and S3 reachable; started in Start()
 }
 
-func New(cfg *config.Config, db *ent.Client) *Server {
+func New(cfg *config.Config, db *ent.Client) (*Server, error) {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.SlogLevel()}))
 	var backupHandler *handler.BackupHandler
 
@@ -54,7 +56,53 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 	e.HTTPErrorHandler = handler.ErrorHandler
 
 	e.Use(metrics.Middleware())
+	// Bound every inbound request body before any handler reads it. Without
+	// this, io.ReadAll on /graphql (graphql.go) is an unbounded allocation =
+	// trivial memory-exhaustion DoS. Applied globally: orbital has no
+	// file-upload endpoints, so a generous cap breaks nothing. (audit S.7)
+	e.Use(echomw.BodyLimit(cfg.MaxRequestBody))
 	e.Use(orbmw.DecodePathParams)
+
+	// Rate limiting (audit S.12) — opt-in via ORBITAL_RATE_LIMIT_ENABLED, so
+	// local dev, e2e, and the AKS-dev smoke suite are never throttled;
+	// production enables it explicitly. Per-IP token buckets, in-memory
+	// (orbital is single-replica). Denials return a 429 that the central
+	// ErrorHandler renders as the standard envelope (code RATE_LIMITED), with a
+	// Retry-After header. A tighter bucket is attached to POST /user/login
+	// below to slow credential brute-force. loginRateLimiter stays nil (and the
+	// login route registers without it) when the feature is off.
+	var loginRateLimiter echo.MiddlewareFunc
+	if cfg.RateLimitEnabled {
+		denyHandler := func(c echo.Context, _ string, _ error) error {
+			c.Response().Header().Set("Retry-After", "1")
+			return echo.NewHTTPError(http.StatusTooManyRequests, "rate limit exceeded — too many requests; retry after a moment")
+		}
+		newLimiter := func(rps int) echo.MiddlewareFunc {
+			return echomw.RateLimiterWithConfig(echomw.RateLimiterConfig{
+				Store: echomw.NewRateLimiterMemoryStoreWithConfig(echomw.RateLimiterMemoryStoreConfig{
+					Rate:  rate.Limit(rps),
+					Burst: rps * 2,
+				}),
+				DenyHandler: denyHandler,
+			})
+		}
+		// General per-IP limiter for the whole surface, skipping the Prometheus
+		// scrape endpoint, K8s probe, and static assets so scrapers/probes are
+		// never throttled.
+		e.Use(echomw.RateLimiterWithConfig(echomw.RateLimiterConfig{
+			Store: echomw.NewRateLimiterMemoryStoreWithConfig(echomw.RateLimiterMemoryStoreConfig{
+				Rate:  rate.Limit(cfg.RateLimitRPS),
+				Burst: cfg.RateLimitRPS * 2,
+			}),
+			DenyHandler: denyHandler,
+			Skipper: func(c echo.Context) bool {
+				p := c.Request().URL.Path
+				return p == "/healthz" || p == "/metrics" || strings.HasPrefix(p, cfg.BasePath+"/static/")
+			},
+		}))
+		loginRateLimiter = newLimiter(cfg.LoginRateLimitRPS)
+		logger.Info("rate limiting enabled", "general_rps", cfg.RateLimitRPS, "login_rps", cfg.LoginRateLimitRPS)
+	}
 	e.GET("/metrics", metrics.Handler())
 	e.GET("/healthz", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
@@ -180,6 +228,17 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		logger.Info("auth: API authentication enabled", "mode", authMode, "enabled", true)
 	}
 
+	// Fail-closed in production. An empty apiAuth means /graphql and /api/v1
+	// accept unauthenticated requests — acceptable only in dev (cfg.Dev), where
+	// bearer auth is intentionally bypassed (see the switch above). In
+	// production this state must abort startup rather than silently degrade to
+	// no-auth, whatever the cause: OIDC discovery unreachable at boot, a
+	// verifier-init error, or an unset issuer. The preceding WARN carries the
+	// specific reason. (audit S.16)
+	if !cfg.Dev && len(apiAuth) == 0 {
+		return nil, fmt.Errorf("refusing to start: API authentication is disabled in production (ORBITAL_DEV=false) — ensure ORBITAL_OIDC_ISSUER_URL is set and OIDC discovery is reachable at startup")
+	}
+
 	// Default API group — dev+ required for mutating methods (POST/PUT/PATCH/DELETE).
 	// RequireRole passes GET/HEAD/OPTIONS through unconditionally.
 	api := root.Group("/api/v1", append(apiAuth, handler.RequireRole(db, user.RoleDev))...)
@@ -248,7 +307,11 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 
 	if db != nil {
 		login := handler.NewLogin(db, cfg.SessionKeys(), webtemplates.LoginForm(), cfg.BasePath, logger)
-		root.POST("/user/login", login.Post)
+		if loginRateLimiter != nil {
+			root.POST("/user/login", login.Post, loginRateLimiter)
+		} else {
+			root.POST("/user/login", login.Post)
+		}
 		root.POST("/user/logout", login.Logout)
 
 		if oidcEnabled {
@@ -472,7 +535,7 @@ func New(cfg *config.Config, db *ent.Client) *Server {
 		logger:             logger,
 		backupHandler:      backupHandler,
 		divergenceIngester: divIngester,
-	}
+	}, nil
 }
 
 func (s *Server) Start(ctx context.Context) error {

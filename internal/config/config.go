@@ -11,34 +11,52 @@ import (
 )
 
 type Config struct {
-	Port                    string        `envconfig:"ORBITAL_PORT"                    default:"8001"`
-	ShutdownTimeout         time.Duration `envconfig:"ORBITAL_SHUTDOWN_TIMEOUT"        default:"10s"`
-	DGraphURL               string        `envconfig:"DGRAPH_URL"                      default:"http://localhost:8080/graphql"`
-	DGraphAdminURL          string        `envconfig:"DGRAPH_ADMIN_URL"                default:"http://localhost:8080/admin"`
-	RatelURL                string        `envconfig:"RATEL_URL"                       default:"http://localhost:8000"`
-	IssueTrackerURL         string        `envconfig:"ORBITAL_ISSUE_TRACKER_URL"       default:"https://dev.azure.com/armadasystems/Commander/_workitems/create/Bug?[System.AreaPath]=Commander\\Edge\\Edge Platform"`
-	Dev                     bool          `envconfig:"ORBITAL_DEV"                     default:"true"`
-	LogLevel                string        `envconfig:"ORBITAL_LOG_LEVEL"               default:"info"`
-	DGraphScratchURL        string        `envconfig:"DGRAPH_SCRATCH_URL"              default:"http://localhost:8081/graphql"`
-	DGraphScratchAdminURL   string        `envconfig:"DGRAPH_SCRATCH_ADMIN_URL"        default:"http://localhost:8081/admin"`
-	DGraphScratchZeroURL    string        `envconfig:"DGRAPH_SCRATCH_ZERO_URL"         default:"http://localhost:6081"`
-	DatabaseURL             string        `envconfig:"DATABASE_URL"                    default:"postgres://orbital:orbital-local-dev-secret@localhost:5432/orbital?sslmode=disable"`
-	ExportDir               string        `envconfig:"ORBITAL_EXPORT_DIR"              default:"./subgraph-exports"`
-	DGraphScratchExportDir  string        `envconfig:"DGRAPH_SCRATCH_EXPORT_DIR"       default:"/tmp/orbital-test-scratch"`
-	SchemaPath              string        `envconfig:"ORBITAL_SCHEMA_PATH"             default:"schema/schema.graphql"`
-	SessionHMACKey          string        `envconfig:"ORBITAL_SESSION_HMAC_KEY"        default:"local-dev-hmac-key-change-in-prod"` // must be changed in prod
-	SessionEncryptionKey    string        `envconfig:"ORBITAL_SESSION_ENCRYPTION_KEY"  default:"local-dev-enc-key-32-bytes-pad!!"`  // must be exactly 32 bytes for AES-256; empty disables cookie encryption
-	DGraphExportDir         string        `envconfig:"DGRAPH_EXPORT_DIR"               default:"/tmp/orbital-test-blue"`            // host-side mount of /dgraph/export on blue alpha
-	S3Endpoint              string        `envconfig:"ORBITAL_S3_ENDPOINT"             default:"http://localhost:9000"`
-	S3Region                string        `envconfig:"ORBITAL_S3_REGION"               default:"us-east-1"`
-	S3Bucket                string        `envconfig:"ORBITAL_S3_BUCKET"               default:"orbital"`
-	S3AccessKey             string        `envconfig:"ORBITAL_S3_ACCESS_KEY"           default:"minioadmin"`
-	S3SecretKey             string        `envconfig:"ORBITAL_S3_SECRET_KEY"           default:"minioadmin"`
-	S3Prefix                string        `envconfig:"ORBITAL_S3_PREFIX"                default:"backups/"` // optional path prefix within the bucket
-	S3RetentionCount        int           `envconfig:"ORBITAL_S3_RETENTION_COUNT"       default:"0"`        // deprecated: use ORBITAL_BACKUP_RETENTION_MIN_COUNT
-	BackupRetentionDays     int           `envconfig:"ORBITAL_BACKUP_RETENTION_DAYS"    default:"14"`       // delete backups older than N days; 0 = no time-based pruning
-	BackupRetentionMinCount int           `envconfig:"ORBITAL_BACKUP_RETENTION_MIN_COUNT" default:"3"`      // always keep at least N backups regardless of age
-	BackupSchedule          string        `envconfig:"ORBITAL_BACKUP_SCHEDULE"    default:""`               // cron expression for in-process scheduler (e.g. "0 8 * * *" = midnight PT); empty = disabled
+	Port            string        `envconfig:"ORBITAL_PORT"                    default:"8001"`
+	ShutdownTimeout time.Duration `envconfig:"ORBITAL_SHUTDOWN_TIMEOUT"        default:"10s"`
+	// MaxRequestBody caps every inbound request body (Echo BodyLimit) — the
+	// guard against the unbounded io.ReadAll on /graphql (audit S.7). Generous
+	// by default because orbital's bodies are small JSON (GraphQL queries, job
+	// triggers) and there are no file-upload endpoints; seeding POSTs directly
+	// to DGraph, not through orbital. Tighten via env if a deployment wants a
+	// stricter ceiling. Echo humanized size string (e.g. "10M", "512K").
+	MaxRequestBody string `envconfig:"ORBITAL_MAX_REQUEST_BODY" default:"10M"`
+	// Rate limiting (audit S.12). Opt-in — OFF by default so local dev, e2e,
+	// and the AKS-dev smoke suite are never throttled; production enables it
+	// with ORBITAL_RATE_LIMIT_ENABLED=true. Per-IP token buckets, in-memory
+	// (orbital runs single-replica — see ROADMAP HA note). RateLimitRPS is the
+	// sustained per-IP request/sec for the whole surface; LoginRateLimitRPS is
+	// a tighter bucket on POST /user/login to slow credential brute-force.
+	// Burst = 2×RPS. Behind a proxy, per-IP fairness needs c.RealIP() to
+	// resolve the true client via X-Forwarded-For (Istio sets it).
+	RateLimitEnabled        bool   `envconfig:"ORBITAL_RATE_LIMIT_ENABLED"   default:"false"`
+	RateLimitRPS            int    `envconfig:"ORBITAL_RATE_LIMIT_RPS"       default:"40"`
+	LoginRateLimitRPS       int    `envconfig:"ORBITAL_LOGIN_RATE_LIMIT_RPS" default:"5"`
+	DGraphURL               string `envconfig:"DGRAPH_URL"                      default:"http://localhost:8080/graphql"`
+	DGraphAdminURL          string `envconfig:"DGRAPH_ADMIN_URL"                default:"http://localhost:8080/admin"`
+	RatelURL                string `envconfig:"RATEL_URL"                       default:"http://localhost:8000"`
+	IssueTrackerURL         string `envconfig:"ORBITAL_ISSUE_TRACKER_URL"       default:"https://dev.azure.com/armadasystems/Commander/_workitems/create/Bug?[System.AreaPath]=Commander\\Edge\\Edge Platform"`
+	Dev                     bool   `envconfig:"ORBITAL_DEV"                     default:"true"`
+	LogLevel                string `envconfig:"ORBITAL_LOG_LEVEL"               default:"info"`
+	DGraphScratchURL        string `envconfig:"DGRAPH_SCRATCH_URL"              default:"http://localhost:8081/graphql"`
+	DGraphScratchAdminURL   string `envconfig:"DGRAPH_SCRATCH_ADMIN_URL"        default:"http://localhost:8081/admin"`
+	DGraphScratchZeroURL    string `envconfig:"DGRAPH_SCRATCH_ZERO_URL"         default:"http://localhost:6081"`
+	DatabaseURL             string `envconfig:"DATABASE_URL"                    default:"postgres://orbital:orbital-local-dev-secret@localhost:5432/orbital?sslmode=disable"`
+	ExportDir               string `envconfig:"ORBITAL_EXPORT_DIR"              default:"./subgraph-exports"`
+	DGraphScratchExportDir  string `envconfig:"DGRAPH_SCRATCH_EXPORT_DIR"       default:"/tmp/orbital-test-scratch"`
+	SchemaPath              string `envconfig:"ORBITAL_SCHEMA_PATH"             default:"schema/schema.graphql"`
+	SessionHMACKey          string `envconfig:"ORBITAL_SESSION_HMAC_KEY"        default:"local-dev-hmac-key-change-in-prod"` // must be changed in prod
+	SessionEncryptionKey    string `envconfig:"ORBITAL_SESSION_ENCRYPTION_KEY"  default:"local-dev-enc-key-32-bytes-pad!!"`  // must be exactly 32 bytes for AES-256; empty disables cookie encryption
+	DGraphExportDir         string `envconfig:"DGRAPH_EXPORT_DIR"               default:"/tmp/orbital-test-blue"`            // host-side mount of /dgraph/export on blue alpha
+	S3Endpoint              string `envconfig:"ORBITAL_S3_ENDPOINT"             default:"http://localhost:9000"`
+	S3Region                string `envconfig:"ORBITAL_S3_REGION"               default:"us-east-1"`
+	S3Bucket                string `envconfig:"ORBITAL_S3_BUCKET"               default:"orbital"`
+	S3AccessKey             string `envconfig:"ORBITAL_S3_ACCESS_KEY"           default:"minioadmin"`
+	S3SecretKey             string `envconfig:"ORBITAL_S3_SECRET_KEY"           default:"minioadmin"`
+	S3Prefix                string `envconfig:"ORBITAL_S3_PREFIX"                default:"backups/"` // optional path prefix within the bucket
+	S3RetentionCount        int    `envconfig:"ORBITAL_S3_RETENTION_COUNT"       default:"0"`        // deprecated: use ORBITAL_BACKUP_RETENTION_MIN_COUNT
+	BackupRetentionDays     int    `envconfig:"ORBITAL_BACKUP_RETENTION_DAYS"    default:"14"`       // delete backups older than N days; 0 = no time-based pruning
+	BackupRetentionMinCount int    `envconfig:"ORBITAL_BACKUP_RETENTION_MIN_COUNT" default:"3"`      // always keep at least N backups regardless of age
+	BackupSchedule          string `envconfig:"ORBITAL_BACKUP_SCHEDULE"    default:""`               // cron expression for in-process scheduler (e.g. "0 8 * * *" = midnight PT); empty = disabled
 	// DivergenceIngestEnabled toggles the S3 poller that ingests divergence
 	// snapshots published by orbs. Defaults on so `make run-orbital` picks up
 	// snapshots seeded by scripts/seed-divergence-s3.sh without extra env vars.

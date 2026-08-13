@@ -176,7 +176,7 @@ Orbital's GraphQL proxy (`internal/handler/graphql.go Handle`) injects `version:
 
 ### `ifVersion` (general MVCC, opt-in, still true)
 
-When a UI Edit modal wants strict optimistic-concurrency semantics, it includes `ifVersion: <currentVersion>` in the mutation variables. The proxy compares to the actual current version and returns 409 on mismatch. Raw GraphQL / Ratel users may omit and get last-writer-wins. This is deliberate: `ifVersion`-required-everywhere is K8s-strict (fine for K8s, friction-heavy for our usage pattern); opt-in matches HTTP ETags / DynamoDB conditional-update conventions and is enough for the actual race classes orbital faces.
+When a UI Edit modal wants strict optimistic-concurrency semantics, it includes `ifVersion: <currentVersion>` in the mutation variables. The proxy compares to the actual current version and returns 409 on mismatch. A **malformed** `ifVersion` (non-numeric) is rejected as `400 BAD_USER_INPUT`, not silently coerced to 0 — previously a bad token parsed to 0 and could pass the check (audit A.3; `toFloat64` now returns `(float64, ok)`). Raw GraphQL / Ratel users may omit and get last-writer-wins. This is deliberate: `ifVersion`-required-everywhere is K8s-strict (fine for K8s, friction-heavy for our usage pattern); opt-in matches HTTP ETags / DynamoDB conditional-update conventions and is enough for the actual race classes orbital faces.
 
 ### Accept is last-writer-wins (per ADR 012)
 

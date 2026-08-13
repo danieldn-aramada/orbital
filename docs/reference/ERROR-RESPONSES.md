@@ -104,19 +104,46 @@ on them). Namespace only when a bare word would collide. Add a row here when you
 | `UNAUTHENTICATED`            | 401 | auth middleware | No valid identity presented. |
 | `MVCC_CONFLICT`              | 409 | `graphql.go` `ifVersion` check | Record changed since the caller's read; reload and retry. Set explicitly via `writeError` (NOT the 409 default). |
 | `CONFLICT`                   | 409 | REST job triggers (`backup`/`export`/`restore` already-in-progress) | Non-MVCC state conflict. The `codeForStatus` default for any bare 409. |
-| `BAD_USER_INPUT`             | 400 (also 405/422) | REST validators; Echo bind/routing errors | Malformed or missing request fields. The `codeForStatus` default for any bare 4xx without a more specific mapping. |
+| `BAD_USER_INPUT`             | 400 (also 405/422) | REST validators; Echo bind/routing errors; `graphql.go` malformed `ifVersion` | Malformed or missing request fields. The `codeForStatus` default for any bare 4xx without a more specific mapping. |
 | `VARIABLE_FORM_REQUIRED`| 400 | `graphql.go` inline-selector guard (Spike 31, live) | A single-entity `update{Kind}` mutation passed its `orbId` or `set` inline instead of as GraphQL variables, so the proxy can't stamp `version`/`updatedAt`/`updatedBy`. Kill switch: `ORBITAL_INLINE_SELECTOR_REJECT=false`. |
 | `NOT_FOUND`                  | 404 | REST resource lookups | Named resource does not exist. |
+| `CONTENT_TOO_LARGE`          | 413 | `BodyLimit` middleware (`server.go`) | Request body exceeds `ORBITAL_MAX_REQUEST_BODY`. Spelling is RFC 9110's current 413 phrase ("Content Too Large"), not the superseded "Payload Too Large". The `codeForStatus` default for any bare 413. |
+| `RATE_LIMITED`               | 429 | `RateLimiter` middleware (`server.go`, opt-in via `ORBITAL_RATE_LIMIT_ENABLED`) | Per-IP request rate exceeded; response carries a `Retry-After` header. Chosen over `THROTTLED`/`RESOURCE_EXHAUSTED` — see "Deriving a new code". The `codeForStatus` default for any bare 429. |
 | `UNAVAILABLE`                | 503, 502, 504 | dependency not configured/reachable (registry, signing key, bundler, DC resolve) | A required downstream is unavailable. The `codeForStatus` default for 502/503/504. |
 | `INTERNAL`                   | 500 | catch-all | Unexpected/raw error. Message is generic (`Internal Server Error`), real detail logged with `request.id` — never in the body. The `codeForStatus` default for any other 5xx. |
 
-Code spellings intentionally match GraphQL/Apollo conventions (`FORBIDDEN`,
-`BAD_USER_INPUT`) so the two envelopes could converge without renaming codes later.
+Code spellings are **derived, not invented** — see "Deriving a new `code`" below.
 
 `codeForStatus` (in `errors.go`) is the default status→code map for any error that arrives
 without an explicit code — bare `echo.NewHTTPError`, Echo's own 404/405/bind errors. Specific
 codes that a bare status can't disambiguate (`MVCC_CONFLICT` vs `CONFLICT` on 409) are set at
 the raising site via `writeError`.
+
+## Deriving a new `code` (follow this — don't guess, don't re-research)
+
+When you add an error condition, derive its `code` in this order. This exists so the spelling
+question is a lookup, not a research cycle — the alternatives below were already checked
+against Apollo, GitHub, Shopify, gRPC/Google, and the RFCs (2026-08-13).
+
+1. **Apollo built-in?** If Apollo Server has a built-in code for the condition, use that exact
+   spelling, so our envelope and a future GraphQL envelope converge without a rename. The AS4
+   built-ins are: `GRAPHQL_PARSE_FAILED`, `GRAPHQL_VALIDATION_FAILED`, `BAD_USER_INPUT`,
+   `PERSISTED_QUERY_NOT_FOUND`, `PERSISTED_QUERY_NOT_SUPPORTED`, `OPERATION_RESOLUTION_FAILURE`,
+   `BAD_REQUEST`, `INTERNAL_SERVER_ERROR`. (AS4 *dropped* `FORBIDDEN`/`UNAUTHENTICATED`; we keep
+   those on semantic grounds — they match gRPC/Google and AS2/AS3 history.)
+2. **Clean HTTP-status mapping?** Use the **current RFC 9110** reason phrase, UPPER_SNAKE — e.g.
+   413 → `CONTENT_TOO_LARGE` (RFC 9110), **not** the superseded "Payload Too Large" (RFC 7231),
+   **not** Go/Echo's legacy `StatusText` ("Request Entity Too Large", RFC 2616). Match today's
+   spec, not what the stdlib happens to emit. This is why `FORBIDDEN`/`NOT_FOUND`/`CONFLICT`
+   mirror their current phrases.
+3. **HTTP doesn't name the semantic well** (auth, quota, rate limiting)? Prefer an established
+   ecosystem semantic code over the bare HTTP phrase, in precedence **GraphQL ecosystem →
+   gRPC/Google → HTTP phrase**, and pick the clearest:
+   - rate limiting (429) → `RATE_LIMITED` (GitHub GraphQL). Rejected: `THROTTLED` (Shopify),
+     `RESOURCE_EXHAUSTED` (gRPC/Google), `TOO_MANY_REQUESTS` (bare HTTP) — valid but less clear.
+   - no identity (401) → `UNAUTHENTICATED` (gRPC/Google/AS3), not HTTP's misnomer "Unauthorized".
+4. Record the choice **and the alternatives you rejected** in the registry row (or here), so the
+   next person doesn't re-run the research. UPPER_SNAKE, unique, stable once shipped.
 
 ## HTTP status guidance
 
@@ -181,6 +208,11 @@ convention). Orbital-authored proxy guards (role, MVCC) are the exception — th
   defined; populate it once docs are hosted at a stable URL.
 - **Codes are documented here before use.** Adding a code without a registry row is
   incomplete — clients have no way to know it's stable.
+- **New codes are derived via "Deriving a new `code`", not invented.** Settled 2026-08-13 after
+  checking Apollo / GitHub / Shopify / gRPC-Google / RFC 9110: 413 = `CONTENT_TOO_LARGE` (RFC
+  9110's current phrase, not the superseded "Payload Too Large"); 429 = `RATE_LIMITED` (GitHub
+  GraphQL, chosen over `THROTTLED` / `RESOURCE_EXHAUSTED`). The rejected alternatives are recorded
+  so the spelling question is a lookup, not a re-research — don't relitigate.
 - **Existing `graphql.go` bodies are a forward-compatible subset.** The current
   `{"error": "..."}` 403/409 responses satisfy this doc once `code`/`httpStatus` are added;
   the addition is additive and non-breaking.

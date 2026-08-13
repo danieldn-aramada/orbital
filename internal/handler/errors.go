@@ -27,6 +27,8 @@ const (
 	CodeNotFound             = "NOT_FOUND"
 	CodeBadUserInput         = "BAD_USER_INPUT"
 	CodeVariableFormRequired = "VARIABLE_FORM_REQUIRED"
+	CodeContentTooLarge      = "CONTENT_TOO_LARGE"
+	CodeRateLimited          = "RATE_LIMITED"
 	CodeConflict             = "CONFLICT"
 	CodeMVCCConflict         = "MVCC_CONFLICT"
 	CodeUnavailable          = "UNAVAILABLE"
@@ -104,6 +106,10 @@ func codeForStatus(status int) string {
 		return CodeNotFound
 	case http.StatusConflict:
 		return CodeConflict
+	case http.StatusRequestEntityTooLarge:
+		return CodeContentTooLarge
+	case http.StatusTooManyRequests:
+		return CodeRateLimited
 	case http.StatusServiceUnavailable, http.StatusBadGateway, http.StatusGatewayTimeout:
 		return CodeUnavailable
 	}

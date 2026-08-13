@@ -196,12 +196,19 @@ func (h *OCI) DeleteArtifact(c echo.Context) error {
 	if job.ArtifactPath == nil {
 		return echo.ErrNotFound
 	}
-	if rmErr := os.Remove(*job.ArtifactPath); rmErr != nil && !os.IsNotExist(rmErr) {
-		h.logger.Warn("delete artifact: remove failed", "path", *job.ArtifactPath, "err", rmErr)
+	artifactPath := *job.ArtifactPath
+	if rmErr := os.Remove(artifactPath); rmErr != nil && !os.IsNotExist(rmErr) {
+		h.logger.Warn("delete artifact: remove failed", "path", artifactPath, "err", rmErr)
 	}
 	if _, err := h.db.ExportJob.UpdateOneID(jobID).ClearArtifactPath().Save(c.Request().Context()); err != nil {
 		return fmt.Errorf("clear artifact_path: %w", err)
 	}
+	writeAuditEvent(h.db, h.logger, "management", actorFromContext(c), "deleteArtifact",
+		[]string{"deleteArtifact"},
+		nil,
+		nil,
+		map[string]any{"jobId": jobID.String(), "artifactPath": artifactPath},
+	)
 	return c.NoContent(http.StatusNoContent)
 }
 
