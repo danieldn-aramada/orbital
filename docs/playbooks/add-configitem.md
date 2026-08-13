@@ -91,6 +91,15 @@ the registry and produce silent bugs:
 - `typeBeforeFields` — derived from `Types[].BeforeFields`
 - `configitem-editor.js` mutation shapes — driven by the targets blob
 - Audit diff rendering — generic, no per-type code
+- **The export / subgraph selection** — orbital's export is schema-driven, not
+  hand-enumerated. `fetchUIDPredicates` derives the edge list from the live
+  DGraph schema (`schema {}`) and scalars come via `expand(_all_)`
+  (`internal/handler/export.go`). A new type, its edges, and its scalar fields
+  flow into the export automatically once the schema is applied — **no
+  export-code change, ever.** ⚠ This is only *orbital's* export. A **downstream**
+  consumer with a hand-enumerated GraphQL query — notably the configbundle
+  bundler's `ConfigBundleByOrbID` query — must add the new field on *its* side;
+  that's the consumer's change, not orbital's. Don't conflate the two.
 
 If your new type needs behavior the registry doesn't model today (e.g. a new
 relationship cardinality, a wrapper type pattern, computed fields), extend

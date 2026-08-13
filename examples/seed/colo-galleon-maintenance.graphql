@@ -1,0 +1,506 @@
+mutation UpsertServerMaintenance {
+  addServerMaintenance(input: [
+    {
+      orbId: "colo:server-maintenance-1F206G4"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-1F206G4" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-1RK3V64"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-1RK3V64" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-1W8Y2Z3"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-1W8Y2Z3" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-2B52FZ3"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-2B52FZ3" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-2F206G4"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-2F206G4" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-2RK3V64"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-2RK3V64" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-2W8Y2Z3"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-2W8Y2Z3" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-3F206G4"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-3F206G4" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-3RK3V64"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-3RK3V64" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-3V5Y2Z3"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-3V5Y2Z3" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-4B52FZ3"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-4B52FZ3" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-4F206G4"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-4F206G4" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-4RK3V64"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-4RK3V64" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-5B52FZ3"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-5B52FZ3" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-5F206G4"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-5F206G4" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-5PJ1FZ3"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-5PJ1FZ3" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-6CVD664"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-6CVD664" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-6F206G4"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-6F206G4" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-6MP6K74"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-6MP6K74" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-7CVD664"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-7CVD664" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-7F206G4"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-7F206G4" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-7MP6K74"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-7MP6K74" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-8CVD664"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-8CVD664" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-8MP6K74"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-8MP6K74" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-9BQS2Z3"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-9BQS2Z3" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-9FRHDX3"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-9FRHDX3" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-9GMM3D4"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-9GMM3D4" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-9MP6K74"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-9MP6K74" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-B4KS2Z3"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-B4KS2Z3" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-BFRHDX3"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-BFRHDX3" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-BGMM3D4"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-BGMM3D4" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-BMP6K74"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-BMP6K74" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-CFRHDX3"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-CFRHDX3" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-CGMM3D4"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-CGMM3D4" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-CWJHDX3"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-CWJHDX3" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-DGMM3D4"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-DGMM3D4" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-DMP6K74"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-DMP6K74" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-FGMM3D4"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-FGMM3D4" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-FJ32V64"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-FJ32V64" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-FQK3V64"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-FQK3V64" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-GD206G4"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-GD206G4" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-GJ32V64"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-GJ32V64" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-GQK3V64"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-GQK3V64" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-HD206G4"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-HD206G4" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-HMP6K74"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-HMP6K74" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-HQK3V64"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-HQK3V64" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-JD206G4"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-JD206G4" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-JQK3V64"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-JQK3V64" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-JV8Y2Z3"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-JV8Y2Z3" version: 1 }
+      enabled: false
+    }
+    {
+      orbId: "colo:server-maintenance-S447008X3823034"
+      version: 1
+      name: "maintenance"
+      namespace: "colo"
+      createdBy: "admin@armada.ai"
+      createdAt: "2026-05-15T00:00:00Z"
+      server: { orbId: "colo:server-S447008X3823034" version: 1 }
+      enabled: false
+    }
+  ], upsert: true) {
+    numUids
+  }
+}

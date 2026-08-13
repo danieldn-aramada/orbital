@@ -92,6 +92,9 @@
             <li data-panel="srv-panel-network-{{.DomID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-network-wired"></i></span><span>Network</span></a>
             </li>
+            <li data-panel="srv-panel-maintenance-{{.DomID}}">
+              <a><span class="icon is-small"><i class="fa-solid fa-wrench"></i></span><span>Maintenance</span></a>
+            </li>
             {{template "audit-tab-li" .}}
           </ul>
         </div>
@@ -199,6 +202,21 @@
           </div>
           {{else}}
           <p class="has-text-grey p-2">No network adapters discovered yet.</p>
+          {{end}}
+        </div>
+
+        <div id="srv-panel-maintenance-{{.DomID}}" style="display:none">
+          {{if .MaintenanceConfigured}}
+          <table class="table is-fullwidth mt-2">
+            <tbody>
+              <tr><td style="white-space:nowrap;width:1%">enabled</td><td><span class="tag">{{if .MaintenanceEnabled}}true{{else}}false{{end}}</span></td></tr>
+              <tr><td style="white-space:nowrap">windowStart</td><td>{{if .MaintenanceWindowStart}}{{.MaintenanceWindowStart}}{{else}}—{{end}}</td></tr>
+              <tr><td style="white-space:nowrap">windowEnd</td><td>{{if .MaintenanceWindowEnd}}{{.MaintenanceWindowEnd}}{{else}}—{{end}}</td></tr>
+              <tr><td style="white-space:nowrap">reason</td><td>{{if .MaintenanceReason}}{{.MaintenanceReason}}{{else}}—{{end}}</td></tr>
+            </tbody>
+          </table>
+          {{else}}
+          <p class="has-text-grey p-2">No maintenance configured.</p>
           {{end}}
         </div>
 

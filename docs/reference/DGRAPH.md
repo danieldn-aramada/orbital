@@ -26,6 +26,7 @@ Read this before: DGraph schema changes, query/mutation work, export/import, see
 | Type | `orbId` | Natural key |
 |---|---|---|
 | `Server` | `<ns>:server-<serial>` | **Redfish System SerialNumber** — Dell Service Tag (`BFRHDX3`) and Supermicro (`S447008X3823034`) are both just this; it's also the `<serverTag>` in the network-* ids below. **Never `asset_tag`** — that's org-assigned and can be null (was null for the A100), which breaks scan-idempotency. |
+| `ServerMaintenance` | `<ns>:server-maintenance-<serial>` | owner server serial — 1:1 with `Server`, so the natural key is just the owner serial (same value as `server-<serial>`). No discriminator: one maintenance node per server (intent, not history — history lives in the audit log + edge Events). |
 | `NetworkDevice` | `<ns>:network-device-<serial>` | switch/firewall serial |
 | `NetworkAdapter` | `<ns>:network-adapter-<serverTag>-<FQDD>` | owner serial + Redfish adapter FQDD |
 | `NetworkInterface` (server NIC) | `<ns>:network-interface-<serverTag>-<FQDD>` | owner serial + Redfish interface FQDD |

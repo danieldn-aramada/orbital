@@ -81,6 +81,7 @@ type Server implements ConfigItem {
     rack: Rack
     idracSettings: IdracSettings @hasInverse(field: server)
     serverConfigurationProfile: ServerConfigurationProfile @hasInverse(field: server)
+    serverMaintenance: ServerMaintenance @hasInverse(field: server)
     storageControllers: [StorageController] @hasInverse(field: server)
     networkAdapters: [NetworkAdapter] @hasInverse(field: server)
     networkInterfaces: [NetworkInterface] @hasInverse(field: server)
@@ -99,6 +100,23 @@ type IdracSettings implements ConfigItem {
     lockdownModeEnabled: Boolean
     dhcpEnabled: Boolean
     racadmEnabled: Boolean
+
+    server: Server!
+}
+
+# Maintenance intent for a server — DESIRED state only (edge actuates + observes).
+#   enabled     — on/off switch: true = maintenance requested. Exit = enabled:false
+#                 (symmetric toggle), not clearing a timestamp.
+#   windowStart — optional scheduling: don't begin before this (null = begin now).
+#   windowEnd   — optional scheduling: don't begin after this (null = no deadline);
+#                 gates entry only, never exit.
+# Observed phase (Draining/Active/...) lives at the edge (serverconfig.status +
+# monitoring), NOT here.
+type ServerMaintenance implements ConfigItem {
+    enabled: Boolean
+    windowStart: DateTime
+    windowEnd: DateTime
+    reason: String
 
     server: Server!
 }

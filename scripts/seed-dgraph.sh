@@ -112,14 +112,14 @@ seed_file() {
 echo "==> Seeding DGraph (base)..."
 for f in examples/seed/*.graphql; do
   case "$(basename "$f" .graphql)" in
-    *-idrac|*-storage|*-clusters|*-network) continue ;;
+    *-idrac|*-storage|*-clusters|*-network|*-maintenance) continue ;;
   esac
   seed_file "$f"
 done
 
 echo "==> Seeding DGraph (supplementary)..."
 # Clusters must come after base — they reference DataCenters + Servers seeded above.
-for f in examples/seed/*-idrac.graphql examples/seed/*-storage.graphql examples/seed/*-clusters.graphql examples/seed/*-network.graphql; do
+for f in examples/seed/*-idrac.graphql examples/seed/*-storage.graphql examples/seed/*-clusters.graphql examples/seed/*-network.graphql examples/seed/*-maintenance.graphql; do
   [ -f "$f" ] || continue
   seed_file "$f"
 done

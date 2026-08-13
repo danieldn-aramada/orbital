@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/armada/orbital/internal/configitems"
 	"github.com/armada/orbital/internal/web/data/layout"
@@ -49,6 +50,7 @@ const getServerQuery = `
         racadmEnabled
       }
       serverConfigurationProfile { orbId json }
+      serverMaintenance { orbId version enabled windowStart windowEnd reason }
       storageControllers {
         orbId
         name
@@ -164,6 +166,14 @@ type serverQueryResponse struct {
 		OrbID string `json:"orbId"`
 		JSON  string `json:"json"`
 	} `json:"serverConfigurationProfile"`
+	ServerMaintenance *struct {
+		OrbID       string  `json:"orbId"`
+		Version     int     `json:"version"`
+		Enabled     *bool   `json:"enabled"`
+		WindowStart *string `json:"windowStart"`
+		WindowEnd   *string `json:"windowEnd"`
+		Reason      *string `json:"reason"`
+	} `json:"serverMaintenance"`
 	StorageControllers []struct {
 		OrbID          string `json:"orbId"`
 		Name           string `json:"name"`
@@ -258,41 +268,50 @@ type networkAdapterTabData struct {
 }
 
 type serverTabDetailData struct {
-	ID                 string
-	OrbID              string
-	DomID              string // SafeDomID(OrbID)
-	Name               string
-	Hostname           string
-	Model              string
-	Manufacturer       string
-	ServiceTag         string
-	RackPosition       int
-	OobIP              string
-	OobMAC             string
-	CreatedBy          string
-	CreatedAt          string
-	UpdatedBy          string
-	UpdatedAt          string
-	Namespace          string
-	Rack               struct{ ID, Name string }
-	Version            int
-	DataCenterID       string
-	DataCenterOrbID    string
-	DataCenterDomID    string // SafeDomID(DataCenterOrbID)
-	DataCenterName     string
-	ShowDCBack         bool // true when drilled from a DC tab
-	CurrentUser        string
-	EditDataJSON       template.JS
-	EditTargetsJSON    template.JS // configitem-editor.js consumes — see configitems.BuildEditTargets
-	IdracOrbID         string
-	IdracVersion       int
-	IdracSettings      *idracSettingsTabData
-	ConfigProfileJSON  string
-	StorageControllers []storageControllerTabData
-	NetworkAdapters    []networkAdapterTabData
-	MgmtInterfaces     []networkInterfaceTabData
-	BasePath           string
-	Actions            layout.PageActions
+	ID                string
+	OrbID             string
+	DomID             string // SafeDomID(OrbID)
+	Name              string
+	Hostname          string
+	Model             string
+	Manufacturer      string
+	ServiceTag        string
+	RackPosition      int
+	OobIP             string
+	OobMAC            string
+	CreatedBy         string
+	CreatedAt         string
+	UpdatedBy         string
+	UpdatedAt         string
+	Namespace         string
+	Rack              struct{ ID, Name string }
+	Version           int
+	DataCenterID      string
+	DataCenterOrbID   string
+	DataCenterDomID   string // SafeDomID(DataCenterOrbID)
+	DataCenterName    string
+	ShowDCBack        bool // true when drilled from a DC tab
+	CurrentUser       string
+	EditDataJSON      template.JS
+	EditTargetsJSON   template.JS // configitem-editor.js consumes — see configitems.BuildEditTargets
+	IdracOrbID        string
+	IdracVersion      int
+	IdracSettings     *idracSettingsTabData
+	ConfigProfileJSON string
+	// Maintenance display (read-only, field-accurate — mirrors the edit modal).
+	// Configured == a serverMaintenance node exists; Enabled is its on/off
+	// switch; the window (if any) is optional scheduling. Editing is via the
+	// JSON editor.
+	MaintenanceConfigured  bool
+	MaintenanceEnabled     bool
+	MaintenanceWindowStart string
+	MaintenanceWindowEnd   string
+	MaintenanceReason      string
+	StorageControllers     []storageControllerTabData
+	NetworkAdapters        []networkAdapterTabData
+	MgmtInterfaces         []networkInterfaceTabData
+	BasePath               string
+	Actions                layout.PageActions
 	// RelatedOrbIDsCSV is "<server-orbId>,<idrac-orbId>,<scp-orbId>,..." —
 	// every ConfigItem in the rendered subgraph. The audit tab uses it to
 	// fetch events for the whole server-and-its-children in one call. See
@@ -301,6 +320,17 @@ type serverTabDetailData struct {
 	// AuditPanelID matches data-panel on the audit <li> and the id of the
 	// placeholder <div>. Consumed by the shared audit-tab partial.
 	AuditPanelID string
+}
+
+// fmtMaintTime renders an ISO-8601 timestamp as a readable UTC string for the
+// maintenance display (e.g. "Aug 14, 2026 8:00 AM UTC"). Falls back to the raw
+// value when it doesn't parse, so a hand-entered odd value still shows.
+func fmtMaintTime(iso string) string {
+	t, err := time.Parse(time.RFC3339, iso)
+	if err != nil {
+		return iso
+	}
+	return t.UTC().Format("Jan 2, 2006 3:04 PM MST")
 }
 
 // collectRelatedOrbIDs returns the server's orbId followed by every nested
@@ -320,6 +350,9 @@ func collectRelatedOrbIDs(raw *serverQueryResponse) []string {
 	}
 	if raw.ServerConfigurationProfile != nil {
 		add(raw.ServerConfigurationProfile.OrbID)
+	}
+	if raw.ServerMaintenance != nil {
+		add(raw.ServerMaintenance.OrbID)
 	}
 	add(raw.OobIP.OrbID)
 	for _, sc := range raw.StorageControllers {
@@ -413,6 +446,27 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 		"serviceTag":    raw.ServiceTag,
 		"idracSettings": idracFields,
 	}
+	// serverMaintenance: null when the node is absent — that's what makes the
+	// editor dispatch addServerMaintenance the first time an admin sets a
+	// window (a non-null seed would be read as "exists" → updateServerMaintenance
+	// against a missing node = silent no-op). When present, seed only the
+	// non-null fields so a nullable windowStart round-trips as JSON null, never
+	// "" (DGraph's DateTime rejects empty strings).
+	if raw.ServerMaintenance != nil {
+		// Render the full block with null placeholders for empty scheduling
+		// fields so the editor shows a togglable form (flip `enabled`), not a
+		// sparse object. The *string pointers marshal to their value or JSON
+		// null — null (never "") because DGraph's DateTime rejects empty strings
+		// and the editor would send that "" straight into the mutation set.
+		editFields["serverMaintenance"] = map[string]any{
+			"enabled":     raw.ServerMaintenance.Enabled != nil && *raw.ServerMaintenance.Enabled,
+			"windowStart": raw.ServerMaintenance.WindowStart,
+			"windowEnd":   raw.ServerMaintenance.WindowEnd,
+			"reason":      raw.ServerMaintenance.Reason,
+		}
+	} else {
+		editFields["serverMaintenance"] = nil
+	}
 	editJSON, _ := json.Marshal(editFields)
 
 	// Edit-target metadata for the configitem-editor JS module — registry-derived.
@@ -422,6 +476,13 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 	if raw.IdracSettings != nil && raw.IdracSettings.OrbID != "" {
 		editTargets = configitems.OverrideEditTargetOrbID(editTargets, "IdracSettings", raw.IdracSettings.OrbID)
 	}
+	// ServerMaintenance uses the current prefix convention
+	// (<ns>:server-maintenance-<serial>), not the legacy <name>-<suffix> shape
+	// BuildEditTargets derives. Override it so first-time create and edits both
+	// target the convention-correct id. serviceTag holds the serial — the same
+	// value the server's own orbId (server-<serial>) is keyed on.
+	maintenanceOrbID := raw.Namespace + ":server-maintenance-" + raw.ServiceTag
+	editTargets = configitems.OverrideEditTargetOrbID(editTargets, "ServerMaintenance", maintenanceOrbID)
 	editTargetsJSON, _ := json.Marshal(editTargets)
 
 	srv := serverTabDetailData{
@@ -476,6 +537,23 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 			srv.ConfigProfileJSON = buf.String()
 		} else {
 			srv.ConfigProfileJSON = raw.ServerConfigurationProfile.JSON
+		}
+	}
+
+	// Show the full field table whenever a maintenance node exists (colo servers
+	// are seeded with one, off by default). Timestamps render as readable UTC;
+	// empty window/reason fields show as "—" (never "now").
+	if raw.ServerMaintenance != nil {
+		srv.MaintenanceConfigured = true
+		srv.MaintenanceEnabled = raw.ServerMaintenance.Enabled != nil && *raw.ServerMaintenance.Enabled
+		if raw.ServerMaintenance.WindowStart != nil {
+			srv.MaintenanceWindowStart = fmtMaintTime(*raw.ServerMaintenance.WindowStart)
+		}
+		if raw.ServerMaintenance.WindowEnd != nil {
+			srv.MaintenanceWindowEnd = fmtMaintTime(*raw.ServerMaintenance.WindowEnd)
+		}
+		if raw.ServerMaintenance.Reason != nil {
+			srv.MaintenanceReason = *raw.ServerMaintenance.Reason
 		}
 	}
 

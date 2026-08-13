@@ -121,7 +121,7 @@ var Types = []Type{
 	{
 		Name:         "Server",
 		IsRoot:       true,
-		BeforeFields: "id orbId name version hostname model manufacturer serviceTag rackPosition oobMAC idracSettings { firmwareVersion sshEnabled ipmiEnabled lockdownModeEnabled osToIdracPassThroughEnabled usbManagementPortEnabled dhcpEnabled racadmEnabled }",
+		BeforeFields: "id orbId name version hostname model manufacturer serviceTag rackPosition oobMAC idracSettings { firmwareVersion sshEnabled ipmiEnabled lockdownModeEnabled osToIdracPassThroughEnabled usbManagementPortEnabled dhcpEnabled racadmEnabled } serverMaintenance { enabled windowStart windowEnd reason }",
 		FormFields:   []string{"hostname", "manufacturer", "model", "oobMAC", "rackPosition", "serviceTag"},
 		PayloadField: "server",
 	},
@@ -133,6 +133,15 @@ var Types = []Type{
 		BeforeFields: "id orbId name version firmwareVersion sshEnabled ipmiEnabled lockdownModeEnabled osToIdracPassThroughEnabled usbManagementPortEnabled dhcpEnabled racadmEnabled",
 		FormFields:   []string{"firmwareVersion", "sshEnabled", "ipmiEnabled", "lockdownModeEnabled", "osToIdracPassThroughEnabled", "usbManagementPortEnabled", "dhcpEnabled", "racadmEnabled"},
 		PayloadField: "idracSettings",
+	},
+	{
+		Name:         "ServerMaintenance",
+		OwnerType:    "Server",
+		OwnerField:   "server",
+		ChildField:   "serverMaintenance",
+		BeforeFields: "id orbId name version enabled windowStart windowEnd reason",
+		FormFields:   []string{"enabled", "windowStart", "windowEnd", "reason"},
+		PayloadField: "serverMaintenance",
 	},
 	{
 		Name:         "ServerConfigurationProfile",
