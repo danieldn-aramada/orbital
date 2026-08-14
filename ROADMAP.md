@@ -11,11 +11,11 @@
 
 ## Recent accomplishments
 
+- **2026-08-14** — ServerMaintenance ConfigItem (schema v6): `enabled` switch + optional DateTime window, colo servers seeded present-and-off, bundler-downstream; JSON-editor field-clearing via DGraph `remove` (set:null no-op); architecture cheatsheet.
 - **2026-08-12** — Colo server inventory 100% reconciled with NetBox: added the A100/Hyperplane (Supermicro, Redfish-scanned, caught NetBox's wrong serial/model/RAM); adopted server orbId `<ns>:server-<serial>`, migrated all 190 servers across 10 DCs.
 - **2026-08-11** — Dark mode: hardcoded light-mode color literals swept to Bulma `--bulma-*` scheme vars (clusters/audit/publish child rows, WCAG AA both modes); fixed DataTables `.modal-content` white-frame collision + `html.dark` sync so DataTables' dark theme fires.
 - **2026-08-11** — Network topology shipped: NetworkDevice/Adapter/Port schema, 46 colo servers seeded (Redfish × NetBox-inventory reconcile), editable Network Devices UI + Server NICs tab, negotiated linkSpeedMbps; live on AKS dev v0.0.30.
 - **2026-08-10** — Closed Spike 14 (orb deployment model): edge deploy is kustomize-native (`deploy/edge/base` + `colo-galleon` overlay — orb + edge DGraph + Zot ACR mirror), demo-proven on colo-galleon. The "orb Helm chart" line was superseded by the canonical kustomize overlays. Sole remaining edge item — a default-deny NetworkPolicy — deferred to security hardening (pre-GA).
-- **2026-08-04** — Orb edge observability: `/metrics` (dedicated registry) with round-trip propagation + RED, scraped via ServiceMonitor → colo-dev-main Grafana dashboard; fixed sig-sync regression (edge Zot tag-regex now matches cosign `.sig`).
 
 ---
 

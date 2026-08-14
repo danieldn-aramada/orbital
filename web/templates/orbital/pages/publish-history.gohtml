@@ -79,7 +79,7 @@
         {{/* Bounded scroll container: even with 100 history rows (the server-side
              cap in OCI.ListArtifacts), the page doesn't grow unbounded.
              Sticky <thead> keeps column headers visible while scrolling inside. */}}
-        <div style="overflow:auto; max-height: calc(100vh - 420px); border: 1px solid var(--bulma-border);">
+        <div style="overflow:auto; max-height: calc(100vh - 420px);">
           <table id="artifacts-table" class="table is-striped is-hoverable is-fullwidth is-size-7 mb-0" style="table-layout: fixed;">
             {{/* Column order: identity (Data Center, Tag) → outcome (Status) →
                  when (Published At) → Layers, Signed. Repository and the full

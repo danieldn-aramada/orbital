@@ -79,12 +79,17 @@ function rootWithoutSubtrees(state, targets) {
 // mutation. This shape triggers orbital's generic before-fetch + diff renderer.
 // Do NOT change to add{Kind}.upsert — that path skips the before-fetch and
 // shows raw variables instead of a colored diff. See docs/reference/AUDIT.md.
-function buildUpdateCall({ kind, orbId, set, payloadField }) {
+function buildUpdateCall({ kind, orbId, set, remove, payloadField }) {
+  // `remove` clears fields the user emptied. DGraph ignores null in `set` and
+  // rejects "" on typed scalars (DateTime), so clearing requires `remove` with
+  // the field's prior value. Only declare/send it when non-empty so existing
+  // set-only edits are byte-for-byte unchanged.
+  const hasRemove = remove && Object.keys(remove).length > 0
   return {
-    query: `mutation Update${kind}($orbId: String!, $set: ${kind}Patch!) {
-      update${kind}(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { ${payloadField} { orbId } }
+    query: `mutation Update${kind}($orbId: String!, $set: ${kind}Patch!${hasRemove ? `, $remove: ${kind}Patch` : ''}) {
+      update${kind}(input: { filter: { orbId: { eq: $orbId } }, set: $set${hasRemove ? ', remove: $remove' : ''} }) { ${payloadField} { orbId } }
     }`,
-    variables: { orbId, set },
+    variables: hasRemove ? { orbId, set, remove } : { orbId, set },
   }
 }
 
@@ -149,7 +154,7 @@ export function initConfigItemEditor({
       const before = JSON.parse(snapshots.get(snapshotKey(t)))
       const changed = JSON.stringify(currentSub ?? null) !== JSON.stringify(before)
       const existed = before != null
-      if (changed) changes.push({ target: t, currentSub, existed })
+      if (changed) changes.push({ target: t, currentSub, existed, before })
     }
 
     if (changes.length === 0) {
@@ -167,11 +172,30 @@ export function initConfigItemEditor({
       if (!jsonStrFields.has(f)) return v
       return typeof v === 'string' ? v : JSON.stringify(v)
     }
+    // An "empty" value the user cleared: null, "", or a deleted key. These must
+    // never go into `set` (DGraph ignores null and rejects "" on DateTime) —
+    // clearing is expressed via `remove` instead.
+    const isEmpty = v => v === undefined || v === null || v === ''
     // Build the `set` map (for update) or `input` map (for add) of scalar field
     // values from a target's currentSub — the JSON editor's post-submit shape.
+    // Empty values are skipped; see removePayload for how they're cleared.
     const scalarPayload = (t, sub) => {
       const out = {}
-      for (const f of t.fields) if (f in sub) out[f] = valueForMutation(t, f, sub[f])
+      for (const f of t.fields) if (f in sub && !isEmpty(sub[f])) out[f] = valueForMutation(t, f, sub[f])
+      return out
+    }
+    // Build the `remove` map: fields that HAD a value in the snapshot and are now
+    // empty in the edited state. DGraph clears a scalar only via `remove` (with
+    // its prior value), never via set:null/set:"". Type-agnostic — DateTime,
+    // String, etc. all clear the same way.
+    const removePayload = (t, before, sub) => {
+      const out = {}
+      if (before == null) return out
+      for (const f of t.fields) {
+        if (!isEmpty(before[f]) && isEmpty(sub == null ? undefined : sub[f])) {
+          out[f] = valueForMutation(t, f, before[f])
+        }
+      }
       return out
     }
     // Metadata for entities created as a NESTED subtree inside an update{Root}
@@ -263,6 +287,7 @@ export function initConfigItemEditor({
     if (rootSet !== null) {
       calls.push(buildUpdateCall({
         kind: rootTarget.kind, orbId: reloadOrbId, set: rootSet, payloadField: rootTarget.payloadField,
+        remove: rootChange ? removePayload(rootTarget, rootChange.before, rootChange.currentSub) : {},
       }))
     }
     for (const ch of changes) {
@@ -275,6 +300,7 @@ export function initConfigItemEditor({
         calls.push(buildUpdateCall({
           kind: t.kind, orbId: t.orbId, payloadField: t.payloadField,
           set: { ...scalarPayload(t, sub) },
+          remove: removePayload(t, ch.before, sub),
         }))
       } else {
         // CREATE under an already-existing wrapper (sibling exists). Safe

@@ -25,6 +25,42 @@ curl -s -X POST $ORBITAL_URL/graphql -H "Authorization: Bearer $TOKEN" -H "Conte
 
 The `-d` body is JSON and may span multiple lines for readability — only the `query` string stays on one line. A mutation's returned entity confirms the write: the server stamps `updatedAt`/`updatedBy` (**no milliseconds**) and bumps `version`.
 
+### Clearing a field — use `remove` (with a `set`)
+
+Orbital's `/graphql` is DGraph GraphQL. To **clear** a field, use the update input's **`remove`** — `set: { field: null }` is a DGraph **no-op** (nulls in `set` are silently ignored, the value stays), and `set: { field: "" }` is **rejected** on typed scalars like `DateTime`. Two rules:
+
+- **`remove` matches on the value** — pass the field's **current** value, so read it first, then remove it.
+- **Keep a variable `set`** (even `{}`) alongside `remove`. A `remove`-only mutation is rejected `400 VARIABLE_FORM_REQUIRED`, and the variable `set` is what orbital stamps `version`/`updatedAt`/`updatedBy` into.
+
+```graphql
+# 1. read the current value(s)
+query { getServerMaintenance(orbId: "ns:server-maintenance-<serial>") { windowStart windowEnd } }
+
+# 2. clear them — remove takes the current values; set can be empty
+mutation Clear($orbId: String!, $set: ServerMaintenancePatch!, $remove: ServerMaintenancePatch) {
+  updateServerMaintenance(input: { filter: { orbId: { eq: $orbId } }, set: $set, remove: $remove }) { numUids }
+}
+# variables:
+#   { "orbId": "ns:server-maintenance-<serial>",
+#     "set": {},
+#     "remove": { "windowStart": "<current windowStart>", "windowEnd": "<current windowEnd>" } }
+```
+
+The full request body on the wire (what the UI editor sends — kept fields go in `set`, cleared fields in `remove`):
+
+```json
+{
+  "query": "mutation UpdateServerMaintenance($orbId: String!, $set: ServerMaintenancePatch!, $remove: ServerMaintenancePatch) { updateServerMaintenance(input: { filter: { orbId: { eq: $orbId } }, set: $set, remove: $remove }) { serverMaintenance { orbId } } }",
+  "variables": {
+    "orbId": "colo:server-maintenance-CWJHDX3",
+    "set":    { "enabled": true, "reason": "test" },
+    "remove": { "windowStart": "2026-08-14T18:00:00Z", "windowEnd": "2026-08-14T22:00:00Z" }
+  }
+}
+```
+
+Orbital's UI editor does this read-then-remove automatically; API callers do it explicitly.
+
 ---
 
 ## Example schema 
