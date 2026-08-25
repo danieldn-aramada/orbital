@@ -149,7 +149,7 @@ edge-down: ## Stop the edge sim
 	docker compose -f deploy/local/docker-compose.edge.yml down -v
 
 docs: ## Regenerate Swagger docs for orbital + orb (requires swag)
-	swag init -g main.go -o docs --dir cmd/orbital,internal/handler,internal/ocitype
+	swag init -g main.go -o docs --dir cmd/orbital,internal/handler,internal/ocitype,internal/graphdiff
 	swag init -g doc.go -o docs/orb --dir cmd/orb,internal/orbserver,internal/orb,internal/ocitype,internal/divergence
 
 build-css: ## Compile web/sass/main.scss → web/shared/static/css/main.css (requires: npm install)

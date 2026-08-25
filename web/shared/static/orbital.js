@@ -473,32 +473,52 @@ document.addEventListener('DOMContentLoaded', () => {
   loadExportJobsTable()
 })
 
-// handleExportSubmit posts the atomic export request. Destination comes from
-// the destination dropdown: "oci" → publish to OCI, zip discarded; "download"
-// → export only, zip retained for download. Server auto-infers download=true
-// when OCI is unconfigured.
+// handleExportSubmit routes the export button. Publishing to OCI opens the
+// pre-publish review modal first (the desired-state diff vs the last published
+// artifact) so the operator confirms what ships — the "confirm step" of publish.
+// Download-only exports (no OCI baseline) fire directly.
 function handleExportSubmit(btn) {
-  const select = document.getElementById('export-datacenter-select')
-  const id = select?.value
+  const id = document.getElementById('export-datacenter-select')?.value
   if (!id) return
-
   const dest = document.getElementById('export-destination-select')?.value
   if (!dest) return
-  const download = dest === 'download'
+  if (dest === 'download') { doExportRequest(id, true, btn); return }
+  openExportPreview(id)
+}
 
+// doExportRequest posts the atomic export request. download=false → publish to
+// OCI; download=true → export-only zip retained for download.
+//
+// expectedContentHash (optional) is the guarded-Apply token from the preview:
+// the server 409s if another writer changed intent during the review→Apply gap.
+// On that 409 we re-open the preview with the FRESH diff rather than shipping
+// something the operator never reviewed (terraform's "saved plan is stale" flow,
+// made automatic).
+function doExportRequest(id, download, btn, expectedContentHash, modal) {
   const buttons = document.querySelectorAll('.js-export-submit')
   buttons.forEach(b => { b.disabled = true })
   if (btn) btn.classList.add('is-loading')
 
+  const payload = { orbId: id, download }
+  if (expectedContentHash) payload.expectedContentHash = expectedContentHash
+
   fetch(BASE + '/api/v1/export', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ orbId: id, download }),
+    body: JSON.stringify(payload),
   })
-    .then(r => r.json())
-    .then(json => {
+    .then(r => r.json().then(json => ({ status: r.status, json })))
+    .then(({ status, json }) => {
       buttons.forEach(b => { b.disabled = false })
       if (btn) btn.classList.remove('is-loading')
+      // Branch on `code`, never the message: this endpoint also 409s for
+      // "export/restore already in progress" (code CONFLICT), which is NOT a
+      // stale preview and must fall through to the normal error path.
+      if (status === 409 && json.code === 'MVCC_CONFLICT') {
+        loadExportPreview(id, 'Someone else changed this data center while you were reviewing. Here are the updated changes.')
+        return
+      }
+      if (modal) modal.classList.remove('is-active')
       if (json.error) {
         showExportBox('is-warning')
         setExportSummary(json.error, 'is-warning')
@@ -511,9 +531,152 @@ function handleExportSubmit(btn) {
     .catch(() => {
       buttons.forEach(b => { b.disabled = false })
       if (btn) btn.classList.remove('is-loading')
+      if (modal) modal.classList.remove('is-active')
       showExportBox('is-danger')
       setExportSummary('Failed to start export.', 'is-danger')
     })
+}
+
+// openExportPreview opens the review modal and loads the desired-state diff from
+// the preview API. Confirm proceeds to the actual publish, passing the previewed
+// contentHash so the server can refuse if intent moved (guarded Apply). A
+// preview failure never blocks publishing — the operator can still ship the
+// current state, just without the guard.
+// `note` renders a warning banner above the diff (used on a stale-hash retry).
+function openExportPreview(id) {
+  const modal = document.getElementById('export-preview-modal')
+  const body = document.getElementById('export-preview-body')
+  const confirmBtn = document.getElementById('export-preview-confirm')
+  if (!modal || !body || !confirmBtn) { doExportRequest(id, false, null); return }
+
+  confirmBtn.onclick = () => {
+    // The modal deliberately stays OPEN through the request: the guard re-reads
+    // and re-hashes the whole subgraph (seconds), and on a stale hash we refresh
+    // the diff in place. Closing here would blank the screen mid-check and then
+    // flicker back — it reads as a glitch. doExportRequest closes it on any
+    // outcome that isn't a stale preview.
+    doExportRequest(id, false, confirmBtn, confirmBtn.dataset.contentHash || '', modal)
+  }
+  modal.classList.add('is-active')
+  loadExportPreview(id)
+}
+
+// loadExportPreview fills the already-open modal with a fresh diff. Split from
+// openExportPreview so a stale-hash 409 can refresh in place without a
+// close/reopen flicker. `note` renders a warning banner above the diff.
+function loadExportPreview(id, note) {
+  const body = document.getElementById('export-preview-body')
+  const confirmBtn = document.getElementById('export-preview-confirm')
+  if (!body || !confirmBtn) return
+
+  body.innerHTML = '<div class="has-text-centered p-5"><span class="icon is-large has-text-grey"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></span><p class="mt-2 has-text-grey">Computing changes…</p></div>'
+  confirmBtn.disabled = true
+
+  fetch(BASE + '/api/v1/export/preview', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orbId: id }),
+  })
+    .then(r => r.json())
+    .then(json => {
+      confirmBtn.dataset.contentHash = (json.current && json.current.contentHash) || ''
+      renderExportPreview(body, json, note)
+      confirmBtn.disabled = false
+    })
+    .catch(() => {
+      // No hash => publish unguarded rather than sending a stale one.
+      confirmBtn.dataset.contentHash = ''
+      body.innerHTML = '<div class="notification is-warning is-light">Couldn’t compute the preview. You can still publish the current state.</div>'
+      confirmBtn.disabled = false
+    })
+}
+
+function renderExportPreview(body, json, note) {
+  const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+  const fmt = (v) => v == null ? '<span class="has-text-grey-light">∅</span>' : '<span class="is-family-monospace">' + esc(JSON.stringify(v)) + '</span>'
+  const fmtDate = (iso) => { if (!iso) return ''; const d = new Date(iso); return isNaN(d.getTime()) ? String(iso).slice(0, 10) : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) }
+  const s = json.summary || {}
+  const b = json.lastPublishedVersion || {}
+  const changed = (s.added || 0) + (s.removed || 0) + (s.modified || 0)
+
+  // Stale-hash retry banner (someone else edited during the review).
+  let head = note ? '<div class="notification is-warning is-light py-2 is-size-7 mb-3">' + esc(note) + '</div>' : ''
+
+  // Plan line — the loudest thing in the modal.
+  head += '<p class="mb-1"><strong>' + (changed === 0 ? 'No changes since last publish.' : ('Plan: ' + (s.modified || 0) + ' changed · ' + (s.added || 0) + ' added · ' + (s.removed || 0) + ' removed')) + '</strong> <span class="has-text-grey is-size-7">(' + (s.unchanged || 0) + ' unchanged)</span></p>'
+
+  // Provenance — operator language, no jargon, no digest noise.
+  if (b.state === 'first_export') head += '<p class="has-text-grey is-size-7 mb-3">First publish for this data center — every configuration item will be shipped.</p>'
+  else if (b.state === 'unavailable') head += '<div class="notification is-warning is-light py-2 is-size-7 mb-3">Couldn’t load the last published artifact' + (b.reason ? ' (' + esc(b.reason) + ')' : '') + '. No diff shown — publishing will ship the current state.</div>'
+  else head += '<p class="has-text-grey is-size-7 mb-3">Last published: ' + esc(b.tag || '') + (b.publishedAt ? ' · ' + esc(fmtDate(b.publishedAt)) : '') + '</p>'
+
+  // Change table — grouped by change type, then by owner. Omitted entirely when
+  // there's nothing to publish (the plan line already says so).
+  const table = changed === 0 ? '' : renderExportPreviewTable(json.changes || [], esc, fmt)
+
+  // Disclaimer as a muted footnote — honest, not loud.
+  const footnote = json.disclaimer ? '<p class="has-text-grey-light is-size-7 mt-4">' + esc(json.disclaimer) + '</p>' : ''
+
+  body.innerHTML = head + table + footnote
+}
+
+// renderExportPreviewTable renders one section per change type (Modified /
+// Added / Removed). Empty sections are never rendered, and each section's row
+// count equals its summary count — the API returns ONE entry per changed
+// entity, already carrying its owner, so there is no tree to walk and no
+// containment logic here. Any client integrating with orbital renders this the
+// same way; if the UI ever needs bespoke logic, that belongs in the API.
+//
+// The `<namespace>:` prefix is stripped from ids (a preview is scoped to one
+// data center, so it's constant); the full id stays in the cell's title.
+function renderExportPreviewTable(changes, esc, fmt) {
+  const rows = changes
+  const short = (id) => String(id || '').replace(/^[^:]+:/, '')
+  const sections = [
+    { key: 'modified', label: 'Modified', cls: 'is-warning' },
+    { key: 'added', label: 'Added', cls: 'is-success' },
+    { key: 'removed', label: 'Removed', cls: 'is-danger' },
+  ]
+  let out = ''
+  for (const sec of sections) {
+    const inSec = rows.filter(r => r.change === sec.key)
+    if (!inSec.length) continue
+
+    let trs = ''
+    for (const r of inSec) {
+      trs += '<tr>'
+        + '<td class="is-family-monospace is-size-7" title="' + esc(r.orbId) + '">' + esc(short(r.orbId)) + '</td>'
+        + '<td class="has-text-grey is-size-7">' + esc(r.type) + '</td>'
+        + '<td class="is-size-7">' + renderExportPreviewFields(r, esc, fmt) + '</td>'
+        + '</tr>'
+    }
+
+    out += '<p class="mt-4 mb-1"><span class="tag is-small ' + sec.cls + '">' + sec.label + '</span> '
+      + '<span class="has-text-grey is-size-7">' + inSec.length + '</span></p>'
+      + '<div style="overflow-x:auto"><table class="table is-fullwidth is-narrow is-hoverable mb-0">'
+      + '<thead><tr>'
+      + '<th class="is-size-7">orbId</th>'
+      + '<th class="is-size-7">Type</th>'
+      + '<th class="is-size-7">Change</th>'
+      + '</tr></thead>'
+      + '<tbody>' + trs + '</tbody></table></div>'
+  }
+  return out
+}
+
+// Modified rows show the actual before → after per field (the signal). Added and
+// removed rows show only a field count — every field of a new/gone entity is
+// trivially new/gone, so dumping them all is noise. The `Type.` prefix is
+// stripped from field names because the Type column already carries it.
+function renderExportPreviewFields(node, esc, fmt) {
+  const fields = node.fields || []
+  if (node.change !== 'modified') {
+    return '<span class="has-text-grey">' + fields.length + (fields.length === 1 ? ' field' : ' fields') + '</span>'
+  }
+  return fields.map(f =>
+    '<div><span class="has-text-grey">' + esc(String(f.field).replace(/^[^.]+\./, '')) + '</span>: '
+    + fmt(f.before) + ' <span class="has-text-grey-light">→</span> ' + fmt(f.after) + '</div>'
+  ).join('')
 }
 
 function pollExportStatus(jobId, download) {

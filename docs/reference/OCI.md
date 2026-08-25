@@ -25,6 +25,111 @@ Read this before: export job work, OCI publish/signing, backup/restore, Swagger 
 - **Export and publish are separate actions** — publish never happens automatically on export. Publish button appears on completed jobs. Re-publishing is allowed and creates a new `registry_artifacts` row (full audit trail).
 - **Globally serialized** — scratch DGraph is shared state; only one export job may be pending or running at a time. Returns 409 if another is in progress.
 
+## Export preview — `POST /api/v1/export/preview`
+
+Synchronous, read-only, no job created: returns the **desired-state delta** between the DC's current subgraph (blue) and its last published artifact (pulled by OCI digest). The `terraform plan` / `helm diff` step for publish — orbital's UI opens it as the confirm gate on Publish, and any client can call it the same way.
+
+**It is a desired-state delta, NOT an apply-forecast.** Orbital is intent-only and never in the reconciliation path; the edge controller decides what actually gets applied. Say "changes vs last published artifact" — never "will be applied / will create / will destroy." The response carries a `disclaimer` field saying so; keep it surfaced in any UI.
+
+**Three baseline states, and the distinction is load-bearing:**
+
+| `lastPublishedVersion.state` | Meaning | Response |
+|---|---|---|
+| `published` | prior artifact found and pulled | the diff |
+| `first_export` | no completed artifact for this DC | every entity is `added` — a legitimate full-add |
+| `unavailable` | a completed artifact EXISTS but its bytes couldn't be fetched (registry down, digest GC'd, creds unset) | **200** with `retrievable:false` + `reason`, and **`changes` empty** |
+
+`unavailable` must **never** render as a full-add — that would tell an operator they're re-adding the whole data center when in fact orbital just couldn't read the baseline. The two are distinguished by a cheap PostgreSQL check (does a completed row exist?) that never depends on the registry.
+
+**Response shape is FLAT** — `changes[]` has one entry per changed entity (`orbId`, `type`, `change`, `fields[]`), so `len(changes)` always equals the summary counts. It was briefly a nested tree with owner pointers; both were removed 2026-08-24. **Orbital is API-first: its own UI must be a thin renderer, so anything the UI displays an upstream client can display with the same ease.** Client-side logic in orbital's UI is a signal the API isn't carrying its weight.
+
+**The diff source is a content-diff of graph snapshots — NEVER the audit log.** This gets proposed repeatedly; it is wrong for four reasons: (1) the audit log is an event *stream*, so five edits to one field report five changes instead of one net change — and can't cancel an edit against its own reversal; (2) it records mutation *input* (`{operationName, query, variables}`), not before→after state; (3) **a `dropAll` restore writes zero audit rows** — the single operation that changes published content the most would show an empty window, telling the operator "nothing changed" right before they publish a wholesale-different graph; (4) same blind spot for `make seed` and any direct DQL write. Audit answers *who/when* (compliance); only a snapshot content-diff answers *what is the net difference*. Normalization rules: `DGRAPH.md` § "Comparing two graph snapshots".
+
+**Precedent** (this shape is conventional, not invented): `terraform plan` and the `helm diff` plugin (diff last-deployed vs pending); Argo CD `ignoreDifferences` (excluding server-managed churn fields is mandatory, not optional); Kubernetes strategic-merge `patchMergeKey` (match by stable key, not position); RFC 8785 JCS (canonicalize before hashing); OCI digest pinning (immutable baseline reference).
+
+## Guarded Apply — `expectedContentHash` (optimistic concurrency)
+
+`POST /api/v1/export` accepts an **optional** `expectedContentHash`. Pass the `current.contentHash` from a prior `POST /api/v1/export/preview` and the export **409s** if the DC's desired state changed in the review→Apply gap (another operator edited intent). Omit it for last-writer-wins — the default, so existing API callers are unaffected. Orbital's UI always sends it; on 409 it re-opens the preview with the fresh diff.
+
+This is the **ETag / `If-Match` pattern** (RFC 9110) with the validator carried in the request body rather than a header, because the guarded resource (the DC's desired state) is not the URL being POSTed to. Closest precedent: GitHub's Contents API, which takes the current blob `sha` in the body and rejects a mismatch. Also the shape of `terraform plan -out` → `apply` refusing a stale saved plan.
+
+**Orbital is stateless between the two calls — this is the load-bearing property.** Preview reads the subgraph, hashes it, returns the hash, and **discards everything**; the hash lives only in the client. There is no server-side snapshot, no session, no TTL, no eviction, and no replica affinity — orbital recomputes the hash from scratch on the apply and compares. A review started against one pod applies cleanly against another, and a hash taken before an orbital restart is still valid after it. Do NOT "improve" this by stashing the previewed snapshot server-side under a token: that trades a self-describing 32-byte value for megabytes of per-review state plus expiry and affinity problems.
+
+**What gets hashed — and where scratch fits.** `fetchNamespaceSubgraph` reads **blue**; that result (the `nodes` slice) is what the hash covers. **Scratch is downstream of it** — a serialization mechanism, not a source of truth: the export wipes scratch, loads `nodes` into it, and runs a native DGraph export to produce `data.json.gz`. So the hash gates the pipeline's *input*; everything after it is derived from data already verified. Scratch is wiped at the start of every export and holds nothing between runs.
+
+**Do NOT try to hash the exported artifact instead** — DGraph's native export is not byte-deterministic (the same finding that killed checksum-based backup dedup, see § Backup). The same graph can serialize to different bytes, so an output hash would produce constant false conflicts. Hashing the normalized graph model is stable by construction.
+
+The preview **never touches scratch** — it reads blue and stops, so it takes no scratch lock and never contends with a running export.
+
+```mermaid
+sequenceDiagram
+    participant C as Client (UI / AEP)
+    participant O as Orbital
+    participant B as DGraph (blue)
+    participant S as DGraph (scratch)
+    participant R as OCI Registry
+
+    %% ── 1. Preview — read-only, never touches scratch ───────────────────────
+    C->>O: POST /api/v1/export/preview {orbId}
+    O->>B: fetchNamespaceSubgraph
+    B-->>O: S1 (nodes)
+    O->>R: pull last artifact by digest
+    R-->>O: baseline data.json.gz
+    Note over O: normalize(S1) = H1, diff vs baseline
+    O-->>C: 200 {contentHash H1, changes}
+    Note over O: S1 discarded — Orbital retains nothing
+
+    Note over C: operator reviews (minutes)
+
+    %% ── 2. Apply — guarded ──────────────────────────────────────────────────
+    C->>O: POST /api/v1/export {orbId, expectedContentHash H1}
+    O->>B: fetchNamespaceSubgraph (fresh read)
+    B-->>O: S2 (nodes)
+    Note over O: normalize(S2) = H2
+
+    alt H2 differs from H1
+        O-->>C: 409 MVCC_CONFLICT — no job created
+    else H2 equals H1
+        O-->>C: 202 {jobId}
+        Note over O: pin S2 — goroutine reuses these exact nodes
+        O->>S: wipe, apply schema, load S2
+        O->>S: trigger native export
+        S-->>O: data.json.gz
+        O->>R: push + sign
+    end
+```
+
+**Pinning — why the export uses the verified bytes.** The guard's read (`S2`) happens in `Trigger`; without pinning, `doExport` would issue a *third* read in the goroutine, leaving a millisecond-wide window where the published artifact could contain an unreviewed change. So when `expectedContentHash` is supplied, `Trigger` hands its already-fetched `S2` to `runExport`, and `doExport` uses those nodes instead of re-fetching. That makes **shipped == reviewed** structurally true, and it *removes* a query rather than adding one. Unguarded callers keep the old behavior (goroutine fetches its own snapshot) so their trigger stays fast.
+
+**Multi-writer clients MUST send it.** It is optional at the protocol level only for back-compat (orbctl, scripts, single-operator flows). Any surface where several people can edit intent concurrently — orbital's own UI, AEP — is expected to send it on every apply.
+
+**What the hash covers** (`graphdiff.Snapshot.ContentHash`, `internal/graphdiff/compare.go`): the **canonical normalized graph** — sorted orbIds, each node emitted as sorted-key JSON (`orbId`, `types`, `f:<scalar>`, `e:<edge>` as sorted target orbIds) streamed into one SHA-256. Therefore:
+
+- **In** — the set of orbIds present (so **adds and deletes** move it, which a per-node `version`/`ifVersion` check structurally cannot catch), type membership, every scalar value, every edge as target-orbId sets.
+- **Out** — `ConfigItem.version` / `updatedAt` / `updatedBy` and DGraph internals (`uid`, tenant `namespace`). So it is **UID-independent** (survives a restore's UID reassignment) and **noise-independent** (a save-with-no-change bumps `version` but does NOT trip the guard — it guards semantic change, not write activity).
+- **Not covered:** the GraphQL schema. A `schema.graphql` change between preview and Apply would alter `schema.gz` without moving the hash. Acceptable — that's a deploy event, not a concurrent-operator action.
+
+Preview and the guard call the **same** `graphdiff.NormalizeCurrent(fetchNamespaceSubgraph(ns)).ContentHash()`, so "hash changed" ⟺ "the preview would render differently" — it cannot drift from what the operator reviewed. The guard runs **after** the cheap in-progress checks (it costs a full subgraph re-fetch) and **before** job creation, so a rejected Apply leaves no job row. Scoped to the one DC's namespace — edits in another DC never block your publish.
+
+## Known limits — export, preview, guarded apply
+
+**Whole-subgraph-in-memory is the binding constraint, and it predates all of this.** `fetchNamespaceSubgraph` returns the entire namespace as `[]map[string]any`, and `loadSubgraphIntoScratch` marshals all of it into a single DQL mutation body. That was true before the preview and the guard existed. If a DC subgraph ever stops fitting in memory, **the export breaks first** — do not conclude the hash or the preview needs redesigning. The bound is physical (one modular data center's servers, NICs, volumes, clusters), ~1,300 nodes for colo today.
+
+**Preview is the heaviest consumer — not the guard, and not the pin.** Computing a diff holds four structures at once: baseline nodes + baseline snapshot + current nodes + current snapshot, roughly 4× one subgraph. By contrast the pin adds ~nothing to peak: exports are globally serialized, so at most one snapshot is live either way — pinning only extends how long it is held, not how much.
+
+**Escape hatches, in the order to reach for them:**
+
+1. **Free the raw nodes after `NormalizeCurrent`.** Preview doesn't need the raw slice once the Snapshot exists — dropping the reference roughly halves peak. Cheapest win, no design change.
+2. **Stream the hash.** Collect and sort orbIds first, then normalize + encode one node at a time into the running SHA-256 — O(node count) instead of O(whole graph).
+3. **The diff is the genuinely hard one.** Comparing by orbId wants both sides indexed; streamable only as a merge-join over orbId-sorted inputs. Real work — defer until 1 and 2 are exhausted.
+4. **Paginate the response before optimizing the computation** (`?detail=summary`, truncation — design §7). Response size usually hurts before memory does.
+
+**The client contract is scale-independent — this is the insurance.** `contentHash` is a 32-byte opaque token compared in O(1). Clients never parse it, never construct it, never depend on its derivation. So the derivation can be swapped wholesale — streaming digest, a rolling hash maintained in DGraph, a Merkle tree over orbIds — with **zero client changes**. Never leak hash internals into the API; that freedom is the whole point of the ETag shape.
+
+**Cost is latency as well as memory.** A guarded apply pays one extra full subgraph read to verify before it accepts — seconds on a large DC. That is why the guard runs *after* the cheap in-progress checks and before job creation.
+
+**Two things the hash deliberately does not cover:** the GraphQL schema (a `schema.graphql` change between preview and apply alters `schema.gz` without moving the hash — a deploy event, not a concurrent-operator one), and the scratch round-trip (the preview reads blue and never stages to scratch, so it surfaces semantic differences, not serialization ones — intentional, since DGraph's native export isn't byte-deterministic — see `DGRAPH.md` § "Comparing two graph snapshots").
+
 ## Download endpoint — dual mode for courier flow
 
 `GET /api/v1/export/jobs/:jobId/download`

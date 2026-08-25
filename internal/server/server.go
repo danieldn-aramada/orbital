@@ -243,6 +243,13 @@ func New(cfg *config.Config, db *ent.Client) (*Server, error) {
 	// RequireRole passes GET/HEAD/OPTIONS through unconditionally.
 	api := root.Group("/api/v1", append(apiAuth, handler.RequireRole(db, user.RoleDev))...)
 
+	// Read-only API group — auth required, but NO route-level RoleDev check, so
+	// readonly callers can run read endpoints that happen to be POST-shaped
+	// (e.g. export preview, which takes an orbId in the body per the "orbId is
+	// never a path segment" convention). Mirrors the GraphQL group's rationale:
+	// a POST read must not be gated as a mutation.
+	apiReadonly := root.Group("/api/v1", apiAuth...)
+
 	// GraphQL group — auth required, but NO route-level role check. GraphQL
 	// queries use POST, so RequireRole(RoleDev) would wrongly block readonly
 	// callers from running reads. Mutation authorization is enforced at the
@@ -382,6 +389,7 @@ func New(cfg *config.Config, db *ent.Client) (*Server, error) {
 
 		api.GET("/export/jobs/:jobId", exp.Status)
 		api.GET("/export/jobs/:jobId/download", exp.Download)
+		apiReadonly.POST("/export/preview", exp.Preview)
 
 		ociCfg := oci.Config{
 			Registry:       cfg.OCIRegistry,
@@ -392,6 +400,7 @@ func New(cfg *config.Config, db *ent.Client) (*Server, error) {
 			Timeout:        cfg.OCIPublishTimeout,
 			AllowHTTP:      cfg.OCIAllowHTTP,
 		}
+		exp.SetOCIConfig(ociCfg)
 		retryClient := retryablehttp.NewClient()
 		retryClient.RetryMax = cfg.BundlerMaxAttempts - 1
 		retryClient.RetryWaitMin = time.Second

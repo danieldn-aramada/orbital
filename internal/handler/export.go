@@ -23,6 +23,8 @@ import (
 	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/ent/restorejob"
 	"github.com/armada/orbital/internal/bundler"
+	"github.com/armada/orbital/internal/graphdiff"
+	"github.com/armada/orbital/internal/oci"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
@@ -68,7 +70,15 @@ type Export struct {
 	// handler exists (handler → oci → handler cycle is avoided by injecting
 	// the closure rather than a handler ref).
 	publishFn PublishExportedFunc
+	// ociCfg supplies registry credentials for the preview endpoint's baseline
+	// pull-by-digest. Zero when OCI is not configured (preview then reports the
+	// baseline as unavailable/first_export rather than diffing). Set by server.go.
+	ociCfg oci.Config
 }
+
+// SetOCIConfig injects the OCI registry config used by the preview endpoint to
+// pull the last-published artifact (baseline) by digest.
+func (h *Export) SetOCIConfig(cfg oci.Config) { h.ociCfg = cfg }
 
 // SetBasePath configures the URL base path used by HTML fragments rendered by this handler.
 func (h *Export) SetBasePath(bp string) { h.basePath = bp }
@@ -146,10 +156,18 @@ type exportRequest struct {
 	// discarding the zip on completion. true exports only and retains the zip
 	// for GET /api/v1/export/jobs/{jobId}/download.
 	Download bool `json:"download" example:"false"`
+	// ExpectedContentHash is the optional guarded-Apply token: pass the
+	// `current.contentHash` from a prior POST /api/v1/export/preview and the
+	// export aborts with 409 if the data center's desired state changed since
+	// that preview (another writer edited intent in the review→Apply gap).
+	// Omit for last-writer-wins (default, back-compatible). This is the
+	// ETag/If-Match pattern applied to a whole subgraph — one hash rather than
+	// per-node version checks, so concurrent ADDS and DELETES are caught too.
+	ExpectedContentHash string `json:"expectedContentHash,omitempty" example:"sha256:045b8a51a0aea59fa"`
 }
 
 // @Summary     Trigger subgraph export
-// @Description Triggers an async atomic export of the data center's configuration subgraph. When download=false (default) AND OCI is configured, the export chains into an OCI publish and the zip is discarded on completion. When download=true (or OCI is not configured), the export runs in download-only mode and the zip is retained on disk for the client to fetch via GET /api/v1/export/jobs/{jobId}/download. Returns 202 with a job ID immediately; poll GET /api/v1/export/jobs/{jobId} until terminal state. Returns 409 if an export or restore is already in progress.
+// @Description Triggers an async atomic export of the data center's configuration subgraph. When download=false (default) AND OCI is configured, the export chains into an OCI publish and the zip is discarded on completion. When download=true (or OCI is not configured), the export runs in download-only mode and the zip is retained on disk for the client to fetch via GET /api/v1/export/jobs/{jobId}/download. Returns 202 with a job ID immediately; poll GET /api/v1/export/jobs/{jobId} until terminal state. Returns 409 if an export or restore is already in progress, or if expectedContentHash is supplied and the desired state changed since that preview (guarded Apply).
 // @Tags        export
 // @Accept      json
 // @Produce     json
@@ -176,7 +194,7 @@ func (h *Export) Trigger(c echo.Context) error {
 		download = true
 	}
 
-	dcName, dcOrbID, _, err := h.fetchDCInfo(c.Request().Context(), datacenterID)
+	dcName, dcOrbID, namespaceName, err := h.fetchDCInfo(c.Request().Context(), datacenterID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "could not resolve datacenter: "+err.Error())
 	}
@@ -202,6 +220,32 @@ func (h *Export) Trigger(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusConflict, fmt.Sprintf("restore in progress (id: %s)", existingRestore.ID))
 	}
 
+	// Guarded Apply (optimistic concurrency, ETag/If-Match shape): when the
+	// caller passes the contentHash it previewed, re-hash the CURRENT desired
+	// state and refuse if intent moved in the review→Apply gap. Runs after the
+	// cheap in-progress checks so a doomed request doesn't pay for the subgraph
+	// query. Omitted hash = last-writer-wins (back-compatible).
+	var pinned []map[string]any
+	if req.ExpectedContentHash != "" {
+		nodes, err := h.fetchNamespaceSubgraph(c.Request().Context(), namespaceName)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusServiceUnavailable, "verify current state: "+err.Error())
+		}
+		if got := graphdiff.NormalizeCurrent(nodes).ContentHash(); got != req.ExpectedContentHash {
+			// MVCC_CONFLICT, not a bare 409: this endpoint also returns 409 for
+			// "export/restore already in progress", and clients branch on `code`,
+			// never on the message (docs/reference/ERROR-RESPONSES.md).
+			return writeError(c, http.StatusConflict, CodeMVCCConflict,
+				"desired state changed since the preview was generated — re-review before publishing",
+				"Re-run the export preview to see the current changes, then publish with the new contentHash.")
+		}
+		// Pin the VERIFIED snapshot for the export. Without this, doExport issues
+		// its own re-read and a change landing in between would ship unreviewed.
+		// Handing these exact nodes over makes "shipped == reviewed" structural —
+		// and removes a query rather than adding one.
+		pinned = nodes
+	}
+
 	actor := actorFromContext(c)
 	var actorPtr *string
 	if actor != "" {
@@ -222,7 +266,7 @@ func (h *Export) Trigger(c echo.Context) error {
 	// Audit event fires from runExport on completion — the atomic flow
 	// produces ONE `export` event with the actual outcome (mode, publishedToOCI)
 	// rather than a per-phase trail.
-	go h.runExport(job.ID, download, actor, dcOrbID)
+	go h.runExport(job.ID, download, actor, dcOrbID, pinned)
 
 	return c.JSON(http.StatusAccepted, triggerResponse{
 		JobID:  job.ID.String(),
@@ -683,7 +727,10 @@ func sanitizeForFilename(s string) string {
 // means "export then publish to OCI, discard zip." Emits a single `export`
 // audit event on success, capturing mode + publishedToOCI. On failure, the
 // zip is deleted (never retained through a failed atomic flow).
-func (h *Export) runExport(jobID uuid.UUID, download bool, actor string, dcOrbID string) {
+// pinned carries the guarded-Apply snapshot: the subgraph Trigger already read
+// and hash-verified. nil for unguarded callers, which makes doExport fetch its
+// own. See docs/reference/OCI.md § "Guarded Apply".
+func (h *Export) runExport(jobID uuid.UUID, download bool, actor string, dcOrbID string, pinned []map[string]any) {
 	timeout := h.timeout
 	if timeout == 0 {
 		timeout = 30 * time.Minute
@@ -726,7 +773,7 @@ func (h *Export) runExport(jobID uuid.UUID, download bool, actor string, dcOrbID
 		return
 	}
 
-	if err := h.doExport(ctx, jobID, log); err != nil {
+	if err := h.doExport(ctx, jobID, log, pinned); err != nil {
 		log.Error("export failed", "err", err)
 		h.markFailed(ctx, jobID, err.Error())
 		return
@@ -837,7 +884,7 @@ func (h *Export) emitExportEvent(actor, dcOrbID string, jobID uuid.UUID, mode st
 	)
 }
 
-func (h *Export) doExport(ctx context.Context, jobID uuid.UUID, log *slog.Logger) error {
+func (h *Export) doExport(ctx context.Context, jobID uuid.UUID, log *slog.Logger, pinned []map[string]any) error {
 	job, err := h.db.ExportJob.Get(ctx, jobID)
 	if err != nil {
 		return fmt.Errorf("get job: %w", err)
@@ -854,10 +901,17 @@ func (h *Export) doExport(ctx context.Context, jobID uuid.UUID, log *slog.Logger
 	// Uses has(ConfigItem.namespace) + uid_in to find every node in the namespace
 	// regardless of type, then expand(_all_) to get all predicates without
 	// enumerating schema types. New ConfigItem types are automatically included.
-	log.Info("querying namespace subgraph from blue DGraph", "namespace", namespaceName)
-	nodes, err := h.fetchNamespaceSubgraph(ctx, namespaceName)
-	if err != nil {
-		return fmt.Errorf("fetch namespace subgraph: %w", err)
+	// Guarded Apply pins the snapshot Trigger already hash-verified, so the bytes
+	// published ARE the bytes reviewed. Unguarded callers read here as before.
+	nodes := pinned
+	if nodes == nil {
+		log.Info("querying namespace subgraph from blue DGraph", "namespace", namespaceName)
+		nodes, err = h.fetchNamespaceSubgraph(ctx, namespaceName)
+		if err != nil {
+			return fmt.Errorf("fetch namespace subgraph: %w", err)
+		}
+	} else {
+		log.Info("using pinned subgraph verified by guarded apply", "namespace", namespaceName)
 	}
 	log.Info("subgraph fetched", "nodes", len(nodes))
 	if len(nodes) == 0 {

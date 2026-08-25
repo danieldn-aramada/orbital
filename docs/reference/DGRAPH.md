@@ -35,6 +35,20 @@ Read this before: DGraph schema changes, query/mutation work, export/import, see
 
 **Legacy (pre-convention — migrate when next touched, don't treat network types as the special case):** `IPAddress` = `<ns>:<address>`, `Rack` = `<ns>:<rackName>`, `IdracSettings` = `<ns>:<serviceTag>-idrac`, cluster children = `<ns>:<clusterName>-<kind>`. (`Server` migrated to `server-<serial>` 2026-08-12.)
 
+## ConfigItem ownership (owned-child model)
+
+Some ConfigItems are **owned children** of another: they model physical/logical containment (`StorageDevice` ∈ `StorageController` ∈ `Server`; `NetworkInterface` on a `NetworkAdapter` ∈ `Server`; `ServerMaintenance` for a `Server`). Ownership is a **presentation / aggregation** concept, **never actuation** — edge controllers never consume it. It drives: nested JSON editing (children edited through the owner's tree, see UI.md), audit rollup (an owner's audit tab aggregates its children's events — `collectRelatedOrbIDs`), and delete-cascade. It does **not** drive the export diff preview — see the note below.
+
+**Two layers, two homes:**
+- **Ownership *instances*** ("this maintenance belongs to *that* server") already live in the CMDB — they ARE the child→owner **edge** in DGraph (`ServerMaintenance.server`), read live wherever needed.
+- **Ownership *type-policy*** ("which edge *types* are containment, and their precedence") is **schema metadata**: it changes only when the schema changes, is not operator-tunable, and must be reviewed / versioned / deployed with the schema. It therefore belongs **co-located with the schema, in version control — NOT in Postgres** (the operational/runtime DB; model-definition there invites drift from the schema it describes and bypasses review).
+
+**Single source (Spike 33, done 2026-08-24):** the type-policy lives once, in `internal/configitems/registry.go` — each `Type`'s `OwnerType`/`OwnerField`/`ChildField` (single-owner) plus an ordered, most-specific-first `OwnerEdges []OwnerEdge` for multi-parent types (`NetworkInterface`, `IPAddress`, `StorageVolume`). The **audit collector** (`internal/handler/related_orbids.go`) derives from it via `OwnedChildren()` / `OwnedOrbIDSelection()`; the per-type `collectRelatedOrbIDs` / `collectClusterRelatedOrbIDs` walkers are gone, which fixed real drift (storage devices/volumes and switch-side interfaces never rolled up; NetworkDevice and DataCenter aggregated nothing). A schema-consistency test (`configitems/schema_consistency_test.go`, R3) fails the build if the registry drifts from `schema.graphql` or a ConfigItem type goes unregistered. Adding an owned-child type = one registry entry (see `docs/playbooks/add-configitem.md`).
+
+The export **diff preview** was briefly a second consumer (it rolled changes up under an owner). That was removed 2026-08-24 — owner was never a decided requirement for the preview, and the orbId convention already identifies the owning entity. Ownership today serves the audit tab, the JSON editor's subtree paths, and delete-cascade. Do not re-add it to the diff without an explicit decision.
+
+> **Why not infer ownership from DGraph automatically?** DGraph encodes *relationships*, not *ownership* — `@hasInverse` is bidirectional, there is no `@owns`. Projecting the graph to a tree must pick one canonical parent per node (a NIC nests under its adapter, not its server *and* device), which is a domain policy, not a derivable fact. Ownership must be **declared**; the goal is to declare it once, explicitly, next to the schema.
+
 ## Query patterns
 
 ### DQL tilde traversal (reverse edges)
@@ -64,6 +78,29 @@ GraphQL cannot traverse typed back-refs polymorphically. For queries like "is th
 
 ### GraphQL get vs query
 `get{Type}(id: ID!)` — reliable for most types. For acronym-named types (e.g. `IPAddress`), prefer `query{Type}(filter: { orbId: { eq: $orbId } })` which is more reliable than `getIPAddress`.
+
+## Comparing two graph snapshots (normalization)
+
+Anything that diffs or fingerprints the graph — the export preview, its `contentHash`, a future published-vs-published diff — must normalize first, because **the same graph reaches you in two different wire shapes**. `internal/graphdiff` owns this; read it before writing any new comparison.
+
+| | Live DQL (`fetchNamespaceSubgraph`) | DGraph native export (`data.json.gz`) |
+|---|---|---|
+| Shape | one **merged map per node** | a **flat array of per-predicate fragments** |
+| `uid` | appears once per node | **recurs** — one fragment per predicate, and one per edge target |
+| `dgraph.type` | an **array** | a **string**, one fragment per type |
+| Booleans | real JSON `false` | **quoted strings `"false"`** |
+
+Five rules fall out, each of which caused (or would have caused) a real bug:
+
+- **Reassemble the export by `uid` before comparing.** A 663-node export arrives as ~8,000 fragments; fold each fragment's single predicate into the accumulating node (scalars overwrite, edges/types union).
+- **Booleans must be coerced.** `"false"` (export) vs `false` (DQL) compares unequal — this produced **174 false-positive "modified" nodes** against real colo data and was invisible to synthetic tests. `canonScalar` normalizes both sides.
+- **Compare edges by target `orbId`, never by `uid`.** `dgraph live` reassigns UIDs on restore, so any UID-based comparison reports every edge as changed after a restore.
+- **Exclude the churn predicates:** `ConfigItem.version`, `ConfigItem.updatedAt`, `ConfigItem.updatedBy` (rewritten on every write, so a diff would mark every touched node modified) plus DGraph internals `uid` and the tenant `namespace` (`"0x0"` — **not** `ConfigItem.namespace`). `createdAt`/`createdBy` are deliberately KEPT: they only change on delete+recreate, which is real signal.
+- **Key everything by `orbId`.** It's the stable identity across instances and restores (see § orbId convention).
+
+**Do NOT fingerprint the exported artifact instead of the normalized graph** — DGraph's native export is **not byte-deterministic** (the same finding that killed checksum-based backup dedup). Hash the canonical model; it's stable by construction.
+
+The one guard that proves normalization is correct is a **round-trip**: export a DC, then diff the current graph against that same artifact — the result must be empty. Any normalizer disagreement shows up immediately.
 
 ## Blue-green DGraph topology
 

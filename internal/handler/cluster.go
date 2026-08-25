@@ -207,38 +207,6 @@ type backupS3SyncResponse struct {
 	Enabled   bool   `json:"enabled"`
 }
 
-// collectClusterRelatedOrbIDs returns the cluster's orbId followed by every
-// nested ConfigItem orbId in the cluster's subgraph (nodes + backup tree).
-// Empty / zero values are skipped so the result is ready for the
-// data-related-orb-ids attribute. Order is stable: the cluster comes first,
-// then nodes, then the backup wrapper, then each backup sub-kind. Mirrors the
-// Server → collectRelatedOrbIDs pattern. See shared.js loadAuditPanel.
-func collectClusterRelatedOrbIDs(raw *clusterQueryResponse) []string {
-	out := make([]string, 0, 4+len(raw.Nodes))
-	add := func(id string) {
-		if id != "" {
-			out = append(out, id)
-		}
-	}
-	add(raw.OrbID)
-	for _, n := range raw.Nodes {
-		add(n.OrbID)
-	}
-	if raw.Backup != nil {
-		add(raw.Backup.OrbID)
-		if raw.Backup.Etcd != nil {
-			add(raw.Backup.Etcd.OrbID)
-		}
-		if raw.Backup.Velero != nil {
-			add(raw.Backup.Velero.OrbID)
-		}
-		if raw.Backup.S3Sync != nil {
-			add(raw.Backup.S3Sync.OrbID)
-		}
-	}
-	return out
-}
-
 type clusterNodeTabData struct {
 	OrbID            string
 	Name             string // the k8s node name (KubernetesNode.name), e.g. "dev-main-cp9-7"
@@ -568,7 +536,7 @@ func (h *ClusterHandler) Tab(c echo.Context) error {
 		}
 		tab.Backup = bd
 	}
-	tab.RelatedOrbIDsCSV = strings.Join(collectClusterRelatedOrbIDs(&raw), ",")
+	tab.RelatedOrbIDsCSV = strings.Join(collectRelatedOrbIDs(c.Request().Context(), h.dgraphURL, raw.Typename, raw.OrbID), ",")
 	tab.AuditPanelID = "cluster-panel-audit-" + tab.DomID
 
 	tmpl := h.fragment

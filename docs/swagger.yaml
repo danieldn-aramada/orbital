@@ -1,4 +1,42 @@
 definitions:
+  graphdiff.Change:
+    properties:
+      change:
+        description: '"added" | "removed" | "modified" | "unchanged" (container only)'
+        type: string
+      children:
+        items:
+          $ref: '#/definitions/graphdiff.Change'
+        type: array
+      descendantSummary:
+        $ref: '#/definitions/graphdiff.Summary'
+      fields:
+        items:
+          $ref: '#/definitions/graphdiff.FieldChange'
+        type: array
+      orbId:
+        type: string
+      type:
+        type: string
+    type: object
+  graphdiff.FieldChange:
+    properties:
+      after: {}
+      before: {}
+      field:
+        type: string
+    type: object
+  graphdiff.Summary:
+    properties:
+      added:
+        type: integer
+      modified:
+        type: integer
+      removed:
+        type: integer
+      unchanged:
+        type: integer
+    type: object
   handler.artifactResponse:
     properties:
       bundlerError:
@@ -81,6 +119,18 @@ definitions:
       status:
         type: string
       trigger:
+        type: string
+    type: object
+  handler.currentMeta:
+    properties:
+      contentHash:
+        example: sha256:abc
+        type: string
+      nodeCount:
+        example: 663
+        type: integer
+      source:
+        example: blue
         type: string
     type: object
   handler.entryItem:
@@ -179,6 +229,17 @@ definitions:
           for GET /api/v1/export/jobs/{jobId}/download.
         example: false
         type: boolean
+      expectedContentHash:
+        description: |-
+          ExpectedContentHash is the optional guarded-Apply token: pass the
+          `current.contentHash` from a prior POST /api/v1/export/preview and the
+          export aborts with 409 if the data center's desired state changed since
+          that preview (another writer edited intent in the review→Apply gap).
+          Omit for last-writer-wins (default, back-compatible). This is the
+          ETag/If-Match pattern applied to a whole subgraph — one hash rather than
+          per-node version checks, so concurrent ADDS and DELETES are caught too.
+        example: sha256:045b8a51a0aea59fa
+        type: string
       orbId:
         description: OrbID identifies the data center to export, in "namespace:name"
           form. Required.
@@ -198,6 +259,52 @@ definitions:
       field:
         example: retentionDays
         type: string
+    type: object
+  handler.lastPublishedMeta:
+    properties:
+      digest:
+        example: sha256:1a2b
+        type: string
+      exportJobId:
+        type: string
+      publishedAt:
+        type: string
+      reason:
+        type: string
+      retrievable:
+        type: boolean
+      state:
+        description: published | first_export | unavailable
+        example: published
+        type: string
+      tag:
+        example: v8
+        type: string
+    type: object
+  handler.previewResponse:
+    properties:
+      byType:
+        additionalProperties:
+          $ref: '#/definitions/graphdiff.Summary'
+        type: object
+      changes:
+        items:
+          $ref: '#/definitions/graphdiff.Change'
+        type: array
+      current:
+        $ref: '#/definitions/handler.currentMeta'
+      dataCenterName:
+        example: colo-galleon
+        type: string
+      disclaimer:
+        type: string
+      lastPublishedVersion:
+        $ref: '#/definitions/handler.lastPublishedMeta'
+      orbId:
+        example: colo:colo-galleon
+        type: string
+      summary:
+        $ref: '#/definitions/graphdiff.Summary'
     type: object
   handler.putResolutionBody:
     properties:
@@ -750,7 +857,9 @@ paths:
         (or OCI is not configured), the export runs in download-only mode and the
         zip is retained on disk for the client to fetch via GET /api/v1/export/jobs/{jobId}/download.
         Returns 202 with a job ID immediately; poll GET /api/v1/export/jobs/{jobId}
-        until terminal state. Returns 409 if an export or restore is already in progress.
+        until terminal state. Returns 409 if an export or restore is already in progress,
+        or if expectedContentHash is supplied and the desired state changed since
+        that preview (guarded Apply).
       parameters:
       - description: Export request
         in: body
@@ -1082,6 +1191,29 @@ paths:
       summary: Update user role
       tags:
       - users
+  /export/preview:
+    post:
+      consumes:
+      - application/json
+      description: Synchronous, read-only. Diffs the current desired state for a data
+        center against its last published artifact. Not an apply-forecast.
+      parameters:
+      - description: Data center orbId to preview
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.exportRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.previewResponse'
+      summary: Preview export diff (desired-state delta vs last published)
+      tags:
+      - export
   /graphql:
     post:
       consumes:

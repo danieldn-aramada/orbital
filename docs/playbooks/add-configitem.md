@@ -57,9 +57,12 @@ Add one entry to `internal/configitems/registry.go::Types`:
 - `typeBeforeFields` / `BeforeFields("MyNewKind")` — audit before-fetcher knows what to select
 - `BuildEditTargets(...)` — page handlers' edit modal includes this kind in its JSON editor + dispatches `update{Kind}` on edit / `add{Kind}` on first-time create
 - `configitem-editor.js` (the JS module) — consumes the registry-derived targets blob from any page that exports it; no JS edits needed
+- **ownership (Spike 33)** — the export **diff-preview rollup** (`graphdiff.ownerEdges`) AND the **audit related-orbId collector** BOTH derive from this entry's `OwnerType`/`OwnerField`/`ChildField`, so they can never drift from each other again. For a **multi-parent** type — owned by more than one type, or where the rollup parent differs from the down-path (e.g. `NetworkInterface`, `IPAddress`, `StorageVolume`) — declare an ordered `OwnerEdges []OwnerEdge` (most-specific first; the first present edge on a node is its canonical parent, à la Kubernetes `controller:true`)
 
-Pin behavior with `internal/configitems/registry_test.go` — the parity test
-catches drift between the registry and what consumers see.
+Pin behavior with `internal/configitems/registry_test.go` (parity) and
+`schema_consistency_test.go` (the R3 guard — fails the build if the registry's
+ownership fields drift from `schema.graphql`, or a new ConfigItem type is
+unregistered).
 
 ---
 
@@ -74,11 +77,13 @@ This is the **only handler-side change required**. Everything downstream —
 audit pipeline, edit-target JSON, JS submit handler, diff rendering — picks
 it up automatically from the registry.
 
-If the new type is **a new owned child of an existing parent** (e.g. another
-sub-kind of ClusterBackup), the parent's `collect*RelatedOrbIDs` walker also
-needs to include the new child's orbId (so audit aggregation surfaces its
-events on the parent's Audit Log tab). This is currently still hand-written;
-the registry's `Children()` could drive it in a future refactor.
+If the new type is **a new owned child of an existing parent**, audit
+aggregation surfaces its events on the parent's Audit Log tab **automatically** —
+the single generic `collectRelatedOrbIDs` (`internal/handler/related_orbids.go`)
+derives owned children from the registry (`configitems.OwnedChildren`), so no
+hand-written walker to update (Spike 33 removed the per-type ones). Just make
+sure your `OwnerType`/`OwnerField`/`ChildField` (and `OwnerEdges` if multi-parent)
+are correct — the R3 test enforces they match the schema.
 
 ---
 

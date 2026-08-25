@@ -565,10 +565,17 @@ const docTemplate = `{
         "orb.ImportRecord": {
             "type": "object",
             "properties": {
+                "buildAt": {
+                    "description": "Propagation anchors — nil when unknown (upload imports, or a registry\nwithout the search extension). Deltas: zotPushAt−buildAt = publish→edge,\nimportedAt−zotPushAt = edge→import, dispatchedAt−importedAt = import→dispatch.",
+                    "type": "string"
+                },
                 "dcOrbId": {
                     "type": "string"
                 },
                 "digest": {
+                    "type": "string"
+                },
+                "dispatchedAt": {
                     "type": "string"
                 },
                 "error": {
@@ -599,6 +606,9 @@ const docTemplate = `{
                 },
                 "verification": {
                     "description": "Verification* constant",
+                    "type": "string"
+                },
+                "zotPushAt": {
                     "type": "string"
                 }
             }

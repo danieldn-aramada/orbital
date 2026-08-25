@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 
@@ -127,84 +126,8 @@ func TestServerTab_Success(t *testing.T) {
 	}
 	// Audit-tab li must carry the full subgraph orbId list so the panel can
 	// fetch events for the server AND its nested ConfigItems in one call.
-	wantCSV := `data-related-orb-ids="test:srv-01,test:srv-01-idrac,test:srv-01-scp,test:srv-01-oobip,test:srv-01-ctrl-0"`
+	wantCSV := `data-related-orb-ids="test:srv-01,test:srv-01-ctrl-0,test:srv-01-idrac,test:srv-01-oobip,test:srv-01-scp"`
 	if !strings.Contains(rec.Body.String(), wantCSV) {
 		t.Errorf("server tab missing %q in rendered body", wantCSV)
-	}
-}
-
-func TestCollectRelatedOrbIDs(t *testing.T) {
-	mk := func(server string, idrac, scp, oob string, controllers ...string) *serverQueryResponse {
-		r := &serverQueryResponse{OrbID: server}
-		r.OobIP.OrbID = oob
-		if idrac != "" {
-			r.IdracSettings = &struct {
-				OrbID                       string `json:"orbId"`
-				Version                     int    `json:"version"`
-				FirmwareVersion             string `json:"firmwareVersion"`
-				OsToIdracPassThroughEnabled bool   `json:"osToIdracPassThroughEnabled"`
-				SshEnabled                  bool   `json:"sshEnabled"`
-				UsbManagementPortEnabled    bool   `json:"usbManagementPortEnabled"`
-				IpmiEnabled                 bool   `json:"ipmiEnabled"`
-				LockdownModeEnabled         bool   `json:"lockdownModeEnabled"`
-				DhcpEnabled                 bool   `json:"dhcpEnabled"`
-				RacadmEnabled               bool   `json:"racadmEnabled"`
-			}{OrbID: idrac}
-		}
-		if scp != "" {
-			r.ServerConfigurationProfile = &struct {
-				OrbID string `json:"orbId"`
-				JSON  string `json:"json"`
-			}{OrbID: scp}
-		}
-		for _, c := range controllers {
-			r.StorageControllers = append(r.StorageControllers, struct {
-				OrbID          string `json:"orbId"`
-				Name           string `json:"name"`
-				StorageDevices []struct {
-					Name          string `json:"name"`
-					CapacityBytes int    `json:"capacityBytes"`
-					Manufacturer  string `json:"manufacturer"`
-					SerialNumber  string `json:"serialNumber"`
-					WWN           string `json:"wwn"`
-				} `json:"storageDevices"`
-			}{OrbID: c})
-		}
-		return r
-	}
-
-	cases := []struct {
-		name string
-		in   *serverQueryResponse
-		want []string
-	}{
-		{
-			name: "full subgraph",
-			in:   mk("srv", "idrac", "scp", "oob", "ctrl0", "ctrl1"),
-			want: []string{"srv", "idrac", "scp", "oob", "ctrl0", "ctrl1"},
-		},
-		{
-			name: "no idrac no scp no controllers",
-			in:   mk("srv", "", "", "oob"),
-			want: []string{"srv", "oob"},
-		},
-		{
-			name: "missing oob orbId is skipped",
-			in:   mk("srv", "idrac", "", ""),
-			want: []string{"srv", "idrac"},
-		},
-		{
-			name: "server only",
-			in:   mk("srv", "", "", ""),
-			want: []string{"srv"},
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := collectRelatedOrbIDs(tc.in)
-			if !slices.Equal(got, tc.want) {
-				t.Errorf("got %v, want %v", got, tc.want)
-			}
-		})
 	}
 }

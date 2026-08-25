@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/armada/orbital/internal/configitems"
 	"github.com/armada/orbital/internal/web/data/layout"
@@ -160,9 +161,9 @@ type dataCenterTabData struct {
 	BasePath        string
 	Actions         layout.PageActions
 	// AuditPanelID + RelatedOrbIDsCSV are consumed by the shared audit-tab
-	// partial (web/templates/shared/partials/audit-tab.gohtml). DC's audit
-	// panel does NOT aggregate child events, so RelatedOrbIDsCSV stays empty
-	// and initDetailTabs falls back to data-orb-id.
+	// partial (web/templates/shared/partials/audit-tab.gohtml). RelatedOrbIDsCSV
+	// is the DC plus its owned children (Racks) from the registry-driven
+	// collector (Spike 33), so the panel aggregates their events too.
 	AuditPanelID     string
 	RelatedOrbIDsCSV string
 }
@@ -242,24 +243,25 @@ func (h *DataCenter) Tab(c echo.Context) error {
 
 	domID := SafeDomID(raw.OrbID)
 	dc := dataCenterTabData{
-		ID:              raw.ID,
-		OrbID:           raw.OrbID,
-		DomID:           domID,
-		AuditPanelID:    "dc-panel-audit-" + domID,
-		Name:            raw.Name,
-		CreatedBy:       raw.CreatedBy,
-		CreatedAt:       raw.CreatedAt,
-		UpdatedBy:       raw.UpdatedBy,
-		UpdatedAt:       raw.UpdatedAt,
-		Namespace:       raw.Namespace,
-		ServerCount:     raw.ServersAggregate.Count,
-		Version:         raw.Version,
-		AssetDataV2:     prettyAssetData,
-		CurrentUser:     currentUser,
-		EditDataJSON:    template.JS(editJSON),
-		EditTargetsJSON: template.JS(editTargetsJSON),
-		BasePath:        h.basePath,
-		Actions:         h.actions(c),
+		ID:               raw.ID,
+		OrbID:            raw.OrbID,
+		DomID:            domID,
+		AuditPanelID:     "dc-panel-audit-" + domID,
+		RelatedOrbIDsCSV: strings.Join(collectRelatedOrbIDs(c.Request().Context(), h.dgraphURL, "DataCenter", raw.OrbID), ","),
+		Name:             raw.Name,
+		CreatedBy:        raw.CreatedBy,
+		CreatedAt:        raw.CreatedAt,
+		UpdatedBy:        raw.UpdatedBy,
+		UpdatedAt:        raw.UpdatedAt,
+		Namespace:        raw.Namespace,
+		ServerCount:      raw.ServersAggregate.Count,
+		Version:          raw.Version,
+		AssetDataV2:      prettyAssetData,
+		CurrentUser:      currentUser,
+		EditDataJSON:     template.JS(editJSON),
+		EditTargetsJSON:  template.JS(editTargetsJSON),
+		BasePath:         h.basePath,
+		Actions:          h.actions(c),
 	}
 	for _, r := range raw.Racks {
 		dc.Racks = append(dc.Racks, rackTabData{

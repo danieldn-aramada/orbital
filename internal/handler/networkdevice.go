@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/armada/orbital/internal/configitems"
@@ -288,7 +289,7 @@ func (h *NetworkDeviceHandler) Tab(c echo.Context) error {
 		EditTargetsJSON:  template.JS(targetsJSON),
 		BasePath:         h.basePath,
 		Actions:          h.actions(c),
-		RelatedOrbIDsCSV: raw.OrbID,
+		RelatedOrbIDsCSV: strings.Join(collectRelatedOrbIDs(c.Request().Context(), h.dgraphURL, "NetworkDevice", raw.OrbID), ","),
 		AuditPanelID:     "network-device-panel-audit-" + SafeDomID(raw.OrbID),
 	}
 	if raw.DataCenter != nil {

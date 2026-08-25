@@ -120,6 +120,30 @@
           </div>
         </article>
       </div>
+
+      {{/* Pre-publish review modal. Publishing to OCI opens this first: it shows
+           the desired-state diff vs the last published artifact (Spike 30) so
+           the operator never blind-publishes. Read-only — Confirm proceeds to
+           the normal export/publish flow. Download-only exports skip it. */}}
+      <div id="export-preview-modal" class="modal">
+        <div class="modal-background" onclick="document.getElementById('export-preview-modal').classList.remove('is-active')"></div>
+        <div class="modal-card" style="max-width: 1040px; width: 94%;">
+          <header class="modal-card-head">
+            <p class="modal-card-title">Review changes</p>
+            <button class="delete" aria-label="close" onclick="document.getElementById('export-preview-modal').classList.remove('is-active')"></button>
+          </header>
+          <section class="modal-card-body">
+            <div id="export-preview-body"></div>
+          </section>
+          <footer class="modal-card-foot" style="justify-content: flex-end; gap: 0.5rem;">
+            <button class="button" onclick="document.getElementById('export-preview-modal').classList.remove('is-active')">Cancel</button>
+            <button id="export-preview-confirm" class="button is-primary" type="button" disabled>
+              <span class="icon"><i class="fa-solid fa-cloud-arrow-up"></i></span>
+              <span>Confirm &amp; Publish</span>
+            </button>
+          </footer>
+        </div>
+      </div>
       {{end}}
 
       {{/* Retained Downloads section — shows completed download-flow jobs whose

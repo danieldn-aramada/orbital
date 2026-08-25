@@ -591,7 +591,7 @@
         },
         "/api/v1/export": {
             "post": {
-                "description": "Triggers an async atomic export of the data center's configuration subgraph. When download=false (default) AND OCI is configured, the export chains into an OCI publish and the zip is discarded on completion. When download=true (or OCI is not configured), the export runs in download-only mode and the zip is retained on disk for the client to fetch via GET /api/v1/export/jobs/{jobId}/download. Returns 202 with a job ID immediately; poll GET /api/v1/export/jobs/{jobId} until terminal state. Returns 409 if an export or restore is already in progress.",
+                "description": "Triggers an async atomic export of the data center's configuration subgraph. When download=false (default) AND OCI is configured, the export chains into an OCI publish and the zip is discarded on completion. When download=true (or OCI is not configured), the export runs in download-only mode and the zip is retained on disk for the client to fetch via GET /api/v1/export/jobs/{jobId}/download. Returns 202 with a job ID immediately; poll GET /api/v1/export/jobs/{jobId} until terminal state. Returns 409 if an export or restore is already in progress, or if expectedContentHash is supplied and the desired state changed since that preview (guarded Apply).",
                 "consumes": [
                     "application/json"
                 ],
@@ -1084,6 +1084,40 @@
                 }
             }
         },
+        "/export/preview": {
+            "post": {
+                "description": "Synchronous, read-only. Diffs the current desired state for a data center against its last published artifact. Not an apply-forecast.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "export"
+                ],
+                "summary": "Preview export diff (desired-state delta vs last published)",
+                "parameters": [
+                    {
+                        "description": "Data center orbId to preview",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.exportRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.previewResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/graphql": {
             "post": {
                 "description": "POST: proxies GraphQL queries and mutations to DGraph. GET: serves the GraphiQL explorer UI.",
@@ -1122,6 +1156,63 @@
         }
     },
     "definitions": {
+        "graphdiff.Change": {
+            "type": "object",
+            "properties": {
+                "change": {
+                    "description": "\"added\" | \"removed\" | \"modified\" | \"unchanged\" (container only)",
+                    "type": "string"
+                },
+                "children": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/graphdiff.Change"
+                    }
+                },
+                "descendantSummary": {
+                    "$ref": "#/definitions/graphdiff.Summary"
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/graphdiff.FieldChange"
+                    }
+                },
+                "orbId": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "graphdiff.FieldChange": {
+            "type": "object",
+            "properties": {
+                "after": {},
+                "before": {},
+                "field": {
+                    "type": "string"
+                }
+            }
+        },
+        "graphdiff.Summary": {
+            "type": "object",
+            "properties": {
+                "added": {
+                    "type": "integer"
+                },
+                "modified": {
+                    "type": "integer"
+                },
+                "removed": {
+                    "type": "integer"
+                },
+                "unchanged": {
+                    "type": "integer"
+                }
+            }
+        },
         "handler.artifactResponse": {
             "type": "object",
             "properties": {
@@ -1242,6 +1333,23 @@
                 },
                 "trigger": {
                     "type": "string"
+                }
+            }
+        },
+        "handler.currentMeta": {
+            "type": "object",
+            "properties": {
+                "contentHash": {
+                    "type": "string",
+                    "example": "sha256:abc"
+                },
+                "nodeCount": {
+                    "type": "integer",
+                    "example": 663
+                },
+                "source": {
+                    "type": "string",
+                    "example": "blue"
                 }
             }
         },
@@ -1374,6 +1482,11 @@
                     "type": "boolean",
                     "example": false
                 },
+                "expectedContentHash": {
+                    "description": "ExpectedContentHash is the optional guarded-Apply token: pass the\n`current.contentHash` from a prior POST /api/v1/export/preview and the\nexport aborts with 409 if the data center's desired state changed since\nthat preview (another writer edited intent in the review→Apply gap).\nOmit for last-writer-wins (default, back-compatible). This is the\nETag/If-Match pattern applied to a whole subgraph — one hash rather than\nper-node version checks, so concurrent ADDS and DELETES are caught too.",
+                    "type": "string",
+                    "example": "sha256:045b8a51a0aea59fa"
+                },
                 "orbId": {
                     "description": "OrbID identifies the data center to export, in \"namespace:name\" form. Required.",
                     "type": "string",
@@ -1395,6 +1508,73 @@
                 "field": {
                     "type": "string",
                     "example": "retentionDays"
+                }
+            }
+        },
+        "handler.lastPublishedMeta": {
+            "type": "object",
+            "properties": {
+                "digest": {
+                    "type": "string",
+                    "example": "sha256:1a2b"
+                },
+                "exportJobId": {
+                    "type": "string"
+                },
+                "publishedAt": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "retrievable": {
+                    "type": "boolean"
+                },
+                "state": {
+                    "description": "published | first_export | unavailable",
+                    "type": "string",
+                    "example": "published"
+                },
+                "tag": {
+                    "type": "string",
+                    "example": "v8"
+                }
+            }
+        },
+        "handler.previewResponse": {
+            "type": "object",
+            "properties": {
+                "byType": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/graphdiff.Summary"
+                    }
+                },
+                "changes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/graphdiff.Change"
+                    }
+                },
+                "current": {
+                    "$ref": "#/definitions/handler.currentMeta"
+                },
+                "dataCenterName": {
+                    "type": "string",
+                    "example": "colo-galleon"
+                },
+                "disclaimer": {
+                    "type": "string"
+                },
+                "lastPublishedVersion": {
+                    "$ref": "#/definitions/handler.lastPublishedMeta"
+                },
+                "orbId": {
+                    "type": "string",
+                    "example": "colo:colo-galleon"
+                },
+                "summary": {
+                    "$ref": "#/definitions/graphdiff.Summary"
                 }
             }
         },

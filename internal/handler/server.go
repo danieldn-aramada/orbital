@@ -333,43 +333,6 @@ func fmtMaintTime(iso string) string {
 	return t.UTC().Format("Jan 2, 2006 3:04 PM MST")
 }
 
-// collectRelatedOrbIDs returns the server's orbId followed by every nested
-// ConfigItem orbId present on the GraphQL response. Empty / zero values are
-// skipped so the result is ready for the data-related-orb-ids attribute.
-// Order is stable: the server's own orbId comes first.
-func collectRelatedOrbIDs(raw *serverQueryResponse) []string {
-	out := make([]string, 0, 4+len(raw.StorageControllers))
-	add := func(id string) {
-		if id != "" {
-			out = append(out, id)
-		}
-	}
-	add(raw.OrbID)
-	if raw.IdracSettings != nil {
-		add(raw.IdracSettings.OrbID)
-	}
-	if raw.ServerConfigurationProfile != nil {
-		add(raw.ServerConfigurationProfile.OrbID)
-	}
-	if raw.ServerMaintenance != nil {
-		add(raw.ServerMaintenance.OrbID)
-	}
-	add(raw.OobIP.OrbID)
-	for _, sc := range raw.StorageControllers {
-		add(sc.OrbID)
-	}
-	for _, na := range raw.NetworkAdapters {
-		add(na.OrbID)
-		for _, p := range na.NetworkInterfaces {
-			add(p.OrbID)
-		}
-	}
-	for _, p := range raw.MgmtInterfaces {
-		add(p.OrbID)
-	}
-	return out
-}
-
 func (h *ServerHandler) Tab(c echo.Context) error {
 	if c.Request().Header.Get("HX-Request") != "true" {
 		return c.Redirect(http.StatusFound, h.basePath+"/")
@@ -613,7 +576,7 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 		srv.MgmtInterfaces = append(srv.MgmtInterfaces, port)
 	}
 
-	srv.RelatedOrbIDsCSV = strings.Join(collectRelatedOrbIDs(&raw), ",")
+	srv.RelatedOrbIDsCSV = strings.Join(collectRelatedOrbIDs(c.Request().Context(), h.dgraphURL, "Server", raw.OrbID), ",")
 	srv.AuditPanelID = "srv-panel-audit-" + srv.DomID
 
 	tmpl := h.fragment

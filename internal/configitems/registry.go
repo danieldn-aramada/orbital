@@ -61,6 +61,23 @@ type Type struct {
 	// at EtcdBackup). Used by JS editor subtree paths.
 	ChildField string
 
+	// OwnerEdges is the ownership type-policy for the diff-preview rollup
+	// (Spike 30, upward walk) and the audit collector (downward walk), for types
+	// whose ownership is NOT a single primary owner. It is an ordered list of
+	// candidate owners, most-specific first: the FIRST edge whose Field is
+	// present on a given node instance is that node's canonical presentation
+	// parent (mirrors Kubernetes' single controller:true among many
+	// ownerReferences). Precedence is list order — never a Go map's randomized
+	// iteration.
+	//
+	// Leave empty for single-owner types and roots: single-owner ownership is
+	// derived from {OwnerType, OwnerField, ChildField} above (see OwnerEdgesOf).
+	// Declare explicitly only for multi-parent types (NetworkInterface,
+	// IPAddress) or where the up-owner differs from the down-path (StorageVolume,
+	// whose required storageController edge is its rollup parent even though it
+	// is reached downward via StorageDevice.storageVolumes).
+	OwnerEdges []OwnerEdge
+
 	// BeforeFields is the GraphQL selection used to fetch the before-state for
 	// audit diff rendering. Must include `id orbId name version` at minimum
 	// plus every editable scalar so buildDiffHTML has both sides to compare.
@@ -93,6 +110,123 @@ type Type struct {
 	// mutation's `set`, or DGraph rejects with "cannot use as String".
 	// E.g. DataCenter.assetDataV2 — declared `String # json` in the schema.
 	JSONStringFields []string
+}
+
+// OwnerEdge is one candidate owner of a ConfigItem type — the type-policy the
+// diff-preview rollup and the audit collector both derive from, so they can
+// never drift. It captures BOTH directions of the same @hasInverse edge:
+//   - Field:     the field on the CHILD pointing up to the owner (e.g. IPAddress
+//     has Field "serverOobIP"). Used by graphdiff's upward owner-of walk.
+//   - DownField: the field on the OWNER pointing down at the child (e.g. Server
+//     has DownField "oobIP"). Used by the audit collector's downward walk.
+//     Empty when no direct down field exists (e.g. StorageVolume→StorageController
+//     has no StorageController.storageVolumes; that child is reached downward via
+//     its single-owner ChildField instead).
+type OwnerEdge struct {
+	OwnerType string
+	Field     string
+	DownField string
+}
+
+// OwnerEdgesOf returns the ordered ownership edges for a type — the explicit
+// Type.OwnerEdges when declared, otherwise the single-owner edge derived from
+// {OwnerType, OwnerField, ChildField}. Roots and un-owned types return nil.
+// This is the ONE place both the diff rollup and the audit collector read
+// ownership from.
+func (t Type) OwnerEdgesOf() []OwnerEdge {
+	if len(t.OwnerEdges) > 0 {
+		return t.OwnerEdges
+	}
+	if t.OwnerType != "" && t.OwnerField != "" {
+		return []OwnerEdge{{OwnerType: t.OwnerType, Field: t.OwnerField, DownField: t.ChildField}}
+	}
+	return nil
+}
+
+// OwnerEdgePredicates returns the ordered upward owner-edge predicates
+// ("<ChildType>.<field>", most-specific first within a type) — the single
+// source the diff-preview rollup (graphdiff.ownerEdges) derives from. Order
+// across types is irrelevant (a node carries only one type's predicates); order
+// WITHIN a type is the precedence that selects the canonical parent.
+func OwnerEdgePredicates() []string {
+	var out []string
+	for _, t := range Types {
+		for _, e := range t.OwnerEdgesOf() {
+			out = append(out, t.Name+"."+e.Field)
+		}
+	}
+	return out
+}
+
+// OwnedChild is a downward ownership link for the audit collector: the owner
+// owns ChildType, reachable via ChildField (the owner-side @hasInverse pointer).
+type OwnedChild struct {
+	ChildType  string
+	ChildField string
+}
+
+// downwardEdges returns every owner edge of t that has a usable DOWN field — the
+// explicit OwnerEdges plus the single-owner {OwnerType, ChildField}. Used for
+// the downward audit walk (the upward rollup uses OwnerEdgesOf instead).
+func downwardEdges(t Type) []OwnerEdge {
+	edges := append([]OwnerEdge(nil), t.OwnerEdges...)
+	if t.OwnerType != "" && t.ChildField != "" {
+		edges = append(edges, OwnerEdge{OwnerType: t.OwnerType, Field: t.OwnerField, DownField: t.ChildField})
+	}
+	return edges
+}
+
+// OwnedChildren returns every ConfigItem type owned by parentType, downward —
+// the single source the audit collector derives from. Honors interface
+// ownership (a concrete type gets children that name an interface it
+// implements, e.g. EksaKubernetesCluster gets KubernetesNode/ClusterBackup).
+// Deduplicated per (ChildType, ChildField).
+func OwnedChildren(parentType string) []OwnedChild {
+	parentT, parentKnown := nameSet[parentType]
+	owns := func(ownerType string) bool {
+		return ownerType == parentType ||
+			(parentKnown && slices.Contains(parentT.Implements, ownerType))
+	}
+	seen := make(map[OwnedChild]bool)
+	var out []OwnedChild
+	for _, t := range Types {
+		for _, e := range downwardEdges(t) {
+			if e.DownField == "" || !owns(e.OwnerType) {
+				continue
+			}
+			oc := OwnedChild{ChildType: t.Name, ChildField: e.DownField}
+			if !seen[oc] {
+				seen[oc] = true
+				out = append(out, oc)
+			}
+		}
+	}
+	return out
+}
+
+// OwnedOrbIDSelection returns a GraphQL sub-selection fetching every owned
+// descendant's orbId under rootType, built from the downward ownership graph —
+// the single source the audit collector's related-orbId query derives from.
+// Deterministic (Types slice order). Path/depth-guarded against a
+// (schema-impossible) ownership type cycle.
+func OwnedOrbIDSelection(rootType string) string {
+	var b strings.Builder
+	var rec func(typeName string, path map[string]bool, depth int)
+	rec = func(typeName string, path map[string]bool, depth int) {
+		if depth > 8 || path[typeName] {
+			return
+		}
+		path[typeName] = true
+		for _, c := range OwnedChildren(typeName) {
+			b.WriteString(c.ChildField)
+			b.WriteString(" { orbId ")
+			rec(c.ChildType, path, depth+1)
+			b.WriteString("} ")
+		}
+		delete(path, typeName)
+	}
+	rec(rootType, map[string]bool{}, 0)
+	return strings.TrimSpace(b.String())
 }
 
 // Types is THE registry. Adding a new ConfigItem starts here.
@@ -173,6 +307,11 @@ var Types = []Type{
 		ChildField:   "storageVolumes",
 		BeforeFields: "id orbId name version",
 		PayloadField: "storageVolume",
+		// Rollup parent is the required StorageController edge (no down field —
+		// reached downward via StorageDevice.storageVolumes, its ChildField).
+		OwnerEdges: []OwnerEdge{
+			{OwnerType: "StorageController", Field: "storageController"},
+		},
 	},
 
 	// ── IP addresses (referenced by many types via @hasInverse) ──────────────
@@ -180,6 +319,14 @@ var Types = []Type{
 		Name:         "IPAddress",
 		BeforeFields: "id orbId name version address type role",
 		PayloadField: "ipAddress",
+		// Multi-parent: an IP is owned by whichever resource references it —
+		// server OOB, k8s node, cluster control-plane, or EKS-A Tinkerbell.
+		OwnerEdges: []OwnerEdge{
+			{OwnerType: "Server", Field: "serverOobIP", DownField: "oobIP"},
+			{OwnerType: "KubernetesNode", Field: "kubernetesNodeIpv4", DownField: "ipv4"},
+			{OwnerType: "KubernetesCluster", Field: "kubernetesClusterControlPlaneEndpoint", DownField: "controlPlaneEndpoint"},
+			{OwnerType: "EksaKubernetesCluster", Field: "eksaKubernetesClusterTinkerbellIP", DownField: "tinkerbellIP"},
+		},
 	},
 
 	// ── Network devices (switch / router / firewall / sd-wan) ────────────────
@@ -207,6 +354,14 @@ var Types = []Type{
 		ChildField:   "networkInterfaces",
 		BeforeFields: "id orbId name version",
 		PayloadField: "networkInterface",
+		// Multi-parent (XOR at the instance level): a server NIC nests under its
+		// adapter (server-side), a switch/LAG port under its NetworkDevice.
+		// Most-specific first: adapter before the server it belongs to.
+		OwnerEdges: []OwnerEdge{
+			{OwnerType: "NetworkAdapter", Field: "networkAdapter", DownField: "networkInterfaces"},
+			{OwnerType: "Server", Field: "server", DownField: "networkInterfaces"},
+			{OwnerType: "NetworkDevice", Field: "networkDevice", DownField: "networkInterfaces"},
+		},
 	},
 
 	// ── Kubernetes cluster hierarchy ─────────────────────────────────────────
