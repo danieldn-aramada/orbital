@@ -54,4 +54,8 @@ type MenuItem struct {
 	Href   string
 	IsTodo bool
 	Active bool
+	// Badge renders a count chip after the label. Zero renders nothing. Used to
+	// surface work waiting on the operator (unreviewed divergences) so the item
+	// is a notification rather than a destination they must remember to visit.
+	Badge int
 }

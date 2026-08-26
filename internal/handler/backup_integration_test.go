@@ -211,9 +211,7 @@ func TestBackupTrigger_ConflictWhenInProgress(t *testing.T) {
 	req2 := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec2 := httptest.NewRecorder()
 	c2 := e.NewContext(req2, rec2)
-	if err := h.Trigger(c2); err != nil {
-		t.Fatalf("second Trigger: %v", err)
-	}
+	renderErr(c2, h.Trigger(c2))
 	if rec2.Code != http.StatusConflict {
 		t.Errorf("second trigger: expected 409, got %d: %s", rec2.Code, rec2.Body.String())
 	}

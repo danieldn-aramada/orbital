@@ -119,7 +119,7 @@ func (h *Export) Preview(c echo.Context) error {
 
 	// Pull the baseline bytes by digest and normalize. Any failure here is a
 	// 200 with baseline.state="unavailable" — never a fake full-add, never a 5xx.
-	plain, perr := h.pullBaseline(ctx, art)
+	plain, perr := h.pullArtifactGraph(ctx, art)
 	if perr != nil {
 		resp.LastPublishedVersion.State = "unavailable"
 		resp.LastPublishedVersion.Retrievable = false
@@ -171,9 +171,9 @@ func (h *Export) lastPublishedArtifact(ctx context.Context, dcOrbID string) (*en
 	return art, nil
 }
 
-// pullBaseline pulls the artifact by immutable digest and returns the unpacked
+// pullArtifactGraph pulls the artifact by immutable digest and returns the unpacked
 // (un-gzipped) native export JSON.
-func (h *Export) pullBaseline(ctx context.Context, art *ent.RegistryArtifact) ([]byte, error) {
+func (h *Export) pullArtifactGraph(ctx context.Context, art *ent.RegistryArtifact) ([]byte, error) {
 	if h.ociCfg.Registry == "" {
 		return nil, fmt.Errorf("OCI registry not configured")
 	}

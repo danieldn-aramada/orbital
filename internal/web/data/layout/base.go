@@ -20,6 +20,11 @@ type Base struct {
 	CurrentPath       string
 	CanMutate         bool
 	AdminEmails       []string
+	// PendingDivergences is the count of divergence entries with no operator
+	// resolution yet. Rendered as a badge on the menu so edge drift is visible
+	// without navigating to /divergence-reports — divergence is a notification,
+	// not a destination. 0 renders nothing.
+	PendingDivergences int
 
 	User
 }

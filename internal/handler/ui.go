@@ -130,6 +130,43 @@ func (h *UI) renderFragment(c echo.Context, page, fragment string, data any) err
 	return renderHTML(c, tmpl, fragment, data)
 }
 
+// pendingDivergenceCount returns the number of divergence entries the operator
+// has not yet resolved — the menu badge. "Pending" mirrors the /divergence-reports
+// definition exactly: an entry with no DivergenceResolution row on
+// (entry_orb_id, field).
+//
+// Two small queries + a set difference rather than the List handler's per-entry
+// lookup, because this runs on EVERY page render. The two tables are 10s–100s of
+// rows; if that stops being true, cache it rather than reintroducing N+1.
+// Any error yields 0 — a badge must never break a page render.
+func (h *UI) pendingDivergenceCount(c echo.Context) int {
+	if h.db == nil {
+		return 0
+	}
+	ctx := c.Request().Context()
+	entries, err := h.db.DivergenceEntry.Query().
+		Select(divergenceentry.FieldEntryOrbID, divergenceentry.FieldField).All(ctx)
+	if err != nil || len(entries) == 0 {
+		return 0
+	}
+	resolutions, err := h.db.DivergenceResolution.Query().
+		Select(divergenceresolution.FieldEntryOrbID, divergenceresolution.FieldField).All(ctx)
+	if err != nil {
+		return 0
+	}
+	resolved := make(map[string]bool, len(resolutions))
+	for _, r := range resolutions {
+		resolved[r.EntryOrbID+"\x00"+r.Field] = true
+	}
+	n := 0
+	for _, e := range entries {
+		if !resolved[e.EntryOrbID+"\x00"+e.Field] {
+			n++
+		}
+	}
+	return n
+}
+
 func (h *UI) base(c echo.Context) layout.Base {
 	isAuthn, _ := c.Get("is_authn").(bool)
 	userID, _ := c.Get("user_id").(int)
@@ -157,19 +194,22 @@ func (h *UI) base(c echo.Context) layout.Base {
 		}
 	}
 
+	pendingDivergences := h.pendingDivergenceCount(c)
+
 	return layout.Base{
-		Head:              layout.Head{Version: version},
-		NavBar:            layout.NavBar{RatelURL: h.ratelURL, IssueTrackerURL: h.issueTrackerURL},
-		IsAuthn:           isAuthn,
-		OIDCEnabled:       h.oidcEnabled,
-		DeviceCodeEnabled: h.deviceCodeEnabled,
-		User:              layout.User{Id: userID, Name: userName, Email: userEmail, Role: userRole},
-		CanMutate:         canMutate,
-		AdminEmails:       adminEmails,
-		CsrfToken:         csrfToken,
-		AppVersion:        appversion.Version,
-		BasePath:          h.basePath,
-		CurrentPath:       c.Request().URL.Path,
+		Head:               layout.Head{Version: version},
+		PendingDivergences: pendingDivergences,
+		NavBar:             layout.NavBar{RatelURL: h.ratelURL, IssueTrackerURL: h.issueTrackerURL},
+		IsAuthn:            isAuthn,
+		OIDCEnabled:        h.oidcEnabled,
+		DeviceCodeEnabled:  h.deviceCodeEnabled,
+		User:               layout.User{Id: userID, Name: userName, Email: userEmail, Role: userRole},
+		CanMutate:          canMutate,
+		AdminEmails:        adminEmails,
+		CsrfToken:          csrfToken,
+		AppVersion:         appversion.Version,
+		BasePath:           h.basePath,
+		CurrentPath:        c.Request().URL.Path,
 		UI: layout.UIConfig{
 			AppName:         "Orbital",
 			Tagline:         []string{"Graph-native source of truth", "for modular data centers"},
@@ -183,12 +223,12 @@ func (h *UI) base(c echo.Context) layout.Base {
 				{Label: "GitHub", URL: "https://github.com/danieldn-aramada/demo"},
 				{Label: "Report Issue"},
 			},
-			MenuSections: h.buildMenuSections(c.Request().URL.Path, userRole),
+			MenuSections: h.buildMenuSections(c.Request().URL.Path, userRole, pendingDivergences),
 		},
 	}
 }
 
-func (h *UI) buildMenuSections(path, userRole string) []layout.MenuSection {
+func (h *UI) buildMenuSections(path, userRole string, pendingDivergences int) []layout.MenuSection {
 	bp := h.basePath
 	sections := []layout.MenuSection{
 		{
@@ -211,7 +251,7 @@ func (h *UI) buildMenuSections(path, userRole string) []layout.MenuSection {
 			Items: []layout.MenuItem{
 				{Label: "Export Subgraph", Href: bp + "/export", Active: path == bp+"/export"},
 				{Label: "Publish History", Href: bp + "/publish-history", Active: path == bp+"/publish-history"},
-				{Label: "Divergence Reports", Href: bp + "/divergence-reports", Active: path == bp+"/divergence-reports"},
+				{Label: "Divergence Reports", Href: bp + "/divergence-reports", Active: path == bp+"/divergence-reports", Badge: pendingDivergences},
 			},
 		},
 	}

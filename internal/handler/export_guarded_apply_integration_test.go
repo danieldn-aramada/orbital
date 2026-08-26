@@ -49,7 +49,10 @@ func TestExportTrigger_StaleContentHashConflicts(t *testing.T) {
 		t.Fatalf("preview did not return a usable contentHash: %q", preview.Current.ContentHash)
 	}
 
-	testDB.ExportJob.Delete().ExecX(ctx)
+	// Count rather than wipe: other tests in this package publish artifacts, and
+	// registry_artifacts has an FK onto export_jobs — a blanket delete would fail
+	// on the constraint depending on test order.
+	jobsBefore := testDB.ExportJob.Query().CountX(ctx)
 
 	// A hash the operator reviewed BEFORE someone else edited intent.
 	stale := "sha256:0000000000000000000000000000000000000000000000000000000000000000"
@@ -58,16 +61,28 @@ func TestExportTrigger_StaleContentHashConflicts(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
-	err := h.Trigger(e.NewContext(req, rec))
-	if err == nil {
-		t.Fatalf("expected a 409 error, got none (status %d, body %s)", rec.Code, rec.Body.String())
+	// The guard uses writeError, so it RENDERS the envelope and returns nil —
+	// assert on the response, and specifically on `code`. A bare 409 would be
+	// CONFLICT ("already in progress"), which clients must be able to tell apart
+	// from a stale preview.
+	if err := h.Trigger(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("Trigger returned an error instead of rendering the envelope: %v", err)
 	}
-	he, ok := err.(*echo.HTTPError)
-	if !ok || he.Code != http.StatusConflict {
-		t.Fatalf("expected 409 HTTPError, got %#v", err)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var envelope struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode error envelope: %v", err)
+	}
+	if envelope.Code != "MVCC_CONFLICT" {
+		t.Fatalf("expected code MVCC_CONFLICT (distinguishable from an in-progress CONFLICT), got %q: %s",
+			envelope.Code, rec.Body.String())
 	}
 
-	if n := testDB.ExportJob.Query().CountX(ctx); n != 0 {
-		t.Errorf("a rejected guarded Apply must not create a job, found %d", n)
+	if n := testDB.ExportJob.Query().CountX(ctx); n != jobsBefore {
+		t.Errorf("a rejected guarded Apply must not create a job: had %d, now %d", jobsBefore, n)
 	}
 }

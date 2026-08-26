@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/armada/orbital/ent/exportjob"
@@ -274,19 +275,26 @@ func TestExportTrigger_ConflictWhenJobRunning(t *testing.T) {
 
 	c, rec := exportTriggerCtx(t, "test:dc01")
 
-	if err := h.Trigger(c); err != nil {
-		t.Fatalf("Trigger: %v", err)
-	}
+	renderErr(c, h.Trigger(c))
 	if rec.Code != http.StatusConflict {
 		t.Errorf("expected 409 when job running, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var body map[string]string
+	// The conflict is rendered as the standard error envelope (error/code/
+	// httpStatus/hint) — NOT the old {"id": "..."} shape. The conflicting job id
+	// is carried inside the message so an operator can find the running job.
+	var body struct {
+		Error string `json:"error"`
+		Code  string `json:"code"`
+	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if body["id"] == "" {
-		t.Errorf("expected conflicting id in response, got: %v", body)
+	if body.Code != "CONFLICT" {
+		t.Errorf("expected code CONFLICT, got %q: %s", body.Code, rec.Body.String())
+	}
+	if !strings.Contains(body.Error, "already in progress") || !strings.Contains(body.Error, "id:") {
+		t.Errorf("expected the conflicting job id in the message, got: %q", body.Error)
 	}
 }
 

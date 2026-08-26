@@ -64,6 +64,7 @@ OWASP alignment: actor, timestamp, event category, action, resource, and reason 
 - `resource_ids` (JSON array): all orbIds touched — extracted from five sources (see below).
 - `details` jsonb: full raw payload `{operationName, query, variables}`.
 - **Events are always recorded** for mutations touching known types regardless of `ifVersion` presence — MVCC is opt-in and orthogonal to eventing.
+- **Attribution ("who changed this") is a client-side join on `orbId`, not a new API.** A client pairs a content diff (e.g. the export preview) with `GET /api/v1/audit-log?orbId=<node>` to answer *who/when* per changed entity. Division of labour: **the diff answers *what* changed; the audit log answers *who/when*** — never use the audit log to compute *what* (see `OCI.md` § "Export preview" for why: it's an event stream, records mutation input rather than before→after, and a `dropAll` restore writes zero rows). **Node-level attribution is exact; field-level is best-effort** — the event stores the mutation *input* (`details.variables`), not a per-field owner, so "who set *this field*" is inferred from the most recent event whose variables include it. Do NOT add a field-history table to make it exact; that's the rejected antipattern.
 
 ## extractResourceIDs — five sources
 

@@ -261,9 +261,7 @@ func TestResolveUser_NoEmail_Returns401(t *testing.T) {
 	c.Set("user_id", 0)
 	// user_email not set
 
-	if err := h(c); err != nil {
-		t.Fatalf("unexpected error (expected JSON response): %v", err)
-	}
+	renderErr(c, h(c))
 	if called {
 		t.Error("handler must not be called when email is missing")
 	}

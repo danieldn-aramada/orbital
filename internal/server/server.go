@@ -390,6 +390,7 @@ func New(cfg *config.Config, db *ent.Client) (*Server, error) {
 		api.GET("/export/jobs/:jobId", exp.Status)
 		api.GET("/export/jobs/:jobId/download", exp.Download)
 		apiReadonly.POST("/export/preview", exp.Preview)
+		apiReadonly.GET("/export/compare", exp.Compare)
 
 		ociCfg := oci.Config{
 			Registry:       cfg.OCIRegistry,

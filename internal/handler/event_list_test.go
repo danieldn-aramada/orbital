@@ -38,10 +38,23 @@ func eventCtx(method, url string, query map[string]string) (echo.Context, *httpt
 }
 
 // clearEvents deletes all event child records then events to satisfy FK constraints.
+// clearEvents wipes the audit tables, children first.
+//
+// Retries because this races background audit writers: an export goroutine's
+// emitExportEvent can insert an Event AND its resource-type children in the
+// window between our child delete and our parent delete, which trips
+// event_resource_types' FK onto events. The window is tiny but real — it made
+// TestGraphQL_MutationWritesAuditEvent fail roughly 1 run in 4 once other tests
+// started completing their exports.
 func clearEvents(ctx context.Context) {
-	testDB.EventResourceType.Delete().ExecX(ctx)
-	testDB.EventResource.Delete().ExecX(ctx)
-	testDB.Event.Delete().ExecX(ctx)
+	for attempt := 0; attempt < 5; attempt++ {
+		_, _ = testDB.EventResourceType.Delete().Exec(ctx)
+		_, _ = testDB.EventResource.Delete().Exec(ctx)
+		if _, err := testDB.Event.Delete().Exec(ctx); err == nil {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 // createEvent creates an event and associates orbId resources and resource types with it.

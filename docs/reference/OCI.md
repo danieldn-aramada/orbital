@@ -31,7 +31,7 @@ Synchronous, read-only, no job created: returns the **desired-state delta** betw
 
 **It is a desired-state delta, NOT an apply-forecast.** Orbital is intent-only and never in the reconciliation path; the edge controller decides what actually gets applied. Say "changes vs last published artifact" — never "will be applied / will create / will destroy." The response carries a `disclaimer` field saying so; keep it surfaced in any UI.
 
-**Three baseline states, and the distinction is load-bearing:**
+**Three states for the published side, and the distinction is load-bearing:**
 
 | `lastPublishedVersion.state` | Meaning | Response |
 |---|---|---|
@@ -39,13 +39,25 @@ Synchronous, read-only, no job created: returns the **desired-state delta** betw
 | `first_export` | no completed artifact for this DC | every entity is `added` — a legitimate full-add |
 | `unavailable` | a completed artifact EXISTS but its bytes couldn't be fetched (registry down, digest GC'd, creds unset) | **200** with `retrievable:false` + `reason`, and **`changes` empty** |
 
-`unavailable` must **never** render as a full-add — that would tell an operator they're re-adding the whole data center when in fact orbital just couldn't read the baseline. The two are distinguished by a cheap PostgreSQL check (does a completed row exist?) that never depends on the registry.
+`unavailable` must **never** render as a full-add — that would tell an operator they're re-adding the whole data center when in fact orbital just couldn't read the published side. The two are distinguished by a cheap PostgreSQL check (does a completed row exist?) that never depends on the registry.
 
 **Response shape is FLAT** — `changes[]` has one entry per changed entity (`orbId`, `type`, `change`, `fields[]`), so `len(changes)` always equals the summary counts. It was briefly a nested tree with owner pointers; both were removed 2026-08-24. **Orbital is API-first: its own UI must be a thin renderer, so anything the UI displays an upstream client can display with the same ease.** Client-side logic in orbital's UI is a signal the API isn't carrying its weight.
 
 **The diff source is a content-diff of graph snapshots — NEVER the audit log.** This gets proposed repeatedly; it is wrong for four reasons: (1) the audit log is an event *stream*, so five edits to one field report five changes instead of one net change — and can't cancel an edit against its own reversal; (2) it records mutation *input* (`{operationName, query, variables}`), not before→after state; (3) **a `dropAll` restore writes zero audit rows** — the single operation that changes published content the most would show an empty window, telling the operator "nothing changed" right before they publish a wholesale-different graph; (4) same blind spot for `make seed` and any direct DQL write. Audit answers *who/when* (compliance); only a snapshot content-diff answers *what is the net difference*. Normalization rules: `DGRAPH.md` § "Comparing two graph snapshots".
 
 **Precedent** (this shape is conventional, not invented): `terraform plan` and the `helm diff` plugin (diff last-deployed vs pending); Argo CD `ignoreDifferences` (excluding server-managed churn fields is mandatory, not optional); Kubernetes strategic-merge `patchMergeKey` (match by stable key, not position); RFC 8785 JCS (canonicalize before hashing); OCI digest pinning (immutable baseline reference).
+
+**Reverting a previewed change is the CLIENT's job — orbital exposes no revert endpoint.** The preview response already carries each changed field's prior value in `changes[].fields[].before`, so "discard this change before publishing" is just writing that value back via the existing `update{Type}` GraphQL mutation. It reuses the proven mutation + authz + audit path, and it is correctly indistinguishable from any other intent edit — because it *is* one. **A batch `POST /api/v1/export/revert` was designed and rejected (2026-08-25):** its only real advantage was atomic multi-node revert, but a partial revert is harmless here (nothing has shipped — the operator re-previews and sees what remains), and the `expectedContentHash` guard below already guarantees they publish exactly what they last reviewed. Do not add a revert endpoint without a demonstrated need for transactional semantics.
+
+## Compare two published artifacts — `GET /api/v1/export/compare?from={id}&to={id}`
+
+Read-only diff between **any two published artifacts of the same data center** — the forensic question ("we shipped v7, v5 was fine, what moved?"), distinct from the per-publish record. Both sides are pulled by immutable digest and run through the **same** normalizer (both are DGraph native exports), which makes this strictly simpler than the preview, where a native export must reconcile against a live DQL result. Registered on the readonly API group: a diff is a read.
+
+**Sides are `from` and `to`, never "baseline".** POSIX `diff from-file to-file`; `git diff <from>..<to>`. Direction is then unambiguous: `fields[].before` is the value in `from`, `after` is the value in `to`. Document-level `from`/`to` over field-level `before`/`after` mirrors git layering file-level `a`/`b` over line-level `-`/`+`. The **preview** keeps its descriptive `lastPublishedVersion` / `current` instead — its two sides are *not* symmetric (an immutable artifact vs live mutable state), so naming them for what they are beats a generic pair.
+
+**Guards:** both artifacts must belong to the same DC (**400** otherwise — every orbId would differ and the diff would report the whole graph as removed+added); each must have a digest (**400** if it never completed a publish); missing artifact **404**; an unretrievable or unparseable side is **502**. Note this is deliberately *stricter* than the preview: the preview degrades an unretrievable side to a `200` with a state flag because it still has a current-state story to tell, whereas a comparison with a missing side has nothing to return.
+
+**This does NOT replace the "Changes since…" panel on the publish-history page.** That panel time-windows the audit log and is fast (one indexed query vs two OCI pulls) — it answers *who did what during this publish*, which a content diff cannot. Keep both; they answer different questions. ⚠️ But note the panel's audit source is blind to `dropAll` restores, seeds, and direct DQL, so its heading claims more authority than the data supports — consider relabelling it "Activity in this window" rather than presenting it as the changeset.
 
 ## Guarded Apply — `expectedContentHash` (optimistic concurrency)
 
@@ -74,8 +86,8 @@ sequenceDiagram
     O->>B: fetchNamespaceSubgraph
     B-->>O: S1 (nodes)
     O->>R: pull last artifact by digest
-    R-->>O: baseline data.json.gz
-    Note over O: normalize(S1) = H1, diff vs baseline
+    R-->>O: last published data.json.gz
+    Note over O: normalize(S1) = H1, diff vs last published
     O-->>C: 200 {contentHash H1, changes}
     Note over O: S1 discarded — Orbital retains nothing
 
@@ -115,7 +127,7 @@ Preview and the guard call the **same** `graphdiff.NormalizeCurrent(fetchNamespa
 
 **Whole-subgraph-in-memory is the binding constraint, and it predates all of this.** `fetchNamespaceSubgraph` returns the entire namespace as `[]map[string]any`, and `loadSubgraphIntoScratch` marshals all of it into a single DQL mutation body. That was true before the preview and the guard existed. If a DC subgraph ever stops fitting in memory, **the export breaks first** — do not conclude the hash or the preview needs redesigning. The bound is physical (one modular data center's servers, NICs, volumes, clusters), ~1,300 nodes for colo today.
 
-**Preview is the heaviest consumer — not the guard, and not the pin.** Computing a diff holds four structures at once: baseline nodes + baseline snapshot + current nodes + current snapshot, roughly 4× one subgraph. By contrast the pin adds ~nothing to peak: exports are globally serialized, so at most one snapshot is live either way — pinning only extends how long it is held, not how much.
+**Preview is the heaviest consumer — not the guard, and not the pin.** Computing a diff holds four structures at once: published nodes + published snapshot + current nodes + current snapshot, roughly 4× one subgraph. By contrast the pin adds ~nothing to peak: exports are globally serialized, so at most one snapshot is live either way — pinning only extends how long it is held, not how much.
 
 **Escape hatches, in the order to reach for them:**
 

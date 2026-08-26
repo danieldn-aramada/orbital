@@ -160,9 +160,10 @@ func triggerRestore(t *testing.T, h *handler.RestoreHandler, backupID uuid.UUID)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	if err := h.Trigger(c); err != nil {
-		t.Fatalf("Trigger: %v", err)
-	}
+	// The handler signals rejection by RETURNING an *echo.HTTPError; render it
+	// through the central ErrorHandler so callers see the same status + envelope
+	// a real client would.
+	renderErr(c, h.Trigger(c))
 	return rec.Code, rec.Body.Bytes()
 }
 
@@ -178,9 +179,7 @@ func TestRestoreTrigger_InvalidBackupID(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	if err := h.Trigger(c); err != nil {
-		t.Fatalf("Trigger: %v", err)
-	}
+	renderErr(c, h.Trigger(c))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}

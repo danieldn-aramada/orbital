@@ -7,7 +7,7 @@
   <ul class="app-menu-section-list">
     {{range .Items}}
     <li class="app-menu-item">
-      <a class="app-menu-link{{if .Active}} is-active{{end}}{{if .IsTodo}} todo{{end}}" href="{{.Href}}">{{.Label}}</a>
+      <a class="app-menu-link{{if .Active}} is-active{{end}}{{if .IsTodo}} todo{{end}}" href="{{.Href}}">{{.Label}}{{if gt .Badge 0}} <span class="tag is-warning is-small ml-1" title="{{.Badge}} awaiting review">{{.Badge}}</span>{{end}}</a>
     </li>
     {{end}}
   </ul>

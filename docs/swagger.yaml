@@ -2,14 +2,8 @@ definitions:
   graphdiff.Change:
     properties:
       change:
-        description: '"added" | "removed" | "modified" | "unchanged" (container only)'
+        description: '"added" | "removed" | "modified"'
         type: string
-      children:
-        items:
-          $ref: '#/definitions/graphdiff.Change'
-        type: array
-      descendantSummary:
-        $ref: '#/definitions/graphdiff.Summary'
       fields:
         items:
           $ref: '#/definitions/graphdiff.FieldChange'
@@ -36,6 +30,23 @@ definitions:
         type: integer
       unchanged:
         type: integer
+    type: object
+  handler.artifactRef:
+    properties:
+      dataCenterName:
+        example: colo-galleon
+        type: string
+      digest:
+        example: sha256:81147a187a8f
+        type: string
+      id:
+        example: 42
+        type: integer
+      publishedAt:
+        type: string
+      tag:
+        example: v2
+        type: string
     type: object
   handler.artifactResponse:
     properties:
@@ -120,6 +131,25 @@ definitions:
         type: string
       trigger:
         type: string
+    type: object
+  handler.compareResponse:
+    properties:
+      byType:
+        additionalProperties:
+          $ref: '#/definitions/graphdiff.Summary'
+        type: object
+      changes:
+        items:
+          $ref: '#/definitions/graphdiff.Change'
+        type: array
+      disclaimer:
+        type: string
+      from:
+        $ref: '#/definitions/handler.artifactRef'
+      summary:
+        $ref: '#/definitions/graphdiff.Summary'
+      to:
+        $ref: '#/definitions/handler.artifactRef'
     type: object
   handler.currentMeta:
     properties:
@@ -1191,6 +1221,32 @@ paths:
       summary: Update user role
       tags:
       - users
+  /export/compare:
+    get:
+      description: Returns the desired-state delta between two published OCI artifacts
+        of the same data center. Read-only; both artifacts are pulled by immutable
+        digest. Not an apply-forecast.
+      parameters:
+      - description: Artifact ID to diff FROM (the earlier side)
+        in: query
+        name: from
+        required: true
+        type: integer
+      - description: Artifact ID to diff TO (the later side)
+        in: query
+        name: to
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.compareResponse'
+      summary: Compare two published artifacts
+      tags:
+      - export
   /export/preview:
     post:
       consumes:

@@ -1092,6 +1092,42 @@ const docTemplate = `{
                 }
             }
         },
+        "/export/compare": {
+            "get": {
+                "description": "Returns the desired-state delta between two published OCI artifacts of the same data center. Read-only; both artifacts are pulled by immutable digest. Not an apply-forecast.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "export"
+                ],
+                "summary": "Compare two published artifacts",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Artifact ID to diff FROM (the earlier side)",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Artifact ID to diff TO (the later side)",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.compareResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/export/preview": {
             "post": {
                 "description": "Synchronous, read-only. Diffs the current desired state for a data center against its last published artifact. Not an apply-forecast.",
@@ -1168,17 +1204,8 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "change": {
-                    "description": "\"added\" | \"removed\" | \"modified\" | \"unchanged\" (container only)",
+                    "description": "\"added\" | \"removed\" | \"modified\"",
                     "type": "string"
-                },
-                "children": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/graphdiff.Change"
-                    }
-                },
-                "descendantSummary": {
-                    "$ref": "#/definitions/graphdiff.Summary"
                 },
                 "fields": {
                     "type": "array",
@@ -1218,6 +1245,30 @@ const docTemplate = `{
                 },
                 "unchanged": {
                     "type": "integer"
+                }
+            }
+        },
+        "handler.artifactRef": {
+            "type": "object",
+            "properties": {
+                "dataCenterName": {
+                    "type": "string",
+                    "example": "colo-galleon"
+                },
+                "digest": {
+                    "type": "string",
+                    "example": "sha256:81147a187a8f"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 42
+                },
+                "publishedAt": {
+                    "type": "string"
+                },
+                "tag": {
+                    "type": "string",
+                    "example": "v2"
                 }
             }
         },
@@ -1341,6 +1392,35 @@ const docTemplate = `{
                 },
                 "trigger": {
                     "type": "string"
+                }
+            }
+        },
+        "handler.compareResponse": {
+            "type": "object",
+            "properties": {
+                "byType": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/graphdiff.Summary"
+                    }
+                },
+                "changes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/graphdiff.Change"
+                    }
+                },
+                "disclaimer": {
+                    "type": "string"
+                },
+                "from": {
+                    "$ref": "#/definitions/handler.artifactRef"
+                },
+                "summary": {
+                    "$ref": "#/definitions/graphdiff.Summary"
+                },
+                "to": {
+                    "$ref": "#/definitions/handler.artifactRef"
                 }
             }
         },

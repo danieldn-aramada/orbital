@@ -260,9 +260,7 @@ func TestExportDownload_BundlerFails_Returns502(t *testing.T) {
 	c, rec := exportAPICtx(http.MethodGet, "/api/v1/export/jobs/"+job.ID.String()+"/download",
 		map[string]string{"jobId": job.ID.String()})
 
-	if err := h.Download(c); err != nil {
-		t.Fatalf("Download returned error (should be JSON 502, not error): %v", err)
-	}
+	renderErr(c, h.Download(c))
 	if rec.Code != http.StatusBadGateway {
 		t.Errorf("expected 502, got %d: %s", rec.Code, rec.Body.String())
 	}
