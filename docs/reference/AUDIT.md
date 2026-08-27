@@ -1,13 +1,13 @@
 # Audit & Events Reference
 
-Read this before: touching `internal/handler/graphql.go`, `internal/handler/event.go`, the `events` ent table, the HTTP request logger in `server.go`/`orbserver/server.go`, or audit log UI work.
+Read this before: touching `internal/handler/graphql.go`, `internal/handler/audit.go`, the `audit_events` ent table, the HTTP request logger in `server.go`/`orbserver/server.go`, or audit log UI work.
 
 ## Two observability streams — different standards
 
 | Stream | Standard | Storage | Retention | Configured in |
 |---|---|---|---|---|
 | **HTTP access log** | OpenTelemetry semantic conventions for HTTP server | stdout → OTel Collector → Loki / Azure Monitor | 30–90 days (TBD policy) | `internal/server/server.go` and `internal/orbserver/server.go` RequestLoggerWithConfig |
-| **Security audit events** | OWASP Application Logging Cheat Sheet + NIST SP 800-92 | PostgreSQL `event` table | ≥ 12 months (TBD policy) | `internal/handler/event.go` `writeAuditEvent` |
+| **Security audit events** | AWS CloudTrail (structure) + OWASP Application Logging Cheat Sheet + NIST SP 800-92 | PostgreSQL `audit_events` table | **operator-configured** — see § Retention | `internal/handler/audit.go` `writeAuditEvent` |
 
 They overlap (both capture `client_ip`, `actor`) but serve different audiences (ops vs. security/compliance) and have different retention. **Do not collapse the two streams** — operational log volume blows up audit storage; audit detail is wasted on stdout.
 
@@ -52,9 +52,107 @@ Both apps skip access logs for `/static/*` and `/favicon.ico` (asset noise). Orb
 
 Echo's `c.RealIP()` reads `X-Forwarded-For` and trusts it from **any** caller by default. Behind Istio this is fine — the threat of header spoofing is bounded by the cluster perimeter. If orbital ever gets exposed to public traffic without a stripping proxy, configure `e.IPExtractor` with a trusted-proxy list.
 
+## What the audit log is for
+
+Orbital is an intent-only CMDB, never in the reconciliation path, so the only thing it can be authoritative about is what happened **at its own API boundary**:
+
+> **Provenance for control-plane actions — every attempt to act on orbital through its API, successful or not, and what that attempt carried.**
+
+Intent changes (`event_category: data`) are **one of three categories**, not the whole stream; `management` and `auth` change no intent.
+
+**The rule:**
+
+> The audit log answers *who did what, in one act, and when* — **per event, attributed**. It never answers *what is the state now* or *what is the net difference between two points*. Those are the Topology API and `internal/graphdiff`.
+
+Both the audit log and `graphdiff` carry before/after values. The difference is **grain and attribution**, not field-level detail:
+
+| | audit log | `graphdiff` |
+|---|---|---|
+| Grain | one declared act | two states, any distance apart |
+| Attribution | yes — `actor` | none |
+| `hostname: a → b → a` | **2 records** | **0 changes** |
+
+That last row is why both surfaces can be correct while disagreeing — so **never label a `graphdiff` result and an audit result with the same noun in the same view**. The content diff owns "Changes"/"Diff"; the audit stream owns "Activity"/"Edits".
+
+This is the split AWS makes between Config (*"what did my resource look like?"*) and CloudTrail (*"who made an API call to modify this resource?"*). CloudTrail has no before-state field at all; orbital's `details.before` is a deliberate improvement on it, and is why orbital needs no second store to render a diff.
+
+## Naming — `audit_events` (storage) / `audit-log` (API)
+
+**Settled 2026-08-26.** Both layers share the root noun `audit`:
+
+| Layer | Name |
+|---|---|
+| Postgres tables | `audit_events`, `audit_event_resources`, `audit_event_resource_types` |
+| ent types | `AuditEvent`, `AuditEventResource`, `AuditEventResourceType` |
+| Go handler | `AuditHandler` in `internal/handler/audit.go` |
+| REST API | `/api/v1/audit-log` |
+| UI / Swagger tag | "Audit Log" / `audit` |
+
+**Do NOT reintroduce a bare `Event` noun for audit data.** `event` is already contested in this codebase — OTel log records, divergence reports, edge Kubernetes events. Kubernetes hit the identical collision and had to mint an `audit.k8s.io` API group because core `v1 Event` (1-hour TTL, "best-effort, supplemental") was already taken; its audit events default to 366-day retention. GitLab compounds the same way and kept `audit_events` in all six of its sharded tables.
+
+The API path stays `/api/v1/audit-log` — collection vs record, matching GitHub (`GET /orgs/{org}/audit-log`, records called "audit log events"). Renaming it to `/audit-events` would break AEP for no gain.
+
+`writeAuditEvent` (package-level, persists a row) and `GraphQL.auditMutation` (builds mutation-shaped `details`, then delegates) are **two acts, not two names for one** — keep them distinct.
+
+## CloudTrail field parity
+
+CloudTrail is the structural anchor (see § Naming), so this is the checklist for what an audit row should carry. Verified against AWS's record-contents reference (`eventVersion` 1.11).
+
+| CloudTrail field | Orbital | Status |
+|---|---|---|
+| `eventID` | `id` (uuid) | ✅ |
+| `eventTime` | `timestamp` | ✅ |
+| `eventCategory` | `event_category` | ✅ borrowed directly |
+| `requestParameters` | `details.variables` | ✅ |
+| `resources[]` | `audit_event_resources` + `_resource_types` | ✅ richer than CloudTrail |
+| `eventName` | `operations[]` (array) | ~ **deliberate** — one row per HTTP request, so compound mutations produce an array |
+| `userIdentity` (nested union) | `actor` (flat string) | ~ flattened; adequate at current scale. CloudTrail's is a discriminated union with only `type` required — do not half-adopt it |
+| `responseElements` | — (we store `details.before` instead) | ~ **deliberate and better for a CMDB** — see below |
+| `eventSource` | — | ❌ missing — `graphql` / `rest` / `internal` (`DispatchMutation`) is currently unknowable |
+| `sourceIPAddress` | — | ❌ missing (the OWASP gap) |
+| `userAgent` | — | ❌ missing |
+| `errorCode` / `errorMessage` | — | ❌ missing — and a rejected mutation currently writes **no row at all** |
+| `readOnly` | — | n/a — mutations only |
+
+**Three CloudTrail behaviours to copy deliberately:**
+
+1. **Failed calls are recorded, and not only authorization failures.** AWS's own worked example is a `TrailNotFoundException` — a resource-not-found error. `errorMessage` is documented as *"includes messages for authorization failures"*, i.e. auth failures are a **subset**, not the scope. Orbital today gates the audit write on `!hasGQLErrors(respBytes)` in `graphql.go`, so a mutation that passes authz and is then rejected by DGraph leaves zero trace. (`authorizationDenied` *is* recorded separately, by `RequireRole` middleware.)
+2. **The success/failure signal is the presence of `errorCode`**, not a status field. A failed call still carries full `requestParameters`.
+3. **The failure reason outranks the payload.** In CloudTrail's documented truncation order for oversized events, `errorMessage` is dropped **last** — after `requestParameters` and `responseElements`.
+
+**One CloudTrail weakness NOT to inherit:** AWS admits some services put `errorCode`/`errorMessage` at top level and others bury them inside `responseElements`. If orbital adds these, make them **mandatory top-level fields**.
+
+**Where orbital is deliberately ahead:** CloudTrail's `requestParameters` carries only what the caller sent, so a CloudTrail-shaped record **cannot render a field-level diff on its own** — that is precisely why AWS needs Config alongside it. Orbital's `details.before` gives us the diff without a second store. Keep it; it is a considered divergence, not drift.
+
+## Retention
+
+**Current state: nothing is pruned. There is no retention mechanism yet** — rows accumulate indefinitely. The decision below is settled design, not shipped behaviour.
+
+**Decided: orbital is not prescriptive.** `ORBITAL_AUDIT_RETENTION_DAYS` (*not yet implemented*), **default `0` = retain indefinitely**; the operator sets it. Orbital cannot know an adopter's obligations, and four of six common frameworks leave the period to the organization (ISO 27001 A.8.15, NIST 800-53 AU-11, NIST 800-171 3.3.1/03.03.03, SOC 2 TSC). Only PCI DSS names a number (Req 10.5.1: 12 months, ≥3 immediately available).
+
+**Do NOT restore a "≥ 12 months" claim here** — it was never ratified, and it asserts a compliance posture on the adopter's behalf.
+
+Two rules for whoever implements pruning:
+- **Ship the pruner in-process**, not as an optional external job. NetBox's 90-day default sat inert behind a cron many operators never installed; when 4.4 moved housekeeping into a built-in scheduler, the dormant default fired and deleted everything older than 90 days on upgrade.
+- **Surface growth** (row count / oldest-record age) since the default is unbounded.
+
+
+**Framework guidance for adopters** (orbital ships none of these as a default — see above). Two widely repeated figures are wrong or misattributed:
+
+| Framework | Requirement | Retention |
+|---|---|---|
+| **PCI DSS v4.x** | Req 10.5.1 (v3.2.1: Req 10.7) | **12 months**, ≥3 immediately available |
+| **SOC 2** | Trust Services Criteria | **No numeric retention in the TSC.** The practical ~12 months derives from the **Type 2 observation window** the auditor samples across — not from any criterion |
+| **ISO 27001:2022** | A.8.15 Logging (consolidates 2013 A.12.4.1/.2/.3) | Organization-determined; ISO 27002 §8.15 supplies no number |
+| **NIST 800-171 / CMMC** | Rev 2 §3.3.1 / Rev 3 §03.03.03 | ❌ **No 90-day minimum exists.** That figure comes from **DFARS 252.204-7012(e)** incident media preservation — a clock running *forward from an incident report*, not a retention floor |
+| **NIST 800-53** | AU-11 | Organization-defined. AU-11(1) additionally requires proving long-term records can be *retrieved* |
+| **HIPAA** | 45 CFR §164.316(b)(2)(i) | 6 years, for Security Rule *documentation* — never names audit logs. **N/A** for a CMDB holding no ePHI |
+| **NetBox** (closest peer) | `CHANGELOG_RETENTION` | 90 days default; `0` = forever |
+
+
 ## Event model
 
-The remaining sections describe the **security audit events** stream — structured rows written to PostgreSQL's `event` table, distinct from the HTTP access log above. Captures mutations, auth failures, administrative operations. Retention is long because regulatory frameworks (SOC 2, ISO 27001) expect 12+ months.
+The remaining sections describe the **security audit events** stream — structured rows written to PostgreSQL's `audit_events` table, distinct from the HTTP access log above. Captures mutations, auth failures, administrative operations.
 
 OWASP alignment: actor, timestamp, event category, action, resource, and reason are captured today. **Gap**: `client.address` and `user_agent.original` are not yet on the event row — adding them is the next iteration on this stream.
 
@@ -86,7 +184,7 @@ OWASP alignment: actor, timestamp, event category, action, resource, and reason 
 
 ## writeAuditEvent helper
 
-- Package-level function in `internal/handler/event.go`. Shared by `GraphQL.writeEvent`, `Export.Trigger`, `BackupHandler.Trigger`.
+- Package-level function in `internal/handler/audit.go`. Shared by `GraphQL.auditMutation`, `Export.Trigger`, `BackupHandler.Trigger`.
 - Arguments: `*ent.Client`, `*slog.Logger`, actor, opName, operations, resourceTypes, resourceIDs, details map.
 - **Failures are logged and swallowed** — audit writes must never block or fail a request.
 
@@ -100,7 +198,7 @@ Three values (stored as string, not enum — adding a value does not require ent
 | `"management"` | System operations: backup, restore, export, schema apply, authorizationDenied |
 | `"auth"` | Login/logout events: loginSuccess, loginFailed, logout |
 
-The audit tab query (`GET /api/v1/events?orbId=...`) filters to `event_category IN ('data', 'management')`. Auth events are excluded structurally — they have no resource_ids and appear in every resource tab if included.
+The audit tab query (`GET /api/v1/audit-log?orbId=...`) filters to `event_category IN ('data', 'management')`. Auth events are excluded structurally — they have no resource_ids and appear in every resource tab if included.
 
 ## ent conventions for events
 
@@ -115,7 +213,7 @@ The audit tab query (`GET /api/v1/events?orbId=...`) filters to `event_category 
 - **Add-mutation response selections MUST include `{ <payloadField> { orbId } }` so the audit extractor can link the new resource.** `extractResourceIDs` finds orbIds in three places: `variables["orbId"]`, `variables["input"][i].orbId`, and the response body. The configitem-editor JS module always includes the registry-declared `PayloadField` in its add-mutation response selection so this is automatic for editor-driven flows. If you write a custom mutation that uses a non-`input` variable name, you must include orbId in the response — otherwise the event lands with empty `event_resources` and is invisible to per-orbId panel queries.
 - **For EDITS dispatch canonical `update{Kind}(input: { filter: { orbId: { eq: $orbId } }, set: $set })` — `add{Kind}.upsert=true` does NOT produce diffs.** The diff renderer reads `variables["set"]` as the after-state; the before-fetcher reads `variables["orbId"]`. Only this combination yields the green/red field-level diff. `add{Kind}` mutations have no before-state and render raw variables — correct for creates, unacceptable for edits. The `configitem-editor.js` module routes existing-row edits through `update{Kind}` and first-time creates through `add{Kind}` automatically based on the initial snapshot — no per-page edits needed.
 - **Every parent ConfigItem with owned children MUST aggregate their audit events into the parent's tab.** Mirror the canonical pattern: handler exports `collect*RelatedOrbIDs(raw)`; tab data gets a `RelatedOrbIDsCSV`; audit `<li>` carries `data-related-orb-ids`; `shared.js initXDetailTabs.loadAuditPanel` reads it and OR-queries the audit endpoint. References: `server.go::collectRelatedOrbIDs` + `cluster.go::collectClusterRelatedOrbIDs`. (Future: derive this walker from `configitems.Children()` so adding a new owned child no longer requires touching the parent's collector — currently still hand-written.)
-- **Audit diff is generic — excludelist, not allowlist.** `buildDiffHTML` in `event.go` diffs every field in `before ∩ after` (minus metadata: `id`, `version`, `orbId`, `namespace`, `createdAt/By`, `updatedAt/By`, `ifVersion`). Adding a new ConfigItem type produces diffs out of the box. Patch-style mutations (`update{Type}(input: {filter, set: $set})`) have after-values under `variables["set"]`; flat-shape edits keep them top-level. Both work. **Do NOT reintroduce per-type renderer blocks** — the previous nested-iDRAC block was removed 2026-06-20 once Server edit started dispatching parallel `updateServer`+`updateIdracSettings` mutations.
+- **Audit diff is generic — excludelist, not allowlist.** `buildDiffHTML` in `audit.go` diffs every field in `before ∩ after` (minus metadata: `id`, `version`, `orbId`, `namespace`, `createdAt/By`, `updatedAt/By`, `ifVersion`). Adding a new ConfigItem type produces diffs out of the box. Patch-style mutations (`update{Type}(input: {filter, set: $set})`) have after-values under `variables["set"]`; flat-shape edits keep them top-level. Both work. **Do NOT reintroduce per-type renderer blocks** — the previous nested-iDRAC block was removed 2026-06-20 once Server edit started dispatching parallel `updateServer`+`updateIdracSettings` mutations.
 - **The JSON `changes` field is the client-facing diff; `computeChanges` is the single source of truth.** `computeChanges(before, variables)` returns `[]{field, before, after}` (raw typed values, metadata excluded); `buildDiffHTML` is a pure renderer over it, so the API's `changes` and the HTML panel can never disagree. `eventItem.Changes` is `omitempty` — **present ONLY for a clean single-entity update**, omitted for multi-op / bulk-add / create events. Clients branch on its presence, not on `operations`/`before`. **Do NOT add a second diff implementation** — extend `computeChanges`. Pinned by `TestComputeChanges`.
 - **Never expose DGraph UIDs in audit output.** `stripDGraphIDs` (recursive) removes every `id` from `before` before it's persisted into `details` — UIDs are internal and reassigned on restore/reimport; clients key on `orbId`. It's a **write-time** strip: new events are clean, historical events keep their UIDs (the log is immutable — do not rewrite it). Pinned by `TestStripDGraphIDs`.
 - **Internal dispatchers supply `before` themselves.** `GraphQL.DispatchMutation(ctx, actor, query, variables, before)` does NOT auto-fetch the before-state — that's a user-facing concern in `Handle`. Callers that want a diff in the audit row pass `before` directly. For divergence-accept, `dispatchAcceptMutation` builds `before` from `entry.IntendedValue` (already captured at ingest time — no extra DGraph round-trip). For other internal mutations, the caller picks the cheapest source of truth.

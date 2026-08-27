@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/armada/orbital/ent/event"
+	"github.com/armada/orbital/ent/auditevent"
 	"github.com/armada/orbital/internal/auth"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/labstack/echo/v4"
@@ -261,7 +261,7 @@ func TestLogin_Success_WritesAuditEvent(t *testing.T) {
 		SaveX(ctx)
 	t.Cleanup(func() {
 		testDB.User.DeleteOne(u).ExecX(ctx)
-		testDB.Event.Delete().Where(event.Actor(email)).ExecX(ctx)
+		testDB.AuditEvent.Delete().Where(auditevent.Actor(email)).ExecX(ctx)
 	})
 
 	h := newLoginHandler()
@@ -275,7 +275,7 @@ func TestLogin_Success_WritesAuditEvent(t *testing.T) {
 	// Give writeAuditEvent (async-ish via goroutine-free path) time to commit.
 	time.Sleep(50 * time.Millisecond)
 
-	ev, err := testDB.Event.Query().Where(event.Actor(email)).Only(ctx)
+	ev, err := testDB.AuditEvent.Query().Where(auditevent.Actor(email)).Only(ctx)
 	if err != nil {
 		t.Fatalf("audit event not found: %v", err)
 	}
@@ -299,7 +299,7 @@ func TestLogin_WrongPassword_WritesAuditEvent(t *testing.T) {
 		SaveX(ctx)
 	t.Cleanup(func() {
 		testDB.User.DeleteOne(u).ExecX(ctx)
-		testDB.Event.Delete().Where(event.Actor(email)).ExecX(ctx)
+		testDB.AuditEvent.Delete().Where(auditevent.Actor(email)).ExecX(ctx)
 	})
 
 	h := newLoginHandler()
@@ -312,7 +312,7 @@ func TestLogin_WrongPassword_WritesAuditEvent(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	ev, err := testDB.Event.Query().Where(event.Actor(email)).Only(ctx)
+	ev, err := testDB.AuditEvent.Query().Where(auditevent.Actor(email)).Only(ctx)
 	if err != nil {
 		t.Fatalf("audit event not found: %v", err)
 	}

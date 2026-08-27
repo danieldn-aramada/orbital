@@ -28,7 +28,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Stack
 
 - **Go** — both `orbital` and `orb`
-- **DGraph** (community edition) — graph DB; stores all configuration items. Self-hosted in the same K8s namespace as orbital. Do not replace — see Settled Decisions.
+- **DGraph** — graph DB; stores all configuration items. Self-hosted in the same K8s namespace as orbital. Do not replace — see Settled Decisions.
 - **PostgreSQL** — all operational data for `orbital` (orb registry, users, audit logs, jobs, schema versions, backup records). PostgreSQL backup handled by Azure managed PostgreSQL.
 - **Valkey** — in-memory cache for `orbital`. Do not switch to Redis — see Settled Decisions.
 

@@ -123,7 +123,7 @@ test.describe('fragment reload error states', () => {
   })
 
   test('server tab: reload failure shows error notification', async ({ page }) => {
-    const orbId = '2f-uae:5HSC3D4'  // seeded R750 server (same as configitem-editor tests)
+    const orbId = '2f-uae:server-5HSC3D4'  // seeded R750 server (same as configitem-editor tests)
     const domId = safeDomId(orbId)
     await page.goto(`/servers?open=${encodeURIComponent(orbId)}&label=${encodeURIComponent(orbId)}`)
     const tabContent = page.locator(`#tab-content-srv-${domId}`)

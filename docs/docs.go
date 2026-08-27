@@ -637,6 +637,42 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/export/compare": {
+            "get": {
+                "description": "Returns the desired-state delta between two published OCI artifacts of the same data center. Read-only; both artifacts are pulled by immutable digest. Not an apply-forecast.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "export"
+                ],
+                "summary": "Compare two published artifacts",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Artifact ID to diff FROM (the earlier side)",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Artifact ID to diff TO (the later side)",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.compareResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/export/jobs": {
             "get": {
                 "description": "Returns the 50 most recent export jobs ordered by creation time.",
@@ -756,9 +792,43 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/export/preview": {
+            "post": {
+                "description": "Synchronous, read-only. Diffs the current desired state for a data center against its last published artifact. Not an apply-forecast.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "export"
+                ],
+                "summary": "Preview export diff (desired-state delta vs last published)",
+                "parameters": [
+                    {
+                        "description": "Data center orbId to preview",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.exportRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.previewResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/oci/artifacts": {
             "get": {
-                "description": "Returns the 100 most recent OCI artifacts ordered by publish time descending.",
+                "description": "Returns published OCI artifacts, most recent first. Combine ` + "`" + `dc` + "`" + ` + ` + "`" + `status=completed` + "`" + ` + ` + "`" + `limit=1` + "`" + ` to read the latest published version for a data center — the response carries ` + "`" + `tag` + "`" + `, ` + "`" + `digest` + "`" + ` and ` + "`" + `completedAt` + "`" + `. **Compare on ` + "`" + `digest` + "`" + `, not ` + "`" + `tag` + "`" + `:** the tag sequence is per OCI repository and the repository name derives from the data center's editable name, so renaming a data center restarts the sequence at v1 for the same orbId.",
                 "produces": [
                     "application/json"
                 ],
@@ -766,6 +836,26 @@ const docTemplate = `{
                     "oci"
                 ],
                 "summary": "List OCI artifacts",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by data center orbId (e.g. colo:colo-galleon). Matches RegistryArtifact.datacenter_id, which stores the orbId.",
+                        "name": "dc",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by publish status (e.g. completed). Only completed artifacts have a retrievable digest.",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Max results (default 100, max 500)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1087,76 +1177,6 @@ const docTemplate = `{
                         "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/handler.errorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/export/compare": {
-            "get": {
-                "description": "Returns the desired-state delta between two published OCI artifacts of the same data center. Read-only; both artifacts are pulled by immutable digest. Not an apply-forecast.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "export"
-                ],
-                "summary": "Compare two published artifacts",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Artifact ID to diff FROM (the earlier side)",
-                        "name": "from",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Artifact ID to diff TO (the later side)",
-                        "name": "to",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handler.compareResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/export/preview": {
-            "post": {
-                "description": "Synchronous, read-only. Diffs the current desired state for a data center against its last published artifact. Not an apply-forecast.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "export"
-                ],
-                "summary": "Preview export diff (desired-state delta vs last published)",
-                "parameters": [
-                    {
-                        "description": "Data center orbId to preview",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.exportRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handler.previewResponse"
                         }
                     }
                 }

@@ -312,7 +312,7 @@ func TestRestoreCompleted_WritesManagementAuditEvent(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	events, err := testDB.Event.Query().All(ctx)
+	events, err := testDB.AuditEvent.Query().All(ctx)
 	if err != nil {
 		t.Fatalf("query events: %v", err)
 	}

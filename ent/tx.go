@@ -12,6 +12,12 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// AuditEvent is the client for interacting with the AuditEvent builders.
+	AuditEvent *AuditEventClient
+	// AuditEventResource is the client for interacting with the AuditEventResource builders.
+	AuditEventResource *AuditEventResourceClient
+	// AuditEventResourceType is the client for interacting with the AuditEventResourceType builders.
+	AuditEventResourceType *AuditEventResourceTypeClient
 	// Backup is the client for interacting with the Backup builders.
 	Backup *BackupClient
 	// DivergenceEntry is the client for interacting with the DivergenceEntry builders.
@@ -20,12 +26,6 @@ type Tx struct {
 	DivergenceIngestCursor *DivergenceIngestCursorClient
 	// DivergenceResolution is the client for interacting with the DivergenceResolution builders.
 	DivergenceResolution *DivergenceResolutionClient
-	// Event is the client for interacting with the Event builders.
-	Event *EventClient
-	// EventResource is the client for interacting with the EventResource builders.
-	EventResource *EventResourceClient
-	// EventResourceType is the client for interacting with the EventResourceType builders.
-	EventResourceType *EventResourceTypeClient
 	// ExportJob is the client for interacting with the ExportJob builders.
 	ExportJob *ExportJobClient
 	// Orb is the client for interacting with the Orb builders.
@@ -167,13 +167,13 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.AuditEvent = NewAuditEventClient(tx.config)
+	tx.AuditEventResource = NewAuditEventResourceClient(tx.config)
+	tx.AuditEventResourceType = NewAuditEventResourceTypeClient(tx.config)
 	tx.Backup = NewBackupClient(tx.config)
 	tx.DivergenceEntry = NewDivergenceEntryClient(tx.config)
 	tx.DivergenceIngestCursor = NewDivergenceIngestCursorClient(tx.config)
 	tx.DivergenceResolution = NewDivergenceResolutionClient(tx.config)
-	tx.Event = NewEventClient(tx.config)
-	tx.EventResource = NewEventResourceClient(tx.config)
-	tx.EventResourceType = NewEventResourceTypeClient(tx.config)
 	tx.ExportJob = NewExportJobClient(tx.config)
 	tx.Orb = NewOrbClient(tx.config)
 	tx.RegistryArtifact = NewRegistryArtifactClient(tx.config)
@@ -188,7 +188,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: Backup.QueryXXX(), the query will be executed
+// applies a query, for example: AuditEvent.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

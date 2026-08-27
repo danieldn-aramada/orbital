@@ -497,6 +497,18 @@ func (h *UI) EdgeDelivery(c echo.Context) error {
 		OCIConfigured: h.ociConfigured,
 		OCIRegistry:   h.ociRegistry,
 		OCIRepo:       h.ociRepo,
+		ActiveTab:     "artifacts",
+	})
+}
+
+// PublishHistoryCompare renders the Compare tab. from/to come from the query
+// string rather than page data so the URL alone reproduces a given diff — the
+// reason these tabs are routes instead of client-side panels.
+func (h *UI) PublishHistoryCompare(c echo.Context) error {
+	return h.render(c, "publish-history-compare", page.PublishHistoryCompare{
+		Base:      h.base(c),
+		PageTitle: "Compare Artifacts",
+		ActiveTab: "compare",
 	})
 }
 

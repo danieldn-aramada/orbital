@@ -7,6 +7,22 @@
       <span class="icon"><i class="fas fa-chevron-right"></i></span>
     </button>
   </td>
+  {{/* Comparable only when the bytes are actually retrievable: a failed or
+       in-flight publish has no digest, and GET /api/v1/export/compare 400s on
+       either side missing one. Disabling here is affordance, not authorization —
+       the API still enforces it. */}}
+  <td>
+    {{if and (eq .Status "completed") .HasDigest}}
+      <input type="checkbox" class="js-compare-select"
+             data-artifact-id="{{.ID}}"
+             data-datacenter="{{.DatacenterName}}"
+             data-tag="{{.Tag}}"
+             data-exported-at="{{.ExportedAtRFC3339}}"
+             aria-label="Select {{.DatacenterName}} {{.Tag}} for comparison">
+    {{else}}
+      <span class="has-text-grey-light" title="No digest — this publish never completed, so its bytes can't be retrieved">—</span>
+    {{end}}
+  </td>
   <td>{{.DatacenterName}}</td>
   <td><span class="tag is-light">{{.Tag}}</span></td>
   <td><span class="tag {{.StatusClass}}">{{.Status}}</span></td>
@@ -42,7 +58,7 @@
      (see /api/v1/audit-log ?namespace=&since=&until=). */}}
 <tr class="js-publish-changes-detail is-hidden">
   <td></td>
-  <td colspan="9" style="background: var(--bulma-background);">
+  <td colspan="10" style="background: var(--bulma-background);">
     <div class="mb-2 is-flex is-align-items-center" style="gap:0.35rem;">
       <span class="has-text-grey is-size-7">Digest:</span>
       {{if .HasDigest}}
@@ -52,10 +68,21 @@
     </div>
     {{if eq .Status "completed"}}
     {{if .HasPrevious}}
-    <div class="mb-2">
-      <span class="has-text-grey is-size-7">Changes since
+    {{/* Labelled "Audit Log" to match what this content is called everywhere
+         else in the product (menu item, DC/Server/Cluster detail tabs, the API
+         path). It used to say "Changes since …", which collides with the
+         content diff on the Compare tab — same noun, different numbers for the
+         same pair, because this is an ordered event stream and that is a net
+         difference. The explainer below is what actually prevents the "these
+         disagree, something is broken" report; the label alone can't. */}}
+    <div class="mb-1">
+      <span class="has-text-weight-medium is-size-7">Audit Log</span>
+      <span class="has-text-grey is-size-7"> · since
         <span class="is-family-monospace">{{.PreviousExportedAtRFC3339}}</span></span>
     </div>
+    <p class="has-text-grey-light is-size-7 mb-2">
+      Every edit in this window, in order, with who made it. An edit that was later undone still appears here.
+    </p>
     <div hx-get="{{.BasePath}}/api/v1/audit-log?namespace={{.DatacenterNamespace}}&since={{.PreviousExportedAtRFC3339}}&until={{.ExportedAtRFC3339}}&event_category=data&limit=200"
          hx-trigger="revealed once"
          hx-target="this"
@@ -69,5 +96,5 @@
     {{end}}
   </td>
 </tr>
-{{else}}<tr><td colspan="10" class="has-text-grey">No artifacts yet.</td></tr>
+{{else}}<tr><td colspan="11" class="has-text-grey">No artifacts yet.</td></tr>
 {{end}}

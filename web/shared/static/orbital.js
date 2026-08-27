@@ -2139,3 +2139,213 @@ document.addEventListener('keydown', (e) => {
 //      that can't import the module symbol directly.
 // Do NOT add new entries here to support a new onclick — use delegation.
 
+
+// ─── Publish History: compare selection ───────────────────────────────────────
+
+// Row selection on the Artifacts tab. Enables Compare only when exactly two
+// artifacts of the SAME data center are ticked — cross-DC pairs are meaningless
+// (every orbId differs, so the diff reports the whole graph as removed+added)
+// and the API 400s on them. Gating here is affordance; the server still enforces.
+//
+// Direction is derived from publish time, never click order: the table sorts
+// newest-first, so "first ticked" would invert the diff about half the time.
+// The button label spells out the resolved direction so there is no ambiguity.
+function updateCompareSelection() {
+  const btn = document.getElementById('btn-compare-selected')
+  const label = document.getElementById('btn-compare-selected-label')
+  const hint = document.getElementById('compare-select-hint')
+  if (!btn || !label) return
+
+  const checked = Array.from(document.querySelectorAll('.js-compare-select:checked'))
+  const boxes = Array.from(document.querySelectorAll('.js-compare-select'))
+
+  // Once one row is picked, lock out other data centers rather than letting the
+  // user build a pair the API will reject.
+  const dc = checked.length ? checked[0].dataset.datacenter : null
+  boxes.forEach(b => {
+    b.disabled = dc !== null && b.dataset.datacenter !== dc
+  })
+
+  if (checked.length !== 2) {
+    btn.disabled = true
+    label.textContent = 'Compare'
+    if (hint) {
+      hint.textContent = checked.length === 0
+        ? 'Select two artifacts to compare'
+        : `Select 1 more artifact in ${dc}`
+    }
+    return
+  }
+
+  const [a, b] = checked
+  const [from, to] = a.dataset.exportedAt <= b.dataset.exportedAt ? [a, b] : [b, a]
+  btn.disabled = false
+  label.textContent = `Compare ${from.dataset.tag} → ${to.dataset.tag}`
+  if (hint) hint.textContent = ''
+  btn.dataset.from = from.dataset.artifactId
+  btn.dataset.to = to.dataset.artifactId
+}
+
+document.addEventListener('change', (e) => {
+  if (e.target.classList && e.target.classList.contains('js-compare-select')) updateCompareSelection()
+})
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('#btn-compare-selected')
+  if (!btn || btn.disabled) return
+  // Deep-link into the Compare tab rather than rendering in place, so the
+  // resulting URL reproduces this exact diff for anyone it's shared with.
+  window.location.href = `${BASE}/publish-history/compare?from=${btn.dataset.from}&to=${btn.dataset.to}`
+})
+
+// ─── Publish History: Compare tab ─────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!document.getElementById('compare-result')) return
+  initComparePage()
+})
+
+// initComparePage populates the pickers from the artifact list, honours any
+// ?from=&to= already in the URL, and runs the diff.
+function initComparePage() {
+  const dcSel = document.getElementById('compare-dc-select')
+  const fromSel = document.getElementById('compare-from-select')
+  const toSel = document.getElementById('compare-to-select')
+  const runBtn = document.getElementById('btn-compare-run')
+  const out = document.getElementById('compare-result')
+  if (!dcSel || !fromSel || !toSel || !runBtn) return
+
+  const params = new URLSearchParams(window.location.search)
+  const wantFrom = params.get('from')
+  const wantTo = params.get('to')
+
+  // Versions are fetched per data center via ?dc=, never by pulling the whole
+  // artifact list and grouping here. The unfiltered list is capped, so one
+  // busy data center would push the others off it entirely — and grouping
+  // client-side is the "UI compensating for the API" pattern orbital rejects.
+  const loadVersions = (dcOrbId, selectFrom, selectTo) => {
+    fromSel.disabled = toSel.disabled = runBtn.disabled = true
+    return fetch(`${BASE}/api/v1/oci/artifacts?dc=${encodeURIComponent(dcOrbId)}&status=completed&limit=500`)
+      .then(r => r.json())
+      .then(rows => {
+        // Only artifacts with a digest can be pulled by digest.
+        const usable = (rows || []).filter(a => a.digest)
+        // Oldest-first so the From/To dropdowns read chronologically.
+        usable.sort((x, y) => String(x.completedAt || '').localeCompare(String(y.completedAt || '')))
+
+        if (usable.length < 2) {
+          fromSel.innerHTML = toSel.innerHTML = '<option value="">—</option>'
+          out.innerHTML = `<div class="notification is-light">${usable.length === 0
+            ? 'Nothing published for this data center yet.'
+            : 'Only one published version — nothing to compare against yet.'}</div>`
+          return
+        }
+
+        const opts = usable.map(a => `<option value="${a.id}">${esc(a.tag)}</option>`).join('')
+        fromSel.innerHTML = opts
+        toSel.innerHTML = opts
+        fromSel.disabled = toSel.disabled = runBtn.disabled = false
+        // Default to the two most recent — the common "what changed last?" case.
+        fromSel.value = String(selectFrom || usable[usable.length - 2].id)
+        toSel.value = String(selectTo || usable[usable.length - 1].id)
+      })
+  }
+
+  const populateDCs = (activeOrbId) => {
+    // Data centers come from the Topology API, the authoritative source —
+    // not inferred from whichever artifacts happened to fit in a capped list.
+    return fetch(BASE + '/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: '{ queryDataCenter { orbId name } }' }),
+    })
+      .then(r => r.json())
+      .then(res => {
+        const dcs = (res.data && res.data.queryDataCenter) || []
+        if (!dcs.length) {
+          dcSel.innerHTML = '<option value="">No data centers</option>'
+          return null
+        }
+        dcs.sort((a, b) => String(a.name || a.orbId).localeCompare(String(b.name || b.orbId)))
+        const active = activeOrbId || dcs[0].orbId
+        dcSel.innerHTML = dcs.map(d =>
+          `<option value="${esc(d.orbId)}"${d.orbId === active ? ' selected' : ''}>${esc(d.name || d.orbId)}</option>`).join('')
+        return active
+      })
+  }
+
+  dcSel.addEventListener('change', () => { out.innerHTML = ''; loadVersions(dcSel.value) })
+
+  runBtn.addEventListener('click', () => {
+    if (!fromSel.value || !toSel.value) return
+    // Keep the URL in sync so the current view is always linkable.
+    window.history.replaceState({}, '', `${BASE}/publish-history/compare?from=${fromSel.value}&to=${toSel.value}`)
+    runCompare(fromSel.value, toSel.value)
+  })
+
+  // A deep link names artifacts, not a data center — resolve one to find which
+  // DC to select, then load that DC's versions and run the diff.
+  if (wantFrom && wantTo) {
+    fetch(`${BASE}/api/v1/oci/artifacts/${encodeURIComponent(wantFrom)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(a => populateDCs(a && a.datacenterId))
+      .then(active => active && loadVersions(dcSel.value, wantFrom, wantTo))
+      .then(() => runCompare(wantFrom, wantTo))
+      .catch(() => { out.innerHTML = '<div class="notification is-warning is-light">Couldn\u2019t load that comparison.</div>' })
+    return
+  }
+
+  populateDCs().then(active => active && loadVersions(dcSel.value))
+}
+
+
+function runCompare(from, to) {
+  const out = document.getElementById('compare-result')
+  if (!out) return
+  out.innerHTML = '<div class="has-text-centered p-5"><span class="icon is-large has-text-grey"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></span><p class="mt-2 has-text-grey">Comparing…</p></div>'
+
+  fetch(`${BASE}/api/v1/export/compare?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
+    .then(r => r.json().then(json => ({ status: r.status, json })))
+    .then(({ status, json }) => {
+      if (status !== 200) {
+        out.innerHTML = `<div class="notification is-warning is-light">${esc(json.error || 'Comparison failed.')}</div>`
+        return
+      }
+      renderCompare(out, json)
+    })
+    .catch(() => {
+      out.innerHTML = '<div class="notification is-danger is-light">Comparison request failed.</div>'
+    })
+}
+
+function esc(x) {
+  return String(x == null ? '' : x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+}
+
+// renderCompare reuses renderExportPreviewTable verbatim — the compare endpoint
+// returns the identical flat `changes[]` shape as the export preview, because
+// both are produced by the same graphdiff core. Only the header differs.
+function renderCompare(out, json) {
+  const fmt = (v) => v == null ? '<span class="has-text-grey-light">∅</span>' : '<span class="is-family-monospace">' + esc(JSON.stringify(v)) + '</span>'
+  const s = json.summary || {}
+  const changed = (s.added || 0) + (s.removed || 0) + (s.modified || 0)
+  const fmtDate = (iso) => { if (!iso) return ''; const d = new Date(iso); return isNaN(d.getTime()) ? String(iso).slice(0, 10) : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) }
+
+  let head = '<p class="mb-1"><strong>Changes · ' + esc(json.from.tag) + ' → ' + esc(json.to.tag) + '</strong> '
+    + '<span class="has-text-grey is-size-7">' + esc(json.from.dataCenterName) + '</span></p>'
+
+  // The counterpart to the Audit Log explainer on the Artifacts tab. Both are
+  // correct and will disagree for the same pair; saying why is what stops that
+  // reading as a bug.
+  head += '<p class="has-text-grey-light is-size-7 mb-3">Net difference between the two published versions. Edits that were later undone don’t appear here — see the Audit Log for the full edit history.</p>'
+
+  head += '<p class="mb-3"><strong>' + (changed === 0
+    ? 'No differences between these versions.'
+    : ('' + (s.modified || 0) + ' changed · ' + (s.added || 0) + ' added · ' + (s.removed || 0) + ' removed'))
+    + '</strong> <span class="has-text-grey is-size-7">(' + (s.unchanged || 0) + ' unchanged)</span>'
+    + '<span class="has-text-grey is-size-7"> · published ' + esc(fmtDate(json.from.publishedAt)) + ' → ' + esc(fmtDate(json.to.publishedAt)) + '</span></p>'
+
+  const table = changed === 0 ? '' : renderExportPreviewTable(json.changes || [], esc, fmt)
+  const footnote = json.disclaimer ? '<p class="has-text-grey-light is-size-7 mt-4">' + esc(json.disclaimer) + '</p>' : ''
+  out.innerHTML = head + table + footnote
+}

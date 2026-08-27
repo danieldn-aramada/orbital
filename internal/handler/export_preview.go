@@ -59,7 +59,7 @@ type currentMeta struct {
 //	@Produce		json
 //	@Param			body	body		exportRequest	true	"Data center orbId to preview"
 //	@Success		200		{object}	previewResponse
-//	@Router			/export/preview [post]
+//	@Router			/api/v1/export/preview [post]
 func (h *Export) Preview(c echo.Context) error {
 	var req exportRequest
 	if err := c.Bind(&req); err != nil {

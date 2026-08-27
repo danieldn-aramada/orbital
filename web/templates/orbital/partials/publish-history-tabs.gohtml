@@ -1,0 +1,24 @@
+{{/* Tab bar shared by the Publish History pages. Unlike the detail-page tabs
+     (shared.js initXDetailTabs), these tabs are REAL ROUTES, not client-side
+     panel toggles: a comparison has to be linkable — pasting
+     /publish-history/compare?from=3&to=7 into a ticket must reproduce that exact
+     diff. Client-side tabs keep their state in localStorage, which can't do that.
+     Expects .BasePath and .ActiveTab ("artifacts" | "compare"). */}}
+{{define "publish-history-tabs"}}
+<div class="tabs is-boxed">
+  <ul>
+    <li{{if eq .ActiveTab "artifacts"}} class="is-active"{{end}}>
+      <a href="{{.BasePath}}/publish-history">
+        <span class="icon is-small"><i class="fa-solid fa-box-archive"></i></span>
+        <span>Artifacts</span>
+      </a>
+    </li>
+    <li{{if eq .ActiveTab "compare"}} class="is-active"{{end}}>
+      <a href="{{.BasePath}}/publish-history/compare">
+        <span class="icon is-small"><i class="fa-solid fa-code-compare"></i></span>
+        <span>Compare</span>
+      </a>
+    </li>
+  </ul>
+</div>
+{{end}}

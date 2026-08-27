@@ -86,6 +86,97 @@ func TestRegistryMatchesSchema(t *testing.T) {
 	}
 }
 
+// TestBeforeFieldsCoverFormFields guards the one drift that is silent in both
+// directions — no compiler error, no failing request, no visible UI change.
+//
+// The regression: someone adds an editable field to a type's FormFields (or to
+// schema.graphql and then FormFields) and forgets to add it to BeforeFields.
+// The edit still succeeds. The audit event is still written. But the field is
+// absent from the `before` snapshot the proxy fetches, so computeChanges — which
+// walks the intersection of before and after keys — skips it, and that field's
+// edits never appear in `changes[]`, in the audit panel's diff, or in any client
+// rendering attribution. Nothing anywhere reports a problem.
+//
+// The registry was clean when this was written; the point is to keep it that way,
+// because there is no other signal that it stopped being true.
+//
+// Also checks the reverse (a BeforeFields token that is not a real schema field),
+// which catches a typo that would silently drop the same field from the snapshot.
+func TestBeforeFieldsCoverFormFields(t *testing.T) {
+	src, err := os.ReadFile("../../schema/schema.graphql")
+	if err != nil {
+		t.Fatalf("read schema: %v", err)
+	}
+	fields, _ := parseSchemaTypes(string(src))
+
+	for _, ty := range Types {
+		if ty.BeforeFields == "" {
+			continue
+		}
+		before := topLevelSelection(ty.BeforeFields)
+
+		// (a) Every editor-writable field must be in the before-snapshot.
+		for _, f := range ty.FormFields {
+			if !before[f] {
+				t.Errorf("%s: FormField %q is missing from BeforeFields — edits to it will silently produce no audit diff (add it to BeforeFields in registry.go)",
+					ty.Name, f)
+			}
+		}
+
+		// (b) Every before-snapshot field must exist on the type. A typo here is
+		// equally silent: DGraph rejects the selection, before-fetch logs a warning
+		// and returns nil, and the whole diff disappears for that type.
+		//
+		// "Exists on the type" includes fields inherited from every interface it
+		// implements — `id`/`orbId`/`name`/`version` are declared once on the
+		// ConfigItem interface, not repeated in each type block.
+		if _, ok := fields[ty.Name]; !ok {
+			continue // TestRegistryMatchesSchema (a) already reports this
+		}
+		declared := map[string]bool{}
+		for _, src := range append([]string{ty.Name, "ConfigItem"}, ty.Implements...) {
+			for f := range fields[src] {
+				declared[f] = true
+			}
+		}
+		for f := range before {
+			if !declared[f] {
+				t.Errorf("%s: BeforeFields names %q, which is not a field on %s (or any interface it implements) in schema.graphql", ty.Name, f, ty.Name)
+			}
+		}
+	}
+}
+
+// topLevelSelection returns the depth-0 field names of a GraphQL selection
+// string, so nested sub-selections (`idracSettings { sshEnabled ... }`) contribute
+// only their own name and not their children's — a child field name would
+// otherwise appear to satisfy a parent-level FormField check.
+func topLevelSelection(sel string) map[string]bool {
+	out := map[string]bool{}
+	depth := 0
+	for _, tok := range strings.Fields(sel) {
+		switch tok {
+		case "{":
+			depth++
+		case "}":
+			depth--
+		default:
+			// Handles "name{" and "}" fused to a token by sloppy spacing.
+			for strings.HasSuffix(tok, "{") {
+				tok = strings.TrimSuffix(tok, "{")
+				depth++
+			}
+			if tok == "" {
+				continue
+			}
+			if depth == 0 {
+				out[tok] = true
+			}
+		}
+	}
+	return out
+}
+
 // parseSchemaTypes returns type/interface name -> set of field names, and the
 // set of types whose declaration line contains "ConfigItem" (i.e. implement it).
 // A deliberately small line scanner — not a GraphQL parser.

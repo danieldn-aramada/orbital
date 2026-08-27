@@ -19,10 +19,14 @@ var base = []string{
 	"web/templates/orbital/components/config-item-delete-modal.gohtml",
 }
 
-func page(path string) []string {
-	files := make([]string, len(base)+1)
-	copy(files, base)
-	files[len(base)] = path
+// page builds a parse set: the shared base plus the page file, plus any extra
+// partials that page needs. Variadic so a partial shared by a *subset* of pages
+// (e.g. the Publish History tab bar, used by two) can be included where it's
+// needed instead of being added to `base` and parsed into every page.
+func page(paths ...string) []string {
+	files := make([]string, 0, len(base)+len(paths))
+	files = append(files, base...)
+	files = append(files, paths...)
 	return files
 }
 
@@ -55,7 +59,12 @@ func Map() map[string]*template.Template {
 		"audit-log":          template.Must(template.ParseFiles(page("web/templates/orbital/pages/audit-log.gohtml")...)),
 		"schema":             template.Must(template.ParseFiles(page("web/templates/orbital/pages/schema.gohtml")...)),
 		"export":             template.Must(template.ParseFiles(page("web/templates/orbital/pages/export.gohtml")...)),
-		"publish-history":    template.Must(template.ParseFiles(page("web/templates/orbital/pages/publish-history.gohtml")...)),
+		"publish-history": template.Must(template.ParseFiles(page(
+			"web/templates/orbital/pages/publish-history.gohtml",
+			"web/templates/orbital/partials/publish-history-tabs.gohtml")...)),
+		"publish-history-compare": template.Must(template.ParseFiles(page(
+			"web/templates/orbital/pages/publish-history-compare.gohtml",
+			"web/templates/orbital/partials/publish-history-tabs.gohtml")...)),
 		"servers":            template.Must(template.ParseFiles(page("web/templates/orbital/pages/servers.gohtml")...)),
 		"clusters":           template.Must(template.ParseFiles(page("web/templates/orbital/pages/clusters.gohtml")...)),
 		"network":            template.Must(template.ParseFiles(page("web/templates/orbital/pages/network.gohtml")...)),

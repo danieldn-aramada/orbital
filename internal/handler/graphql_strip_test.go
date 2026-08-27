@@ -7,7 +7,7 @@ import (
 
 // TestStripDGraphIDs pins the before-state UID scrub: every "id" key removed at
 // any depth (map, nested map, array of maps), everything else kept, and — the
-// race-safety property — the caller's map left untouched (writeEvent runs in a
+// race-safety property — the caller's map left untouched (auditMutation runs in a
 // goroutine, so an in-place strip could race the request path).
 func TestStripDGraphIDs(t *testing.T) {
 	in := map[string]any{

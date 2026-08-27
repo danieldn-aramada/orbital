@@ -312,7 +312,7 @@ func (h *GraphQL) Handle(c echo.Context) error {
 	if touchesKnownType && h.db != nil && !hasGQLErrors(respBytes) {
 		operations, resourceTypes := extractOperations(req.Query)
 		resourceIDs := extractResourceIDs(req.Query, req.Variables, respBytes)
-		go h.writeEvent(opName, operations, resourceTypes, resourceIDs, actor, req.Query, req.Variables, before)
+		go h.auditMutation(opName, operations, resourceTypes, resourceIDs, actor, req.Query, req.Variables, before)
 	}
 
 	c.Response().Header().Set("Content-Type", "application/json")
@@ -365,7 +365,7 @@ func (h *GraphQL) DispatchMutation(ctx context.Context, actor, query string, var
 		}
 		operations, resourceTypes := extractOperations(query)
 		resourceIDs := extractResourceIDs(query, variables, respBytes)
-		go h.writeEvent(opName, operations, resourceTypes, resourceIDs, actor, query, variables, before)
+		go h.auditMutation(opName, operations, resourceTypes, resourceIDs, actor, query, variables, before)
 	}
 	return respBytes, nil
 }
@@ -461,7 +461,13 @@ func (h *GraphQL) doFetch(getter string, body []byte) (map[string]any, error) {
 	return entity, nil
 }
 
-func (h *GraphQL) writeEvent(opName string, operations, resourceTypes, resourceIDs []string, actor, query string, variables map[string]any, before map[string]any) {
+// auditMutation builds the `details` payload for a GraphQL mutation and hands
+// it to writeAuditEvent, which persists the row. Two names because these are
+// two acts, not one: this assembles what a mutation-shaped audit record needs
+// (query, variables, before-state), writeAuditEvent knows how to store any
+// audit record. The old name (`writeEvent`) read as a duplicate of
+// `writeAuditEvent` and hid that layering.
+func (h *GraphQL) auditMutation(opName string, operations, resourceTypes, resourceIDs []string, actor, query string, variables map[string]any, before map[string]any) {
 	details := map[string]any{
 		"operationName": opName,
 		"query":         query,
@@ -476,7 +482,7 @@ func (h *GraphQL) writeEvent(opName string, operations, resourceTypes, resourceI
 // stripDGraphIDs returns a deep copy of v with every "id" key removed. DGraph
 // UIDs are internal and reassigned on restore/reimport, so they must never be
 // persisted to the audit event or exposed via the API — clients key on orbId.
-// Copy-based so the caller's before-state map is left intact (writeEvent runs in
+// Copy-based so the caller's before-state map is left intact (auditMutation runs in
 // a goroutine); recurses into nested maps and arrays.
 func stripDGraphIDs(v any) any {
 	switch t := v.(type) {

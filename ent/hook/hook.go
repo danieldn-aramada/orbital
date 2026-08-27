@@ -9,6 +9,42 @@ import (
 	"github.com/armada/orbital/ent"
 )
 
+// The AuditEventFunc type is an adapter to allow the use of ordinary
+// function as AuditEvent mutator.
+type AuditEventFunc func(context.Context, *ent.AuditEventMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AuditEventFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AuditEventMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuditEventMutation", m)
+}
+
+// The AuditEventResourceFunc type is an adapter to allow the use of ordinary
+// function as AuditEventResource mutator.
+type AuditEventResourceFunc func(context.Context, *ent.AuditEventResourceMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AuditEventResourceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AuditEventResourceMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuditEventResourceMutation", m)
+}
+
+// The AuditEventResourceTypeFunc type is an adapter to allow the use of ordinary
+// function as AuditEventResourceType mutator.
+type AuditEventResourceTypeFunc func(context.Context, *ent.AuditEventResourceTypeMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AuditEventResourceTypeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AuditEventResourceTypeMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuditEventResourceTypeMutation", m)
+}
+
 // The BackupFunc type is an adapter to allow the use of ordinary
 // function as Backup mutator.
 type BackupFunc func(context.Context, *ent.BackupMutation) (ent.Value, error)
@@ -55,42 +91,6 @@ func (f DivergenceResolutionFunc) Mutate(ctx context.Context, m ent.Mutation) (e
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DivergenceResolutionMutation", m)
-}
-
-// The EventFunc type is an adapter to allow the use of ordinary
-// function as Event mutator.
-type EventFunc func(context.Context, *ent.EventMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f EventFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.EventMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EventMutation", m)
-}
-
-// The EventResourceFunc type is an adapter to allow the use of ordinary
-// function as EventResource mutator.
-type EventResourceFunc func(context.Context, *ent.EventResourceMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f EventResourceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.EventResourceMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EventResourceMutation", m)
-}
-
-// The EventResourceTypeFunc type is an adapter to allow the use of ordinary
-// function as EventResourceType mutator.
-type EventResourceTypeFunc func(context.Context, *ent.EventResourceTypeMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f EventResourceTypeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.EventResourceTypeMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EventResourceTypeMutation", m)
 }
 
 // The ExportJobFunc type is an adapter to allow the use of ordinary

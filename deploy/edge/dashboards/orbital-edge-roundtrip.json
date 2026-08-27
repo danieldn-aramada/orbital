@@ -167,7 +167,7 @@
       "id": 17,
       "type": "stat",
       "title": "HTTP 4xx (in range)",
-      "description": "orb client errors (4xx) in the selected range, filtered by $path. Often benign (404 probes) — use the $path filter to cut noise.",
+      "description": "orb client errors (4xx) in the selected range, filtered by $path. Often benign (404 probes) \u2014 use the $path filter to cut noise.",
       "gridPos": {
         "h": 4,
         "w": 4,
@@ -225,7 +225,7 @@
       "id": 13,
       "type": "stat",
       "title": "Roundtrip to orb (p50)",
-      "description": "Typical time orbital publish → orb import = p50(publish_to_edge) + p50(edge_to_import), over the selected range. Outlier-robust.",
+      "description": "Typical time orbital publish \u2192 orb import = p50(publish_to_edge) + p50(edge_to_import), over the selected range. Outlier-robust.",
       "gridPos": {
         "h": 4,
         "w": 4,
@@ -266,7 +266,7 @@
       "id": 14,
       "type": "stat",
       "title": "Imports (in range)",
-      "description": "Number of orb imports in the selected range (increase of orb_imports_total). The p50/p95 latency panels rest on this many samples — if ~0–1, treat latency as noisy.",
+      "description": "Number of orb imports in the selected range (increase of orb_imports_total). The p50/p95 latency panels rest on this many samples \u2014 if ~0\u20131, treat latency as noisy.",
       "gridPos": {
         "h": 4,
         "w": 4,
@@ -380,8 +380,8 @@
     {
       "id": 5,
       "type": "timeseries",
-      "title": "Config round-trip latency — p50 per hop (typical)",
-      "description": "Median (p50) propagation latency per hop over the selected range — outlier-robust, unlike an average. publish_to_edge = orbital publish → Zot mirror (NTP-dependent); edge_to_import = Zot mirror → orb import; import_to_dispatch = orb import → consumer dispatch. Imports are infrequent, so set the dashboard range ≥ ~2 weeks (edge Prometheus retains ~10–11d).",
+      "title": "Config round-trip latency \u2014 p50 per hop (typical)",
+      "description": "Median (p50) propagation latency per hop over the selected range \u2014 outlier-robust, unlike an average. publish_to_edge = orbital publish \u2192 Zot mirror (NTP-dependent); edge_to_import = Zot mirror \u2192 orb import; import_to_dispatch = orb import \u2192 consumer dispatch. Imports are infrequent, so set the dashboard range \u2265 ~2 weeks (edge Prometheus retains ~10\u201311d).",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -418,7 +418,7 @@
     {
       "id": 6,
       "type": "timeseries",
-      "title": "Config round-trip latency — p95 per hop",
+      "title": "Config round-trip latency \u2014 p95 per hop",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -450,12 +450,12 @@
         },
         "overrides": []
       },
-      "description": "p95 propagation latency per hop over the selected range — catches slow/stalled imports. Widen the dashboard range if empty; imports are infrequent."
+      "description": "p95 propagation latency per hop over the selected range \u2014 catches slow/stalled imports. Widen the dashboard range if empty; imports are infrequent."
     },
     {
       "id": 7,
       "type": "timeseries",
-      "title": "Zot — manifest write rate (reconcile churn, NOT new artifacts)",
+      "title": "Zot \u2014 manifest write rate (reconcile churn, NOT new artifacts)",
       "description": "rate(zot_repo_uploads_total). Zot re-registers all matching manifests each pollInterval reconcile, so this measures reconcile churn, not new-artifact arrivals. A steady baseline is normal; spikes/growth track reconcile load. 'New artifacts landed' = orb_imports_total.",
       "gridPos": {
         "h": 8,
@@ -492,8 +492,8 @@
     {
       "id": 8,
       "type": "timeseries",
-      "title": "Zot — scheduler pressure (queue + workers)",
-      "description": "Sync runs as scheduler tasks — queue depth / worker saturation is the signal for whether the mirror is keeping up.",
+      "title": "Zot \u2014 scheduler pressure (queue + workers)",
+      "description": "Sync runs as scheduler tasks \u2014 queue depth / worker saturation is the signal for whether the mirror is keeping up.",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -537,7 +537,7 @@
     {
       "id": 9,
       "type": "timeseries",
-      "title": "Zot — storage per repo",
+      "title": "Zot \u2014 storage per repo",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -572,7 +572,7 @@
     {
       "id": 10,
       "type": "timeseries",
-      "title": "orb — request rate by route/status (RED)",
+      "title": "orb \u2014 request rate by route/status (RED)",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -607,8 +607,8 @@
     {
       "id": 18,
       "type": "timeseries",
-      "title": "orb — HTTP errors (4xx/5xx) over time",
-      "description": "Per-interval error counts by status·path (filtered by $path). At low volume a single error shows as a clear spike — easy to validate.",
+      "title": "orb \u2014 HTTP errors (4xx/5xx) over time",
+      "description": "Per-interval error counts by status\u00b7path (filtered by $path). At low volume a single error shows as a clear spike \u2014 easy to validate.",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -647,7 +647,7 @@
     {
       "id": 11,
       "type": "timeseries",
-      "title": "orb — p95 request latency by route",
+      "title": "orb \u2014 p95 request latency by route",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -682,7 +682,7 @@
     {
       "id": 12,
       "type": "timeseries",
-      "title": "orb — runtime (memory + goroutines)",
+      "title": "orb \u2014 runtime (memory + goroutines)",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -733,6 +733,156 @@
             ]
           }
         ]
+      }
+    },
+    {
+      "id": 19,
+      "type": "row",
+      "collapsed": false,
+      "title": "Storage \u2014 orb namespace PVCs",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 36
+      },
+      "panels": []
+    },
+    {
+      "id": 20,
+      "type": "bargauge",
+      "title": "Disk fill % by PVC (now)",
+      "description": "Current filesystem usage per orb-namespace PVC, from kubelet volume stats (filesystem truth, not the app's own accounting). Zot = registry-data-demo. Deduped across the 2 Prometheus replicas via max by(pvc).",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 37
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (persistentvolumeclaim) (100 * kubelet_volume_stats_used_bytes{namespace=\"orb\"} / kubelet_volume_stats_capacity_bytes{namespace=\"orb\"})",
+          "legendFormat": "{{persistentvolumeclaim}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Disk used by PVC (trend)",
+      "description": "Bytes used per orb-namespace PVC over time \u2014 the growth signal. Edge Prometheus retains ~10 days, so this is a ~10-day window. Zot = registry-data-demo.",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 37
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (persistentvolumeclaim) (kubelet_volume_stats_used_bytes{namespace=\"orb\"})",
+          "legendFormat": "{{persistentvolumeclaim}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Free space by PVC (headroom)",
+      "description": "Available bytes per orb-namespace PVC over time. Shrinking headroom is the fill warning. Zot = registry-data-demo.",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 37
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (persistentvolumeclaim) (kubelet_volume_stats_available_bytes{namespace=\"orb\"})",
+          "legendFormat": "{{persistentvolumeclaim}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
       }
     }
   ]

@@ -11,7 +11,7 @@
 import { test, expect, Page } from '@playwright/test'
 
 const CLUSTER_ORB_ID = 'colo:dev-main'
-const SERVER_ORB_ID  = '2f-uae:5HSC3D4'  // seeded R750 with iDRAC in 2f-uae namespace
+const SERVER_ORB_ID  = '2f-uae:server-5HSC3D4'  // seeded R750 with iDRAC in 2f-uae namespace
 const DC_ORB_ID      = 'seattle:seattle-galleon'
 
 // safeDomId mirrors the Go helper; orbId → DOM-safe id (`:` → `_`).

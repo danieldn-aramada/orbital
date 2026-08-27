@@ -911,6 +911,32 @@ paths:
       summary: Trigger subgraph export
       tags:
       - export
+  /api/v1/export/compare:
+    get:
+      description: Returns the desired-state delta between two published OCI artifacts
+        of the same data center. Read-only; both artifacts are pulled by immutable
+        digest. Not an apply-forecast.
+      parameters:
+      - description: Artifact ID to diff FROM (the earlier side)
+        in: query
+        name: from
+        required: true
+        type: integer
+      - description: Artifact ID to diff TO (the later side)
+        in: query
+        name: to
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.compareResponse'
+      summary: Compare two published artifacts
+      tags:
+      - export
   /api/v1/export/jobs:
     get:
       description: Returns the 50 most recent export jobs ordered by creation time.
@@ -993,10 +1019,52 @@ paths:
       summary: Download export artifact
       tags:
       - export
+  /api/v1/export/preview:
+    post:
+      consumes:
+      - application/json
+      description: Synchronous, read-only. Diffs the current desired state for a data
+        center against its last published artifact. Not an apply-forecast.
+      parameters:
+      - description: Data center orbId to preview
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.exportRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.previewResponse'
+      summary: Preview export diff (desired-state delta vs last published)
+      tags:
+      - export
   /api/v1/oci/artifacts:
     get:
-      description: Returns the 100 most recent OCI artifacts ordered by publish time
-        descending.
+      description: Returns published OCI artifacts, most recent first. Combine `dc`
+        + `status=completed` + `limit=1` to read the latest published version for
+        a data center — the response carries `tag`, `digest` and `completedAt`. **Compare
+        on `digest`, not `tag`:** the tag sequence is per OCI repository and the repository
+        name derives from the data center's editable name, so renaming a data center
+        restarts the sequence at v1 for the same orbId.
+      parameters:
+      - description: Filter by data center orbId (e.g. colo:colo-galleon). Matches
+          RegistryArtifact.datacenter_id, which stores the orbId.
+        in: query
+        name: dc
+        type: string
+      - description: Filter by publish status (e.g. completed). Only completed artifacts
+          have a retrievable digest.
+        in: query
+        name: status
+        type: string
+      - description: Max results (default 100, max 500)
+        in: query
+        name: limit
+        type: integer
       produces:
       - application/json
       responses:
@@ -1221,55 +1289,6 @@ paths:
       summary: Update user role
       tags:
       - users
-  /export/compare:
-    get:
-      description: Returns the desired-state delta between two published OCI artifacts
-        of the same data center. Read-only; both artifacts are pulled by immutable
-        digest. Not an apply-forecast.
-      parameters:
-      - description: Artifact ID to diff FROM (the earlier side)
-        in: query
-        name: from
-        required: true
-        type: integer
-      - description: Artifact ID to diff TO (the later side)
-        in: query
-        name: to
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handler.compareResponse'
-      summary: Compare two published artifacts
-      tags:
-      - export
-  /export/preview:
-    post:
-      consumes:
-      - application/json
-      description: Synchronous, read-only. Diffs the current desired state for a data
-        center against its last published artifact. Not an apply-forecast.
-      parameters:
-      - description: Data center orbId to preview
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/handler.exportRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handler.previewResponse'
-      summary: Preview export diff (desired-state delta vs last published)
-      tags:
-      - export
   /graphql:
     post:
       consumes:

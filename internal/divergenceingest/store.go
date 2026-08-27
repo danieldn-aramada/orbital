@@ -147,7 +147,7 @@ func (i *Ingester) applyReport(ctx context.Context, dc dcRef, publishedAt time.T
 		"added":   len(incoming),
 	}
 	raw, _ := json.Marshal(details)
-	ev, err := tx.Event.Create().
+	ev, err := tx.AuditEvent.Create().
 		SetActor("system:ingester").
 		SetEventCategory("management").
 		SetOperations([]string{"supersedeDivergenceReport"}).
@@ -157,11 +157,11 @@ func (i *Ingester) applyReport(ctx context.Context, dc dcRef, publishedAt time.T
 		_ = tx.Rollback()
 		return fmt.Errorf("audit event: %w", err)
 	}
-	if _, err := tx.EventResource.Create().SetOrbID(dc.id).SetEvent(ev).Save(ctx); err != nil {
+	if _, err := tx.AuditEventResource.Create().SetOrbID(dc.id).SetAuditEvent(ev).Save(ctx); err != nil {
 		_ = tx.Rollback()
 		return fmt.Errorf("audit event resource: %w", err)
 	}
-	if _, err := tx.EventResourceType.Create().SetResourceType("DataCenter").SetEvent(ev).Save(ctx); err != nil {
+	if _, err := tx.AuditEventResourceType.Create().SetResourceType("DataCenter").SetAuditEvent(ev).Save(ctx); err != nil {
 		_ = tx.Rollback()
 		return fmt.Errorf("audit event resource_type: %w", err)
 	}

@@ -8,6 +8,92 @@ import (
 )
 
 var (
+	// AuditEventsColumns holds the columns for the "audit_events" table.
+	AuditEventsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "operations", Type: field.TypeJSON, Nullable: true},
+		{Name: "actor", Type: field.TypeString},
+		{Name: "timestamp", Type: field.TypeTime},
+		{Name: "details", Type: field.TypeJSON, Nullable: true},
+		{Name: "event_category", Type: field.TypeString, Default: "data"},
+	}
+	// AuditEventsTable holds the schema information for the "audit_events" table.
+	AuditEventsTable = &schema.Table{
+		Name:       "audit_events",
+		Columns:    AuditEventsColumns,
+		PrimaryKey: []*schema.Column{AuditEventsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "auditevent_timestamp",
+				Unique:  false,
+				Columns: []*schema.Column{AuditEventsColumns[3]},
+			},
+		},
+	}
+	// AuditEventResourcesColumns holds the columns for the "audit_event_resources" table.
+	AuditEventResourcesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "orb_id", Type: field.TypeString},
+		{Name: "audit_event_id", Type: field.TypeUUID},
+	}
+	// AuditEventResourcesTable holds the schema information for the "audit_event_resources" table.
+	AuditEventResourcesTable = &schema.Table{
+		Name:       "audit_event_resources",
+		Columns:    AuditEventResourcesColumns,
+		PrimaryKey: []*schema.Column{AuditEventResourcesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "audit_event_resources_audit_events_resources",
+				Columns:    []*schema.Column{AuditEventResourcesColumns[2]},
+				RefColumns: []*schema.Column{AuditEventsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "auditeventresource_orb_id",
+				Unique:  false,
+				Columns: []*schema.Column{AuditEventResourcesColumns[1]},
+			},
+			{
+				Name:    "auditeventresource_audit_event_id_orb_id",
+				Unique:  true,
+				Columns: []*schema.Column{AuditEventResourcesColumns[2], AuditEventResourcesColumns[1]},
+			},
+		},
+	}
+	// AuditEventResourceTypesColumns holds the columns for the "audit_event_resource_types" table.
+	AuditEventResourceTypesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "resource_type", Type: field.TypeString},
+		{Name: "audit_event_id", Type: field.TypeUUID},
+	}
+	// AuditEventResourceTypesTable holds the schema information for the "audit_event_resource_types" table.
+	AuditEventResourceTypesTable = &schema.Table{
+		Name:       "audit_event_resource_types",
+		Columns:    AuditEventResourceTypesColumns,
+		PrimaryKey: []*schema.Column{AuditEventResourceTypesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "audit_event_resource_types_audit_events_resource_types",
+				Columns:    []*schema.Column{AuditEventResourceTypesColumns[2]},
+				RefColumns: []*schema.Column{AuditEventsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "auditeventresourcetype_resource_type",
+				Unique:  false,
+				Columns: []*schema.Column{AuditEventResourceTypesColumns[1]},
+			},
+			{
+				Name:    "auditeventresourcetype_audit_event_id_resource_type",
+				Unique:  true,
+				Columns: []*schema.Column{AuditEventResourceTypesColumns[2], AuditEventResourceTypesColumns[1]},
+			},
+		},
+	}
 	// BackupsColumns holds the columns for the "backups" table.
 	BackupsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -109,92 +195,6 @@ var (
 				Name:    "divergenceresolution_entry_orb_id_field",
 				Unique:  true,
 				Columns: []*schema.Column{DivergenceResolutionsColumns[5], DivergenceResolutionsColumns[6]},
-			},
-		},
-	}
-	// EventsColumns holds the columns for the "events" table.
-	EventsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeUUID},
-		{Name: "operations", Type: field.TypeJSON, Nullable: true},
-		{Name: "actor", Type: field.TypeString},
-		{Name: "timestamp", Type: field.TypeTime},
-		{Name: "details", Type: field.TypeJSON, Nullable: true},
-		{Name: "event_category", Type: field.TypeString, Default: "data"},
-	}
-	// EventsTable holds the schema information for the "events" table.
-	EventsTable = &schema.Table{
-		Name:       "events",
-		Columns:    EventsColumns,
-		PrimaryKey: []*schema.Column{EventsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "event_timestamp",
-				Unique:  false,
-				Columns: []*schema.Column{EventsColumns[3]},
-			},
-		},
-	}
-	// EventResourcesColumns holds the columns for the "event_resources" table.
-	EventResourcesColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "orb_id", Type: field.TypeString},
-		{Name: "event_id", Type: field.TypeUUID},
-	}
-	// EventResourcesTable holds the schema information for the "event_resources" table.
-	EventResourcesTable = &schema.Table{
-		Name:       "event_resources",
-		Columns:    EventResourcesColumns,
-		PrimaryKey: []*schema.Column{EventResourcesColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "event_resources_events_resources",
-				Columns:    []*schema.Column{EventResourcesColumns[2]},
-				RefColumns: []*schema.Column{EventsColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
-		Indexes: []*schema.Index{
-			{
-				Name:    "eventresource_orb_id",
-				Unique:  false,
-				Columns: []*schema.Column{EventResourcesColumns[1]},
-			},
-			{
-				Name:    "eventresource_event_id_orb_id",
-				Unique:  true,
-				Columns: []*schema.Column{EventResourcesColumns[2], EventResourcesColumns[1]},
-			},
-		},
-	}
-	// EventResourceTypesColumns holds the columns for the "event_resource_types" table.
-	EventResourceTypesColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "resource_type", Type: field.TypeString},
-		{Name: "event_id", Type: field.TypeUUID},
-	}
-	// EventResourceTypesTable holds the schema information for the "event_resource_types" table.
-	EventResourceTypesTable = &schema.Table{
-		Name:       "event_resource_types",
-		Columns:    EventResourceTypesColumns,
-		PrimaryKey: []*schema.Column{EventResourceTypesColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "event_resource_types_events_resource_types",
-				Columns:    []*schema.Column{EventResourceTypesColumns[2]},
-				RefColumns: []*schema.Column{EventsColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
-		Indexes: []*schema.Index{
-			{
-				Name:    "eventresourcetype_resource_type",
-				Unique:  false,
-				Columns: []*schema.Column{EventResourceTypesColumns[1]},
-			},
-			{
-				Name:    "eventresourcetype_event_id_resource_type",
-				Unique:  true,
-				Columns: []*schema.Column{EventResourceTypesColumns[2], EventResourceTypesColumns[1]},
 			},
 		},
 	}
@@ -312,13 +312,13 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		AuditEventsTable,
+		AuditEventResourcesTable,
+		AuditEventResourceTypesTable,
 		BackupsTable,
 		DivergenceEntriesTable,
 		DivergenceIngestCursorsTable,
 		DivergenceResolutionsTable,
-		EventsTable,
-		EventResourcesTable,
-		EventResourceTypesTable,
 		ExportJobsTable,
 		OrbsTable,
 		RegistryArtifactsTable,
@@ -328,7 +328,7 @@ var (
 )
 
 func init() {
-	EventResourcesTable.ForeignKeys[0].RefTable = EventsTable
-	EventResourceTypesTable.ForeignKeys[0].RefTable = EventsTable
+	AuditEventResourcesTable.ForeignKeys[0].RefTable = AuditEventsTable
+	AuditEventResourceTypesTable.ForeignKeys[0].RefTable = AuditEventsTable
 	RegistryArtifactsTable.ForeignKeys[0].RefTable = ExportJobsTable
 }

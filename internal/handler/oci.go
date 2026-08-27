@@ -214,16 +214,55 @@ func (h *OCI) DeleteArtifact(c echo.Context) error {
 
 // ListArtifacts handles GET /api/v1/oci/artifacts
 //
+// Filters exist because the unfiltered list is capped: without `dc`, a data
+// center that publishes often pushes every other data center off the response
+// entirely. Any client asking "what did orbital last publish for X?" must scope
+// by `dc` rather than fetching the list and grouping client-side.
+//
+// Ordering is by initiated_at descending. That is unambiguous here because
+// exports are globally serialized (Trigger 409s while any export is pending or
+// running), so no two publishes overlap and initiated/completed order alike.
+//
 // @Summary     List OCI artifacts
-// @Description Returns the 100 most recent OCI artifacts ordered by publish time descending.
+// @Description Returns published OCI artifacts, most recent first. Combine `dc` + `status=completed` + `limit=1` to read the latest published version for a data center — the response carries `tag`, `digest` and `completedAt`. **Compare on `digest`, not `tag`:** the tag sequence is per OCI repository and the repository name derives from the data center's editable name, so renaming a data center restarts the sequence at v1 for the same orbId.
 // @Tags        oci
 // @Produce     json
+// @Param       dc     query string false "Filter by data center orbId (e.g. colo:colo-galleon). Matches RegistryArtifact.datacenter_id, which stores the orbId."
+// @Param       status query string false "Filter by publish status (e.g. completed). Only completed artifacts have a retrievable digest."
+// @Param       limit  query int    false "Max results (default 100, max 500)"
 // @Success     200 {array} artifactResponse
 // @Router      /api/v1/oci/artifacts [get]
 func (h *OCI) ListArtifacts(c echo.Context) error {
-	artifacts, err := h.db.RegistryArtifact.Query().
+	limit := 100
+	if v := c.QueryParam("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 500 {
+			limit = n
+		}
+	}
+
+	q := h.db.RegistryArtifact.Query()
+	// `dc` is the orbId. datacenter_id holds the orbId (set from the export
+	// request's orbId, not a DGraph UID — the "DGraph internal ID" comment on
+	// the ent field is stale). Matching the `?dc=` convention on /divergences.
+	if dc := c.QueryParam("dc"); dc != "" {
+		q = q.Where(registryartifact.DatacenterID(dc))
+	}
+	// Validate rather than letting an unknown value fall through to an empty
+	// list — a caller who typos `status=complete` would otherwise read the empty
+	// response as "this data center has never published".
+	if status := c.QueryParam("status"); status != "" {
+		st := registryartifact.Status(status)
+		if err := registryartifact.StatusValidator(st); err != nil {
+			return writeError(c, http.StatusBadRequest, CodeBadUserInput,
+				fmt.Sprintf("unknown status %q", status),
+				"Valid values: pending, bundling, pushing, signing, completed, failed.")
+		}
+		q = q.Where(registryartifact.StatusEQ(st))
+	}
+
+	artifacts, err := q.
 		Order(registryartifact.ByInitiatedAt(sql.OrderDesc())).
-		Limit(100).
+		Limit(limit).
 		WithExportJob().
 		All(c.Request().Context())
 	if err != nil {

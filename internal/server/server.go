@@ -428,6 +428,7 @@ func New(cfg *config.Config, db *ent.Client) (*Server, error) {
 		api.GET("/oci/public-key", ociH.PublicKey)
 		api.POST("/oci/test-connection", ociH.TestConnection)
 		root.GET("/publish-history", ui.EdgeDelivery)
+		root.GET("/publish-history/compare", ui.PublishHistoryCompare)
 
 		if !s3Configured {
 			logger.Warn("S3 not configured (ORBITAL_S3_BUCKET, ORBITAL_S3_ACCESS_KEY, ORBITAL_S3_SECRET_KEY) — backup disabled")

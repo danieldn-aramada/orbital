@@ -248,7 +248,7 @@ e2e-tests (full orbital stack + Playwright)
 |------|-------|------|-------|
 | `handler/datacenter.go` | ~279 | Low | `Tab` handler fully covered by `datacenter_test.go`. No standalone CRUD — mutations flow through GraphQL proxy. |
 | `handler/server.go` | ~346 | Low | `Tab` handler fully covered by `server_test.go`. |
-| `handler/event.go` | ~398 | Low | Pure functions and `List` handler now covered (`event_list_test.go`: 6 integration tests). Remaining: HTMX fragment rendering path — low risk, covered by E2E. |
+| `handler/audit.go` | ~398 | Low | Pure functions and `List` handler now covered (`audit_list_test.go`: 6 integration tests). Remaining: HTMX fragment rendering path — low risk, covered by E2E. |
 | `handler/export.go` | ~807 | Low | All API paths covered including Download happy path. `runExport` covered by `export_integration_test.go`. Remaining: `Trigger` audit event write — low risk. |
 | `handler/inventory.go` | ~127 | Medium | Inventory/discovery handlers. |
 | `server/server.go` | ~296 | Medium | Echo server setup, middleware wiring, route registration. |
@@ -432,7 +432,7 @@ This was the single highest-risk gap. `handler/oidc_test.go` adds 6 integration 
 
 2. **`handler/server.go` (~346 lines) -- Medium risk.** Server CRUD handlers. Same situation as datacenter.go.
 
-3. **`handler/event.go` (List, diff rendering) -- Medium risk.** `writeAuditEvent` is now tested. Remaining: the `List` handler (pagination, filtering by orbId/resource_type, HTMX fragment rendering), `buildDiffHTML`, `buildVarSummary`, and `lineDiff`. These are ~250 lines of presentation logic. Lower risk because audit writes (the compliance-critical path) are covered.
+3. **`handler/audit.go` (List, diff rendering) -- Medium risk.** `writeAuditEvent` is now tested. Remaining: the `List` handler (pagination, filtering by orbId/resource_type, HTMX fragment rendering), `buildDiffHTML`, `buildVarSummary`, and `lineDiff`. These are ~250 lines of presentation logic. Lower risk because audit writes (the compliance-critical path) are covered.
 
 4. **`handler/export.go` (Trigger, Download) -- Medium risk.** `List` and `Status` are now tested. `Trigger` (conflict detection with existing running jobs, audit event write) and `Download` (file streaming, non-completed job returns 404) have no focused handler tests. The full async pipeline is covered by `export_integration_test.go`.
 

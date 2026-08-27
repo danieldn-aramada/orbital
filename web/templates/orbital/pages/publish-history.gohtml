@@ -13,9 +13,11 @@
       {{if not .CanMutate}}{{template "access-required" .}}{{end}}
 
       <p class="is-size-4 mb-2" data-testid="page-heading">Publish History</p>
-      <p class="has-text-grey mb-5" style="font-size: 0.875rem;">
+      <p class="has-text-grey mb-4" style="font-size: 0.875rem;">
         Record of OCI artifacts orbital has published from subgraph exports. Each row is a signed, versioned snapshot of a data center's configuration. ACR is the source of truth for what currently exists in the registry; this page records orbital's publish events.
       </p>
+
+      {{template "publish-history-tabs" .}}
 
       {{if .CanMutate}}
       <section class="mb-6" style="max-width: 520px;">
@@ -75,6 +77,15 @@
             <span class="icon"><i class="fa-solid fa-rotate-right"></i></span>
             <span>Reload</span>
           </button>
+          {{/* Enabled only when exactly two comparable rows are ticked. Label
+               spells out the resolved direction (older → newer, by publish
+               time) because the table sorts newest-first — deriving direction
+               from click order would silently invert half the comparisons. */}}
+          <button id="btn-compare-selected" class="button is-small is-link is-light" disabled>
+            <span class="icon"><i class="fa-solid fa-code-compare"></i></span>
+            <span id="btn-compare-selected-label">Compare</span>
+          </button>
+          <span id="compare-select-hint" class="has-text-grey is-size-7"></span>
         </div>
         {{/* Bounded scroll container: even with 100 history rows (the server-side
              cap in OCI.ListArtifacts), the page doesn't grow unbounded.
@@ -90,6 +101,7 @@
                  end columns overflow into a scroll. 10 cols = 10 <th> = 10 <td>. */}}
             <colgroup>
               <col style="width: 2.5rem">  {{/* chevron */}}
+              <col style="width: 2.5rem">  {{/* compare checkbox */}}
               <col style="width: 9rem">    {{/* Data Center */}}
               <col style="width: 4.5rem">  {{/* Tag */}}
               <col style="width: 7rem">    {{/* Status */}}
@@ -103,6 +115,7 @@
             <thead style="position: sticky; top: 0; background-color: var(--bulma-scheme-main); z-index: 1; box-shadow: 0 1px 0 var(--bulma-border);">
               <tr>
                 <th></th>
+                <th title="Select two artifacts of the same data center to compare"></th>
                 <th>Data Center</th>
                 <th>Tag</th>
                 <th>Status</th>
@@ -115,7 +128,7 @@
               </tr>
             </thead>
             <tbody id="artifacts-tbody">
-              <tr><td colspan="10" class="has-text-grey">No artifacts yet.</td></tr>
+              <tr><td colspan="11" class="has-text-grey">No artifacts yet.</td></tr>
             </tbody>
           </table>
         </div>

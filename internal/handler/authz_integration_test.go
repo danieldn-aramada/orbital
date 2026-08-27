@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/armada/orbital/ent/event"
+	"github.com/armada/orbital/ent/auditevent"
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/auth"
 	"github.com/armada/orbital/internal/handler"
@@ -112,7 +112,7 @@ func TestRequireRole_Denial_WritesAuditEvent(t *testing.T) {
 	const email = "readonly-denied@authztest.com"
 	userID := createTestUser(t, email, user.RoleReadonly)
 	ctx := context.Background()
-	t.Cleanup(func() { testDB.Event.Delete().Where(event.Actor(email)).ExecX(ctx) })
+	t.Cleanup(func() { testDB.AuditEvent.Delete().Where(auditevent.Actor(email)).ExecX(ctx) })
 
 	e := echo.New()
 	mw := handler.RequireAdmin(testDB)
@@ -132,7 +132,7 @@ func TestRequireRole_Denial_WritesAuditEvent(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	ev, dbErr := testDB.Event.Query().Where(event.Actor(email)).Only(ctx)
+	ev, dbErr := testDB.AuditEvent.Query().Where(auditevent.Actor(email)).Only(ctx)
 	if dbErr != nil {
 		t.Fatalf("audit event not found: %v", dbErr)
 	}
@@ -409,7 +409,7 @@ func TestReconcileAdminEmails_ReadonlyPromotedToAdmin(t *testing.T) {
 	const email = "reconcile-readonly@authztest.com"
 	ctx := context.Background()
 	userID := createTestUser(t, email, user.RoleReadonly)
-	t.Cleanup(func() { testDB.Event.Delete().Where(event.Actor("system:adminEmailsConfig")).ExecX(ctx) })
+	t.Cleanup(func() { testDB.AuditEvent.Delete().Where(auditevent.Actor("system:adminEmailsConfig")).ExecX(ctx) })
 
 	handler.ReconcileAdminEmails(ctx, testDB, map[string]struct{}{email: {}}, nil)
 
@@ -422,7 +422,7 @@ func TestReconcileAdminEmails_ReadonlyPromotedToAdmin(t *testing.T) {
 	}
 
 	time.Sleep(50 * time.Millisecond)
-	ev, err := testDB.Event.Query().Where(event.Actor("system:adminEmailsConfig")).Only(ctx)
+	ev, err := testDB.AuditEvent.Query().Where(auditevent.Actor("system:adminEmailsConfig")).Only(ctx)
 	if err != nil {
 		t.Fatalf("audit event not found: %v", err)
 	}

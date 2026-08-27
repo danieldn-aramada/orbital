@@ -5,11 +5,11 @@ package ent
 import (
 	"time"
 
+	"github.com/armada/orbital/ent/auditevent"
 	"github.com/armada/orbital/ent/backup"
 	"github.com/armada/orbital/ent/divergenceentry"
 	"github.com/armada/orbital/ent/divergenceingestcursor"
 	"github.com/armada/orbital/ent/divergenceresolution"
-	"github.com/armada/orbital/ent/event"
 	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/orb"
 	"github.com/armada/orbital/ent/registryartifact"
@@ -23,6 +23,20 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	auditeventFields := schema.AuditEvent{}.Fields()
+	_ = auditeventFields
+	// auditeventDescTimestamp is the schema descriptor for timestamp field.
+	auditeventDescTimestamp := auditeventFields[3].Descriptor()
+	// auditevent.DefaultTimestamp holds the default value on creation for the timestamp field.
+	auditevent.DefaultTimestamp = auditeventDescTimestamp.Default.(func() time.Time)
+	// auditeventDescEventCategory is the schema descriptor for event_category field.
+	auditeventDescEventCategory := auditeventFields[5].Descriptor()
+	// auditevent.DefaultEventCategory holds the default value on creation for the event_category field.
+	auditevent.DefaultEventCategory = auditeventDescEventCategory.Default.(string)
+	// auditeventDescID is the schema descriptor for id field.
+	auditeventDescID := auditeventFields[0].Descriptor()
+	// auditevent.DefaultID holds the default value on creation for the id field.
+	auditevent.DefaultID = auditeventDescID.Default.(func() uuid.UUID)
 	backupMixin := schema.Backup{}.Mixin()
 	backupMixinFields0 := backupMixin[0].Fields()
 	_ = backupMixinFields0
@@ -107,20 +121,6 @@ func init() {
 	divergenceresolutionDescID := divergenceresolutionFields[0].Descriptor()
 	// divergenceresolution.DefaultID holds the default value on creation for the id field.
 	divergenceresolution.DefaultID = divergenceresolutionDescID.Default.(func() uuid.UUID)
-	eventFields := schema.Event{}.Fields()
-	_ = eventFields
-	// eventDescTimestamp is the schema descriptor for timestamp field.
-	eventDescTimestamp := eventFields[3].Descriptor()
-	// event.DefaultTimestamp holds the default value on creation for the timestamp field.
-	event.DefaultTimestamp = eventDescTimestamp.Default.(func() time.Time)
-	// eventDescEventCategory is the schema descriptor for event_category field.
-	eventDescEventCategory := eventFields[5].Descriptor()
-	// event.DefaultEventCategory holds the default value on creation for the event_category field.
-	event.DefaultEventCategory = eventDescEventCategory.Default.(string)
-	// eventDescID is the schema descriptor for id field.
-	eventDescID := eventFields[0].Descriptor()
-	// event.DefaultID holds the default value on creation for the id field.
-	event.DefaultID = eventDescID.Default.(func() uuid.UUID)
 	exportjobMixin := schema.ExportJob{}.Mixin()
 	exportjobMixinFields0 := exportjobMixin[0].Fields()
 	_ = exportjobMixinFields0

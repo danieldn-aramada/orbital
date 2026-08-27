@@ -50,7 +50,7 @@ const compareDisclaimer = "Desired-state delta between two published artifacts. 
 //	@Param			from	query		int	true	"Artifact ID to diff FROM (the earlier side)"
 //	@Param			to		query		int	true	"Artifact ID to diff TO (the later side)"
 //	@Success		200		{object}	compareResponse
-//	@Router			/export/compare [get]
+//	@Router			/api/v1/export/compare [get]
 func (h *Export) Compare(c echo.Context) error {
 	ctx := c.Request().Context()
 
