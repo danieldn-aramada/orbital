@@ -2140,64 +2140,6 @@ document.addEventListener('keydown', (e) => {
 // Do NOT add new entries here to support a new onclick — use delegation.
 
 
-// ─── Publish History: compare selection ───────────────────────────────────────
-
-// Row selection on the Artifacts tab. Enables Compare only when exactly two
-// artifacts of the SAME data center are ticked — cross-DC pairs are meaningless
-// (every orbId differs, so the diff reports the whole graph as removed+added)
-// and the API 400s on them. Gating here is affordance; the server still enforces.
-//
-// Direction is derived from publish time, never click order: the table sorts
-// newest-first, so "first ticked" would invert the diff about half the time.
-// The button label spells out the resolved direction so there is no ambiguity.
-function updateCompareSelection() {
-  const btn = document.getElementById('btn-compare-selected')
-  const label = document.getElementById('btn-compare-selected-label')
-  const hint = document.getElementById('compare-select-hint')
-  if (!btn || !label) return
-
-  const checked = Array.from(document.querySelectorAll('.js-compare-select:checked'))
-  const boxes = Array.from(document.querySelectorAll('.js-compare-select'))
-
-  // Once one row is picked, lock out other data centers rather than letting the
-  // user build a pair the API will reject.
-  const dc = checked.length ? checked[0].dataset.datacenter : null
-  boxes.forEach(b => {
-    b.disabled = dc !== null && b.dataset.datacenter !== dc
-  })
-
-  if (checked.length !== 2) {
-    btn.disabled = true
-    label.textContent = 'Compare'
-    if (hint) {
-      hint.textContent = checked.length === 0
-        ? 'Select two artifacts to compare'
-        : `Select 1 more artifact in ${dc}`
-    }
-    return
-  }
-
-  const [a, b] = checked
-  const [from, to] = a.dataset.exportedAt <= b.dataset.exportedAt ? [a, b] : [b, a]
-  btn.disabled = false
-  label.textContent = `Compare ${from.dataset.tag} → ${to.dataset.tag}`
-  if (hint) hint.textContent = ''
-  btn.dataset.from = from.dataset.artifactId
-  btn.dataset.to = to.dataset.artifactId
-}
-
-document.addEventListener('change', (e) => {
-  if (e.target.classList && e.target.classList.contains('js-compare-select')) updateCompareSelection()
-})
-
-document.addEventListener('click', (e) => {
-  const btn = e.target.closest('#btn-compare-selected')
-  if (!btn || btn.disabled) return
-  // Deep-link into the Compare tab rather than rendering in place, so the
-  // resulting URL reproduces this exact diff for anyone it's shared with.
-  window.location.href = `${BASE}/publish-history/compare?from=${btn.dataset.from}&to=${btn.dataset.to}`
-})
-
 // ─── Publish History: Compare tab ─────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -2251,6 +2193,8 @@ function initComparePage() {
       })
   }
 
+  let mostRecentDC = null
+
   const populateDCs = (activeOrbId) => {
     // Data centers come from the Topology API, the authoritative source —
     // not inferred from whichever artifacts happened to fit in a capped list.
@@ -2267,7 +2211,10 @@ function initComparePage() {
           return null
         }
         dcs.sort((a, b) => String(a.name || a.orbId).localeCompare(String(b.name || b.orbId)))
-        const active = activeOrbId || dcs[0].orbId
+        // Falling back to dcs[0] lands on the alphabetically-first data center,
+        // which usually has nothing published — so a fresh visit opens on an
+        // empty state. Prefer whichever DC published most recently.
+        const active = activeOrbId || mostRecentDC || dcs[0].orbId
         dcSel.innerHTML = dcs.map(d =>
           `<option value="${esc(d.orbId)}"${d.orbId === active ? ' selected' : ''}>${esc(d.name || d.orbId)}</option>`).join('')
         return active
@@ -2280,6 +2227,7 @@ function initComparePage() {
     if (!fromSel.value || !toSel.value) return
     // Keep the URL in sync so the current view is always linkable.
     window.history.replaceState({}, '', `${BASE}/publish-history/compare?from=${fromSel.value}&to=${toSel.value}`)
+    rememberCompare(dcSel.value, fromSel.value, toSel.value)
     runCompare(fromSel.value, toSel.value)
   })
 
@@ -2290,12 +2238,54 @@ function initComparePage() {
       .then(r => r.ok ? r.json() : null)
       .then(a => populateDCs(a && a.datacenterId))
       .then(active => active && loadVersions(dcSel.value, wantFrom, wantTo))
-      .then(() => runCompare(wantFrom, wantTo))
+      .then(() => { rememberCompare(dcSel.value, wantFrom, wantTo); runCompare(wantFrom, wantTo) })
       .catch(() => { out.innerHTML = '<div class="notification is-warning is-light">Couldn\u2019t load that comparison.</div>' })
     return
   }
 
-  populateDCs().then(active => active && loadVersions(dcSel.value))
+  // No query params: restore the last comparison from this session rather than
+  // resetting. The tabs are routes, so Artifacts → Compare is a full page load —
+  // without this, every trip back silently discards the user's selection.
+  const last = recallCompare()
+  if (last) {
+    populateDCs(last.dc)
+      .then(active => active && loadVersions(dcSel.value, last.from, last.to))
+      .then(() => {
+        // Only auto-run if the remembered pair still exists — artifacts can be
+        // deleted between visits.
+        if (fromSel.value === String(last.from) && toSel.value === String(last.to)) {
+          window.history.replaceState({}, '', `${BASE}/publish-history/compare?from=${last.from}&to=${last.to}`)
+          runCompare(last.from, last.to)
+        }
+      })
+      .catch(() => populateDCs().then(active => active && loadVersions(dcSel.value)))
+    return
+  }
+
+  // Cold start: ask which data center published most recently, then open on it.
+  fetch(BASE + '/api/v1/oci/artifacts?status=completed&limit=1')
+    .then(r => r.ok ? r.json() : [])
+    .then(rows => { if (rows && rows.length) mostRecentDC = rows[0].datacenterId })
+    .catch(() => {})
+    .then(() => populateDCs())
+    .then(active => active && loadVersions(dcSel.value))
+}
+
+// Compare selection is remembered per browser session (not localStorage) — it is
+// transient working state, not a preference worth surviving a restart.
+const COMPARE_STATE_KEY = 'orbital.compare.last'
+
+function rememberCompare(dc, from, to) {
+  try { sessionStorage.setItem(COMPARE_STATE_KEY, JSON.stringify({ dc, from, to })) } catch (e) { /* private mode / quota */ }
+}
+
+function recallCompare() {
+  try {
+    const raw = sessionStorage.getItem(COMPARE_STATE_KEY)
+    if (!raw) return null
+    const v = JSON.parse(raw)
+    return (v && v.dc && v.from && v.to) ? v : null
+  } catch (e) { return null }
 }
 
 
@@ -2329,23 +2319,59 @@ function renderCompare(out, json) {
   const fmt = (v) => v == null ? '<span class="has-text-grey-light">∅</span>' : '<span class="is-family-monospace">' + esc(JSON.stringify(v)) + '</span>'
   const s = json.summary || {}
   const changed = (s.added || 0) + (s.removed || 0) + (s.modified || 0)
-  const fmtDate = (iso) => { if (!iso) return ''; const d = new Date(iso); return isNaN(d.getTime()) ? String(iso).slice(0, 10) : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) }
+  // Header carries DATA only — counts, versions, dates — matching how GitHub
+  // ("Showing N changed files…") and terraform ("Plan: 2 to add…") head a diff.
+  // Neither explains what the view isn't; standing prose in a header reads as
+  // documentation and gets skipped after the first visit.
+  //
+  // Emphasis comes from COLOUR, never from mixing bold and regular weight on one
+  // line — and the colours are the ones the Modified/Added/Removed sections below
+  // already use, so header and table speak one language.
+  let head = '<p class="is-size-5 mb-1">' + esc(json.from.tag)
+    + ' <span class="has-text-grey-light">→</span> ' + esc(json.to.tag) + '</p>'
+    + '<p class="has-text-grey is-size-7 mb-4">Published '
+    + esc(formatPublishRange(json.from.publishedAt, json.to.publishedAt)) + '</p>'
 
-  let head = '<p class="mb-1"><strong>Changes · ' + esc(json.from.tag) + ' → ' + esc(json.to.tag) + '</strong> '
-    + '<span class="has-text-grey is-size-7">' + esc(json.from.dataCenterName) + '</span></p>'
+  // Zero counts stay grey — a green "0 added" reads as a result when it is an
+  // absence. Only counts that actually happened earn their colour.
+  const stat = (n, label, cls) =>
+    '<div style="min-width:5.5rem">'
+    + '<p class="is-size-4 ' + (n > 0 ? cls : 'has-text-grey-light') + '">' + n.toLocaleString() + '</p>'
+    + '<p class="is-size-7 has-text-grey">' + label + '</p></div>'
 
-  // The counterpart to the Audit Log explainer on the Artifacts tab. Both are
-  // correct and will disagree for the same pair; saying why is what stops that
-  // reading as a bug.
-  head += '<p class="has-text-grey-light is-size-7 mb-3">Net difference between the two published versions. Edits that were later undone don’t appear here — see the Audit Log for the full edit history.</p>'
+  head += '<div class="is-flex mb-5" style="gap:2.5rem; flex-wrap:wrap;">'
+    + stat(s.modified || 0, 'Changed', 'has-text-warning-dark')
+    + stat(s.added || 0, 'Added', 'has-text-success')
+    + stat(s.removed || 0, 'Removed', 'has-text-danger')
+    + stat(s.unchanged || 0, 'Unchanged', 'has-text-grey')
+    + '</div>'
 
-  head += '<p class="mb-3"><strong>' + (changed === 0
-    ? 'No differences between these versions.'
-    : ('' + (s.modified || 0) + ' changed · ' + (s.added || 0) + ' added · ' + (s.removed || 0) + ' removed'))
-    + '</strong> <span class="has-text-grey is-size-7">(' + (s.unchanged || 0) + ' unchanged)</span>'
-    + '<span class="has-text-grey is-size-7"> · published ' + esc(fmtDate(json.from.publishedAt)) + ' → ' + esc(fmtDate(json.to.publishedAt)) + '</span></p>'
+  // The one place the audit-log-vs-content-diff distinction actually misleads:
+  // zero differences right after the Audit Log showed edits reads as "broken".
+  // Explain it here and nowhere else — contextual help at the moment of doubt.
+  if (changed === 0) {
+    head += '<p class="has-text-grey-light is-size-7 mb-3">No differences between these versions. '
+      + 'Edits that were later undone don\u2019t appear here — see the Audit Log for the full edit history.</p>'
+  }
 
   const table = changed === 0 ? '' : renderExportPreviewTable(json.changes || [], esc, fmt)
-  const footnote = json.disclaimer ? '<p class="has-text-grey-light is-size-7 mt-4">' + esc(json.disclaimer) + '</p>' : ''
-  out.innerHTML = head + table + footnote
+  out.innerHTML = head + table
+}
+
+// formatPublishRange renders two publish timestamps without repeating what the
+// pair already says. Publishes minutes apart previously rendered as the redundant
+// "Aug 27, 2026 → Aug 27, 2026"; same-day now collapses to the times, which are
+// the only distinguishing part. The year appears only when it differs.
+function formatPublishRange(fromISO, toISO) {
+  const a = fromISO ? new Date(fromISO) : null
+  const b = toISO ? new Date(toISO) : null
+  if (!a || !b || isNaN(a.getTime()) || isNaN(b.getTime())) return ''
+
+  const time = (d) => d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+  const dayMonth = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const full = (d) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+
+  if (a.toDateString() === b.toDateString()) return `${dayMonth(a)}, ${time(a)} → ${time(b)}`
+  if (a.getFullYear() !== b.getFullYear()) return `${full(a)} → ${full(b)}`
+  return `${dayMonth(a)} → ${dayMonth(b)}`
 }

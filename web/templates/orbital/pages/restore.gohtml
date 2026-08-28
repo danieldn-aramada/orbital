@@ -30,18 +30,12 @@
           <p class="is-size-6 mb-3"><strong>From a stored backup</strong></p>
           <p class="has-text-grey mb-4" style="font-size: 0.875rem;">
             Orbital fetches the backup directly from storage, loads it into DGraph blue, and tracks the restore status here.
-            Requires orbital to be running in-cluster (Kubernetes).
           </p>
 
           {{if not .BackupEnabled}}
             <div class="notification is-warning is-light" style="font-size: 0.875rem;">
               Object storage is not configured — backups and stored restore are disabled.
               Set <code>ORBITAL_S3_BUCKET</code>, <code>ORBITAL_S3_ACCESS_KEY</code>, and <code>ORBITAL_S3_SECRET_KEY</code>.
-            </div>
-          {{else if not .K8sAvailable}}
-            <div class="notification is-warning is-light" style="font-size: 0.875rem;">
-              Restore is not available — set <code>ORBITAL_RESTORE_BACKEND=docker</code> for local dev
-              or <code>ORBITAL_RESTORE_BACKEND=k8s</code> when running in-cluster.
             </div>
           {{else}}
             <div class="field" style="max-width: 480px;">

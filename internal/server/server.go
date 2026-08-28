@@ -271,7 +271,6 @@ func New(cfg *config.Config, db *ent.Client) (*Server, error) {
 	ui.SetOCIConfig(ociConfigured, cfg.OCIRegistry, cfg.OCIRepo)
 	ui.SetExportDir(cfg.ExportDir)
 	ui.SetSchemaPath(cfg.SchemaPath)
-	ui.SetRestoreAvailable(true)
 	ui.SetDGraphURL(cfg.DGraphURL)
 	ui.SetDGraphAdminURL(cfg.DGraphAdminURL)
 	ui.SetBackupCronSpec(cfg.BackupSchedule)

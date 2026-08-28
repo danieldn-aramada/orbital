@@ -728,9 +728,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const KEY = document.getElementById('server-list-table')
     ? 'hint-dblclick-dismissed-srv'
     : 'hint-dblclick-dismissed-dc'
-  if (!sessionStorage.getItem(KEY)) banner.style.display = ''
+  // localStorage, not sessionStorage: a dismissed hint must STAY dismissed.
+  // Under sessionStorage it reappeared on every one of the seven double-click
+  // tables in every new browser session, so dismissing it never felt like it
+  // worked. Logout still clears both stores, so a different user at the same
+  // browser sees the hint again — which is the behaviour we want.
+  if (!localStorage.getItem(KEY)) banner.style.display = ''
   document.getElementById('hint-banner-dblclick-dismiss').addEventListener('click', () => {
-    sessionStorage.setItem(KEY, '1')
+    localStorage.setItem(KEY, '1')
     banner.style.display = 'none'
   })
 })
@@ -1254,7 +1259,7 @@ export function initDatacenterTable(opts = {}) {
           { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-datacenters' } },
         ] },
       ],
-      topEnd: { search: { placeholder: 'Type search here' } },
+      topEnd: { search: { placeholder: 'Search data centers' } },
     },
     select: { style: 'os' },
     autoWidth: true,

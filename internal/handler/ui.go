@@ -41,7 +41,6 @@ type UI struct {
 	ociRepo           string
 	exportDir         string
 	schemaPath        string
-	restoreAvailable  bool
 	dgraphURL         string
 	dgraphAdminURL    string
 	version           string
@@ -70,10 +69,6 @@ func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, deviceCodeEn
 		version:           fmt.Sprintf("%d", time.Now().Unix()),
 		templates:         webtemplates.Map(),
 	}
-}
-
-func (h *UI) SetRestoreAvailable(available bool) {
-	h.restoreAvailable = available
 }
 
 // SetOCIConfig passes OCI config to the UI handler for rendering state-aware pages.
@@ -538,7 +533,6 @@ func (h *UI) Restore(c echo.Context) error {
 		Base:          h.base(c),
 		PageTitle:     "Restore Graph",
 		BackupEnabled: h.backupEnabled,
-		K8sAvailable:  h.restoreAvailable,
 	}
 	if sv, err := readSchemaVersion(h.schemaPath); err == nil {
 		p.CurrentSchemaVersion = sv

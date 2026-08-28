@@ -1430,9 +1430,6 @@ const docTemplate = `{
                         "$ref": "#/definitions/graphdiff.Change"
                     }
                 },
-                "disclaimer": {
-                    "type": "string"
-                },
                 "from": {
                     "$ref": "#/definitions/handler.artifactRef"
                 },

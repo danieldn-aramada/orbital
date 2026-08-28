@@ -27,15 +27,12 @@ type artifactRef struct {
 // is the value in `from`, `after` is the value in `to`. Document-level from/to over
 // field-level before/after mirrors how git layers file-level a/b over line-level -/+.
 type compareResponse struct {
-	From       artifactRef                  `json:"from"`
-	To         artifactRef                  `json:"to"`
-	Disclaimer string                       `json:"disclaimer"`
-	Summary    graphdiff.Summary            `json:"summary"`
-	ByType     map[string]graphdiff.Summary `json:"byType"`
-	Changes    []*graphdiff.Change          `json:"changes"`
+	From    artifactRef                  `json:"from"`
+	To      artifactRef                  `json:"to"`
+	Summary graphdiff.Summary            `json:"summary"`
+	ByType  map[string]graphdiff.Summary `json:"byType"`
+	Changes []*graphdiff.Change          `json:"changes"`
 }
-
-const compareDisclaimer = "Desired-state delta between two published artifacts. This is not a forecast of what the edge applied; the edge controller decides actuation."
 
 // Compare diffs two published artifacts for the same data center.
 //
@@ -80,12 +77,11 @@ func (h *Export) Compare(c echo.Context) error {
 
 	res := graphdiff.Compare(fromSnap, toSnap)
 	resp := compareResponse{
-		From:       toArtifactRef(from),
-		To:         toArtifactRef(to),
-		Disclaimer: compareDisclaimer,
-		Summary:    res.Summary,
-		ByType:     res.ByType,
-		Changes:    res.Changes,
+		From:    toArtifactRef(from),
+		To:      toArtifactRef(to),
+		Summary: res.Summary,
+		ByType:  res.ByType,
+		Changes: res.Changes,
 	}
 	if resp.Changes == nil {
 		resp.Changes = []*graphdiff.Change{}

@@ -142,8 +142,6 @@ definitions:
         items:
           $ref: '#/definitions/graphdiff.Change'
         type: array
-      disclaimer:
-        type: string
       from:
         $ref: '#/definitions/handler.artifactRef'
       summary:

@@ -346,7 +346,6 @@ func TestRestorePage_RendersExpectedElements(t *testing.T) {
 		testDB,
 		slog.Default(),
 	)
-	ui.SetRestoreAvailable(true)
 	ui.SetSchemaPath(schemaPath())
 
 	e := echo.New()

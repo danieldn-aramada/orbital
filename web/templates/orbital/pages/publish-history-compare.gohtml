@@ -12,16 +12,13 @@
 
       {{if not .CanMutate}}{{template "access-required" .}}{{end}}
 
-      <p class="is-size-4 mb-2" data-testid="page-heading">Publish History</p>
-      <p class="has-text-grey mb-4" style="font-size: 0.875rem;">
-        Compare any two published artifacts of the same data center. Both sides are pulled from the registry by immutable digest, so this reflects exactly what was shipped.
-      </p>
-
+      <p class="is-size-4 mb-4" data-testid="page-heading">Publish History</p>
       {{template "publish-history-tabs" .}}
 
-      {{/* Pickers are the empty state: landing here with no from/to still gives
-           something to do, which is why Compare is a tab and not a hidden flow
-           reachable only by ticking two checkboxes on the Artifacts tab. */}}
+      {{/* The pickers ARE the empty state: landing here with no from/to still
+           gives you something to do. That is why Compare is a tab rather than a
+           flow hidden behind a selection on another page — a feature you can
+           only reach by a non-obvious gesture is one most users never find. */}}
       <div class="is-flex is-align-items-flex-end mb-4" style="gap: 0.75rem; flex-wrap: wrap;">
         <div class="field mb-0">
           <label class="label is-small">Data center</label>

@@ -37,6 +37,17 @@ Read this before: DGraph schema changes, query/mutation work, export/import, see
 
 ## ConfigItem ownership (owned-child model)
 
+> **Ownership is declared in code, never as runtime data — and this is a settled non-goal, with evidence.** The comparative case against operator-tunable ownership is **ServiceNow CMDB**: there, which types may contain which lives in `cmdb_rel_type_suggest`, which is **advisory only** — it populates editor suggestions but does not block an off-model edge. Because that type-policy is admin-edited data with no build step, a new CI class introduces drift caught only by CMDB governance, never by code review. Every other surveyed system does the opposite (NetBox `parent_object`, Kubernetes `controller:true`, Backstage's single declaration) and makes ownership a compile-time property. Orbital follows them: `internal/configitems/registry.go` is the single declaration, and `schema_consistency_test.go` fails the build on drift. Do **not** reintroduce runtime-configurable ownership.
+>
+> **Precedence must stay an ordered slice, never a map.** `Type.OwnerEdges` is order-sensitive (most-specific-first: `NetworkInterface` nests under adapter before server before device). Go map iteration is randomized, so a map here yields a non-deterministic presentation parent.
+>
+> **Cross-namespace ownership is out of scope — and deliberately not enforced in code.** Ownership models physical/logical containment, so a `colo` server cannot contain an `alaska` disk; Kubernetes forbids the equivalent outright. Nothing in orbital can produce such an edge: `orbId` is `<namespace>:<kind>-<natural-key>`, and the editor derives a child's namespace from its parent on create. It would take a hand-written mutation deliberately pairing orbIds across two namespaces.
+>
+> **Do not "add a check to the schema-consistency test" for this** — that test is type-level (it parses `schema.graphql` and validates registry declarations), while namespace is instance data. The check is not expressible there; enforcement would have to be a mutation-time guard or a data-integrity query, which is not worth building for a case nothing produces.
+>
+> Worth knowing if it ever *did* occur: the failure is silent, not loud. Export scopes a data center by namespace filter (`eq(ConfigItem.namespace, …)`), not by graph traversal, so a cross-namespace child would be **excluded from its owner's artifact**, leaving a dangling edge with no error.
+
+
 Some ConfigItems are **owned children** of another: they model physical/logical containment (`StorageDevice` ∈ `StorageController` ∈ `Server`; `NetworkInterface` on a `NetworkAdapter` ∈ `Server`; `ServerMaintenance` for a `Server`). Ownership is a **presentation / aggregation** concept, **never actuation** — edge controllers never consume it. It drives: nested JSON editing (children edited through the owner's tree, see UI.md), audit rollup (an owner's audit tab aggregates its children's events — `collectRelatedOrbIDs`), and delete-cascade. It does **not** drive the export diff preview — see the note below.
 
 **Two layers, two homes:**

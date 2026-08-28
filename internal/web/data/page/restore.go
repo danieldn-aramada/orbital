@@ -14,7 +14,6 @@ type Restore struct {
 	layout.Base
 	PageTitle            string
 	BackupEnabled        bool
-	K8sAvailable         bool
 	CompletedBackups     []BackupOption
 	CurrentSchemaVersion string
 }

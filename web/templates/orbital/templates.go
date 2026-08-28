@@ -65,10 +65,10 @@ func Map() map[string]*template.Template {
 		"publish-history-compare": template.Must(template.ParseFiles(page(
 			"web/templates/orbital/pages/publish-history-compare.gohtml",
 			"web/templates/orbital/partials/publish-history-tabs.gohtml")...)),
-		"servers":            template.Must(template.ParseFiles(page("web/templates/orbital/pages/servers.gohtml")...)),
-		"clusters":           template.Must(template.ParseFiles(page("web/templates/orbital/pages/clusters.gohtml")...)),
-		"network":            template.Must(template.ParseFiles(page("web/templates/orbital/pages/network.gohtml")...)),
-		"restore":            template.Must(template.ParseFiles(page("web/templates/orbital/pages/restore.gohtml")...)),
-		"users":              template.Must(template.ParseFiles(page("web/templates/orbital/pages/users.gohtml")...)),
+		"servers":  template.Must(template.ParseFiles(page("web/templates/orbital/pages/servers.gohtml")...)),
+		"clusters": template.Must(template.ParseFiles(page("web/templates/orbital/pages/clusters.gohtml")...)),
+		"network":  template.Must(template.ParseFiles(page("web/templates/orbital/pages/network.gohtml")...)),
+		"restore":  template.Must(template.ParseFiles(page("web/templates/orbital/pages/restore.gohtml")...)),
+		"users":    template.Must(template.ParseFiles(page("web/templates/orbital/pages/users.gohtml")...)),
 	}
 }
