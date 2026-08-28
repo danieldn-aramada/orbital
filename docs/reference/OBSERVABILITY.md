@@ -4,7 +4,7 @@ Read this before: adding new spans, changing the OTel SDK init, touching
 `internal/observability/`, adding instrumentation to a new handler or job,
 or modifying `/metrics`.
 
-Stack survey: `docs/reference/monitoring-stack.md`.
+Stack survey: `docs/reference/MONITORING-STACK.md`.
 
 ---
 
@@ -233,7 +233,7 @@ After deploy, validate the pipeline with:
    `orbital-otel-collector` → Cortex; view in `commander-grafana` on the Cortex
    data source (e.g. `sum by (path) (rate(http_requests_total{job="scrape-orbital"}[5m]))`).
    The AMW/ama-metrics path silently drops orbital's target after each redeploy —
-   see `docs/reference/monitoring-stack.md` (Metrics + Grafana) for the verified
+   see `docs/reference/MONITORING-STACK.md` (Metrics + Grafana) for the verified
    topology, the known ama-metrics defect, and the dashboard JSON.
 
 ---

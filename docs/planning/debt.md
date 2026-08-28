@@ -1,0 +1,80 @@
+# Known debt
+
+Tracked technical debt for orbital. Split out of `ROADMAP.md` on 2026-08-28 — it had grown to 42 entries (one of them 2.5 KB), which buried the milestone view that ROADMAP exists to give.
+
+**This is an interim home.** By the convention of every comparable project (Kubernetes, Rust, Django, Terraform), debt belongs in the issue tracker with labels, not in a file. Move it there when the workflow is ready; until then, this file keeps it out of the roadmap.
+
+Entries are grouped by whether they need design input before someone can pick them up.
+
+---
+
+**Validation gate — before closing any item:** `go build ./...` + `make test-unit` for Go changes; `make test-integration` for PostgreSQL/DGraph; `make test-e2e` or manual browser check for UI/JS; negative test (wrong config is actually rejected) for security-critical items.
+
+### Track A — fix now (no test harness required)
+
+| Item | Notes |
+|---|---|
+| Replace `title=""` tooltips with Tippy.js | 9+ usages in `divergence-reports.gohtml`, `users.gohtml`, `backup-jobs-tbody.gohtml`, `cluster-tab.gohtml`. Native tooltips have ~1s delay, no theming/positioning. Migrate to Tippy.js (~10KB). |
+| Refactor bundler URL config DSL | `ORBITAL_BUNDLER_URLS=configbundle-bundler=http://...` is a custom micro-DSL in one env var; already caused one bug (preflight probed the raw `name=url` as a URL). Better: one env var per bundler, or ConfigMap-mounted YAML. |
+| Collapse duplicate cluster backup structs | `backupKindResponse` (DGraph decode) and `backupKindTab` (template view struct) are hand-synced — adding a field means updating both or the cluster tab truncates mid-render (the 2026-07-27 `retentionDays` bug). Now *caught* by `TestClusterTab_BackupWithRetentionRendersFullFragment` + buffered `renderHTML`, but drift is still possible. Render the template off the query struct directly so a new field lands in one place. `internal/handler/cluster.go`. |
+| Unify `/graphql` proxy-guard error envelope | **Deferred — build only when a client needs it.** Proxy guards (403/409/400) return the REST `errorResponse` body; DGraph's native `errors[]` passes through untouched, so a caller gets one shape or the other. Unify = wrap proxy-guard rejections in a synthetic `errors:[{message, extensions:{code,httpStatus,hint}}]`. Cheap (codes already match Apollo) but touches 403/409 behavior + orbctl parsing + e2e — don't do speculatively. Context in `docs/reference/ERROR-RESPONSES.md`. |
+| **Config editor Save is not atomic — a partial edit can commit silently** | **Found 2026-08-28 while scoping Spike 36 §17 Session 3.** `configitem-editor.js` builds a list of mutations for one Save (root update + per-target updates + creates) and dispatches them with `Promise.all(calls.map(fetch))`. If the 3rd of 5 fails, the first two are **already committed**; the "fail-fast on the first error" loop only stops *reporting*, not writing. The user sees `Server error (500) — try again` with no indication that part of their edit landed. The code comment says parallel is "safe" — true about ordering (no cross-call dependency), but it reads as the stronger atomicity claim. **Same defect class as Spike 36 D11**, which makes change-request merge a single DGraph transaction. **Natural fix:** route the editor's Save through the same atomic write path D11 builds, rather than a second mechanism. **Why it matters beyond the bug:** once D11 ships, the *reviewed* path is transactional while the *privileged* path (admin clicks Save) is not — the trusted user gets the less safe write. Fixable independently of Spike 36 if that slips. |
+| Replace hand-rolled GraphQL request parsing with a real AST parse | **Address soon.** The `/graphql` proxy understands mutations via regex + string matching (`knownMutationRe`, `extractOperations`, comment-stripping, the Spike 31 inline-selector guard) — parser-level fragility without parser-level correctness. A real AST parse (`gqlparser`, needs dep sign-off) strengthens authz + stamping together and removes the inline-selector constraint (Spike 31 Option B). Not MVP-urgent (every real caller uses the variable form) but this is the principled fix. Touches the load-bearing `Handle` path — do it deliberately with the Spike-31 tests as the net. |
+
+### Audit backlog — May 2026 audit, triaged 2026-07-23
+
+> Verified against current code; source finding files deleted. The security audit's two **Critical** findings (unauthenticated `/graphql`; missing readiness probe) and "RBAC defined but not enforced" were already **FIXED** (Spike 11 + single authenticated `/graphql` group + `/healthz`). **No item below is an OSS release-blocker.**
+
+| Item | Notes |
+|---|---|
+| OIDC config ships real Armada identifiers as defaults | **Pre-OSS deletion pass, not a code condition.** Blank the real tenant/app-ID/allowlist/`admin@armada.ai` defaults to `""` — `config.go:60-72`. The *fail-closed* half is already handled generically by S.16 (`server.go` refuses to boot in prod when `apiAuth` is empty); do NOT add an Armada-specific `== "<tenant-guid>"` boot check (rejected 2026-08-13 — vendor cruft that doesn't serve OSS). Once defaults are empty, a prod deploy that forgets to configure OIDC fails the boot via S.16. (A.1) |
+| ~~Rate limiting absent~~ **DONE 2026-08-13** | Per-IP token buckets (in-memory, single-replica), opt-in via `ORBITAL_RATE_LIMIT_ENABLED` (off in dev/AKS-dev, prod enables); tighter bucket on `/user/login`; denials render the `RATE_LIMITED`/429 envelope + `Retry-After`. `server.go`. (S.12) |
+| ~~No request body size limit~~ **DONE 2026-08-13** | Global `echomw.BodyLimit(ORBITAL_MAX_REQUEST_BODY, default 10M)` bounds the unbounded `io.ReadAll` on `/graphql`; over-limit renders the `CONTENT_TOO_LARGE`/413 envelope. No file-upload endpoints, so global is safe. `server.go`. (S.7) |
+| ~~OIDC-unreachable degrades to no-auth~~ **DONE 2026-08-13** | `server.New` now returns an error and refuses to boot when `!Dev && len(apiAuth)==0` — covers unreachable OIDC discovery, verifier-init failure, and unset issuer in one generic guard. Dev unaffected (`!Dev`-gated). `server.go`. (S.16) |
+| ~~No audit on destructive deletes~~ **DONE 2026-08-13** | `BackupHandler.Delete` → `deleteBackup` and `OCI.DeleteArtifact` → `deleteArtifact` management events (actor via `actorFromContext`, `writeAuditEvent`). Test gap: integration guard (`//go:build integration`, needs `make up`) asserting each delete writes its event — add via `newBackupHandler` + `testDB.Event.Query()` when the stack is up. (S.10) |
+| ~~MVCC silent-pass on bad version type~~ **DONE 2026-08-13** | `toFloat64` now returns `(float64, ok)`; a malformed `ifVersion` is rejected `400 BAD_USER_INPUT` (a garbage concurrency token is a client error, not a "reload and retry" 409 — deviates from the finding's suggested 409, deliberately). Unit-pinned by `TestToFloat64` !ok cases. `graphql.go`. (A.3) |
+| OIDC nonce + constant-time state | Add `nonce` binding; `subtle.ConstantTimeCompare` for state — `oidc.go:95`. (S.14, S.15) |
+| Export/restore job-creation TOCTOU | Serialize (mutex or unique partial index); concurrent triggers corrupt scratch-DGraph — `export.go:216-230`. (S.8) |
+| Async jobs orphaned on shutdown | Track goroutines (WaitGroup + cancellable ctx); SIGTERM mid-restore can leave DGraph wiped — `server.go`, `restore.go:286`. (S.9) |
+| Orb registration not unique | Unique indexes on `datacenter_id` + `public_key` — `ent/schema/orb.go`. (S.11) |
+| Job-status columns unindexed | `index.Fields("status")` on ExportJob/Backup/RestoreJob; conflict queries are full table scans. (A.7) |
+| Backup zip in `/tmp`, defer-only cleanup | Write to a controlled dir + orphan reaper — `backup.go:627-631`. (A.2) |
+| Export scratch-dir leak | `defer os.RemoveAll(jobScratchDir)` after MkdirAll — `export.go:900`. (A.4) |
+| `orb scan` fabricates success | Return "not implemented" instead of hardcoded "Found 3 BMC interfaces" until Spike 2 real discovery — `scan.go:16`. (A.6) |
+| GET `/export/jobs` writes to DB | Move `StatusStale` marking out of the List handler (HTTP-safety violation; swallows the write error) — `export.go:255-262`. (S.18) |
+| OCI push/sign dual credential stacks | Unify ORAS + go-containerregistry creds, or document the coupling — `publisher.go:316-318,371-373`. (A.5) |
+| DGraph query string interpolation | Parameterize interpolated queries (`%q`-quoted, low practical risk) — `export.go:963,1049,1223`. (S.17) |
+| Orbital templates not embedded | orbital handlers still `ParseFiles` from disk; orb already embeds. Deployment note, non-security — `web/embed.go`. (D.1) |
+
+### Audit log — open backlog (Spike 34 closed 2026-08-26; decisions in `docs/reference/AUDIT.md`)
+
+> Direction, convention, naming, and retention policy are **settled and folded into `docs/reference/AUDIT.md`** (§§ What the audit log is for / Naming / CloudTrail field parity / Retention). What remains is work, not open questions.
+
+| Item | Sev | Notes |
+|---|---|---|
+| **Rejected mutations write no audit row** | **High** | `graphql.go` gates the audit write on `!hasGQLErrors(respBytes)`, so a mutation that passes authz and is then rejected by DGraph (validation, constraint, schema) leaves **zero trace**. `authorizationDenied` *is* covered separately by `RequireRole` middleware — the hole is post-authz failures. CloudTrail records these; see `AUDIT.md` § CloudTrail field parity. Fix pairs with the `error_code`/`error_message` columns below. |
+| **Add the 4 missing CloudTrail fields** | Medium | `event_source` (`graphql`/`rest`/`internal` — currently unknowable), `source_ip_address`, `user_agent` (the standing OWASP gap), `error_code`/`error_message`. All **additive nullable columns**, so safe under ent's append-only auto-migration — not blocked on Spike 27. Make the error fields mandatory top-level, not buried in a response body. |
+| **Retention: env var + in-process pruner** | Medium | Decided: `ORBITAL_AUDIT_RETENTION_DAYS`, default `0` = indefinite, operator sets it (orbital is not prescriptive). **Nothing prunes today.** Ship the pruner in-process from day one — NetBox's 90-day default sat inert behind an optional cron and silently deleted history on upgrade when 4.4 activated it. Also surface row count / oldest-record age, since the default is unbounded. |
+| `changes[]` absent for creates, bulk adds, multi-op events | Medium | `before` is fetched only for single-entity mutations carrying `id`/`orbId`, so `addServer(input: [...])` produces no diff. NetBox changelogs all three. Cheaper alternative: emit `changes[]` with `before: null` so clients have one code path. |
+| Non-orbId-filtered mutations record empty `resource_ids` | Medium | Mutations filtered by another field that select only `{numUids}` are invisible to every per-orbId panel. Documented in `AUDIT.md` § extractResourceIDs. |
+| `after` is the mutation input, never a post-mutation re-read | Low | If DGraph coerces or partially applies, the audit asserts something that did not happen. Decide: pay a round-trip, or document it. Leaning document. |
+| Out-of-band writes are invisible to API consumers | Low | `dropAll` restore writes zero rows; direct-DQL and seeding bypass the proxy. Documented internally, but nothing tells a **client** the trail has holes — consider a `disclaimer` field like the diff endpoints carry. |
+| Subtree audit scope is N calls | Low | Clients traverse Topology for descendant orbIds then pass ≤32 repeatable `orbId` params. A schema-level `descendantOrbIds` field would make it one call. Build when a client asks. |
+
+
+### Track B — needs a 15–20 min Opus design session before Sonnet implements
+
+| Item | Notes |
+|---|---|
+| DGraph client abstraction | 22+ raw `http.Post` calls across 7 handler files, no timeouts, no pooling. Extract `internal/dgraph/client.go`. **Interface shape is a design decision** (transport vs semantic level) — do NOT implement on Sonnet without a settled design. Primary unlock for Go integration testing. |
+| `internal/handler/` god package | ~3,500 lines mixing routing, business logic, DGraph calls, file I/O. Decompose post-MVP in 3 steps: extract `internal/storage/`, then `internal/export/`, then `internal/backup/`. Do NOT start before the MVP feature cut. |
+| Registry-driven orbId derivation (kill the `leafSuffix` escape hatch) | **Trigger:** ServerMaintenance feature, 2026-08-13. **Problem:** `configitems.BuildEditTargets` derives every owned-child edit-target orbId as `fmt.Sprintf("%s:%s-%s", namespace, name, leafSuffix(kind))` (`registry.go:469`), where `leafSuffix` (`registry.go` ~518) is a hardcoded `switch`. That only matches the **legacy** `<ns>:<parentName>-<suffix>` shape. New prefix-convention types (`server-maintenance-<serial>`, `network-adapter-<serial>-<FQDD>`) don't fit, so every editor-creatable type needs a hand-written `OverrideEditTargetOrbID` in its page handler — e.g. `server.go` overrides `IdracSettings` (with the *fetched* id) **and** `ServerMaintenance` (with a *constructed* `<ns>:server-maintenance-<serviceTag>`). The correct orbId shape lives in code, so the registry is no longer the single source of truth for orbId. **Why it bites:** for an *optional* child (first-time-create is the common case) the wrongly-derived id is what actually gets written — a silent correctness footgun, not cosmetic. **Fix:** let the `Type` struct declare its orbId pattern so `BuildEditTargets` derives the right id with no override. **Design decision (why Track B):** the pattern needs natural-key inputs the registry doesn't hold (owner serial/serviceTag, FQDD, …). Options: **(a)** `OrbIDKey func(parent map[string]any) string` per-type closure — handlers pass the fetched parent object; handles multi-part keys (network types); **(b)** declarative template + `KeyField` naming the parent field that supplies the key (e.g. `server-maintenance-{key}`, KeyField `serviceTag`) — simpler but weak for multi-part keys; **(c)** just move each construction into a named registry helper (declared once, not re-derived per handler). Recommend (a). **Scope:** `registry.go` (`Type` + `BuildEditTargets`, retire `leafSuffix`); remove the now-redundant `OverrideEditTargetOrbID` calls in `server.go` (+ audit `cluster.go` / any network editor) where the pattern covers them, keeping override only for genuine legacy/fetched-id cases; add a registry test asserting each editor-creatable type derives its documented `DGRAPH.md` orbId. **Acceptance:** adding a new prefix-convention ConfigItem needs ZERO handler orbId override — schema + registry entry is enough (the add-configitem playbook's promise). Pin with a test that derives `ServerMaintenance` → `<ns>:server-maintenance-<serial>` with no handler code. |
+
+### Architecture — requires design discussion before any code
+
+| Item | Notes |
+|---|---|
+| Orbital HA — pervasive single-replica assumptions | Deployed `replicas: 1`, `strategy: Recreate`. Divergence ingester (`lastIngestedByDC` in-memory), backup scheduler (cron double-fires), publish-history ingester all assume single-leader. Going HA needs leader election / advisory locks / dedicated ingest deployment. **Do NOT scale past `replicas: 1`** — double-ingestion corrupts divergence state. |
+| Auto-apply DGraph GraphQL schema on startup | Today orbital does NOT apply `schema.graphql` on boot, so a schema-bumping image deploy silently drifts until someone POSTs to `/admin/schema` — the 2026-07-27 AKS burn (v0.0.25 queried `retentionDays`, DGraph still v3 → every cluster 404'd). **Proposed:** apply the schema additively on startup, mirroring ent auto-migrate for PostgreSQL. **Design points:** (1) re-scopes the "schema migration out of MVP" decision; (2) blue-green apply to active/blue on boot; (3) additive-only guard; (4) confirm multi-replica racing is harmless (DGraph serializes); (5) fix the `schema.graphql:6` vs `DGRAPH.md` doc contradiction. Alternatives: kustomize initContainer, GitOps PreSync Job. Triggered by the 2026-07-27 burn. |
+
+---

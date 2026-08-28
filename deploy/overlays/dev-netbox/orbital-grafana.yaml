@@ -1,7 +1,7 @@
 # Small, orbital-owned Grafana for the devcc (dev-netbox) environment.
 #
 # Why this exists: orbital's reliable metrics path in devcc is the self-owned
-# Cortex (see otel-collector.yaml + docs/reference/monitoring-stack.md). AMW is
+# Cortex (see otel-collector.yaml + docs/reference/MONITORING-STACK.md). AMW is
 # unreliable for orbital (ama-metrics drops its :15020 target on redeploy), and
 # the org's Azure Grafana has no Cortex datasource. commander-grafana has the
 # datasource but ephemeral storage + no dashboard sidecar, so a UI import there
