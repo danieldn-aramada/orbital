@@ -1,0 +1,51 @@
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div>
+    <div class="app-main p-5">
+      {{if not .IsAuthn}}
+        <div class="notification is-warning is-light">
+          <a class="js-modal-trigger" data-target="login-modal">Login</a> to view this page.
+        </div>
+      {{else}}
+
+      <p class="is-size-4 mb-2" data-testid="page-heading">Change Requests</p>
+      <p class="has-text-grey mb-4" style="font-size: 0.875rem;">
+        Proposed changes to configuration intent. A change is reviewed against
+        <strong>current</strong> intent, so a request whose base moved since it was opened
+        needs re-reviewing before it can merge.
+      </p>
+
+      <div id="cr-error" class="notification is-danger is-light" style="display:none;"></div>
+
+      <div class="tabs is-small is-boxed" id="cr-tabs">
+        <ul>
+          <li class="is-active"><a data-cr-filter="awaiting_review=true">Awaiting my review</a></li>
+          <li><a data-cr-filter="mine=true">Mine</a></li>
+          <li><a data-cr-filter="status=active">Open</a></li>
+          <li><a data-cr-filter="status=merged">Merged</a></li>
+          <li><a data-cr-filter="">All</a></li>
+        </ul>
+      </div>
+
+      <table class="table is-striped is-hoverable is-fullwidth is-size-7" id="cr-table">
+        <colgroup>
+          <col style="width:34%"><col style="width:12%"><col style="width:16%">
+          <col style="width:10%"><col style="width:10%"><col style="width:8%"><col style="width:10%">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Title</th><th>Namespace</th><th>Author</th>
+            <th>Status</th><th>Approvals</th><th>Stale</th><th>Age</th>
+          </tr>
+        </thead>
+        <tbody id="cr-tbody"></tbody>
+      </table>
+
+      <p id="cr-empty" class="has-text-grey is-size-7" style="display:none;"></p>
+
+      {{end}}
+    </div>
+  </main>
+{{end}}

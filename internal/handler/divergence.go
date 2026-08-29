@@ -3,14 +3,17 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/divergenceentry"
 	"github.com/armada/orbital/ent/divergenceresolution"
+	"github.com/armada/orbital/internal/approval"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
@@ -25,9 +28,13 @@ import (
 // gql is used by Accept to dispatch the `update{Type}` mutation through the
 // existing GraphQL audit path. May be nil in tests that don't exercise Accept.
 type DivergenceHandler struct {
-	db       *ent.Client
-	logger   *slog.Logger
-	gql      *GraphQL
+	db     *ent.Client
+	logger *slog.Logger
+	gql    *GraphQL
+	// cr opens a change request when an Accept is refused by the approval gate.
+	// Optional in the same sense as ingester: nil in tests that never exercise a
+	// gated Accept.
+	cr       *ChangeRequest
 	ingester DivergenceIngester // optional; nil when ingester subsystem isn't running
 }
 
@@ -47,6 +54,14 @@ func NewDivergenceHandler(db *ent.Client, logger *slog.Logger, gql *GraphQL) *Di
 // handler still works (and tests don't need to mock an ingester).
 func (h *DivergenceHandler) SetIngester(ing DivergenceIngester) {
 	h.ingester = ing
+}
+
+// SetChangeRequests wires the approval engine so a gated Accept can open a
+// change request instead of failing. Set from server wiring; a nil engine makes
+// a gated Accept a 500, which is correct — silently mutating past the gate would
+// be far worse than a loud misconfiguration.
+func (h *DivergenceHandler) SetChangeRequests(cr *ChangeRequest) {
+	h.cr = cr
 }
 
 // entryItem is the wire shape returned by the List endpoint and used by the UI.
@@ -70,6 +85,29 @@ type resolutionItem struct {
 	Action    string `json:"action"` // "accept" | "reject" | "ignore"
 	Actor     string `json:"actor"`
 	DecidedAt string `json:"decidedAt"`
+}
+
+// pendingApprovalItem is what an Accept returns when the field it would change
+// belongs to a protected class and the caller cannot write it directly.
+//
+// The divergence is NOT resolved: intent has not moved, so recording a
+// resolution would claim a decision that has not taken effect, and the entry
+// must stay pending until the change request merges.
+type pendingApprovalItem struct {
+	// Status is always "pending_approval" — a discriminator so a client can
+	// branch without inspecting which fields are present.
+	Status string `json:"status" example:"pending_approval"`
+	// ChangeRequestID is the request opened on the caller's behalf, pre-filled
+	// from this divergence entry.
+	ChangeRequestID string `json:"changeRequestId" example:"4b1f0f7a-6f0c-4a1e-9a2e-2f1c7a0b1234"`
+	Message         string `json:"message" example:"Accepting this divergence needs approval; a change request was opened."`
+}
+
+// resolutionOutcome is one of two shapes: a recorded resolution, or a change
+// request awaiting approval. Never both.
+type resolutionOutcome struct {
+	Resolution *resolutionItem
+	Pending    *pendingApprovalItem
 }
 
 // List handles GET /api/v1/divergences.
@@ -243,6 +281,7 @@ type putResolutionBody struct {
 // @Param    id   path string            true "Divergence entry UUID"
 // @Param    body body putResolutionBody true "Decision payload"
 // @Success  200  {object} resolutionItem
+// @Success  202  {object} pendingApprovalItem "Accept needs approval — a change request was opened and the entry stays pending"
 // @Failure  400  {object} errorResponse
 // @Failure  401  {object} errorResponse
 // @Failure  404  {object} errorResponse
@@ -265,11 +304,17 @@ func (h *DivergenceHandler) PutResolution(c echo.Context) error {
 	if actor == "" {
 		return echo.NewHTTPError(http.StatusUnauthorized, "actor required")
 	}
-	res, err := h.applyResolution(c.Request().Context(), id, action, actor)
+	out, err := h.applyResolution(c.Request().Context(), id, action, actor, resolveCallerRole(c, h.db))
 	if err != nil {
 		return err
 	}
-	return c.JSON(http.StatusOK, *res)
+	if out.Pending != nil {
+		// 202: the request was accepted, the work is not complete. Additive for
+		// clients that branch on 2xx, and honest about the fact that nothing has
+		// changed in the graph yet.
+		return c.JSON(http.StatusAccepted, *out.Pending)
+	}
+	return c.JSON(http.StatusOK, *out.Resolution)
 }
 
 // applyResolution is the side-effect-bearing core of the resolution pipeline.
@@ -278,23 +323,30 @@ func (h *DivergenceHandler) PutResolution(c echo.Context) error {
 // (REPLACE semantics: re-deciding overwrites the previous decision). If the
 // side-effect fails, NO resolution row is written so the entry stays pending.
 //
-// Used by both per-row endpoints (singleResolution) and the batch endpoint
-// (ResolveBatch). Returns an HTTPError on validation/dispatch failure suitable
-// for echo to render, or a generic error on storage failures.
-func (h *DivergenceHandler) applyResolution(ctx context.Context, id uuid.UUID, action divergenceresolution.Action, actor string) (*resolutionItem, error) {
+// Returns an HTTPError on validation/dispatch failure suitable for echo to
+// render, or a generic error on storage failures.
+//
+// Accept on a protected class does NOT mutate: it opens a change request and
+// returns it as `Pending`, leaving the entry unresolved. Reject and Ignore are
+// never gated because neither touches intent.
+func (h *DivergenceHandler) applyResolution(ctx context.Context, id uuid.UUID, action divergenceresolution.Action, actor string, caller callerRole) (resolutionOutcome, error) {
 	entry, err := h.db.DivergenceEntry.Get(ctx, id)
 	if ent.IsNotFound(err) {
-		return nil, echo.NewHTTPError(http.StatusNotFound, "divergence entry not found")
+		return resolutionOutcome{}, echo.NewHTTPError(http.StatusNotFound, "divergence entry not found")
 	}
 	if err != nil {
-		return nil, fmt.Errorf("get entry: %w", err)
+		return resolutionOutcome{}, fmt.Errorf("get entry: %w", err)
 	}
 
 	// Accept dispatches a mutation BEFORE recording the resolution. On failure,
 	// the resolution is not written so the entry stays visible as pending.
 	if action == divergenceresolution.ActionAccept {
-		if err := h.dispatchAcceptMutation(ctx, entry, actor); err != nil {
-			return nil, err
+		pending, err := h.dispatchAcceptMutation(ctx, entry, actor, caller)
+		if err != nil {
+			return resolutionOutcome{}, err
+		}
+		if pending != nil {
+			return resolutionOutcome{Pending: pending}, nil
 		}
 	}
 
@@ -305,7 +357,7 @@ func (h *DivergenceHandler) applyResolution(ctx context.Context, id uuid.UUID, a
 			divergenceresolution.Field(entry.Field),
 		).
 		Exec(ctx); err != nil {
-		return nil, fmt.Errorf("delete prior resolution: %w", err)
+		return resolutionOutcome{}, fmt.Errorf("delete prior resolution: %w", err)
 	}
 
 	res, err := h.db.DivergenceResolution.Create().
@@ -316,7 +368,7 @@ func (h *DivergenceHandler) applyResolution(ctx context.Context, id uuid.UUID, a
 		SetDecidedAt(time.Now().UTC()).
 		Save(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("create resolution: %w", err)
+		return resolutionOutcome{}, fmt.Errorf("create resolution: %w", err)
 	}
 
 	// verbNoun camelCase per AUDIT.md convention. The action verb alone
@@ -352,37 +404,38 @@ func (h *DivergenceHandler) applyResolution(ctx context.Context, id uuid.UUID, a
 		},
 	)
 
-	return &resolutionItem{
+	return resolutionOutcome{Resolution: &resolutionItem{
 		ID:        res.ID.String(),
 		Action:    string(res.Action),
 		Actor:     res.Actor,
 		DecidedAt: res.DecidedAt.UTC().Format(time.RFC3339),
-	}, nil
+	}}, nil
 }
 
-// dispatchAcceptMutation issues `update{TypeName}(filter:{orbId},set:{field:value})`
+// dispatchAcceptMutation issues `update{Type}(filter:{orbId},set:{field:value})`
 // through the GraphQL handler so the mutation lands in audit alongside any
-// user-driven mutation. Returns an HTTPError suitable for the caller to
-// propagate verbatim — bad input is 422 (missing type) or 502 (DGraph failure).
-func (h *DivergenceHandler) dispatchAcceptMutation(ctx context.Context, entry *ent.DivergenceEntry, actor string) error {
-	if entry.TypeName == "" {
-		// Legacy entry ingested before mapping started carrying type info.
-		// The admin must update intent manually until the next report
-		// re-ingests the entry with a type.
-		return echo.NewHTTPError(http.StatusUnprocessableEntity,
-			"divergence entry is missing type info; update intent manually for this field, or wait for the next report")
-	}
+// user-driven mutation.
+//
+// Returns a non-nil pendingApprovalItem when the field belongs to a protected
+// class the caller may not write directly: a change request is opened instead
+// and NOTHING is mutated. Otherwise an HTTPError suitable to propagate verbatim.
+func (h *DivergenceHandler) dispatchAcceptMutation(ctx context.Context, entry *ent.DivergenceEntry, actor string, caller callerRole) (*pendingApprovalItem, error) {
 	if h.gql == nil {
 		// Defensive: server.go must wire gql into DivergenceHandler.
-		return echo.NewHTTPError(http.StatusInternalServerError, "graphql dispatcher not configured")
+		return nil, echo.NewHTTPError(http.StatusInternalServerError, "graphql dispatcher not configured")
 	}
 	if len(entry.OverrideValue) == 0 {
-		return echo.NewHTTPError(http.StatusUnprocessableEntity, "override value is empty; cannot mutate intent")
+		return nil, echo.NewHTTPError(http.StatusUnprocessableEntity, "override value is empty; cannot mutate intent")
+	}
+
+	typeName, err := h.resolveEntryType(ctx, entry)
+	if err != nil {
+		return nil, err
 	}
 
 	var overrideVal any
 	if err := json.Unmarshal(entry.OverrideValue, &overrideVal); err != nil {
-		return echo.NewHTTPError(http.StatusUnprocessableEntity, fmt.Sprintf("invalid override value: %v", err))
+		return nil, echo.NewHTTPError(http.StatusUnprocessableEntity, fmt.Sprintf("invalid override value: %v", err))
 	}
 
 	// Per ADR 012: Accept is last-writer-wins against orbital DGraph. We do
@@ -393,7 +446,7 @@ func (h *DivergenceHandler) dispatchAcceptMutation(ctx context.Context, entry *e
 	// by orbital's general mutation pipeline, not by this handler.
 	mutation := fmt.Sprintf(
 		`mutation AcceptDivergence($filter: %sFilter!, $set: %sPatch!) { update%s(input: {filter: $filter, set: $set}) { numUids } }`,
-		entry.TypeName, entry.TypeName, entry.TypeName,
+		typeName, typeName, typeName,
 	)
 	variables := map[string]any{
 		"filter": map[string]any{"orbId": map[string]any{"eq": entry.EntryOrbID}},
@@ -407,12 +460,94 @@ func (h *DivergenceHandler) dispatchAcceptMutation(ctx context.Context, entry *e
 	_ = json.Unmarshal(entry.IntendedValue, &intended)
 	before := map[string]any{entry.Field: intended}
 
-	if _, err := h.gql.DispatchMutation(ctx, actor, mutation, variables, before); err != nil {
+	// gateEnforce, deliberately. Accept mutates intent, so it is a config change
+	// like any other and the chokepoint is the single authority on whether it is
+	// allowed. Asking the policy here as well would be a second copy of the rule
+	// to keep in sync — instead this REACTS to the gate's refusal.
+	if _, err := h.gql.DispatchMutation(ctx, actor, caller, gateEnforce, mutation, variables, before); err != nil {
+		var gerr *gatedError
+		if errors.As(err, &gerr) && gerr.Code == CodeApprovalRequired {
+			return h.openChangeRequestFor(ctx, entry, typeName, overrideVal, actor)
+		}
 		h.logger.Warn("accept-divergence mutation failed",
-			"orbId", entry.EntryOrbID, "field", entry.Field, "type", entry.TypeName, "err", err)
-		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("failed to update intent: %v", err))
+			"orbId", entry.EntryOrbID, "field", entry.Field, "type", typeName, "err", err)
+		return nil, echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("failed to update intent: %v", err))
 	}
-	return nil
+	return nil, nil
+}
+
+// resolveEntryType returns the ConfigItem type of the entry's target.
+//
+// The report's own type_name is a HINT, not a requirement. It comes from
+// cb-bundler through orb, and older reports do not carry it — which used to make
+// Accept fail with "update intent manually", advice that the approval gate turns
+// circular for exactly the classes someone bothered to protect.
+//
+// orbId is @id on the ConfigItem interface, so it is globally unique across
+// every type and orbital can simply look the type up. The remaining failure —
+// the orbId is not in orbital's graph at all — is a genuinely different problem
+// with a different remedy, so it says so rather than blaming missing type info.
+func (h *DivergenceHandler) resolveEntryType(ctx context.Context, entry *ent.DivergenceEntry) (string, error) {
+	if entry.TypeName != "" {
+		return entry.TypeName, nil
+	}
+	src := approval.NewDGraphSchemaSource(h.gql.DGraphURL())
+	refs, err := src.ResolveEntities(ctx, []string{entry.EntryOrbID})
+	if err != nil {
+		return "", echo.NewHTTPError(http.StatusBadGateway,
+			fmt.Sprintf("could not resolve the type of %s: %v", entry.EntryOrbID, err))
+	}
+	ref, ok := refs[entry.EntryOrbID]
+	if !ok {
+		return "", echo.NewHTTPError(http.StatusUnprocessableEntity, fmt.Sprintf(
+			"orbital has no entity with orbId %q, so there is no intent to update. The edge is reporting a resource orbital does not know about — check the data center's import, or dismiss this entry.",
+			entry.EntryOrbID))
+	}
+	return ref.Type, nil
+}
+
+// openChangeRequestFor turns a refused Accept into a proposal.
+//
+// Deliberately does NOT record a resolution: intent has not moved, so claiming
+// the divergence is resolved would be a lie that survives until someone notices
+// the edge still diverging. The entry stays pending until the change request
+// merges.
+func (h *DivergenceHandler) openChangeRequestFor(ctx context.Context, entry *ent.DivergenceEntry, typeName string, overrideVal any, actor string) (*pendingApprovalItem, error) {
+	if h.cr == nil {
+		return nil, echo.NewHTTPError(http.StatusInternalServerError, "change request engine not configured")
+	}
+	ns, _, _ := strings.Cut(entry.EntryOrbID, ":")
+	cs := &approval.Changeset{
+		Namespace: ns,
+		Changes: []approval.ChangeItem{{
+			OrbID: entry.EntryOrbID,
+			Type:  typeName,
+			Op:    approval.OpUpdate,
+			Set:   map[string]any{entry.Field: overrideVal},
+		}},
+	}
+	title := fmt.Sprintf("Accept edge value for %s.%s", entry.EntryOrbID, entry.Field)
+	desc := fmt.Sprintf("Opened from divergence entry %s. The edge reports %s=%v, set locally by %q. Accepting adopts that value as orbital's intent.",
+		entry.ID, entry.Field, overrideVal, entry.Who)
+
+	cr, problems, err := h.cr.Create(ctx, actor, title, desc, cs)
+	if err != nil {
+		return nil, fmt.Errorf("open change request for divergence: %w", err)
+	}
+	if len(problems) > 0 {
+		return nil, echo.NewHTTPError(http.StatusUnprocessableEntity, fmt.Sprintf(
+			"this divergence cannot be turned into a change request: %s", problems[0].Error()))
+	}
+
+	h.logger.Info("divergence accept requires approval — change request opened",
+		"change_request", cr.ID, "orbId", entry.EntryOrbID, "field", entry.Field, "actor", actor)
+
+	return &pendingApprovalItem{
+		Status:          "pending_approval",
+		ChangeRequestID: cr.ID.String(),
+		Message: fmt.Sprintf("Accepting this divergence needs approval. Change request %s was opened; the entry stays pending until it merges.",
+			cr.ID),
+	}, nil
 }
 
 // Dismiss handles DELETE /api/v1/divergences/:id.

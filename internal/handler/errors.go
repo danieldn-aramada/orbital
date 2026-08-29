@@ -31,6 +31,8 @@ const (
 	CodeRateLimited          = "RATE_LIMITED"
 	CodeConflict             = "CONFLICT"
 	CodeMVCCConflict         = "MVCC_CONFLICT"
+	CodeTargetMissing        = "TARGET_MISSING"
+	CodeApprovalRequired     = "APPROVAL_REQUIRED"
 	CodeUnavailable          = "UNAVAILABLE"
 	CodeInternal             = "INTERNAL"
 )

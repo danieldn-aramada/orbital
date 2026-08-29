@@ -296,23 +296,28 @@ func (h *GraphQL) Handle(c echo.Context) error {
 		}
 	}
 
-	dgStart := time.Now()
-	resp, err := http.Post(h.dgraphURL, "application/json", bytes.NewReader(bodyBytes))
-	metrics.ObserveDGraphCall("mutation", time.Since(dgStart))
+	// context.Background(), not c.Request().Context(), and deliberately so: the
+	// previous http.Post carried no context, so a client disconnect never aborted
+	// an in-flight mutation. Propagating the request context here would let a
+	// dropped connection cancel a write mid-flight, leaving the caller unable to
+	// know whether it applied. Preserving the existing behaviour is both the safer
+	// semantics for a mutation and a strict no-op for this refactor.
+	respBytes, _, bypassedPolicy, err := h.writeToDGraph(context.Background(), bodyBytes, resolveCallerRole(c, h.db), gateEnforce)
 	if err != nil {
-		return fmt.Errorf("proxy to dgraph: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read dgraph response: %w", err)
+		var gerr *gatedError
+		if errors.As(err, &gerr) {
+			h.logger.Warn("mutation refused — approval required",
+				"policy", gerr.Policy, "actor", actor,
+				"request.id", c.Response().Header().Get(echo.HeaderXRequestID))
+			return writeError(c, gerr.Status, gerr.Code, gerr.Message, gerr.Hint)
+		}
+		return err
 	}
 
 	if touchesKnownType && h.db != nil && !hasGQLErrors(respBytes) {
 		operations, resourceTypes := extractOperations(req.Query)
 		resourceIDs := extractResourceIDs(req.Query, req.Variables, respBytes)
-		go h.auditMutation(opName, operations, resourceTypes, resourceIDs, actor, req.Query, req.Variables, before)
+		go h.auditMutation(opName, operations, resourceTypes, resourceIDs, actor, req.Query, req.Variables, before, bypassedPolicy)
 	}
 
 	c.Response().Header().Set("Content-Type", "application/json")
@@ -333,27 +338,21 @@ func (h *GraphQL) Handle(c echo.Context) error {
 // inspect specific GraphQL errors when needed. A non-nil error means the
 // mutation did not succeed and any side-effects (e.g. recording a resolution)
 // MUST be skipped.
-func (h *GraphQL) DispatchMutation(ctx context.Context, actor, query string, variables map[string]any, before map[string]any) ([]byte, error) {
+//
+// caller is the identity the approval gate judges — an `actor` string cannot
+// answer "is this role allowed to bypass". gate says whether the approval check
+// applies; pass gateExempt ONLY with a reason at the call site.
+func (h *GraphQL) DispatchMutation(ctx context.Context, actor string, caller callerRole, gate gateMode, query string, variables map[string]any, before map[string]any) ([]byte, error) {
 	body, err := json.Marshal(gqlRequest{Query: query, Variables: variables})
 	if err != nil {
 		return nil, fmt.Errorf("marshal mutation: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.dgraphURL, bytes.NewReader(body))
+	respBytes, status, bypassedPolicy, err := h.writeToDGraph(ctx, body, caller, gate)
 	if err != nil {
-		return nil, fmt.Errorf("build request: %w", err)
+		return respBytes, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("post dgraph: %w", err)
-	}
-	defer resp.Body.Close()
-	respBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return respBytes, fmt.Errorf("dgraph returned %d", resp.StatusCode)
+	if status != http.StatusOK {
+		return respBytes, fmt.Errorf("dgraph returned %d", status)
 	}
 	if hasGQLErrors(respBytes) {
 		return respBytes, errors.New(firstGQLError(respBytes))
@@ -365,9 +364,93 @@ func (h *GraphQL) DispatchMutation(ctx context.Context, actor, query string, var
 		}
 		operations, resourceTypes := extractOperations(query)
 		resourceIDs := extractResourceIDs(query, variables, respBytes)
-		go h.auditMutation(opName, operations, resourceTypes, resourceIDs, actor, query, variables, before)
+		go h.auditMutation(opName, operations, resourceTypes, resourceIDs, actor, query, variables, before, bypassedPolicy)
 	}
 	return respBytes, nil
+}
+
+// writeToDGraph is THE single place a mutation reaches the graph. Both entry
+// points — the client-facing Handle and the internal DispatchMutation — go
+// through here.
+//
+// Why one function rather than two call sites: Spike 36 D14. `/graphql` is a
+// chokepoint for CLIENTS, not for WRITES — Handle and DispatchMutation each used
+// to POST independently, so a policy check placed in Handle alone was bypassable
+// via divergence-Accept (which dispatches update{Type} to make intent match the
+// edge). Gating both call sites separately means two checks to keep in sync and a
+// third path, added later, that nobody remembers to gate. The approval gate
+// (Session 2) installs its check HERE, making it structurally unbypassable rather
+// than unbypassable by convention.
+//
+// Deliberately does NOT judge the response: it returns the raw body and the HTTP
+// status and lets callers decide. Handle passes DGraph's body through to the
+// client untouched (including GraphQL `errors`); DispatchMutation treats a non-200
+// or a GraphQL error as a Go error. Encoding either policy here would change the
+// other caller's behaviour.
+//
+// ctx: callers pass context.Background() for client-facing mutations — see the
+// note at Handle's call site.
+//
+// caller and gate exist because a chokepoint that cannot see WHO is writing and
+// WHY can only decide nothing. gate is an explicit argument rather than a
+// context value so every exemption is visible at its call site and greppable in
+// one command — a reviewer must be able to enumerate the ways around a security
+// control without reading call graphs.
+func (h *GraphQL) writeToDGraph(ctx context.Context, body []byte, caller callerRole, gate gateMode) (respBytes []byte, status int, bypassed string, err error) {
+	if gate == gateEnforce {
+		bypassed, err = h.checkApprovalPolicy(ctx, body, caller)
+		if err != nil {
+			return nil, 0, "", err
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.dgraphURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, 0, bypassed, fmt.Errorf("build dgraph request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	dgStart := time.Now()
+	resp, err := http.DefaultClient.Do(req)
+	metrics.ObserveDGraphCall("mutation", time.Since(dgStart))
+	if err != nil {
+		return nil, 0, bypassed, fmt.Errorf("proxy to dgraph: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, bypassed, fmt.Errorf("read dgraph response: %w", err)
+	}
+	return respBytes, resp.StatusCode, bypassed, nil
+}
+
+// readFromDGraph POSTs a GraphQL READ and returns the raw body and status.
+//
+// Not part of writeToDGraph's chokepoint and deliberately separate: that
+// function exists so every WRITE passes one policy check, and folding reads
+// into it would mean either checking reads too or adding a flag that says "skip
+// the check" — which is exactly the hole the chokepoint closes.
+func (h *GraphQL) readFromDGraph(ctx context.Context, body []byte) ([]byte, int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.dgraphURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, 0, fmt.Errorf("build dgraph request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	dgStart := time.Now()
+	resp, err := http.DefaultClient.Do(req)
+	metrics.ObserveDGraphCall("query", time.Since(dgStart))
+	if err != nil {
+		return nil, 0, fmt.Errorf("query dgraph: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("read dgraph response: %w", err)
+	}
+	return respBytes, resp.StatusCode, nil
 }
 
 // firstGQLError extracts the first error.message from a DGraph response body,
@@ -467,11 +550,20 @@ func (h *GraphQL) doFetch(getter string, body []byte) (map[string]any, error) {
 // (query, variables, before-state), writeAuditEvent knows how to store any
 // audit record. The old name (`writeEvent`) read as a duplicate of
 // `writeAuditEvent` and hid that layering.
-func (h *GraphQL) auditMutation(opName string, operations, resourceTypes, resourceIDs []string, actor, query string, variables map[string]any, before map[string]any) {
+func (h *GraphQL) auditMutation(opName string, operations, resourceTypes, resourceIDs []string, actor, query string, variables map[string]any, before map[string]any, bypassedPolicy string) {
 	details := map[string]any{
 		"operationName": opName,
 		"query":         query,
 		"variables":     variables,
+	}
+	// A write that skipped an approval policy is marked in the DURABLE record,
+	// not only in the log stream. "Who bypassed review, on what, and when" is a
+	// question asked long after the fact — from the audit API, by someone who
+	// does not already suspect anything. The policy name is carried rather than
+	// a bare boolean so the row says WHICH control was skipped.
+	if bypassedPolicy != "" {
+		details["privileged"] = true
+		details["bypassedPolicy"] = bypassedPolicy
 	}
 	if before != nil {
 		details["before"] = stripDGraphIDs(before)
@@ -637,38 +729,17 @@ func collectOrbIDs(v any, add func(string)) {
 }
 
 // authorizeMutation reports whether the caller may run a GraphQL mutation
-// (dev role minimum). Three caller shapes, checked in order:
-//   - External-JWT callers (ORBITAL_AUTH_MODE=external-jwt) carry a pre-mapped
-//     role in context and have NO users-table row, so there's no user_id to
-//     look up — honor the context role directly. Mirrors the short-circuit in
-//     RequireRole (authz.go); without it, AEP/Keycloak clients get 403 on every
-//     config mutation even though they map to admin.
-//   - Session / AAD-bearer callers resolve to a users-table row (user_id) and
-//     the role is read from PostgreSQL.
-//   - Dev mode (nil db, no context role) passes — no authz backend.
+// (dev role minimum). Caller shapes are resolved by resolveCallerRole (authz.go);
+// dev mode with no authz backend passes.
 func (h *GraphQL) authorizeMutation(c echo.Context) (bool, string) {
-	if roleStr, _ := c.Get("role").(string); roleStr != "" {
-		if RoleAtLeast(user.Role(roleStr), user.RoleDev) {
-			return true, ""
-		}
-		return false, "context role " + roleStr + " below dev"
-	}
-	if h.db == nil {
+	cr := resolveCallerRole(c, h.db)
+	switch {
+	case cr.NoAuthz:
 		return true, ""
-	}
-	userID, _ := c.Get("user_id").(int)
-	if userID == 0 {
-		// No context role and no resolved user: either auth is disabled
-		// (apiAuth empty) or the caller presented no identity. See the
-		// "auth: API AUTHENTICATION DISABLED" startup log.
-		return false, "no context role and no authenticated user (auth may be disabled — check startup auth mode)"
-	}
-	u, err := h.db.User.Get(c.Request().Context(), userID)
-	if err != nil {
-		return false, "user lookup failed"
-	}
-	if !RoleAtLeast(u.Role, user.RoleDev) {
-		return false, "user role " + string(u.Role) + " below dev"
+	case cr.Role == "":
+		return false, cr.Reason
+	case !RoleAtLeast(cr.Role, user.RoleDev):
+		return false, cr.Source + " role " + string(cr.Role) + " below dev"
 	}
 	return true, ""
 }

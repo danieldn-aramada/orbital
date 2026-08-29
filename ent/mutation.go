@@ -12,6 +12,9 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/armada/orbital/ent/approval"
+	"github.com/armada/orbital/ent/approvalpolicy"
+	"github.com/armada/orbital/ent/approvalrequest"
 	"github.com/armada/orbital/ent/auditevent"
 	"github.com/armada/orbital/ent/auditeventresource"
 	"github.com/armada/orbital/ent/auditeventresourcetype"
@@ -20,6 +23,7 @@ import (
 	"github.com/armada/orbital/ent/divergenceingestcursor"
 	"github.com/armada/orbital/ent/divergenceresolution"
 	"github.com/armada/orbital/ent/exportjob"
+	"github.com/armada/orbital/ent/mergeattempt"
 	"github.com/armada/orbital/ent/orb"
 	"github.com/armada/orbital/ent/predicate"
 	"github.com/armada/orbital/ent/registryartifact"
@@ -38,6 +42,9 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
+	TypeApproval               = "Approval"
+	TypeApprovalPolicy         = "ApprovalPolicy"
+	TypeApprovalRequest        = "ApprovalRequest"
 	TypeAuditEvent             = "AuditEvent"
 	TypeAuditEventResource     = "AuditEventResource"
 	TypeAuditEventResourceType = "AuditEventResourceType"
@@ -46,11 +53,3250 @@ const (
 	TypeDivergenceIngestCursor = "DivergenceIngestCursor"
 	TypeDivergenceResolution   = "DivergenceResolution"
 	TypeExportJob              = "ExportJob"
+	TypeMergeAttempt           = "MergeAttempt"
 	TypeOrb                    = "Orb"
 	TypeRegistryArtifact       = "RegistryArtifact"
 	TypeRestoreJob             = "RestoreJob"
 	TypeUser                   = "User"
 )
+
+// ApprovalMutation represents an operation that mutates the Approval nodes in the graph.
+type ApprovalMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *uuid.UUID
+	created_at       *time.Time
+	created_by       *string
+	updated_at       *time.Time
+	updated_by       *string
+	approver         *string
+	decision         *approval.Decision
+	comment          *string
+	approved_at_hash *string
+	clearedFields    map[string]struct{}
+	request          *uuid.UUID
+	clearedrequest   bool
+	done             bool
+	oldValue         func(context.Context) (*Approval, error)
+	predicates       []predicate.Approval
+}
+
+var _ ent.Mutation = (*ApprovalMutation)(nil)
+
+// approvalOption allows management of the mutation configuration using functional options.
+type approvalOption func(*ApprovalMutation)
+
+// newApprovalMutation creates new mutation for the Approval entity.
+func newApprovalMutation(c config, op Op, opts ...approvalOption) *ApprovalMutation {
+	m := &ApprovalMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeApproval,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withApprovalID sets the ID field of the mutation.
+func withApprovalID(id uuid.UUID) approvalOption {
+	return func(m *ApprovalMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *Approval
+		)
+		m.oldValue = func(ctx context.Context) (*Approval, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().Approval.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withApproval sets the old Approval of the mutation.
+func withApproval(node *Approval) approvalOption {
+	return func(m *ApprovalMutation) {
+		m.oldValue = func(context.Context) (*Approval, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ApprovalMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ApprovalMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of Approval entities.
+func (m *ApprovalMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ApprovalMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ApprovalMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().Approval.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *ApprovalMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *ApprovalMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the Approval entity.
+// If the Approval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *ApprovalMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *ApprovalMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *ApprovalMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the Approval entity.
+// If the Approval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *ApprovalMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[approval.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *ApprovalMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[approval.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *ApprovalMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, approval.FieldCreatedBy)
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *ApprovalMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *ApprovalMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the Approval entity.
+// If the Approval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalMutation) OldUpdatedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ClearUpdatedAt clears the value of the "updated_at" field.
+func (m *ApprovalMutation) ClearUpdatedAt() {
+	m.updated_at = nil
+	m.clearedFields[approval.FieldUpdatedAt] = struct{}{}
+}
+
+// UpdatedAtCleared returns if the "updated_at" field was cleared in this mutation.
+func (m *ApprovalMutation) UpdatedAtCleared() bool {
+	_, ok := m.clearedFields[approval.FieldUpdatedAt]
+	return ok
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *ApprovalMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+	delete(m.clearedFields, approval.FieldUpdatedAt)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *ApprovalMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *ApprovalMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the Approval entity.
+// If the Approval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *ApprovalMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[approval.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *ApprovalMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[approval.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *ApprovalMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, approval.FieldUpdatedBy)
+}
+
+// SetApprovalRequestID sets the "approval_request_id" field.
+func (m *ApprovalMutation) SetApprovalRequestID(u uuid.UUID) {
+	m.request = &u
+}
+
+// ApprovalRequestID returns the value of the "approval_request_id" field in the mutation.
+func (m *ApprovalMutation) ApprovalRequestID() (r uuid.UUID, exists bool) {
+	v := m.request
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldApprovalRequestID returns the old "approval_request_id" field's value of the Approval entity.
+// If the Approval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalMutation) OldApprovalRequestID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldApprovalRequestID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldApprovalRequestID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldApprovalRequestID: %w", err)
+	}
+	return oldValue.ApprovalRequestID, nil
+}
+
+// ResetApprovalRequestID resets all changes to the "approval_request_id" field.
+func (m *ApprovalMutation) ResetApprovalRequestID() {
+	m.request = nil
+}
+
+// SetApprover sets the "approver" field.
+func (m *ApprovalMutation) SetApprover(s string) {
+	m.approver = &s
+}
+
+// Approver returns the value of the "approver" field in the mutation.
+func (m *ApprovalMutation) Approver() (r string, exists bool) {
+	v := m.approver
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldApprover returns the old "approver" field's value of the Approval entity.
+// If the Approval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalMutation) OldApprover(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldApprover is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldApprover requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldApprover: %w", err)
+	}
+	return oldValue.Approver, nil
+}
+
+// ResetApprover resets all changes to the "approver" field.
+func (m *ApprovalMutation) ResetApprover() {
+	m.approver = nil
+}
+
+// SetDecision sets the "decision" field.
+func (m *ApprovalMutation) SetDecision(a approval.Decision) {
+	m.decision = &a
+}
+
+// Decision returns the value of the "decision" field in the mutation.
+func (m *ApprovalMutation) Decision() (r approval.Decision, exists bool) {
+	v := m.decision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDecision returns the old "decision" field's value of the Approval entity.
+// If the Approval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalMutation) OldDecision(ctx context.Context) (v approval.Decision, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDecision is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDecision requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDecision: %w", err)
+	}
+	return oldValue.Decision, nil
+}
+
+// ResetDecision resets all changes to the "decision" field.
+func (m *ApprovalMutation) ResetDecision() {
+	m.decision = nil
+}
+
+// SetComment sets the "comment" field.
+func (m *ApprovalMutation) SetComment(s string) {
+	m.comment = &s
+}
+
+// Comment returns the value of the "comment" field in the mutation.
+func (m *ApprovalMutation) Comment() (r string, exists bool) {
+	v := m.comment
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldComment returns the old "comment" field's value of the Approval entity.
+// If the Approval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalMutation) OldComment(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldComment is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldComment requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldComment: %w", err)
+	}
+	return oldValue.Comment, nil
+}
+
+// ClearComment clears the value of the "comment" field.
+func (m *ApprovalMutation) ClearComment() {
+	m.comment = nil
+	m.clearedFields[approval.FieldComment] = struct{}{}
+}
+
+// CommentCleared returns if the "comment" field was cleared in this mutation.
+func (m *ApprovalMutation) CommentCleared() bool {
+	_, ok := m.clearedFields[approval.FieldComment]
+	return ok
+}
+
+// ResetComment resets all changes to the "comment" field.
+func (m *ApprovalMutation) ResetComment() {
+	m.comment = nil
+	delete(m.clearedFields, approval.FieldComment)
+}
+
+// SetApprovedAtHash sets the "approved_at_hash" field.
+func (m *ApprovalMutation) SetApprovedAtHash(s string) {
+	m.approved_at_hash = &s
+}
+
+// ApprovedAtHash returns the value of the "approved_at_hash" field in the mutation.
+func (m *ApprovalMutation) ApprovedAtHash() (r string, exists bool) {
+	v := m.approved_at_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldApprovedAtHash returns the old "approved_at_hash" field's value of the Approval entity.
+// If the Approval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalMutation) OldApprovedAtHash(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldApprovedAtHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldApprovedAtHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldApprovedAtHash: %w", err)
+	}
+	return oldValue.ApprovedAtHash, nil
+}
+
+// ResetApprovedAtHash resets all changes to the "approved_at_hash" field.
+func (m *ApprovalMutation) ResetApprovedAtHash() {
+	m.approved_at_hash = nil
+}
+
+// SetRequestID sets the "request" edge to the ApprovalRequest entity by id.
+func (m *ApprovalMutation) SetRequestID(id uuid.UUID) {
+	m.request = &id
+}
+
+// ClearRequest clears the "request" edge to the ApprovalRequest entity.
+func (m *ApprovalMutation) ClearRequest() {
+	m.clearedrequest = true
+	m.clearedFields[approval.FieldApprovalRequestID] = struct{}{}
+}
+
+// RequestCleared reports if the "request" edge to the ApprovalRequest entity was cleared.
+func (m *ApprovalMutation) RequestCleared() bool {
+	return m.clearedrequest
+}
+
+// RequestID returns the "request" edge ID in the mutation.
+func (m *ApprovalMutation) RequestID() (id uuid.UUID, exists bool) {
+	if m.request != nil {
+		return *m.request, true
+	}
+	return
+}
+
+// RequestIDs returns the "request" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// RequestID instead. It exists only for internal usage by the builders.
+func (m *ApprovalMutation) RequestIDs() (ids []uuid.UUID) {
+	if id := m.request; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetRequest resets all changes to the "request" edge.
+func (m *ApprovalMutation) ResetRequest() {
+	m.request = nil
+	m.clearedrequest = false
+}
+
+// Where appends a list predicates to the ApprovalMutation builder.
+func (m *ApprovalMutation) Where(ps ...predicate.Approval) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ApprovalMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ApprovalMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.Approval, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ApprovalMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ApprovalMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (Approval).
+func (m *ApprovalMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ApprovalMutation) Fields() []string {
+	fields := make([]string, 0, 9)
+	if m.created_at != nil {
+		fields = append(fields, approval.FieldCreatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, approval.FieldCreatedBy)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, approval.FieldUpdatedAt)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, approval.FieldUpdatedBy)
+	}
+	if m.request != nil {
+		fields = append(fields, approval.FieldApprovalRequestID)
+	}
+	if m.approver != nil {
+		fields = append(fields, approval.FieldApprover)
+	}
+	if m.decision != nil {
+		fields = append(fields, approval.FieldDecision)
+	}
+	if m.comment != nil {
+		fields = append(fields, approval.FieldComment)
+	}
+	if m.approved_at_hash != nil {
+		fields = append(fields, approval.FieldApprovedAtHash)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ApprovalMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case approval.FieldCreatedAt:
+		return m.CreatedAt()
+	case approval.FieldCreatedBy:
+		return m.CreatedBy()
+	case approval.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case approval.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case approval.FieldApprovalRequestID:
+		return m.ApprovalRequestID()
+	case approval.FieldApprover:
+		return m.Approver()
+	case approval.FieldDecision:
+		return m.Decision()
+	case approval.FieldComment:
+		return m.Comment()
+	case approval.FieldApprovedAtHash:
+		return m.ApprovedAtHash()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ApprovalMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case approval.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case approval.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case approval.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case approval.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case approval.FieldApprovalRequestID:
+		return m.OldApprovalRequestID(ctx)
+	case approval.FieldApprover:
+		return m.OldApprover(ctx)
+	case approval.FieldDecision:
+		return m.OldDecision(ctx)
+	case approval.FieldComment:
+		return m.OldComment(ctx)
+	case approval.FieldApprovedAtHash:
+		return m.OldApprovedAtHash(ctx)
+	}
+	return nil, fmt.Errorf("unknown Approval field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ApprovalMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case approval.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case approval.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case approval.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case approval.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case approval.FieldApprovalRequestID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetApprovalRequestID(v)
+		return nil
+	case approval.FieldApprover:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetApprover(v)
+		return nil
+	case approval.FieldDecision:
+		v, ok := value.(approval.Decision)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDecision(v)
+		return nil
+	case approval.FieldComment:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetComment(v)
+		return nil
+	case approval.FieldApprovedAtHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetApprovedAtHash(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Approval field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ApprovalMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ApprovalMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ApprovalMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown Approval numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ApprovalMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(approval.FieldCreatedBy) {
+		fields = append(fields, approval.FieldCreatedBy)
+	}
+	if m.FieldCleared(approval.FieldUpdatedAt) {
+		fields = append(fields, approval.FieldUpdatedAt)
+	}
+	if m.FieldCleared(approval.FieldUpdatedBy) {
+		fields = append(fields, approval.FieldUpdatedBy)
+	}
+	if m.FieldCleared(approval.FieldComment) {
+		fields = append(fields, approval.FieldComment)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ApprovalMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ApprovalMutation) ClearField(name string) error {
+	switch name {
+	case approval.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case approval.FieldUpdatedAt:
+		m.ClearUpdatedAt()
+		return nil
+	case approval.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case approval.FieldComment:
+		m.ClearComment()
+		return nil
+	}
+	return fmt.Errorf("unknown Approval nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ApprovalMutation) ResetField(name string) error {
+	switch name {
+	case approval.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case approval.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case approval.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case approval.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case approval.FieldApprovalRequestID:
+		m.ResetApprovalRequestID()
+		return nil
+	case approval.FieldApprover:
+		m.ResetApprover()
+		return nil
+	case approval.FieldDecision:
+		m.ResetDecision()
+		return nil
+	case approval.FieldComment:
+		m.ResetComment()
+		return nil
+	case approval.FieldApprovedAtHash:
+		m.ResetApprovedAtHash()
+		return nil
+	}
+	return fmt.Errorf("unknown Approval field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ApprovalMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.request != nil {
+		edges = append(edges, approval.EdgeRequest)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ApprovalMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case approval.EdgeRequest:
+		if id := m.request; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ApprovalMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ApprovalMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ApprovalMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedrequest {
+		edges = append(edges, approval.EdgeRequest)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ApprovalMutation) EdgeCleared(name string) bool {
+	switch name {
+	case approval.EdgeRequest:
+		return m.clearedrequest
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ApprovalMutation) ClearEdge(name string) error {
+	switch name {
+	case approval.EdgeRequest:
+		m.ClearRequest()
+		return nil
+	}
+	return fmt.Errorf("unknown Approval unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ApprovalMutation) ResetEdge(name string) error {
+	switch name {
+	case approval.EdgeRequest:
+		m.ResetRequest()
+		return nil
+	}
+	return fmt.Errorf("unknown Approval edge %s", name)
+}
+
+// ApprovalPolicyMutation represents an operation that mutates the ApprovalPolicy nodes in the graph.
+type ApprovalPolicyMutation struct {
+	config
+	op                    Op
+	typ                   string
+	id                    *uuid.UUID
+	created_at            *time.Time
+	created_by            *string
+	updated_at            *time.Time
+	updated_by            *string
+	action_type           *string
+	namespace             *string
+	type_name             *string
+	required_approvals    *int
+	addrequired_approvals *int
+	bypass_roles          *[]string
+	appendbypass_roles    []string
+	enabled               *bool
+	clearedFields         map[string]struct{}
+	done                  bool
+	oldValue              func(context.Context) (*ApprovalPolicy, error)
+	predicates            []predicate.ApprovalPolicy
+}
+
+var _ ent.Mutation = (*ApprovalPolicyMutation)(nil)
+
+// approvalpolicyOption allows management of the mutation configuration using functional options.
+type approvalpolicyOption func(*ApprovalPolicyMutation)
+
+// newApprovalPolicyMutation creates new mutation for the ApprovalPolicy entity.
+func newApprovalPolicyMutation(c config, op Op, opts ...approvalpolicyOption) *ApprovalPolicyMutation {
+	m := &ApprovalPolicyMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeApprovalPolicy,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withApprovalPolicyID sets the ID field of the mutation.
+func withApprovalPolicyID(id uuid.UUID) approvalpolicyOption {
+	return func(m *ApprovalPolicyMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ApprovalPolicy
+		)
+		m.oldValue = func(ctx context.Context) (*ApprovalPolicy, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ApprovalPolicy.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withApprovalPolicy sets the old ApprovalPolicy of the mutation.
+func withApprovalPolicy(node *ApprovalPolicy) approvalpolicyOption {
+	return func(m *ApprovalPolicyMutation) {
+		m.oldValue = func(context.Context) (*ApprovalPolicy, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ApprovalPolicyMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ApprovalPolicyMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of ApprovalPolicy entities.
+func (m *ApprovalPolicyMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ApprovalPolicyMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ApprovalPolicyMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ApprovalPolicy.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *ApprovalPolicyMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *ApprovalPolicyMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the ApprovalPolicy entity.
+// If the ApprovalPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalPolicyMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *ApprovalPolicyMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *ApprovalPolicyMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *ApprovalPolicyMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the ApprovalPolicy entity.
+// If the ApprovalPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalPolicyMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *ApprovalPolicyMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[approvalpolicy.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *ApprovalPolicyMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[approvalpolicy.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *ApprovalPolicyMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, approvalpolicy.FieldCreatedBy)
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *ApprovalPolicyMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *ApprovalPolicyMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the ApprovalPolicy entity.
+// If the ApprovalPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalPolicyMutation) OldUpdatedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ClearUpdatedAt clears the value of the "updated_at" field.
+func (m *ApprovalPolicyMutation) ClearUpdatedAt() {
+	m.updated_at = nil
+	m.clearedFields[approvalpolicy.FieldUpdatedAt] = struct{}{}
+}
+
+// UpdatedAtCleared returns if the "updated_at" field was cleared in this mutation.
+func (m *ApprovalPolicyMutation) UpdatedAtCleared() bool {
+	_, ok := m.clearedFields[approvalpolicy.FieldUpdatedAt]
+	return ok
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *ApprovalPolicyMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+	delete(m.clearedFields, approvalpolicy.FieldUpdatedAt)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *ApprovalPolicyMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *ApprovalPolicyMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the ApprovalPolicy entity.
+// If the ApprovalPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalPolicyMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *ApprovalPolicyMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[approvalpolicy.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *ApprovalPolicyMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[approvalpolicy.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *ApprovalPolicyMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, approvalpolicy.FieldUpdatedBy)
+}
+
+// SetActionType sets the "action_type" field.
+func (m *ApprovalPolicyMutation) SetActionType(s string) {
+	m.action_type = &s
+}
+
+// ActionType returns the value of the "action_type" field in the mutation.
+func (m *ApprovalPolicyMutation) ActionType() (r string, exists bool) {
+	v := m.action_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActionType returns the old "action_type" field's value of the ApprovalPolicy entity.
+// If the ApprovalPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalPolicyMutation) OldActionType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActionType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActionType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActionType: %w", err)
+	}
+	return oldValue.ActionType, nil
+}
+
+// ResetActionType resets all changes to the "action_type" field.
+func (m *ApprovalPolicyMutation) ResetActionType() {
+	m.action_type = nil
+}
+
+// SetNamespace sets the "namespace" field.
+func (m *ApprovalPolicyMutation) SetNamespace(s string) {
+	m.namespace = &s
+}
+
+// Namespace returns the value of the "namespace" field in the mutation.
+func (m *ApprovalPolicyMutation) Namespace() (r string, exists bool) {
+	v := m.namespace
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNamespace returns the old "namespace" field's value of the ApprovalPolicy entity.
+// If the ApprovalPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalPolicyMutation) OldNamespace(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNamespace is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNamespace requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNamespace: %w", err)
+	}
+	return oldValue.Namespace, nil
+}
+
+// ResetNamespace resets all changes to the "namespace" field.
+func (m *ApprovalPolicyMutation) ResetNamespace() {
+	m.namespace = nil
+}
+
+// SetTypeName sets the "type_name" field.
+func (m *ApprovalPolicyMutation) SetTypeName(s string) {
+	m.type_name = &s
+}
+
+// TypeName returns the value of the "type_name" field in the mutation.
+func (m *ApprovalPolicyMutation) TypeName() (r string, exists bool) {
+	v := m.type_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTypeName returns the old "type_name" field's value of the ApprovalPolicy entity.
+// If the ApprovalPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalPolicyMutation) OldTypeName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTypeName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTypeName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTypeName: %w", err)
+	}
+	return oldValue.TypeName, nil
+}
+
+// ClearTypeName clears the value of the "type_name" field.
+func (m *ApprovalPolicyMutation) ClearTypeName() {
+	m.type_name = nil
+	m.clearedFields[approvalpolicy.FieldTypeName] = struct{}{}
+}
+
+// TypeNameCleared returns if the "type_name" field was cleared in this mutation.
+func (m *ApprovalPolicyMutation) TypeNameCleared() bool {
+	_, ok := m.clearedFields[approvalpolicy.FieldTypeName]
+	return ok
+}
+
+// ResetTypeName resets all changes to the "type_name" field.
+func (m *ApprovalPolicyMutation) ResetTypeName() {
+	m.type_name = nil
+	delete(m.clearedFields, approvalpolicy.FieldTypeName)
+}
+
+// SetRequiredApprovals sets the "required_approvals" field.
+func (m *ApprovalPolicyMutation) SetRequiredApprovals(i int) {
+	m.required_approvals = &i
+	m.addrequired_approvals = nil
+}
+
+// RequiredApprovals returns the value of the "required_approvals" field in the mutation.
+func (m *ApprovalPolicyMutation) RequiredApprovals() (r int, exists bool) {
+	v := m.required_approvals
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequiredApprovals returns the old "required_approvals" field's value of the ApprovalPolicy entity.
+// If the ApprovalPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalPolicyMutation) OldRequiredApprovals(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequiredApprovals is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequiredApprovals requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequiredApprovals: %w", err)
+	}
+	return oldValue.RequiredApprovals, nil
+}
+
+// AddRequiredApprovals adds i to the "required_approvals" field.
+func (m *ApprovalPolicyMutation) AddRequiredApprovals(i int) {
+	if m.addrequired_approvals != nil {
+		*m.addrequired_approvals += i
+	} else {
+		m.addrequired_approvals = &i
+	}
+}
+
+// AddedRequiredApprovals returns the value that was added to the "required_approvals" field in this mutation.
+func (m *ApprovalPolicyMutation) AddedRequiredApprovals() (r int, exists bool) {
+	v := m.addrequired_approvals
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRequiredApprovals resets all changes to the "required_approvals" field.
+func (m *ApprovalPolicyMutation) ResetRequiredApprovals() {
+	m.required_approvals = nil
+	m.addrequired_approvals = nil
+}
+
+// SetBypassRoles sets the "bypass_roles" field.
+func (m *ApprovalPolicyMutation) SetBypassRoles(s []string) {
+	m.bypass_roles = &s
+	m.appendbypass_roles = nil
+}
+
+// BypassRoles returns the value of the "bypass_roles" field in the mutation.
+func (m *ApprovalPolicyMutation) BypassRoles() (r []string, exists bool) {
+	v := m.bypass_roles
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBypassRoles returns the old "bypass_roles" field's value of the ApprovalPolicy entity.
+// If the ApprovalPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalPolicyMutation) OldBypassRoles(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBypassRoles is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBypassRoles requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBypassRoles: %w", err)
+	}
+	return oldValue.BypassRoles, nil
+}
+
+// AppendBypassRoles adds s to the "bypass_roles" field.
+func (m *ApprovalPolicyMutation) AppendBypassRoles(s []string) {
+	m.appendbypass_roles = append(m.appendbypass_roles, s...)
+}
+
+// AppendedBypassRoles returns the list of values that were appended to the "bypass_roles" field in this mutation.
+func (m *ApprovalPolicyMutation) AppendedBypassRoles() ([]string, bool) {
+	if len(m.appendbypass_roles) == 0 {
+		return nil, false
+	}
+	return m.appendbypass_roles, true
+}
+
+// ResetBypassRoles resets all changes to the "bypass_roles" field.
+func (m *ApprovalPolicyMutation) ResetBypassRoles() {
+	m.bypass_roles = nil
+	m.appendbypass_roles = nil
+}
+
+// SetEnabled sets the "enabled" field.
+func (m *ApprovalPolicyMutation) SetEnabled(b bool) {
+	m.enabled = &b
+}
+
+// Enabled returns the value of the "enabled" field in the mutation.
+func (m *ApprovalPolicyMutation) Enabled() (r bool, exists bool) {
+	v := m.enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnabled returns the old "enabled" field's value of the ApprovalPolicy entity.
+// If the ApprovalPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalPolicyMutation) OldEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnabled: %w", err)
+	}
+	return oldValue.Enabled, nil
+}
+
+// ResetEnabled resets all changes to the "enabled" field.
+func (m *ApprovalPolicyMutation) ResetEnabled() {
+	m.enabled = nil
+}
+
+// Where appends a list predicates to the ApprovalPolicyMutation builder.
+func (m *ApprovalPolicyMutation) Where(ps ...predicate.ApprovalPolicy) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ApprovalPolicyMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ApprovalPolicyMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ApprovalPolicy, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ApprovalPolicyMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ApprovalPolicyMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ApprovalPolicy).
+func (m *ApprovalPolicyMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ApprovalPolicyMutation) Fields() []string {
+	fields := make([]string, 0, 10)
+	if m.created_at != nil {
+		fields = append(fields, approvalpolicy.FieldCreatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, approvalpolicy.FieldCreatedBy)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, approvalpolicy.FieldUpdatedAt)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, approvalpolicy.FieldUpdatedBy)
+	}
+	if m.action_type != nil {
+		fields = append(fields, approvalpolicy.FieldActionType)
+	}
+	if m.namespace != nil {
+		fields = append(fields, approvalpolicy.FieldNamespace)
+	}
+	if m.type_name != nil {
+		fields = append(fields, approvalpolicy.FieldTypeName)
+	}
+	if m.required_approvals != nil {
+		fields = append(fields, approvalpolicy.FieldRequiredApprovals)
+	}
+	if m.bypass_roles != nil {
+		fields = append(fields, approvalpolicy.FieldBypassRoles)
+	}
+	if m.enabled != nil {
+		fields = append(fields, approvalpolicy.FieldEnabled)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ApprovalPolicyMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case approvalpolicy.FieldCreatedAt:
+		return m.CreatedAt()
+	case approvalpolicy.FieldCreatedBy:
+		return m.CreatedBy()
+	case approvalpolicy.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case approvalpolicy.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case approvalpolicy.FieldActionType:
+		return m.ActionType()
+	case approvalpolicy.FieldNamespace:
+		return m.Namespace()
+	case approvalpolicy.FieldTypeName:
+		return m.TypeName()
+	case approvalpolicy.FieldRequiredApprovals:
+		return m.RequiredApprovals()
+	case approvalpolicy.FieldBypassRoles:
+		return m.BypassRoles()
+	case approvalpolicy.FieldEnabled:
+		return m.Enabled()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ApprovalPolicyMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case approvalpolicy.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case approvalpolicy.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case approvalpolicy.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case approvalpolicy.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case approvalpolicy.FieldActionType:
+		return m.OldActionType(ctx)
+	case approvalpolicy.FieldNamespace:
+		return m.OldNamespace(ctx)
+	case approvalpolicy.FieldTypeName:
+		return m.OldTypeName(ctx)
+	case approvalpolicy.FieldRequiredApprovals:
+		return m.OldRequiredApprovals(ctx)
+	case approvalpolicy.FieldBypassRoles:
+		return m.OldBypassRoles(ctx)
+	case approvalpolicy.FieldEnabled:
+		return m.OldEnabled(ctx)
+	}
+	return nil, fmt.Errorf("unknown ApprovalPolicy field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ApprovalPolicyMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case approvalpolicy.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case approvalpolicy.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case approvalpolicy.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case approvalpolicy.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case approvalpolicy.FieldActionType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActionType(v)
+		return nil
+	case approvalpolicy.FieldNamespace:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNamespace(v)
+		return nil
+	case approvalpolicy.FieldTypeName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTypeName(v)
+		return nil
+	case approvalpolicy.FieldRequiredApprovals:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequiredApprovals(v)
+		return nil
+	case approvalpolicy.FieldBypassRoles:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBypassRoles(v)
+		return nil
+	case approvalpolicy.FieldEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnabled(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ApprovalPolicy field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ApprovalPolicyMutation) AddedFields() []string {
+	var fields []string
+	if m.addrequired_approvals != nil {
+		fields = append(fields, approvalpolicy.FieldRequiredApprovals)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ApprovalPolicyMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case approvalpolicy.FieldRequiredApprovals:
+		return m.AddedRequiredApprovals()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ApprovalPolicyMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case approvalpolicy.FieldRequiredApprovals:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRequiredApprovals(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ApprovalPolicy numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ApprovalPolicyMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(approvalpolicy.FieldCreatedBy) {
+		fields = append(fields, approvalpolicy.FieldCreatedBy)
+	}
+	if m.FieldCleared(approvalpolicy.FieldUpdatedAt) {
+		fields = append(fields, approvalpolicy.FieldUpdatedAt)
+	}
+	if m.FieldCleared(approvalpolicy.FieldUpdatedBy) {
+		fields = append(fields, approvalpolicy.FieldUpdatedBy)
+	}
+	if m.FieldCleared(approvalpolicy.FieldTypeName) {
+		fields = append(fields, approvalpolicy.FieldTypeName)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ApprovalPolicyMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ApprovalPolicyMutation) ClearField(name string) error {
+	switch name {
+	case approvalpolicy.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case approvalpolicy.FieldUpdatedAt:
+		m.ClearUpdatedAt()
+		return nil
+	case approvalpolicy.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case approvalpolicy.FieldTypeName:
+		m.ClearTypeName()
+		return nil
+	}
+	return fmt.Errorf("unknown ApprovalPolicy nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ApprovalPolicyMutation) ResetField(name string) error {
+	switch name {
+	case approvalpolicy.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case approvalpolicy.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case approvalpolicy.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case approvalpolicy.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case approvalpolicy.FieldActionType:
+		m.ResetActionType()
+		return nil
+	case approvalpolicy.FieldNamespace:
+		m.ResetNamespace()
+		return nil
+	case approvalpolicy.FieldTypeName:
+		m.ResetTypeName()
+		return nil
+	case approvalpolicy.FieldRequiredApprovals:
+		m.ResetRequiredApprovals()
+		return nil
+	case approvalpolicy.FieldBypassRoles:
+		m.ResetBypassRoles()
+		return nil
+	case approvalpolicy.FieldEnabled:
+		m.ResetEnabled()
+		return nil
+	}
+	return fmt.Errorf("unknown ApprovalPolicy field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ApprovalPolicyMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ApprovalPolicyMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ApprovalPolicyMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ApprovalPolicyMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ApprovalPolicyMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ApprovalPolicyMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ApprovalPolicyMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown ApprovalPolicy unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ApprovalPolicyMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown ApprovalPolicy edge %s", name)
+}
+
+// ApprovalRequestMutation represents an operation that mutates the ApprovalRequest nodes in the graph.
+type ApprovalRequestMutation struct {
+	config
+	op                    Op
+	typ                   string
+	id                    *uuid.UUID
+	created_at            *time.Time
+	created_by            *string
+	updated_at            *time.Time
+	updated_by            *string
+	action_type           *string
+	title                 *string
+	description           *string
+	status                *approvalrequest.Status
+	author                *string
+	base_hash             *string
+	base_present          *[]string
+	appendbase_present    []string
+	payload               *json.RawMessage
+	appendpayload         json.RawMessage
+	executed_at           *time.Time
+	executed_by           *string
+	clearedFields         map[string]struct{}
+	approvals             map[uuid.UUID]struct{}
+	removedapprovals      map[uuid.UUID]struct{}
+	clearedapprovals      bool
+	merge_attempts        map[uuid.UUID]struct{}
+	removedmerge_attempts map[uuid.UUID]struct{}
+	clearedmerge_attempts bool
+	done                  bool
+	oldValue              func(context.Context) (*ApprovalRequest, error)
+	predicates            []predicate.ApprovalRequest
+}
+
+var _ ent.Mutation = (*ApprovalRequestMutation)(nil)
+
+// approvalrequestOption allows management of the mutation configuration using functional options.
+type approvalrequestOption func(*ApprovalRequestMutation)
+
+// newApprovalRequestMutation creates new mutation for the ApprovalRequest entity.
+func newApprovalRequestMutation(c config, op Op, opts ...approvalrequestOption) *ApprovalRequestMutation {
+	m := &ApprovalRequestMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeApprovalRequest,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withApprovalRequestID sets the ID field of the mutation.
+func withApprovalRequestID(id uuid.UUID) approvalrequestOption {
+	return func(m *ApprovalRequestMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ApprovalRequest
+		)
+		m.oldValue = func(ctx context.Context) (*ApprovalRequest, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ApprovalRequest.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withApprovalRequest sets the old ApprovalRequest of the mutation.
+func withApprovalRequest(node *ApprovalRequest) approvalrequestOption {
+	return func(m *ApprovalRequestMutation) {
+		m.oldValue = func(context.Context) (*ApprovalRequest, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ApprovalRequestMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ApprovalRequestMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of ApprovalRequest entities.
+func (m *ApprovalRequestMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ApprovalRequestMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ApprovalRequestMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ApprovalRequest.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *ApprovalRequestMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *ApprovalRequestMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *ApprovalRequestMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *ApprovalRequestMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *ApprovalRequestMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *ApprovalRequestMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[approvalrequest.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *ApprovalRequestMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[approvalrequest.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *ApprovalRequestMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, approvalrequest.FieldCreatedBy)
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *ApprovalRequestMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *ApprovalRequestMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldUpdatedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ClearUpdatedAt clears the value of the "updated_at" field.
+func (m *ApprovalRequestMutation) ClearUpdatedAt() {
+	m.updated_at = nil
+	m.clearedFields[approvalrequest.FieldUpdatedAt] = struct{}{}
+}
+
+// UpdatedAtCleared returns if the "updated_at" field was cleared in this mutation.
+func (m *ApprovalRequestMutation) UpdatedAtCleared() bool {
+	_, ok := m.clearedFields[approvalrequest.FieldUpdatedAt]
+	return ok
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *ApprovalRequestMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+	delete(m.clearedFields, approvalrequest.FieldUpdatedAt)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *ApprovalRequestMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *ApprovalRequestMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *ApprovalRequestMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[approvalrequest.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *ApprovalRequestMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[approvalrequest.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *ApprovalRequestMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, approvalrequest.FieldUpdatedBy)
+}
+
+// SetActionType sets the "action_type" field.
+func (m *ApprovalRequestMutation) SetActionType(s string) {
+	m.action_type = &s
+}
+
+// ActionType returns the value of the "action_type" field in the mutation.
+func (m *ApprovalRequestMutation) ActionType() (r string, exists bool) {
+	v := m.action_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActionType returns the old "action_type" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldActionType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActionType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActionType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActionType: %w", err)
+	}
+	return oldValue.ActionType, nil
+}
+
+// ResetActionType resets all changes to the "action_type" field.
+func (m *ApprovalRequestMutation) ResetActionType() {
+	m.action_type = nil
+}
+
+// SetTitle sets the "title" field.
+func (m *ApprovalRequestMutation) SetTitle(s string) {
+	m.title = &s
+}
+
+// Title returns the value of the "title" field in the mutation.
+func (m *ApprovalRequestMutation) Title() (r string, exists bool) {
+	v := m.title
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTitle returns the old "title" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldTitle(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTitle is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTitle requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTitle: %w", err)
+	}
+	return oldValue.Title, nil
+}
+
+// ResetTitle resets all changes to the "title" field.
+func (m *ApprovalRequestMutation) ResetTitle() {
+	m.title = nil
+}
+
+// SetDescription sets the "description" field.
+func (m *ApprovalRequestMutation) SetDescription(s string) {
+	m.description = &s
+}
+
+// Description returns the value of the "description" field in the mutation.
+func (m *ApprovalRequestMutation) Description() (r string, exists bool) {
+	v := m.description
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDescription returns the old "description" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldDescription(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDescription requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
+	}
+	return oldValue.Description, nil
+}
+
+// ClearDescription clears the value of the "description" field.
+func (m *ApprovalRequestMutation) ClearDescription() {
+	m.description = nil
+	m.clearedFields[approvalrequest.FieldDescription] = struct{}{}
+}
+
+// DescriptionCleared returns if the "description" field was cleared in this mutation.
+func (m *ApprovalRequestMutation) DescriptionCleared() bool {
+	_, ok := m.clearedFields[approvalrequest.FieldDescription]
+	return ok
+}
+
+// ResetDescription resets all changes to the "description" field.
+func (m *ApprovalRequestMutation) ResetDescription() {
+	m.description = nil
+	delete(m.clearedFields, approvalrequest.FieldDescription)
+}
+
+// SetStatus sets the "status" field.
+func (m *ApprovalRequestMutation) SetStatus(a approvalrequest.Status) {
+	m.status = &a
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *ApprovalRequestMutation) Status() (r approvalrequest.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldStatus(ctx context.Context) (v approvalrequest.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *ApprovalRequestMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetAuthor sets the "author" field.
+func (m *ApprovalRequestMutation) SetAuthor(s string) {
+	m.author = &s
+}
+
+// Author returns the value of the "author" field in the mutation.
+func (m *ApprovalRequestMutation) Author() (r string, exists bool) {
+	v := m.author
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAuthor returns the old "author" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldAuthor(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAuthor is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAuthor requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAuthor: %w", err)
+	}
+	return oldValue.Author, nil
+}
+
+// ResetAuthor resets all changes to the "author" field.
+func (m *ApprovalRequestMutation) ResetAuthor() {
+	m.author = nil
+}
+
+// SetBaseHash sets the "base_hash" field.
+func (m *ApprovalRequestMutation) SetBaseHash(s string) {
+	m.base_hash = &s
+}
+
+// BaseHash returns the value of the "base_hash" field in the mutation.
+func (m *ApprovalRequestMutation) BaseHash() (r string, exists bool) {
+	v := m.base_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBaseHash returns the old "base_hash" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldBaseHash(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBaseHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBaseHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBaseHash: %w", err)
+	}
+	return oldValue.BaseHash, nil
+}
+
+// ResetBaseHash resets all changes to the "base_hash" field.
+func (m *ApprovalRequestMutation) ResetBaseHash() {
+	m.base_hash = nil
+}
+
+// SetBasePresent sets the "base_present" field.
+func (m *ApprovalRequestMutation) SetBasePresent(s []string) {
+	m.base_present = &s
+	m.appendbase_present = nil
+}
+
+// BasePresent returns the value of the "base_present" field in the mutation.
+func (m *ApprovalRequestMutation) BasePresent() (r []string, exists bool) {
+	v := m.base_present
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBasePresent returns the old "base_present" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldBasePresent(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBasePresent is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBasePresent requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBasePresent: %w", err)
+	}
+	return oldValue.BasePresent, nil
+}
+
+// AppendBasePresent adds s to the "base_present" field.
+func (m *ApprovalRequestMutation) AppendBasePresent(s []string) {
+	m.appendbase_present = append(m.appendbase_present, s...)
+}
+
+// AppendedBasePresent returns the list of values that were appended to the "base_present" field in this mutation.
+func (m *ApprovalRequestMutation) AppendedBasePresent() ([]string, bool) {
+	if len(m.appendbase_present) == 0 {
+		return nil, false
+	}
+	return m.appendbase_present, true
+}
+
+// ClearBasePresent clears the value of the "base_present" field.
+func (m *ApprovalRequestMutation) ClearBasePresent() {
+	m.base_present = nil
+	m.appendbase_present = nil
+	m.clearedFields[approvalrequest.FieldBasePresent] = struct{}{}
+}
+
+// BasePresentCleared returns if the "base_present" field was cleared in this mutation.
+func (m *ApprovalRequestMutation) BasePresentCleared() bool {
+	_, ok := m.clearedFields[approvalrequest.FieldBasePresent]
+	return ok
+}
+
+// ResetBasePresent resets all changes to the "base_present" field.
+func (m *ApprovalRequestMutation) ResetBasePresent() {
+	m.base_present = nil
+	m.appendbase_present = nil
+	delete(m.clearedFields, approvalrequest.FieldBasePresent)
+}
+
+// SetPayload sets the "payload" field.
+func (m *ApprovalRequestMutation) SetPayload(jm json.RawMessage) {
+	m.payload = &jm
+	m.appendpayload = nil
+}
+
+// Payload returns the value of the "payload" field in the mutation.
+func (m *ApprovalRequestMutation) Payload() (r json.RawMessage, exists bool) {
+	v := m.payload
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPayload returns the old "payload" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldPayload(ctx context.Context) (v json.RawMessage, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPayload is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPayload requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPayload: %w", err)
+	}
+	return oldValue.Payload, nil
+}
+
+// AppendPayload adds jm to the "payload" field.
+func (m *ApprovalRequestMutation) AppendPayload(jm json.RawMessage) {
+	m.appendpayload = append(m.appendpayload, jm...)
+}
+
+// AppendedPayload returns the list of values that were appended to the "payload" field in this mutation.
+func (m *ApprovalRequestMutation) AppendedPayload() (json.RawMessage, bool) {
+	if len(m.appendpayload) == 0 {
+		return nil, false
+	}
+	return m.appendpayload, true
+}
+
+// ResetPayload resets all changes to the "payload" field.
+func (m *ApprovalRequestMutation) ResetPayload() {
+	m.payload = nil
+	m.appendpayload = nil
+}
+
+// SetExecutedAt sets the "executed_at" field.
+func (m *ApprovalRequestMutation) SetExecutedAt(t time.Time) {
+	m.executed_at = &t
+}
+
+// ExecutedAt returns the value of the "executed_at" field in the mutation.
+func (m *ApprovalRequestMutation) ExecutedAt() (r time.Time, exists bool) {
+	v := m.executed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExecutedAt returns the old "executed_at" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldExecutedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExecutedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExecutedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExecutedAt: %w", err)
+	}
+	return oldValue.ExecutedAt, nil
+}
+
+// ClearExecutedAt clears the value of the "executed_at" field.
+func (m *ApprovalRequestMutation) ClearExecutedAt() {
+	m.executed_at = nil
+	m.clearedFields[approvalrequest.FieldExecutedAt] = struct{}{}
+}
+
+// ExecutedAtCleared returns if the "executed_at" field was cleared in this mutation.
+func (m *ApprovalRequestMutation) ExecutedAtCleared() bool {
+	_, ok := m.clearedFields[approvalrequest.FieldExecutedAt]
+	return ok
+}
+
+// ResetExecutedAt resets all changes to the "executed_at" field.
+func (m *ApprovalRequestMutation) ResetExecutedAt() {
+	m.executed_at = nil
+	delete(m.clearedFields, approvalrequest.FieldExecutedAt)
+}
+
+// SetExecutedBy sets the "executed_by" field.
+func (m *ApprovalRequestMutation) SetExecutedBy(s string) {
+	m.executed_by = &s
+}
+
+// ExecutedBy returns the value of the "executed_by" field in the mutation.
+func (m *ApprovalRequestMutation) ExecutedBy() (r string, exists bool) {
+	v := m.executed_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExecutedBy returns the old "executed_by" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldExecutedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExecutedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExecutedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExecutedBy: %w", err)
+	}
+	return oldValue.ExecutedBy, nil
+}
+
+// ClearExecutedBy clears the value of the "executed_by" field.
+func (m *ApprovalRequestMutation) ClearExecutedBy() {
+	m.executed_by = nil
+	m.clearedFields[approvalrequest.FieldExecutedBy] = struct{}{}
+}
+
+// ExecutedByCleared returns if the "executed_by" field was cleared in this mutation.
+func (m *ApprovalRequestMutation) ExecutedByCleared() bool {
+	_, ok := m.clearedFields[approvalrequest.FieldExecutedBy]
+	return ok
+}
+
+// ResetExecutedBy resets all changes to the "executed_by" field.
+func (m *ApprovalRequestMutation) ResetExecutedBy() {
+	m.executed_by = nil
+	delete(m.clearedFields, approvalrequest.FieldExecutedBy)
+}
+
+// AddApprovalIDs adds the "approvals" edge to the Approval entity by ids.
+func (m *ApprovalRequestMutation) AddApprovalIDs(ids ...uuid.UUID) {
+	if m.approvals == nil {
+		m.approvals = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		m.approvals[ids[i]] = struct{}{}
+	}
+}
+
+// ClearApprovals clears the "approvals" edge to the Approval entity.
+func (m *ApprovalRequestMutation) ClearApprovals() {
+	m.clearedapprovals = true
+}
+
+// ApprovalsCleared reports if the "approvals" edge to the Approval entity was cleared.
+func (m *ApprovalRequestMutation) ApprovalsCleared() bool {
+	return m.clearedapprovals
+}
+
+// RemoveApprovalIDs removes the "approvals" edge to the Approval entity by IDs.
+func (m *ApprovalRequestMutation) RemoveApprovalIDs(ids ...uuid.UUID) {
+	if m.removedapprovals == nil {
+		m.removedapprovals = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		delete(m.approvals, ids[i])
+		m.removedapprovals[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedApprovals returns the removed IDs of the "approvals" edge to the Approval entity.
+func (m *ApprovalRequestMutation) RemovedApprovalsIDs() (ids []uuid.UUID) {
+	for id := range m.removedapprovals {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ApprovalsIDs returns the "approvals" edge IDs in the mutation.
+func (m *ApprovalRequestMutation) ApprovalsIDs() (ids []uuid.UUID) {
+	for id := range m.approvals {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetApprovals resets all changes to the "approvals" edge.
+func (m *ApprovalRequestMutation) ResetApprovals() {
+	m.approvals = nil
+	m.clearedapprovals = false
+	m.removedapprovals = nil
+}
+
+// AddMergeAttemptIDs adds the "merge_attempts" edge to the MergeAttempt entity by ids.
+func (m *ApprovalRequestMutation) AddMergeAttemptIDs(ids ...uuid.UUID) {
+	if m.merge_attempts == nil {
+		m.merge_attempts = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		m.merge_attempts[ids[i]] = struct{}{}
+	}
+}
+
+// ClearMergeAttempts clears the "merge_attempts" edge to the MergeAttempt entity.
+func (m *ApprovalRequestMutation) ClearMergeAttempts() {
+	m.clearedmerge_attempts = true
+}
+
+// MergeAttemptsCleared reports if the "merge_attempts" edge to the MergeAttempt entity was cleared.
+func (m *ApprovalRequestMutation) MergeAttemptsCleared() bool {
+	return m.clearedmerge_attempts
+}
+
+// RemoveMergeAttemptIDs removes the "merge_attempts" edge to the MergeAttempt entity by IDs.
+func (m *ApprovalRequestMutation) RemoveMergeAttemptIDs(ids ...uuid.UUID) {
+	if m.removedmerge_attempts == nil {
+		m.removedmerge_attempts = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		delete(m.merge_attempts, ids[i])
+		m.removedmerge_attempts[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedMergeAttempts returns the removed IDs of the "merge_attempts" edge to the MergeAttempt entity.
+func (m *ApprovalRequestMutation) RemovedMergeAttemptsIDs() (ids []uuid.UUID) {
+	for id := range m.removedmerge_attempts {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// MergeAttemptsIDs returns the "merge_attempts" edge IDs in the mutation.
+func (m *ApprovalRequestMutation) MergeAttemptsIDs() (ids []uuid.UUID) {
+	for id := range m.merge_attempts {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetMergeAttempts resets all changes to the "merge_attempts" edge.
+func (m *ApprovalRequestMutation) ResetMergeAttempts() {
+	m.merge_attempts = nil
+	m.clearedmerge_attempts = false
+	m.removedmerge_attempts = nil
+}
+
+// Where appends a list predicates to the ApprovalRequestMutation builder.
+func (m *ApprovalRequestMutation) Where(ps ...predicate.ApprovalRequest) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ApprovalRequestMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ApprovalRequestMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ApprovalRequest, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ApprovalRequestMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ApprovalRequestMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ApprovalRequest).
+func (m *ApprovalRequestMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ApprovalRequestMutation) Fields() []string {
+	fields := make([]string, 0, 14)
+	if m.created_at != nil {
+		fields = append(fields, approvalrequest.FieldCreatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, approvalrequest.FieldCreatedBy)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, approvalrequest.FieldUpdatedAt)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, approvalrequest.FieldUpdatedBy)
+	}
+	if m.action_type != nil {
+		fields = append(fields, approvalrequest.FieldActionType)
+	}
+	if m.title != nil {
+		fields = append(fields, approvalrequest.FieldTitle)
+	}
+	if m.description != nil {
+		fields = append(fields, approvalrequest.FieldDescription)
+	}
+	if m.status != nil {
+		fields = append(fields, approvalrequest.FieldStatus)
+	}
+	if m.author != nil {
+		fields = append(fields, approvalrequest.FieldAuthor)
+	}
+	if m.base_hash != nil {
+		fields = append(fields, approvalrequest.FieldBaseHash)
+	}
+	if m.base_present != nil {
+		fields = append(fields, approvalrequest.FieldBasePresent)
+	}
+	if m.payload != nil {
+		fields = append(fields, approvalrequest.FieldPayload)
+	}
+	if m.executed_at != nil {
+		fields = append(fields, approvalrequest.FieldExecutedAt)
+	}
+	if m.executed_by != nil {
+		fields = append(fields, approvalrequest.FieldExecutedBy)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ApprovalRequestMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case approvalrequest.FieldCreatedAt:
+		return m.CreatedAt()
+	case approvalrequest.FieldCreatedBy:
+		return m.CreatedBy()
+	case approvalrequest.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case approvalrequest.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case approvalrequest.FieldActionType:
+		return m.ActionType()
+	case approvalrequest.FieldTitle:
+		return m.Title()
+	case approvalrequest.FieldDescription:
+		return m.Description()
+	case approvalrequest.FieldStatus:
+		return m.Status()
+	case approvalrequest.FieldAuthor:
+		return m.Author()
+	case approvalrequest.FieldBaseHash:
+		return m.BaseHash()
+	case approvalrequest.FieldBasePresent:
+		return m.BasePresent()
+	case approvalrequest.FieldPayload:
+		return m.Payload()
+	case approvalrequest.FieldExecutedAt:
+		return m.ExecutedAt()
+	case approvalrequest.FieldExecutedBy:
+		return m.ExecutedBy()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ApprovalRequestMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case approvalrequest.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case approvalrequest.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case approvalrequest.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case approvalrequest.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case approvalrequest.FieldActionType:
+		return m.OldActionType(ctx)
+	case approvalrequest.FieldTitle:
+		return m.OldTitle(ctx)
+	case approvalrequest.FieldDescription:
+		return m.OldDescription(ctx)
+	case approvalrequest.FieldStatus:
+		return m.OldStatus(ctx)
+	case approvalrequest.FieldAuthor:
+		return m.OldAuthor(ctx)
+	case approvalrequest.FieldBaseHash:
+		return m.OldBaseHash(ctx)
+	case approvalrequest.FieldBasePresent:
+		return m.OldBasePresent(ctx)
+	case approvalrequest.FieldPayload:
+		return m.OldPayload(ctx)
+	case approvalrequest.FieldExecutedAt:
+		return m.OldExecutedAt(ctx)
+	case approvalrequest.FieldExecutedBy:
+		return m.OldExecutedBy(ctx)
+	}
+	return nil, fmt.Errorf("unknown ApprovalRequest field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ApprovalRequestMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case approvalrequest.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case approvalrequest.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case approvalrequest.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case approvalrequest.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case approvalrequest.FieldActionType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActionType(v)
+		return nil
+	case approvalrequest.FieldTitle:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTitle(v)
+		return nil
+	case approvalrequest.FieldDescription:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDescription(v)
+		return nil
+	case approvalrequest.FieldStatus:
+		v, ok := value.(approvalrequest.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case approvalrequest.FieldAuthor:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAuthor(v)
+		return nil
+	case approvalrequest.FieldBaseHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBaseHash(v)
+		return nil
+	case approvalrequest.FieldBasePresent:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBasePresent(v)
+		return nil
+	case approvalrequest.FieldPayload:
+		v, ok := value.(json.RawMessage)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPayload(v)
+		return nil
+	case approvalrequest.FieldExecutedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExecutedAt(v)
+		return nil
+	case approvalrequest.FieldExecutedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExecutedBy(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ApprovalRequest field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ApprovalRequestMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ApprovalRequestMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ApprovalRequestMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown ApprovalRequest numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ApprovalRequestMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(approvalrequest.FieldCreatedBy) {
+		fields = append(fields, approvalrequest.FieldCreatedBy)
+	}
+	if m.FieldCleared(approvalrequest.FieldUpdatedAt) {
+		fields = append(fields, approvalrequest.FieldUpdatedAt)
+	}
+	if m.FieldCleared(approvalrequest.FieldUpdatedBy) {
+		fields = append(fields, approvalrequest.FieldUpdatedBy)
+	}
+	if m.FieldCleared(approvalrequest.FieldDescription) {
+		fields = append(fields, approvalrequest.FieldDescription)
+	}
+	if m.FieldCleared(approvalrequest.FieldBasePresent) {
+		fields = append(fields, approvalrequest.FieldBasePresent)
+	}
+	if m.FieldCleared(approvalrequest.FieldExecutedAt) {
+		fields = append(fields, approvalrequest.FieldExecutedAt)
+	}
+	if m.FieldCleared(approvalrequest.FieldExecutedBy) {
+		fields = append(fields, approvalrequest.FieldExecutedBy)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ApprovalRequestMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ApprovalRequestMutation) ClearField(name string) error {
+	switch name {
+	case approvalrequest.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case approvalrequest.FieldUpdatedAt:
+		m.ClearUpdatedAt()
+		return nil
+	case approvalrequest.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case approvalrequest.FieldDescription:
+		m.ClearDescription()
+		return nil
+	case approvalrequest.FieldBasePresent:
+		m.ClearBasePresent()
+		return nil
+	case approvalrequest.FieldExecutedAt:
+		m.ClearExecutedAt()
+		return nil
+	case approvalrequest.FieldExecutedBy:
+		m.ClearExecutedBy()
+		return nil
+	}
+	return fmt.Errorf("unknown ApprovalRequest nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ApprovalRequestMutation) ResetField(name string) error {
+	switch name {
+	case approvalrequest.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case approvalrequest.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case approvalrequest.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case approvalrequest.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case approvalrequest.FieldActionType:
+		m.ResetActionType()
+		return nil
+	case approvalrequest.FieldTitle:
+		m.ResetTitle()
+		return nil
+	case approvalrequest.FieldDescription:
+		m.ResetDescription()
+		return nil
+	case approvalrequest.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case approvalrequest.FieldAuthor:
+		m.ResetAuthor()
+		return nil
+	case approvalrequest.FieldBaseHash:
+		m.ResetBaseHash()
+		return nil
+	case approvalrequest.FieldBasePresent:
+		m.ResetBasePresent()
+		return nil
+	case approvalrequest.FieldPayload:
+		m.ResetPayload()
+		return nil
+	case approvalrequest.FieldExecutedAt:
+		m.ResetExecutedAt()
+		return nil
+	case approvalrequest.FieldExecutedBy:
+		m.ResetExecutedBy()
+		return nil
+	}
+	return fmt.Errorf("unknown ApprovalRequest field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ApprovalRequestMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.approvals != nil {
+		edges = append(edges, approvalrequest.EdgeApprovals)
+	}
+	if m.merge_attempts != nil {
+		edges = append(edges, approvalrequest.EdgeMergeAttempts)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ApprovalRequestMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case approvalrequest.EdgeApprovals:
+		ids := make([]ent.Value, 0, len(m.approvals))
+		for id := range m.approvals {
+			ids = append(ids, id)
+		}
+		return ids
+	case approvalrequest.EdgeMergeAttempts:
+		ids := make([]ent.Value, 0, len(m.merge_attempts))
+		for id := range m.merge_attempts {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ApprovalRequestMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.removedapprovals != nil {
+		edges = append(edges, approvalrequest.EdgeApprovals)
+	}
+	if m.removedmerge_attempts != nil {
+		edges = append(edges, approvalrequest.EdgeMergeAttempts)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ApprovalRequestMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case approvalrequest.EdgeApprovals:
+		ids := make([]ent.Value, 0, len(m.removedapprovals))
+		for id := range m.removedapprovals {
+			ids = append(ids, id)
+		}
+		return ids
+	case approvalrequest.EdgeMergeAttempts:
+		ids := make([]ent.Value, 0, len(m.removedmerge_attempts))
+		for id := range m.removedmerge_attempts {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ApprovalRequestMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedapprovals {
+		edges = append(edges, approvalrequest.EdgeApprovals)
+	}
+	if m.clearedmerge_attempts {
+		edges = append(edges, approvalrequest.EdgeMergeAttempts)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ApprovalRequestMutation) EdgeCleared(name string) bool {
+	switch name {
+	case approvalrequest.EdgeApprovals:
+		return m.clearedapprovals
+	case approvalrequest.EdgeMergeAttempts:
+		return m.clearedmerge_attempts
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ApprovalRequestMutation) ClearEdge(name string) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown ApprovalRequest unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ApprovalRequestMutation) ResetEdge(name string) error {
+	switch name {
+	case approvalrequest.EdgeApprovals:
+		m.ResetApprovals()
+		return nil
+	case approvalrequest.EdgeMergeAttempts:
+		m.ResetMergeAttempts()
+		return nil
+	}
+	return fmt.Errorf("unknown ApprovalRequest edge %s", name)
+}
 
 // AuditEventMutation represents an operation that mutates the AuditEvent nodes in the graph.
 type AuditEventMutation struct {
@@ -6985,6 +10231,952 @@ func (m *ExportJobMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown ExportJob edge %s", name)
+}
+
+// MergeAttemptMutation represents an operation that mutates the MergeAttempt nodes in the graph.
+type MergeAttemptMutation struct {
+	config
+	op             Op
+	typ            string
+	id             *uuid.UUID
+	created_at     *time.Time
+	created_by     *string
+	updated_at     *time.Time
+	updated_by     *string
+	attempted_by   *string
+	attempted_at   *time.Time
+	results        *json.RawMessage
+	appendresults  json.RawMessage
+	error          *string
+	clearedFields  map[string]struct{}
+	request        *uuid.UUID
+	clearedrequest bool
+	done           bool
+	oldValue       func(context.Context) (*MergeAttempt, error)
+	predicates     []predicate.MergeAttempt
+}
+
+var _ ent.Mutation = (*MergeAttemptMutation)(nil)
+
+// mergeattemptOption allows management of the mutation configuration using functional options.
+type mergeattemptOption func(*MergeAttemptMutation)
+
+// newMergeAttemptMutation creates new mutation for the MergeAttempt entity.
+func newMergeAttemptMutation(c config, op Op, opts ...mergeattemptOption) *MergeAttemptMutation {
+	m := &MergeAttemptMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeMergeAttempt,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withMergeAttemptID sets the ID field of the mutation.
+func withMergeAttemptID(id uuid.UUID) mergeattemptOption {
+	return func(m *MergeAttemptMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *MergeAttempt
+		)
+		m.oldValue = func(ctx context.Context) (*MergeAttempt, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().MergeAttempt.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withMergeAttempt sets the old MergeAttempt of the mutation.
+func withMergeAttempt(node *MergeAttempt) mergeattemptOption {
+	return func(m *MergeAttemptMutation) {
+		m.oldValue = func(context.Context) (*MergeAttempt, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m MergeAttemptMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m MergeAttemptMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of MergeAttempt entities.
+func (m *MergeAttemptMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *MergeAttemptMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *MergeAttemptMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().MergeAttempt.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *MergeAttemptMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *MergeAttemptMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the MergeAttempt entity.
+// If the MergeAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MergeAttemptMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *MergeAttemptMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *MergeAttemptMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *MergeAttemptMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the MergeAttempt entity.
+// If the MergeAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MergeAttemptMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *MergeAttemptMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[mergeattempt.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *MergeAttemptMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[mergeattempt.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *MergeAttemptMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, mergeattempt.FieldCreatedBy)
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *MergeAttemptMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *MergeAttemptMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the MergeAttempt entity.
+// If the MergeAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MergeAttemptMutation) OldUpdatedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ClearUpdatedAt clears the value of the "updated_at" field.
+func (m *MergeAttemptMutation) ClearUpdatedAt() {
+	m.updated_at = nil
+	m.clearedFields[mergeattempt.FieldUpdatedAt] = struct{}{}
+}
+
+// UpdatedAtCleared returns if the "updated_at" field was cleared in this mutation.
+func (m *MergeAttemptMutation) UpdatedAtCleared() bool {
+	_, ok := m.clearedFields[mergeattempt.FieldUpdatedAt]
+	return ok
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *MergeAttemptMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+	delete(m.clearedFields, mergeattempt.FieldUpdatedAt)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *MergeAttemptMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *MergeAttemptMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the MergeAttempt entity.
+// If the MergeAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MergeAttemptMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *MergeAttemptMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[mergeattempt.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *MergeAttemptMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[mergeattempt.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *MergeAttemptMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, mergeattempt.FieldUpdatedBy)
+}
+
+// SetApprovalRequestID sets the "approval_request_id" field.
+func (m *MergeAttemptMutation) SetApprovalRequestID(u uuid.UUID) {
+	m.request = &u
+}
+
+// ApprovalRequestID returns the value of the "approval_request_id" field in the mutation.
+func (m *MergeAttemptMutation) ApprovalRequestID() (r uuid.UUID, exists bool) {
+	v := m.request
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldApprovalRequestID returns the old "approval_request_id" field's value of the MergeAttempt entity.
+// If the MergeAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MergeAttemptMutation) OldApprovalRequestID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldApprovalRequestID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldApprovalRequestID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldApprovalRequestID: %w", err)
+	}
+	return oldValue.ApprovalRequestID, nil
+}
+
+// ResetApprovalRequestID resets all changes to the "approval_request_id" field.
+func (m *MergeAttemptMutation) ResetApprovalRequestID() {
+	m.request = nil
+}
+
+// SetAttemptedBy sets the "attempted_by" field.
+func (m *MergeAttemptMutation) SetAttemptedBy(s string) {
+	m.attempted_by = &s
+}
+
+// AttemptedBy returns the value of the "attempted_by" field in the mutation.
+func (m *MergeAttemptMutation) AttemptedBy() (r string, exists bool) {
+	v := m.attempted_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAttemptedBy returns the old "attempted_by" field's value of the MergeAttempt entity.
+// If the MergeAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MergeAttemptMutation) OldAttemptedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAttemptedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAttemptedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAttemptedBy: %w", err)
+	}
+	return oldValue.AttemptedBy, nil
+}
+
+// ResetAttemptedBy resets all changes to the "attempted_by" field.
+func (m *MergeAttemptMutation) ResetAttemptedBy() {
+	m.attempted_by = nil
+}
+
+// SetAttemptedAt sets the "attempted_at" field.
+func (m *MergeAttemptMutation) SetAttemptedAt(t time.Time) {
+	m.attempted_at = &t
+}
+
+// AttemptedAt returns the value of the "attempted_at" field in the mutation.
+func (m *MergeAttemptMutation) AttemptedAt() (r time.Time, exists bool) {
+	v := m.attempted_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAttemptedAt returns the old "attempted_at" field's value of the MergeAttempt entity.
+// If the MergeAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MergeAttemptMutation) OldAttemptedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAttemptedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAttemptedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAttemptedAt: %w", err)
+	}
+	return oldValue.AttemptedAt, nil
+}
+
+// ResetAttemptedAt resets all changes to the "attempted_at" field.
+func (m *MergeAttemptMutation) ResetAttemptedAt() {
+	m.attempted_at = nil
+}
+
+// SetResults sets the "results" field.
+func (m *MergeAttemptMutation) SetResults(jm json.RawMessage) {
+	m.results = &jm
+	m.appendresults = nil
+}
+
+// Results returns the value of the "results" field in the mutation.
+func (m *MergeAttemptMutation) Results() (r json.RawMessage, exists bool) {
+	v := m.results
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResults returns the old "results" field's value of the MergeAttempt entity.
+// If the MergeAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MergeAttemptMutation) OldResults(ctx context.Context) (v json.RawMessage, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResults is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResults requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResults: %w", err)
+	}
+	return oldValue.Results, nil
+}
+
+// AppendResults adds jm to the "results" field.
+func (m *MergeAttemptMutation) AppendResults(jm json.RawMessage) {
+	m.appendresults = append(m.appendresults, jm...)
+}
+
+// AppendedResults returns the list of values that were appended to the "results" field in this mutation.
+func (m *MergeAttemptMutation) AppendedResults() (json.RawMessage, bool) {
+	if len(m.appendresults) == 0 {
+		return nil, false
+	}
+	return m.appendresults, true
+}
+
+// ClearResults clears the value of the "results" field.
+func (m *MergeAttemptMutation) ClearResults() {
+	m.results = nil
+	m.appendresults = nil
+	m.clearedFields[mergeattempt.FieldResults] = struct{}{}
+}
+
+// ResultsCleared returns if the "results" field was cleared in this mutation.
+func (m *MergeAttemptMutation) ResultsCleared() bool {
+	_, ok := m.clearedFields[mergeattempt.FieldResults]
+	return ok
+}
+
+// ResetResults resets all changes to the "results" field.
+func (m *MergeAttemptMutation) ResetResults() {
+	m.results = nil
+	m.appendresults = nil
+	delete(m.clearedFields, mergeattempt.FieldResults)
+}
+
+// SetError sets the "error" field.
+func (m *MergeAttemptMutation) SetError(s string) {
+	m.error = &s
+}
+
+// Error returns the value of the "error" field in the mutation.
+func (m *MergeAttemptMutation) Error() (r string, exists bool) {
+	v := m.error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldError returns the old "error" field's value of the MergeAttempt entity.
+// If the MergeAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MergeAttemptMutation) OldError(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldError: %w", err)
+	}
+	return oldValue.Error, nil
+}
+
+// ClearError clears the value of the "error" field.
+func (m *MergeAttemptMutation) ClearError() {
+	m.error = nil
+	m.clearedFields[mergeattempt.FieldError] = struct{}{}
+}
+
+// ErrorCleared returns if the "error" field was cleared in this mutation.
+func (m *MergeAttemptMutation) ErrorCleared() bool {
+	_, ok := m.clearedFields[mergeattempt.FieldError]
+	return ok
+}
+
+// ResetError resets all changes to the "error" field.
+func (m *MergeAttemptMutation) ResetError() {
+	m.error = nil
+	delete(m.clearedFields, mergeattempt.FieldError)
+}
+
+// SetRequestID sets the "request" edge to the ApprovalRequest entity by id.
+func (m *MergeAttemptMutation) SetRequestID(id uuid.UUID) {
+	m.request = &id
+}
+
+// ClearRequest clears the "request" edge to the ApprovalRequest entity.
+func (m *MergeAttemptMutation) ClearRequest() {
+	m.clearedrequest = true
+	m.clearedFields[mergeattempt.FieldApprovalRequestID] = struct{}{}
+}
+
+// RequestCleared reports if the "request" edge to the ApprovalRequest entity was cleared.
+func (m *MergeAttemptMutation) RequestCleared() bool {
+	return m.clearedrequest
+}
+
+// RequestID returns the "request" edge ID in the mutation.
+func (m *MergeAttemptMutation) RequestID() (id uuid.UUID, exists bool) {
+	if m.request != nil {
+		return *m.request, true
+	}
+	return
+}
+
+// RequestIDs returns the "request" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// RequestID instead. It exists only for internal usage by the builders.
+func (m *MergeAttemptMutation) RequestIDs() (ids []uuid.UUID) {
+	if id := m.request; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetRequest resets all changes to the "request" edge.
+func (m *MergeAttemptMutation) ResetRequest() {
+	m.request = nil
+	m.clearedrequest = false
+}
+
+// Where appends a list predicates to the MergeAttemptMutation builder.
+func (m *MergeAttemptMutation) Where(ps ...predicate.MergeAttempt) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the MergeAttemptMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *MergeAttemptMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.MergeAttempt, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *MergeAttemptMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *MergeAttemptMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (MergeAttempt).
+func (m *MergeAttemptMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *MergeAttemptMutation) Fields() []string {
+	fields := make([]string, 0, 9)
+	if m.created_at != nil {
+		fields = append(fields, mergeattempt.FieldCreatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, mergeattempt.FieldCreatedBy)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, mergeattempt.FieldUpdatedAt)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, mergeattempt.FieldUpdatedBy)
+	}
+	if m.request != nil {
+		fields = append(fields, mergeattempt.FieldApprovalRequestID)
+	}
+	if m.attempted_by != nil {
+		fields = append(fields, mergeattempt.FieldAttemptedBy)
+	}
+	if m.attempted_at != nil {
+		fields = append(fields, mergeattempt.FieldAttemptedAt)
+	}
+	if m.results != nil {
+		fields = append(fields, mergeattempt.FieldResults)
+	}
+	if m.error != nil {
+		fields = append(fields, mergeattempt.FieldError)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *MergeAttemptMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case mergeattempt.FieldCreatedAt:
+		return m.CreatedAt()
+	case mergeattempt.FieldCreatedBy:
+		return m.CreatedBy()
+	case mergeattempt.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case mergeattempt.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case mergeattempt.FieldApprovalRequestID:
+		return m.ApprovalRequestID()
+	case mergeattempt.FieldAttemptedBy:
+		return m.AttemptedBy()
+	case mergeattempt.FieldAttemptedAt:
+		return m.AttemptedAt()
+	case mergeattempt.FieldResults:
+		return m.Results()
+	case mergeattempt.FieldError:
+		return m.Error()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *MergeAttemptMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case mergeattempt.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case mergeattempt.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case mergeattempt.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case mergeattempt.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case mergeattempt.FieldApprovalRequestID:
+		return m.OldApprovalRequestID(ctx)
+	case mergeattempt.FieldAttemptedBy:
+		return m.OldAttemptedBy(ctx)
+	case mergeattempt.FieldAttemptedAt:
+		return m.OldAttemptedAt(ctx)
+	case mergeattempt.FieldResults:
+		return m.OldResults(ctx)
+	case mergeattempt.FieldError:
+		return m.OldError(ctx)
+	}
+	return nil, fmt.Errorf("unknown MergeAttempt field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MergeAttemptMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case mergeattempt.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case mergeattempt.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case mergeattempt.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case mergeattempt.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case mergeattempt.FieldApprovalRequestID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetApprovalRequestID(v)
+		return nil
+	case mergeattempt.FieldAttemptedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAttemptedBy(v)
+		return nil
+	case mergeattempt.FieldAttemptedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAttemptedAt(v)
+		return nil
+	case mergeattempt.FieldResults:
+		v, ok := value.(json.RawMessage)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResults(v)
+		return nil
+	case mergeattempt.FieldError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetError(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MergeAttempt field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *MergeAttemptMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *MergeAttemptMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MergeAttemptMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown MergeAttempt numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *MergeAttemptMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(mergeattempt.FieldCreatedBy) {
+		fields = append(fields, mergeattempt.FieldCreatedBy)
+	}
+	if m.FieldCleared(mergeattempt.FieldUpdatedAt) {
+		fields = append(fields, mergeattempt.FieldUpdatedAt)
+	}
+	if m.FieldCleared(mergeattempt.FieldUpdatedBy) {
+		fields = append(fields, mergeattempt.FieldUpdatedBy)
+	}
+	if m.FieldCleared(mergeattempt.FieldResults) {
+		fields = append(fields, mergeattempt.FieldResults)
+	}
+	if m.FieldCleared(mergeattempt.FieldError) {
+		fields = append(fields, mergeattempt.FieldError)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *MergeAttemptMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *MergeAttemptMutation) ClearField(name string) error {
+	switch name {
+	case mergeattempt.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case mergeattempt.FieldUpdatedAt:
+		m.ClearUpdatedAt()
+		return nil
+	case mergeattempt.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case mergeattempt.FieldResults:
+		m.ClearResults()
+		return nil
+	case mergeattempt.FieldError:
+		m.ClearError()
+		return nil
+	}
+	return fmt.Errorf("unknown MergeAttempt nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *MergeAttemptMutation) ResetField(name string) error {
+	switch name {
+	case mergeattempt.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case mergeattempt.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case mergeattempt.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case mergeattempt.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case mergeattempt.FieldApprovalRequestID:
+		m.ResetApprovalRequestID()
+		return nil
+	case mergeattempt.FieldAttemptedBy:
+		m.ResetAttemptedBy()
+		return nil
+	case mergeattempt.FieldAttemptedAt:
+		m.ResetAttemptedAt()
+		return nil
+	case mergeattempt.FieldResults:
+		m.ResetResults()
+		return nil
+	case mergeattempt.FieldError:
+		m.ResetError()
+		return nil
+	}
+	return fmt.Errorf("unknown MergeAttempt field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *MergeAttemptMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.request != nil {
+		edges = append(edges, mergeattempt.EdgeRequest)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *MergeAttemptMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case mergeattempt.EdgeRequest:
+		if id := m.request; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *MergeAttemptMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *MergeAttemptMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *MergeAttemptMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedrequest {
+		edges = append(edges, mergeattempt.EdgeRequest)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *MergeAttemptMutation) EdgeCleared(name string) bool {
+	switch name {
+	case mergeattempt.EdgeRequest:
+		return m.clearedrequest
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *MergeAttemptMutation) ClearEdge(name string) error {
+	switch name {
+	case mergeattempt.EdgeRequest:
+		m.ClearRequest()
+		return nil
+	}
+	return fmt.Errorf("unknown MergeAttempt unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *MergeAttemptMutation) ResetEdge(name string) error {
+	switch name {
+	case mergeattempt.EdgeRequest:
+		m.ResetRequest()
+		return nil
+	}
+	return fmt.Errorf("unknown MergeAttempt edge %s", name)
 }
 
 // OrbMutation represents an operation that mutates the Orb nodes in the graph.

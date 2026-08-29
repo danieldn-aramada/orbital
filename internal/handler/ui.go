@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path"
+	"strings"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -251,6 +252,36 @@ func (h *UI) buildMenuSections(path, userRole string, pendingDivergences int) []
 		},
 	}
 
+	// Change Control — a section rather than two items scattered elsewhere,
+	// because it houses both an operational queue and admin config for one
+	// domain. The analogs all do the same (GitHub "Pull Requests", NetBox
+	// Change Management, InfraHub "Proposed Changes"), and branches slot in
+	// here later.
+	ccItems := []layout.MenuItem{
+		{
+			Label: "Change Requests", Href: bp + "/change-requests",
+			Active: path == bp+"/change-requests" || strings.HasPrefix(path, bp+"/change-requests/"),
+			// Asynchronous: "awaiting MY review" needs each candidate rendered
+			// to know whether this caller can approve it, and the menu is on
+			// every page. Computing it inline would make every page load pay
+			// for a change-request scan.
+			BadgeSrc: "/api/v1/change-requests?awaiting_review=true",
+		},
+	}
+	if userRole == "admin" {
+		ccItems = append(ccItems, layout.MenuItem{
+			Label:  "Approval Policies",
+			Href:   bp + "/approval-policies",
+			Active: path == bp+"/approval-policies",
+		})
+	}
+	sections = append(sections, layout.MenuSection{
+		Title: "Change Control",
+		Icon:  "fa-solid fa-code-pull-request",
+		Color: "has-text-link",
+		Items: ccItems,
+	})
+
 	opsItems := []layout.MenuItem{
 		{Label: "Audit Log", Href: bp + "/audit-log", Active: path == bp+"/audit-log"},
 		{Label: "Backup Graph", Href: bp + "/backups", Active: path == bp+"/backups"},
@@ -271,6 +302,37 @@ func (h *UI) buildMenuSections(path, userRole string, pendingDivergences int) []
 	})
 
 	return sections
+}
+
+// ChangeRequests renders the review queue shell. The rows themselves are
+// fetched client-side from GET /api/v1/change-requests — the same public
+// endpoint any other client would use, per the API-first rule. Server-rendering
+// them would make orbital's own UI a privileged path and would duplicate the
+// eligibility logic the API already returns in availableActions.
+func (h *UI) ChangeRequests(c echo.Context) error {
+	return h.render(c, "change-requests", page.ChangeRequests{
+		Base:      h.base(c),
+		PageTitle: "Change Requests",
+	})
+}
+
+// ChangeRequestDetail renders the review shell for one request. Same rule: the
+// request, its diff and its available actions all come from the API.
+func (h *UI) ChangeRequestDetail(c echo.Context) error {
+	return h.render(c, "change-request-detail", page.ChangeRequestDetail{
+		Base:      h.base(c),
+		PageTitle: "Change Request",
+		ID:        c.Param("id"),
+	})
+}
+
+// ApprovalPolicies renders the admin page for protected classes. Admin-gated in
+// the template at the same minimum the API enforces, so the two cannot drift.
+func (h *UI) ApprovalPolicies(c echo.Context) error {
+	return h.render(c, "approval-policies", page.ApprovalPolicies{
+		Base:      h.base(c),
+		PageTitle: "Approval Policies",
+	})
 }
 
 func (h *UI) Index(c echo.Context) error {

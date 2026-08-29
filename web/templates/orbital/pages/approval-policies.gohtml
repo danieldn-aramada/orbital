@@ -1,0 +1,42 @@
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div>
+    <div class="app-main p-5">
+      {{if not .IsAuthn}}
+        <div class="notification is-warning is-light">
+          <a class="js-modal-trigger" data-target="login-modal">Login</a> to view this page.
+        </div>
+      {{else if ne .User.Role "admin"}}
+        <div class="notification is-danger is-light">
+          Admin access required.
+        </div>
+      {{else}}
+
+      <p class="is-size-4 mb-2" data-testid="page-heading">Approval Policies</p>
+      <p class="has-text-grey mb-4" style="font-size: 0.875rem;">
+        A protected class needs review before intent changes. <strong>Opt-in</strong> — with no
+        enabled policy, writes behave exactly as they do without this feature.
+        Roles listed under <strong>bypass</strong> write directly; those writes are recorded
+        as privileged in the audit log.
+      </p>
+
+      <div id="ap-error" class="notification is-danger is-light" style="display:none;"></div>
+
+      <table class="table is-striped is-hoverable is-fullwidth is-size-7" id="ap-table">
+        <thead>
+          <tr>
+            <th>Namespace</th><th>Type</th><th>Approvals</th>
+            <th>Bypass roles</th><th>Enabled</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="ap-tbody"></tbody>
+      </table>
+
+      <button class="button is-small is-link mt-3" id="ap-add">Add policy</button>
+
+      {{end}}
+    </div>
+  </main>
+{{end}}

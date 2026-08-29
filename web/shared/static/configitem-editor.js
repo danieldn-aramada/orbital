@@ -105,6 +105,270 @@ function buildAddCall({ kind, input, payloadField }) {
   }
 }
 
+// valueForMutation stringifies fields declared String in the schema whose VALUE
+// is JSON (DataCenter.assetDataV2). Sending them as structure is rejected —
+// "cannot use as String" from DGraph on the mutation path, and by the changeset
+// validator on the proposal path, which checks it before a reviewer ever sees it.
+function valueForMutation(t, f, v) {
+  const jsonStrFields = new Set(t.jsonStringFields || [])
+  if (!jsonStrFields.has(f)) return v
+  return typeof v === 'string' ? v : JSON.stringify(v)
+}
+
+// An "empty" value the user cleared: null, "", or a deleted key. These must
+// never go into `set` (DGraph ignores null and rejects "" on DateTime) —
+// clearing is expressed via `remove`/`clear` instead.
+function isEmpty(v) { return v === undefined || v === null || v === '' }
+
+// scalarPayload and removePayload were closures inside onSubmit until the
+// change-request path needed the same two computations. Both are pure — they
+// capture nothing — so they are hoisted rather than copied: a second copy would
+// drift the first time someone changes what counts as empty, and the two paths
+// would then propose something different from what they would have written.
+
+function scalarPayload(t, sub) {
+  const out = {}
+  for (const f of t.fields) if (f in sub && !isEmpty(sub[f])) out[f] = valueForMutation(t, f, sub[f])
+  return out
+}
+
+// removePayload builds the `remove` map: fields that HAD a value in the snapshot
+// and are now empty in the edited state. DGraph clears a scalar only via
+// `remove` (with its prior value), never via set:null/set:"". Type-agnostic —
+// DateTime, String, etc. all clear the same way.
+function removePayload(t, before, sub) {
+  const out = {}
+  if (before == null) return out
+  for (const f of t.fields) {
+    if (!isEmpty(before[f]) && isEmpty(sub == null ? undefined : sub[f])) {
+      out[f] = valueForMutation(t, f, before[f])
+    }
+  }
+  return out
+}
+
+// STAMPED_FIELDS are written by orbital, never proposed by a client. The
+// changeset validator rejects them outright — `version` is the MVCC counter and
+// created*/updated* are provenance, so accepting them from a proposal would let
+// a change request rewrite the very trail the approval depends on.
+const STAMPED_FIELDS = new Set([
+  'id', 'orbId', 'namespace', 'version', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy',
+])
+
+function withoutStamped(obj) {
+  const out = {}
+  for (const [k, v] of Object.entries(obj || {})) {
+    if (!STAMPED_FIELDS.has(k)) out[k] = v
+  }
+  return out
+}
+
+// buildChangeset renders the same edit the mutation path renders, in the
+// store-neutral form the change-request API takes.
+//
+// It is NOT a translation of the `calls` array, and cannot be: the mutation
+// path FOLDS a brand-new child subtree into its parent's `set` as a nested
+// object, and DGraph link semantics make that legal there. A changeset forbids
+// it — an edge value may carry only a reference, because DGraph links on an
+// edge rather than writing through it, so a nested payload would be accepted
+// and silently discarded. This flattens the fold instead: one item per entity,
+// wrapper before the children that reference it, which the API permits because
+// merge applies items in order.
+//
+// Exported for test: the fold-flattening is the part with no visual tell, so it
+// is asserted directly rather than inferred from a screenshot.
+export function buildChangeset({
+  namespace, rootTarget, rootOrbId, rootScalars, rootRemove,
+  changes, wrappersNeeded, foldedOrbIds,
+}) {
+  const items = []
+
+  // 1. Wrappers first — nothing may reference an entity that does not exist yet.
+  for (const w of wrappersNeeded.values()) {
+    items.push({
+      orbId: w.orbId,
+      type: w.kind,
+      op: 'upsert',
+      set: withoutStamped({ name: w.name }),
+    })
+  }
+
+  // 2. Children that the mutation path would have folded into the wrapper.
+  //    Each becomes its own item, pointing back at its wrapper by reference.
+  for (const ch of changes) {
+    const t = ch.target
+    if (!foldedOrbIds.has(t.orbId)) continue
+    const set = withoutStamped({ name: deriveName(t), ...scalarPayload(t, ch.currentSub || {}) })
+    if (t.parentInverseField && t.parentOrbId) {
+      set[t.parentInverseField] = { orbId: t.parentOrbId }
+    }
+    items.push({ orbId: t.orbId, type: t.kind, op: 'upsert', set })
+  }
+
+  // 3. The root's own scalar edits, plus a REFERENCE to any wrapper just
+  //    created — a reference, never the nested object the mutation path uses.
+  const rootSet = withoutStamped(rootScalars || {})
+  for (const w of wrappersNeeded.values()) {
+    rootSet[w.parentField] = { orbId: w.orbId }
+  }
+  const rootClear = Object.keys(rootRemove || {}).filter(f => !STAMPED_FIELDS.has(f))
+  if (Object.keys(rootSet).length > 0 || rootClear.length > 0) {
+    items.push({
+      orbId: rootOrbId,
+      type: rootTarget ? rootTarget.kind : undefined,
+      op: 'update',
+      set: rootSet,
+      clear: rootClear,
+    })
+  }
+
+  // 4. Everything else — edits to existing children, and creates under a
+  //    wrapper that already exists.
+  for (const ch of changes) {
+    const t = ch.target
+    if (t.path.length === 0) continue        // root handled above
+    if (foldedOrbIds.has(t.orbId)) continue  // folded child handled above
+    const sub = ch.currentSub || {}
+    if (ch.existed) {
+      const set = withoutStamped(scalarPayload(t, sub))
+      // `remove` carries the field's PRIOR VALUE because DGraph needs it to
+      // clear; the store-neutral form needs only the name. Lossless: merge
+      // re-reads the current value when it builds the mutation, and if that
+      // value moved, the request is stale and will not merge — so the prior
+      // value can never be needed and wrong at the same time.
+      const clear = Object.keys(removePayload(t, ch.before, sub)).filter(f => !STAMPED_FIELDS.has(f))
+      if (Object.keys(set).length === 0 && clear.length === 0) continue
+      items.push({ orbId: t.orbId, type: t.kind, op: 'update', set, clear })
+    } else {
+      const set = withoutStamped({ name: deriveName(t), ...scalarPayload(t, sub) })
+      if (t.parentInverseField && t.parentOrbId) {
+        set[t.parentInverseField] = { orbId: t.parentOrbId }
+      }
+      items.push({ orbId: t.orbId, type: t.kind, op: 'upsert', set })
+    }
+  }
+
+  return { namespace, changes: items }
+}
+
+// applyGateState resolves how this edit will be written and tells the user
+// BEFORE they spend effort on it.
+//
+// Two things are surfaced, and both are about not wasting someone's work:
+//   - the Save button says what it will actually do, so a gated user does not
+//     type an edit expecting it to land and then meet a refusal;
+//   - a change already in flight on this entity is flagged, so two people do not
+//     unknowingly propose conflicting edits to the same thing.
+//
+// Both reads are best-effort. If either call fails the editor stays exactly as
+// it was — an unreachable policy endpoint must not stop someone editing.
+function applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, namespaceOf, setMode }) {
+  const btn = submitBtnId ? document.getElementById(submitBtnId) : null
+  const namespace = namespaceOf(reloadOrbId)
+  if (!namespace) return
+
+  const notice = document.createElement('div')
+  notice.className = 'is-size-7 mb-2'
+  notice.style.display = 'none'
+  if (btn && btn.parentNode) btn.parentNode.insertBefore(notice, btn)
+
+  const say = (cls, html) => {
+    notice.className = 'notification is-light py-2 is-size-7 mb-2 ' + cls
+    notice.innerHTML = html
+    notice.style.display = ''
+  }
+
+  const q = new URLSearchParams({ namespace })
+  if (rootKind) q.set('type', rootKind)
+  fetch(BASE + '/api/v1/approval-policies/resolve?' + q.toString(), { headers: { Accept: 'application/json' } })
+    .then(r => r.ok ? r.json() : null)
+    .then(p => {
+      if (!p || !p.required) return
+      if (p.callerMayBypass) {
+        setMode('privileged')
+        // Stated, never silent. The frictionless path is the audited one — an
+        // admin who bypasses review should know they did, at the moment they do
+        // it, not discover it later in an audit row.
+        say('is-warning', '<strong>Privileged write.</strong> Changes here normally need approval. '
+          + 'Saving writes directly and is recorded as a privileged write.')
+      } else {
+        setMode('propose')
+        if (btn) btn.textContent = 'Propose change'
+        say('is-info', '<strong>Needs approval.</strong> Saving opens a change request for review '
+          + 'instead of changing intent now.')
+      }
+    })
+    .catch(() => {})
+
+  // "In flight" is open OR approved-not-yet-merged. `status=open` would miss the
+  // approved ones, because approved is derived rather than stored.
+  fetch(BASE + '/api/v1/change-requests?status=active&orbId=' + encodeURIComponent(reloadOrbId), {
+    headers: { Accept: 'application/json' },
+  })
+    .then(r => r.ok ? r.json() : null)
+    .then(j => {
+      if (!j || !j.total) return
+      const cr = (j.items || [])[0]
+      const link = cr ? ' <a href="' + BASE + '/change-requests/' + encodeURIComponent(cr.id) + '">Review it</a>.' : ''
+      const pending = document.createElement('div')
+      pending.className = 'notification is-warning is-light py-2 is-size-7 mb-2'
+      pending.setAttribute('data-testid', 'pending-change-notice')
+      pending.innerHTML = '<strong>' + j.total + ' change' + (j.total === 1 ? '' : 's')
+        + ' already proposed</strong> for this item.' + link
+      if (btn && btn.parentNode) btn.parentNode.insertBefore(pending, btn)
+    })
+    .catch(() => {})
+}
+
+// proposeChange opens a change request from the edit the user just made and
+// takes them to it.
+//
+// Navigating rather than toasting is deliberate: a proposal is not the end of
+// the interaction, it is the start of a review, and the next useful thing is
+// the diff a reviewer will see. Leaving the user on the entity page with a
+// toast implies the work is done when it has barely started.
+async function proposeChange({
+  namespace, rootTarget, rootOrbId, rootScalars, rootRemove,
+  changes, wrappersNeeded, foldedOrbIds, showError,
+}) {
+  const changeset = buildChangeset({
+    namespace, rootTarget, rootOrbId, rootScalars, rootRemove,
+    changes, wrappersNeeded, foldedOrbIds,
+  })
+  if (!changeset.changes.length) {
+    showError('Nothing to propose — no fields changed.')
+    return false
+  }
+
+  const title = 'Update ' + String(rootOrbId).replace(/^[^:]+:/, '')
+  let resp
+  try {
+    resp = await fetch(BASE + '/api/v1/change-requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, namespace, changes: changeset.changes }),
+    })
+  } catch (_) {
+    showError('Request failed — check your connection and try again.')
+    return false
+  }
+
+  const body = await resp.json().catch(() => ({}))
+  if (!resp.ok) {
+    // The validator reports EVERY problem at once, so show them all rather than
+    // the first — the whole point is one round-trip's worth of fixes.
+    if (body.problems && body.problems.length) {
+      showError(body.problems.map(p => (p.field ? p.field + ': ' : '') + p.message).join(' · '))
+    } else {
+      showError(body.error || `Could not open a change request (${resp.status}).`)
+    }
+    return false
+  }
+
+  window.location.href = BASE + '/change-requests/' + encodeURIComponent(body.id)
+  return true
+}
+
 // initConfigItemEditor wires the JSON editor + submit button + targets into a
 // working edit modal. Call this once per modal open (the cluster/server/dc
 // page-specific code is responsible for opening the modal and wiring this in).
@@ -121,7 +385,23 @@ export function initConfigItemEditor({
   reloadFn,         // function(orbId) → Promise — page-specific fragment reload
   showError,        // function(msg) — render error to the user
   clearError,       // function() — clear previous error
+  submitBtnId,      // optional: id of the Save button, so this module can relabel it
 }) {
+  // How this edit will be written, resolved ONCE here.
+  //
+  //   save        — ordinary mutation, exactly as before this feature existed
+  //   propose     — the class needs review; Save opens a change request instead
+  //   privileged  — the class needs review, but this caller may bypass it
+  //
+  // Resolved in the module, not per page, because four copies of "am I gated?"
+  // is the drift pattern this codebase has been bitten by before. Pages say
+  // which button to label; they never ask the policy themselves.
+  let mode = 'save'
+  const namespaceOf = (orbId) => String(orbId || '').split(':')[0]
+  const rootKind = (targets.find(t => t.path.length === 0) || {}).kind
+
+  applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, namespaceOf, setMode: (m) => { mode = m } })
+
   // Snapshot every target's subtree at this moment. Each snapshot is a JSON
   // string of the field map (or null if the subtree didn't exist).
   const snapshots = new Map()
@@ -167,37 +447,9 @@ export function initConfigItemEditor({
     // display); on submit they must be re-stringified or DGraph rejects with
     // "cannot use as String". The set of such fields per target type is
     // emitted by configitems.BuildEditTargets as JSONStringFields.
-    const valueForMutation = (t, f, v) => {
-      const jsonStrFields = new Set(t.jsonStringFields || [])
-      if (!jsonStrFields.has(f)) return v
-      return typeof v === 'string' ? v : JSON.stringify(v)
-    }
-    // An "empty" value the user cleared: null, "", or a deleted key. These must
-    // never go into `set` (DGraph ignores null and rejects "" on DateTime) —
-    // clearing is expressed via `remove` instead.
-    const isEmpty = v => v === undefined || v === null || v === ''
     // Build the `set` map (for update) or `input` map (for add) of scalar field
     // values from a target's currentSub — the JSON editor's post-submit shape.
     // Empty values are skipped; see removePayload for how they're cleared.
-    const scalarPayload = (t, sub) => {
-      const out = {}
-      for (const f of t.fields) if (f in sub && !isEmpty(sub[f])) out[f] = valueForMutation(t, f, sub[f])
-      return out
-    }
-    // Build the `remove` map: fields that HAD a value in the snapshot and are now
-    // empty in the edited state. DGraph clears a scalar only via `remove` (with
-    // its prior value), never via set:null/set:"". Type-agnostic — DateTime,
-    // String, etc. all clear the same way.
-    const removePayload = (t, before, sub) => {
-      const out = {}
-      if (before == null) return out
-      for (const f of t.fields) {
-        if (!isEmpty(before[f]) && isEmpty(sub == null ? undefined : sub[f])) {
-          out[f] = valueForMutation(t, f, before[f])
-        }
-      }
-      return out
-    }
     // Metadata for entities created as a NESTED subtree inside an update{Root}
     // `set` (first-time wrapper + children). The GraphQL proxy stamps
     // createdBy/At + updatedBy/At + version on top-level update `set` maps and
@@ -318,6 +570,19 @@ export function initConfigItemEditor({
       }
     }
 
+    // The proposal path. Same computed edit, different destination: a change
+    // request rather than the graph. Nothing is written here — that is the
+    // point of the gate.
+    if (mode === 'propose') {
+      return await proposeChange({
+        namespace: namespaceOf(reloadOrbId),
+        rootTarget, rootOrbId: reloadOrbId,
+        rootScalars: rootSet, rootRemove: rootChange ? removePayload(rootTarget, rootChange.before, rootChange.currentSub) : {},
+        changes, wrappersNeeded, foldedOrbIds,
+        showError,
+      })
+    }
+
     // Dispatch in parallel. Each becomes its own audit row.
     let responses
     try {
@@ -339,6 +604,26 @@ export function initConfigItemEditor({
         if (r.status === 409) {
           const body = await r.json().catch(() => ({}))
           showError(body.error || 'Conflict — please reload and try again.')
+        } else if (r.status === 403) {
+          const body = await r.json().catch(() => ({}))
+          if (body.code === 'APPROVAL_REQUIRED') {
+            // The policy changed between opening this modal and saving, so the
+            // resolved mode was stale. A refusal must never dead-end when the
+            // remedy is one click away and we are holding the exact edit it
+            // needs — so offer it rather than reporting a 403.
+            if (confirm((body.error || 'This change needs approval.') + '\n\nOpen a change request with this edit?')) {
+              return await proposeChange({
+                namespace: namespaceOf(reloadOrbId),
+                rootTarget, rootOrbId: reloadOrbId,
+                rootScalars: rootSet, rootRemove: rootChange ? removePayload(rootTarget, rootChange.before, rootChange.currentSub) : {},
+                changes, wrappersNeeded, foldedOrbIds,
+                showError,
+              })
+            }
+            showError(body.error || 'This change needs approval.')
+          } else {
+            showError(body.error || 'You do not have permission to make this change.')
+          }
         } else {
           showError(`Server error (${r.status}) — try again.`)
         }

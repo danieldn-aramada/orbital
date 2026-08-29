@@ -1,0 +1,26 @@
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div>
+    <div class="app-main p-5" data-cr-id="{{.ID}}">
+      {{if not .IsAuthn}}
+        <div class="notification is-warning is-light">
+          <a class="js-modal-trigger" data-target="login-modal">Login</a> to view this page.
+        </div>
+      {{else}}
+
+      <nav class="breadcrumb is-small mb-2" aria-label="breadcrumbs">
+        <ul>
+          <li><a href="{{.BasePath}}/change-requests">Change Requests</a></li>
+          <li class="is-active"><a aria-current="page">Review</a></li>
+        </ul>
+      </nav>
+
+      <div id="cr-detail-error" class="notification is-danger is-light" style="display:none;"></div>
+      <div id="cr-detail" data-testid="cr-detail"></div>
+
+      {{end}}
+    </div>
+  </main>
+{{end}}

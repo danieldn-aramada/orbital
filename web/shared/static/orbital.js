@@ -245,6 +245,7 @@ document.addEventListener('click', function (e) {
         reloadFn: reloadNetworkDeviceFragment,
         showError,
         clearError,
+        submitBtnId: 'network-device-edit-submit-' + id,
       })
 
       document.getElementById('network-device-edit-submit-' + id).addEventListener('click', async () => {
@@ -594,7 +595,6 @@ function loadExportPreview(id, note) {
 function renderExportPreview(body, json, note) {
   const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
   const fmt = (v) => v == null ? '<span class="has-text-grey-light">∅</span>' : '<span class="is-family-monospace">' + esc(JSON.stringify(v)) + '</span>'
-  const fmtDate = (iso) => { if (!iso) return ''; const d = new Date(iso); return isNaN(d.getTime()) ? String(iso).slice(0, 10) : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) }
   const s = json.summary || {}
   const b = json.lastPublishedVersion || {}
   const changed = (s.added || 0) + (s.removed || 0) + (s.modified || 0)
@@ -1016,6 +1016,7 @@ document.addEventListener('click', function (e) {
         },
         showError,
         clearError,
+        submitBtnId: 'dc-edit-submit-' + id,
       })
 
       document.getElementById('dc-edit-submit-' + id).addEventListener('click', async () => {
@@ -1133,6 +1134,7 @@ document.addEventListener('click', function (e) {
         reloadFn: reloadClusterFragment,
         showError,
         clearError,
+        submitBtnId: 'cluster-edit-submit-' + id,
       })
 
       document.getElementById('cluster-edit-submit-' + id).addEventListener('click', async () => {
@@ -1240,6 +1242,7 @@ document.addEventListener('click', function (e) {
         },
         showError,
         clearError,
+        submitBtnId: 'srv-edit-submit-' + id,
       })
 
       document.getElementById('srv-edit-submit-' + id).addEventListener('click', async () => {
@@ -2129,6 +2132,360 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeReportIssueModal()
 })
 
+// ─── Change Control: async nav badge ────────────────────────────────────────
+// The menu renders an empty chip and this fills it, because "awaiting MY
+// review" needs each candidate request rendered to know whether this caller can
+// approve it — and the menu is on every page. Computing it server-side would
+// make every page load pay for a change-request scan to surface a number nobody
+// is blocking on.
+//
+// The count is `total` from the SAME endpoint the item links to, so the badge
+// and the page can never disagree.
+document.addEventListener('DOMContentLoaded', () => {
+  for (const el of document.querySelectorAll('.js-async-badge')) {
+    const src = el.getAttribute('data-badge-src')
+    if (!src) continue
+    fetch(BASE + src, { headers: { Accept: 'application/json' } })
+      .then(r => r.ok ? r.json() : null)
+      .then(j => {
+        const n = j && typeof j.total === 'number' ? j.total : 0
+        if (n <= 0) return           // zero renders nothing, same as the sync badge
+        el.textContent = String(n)
+        el.title = n + ' awaiting review'
+        el.style.display = ''
+      })
+      .catch(() => {})               // a badge is never worth an error banner
+  }
+})
+
+// ─── Change Control: request queue ──────────────────────────────────────────
+// Rows come from the public API, not from a server-rendered template: orbital's
+// UI is a consumer of that API like any other client. In particular the row's
+// status, approval counts and staleness are all DERIVED server-side and arrive
+// ready to render — this file must never recompute them.
+document.addEventListener('DOMContentLoaded', () => {
+  const tbody = document.getElementById('cr-tbody')
+  if (!tbody) return
+
+  const err = document.getElementById('cr-error')
+  const empty = document.getElementById('cr-empty')
+  const tabs = document.getElementById('cr-tabs')
+
+  const STATUS_CLASS = {
+    open: 'has-text-link',
+    approved: 'has-text-success',
+    merged: 'has-text-grey',
+    rejected: 'has-text-danger',
+    closed: 'has-text-grey-light',
+  }
+
+  function load(filter) {
+    err.style.display = 'none'
+    fetch(BASE + '/api/v1/change-requests' + (filter ? '?' + filter : ''), {
+      headers: { Accept: 'application/json' },
+    })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+      .then(j => render(j.items || [], j.total || 0))
+      .catch(e => {
+        err.textContent = 'Could not load change requests — ' + e.message
+        err.style.display = ''
+      })
+  }
+
+  function render(items, total) {
+    tbody.innerHTML = items.map(cr => {
+      const href = BASE + '/change-requests/' + encodeURIComponent(cr.id)
+      // Status as plain coloured text, not a tag pill — house convention for
+      // dense tables.
+      const status = '<span class="' + (STATUS_CLASS[cr.status] || '') + '">' + esc(cr.status) + '</span>'
+      const approvals = cr.requiredApprovals > 0
+        ? esc(cr.approvals + ' of ' + cr.requiredApprovals)
+        : '<span class="has-text-grey-light">not required</span>'
+      const stale = cr.stale ? '<span class="has-text-warning">stale</span>' : ''
+      return '<tr data-cr-row="' + esc(cr.id) + '">'
+        + '<td><a href="' + href + '">' + esc(cr.title) + '</a></td>'
+        + '<td class="is-family-monospace">' + esc(cr.namespace) + '</td>'
+        + '<td>' + esc(cr.author) + '</td>'
+        + '<td>' + status + '</td>'
+        + '<td>' + approvals + '</td>'
+        + '<td>' + stale + '</td>'
+        + '<td class="has-text-grey">' + esc(fmtDate(cr.createdAt)) + '</td>'
+        + '</tr>'
+    }).join('')
+    empty.textContent = total === 0 ? 'Nothing here.' : ''
+    empty.style.display = total === 0 ? '' : 'none'
+  }
+
+  tabs.addEventListener('click', (e) => {
+    const a = e.target.closest('a[data-cr-filter]')
+    if (!a) return
+    e.preventDefault()
+    for (const li of tabs.querySelectorAll('li')) li.classList.remove('is-active')
+    a.closest('li').classList.add('is-active')
+    load(a.getAttribute('data-cr-filter'))
+  })
+
+  const first = tabs.querySelector('li.is-active a[data-cr-filter]')
+  load(first ? first.getAttribute('data-cr-filter') : '')
+})
+
+// ─── Change Control: review view ────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const host = document.getElementById('cr-detail')
+  if (!host) return
+
+  const id = host.closest('[data-cr-id]').getAttribute('data-cr-id')
+  const err = document.getElementById('cr-detail-error')
+
+  function fail(msg) {
+    err.textContent = msg
+    err.style.display = ''
+  }
+
+  function load() {
+    err.style.display = 'none'
+    Promise.all([
+      fetch(BASE + '/api/v1/change-requests/' + encodeURIComponent(id), { headers: { Accept: 'application/json' } }),
+      fetch(BASE + '/api/v1/change-requests/' + encodeURIComponent(id) + '/diff', { headers: { Accept: 'application/json' } }),
+    ])
+      .then(async ([a, b]) => {
+        if (!a.ok) throw new Error('HTTP ' + a.status)
+        return [await a.json(), b.ok ? await b.json() : null]
+      })
+      .then(([cr, diff]) => render(cr, diff))
+      .catch(e => fail('Could not load this change request — ' + e.message))
+  }
+
+  function render(cr, diff) {
+    const fmt = (v) => v == null
+      ? '<span class="has-text-grey-light">∅</span>'
+      : '<span class="is-family-monospace">' + esc(JSON.stringify(v)) + '</span>'
+
+    let out = '<p class="is-size-4 mb-1" data-testid="page-heading">' + esc(cr.title) + '</p>'
+    out += '<p class="has-text-grey is-size-7 mb-3">'
+      + esc(cr.namespace) + ' · opened by ' + esc(cr.author) + ' · ' + esc(fmtDate(cr.createdAt))
+      + ' · <strong>' + esc(cr.status) + '</strong>'
+      + (cr.requiredApprovals > 0 ? ' · ' + esc(cr.approvals + ' of ' + cr.requiredApprovals + ' approvals') : ' · no approval required')
+      + '</p>'
+
+    if (cr.description) out += '<p class="mb-3" style="white-space:pre-wrap;">' + esc(cr.description) + '</p>'
+
+    // A deleted target is a hard failure with a specific remedy, so it is said
+    // loudly and before the diff, not discovered on a failed merge.
+    if (cr.missingTargets && cr.missingTargets.length) {
+      out += '<div class="notification is-danger is-light py-2 is-size-7 mb-3">'
+        + '<strong>Target missing.</strong> These entities existed when this was opened and are now deleted: '
+        + esc(cr.missingTargets.join(', '))
+        + '. Merging cannot proceed — close this request, drop that item, or recreate the entity and re-review.'
+        + '</div>'
+    } else if (cr.stale) {
+      out += '<div class="notification is-warning is-light py-2 is-size-7 mb-3">'
+        + 'Intent has changed since this was opened. The diff below is against <strong>current</strong> intent; '
+        + 'approving again re-reviews it as it stands now.'
+        + '</div>'
+    }
+
+    // The diff renderer is the same one the export preview and the artifact
+    // compare use — all three consume the identical flat changes[] shape,
+    // because one graphdiff core produces it.
+    if (diff && (diff.changes || []).length) {
+      const s = diff.summary || {}
+      out += '<p class="mb-1"><strong>Plan: ' + (s.modified || 0) + ' changed · '
+        + (s.added || 0) + ' added · ' + (s.removed || 0) + ' removed</strong></p>'
+      out += renderExportPreviewTable(diff.changes, esc, fmt)
+    } else {
+      out += '<p class="has-text-grey is-size-7">No difference from current intent — this change is already applied.</p>'
+    }
+
+    out += renderReviews(cr)
+    out += renderAttempts(cr)
+    out += renderActions(cr)
+    host.innerHTML = out
+  }
+
+  function renderReviews(cr) {
+    if (!cr.reviews || !cr.reviews.length) return ''
+    let rows = ''
+    for (const r of cr.reviews) {
+      // An approval cast against an earlier version is SHOWN, not hidden — the
+      // API keeps the row and marks it, so a reviewer sees "Alice approved an
+      // earlier version" instead of her approval silently vanishing.
+      const note = r.current
+        ? ''
+        : ' <span class="has-text-warning">(approved an earlier version)</span>'
+      rows += '<li class="is-size-7">'
+        + '<strong>' + esc(r.approver) + '</strong> ' + esc(r.decision) + note
+        + ' <span class="has-text-grey">' + esc(fmtDate(r.at)) + '</span>'
+        + (r.comment ? ' — ' + esc(r.comment) : '')
+        + '</li>'
+    }
+    return '<p class="mt-4 mb-1"><strong>Reviews</strong></p><ul data-testid="cr-reviews">' + rows + '</ul>'
+  }
+
+  function renderAttempts(cr) {
+    if (!cr.mergeAttempts || !cr.mergeAttempts.length) return ''
+    let rows = ''
+    for (const a of cr.mergeAttempts) {
+      const items = (a.results || []).map(r =>
+        '<li class="is-size-7">' + (r.applied ? '✓ ' : '✗ ') + esc(r.orbId)
+        + (r.error ? ' — ' + esc(r.error) : '') + '</li>').join('')
+      rows += '<li class="is-size-7 mb-2">'
+        + esc(fmtDate(a.attemptedAt)) + ' by ' + esc(a.attemptedBy)
+        + (a.error ? ' — <span class="has-text-danger">' + esc(a.error) + '</span>' : ' — applied')
+        + (items ? '<ul class="ml-4">' + items + '</ul>' : '')
+        + '</li>'
+    }
+    return '<p class="mt-4 mb-1"><strong>Merge attempts</strong></p>'
+      + '<p class="has-text-grey is-size-7 mb-1">A partly-applied merge leaves this request open. '
+      + 'What already applied stays applied, and re-merging only does the remainder.</p>'
+      + '<ul>' + rows + '</ul>'
+  }
+
+  // Buttons are rendered STRAIGHT from availableActions. The API has already
+  // decided eligibility (role, authorship, status, whether this caller already
+  // approved); re-deriving any of that here would be a second copy of orbital's
+  // rules living in the browser.
+  function renderActions(cr) {
+    const actions = cr.availableActions || []
+    if (!actions.length) return ''
+    const LABEL = {
+      approve: ['Approve', 'is-success'],
+      reject: ['Reject', 'is-danger'],
+      merge: ['Merge', 'is-link'],
+      close: ['Close', ''],
+      edit: ['Edit', ''],
+    }
+    let out = '<div class="mt-5" data-testid="cr-actions">'
+    for (const a of actions) {
+      if (a === 'edit') continue          // amend is a v2 UI; the API supports it
+      const [label, cls] = LABEL[a] || [a, '']
+      out += '<button class="button is-small ' + cls + ' mr-2 js-cr-action" data-cr-action="' + esc(a) + '">' + esc(label) + '</button>'
+    }
+    return out + '</div>'
+  }
+
+  host.addEventListener('click', (e) => {
+    const btn = e.target.closest('.js-cr-action')
+    if (!btn) return
+    const action = btn.getAttribute('data-cr-action')
+    btn.classList.add('is-loading')
+    fetch(BASE + '/api/v1/change-requests/' + encodeURIComponent(id) + '/' + action, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+      .then(async r => {
+        btn.classList.remove('is-loading')
+        if (r.ok) { load(); return }
+        const body = await r.json().catch(() => ({}))
+        // The API's own message and hint are the useful thing — a 409 on merge
+        // says what moved and what to do about it. Do not paraphrase them.
+        fail((body.error || ('Could not ' + action)) + (body.hint ? ' — ' + body.hint : ''))
+      })
+      .catch(() => {
+        btn.classList.remove('is-loading')
+        fail('Request failed — check your connection and try again.')
+      })
+  })
+
+  load()
+})
+
+// ─── Change Control: approval policies (admin) ──────────────────────────────
+// Declaring a protected class is the act that turns the whole feature on, so
+// this page is deliberately plain: a table, and the smallest prompt-driven
+// edit flow that does the job. It is admin-only in the template at the same
+// minimum the API enforces, so the two gates cannot drift.
+document.addEventListener('DOMContentLoaded', () => {
+  const tbody = document.getElementById('ap-tbody')
+  if (!tbody) return
+
+  const err = document.getElementById('ap-error')
+  const addBtn = document.getElementById('ap-add')
+
+  function fail(msg) {
+    err.textContent = msg
+    err.style.display = ''
+  }
+
+  function load() {
+    err.style.display = 'none'
+    fetch(BASE + '/api/v1/approval-policies', { headers: { Accept: 'application/json' } })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+      .then(render)
+      .catch(e => fail('Could not load policies — ' + e.message))
+  }
+
+  function render(policies) {
+    if (!policies || !policies.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="has-text-grey is-size-7">'
+        + 'No protected classes. Every change writes directly, as it does without this feature.'
+        + '</td></tr>'
+      return
+    }
+    tbody.innerHTML = policies.map(p => {
+      // `enforced` is the API telling us whether orbital actually refuses a
+      // direct write for this class — distinct from `enabled`, which is only
+      // what the admin asked for. Showing the admin's intent as though it were
+      // the outcome is exactly the false assurance the field exists to prevent.
+      const state = p.enabled
+        ? (p.enforced
+            ? '<span class="has-text-success">enforced</span>'
+            : '<span class="has-text-warning" title="' + esc(p.notice || '') + '">not enforced</span>')
+        : '<span class="has-text-grey">off</span>'
+      return '<tr data-ap-id="' + esc(p.id) + '">'
+        + '<td class="is-family-monospace">' + esc(p.namespace) + '</td>'
+        + '<td>' + (p.type ? esc(p.type) : '<span class="has-text-grey">all types</span>') + '</td>'
+        + '<td>' + esc(p.requiredApprovals) + '</td>'
+        + '<td class="is-size-7">' + esc((p.bypassRoles || []).join(', ')) + '</td>'
+        + '<td>' + state + '</td>'
+        + '<td class="has-text-right">'
+        + '<button class="button is-small js-ap-toggle mr-1">' + (p.enabled ? 'Disable' : 'Enable') + '</button>'
+        + '<button class="button is-small is-danger is-light js-ap-delete">Delete</button>'
+        + '</td></tr>'
+    }).join('')
+  }
+
+  function send(method, path, body) {
+    return fetch(BASE + '/api/v1/approval-policies' + path, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    }).then(async r => {
+      if (r.ok || r.status === 204) { load(); return }
+      const j = await r.json().catch(() => ({}))
+      fail((j.error || ('Could not ' + method)) + (j.hint ? ' — ' + j.hint : ''))
+    }).catch(() => fail('Request failed — check your connection and try again.'))
+  }
+
+  addBtn.addEventListener('click', () => {
+    const namespace = prompt('Namespace to protect (every change in it will need approval):')
+    if (!namespace) return
+    const type = prompt('Limit to one ConfigItem type? Leave blank for all types:', '') || ''
+    const n = parseInt(prompt('How many approvals are required?', '1') || '1', 10)
+    send('POST', '', {
+      namespace: namespace.trim(),
+      type: type.trim(),
+      requiredApprovals: isNaN(n) || n < 1 ? 1 : n,
+    })
+  })
+
+  tbody.addEventListener('click', (e) => {
+    const row = e.target.closest('[data-ap-id]')
+    if (!row) return
+    const id = row.getAttribute('data-ap-id')
+    if (e.target.closest('.js-ap-toggle')) {
+      const enabling = e.target.textContent.trim() === 'Enable'
+      send('PATCH', '/' + encodeURIComponent(id), { enabled: enabling })
+    } else if (e.target.closest('.js-ap-delete')) {
+      if (!confirm('Delete this policy? Changes to that class will write directly again.')) return
+      send('DELETE', '/' + encodeURIComponent(id))
+    }
+  })
+
+  load()
+})
+
 // ─── Module exports to window (e2e + cross-module only) ─────────────────────
 // All click handlers use class-based delegation (see docs/reference/UI.md);
 // the entries below are NOT a bridge for inline onclick. They exist for two
@@ -2306,6 +2663,18 @@ function runCompare(from, to) {
     .catch(() => {
       out.innerHTML = '<div class="notification is-danger is-light">Comparison request failed.</div>'
     })
+}
+
+// fmtDate renders an ISO timestamp the way orbital shows dates everywhere.
+// Hoisted from inside renderExportPreview when the Change Control views needed
+// it too — one definition with two callers, rather than a second copy that
+// drifts the first time someone changes the format.
+function fmtDate(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return isNaN(d.getTime())
+    ? String(iso).slice(0, 10)
+    : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 function esc(x) {

@@ -5,12 +5,16 @@ package ent
 import (
 	"time"
 
+	"github.com/armada/orbital/ent/approval"
+	"github.com/armada/orbital/ent/approvalpolicy"
+	"github.com/armada/orbital/ent/approvalrequest"
 	"github.com/armada/orbital/ent/auditevent"
 	"github.com/armada/orbital/ent/backup"
 	"github.com/armada/orbital/ent/divergenceentry"
 	"github.com/armada/orbital/ent/divergenceingestcursor"
 	"github.com/armada/orbital/ent/divergenceresolution"
 	"github.com/armada/orbital/ent/exportjob"
+	"github.com/armada/orbital/ent/mergeattempt"
 	"github.com/armada/orbital/ent/orb"
 	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/ent/restorejob"
@@ -23,6 +27,107 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	approvalMixin := schema.Approval{}.Mixin()
+	approvalMixinFields0 := approvalMixin[0].Fields()
+	_ = approvalMixinFields0
+	approvalFields := schema.Approval{}.Fields()
+	_ = approvalFields
+	// approvalDescCreatedAt is the schema descriptor for created_at field.
+	approvalDescCreatedAt := approvalMixinFields0[0].Descriptor()
+	// approval.DefaultCreatedAt holds the default value on creation for the created_at field.
+	approval.DefaultCreatedAt = approvalDescCreatedAt.Default.(func() time.Time)
+	// approvalDescApprover is the schema descriptor for approver field.
+	approvalDescApprover := approvalFields[2].Descriptor()
+	// approval.ApproverValidator is a validator for the "approver" field. It is called by the builders before save.
+	approval.ApproverValidator = approvalDescApprover.Validators[0].(func(string) error)
+	// approvalDescComment is the schema descriptor for comment field.
+	approvalDescComment := approvalFields[4].Descriptor()
+	// approval.DefaultComment holds the default value on creation for the comment field.
+	approval.DefaultComment = approvalDescComment.Default.(string)
+	// approvalDescApprovedAtHash is the schema descriptor for approved_at_hash field.
+	approvalDescApprovedAtHash := approvalFields[5].Descriptor()
+	// approval.ApprovedAtHashValidator is a validator for the "approved_at_hash" field. It is called by the builders before save.
+	approval.ApprovedAtHashValidator = approvalDescApprovedAtHash.Validators[0].(func(string) error)
+	// approvalDescID is the schema descriptor for id field.
+	approvalDescID := approvalFields[0].Descriptor()
+	// approval.DefaultID holds the default value on creation for the id field.
+	approval.DefaultID = approvalDescID.Default.(func() uuid.UUID)
+	approvalpolicyMixin := schema.ApprovalPolicy{}.Mixin()
+	approvalpolicyMixinFields0 := approvalpolicyMixin[0].Fields()
+	_ = approvalpolicyMixinFields0
+	approvalpolicyFields := schema.ApprovalPolicy{}.Fields()
+	_ = approvalpolicyFields
+	// approvalpolicyDescCreatedAt is the schema descriptor for created_at field.
+	approvalpolicyDescCreatedAt := approvalpolicyMixinFields0[0].Descriptor()
+	// approvalpolicy.DefaultCreatedAt holds the default value on creation for the created_at field.
+	approvalpolicy.DefaultCreatedAt = approvalpolicyDescCreatedAt.Default.(func() time.Time)
+	// approvalpolicyDescActionType is the schema descriptor for action_type field.
+	approvalpolicyDescActionType := approvalpolicyFields[1].Descriptor()
+	// approvalpolicy.ActionTypeValidator is a validator for the "action_type" field. It is called by the builders before save.
+	approvalpolicy.ActionTypeValidator = approvalpolicyDescActionType.Validators[0].(func(string) error)
+	// approvalpolicyDescNamespace is the schema descriptor for namespace field.
+	approvalpolicyDescNamespace := approvalpolicyFields[2].Descriptor()
+	// approvalpolicy.NamespaceValidator is a validator for the "namespace" field. It is called by the builders before save.
+	approvalpolicy.NamespaceValidator = approvalpolicyDescNamespace.Validators[0].(func(string) error)
+	// approvalpolicyDescTypeName is the schema descriptor for type_name field.
+	approvalpolicyDescTypeName := approvalpolicyFields[3].Descriptor()
+	// approvalpolicy.DefaultTypeName holds the default value on creation for the type_name field.
+	approvalpolicy.DefaultTypeName = approvalpolicyDescTypeName.Default.(string)
+	// approvalpolicyDescRequiredApprovals is the schema descriptor for required_approvals field.
+	approvalpolicyDescRequiredApprovals := approvalpolicyFields[4].Descriptor()
+	// approvalpolicy.DefaultRequiredApprovals holds the default value on creation for the required_approvals field.
+	approvalpolicy.DefaultRequiredApprovals = approvalpolicyDescRequiredApprovals.Default.(int)
+	// approvalpolicy.RequiredApprovalsValidator is a validator for the "required_approvals" field. It is called by the builders before save.
+	approvalpolicy.RequiredApprovalsValidator = approvalpolicyDescRequiredApprovals.Validators[0].(func(int) error)
+	// approvalpolicyDescBypassRoles is the schema descriptor for bypass_roles field.
+	approvalpolicyDescBypassRoles := approvalpolicyFields[5].Descriptor()
+	// approvalpolicy.DefaultBypassRoles holds the default value on creation for the bypass_roles field.
+	approvalpolicy.DefaultBypassRoles = approvalpolicyDescBypassRoles.Default.([]string)
+	// approvalpolicyDescEnabled is the schema descriptor for enabled field.
+	approvalpolicyDescEnabled := approvalpolicyFields[6].Descriptor()
+	// approvalpolicy.DefaultEnabled holds the default value on creation for the enabled field.
+	approvalpolicy.DefaultEnabled = approvalpolicyDescEnabled.Default.(bool)
+	// approvalpolicyDescID is the schema descriptor for id field.
+	approvalpolicyDescID := approvalpolicyFields[0].Descriptor()
+	// approvalpolicy.DefaultID holds the default value on creation for the id field.
+	approvalpolicy.DefaultID = approvalpolicyDescID.Default.(func() uuid.UUID)
+	approvalrequestMixin := schema.ApprovalRequest{}.Mixin()
+	approvalrequestMixinFields0 := approvalrequestMixin[0].Fields()
+	_ = approvalrequestMixinFields0
+	approvalrequestFields := schema.ApprovalRequest{}.Fields()
+	_ = approvalrequestFields
+	// approvalrequestDescCreatedAt is the schema descriptor for created_at field.
+	approvalrequestDescCreatedAt := approvalrequestMixinFields0[0].Descriptor()
+	// approvalrequest.DefaultCreatedAt holds the default value on creation for the created_at field.
+	approvalrequest.DefaultCreatedAt = approvalrequestDescCreatedAt.Default.(func() time.Time)
+	// approvalrequestDescActionType is the schema descriptor for action_type field.
+	approvalrequestDescActionType := approvalrequestFields[1].Descriptor()
+	// approvalrequest.ActionTypeValidator is a validator for the "action_type" field. It is called by the builders before save.
+	approvalrequest.ActionTypeValidator = approvalrequestDescActionType.Validators[0].(func(string) error)
+	// approvalrequestDescTitle is the schema descriptor for title field.
+	approvalrequestDescTitle := approvalrequestFields[2].Descriptor()
+	// approvalrequest.TitleValidator is a validator for the "title" field. It is called by the builders before save.
+	approvalrequest.TitleValidator = approvalrequestDescTitle.Validators[0].(func(string) error)
+	// approvalrequestDescDescription is the schema descriptor for description field.
+	approvalrequestDescDescription := approvalrequestFields[3].Descriptor()
+	// approvalrequest.DefaultDescription holds the default value on creation for the description field.
+	approvalrequest.DefaultDescription = approvalrequestDescDescription.Default.(string)
+	// approvalrequestDescAuthor is the schema descriptor for author field.
+	approvalrequestDescAuthor := approvalrequestFields[5].Descriptor()
+	// approvalrequest.AuthorValidator is a validator for the "author" field. It is called by the builders before save.
+	approvalrequest.AuthorValidator = approvalrequestDescAuthor.Validators[0].(func(string) error)
+	// approvalrequestDescBaseHash is the schema descriptor for base_hash field.
+	approvalrequestDescBaseHash := approvalrequestFields[6].Descriptor()
+	// approvalrequest.BaseHashValidator is a validator for the "base_hash" field. It is called by the builders before save.
+	approvalrequest.BaseHashValidator = approvalrequestDescBaseHash.Validators[0].(func(string) error)
+	// approvalrequestDescExecutedBy is the schema descriptor for executed_by field.
+	approvalrequestDescExecutedBy := approvalrequestFields[10].Descriptor()
+	// approvalrequest.DefaultExecutedBy holds the default value on creation for the executed_by field.
+	approvalrequest.DefaultExecutedBy = approvalrequestDescExecutedBy.Default.(string)
+	// approvalrequestDescID is the schema descriptor for id field.
+	approvalrequestDescID := approvalrequestFields[0].Descriptor()
+	// approvalrequest.DefaultID holds the default value on creation for the id field.
+	approvalrequest.DefaultID = approvalrequestDescID.Default.(func() uuid.UUID)
 	auditeventFields := schema.AuditEvent{}.Fields()
 	_ = auditeventFields
 	// auditeventDescTimestamp is the schema descriptor for timestamp field.
@@ -134,6 +239,31 @@ func init() {
 	exportjobDescID := exportjobFields[0].Descriptor()
 	// exportjob.DefaultID holds the default value on creation for the id field.
 	exportjob.DefaultID = exportjobDescID.Default.(func() uuid.UUID)
+	mergeattemptMixin := schema.MergeAttempt{}.Mixin()
+	mergeattemptMixinFields0 := mergeattemptMixin[0].Fields()
+	_ = mergeattemptMixinFields0
+	mergeattemptFields := schema.MergeAttempt{}.Fields()
+	_ = mergeattemptFields
+	// mergeattemptDescCreatedAt is the schema descriptor for created_at field.
+	mergeattemptDescCreatedAt := mergeattemptMixinFields0[0].Descriptor()
+	// mergeattempt.DefaultCreatedAt holds the default value on creation for the created_at field.
+	mergeattempt.DefaultCreatedAt = mergeattemptDescCreatedAt.Default.(func() time.Time)
+	// mergeattemptDescAttemptedBy is the schema descriptor for attempted_by field.
+	mergeattemptDescAttemptedBy := mergeattemptFields[2].Descriptor()
+	// mergeattempt.AttemptedByValidator is a validator for the "attempted_by" field. It is called by the builders before save.
+	mergeattempt.AttemptedByValidator = mergeattemptDescAttemptedBy.Validators[0].(func(string) error)
+	// mergeattemptDescAttemptedAt is the schema descriptor for attempted_at field.
+	mergeattemptDescAttemptedAt := mergeattemptFields[3].Descriptor()
+	// mergeattempt.DefaultAttemptedAt holds the default value on creation for the attempted_at field.
+	mergeattempt.DefaultAttemptedAt = mergeattemptDescAttemptedAt.Default.(func() time.Time)
+	// mergeattemptDescError is the schema descriptor for error field.
+	mergeattemptDescError := mergeattemptFields[5].Descriptor()
+	// mergeattempt.DefaultError holds the default value on creation for the error field.
+	mergeattempt.DefaultError = mergeattemptDescError.Default.(string)
+	// mergeattemptDescID is the schema descriptor for id field.
+	mergeattemptDescID := mergeattemptFields[0].Descriptor()
+	// mergeattempt.DefaultID holds the default value on creation for the id field.
+	mergeattempt.DefaultID = mergeattemptDescID.Default.(func() uuid.UUID)
 	orbMixin := schema.Orb{}.Mixin()
 	orbMixinFields0 := orbMixin[0].Fields()
 	_ = orbMixinFields0

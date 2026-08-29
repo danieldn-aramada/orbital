@@ -70,5 +70,9 @@ func Map() map[string]*template.Template {
 		"network":  template.Must(template.ParseFiles(page("web/templates/orbital/pages/network.gohtml")...)),
 		"restore":  template.Must(template.ParseFiles(page("web/templates/orbital/pages/restore.gohtml")...)),
 		"users":    template.Must(template.ParseFiles(page("web/templates/orbital/pages/users.gohtml")...)),
+
+		"change-requests":       template.Must(template.ParseFiles(page("web/templates/orbital/pages/change-requests.gohtml")...)),
+		"change-request-detail": template.Must(template.ParseFiles(page("web/templates/orbital/pages/change-request-detail.gohtml")...)),
+		"approval-policies":     template.Must(template.ParseFiles(page("web/templates/orbital/pages/approval-policies.gohtml")...)),
 	}
 }

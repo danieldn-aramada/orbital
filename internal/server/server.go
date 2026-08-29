@@ -303,6 +303,9 @@ func New(cfg *config.Config, db *ent.Client) (*Server, error) {
 	root.GET("/backups", ui.Backups)
 	root.GET("/divergence-reports", ui.DivergenceReports)
 	root.GET("/audit-log", ui.AuditLog)
+	root.GET("/change-requests", ui.ChangeRequests)
+	root.GET("/change-requests/:id", ui.ChangeRequestDetail)
+	root.GET("/approval-policies", ui.ApprovalPolicies)
 	root.GET("/restore", ui.Restore)
 	root.GET("/schema", ui.Schema)
 	root.GET("/export", ui.Export)
@@ -507,6 +510,42 @@ func New(cfg *config.Config, db *ent.Client) (*Server, error) {
 		api.DELETE("/divergences", dh.ClearByDC)
 		api.PUT("/divergences/:id/resolution", dh.PutResolution)
 		api.DELETE("/divergences/:id/resolution", dh.DeleteResolution)
+
+		// Change requests. Reads go on apiReadonly so a readonly caller can
+		// review the queue and the diff; every state transition is dev+ via the
+		// `api` group, and the finer rules (author != approver, who may merge)
+		// are enforced in the handler because they depend on the request.
+		//
+		// Policy administration is admin-only: a dev who could edit the policy
+		// governing their own change could disable the gate instead of passing
+		// it. RequireRole(RoleAdmin) on the mutating verbs; the read and the
+		// resolve convenience stay dev-visible so a client can label its save
+		// button without being an admin.
+		crh := handler.NewChangeRequest(db, gql, cfg.DGraphURL, logger)
+		// A gated divergence Accept opens a change request instead of mutating.
+		dh.SetChangeRequests(crh)
+		apiReadonly.GET("/change-requests", crh.ListChangeRequests)
+		apiReadonly.GET("/change-requests/:id", crh.GetChangeRequest)
+		apiReadonly.GET("/change-requests/:id/diff", crh.GetChangeRequestDiff)
+		api.POST("/change-requests", crh.CreateChangeRequest)
+		api.PATCH("/change-requests/:id", crh.AmendChangeRequest)
+		api.POST("/change-requests/:id/approve", crh.ApproveChangeRequest)
+		api.POST("/change-requests/:id/reject", crh.RejectChangeRequest)
+		api.POST("/change-requests/:id/merge", crh.MergeChangeRequest)
+		api.POST("/change-requests/:id/close", crh.CloseChangeRequest)
+
+		// Spike 36 session 2 installs the write gate. Until then a declared
+		// policy records intent without enforcing it, so say so at startup —
+		// an operator inheriting a configured deployment must not discover it
+		// from a mutation that should have been refused and was not.
+		crh.WarnUnenforcedPolicies(context.Background())
+
+		adminAPI := root.Group("/api/v1", append(apiAuth, handler.RequireRole(db, user.RoleAdmin))...)
+		apiReadonly.GET("/approval-policies", crh.ListApprovalPolicies)
+		apiReadonly.GET("/approval-policies/resolve", crh.ResolveApprovalPolicy)
+		adminAPI.POST("/approval-policies", crh.CreateApprovalPolicy)
+		adminAPI.PATCH("/approval-policies/:id", crh.UpdateApprovalPolicy)
+		adminAPI.DELETE("/approval-policies/:id", crh.DeleteApprovalPolicy)
 	}
 
 	gqlGroup.Any("/graphql", gql.Handle)

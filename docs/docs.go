@@ -15,6 +15,188 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/v1/approval-policies": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "approval-policies"
+                ],
+                "summary": "List approval policies",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handler.approvalPolicyResponse"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Opt-in: with no enabled policy, writes behave exactly as they do today.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "approval-policies"
+                ],
+                "summary": "Create an approval policy",
+                "parameters": [
+                    {
+                        "description": "Policy",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.approvalPolicyBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/handler.approvalPolicyResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/approval-policies/resolve": {
+            "get": {
+                "description": "Lets a client label its save button Save or Propose without re-implementing policy resolution.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "approval-policies"
+                ],
+                "summary": "Resolve the policy for a namespace and type",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Namespace",
+                        "name": "namespace",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "ConfigItem type",
+                        "name": "type",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.approvalPolicyResolveResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/approval-policies/{id}": {
+            "delete": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "approval-policies"
+                ],
+                "summary": "Delete an approval policy",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Policy ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "approval-policies"
+                ],
+                "summary": "Update an approval policy",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Policy ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.approvalPolicyBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.approvalPolicyResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/audit-log": {
             "get": {
                 "description": "Read-only, immutable audit trail of intent mutations, newest first.\n\n**Scope a query** by combining filters: ` + "`" + `orbId` + "`" + ` (repeatable, max 32) for a specific resource; ` + "`" + `namespace` + "`" + ` for a whole data center; ` + "`" + `resource_type` + "`" + `/` + "`" + `operation_name` + "`" + ` to narrow. To see everything under a server/cluster, fetch its subtree orbIds from the GraphQL Topology API and pass them as repeatable ` + "`" + `orbId` + "`" + ` params (there is no single \"cluster\" scope — a child mutation records the child's orbId, not the parent's).\n\n**Render a diff:** when an event is a clean single-entity update it carries a ` + "`" + `changes` + "`" + ` array (` + "`" + `[{field, before, after}]` + "`" + `) with metadata and DGraph UIDs already excluded — render it directly. When ` + "`" + `changes` + "`" + ` is absent (bulk add, create, or a multi-operation event), there is no field diff; fall back to showing ` + "`" + `operations` + "`" + ` + ` + "`" + `resourceIds` + "`" + `. The raw ` + "`" + `details` + "`" + ` (with ` + "`" + `before` + "`" + `/` + "`" + `variables` + "`" + `) is always included for callers that want it.\n\nReturns JSON by default; returns an HTML table fragment when the ` + "`" + `HX-Request` + "`" + ` header is present (used by orbital's own UI). See docs/api-cheatsheet.md § \"Audit log\".",
@@ -287,6 +469,418 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/change-requests": {
+            "get": {
+                "description": "Filters compose. ` + "`" + `mine` + "`" + ` and ` + "`" + `awaiting_review` + "`" + ` are caller-relative; ` + "`" + `orbId` + "`" + ` matches any request whose changeset touches that entity, at any position. ` + "`" + `status=active` + "`" + ` means not-terminal (open plus approved) — the filter to use for \"does this entity have a change in flight\", since ` + "`" + `approved` + "`" + ` is derived and ` + "`" + `status=open` + "`" + ` excludes it.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "change-requests"
+                ],
+                "summary": "List change requests",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "open, approved, active (open+approved), rejected, merged or closed",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Namespace",
+                        "name": "namespace",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Author email",
+                        "name": "author",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Only requests this caller authored",
+                        "name": "mine",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Only requests this caller can still review",
+                        "name": "awaiting_review",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Only requests touching this entity",
+                        "name": "orbId",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.changeRequestListResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Validates the changeset against the deployed schema and the current graph, captures the intent it is written against, and opens it for review. Every problem is reported at once.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "change-requests"
+                ],
+                "summary": "Open a change request",
+                "parameters": [
+                    {
+                        "description": "Change request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.createChangeRequestBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/handler.changeRequestResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.validationErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/change-requests/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "change-requests"
+                ],
+                "summary": "Get a change request",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Change request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.changeRequestResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "Changing the changeset re-captures the intent it is written against, which stops the existing approvals from counting.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "change-requests"
+                ],
+                "summary": "Amend an open change request",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Change request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.amendChangeRequestBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.changeRequestResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.validationErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/change-requests/{id}/approve": {
+            "post": {
+                "description": "Stamped with the intent it was cast against. Approving a stale request is how you re-review after the base moved.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "change-requests"
+                ],
+                "summary": "Approve a change request",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Change request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Reviewer comment",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/handler.decisionBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.changeRequestResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/change-requests/{id}/close": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "change-requests"
+                ],
+                "summary": "Close a change request",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Change request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.changeRequestResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/change-requests/{id}/diff": {
+            "get": {
+                "description": "Flat list of changed entities — one entry per orbId, never a nested tree. Recomputed against live intent on every call, so it already reflects anything that moved since the request was opened.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "change-requests"
+                ],
+                "summary": "Diff a change request against current intent",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Change request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.changeRequestDiffResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/change-requests/{id}/merge": {
+            "post": {
+                "description": "MVCC-guarded. Items apply one at a time; a partial merge leaves the request open with a recorded attempt, and the remainder is re-mergeable without re-approval unless someone else wrote to a covered entity.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "change-requests"
+                ],
+                "summary": "Merge a change request",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Change request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.changeRequestResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/change-requests/{id}/reject": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "change-requests"
+                ],
+                "summary": "Reject a change request",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Change request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Reviewer comment",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/handler.decisionBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.changeRequestResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/config-items/{type}/{id}": {
             "delete": {
                 "description": "Deletes a DataCenter or Server together with its dependent\nchildren. Bound to the UI delete modal's confirm action.\nSingle-entity (non-cascading) deletes go through GraphQL.",
@@ -536,6 +1130,12 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/handler.resolutionItem"
+                        }
+                    },
+                    "202": {
+                        "description": "Accept needs approval — a change request was opened and the entry stays pending",
+                        "schema": {
+                            "$ref": "#/definitions/handler.pendingApprovalItem"
                         }
                     },
                     "400": {
@@ -1268,6 +1868,170 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.amendChangeRequestBody": {
+            "type": "object",
+            "properties": {
+                "changes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.changeItemBody"
+                    }
+                },
+                "description": {
+                    "type": "string",
+                    "example": "Rescheduled to the Dec window."
+                },
+                "namespace": {
+                    "type": "string",
+                    "example": "alaska-dot"
+                },
+                "title": {
+                    "type": "string",
+                    "example": "Enable SSH on the Anchorage iDRACs"
+                }
+            }
+        },
+        "handler.approvalPolicyBody": {
+            "type": "object",
+            "required": [
+                "namespace"
+            ],
+            "properties": {
+                "bypassRoles": {
+                    "description": "BypassRoles may write this class directly, recorded as a privileged write.\nDefaults to [\"admin\"]. Bypass is a property of the policy, not of a user.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "admin"
+                    ]
+                },
+                "enabled": {
+                    "description": "Enabled turns the policy off without deleting it. Default true.",
+                    "type": "boolean",
+                    "example": true
+                },
+                "namespace": {
+                    "description": "Namespace the policy governs.",
+                    "type": "string",
+                    "example": "alaska-dot"
+                },
+                "requiredApprovals": {
+                    "description": "RequiredApprovals is how many distinct reviewers must approve. Default 1.",
+                    "type": "integer",
+                    "example": 1
+                },
+                "type": {
+                    "description": "TypeName narrows the policy to one ConfigItem type. Empty means every type.",
+                    "type": "string",
+                    "example": "Server"
+                }
+            }
+        },
+        "handler.approvalPolicyResolveResponse": {
+            "type": "object",
+            "properties": {
+                "bypassRoles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "callerMayBypass": {
+                    "description": "CallerMayBypass is the verdict for THIS caller, already computed.",
+                    "type": "boolean",
+                    "example": false
+                },
+                "enforced": {
+                    "description": "Enforced reports whether a direct mutation would actually be refused.\nA client labelling its save button should read Required to decide what to\nOFFER, and Enforced to know whether saving directly would still succeed.",
+                    "type": "boolean",
+                    "example": false
+                },
+                "notice": {
+                    "description": "Notice explains a policy that is recorded but not yet enforced. Absent\nonce enforcement is live.",
+                    "type": "string"
+                },
+                "required": {
+                    "description": "Required reports whether a POLICY demands approval for this class. It\ndescribes the policy, not what orbital will do — see Enforced.",
+                    "type": "boolean",
+                    "example": true
+                },
+                "requiredApprovals": {
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "handler.approvalPolicyResponse": {
+            "type": "object",
+            "properties": {
+                "actionType": {
+                    "type": "string",
+                    "example": "config.mutation"
+                },
+                "bypassRoles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "enabled": {
+                    "description": "Enabled is the admin's switch: turn a policy off without deleting it.",
+                    "type": "boolean",
+                    "example": true
+                },
+                "enforced": {
+                    "description": "Enforced reports whether orbital's write path actually REFUSES a\nmutation this policy covers. Distinct from Enabled, which is only what\nthe admin asked for. Both must be true for the class to be protected.",
+                    "type": "boolean",
+                    "example": false
+                },
+                "id": {
+                    "type": "string",
+                    "example": "7c2e1f88-1a2b-4c3d-8e9f-0a1b2c3d4e5f"
+                },
+                "namespace": {
+                    "type": "string",
+                    "example": "alaska-dot"
+                },
+                "notice": {
+                    "description": "Notice explains a policy that is recorded but not yet enforced. Absent\nonce enforcement is live.",
+                    "type": "string"
+                },
+                "requiredApprovals": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "type": {
+                    "type": "string",
+                    "example": "Server"
+                }
+            }
+        },
+        "handler.approvalResponse": {
+            "type": "object",
+            "properties": {
+                "approver": {
+                    "type": "string",
+                    "example": "reviewer@armada.ai"
+                },
+                "at": {
+                    "type": "string"
+                },
+                "comment": {
+                    "type": "string"
+                },
+                "current": {
+                    "description": "Current is false when the decision was cast against an earlier version of\nthe intent and no longer counts — surfaced rather than hidden so the UI\ncan say \"approved an earlier version\" instead of the approval vanishing.",
+                    "type": "boolean",
+                    "example": true
+                },
+                "decision": {
+                    "type": "string",
+                    "example": "approved"
+                }
+            }
+        },
         "handler.artifactRef": {
             "type": "object",
             "properties": {
@@ -1415,6 +2179,207 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.changeItemBody": {
+            "type": "object",
+            "required": [
+                "op",
+                "orbId"
+            ],
+            "properties": {
+                "clear": {
+                    "description": "Clear is the fields to unset.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "oobMAC"
+                    ]
+                },
+                "op": {
+                    "description": "Op is one of upsert, update, delete. Explicit, never inferred — a request\napproved as an update must not silently become a create.",
+                    "type": "string",
+                    "example": "update"
+                },
+                "orbId": {
+                    "description": "OrbID identifies the target. Globally unique, which is why Type is optional.",
+                    "type": "string",
+                    "example": "alaska-dot:server-4FK8K44"
+                },
+                "set": {
+                    "description": "Set is the fields to write. Edge fields carry only a reference:\n{\"dataCenter\": {\"orbId\": \"alaska-dot:dc-01\"}}.",
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "type": {
+                    "description": "Type is the ConfigItem type. Optional for an existing entity (orbital\nresolves it from OrbID); REQUIRED when creating one that does not exist.",
+                    "type": "string",
+                    "example": "Server"
+                }
+            }
+        },
+        "handler.changeRequestDiffResponse": {
+            "type": "object",
+            "properties": {
+                "baseHash": {
+                    "description": "BaseHash is the hash captured when the request was opened.",
+                    "type": "string",
+                    "example": "sha256:045b8a51a0aea59fa"
+                },
+                "changes": {
+                    "description": "Changes is FLAT — one entry per changed entity, never a nested tree.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/graphdiff.Change"
+                    }
+                },
+                "contentHash": {
+                    "description": "ContentHash is the hash of current intent over this request's scope.",
+                    "type": "string",
+                    "example": "sha256:045b8a51a0aea59fa"
+                },
+                "stale": {
+                    "description": "Stale means the base moved; the diff below is against CURRENT intent, so\nit already reflects that.",
+                    "type": "boolean",
+                    "example": false
+                },
+                "summary": {
+                    "$ref": "#/definitions/graphdiff.Summary"
+                }
+            }
+        },
+        "handler.changeRequestListResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.changeRequestResponse"
+                    }
+                },
+                "total": {
+                    "description": "Total is the number of matching requests. Drives the \"awaiting my review\"\nnav badge — there is no separate count endpoint.",
+                    "type": "integer",
+                    "example": 3
+                }
+            }
+        },
+        "handler.changeRequestResponse": {
+            "type": "object",
+            "properties": {
+                "actionType": {
+                    "type": "string",
+                    "example": "config.mutation"
+                },
+                "approvals": {
+                    "description": "Approvals is how many currently-counting approvals exist, and Required is\nhow many the policy demands. Required 0 means nothing governs this change.",
+                    "type": "integer",
+                    "example": 0
+                },
+                "author": {
+                    "type": "string",
+                    "example": "proposer@armada.ai"
+                },
+                "availableActions": {
+                    "description": "AvailableActions is the caller-relative verdict: approve, reject, merge,\nedit, close.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "changes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.changeItemBody"
+                    }
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "executedAt": {
+                    "type": "string"
+                },
+                "executedBy": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "4b1f0f7a-6f0c-4a1e-9a2e-2f1c7a0b1234"
+                },
+                "mergeAttempts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.mergeAttemptResult"
+                    }
+                },
+                "missingTargets": {
+                    "description": "MissingTargets are entities that existed when this request was opened and\nhave since been deleted. A merge will fail with TARGET_MISSING.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "namespace": {
+                    "type": "string",
+                    "example": "alaska-dot"
+                },
+                "requiredApprovals": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "reviews": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.approvalResponse"
+                    }
+                },
+                "stale": {
+                    "description": "Stale means the intent this request was written against has changed since\nit was opened. Derived on every read — never a stored column.",
+                    "type": "boolean",
+                    "example": false
+                },
+                "status": {
+                    "description": "Status is the EFFECTIVE status: open, approved, rejected, merged, closed.\n` + "`" + `approved` + "`" + ` is derived from the valid-approval count, so it can revert to\n` + "`" + `open` + "`" + ` on its own when the base moves.",
+                    "type": "string",
+                    "example": "open"
+                },
+                "title": {
+                    "type": "string",
+                    "example": "Enable SSH on the Anchorage iDRACs"
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.changesetProblem": {
+            "type": "object",
+            "properties": {
+                "field": {
+                    "type": "string",
+                    "example": "hostnmae"
+                },
+                "hint": {
+                    "type": "string"
+                },
+                "index": {
+                    "description": "Index is the item's position in changes[], so a client can point at the\noffending row instead of making the user re-read the whole changeset.",
+                    "type": "integer",
+                    "example": 0
+                },
+                "message": {
+                    "type": "string",
+                    "example": "no such field on Server"
+                },
+                "orbId": {
+                    "type": "string",
+                    "example": "alaska-dot:server-4FK8K44"
+                }
+            }
+        },
         "handler.compareResponse": {
             "type": "object",
             "properties": {
@@ -1441,6 +2406,38 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.createChangeRequestBody": {
+            "type": "object",
+            "required": [
+                "changes",
+                "namespace",
+                "title"
+            ],
+            "properties": {
+                "changes": {
+                    "description": "Changes is the target end-state, one entry per entity.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.changeItemBody"
+                    }
+                },
+                "description": {
+                    "description": "Description is optional free text — why, and anything a reviewer needs.",
+                    "type": "string",
+                    "example": "Requested by field ops for the Nov maintenance window."
+                },
+                "namespace": {
+                    "description": "Namespace scopes the whole request. Every orbId in changes must be in it.",
+                    "type": "string",
+                    "example": "alaska-dot"
+                },
+                "title": {
+                    "description": "Title is the one-line summary reviewers see in the queue.",
+                    "type": "string",
+                    "example": "Enable SSH on the Anchorage iDRACs"
+                }
+            }
+        },
         "handler.currentMeta": {
             "type": "object",
             "properties": {
@@ -1455,6 +2452,15 @@ const docTemplate = `{
                 "source": {
                     "type": "string",
                     "example": "blue"
+                }
+            }
+        },
+        "handler.decisionBody": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "type": "string",
+                    "example": "Checked against the maintenance window."
                 }
             }
         },
@@ -1643,6 +2649,64 @@ const docTemplate = `{
                 "tag": {
                     "type": "string",
                     "example": "v8"
+                }
+            }
+        },
+        "handler.mergeAttemptResult": {
+            "type": "object",
+            "properties": {
+                "attemptedAt": {
+                    "type": "string"
+                },
+                "attemptedBy": {
+                    "type": "string",
+                    "example": "merger@armada.ai"
+                },
+                "error": {
+                    "description": "Error is the attempt-level failure. Empty when every item applied.",
+                    "type": "string"
+                },
+                "results": {
+                    "description": "Results is the per-item outcome, in the order applied. A partial merge is\na real outcome, not an error state — what applied stays applied.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.mergeItemResult"
+                    }
+                }
+            }
+        },
+        "handler.mergeItemResult": {
+            "type": "object",
+            "properties": {
+                "applied": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "error": {
+                    "type": "string"
+                },
+                "orbId": {
+                    "type": "string",
+                    "example": "alaska-dot:server-4FK8K44"
+                }
+            }
+        },
+        "handler.pendingApprovalItem": {
+            "type": "object",
+            "properties": {
+                "changeRequestId": {
+                    "description": "ChangeRequestID is the request opened on the caller's behalf, pre-filled\nfrom this divergence entry.",
+                    "type": "string",
+                    "example": "4b1f0f7a-6f0c-4a1e-9a2e-2f1c7a0b1234"
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Accepting this divergence needs approval; a change request was opened."
+                },
+                "status": {
+                    "description": "Status is always \"pending_approval\" — a discriminator so a client can\nbranch without inspecting which fields are present.",
+                    "type": "string",
+                    "example": "pending_approval"
                 }
             }
         },
@@ -1838,6 +2902,29 @@ const docTemplate = `{
                 },
                 "role": {
                     "type": "string"
+                }
+            }
+        },
+        "handler.validationErrorResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "BAD_USER_INPUT"
+                },
+                "error": {
+                    "type": "string",
+                    "example": "changeset is not valid"
+                },
+                "httpStatus": {
+                    "type": "integer",
+                    "example": 400
+                },
+                "problems": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.changesetProblem"
+                    }
                 }
             }
         },

@@ -9,6 +9,42 @@ import (
 	"github.com/armada/orbital/ent"
 )
 
+// The ApprovalFunc type is an adapter to allow the use of ordinary
+// function as Approval mutator.
+type ApprovalFunc func(context.Context, *ent.ApprovalMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ApprovalFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ApprovalMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ApprovalMutation", m)
+}
+
+// The ApprovalPolicyFunc type is an adapter to allow the use of ordinary
+// function as ApprovalPolicy mutator.
+type ApprovalPolicyFunc func(context.Context, *ent.ApprovalPolicyMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ApprovalPolicyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ApprovalPolicyMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ApprovalPolicyMutation", m)
+}
+
+// The ApprovalRequestFunc type is an adapter to allow the use of ordinary
+// function as ApprovalRequest mutator.
+type ApprovalRequestFunc func(context.Context, *ent.ApprovalRequestMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ApprovalRequestFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ApprovalRequestMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ApprovalRequestMutation", m)
+}
+
 // The AuditEventFunc type is an adapter to allow the use of ordinary
 // function as AuditEvent mutator.
 type AuditEventFunc func(context.Context, *ent.AuditEventMutation) (ent.Value, error)
@@ -103,6 +139,18 @@ func (f ExportJobFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, e
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ExportJobMutation", m)
+}
+
+// The MergeAttemptFunc type is an adapter to allow the use of ordinary
+// function as MergeAttempt mutator.
+type MergeAttemptFunc func(context.Context, *ent.MergeAttemptMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f MergeAttemptFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MergeAttemptMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MergeAttemptMutation", m)
 }
 
 // The OrbFunc type is an adapter to allow the use of ordinary

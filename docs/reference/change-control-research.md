@@ -1,6 +1,8 @@
 # Should a data-center source-of-truth have a built-in approval mechanism?
 
-> **Evidence companion to [Spike 36](spike-36-approval-engine.md).** Public-sourced landscape research (vendor docs, GitHub stars, public funding/adoption) behind the change-request / approval-engine design. On ship, graduates to a linked companion of `docs/reference/CHANGE-CONTROL.md`.
+> **Evidence companion to [`CHANGE-CONTROL.md`](./CHANGE-CONTROL.md)** — start there for what orbital actually does. This is the landscape research behind the *decision to build it at all*: public vendor docs, adoption signals, and how comparable systems (InfraHub, NetBox, ServiceNow, Terraform Cloud, Vault, GitHub) solve the same problem.
+>
+> **Kept because "why did we build this rather than buy or skip it" is a question that comes back**, usually from someone new, and reproducing the survey is expensive. Point-in-time as of 2026-08-26 — treat adoption numbers and vendor feature claims as dated. The **decisions** it informed are settled and live in `CHANGE-CONTROL.md`; nothing here is normative.
 
 **Purpose:** Decision-support research for orbital (graph-native, API-first CMDB / source-of-truth for modular data centers). Question: *given orbital's product category, SHOULD it build change-approval (maker-checker: user A proposes a config change, it must be approved by user B before it becomes authoritative intent) into the product itself, or delegate it?*
 

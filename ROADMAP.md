@@ -59,7 +59,7 @@ selection, and the architecture design that became the SDD.*
 | Changeset diff — preview · guarded apply · compare | ✅ Shipped | Q3 2026 |
 | Audit log — convention, rename, retention policy | ✅ Shipped | Q3 2026 |
 | **Observability** — OTel, metrics, dashboards | 🟡 **In progress** | Q3–Q4 2026 |
-| **Change Requests + approval engine** | 📋 Design ratified | Q4 2026 |
+| **Change Requests + approval engine** | ✅ Shipped | Q4 2026 |
 | Postgres migrations (Atlas) | 📋 Design complete | Q4 2026 |
 | Test-suite audit | 📋 Not started | Q4 2026 |
 | Provider-portable identity (OIDC `id_token`) | 📋 Not started | Q4 2026 |
@@ -73,7 +73,6 @@ selection, and the architecture design that became the SDD.*
 
 | | |
 |---|---|
-| **Spike 36 — Change Requests & approval engine** | Design ratified and unblocked. Maker-checker gate enforced at orbital's write path; generic engine + per-action adapters. → [`spike-36-approval-engine.md`](docs/spikes/spike-36-approval-engine.md) |
 | **Spike 27 — Atlas Postgres migrations** | Versioned migrations; ends the crashloop-on-deploy class. → [`spike-27-atlas-migrations.md`](docs/spikes/spike-27-atlas-migrations.md) |
 | **Spike 23 — Audit existing tests** | Which tests guard real regressions vs which are theatre. |
 | **Spike 26 — Provider-portable identity** | Move orbctl + orbital off AAD-specific claims to standard OIDC. |

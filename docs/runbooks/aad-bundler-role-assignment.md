@@ -4,7 +4,7 @@
 
 **Time required:** ~3 minutes.
 
-**Why this is needed:** The Orbital-Netbox application registration uses OAuth2 client credentials grant to authenticate internal service-to-service calls to itself (see [ADR 010](../decisions/010-bundler-service-auth.md) for design rationale). For Microsoft Entra to include the `roles` claim in the issued JWT, the calling service principal needs an **App Role Assignment** on the resource service principal. Because the caller and resource are the same application, this self-assignment is not auto-created by the "Grant admin consent" button on App Registrations and must be added explicitly.
+**Why this is needed:** The Orbital-Netbox application registration uses OAuth2 client credentials grant to authenticate internal service-to-service calls to itself (design rationale is in [`OCI.md`](../reference/OCI.md); the original ADR 010 was folded there when `docs/decisions/` was removed in 2026-07 — recoverable via `git log docs/decisions/`). For Microsoft Entra to include the `roles` claim in the issued JWT, the calling service principal needs an **App Role Assignment** on the resource service principal. Because the caller and resource are the same application, this self-assignment is not auto-created by the "Grant admin consent" button on App Registrations and must be added explicitly.
 
 This runbook covers the UI-based assignment via the Enterprise Applications blade.
 

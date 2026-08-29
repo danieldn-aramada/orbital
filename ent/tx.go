@@ -12,6 +12,12 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// Approval is the client for interacting with the Approval builders.
+	Approval *ApprovalClient
+	// ApprovalPolicy is the client for interacting with the ApprovalPolicy builders.
+	ApprovalPolicy *ApprovalPolicyClient
+	// ApprovalRequest is the client for interacting with the ApprovalRequest builders.
+	ApprovalRequest *ApprovalRequestClient
 	// AuditEvent is the client for interacting with the AuditEvent builders.
 	AuditEvent *AuditEventClient
 	// AuditEventResource is the client for interacting with the AuditEventResource builders.
@@ -28,6 +34,8 @@ type Tx struct {
 	DivergenceResolution *DivergenceResolutionClient
 	// ExportJob is the client for interacting with the ExportJob builders.
 	ExportJob *ExportJobClient
+	// MergeAttempt is the client for interacting with the MergeAttempt builders.
+	MergeAttempt *MergeAttemptClient
 	// Orb is the client for interacting with the Orb builders.
 	Orb *OrbClient
 	// RegistryArtifact is the client for interacting with the RegistryArtifact builders.
@@ -167,6 +175,9 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.Approval = NewApprovalClient(tx.config)
+	tx.ApprovalPolicy = NewApprovalPolicyClient(tx.config)
+	tx.ApprovalRequest = NewApprovalRequestClient(tx.config)
 	tx.AuditEvent = NewAuditEventClient(tx.config)
 	tx.AuditEventResource = NewAuditEventResourceClient(tx.config)
 	tx.AuditEventResourceType = NewAuditEventResourceTypeClient(tx.config)
@@ -175,6 +186,7 @@ func (tx *Tx) init() {
 	tx.DivergenceIngestCursor = NewDivergenceIngestCursorClient(tx.config)
 	tx.DivergenceResolution = NewDivergenceResolutionClient(tx.config)
 	tx.ExportJob = NewExportJobClient(tx.config)
+	tx.MergeAttempt = NewMergeAttemptClient(tx.config)
 	tx.Orb = NewOrbClient(tx.config)
 	tx.RegistryArtifact = NewRegistryArtifactClient(tx.config)
 	tx.RestoreJob = NewRestoreJobClient(tx.config)
@@ -188,7 +200,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: AuditEvent.QueryXXX(), the query will be executed
+// applies a query, for example: Approval.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

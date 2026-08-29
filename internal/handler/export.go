@@ -1039,9 +1039,16 @@ func (h *Export) fetchDCInfo(ctx context.Context, datacenterOrbID string) (name,
 // whose type is uid. These must be listed explicitly in DQL queries — expand(_all_)
 // only returns scalar predicates.
 func (h *Export) fetchUIDPredicates(ctx context.Context) ([]string, error) {
+	return fetchUIDPredicates(ctx, h.dgraphURL)
+}
+
+// fetchUIDPredicates is the Export-independent form, shared with the change
+// request base-snapshot query (which needs the same edge-predicate list but has
+// no Export to hang off).
+func fetchUIDPredicates(ctx context.Context, dgraphURL string) ([]string, error) {
 	payload := map[string]string{"query": "schema {}"}
 	body, _ := json.Marshal(payload)
-	resp, err := http.Post(dqlBase(h.dgraphURL)+"/query", "application/json", bytes.NewReader(body))
+	resp, err := http.Post(dqlBase(dgraphURL)+"/query", "application/json", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("schema query: %w", err)
 	}

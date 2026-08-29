@@ -12,6 +12,9 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/armada/orbital/ent/approval"
+	"github.com/armada/orbital/ent/approvalpolicy"
+	"github.com/armada/orbital/ent/approvalrequest"
 	"github.com/armada/orbital/ent/auditevent"
 	"github.com/armada/orbital/ent/auditeventresource"
 	"github.com/armada/orbital/ent/auditeventresourcetype"
@@ -20,6 +23,7 @@ import (
 	"github.com/armada/orbital/ent/divergenceingestcursor"
 	"github.com/armada/orbital/ent/divergenceresolution"
 	"github.com/armada/orbital/ent/exportjob"
+	"github.com/armada/orbital/ent/mergeattempt"
 	"github.com/armada/orbital/ent/orb"
 	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/ent/restorejob"
@@ -84,6 +88,9 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
+			approval.Table:               approval.ValidColumn,
+			approvalpolicy.Table:         approvalpolicy.ValidColumn,
+			approvalrequest.Table:        approvalrequest.ValidColumn,
 			auditevent.Table:             auditevent.ValidColumn,
 			auditeventresource.Table:     auditeventresource.ValidColumn,
 			auditeventresourcetype.Table: auditeventresourcetype.ValidColumn,
@@ -92,6 +99,7 @@ func checkColumn(t, c string) error {
 			divergenceingestcursor.Table: divergenceingestcursor.ValidColumn,
 			divergenceresolution.Table:   divergenceresolution.ValidColumn,
 			exportjob.Table:              exportjob.ValidColumn,
+			mergeattempt.Table:           mergeattempt.ValidColumn,
 			orb.Table:                    orb.ValidColumn,
 			registryartifact.Table:       registryartifact.ValidColumn,
 			restorejob.Table:             restorejob.ValidColumn,

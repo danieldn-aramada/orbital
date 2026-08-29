@@ -3,11 +3,124 @@
 package migrate
 
 import (
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/dialect/sql/schema"
 	"entgo.io/ent/schema/field"
 )
 
 var (
+	// ApprovalsColumns holds the columns for the "approvals" table.
+	ApprovalsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_at", Type: field.TypeTime, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "approver", Type: field.TypeString},
+		{Name: "decision", Type: field.TypeEnum, Enums: []string{"approved", "rejected"}},
+		{Name: "comment", Type: field.TypeString, Nullable: true, Size: 2147483647, Default: ""},
+		{Name: "approved_at_hash", Type: field.TypeString},
+		{Name: "approval_request_id", Type: field.TypeUUID},
+	}
+	// ApprovalsTable holds the schema information for the "approvals" table.
+	ApprovalsTable = &schema.Table{
+		Name:       "approvals",
+		Columns:    ApprovalsColumns,
+		PrimaryKey: []*schema.Column{ApprovalsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "approvals_approval_requests_approvals",
+				Columns:    []*schema.Column{ApprovalsColumns[9]},
+				RefColumns: []*schema.Column{ApprovalRequestsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "approval_approval_request_id_approver",
+				Unique:  true,
+				Columns: []*schema.Column{ApprovalsColumns[9], ApprovalsColumns[5]},
+			},
+		},
+	}
+	// ApprovalPoliciesColumns holds the columns for the "approval_policies" table.
+	ApprovalPoliciesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_at", Type: field.TypeTime, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "action_type", Type: field.TypeString},
+		{Name: "namespace", Type: field.TypeString},
+		{Name: "type_name", Type: field.TypeString, Nullable: true, Default: ""},
+		{Name: "required_approvals", Type: field.TypeInt, Default: 1},
+		{Name: "bypass_roles", Type: field.TypeJSON},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+	}
+	// ApprovalPoliciesTable holds the schema information for the "approval_policies" table.
+	ApprovalPoliciesTable = &schema.Table{
+		Name:       "approval_policies",
+		Columns:    ApprovalPoliciesColumns,
+		PrimaryKey: []*schema.Column{ApprovalPoliciesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "approvalpolicy_action_type_namespace_type_name",
+				Unique:  true,
+				Columns: []*schema.Column{ApprovalPoliciesColumns[5], ApprovalPoliciesColumns[6], ApprovalPoliciesColumns[7]},
+			},
+		},
+	}
+	// ApprovalRequestsColumns holds the columns for the "approval_requests" table.
+	ApprovalRequestsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_at", Type: field.TypeTime, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "action_type", Type: field.TypeString},
+		{Name: "title", Type: field.TypeString},
+		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647, Default: ""},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"open", "rejected", "merged", "closed"}, Default: "open"},
+		{Name: "author", Type: field.TypeString},
+		{Name: "base_hash", Type: field.TypeString},
+		{Name: "base_present", Type: field.TypeJSON, Nullable: true},
+		{Name: "payload", Type: field.TypeJSON},
+		{Name: "executed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "executed_by", Type: field.TypeString, Nullable: true, Default: ""},
+	}
+	// ApprovalRequestsTable holds the schema information for the "approval_requests" table.
+	ApprovalRequestsTable = &schema.Table{
+		Name:       "approval_requests",
+		Columns:    ApprovalRequestsColumns,
+		PrimaryKey: []*schema.Column{ApprovalRequestsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "approvalrequest_status_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{ApprovalRequestsColumns[8], ApprovalRequestsColumns[1]},
+			},
+			{
+				Name:    "approvalrequest_author",
+				Unique:  false,
+				Columns: []*schema.Column{ApprovalRequestsColumns[9]},
+			},
+			{
+				Name:    "approvalrequest_action_type",
+				Unique:  false,
+				Columns: []*schema.Column{ApprovalRequestsColumns[5]},
+			},
+			{
+				Name:    "approvalrequest_payload",
+				Unique:  false,
+				Columns: []*schema.Column{ApprovalRequestsColumns[12]},
+				Annotation: &entsql.IndexAnnotation{
+					Types: map[string]string{
+						"postgres": "GIN",
+					},
+				},
+			},
+		},
+	}
 	// AuditEventsColumns holds the columns for the "audit_events" table.
 	AuditEventsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -220,6 +333,40 @@ var (
 		Columns:    ExportJobsColumns,
 		PrimaryKey: []*schema.Column{ExportJobsColumns[0]},
 	}
+	// MergeAttemptsColumns holds the columns for the "merge_attempts" table.
+	MergeAttemptsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_at", Type: field.TypeTime, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "attempted_by", Type: field.TypeString},
+		{Name: "attempted_at", Type: field.TypeTime},
+		{Name: "results", Type: field.TypeJSON, Nullable: true},
+		{Name: "error", Type: field.TypeString, Nullable: true, Size: 2147483647, Default: ""},
+		{Name: "approval_request_id", Type: field.TypeUUID},
+	}
+	// MergeAttemptsTable holds the schema information for the "merge_attempts" table.
+	MergeAttemptsTable = &schema.Table{
+		Name:       "merge_attempts",
+		Columns:    MergeAttemptsColumns,
+		PrimaryKey: []*schema.Column{MergeAttemptsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "merge_attempts_approval_requests_merge_attempts",
+				Columns:    []*schema.Column{MergeAttemptsColumns[9]},
+				RefColumns: []*schema.Column{ApprovalRequestsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "mergeattempt_approval_request_id_attempted_at",
+				Unique:  false,
+				Columns: []*schema.Column{MergeAttemptsColumns[9], MergeAttemptsColumns[6]},
+			},
+		},
+	}
 	// OrbsColumns holds the columns for the "orbs" table.
 	OrbsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -312,6 +459,9 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		ApprovalsTable,
+		ApprovalPoliciesTable,
+		ApprovalRequestsTable,
 		AuditEventsTable,
 		AuditEventResourcesTable,
 		AuditEventResourceTypesTable,
@@ -320,6 +470,7 @@ var (
 		DivergenceIngestCursorsTable,
 		DivergenceResolutionsTable,
 		ExportJobsTable,
+		MergeAttemptsTable,
 		OrbsTable,
 		RegistryArtifactsTable,
 		RestoreJobsTable,
@@ -328,7 +479,9 @@ var (
 )
 
 func init() {
+	ApprovalsTable.ForeignKeys[0].RefTable = ApprovalRequestsTable
 	AuditEventResourcesTable.ForeignKeys[0].RefTable = AuditEventsTable
 	AuditEventResourceTypesTable.ForeignKeys[0].RefTable = AuditEventsTable
+	MergeAttemptsTable.ForeignKeys[0].RefTable = ApprovalRequestsTable
 	RegistryArtifactsTable.ForeignKeys[0].RefTable = ExportJobsTable
 }

@@ -31,6 +31,145 @@ definitions:
       unchanged:
         type: integer
     type: object
+  handler.amendChangeRequestBody:
+    properties:
+      changes:
+        items:
+          $ref: '#/definitions/handler.changeItemBody'
+        type: array
+      description:
+        example: Rescheduled to the Dec window.
+        type: string
+      namespace:
+        example: alaska-dot
+        type: string
+      title:
+        example: Enable SSH on the Anchorage iDRACs
+        type: string
+    type: object
+  handler.approvalPolicyBody:
+    properties:
+      bypassRoles:
+        description: |-
+          BypassRoles may write this class directly, recorded as a privileged write.
+          Defaults to ["admin"]. Bypass is a property of the policy, not of a user.
+        example:
+        - admin
+        items:
+          type: string
+        type: array
+      enabled:
+        description: Enabled turns the policy off without deleting it. Default true.
+        example: true
+        type: boolean
+      namespace:
+        description: Namespace the policy governs.
+        example: alaska-dot
+        type: string
+      requiredApprovals:
+        description: RequiredApprovals is how many distinct reviewers must approve.
+          Default 1.
+        example: 1
+        type: integer
+      type:
+        description: TypeName narrows the policy to one ConfigItem type. Empty means
+          every type.
+        example: Server
+        type: string
+    required:
+    - namespace
+    type: object
+  handler.approvalPolicyResolveResponse:
+    properties:
+      bypassRoles:
+        items:
+          type: string
+        type: array
+      callerMayBypass:
+        description: CallerMayBypass is the verdict for THIS caller, already computed.
+        example: false
+        type: boolean
+      enforced:
+        description: |-
+          Enforced reports whether a direct mutation would actually be refused.
+          A client labelling its save button should read Required to decide what to
+          OFFER, and Enforced to know whether saving directly would still succeed.
+        example: false
+        type: boolean
+      notice:
+        description: |-
+          Notice explains a policy that is recorded but not yet enforced. Absent
+          once enforcement is live.
+        type: string
+      required:
+        description: |-
+          Required reports whether a POLICY demands approval for this class. It
+          describes the policy, not what orbital will do — see Enforced.
+        example: true
+        type: boolean
+      requiredApprovals:
+        example: 1
+        type: integer
+    type: object
+  handler.approvalPolicyResponse:
+    properties:
+      actionType:
+        example: config.mutation
+        type: string
+      bypassRoles:
+        items:
+          type: string
+        type: array
+      enabled:
+        description: 'Enabled is the admin''s switch: turn a policy off without deleting
+          it.'
+        example: true
+        type: boolean
+      enforced:
+        description: |-
+          Enforced reports whether orbital's write path actually REFUSES a
+          mutation this policy covers. Distinct from Enabled, which is only what
+          the admin asked for. Both must be true for the class to be protected.
+        example: false
+        type: boolean
+      id:
+        example: 7c2e1f88-1a2b-4c3d-8e9f-0a1b2c3d4e5f
+        type: string
+      namespace:
+        example: alaska-dot
+        type: string
+      notice:
+        description: |-
+          Notice explains a policy that is recorded but not yet enforced. Absent
+          once enforcement is live.
+        type: string
+      requiredApprovals:
+        example: 1
+        type: integer
+      type:
+        example: Server
+        type: string
+    type: object
+  handler.approvalResponse:
+    properties:
+      approver:
+        example: reviewer@armada.ai
+        type: string
+      at:
+        type: string
+      comment:
+        type: string
+      current:
+        description: |-
+          Current is false when the decision was cast against an earlier version of
+          the intent and no longer counts — surfaced rather than hidden so the UI
+          can say "approved an earlier version" instead of the approval vanishing.
+        example: true
+        type: boolean
+      decision:
+        example: approved
+        type: string
+    type: object
   handler.artifactRef:
     properties:
       dataCenterName:
@@ -132,6 +271,177 @@ definitions:
       trigger:
         type: string
     type: object
+  handler.changeItemBody:
+    properties:
+      clear:
+        description: Clear is the fields to unset.
+        example:
+        - oobMAC
+        items:
+          type: string
+        type: array
+      op:
+        description: |-
+          Op is one of upsert, update, delete. Explicit, never inferred — a request
+          approved as an update must not silently become a create.
+        example: update
+        type: string
+      orbId:
+        description: OrbID identifies the target. Globally unique, which is why Type
+          is optional.
+        example: alaska-dot:server-4FK8K44
+        type: string
+      set:
+        additionalProperties: {}
+        description: |-
+          Set is the fields to write. Edge fields carry only a reference:
+          {"dataCenter": {"orbId": "alaska-dot:dc-01"}}.
+        type: object
+      type:
+        description: |-
+          Type is the ConfigItem type. Optional for an existing entity (orbital
+          resolves it from OrbID); REQUIRED when creating one that does not exist.
+        example: Server
+        type: string
+    required:
+    - op
+    - orbId
+    type: object
+  handler.changeRequestDiffResponse:
+    properties:
+      baseHash:
+        description: BaseHash is the hash captured when the request was opened.
+        example: sha256:045b8a51a0aea59fa
+        type: string
+      changes:
+        description: Changes is FLAT — one entry per changed entity, never a nested
+          tree.
+        items:
+          $ref: '#/definitions/graphdiff.Change'
+        type: array
+      contentHash:
+        description: ContentHash is the hash of current intent over this request's
+          scope.
+        example: sha256:045b8a51a0aea59fa
+        type: string
+      stale:
+        description: |-
+          Stale means the base moved; the diff below is against CURRENT intent, so
+          it already reflects that.
+        example: false
+        type: boolean
+      summary:
+        $ref: '#/definitions/graphdiff.Summary'
+    type: object
+  handler.changeRequestListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/handler.changeRequestResponse'
+        type: array
+      total:
+        description: |-
+          Total is the number of matching requests. Drives the "awaiting my review"
+          nav badge — there is no separate count endpoint.
+        example: 3
+        type: integer
+    type: object
+  handler.changeRequestResponse:
+    properties:
+      actionType:
+        example: config.mutation
+        type: string
+      approvals:
+        description: |-
+          Approvals is how many currently-counting approvals exist, and Required is
+          how many the policy demands. Required 0 means nothing governs this change.
+        example: 0
+        type: integer
+      author:
+        example: proposer@armada.ai
+        type: string
+      availableActions:
+        description: |-
+          AvailableActions is the caller-relative verdict: approve, reject, merge,
+          edit, close.
+        items:
+          type: string
+        type: array
+      changes:
+        items:
+          $ref: '#/definitions/handler.changeItemBody'
+        type: array
+      createdAt:
+        type: string
+      description:
+        type: string
+      executedAt:
+        type: string
+      executedBy:
+        type: string
+      id:
+        example: 4b1f0f7a-6f0c-4a1e-9a2e-2f1c7a0b1234
+        type: string
+      mergeAttempts:
+        items:
+          $ref: '#/definitions/handler.mergeAttemptResult'
+        type: array
+      missingTargets:
+        description: |-
+          MissingTargets are entities that existed when this request was opened and
+          have since been deleted. A merge will fail with TARGET_MISSING.
+        items:
+          type: string
+        type: array
+      namespace:
+        example: alaska-dot
+        type: string
+      requiredApprovals:
+        example: 1
+        type: integer
+      reviews:
+        items:
+          $ref: '#/definitions/handler.approvalResponse'
+        type: array
+      stale:
+        description: |-
+          Stale means the intent this request was written against has changed since
+          it was opened. Derived on every read — never a stored column.
+        example: false
+        type: boolean
+      status:
+        description: |-
+          Status is the EFFECTIVE status: open, approved, rejected, merged, closed.
+          `approved` is derived from the valid-approval count, so it can revert to
+          `open` on its own when the base moves.
+        example: open
+        type: string
+      title:
+        example: Enable SSH on the Anchorage iDRACs
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  handler.changesetProblem:
+    properties:
+      field:
+        example: hostnmae
+        type: string
+      hint:
+        type: string
+      index:
+        description: |-
+          Index is the item's position in changes[], so a client can point at the
+          offending row instead of making the user re-read the whole changeset.
+        example: 0
+        type: integer
+      message:
+        example: no such field on Server
+        type: string
+      orbId:
+        example: alaska-dot:server-4FK8K44
+        type: string
+    type: object
   handler.compareResponse:
     properties:
       byType:
@@ -149,6 +459,32 @@ definitions:
       to:
         $ref: '#/definitions/handler.artifactRef'
     type: object
+  handler.createChangeRequestBody:
+    properties:
+      changes:
+        description: Changes is the target end-state, one entry per entity.
+        items:
+          $ref: '#/definitions/handler.changeItemBody'
+        type: array
+      description:
+        description: Description is optional free text — why, and anything a reviewer
+          needs.
+        example: Requested by field ops for the Nov maintenance window.
+        type: string
+      namespace:
+        description: Namespace scopes the whole request. Every orbId in changes must
+          be in it.
+        example: alaska-dot
+        type: string
+      title:
+        description: Title is the one-line summary reviewers see in the queue.
+        example: Enable SSH on the Anchorage iDRACs
+        type: string
+    required:
+    - changes
+    - namespace
+    - title
+    type: object
   handler.currentMeta:
     properties:
       contentHash:
@@ -159,6 +495,12 @@ definitions:
         type: integer
       source:
         example: blue
+        type: string
+    type: object
+  handler.decisionBody:
+    properties:
+      comment:
+        example: Checked against the maintenance window.
         type: string
     type: object
   handler.entryItem:
@@ -309,6 +651,53 @@ definitions:
         example: v8
         type: string
     type: object
+  handler.mergeAttemptResult:
+    properties:
+      attemptedAt:
+        type: string
+      attemptedBy:
+        example: merger@armada.ai
+        type: string
+      error:
+        description: Error is the attempt-level failure. Empty when every item applied.
+        type: string
+      results:
+        description: |-
+          Results is the per-item outcome, in the order applied. A partial merge is
+          a real outcome, not an error state — what applied stays applied.
+        items:
+          $ref: '#/definitions/handler.mergeItemResult'
+        type: array
+    type: object
+  handler.mergeItemResult:
+    properties:
+      applied:
+        example: true
+        type: boolean
+      error:
+        type: string
+      orbId:
+        example: alaska-dot:server-4FK8K44
+        type: string
+    type: object
+  handler.pendingApprovalItem:
+    properties:
+      changeRequestId:
+        description: |-
+          ChangeRequestID is the request opened on the caller's behalf, pre-filled
+          from this divergence entry.
+        example: 4b1f0f7a-6f0c-4a1e-9a2e-2f1c7a0b1234
+        type: string
+      message:
+        example: Accepting this divergence needs approval; a change request was opened.
+        type: string
+      status:
+        description: |-
+          Status is always "pending_approval" — a discriminator so a client can
+          branch without inspecting which fields are present.
+        example: pending_approval
+        type: string
+    type: object
   handler.previewResponse:
     properties:
       byType:
@@ -447,6 +836,22 @@ definitions:
       role:
         type: string
     type: object
+  handler.validationErrorResponse:
+    properties:
+      code:
+        example: BAD_USER_INPUT
+        type: string
+      error:
+        example: changeset is not valid
+        type: string
+      httpStatus:
+        example: 400
+        type: integer
+      problems:
+        items:
+          $ref: '#/definitions/handler.changesetProblem'
+        type: array
+    type: object
   ocitype.ArtifactLayer:
     properties:
       digest:
@@ -473,6 +878,127 @@ info:
   title: Orbital API
   version: 0.0.0-dev
 paths:
+  /api/v1/approval-policies:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.approvalPolicyResponse'
+            type: array
+      summary: List approval policies
+      tags:
+      - approval-policies
+    post:
+      consumes:
+      - application/json
+      description: 'Opt-in: with no enabled policy, writes behave exactly as they
+        do today.'
+      parameters:
+      - description: Policy
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.approvalPolicyBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.approvalPolicyResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+      summary: Create an approval policy
+      tags:
+      - approval-policies
+  /api/v1/approval-policies/{id}:
+    delete:
+      parameters:
+      - description: Policy ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+      summary: Delete an approval policy
+      tags:
+      - approval-policies
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Policy ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to change
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.approvalPolicyBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.approvalPolicyResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+      summary: Update an approval policy
+      tags:
+      - approval-policies
+  /api/v1/approval-policies/resolve:
+    get:
+      description: Lets a client label its save button Save or Propose without re-implementing
+        policy resolution.
+      parameters:
+      - description: Namespace
+        in: query
+        name: namespace
+        required: true
+        type: string
+      - description: ConfigItem type
+        in: query
+        name: type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.approvalPolicyResolveResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+      summary: Resolve the policy for a namespace and type
+      tags:
+      - approval-policies
   /api/v1/audit-log:
     get:
       description: |-
@@ -667,6 +1193,288 @@ paths:
       summary: Test backup storage connection
       tags:
       - backup
+  /api/v1/change-requests:
+    get:
+      description: Filters compose. `mine` and `awaiting_review` are caller-relative;
+        `orbId` matches any request whose changeset touches that entity, at any position.
+        `status=active` means not-terminal (open plus approved) — the filter to use
+        for "does this entity have a change in flight", since `approved` is derived
+        and `status=open` excludes it.
+      parameters:
+      - description: open, approved, active (open+approved), rejected, merged or closed
+        in: query
+        name: status
+        type: string
+      - description: Namespace
+        in: query
+        name: namespace
+        type: string
+      - description: Author email
+        in: query
+        name: author
+        type: string
+      - description: Only requests this caller authored
+        in: query
+        name: mine
+        type: boolean
+      - description: Only requests this caller can still review
+        in: query
+        name: awaiting_review
+        type: boolean
+      - description: Only requests touching this entity
+        in: query
+        name: orbId
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.changeRequestListResponse'
+      summary: List change requests
+      tags:
+      - change-requests
+    post:
+      consumes:
+      - application/json
+      description: Validates the changeset against the deployed schema and the current
+        graph, captures the intent it is written against, and opens it for review.
+        Every problem is reported at once.
+      parameters:
+      - description: Change request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.createChangeRequestBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.changeRequestResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.validationErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+      summary: Open a change request
+      tags:
+      - change-requests
+  /api/v1/change-requests/{id}:
+    get:
+      parameters:
+      - description: Change request ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.changeRequestResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+      summary: Get a change request
+      tags:
+      - change-requests
+    patch:
+      consumes:
+      - application/json
+      description: Changing the changeset re-captures the intent it is written against,
+        which stops the existing approvals from counting.
+      parameters:
+      - description: Change request ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to change
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.amendChangeRequestBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.changeRequestResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.validationErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+      summary: Amend an open change request
+      tags:
+      - change-requests
+  /api/v1/change-requests/{id}/approve:
+    post:
+      consumes:
+      - application/json
+      description: Stamped with the intent it was cast against. Approving a stale
+        request is how you re-review after the base moved.
+      parameters:
+      - description: Change request ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Reviewer comment
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/handler.decisionBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.changeRequestResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+      summary: Approve a change request
+      tags:
+      - change-requests
+  /api/v1/change-requests/{id}/close:
+    post:
+      parameters:
+      - description: Change request ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.changeRequestResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+      summary: Close a change request
+      tags:
+      - change-requests
+  /api/v1/change-requests/{id}/diff:
+    get:
+      description: Flat list of changed entities — one entry per orbId, never a nested
+        tree. Recomputed against live intent on every call, so it already reflects
+        anything that moved since the request was opened.
+      parameters:
+      - description: Change request ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.changeRequestDiffResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+      summary: Diff a change request against current intent
+      tags:
+      - change-requests
+  /api/v1/change-requests/{id}/merge:
+    post:
+      description: MVCC-guarded. Items apply one at a time; a partial merge leaves
+        the request open with a recorded attempt, and the remainder is re-mergeable
+        without re-approval unless someone else wrote to a covered entity.
+      parameters:
+      - description: Change request ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.changeRequestResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+      summary: Merge a change request
+      tags:
+      - change-requests
+  /api/v1/change-requests/{id}/reject:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Change request ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Reviewer comment
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/handler.decisionBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.changeRequestResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+      summary: Reject a change request
+      tags:
+      - change-requests
   /api/v1/config-items/{type}/{id}:
     delete:
       description: |-
@@ -856,6 +1664,11 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/handler.resolutionItem'
+        "202":
+          description: Accept needs approval — a change request was opened and the
+            entry stays pending
+          schema:
+            $ref: '#/definitions/handler.pendingApprovalItem'
         "400":
           description: Bad Request
           schema:

@@ -54,6 +54,10 @@ func truncateAll(dsn string) error {
 	defer db.Close()
 
 	tables := []string{
+		"approvals",
+		"merge_attempts",
+		"approval_requests",
+		"approval_policies",
 		"registry_artifacts",
 		"restore_jobs",
 		"export_jobs",

@@ -6,6 +6,15 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// Approval is the predicate function for approval builders.
+type Approval func(*sql.Selector)
+
+// ApprovalPolicy is the predicate function for approvalpolicy builders.
+type ApprovalPolicy func(*sql.Selector)
+
+// ApprovalRequest is the predicate function for approvalrequest builders.
+type ApprovalRequest func(*sql.Selector)
+
 // AuditEvent is the predicate function for auditevent builders.
 type AuditEvent func(*sql.Selector)
 
@@ -29,6 +38,9 @@ type DivergenceResolution func(*sql.Selector)
 
 // ExportJob is the predicate function for exportjob builders.
 type ExportJob func(*sql.Selector)
+
+// MergeAttempt is the predicate function for mergeattempt builders.
+type MergeAttempt func(*sql.Selector)
 
 // Orb is the predicate function for orb builders.
 type Orb func(*sql.Selector)

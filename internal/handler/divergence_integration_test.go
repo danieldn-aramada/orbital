@@ -13,10 +13,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/armada/orbital/ent/approvalpolicy"
 	"github.com/armada/orbital/ent/divergenceentry"
 	"github.com/armada/orbital/ent/divergenceresolution"
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/handler"
+	"github.com/armada/orbital/internal/testutil"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
@@ -70,36 +73,42 @@ func newPutResolutionRequest(t *testing.T, entryID, action string, adminID int, 
 	return c, rec
 }
 
-func TestAccept_EmptyTypeReturns422(t *testing.T) {
+// An entry with no type_name is no longer a dead end. The report's type_name is
+// a hint; orbId is @id on the ConfigItem interface, so orbital looks the type up
+// instead of telling the admin to "update intent manually" — advice the approval
+// gate makes circular for exactly the classes someone bothered to protect.
+//
+// What remains a hard failure is an orbId orbital has never heard of. That is a
+// genuinely different problem (the edge is reporting a resource orbital does not
+// model) with a different remedy, and the message has to say so rather than
+// blaming missing type info.
+func TestAccept_UnknownOrbIDIsRejectedWithItsOwnReason(t *testing.T) {
 	adminID := createTestUser(t, "accept-empty-type@test.com", user.RoleAdmin)
-	entryID := seedDivergenceEntry(t, "colo:colo-galleon", "colo:legacy-srv", "sshEnabled", "", true)
+	entryID := seedDivergenceEntry(t, "colo:colo-galleon", "colo:not-in-the-graph", "sshEnabled", "", true)
 
-	// Mock DGraph — should never be called when type is empty.
-	dgraphCalled := false
-	dgraph := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		dgraphCalled = true
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"data":{}}`)) //nolint:errcheck
-	}))
-	defer dgraph.Close()
-	gql := handler.NewGraphQL(dgraph.URL, testDB, slog.Default(), false)
+	// A real DGraph: the type lookup must actually run and come back empty.
+	gql := handler.NewGraphQL(testutil.DGraphURL(), testDB, slog.Default(), false)
 	h := handler.NewDivergenceHandler(testDB, slog.Default(), gql)
 
 	c, _ := newPutResolutionRequest(t, entryID, "accept", adminID, "accept-empty-type@test.com")
 	err := h.PutResolution(c)
 	if err == nil {
-		t.Fatal("expected error for empty type, got nil")
+		t.Fatal("expected an error for an orbId orbital does not know")
 	}
 	httpErr, ok := err.(*echo.HTTPError)
 	if !ok || httpErr.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("expected 422, got %v", err)
 	}
-	if dgraphCalled {
-		t.Error("DGraph was called for a missing-type entry; it shouldn't have been")
+	msg, _ := httpErr.Message.(string)
+	if !strings.Contains(msg, "colo:not-in-the-graph") {
+		t.Errorf("error does not name the orbId: %q", msg)
+	}
+	if strings.Contains(msg, "type info") {
+		t.Errorf("error still blames missing type info: %q", msg)
 	}
 	// Resolution must NOT have been recorded.
 	count := testDB.DivergenceResolution.Query().
-		Where(divergenceresolution.EntryOrbID("colo:legacy-srv"), divergenceresolution.Field("sshEnabled")).
+		Where(divergenceresolution.EntryOrbID("colo:not-in-the-graph"), divergenceresolution.Field("sshEnabled")).
 		CountX(context.Background())
 	if count != 0 {
 		t.Errorf("expected 0 resolutions, got %d", count)
@@ -395,4 +404,156 @@ func TestList_ActionFilter_BatchAcceptAndRejectOnSameConfigItem(t *testing.T) {
 	if gotFields["ipmiEnabled"] != "accept" {
 		t.Errorf("ipmiEnabled should be accept, got %q", gotFields["ipmiEnabled"])
 	}
+}
+
+// ── the approval gate meets divergence resolution ──────────────────────────
+
+// Reject and Ignore never touch intent, so gating them would be friction with
+// no control value: it would make an operator open a change request to decline
+// a change.
+func TestResolve_RejectAndIgnoreAreNeverGated(t *testing.T) {
+	ctx := context.Background()
+	adminID := createTestUser(t, "gate-reject@test.com", user.RoleAdmin)
+	seedGatePolicy(t, "colo")
+
+	gql := handler.NewGraphQL(testutil.DGraphURL(), testDB, slog.Default(), false)
+	h := handler.NewDivergenceHandler(testDB, slog.Default(), gql)
+	h.SetChangeRequests(handler.NewChangeRequest(testDB, gql, testutil.DGraphURL(), slog.Default()))
+
+	for _, action := range []string{"reject", "ignore"} {
+		orbID := "colo:gate-" + action
+		entryID := seedDivergenceEntry(t, "colo:colo-galleon", orbID, "sshEnabled", "IdracSettings", true)
+		c, rec := newPutResolutionRequest(t, entryID, action, adminID, "gate-reject@test.com")
+		if err := h.PutResolution(c); err != nil {
+			t.Fatalf("%s was gated: %v", action, err)
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("%s returned %d, want 200", action, rec.Code)
+		}
+		n := testDB.DivergenceResolution.Query().
+			Where(divergenceresolution.EntryOrbID(orbID), divergenceresolution.Field("sshEnabled")).
+			CountX(ctx)
+		if n != 1 {
+			t.Errorf("%s recorded %d resolutions, want 1", action, n)
+		}
+	}
+}
+
+// A gated Accept must NOT mutate and must NOT record a resolution — intent has
+// not moved, and claiming otherwise would leave an entry marked resolved while
+// the edge keeps diverging. It opens a change request instead and says so.
+func TestAccept_GatedOpensChangeRequestAndLeavesEntryPending(t *testing.T) {
+	ctx := context.Background()
+	devID := createTestUser(t, "gate-accept@test.com", user.RoleDev)
+	seedGatePolicy(t, "colo")
+
+	orbID := seedGateTargetServer(t)
+	entryID := seedDivergenceEntry(t, "colo:colo-galleon", orbID, "hostname", "Server", "edge-set-name")
+
+	gql := handler.NewGraphQL(testutil.DGraphURL(), testDB, slog.Default(), false)
+	crh := handler.NewChangeRequest(testDB, gql, testutil.DGraphURL(), slog.Default())
+	h := handler.NewDivergenceHandler(testDB, slog.Default(), gql)
+	h.SetChangeRequests(crh)
+
+	c, rec := newPutResolutionRequest(t, entryID, "accept", devID, "gate-accept@test.com")
+	if err := h.PutResolution(c); err != nil {
+		t.Fatalf("accept: %v", err)
+	}
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202 Accepted", rec.Code)
+	}
+
+	var body struct {
+		Status          string `json:"status"`
+		ChangeRequestID string `json:"changeRequestId"`
+		Message         string `json:"message"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Status != "pending_approval" || body.ChangeRequestID == "" {
+		t.Fatalf("body = %+v, want pending_approval with a change request id", body)
+	}
+
+	// No resolution: the divergence is still open.
+	if n := testDB.DivergenceResolution.Query().
+		Where(divergenceresolution.EntryOrbID(orbID)).CountX(ctx); n != 0 {
+		t.Errorf("recorded %d resolutions for a gated accept, want 0", n)
+	}
+
+	// The change request is real, and carries the edge's value as its proposal.
+	crID, err := uuid.Parse(body.ChangeRequestID)
+	if err != nil {
+		t.Fatalf("bad change request id %q: %v", body.ChangeRequestID, err)
+	}
+	cr, err := crh.Get(ctx, crID)
+	if err != nil {
+		t.Fatalf("load change request: %v", err)
+	}
+	var payload struct {
+		Namespace string `json:"namespace"`
+		Changes   []struct {
+			OrbID string         `json:"orbId"`
+			Type  string         `json:"type"`
+			Op    string         `json:"op"`
+			Set   map[string]any `json:"set"`
+		} `json:"changes"`
+	}
+	if err := json.Unmarshal(cr.Payload, &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if len(payload.Changes) != 1 {
+		t.Fatalf("changes = %d, want 1", len(payload.Changes))
+	}
+	ch := payload.Changes[0]
+	if ch.OrbID != orbID || ch.Type != "Server" || ch.Op != "update" {
+		t.Errorf("change = %+v, want an update of %s", ch, orbID)
+	}
+	if ch.Set["hostname"] != "edge-set-name" {
+		t.Errorf("proposed value = %v, want the edge's value", ch.Set["hostname"])
+	}
+	if cr.Author != "gate-accept@test.com" {
+		t.Errorf("author = %q, want the operator who clicked accept", cr.Author)
+	}
+}
+
+// seedGatePolicy makes a namespace protected. Idempotent and self-cleaning:
+// this package shares one testDB across the whole run (TestMain, not a
+// per-test truncate), so a policy left behind would leak into every later test
+// and gate mutations they never asked to have gated.
+func seedGatePolicy(t *testing.T, namespace string) {
+	t.Helper()
+	ctx := context.Background()
+	clear := func() {
+		if _, err := testDB.ApprovalPolicy.Delete().
+			Where(approvalpolicy.NamespaceEQ(namespace)).Exec(ctx); err != nil {
+			t.Logf("clear approval policies: %v", err)
+		}
+	}
+	clear()
+	if _, err := testDB.ApprovalPolicy.Create().
+		SetActionType("config.mutation").
+		SetNamespace(namespace).
+		SetRequiredApprovals(1).
+		Save(ctx); err != nil {
+		t.Fatalf("create policy: %v", err)
+	}
+	t.Cleanup(clear)
+}
+
+// seedGateTargetServer creates a real Server so the accept path has something to
+// resolve and diff against.
+func seedGateTargetServer(t *testing.T) string {
+	t.Helper()
+	const dc = "colo:gate-dc"
+	const srv = "colo:gate-server"
+	// Inline literals are fine here: this posts straight to DGraph, never
+	// through orbital, so the gate's variable-form requirement does not apply.
+	dgraphMutate(t, `mutation { addDataCenter(input: [{namespace: "colo", orbId: "`+dc+`", name: "gate dc", version: 1}], upsert: true) { numUids } }`)
+	dgraphMutate(t, `mutation { addServer(input: [{namespace: "colo", orbId: "`+srv+`", version: 1, hostname: "orbital-intended-name", dataCenter: {orbId: "`+dc+`"}}], upsert: true) { numUids } }`)
+	t.Cleanup(func() {
+		dgraphMutate(t, `mutation { deleteServer(filter: {orbId: {eq: "`+srv+`"}}) { numUids } }`)
+		dgraphMutate(t, `mutation { deleteDataCenter(filter: {orbId: {eq: "`+dc+`"}}) { numUids } }`)
+	})
+	return srv
 }

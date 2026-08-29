@@ -25,6 +25,56 @@ func RoleAtLeast(actual, minimum user.Role) bool {
 	return roleLevel[actual] >= roleLevel[minimum]
 }
 
+// callerRole is the caller's resolved identity for authorization decisions.
+// Separated from any single yes/no gate because more than one subsystem needs
+// the FACT ("what role is this caller") rather than one gate's verdict: the
+// mutation guard asks "is it dev+", and the approval engine asks both
+// "is it dev+" and "is it in this policy's bypass_roles".
+type callerRole struct {
+	// Role is empty only when NoAuthz is true or Reason is set.
+	Role user.Role
+	// Source is "context" (pre-mapped external-JWT claim) or "user" (users
+	// table). Used for log/error wording.
+	Source string
+	// NoAuthz means no authz backend is configured at all (nil db) — local dev
+	// and unit tests. Deliberately NOT modelled as "admin": treating an absent
+	// backend as the highest role would silently hand out bypass privileges.
+	NoAuthz bool
+	// Reason explains an unresolvable caller.
+	Reason string
+}
+
+// resolveCallerRole reads the caller's role. Three caller shapes, checked in
+// order:
+//   - External-JWT callers (ORBITAL_AUTH_MODE=external-jwt) carry a pre-mapped
+//     role in context and have NO users-table row, so there is no user_id to
+//     look up — honor the context role directly. Mirrors the short-circuit in
+//     RequireRole; without it, AEP/Keycloak clients get 403 on every config
+//     mutation even though they map to admin.
+//   - Session / AAD-bearer callers resolve to a users-table row (user_id) and
+//     the role is read from PostgreSQL.
+//   - No authz backend (nil db) — see NoAuthz.
+func resolveCallerRole(c echo.Context, db *ent.Client) callerRole {
+	if roleStr, _ := c.Get("role").(string); roleStr != "" {
+		return callerRole{Role: user.Role(roleStr), Source: "context"}
+	}
+	if db == nil {
+		return callerRole{NoAuthz: true}
+	}
+	userID, _ := c.Get("user_id").(int)
+	if userID == 0 {
+		// No context role and no resolved user: either auth is disabled
+		// (apiAuth empty) or the caller presented no identity. See the
+		// "auth: API AUTHENTICATION DISABLED" startup log.
+		return callerRole{Reason: "no context role and no authenticated user (auth may be disabled — check startup auth mode)"}
+	}
+	u, err := db.User.Get(c.Request().Context(), userID)
+	if err != nil {
+		return callerRole{Reason: "user lookup failed"}
+	}
+	return callerRole{Role: u.Role, Source: "user"}
+}
+
 // RoleForEmail returns admin if email is in adminEmails, otherwise readonly.
 func RoleForEmail(email string, adminEmails map[string]struct{}) user.Role {
 	if _, ok := adminEmails[email]; ok {

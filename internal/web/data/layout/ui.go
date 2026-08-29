@@ -58,4 +58,14 @@ type MenuItem struct {
 	// surface work waiting on the operator (unreviewed divergences) so the item
 	// is a notification rather than a destination they must remember to visit.
 	Badge int
+	// BadgeSrc makes the chip ASYNCHRONOUS: the menu renders an empty span and
+	// JS fills it from this API path. Use it when the count is expensive to
+	// compute, since the menu is on EVERY page — a badge that costs a scan per
+	// page load makes the whole app slower to surface a number nobody is
+	// waiting on. The count read is `total` from the response, so the badge and
+	// the page it links to can never disagree.
+	//
+	// Mutually exclusive with Badge. Path is BasePath-relative and prefixed by
+	// the JS, per the data-* convention.
+	BadgeSrc string
 }
