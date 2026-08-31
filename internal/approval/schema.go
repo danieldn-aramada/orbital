@@ -46,6 +46,11 @@ type FieldSchema struct {
 // validation is testable without DGraph, and so the source of truth can move
 // (introspection today) without touching the rules.
 type SchemaSource interface {
+	// NamespaceExists reports whether a namespace holds anything. Used to refuse
+	// a policy for a namespace that does not exist — one that governs nothing
+	// while reporting itself enforced is the worst state a security control can
+	// be in, and a single typo produces it.
+	NamespaceExists(ctx context.Context, name string) (bool, error)
 	// ResolveEntities returns what exists for the given orbIds. orbIds with no
 	// entity are OMITTED from the result — absence is how a create is detected.
 	ResolveEntities(ctx context.Context, orbIDs []string) (map[string]EntityRef, error)
@@ -247,4 +252,23 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// NamespaceExists reports whether any ConfigItem carries this namespace.
+//
+// Deliberately "does anything live here", not "is there a Namespace node":
+// a policy exists to gate writes to entities, so a namespace with no entities
+// cannot be what the admin meant, whether or not a bare Namespace node happens
+// to exist.
+func (s *DGraphSchemaSource) NamespaceExists(ctx context.Context, name string) (bool, error) {
+	const q = `query($ns:String!){ queryConfigItem(filter:{namespace:{eq:$ns}}, first:1) { orbId } }`
+	var out struct {
+		QueryConfigItem []struct {
+			OrbID string `json:"orbId"`
+		} `json:"queryConfigItem"`
+	}
+	if err := s.do(ctx, q, map[string]any{"ns": name}, &out); err != nil {
+		return false, fmt.Errorf("check namespace %q: %w", name, err)
+	}
+	return len(out.QueryConfigItem) > 0, nil
 }

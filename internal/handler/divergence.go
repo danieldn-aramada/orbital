@@ -99,7 +99,7 @@ type pendingApprovalItem struct {
 	Status string `json:"status" example:"pending_approval"`
 	// ChangeRequestID is the request opened on the caller's behalf, pre-filled
 	// from this divergence entry.
-	ChangeRequestID string `json:"changeRequestId" example:"4b1f0f7a-6f0c-4a1e-9a2e-2f1c7a0b1234"`
+	ChangeRequestID string `json:"changeRequestId" example:"colo-42"`
 	Message         string `json:"message" example:"Accepting this divergence needs approval; a change request was opened."`
 }
 
@@ -540,13 +540,13 @@ func (h *DivergenceHandler) openChangeRequestFor(ctx context.Context, entry *ent
 	}
 
 	h.logger.Info("divergence accept requires approval — change request opened",
-		"change_request", cr.ID, "orbId", entry.EntryOrbID, "field", entry.Field, "actor", actor)
+		"change_request", crHumanID(cr), "orbId", entry.EntryOrbID, "field", entry.Field, "actor", actor)
 
 	return &pendingApprovalItem{
 		Status:          "pending_approval",
-		ChangeRequestID: cr.ID.String(),
+		ChangeRequestID: crHumanID(cr),
 		Message: fmt.Sprintf("Accepting this divergence needs approval. Change request %s was opened; the entry stays pending until it merges.",
-			cr.ID),
+			crHumanID(cr)),
 	}, nil
 }
 

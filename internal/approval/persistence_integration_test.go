@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/armada/orbital/ent/approvalpolicy"
 	"github.com/armada/orbital/internal/approval"
 	"github.com/armada/orbital/internal/testutil"
 )
@@ -52,6 +51,7 @@ func TestApprovalRequest_RoundTrip(t *testing.T) {
 
 	created, err := db.ApprovalRequest.Create().
 		SetActionType(approval.ActionTypeConfigMutation).
+		SetNamespace("alaska-dot").SetNumber(1).
 		SetTitle("Rename edge-01 and enable SSH").
 		SetDescription("multi\nline\tdescription").
 		SetAuthor("proposer@test.com").
@@ -143,6 +143,7 @@ func TestApproval_RoundTripAndPerApproverUniqueness(t *testing.T) {
 
 	req, err := db.ApprovalRequest.Create().
 		SetActionType(approval.ActionTypeConfigMutation).
+		SetNamespace("alaska-dot").SetNumber(1).
 		SetTitle("t").SetAuthor("a@test.com").
 		SetBaseHash("sha256:base").
 		SetPayload(json.RawMessage(`{"namespace":"ns","changes":[]}`)).
@@ -190,6 +191,7 @@ func TestMergeAttempt_RoundTrip(t *testing.T) {
 
 	req, err := db.ApprovalRequest.Create().
 		SetActionType(approval.ActionTypeConfigMutation).
+		SetNamespace("alaska-dot").SetNumber(1).
 		SetTitle("t").SetAuthor("a@test.com").
 		SetBaseHash("sha256:base").
 		SetPayload(json.RawMessage(`{"namespace":"ns","changes":[]}`)).
@@ -268,15 +270,32 @@ func TestApprovalPolicy_RoundTripAndBypassDefault(t *testing.T) {
 	if !got.Enabled {
 		t.Error("enabled = false, want true by default")
 	}
-	if got.TypeName != "" {
-		t.Errorf("type_name = %q, want empty (all types)", got.TypeName)
+	if !got.AllTypes {
+		t.Error("all_types = false, want true by default")
+	}
+	if len(got.Types) != 0 {
+		t.Errorf("types = %v, want empty — all_types:true plus a type list say different things", got.Types)
 	}
 
-	// Explicit multi-value path.
-	typed, err := db.ApprovalPolicy.Create().
+	// One policy per namespace: a second is refused by the unique index rather
+	// than quietly coexisting, which is what makes "which policy gated this?"
+	// answerable with one row instead of a resolution order nobody wrote down.
+	if _, err := db.ApprovalPolicy.Create().
 		SetActionType(approval.ActionTypeConfigMutation).
 		SetNamespace("alaska-dot").
-		SetTypeName("Server").
+		SetAllTypes(false).
+		SetTypes([]string{"Server"}).
+		Save(ctx); err == nil {
+		t.Fatal("a second policy for the same namespace was accepted — unique index missing")
+	}
+
+	// The type list is a jsonb column, so the list-valued path needs its own
+	// round trip: order and membership must both survive.
+	typed, err := db.ApprovalPolicy.Create().
+		SetActionType(approval.ActionTypeConfigMutation).
+		SetNamespace("colo").
+		SetAllTypes(false).
+		SetTypes([]string{"Server", "Rack"}).
 		SetRequiredApprovals(2).
 		SetBypassRoles([]string{"admin", "dev"}).
 		SetEnabled(false).
@@ -288,31 +307,45 @@ func TestApprovalPolicy_RoundTripAndBypassDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get typed: %v", err)
 	}
+	if len(got2.Types) != 2 || got2.Types[0] != "Server" || got2.Types[1] != "Rack" {
+		t.Errorf("types = %v, want [Server Rack]", got2.Types)
+	}
+	if got2.AllTypes {
+		t.Error("all_types = true, want false")
+	}
 	if len(got2.BypassRoles) != 2 || got2.BypassRoles[0] != "admin" || got2.BypassRoles[1] != "dev" {
 		t.Errorf("bypass_roles = %v", got2.BypassRoles)
 	}
 	if got2.RequiredApprovals != 2 || got2.Enabled {
 		t.Errorf("required=%d enabled=%v", got2.RequiredApprovals, got2.Enabled)
 	}
+}
 
-	// type_name defaults to "" rather than NULL specifically so this collides —
-	// Postgres treats NULLs as distinct, which would let duplicate
-	// all-types policies coexist and make resolution nondeterministic.
-	_, err = db.ApprovalPolicy.Create().
+// all_types and types are an either/or, and the CHECK constraint is what makes
+// that true of the DATA rather than of one code path. The API validates the
+// same rule with a better message, but a policy written by a migration, a
+// psql session, or a future handler that forgets goes straight to the table —
+// and a row saying both "every type" and "these two types" has no answer to
+// "what does this protect?".
+func TestApprovalPolicy_ScopeConstraintRejectsContradictoryRows(t *testing.T) {
+	ctx := context.Background()
+	db := testutil.NewTestDB(t)
+
+	if _, err := db.ApprovalPolicy.Create().
 		SetActionType(approval.ActionTypeConfigMutation).
-		SetNamespace("alaska-dot").
-		Save(ctx)
-	if err == nil {
-		t.Fatal("duplicate (action_type, namespace, all-types) accepted — unique index missing")
+		SetNamespace("contradictory").
+		SetAllTypes(true).
+		SetTypes([]string{"Server"}).
+		Save(ctx); err == nil {
+		t.Error("all_types:true with a type list was stored — the row claims two different scopes")
 	}
 
-	all, err := db.ApprovalPolicy.Query().
-		Where(approvalpolicy.NamespaceEQ("alaska-dot")).
-		All(ctx)
-	if err != nil {
-		t.Fatalf("query: %v", err)
-	}
-	if len(all) != 2 {
-		t.Errorf("policies = %d, want 2", len(all))
+	if _, err := db.ApprovalPolicy.Create().
+		SetActionType(approval.ActionTypeConfigMutation).
+		SetNamespace("empty-scope").
+		SetAllTypes(false).
+		SetTypes([]string{}).
+		Save(ctx); err == nil {
+		t.Error("all_types:false with no types was stored — the policy protects nothing while reporting itself active")
 	}
 }

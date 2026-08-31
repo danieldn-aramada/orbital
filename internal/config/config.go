@@ -68,6 +68,35 @@ type Config struct {
 	// can't stamp version/updatedAt/updatedBy into. Default on; a kill switch for
 	// ops if an unanticipated caller surfaces. See docs/reference/ERROR-RESPONSES.md.
 	InlineSelectorReject bool `envconfig:"ORBITAL_INLINE_SELECTOR_REJECT" default:"true"`
+
+	// ChangeControlEnabled controls whether orbital's change-control feature
+	// EXISTS: the Change Requests queue, the Approval Policies admin page, their
+	// REST endpoints, and the approval gate.
+	//
+	// It earns a toggle because the feature is actively HARMFUL to some
+	// adopters, not merely unused by them: a team running their own change
+	// management (ServiceNow, an internal process) would have two systems
+	// answering "was this change approved", and anyone using orbital's flow
+	// makes that change invisible to their org's audit. Nav clutter alone would
+	// not justify a toggle.
+	//
+	// Turning it off HIDES the surface. It does not delete anything: existing
+	// change requests, approvals and policies stay in PostgreSQL untouched and
+	// reappear if it is switched back on. Do NOT use it to "reset" the feature.
+	//
+	// With this off the approval gate never runs either, whatever policies
+	// remain in the database — enforcing writes while offering no way to propose
+	// a change would be a state with no coherent meaning.
+	//
+	// There is deliberately NO global "enforcement on/off" setting beside this.
+	// Every comparable policy engine puts enforcement on the POLICY — Kyverno's
+	// `validationFailureAction`, Gatekeeper's `enforcementAction`, Sentinel's
+	// enforcement level, GitHub rulesets' enforcement status — because stopping
+	// ONE misbehaving policy is what an operator actually needs, and a global
+	// switch is the blunt version of it. Disabling a policy is always reachable:
+	// policy administration writes PostgreSQL, never DGraph, so it is never
+	// itself gated.
+	ChangeControlEnabled bool `envconfig:"ORBITAL_CHANGE_CONTROL_ENABLED" default:"true"`
 	// OIDCIssuerURL defaults to the Azure AD tenant URL so the SSO login button
 	// is available in `make run-orbital` for daily UI work (provided the user
 	// also sets ORBITAL_OIDC_CLIENT_SECRET). In dev mode (ORBITAL_DEV=true),

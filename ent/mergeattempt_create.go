@@ -80,7 +80,7 @@ func (_c *MergeAttemptCreate) SetNillableUpdatedBy(v *string) *MergeAttemptCreat
 }
 
 // SetApprovalRequestID sets the "approval_request_id" field.
-func (_c *MergeAttemptCreate) SetApprovalRequestID(v uuid.UUID) *MergeAttemptCreate {
+func (_c *MergeAttemptCreate) SetApprovalRequestID(v int64) *MergeAttemptCreate {
 	_c.mutation.SetApprovalRequestID(v)
 	return _c
 }
@@ -140,7 +140,7 @@ func (_c *MergeAttemptCreate) SetNillableID(v *uuid.UUID) *MergeAttemptCreate {
 }
 
 // SetRequestID sets the "request" edge to the ApprovalRequest entity by ID.
-func (_c *MergeAttemptCreate) SetRequestID(id uuid.UUID) *MergeAttemptCreate {
+func (_c *MergeAttemptCreate) SetRequestID(id int64) *MergeAttemptCreate {
 	_c.mutation.SetRequestID(id)
 	return _c
 }
@@ -300,7 +300,7 @@ func (_c *MergeAttemptCreate) createSpec() (*MergeAttempt, *sqlgraph.CreateSpec)
 			Columns: []string{mergeattempt.RequestColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

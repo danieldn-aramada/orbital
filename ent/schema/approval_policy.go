@@ -2,6 +2,8 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
+	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	"github.com/google/uuid"
@@ -26,15 +28,24 @@ func (ApprovalPolicy) Fields() []ent.Field {
 		// action_type matches ApprovalRequest.action_type (e.g. "config.mutation").
 		field.String("action_type").NotEmpty(),
 
-		// namespace + type_name are the config.mutation selector. type_name is
-		// "" for "every type in this namespace" — an empty string rather than
-		// NULL so the unique index below actually dedupes (Postgres treats NULLs
-		// as distinct, so a nullable column would allow duplicate policies).
-		//
-		// Named type_name, not type, matching DivergenceEntry — `type` collides
-		// with ent's generated identifiers.
 		field.String("namespace").NotEmpty(),
-		field.String("type_name").Optional().Default(""),
+
+		// AllTypes and Types are an either/or, and the CHECK constraint in
+		// Annotations makes the other two combinations unrepresentable rather
+		// than merely discouraged.
+		//
+		// A row that set both would say two contradictory things, and whichever
+		// one the code chose to honour, the row itself would no longer describe
+		// what is protected — unreadable from a backup, from psql during an
+		// incident, or by the next person who writes `policy.Types` without
+		// checking AllTypes. That is the same two-representations-of-one-fact
+		// drift this feature has been bitten by repeatedly.
+		//
+		// AllTypes is not "every type that exists today": it matches ANY type,
+		// so a ConfigItem added to the schema next month is covered the day it
+		// lands. Enumerating today's types cannot express that.
+		field.Bool("all_types").Default(true),
+		field.JSON("types", []string{}).Optional(),
 
 		field.Int("required_approvals").Default(1).Positive(),
 
@@ -57,11 +68,31 @@ func (ApprovalPolicy) Mixin() []ent.Mixin {
 
 func (ApprovalPolicy) Indexes() []ent.Index {
 	return []ent.Index{
-		// One policy per protected class.
-		index.Fields("action_type", "namespace", "type_name").Unique(),
+		// ONE policy per namespace. Types live in the row, so there is nothing
+		// to compose and exactly one policy can ever govern a mutation — which
+		// is what makes "why was this gated?" answerable with a single name.
+		index.Fields("action_type", "namespace").Unique(),
 	}
 }
 
 func (ApprovalPolicy) Edges() []ent.Edge {
 	return nil
+}
+
+// Annotations puts the either/or in the DATABASE, not only in the API.
+//
+// The API validates it too, with a better message — but the API is one writer.
+// A migration, a psql session, or a code path added next year are not, and a
+// constraint here is the only layer none of them can skip. That is the
+// difference between the rule holding today and holding in a year.
+func (ApprovalPolicy) Annotations() []schema.Annotation {
+	return []schema.Annotation{
+		// jsonb null is a SCALAR, not an empty array, so jsonb_array_length()
+		// raises rather than returning 0 on a row whose types was never set.
+		// Treating any non-array as "no types" keeps the rule about scope
+		// rather than about representation.
+		entsql.Checks(map[string]string{
+			"approval_policy_scope_exclusive": "(all_types AND (jsonb_typeof(types) <> 'array' OR jsonb_array_length(types) = 0)) OR ((NOT all_types) AND jsonb_typeof(types) = 'array' AND jsonb_array_length(types) > 0)",
+		}),
+	}
 }

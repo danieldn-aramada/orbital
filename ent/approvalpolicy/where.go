@@ -85,9 +85,9 @@ func Namespace(v string) predicate.ApprovalPolicy {
 	return predicate.ApprovalPolicy(sql.FieldEQ(FieldNamespace, v))
 }
 
-// TypeName applies equality check predicate on the "type_name" field. It's identical to TypeNameEQ.
-func TypeName(v string) predicate.ApprovalPolicy {
-	return predicate.ApprovalPolicy(sql.FieldEQ(FieldTypeName, v))
+// AllTypes applies equality check predicate on the "all_types" field. It's identical to AllTypesEQ.
+func AllTypes(v bool) predicate.ApprovalPolicy {
+	return predicate.ApprovalPolicy(sql.FieldEQ(FieldAllTypes, v))
 }
 
 // RequiredApprovals applies equality check predicate on the "required_approvals" field. It's identical to RequiredApprovalsEQ.
@@ -470,79 +470,24 @@ func NamespaceContainsFold(v string) predicate.ApprovalPolicy {
 	return predicate.ApprovalPolicy(sql.FieldContainsFold(FieldNamespace, v))
 }
 
-// TypeNameEQ applies the EQ predicate on the "type_name" field.
-func TypeNameEQ(v string) predicate.ApprovalPolicy {
-	return predicate.ApprovalPolicy(sql.FieldEQ(FieldTypeName, v))
+// AllTypesEQ applies the EQ predicate on the "all_types" field.
+func AllTypesEQ(v bool) predicate.ApprovalPolicy {
+	return predicate.ApprovalPolicy(sql.FieldEQ(FieldAllTypes, v))
 }
 
-// TypeNameNEQ applies the NEQ predicate on the "type_name" field.
-func TypeNameNEQ(v string) predicate.ApprovalPolicy {
-	return predicate.ApprovalPolicy(sql.FieldNEQ(FieldTypeName, v))
+// AllTypesNEQ applies the NEQ predicate on the "all_types" field.
+func AllTypesNEQ(v bool) predicate.ApprovalPolicy {
+	return predicate.ApprovalPolicy(sql.FieldNEQ(FieldAllTypes, v))
 }
 
-// TypeNameIn applies the In predicate on the "type_name" field.
-func TypeNameIn(vs ...string) predicate.ApprovalPolicy {
-	return predicate.ApprovalPolicy(sql.FieldIn(FieldTypeName, vs...))
+// TypesIsNil applies the IsNil predicate on the "types" field.
+func TypesIsNil() predicate.ApprovalPolicy {
+	return predicate.ApprovalPolicy(sql.FieldIsNull(FieldTypes))
 }
 
-// TypeNameNotIn applies the NotIn predicate on the "type_name" field.
-func TypeNameNotIn(vs ...string) predicate.ApprovalPolicy {
-	return predicate.ApprovalPolicy(sql.FieldNotIn(FieldTypeName, vs...))
-}
-
-// TypeNameGT applies the GT predicate on the "type_name" field.
-func TypeNameGT(v string) predicate.ApprovalPolicy {
-	return predicate.ApprovalPolicy(sql.FieldGT(FieldTypeName, v))
-}
-
-// TypeNameGTE applies the GTE predicate on the "type_name" field.
-func TypeNameGTE(v string) predicate.ApprovalPolicy {
-	return predicate.ApprovalPolicy(sql.FieldGTE(FieldTypeName, v))
-}
-
-// TypeNameLT applies the LT predicate on the "type_name" field.
-func TypeNameLT(v string) predicate.ApprovalPolicy {
-	return predicate.ApprovalPolicy(sql.FieldLT(FieldTypeName, v))
-}
-
-// TypeNameLTE applies the LTE predicate on the "type_name" field.
-func TypeNameLTE(v string) predicate.ApprovalPolicy {
-	return predicate.ApprovalPolicy(sql.FieldLTE(FieldTypeName, v))
-}
-
-// TypeNameContains applies the Contains predicate on the "type_name" field.
-func TypeNameContains(v string) predicate.ApprovalPolicy {
-	return predicate.ApprovalPolicy(sql.FieldContains(FieldTypeName, v))
-}
-
-// TypeNameHasPrefix applies the HasPrefix predicate on the "type_name" field.
-func TypeNameHasPrefix(v string) predicate.ApprovalPolicy {
-	return predicate.ApprovalPolicy(sql.FieldHasPrefix(FieldTypeName, v))
-}
-
-// TypeNameHasSuffix applies the HasSuffix predicate on the "type_name" field.
-func TypeNameHasSuffix(v string) predicate.ApprovalPolicy {
-	return predicate.ApprovalPolicy(sql.FieldHasSuffix(FieldTypeName, v))
-}
-
-// TypeNameIsNil applies the IsNil predicate on the "type_name" field.
-func TypeNameIsNil() predicate.ApprovalPolicy {
-	return predicate.ApprovalPolicy(sql.FieldIsNull(FieldTypeName))
-}
-
-// TypeNameNotNil applies the NotNil predicate on the "type_name" field.
-func TypeNameNotNil() predicate.ApprovalPolicy {
-	return predicate.ApprovalPolicy(sql.FieldNotNull(FieldTypeName))
-}
-
-// TypeNameEqualFold applies the EqualFold predicate on the "type_name" field.
-func TypeNameEqualFold(v string) predicate.ApprovalPolicy {
-	return predicate.ApprovalPolicy(sql.FieldEqualFold(FieldTypeName, v))
-}
-
-// TypeNameContainsFold applies the ContainsFold predicate on the "type_name" field.
-func TypeNameContainsFold(v string) predicate.ApprovalPolicy {
-	return predicate.ApprovalPolicy(sql.FieldContainsFold(FieldTypeName, v))
+// TypesNotNil applies the NotNil predicate on the "types" field.
+func TypesNotNil() predicate.ApprovalPolicy {
+	return predicate.ApprovalPolicy(sql.FieldNotNull(FieldTypes))
 }
 
 // RequiredApprovalsEQ applies the EQ predicate on the "required_approvals" field.

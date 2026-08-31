@@ -36,23 +36,35 @@ test('Cluster delete cascades nodes but preserves servers', async ({ page }) => 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        query: `mutation Seed($clusterOrbId: String!, $nodeOrbId: String!, $serverOrbId: String!) {
+        // The whole input goes in a VARIABLE, not inline.
+        //
+        // Orbital resolves the governing approval policy from the entity's
+        // orbId, and it cannot read an orbId out of an inline literal — so with
+        // any policy enabled an inline add is refused with
+        // VARIABLE_FORM_REQUIRED (fail-closed; an inline mutation must not be a
+        // way around the gate). This spec used to pass only because the dev
+        // stack happened to have no policies, and failed the moment a developer
+        // configured one. The variable form is what orbital's own editor and
+        // orbctl send.
+        query: `mutation Seed($input: [AddEksaKubernetesClusterInput!]!) {
           addNamespace(input: { name: "e2e" }, upsert: true) { numUids }
-          addEksaKubernetesCluster(input: [{
-            name: "e2e-cluster", orbId: $clusterOrbId, namespace: "e2e", version: 1,
-            createdBy: "e2e@test", createdAt: "2026-06-18T00:00:00Z",
-            kubernetesVersion: "v1.31.0", cni: "cilium", environment: "dev",
-            clusterType: "workload",
-            dataCenter: { orbId: "colo:colo-galleon", version: 1 },
-            nodes: [{
-              orbId: $nodeOrbId, namespace: "e2e", version: 1,
-              createdBy: "e2e@test", createdAt: "2026-06-18T00:00:00Z",
-              role: "control_plane",
-              server: { orbId: $serverOrbId, version: 1 }
-            }]
-          }], upsert: true) { numUids }
+          addEksaKubernetesCluster(input: $input, upsert: true) { numUids }
         }`,
-        variables: { clusterOrbId, nodeOrbId, serverOrbId: server.orbId },
+        variables: {
+          input: [{
+            name: 'e2e-cluster', orbId: clusterOrbId, namespace: 'e2e', version: 1,
+            createdBy: 'e2e@test', createdAt: '2026-06-18T00:00:00Z',
+            kubernetesVersion: 'v1.31.0', cni: 'cilium', environment: 'dev',
+            clusterType: 'workload',
+            dataCenter: { orbId: 'colo:colo-galleon', version: 1 },
+            nodes: [{
+              orbId: nodeOrbId, namespace: 'e2e', version: 1,
+              createdBy: 'e2e@test', createdAt: '2026-06-18T00:00:00Z',
+              role: 'control_plane',
+              server: { orbId: server.orbId, version: 1 },
+            }],
+          }],
+        },
       }),
     })
     const j2 = await r2.json()

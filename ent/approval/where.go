@@ -77,7 +77,7 @@ func UpdatedBy(v string) predicate.Approval {
 }
 
 // ApprovalRequestID applies equality check predicate on the "approval_request_id" field. It's identical to ApprovalRequestIDEQ.
-func ApprovalRequestID(v uuid.UUID) predicate.Approval {
+func ApprovalRequestID(v int64) predicate.Approval {
 	return predicate.Approval(sql.FieldEQ(FieldApprovalRequestID, v))
 }
 
@@ -337,22 +337,22 @@ func UpdatedByContainsFold(v string) predicate.Approval {
 }
 
 // ApprovalRequestIDEQ applies the EQ predicate on the "approval_request_id" field.
-func ApprovalRequestIDEQ(v uuid.UUID) predicate.Approval {
+func ApprovalRequestIDEQ(v int64) predicate.Approval {
 	return predicate.Approval(sql.FieldEQ(FieldApprovalRequestID, v))
 }
 
 // ApprovalRequestIDNEQ applies the NEQ predicate on the "approval_request_id" field.
-func ApprovalRequestIDNEQ(v uuid.UUID) predicate.Approval {
+func ApprovalRequestIDNEQ(v int64) predicate.Approval {
 	return predicate.Approval(sql.FieldNEQ(FieldApprovalRequestID, v))
 }
 
 // ApprovalRequestIDIn applies the In predicate on the "approval_request_id" field.
-func ApprovalRequestIDIn(vs ...uuid.UUID) predicate.Approval {
+func ApprovalRequestIDIn(vs ...int64) predicate.Approval {
 	return predicate.Approval(sql.FieldIn(FieldApprovalRequestID, vs...))
 }
 
 // ApprovalRequestIDNotIn applies the NotIn predicate on the "approval_request_id" field.
-func ApprovalRequestIDNotIn(vs ...uuid.UUID) predicate.Approval {
+func ApprovalRequestIDNotIn(vs ...int64) predicate.Approval {
 	return predicate.Approval(sql.FieldNotIn(FieldApprovalRequestID, vs...))
 }
 

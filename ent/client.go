@@ -675,7 +675,7 @@ func (c *ApprovalRequestClient) UpdateOne(_m *ApprovalRequest) *ApprovalRequestU
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *ApprovalRequestClient) UpdateOneID(id uuid.UUID) *ApprovalRequestUpdateOne {
+func (c *ApprovalRequestClient) UpdateOneID(id int64) *ApprovalRequestUpdateOne {
 	mutation := newApprovalRequestMutation(c.config, OpUpdateOne, withApprovalRequestID(id))
 	return &ApprovalRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
@@ -692,7 +692,7 @@ func (c *ApprovalRequestClient) DeleteOne(_m *ApprovalRequest) *ApprovalRequestD
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *ApprovalRequestClient) DeleteOneID(id uuid.UUID) *ApprovalRequestDeleteOne {
+func (c *ApprovalRequestClient) DeleteOneID(id int64) *ApprovalRequestDeleteOne {
 	builder := c.Delete().Where(approvalrequest.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
@@ -709,12 +709,12 @@ func (c *ApprovalRequestClient) Query() *ApprovalRequestQuery {
 }
 
 // Get returns a ApprovalRequest entity by its id.
-func (c *ApprovalRequestClient) Get(ctx context.Context, id uuid.UUID) (*ApprovalRequest, error) {
+func (c *ApprovalRequestClient) Get(ctx context.Context, id int64) (*ApprovalRequest, error) {
 	return c.Query().Where(approvalrequest.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *ApprovalRequestClient) GetX(ctx context.Context, id uuid.UUID) *ApprovalRequest {
+func (c *ApprovalRequestClient) GetX(ctx context.Context, id int64) *ApprovalRequest {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)

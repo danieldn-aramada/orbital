@@ -152,7 +152,8 @@ func TestGate_TypeScopedPolicyIsNarrow(t *testing.T) {
 	if _, err := f.db.ApprovalPolicy.Create().
 		SetActionType(approval.ActionTypeConfigMutation).
 		SetNamespace(crNS).
-		SetTypeName("Server").
+		SetAllTypes(false).
+		SetTypes([]string{"Server"}).
 		SetRequiredApprovals(1).
 		Save(ctx); err != nil {
 		t.Fatalf("create policy: %v", err)
@@ -279,7 +280,8 @@ func TestGate_MultiTypeMutationTakesTheStrictestPolicy(t *testing.T) {
 	if _, err := f.db.ApprovalPolicy.Create().
 		SetActionType(approval.ActionTypeConfigMutation).
 		SetNamespace(crNS).
-		SetTypeName("IdracSettings").
+		SetAllTypes(false).
+		SetTypes([]string{"IdracSettings"}).
 		SetRequiredApprovals(1).
 		Save(ctx); err != nil {
 		t.Fatalf("create policy: %v", err)

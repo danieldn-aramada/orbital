@@ -30,8 +30,10 @@ type MergeAttempt struct {
 
 func (MergeAttempt) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).Default(uuid.New),
-		field.UUID("approval_request_id", uuid.UUID{}),
+		field.UUID("id", uuid.UUID{}).Default(newUUIDv7),
+		// Follows ApprovalRequest's key, which is a bigint — the human
+		// identifier there is namespace-number, not this.
+		field.Int64("approval_request_id"),
 
 		field.String("attempted_by").NotEmpty(),
 		field.Time("attempted_at").Default(time.Now),

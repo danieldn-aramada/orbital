@@ -3,40 +3,109 @@
     <div class="app-menu">
       {{template "menu.gohtml" .}}
     </div>
-    <div class="app-main p-5">
+    <div class="app-main p-5" data-can-admin="{{if eq .User.Role "admin"}}true{{else}}false{{end}}">
       {{if not .IsAuthn}}
         <div class="notification is-warning is-light">
           <a class="js-modal-trigger" data-target="login-modal">Login</a> to view this page.
-        </div>
-      {{else if ne .User.Role "admin"}}
-        <div class="notification is-danger is-light">
-          Admin access required.
         </div>
       {{else}}
 
       <p class="is-size-4 mb-2" data-testid="page-heading">Approval Policies</p>
       <p class="has-text-grey mb-4" style="font-size: 0.875rem;">
-        A protected class needs review before intent changes. <strong>Opt-in</strong> — with no
-        enabled policy, writes behave exactly as they do without this feature.
-        Roles listed under <strong>bypass</strong> write directly; those writes are recorded
-        as privileged in the audit log.
+        Namespaces (optionally scoped to a type) that require change-request approval before edits apply.
       </p>
 
       <div id="ap-error" class="notification is-danger is-light" style="display:none;"></div>
 
+      {{if eq .User.Role "admin"}}
+      <div class="mb-3">
+        <button class="button is-small is-link" id="ap-add">Add policy</button>
+      </div>
+      {{else}}
+      <p class="has-text-grey is-size-7 mb-3">Read-only. Must be admin to manage.</p>
+      {{end}}
+
       <table class="table is-striped is-hoverable is-fullwidth is-size-7" id="ap-table">
         <thead>
           <tr>
-            <th>Namespace</th><th>Type</th><th>Approvals</th>
-            <th>Bypass roles</th><th>Enabled</th><th></th>
+            <th>Namespace</th><th>Types</th><th>Approvals</th>
+            <th>Bypass roles</th><th>Enforcement</th><th></th>
           </tr>
         </thead>
         <tbody id="ap-tbody"></tbody>
       </table>
 
-      <button class="button is-small is-link mt-3" id="ap-add">Add policy</button>
+      {{if eq .User.Role "admin"}}
+      <div class="modal" id="ap-modal">
+        <div class="modal-background"></div>
+        <div class="modal-content" style="max-width:32rem;">
+          <div class="box">
+            <p class="is-size-5 mb-4" id="ap-modal-title">Protect a class of changes</p>
 
+            <div id="ap-modal-error" class="notification is-danger is-light py-2 is-size-7" style="display:none;"></div>
+
+            <div class="field">
+              <label class="label is-small" for="ap-namespace">Namespace</label>
+              <div class="control">
+                <div class="select is-small is-fullwidth">
+                  <select id="ap-namespace"></select>
+                </div>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="label is-small">Scope</label>
+              <div class="control">
+                <label class="checkbox is-size-7">
+                  <input type="checkbox" id="ap-all-types" checked> All types in this namespace
+                </label>
+              </div>
+            </div>
+
+            <div class="field" id="ap-type-field">
+              <div class="control">
+                <div class="select is-small is-fullwidth is-multiple">
+                  <select id="ap-type" multiple size="6" disabled></select>
+                </div>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="label is-small" for="ap-required">Approvals required</label>
+              <div class="control">
+                <input class="input is-small" type="number" id="ap-required" min="1" value="1">
+              </div>
+              <p class="help">Distinct reviewers, never the author.</p>
+            </div>
+
+            <div class="field">
+              <label class="label is-small">Roles that may bypass</label>
+              <div class="control">
+                <label class="checkbox is-size-7 mr-4">
+                  <input type="checkbox" class="ap-bypass" value="admin" checked> admin
+                </label>
+                <label class="checkbox is-size-7 mr-4">
+                  <input type="checkbox" class="ap-bypass" value="dev"> dev
+                </label>
+              </div>
+              <p class="help">Write directly, recorded as privileged. Clear both to require review from everyone.</p>
+            </div>
+
+            <div class="field is-grouped mt-4">
+              <div class="control">
+                <button class="button is-small is-link" id="ap-modal-save">Create policy</button>
+              </div>
+              <div class="control">
+                <button class="button is-small" id="ap-modal-cancel">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button class="modal-close is-large" aria-label="close" id="ap-modal-close"></button>
+      </div>
       {{end}}
+
+{{end}}
     </div>
   </main>
 {{end}}

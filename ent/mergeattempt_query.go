@@ -403,8 +403,8 @@ func (_q *MergeAttemptQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 }
 
 func (_q *MergeAttemptQuery) loadRequest(ctx context.Context, query *ApprovalRequestQuery, nodes []*MergeAttempt, init func(*MergeAttempt), assign func(*MergeAttempt, *ApprovalRequest)) error {
-	ids := make([]uuid.UUID, 0, len(nodes))
-	nodeids := make(map[uuid.UUID][]*MergeAttempt)
+	ids := make([]int64, 0, len(nodes))
+	nodeids := make(map[int64][]*MergeAttempt)
 	for i := range nodes {
 		fk := nodes[i].ApprovalRequestID
 		if _, ok := nodeids[fk]; !ok {

@@ -16,7 +16,6 @@ import (
 	"github.com/armada/orbital/ent/approvalrequest"
 	"github.com/armada/orbital/ent/mergeattempt"
 	"github.com/armada/orbital/ent/predicate"
-	"github.com/google/uuid"
 )
 
 // MergeAttemptUpdate is the builder for updating MergeAttempt entities.
@@ -93,13 +92,13 @@ func (_u *MergeAttemptUpdate) ClearUpdatedBy() *MergeAttemptUpdate {
 }
 
 // SetApprovalRequestID sets the "approval_request_id" field.
-func (_u *MergeAttemptUpdate) SetApprovalRequestID(v uuid.UUID) *MergeAttemptUpdate {
+func (_u *MergeAttemptUpdate) SetApprovalRequestID(v int64) *MergeAttemptUpdate {
 	_u.mutation.SetApprovalRequestID(v)
 	return _u
 }
 
 // SetNillableApprovalRequestID sets the "approval_request_id" field if the given value is not nil.
-func (_u *MergeAttemptUpdate) SetNillableApprovalRequestID(v *uuid.UUID) *MergeAttemptUpdate {
+func (_u *MergeAttemptUpdate) SetNillableApprovalRequestID(v *int64) *MergeAttemptUpdate {
 	if v != nil {
 		_u.SetApprovalRequestID(*v)
 	}
@@ -173,7 +172,7 @@ func (_u *MergeAttemptUpdate) ClearError() *MergeAttemptUpdate {
 }
 
 // SetRequestID sets the "request" edge to the ApprovalRequest entity by ID.
-func (_u *MergeAttemptUpdate) SetRequestID(id uuid.UUID) *MergeAttemptUpdate {
+func (_u *MergeAttemptUpdate) SetRequestID(id int64) *MergeAttemptUpdate {
 	_u.mutation.SetRequestID(id)
 	return _u
 }
@@ -295,7 +294,7 @@ func (_u *MergeAttemptUpdate) sqlSave(ctx context.Context) (_node int, err error
 			Columns: []string{mergeattempt.RequestColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -308,7 +307,7 @@ func (_u *MergeAttemptUpdate) sqlSave(ctx context.Context) (_node int, err error
 			Columns: []string{mergeattempt.RequestColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -397,13 +396,13 @@ func (_u *MergeAttemptUpdateOne) ClearUpdatedBy() *MergeAttemptUpdateOne {
 }
 
 // SetApprovalRequestID sets the "approval_request_id" field.
-func (_u *MergeAttemptUpdateOne) SetApprovalRequestID(v uuid.UUID) *MergeAttemptUpdateOne {
+func (_u *MergeAttemptUpdateOne) SetApprovalRequestID(v int64) *MergeAttemptUpdateOne {
 	_u.mutation.SetApprovalRequestID(v)
 	return _u
 }
 
 // SetNillableApprovalRequestID sets the "approval_request_id" field if the given value is not nil.
-func (_u *MergeAttemptUpdateOne) SetNillableApprovalRequestID(v *uuid.UUID) *MergeAttemptUpdateOne {
+func (_u *MergeAttemptUpdateOne) SetNillableApprovalRequestID(v *int64) *MergeAttemptUpdateOne {
 	if v != nil {
 		_u.SetApprovalRequestID(*v)
 	}
@@ -477,7 +476,7 @@ func (_u *MergeAttemptUpdateOne) ClearError() *MergeAttemptUpdateOne {
 }
 
 // SetRequestID sets the "request" edge to the ApprovalRequest entity by ID.
-func (_u *MergeAttemptUpdateOne) SetRequestID(id uuid.UUID) *MergeAttemptUpdateOne {
+func (_u *MergeAttemptUpdateOne) SetRequestID(id int64) *MergeAttemptUpdateOne {
 	_u.mutation.SetRequestID(id)
 	return _u
 }
@@ -629,7 +628,7 @@ func (_u *MergeAttemptUpdateOne) sqlSave(ctx context.Context) (_node *MergeAttem
 			Columns: []string{mergeattempt.RequestColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -642,7 +641,7 @@ func (_u *MergeAttemptUpdateOne) sqlSave(ctx context.Context) (_node *MergeAttem
 			Columns: []string{mergeattempt.RequestColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

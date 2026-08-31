@@ -80,6 +80,18 @@ func (_c *ApprovalRequestCreate) SetNillableUpdatedBy(v *string) *ApprovalReques
 	return _c
 }
 
+// SetNamespace sets the "namespace" field.
+func (_c *ApprovalRequestCreate) SetNamespace(v string) *ApprovalRequestCreate {
+	_c.mutation.SetNamespace(v)
+	return _c
+}
+
+// SetNumber sets the "number" field.
+func (_c *ApprovalRequestCreate) SetNumber(v int) *ApprovalRequestCreate {
+	_c.mutation.SetNumber(v)
+	return _c
+}
+
 // SetActionType sets the "action_type" field.
 func (_c *ApprovalRequestCreate) SetActionType(v string) *ApprovalRequestCreate {
 	_c.mutation.SetActionType(v)
@@ -173,16 +185,8 @@ func (_c *ApprovalRequestCreate) SetNillableExecutedBy(v *string) *ApprovalReque
 }
 
 // SetID sets the "id" field.
-func (_c *ApprovalRequestCreate) SetID(v uuid.UUID) *ApprovalRequestCreate {
+func (_c *ApprovalRequestCreate) SetID(v int64) *ApprovalRequestCreate {
 	_c.mutation.SetID(v)
-	return _c
-}
-
-// SetNillableID sets the "id" field if the given value is not nil.
-func (_c *ApprovalRequestCreate) SetNillableID(v *uuid.UUID) *ApprovalRequestCreate {
-	if v != nil {
-		_c.SetID(*v)
-	}
 	return _c
 }
 
@@ -267,16 +271,28 @@ func (_c *ApprovalRequestCreate) defaults() {
 		v := approvalrequest.DefaultExecutedBy
 		_c.mutation.SetExecutedBy(v)
 	}
-	if _, ok := _c.mutation.ID(); !ok {
-		v := approvalrequest.DefaultID()
-		_c.mutation.SetID(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *ApprovalRequestCreate) check() error {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "ApprovalRequest.created_at"`)}
+	}
+	if _, ok := _c.mutation.Namespace(); !ok {
+		return &ValidationError{Name: "namespace", err: errors.New(`ent: missing required field "ApprovalRequest.namespace"`)}
+	}
+	if v, ok := _c.mutation.Namespace(); ok {
+		if err := approvalrequest.NamespaceValidator(v); err != nil {
+			return &ValidationError{Name: "namespace", err: fmt.Errorf(`ent: validator failed for field "ApprovalRequest.namespace": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Number(); !ok {
+		return &ValidationError{Name: "number", err: errors.New(`ent: missing required field "ApprovalRequest.number"`)}
+	}
+	if v, ok := _c.mutation.Number(); ok {
+		if err := approvalrequest.NumberValidator(v); err != nil {
+			return &ValidationError{Name: "number", err: fmt.Errorf(`ent: validator failed for field "ApprovalRequest.number": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.ActionType(); !ok {
 		return &ValidationError{Name: "action_type", err: errors.New(`ent: missing required field "ApprovalRequest.action_type"`)}
@@ -335,12 +351,9 @@ func (_c *ApprovalRequestCreate) sqlSave(ctx context.Context) (*ApprovalRequest,
 		}
 		return nil, err
 	}
-	if _spec.ID.Value != nil {
-		if id, ok := _spec.ID.Value.(*uuid.UUID); ok {
-			_node.ID = *id
-		} else if err := _node.ID.Scan(_spec.ID.Value); err != nil {
-			return nil, err
-		}
+	if _spec.ID.Value != _node.ID {
+		id := _spec.ID.Value.(int64)
+		_node.ID = int64(id)
 	}
 	_c.mutation.id = &_node.ID
 	_c.mutation.done = true
@@ -350,11 +363,11 @@ func (_c *ApprovalRequestCreate) sqlSave(ctx context.Context) (*ApprovalRequest,
 func (_c *ApprovalRequestCreate) createSpec() (*ApprovalRequest, *sqlgraph.CreateSpec) {
 	var (
 		_node = &ApprovalRequest{config: _c.config}
-		_spec = sqlgraph.NewCreateSpec(approvalrequest.Table, sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeUUID))
+		_spec = sqlgraph.NewCreateSpec(approvalrequest.Table, sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeInt64))
 	)
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
-		_spec.ID.Value = &id
+		_spec.ID.Value = id
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(approvalrequest.FieldCreatedAt, field.TypeTime, value)
@@ -371,6 +384,14 @@ func (_c *ApprovalRequestCreate) createSpec() (*ApprovalRequest, *sqlgraph.Creat
 	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(approvalrequest.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
+	}
+	if value, ok := _c.mutation.Namespace(); ok {
+		_spec.SetField(approvalrequest.FieldNamespace, field.TypeString, value)
+		_node.Namespace = value
+	}
+	if value, ok := _c.mutation.Number(); ok {
+		_spec.SetField(approvalrequest.FieldNumber, field.TypeInt, value)
+		_node.Number = value
 	}
 	if value, ok := _c.mutation.ActionType(); ok {
 		_spec.SetField(approvalrequest.FieldActionType, field.TypeString, value)
@@ -492,6 +513,10 @@ func (_c *ApprovalRequestCreateBulk) Save(ctx context.Context) ([]*ApprovalReque
 					return nil, err
 				}
 				mutation.id = &nodes[i].ID
+				if specs[i].ID.Value != nil && nodes[i].ID == 0 {
+					id := specs[i].ID.Value.(int64)
+					nodes[i].ID = int64(id)
+				}
 				mutation.done = true
 				return nodes[i], nil
 			})

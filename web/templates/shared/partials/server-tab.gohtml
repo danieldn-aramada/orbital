@@ -38,6 +38,16 @@
     </div>
   </div>
 
+  {{/*
+  Filled by orbital.js (loadPendingChangeBanners) from
+  GET /api/v1/change-requests?status=active&orbId=… — the same public endpoint
+  any other client would call, per the Change Control UI decision. Stays empty
+  when nothing is in flight: an empty banner is a banner nobody reads.
+  The subtree orbIds come from the audit tab's data-related-orb-ids, so this and
+  the audit panel can never disagree about what "this server" covers.
+  */}}
+  <div data-pending-changes-for="{{.OrbID}}"></div>
+
   <div class="grid">
     <div class="cell is-col-span-2 is-row-span-1">
       <article class="box">
@@ -207,12 +217,20 @@
 
         <div id="srv-panel-maintenance-{{.DomID}}" style="display:none">
           {{if .MaintenanceConfigured}}
-          <table class="table is-fullwidth mt-2">
+          {{/* data-field-orbid / data-field-values drive the proposed-change
+               marks: orbital.js reads every panel carrying them, asks
+               /api/v1/proposed-changes about those orbIds, and fills the
+               js-field-mark slot on any row whose field is proposed. The
+               values are the RAW ones, so a proposal that already matches
+               current state can be recognised as a no-op and left unmarked. */}}
+          <table class="table is-fullwidth mt-2"
+                 data-field-orbid="{{.MaintenanceOrbID}}"
+                 data-field-values="{{.MaintenanceValuesJSON}}">
             <tbody>
-              <tr><td style="white-space:nowrap;width:1%">enabled</td><td><span class="tag">{{if .MaintenanceEnabled}}true{{else}}false{{end}}</span></td></tr>
-              <tr><td style="white-space:nowrap">windowStart</td><td>{{if .MaintenanceWindowStart}}{{.MaintenanceWindowStart}}{{else}}—{{end}}</td></tr>
-              <tr><td style="white-space:nowrap">windowEnd</td><td>{{if .MaintenanceWindowEnd}}{{.MaintenanceWindowEnd}}{{else}}—{{end}}</td></tr>
-              <tr><td style="white-space:nowrap">reason</td><td>{{if .MaintenanceReason}}{{.MaintenanceReason}}{{else}}—{{end}}</td></tr>
+              <tr data-field="enabled"><td style="white-space:nowrap;width:1%">enabled</td><td><span class="tag">{{if .MaintenanceEnabled}}true{{else}}false{{end}}</span><span class="js-field-mark"></span></td></tr>
+              <tr data-field="windowStart"><td style="white-space:nowrap">windowStart</td><td>{{if .MaintenanceWindowStart}}{{.MaintenanceWindowStart}}{{else}}—{{end}}<span class="js-field-mark"></span></td></tr>
+              <tr data-field="windowEnd"><td style="white-space:nowrap">windowEnd</td><td>{{if .MaintenanceWindowEnd}}{{.MaintenanceWindowEnd}}{{else}}—{{end}}<span class="js-field-mark"></span></td></tr>
+              <tr data-field="reason"><td style="white-space:nowrap">reason</td><td>{{if .MaintenanceReason}}{{.MaintenanceReason}}{{else}}—{{end}}<span class="js-field-mark"></span></td></tr>
             </tbody>
           </table>
           {{else}}

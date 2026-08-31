@@ -27,8 +27,9 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   `POST /api/v1/change-requests` proposes a set of ConfigItem changes as target end-state;
   a peer other than the author approves it; `POST .../merge` applies it MVCC-guarded.
   `GET .../diff` returns a flat, render-ready diff of current intent vs the proposal.
-  Protected classes are declared per namespace (optionally per type) via
-  `/api/v1/approval-policies`, and are **opt-in** — with no policy, nothing changes.
+  Protected classes are declared via `/api/v1/approval-policies` — **one policy per
+  namespace**, covering either every type or a named list — and are **opt-in**: with no
+  policy, nothing changes. Enforcement is per policy; there is no global switch.
   Notable properties: a changeset is validated against the *deployed* schema at creation, so a
   proposal that could never apply never reaches a reviewer; staleness and approval validity are
   derived on every read rather than stored, so no hook can miss a write; a partially applied
@@ -46,9 +47,11 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   a review view showing the diff, the approvals (including "approved an earlier version"
   when one no longer counts) and only the actions the caller may actually take; and the
   config editor relabels **Save → Propose change** on a protected class, opening a change
-  request and taking you to its review instead of writing. An admin keeps Save, with a
-  visible notice that the write bypasses review. An entity with a change already in
-  flight says so before you start editing it.
+  request instead of writing, and leaving you on the entity — where a banner names the
+  request and links to it. An admin keeps Save, with a visible notice that the write
+  bypasses review. An entity with a change already in flight says so before you start
+  editing it, including when the change targets an owned child such as its iDRAC or
+  maintenance window.
 - **Artifact-to-artifact compare** — `GET /api/v1/export/compare?from=&to=` returns the
   desired-state delta between any two published artifacts of a data center, pulled by immutable
   digest and diffed in memory. Surfaced as a **Compare** tab on Publish History with linkable
@@ -60,6 +63,26 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   Without them the endpoint was capped at 100 rows across all data centers, so a busy data center
   pushed others out of the response entirely.
 - **Divergence badge** in the navigation, showing unresolved divergence entries.
+- **`GET /api/v1/proposed-changes?orbId=…`** — what is proposed for a set of entities, keyed by
+  orbId and indexed by field, so a client can overlay proposals onto entities read from
+  `/graphql` with a map lookup rather than inverting the change-request list itself. Reads
+  PostgreSQL only, so it is safe on every page load. Powers per-field marks on the server
+  detail page: a field with a change in flight names the proposed value, its author and a link
+  to the review; several proposals show a count, and ones that disagree are called out.
+- **Change requests are identified as `<namespace>-<number>`** (`colo-42`) instead of a UUID —
+  per-namespace numbering, so each data center counts from 1 and an id says which site it is
+  about. Accepted and returned everywhere, including URLs. The queue lists the id first, titles
+  each request by what it changes (`server-CWJHDX3 · maintenance.enabled → true`) rather than
+  which entity it touches, and shows relative age.
+- **Approval-policy administration is audited** — create, update and delete write `management`
+  audit events carrying before/after and an explicit flag when enforcement stopped. Previously a
+  write that *bypassed* a policy was recorded while changing the policy itself left no trace.
+- **`?orbId=` is repeatable on `/api/v1/change-requests` and `/api/v1/audit-log`** (max 128),
+  matching requests or events touching any of them — so a view can ask about an entity and
+  everything it owns in one call.
+- **`ORBITAL_CHANGE_CONTROL_ENABLED`** removes the change-control feature entirely — queue,
+  policies page, endpoints and nav — for adopters running their own change management. Deletes
+  no data; see `docs/reference/CONFIG.md`.
 - **`ServerMaintenance` config item** (schema v6) — maintenance-window flag per server.
 - **Request payload-size guard and rate limiting** on the API surface.
 
@@ -86,6 +109,11 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   `docs/planning/backlog.md` and technical debt to `docs/planning/debt.md`.
 
 ### Fixed
+- **`/api/v1/audit-log` silently truncated an over-cap `orbId` filter**, so a resource panel whose
+  subtree exceeded the limit dropped its overflow children with no signal — a Server audit tab
+  looked complete and was not. Both filters now refuse over the cap instead of narrowing the
+  answer, and the cap is sized above a real subtree (measured at 35 orbIds for a populated
+  server; it was 32).
 - **JSON-editor field clearing** — clearing a field is now a DGraph `remove`; `set: null` was a
   silent no-op, so cleared fields never persisted.
 - **Handler integration suite** — 10 failures and an intermittent flake. Tests called handlers

@@ -117,23 +117,35 @@ func (_u *ApprovalPolicyUpdate) SetNillableNamespace(v *string) *ApprovalPolicyU
 	return _u
 }
 
-// SetTypeName sets the "type_name" field.
-func (_u *ApprovalPolicyUpdate) SetTypeName(v string) *ApprovalPolicyUpdate {
-	_u.mutation.SetTypeName(v)
+// SetAllTypes sets the "all_types" field.
+func (_u *ApprovalPolicyUpdate) SetAllTypes(v bool) *ApprovalPolicyUpdate {
+	_u.mutation.SetAllTypes(v)
 	return _u
 }
 
-// SetNillableTypeName sets the "type_name" field if the given value is not nil.
-func (_u *ApprovalPolicyUpdate) SetNillableTypeName(v *string) *ApprovalPolicyUpdate {
+// SetNillableAllTypes sets the "all_types" field if the given value is not nil.
+func (_u *ApprovalPolicyUpdate) SetNillableAllTypes(v *bool) *ApprovalPolicyUpdate {
 	if v != nil {
-		_u.SetTypeName(*v)
+		_u.SetAllTypes(*v)
 	}
 	return _u
 }
 
-// ClearTypeName clears the value of the "type_name" field.
-func (_u *ApprovalPolicyUpdate) ClearTypeName() *ApprovalPolicyUpdate {
-	_u.mutation.ClearTypeName()
+// SetTypes sets the "types" field.
+func (_u *ApprovalPolicyUpdate) SetTypes(v []string) *ApprovalPolicyUpdate {
+	_u.mutation.SetTypes(v)
+	return _u
+}
+
+// AppendTypes appends value to the "types" field.
+func (_u *ApprovalPolicyUpdate) AppendTypes(v []string) *ApprovalPolicyUpdate {
+	_u.mutation.AppendTypes(v)
+	return _u
+}
+
+// ClearTypes clears the value of the "types" field.
+func (_u *ApprovalPolicyUpdate) ClearTypes() *ApprovalPolicyUpdate {
+	_u.mutation.ClearTypes()
 	return _u
 }
 
@@ -272,11 +284,19 @@ func (_u *ApprovalPolicyUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if value, ok := _u.mutation.Namespace(); ok {
 		_spec.SetField(approvalpolicy.FieldNamespace, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.TypeName(); ok {
-		_spec.SetField(approvalpolicy.FieldTypeName, field.TypeString, value)
+	if value, ok := _u.mutation.AllTypes(); ok {
+		_spec.SetField(approvalpolicy.FieldAllTypes, field.TypeBool, value)
 	}
-	if _u.mutation.TypeNameCleared() {
-		_spec.ClearField(approvalpolicy.FieldTypeName, field.TypeString)
+	if value, ok := _u.mutation.Types(); ok {
+		_spec.SetField(approvalpolicy.FieldTypes, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedTypes(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, approvalpolicy.FieldTypes, value)
+		})
+	}
+	if _u.mutation.TypesCleared() {
+		_spec.ClearField(approvalpolicy.FieldTypes, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.RequiredApprovals(); ok {
 		_spec.SetField(approvalpolicy.FieldRequiredApprovals, field.TypeInt, value)
@@ -403,23 +423,35 @@ func (_u *ApprovalPolicyUpdateOne) SetNillableNamespace(v *string) *ApprovalPoli
 	return _u
 }
 
-// SetTypeName sets the "type_name" field.
-func (_u *ApprovalPolicyUpdateOne) SetTypeName(v string) *ApprovalPolicyUpdateOne {
-	_u.mutation.SetTypeName(v)
+// SetAllTypes sets the "all_types" field.
+func (_u *ApprovalPolicyUpdateOne) SetAllTypes(v bool) *ApprovalPolicyUpdateOne {
+	_u.mutation.SetAllTypes(v)
 	return _u
 }
 
-// SetNillableTypeName sets the "type_name" field if the given value is not nil.
-func (_u *ApprovalPolicyUpdateOne) SetNillableTypeName(v *string) *ApprovalPolicyUpdateOne {
+// SetNillableAllTypes sets the "all_types" field if the given value is not nil.
+func (_u *ApprovalPolicyUpdateOne) SetNillableAllTypes(v *bool) *ApprovalPolicyUpdateOne {
 	if v != nil {
-		_u.SetTypeName(*v)
+		_u.SetAllTypes(*v)
 	}
 	return _u
 }
 
-// ClearTypeName clears the value of the "type_name" field.
-func (_u *ApprovalPolicyUpdateOne) ClearTypeName() *ApprovalPolicyUpdateOne {
-	_u.mutation.ClearTypeName()
+// SetTypes sets the "types" field.
+func (_u *ApprovalPolicyUpdateOne) SetTypes(v []string) *ApprovalPolicyUpdateOne {
+	_u.mutation.SetTypes(v)
+	return _u
+}
+
+// AppendTypes appends value to the "types" field.
+func (_u *ApprovalPolicyUpdateOne) AppendTypes(v []string) *ApprovalPolicyUpdateOne {
+	_u.mutation.AppendTypes(v)
+	return _u
+}
+
+// ClearTypes clears the value of the "types" field.
+func (_u *ApprovalPolicyUpdateOne) ClearTypes() *ApprovalPolicyUpdateOne {
+	_u.mutation.ClearTypes()
 	return _u
 }
 
@@ -588,11 +620,19 @@ func (_u *ApprovalPolicyUpdateOne) sqlSave(ctx context.Context) (_node *Approval
 	if value, ok := _u.mutation.Namespace(); ok {
 		_spec.SetField(approvalpolicy.FieldNamespace, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.TypeName(); ok {
-		_spec.SetField(approvalpolicy.FieldTypeName, field.TypeString, value)
+	if value, ok := _u.mutation.AllTypes(); ok {
+		_spec.SetField(approvalpolicy.FieldAllTypes, field.TypeBool, value)
 	}
-	if _u.mutation.TypeNameCleared() {
-		_spec.ClearField(approvalpolicy.FieldTypeName, field.TypeString)
+	if value, ok := _u.mutation.Types(); ok {
+		_spec.SetField(approvalpolicy.FieldTypes, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedTypes(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, approvalpolicy.FieldTypes, value)
+		})
+	}
+	if _u.mutation.TypesCleared() {
+		_spec.ClearField(approvalpolicy.FieldTypes, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.RequiredApprovals(); ok {
 		_spec.SetField(approvalpolicy.FieldRequiredApprovals, field.TypeInt, value)

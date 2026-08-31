@@ -21604,6 +21604,16 @@ has-background-danger.is-hoverable:active {
   border-top: 1px solid var(--bulma-border);
 }
 
+.modal-card-foot.has-gate-notice {
+  flex-wrap: wrap;
+}
+
+.modal-card-foot .js-gate-notice {
+  flex-basis: 100%;
+  width: 100%;
+  margin-bottom: 0;
+}
+
 .form-cluster-create {
   max-width: 800px;
 }

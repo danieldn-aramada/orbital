@@ -14,6 +14,7 @@
 //   Cluster edit modal
 //   HTMX afterSwap — orbital editor cleanup
 //   Server edit modal
+//   Pending change requests banner (detail pages)
 //   Audit log page
 //   Restore
 //   Users page
@@ -27,10 +28,10 @@
 // boundary between module logic and global registration. (Click handlers
 // stay inside their feature section as delegated listeners — see UI.md.)
 
-// configitem-editor.js: generic edit-modal submit handler. Imported for side
-// effect (registers window.initConfigItemEditor) so any page's modal shim
+// configitem-editor.js: generic edit-modal submit handler. Also imported for
+// side effect (registers window.initConfigItemEditor) so any page's modal shim
 // can call it without re-importing.
-import './configitem-editor.js'
+import { activeChangeRequestsFor } from './configitem-editor.js'
 
 import {
   BASE,
@@ -71,6 +72,7 @@ import {
   saveNetworkDeviceTab,
   initNetworkDeviceTabRestoration,
   safeDomId,
+  subtreeOrbIds,
   initRowNavigation,
   initLinkNavigation,
   initReloadButtons,
@@ -293,6 +295,8 @@ initLinkNavigation()
 initReloadButtons({
   onDcReloaded: (domId) => dcEditors.delete(domId),
   onSrvReloaded: (target) => {
+    loadPendingChangeBanners(target)
+    loadFieldMarks(target)
     const srvDetailTabs = target.querySelector('[id^="srv-detail-tabs-"]')
     if (srvDetailTabs) srvEditors.delete(srvDetailTabs.id.replace('srv-detail-tabs-', ''))
     const dcDetailTabs = target.querySelector('[id^="dc-detail-tabs-"]')
@@ -1280,6 +1284,240 @@ document.addEventListener('click', function (e) {
   }
 })
 
+// ─── Pending change requests banner (detail pages) ────────────────────────────
+//
+// "Is anyone already changing this?" asked on the page rather than only inside
+// the edit modal — by the time someone opens the editor they have usually
+// decided what to type.
+//
+// The scope is the entity AND everything it owns, because a change to an owned
+// child records the CHILD's orbId: a maintenance edit on a server lands as
+// `<ns>:server-maintenance-<serial>`, so a banner asking about the server alone
+// would stay silent while a proposal for that server sits in review. The list
+// comes from the audit tab's data-related-orb-ids — one source, so the banner
+// and the audit panel always mean the same thing by "this server".
+//
+// Nothing in flight renders NOTHING. An always-present banner reading "0
+// changes" is noise on every page view, and noise is what makes the one that
+// matters invisible.
+function renderPendingChangeBanner(holder, items) {
+  const notice = document.createElement('div')
+  notice.className = 'notification is-warning is-light py-2 is-size-7'
+  notice.dataset.testid = 'pending-changes-banner'
+
+  const lead = document.createElement('strong')
+  lead.textContent = items.length + (items.length === 1 ? ' change' : ' changes') + ' in review'
+  notice.appendChild(lead)
+  notice.appendChild(document.createTextNode(' for this item or something it owns — '))
+
+  items.forEach((cr, i) => {
+    if (i > 0) notice.appendChild(document.createTextNode(' · '))
+    const a = document.createElement('a')
+    a.href = BASE + '/change-requests/' + encodeURIComponent(cr.id)
+    // textContent, not innerHTML: the title is whatever the proposer typed.
+    a.textContent = cr.title || cr.id
+    notice.appendChild(a)
+  })
+
+  holder.replaceChildren(notice)
+}
+
+// loadPendingChangeBanners fills every [data-pending-changes-for] placeholder
+// inside root. Idempotent — re-running after a fragment reload replaces the
+// banner rather than stacking a second one.
+function loadPendingChangeBanners(root = document) {
+  const holders = root.querySelectorAll ? root.querySelectorAll('[data-pending-changes-for]') : []
+  for (const holder of holders) {
+    const orbId = holder.dataset.pendingChangesFor
+    if (!orbId) continue
+    activeChangeRequestsFor(subtreeOrbIds(orbId))
+      .then(j => {
+        if (!j || !j.total) {
+          holder.replaceChildren()
+          return
+        }
+        renderPendingChangeBanner(holder, j.items)
+      })
+      .catch(() => {})
+  }
+}
+
+// ─── Proposed-change field marks ─────────────────────────────────────────────
+//
+// The banner says a change is in flight; these say WHICH FIELD, so you find out
+// before retyping an edit someone already proposed.
+//
+// The mark is an INDEX INTO the proposal, never a second value. With two
+// proposals a "pending: true" reads as a fact when it is one of two competing
+// claims, and a proposal touching five fields would be scattered across five
+// rows with no way to see it as the unit a reviewer approves. So: one proposal
+// names its value, several show a count, and disagreement is called out.
+//
+// Data comes from GET /api/v1/proposed-changes keyed by orbId — the inversion
+// and the conflict comparison are the API's, so an adopter's UI renders this
+// from the same call with the same one-line lookup.
+
+const FIELD_MARK_VALUE_MAX = 40
+
+// fmtAge renders a coarse "how long ago". Coarse on purpose: the useful
+// question is "is this fresh or has it been sitting there", not the minute.
+function fmtAge(iso) {
+  const then = Date.parse(iso)
+  if (!then) return ''
+  const mins = Math.max(0, Math.round((Date.now() - then) / 60000))
+  if (mins < 1) return 'just now'
+  if (mins < 60) return mins + 'm ago'
+  const hrs = Math.round(mins / 60)
+  if (hrs < 24) return hrs + 'h ago'
+  return Math.round(hrs / 24) + 'd ago'
+}
+
+// inlineValue renders a proposed value only when doing so stays readable.
+// Structured or long values fall back to naming the proposal without it —
+// the API returns the value untouched and this is the client's call.
+function inlineValue(p) {
+  if (p.op === 'clear') return '(cleared)'
+  const v = p.value
+  if (v === null || typeof v === 'object') return null
+  const s = String(v)
+  return s.length <= FIELD_MARK_VALUE_MAX ? s : null
+}
+
+// sameValue decides whether a proposal has already come true.
+//
+// Compared as canonical JSON so 1 and 1.0, or two equal objects, agree. This is
+// the no-op suppression: a proposal whose value already matches current state
+// changes nothing, and marking the field would be noise — most often after
+// someone applied the same edit directly, or in the brief window where the
+// graph read and the proposals read straddle a merge. The request still exists
+// and still shows in the banner; it just is not a reason to annotate the field.
+function sameValue(proposal, current) {
+  if (proposal.op === 'clear') return current === null || current === undefined
+  try {
+    return JSON.stringify(proposal.value) === JSON.stringify(current)
+  } catch (_) {
+    return false
+  }
+}
+
+// conflictsAmong recomputes disagreement over the proposals that SURVIVED
+// suppression.
+//
+// The API's `conflicting` counts every proposal, because it reads PostgreSQL
+// only and cannot know current values. Once the client drops the no-ops the
+// remaining set may agree — two proposals for `enabled`, one of which already
+// matches reality, leave exactly one live claim and no conflict. Rendering the
+// API's flag directly marked that as conflicting, which is a warning about
+// nothing.
+function conflictsAmong(live) {
+  if (live.length < 2) return false
+  const key = p => (p.op === 'clear' ? 'clear' : JSON.stringify(p.value))
+  return live.some(p => key(p) !== key(live[0]))
+}
+
+function renderFieldMark(slot, field, current, basePath) {
+  const live = (field.proposals || []).filter(p => !sameValue(p, current))
+  if (!live.length) return                      // every proposal is already true
+  const conflicting = conflictsAmong(live)
+
+  slot.replaceChildren()
+  // Default text colour, not a coloured run.
+  //
+  // `has-text-info` renders a pale blue that is roughly 2.5:1 on a white row —
+  // legible only if you already know it is there, which is the opposite of what
+  // a mark is for. The colour also had nothing left to say: the row already
+  // reads "proposed", so tinting the whole sentence encoded no extra fact.
+  //
+  // The proposed VALUE gets a tag instead, which puts it in the same visual
+  // register as the current value beside it (the table renders that as a tag
+  // too) and reads as "here are two values, one of them is a claim". This does
+  // not contradict the plain-coloured-text rule for dense tables — that rule is
+  // about a status COLUMN, where a column of pills is noise. Here the pill sits
+  // against another pill and the parallel is the point.
+  const wrap = document.createElement('span')
+  wrap.className = 'js-field-mark-text ml-3 is-size-7'
+  wrap.setAttribute('data-testid', 'field-mark')
+
+  if (live.length > 1) {
+    // Never two competing values on one row. A count, and a way through.
+    const badge = document.createElement('span')
+    // Solid-light danger: high contrast, unlike the pale text it replaced.
+    // Conflict is the one state here worth interrupting for.
+    badge.className = conflicting ? 'tag is-danger is-light' : 'tag is-light'
+    badge.textContent = live.length + ' proposed changes'
+      + (conflicting ? ' — conflicting' : '')
+    wrap.appendChild(badge)
+  } else {
+    const p = live[0]
+    const val = inlineValue(p)
+    const verb = p.status === 'approved' ? 'approved' : 'proposed'
+    if (val === null) {
+      wrap.appendChild(document.createTextNode(verb + ' change'))
+    } else {
+      wrap.appendChild(document.createTextNode(verb + ' → '))
+      const tag = document.createElement('span')
+      tag.className = 'tag is-info is-light'
+      tag.textContent = val
+      wrap.appendChild(tag)
+    }
+    const meta = document.createElement('span')
+    meta.className = 'has-text-grey ml-2'
+    meta.textContent = p.author + (fmtAge(p.createdAt) ? ', ' + fmtAge(p.createdAt) : '')
+      + (p.status === 'approved' ? ' · merges next' : '')
+    wrap.appendChild(meta)
+  }
+
+  // One word, whether there is one proposal or five. "Review them" made the
+  // label depend on the count for no benefit — the count is already stated.
+  const link = document.createElement('a')
+  link.className = 'ml-3 is-size-7'
+  link.href = basePath + '/change-requests'
+    + (live.length === 1 ? '/' + encodeURIComponent(live[0].changeRequestId) : '')
+  link.textContent = 'Review'
+  wrap.appendChild(link)
+  slot.appendChild(wrap)
+}
+
+// loadFieldMarks fills [data-field-orbid] tables inside root.
+//
+// One request for every orbId on the page, not one per table: the endpoint
+// takes a repeatable orbId and the page usually shows several panels for the
+// same subtree.
+function loadFieldMarks(root = document) {
+  const tables = root.querySelectorAll ? [...root.querySelectorAll('[data-field-orbid]')] : []
+  const withIds = tables.filter(t => t.dataset.fieldOrbid)
+  if (!withIds.length) return
+
+  const orbIds = [...new Set(withIds.map(t => t.dataset.fieldOrbid))]
+  const qs = orbIds.map(id => 'orbId=' + encodeURIComponent(id)).join('&')
+  fetch(BASE + '/api/v1/proposed-changes?' + qs, { headers: { Accept: 'application/json' } })
+    .then(r => (r.ok ? r.json() : null))
+    .then(byOrbId => {
+      if (!byOrbId) return
+      for (const table of withIds) {
+        const entry = byOrbId[table.dataset.fieldOrbid]
+        let current = {}
+        try { current = JSON.parse(table.dataset.fieldValues || '{}') } catch (_) { /* marks still render */ }
+        for (const row of table.querySelectorAll('[data-field]')) {
+          const slot = row.querySelector('.js-field-mark')
+          if (!slot) continue
+          slot.replaceChildren()                 // idempotent across fragment reloads
+          const field = entry && entry.fields && entry.fields[row.dataset.field]
+          if (field) renderFieldMark(slot, field, current[row.dataset.field], BASE)
+        }
+      }
+    })
+    .catch(() => {})                             // a mark is never worth an error banner
+}
+
+document.addEventListener('htmx:afterSettle', (evt) => {
+  const target = evt.detail && evt.detail.target
+  if (target) {
+    loadPendingChangeBanners(target)
+    loadFieldMarks(target)
+  }
+})
+
 // ─── Audit log page ───────────────────────────────────────────────────────────
 
 const skipVars = new Set(['updatedBy', 'updatedAt', 'id'])
@@ -1333,6 +1571,15 @@ function renderPayload(details) {
 document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('audit-log-table')) return
 
+  // details is an object on some rows and a JSON string on others (it is jsonb
+  // that has been through two encoders), so every reader has to tolerate both.
+  function auditDetails(row) {
+    const d = row && row.details
+    if (!d) return null
+    if (typeof d === 'string') { try { return JSON.parse(d) } catch (_) { return null } }
+    return d
+  }
+
   const auditTable = new DataTable('#audit-log-table', {
     layout: {
       topStart: [
@@ -1360,7 +1607,25 @@ document.addEventListener('DOMContentLoaded', () => {
       { data: null, orderable: false, className: 'dt-control', defaultContent: '', width: '1%' },
       { data: 'timestamp' },
       { data: 'actor' },
-      { data: 'operations', render: (v) => (v && v.length) ? v.map(op => `<span class="tag is-info is-light is-small">${op}</span>`).join(' ') : '<span class="tag is-light is-small">unknown</span>' },
+      {
+        data: 'operations',
+        render: (v, type, row) => {
+          const ops = (v && v.length)
+            ? v.map(op => `<span class="tag is-info is-light is-small">${op}</span>`).join(' ')
+            : '<span class="tag is-light is-small">unknown</span>'
+          // A privileged write IS a write — it belongs in the log like any
+          // other, and it is marked rather than filed somewhere separate.
+          // Without this the bypass was recorded in the API and invisible on
+          // the page, which is precisely where someone goes to ask "who skipped
+          // review". A tag on the existing Operations column rather than a new
+          // one: a column that is empty on all but a handful of rows costs
+          // every reader width to tell almost none of them anything.
+          const d = auditDetails(row)
+          if (!d || !d.privileged) return ops
+          const policy = d.bypassedPolicy ? ` (${esc(String(d.bypassedPolicy))})` : ''
+          return ops + ` <span class="tag is-warning is-small" title="Written directly, skipping the approval policy for ${esc(String(d.bypassedPolicy || 'this class'))}">bypassed review${policy}</span>`
+        },
+      },
       { data: 'resourceTypes', render: (v) => (v && v.length) ? v.join(', ') : '—' },
       { data: 'resourceIds', render: (v) => (v && v.length) ? v.join(', ') : '—' },
       { data: 'details', visible: false },
@@ -1756,6 +2021,16 @@ function confirmDivergenceBatch() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: r.action }),
     }).then(async resp => {
+      // 202 is NOT plain success. The class is protected, so Accept opened a
+      // change request instead of changing intent — the divergence is still
+      // open and stays open until that request merges. Treating it as done
+      // (which `resp.ok` alone does) reloads the page, leaves the entry sitting
+      // there, and tells the operator nothing about the request now waiting on
+      // a reviewer.
+      if (resp.status === 202) {
+        const body = await resp.json().catch(() => ({}))
+        return { id: r.id, ok: true, pending: true, changeRequestId: body.changeRequestId }
+      }
       if (resp.ok) return { id: r.id, ok: true }
       const body = await resp.json().catch(() => ({}))
       const errMessage = body.message || body.error || `HTTP ${resp.status}`
@@ -1766,8 +2041,37 @@ function confirmDivergenceBatch() {
       .filter(o => o.status === 'rejected')
       .map(o => ({ id: o.reason.id || '?', error: o.reason.message || 'unknown error' }))
     const okCount = outcomes.length - failed.length
-    if (failed.length === 0) {
+    const pending = outcomes
+      .filter(o => o.status === 'fulfilled' && o.value.pending)
+      .map(o => o.value)
+
+    if (failed.length === 0 && pending.length === 0) {
       window.location.reload()
+      return
+    }
+
+    // Some decisions needed approval. Say so BEFORE reloading, with links —
+    // after a reload those entries look untouched and the operator has no way
+    // back to the requests they just created.
+    if (failed.length === 0) {
+      closeDivergenceConfirmModal()
+      if (errEl) {
+        const links = pending
+          .filter(p => p.changeRequestId)
+          .map(p => `<a href="${BASE}/change-requests/${encodeURIComponent(p.changeRequestId)}">${esc(p.changeRequestId)}</a>`)
+          .join(', ')
+        errEl.classList.remove('is-danger')
+        errEl.classList.add('is-info')
+        errEl.style.whiteSpace = 'normal'
+        errEl.innerHTML = `${pending.length} of these need approval, so `
+          + `${pending.length === 1 ? 'a change request was' : 'change requests were'} opened instead`
+          + `${links ? ': ' + links : ''}. `
+          + `These entries stay open until ${pending.length === 1 ? 'it merges' : 'they merge'}.`
+          + (okCount > pending.length ? ` The other ${okCount - pending.length} applied.` : '')
+        errEl.style.display = ''
+      }
+      if (submit) submit.classList.remove('is-loading')
+      updateDivergenceBatchCounter()
       return
     }
     // Mark each failed row's Decision cell inline so the row itself shows the
@@ -2179,7 +2483,10 @@ document.addEventListener('DOMContentLoaded', () => {
     closed: 'has-text-grey-light',
   }
 
+  let currentFilter = ''
+
   function load(filter) {
+    currentFilter = filter || ''
     err.style.display = 'none'
     fetch(BASE + '/api/v1/change-requests' + (filter ? '?' + filter : ''), {
       headers: { Accept: 'application/json' },
@@ -2197,22 +2504,38 @@ document.addEventListener('DOMContentLoaded', () => {
       const href = BASE + '/change-requests/' + encodeURIComponent(cr.id)
       // Status as plain coloured text, not a tag pill — house convention for
       // dense tables.
-      const status = '<span class="' + (STATUS_CLASS[cr.status] || '') + '">' + esc(cr.status) + '</span>'
+      // Status is the ONE column that carries colour. Staleness rides in the
+      // same cell rather than a column of its own: it is a fact about the
+      // request's state, and a second coloured column competes with the first
+      // for the eye instead of adding to it.
+      let status = '<span class="' + (STATUS_CLASS[cr.status] || '') + '">' + esc(cr.status) + '</span>'
+      if (cr.stale) status += ' <span class="has-text-warning">\u00b7 stale</span>'
+      // Plain text, including the placeholder — a greyed "not required" is the
+      // same per-cell styling the policies page dropped.
       const approvals = cr.requiredApprovals > 0
-        ? esc(cr.approvals + ' of ' + cr.requiredApprovals)
-        : '<span class="has-text-grey-light">not required</span>'
-      const stale = cr.stale ? '<span class="has-text-warning">stale</span>' : ''
+        ? cr.approvals + ' of ' + cr.requiredApprovals
+        : 'not required'
       return '<tr data-cr-row="' + esc(cr.id) + '">'
-        + '<td><a href="' + href + '">' + esc(cr.title) + '</a></td>'
-        + '<td class="is-family-monospace">' + esc(cr.namespace) + '</td>'
+        + '<td class="is-family-monospace"><a href="' + href + '">' + esc(cr.id) + '</a></td>'
+        + '<td>' + esc(cr.title) + '</td>'
+        + '<td>' + esc(cr.namespace) + '</td>'
         + '<td>' + esc(cr.author) + '</td>'
         + '<td>' + status + '</td>'
-        + '<td>' + approvals + '</td>'
-        + '<td>' + stale + '</td>'
-        + '<td class="has-text-grey">' + esc(fmtDate(cr.createdAt)) + '</td>'
+        + '<td>' + esc(approvals) + '</td>'
+        + '<td title="' + esc(fmtDate(cr.createdAt)) + '">' + esc(fmtAge(cr.createdAt)) + '</td>'
         + '</tr>'
     }).join('')
-    empty.textContent = total === 0 ? 'Nothing here.' : ''
+    // What "empty" means depends on the tab, and the useful reading differs each
+    // time — "nothing awaits you" is reassurance; "nothing exists" is a
+    // statement about the system. A single "Nothing here." says neither.
+    const EMPTY = {
+      'awaiting_review=true': 'Nothing is waiting on your review.',
+      'mine=true': 'You have not opened any change requests.',
+      'status=active': 'No change requests are open.',
+      'status=merged': 'Nothing has been merged yet.',
+      '': 'No change requests yet. One is created when a change needs approval before it applies.',
+    }
+    empty.textContent = total === 0 ? (EMPTY[currentFilter] || EMPTY['']) : ''
     empty.style.display = total === 0 ? '' : 'none'
   }
 
@@ -2402,6 +2725,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const err = document.getElementById('ap-error')
   const addBtn = document.getElementById('ap-add')
+  // Non-admins get the page read-only. The row controls are omitted rather than
+  // disabled: a greyed Delete still says "you could do this", and the API would
+  // refuse anyway — better to render what the caller can actually do.
+  const canAdmin = tbody.closest('[data-can-admin]')?.getAttribute('data-can-admin') === 'true'
 
   function fail(msg) {
     err.textContent = msg
@@ -2416,7 +2743,12 @@ document.addEventListener('DOMContentLoaded', () => {
       .catch(e => fail('Could not load policies — ' + e.message))
   }
 
+  // The last rendered list, so Edit can prefill from what the operator is
+  // looking at rather than re-fetching a row that may have moved underneath.
+  let lastPolicies = []
+
   function render(policies) {
+    lastPolicies = policies || []
     if (!policies || !policies.length) {
       tbody.innerHTML = '<tr><td colspan="6" class="has-text-grey is-size-7">'
         + 'No protected classes. Every change writes directly, as it does without this feature.'
@@ -2424,24 +2756,51 @@ document.addEventListener('DOMContentLoaded', () => {
       return
     }
     tbody.innerHTML = policies.map(p => {
-      // `enforced` is the API telling us whether orbital actually refuses a
-      // direct write for this class — distinct from `enabled`, which is only
-      // what the admin asked for. Showing the admin's intent as though it were
-      // the outcome is exactly the false assurance the field exists to prevent.
-      const state = p.enabled
-        ? (p.enforced
-            ? '<span class="has-text-success">enforced</span>'
-            : '<span class="has-text-warning" title="' + esc(p.notice || '') + '">not enforced</span>')
-        : '<span class="has-text-grey">off</span>'
+      // A segmented control, matching the Users page's role picker: both options
+      // visible, the active one highlighted and disabled.
+      //
+      // It replaced a single blue button reading "Disable" beside a Status
+      // column reading "enforced" — a state and an action stating the same fact
+      // in opposite directions, so the reader had to invert one to reconcile
+      // them. A toggle would have the same defect (does it show the state or the
+      // action?); a segmented pair does not, because nothing is implied.
+      //
+      // `enforced` is the API's answer to "does orbital actually refuse a direct
+      // write", as opposed to `enabled`, which is only what the admin asked for.
+      // They agree in every shipping build, so there is no Status column any
+      // more — but if they ever diverge the anomaly appears ON the control,
+      // where someone is already looking, rather than in a column that reads the
+      // same 99% of the time.
+      // Two states, because there are only two. Enforcement is per-policy and
+      // there is no global switch that could make an enabled policy inert, so
+      // `enabled` IS whether it is being enforced.
+      //
+      // Vocabulary follows the category — GitHub rulesets, Kyverno, Gatekeeper
+      // and Sentinel all put enforcement on the policy. Red on the off side
+      // matches the Users role picker's severity ramp: not "bad", but *look at
+      // this* — a disabled policy sits in the table looking like protection.
       return '<tr data-ap-id="' + esc(p.id) + '">'
-        + '<td class="is-family-monospace">' + esc(p.namespace) + '</td>'
-        + '<td>' + (p.type ? esc(p.type) : '<span class="has-text-grey">all types</span>') + '</td>'
+        + '<td>' + esc(p.namespace) + '</td>'
+        + '<td>' + (p.allTypes ? 'All types' : esc((p.types || []).join(', '))) + '</td>'
         + '<td>' + esc(p.requiredApprovals) + '</td>'
-        + '<td class="is-size-7">' + esc((p.bypassRoles || []).join(', ')) + '</td>'
-        + '<td>' + state + '</td>'
+        + '<td>' + esc((p.bypassRoles || []).join(', ')) + '</td>'
+        + '<td>'
+        + (canAdmin
+            ? '<div class="buttons has-addons" style="margin-bottom:0; flex-wrap:nowrap;">'
+              + '<button class="button is-small js-ap-enable' + (p.enabled ? ' is-success is-selected' : '') + '"'
+              + (p.enabled ? ' disabled' : '') + ' title="Changes to this class need approval" style="width:5.5rem;">Active</button>'
+              + '<button class="button is-small js-ap-disable' + (p.enabled ? '' : ' is-danger is-selected') + '"'
+              + (p.enabled ? '' : ' disabled') + ' title="Off — changes to this class write directly" style="width:5.5rem;">Disabled</button>'
+              + '</div>'
+            // Read-only: the same fact as plain coloured text, no affordance.
+            : '<span class="' + (p.enabled ? 'has-text-success' : 'has-text-danger') + '">'
+              + (p.enabled ? 'Active' : 'Disabled') + '</span>')
+        + '</td>'
         + '<td class="has-text-right">'
-        + '<button class="button is-small js-ap-toggle mr-1">' + (p.enabled ? 'Disable' : 'Enable') + '</button>'
-        + '<button class="button is-small is-danger is-light js-ap-delete">Delete</button>'
+        + (canAdmin
+            ? '<button class="button is-small js-ap-edit mr-2">Edit</button>'
+              + '<button class="button is-small is-danger js-ap-delete">Delete</button>'
+            : '')
         + '</td></tr>'
     }).join('')
   }
@@ -2458,25 +2817,182 @@ document.addEventListener('DOMContentLoaded', () => {
     }).catch(() => fail('Request failed — check your connection and try again.'))
   }
 
-  addBtn.addEventListener('click', () => {
-    const namespace = prompt('Namespace to protect (every change in it will need approval):')
-    if (!namespace) return
-    const type = prompt('Limit to one ConfigItem type? Leave blank for all types:', '') || ''
-    const n = parseInt(prompt('How many approvals are required?', '1') || '1', 10)
-    send('POST', '', {
-      namespace: namespace.trim(),
-      type: type.trim(),
-      requiredApprovals: isNaN(n) || n < 1 ? 1 : n,
+  // The namespace and type are PICKED, never typed.
+  //
+  // Free text here is not a style problem: a transposed character produces a
+  // policy that renders as `enforced` and gates nothing, which is the exact
+  // false assurance the `enforced` flag exists to prevent, arriving through a
+  // different door. Both lists come from existing public listings — orbital
+  // adds no UI-only endpoint to populate a dropdown.
+  if (!canAdmin) { load(); return }
+
+  const modal = document.getElementById('ap-modal')
+  const nsSel = document.getElementById('ap-namespace')
+  const typeSel = document.getElementById('ap-type')
+  const allTypes = document.getElementById('ap-all-types')
+  const typeField = document.getElementById('ap-type-field')
+
+  // Scope is a MODE, picked deliberately — not an empty selection standing in
+  // for "everything".
+  //
+  // The two produce genuinely different policies, which is why this is a choice
+  // and not a convenience. `allTypes` matches ANY type, so a ConfigItem added to
+  // the schema next month is covered the day it lands. An enumerated list covers
+  // what it enumerates; the next type to arrive is ungoverned and nobody
+  // notices. Pre-ticking every type would look identical today and quietly stop
+  // being true the next time the schema grows.
+  //
+  // Same shape as an explicit wildcard elsewhere — K8s RBAC `resources: ["*"]`,
+  // IAM `"Resource": "*"`, GitHub rulesets' "All branches" vs "Include by
+  // pattern".
+  function syncScope() {
+    typeSel.disabled = allTypes.checked
+    typeField.style.opacity = allTypes.checked ? '0.45' : ''
+    if (allTypes.checked) {
+      for (const o of typeSel.options) o.selected = false
+    }
+  }
+  allTypes.addEventListener('change', syncScope)
+  const reqInput = document.getElementById('ap-required')
+  const modalErr = document.getElementById('ap-modal-error')
+
+  const closeModal = () => {
+    modal.classList.remove('is-active')
+    document.documentElement.style.overflow = ''
+  }
+  for (const id of ['ap-modal-cancel', 'ap-modal-close']) {
+    document.getElementById(id).addEventListener('click', closeModal)
+  }
+  modal.querySelector('.modal-background').addEventListener('click', closeModal)
+
+  function gql(query) {
+    return fetch(BASE + '/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    }).then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+  }
+
+  let optionsLoaded = false
+  function loadOptions() {
+    if (optionsLoaded) return Promise.resolve()
+    return Promise.all([
+      gql('{ queryNamespace{ name } }'),
+      gql('{ __type(name:"ConfigItem"){ possibleTypes { name } } }'),
+    ]).then(([ns, ty]) => {
+      const names = (ns.data?.queryNamespace || []).map(n => n.name).sort()
+      nsSel.innerHTML = names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')
+      // No "every type" OPTION: with a multi-select, an all-types entry sitting
+      // alongside specific ones is a contradictory selection waiting to happen.
+      // Empty means all, said in the help text instead.
+      const types = (ty.data?.__type?.possibleTypes || []).map(t => t.name).sort()
+      typeSel.innerHTML = types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')
+      optionsLoaded = true
     })
+  }
+
+  // The id of the policy being edited, or null when adding. Editing exists
+  // because there is one policy per namespace: without it, "also protect Rack"
+  // would mean deleting the policy and rebuilding it from memory, and the API's
+  // own 409 tells you to PATCH — advice a UI with no edit path cannot follow.
+  let editingId = null
+
+  function openModal(p) {
+    editingId = p ? p.id : null
+    modalErr.style.display = 'none'
+    document.getElementById('ap-modal-title').textContent =
+      p ? 'Edit policy — ' + p.namespace : 'Protect a class of changes'
+    document.getElementById('ap-modal-save').textContent = p ? 'Save changes' : 'Create policy'
+    loadOptions()
+      .then(() => {
+        if (!nsSel.options.length) {
+          fail('No namespaces exist yet — there is nothing to protect.')
+          return
+        }
+        // The namespace IS the policy's identity, so editing cannot move it —
+        // that would be deleting one policy and creating another, and the two
+        // have different audit stories.
+        nsSel.value = p ? p.namespace : nsSel.options[0].value
+        nsSel.disabled = !!p
+        allTypes.checked = p ? !!p.allTypes : true
+        const want = new Set(p ? (p.types || []) : [])
+        for (const o of typeSel.options) o.selected = want.has(o.value)
+        reqInput.value = p ? p.requiredApprovals : 1
+        const roles = new Set(p ? (p.bypassRoles || []) : ['admin'])
+        for (const c of document.querySelectorAll('.ap-bypass')) c.checked = roles.has(c.value)
+        syncScope()
+        modal.classList.add('is-active')
+        document.documentElement.style.overflow = 'hidden'
+      })
+      .catch(e => fail('Could not load namespaces — ' + e.message))
+  }
+
+  addBtn.addEventListener('click', () => openModal(null))
+
+  document.getElementById('ap-modal-save').addEventListener('click', async () => {
+    modalErr.style.display = 'none'
+    const n = parseInt(reqInput.value, 10)
+    const bypassRoles = Array.from(document.querySelectorAll('.ap-bypass:checked')).map(c => c.value)
+    const chosen = Array.from(typeSel.selectedOptions).map(o => o.value).filter(Boolean)
+    if (!allTypes.checked && !chosen.length) {
+      modalErr.textContent = 'Pick at least one type, or tick "All types in this namespace".'
+      modalErr.style.display = ''
+      return
+    }
+
+    // ONE request touching ONE row, whether adding or editing. The types live
+    // in the policy, so selecting three of them is still a single policy —
+    // nothing to compose, nothing to partially create, and exactly one policy
+    // to name when someone asks why a change was gated.
+    const payload = {
+      allTypes: allTypes.checked,
+      types: allTypes.checked ? [] : chosen,
+      requiredApprovals: isNaN(n) || n < 1 ? 1 : n,
+      // An explicit empty list is meaningful — "nobody bypasses, including
+      // admins" — so it is sent as such rather than omitted, which the API
+      // would read as "use the default".
+      bypassRoles: bypassRoles,
+    }
+    if (!editingId) payload.namespace = nsSel.value
+
+    let resp
+    try {
+      resp = await fetch(BASE + '/api/v1/approval-policies' + (editingId ? '/' + editingId : ''), {
+        method: editingId ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+    } catch (_) {
+      modalErr.textContent = 'Request failed — check your connection and try again.'
+      modalErr.style.display = ''
+      return
+    }
+
+    if (resp.ok) { closeModal(); load(); return }
+    const j = await resp.json().catch(() => ({}))
+    const what = editingId ? 'save the policy' : 'create the policy'
+    modalErr.textContent = (j.error || `Could not ${what} (${resp.status}).`) + (j.hint ? ' — ' + j.hint : '')
+    modalErr.style.display = ''
   })
 
   tbody.addEventListener('click', (e) => {
     const row = e.target.closest('[data-ap-id]')
     if (!row) return
     const id = row.getAttribute('data-ap-id')
-    if (e.target.closest('.js-ap-toggle')) {
-      const enabling = e.target.textContent.trim() === 'Enable'
-      send('PATCH', '/' + encodeURIComponent(id), { enabled: enabling })
+
+    if (e.target.closest('.js-ap-enable')) {
+      // Asymmetric on purpose: turning protection ON is free.
+      send('PATCH', '/' + encodeURIComponent(id), { enabled: true })
+    } else if (e.target.closest('.js-ap-disable')) {
+      // Turning it OFF asks first. One click to stop requiring review for a
+      // whole class of changes is lighter than the action deserves — Delete
+      // already confirms, and this has the same consequence for as long as it
+      // stays off.
+      if (!confirm('Disable this policy?\n\nChanges to this class will write directly, with no review, until it is enabled again.')) return
+      send('PATCH', '/' + encodeURIComponent(id), { enabled: false })
+    } else if (e.target.closest('.js-ap-edit')) {
+      const p = (lastPolicies || []).find(x => x.id === id)
+      if (p) openModal(p)
     } else if (e.target.closest('.js-ap-delete')) {
       if (!confirm('Delete this policy? Changes to that class will write directly again.')) return
       send('DELETE', '/' + encodeURIComponent(id))

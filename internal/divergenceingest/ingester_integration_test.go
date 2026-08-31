@@ -42,6 +42,9 @@ func TestMain(m *testing.M) {
 
 func setup() error {
 	var err error
+	if err := testutil.EnsureTestDatabase(); err != nil {
+		log.Fatalf("ensure test database: %v", err)
+	}
 	testDB, err = ent.Open("postgres", testutil.TestDatabaseURL())
 	if err != nil {
 		return fmt.Errorf("open db: %w", err)

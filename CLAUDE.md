@@ -25,6 +25,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Reconciling configuration drift — orbital surfaces divergence to administrators but never auto-resolves it and is never in the reconciliation path
 - Packaging, signing, or transporting config payloads — orbital's contract ends at the export API (`json.gz` + `schema.gz`); how that is packaged into a ConfigBundle, signed, and delivered to the edge is the deployment layer's concern (implemented in a separate repository)
 
+### Design posture: compose, don't replace
+
+**Orbital is adopted by teams at companies that already run their own DCIM, auth, ITSM and change-management tools.** Assume the adopter arrives with a stack, and design orbital to slot into it — never to replace it, and never to assume it is absent. Every Non-Goal above is an instance of this, and so are the "out of v1 scope" and "do not prescribe" entries in Settled Decisions: they are not separate judgement calls, they are one principle applied repeatedly.
+
+What it means in practice:
+
+- **Identity is theirs.** Auth is OIDC against the adopter's IdP; orbital's user table holds a role, not an identity system.
+- **Upstream owners keep their data.** Network config, PLM and ITSM are owned elsewhere; orbital references them, and integrations go behind a Go interface rather than a schema commitment.
+- **A capability that duplicates one the adopter already has must be switchable off.** Change control is the worked example — a team on ServiceNow would otherwise get two answers to "was this change approved", with orbital's flow invisible to their org's audit. That harm is what earns a toggle; see `docs/reference/CONFIG.md` for the bar and the rules.
+- **Contracts end at the boundary.** Orbital publishes intent and accepts reports. Transport, packaging, signing and reconciliation are someone else's, deliberately.
+
+**The boundary — do NOT over-apply this.** Orbital *owns* the graph, the design intent, the export contract and its own API and UI. "Compose, don't replace" governs what orbital reaches for **outward**; it is not an argument for orbital doing less at its core. If it is being used to argue against orbital owning something central, it is being misused.
+
 ## Stack
 
 - **Go** — both `orbital` and `orb`
@@ -115,6 +128,7 @@ Read the relevant doc(s) BEFORE writing code in that area — they encode conven
 | **Querying NetBox / building or reconciling a network-topology seed** (endpoints, field shapes, join keys, gotchas) | `docs/reference/NETBOX.md` |
 | UI templates, HTMX, JavaScript, CSS, edit modals, JSON editor pattern | `docs/reference/UI.md` |
 | Audit events, mutation recording, diff rendering, `graphql.go` proxy | `docs/reference/AUDIT.md` |
+| **Env vars / config / adding a feature toggle** (incl. the ops-vs-maturity rule) | `docs/reference/CONFIG.md` |
 | Error responses — envelope (`error`/`code`/`httpStatus`/`hint`), `code` registry, HTTP-status mapping | `docs/reference/ERROR-RESPONSES.md` |
 | Auth, sessions, OIDC, bearer tokens, role enforcement, orbctl credentials | `docs/reference/AUTH.md` |
 | OCI publish, signing, export jobs, backup, restore, bundler integration | `docs/reference/OCI.md` |

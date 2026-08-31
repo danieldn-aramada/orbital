@@ -77,7 +77,7 @@ func UpdatedBy(v string) predicate.MergeAttempt {
 }
 
 // ApprovalRequestID applies equality check predicate on the "approval_request_id" field. It's identical to ApprovalRequestIDEQ.
-func ApprovalRequestID(v uuid.UUID) predicate.MergeAttempt {
+func ApprovalRequestID(v int64) predicate.MergeAttempt {
 	return predicate.MergeAttempt(sql.FieldEQ(FieldApprovalRequestID, v))
 }
 
@@ -337,22 +337,22 @@ func UpdatedByContainsFold(v string) predicate.MergeAttempt {
 }
 
 // ApprovalRequestIDEQ applies the EQ predicate on the "approval_request_id" field.
-func ApprovalRequestIDEQ(v uuid.UUID) predicate.MergeAttempt {
+func ApprovalRequestIDEQ(v int64) predicate.MergeAttempt {
 	return predicate.MergeAttempt(sql.FieldEQ(FieldApprovalRequestID, v))
 }
 
 // ApprovalRequestIDNEQ applies the NEQ predicate on the "approval_request_id" field.
-func ApprovalRequestIDNEQ(v uuid.UUID) predicate.MergeAttempt {
+func ApprovalRequestIDNEQ(v int64) predicate.MergeAttempt {
 	return predicate.MergeAttempt(sql.FieldNEQ(FieldApprovalRequestID, v))
 }
 
 // ApprovalRequestIDIn applies the In predicate on the "approval_request_id" field.
-func ApprovalRequestIDIn(vs ...uuid.UUID) predicate.MergeAttempt {
+func ApprovalRequestIDIn(vs ...int64) predicate.MergeAttempt {
 	return predicate.MergeAttempt(sql.FieldIn(FieldApprovalRequestID, vs...))
 }
 
 // ApprovalRequestIDNotIn applies the NotIn predicate on the "approval_request_id" field.
-func ApprovalRequestIDNotIn(vs ...uuid.UUID) predicate.MergeAttempt {
+func ApprovalRequestIDNotIn(vs ...int64) predicate.MergeAttempt {
 	return predicate.MergeAttempt(sql.FieldNotIn(FieldApprovalRequestID, vs...))
 }
 

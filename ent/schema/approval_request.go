@@ -9,7 +9,6 @@ import (
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
-	"github.com/google/uuid"
 )
 
 // ApprovalRequest is one proposed change awaiting review — the generic
@@ -28,7 +27,29 @@ type ApprovalRequest struct {
 
 func (ApprovalRequest) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).Default(uuid.New),
+		// A plain auto-increment bigint, not a UUID.
+		//
+		// The identifier people actually use is `namespace`-`number` (see below);
+		// this is the surrogate key behind it. UUID bought nothing here — orbital
+		// has one PostgreSQL, no distributed writes, and its own backup/restore
+		// covers DGraph, not this database — while every comparable system
+		// (GitHub, GitLab, Jira) uses an integer plus a short human id, which is
+		// the pattern worth matching.
+		field.Int64("id"),
+
+		// namespace and number form the human identifier: `colo-42`.
+		//
+		// Denormalised from payload.namespace on purpose. It is immutable for the
+		// life of the request (a changeset is single-namespace by construction),
+		// and every lookup by human id filters on it — reading it out of jsonb on
+		// the path that serves `/change-requests/colo-42` would make the primary
+		// lookup a containment query.
+		//
+		// number is per-namespace, so each data center counts from 1 — the Jira
+		// PROJ-42 model applied to orbital's natural partition. The unique index
+		// below is what makes it safe under concurrent creates.
+		field.String("namespace").NotEmpty().Immutable(),
+		field.Int("number").Positive().Immutable(),
 
 		// action_type selects the adapter (e.g. "config.mutation"). A plain
 		// string, NOT an ent enum: the whole point of the generic engine is that
@@ -105,6 +126,11 @@ func (ApprovalRequest) Indexes() []ent.Index {
 		// "mine" filter.
 		index.Fields("author"),
 		index.Fields("action_type"),
+		// The human identifier. UNIQUE is not decoration: numbers are allocated
+		// as max(number)+1 per namespace, and this index is what turns a
+		// concurrent double-allocation into a retryable constraint error instead
+		// of two requests silently sharing `colo-42`.
+		index.Fields("namespace", "number").Unique(),
 		// GIN on the payload so "which requests touch this orbId" is an indexed
 		// containment lookup rather than a scan-plus-render. Without it the
 		// pending-change badge — which fires on every detail view — would load

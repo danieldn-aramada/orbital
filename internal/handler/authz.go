@@ -55,6 +55,26 @@ type callerRole struct {
 //     the role is read from PostgreSQL.
 //   - No authz backend (nil db) — see NoAuthz.
 func resolveCallerRole(c echo.Context, db *ent.Client) callerRole {
+	if cached, ok := c.Get(callerRoleKey).(callerRole); ok {
+		return cached
+	}
+	cr := computeCallerRole(c, db)
+	c.Set(callerRoleKey, cr)
+	return cr
+}
+
+// callerRoleKey memoises the resolved role for the LIFETIME OF ONE REQUEST.
+//
+// Not a cache with a TTL, and deliberately not one: PostgreSQL stays the
+// authority and is re-read on the caller's very next request, so an admin
+// changing someone's role takes effect immediately rather than whenever a
+// cache expires. What this removes is only the repetition inside a single
+// request — RequireRole looks the user up, then the handler asks again, and on
+// a /graphql mutation authorizeMutation and writeToDGraph each ask a third and
+// fourth time. Same row, same transaction-visible instant, N queries.
+const callerRoleKey = "caller_role"
+
+func computeCallerRole(c echo.Context, db *ent.Client) callerRole {
 	if roleStr, _ := c.Get("role").(string); roleStr != "" {
 		return callerRole{Role: user.Role(roleStr), Source: "context"}
 	}
@@ -176,6 +196,10 @@ func ResolveUser(db *ent.Client, adminEmails map[string]struct{}) echo.Middlewar
 				}
 			}
 			c.Set("user_id", u.ID)
+			// This is the bearer path — the production one. RequireRole and the
+			// handler both want this user's role next; hand them the row already
+			// fetched instead of making each re-query it.
+			c.Set(callerRoleKey, callerRole{Role: u.Role, Source: "user"})
 			return next(c)
 		}
 	}
@@ -253,6 +277,9 @@ func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 				)
 				return echo.NewHTTPError(http.StatusForbidden, "user record not found — sign in and retry")
 			}
+			// The handler downstream will ask for this same role. Seed the memo
+			// from the row already in hand rather than making it query again.
+			c.Set(callerRoleKey, callerRole{Role: u.Role, Source: "user"})
 			if !RoleAtLeast(u.Role, minRole) {
 				slog.Default().Warn("authorization denied",
 					"actor", u.Email,

@@ -224,6 +224,20 @@ func (h *UI) base(c echo.Context) layout.Base {
 	}
 }
 
+// changeControlEnabled mirrors ORBITAL_CHANGE_CONTROL_ENABLED. Package-level and
+// set once at startup so the nav, the routes and the approval gate cannot
+// disagree about whether the feature exists.
+//
+// It is the ONLY global switch: enforcement itself is per-policy, matching every
+// comparable policy engine. Disabling one policy stops that policy gating and
+// leaves the rest alone, which is what an operator needs when a single policy
+// misbehaves.
+var changeControlEnabled = true
+
+// SetChangeControlEnabled wires ORBITAL_CHANGE_CONTROL_ENABLED. Called from
+// server startup before any request is served.
+func SetChangeControlEnabled(on bool) { changeControlEnabled = on }
+
 func (h *UI) buildMenuSections(path, userRole string, pendingDivergences int) []layout.MenuSection {
 	bp := h.basePath
 	sections := []layout.MenuSection{
@@ -252,35 +266,44 @@ func (h *UI) buildMenuSections(path, userRole string, pendingDivergences int) []
 		},
 	}
 
-	// Change Control — a section rather than two items scattered elsewhere,
-	// because it houses both an operational queue and admin config for one
-	// domain. The analogs all do the same (GitHub "Pull Requests", NetBox
-	// Change Management, InfraHub "Proposed Changes"), and branches slot in
-	// here later.
-	ccItems := []layout.MenuItem{
-		{
-			Label: "Change Requests", Href: bp + "/change-requests",
-			Active: path == bp+"/change-requests" || strings.HasPrefix(path, bp+"/change-requests/"),
-			// Asynchronous: "awaiting MY review" needs each candidate rendered
-			// to know whether this caller can approve it, and the menu is on
-			// every page. Computing it inline would make every page load pay
-			// for a change-request scan.
-			BadgeSrc: "/api/v1/change-requests?awaiting_review=true",
-		},
-	}
-	if userRole == "admin" {
+	// Hidden entirely when change control is disabled. An adopter running their
+	// own change management should not be offered a second place to answer "was
+	// this approved" — that is the harm the toggle exists for, and a greyed-out
+	// nav item would still invite the question.
+	if changeControlEnabled {
+		// Change Control — a section rather than two items scattered elsewhere,
+		// because it houses both an operational queue and admin config for one
+		// domain. The analogs all do the same (GitHub "Pull Requests", NetBox
+		// Change Management, InfraHub "Proposed Changes"), and branches slot in
+		// here later.
+		ccItems := []layout.MenuItem{
+			{
+				Label: "Change Requests", Href: bp + "/change-requests",
+				Active: path == bp+"/change-requests" || strings.HasPrefix(path, bp+"/change-requests/"),
+				// Asynchronous: "awaiting MY review" needs each candidate rendered
+				// to know whether this caller can approve it, and the menu is on
+				// every page. Computing it inline would make every page load pay
+				// for a change-request scan.
+				BadgeSrc: "/api/v1/change-requests?awaiting_review=true",
+			},
+		}
+		// readonly+, matching the API: apiReadonly serves GET /approval-policies,
+		// and a UI gate stricter than the API's is its own bug — it hides from a
+		// dev the answer to "why was my change gated", which is the question this
+		// page exists to answer. MUTATING policies stays admin-only, enforced by
+		// adminAPI and mirrored in the template.
 		ccItems = append(ccItems, layout.MenuItem{
 			Label:  "Approval Policies",
 			Href:   bp + "/approval-policies",
 			Active: path == bp+"/approval-policies",
 		})
+		sections = append(sections, layout.MenuSection{
+			Title: "Change Control",
+			Icon:  "fa-solid fa-code-pull-request",
+			Color: "has-text-link",
+			Items: ccItems,
+		})
 	}
-	sections = append(sections, layout.MenuSection{
-		Title: "Change Control",
-		Icon:  "fa-solid fa-code-pull-request",
-		Color: "has-text-link",
-		Items: ccItems,
-	})
 
 	opsItems := []layout.MenuItem{
 		{Label: "Audit Log", Href: bp + "/audit-log", Active: path == bp+"/audit-log"},
@@ -326,8 +349,9 @@ func (h *UI) ChangeRequestDetail(c echo.Context) error {
 	})
 }
 
-// ApprovalPolicies renders the admin page for protected classes. Admin-gated in
-// the template at the same minimum the API enforces, so the two cannot drift.
+// ApprovalPolicies renders the protected classes. Readable by readonly+ to match
+// the API, because "why was my change gated" is a dev's question and this page
+// is the answer; the write controls are admin-only, matching adminAPI.
 func (h *UI) ApprovalPolicies(c echo.Context) error {
 	return h.render(c, "approval-policies", page.ApprovalPolicies{
 		Base:      h.base(c),

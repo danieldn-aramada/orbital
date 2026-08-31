@@ -11,14 +11,13 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent/approvalrequest"
-	"github.com/google/uuid"
 )
 
 // ApprovalRequest is the model entity for the ApprovalRequest schema.
 type ApprovalRequest struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID uuid.UUID `json:"id,omitempty"`
+	ID int64 `json:"id,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// CreatedBy holds the value of the "created_by" field.
@@ -27,6 +26,10 @@ type ApprovalRequest struct {
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 	// UpdatedBy holds the value of the "updated_by" field.
 	UpdatedBy string `json:"updated_by,omitempty"`
+	// Namespace holds the value of the "namespace" field.
+	Namespace string `json:"namespace,omitempty"`
+	// Number holds the value of the "number" field.
+	Number int `json:"number,omitempty"`
 	// ActionType holds the value of the "action_type" field.
 	ActionType string `json:"action_type,omitempty"`
 	// Title holds the value of the "title" field.
@@ -89,12 +92,12 @@ func (*ApprovalRequest) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case approvalrequest.FieldBasePresent, approvalrequest.FieldPayload:
 			values[i] = new([]byte)
-		case approvalrequest.FieldCreatedBy, approvalrequest.FieldUpdatedBy, approvalrequest.FieldActionType, approvalrequest.FieldTitle, approvalrequest.FieldDescription, approvalrequest.FieldStatus, approvalrequest.FieldAuthor, approvalrequest.FieldBaseHash, approvalrequest.FieldExecutedBy:
+		case approvalrequest.FieldID, approvalrequest.FieldNumber:
+			values[i] = new(sql.NullInt64)
+		case approvalrequest.FieldCreatedBy, approvalrequest.FieldUpdatedBy, approvalrequest.FieldNamespace, approvalrequest.FieldActionType, approvalrequest.FieldTitle, approvalrequest.FieldDescription, approvalrequest.FieldStatus, approvalrequest.FieldAuthor, approvalrequest.FieldBaseHash, approvalrequest.FieldExecutedBy:
 			values[i] = new(sql.NullString)
 		case approvalrequest.FieldCreatedAt, approvalrequest.FieldUpdatedAt, approvalrequest.FieldExecutedAt:
 			values[i] = new(sql.NullTime)
-		case approvalrequest.FieldID:
-			values[i] = new(uuid.UUID)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -111,11 +114,11 @@ func (_m *ApprovalRequest) assignValues(columns []string, values []any) error {
 	for i := range columns {
 		switch columns[i] {
 		case approvalrequest.FieldID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
-				return fmt.Errorf("unexpected type %T for field id", values[i])
-			} else if value != nil {
-				_m.ID = *value
+			value, ok := values[i].(*sql.NullInt64)
+			if !ok {
+				return fmt.Errorf("unexpected type %T for field id", value)
 			}
+			_m.ID = int64(value.Int64)
 		case approvalrequest.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -140,6 +143,18 @@ func (_m *ApprovalRequest) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
 				_m.UpdatedBy = value.String
+			}
+		case approvalrequest.FieldNamespace:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field namespace", values[i])
+			} else if value.Valid {
+				_m.Namespace = value.String
+			}
+		case approvalrequest.FieldNumber:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field number", values[i])
+			} else if value.Valid {
+				_m.Number = int(value.Int64)
 			}
 		case approvalrequest.FieldActionType:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -265,6 +280,12 @@ func (_m *ApprovalRequest) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
 	builder.WriteString(_m.UpdatedBy)
+	builder.WriteString(", ")
+	builder.WriteString("namespace=")
+	builder.WriteString(_m.Namespace)
+	builder.WriteString(", ")
+	builder.WriteString("number=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Number))
 	builder.WriteString(", ")
 	builder.WriteString("action_type=")
 	builder.WriteString(_m.ActionType)

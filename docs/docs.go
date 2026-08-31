@@ -37,7 +37,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Opt-in: with no enabled policy, writes behave exactly as they do today.",
+                "description": "Opt-in: with no enabled policy, writes behave exactly as they do today.\n\nOne policy per namespace. Scope is an either/or: send allTypes:true with no\ntypes (covers every type, including ones added to the schema later), or\nallTypes:false with a non-empty types list. The other two combinations are\nrefused with 400 — a policy that says both, or says nothing, cannot answer\n\"what does this protect?\". A second policy for the same namespace is 409;\nPATCH the existing one to change which types it covers.",
                 "consumes": [
                     "application/json"
                 ],
@@ -199,7 +199,7 @@ const docTemplate = `{
         },
         "/api/v1/audit-log": {
             "get": {
-                "description": "Read-only, immutable audit trail of intent mutations, newest first.\n\n**Scope a query** by combining filters: ` + "`" + `orbId` + "`" + ` (repeatable, max 32) for a specific resource; ` + "`" + `namespace` + "`" + ` for a whole data center; ` + "`" + `resource_type` + "`" + `/` + "`" + `operation_name` + "`" + ` to narrow. To see everything under a server/cluster, fetch its subtree orbIds from the GraphQL Topology API and pass them as repeatable ` + "`" + `orbId` + "`" + ` params (there is no single \"cluster\" scope — a child mutation records the child's orbId, not the parent's).\n\n**Render a diff:** when an event is a clean single-entity update it carries a ` + "`" + `changes` + "`" + ` array (` + "`" + `[{field, before, after}]` + "`" + `) with metadata and DGraph UIDs already excluded — render it directly. When ` + "`" + `changes` + "`" + ` is absent (bulk add, create, or a multi-operation event), there is no field diff; fall back to showing ` + "`" + `operations` + "`" + ` + ` + "`" + `resourceIds` + "`" + `. The raw ` + "`" + `details` + "`" + ` (with ` + "`" + `before` + "`" + `/` + "`" + `variables` + "`" + `) is always included for callers that want it.\n\nReturns JSON by default; returns an HTML table fragment when the ` + "`" + `HX-Request` + "`" + ` header is present (used by orbital's own UI). See docs/api-cheatsheet.md § \"Audit log\".",
+                "description": "Read-only, immutable audit trail of intent mutations, newest first.\n\n**Scope a query** by combining filters: ` + "`" + `orbId` + "`" + ` (repeatable, **max 128** — over that the request is refused with ` + "`" + `400 BAD_USER_INPUT` + "`" + `, never silently truncated) for a specific resource; ` + "`" + `namespace` + "`" + ` for a whole data center; ` + "`" + `resource_type` + "`" + `/` + "`" + `operation_name` + "`" + ` to narrow. To see everything under a server/cluster, fetch its subtree orbIds from the GraphQL Topology API and pass them as repeatable ` + "`" + `orbId` + "`" + ` params (there is no single \"cluster\" scope — a child mutation records the child's orbId, not the parent's).\n\n**Render a diff:** when an event is a clean single-entity update it carries a ` + "`" + `changes` + "`" + ` array (` + "`" + `[{field, before, after}]` + "`" + `) with metadata and DGraph UIDs already excluded — render it directly. When ` + "`" + `changes` + "`" + ` is absent (bulk add, create, or a multi-operation event), there is no field diff; fall back to showing ` + "`" + `operations` + "`" + ` + ` + "`" + `resourceIds` + "`" + `. The raw ` + "`" + `details` + "`" + ` (with ` + "`" + `before` + "`" + `/` + "`" + `variables` + "`" + `) is always included for callers that want it.\n\nReturns JSON by default; returns an HTML table fragment when the ` + "`" + `HX-Request` + "`" + ` header is present (used by orbital's own UI). See docs/api-cheatsheet.md § \"Audit log\".",
                 "produces": [
                     "application/json"
                 ],
@@ -226,7 +226,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "Filter by resource orbId (e.g. alaska-dot:GRTLY24). Repeatable (pass multiple), max 32 — matches events touching ANY of them.",
+                        "description": "Filter by resource orbId (e.g. alaska-dot:GRTLY24). Repeatable, max 128 — matches events touching ANY of them. Over 128 the request is refused (400), not truncated.",
                         "name": "orbId",
                         "in": "query"
                     },
@@ -272,6 +272,12 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/handler.auditLogResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
                         }
                     }
                 }
@@ -471,7 +477,7 @@ const docTemplate = `{
         },
         "/api/v1/change-requests": {
             "get": {
-                "description": "Filters compose. ` + "`" + `mine` + "`" + ` and ` + "`" + `awaiting_review` + "`" + ` are caller-relative; ` + "`" + `orbId` + "`" + ` matches any request whose changeset touches that entity, at any position. ` + "`" + `status=active` + "`" + ` means not-terminal (open plus approved) — the filter to use for \"does this entity have a change in flight\", since ` + "`" + `approved` + "`" + ` is derived and ` + "`" + `status=open` + "`" + ` excludes it.",
+                "description": "Filters compose. ` + "`" + `mine` + "`" + ` and ` + "`" + `awaiting_review` + "`" + ` are caller-relative; ` + "`" + `orbId` + "`" + ` matches any request whose changeset touches that entity, at any position. ` + "`" + `status=active` + "`" + ` means not-terminal (open plus approved) — the filter to use for \"does this entity have a change in flight\", since ` + "`" + `approved` + "`" + ` is derived and ` + "`" + `status=open` + "`" + ` excludes it.\n\n` + "`" + `orbId` + "`" + ` is **repeatable** and the values are OR-ed (max 32; more is refused, never truncated). A change to an owned child records the CHILD's orbId — a server-maintenance edit lands as ` + "`" + `\u003cns\u003e:server-maintenance-\u003cserial\u003e` + "`" + ` — so \"is anything in flight for this server\" means passing the server's orbId AND the orbIds of everything it owns, exactly as ` + "`" + `/api/v1/audit-log` + "`" + ` does.",
                 "produces": [
                     "application/json"
                 ],
@@ -511,8 +517,12 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "type": "string",
-                        "description": "Only requests touching this entity",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Only requests touching this entity. Repeatable, max 128 — matches requests touching ANY of them. Over 128 the request is refused (400), not truncated.",
                         "name": "orbId",
                         "in": "query"
                     }
@@ -522,6 +532,12 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/handler.changeRequestListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
                         }
                     }
                 }
@@ -1586,6 +1602,48 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/proposed-changes": {
+            "get": {
+                "description": "The field-level projection of the open change requests touching a set of entities.\n\n**Why this exists separately from ` + "`" + `/api/v1/change-requests` + "`" + `.** That endpoint answers\n\"list the requests\"; this one answers \"what is proposed about these entities\". Getting\nthe second from the first means inverting it — every request, every change item, every\nkey in ` + "`" + `set` + "`" + ` — then grouping by (orbId, field) and comparing values to spot conflicts.\nThat walk would be re-implemented by every client, so orbital does it once.\n\n**Designed for the join.** The response is keyed by orbId, which is ` + "`" + `@id` + "`" + ` on the\nConfigItem interface and therefore globally unique across every type. So overlaying\nproposals onto entities read from ` + "`" + `/graphql` + "`" + ` is a map lookup:\n` + "`" + `proposals[node.orbId].fields[name]` + "`" + ` — no traversal, no correlation logic. Issue both\ncalls in parallel; they have no dependency on each other.\n\n**Reads PostgreSQL only** — no DGraph round-trip, so it is safe on every page load.\nOne consequence: it cannot know the CURRENT value of a field, so it cannot tell that a\nproposal has become a no-op (someone applied the same value directly). The client holds\nboth halves and should suppress a field mark when the proposed value already equals the\ncurrent one. ` + "`" + `status` + "`" + ` is likewise derived from the approval count against the request's\nstored base rather than live intent — a display hint, not a merge verdict. Merge\nre-checks against live state and can still refuse with ` + "`" + `409 MVCC_CONFLICT` + "`" + `.\n\nOnly ` + "`" + `active` + "`" + ` requests appear — open plus approved-not-yet-merged. Closed, merged and\nrejected requests are absent, as are entities with nothing proposed.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "change-requests"
+                ],
+                "summary": "What is proposed for these entities",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Entities to report on. Repeatable, max 128 — over that the request is refused (400), not truncated.",
+                        "name": "orbId",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/handler.proposedChangesEntry"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/restore": {
             "post": {
                 "description": "Restores DGraph blue from a stored backup. Blocked if any backup, export, or restore job is in progress.",
@@ -1897,8 +1955,13 @@ const docTemplate = `{
                 "namespace"
             ],
             "properties": {
+                "allTypes": {
+                    "description": "AllTypes protects every type in the namespace, including ConfigItem types\nadded to the schema later. Mutually exclusive with Types.",
+                    "type": "boolean",
+                    "example": true
+                },
                 "bypassRoles": {
-                    "description": "BypassRoles may write this class directly, recorded as a privileged write.\nDefaults to [\"admin\"]. Bypass is a property of the policy, not of a user.",
+                    "description": "BypassRoles may write this class directly, recorded as a privileged write.\nBypass is a property of the policy, not of a user.\n\nOmit the field to accept the default [\"admin\"]. Send an EMPTY array to\nmean nobody bypasses — including admins. The two are distinct on purpose:\nthere is no other way to express a class that everyone must get reviewed.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -1922,10 +1985,15 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 1
                 },
-                "type": {
-                    "description": "TypeName narrows the policy to one ConfigItem type. Empty means every type.",
-                    "type": "string",
-                    "example": "Server"
+                "types": {
+                    "description": "Types are the ConfigItem types to protect. Mutually exclusive with\nAllTypes: exactly one of the two must say what is covered, and the other\ntwo combinations are refused (see the create endpoint).",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "Server"
+                    ]
                 }
             }
         },
@@ -1942,15 +2010,6 @@ const docTemplate = `{
                     "description": "CallerMayBypass is the verdict for THIS caller, already computed.",
                     "type": "boolean",
                     "example": false
-                },
-                "enforced": {
-                    "description": "Enforced reports whether a direct mutation would actually be refused.\nA client labelling its save button should read Required to decide what to\nOFFER, and Enforced to know whether saving directly would still succeed.",
-                    "type": "boolean",
-                    "example": false
-                },
-                "notice": {
-                    "description": "Notice explains a policy that is recorded but not yet enforced. Absent\nonce enforcement is live.",
-                    "type": "string"
                 },
                 "required": {
                     "description": "Required reports whether a POLICY demands approval for this class. It\ndescribes the policy, not what orbital will do — see Enforced.",
@@ -1970,6 +2029,10 @@ const docTemplate = `{
                     "type": "string",
                     "example": "config.mutation"
                 },
+                "allTypes": {
+                    "type": "boolean",
+                    "example": true
+                },
                 "bypassRoles": {
                     "type": "array",
                     "items": {
@@ -1981,11 +2044,6 @@ const docTemplate = `{
                     "type": "boolean",
                     "example": true
                 },
-                "enforced": {
-                    "description": "Enforced reports whether orbital's write path actually REFUSES a\nmutation this policy covers. Distinct from Enabled, which is only what\nthe admin asked for. Both must be true for the class to be protected.",
-                    "type": "boolean",
-                    "example": false
-                },
                 "id": {
                     "type": "string",
                     "example": "7c2e1f88-1a2b-4c3d-8e9f-0a1b2c3d4e5f"
@@ -1994,17 +2052,15 @@ const docTemplate = `{
                     "type": "string",
                     "example": "alaska-dot"
                 },
-                "notice": {
-                    "description": "Notice explains a policy that is recorded but not yet enforced. Absent\nonce enforcement is live.",
-                    "type": "string"
-                },
                 "requiredApprovals": {
                     "type": "integer",
                     "example": 1
                 },
-                "type": {
-                    "type": "string",
-                    "example": "Server"
+                "types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -2306,8 +2362,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "id": {
+                    "description": "ID is the human identifier — the namespace, then its number within that\nnamespace. It is what every URL and every client uses; the surrogate\nbigint behind it is never exposed. Per-namespace numbering follows Jira's\nPROJ-42 model applied to orbital's natural partition, so an id pasted into\nchat says which data center it is about.",
                     "type": "string",
-                    "example": "4b1f0f7a-6f0c-4a1e-9a2e-2f1c7a0b1234"
+                    "example": "colo-42"
                 },
                 "mergeAttempts": {
                     "type": "array",
@@ -2697,7 +2754,7 @@ const docTemplate = `{
                 "changeRequestId": {
                     "description": "ChangeRequestID is the request opened on the caller's behalf, pre-filled\nfrom this divergence entry.",
                     "type": "string",
-                    "example": "4b1f0f7a-6f0c-4a1e-9a2e-2f1c7a0b1234"
+                    "example": "colo-42"
                 },
                 "message": {
                     "type": "string",
@@ -2744,6 +2801,79 @@ const docTemplate = `{
                 },
                 "summary": {
                     "$ref": "#/definitions/graphdiff.Summary"
+                }
+            }
+        },
+        "handler.proposedByChange": {
+            "type": "object",
+            "properties": {
+                "approvals": {
+                    "description": "Approvals and RequiredApprovals are the raw counts behind Status, so a\nclient can render \"1 of 2\" rather than inferring it.",
+                    "type": "integer"
+                },
+                "author": {
+                    "type": "string",
+                    "example": "dev@armada.ai"
+                },
+                "changeRequestId": {
+                    "type": "string",
+                    "example": "colo-42"
+                },
+                "createdAt": {
+                    "type": "string",
+                    "example": "2026-08-30T22:14:03Z"
+                },
+                "op": {
+                    "description": "Op is \"update\", \"upsert\" or \"clear\". A clear carries no Value.",
+                    "type": "string",
+                    "example": "update"
+                },
+                "requiredApprovals": {
+                    "type": "integer"
+                },
+                "status": {
+                    "description": "Status is \"open\" or \"approved\", derived from the approval count against\nthe request's STORED base. See the endpoint's @Description for the\ncaveat — it is a display hint, not a merge verdict.",
+                    "type": "string",
+                    "example": "open"
+                },
+                "title": {
+                    "type": "string",
+                    "example": "Update server-CWJHDX3"
+                },
+                "value": {
+                    "description": "Value is the proposed value, unmodified. Not truncated and not\nstringified: how to render a long or structured value is the client's\ndecision, and orbital's own UI is not privileged over anyone else's."
+                }
+            }
+        },
+        "handler.proposedChangesEntry": {
+            "type": "object",
+            "properties": {
+                "fields": {
+                    "description": "Fields maps a field name to what is proposed for it.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/handler.proposedField"
+                    }
+                },
+                "type": {
+                    "description": "Type is the ConfigItem type, so a client can label the entity without a\nsecond lookup.",
+                    "type": "string",
+                    "example": "ServerMaintenance"
+                }
+            }
+        },
+        "handler.proposedField": {
+            "type": "object",
+            "properties": {
+                "conflicting": {
+                    "description": "Conflicting is true when two or more proposals set this field to\nDIFFERENT values.\n\nDerived server-side on purpose. It is a comparison across proposals, and\nleaving it to callers means every client re-implements it and gets it\nsubtly different — the same reason the field index itself is server-side.",
+                    "type": "boolean"
+                },
+                "proposals": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.proposedByChange"
+                    }
                 }
             }
         },

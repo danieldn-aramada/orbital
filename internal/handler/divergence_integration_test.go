@@ -9,17 +9,18 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/armada/orbital/ent/approvalpolicy"
+	"github.com/armada/orbital/ent/approvalrequest"
 	"github.com/armada/orbital/ent/divergenceentry"
 	"github.com/armada/orbital/ent/divergenceresolution"
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/testutil"
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
@@ -482,11 +483,24 @@ func TestAccept_GatedOpensChangeRequestAndLeavesEntryPending(t *testing.T) {
 	}
 
 	// The change request is real, and carries the edge's value as its proposal.
-	crID, err := uuid.Parse(body.ChangeRequestID)
+	// The API hands back the human id (namespace-number). This test is in the
+	// _test package, so it resolves it the way an external client would rather
+	// than reaching for the unexported parser.
+	i := strings.LastIndex(body.ChangeRequestID, "-")
+	if i <= 0 {
+		t.Fatalf("bad change request id %q", body.ChangeRequestID)
+	}
+	num, err := strconv.Atoi(body.ChangeRequestID[i+1:])
 	if err != nil {
 		t.Fatalf("bad change request id %q: %v", body.ChangeRequestID, err)
 	}
-	cr, err := crh.Get(ctx, crID)
+	row, err := testDB.ApprovalRequest.Query().
+		Where(approvalrequest.NamespaceEQ(body.ChangeRequestID[:i]),
+			approvalrequest.NumberEQ(num)).Only(ctx)
+	if err != nil {
+		t.Fatalf("resolve %q: %v", body.ChangeRequestID, err)
+	}
+	cr, err := crh.Get(ctx, row.ID)
 	if err != nil {
 		t.Fatalf("load change request: %v", err)
 	}

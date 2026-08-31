@@ -8,51 +8,50 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/armada/orbital/ent/predicate"
-	"github.com/google/uuid"
 )
 
 // ID filters vertices based on their ID field.
-func ID(id uuid.UUID) predicate.ApprovalRequest {
+func ID(id int64) predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(sql.FieldEQ(FieldID, id))
 }
 
 // IDEQ applies the EQ predicate on the ID field.
-func IDEQ(id uuid.UUID) predicate.ApprovalRequest {
+func IDEQ(id int64) predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(sql.FieldEQ(FieldID, id))
 }
 
 // IDNEQ applies the NEQ predicate on the ID field.
-func IDNEQ(id uuid.UUID) predicate.ApprovalRequest {
+func IDNEQ(id int64) predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(sql.FieldNEQ(FieldID, id))
 }
 
 // IDIn applies the In predicate on the ID field.
-func IDIn(ids ...uuid.UUID) predicate.ApprovalRequest {
+func IDIn(ids ...int64) predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(sql.FieldIn(FieldID, ids...))
 }
 
 // IDNotIn applies the NotIn predicate on the ID field.
-func IDNotIn(ids ...uuid.UUID) predicate.ApprovalRequest {
+func IDNotIn(ids ...int64) predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(sql.FieldNotIn(FieldID, ids...))
 }
 
 // IDGT applies the GT predicate on the ID field.
-func IDGT(id uuid.UUID) predicate.ApprovalRequest {
+func IDGT(id int64) predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(sql.FieldGT(FieldID, id))
 }
 
 // IDGTE applies the GTE predicate on the ID field.
-func IDGTE(id uuid.UUID) predicate.ApprovalRequest {
+func IDGTE(id int64) predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(sql.FieldGTE(FieldID, id))
 }
 
 // IDLT applies the LT predicate on the ID field.
-func IDLT(id uuid.UUID) predicate.ApprovalRequest {
+func IDLT(id int64) predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(sql.FieldLT(FieldID, id))
 }
 
 // IDLTE applies the LTE predicate on the ID field.
-func IDLTE(id uuid.UUID) predicate.ApprovalRequest {
+func IDLTE(id int64) predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(sql.FieldLTE(FieldID, id))
 }
 
@@ -74,6 +73,16 @@ func UpdatedAt(v time.Time) predicate.ApprovalRequest {
 // UpdatedBy applies equality check predicate on the "updated_by" field. It's identical to UpdatedByEQ.
 func UpdatedBy(v string) predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(sql.FieldEQ(FieldUpdatedBy, v))
+}
+
+// Namespace applies equality check predicate on the "namespace" field. It's identical to NamespaceEQ.
+func Namespace(v string) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldEQ(FieldNamespace, v))
+}
+
+// Number applies equality check predicate on the "number" field. It's identical to NumberEQ.
+func Number(v int) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldEQ(FieldNumber, v))
 }
 
 // ActionType applies equality check predicate on the "action_type" field. It's identical to ActionTypeEQ.
@@ -349,6 +358,111 @@ func UpdatedByEqualFold(v string) predicate.ApprovalRequest {
 // UpdatedByContainsFold applies the ContainsFold predicate on the "updated_by" field.
 func UpdatedByContainsFold(v string) predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(sql.FieldContainsFold(FieldUpdatedBy, v))
+}
+
+// NamespaceEQ applies the EQ predicate on the "namespace" field.
+func NamespaceEQ(v string) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldEQ(FieldNamespace, v))
+}
+
+// NamespaceNEQ applies the NEQ predicate on the "namespace" field.
+func NamespaceNEQ(v string) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldNEQ(FieldNamespace, v))
+}
+
+// NamespaceIn applies the In predicate on the "namespace" field.
+func NamespaceIn(vs ...string) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldIn(FieldNamespace, vs...))
+}
+
+// NamespaceNotIn applies the NotIn predicate on the "namespace" field.
+func NamespaceNotIn(vs ...string) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldNotIn(FieldNamespace, vs...))
+}
+
+// NamespaceGT applies the GT predicate on the "namespace" field.
+func NamespaceGT(v string) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldGT(FieldNamespace, v))
+}
+
+// NamespaceGTE applies the GTE predicate on the "namespace" field.
+func NamespaceGTE(v string) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldGTE(FieldNamespace, v))
+}
+
+// NamespaceLT applies the LT predicate on the "namespace" field.
+func NamespaceLT(v string) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldLT(FieldNamespace, v))
+}
+
+// NamespaceLTE applies the LTE predicate on the "namespace" field.
+func NamespaceLTE(v string) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldLTE(FieldNamespace, v))
+}
+
+// NamespaceContains applies the Contains predicate on the "namespace" field.
+func NamespaceContains(v string) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldContains(FieldNamespace, v))
+}
+
+// NamespaceHasPrefix applies the HasPrefix predicate on the "namespace" field.
+func NamespaceHasPrefix(v string) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldHasPrefix(FieldNamespace, v))
+}
+
+// NamespaceHasSuffix applies the HasSuffix predicate on the "namespace" field.
+func NamespaceHasSuffix(v string) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldHasSuffix(FieldNamespace, v))
+}
+
+// NamespaceEqualFold applies the EqualFold predicate on the "namespace" field.
+func NamespaceEqualFold(v string) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldEqualFold(FieldNamespace, v))
+}
+
+// NamespaceContainsFold applies the ContainsFold predicate on the "namespace" field.
+func NamespaceContainsFold(v string) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldContainsFold(FieldNamespace, v))
+}
+
+// NumberEQ applies the EQ predicate on the "number" field.
+func NumberEQ(v int) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldEQ(FieldNumber, v))
+}
+
+// NumberNEQ applies the NEQ predicate on the "number" field.
+func NumberNEQ(v int) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldNEQ(FieldNumber, v))
+}
+
+// NumberIn applies the In predicate on the "number" field.
+func NumberIn(vs ...int) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldIn(FieldNumber, vs...))
+}
+
+// NumberNotIn applies the NotIn predicate on the "number" field.
+func NumberNotIn(vs ...int) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldNotIn(FieldNumber, vs...))
+}
+
+// NumberGT applies the GT predicate on the "number" field.
+func NumberGT(v int) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldGT(FieldNumber, v))
+}
+
+// NumberGTE applies the GTE predicate on the "number" field.
+func NumberGTE(v int) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldGTE(FieldNumber, v))
+}
+
+// NumberLT applies the LT predicate on the "number" field.
+func NumberLT(v int) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldLT(FieldNumber, v))
+}
+
+// NumberLTE applies the LTE predicate on the "number" field.
+func NumberLTE(v int) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldLTE(FieldNumber, v))
 }
 
 // ActionTypeEQ applies the EQ predicate on the "action_type" field.

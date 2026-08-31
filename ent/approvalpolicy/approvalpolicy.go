@@ -26,8 +26,10 @@ const (
 	FieldActionType = "action_type"
 	// FieldNamespace holds the string denoting the namespace field in the database.
 	FieldNamespace = "namespace"
-	// FieldTypeName holds the string denoting the type_name field in the database.
-	FieldTypeName = "type_name"
+	// FieldAllTypes holds the string denoting the all_types field in the database.
+	FieldAllTypes = "all_types"
+	// FieldTypes holds the string denoting the types field in the database.
+	FieldTypes = "types"
 	// FieldRequiredApprovals holds the string denoting the required_approvals field in the database.
 	FieldRequiredApprovals = "required_approvals"
 	// FieldBypassRoles holds the string denoting the bypass_roles field in the database.
@@ -47,7 +49,8 @@ var Columns = []string{
 	FieldUpdatedBy,
 	FieldActionType,
 	FieldNamespace,
-	FieldTypeName,
+	FieldAllTypes,
+	FieldTypes,
 	FieldRequiredApprovals,
 	FieldBypassRoles,
 	FieldEnabled,
@@ -70,8 +73,8 @@ var (
 	ActionTypeValidator func(string) error
 	// NamespaceValidator is a validator for the "namespace" field. It is called by the builders before save.
 	NamespaceValidator func(string) error
-	// DefaultTypeName holds the default value on creation for the "type_name" field.
-	DefaultTypeName string
+	// DefaultAllTypes holds the default value on creation for the "all_types" field.
+	DefaultAllTypes bool
 	// DefaultRequiredApprovals holds the default value on creation for the "required_approvals" field.
 	DefaultRequiredApprovals int
 	// RequiredApprovalsValidator is a validator for the "required_approvals" field. It is called by the builders before save.
@@ -122,9 +125,9 @@ func ByNamespace(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldNamespace, opts...).ToFunc()
 }
 
-// ByTypeName orders the results by the type_name field.
-func ByTypeName(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTypeName, opts...).ToFunc()
+// ByAllTypes orders the results by the all_types field.
+func ByAllTypes(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAllTypes, opts...).ToFunc()
 }
 
 // ByRequiredApprovals orders the results by the required_approvals field.

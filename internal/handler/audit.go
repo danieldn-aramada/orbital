@@ -115,7 +115,7 @@ var skipVarsSet = map[string]bool{
 // @Summary     List audit events
 // @Description Read-only, immutable audit trail of intent mutations, newest first.
 // @Description
-// @Description **Scope a query** by combining filters: `orbId` (repeatable, max 32) for a specific resource; `namespace` for a whole data center; `resource_type`/`operation_name` to narrow. To see everything under a server/cluster, fetch its subtree orbIds from the GraphQL Topology API and pass them as repeatable `orbId` params (there is no single "cluster" scope — a child mutation records the child's orbId, not the parent's).
+// @Description **Scope a query** by combining filters: `orbId` (repeatable, **max 128** — over that the request is refused with `400 BAD_USER_INPUT`, never silently truncated) for a specific resource; `namespace` for a whole data center; `resource_type`/`operation_name` to narrow. To see everything under a server/cluster, fetch its subtree orbIds from the GraphQL Topology API and pass them as repeatable `orbId` params (there is no single "cluster" scope — a child mutation records the child's orbId, not the parent's).
 // @Description
 // @Description **Render a diff:** when an event is a clean single-entity update it carries a `changes` array (`[{field, before, after}]`) with metadata and DGraph UIDs already excluded — render it directly. When `changes` is absent (bulk add, create, or a multi-operation event), there is no field diff; fall back to showing `operations` + `resourceIds`. The raw `details` (with `before`/`variables`) is always included for callers that want it.
 // @Description
@@ -124,7 +124,7 @@ var skipVarsSet = map[string]bool{
 // @Produce     json
 // @Param       limit          query int    false "Max results (default 100, max 500)"
 // @Param       offset         query int    false "Pagination offset"
-// @Param       orbId          query []string false "Filter by resource orbId (e.g. alaska-dot:GRTLY24). Repeatable (pass multiple), max 32 — matches events touching ANY of them."
+// @Param       orbId          query []string false "Filter by resource orbId (e.g. alaska-dot:GRTLY24). Repeatable, max 128 — matches events touching ANY of them. Over 128 the request is refused (400), not truncated."
 // @Param       namespace      query string false "Filter by namespace prefix (e.g. \"colo\" matches every orbId starting with \"colo:\"). Cheap DC-scope filter that avoids enumerating child orbIds."
 // @Param       since          query string false "RFC3339 lower bound (exclusive) on event timestamp"
 // @Param       until          query string false "RFC3339 upper bound (inclusive) on event timestamp"
@@ -132,6 +132,7 @@ var skipVarsSet = map[string]bool{
 // @Param       resource_type  query string false "Filter by resource type (e.g. Server, DataCenter)"
 // @Param       operation_name query string false "Filter to events containing this operation (exact, case-sensitive; stored form is verb-lowercased, e.g. updateVeleroBackup)"
 // @Success     200 {object} auditLogResponse
+// @Failure     400 {object} errorResponse
 // @Router      /api/v1/audit-log [get]
 func (h *AuditHandler) List(c echo.Context) error {
 	limit := 100
@@ -153,7 +154,6 @@ func (h *AuditHandler) List(c echo.Context) error {
 	// events across a parent and its nested ConfigItems (e.g. a Server tab
 	// pulling its IdracSettings / ServerConfigurationProfile / StorageControllers
 	// in one fetch). Capped to defend against URL/query bloat.
-	const maxOrbIDs = 32
 	rawOrbIDs := c.QueryParams()["orbId"]
 	// Drop empties so an attribute like data-related-orb-ids="" doesn't insert "".
 	orbIDFilter := make([]string, 0, len(rawOrbIDs))
@@ -162,8 +162,15 @@ func (h *AuditHandler) List(c echo.Context) error {
 			orbIDFilter = append(orbIDFilter, id)
 		}
 	}
-	if len(orbIDFilter) > maxOrbIDs {
-		orbIDFilter = orbIDFilter[:maxOrbIDs]
+	if len(orbIDFilter) > maxOrbIDFilter {
+		// Refused, not truncated. Truncating silently answered a narrower
+		// question than the caller asked and looked exactly like a correct
+		// answer: a Server audit tab whose subtree exceeded the cap was
+		// dropping its overflow children, and "no events for that disk" is
+		// indistinguishable from "that disk was never queried".
+		return writeError(c, http.StatusBadRequest, CodeBadUserInput,
+			fmt.Sprintf("too many orbId filters: %d (max %d)", len(orbIDFilter), maxOrbIDFilter),
+			fmt.Sprintf("Query at most %d orbIds at a time, or drop orbId and filter by namespace instead.", maxOrbIDFilter))
 	}
 	if len(orbIDFilter) > 0 {
 		// Resource-scoped audit panels (DC, Server, etc.) must show only events

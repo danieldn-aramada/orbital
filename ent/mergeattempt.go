@@ -29,7 +29,7 @@ type MergeAttempt struct {
 	// UpdatedBy holds the value of the "updated_by" field.
 	UpdatedBy string `json:"updated_by,omitempty"`
 	// ApprovalRequestID holds the value of the "approval_request_id" field.
-	ApprovalRequestID uuid.UUID `json:"approval_request_id,omitempty"`
+	ApprovalRequestID int64 `json:"approval_request_id,omitempty"`
 	// AttemptedBy holds the value of the "attempted_by" field.
 	AttemptedBy string `json:"attempted_by,omitempty"`
 	// AttemptedAt holds the value of the "attempted_at" field.
@@ -71,11 +71,13 @@ func (*MergeAttempt) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case mergeattempt.FieldResults:
 			values[i] = new([]byte)
+		case mergeattempt.FieldApprovalRequestID:
+			values[i] = new(sql.NullInt64)
 		case mergeattempt.FieldCreatedBy, mergeattempt.FieldUpdatedBy, mergeattempt.FieldAttemptedBy, mergeattempt.FieldError:
 			values[i] = new(sql.NullString)
 		case mergeattempt.FieldCreatedAt, mergeattempt.FieldUpdatedAt, mergeattempt.FieldAttemptedAt:
 			values[i] = new(sql.NullTime)
-		case mergeattempt.FieldID, mergeattempt.FieldApprovalRequestID:
+		case mergeattempt.FieldID:
 			values[i] = new(uuid.UUID)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -124,10 +126,10 @@ func (_m *MergeAttempt) assignValues(columns []string, values []any) error {
 				_m.UpdatedBy = value.String
 			}
 		case mergeattempt.FieldApprovalRequestID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
+			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field approval_request_id", values[i])
-			} else if value != nil {
-				_m.ApprovalRequestID = *value
+			} else if value.Valid {
+				_m.ApprovalRequestID = value.Int64
 			}
 		case mergeattempt.FieldAttemptedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {

@@ -607,11 +607,37 @@ export function initDetailTabs(tabContainer, options = {}) {
   }
 }
 
+// splitOrbIds parses a data-related-orb-ids CSV, falling back to a single orbId
+// when the attribute is absent or empty.
+function splitOrbIds(csv, fallback) {
+  const ids = String(csv || '').split(',').map(s => s.trim()).filter(Boolean)
+  if (ids.length) return ids
+  return fallback ? [fallback] : []
+}
+
+// subtreeOrbIds returns a rendered ConfigItem's orbId plus every orbId it owns,
+// read from the data-related-orb-ids the page handler already emits
+// (collectRelatedOrbIDs in Go — see AUDIT.md, the page composer owns the
+// parent→child knowledge, not the API).
+//
+// Any per-node query about "this item" needs this list, not the bare orbId: a
+// change to an owned child records the CHILD's orbId and never the parent's, so
+// asking about the parent alone answers "nothing here" while something is in
+// flight. Both consumers — the audit panel and the pending-change lookups — read
+// the same attribute so they can never disagree about what the item covers.
+export function subtreeOrbIds(orbId, scope = document) {
+  if (!orbId) return []
+  // Attribute-selector values are quoted, so only " and \ need escaping;
+  // CSS.escape would mangle the ":" every orbId carries.
+  const q = String(orbId).replace(/(["\\])/g, '\\$1')
+  const el = scope.querySelector(`[data-related-orb-ids][data-orb-id="${q}"]`)
+  return splitOrbIds(el && el.dataset.relatedOrbIds, orbId)
+}
+
 function loadAuditPanelForTab(tab, panel) {
   // data-related-orb-ids embeds the full subgraph (parent + nested ConfigItems)
   // so one fetch pulls all relevant events. Falls back to data-orb-id alone.
-  const related = (tab.dataset.relatedOrbIds || tab.dataset.orbId || '')
-    .split(',').map(s => s.trim()).filter(Boolean)
+  const related = splitOrbIds(tab.dataset.relatedOrbIds, tab.dataset.orbId)
   if (related.length === 0) return
   const qs = related.map(id => `orbId=${encodeURIComponent(id)}`).join('&')
   fetch(BASE + `/api/v1/audit-log?${qs}&limit=${AUDIT_PANEL_LIMIT}`, {

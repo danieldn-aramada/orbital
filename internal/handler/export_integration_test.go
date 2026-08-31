@@ -50,6 +50,14 @@ func TestMain(m *testing.M) {
 }
 
 func setupExportSuite() error {
+	// Create the test database if it is missing. `make down` wipes the Postgres
+	// volume, and only `make test-integration` recreates it — so a direct
+	// `go test -tags=integration` would otherwise fail several layers from the
+	// cause.
+	if err := testutil.EnsureTestDatabase(); err != nil {
+		return fmt.Errorf("ensure test database: %w", err)
+	}
+
 	// Open ent client.
 	var err error
 	testDB, err = ent.Open("postgres", testutil.TestDatabaseURL())

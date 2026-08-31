@@ -12,9 +12,7 @@
 
       <p class="is-size-4 mb-2" data-testid="page-heading">Change Requests</p>
       <p class="has-text-grey mb-4" style="font-size: 0.875rem;">
-        Proposed changes to configuration intent. A change is reviewed against
-        <strong>current</strong> intent, so a request whose base moved since it was opened
-        needs re-reviewing before it can merge.
+        Proposed changes to configuration intent, reviewed against current intent before they apply.
       </p>
 
       <div id="cr-error" class="notification is-danger is-light" style="display:none;"></div>
@@ -31,13 +29,16 @@
 
       <table class="table is-striped is-hoverable is-fullwidth is-size-7" id="cr-table">
         <colgroup>
-          <col style="width:34%"><col style="width:12%"><col style="width:16%">
-          <col style="width:10%"><col style="width:10%"><col style="width:8%"><col style="width:10%">
+          <col style="width:9%"><col style="width:32%"><col style="width:11%"><col style="width:16%">
+          <col style="width:12%"><col style="width:9%"><col style="width:11%">
         </colgroup>
         <thead>
           <tr>
-            <th>Title</th><th>Namespace</th><th>Author</th>
-            <th>Status</th><th>Approvals</th><th>Stale</th><th>Age</th>
+            {{/* The id is FIRST and always shown: it is the only column
+                 guaranteed to differ between two rows, and it is what someone
+                 quotes when they ask a colleague to look at one. */}}
+            <th>ID</th><th>Title</th><th>Namespace</th><th>Author</th>
+            <th>Status</th><th>Approvals</th><th>Age</th>
           </tr>
         </thead>
         <tbody id="cr-tbody"></tbody>

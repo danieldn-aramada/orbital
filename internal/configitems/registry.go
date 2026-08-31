@@ -436,6 +436,18 @@ var nameSet = func() map[string]Type {
 }()
 
 // FindByName returns the Type entry for `name`, or false if not registered.
+// Names returns every registered ConfigItem type name, sorted. Used where a
+// caller needs to offer or validate the set of types (approval-policy
+// selectors), so the list can never drift from the registry.
+func Names() []string {
+	out := make([]string, 0, len(Types))
+	for _, t := range Types {
+		out = append(out, t.Name)
+	}
+	slices.Sort(out)
+	return out
+}
+
 func FindByName(name string) (Type, bool) {
 	t, ok := nameSet[name]
 	return t, ok

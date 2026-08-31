@@ -75,7 +75,7 @@ type ApprovalMutation struct {
 	comment          *string
 	approved_at_hash *string
 	clearedFields    map[string]struct{}
-	request          *uuid.UUID
+	request          *int64
 	clearedrequest   bool
 	done             bool
 	oldValue         func(context.Context) (*Approval, error)
@@ -370,12 +370,12 @@ func (m *ApprovalMutation) ResetUpdatedBy() {
 }
 
 // SetApprovalRequestID sets the "approval_request_id" field.
-func (m *ApprovalMutation) SetApprovalRequestID(u uuid.UUID) {
-	m.request = &u
+func (m *ApprovalMutation) SetApprovalRequestID(i int64) {
+	m.request = &i
 }
 
 // ApprovalRequestID returns the value of the "approval_request_id" field in the mutation.
-func (m *ApprovalMutation) ApprovalRequestID() (r uuid.UUID, exists bool) {
+func (m *ApprovalMutation) ApprovalRequestID() (r int64, exists bool) {
 	v := m.request
 	if v == nil {
 		return
@@ -386,7 +386,7 @@ func (m *ApprovalMutation) ApprovalRequestID() (r uuid.UUID, exists bool) {
 // OldApprovalRequestID returns the old "approval_request_id" field's value of the Approval entity.
 // If the Approval object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ApprovalMutation) OldApprovalRequestID(ctx context.Context) (v uuid.UUID, err error) {
+func (m *ApprovalMutation) OldApprovalRequestID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldApprovalRequestID is only allowed on UpdateOne operations")
 	}
@@ -563,7 +563,7 @@ func (m *ApprovalMutation) ResetApprovedAtHash() {
 }
 
 // SetRequestID sets the "request" edge to the ApprovalRequest entity by id.
-func (m *ApprovalMutation) SetRequestID(id uuid.UUID) {
+func (m *ApprovalMutation) SetRequestID(id int64) {
 	m.request = &id
 }
 
@@ -579,7 +579,7 @@ func (m *ApprovalMutation) RequestCleared() bool {
 }
 
 // RequestID returns the "request" edge ID in the mutation.
-func (m *ApprovalMutation) RequestID() (id uuid.UUID, exists bool) {
+func (m *ApprovalMutation) RequestID() (id int64, exists bool) {
 	if m.request != nil {
 		return *m.request, true
 	}
@@ -589,7 +589,7 @@ func (m *ApprovalMutation) RequestID() (id uuid.UUID, exists bool) {
 // RequestIDs returns the "request" edge IDs in the mutation.
 // Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
 // RequestID instead. It exists only for internal usage by the builders.
-func (m *ApprovalMutation) RequestIDs() (ids []uuid.UUID) {
+func (m *ApprovalMutation) RequestIDs() (ids []int64) {
 	if id := m.request; id != nil {
 		ids = append(ids, *id)
 	}
@@ -755,7 +755,7 @@ func (m *ApprovalMutation) SetField(name string, value ent.Value) error {
 		m.SetUpdatedBy(v)
 		return nil
 	case approval.FieldApprovalRequestID:
-		v, ok := value.(uuid.UUID)
+		v, ok := value.(int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -796,13 +796,16 @@ func (m *ApprovalMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *ApprovalMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *ApprovalMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	}
 	return nil, false
 }
 
@@ -982,7 +985,9 @@ type ApprovalPolicyMutation struct {
 	updated_by            *string
 	action_type           *string
 	namespace             *string
-	type_name             *string
+	all_types             *bool
+	types                 *[]string
+	appendtypes           []string
 	required_approvals    *int
 	addrequired_approvals *int
 	bypass_roles          *[]string
@@ -1353,53 +1358,105 @@ func (m *ApprovalPolicyMutation) ResetNamespace() {
 	m.namespace = nil
 }
 
-// SetTypeName sets the "type_name" field.
-func (m *ApprovalPolicyMutation) SetTypeName(s string) {
-	m.type_name = &s
+// SetAllTypes sets the "all_types" field.
+func (m *ApprovalPolicyMutation) SetAllTypes(b bool) {
+	m.all_types = &b
 }
 
-// TypeName returns the value of the "type_name" field in the mutation.
-func (m *ApprovalPolicyMutation) TypeName() (r string, exists bool) {
-	v := m.type_name
+// AllTypes returns the value of the "all_types" field in the mutation.
+func (m *ApprovalPolicyMutation) AllTypes() (r bool, exists bool) {
+	v := m.all_types
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldTypeName returns the old "type_name" field's value of the ApprovalPolicy entity.
+// OldAllTypes returns the old "all_types" field's value of the ApprovalPolicy entity.
 // If the ApprovalPolicy object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ApprovalPolicyMutation) OldTypeName(ctx context.Context) (v string, err error) {
+func (m *ApprovalPolicyMutation) OldAllTypes(ctx context.Context) (v bool, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTypeName is only allowed on UpdateOne operations")
+		return v, errors.New("OldAllTypes is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTypeName requires an ID field in the mutation")
+		return v, errors.New("OldAllTypes requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTypeName: %w", err)
+		return v, fmt.Errorf("querying old value for OldAllTypes: %w", err)
 	}
-	return oldValue.TypeName, nil
+	return oldValue.AllTypes, nil
 }
 
-// ClearTypeName clears the value of the "type_name" field.
-func (m *ApprovalPolicyMutation) ClearTypeName() {
-	m.type_name = nil
-	m.clearedFields[approvalpolicy.FieldTypeName] = struct{}{}
+// ResetAllTypes resets all changes to the "all_types" field.
+func (m *ApprovalPolicyMutation) ResetAllTypes() {
+	m.all_types = nil
 }
 
-// TypeNameCleared returns if the "type_name" field was cleared in this mutation.
-func (m *ApprovalPolicyMutation) TypeNameCleared() bool {
-	_, ok := m.clearedFields[approvalpolicy.FieldTypeName]
+// SetTypes sets the "types" field.
+func (m *ApprovalPolicyMutation) SetTypes(s []string) {
+	m.types = &s
+	m.appendtypes = nil
+}
+
+// Types returns the value of the "types" field in the mutation.
+func (m *ApprovalPolicyMutation) Types() (r []string, exists bool) {
+	v := m.types
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTypes returns the old "types" field's value of the ApprovalPolicy entity.
+// If the ApprovalPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalPolicyMutation) OldTypes(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTypes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTypes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTypes: %w", err)
+	}
+	return oldValue.Types, nil
+}
+
+// AppendTypes adds s to the "types" field.
+func (m *ApprovalPolicyMutation) AppendTypes(s []string) {
+	m.appendtypes = append(m.appendtypes, s...)
+}
+
+// AppendedTypes returns the list of values that were appended to the "types" field in this mutation.
+func (m *ApprovalPolicyMutation) AppendedTypes() ([]string, bool) {
+	if len(m.appendtypes) == 0 {
+		return nil, false
+	}
+	return m.appendtypes, true
+}
+
+// ClearTypes clears the value of the "types" field.
+func (m *ApprovalPolicyMutation) ClearTypes() {
+	m.types = nil
+	m.appendtypes = nil
+	m.clearedFields[approvalpolicy.FieldTypes] = struct{}{}
+}
+
+// TypesCleared returns if the "types" field was cleared in this mutation.
+func (m *ApprovalPolicyMutation) TypesCleared() bool {
+	_, ok := m.clearedFields[approvalpolicy.FieldTypes]
 	return ok
 }
 
-// ResetTypeName resets all changes to the "type_name" field.
-func (m *ApprovalPolicyMutation) ResetTypeName() {
-	m.type_name = nil
-	delete(m.clearedFields, approvalpolicy.FieldTypeName)
+// ResetTypes resets all changes to the "types" field.
+func (m *ApprovalPolicyMutation) ResetTypes() {
+	m.types = nil
+	m.appendtypes = nil
+	delete(m.clearedFields, approvalpolicy.FieldTypes)
 }
 
 // SetRequiredApprovals sets the "required_approvals" field.
@@ -1579,7 +1636,7 @@ func (m *ApprovalPolicyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ApprovalPolicyMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
 	if m.created_at != nil {
 		fields = append(fields, approvalpolicy.FieldCreatedAt)
 	}
@@ -1598,8 +1655,11 @@ func (m *ApprovalPolicyMutation) Fields() []string {
 	if m.namespace != nil {
 		fields = append(fields, approvalpolicy.FieldNamespace)
 	}
-	if m.type_name != nil {
-		fields = append(fields, approvalpolicy.FieldTypeName)
+	if m.all_types != nil {
+		fields = append(fields, approvalpolicy.FieldAllTypes)
+	}
+	if m.types != nil {
+		fields = append(fields, approvalpolicy.FieldTypes)
 	}
 	if m.required_approvals != nil {
 		fields = append(fields, approvalpolicy.FieldRequiredApprovals)
@@ -1630,8 +1690,10 @@ func (m *ApprovalPolicyMutation) Field(name string) (ent.Value, bool) {
 		return m.ActionType()
 	case approvalpolicy.FieldNamespace:
 		return m.Namespace()
-	case approvalpolicy.FieldTypeName:
-		return m.TypeName()
+	case approvalpolicy.FieldAllTypes:
+		return m.AllTypes()
+	case approvalpolicy.FieldTypes:
+		return m.Types()
 	case approvalpolicy.FieldRequiredApprovals:
 		return m.RequiredApprovals()
 	case approvalpolicy.FieldBypassRoles:
@@ -1659,8 +1721,10 @@ func (m *ApprovalPolicyMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldActionType(ctx)
 	case approvalpolicy.FieldNamespace:
 		return m.OldNamespace(ctx)
-	case approvalpolicy.FieldTypeName:
-		return m.OldTypeName(ctx)
+	case approvalpolicy.FieldAllTypes:
+		return m.OldAllTypes(ctx)
+	case approvalpolicy.FieldTypes:
+		return m.OldTypes(ctx)
 	case approvalpolicy.FieldRequiredApprovals:
 		return m.OldRequiredApprovals(ctx)
 	case approvalpolicy.FieldBypassRoles:
@@ -1718,12 +1782,19 @@ func (m *ApprovalPolicyMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetNamespace(v)
 		return nil
-	case approvalpolicy.FieldTypeName:
-		v, ok := value.(string)
+	case approvalpolicy.FieldAllTypes:
+		v, ok := value.(bool)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetTypeName(v)
+		m.SetAllTypes(v)
+		return nil
+	case approvalpolicy.FieldTypes:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTypes(v)
 		return nil
 	case approvalpolicy.FieldRequiredApprovals:
 		v, ok := value.(int)
@@ -1800,8 +1871,8 @@ func (m *ApprovalPolicyMutation) ClearedFields() []string {
 	if m.FieldCleared(approvalpolicy.FieldUpdatedBy) {
 		fields = append(fields, approvalpolicy.FieldUpdatedBy)
 	}
-	if m.FieldCleared(approvalpolicy.FieldTypeName) {
-		fields = append(fields, approvalpolicy.FieldTypeName)
+	if m.FieldCleared(approvalpolicy.FieldTypes) {
+		fields = append(fields, approvalpolicy.FieldTypes)
 	}
 	return fields
 }
@@ -1826,8 +1897,8 @@ func (m *ApprovalPolicyMutation) ClearField(name string) error {
 	case approvalpolicy.FieldUpdatedBy:
 		m.ClearUpdatedBy()
 		return nil
-	case approvalpolicy.FieldTypeName:
-		m.ClearTypeName()
+	case approvalpolicy.FieldTypes:
+		m.ClearTypes()
 		return nil
 	}
 	return fmt.Errorf("unknown ApprovalPolicy nullable field %s", name)
@@ -1855,8 +1926,11 @@ func (m *ApprovalPolicyMutation) ResetField(name string) error {
 	case approvalpolicy.FieldNamespace:
 		m.ResetNamespace()
 		return nil
-	case approvalpolicy.FieldTypeName:
-		m.ResetTypeName()
+	case approvalpolicy.FieldAllTypes:
+		m.ResetAllTypes()
+		return nil
+	case approvalpolicy.FieldTypes:
+		m.ResetTypes()
 		return nil
 	case approvalpolicy.FieldRequiredApprovals:
 		m.ResetRequiredApprovals()
@@ -1924,11 +1998,14 @@ type ApprovalRequestMutation struct {
 	config
 	op                    Op
 	typ                   string
-	id                    *uuid.UUID
+	id                    *int64
 	created_at            *time.Time
 	created_by            *string
 	updated_at            *time.Time
 	updated_by            *string
+	namespace             *string
+	number                *int
+	addnumber             *int
 	action_type           *string
 	title                 *string
 	description           *string
@@ -1973,7 +2050,7 @@ func newApprovalRequestMutation(c config, op Op, opts ...approvalrequestOption) 
 }
 
 // withApprovalRequestID sets the ID field of the mutation.
-func withApprovalRequestID(id uuid.UUID) approvalrequestOption {
+func withApprovalRequestID(id int64) approvalrequestOption {
 	return func(m *ApprovalRequestMutation) {
 		var (
 			err   error
@@ -2025,13 +2102,13 @@ func (m ApprovalRequestMutation) Tx() (*Tx, error) {
 
 // SetID sets the value of the id field. Note that this
 // operation is only accepted on creation of ApprovalRequest entities.
-func (m *ApprovalRequestMutation) SetID(id uuid.UUID) {
+func (m *ApprovalRequestMutation) SetID(id int64) {
 	m.id = &id
 }
 
 // ID returns the ID value in the mutation. Note that the ID is only available
 // if it was provided to the builder or after it was returned from the database.
-func (m *ApprovalRequestMutation) ID() (id uuid.UUID, exists bool) {
+func (m *ApprovalRequestMutation) ID() (id int64, exists bool) {
 	if m.id == nil {
 		return
 	}
@@ -2042,12 +2119,12 @@ func (m *ApprovalRequestMutation) ID() (id uuid.UUID, exists bool) {
 // That means, if the mutation is applied within a transaction with an isolation level such
 // as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
 // or updated by the mutation.
-func (m *ApprovalRequestMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+func (m *ApprovalRequestMutation) IDs(ctx context.Context) ([]int64, error) {
 	switch {
 	case m.op.Is(OpUpdateOne | OpDeleteOne):
 		id, exists := m.ID()
 		if exists {
-			return []uuid.UUID{id}, nil
+			return []int64{id}, nil
 		}
 		fallthrough
 	case m.op.Is(OpUpdate | OpDelete):
@@ -2238,6 +2315,98 @@ func (m *ApprovalRequestMutation) UpdatedByCleared() bool {
 func (m *ApprovalRequestMutation) ResetUpdatedBy() {
 	m.updated_by = nil
 	delete(m.clearedFields, approvalrequest.FieldUpdatedBy)
+}
+
+// SetNamespace sets the "namespace" field.
+func (m *ApprovalRequestMutation) SetNamespace(s string) {
+	m.namespace = &s
+}
+
+// Namespace returns the value of the "namespace" field in the mutation.
+func (m *ApprovalRequestMutation) Namespace() (r string, exists bool) {
+	v := m.namespace
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNamespace returns the old "namespace" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldNamespace(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNamespace is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNamespace requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNamespace: %w", err)
+	}
+	return oldValue.Namespace, nil
+}
+
+// ResetNamespace resets all changes to the "namespace" field.
+func (m *ApprovalRequestMutation) ResetNamespace() {
+	m.namespace = nil
+}
+
+// SetNumber sets the "number" field.
+func (m *ApprovalRequestMutation) SetNumber(i int) {
+	m.number = &i
+	m.addnumber = nil
+}
+
+// Number returns the value of the "number" field in the mutation.
+func (m *ApprovalRequestMutation) Number() (r int, exists bool) {
+	v := m.number
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNumber returns the old "number" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldNumber(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNumber is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNumber requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNumber: %w", err)
+	}
+	return oldValue.Number, nil
+}
+
+// AddNumber adds i to the "number" field.
+func (m *ApprovalRequestMutation) AddNumber(i int) {
+	if m.addnumber != nil {
+		*m.addnumber += i
+	} else {
+		m.addnumber = &i
+	}
+}
+
+// AddedNumber returns the value that was added to the "number" field in this mutation.
+func (m *ApprovalRequestMutation) AddedNumber() (r int, exists bool) {
+	v := m.addnumber
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetNumber resets all changes to the "number" field.
+func (m *ApprovalRequestMutation) ResetNumber() {
+	m.number = nil
+	m.addnumber = nil
 }
 
 // SetActionType sets the "action_type" field.
@@ -2825,7 +2994,7 @@ func (m *ApprovalRequestMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ApprovalRequestMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 16)
 	if m.created_at != nil {
 		fields = append(fields, approvalrequest.FieldCreatedAt)
 	}
@@ -2837,6 +3006,12 @@ func (m *ApprovalRequestMutation) Fields() []string {
 	}
 	if m.updated_by != nil {
 		fields = append(fields, approvalrequest.FieldUpdatedBy)
+	}
+	if m.namespace != nil {
+		fields = append(fields, approvalrequest.FieldNamespace)
+	}
+	if m.number != nil {
+		fields = append(fields, approvalrequest.FieldNumber)
 	}
 	if m.action_type != nil {
 		fields = append(fields, approvalrequest.FieldActionType)
@@ -2884,6 +3059,10 @@ func (m *ApprovalRequestMutation) Field(name string) (ent.Value, bool) {
 		return m.UpdatedAt()
 	case approvalrequest.FieldUpdatedBy:
 		return m.UpdatedBy()
+	case approvalrequest.FieldNamespace:
+		return m.Namespace()
+	case approvalrequest.FieldNumber:
+		return m.Number()
 	case approvalrequest.FieldActionType:
 		return m.ActionType()
 	case approvalrequest.FieldTitle:
@@ -2921,6 +3100,10 @@ func (m *ApprovalRequestMutation) OldField(ctx context.Context, name string) (en
 		return m.OldUpdatedAt(ctx)
 	case approvalrequest.FieldUpdatedBy:
 		return m.OldUpdatedBy(ctx)
+	case approvalrequest.FieldNamespace:
+		return m.OldNamespace(ctx)
+	case approvalrequest.FieldNumber:
+		return m.OldNumber(ctx)
 	case approvalrequest.FieldActionType:
 		return m.OldActionType(ctx)
 	case approvalrequest.FieldTitle:
@@ -2977,6 +3160,20 @@ func (m *ApprovalRequestMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetUpdatedBy(v)
+		return nil
+	case approvalrequest.FieldNamespace:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNamespace(v)
+		return nil
+	case approvalrequest.FieldNumber:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNumber(v)
 		return nil
 	case approvalrequest.FieldActionType:
 		v, ok := value.(string)
@@ -3055,13 +3252,21 @@ func (m *ApprovalRequestMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *ApprovalRequestMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addnumber != nil {
+		fields = append(fields, approvalrequest.FieldNumber)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *ApprovalRequestMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case approvalrequest.FieldNumber:
+		return m.AddedNumber()
+	}
 	return nil, false
 }
 
@@ -3070,6 +3275,13 @@ func (m *ApprovalRequestMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ApprovalRequestMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case approvalrequest.FieldNumber:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddNumber(v)
+		return nil
 	}
 	return fmt.Errorf("unknown ApprovalRequest numeric field %s", name)
 }
@@ -3153,6 +3365,12 @@ func (m *ApprovalRequestMutation) ResetField(name string) error {
 		return nil
 	case approvalrequest.FieldUpdatedBy:
 		m.ResetUpdatedBy()
+		return nil
+	case approvalrequest.FieldNamespace:
+		m.ResetNamespace()
+		return nil
+	case approvalrequest.FieldNumber:
+		m.ResetNumber()
 		return nil
 	case approvalrequest.FieldActionType:
 		m.ResetActionType()
@@ -10249,7 +10467,7 @@ type MergeAttemptMutation struct {
 	appendresults  json.RawMessage
 	error          *string
 	clearedFields  map[string]struct{}
-	request        *uuid.UUID
+	request        *int64
 	clearedrequest bool
 	done           bool
 	oldValue       func(context.Context) (*MergeAttempt, error)
@@ -10544,12 +10762,12 @@ func (m *MergeAttemptMutation) ResetUpdatedBy() {
 }
 
 // SetApprovalRequestID sets the "approval_request_id" field.
-func (m *MergeAttemptMutation) SetApprovalRequestID(u uuid.UUID) {
-	m.request = &u
+func (m *MergeAttemptMutation) SetApprovalRequestID(i int64) {
+	m.request = &i
 }
 
 // ApprovalRequestID returns the value of the "approval_request_id" field in the mutation.
-func (m *MergeAttemptMutation) ApprovalRequestID() (r uuid.UUID, exists bool) {
+func (m *MergeAttemptMutation) ApprovalRequestID() (r int64, exists bool) {
 	v := m.request
 	if v == nil {
 		return
@@ -10560,7 +10778,7 @@ func (m *MergeAttemptMutation) ApprovalRequestID() (r uuid.UUID, exists bool) {
 // OldApprovalRequestID returns the old "approval_request_id" field's value of the MergeAttempt entity.
 // If the MergeAttempt object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MergeAttemptMutation) OldApprovalRequestID(ctx context.Context) (v uuid.UUID, err error) {
+func (m *MergeAttemptMutation) OldApprovalRequestID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldApprovalRequestID is only allowed on UpdateOne operations")
 	}
@@ -10766,7 +10984,7 @@ func (m *MergeAttemptMutation) ResetError() {
 }
 
 // SetRequestID sets the "request" edge to the ApprovalRequest entity by id.
-func (m *MergeAttemptMutation) SetRequestID(id uuid.UUID) {
+func (m *MergeAttemptMutation) SetRequestID(id int64) {
 	m.request = &id
 }
 
@@ -10782,7 +11000,7 @@ func (m *MergeAttemptMutation) RequestCleared() bool {
 }
 
 // RequestID returns the "request" edge ID in the mutation.
-func (m *MergeAttemptMutation) RequestID() (id uuid.UUID, exists bool) {
+func (m *MergeAttemptMutation) RequestID() (id int64, exists bool) {
 	if m.request != nil {
 		return *m.request, true
 	}
@@ -10792,7 +11010,7 @@ func (m *MergeAttemptMutation) RequestID() (id uuid.UUID, exists bool) {
 // RequestIDs returns the "request" edge IDs in the mutation.
 // Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
 // RequestID instead. It exists only for internal usage by the builders.
-func (m *MergeAttemptMutation) RequestIDs() (ids []uuid.UUID) {
+func (m *MergeAttemptMutation) RequestIDs() (ids []int64) {
 	if id := m.request; id != nil {
 		ids = append(ids, *id)
 	}
@@ -10958,7 +11176,7 @@ func (m *MergeAttemptMutation) SetField(name string, value ent.Value) error {
 		m.SetUpdatedBy(v)
 		return nil
 	case mergeattempt.FieldApprovalRequestID:
-		v, ok := value.(uuid.UUID)
+		v, ok := value.(int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -10999,13 +11217,16 @@ func (m *MergeAttemptMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *MergeAttemptMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *MergeAttemptMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	}
 	return nil, false
 }
 

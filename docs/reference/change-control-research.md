@@ -17,7 +17,7 @@
 **Yes — the capability belongs in orbital's category and fits its architecture — but the evidence sharpens *what kind* and *where*.**
 
 - Orbital's two closest analogs (NetBox, InfraHub) are converging on built-in, *enforced* proposed-change review, and they share orbital's defining trait: a **single API write-path** (a real chokepoint).
-- The enterprise CMDBs that do NOT gate their store (ServiceNow, Device42) don't because their store has *many uncontrolled write paths* (Discovery, IRE, imports). That limitation-driven choice **does not transfer to orbital**.
+- The enterprise CMDBs that do NOT gate their store (ServiceNow, Device42) don't because they became **discovery-*populated*** (many write paths: Discovery, IRE, imports) — a *deviation* from the ITIL definition, in which a CMDB **is** the authorized/intended config and discovery is a *separate* drift-check run against it. Orbital kept the intent model, so it **can** gate. (Corrected + widened — see the 2026-08-29 addendum below.)
 - The single most consistent finding across all four categories: **an approval gate is only real if it sits at the layer every write passes through.** For orbital that is its GraphQL mutation API — not a client (AEP), because orbctl and third-party clients also write.
 - Caveat: everyone who ships enforced review **monetizes it as a premium tier** → it is a significant investment, not a bolt-on. So the real decision is *timing/positioning*, not feasibility.
 
@@ -58,6 +58,7 @@
 - Cites: docs.nautobot.com/projects/core/en/stable/user-guide/platform-functionality/approval-workflow/ ; source `nautobot/extras/models/approvals.py`
 
 ### OpsMill InfraHub — the direct analog
+- **Storage: Neo4j** (Bolt/Cypher; optional Memgraph) — *not* orbital's DGraph, but **both are graph-native** (the shared axis; both sit apart from the relational CMDBs). Its branching is **application-layer copy-on-write on Neo4j**, *not* a database feature — neither Neo4j nor DGraph has native branching. **Why orbital's mechanism differs:** DGraph's globally-unique `@id` + lack of cheap branch-scoping make *in-graph* branches costly, so orbital uses a **Postgres changeset** for the same concept (see the branching addendum). Same model, different engine, engine-adapted mechanism.
 - Core, central to product identity. Proposed Changes ≈ GitHub/GitLab PRs. Branches = copy-on-write graph snapshots (delta-only vs branched_from).
 - **Enforcement split by edition:** Community has the *mechanism* (branches, diff, comments, approve/reject) but **no built-in enforcement** — a direct `infrahubctl branch merge` bypasses review unless you strip `global:edit_default_branch` + branch-merge perms via RBAC. Enterprise adds hard gates: `INFRAHUB_POLICY_REQUIRED_PROPOSED_CHANGE_APPROVALS=<n>` and `INFRAHUB_POLICY_REVOKE_PROPOSED_CHANGE_APPROVALS`, enforced at the GraphQL/API layer (client + automation), not UI-only.
 - **Conflict detection is ALWAYS enforced** (both editions) at the merge/data layer.
@@ -286,3 +287,32 @@ Orbital already gates the **publish** boundary (intent → edge: export-preview 
 - **InfraHub (OpsMill)** — young open-source **graph-based "infrastructure source of truth"** with built-in version control, branches, peer-reviewed proposed changes, CI, API. OpsMill founded 2023 (France). **Closest architectural analog to orbital.** Popularity: early-stage (~510 stars) but credible momentum — **$14M Series A (May 2026)**, marquee references (TikTok; Eurofiber cut deployment 5 days → 15 min), integrates with Ansible/Nornir/Terraform. The "where the category is heading" signal.
 
 **Sources:** SiliconANGLE (OpsMill $14M Series A, 2026-05) ; Packet Pushers (InfraHub launch) ; Budibase (BMC Helix vs ServiceNow) ; 6sense (BMC Helix ITSM market share) ; GitHub star counts via `gh api` 2026-08-26.
+
+---
+
+## Wider scan + the intent-vs-discovery correction (2026-08-29)
+
+A broader second pass (beyond the original eight primary-doc products) plus two clarifications that sharpen — not change — the conclusion. *This section is **scan-level** (search snippets), not per-product primary-doc verification like Categories 1–4; deepen any single product if it becomes decision-relevant.*
+
+### Wider scan: no new store-gater — everything lands in the existing buckets
+Searched **i-doit, CMDBuild, GLPI, Ralph** (OSS CMDBs); **Jerikan, IP Fabric, Slurpit** (network-as-code / SoT); **Jira Service Management / Assets (Insight), Freshservice, Ivanti** (enterprise ITSM). No product gates its own store beyond InfraHub / NetBox. The additions fall into two buckets already established above:
+
+- **Change management as a *separate workflow object* — does NOT gate the CI store** (the ServiceNow pattern): **Jira Service Management / Assets** (CAB approvals + CI/CD deployment gating, but on the change-request / release, not the Assets store), **Freshservice**, **Ivanti** (approval workflows by change type), and OSS **GLPI / i-doit** (ITIL change tickets). **CMDBuild** ships a generic workflow engine you *could* build a gate in, but nothing gates the store by default.
+- **Review enforced via Git — the data lives in Git, the gate is a Git PR**: **Jerikan** (YAML-in-Git + merge-request review) and the **GitOps** tools (Atlantis / Flux / Argo CD). **IP Fabric** enforces review by *creating a NetBox branch* — i.e., it borrows NetBox's gate rather than having its own.
+
+### Is the leaders' change management "Git-based"? For the DATA — no.
+"Git-based" splits three ways, and the two closest analogs do **not** store their data in Git:
+- **NetBox branching** — Postgres **schema-per-branch** + changelog replay. No Git.
+- **InfraHub** — data branches / proposed-changes / merges live **inside its Neo4j graph database** (version control built into the DB). Git is used **only for the code side** — transformations, queries, generators (Jinja2 / Python) in external repos — **not the infrastructure data**. (Its git-heavy framing = git *vocabulary* for the data model + *real* Git for the code/artifact layer.)
+- **Literally Git** (data in Git, gate = Git PR): Jerikan, GitOps.
+
+→ Orbital's model — a **changeset in Postgres merged into the DGraph SoT** — is git-*concepts-on-its-own-store*, matching NetBox (Postgres) and InfraHub (Neo4j), **not** data-in-Git. Aligned with the closest analogs on exactly this axis; InfraHub's Git-for-code is a separate concern (orbital's equivalent boundary is the export API + deployment/bundler layer).
+
+### The intent-vs-discovery correction (why "few gate the store" is unsurprising, not doubtful)
+An earlier framing ("CMDBs are discovery-fed, so they can't gate") conflated **practice with definition**. Corrected:
+- **By definition (ITIL), a CMDB is the *authorized / intended* configuration** — "what should be in place per governance." **Discovery is a *separate* process** that reports observed state and is compared against the CMDB to flag *unauthorized* changes. The CMDB is meant to be an intent record updated through change/approval; discovery detects drift *against* it.
+- **In practice**, enterprise CMDBs (ServiceNow, Device42, BMC) became discovery-***populated*** — using discovery to *fill* the record, not just check it — because maintaining authored intent by hand didn't scale. This is a well-known failure mode ("the enduring myth of CMDB").
+- **So "few gate the store" really means "few kept the intent model."** The discovery-*populated* CMDBs can't gate (you cannot human-approve a discovery firehose); the intent / authored SoTs — **orbital, InfraHub, NetBox** — can, and do. **Gating the store is the *orthodox* CMDB behaviour**, not an exotic one.
+- **Orbital is not the outlier — it is the faithful CMDB.** It holds intent, keeps discovery out of scope (observed state = divergence reported from the edge, then reconciled), and is therefore *more* aligned with the ITIL definition than the discovery-populated majority. CLAUDE.md's "intent-only CMDB" label is precisely this.
+
+**Sources (scan-level):** ITSM "enduring myth of CMDB" whitepaper; ITIL CMDB overviews (Device42, Atlassian); InfraHub architecture + Git-repository docs (OpsMill); netbox-branching architecture (DeepWiki); Jerikan / Git-as-network-SoT (Vincent Bernat); IP Fabric ↔ NetBox branching; JSM / Ivanti change-management comparisons.

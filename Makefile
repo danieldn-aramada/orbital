@@ -42,6 +42,14 @@ help: ## Show this help
 
 up: ## Start the local stack (DGraph, Postgres, MinIO, Zot, orb DGraph)
 	docker compose -f $(COMPOSE_FILE) up -d
+	@# `make down` runs -v and wipes the Postgres volume, taking orbital_test with
+	@# it. Recreating here means `make up` leaves you ready to run anything,
+	@# which is what the dev invariant promises.
+	@for i in 1 2 3 4 5 6 7 8 9 10; do \
+		docker compose -f $(COMPOSE_FILE) exec -T postgres pg_isready -U orbital >/dev/null 2>&1 && break; \
+		sleep 1; \
+	done
+	@docker compose -f $(COMPOSE_FILE) exec -T postgres psql -U orbital -c "CREATE DATABASE orbital_test;" 2>&1 | grep -v "already exists" || true
 
 down: ## Stop the local stack (all profiles)
 	docker compose -f $(COMPOSE_FILE) --profile '*' down -v
@@ -92,7 +100,10 @@ test-unit: ## Run unit tests with coverage summary (no external services require
 	@go tool cover -func=coverage.out | tail -1
 
 test-integration: ## Run integration tests against real services (requires: make up)
-	@docker compose -f $(COMPOSE_FILE) exec -T postgres psql -U orbital -c "CREATE DATABASE orbital_test;" 2>/dev/null || true
+	@# Belt and braces: the test harness also creates this (testutil.EnsureTestDatabase),
+	@# so a direct `go test -tags=integration` works too. `make down` runs -v and
+	@# wipes the volume, so it genuinely goes missing.
+	@docker compose -f $(COMPOSE_FILE) exec -T postgres psql -U orbital -c "CREATE DATABASE orbital_test;" 2>&1 | grep -v "already exists" || true
 	@echo "Running integration tests..."
 	@go test -count=1 -tags integration -timeout 10m -p 1 $(TEST_PKGS)
 	@echo "Reseeding DGraph for E2E tests..."

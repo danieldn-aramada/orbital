@@ -13,8 +13,6 @@ import (
 	"github.com/armada/orbital/ent/approvalrequest"
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/approval"
-	"github.com/armada/orbital/internal/graphdiff"
-	"github.com/google/uuid"
 )
 
 // mergeTarget is what merge needs to know about one item's entity right now:
@@ -46,7 +44,7 @@ type mergeTarget struct {
 //
 // So a transient failure costs one retry click, while a genuine third-party
 // write still forces re-review. Nothing has to be cleaned up by hand.
-func (h *ChangeRequest) Merge(ctx context.Context, id uuid.UUID, actor string, role user.Role, noAuthz bool) (*ent.ApprovalRequest, error) {
+func (h *ChangeRequest) Merge(ctx context.Context, id int64, actor string, role user.Role, noAuthz bool) (*ent.ApprovalRequest, error) {
 	cr, err := h.Get(ctx, id)
 	if err != nil {
 		return nil, err
@@ -105,7 +103,11 @@ func (h *ChangeRequest) Merge(ctx context.Context, id uuid.UUID, actor string, r
 	// rather than an empty placeholder someone has to notice and fill in.
 	caller := callerRole{Role: role, NoAuthz: noAuthz}
 
-	before := st.Snapshot
+	// The version vector as it stood before any item was applied. Versions
+	// rather than content because that is what base_hash is now made of — a
+	// rebase that recomputed a CONTENT hash here would write a value State can
+	// never reproduce, leaving the request permanently stale.
+	before := st.Versions
 	applied := map[string]bool{}
 	results := make([]approval.ItemResult, 0, len(st.Changeset.Changes))
 	var failure error
@@ -172,22 +174,22 @@ func (h *ChangeRequest) Merge(ctx context.Context, id uuid.UUID, actor string, r
 // inverse edge on its target, so if the target is itself in scope it shows as
 // an unapplied change and the request goes stale. Rare (both ends must be in
 // the same changeset), and the cost is one extra approval — the safe direction.
-func (h *ChangeRequest) rebaseOrStale(ctx context.Context, cr *ent.ApprovalRequest, st crState, before graphdiff.Snapshot, applied map[string]bool) {
-	after, err := baseSnapshot(ctx, h.dgraphURL, st.Scope)
+func (h *ChangeRequest) rebaseOrStale(ctx context.Context, cr *ent.ApprovalRequest, st crState, before map[string]int, applied map[string]bool) {
+	after, err := scopeVersions(ctx, h.dgraphURL, st.Scope)
 	if err != nil {
 		h.logger.Warn("rebase check: re-read failed, leaving base as-is",
 			"change_request", cr.ID, "err", err)
 		return
 	}
-	for _, ch := range graphdiff.Compare(before, after).Changes {
-		if !applied[ch.OrbID] {
+	for orbID := range movedOrbIDs(before, after) {
+		if !applied[orbID] {
 			h.logger.Info("partial merge: base moved by something we did not apply — approvals will not carry",
-				"change_request", cr.ID, "orb_id", ch.OrbID)
+				"change_request", cr.ID, "orb_id", orbID)
 			return
 		}
 	}
 
-	newHash := after.ContentHash()
+	newHash := versionHash(after)
 	if newHash == cr.BaseHash {
 		return // nothing actually changed; approvals already valid
 	}
@@ -215,7 +217,7 @@ func (h *ChangeRequest) rebaseOrStale(ctx context.Context, cr *ent.ApprovalReque
 // DGraph-write function everything else uses. A merge is not a privileged
 // side-channel into the graph; it is an ordinary write with a change request
 // behind it.
-func (h *ChangeRequest) applyItem(ctx context.Context, actor string, caller callerRole, crID uuid.UUID, item approval.ChangeItem, target mergeTarget) error {
+func (h *ChangeRequest) applyItem(ctx context.Context, actor string, caller callerRole, crID int64, item approval.ChangeItem, target mergeTarget) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	// gateExempt, and this is the ONE place it is legitimate.
@@ -381,7 +383,7 @@ func (h *ChangeRequest) fetchMergeTargets(ctx context.Context, items []approval.
 	return out, nil
 }
 
-func (h *ChangeRequest) recordAttempt(ctx context.Context, crID uuid.UUID, actor string, results []approval.ItemResult, failure error) error {
+func (h *ChangeRequest) recordAttempt(ctx context.Context, crID int64, actor string, results []approval.ItemResult, failure error) error {
 	raw, err := json.Marshal(results)
 	if err != nil {
 		return fmt.Errorf("marshal results: %w", err)
@@ -400,4 +402,23 @@ func errText(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+// movedOrbIDs returns every orbId whose version changed between two vectors,
+// including ones that appeared or disappeared. Appearing and disappearing both
+// count as movement for the same reason a version bump does: the scope is not
+// what it was when the request was reviewed.
+func movedOrbIDs(before, after map[string]int) map[string]bool {
+	moved := map[string]bool{}
+	for id, v := range before {
+		if w, ok := after[id]; !ok || w != v {
+			moved[id] = true
+		}
+	}
+	for id := range after {
+		if _, ok := before[id]; !ok {
+			moved[id] = true
+		}
+	}
+	return moved
 }

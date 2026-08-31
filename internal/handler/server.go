@@ -302,7 +302,16 @@ type serverTabDetailData struct {
 	// Configured == a serverMaintenance node exists; Enabled is its on/off
 	// switch; the window (if any) is optional scheduling. Editing is via the
 	// JSON editor.
-	MaintenanceConfigured  bool
+	MaintenanceConfigured bool
+	// MaintenanceOrbID and MaintenanceValuesJSON let the page overlay proposed
+	// changes onto these fields. A maintenance edit is recorded against the
+	// CHILD's orbId, never the server's, so the field marks need the child id;
+	// and the raw values are carried as JSON because the mark is suppressed
+	// when a proposal already matches the current value, and comparing a
+	// proposed `true` against the string "true" the table renders would be a
+	// guess.
+	MaintenanceOrbID       string
+	MaintenanceValuesJSON  string
 	MaintenanceEnabled     bool
 	MaintenanceWindowStart string
 	MaintenanceWindowEnd   string
@@ -508,7 +517,14 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 	// empty window/reason fields show as "—" (never "now").
 	if raw.ServerMaintenance != nil {
 		srv.MaintenanceConfigured = true
+		srv.MaintenanceOrbID = raw.ServerMaintenance.OrbID
 		srv.MaintenanceEnabled = raw.ServerMaintenance.Enabled != nil && *raw.ServerMaintenance.Enabled
+		srv.MaintenanceValuesJSON = rawFieldValues(map[string]any{
+			"enabled":     raw.ServerMaintenance.Enabled,
+			"windowStart": raw.ServerMaintenance.WindowStart,
+			"windowEnd":   raw.ServerMaintenance.WindowEnd,
+			"reason":      raw.ServerMaintenance.Reason,
+		})
 		if raw.ServerMaintenance.WindowStart != nil {
 			srv.MaintenanceWindowStart = fmtMaintTime(*raw.ServerMaintenance.WindowStart)
 		}
@@ -586,4 +602,18 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	return renderHTML(c, tmpl, "", srv)
+}
+
+// rawFieldValues encodes a field-name → current-value map for the page to
+// compare proposals against.
+//
+// The RAW value, not the rendered one: the table shows a maintenance window as
+// readable UTC and an unset field as "—", and comparing a proposed timestamp
+// against "—" would suppress nothing and mark everything.
+func rawFieldValues(v map[string]any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "{}" // no values means nothing is suppressed — marks still render
+	}
+	return string(b)
 }

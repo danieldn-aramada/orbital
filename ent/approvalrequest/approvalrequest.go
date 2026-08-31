@@ -8,7 +8,6 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/google/uuid"
 )
 
 const (
@@ -24,6 +23,10 @@ const (
 	FieldUpdatedAt = "updated_at"
 	// FieldUpdatedBy holds the string denoting the updated_by field in the database.
 	FieldUpdatedBy = "updated_by"
+	// FieldNamespace holds the string denoting the namespace field in the database.
+	FieldNamespace = "namespace"
+	// FieldNumber holds the string denoting the number field in the database.
+	FieldNumber = "number"
 	// FieldActionType holds the string denoting the action_type field in the database.
 	FieldActionType = "action_type"
 	// FieldTitle holds the string denoting the title field in the database.
@@ -73,6 +76,8 @@ var Columns = []string{
 	FieldCreatedBy,
 	FieldUpdatedAt,
 	FieldUpdatedBy,
+	FieldNamespace,
+	FieldNumber,
 	FieldActionType,
 	FieldTitle,
 	FieldDescription,
@@ -98,6 +103,10 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
+	// NamespaceValidator is a validator for the "namespace" field. It is called by the builders before save.
+	NamespaceValidator func(string) error
+	// NumberValidator is a validator for the "number" field. It is called by the builders before save.
+	NumberValidator func(int) error
 	// ActionTypeValidator is a validator for the "action_type" field. It is called by the builders before save.
 	ActionTypeValidator func(string) error
 	// TitleValidator is a validator for the "title" field. It is called by the builders before save.
@@ -110,8 +119,6 @@ var (
 	BaseHashValidator func(string) error
 	// DefaultExecutedBy holds the default value on creation for the "executed_by" field.
 	DefaultExecutedBy string
-	// DefaultID holds the default value on creation for the "id" field.
-	DefaultID func() uuid.UUID
 )
 
 // Status defines the type for the "status" enum field.
@@ -168,6 +175,16 @@ func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByUpdatedBy orders the results by the updated_by field.
 func ByUpdatedBy(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedBy, opts...).ToFunc()
+}
+
+// ByNamespace orders the results by the namespace field.
+func ByNamespace(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNamespace, opts...).ToFunc()
+}
+
+// ByNumber orders the results by the number field.
+func ByNumber(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNumber, opts...).ToFunc()
 }
 
 // ByActionType orders the results by the action_type field.

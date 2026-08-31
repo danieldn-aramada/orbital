@@ -7,16 +7,18 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/armada/orbital/ent"
 	entapproval "github.com/armada/orbital/ent/approval"
+	"slices"
+
 	"github.com/armada/orbital/ent/approvalpolicy"
 	"github.com/armada/orbital/ent/approvalrequest"
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/approval"
 	"github.com/armada/orbital/internal/graphdiff"
-	"github.com/google/uuid"
 )
 
 // ChangeRequest is the config.mutation facade over the generic approval engine
@@ -44,34 +46,6 @@ func NewChangeRequest(db *ent.Client, gql *GraphQL, dgraphURL string, logger *sl
 	}
 }
 
-// approvalGateInstalled reports whether orbital's write path actually REFUSES a
-// mutation that a policy protects.
-//
-// It exists because "the admin declared a policy" and "orbital enforces it" were
-// separate facts for one release, and a security control believed to be on while
-// it is off is worse than one everybody knows is missing. Every surface that
-// could create that belief — the policy response, the resolve endpoint, and the
-// startup warning — reads this one constant rather than each asserting
-// enforcement independently.
-//
-// Installed 2026-08-29 (session 2): GraphQL.writeToDGraph refuses a mutation on
-// a protected class when the caller's role is not in the policy's bypass_roles.
-// TestApprovalPolicy_NoticeMatchesEnforcement pins this constant to the wording
-// every surface shows, so the two cannot drift in either direction.
-const approvalGateInstalled = true
-
-// approvalNotEnforcedNotice is what every surface says while the gate is off.
-const approvalNotEnforcedNotice = "This policy is recorded but NOT yet enforced: orbital does not refuse a direct mutation on this class. Change requests work end to end; nothing yet forces callers to use them."
-
-// enforcementNotice returns the notice while the gate is off, and empty once it
-// is installed — so the wording cannot outlive the condition it describes.
-func enforcementNotice() string {
-	if approvalGateInstalled {
-		return ""
-	}
-	return approvalNotEnforcedNotice
-}
-
 // Sentinel errors the REST layer maps to status codes. Kept as values rather
 // than inline strings so the mapping lives in one place and a new call site
 // cannot invent a status.
@@ -92,9 +66,15 @@ var (
 type crState struct {
 	Changeset approval.Changeset
 	// Scope is the declared orbIds plus their owned subtrees — what the hash covers.
-	Scope    []string
+	Scope []string
+	// Snapshot is the scope's full content. Populated ONLY by StateWithSnapshot
+	// — reading it costs a subtree fetch per request, which is why the render
+	// path does not.
 	Snapshot graphdiff.Snapshot
-	// CurrentHash is the content hash of Scope right now. Stale is simply
+	// Versions is the scope's OCC version vector, and the thing CurrentHash is
+	// computed from. Always populated.
+	Versions map[string]int
+	// CurrentHash hashes Scope's version vector right now. Stale is simply
 	// CurrentHash != the hash captured at open.
 	CurrentHash string
 	Stale       bool
@@ -140,7 +120,7 @@ func (h *ChangeRequest) Create(ctx context.Context, actor, title, description st
 		return nil, nil, fmt.Errorf("resolve entities: %w", err)
 	}
 	scope := baseScope(ctx, h.dgraphURL, declaredOrbIDs(cs), existing)
-	snap, err := baseSnapshot(ctx, h.dgraphURL, scope)
+	versions, err := scopeVersions(ctx, h.dgraphURL, scope)
 	if err != nil {
 		return nil, nil, fmt.Errorf("capture base: %w", err)
 	}
@@ -152,24 +132,85 @@ func (h *ChangeRequest) Create(ctx context.Context, actor, title, description st
 		return nil, nil, fmt.Errorf("marshal changeset: %w", err)
 	}
 
-	cr, err := h.db.ApprovalRequest.Create().
-		SetActionType(approval.ActionTypeConfigMutation).
-		SetTitle(title).
-		SetDescription(description).
-		SetAuthor(actor).
-		SetCreatedBy(actor).
-		SetBaseHash(snap.ContentHash()).
-		SetBasePresent(presentIn(snap, scope)).
-		SetPayload(payload).
-		Save(ctx)
+	cr, err := h.createNumbered(ctx, cs.Namespace, func(b *ent.ApprovalRequestCreate) *ent.ApprovalRequestCreate {
+		return b.
+			SetActionType(approval.ActionTypeConfigMutation).
+			SetTitle(title).
+			SetDescription(description).
+			SetAuthor(actor).
+			SetCreatedBy(actor).
+			SetBaseHash(versionHash(versions)).
+			SetBasePresent(presentInVersions(versions, scope)).
+			SetPayload(payload)
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("create change request: %w", err)
 	}
 	return cr, nil, nil
 }
 
+// crNumberRetries bounds the allocation retry. Each retry costs one round trip
+// and only happens when two creates in the SAME namespace interleave, which for
+// human-authored change requests is rare — three attempts is generous.
+const crNumberRetries = 3
+
+// createNumbered allocates the next per-namespace number and inserts the row.
+//
+// Allocation is max(number)+1 for the namespace, and correctness comes from the
+// UNIQUE index on (namespace, number) rather than from the read: two concurrent
+// creates can both read the same max, but only one insert survives and the other
+// retries against the now-higher max. A counter table with an upsert-returning
+// would avoid the retry, but it is a second source of truth for a number the
+// requests themselves already carry — and this way a row deleted by hand cannot
+// leave the counter pointing past reality.
+//
+// Numbers are NOT reused after a delete: max()+1 skips the gap, which is what
+// you want, because an id that once meant one change must never come to mean
+// another.
+func (h *ChangeRequest) createNumbered(
+	ctx context.Context,
+	namespace string,
+	build func(*ent.ApprovalRequestCreate) *ent.ApprovalRequestCreate,
+) (*ent.ApprovalRequest, error) {
+	var lastErr error
+	for attempt := 0; attempt < crNumberRetries; attempt++ {
+		next, err := h.nextCRNumber(ctx, namespace)
+		if err != nil {
+			return nil, err
+		}
+		cr, err := build(h.db.ApprovalRequest.Create()).
+			SetNamespace(namespace).
+			SetNumber(next).
+			Save(ctx)
+		if err == nil {
+			return cr, nil
+		}
+		if !ent.IsConstraintError(err) {
+			return nil, err
+		}
+		// Someone took this number between the read and the insert. Re-read.
+		lastErr = err
+	}
+	return nil, fmt.Errorf("allocate change request number for %q after %d attempts: %w",
+		namespace, crNumberRetries, lastErr)
+}
+
+func (h *ChangeRequest) nextCRNumber(ctx context.Context, namespace string) (int, error) {
+	last, err := h.db.ApprovalRequest.Query().
+		Where(approvalrequest.NamespaceEQ(namespace)).
+		Order(ent.Desc(approvalrequest.FieldNumber)).
+		First(ctx)
+	if ent.IsNotFound(err) {
+		return 1, nil // first change request for this data center
+	}
+	if err != nil {
+		return 0, fmt.Errorf("read last change request number for %q: %w", namespace, err)
+	}
+	return last.Number + 1, nil
+}
+
 // Get loads a change request with its approvals and merge attempts.
-func (h *ChangeRequest) Get(ctx context.Context, id uuid.UUID) (*ent.ApprovalRequest, error) {
+func (h *ChangeRequest) Get(ctx context.Context, id int64) (*ent.ApprovalRequest, error) {
 	cr, err := h.db.ApprovalRequest.Query().
 		Where(approvalrequest.ID(id)).
 		WithApprovals().
@@ -199,17 +240,22 @@ func (h *ChangeRequest) State(ctx context.Context, cr *ent.ApprovalRequest) (crS
 		return st, fmt.Errorf("resolve entities: %w", err)
 	}
 	st.Scope = baseScope(ctx, h.dgraphURL, declared, existing)
-	st.Snapshot, err = baseSnapshot(ctx, h.dgraphURL, st.Scope)
+	// Versions, not content. State answers "has this moved?" and is called once
+	// per request RENDERED — the nav badge renders the whole open queue on every
+	// page load — so it must not fetch and normalize every node in scope. The
+	// paths that genuinely need node content (the diff view, merge) ask for the
+	// snapshot separately via StateWithSnapshot.
+	st.Versions, err = scopeVersions(ctx, h.dgraphURL, st.Scope)
 	if err != nil {
 		return st, fmt.Errorf("read current state: %w", err)
 	}
-	st.CurrentHash = st.Snapshot.ContentHash()
+	st.CurrentHash = versionHash(st.Versions)
 	st.Stale = st.CurrentHash != cr.BaseHash
 
 	// Present at open, gone now. Detected here so both the detail view and
 	// merge see it — the view can warn before anyone spends a review on it.
 	for _, id := range cr.BasePresent {
-		if _, ok := st.Snapshot[id]; !ok {
+		if _, ok := st.Versions[id]; !ok {
 			st.Missing = append(st.Missing, id)
 		}
 	}
@@ -261,67 +307,150 @@ func (h *ChangeRequest) State(ctx context.Context, cr *ent.ApprovalRequest) (crS
 	return st, nil
 }
 
-// resolvedPolicy is the composition of every policy matching a changeset.
+// StateWithSnapshot is State plus the scope's full content.
+//
+// Separate from State because the snapshot is the expensive half — a subtree
+// fetch and a normalize per request — and only two callers need it: the diff
+// view, which renders field-level changes, and merge, which needs the before
+// state to decide what actually applied. Everything that merely displays a
+// request's STATUS goes through State and never pays for it.
+func (h *ChangeRequest) StateWithSnapshot(ctx context.Context, cr *ent.ApprovalRequest) (crState, error) {
+	st, err := h.State(ctx, cr)
+	if err != nil {
+		return st, err
+	}
+	st.Snapshot, err = baseSnapshot(ctx, h.dgraphURL, st.Scope)
+	if err != nil {
+		return st, fmt.Errorf("read current state: %w", err)
+	}
+	return st, nil
+}
+
+// resolvedPolicy is the policy governing a changeset, if any.
 type resolvedPolicy struct {
 	required    int
 	bypassRoles []string
+	namespace   string
+	found       bool
 }
 
-// resolvePolicy composes the policies covering a changeset.
+// resolvePolicy finds the one policy governing a changeset.
 //
-// A changeset can touch several types, so several policies can apply at once,
-// and the composition is deliberately the STRICTEST reading: required_approvals
-// is the maximum across matches, and bypass_roles is the INTERSECTION — a role
-// may write straight through only if it may do so for every protected class the
-// request touches. Any looser rule would let a request dodge the stricter
-// policy by bundling one lightly-governed item alongside a heavily-governed one.
+// One, never several: policies are unique per namespace and carry their own
+// type list, so there is nothing to compose. The composed alternative produced
+// outcomes neither policy stated — most sharply, intersecting bypass_roles
+// [admin] with [dev] yielded "nobody bypasses", a rule an admin never wrote and
+// would meet as an unexplained refusal.
 //
-// With no matching enabled policy the request is ungoverned: required is 0, so
-// it reads as approved immediately and merges without review. That is the
-// opt-in property — installing the engine changes nothing until an admin
-// declares a protected class.
-func (h *ChangeRequest) resolvePolicy(ctx context.Context, actionType string, cs *approval.Changeset) (resolvedPolicy, error) {
-	types := map[string]bool{}
-	for _, ch := range cs.Changes {
-		if ch.Type != "" {
-			types[ch.Type] = true
+// With no matching policy the changeset is ungoverned: required is 0, so it
+// reads as approved immediately and merges without review. That is the opt-in
+// property — installing the engine changes nothing until an admin declares a
+// protected class.
+// policyRow returns the one enabled policy for a namespace, or nil.
+//
+// Separated from resolvePolicy because WHICH row applies depends only on
+// (actionType, namespace) — one policy per namespace — while whether it
+// governs a given changeset depends on that changeset's types. Splitting them
+// is what makes the row memoisable.
+func (h *ChangeRequest) policyRow(ctx context.Context, actionType, namespace string) (*ent.ApprovalPolicy, error) {
+	memo := policyMemoFrom(ctx)
+	key := actionType + "\x00" + namespace
+	if memo != nil {
+		if p, ok := memo.get(key); ok {
+			return p, nil
 		}
 	}
 
-	pols, err := h.db.ApprovalPolicy.Query().
+	p, err := h.db.ApprovalPolicy.Query().
 		Where(
 			approvalpolicy.ActionTypeEQ(actionType),
-			approvalpolicy.NamespaceEQ(cs.Namespace),
+			approvalpolicy.NamespaceEQ(namespace),
 			approvalpolicy.EnabledEQ(true),
-		).All(ctx)
-	if err != nil {
-		return resolvedPolicy{}, fmt.Errorf("resolve approval policy: %w", err)
+		).First(ctx)
+	if err != nil && !ent.IsNotFound(err) {
+		return nil, fmt.Errorf("resolve approval policy: %w", err)
+	}
+	if ent.IsNotFound(err) {
+		p = nil
+	}
+	if memo != nil {
+		memo.put(key, p)
+	}
+	return p, nil
+}
+
+// policyMemo caches policy rows for the lifetime of ONE request.
+//
+// Rendering a change request derives its status, and status depends on the
+// policy — so a list of N requests asked PostgreSQL for the same row N times,
+// and on the queue page those rows are overwhelmingly one namespace. The memo
+// makes that one query per distinct namespace in the response.
+//
+// Not a TTL cache and deliberately not one: it is created per request and
+// discarded with it, so PostgreSQL is re-read on the next request and a policy
+// an admin just changed applies immediately. Install it (withPolicyMemo) only
+// where a single request renders many rows; without it every lookup queries, as
+// before.
+type policyMemo struct {
+	mu sync.Mutex
+	m  map[string]*ent.ApprovalPolicy
+}
+
+func (p *policyMemo) get(key string) (*ent.ApprovalPolicy, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	v, ok := p.m[key]
+	return v, ok
+}
+
+func (p *policyMemo) put(key string, v *ent.ApprovalPolicy) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.m[key] = v
+}
+
+type policyMemoCtxKey struct{}
+
+func withPolicyMemo(ctx context.Context) context.Context {
+	return context.WithValue(ctx, policyMemoCtxKey{}, &policyMemo{m: map[string]*ent.ApprovalPolicy{}})
+}
+
+func policyMemoFrom(ctx context.Context) *policyMemo {
+	m, _ := ctx.Value(policyMemoCtxKey{}).(*policyMemo)
+	return m
+}
+
+func (h *ChangeRequest) resolvePolicy(ctx context.Context, actionType string, cs *approval.Changeset) (resolvedPolicy, error) {
+	p, err := h.policyRow(ctx, actionType, cs.Namespace)
+	if err != nil || p == nil {
+		return resolvedPolicy{}, err
 	}
 
-	out := resolvedPolicy{}
-	var bypass map[string]bool
-	for _, p := range pols {
-		// type_name "" is the namespace-wide policy; a named one applies only
-		// to changesets touching that type.
-		if p.TypeName != "" && !types[p.TypeName] {
-			continue
-		}
-		if p.RequiredApprovals > out.required {
-			out.required = p.RequiredApprovals
-		}
-		next := map[string]bool{}
-		for _, r := range p.BypassRoles {
-			if bypass == nil || bypass[r] {
-				next[r] = true
+	// Whether the row GOVERNS this particular changeset is a property of the
+	// changeset, so it is decided here rather than memoised with the row.
+	governs := p.AllTypes
+	if !governs {
+		for _, ch := range cs.Changes {
+			if ch.Type != "" && slices.Contains(p.Types, ch.Type) {
+				governs = true
+				break
 			}
 		}
-		bypass = next
 	}
-	for r := range bypass {
-		out.bypassRoles = append(out.bypassRoles, r)
+	if !governs {
+		return resolvedPolicy{}, nil
 	}
-	sort.Strings(out.bypassRoles)
-	return out, nil
+
+	roles := p.BypassRoles
+	if roles == nil {
+		roles = []string{}
+	}
+	return resolvedPolicy{
+		required:    p.RequiredApprovals,
+		bypassRoles: roles,
+		namespace:   p.Namespace,
+		found:       true,
+	}, nil
 }
 
 // Approve records a reviewer's approval, stamped with the hash it was cast
@@ -331,16 +460,16 @@ func (h *ChangeRequest) resolvePolicy(ctx context.Context, actionType string, cs
 // after the base moved: the new decision stamps the current hash and starts
 // counting, while the earlier one stops. Blocking it would leave an operator
 // with a request they can neither advance nor fix.
-func (h *ChangeRequest) Approve(ctx context.Context, id uuid.UUID, actor string, role user.Role, comment string) (*ent.ApprovalRequest, error) {
+func (h *ChangeRequest) Approve(ctx context.Context, id int64, actor string, role user.Role, comment string) (*ent.ApprovalRequest, error) {
 	return h.decide(ctx, id, actor, role, comment, entapproval.DecisionApproved)
 }
 
 // Reject records a reviewer's rejection, which is terminal.
-func (h *ChangeRequest) Reject(ctx context.Context, id uuid.UUID, actor string, role user.Role, comment string) (*ent.ApprovalRequest, error) {
+func (h *ChangeRequest) Reject(ctx context.Context, id int64, actor string, role user.Role, comment string) (*ent.ApprovalRequest, error) {
 	return h.decide(ctx, id, actor, role, comment, entapproval.DecisionRejected)
 }
 
-func (h *ChangeRequest) decide(ctx context.Context, id uuid.UUID, actor string, role user.Role, comment string, decision entapproval.Decision) (*ent.ApprovalRequest, error) {
+func (h *ChangeRequest) decide(ctx context.Context, id int64, actor string, role user.Role, comment string, decision entapproval.Decision) (*ent.ApprovalRequest, error) {
 	cr, err := h.Get(ctx, id)
 	if err != nil {
 		return nil, err
@@ -415,7 +544,7 @@ func (h *ChangeRequest) decide(ctx context.Context, id uuid.UUID, actor string, 
 }
 
 // Close withdraws a request. Author-only, or a caller who could bypass the gate.
-func (h *ChangeRequest) Close(ctx context.Context, id uuid.UUID, actor string, role user.Role) (*ent.ApprovalRequest, error) {
+func (h *ChangeRequest) Close(ctx context.Context, id int64, actor string, role user.Role) (*ent.ApprovalRequest, error) {
 	cr, err := h.Get(ctx, id)
 	if err != nil {
 		return nil, err
@@ -446,7 +575,7 @@ func (h *ChangeRequest) Close(ctx context.Context, id uuid.UUID, actor string, r
 // approval automatically: they were stamped against the old hash and stop
 // counting. No dismissal step to remember, and no window in which a reviewer's
 // approval of one proposal silently carries over to a different one.
-func (h *ChangeRequest) Amend(ctx context.Context, id uuid.UUID, actor string, role user.Role, title, description *string, cs *approval.Changeset) (*ent.ApprovalRequest, []approval.ValidationError, error) {
+func (h *ChangeRequest) Amend(ctx context.Context, id int64, actor string, role user.Role, title, description *string, cs *approval.Changeset) (*ent.ApprovalRequest, []approval.ValidationError, error) {
 	cr, err := h.Get(ctx, id)
 	if err != nil {
 		return nil, nil, err
@@ -483,7 +612,7 @@ func (h *ChangeRequest) Amend(ctx context.Context, id uuid.UUID, actor string, r
 			return nil, nil, fmt.Errorf("resolve entities: %w", err)
 		}
 		scope := baseScope(ctx, h.dgraphURL, declaredOrbIDs(cs), existing)
-		snap, err := baseSnapshot(ctx, h.dgraphURL, scope)
+		versions, err := scopeVersions(ctx, h.dgraphURL, scope)
 		if err != nil {
 			return nil, nil, fmt.Errorf("capture base: %w", err)
 		}
@@ -491,7 +620,7 @@ func (h *ChangeRequest) Amend(ctx context.Context, id uuid.UUID, actor string, r
 		if err != nil {
 			return nil, nil, fmt.Errorf("marshal changeset: %w", err)
 		}
-		upd = upd.SetPayload(payload).SetBaseHash(snap.ContentHash()).SetBasePresent(presentIn(snap, scope))
+		upd = upd.SetPayload(payload).SetBaseHash(versionHash(versions)).SetBasePresent(presentInVersions(versions, scope))
 	}
 
 	if _, err := upd.Save(ctx); err != nil {
@@ -668,4 +797,36 @@ func edgeTargetOrbIDs(v any) ([]string, bool) {
 		}
 	}
 	return nil, false
+}
+
+// roleBypassesAnyPolicy reports whether the caller's role appears in the
+// bypass_roles of ANY enabled policy.
+//
+// Used to decide whether "awaiting my review" can exclude the caller's own
+// requests in SQL. Bypass makes approve available on your own request, so the
+// exclusion is only safe when no policy grants it — and one query answers that
+// for every row at once, where the per-row answer would need the namespace.
+//
+// Errs toward false (no exclusion, render everything) on an unresolvable
+// caller: a slower correct answer beats a fast wrong one.
+func (h *ChangeRequest) roleBypassesAnyPolicy(ctx context.Context, caller callerRole) (bool, error) {
+	if caller.NoAuthz {
+		return true, nil // no authz backend means everything is available
+	}
+	if caller.Role == "" {
+		return true, nil
+	}
+	rows, err := h.db.ApprovalPolicy.Query().
+		Where(approvalpolicy.EnabledEQ(true)).
+		Select(approvalpolicy.FieldBypassRoles).
+		All(ctx)
+	if err != nil {
+		return false, fmt.Errorf("read bypass roles: %w", err)
+	}
+	for _, p := range rows {
+		if slices.Contains(p.BypassRoles, string(caller.Role)) {
+			return true, nil
+		}
+	}
+	return false, nil
 }

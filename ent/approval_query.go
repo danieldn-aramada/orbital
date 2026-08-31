@@ -403,8 +403,8 @@ func (_q *ApprovalQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*App
 }
 
 func (_q *ApprovalQuery) loadRequest(ctx context.Context, query *ApprovalRequestQuery, nodes []*Approval, init func(*Approval), assign func(*Approval, *ApprovalRequest)) error {
-	ids := make([]uuid.UUID, 0, len(nodes))
-	nodeids := make(map[uuid.UUID][]*Approval)
+	ids := make([]int64, 0, len(nodes))
+	nodeids := make(map[int64][]*Approval)
 	for i := range nodes {
 		fk := nodes[i].ApprovalRequestID
 		if _, ok := nodeids[fk]; !ok {

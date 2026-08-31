@@ -16,7 +16,6 @@ import (
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/approval"
 	"github.com/armada/orbital/internal/testutil"
-	"github.com/google/uuid"
 )
 
 const (
@@ -32,8 +31,9 @@ const (
 )
 
 type crFixture struct {
-	db  *ent.Client
-	crh *ChangeRequest
+	db     *ent.Client
+	crh    *ChangeRequest
+	auditH *AuditHandler
 }
 
 func newCRFixture(t *testing.T) *crFixture {
@@ -42,7 +42,7 @@ func newCRFixture(t *testing.T) *crFixture {
 	gql := NewGraphQL(testutil.DGraphURL(), db, slog.Default(), false)
 	crh := NewChangeRequest(db, gql, testutil.DGraphURL(), slog.Default())
 	seedCREngineFixture(t)
-	return &crFixture{db: db, crh: crh}
+	return &crFixture{db: db, crh: crh, auditH: &AuditHandler{db: db, logger: slog.Default()}}
 }
 
 // requireApproval installs a policy so the namespace is actually governed.
@@ -72,13 +72,15 @@ func (f *crFixture) open(t *testing.T, items ...approval.ChangeItem) *ent.Approv
 	return cr
 }
 
-func (f *crFixture) state(t *testing.T, id interface{ String() string }) crState {
+func (f *crFixture) state(t *testing.T, id int64) crState {
 	t.Helper()
-	cr, err := f.crh.Get(context.Background(), mustUUID(t, id.String()))
+	cr, err := f.crh.Get(context.Background(), id)
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	st, err := f.crh.State(context.Background(), cr)
+	// The full variant: fixtures assert on both the cheap anchor (Versions)
+	// and the diff (Snapshot), and only StateWithSnapshot has both.
+	st, err := f.crh.StateWithSnapshot(context.Background(), cr)
 	if err != nil {
 		t.Fatalf("state: %v", err)
 	}
@@ -170,7 +172,7 @@ func TestCR_MergedRequestDoesNotReportItselfStale(t *testing.T) {
 	}
 }
 
-func mustGet(t *testing.T, f *crFixture, id uuid.UUID) *ent.ApprovalRequest {
+func mustGet(t *testing.T, f *crFixture, id int64) *ent.ApprovalRequest {
 	t.Helper()
 	cr, err := f.crh.Get(context.Background(), id)
 	if err != nil {
@@ -391,7 +393,7 @@ func TestCR_PartialMerge_ThirdPartyWriteBlocksRebase(t *testing.T) {
 	}
 
 	st := f.state(t, cr.ID)
-	before := st.Snapshot
+	before := st.Versions
 	oldHash := cr.BaseHash
 
 	// Simulate the interleaving a real partial merge produces: we applied item
@@ -792,46 +794,104 @@ func TestCR_ErrorCodesAreDistinct(t *testing.T) {
 	}
 }
 
-// A policy that is recorded but not enforced must say so on every surface an
-// admin could read, and must STOP saying so the moment enforcement lands.
+// Enforcement is per-policy, so disabling a policy must stop that policy gating
+// and leave everything it never covered alone. That precision is the reason
+// there is no global enforcement switch — when a policy misbehaves an operator
+// needs to stop it, not stop change control.
 //
-// This is the test that matters when session 2 flips approvalGateInstalled: it
-// fails if the flag moves and the "not enforced" wording is left behind, which
-// would be the same false assurance in reverse — a control that is on while
-// every response claims it is off. It asserts the RELATIONSHIP, not the current
-// value, so it is correct in both states and needs no edit when the flag flips.
-func TestApprovalPolicy_NoticeMatchesEnforcement(t *testing.T) {
+// Two things this pins beyond the obvious. Disabling must not DELETE the row:
+// an operator who turns a policy off to unblock an incident has to be able to
+// turn it back on with its settings intact, and a toggle that destroys
+// configuration is one nobody dares use. And the escape hatch has to stay
+// reachable: policy administration writes PostgreSQL, never DGraph, so it is
+// never itself approval-gated. If that ever changes, a bad policy could lock
+// out the only means of disabling it.
+func TestApprovalPolicy_DisablingStopsGatingAndKeepsTheRow(t *testing.T) {
+	ctx := context.Background()
 	f := newCRFixture(t)
-	f.requireApproval(t, 1)
+	gql := NewGraphQL(testutil.DGraphURL(), f.db, f.crh.logger, false)
 
-	pol, err := f.db.ApprovalPolicy.Query().Only(context.Background())
+	pol, err := f.db.ApprovalPolicy.Create().
+		SetActionType(approval.ActionTypeConfigMutation).
+		SetNamespace(crNS).
+		SetAllTypes(false).
+		SetTypes([]string{"Server"}).
+		SetRequiredApprovals(2).
+		SetBypassRoles([]string{}).
+		Save(ctx)
 	if err != nil {
-		t.Fatalf("query policy: %v", err)
-	}
-	view := renderPolicy(pol)
-
-	if view.Enforced != approvalGateInstalled {
-		t.Errorf("enforced = %v, want %v (the gate's actual state)", view.Enforced, approvalGateInstalled)
-	}
-	if approvalGateInstalled && view.Notice != "" {
-		t.Errorf("enforcement is live but the response still says %q", view.Notice)
-	}
-	if !approvalGateInstalled && view.Notice == "" {
-		t.Error("an enabled policy is not enforced and the response does not say so")
+		t.Fatalf("create policy: %v", err)
 	}
 
-	// A disabled policy is not enforced either, but for a reason the admin
-	// chose — it must not carry the "orbital has not implemented this yet"
-	// notice, which would misattribute their own switch to a missing feature.
-	off, err := pol.Update().SetEnabled(false).Save(context.Background())
-	if err != nil {
+	srvQ, srvV := updateHostname(crServerA, "gated")
+	idracQ := `mutation U($orbId: String!, $set: IdracSettingsPatch!) { updateIdracSettings(input: {filter: {orbId: {eq: $orbId}}, set: $set}) { numUids } }`
+	idracV := map[string]any{"orbId": crIdracA, "set": map[string]any{"firmwareVersion": "3.0.0"}}
+
+	if err := mutate(t, gql, adminCaller(), srvQ, srvV); err == nil {
+		t.Fatal("precondition: Server is not gated")
+	}
+	if err := mutate(t, gql, adminCaller(), idracQ, idracV); err != nil {
+		t.Fatalf("a Server-scoped policy gated IdracSettings: %v", err)
+	}
+
+	if _, err := f.db.ApprovalPolicy.UpdateOneID(pol.ID).SetEnabled(false).Save(ctx); err != nil {
 		t.Fatalf("disable: %v", err)
 	}
-	offView := renderPolicy(off)
-	if offView.Enforced {
-		t.Error("a disabled policy reports itself enforced")
+	if err := mutate(t, gql, adminCaller(), srvQ, srvV); err != nil {
+		t.Errorf("disabling the policy did not stop it gating: %v", err)
 	}
-	if offView.Notice != "" {
-		t.Errorf("a deliberately disabled policy carries the not-implemented notice: %q", offView.Notice)
+
+	back, err := f.db.ApprovalPolicy.Get(ctx, pol.ID)
+	if err != nil {
+		t.Fatalf("the policy row is gone after disabling it: %v", err)
+	}
+	if back.RequiredApprovals != 2 || len(back.Types) != 1 || back.Types[0] != "Server" {
+		t.Errorf("settings lost on disable: required=%d types=%v", back.RequiredApprovals, back.Types)
+	}
+}
+
+// The accepted limit of a version-based anchor, pinned so it is a DECISION on
+// the record rather than a surprise someone rediscovers.
+//
+// Staleness asks "has intent moved since this was reviewed?" and answers it from
+// orbital's OCC counter, which every write through orbital bumps. A write that
+// reaches DGraph without passing through orbital never bumps it, and is
+// therefore invisible here.
+//
+// That is the trade the cheap anchor buys: State runs once per change request
+// RENDERED — the nav badge renders the whole open queue on every page load — so
+// it reads two predicates instead of fetching and normalizing every node in
+// scope. Orbital owns intent; a writer going around it has already left the
+// model this check describes. If direct-to-DGraph writes ever become a real
+// scenario rather than a test convenience, this is the test that has to change,
+// and it says so.
+func TestCR_OutOfBandWriteThatSkipsTheVersionCounterIsNotSeen(t *testing.T) {
+	f := newCRFixture(t)
+
+	cr := f.open(t, approval.ChangeItem{
+		OrbID: crServerA, Op: approval.OpUpdate,
+		Set: map[string]any{"hostname": "proposed"},
+	})
+	if st := f.state(t, cr.ID); st.Stale {
+		t.Fatal("precondition: fresh request already reads stale")
+	}
+
+	// Straight to DGraph, content changed, version deliberately left alone.
+	crGQL(t, `mutation($orbId: String!, $set: ServerPatch!) { updateServer(input: {filter: {orbId: {eq: $orbId}}, set: $set}) { numUids } }`,
+		map[string]any{"orbId": crServerA, "set": map[string]any{"hostname": "changed-behind-orbitals-back"}})
+
+	if got := readHostname(t, crServerA); got != "changed-behind-orbitals-back" {
+		t.Fatalf("the out-of-band write did not land: hostname = %q", got)
+	}
+	if st := f.state(t, cr.ID); st.Stale {
+		t.Error("an out-of-band write marked the request stale — if this now works, the doc in CHANGE-CONTROL.md describing the limit is wrong")
+	}
+
+	// And the counterpart: the SAME edit made the way intent is actually
+	// written does mark it stale. Together these two say the anchor tracks
+	// orbital's writes, not merely "some writes".
+	setHostname(t, crServerA, "changed-through-orbital")
+	if st := f.state(t, cr.ID); !st.Stale {
+		t.Error("a version-bumping write did not mark the request stale — the anchor is not tracking movement at all")
 	}
 }

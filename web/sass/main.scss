@@ -173,6 +173,24 @@ html {
   border-top: 1px solid var(--bulma-border);
 }
 
+// A gate notice ("Needs approval" / "Bypasses review") lives INSIDE the footer,
+// above the buttons, so it shares their left edge. Anywhere else in the dialog
+// has a different inset — the body and the footer pad differently — and three
+// left edges in one modal reads as broken.
+//
+// Wrapping rather than switching to a column: the footer's second row is the
+// buttons plus an error span that must stay beside them. The notice claims a
+// full row via flex-basis and the rest keeps its own.
+.modal-card-foot.has-gate-notice {
+  flex-wrap: wrap;
+}
+
+.modal-card-foot .js-gate-notice {
+  flex-basis: 100%;
+  width: 100%;
+  margin-bottom: 0;
+}
+
 .form-cluster-create {
   // margin: auto;
   // max-width: 80%;

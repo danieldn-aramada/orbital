@@ -16,7 +16,6 @@ import (
 	"github.com/armada/orbital/ent/approvalrequest"
 	"github.com/armada/orbital/ent/mergeattempt"
 	"github.com/armada/orbital/ent/predicate"
-	"github.com/google/uuid"
 )
 
 // ApprovalRequestQuery is the builder for querying ApprovalRequest entities.
@@ -132,8 +131,8 @@ func (_q *ApprovalRequestQuery) FirstX(ctx context.Context) *ApprovalRequest {
 
 // FirstID returns the first ApprovalRequest ID from the query.
 // Returns a *NotFoundError when no ApprovalRequest ID was found.
-func (_q *ApprovalRequestQuery) FirstID(ctx context.Context) (id uuid.UUID, err error) {
-	var ids []uuid.UUID
+func (_q *ApprovalRequestQuery) FirstID(ctx context.Context) (id int64, err error) {
+	var ids []int64
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
@@ -145,7 +144,7 @@ func (_q *ApprovalRequestQuery) FirstID(ctx context.Context) (id uuid.UUID, err 
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *ApprovalRequestQuery) FirstIDX(ctx context.Context) uuid.UUID {
+func (_q *ApprovalRequestQuery) FirstIDX(ctx context.Context) int64 {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -183,8 +182,8 @@ func (_q *ApprovalRequestQuery) OnlyX(ctx context.Context) *ApprovalRequest {
 // OnlyID is like Only, but returns the only ApprovalRequest ID in the query.
 // Returns a *NotSingularError when more than one ApprovalRequest ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *ApprovalRequestQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error) {
-	var ids []uuid.UUID
+func (_q *ApprovalRequestQuery) OnlyID(ctx context.Context) (id int64, err error) {
+	var ids []int64
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
@@ -200,7 +199,7 @@ func (_q *ApprovalRequestQuery) OnlyID(ctx context.Context) (id uuid.UUID, err e
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *ApprovalRequestQuery) OnlyIDX(ctx context.Context) uuid.UUID {
+func (_q *ApprovalRequestQuery) OnlyIDX(ctx context.Context) int64 {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -228,7 +227,7 @@ func (_q *ApprovalRequestQuery) AllX(ctx context.Context) []*ApprovalRequest {
 }
 
 // IDs executes the query and returns a list of ApprovalRequest IDs.
-func (_q *ApprovalRequestQuery) IDs(ctx context.Context) (ids []uuid.UUID, err error) {
+func (_q *ApprovalRequestQuery) IDs(ctx context.Context) (ids []int64, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
@@ -240,7 +239,7 @@ func (_q *ApprovalRequestQuery) IDs(ctx context.Context) (ids []uuid.UUID, err e
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *ApprovalRequestQuery) IDsX(ctx context.Context) []uuid.UUID {
+func (_q *ApprovalRequestQuery) IDsX(ctx context.Context) []int64 {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -450,7 +449,7 @@ func (_q *ApprovalRequestQuery) sqlAll(ctx context.Context, hooks ...queryHook) 
 
 func (_q *ApprovalRequestQuery) loadApprovals(ctx context.Context, query *ApprovalQuery, nodes []*ApprovalRequest, init func(*ApprovalRequest), assign func(*ApprovalRequest, *Approval)) error {
 	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[uuid.UUID]*ApprovalRequest)
+	nodeids := make(map[int64]*ApprovalRequest)
 	for i := range nodes {
 		fks = append(fks, nodes[i].ID)
 		nodeids[nodes[i].ID] = nodes[i]
@@ -480,7 +479,7 @@ func (_q *ApprovalRequestQuery) loadApprovals(ctx context.Context, query *Approv
 }
 func (_q *ApprovalRequestQuery) loadMergeAttempts(ctx context.Context, query *MergeAttemptQuery, nodes []*ApprovalRequest, init func(*ApprovalRequest), assign func(*ApprovalRequest, *MergeAttempt)) error {
 	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[uuid.UUID]*ApprovalRequest)
+	nodeids := make(map[int64]*ApprovalRequest)
 	for i := range nodes {
 		fks = append(fks, nodes[i].ID)
 		nodeids[nodes[i].ID] = nodes[i]
@@ -519,7 +518,7 @@ func (_q *ApprovalRequestQuery) sqlCount(ctx context.Context) (int, error) {
 }
 
 func (_q *ApprovalRequestQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(approvalrequest.Table, approvalrequest.Columns, sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewQuerySpec(approvalrequest.Table, approvalrequest.Columns, sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeInt64))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique

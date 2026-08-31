@@ -11,6 +11,7 @@
 // leaked policy would silently gate every later spec in the run.
 
 import { test, expect, Page } from '@playwright/test'
+import { savePolicies, clearPolicies, restorePolicies } from './policy-snapshot'
 
 const SERVER_ORB_ID = '2f-uae:server-5HSC3D4'
 const NS = '2f-uae'
@@ -32,20 +33,24 @@ async function api(page: Page, method: string, path: string, body?: unknown) {
 // assuming it, and clears up after itself. A leaked policy does not fail the
 // test that leaked it — it fails an unrelated one later, which is the worst
 // kind of flake to chase.
-async function clearPolicies(page: Page) {
-  const res = await api(page, 'GET', '/api/v1/approval-policies')
-  if (!res.ok()) return
-  for (const p of await res.json()) {
-    await api(page, 'DELETE', `/api/v1/approval-policies/${p.id}`)
-  }
-}
+
+test.beforeAll(async ({ browser }) => {
+  const page = await browser.newPage()
+  await savePolicies(page.request)
+  await page.close()
+})
+test.afterAll(async ({ browser }) => {
+  const page = await browser.newPage()
+  await restorePolicies(page.request)
+  await page.close()
+})
 
 // bypassRoles defaults to ["admin"], and the e2e identity IS admin — so the
 // default policy makes this browser a privileged writer, not a proposer. Tests
 // that need the gated path pass a role nobody holds, which is a real
 // configuration (a class nobody may bypass) rather than a test-only trick.
 async function protect(page: Page, namespace: string, bypassRoles?: string[]): Promise<string> {
-  await clearPolicies(page)
+  await clearPolicies(page.request)
   const res = await api(page, 'POST', '/api/v1/approval-policies', {
     namespace, requiredApprovals: 1,
     ...(bypassRoles ? { bypassRoles } : {}),
@@ -103,6 +108,18 @@ test('the queue lists requests and each filter tab changes only the query param'
     await expect(row).toContainText(NS)
     await expect(row).toContainText('0 of 1')
 
+    // Status is the only coloured column, and staleness rides inside it rather
+    // than in a second one competing for the eye. The count grew to seven when
+    // the ID column was added — two requests on one entity were otherwise
+    // identical in every visible column.
+    await expect(page.locator('#cr-table thead th')).toHaveCount(7)
+    await expect(page.locator('#cr-table thead th').first()).toHaveText('ID')
+    // The id is the row's link, so a row can always be reached by the thing
+    // people quote.
+    await expect(row.locator('td').first()).toHaveText(/^[a-z0-9-]+-\d+$/)
+    const headers = await page.locator('#cr-table thead th').allTextContents()
+    expect(headers).not.toContain('Stale')
+
     // "Merged" must exclude a request that has not merged — otherwise the tabs
     // are decoration.
     await page.locator('a[data-cr-filter="status=merged"]').click()
@@ -130,6 +147,35 @@ test('a gated class relabels Save to "Propose change", writes nothing, and lands
     await expect(btn).toHaveText('Propose change', { timeout: 10_000 })
     await expect(page.locator(`#edit-modal-srv-${domId}`)).toContainText('Needs approval')
 
+    // The notice sits in the FOOTER, as a sibling of the button row.
+    //
+    // That is what makes its left edge the Save button's left edge: both are
+    // laid out inside the footer's padding. Earlier placements each satisfied
+    // some rule and still looked wrong — inside `.buttons` it became a flex
+    // sibling of the actions and shoved them sideways; in the body it scrolled
+    // away with the editor; between body and footer it was flush to the card
+    // while the editor sat inside the body's padding, giving three left edges
+    // in one dialog.
+    //
+    // Asserted structurally rather than by measuring pixels: the modal animates
+    // with a 3D transform (modal-fx-3dRotateFromBottom), so getBoundingClientRect
+    // returns projected coordinates that differ per child until it settles —
+    // a measurement here reports a phantom offset. Position is the cause,
+    // alignment is the effect, and only the cause is stable to assert.
+    const misplaced = await page.evaluate(({ id }) => {
+      const card = document.querySelector(`#edit-modal-srv-${id} .modal-card`)
+      const notice = card?.querySelector('.notification')
+      if (!notice) return 'no notice found'
+      if (notice.closest('.buttons')) return 'notice is inside the button row'
+      if (notice.closest('.modal-card-body')) return 'notice is inside the scrolling body'
+      const foot = notice.closest('.modal-card-foot')
+      if (!foot) return 'notice is outside the footer, so it does not share the buttons inset'
+      if (notice.parentElement !== foot) return 'notice is nested inside the footer rather than a sibling of the button row'
+      if (!foot.classList.contains('has-gate-notice')) return 'footer is missing has-gate-notice, so it will not wrap the notice onto its own row'
+      return ''
+    }, { id: domId })
+    expect(misplaced).toBe('')
+
     // Change one field through the real editor instance, the same way the
     // existing editor spec drives it.
     await page.evaluate(({ id }) => {
@@ -141,9 +187,17 @@ test('a gated class relabels Save to "Propose change", writes nothing, and lands
 
     await btn.click()
 
-    // AC 12 — a proposal is the start of a review, so it lands on the review.
-    await page.waitForURL(/\/change-requests\/[0-9a-f-]{36}$/, { timeout: 15_000 })
-    await expect(page.locator('[data-testid="cr-detail"]')).toContainText('proposed-by-e2e')
+    // AC 12 — proposing is a SAVE: it leaves you on the thing you were editing.
+    //
+    // It used to navigate to the new request's review page. That teleported the
+    // user out of the entity mid-flow and made the gated path behave unlike the
+    // ordinary one. The banner is what confirms the proposal landed, and it is
+    // also the way through to the review.
+    await expect(page.locator(`#edit-modal-srv-${domId}`)).not.toHaveClass(/is-active/, { timeout: 15_000 })
+    expect(page.url()).not.toMatch(/\/change-requests\//)
+    const banner = page.locator(`[data-pending-changes-for="${SERVER_ORB_ID}"]`)
+    await expect(banner).toContainText('in review', { timeout: 15_000 })
+    await expect(banner.locator('a')).toHaveAttribute('href', /\/change-requests\/[a-z0-9-]+-\d+$/)
 
     // AC 6 — nothing reached the graph.
     const srv = await (await api(page, 'POST', '/graphql', {
@@ -246,7 +300,7 @@ test('an admin on a protected class sees Save plus a visible bypass notice, and 
     const modal = page.locator(`#edit-modal-srv-${domId}`)
     // The seeded e2e identity is admin, which the default policy puts in
     // bypass_roles — so the button must still say Save, and must say why.
-    await expect(modal).toContainText('Privileged write', { timeout: 10_000 })
+    await expect(modal).toContainText('Bypasses review', { timeout: 10_000 })
     await expect(page.locator(`#srv-edit-submit-${domId}`)).toHaveText('Save')
   } finally {
     await unprotect(page, policyId)
@@ -255,14 +309,14 @@ test('an admin on a protected class sees Save plus a visible bypass notice, and 
 
 // AC 10
 test('with no policy the editor behaves exactly as it does today', async ({ page }) => {
-  await clearPolicies(page)
+  await clearPolicies(page.request)
   const domId = await openServerEditModal(page, SERVER_ORB_ID)
   const modal = page.locator(`#edit-modal-srv-${domId}`)
   await expect(page.locator(`#srv-edit-submit-${domId}`)).toHaveText('Save')
   // Give the async policy resolve time to have landed if it were going to.
   await page.waitForTimeout(1000)
   await expect(modal).not.toContainText('Needs approval')
-  await expect(modal).not.toContainText('Privileged write')
+  await expect(modal).not.toContainText('Bypasses review')
 })
 
 // AC 14 (browser half — the notice a person actually sees)
@@ -391,7 +445,7 @@ test('an entity whose only requests are closed shows no pending notice', async (
 // which is the worst available outcome: the remedy exists, it is one click
 // away, and the browser is holding the exact edit it needs.
 test('a save refused as APPROVAL_REQUIRED offers to open a change request with that edit', async ({ page }) => {
-  await clearPolicies(page)
+  await clearPolicies(page.request)
   await closeAllInFlight(page, SERVER_ORB_ID)
 
   // Modal opens with NO policy, so the button resolves to plain Save.
@@ -417,12 +471,20 @@ test('a save refused as APPROVAL_REQUIRED offers to open a change request with t
 
     // The offer names the reason and what accepting does — a bare "403" would
     // leave the operator to work out both.
-    await page.waitForURL(/\/change-requests\/[0-9a-f-]{36}$/, { timeout: 15_000 })
+    await expect(page.locator(`#edit-modal-srv-${domId}`)).not.toHaveClass(/is-active/, { timeout: 15_000 })
     expect(prompt).toContain('approval')
     expect(prompt).toContain('change request')
 
+    // Accepting the offer proposes and returns you to the entity, same as a
+    // save — not to the review page.
+    expect(page.url()).not.toMatch(/\/change-requests\//)
+    await expect(page.locator(`[data-pending-changes-for="${SERVER_ORB_ID}"]`))
+      .toContainText('in review', { timeout: 15_000 })
+
     // The edit survived the refusal — the whole point is not retyping it.
-    await expect(page.locator('[data-testid="cr-detail"]')).toContainText('refused-then-proposed')
+    const proposed = await (await api(page, 'GET',
+      `/api/v1/change-requests?status=active&orbId=${encodeURIComponent(SERVER_ORB_ID)}`)).json()
+    expect(JSON.stringify(proposed.items)).toContain('refused-then-proposed')
 
     // And it is a proposal, not a write.
     const srv = await (await api(page, 'POST', '/graphql', {
@@ -439,7 +501,7 @@ test('a save refused as APPROVAL_REQUIRED offers to open a change request with t
 // the reason visible and their edit intact. An offer that proposes anyway when
 // you say no is worse than no offer.
 test('declining the offer leaves the edit in place and explains the refusal', async ({ page }) => {
-  await clearPolicies(page)
+  await clearPolicies(page.request)
   await closeAllInFlight(page, SERVER_ORB_ID)
 
   const domId = await openServerEditModal(page, SERVER_ORB_ID)

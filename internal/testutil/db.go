@@ -5,12 +5,15 @@ package testutil
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/enttest"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 )
 
 // TestDatabaseURL returns the PostgreSQL DSN for the test stack.
@@ -22,11 +25,48 @@ func TestDatabaseURL() string {
 	return "postgres://orbital:orbital-local-dev-secret@localhost:5432/orbital_test?sslmode=disable"
 }
 
+// EnsureTestDatabase creates the test database if it does not exist.
+//
+// Called from the test harness rather than left to the Makefile because the
+// harness is the code that NEEDS it: `make test-integration` creates it, but
+// running `go test -tags=integration` directly, or from an IDE, skips that and
+// dies with a bare `database "orbital_test" does not exist` several layers
+// away from the cause. `make down` runs `-v`, which wipes the Postgres volume,
+// so the normal down/up cycle destroys it.
+//
+// "Already exists" is not an error; anything else is, and is returned rather
+// than swallowed — a permissions failure must not look like success.
+func EnsureTestDatabase() error {
+	dsn := TestDatabaseURL()
+	admin := regexp.MustCompile(`/[^/?]+(\?|$)`).ReplaceAllString(dsn, "/postgres$1")
+
+	db, err := sql.Open("postgres", admin)
+	if err != nil {
+		return fmt.Errorf("connect to postgres to create the test database: %w", err)
+	}
+	defer db.Close()
+
+	name := "orbital_test"
+	if m := regexp.MustCompile(`/([^/?]+)(\?|$)`).FindStringSubmatch(dsn); len(m) > 1 {
+		name = m[1]
+	}
+	if _, err := db.Exec("CREATE DATABASE " + pq.QuoteIdentifier(name)); err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			return nil
+		}
+		return fmt.Errorf("create database %q: %w", name, err)
+	}
+	return nil
+}
+
 // NewTestDB opens an ent client against the test PostgreSQL instance and runs
 // auto-migration. All tables are truncated via t.Cleanup when the test ends.
 func NewTestDB(t *testing.T) *ent.Client {
 	t.Helper()
 
+	if err := EnsureTestDatabase(); err != nil {
+		t.Fatalf("ensure test database: %v", err)
+	}
 	client := enttest.Open(t, "postgres", TestDatabaseURL())
 
 	t.Cleanup(func() {

@@ -31,8 +31,10 @@ type ApprovalPolicy struct {
 	ActionType string `json:"action_type,omitempty"`
 	// Namespace holds the value of the "namespace" field.
 	Namespace string `json:"namespace,omitempty"`
-	// TypeName holds the value of the "type_name" field.
-	TypeName string `json:"type_name,omitempty"`
+	// AllTypes holds the value of the "all_types" field.
+	AllTypes bool `json:"all_types,omitempty"`
+	// Types holds the value of the "types" field.
+	Types []string `json:"types,omitempty"`
 	// RequiredApprovals holds the value of the "required_approvals" field.
 	RequiredApprovals int `json:"required_approvals,omitempty"`
 	// BypassRoles holds the value of the "bypass_roles" field.
@@ -47,13 +49,13 @@ func (*ApprovalPolicy) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case approvalpolicy.FieldBypassRoles:
+		case approvalpolicy.FieldTypes, approvalpolicy.FieldBypassRoles:
 			values[i] = new([]byte)
-		case approvalpolicy.FieldEnabled:
+		case approvalpolicy.FieldAllTypes, approvalpolicy.FieldEnabled:
 			values[i] = new(sql.NullBool)
 		case approvalpolicy.FieldRequiredApprovals:
 			values[i] = new(sql.NullInt64)
-		case approvalpolicy.FieldCreatedBy, approvalpolicy.FieldUpdatedBy, approvalpolicy.FieldActionType, approvalpolicy.FieldNamespace, approvalpolicy.FieldTypeName:
+		case approvalpolicy.FieldCreatedBy, approvalpolicy.FieldUpdatedBy, approvalpolicy.FieldActionType, approvalpolicy.FieldNamespace:
 			values[i] = new(sql.NullString)
 		case approvalpolicy.FieldCreatedAt, approvalpolicy.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -117,11 +119,19 @@ func (_m *ApprovalPolicy) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Namespace = value.String
 			}
-		case approvalpolicy.FieldTypeName:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field type_name", values[i])
+		case approvalpolicy.FieldAllTypes:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field all_types", values[i])
 			} else if value.Valid {
-				_m.TypeName = value.String
+				_m.AllTypes = value.Bool
+			}
+		case approvalpolicy.FieldTypes:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field types", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Types); err != nil {
+					return fmt.Errorf("unmarshal field types: %w", err)
+				}
 			}
 		case approvalpolicy.FieldRequiredApprovals:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -199,8 +209,11 @@ func (_m *ApprovalPolicy) String() string {
 	builder.WriteString("namespace=")
 	builder.WriteString(_m.Namespace)
 	builder.WriteString(", ")
-	builder.WriteString("type_name=")
-	builder.WriteString(_m.TypeName)
+	builder.WriteString("all_types=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AllTypes))
+	builder.WriteString(", ")
+	builder.WriteString("types=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Types))
 	builder.WriteString(", ")
 	builder.WriteString("required_approvals=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RequiredApprovals))

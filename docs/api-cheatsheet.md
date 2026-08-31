@@ -355,3 +355,54 @@ curl -s -X POST $ORBITAL_URL/api/v1/export -H "Authorization: Bearer $TOKEN" -H 
 # poll
 curl -s $ORBITAL_URL/api/v1/export/jobs/<jobId> -H "Authorization: Bearer $TOKEN" | jq '{status, phase, published}'
 ```
+
+
+## Show what is already proposed (REST + GraphQL, in parallel)
+
+Two calls, joined on `orbId`. `orbId` is `@id` on the ConfigItem interface — globally unique
+across every type — so the overlay is a map lookup, not a correlation. Issue them in parallel;
+they have no dependency on each other.
+
+```bash
+# 1. the entities you are rendering, and their owned children
+curl -s $ORBITAL_URL/graphql -H "Content-Type: application/json" -d '{"query":"
+  { getServer(orbId:\"colo:server-CWJHDX3\") {
+      orbId hostname
+      serverMaintenance { orbId enabled reason }
+    } }"}'
+
+# 2. what is proposed for any of those orbIds (repeatable, max 128)
+curl -s "$ORBITAL_URL/api/v1/proposed-changes\
+?orbId=colo:server-CWJHDX3&orbId=colo:server-maintenance-CWJHDX3" -H "Authorization: Bearer $TOKEN"
+```
+
+```json
+{ "colo:server-maintenance-CWJHDX3": {
+    "type": "ServerMaintenance",
+    "fields": { "enabled": {
+      "conflicting": false,
+      "proposals": [{ "changeRequestId": "colo-42", "status": "open", "op": "update",
+                      "value": true, "approvals": 0, "requiredApprovals": 1,
+                      "author": "dev@armada.ai", "createdAt": "2026-08-30T22:14:03Z" }] } } } }
+```
+
+Rendering it is one lookup — no walk, no grouping, no conflict comparison; orbital did those:
+
+```js
+const p = proposals[node.orbId]?.fields['enabled']
+```
+
+Two rules worth copying from orbital's own UI, because the API cannot do either for you:
+
+- **Suppress no-ops.** This endpoint reads PostgreSQL only, so it does not know current values.
+  A proposal whose `value` already equals what you rendered changes nothing — drop the mark
+  (keep the request in your banner; it still needs closing or merging).
+- **Recompute `conflicting` over what survives.** The flag counts every proposal. Two proposals
+  of which one is already true leave one live claim and no conflict.
+
+`status` is derived from the approval count against the request's stored base — a display hint,
+not a merge verdict. Merge re-checks against live intent and can still refuse with
+`409 MVCC_CONFLICT`.
+
+Which children to ask about is **your** decision, not orbital's: ask about exactly the orbIds you
+rendered. Over 128 the request is refused (`400`), never silently truncated.

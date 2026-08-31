@@ -260,6 +260,18 @@ func New(cfg *config.Config, db *ent.Client) (*Server, error) {
 	gqlGroup := root.Group("", apiAuth...)
 	// Constructed once at outer scope so the DivergenceHandler can borrow it
 	// for the Accept-mutation dispatch (see internal/handler/divergence.go).
+	// Before any handler is constructed: every surface that reports whether a
+	// policy is enforced reads this.
+	//
+	// The hierarchy is resolved HERE, once, rather than at each read site —
+	// change control off means the gate is off whatever its own setting says,
+	// and leaving that to be re-derived in four places is how one of them ends
+	// up disagreeing.
+	handler.SetChangeControlEnabled(cfg.ChangeControlEnabled)
+	if !cfg.ChangeControlEnabled {
+		logger.Warn("CHANGE CONTROL DISABLED (ORBITAL_CHANGE_CONTROL_ENABLED=false) — change-request and approval-policy pages and endpoints are not registered, and no mutation is gated. Existing rows are retained, not deleted.")
+	}
+
 	gql := handler.NewGraphQL(cfg.DGraphURL, db, logger, cfg.InlineSelectorReject)
 	s3Configured := cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != ""
 	ociConfigured := cfg.OCIConfigured()
@@ -303,9 +315,11 @@ func New(cfg *config.Config, db *ent.Client) (*Server, error) {
 	root.GET("/backups", ui.Backups)
 	root.GET("/divergence-reports", ui.DivergenceReports)
 	root.GET("/audit-log", ui.AuditLog)
-	root.GET("/change-requests", ui.ChangeRequests)
-	root.GET("/change-requests/:id", ui.ChangeRequestDetail)
-	root.GET("/approval-policies", ui.ApprovalPolicies)
+	if cfg.ChangeControlEnabled {
+		root.GET("/change-requests", ui.ChangeRequests)
+		root.GET("/change-requests/:id", ui.ChangeRequestDetail)
+		root.GET("/approval-policies", ui.ApprovalPolicies)
+	}
 	root.GET("/restore", ui.Restore)
 	root.GET("/schema", ui.Schema)
 	root.GET("/export", ui.Export)
@@ -521,31 +535,34 @@ func New(cfg *config.Config, db *ent.Client) (*Server, error) {
 		// it. RequireRole(RoleAdmin) on the mutating verbs; the read and the
 		// resolve convenience stay dev-visible so a client can label its save
 		// button without being an admin.
-		crh := handler.NewChangeRequest(db, gql, cfg.DGraphURL, logger)
-		// A gated divergence Accept opens a change request instead of mutating.
-		dh.SetChangeRequests(crh)
-		apiReadonly.GET("/change-requests", crh.ListChangeRequests)
-		apiReadonly.GET("/change-requests/:id", crh.GetChangeRequest)
-		apiReadonly.GET("/change-requests/:id/diff", crh.GetChangeRequestDiff)
-		api.POST("/change-requests", crh.CreateChangeRequest)
-		api.PATCH("/change-requests/:id", crh.AmendChangeRequest)
-		api.POST("/change-requests/:id/approve", crh.ApproveChangeRequest)
-		api.POST("/change-requests/:id/reject", crh.RejectChangeRequest)
-		api.POST("/change-requests/:id/merge", crh.MergeChangeRequest)
-		api.POST("/change-requests/:id/close", crh.CloseChangeRequest)
+		// Change control is registered only when enabled. Not registering the
+		// routes is what makes them 404 rather than 403 — an adopter running
+		// their own change management should not have integrators discover
+		// endpoints their org does not use.
+		if cfg.ChangeControlEnabled {
+			crh := handler.NewChangeRequest(db, gql, cfg.DGraphURL, logger)
+			// A gated divergence Accept opens a change request instead of mutating.
+			dh.SetChangeRequests(crh)
+			apiReadonly.GET("/change-requests", crh.ListChangeRequests)
+			apiReadonly.GET("/change-requests/:id", crh.GetChangeRequest)
+			apiReadonly.GET("/change-requests/:id/diff", crh.GetChangeRequestDiff)
+			api.POST("/change-requests", crh.CreateChangeRequest)
+			api.PATCH("/change-requests/:id", crh.AmendChangeRequest)
+			api.POST("/change-requests/:id/approve", crh.ApproveChangeRequest)
+			api.POST("/change-requests/:id/reject", crh.RejectChangeRequest)
+			api.POST("/change-requests/:id/merge", crh.MergeChangeRequest)
+			api.POST("/change-requests/:id/close", crh.CloseChangeRequest)
 
-		// Spike 36 session 2 installs the write gate. Until then a declared
-		// policy records intent without enforcing it, so say so at startup —
-		// an operator inheriting a configured deployment must not discover it
-		// from a mutation that should have been refused and was not.
-		crh.WarnUnenforcedPolicies(context.Background())
-
-		adminAPI := root.Group("/api/v1", append(apiAuth, handler.RequireRole(db, user.RoleAdmin))...)
-		apiReadonly.GET("/approval-policies", crh.ListApprovalPolicies)
-		apiReadonly.GET("/approval-policies/resolve", crh.ResolveApprovalPolicy)
-		adminAPI.POST("/approval-policies", crh.CreateApprovalPolicy)
-		adminAPI.PATCH("/approval-policies/:id", crh.UpdateApprovalPolicy)
-		adminAPI.DELETE("/approval-policies/:id", crh.DeleteApprovalPolicy)
+			adminAPI := root.Group("/api/v1", append(apiAuth, handler.RequireRole(db, user.RoleAdmin))...)
+			apiReadonly.GET("/approval-policies", crh.ListApprovalPolicies)
+			apiReadonly.GET("/approval-policies/resolve", crh.ResolveApprovalPolicy)
+			// The field-level projection of open requests, keyed by orbId so a
+			// client can overlay it onto entities read from /graphql.
+			apiReadonly.GET("/proposed-changes", crh.ProposedChanges)
+			adminAPI.POST("/approval-policies", crh.CreateApprovalPolicy)
+			adminAPI.PATCH("/approval-policies/:id", crh.UpdateApprovalPolicy)
+			adminAPI.DELETE("/approval-policies/:id", crh.DeleteApprovalPolicy)
+		}
 	}
 
 	gqlGroup.Any("/graphql", gql.Handle)

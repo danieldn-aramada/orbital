@@ -14,7 +14,6 @@ import (
 	"github.com/armada/orbital/ent/approval"
 	"github.com/armada/orbital/ent/approvalrequest"
 	"github.com/armada/orbital/ent/predicate"
-	"github.com/google/uuid"
 )
 
 // ApprovalUpdate is the builder for updating Approval entities.
@@ -91,13 +90,13 @@ func (_u *ApprovalUpdate) ClearUpdatedBy() *ApprovalUpdate {
 }
 
 // SetApprovalRequestID sets the "approval_request_id" field.
-func (_u *ApprovalUpdate) SetApprovalRequestID(v uuid.UUID) *ApprovalUpdate {
+func (_u *ApprovalUpdate) SetApprovalRequestID(v int64) *ApprovalUpdate {
 	_u.mutation.SetApprovalRequestID(v)
 	return _u
 }
 
 // SetNillableApprovalRequestID sets the "approval_request_id" field if the given value is not nil.
-func (_u *ApprovalUpdate) SetNillableApprovalRequestID(v *uuid.UUID) *ApprovalUpdate {
+func (_u *ApprovalUpdate) SetNillableApprovalRequestID(v *int64) *ApprovalUpdate {
 	if v != nil {
 		_u.SetApprovalRequestID(*v)
 	}
@@ -167,7 +166,7 @@ func (_u *ApprovalUpdate) SetNillableApprovedAtHash(v *string) *ApprovalUpdate {
 }
 
 // SetRequestID sets the "request" edge to the ApprovalRequest entity by ID.
-func (_u *ApprovalUpdate) SetRequestID(id uuid.UUID) *ApprovalUpdate {
+func (_u *ApprovalUpdate) SetRequestID(id int64) *ApprovalUpdate {
 	_u.mutation.SetRequestID(id)
 	return _u
 }
@@ -291,7 +290,7 @@ func (_u *ApprovalUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Columns: []string{approval.RequestColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -304,7 +303,7 @@ func (_u *ApprovalUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Columns: []string{approval.RequestColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -393,13 +392,13 @@ func (_u *ApprovalUpdateOne) ClearUpdatedBy() *ApprovalUpdateOne {
 }
 
 // SetApprovalRequestID sets the "approval_request_id" field.
-func (_u *ApprovalUpdateOne) SetApprovalRequestID(v uuid.UUID) *ApprovalUpdateOne {
+func (_u *ApprovalUpdateOne) SetApprovalRequestID(v int64) *ApprovalUpdateOne {
 	_u.mutation.SetApprovalRequestID(v)
 	return _u
 }
 
 // SetNillableApprovalRequestID sets the "approval_request_id" field if the given value is not nil.
-func (_u *ApprovalUpdateOne) SetNillableApprovalRequestID(v *uuid.UUID) *ApprovalUpdateOne {
+func (_u *ApprovalUpdateOne) SetNillableApprovalRequestID(v *int64) *ApprovalUpdateOne {
 	if v != nil {
 		_u.SetApprovalRequestID(*v)
 	}
@@ -469,7 +468,7 @@ func (_u *ApprovalUpdateOne) SetNillableApprovedAtHash(v *string) *ApprovalUpdat
 }
 
 // SetRequestID sets the "request" edge to the ApprovalRequest entity by ID.
-func (_u *ApprovalUpdateOne) SetRequestID(id uuid.UUID) *ApprovalUpdateOne {
+func (_u *ApprovalUpdateOne) SetRequestID(id int64) *ApprovalUpdateOne {
 	_u.mutation.SetRequestID(id)
 	return _u
 }
@@ -623,7 +622,7 @@ func (_u *ApprovalUpdateOne) sqlSave(ctx context.Context) (_node *Approval, err 
 			Columns: []string{approval.RequestColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -636,7 +635,7 @@ func (_u *ApprovalUpdateOne) sqlSave(ctx context.Context) (_node *Approval, err 
 			Columns: []string{approval.RequestColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

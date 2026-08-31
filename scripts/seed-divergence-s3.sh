@@ -36,18 +36,42 @@ SNAPSHOT_TS="2026-06-11T120000Z"
 # ────────────────────────────────────────────────────────────────────────────
 echo "==> Stubbing RegistryArtifact rows..."
 # Idempotent: clear prior seed rows (identified by tag='seed') before inserting.
+#
+# The export_jobs rows are NOT optional. registry_artifacts.export_job_id has a
+# foreign key (added in v0.0.23), and this script used to pass gen_random_uuid()
+# — pointing at nothing. That worked until the FK existed and has failed ever
+# since, taking the whole local divergence flow with it.
 ${PSQL} -v ON_ERROR_STOP=1 <<SQL >/dev/null
 DELETE FROM registry_artifacts WHERE tag = 'seed';
+DELETE FROM export_jobs WHERE datacenter_name IN ('colo-galleon', 'alaska-dot-galleon') AND status = 'seed';
+
+WITH jobs AS (
+  INSERT INTO export_jobs (id, created_at, datacenter_id, datacenter_name, status)
+  VALUES
+    (gen_random_uuid(), NOW(), '${DC_COLO_ID}',   'colo-galleon',       'seed'),
+    (gen_random_uuid(), NOW(), '${DC_ALASKA_ID}', 'alaska-dot-galleon', 'seed')
+  RETURNING id, datacenter_id, datacenter_name
+)
 INSERT INTO registry_artifacts (
   export_job_id, datacenter_id, datacenter_name, registry, repository, tag,
   status, initiated_at, completed_at, signed, enriched
-) VALUES
-  (gen_random_uuid(), '${DC_COLO_ID}',   'colo-galleon',       'localhost:5001', '${DC_COLO_REPO}',   'seed', 'completed', NOW(), NOW(), false, false),
-  (gen_random_uuid(), '${DC_ALASKA_ID}', 'alaska-dot-galleon', 'localhost:5001', '${DC_ALASKA_REPO}', 'seed', 'completed', NOW(), NOW(), false, false);
+)
+SELECT j.id, j.datacenter_id, j.datacenter_name, 'localhost:5001',
+       CASE j.datacenter_name WHEN 'colo-galleon' THEN '${DC_COLO_REPO}' ELSE '${DC_ALASKA_REPO}' END,
+       'seed', 'completed', NOW(), NOW(), false, false
+FROM jobs j;
 SQL
 
 # ────────────────────────────────────────────────────────────────────────────
 # Step 2 — write snapshot JSON files to disk, then upload via mc.
+#
+# The orbIds below MUST match what scripts/seed-dgraph.sh actually creates.
+# They drifted once already: these were bare service tags (colo:3V5Y2Z3) from
+# before Server adopted the <namespace>:server-<serial> convention, so every
+# entry pointed at an entity that did not exist. Nothing failed loudly — the
+# entries ingested fine and only broke when something tried to ACT on one
+# (accepting a divergence for a missing entity). Re-check these after any
+# change to the DGraph seed.
 # ────────────────────────────────────────────────────────────────────────────
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "${TMPDIR}"' EXIT
@@ -60,7 +84,7 @@ cat > "${TMPDIR}/divergence/${DC_COLO_REPO}/${SNAPSHOT_TS}.json" <<JSON
   "publishedAt": "2026-06-11T12:00:00Z",
   "overrides": [
     {
-      "orbId": "colo:3V5Y2Z3",
+      "orbId": "colo:server-7MP6K74",
       "field": "oobMAC",
       "type": "Server",
       "intendedValue": "c8:4b:d6:a6:75:9b",
@@ -69,7 +93,7 @@ cat > "${TMPDIR}/divergence/${DC_COLO_REPO}/${SNAPSHOT_TS}.json" <<JSON
       "when": "2026-06-08T10:00:00Z"
     },
     {
-      "orbId": "colo:JV8Y2Z3",
+      "orbId": "colo:server-8MP6K74",
       "field": "hostname",
       "type": "Server",
       "intendedValue": "r10-u06.colo-galleon",
@@ -86,7 +110,7 @@ cat > "${TMPDIR}/divergence/${DC_ALASKA_REPO}/${SNAPSHOT_TS}.json" <<JSON
   "publishedAt": "2026-06-11T12:00:00Z",
   "overrides": [
     {
-      "orbId": "alaska-dot:55W8K44",
+      "orbId": "alaska-dot:server-3H3V564",
       "field": "manufacturer",
       "type": "Server",
       "intendedValue": "Dell",

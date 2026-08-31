@@ -79,7 +79,7 @@ func (_c *ApprovalCreate) SetNillableUpdatedBy(v *string) *ApprovalCreate {
 }
 
 // SetApprovalRequestID sets the "approval_request_id" field.
-func (_c *ApprovalCreate) SetApprovalRequestID(v uuid.UUID) *ApprovalCreate {
+func (_c *ApprovalCreate) SetApprovalRequestID(v int64) *ApprovalCreate {
 	_c.mutation.SetApprovalRequestID(v)
 	return _c
 }
@@ -131,7 +131,7 @@ func (_c *ApprovalCreate) SetNillableID(v *uuid.UUID) *ApprovalCreate {
 }
 
 // SetRequestID sets the "request" edge to the ApprovalRequest entity by ID.
-func (_c *ApprovalCreate) SetRequestID(id uuid.UUID) *ApprovalCreate {
+func (_c *ApprovalCreate) SetRequestID(id int64) *ApprovalCreate {
 	_c.mutation.SetRequestID(id)
 	return _c
 }
@@ -300,7 +300,7 @@ func (_c *ApprovalCreate) createSpec() (*Approval, *sqlgraph.CreateSpec) {
 			Columns: []string{approval.RequestColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

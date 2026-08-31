@@ -63,10 +63,17 @@ func addRack(t *testing.T) {
 		}}})
 }
 
+// setHostname simulates a third party editing intent.
+//
+// It bumps `version` explicitly because it POSTs straight to DGraph, and every
+// real write to intent goes through orbital, which stamps the increment itself
+// (graphql.go). Without the bump the fixture writes content that orbital's OCC
+// counter never saw — which is a DIFFERENT scenario, covered on its own by
+// TestCR_OutOfBandWriteThatSkipsTheVersionCounterIsNotSeen.
 func setHostname(t *testing.T, orbID, v string) {
 	t.Helper()
-	crGQL(t, `mutation($orbId:String!,$set:ServerPatch!){ updateServer(input:{filter:{orbId:{eq:$orbId}}, set:$set}){ numUids } }`,
-		map[string]any{"orbId": orbID, "set": map[string]any{"hostname": v}})
+	crGQL(t, `mutation($orbId: String!, $set: ServerPatch!) { updateServer(input: {filter: {orbId: {eq: $orbId}}, set: $set}) { numUids } }`,
+		map[string]any{"orbId": orbID, "set": map[string]any{"hostname": v, "version": readVersion(t, orbID) + 1}})
 }
 
 func readHostname(t *testing.T, orbID string) string {

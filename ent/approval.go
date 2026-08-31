@@ -28,7 +28,7 @@ type Approval struct {
 	// UpdatedBy holds the value of the "updated_by" field.
 	UpdatedBy string `json:"updated_by,omitempty"`
 	// ApprovalRequestID holds the value of the "approval_request_id" field.
-	ApprovalRequestID uuid.UUID `json:"approval_request_id,omitempty"`
+	ApprovalRequestID int64 `json:"approval_request_id,omitempty"`
 	// Approver holds the value of the "approver" field.
 	Approver string `json:"approver,omitempty"`
 	// Decision holds the value of the "decision" field.
@@ -68,11 +68,13 @@ func (*Approval) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case approval.FieldApprovalRequestID:
+			values[i] = new(sql.NullInt64)
 		case approval.FieldCreatedBy, approval.FieldUpdatedBy, approval.FieldApprover, approval.FieldDecision, approval.FieldComment, approval.FieldApprovedAtHash:
 			values[i] = new(sql.NullString)
 		case approval.FieldCreatedAt, approval.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
-		case approval.FieldID, approval.FieldApprovalRequestID:
+		case approval.FieldID:
 			values[i] = new(uuid.UUID)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -121,10 +123,10 @@ func (_m *Approval) assignValues(columns []string, values []any) error {
 				_m.UpdatedBy = value.String
 			}
 		case approval.FieldApprovalRequestID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
+			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field approval_request_id", values[i])
-			} else if value != nil {
-				_m.ApprovalRequestID = *value
+			} else if value.Valid {
+				_m.ApprovalRequestID = value.Int64
 			}
 		case approval.FieldApprover:
 			if value, ok := values[i].(*sql.NullString); !ok {

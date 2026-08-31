@@ -47,7 +47,7 @@
 // The page handler builds this list from the Go-side registry — see
 // internal/handler/cluster.go for the reference implementation.
 
-import { BASE, safeDomId } from './shared.js'
+import { BASE, safeDomId, subtreeOrbIds } from './shared.js'
 
 // getByPath walks `obj` following `path` (an array of keys) and returns the
 // value at that location, or undefined if any intermediate key is missing.
@@ -251,6 +251,34 @@ export function buildChangeset({
   return { namespace, changes: items }
 }
 
+// activeChangeRequestsFor answers "what is in flight for this item?" for a whole
+// ConfigItem subtree — the entity plus everything it owns.
+//
+// `active` is open PLUS approved-not-yet-merged: `status=open` would miss the
+// approved ones, because approved is derived rather than stored.
+//
+// ONE request, not a chunked set. The API's orbId cap sits above the largest
+// real subtree, so the list always fits; if it ever stops fitting the API
+// refuses outright rather than truncating, which is a visible failure instead
+// of a quietly narrowed answer. This deliberately does NOT split-and-merge:
+// chunks overlap in their results — a request naming both a server and its
+// iDRAC comes back in two of them — so every consumer would need an
+// overlap-aware union by id, and that is the API's job to make unnecessary.
+//
+// Best-effort by design: an unreachable endpoint leaves the caller with an
+// empty answer rather than an error, because no notice is better than blocking
+// an edit on a badge.
+export function activeChangeRequestsFor(orbIds) {
+  const ids = [...new Set((orbIds || []).filter(Boolean))]
+  if (ids.length === 0) return Promise.resolve({ total: 0, items: [] })
+
+  const qs = ids.map(id => 'orbId=' + encodeURIComponent(id)).join('&')
+  return fetch(BASE + '/api/v1/change-requests?status=active&' + qs, { headers: { Accept: 'application/json' } })
+    .then(r => (r.ok ? r.json() : null))
+    .then(j => ({ total: (j && j.total) || 0, items: (j && j.items) || [] }))
+    .catch(() => ({ total: 0, items: [] }))
+}
+
 // applyGateState resolves how this edit will be written and tells the user
 // BEFORE they spend effort on it.
 //
@@ -262,18 +290,42 @@ export function buildChangeset({
 //
 // Both reads are best-effort. If either call fails the editor stays exactly as
 // it was — an unreachable policy endpoint must not stop someone editing.
-function applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, namespaceOf, setMode }) {
+function applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, targets, namespaceOf, setMode }) {
   const btn = submitBtnId ? document.getElementById(submitBtnId) : null
   const namespace = namespaceOf(reloadOrbId)
   if (!namespace) return
 
+  // Notices go INSIDE the footer, above the buttons — not between the body and
+  // the footer, and not next to the buttons.
+  //
+  // Three earlier placements each misaligned it. Inside `.buttons` it became a
+  // flex sibling of Save and Cancel and shoved them sideways. In the body it
+  // scrolled away with the JSON editor. Between body and footer it was flush to
+  // the card while the editor sits inside the body's padding and the buttons sit
+  // inside the footer's — three different left edges in one dialog.
+  //
+  // Inside the footer it inherits the footer's padding, so its left edge is the
+  // Save button's left edge exactly. `.has-gate-notice` makes the footer wrap
+  // (see main.scss) so the notice takes a full row of its own and the buttons
+  // keep theirs.
+  function addNotice(el) {
+    const foot = btn && btn.closest('.modal-card')?.querySelector('.modal-card-foot')
+    if (foot) {
+      el.classList.add('js-gate-notice')
+      foot.classList.add('has-gate-notice')
+      foot.insertBefore(el, foot.firstChild)
+    } else if (btn && btn.parentNode) {
+      btn.parentNode.insertBefore(el, btn)
+    }
+  }
+
   const notice = document.createElement('div')
-  notice.className = 'is-size-7 mb-2'
+  notice.className = 'is-size-7'
   notice.style.display = 'none'
-  if (btn && btn.parentNode) btn.parentNode.insertBefore(notice, btn)
+  addNotice(notice)
 
   const say = (cls, html) => {
-    notice.className = 'notification is-light py-2 is-size-7 mb-2 ' + cls
+    notice.className = 'notification is-light py-2 is-size-7 js-gate-notice ' + cls
     notice.innerHTML = html
     notice.style.display = ''
   }
@@ -289,47 +341,105 @@ function applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, namespaceOf
         // Stated, never silent. The frictionless path is the audited one — an
         // admin who bypasses review should know they did, at the moment they do
         // it, not discover it later in an audit row.
-        say('is-warning', '<strong>Privileged write.</strong> Changes here normally need approval. '
-          + 'Saving writes directly and is recorded as a privileged write.')
+        // "Bypasses review" rather than "privileged write": it says what
+        // happens instead of naming an internal concept, and it is the same
+        // wording the audit log uses for the row this produces.
+        say('is-warning', '<strong>Bypasses review.</strong> Edits here need approval, '
+          + 'but your role writes directly. The audit log records it.')
       } else {
         setMode('propose')
         if (btn) btn.textContent = 'Propose change'
-        say('is-info', '<strong>Needs approval.</strong> Saving opens a change request for review '
-          + 'instead of changing intent now.')
+        // Says what happens and what does NOT. "changing intent" was orbital's
+        // own vocabulary leaking into a sentence aimed at whoever is editing.
+        say('is-info', '<strong>Needs approval.</strong> Your edit goes for review — '
+          + 'nothing changes until someone approves it.')
       }
     })
     .catch(() => {})
 
-  // "In flight" is open OR approved-not-yet-merged. `status=open` would miss the
-  // approved ones, because approved is derived rather than stored.
-  fetch(BASE + '/api/v1/change-requests?status=active&orbId=' + encodeURIComponent(reloadOrbId), {
-    headers: { Accept: 'application/json' },
-  })
-    .then(r => r.ok ? r.json() : null)
+  // Ask about the whole item, not just its root node. An edit to an owned child
+  // is recorded against the CHILD's orbId — a maintenance edit lands as
+  // `<ns>:server-maintenance-<serial>` — so the root orbId alone reports
+  // "nothing in flight" while a proposal for this very modal sits open.
+  //
+  // Two sources, unioned: what the page rendered (data-related-orb-ids, the
+  // children that EXIST) and what this modal can edit (targets, which include a
+  // child that does not exist yet and whose orbId a proposal would create).
+  const scope = new Set(subtreeOrbIds(reloadOrbId))
+  for (const t of targets || []) if (t.orbId) scope.add(t.orbId)
+
+  activeChangeRequestsFor([...scope])
     .then(j => {
       if (!j || !j.total) return
       const cr = (j.items || [])[0]
       const link = cr ? ' <a href="' + BASE + '/change-requests/' + encodeURIComponent(cr.id) + '">Review it</a>.' : ''
       const pending = document.createElement('div')
-      pending.className = 'notification is-warning is-light py-2 is-size-7 mb-2'
+      pending.className = 'notification is-warning is-light py-2 is-size-7'
       pending.setAttribute('data-testid', 'pending-change-notice')
       pending.innerHTML = '<strong>' + j.total + ' change' + (j.total === 1 ? '' : 's')
         + ' already proposed</strong> for this item.' + link
-      if (btn && btn.parentNode) btn.parentNode.insertBefore(pending, btn)
+      addNotice(pending)
     })
-    .catch(() => {})
+}
+
+// changesetTitle names a proposal by WHAT IT CHANGES, not just what it touches.
+//
+// It used to be `'Update ' + orbId`, which named the entity. Every edit to the
+// same server produced the same title, so the queue showed rows that were
+// indistinguishable in every visible column — two different changes and two
+// identical proposals looked exactly alike, and only the second is a mistake
+// worth noticing.
+//
+// Deriving from the changeset means two rows read the same only when the
+// changes really are the same. Owned children are qualified by their type,
+// because `enabled` alone does not say enabled on what.
+function changesetTitle(rootOrbId, changeset) {
+  const entity = String(rootOrbId).replace(/^[^:]+:/, '')
+  const items = (changeset && changeset.changes) || []
+
+  const fields = []
+  for (const item of items) {
+    // The root's own fields need no qualifier; a child's do.
+    const prefix = item.orbId === rootOrbId ? '' : (item.type ? item.type + '.' : '')
+    for (const name of Object.keys(item.set || {})) {
+      fields.push({ label: prefix + name, value: item.set[name], cleared: false })
+    }
+    for (const name of (item.clear || [])) {
+      fields.push({ label: prefix + name, value: null, cleared: true })
+    }
+  }
+
+  if (fields.length === 0) return 'Update ' + entity      // create-only, or nothing resolvable
+  if (fields.length > 1) return entity + ' · ' + fields.length + ' fields'
+
+  const f = fields[0]
+  if (f.cleared) return entity + ' · clear ' + f.label
+  // A value is shown only when it stays readable — same rule as the field
+  // marks. A title is a label, not a payload dump.
+  if (f.value !== null && typeof f.value !== 'object') {
+    const v = String(f.value)
+    if (v.length <= 40) return entity + ' · ' + f.label + ' → ' + v
+  }
+  return entity + ' · ' + f.label
 }
 
 // proposeChange opens a change request from the edit the user just made and
-// takes them to it.
+// leaves the user where they were.
 //
-// Navigating rather than toasting is deliberate: a proposal is not the end of
-// the interaction, it is the start of a review, and the next useful thing is
-// the diff a reviewer will see. Leaving the user on the entity page with a
-// toast implies the work is done when it has barely started.
+// It used to navigate to the new request's review page, on the reasoning that a
+// proposal is the start of a review rather than an end state. That was wrong in
+// practice: proposing is a save, and a save that teleports you out of the thing
+// you were editing breaks the flow — especially when the next edit is on the
+// same server. It also made the gated path behave differently from the ordinary
+// one for no reason the user asked for.
+//
+// Reloading the fragment instead is what surfaces the answer: the entity's
+// pending-change banner appears ("1 change in review for this item or something
+// it owns — …"), naming the request and linking to it. The confirmation and the
+// way through are the same element, and the user chooses when to leave.
 async function proposeChange({
   namespace, rootTarget, rootOrbId, rootScalars, rootRemove,
-  changes, wrappersNeeded, foldedOrbIds, showError,
+  changes, wrappersNeeded, foldedOrbIds, showError, reloadFn,
 }) {
   const changeset = buildChangeset({
     namespace, rootTarget, rootOrbId, rootScalars, rootRemove,
@@ -340,7 +450,7 @@ async function proposeChange({
     return false
   }
 
-  const title = 'Update ' + String(rootOrbId).replace(/^[^:]+:/, '')
+  const title = changesetTitle(rootOrbId, changeset)
   let resp
   try {
     resp = await fetch(BASE + '/api/v1/change-requests', {
@@ -365,7 +475,9 @@ async function proposeChange({
     return false
   }
 
-  window.location.href = BASE + '/change-requests/' + encodeURIComponent(body.id)
+  // Same as an ordinary save: reload the fragment so the page reflects reality.
+  // Here that reality is "a change is in review", which the banner states.
+  if (reloadFn) await reloadFn(rootOrbId)
   return true
 }
 
@@ -400,7 +512,7 @@ export function initConfigItemEditor({
   const namespaceOf = (orbId) => String(orbId || '').split(':')[0]
   const rootKind = (targets.find(t => t.path.length === 0) || {}).kind
 
-  applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, namespaceOf, setMode: (m) => { mode = m } })
+  applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, targets, namespaceOf, setMode: (m) => { mode = m } })
 
   // Snapshot every target's subtree at this moment. Each snapshot is a JSON
   // string of the field map (or null if the subtree didn't exist).
@@ -579,7 +691,7 @@ export function initConfigItemEditor({
         rootTarget, rootOrbId: reloadOrbId,
         rootScalars: rootSet, rootRemove: rootChange ? removePayload(rootTarget, rootChange.before, rootChange.currentSub) : {},
         changes, wrappersNeeded, foldedOrbIds,
-        showError,
+        showError, reloadFn,
       })
     }
 
@@ -617,7 +729,7 @@ export function initConfigItemEditor({
                 rootTarget, rootOrbId: reloadOrbId,
                 rootScalars: rootSet, rootRemove: rootChange ? removePayload(rootTarget, rootChange.before, rootChange.currentSub) : {},
                 changes, wrappersNeeded, foldedOrbIds,
-                showError,
+                showError, reloadFn,
               })
             }
             showError(body.error || 'This change needs approval.')

@@ -69,22 +69,22 @@ func init() {
 	approvalpolicyDescNamespace := approvalpolicyFields[2].Descriptor()
 	// approvalpolicy.NamespaceValidator is a validator for the "namespace" field. It is called by the builders before save.
 	approvalpolicy.NamespaceValidator = approvalpolicyDescNamespace.Validators[0].(func(string) error)
-	// approvalpolicyDescTypeName is the schema descriptor for type_name field.
-	approvalpolicyDescTypeName := approvalpolicyFields[3].Descriptor()
-	// approvalpolicy.DefaultTypeName holds the default value on creation for the type_name field.
-	approvalpolicy.DefaultTypeName = approvalpolicyDescTypeName.Default.(string)
+	// approvalpolicyDescAllTypes is the schema descriptor for all_types field.
+	approvalpolicyDescAllTypes := approvalpolicyFields[3].Descriptor()
+	// approvalpolicy.DefaultAllTypes holds the default value on creation for the all_types field.
+	approvalpolicy.DefaultAllTypes = approvalpolicyDescAllTypes.Default.(bool)
 	// approvalpolicyDescRequiredApprovals is the schema descriptor for required_approvals field.
-	approvalpolicyDescRequiredApprovals := approvalpolicyFields[4].Descriptor()
+	approvalpolicyDescRequiredApprovals := approvalpolicyFields[5].Descriptor()
 	// approvalpolicy.DefaultRequiredApprovals holds the default value on creation for the required_approvals field.
 	approvalpolicy.DefaultRequiredApprovals = approvalpolicyDescRequiredApprovals.Default.(int)
 	// approvalpolicy.RequiredApprovalsValidator is a validator for the "required_approvals" field. It is called by the builders before save.
 	approvalpolicy.RequiredApprovalsValidator = approvalpolicyDescRequiredApprovals.Validators[0].(func(int) error)
 	// approvalpolicyDescBypassRoles is the schema descriptor for bypass_roles field.
-	approvalpolicyDescBypassRoles := approvalpolicyFields[5].Descriptor()
+	approvalpolicyDescBypassRoles := approvalpolicyFields[6].Descriptor()
 	// approvalpolicy.DefaultBypassRoles holds the default value on creation for the bypass_roles field.
 	approvalpolicy.DefaultBypassRoles = approvalpolicyDescBypassRoles.Default.([]string)
 	// approvalpolicyDescEnabled is the schema descriptor for enabled field.
-	approvalpolicyDescEnabled := approvalpolicyFields[6].Descriptor()
+	approvalpolicyDescEnabled := approvalpolicyFields[7].Descriptor()
 	// approvalpolicy.DefaultEnabled holds the default value on creation for the enabled field.
 	approvalpolicy.DefaultEnabled = approvalpolicyDescEnabled.Default.(bool)
 	// approvalpolicyDescID is the schema descriptor for id field.
@@ -100,34 +100,38 @@ func init() {
 	approvalrequestDescCreatedAt := approvalrequestMixinFields0[0].Descriptor()
 	// approvalrequest.DefaultCreatedAt holds the default value on creation for the created_at field.
 	approvalrequest.DefaultCreatedAt = approvalrequestDescCreatedAt.Default.(func() time.Time)
+	// approvalrequestDescNamespace is the schema descriptor for namespace field.
+	approvalrequestDescNamespace := approvalrequestFields[1].Descriptor()
+	// approvalrequest.NamespaceValidator is a validator for the "namespace" field. It is called by the builders before save.
+	approvalrequest.NamespaceValidator = approvalrequestDescNamespace.Validators[0].(func(string) error)
+	// approvalrequestDescNumber is the schema descriptor for number field.
+	approvalrequestDescNumber := approvalrequestFields[2].Descriptor()
+	// approvalrequest.NumberValidator is a validator for the "number" field. It is called by the builders before save.
+	approvalrequest.NumberValidator = approvalrequestDescNumber.Validators[0].(func(int) error)
 	// approvalrequestDescActionType is the schema descriptor for action_type field.
-	approvalrequestDescActionType := approvalrequestFields[1].Descriptor()
+	approvalrequestDescActionType := approvalrequestFields[3].Descriptor()
 	// approvalrequest.ActionTypeValidator is a validator for the "action_type" field. It is called by the builders before save.
 	approvalrequest.ActionTypeValidator = approvalrequestDescActionType.Validators[0].(func(string) error)
 	// approvalrequestDescTitle is the schema descriptor for title field.
-	approvalrequestDescTitle := approvalrequestFields[2].Descriptor()
+	approvalrequestDescTitle := approvalrequestFields[4].Descriptor()
 	// approvalrequest.TitleValidator is a validator for the "title" field. It is called by the builders before save.
 	approvalrequest.TitleValidator = approvalrequestDescTitle.Validators[0].(func(string) error)
 	// approvalrequestDescDescription is the schema descriptor for description field.
-	approvalrequestDescDescription := approvalrequestFields[3].Descriptor()
+	approvalrequestDescDescription := approvalrequestFields[5].Descriptor()
 	// approvalrequest.DefaultDescription holds the default value on creation for the description field.
 	approvalrequest.DefaultDescription = approvalrequestDescDescription.Default.(string)
 	// approvalrequestDescAuthor is the schema descriptor for author field.
-	approvalrequestDescAuthor := approvalrequestFields[5].Descriptor()
+	approvalrequestDescAuthor := approvalrequestFields[7].Descriptor()
 	// approvalrequest.AuthorValidator is a validator for the "author" field. It is called by the builders before save.
 	approvalrequest.AuthorValidator = approvalrequestDescAuthor.Validators[0].(func(string) error)
 	// approvalrequestDescBaseHash is the schema descriptor for base_hash field.
-	approvalrequestDescBaseHash := approvalrequestFields[6].Descriptor()
+	approvalrequestDescBaseHash := approvalrequestFields[8].Descriptor()
 	// approvalrequest.BaseHashValidator is a validator for the "base_hash" field. It is called by the builders before save.
 	approvalrequest.BaseHashValidator = approvalrequestDescBaseHash.Validators[0].(func(string) error)
 	// approvalrequestDescExecutedBy is the schema descriptor for executed_by field.
-	approvalrequestDescExecutedBy := approvalrequestFields[10].Descriptor()
+	approvalrequestDescExecutedBy := approvalrequestFields[12].Descriptor()
 	// approvalrequest.DefaultExecutedBy holds the default value on creation for the executed_by field.
 	approvalrequest.DefaultExecutedBy = approvalrequestDescExecutedBy.Default.(string)
-	// approvalrequestDescID is the schema descriptor for id field.
-	approvalrequestDescID := approvalrequestFields[0].Descriptor()
-	// approvalrequest.DefaultID holds the default value on creation for the id field.
-	approvalrequest.DefaultID = approvalrequestDescID.Default.(func() uuid.UUID)
 	auditeventFields := schema.AuditEvent{}.Fields()
 	_ = auditeventFields
 	// auditeventDescTimestamp is the schema descriptor for timestamp field.

@@ -25,6 +25,15 @@ func (f fakeSchema) ResolveEntities(_ context.Context, ids []string) (map[string
 	return out, nil
 }
 
+func (f fakeSchema) NamespaceExists(_ context.Context, name string) (bool, error) {
+	for _, e := range f.entities {
+		if e.Namespace == name {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (f fakeSchema) TypeSchemas(_ context.Context, names []string) (map[string]TypeSchema, error) {
 	out := map[string]TypeSchema{}
 	for _, n := range names {

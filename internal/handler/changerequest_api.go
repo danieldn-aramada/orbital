@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,7 +15,9 @@ import (
 	entapproval "github.com/armada/orbital/ent/approval"
 	"github.com/armada/orbital/ent/approvalpolicy"
 	"github.com/armada/orbital/ent/approvalrequest"
+	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/approval"
+	"github.com/armada/orbital/internal/configitems"
 	"github.com/armada/orbital/internal/graphdiff"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -70,12 +73,21 @@ type decisionBody struct {
 type approvalPolicyBody struct {
 	// Namespace the policy governs.
 	Namespace string `json:"namespace" validate:"required" example:"alaska-dot"`
-	// TypeName narrows the policy to one ConfigItem type. Empty means every type.
-	TypeName string `json:"type,omitempty" example:"Server"`
+	// AllTypes protects every type in the namespace, including ConfigItem types
+	// added to the schema later. Mutually exclusive with Types.
+	AllTypes *bool `json:"allTypes,omitempty" example:"true"`
+	// Types are the ConfigItem types to protect. Mutually exclusive with
+	// AllTypes: exactly one of the two must say what is covered, and the other
+	// two combinations are refused (see the create endpoint).
+	Types []string `json:"types,omitempty" example:"Server"`
 	// RequiredApprovals is how many distinct reviewers must approve. Default 1.
 	RequiredApprovals int `json:"requiredApprovals,omitempty" example:"1"`
 	// BypassRoles may write this class directly, recorded as a privileged write.
-	// Defaults to ["admin"]. Bypass is a property of the policy, not of a user.
+	// Bypass is a property of the policy, not of a user.
+	//
+	// Omit the field to accept the default ["admin"]. Send an EMPTY array to
+	// mean nobody bypasses — including admins. The two are distinct on purpose:
+	// there is no other way to express a class that everyone must get reviewed.
 	BypassRoles []string `json:"bypassRoles,omitempty" example:"admin"`
 	// Enabled turns the policy off without deleting it. Default true.
 	Enabled *bool `json:"enabled,omitempty" example:"true"`
@@ -90,7 +102,12 @@ type approvalPolicyBody struct {
 // re-implements orbital's eligibility rules. Orbital's own UI renders buttons
 // straight from AvailableActions, exactly as an external client would.
 type changeRequestResponse struct {
-	ID          string `json:"id" example:"4b1f0f7a-6f0c-4a1e-9a2e-2f1c7a0b1234"`
+	// ID is the human identifier — the namespace, then its number within that
+	// namespace. It is what every URL and every client uses; the surrogate
+	// bigint behind it is never exposed. Per-namespace numbering follows Jira's
+	// PROJ-42 model applied to orbital's natural partition, so an id pasted into
+	// chat says which data center it is about.
+	ID          string `json:"id" example:"colo-42"`
 	ActionType  string `json:"actionType" example:"config.mutation"`
 	Title       string `json:"title" example:"Enable SSH on the Anchorage iDRACs"`
 	Description string `json:"description,omitempty"`
@@ -180,18 +197,12 @@ type approvalPolicyResponse struct {
 	ID                string   `json:"id" example:"7c2e1f88-1a2b-4c3d-8e9f-0a1b2c3d4e5f"`
 	ActionType        string   `json:"actionType" example:"config.mutation"`
 	Namespace         string   `json:"namespace" example:"alaska-dot"`
-	TypeName          string   `json:"type,omitempty" example:"Server"`
+	AllTypes          bool     `json:"allTypes" example:"true"`
+	Types             []string `json:"types,omitempty"`
 	RequiredApprovals int      `json:"requiredApprovals" example:"1"`
 	BypassRoles       []string `json:"bypassRoles"`
 	// Enabled is the admin's switch: turn a policy off without deleting it.
 	Enabled bool `json:"enabled" example:"true"`
-	// Enforced reports whether orbital's write path actually REFUSES a
-	// mutation this policy covers. Distinct from Enabled, which is only what
-	// the admin asked for. Both must be true for the class to be protected.
-	Enforced bool `json:"enforced" example:"false"`
-	// Notice explains a policy that is recorded but not yet enforced. Absent
-	// once enforcement is live.
-	Notice string `json:"notice,omitempty"`
 }
 
 // approvalPolicyResolveResponse answers "is this change gated for me?" so a
@@ -204,13 +215,6 @@ type approvalPolicyResolveResponse struct {
 	BypassRoles       []string `json:"bypassRoles"`
 	// CallerMayBypass is the verdict for THIS caller, already computed.
 	CallerMayBypass bool `json:"callerMayBypass" example:"false"`
-	// Enforced reports whether a direct mutation would actually be refused.
-	// A client labelling its save button should read Required to decide what to
-	// OFFER, and Enforced to know whether saving directly would still succeed.
-	Enforced bool `json:"enforced" example:"false"`
-	// Notice explains a policy that is recorded but not yet enforced. Absent
-	// once enforcement is live.
-	Notice string `json:"notice,omitempty"`
 }
 
 // validationErrorResponse reports every problem with a proposed changeset at
@@ -274,6 +278,8 @@ func (h *ChangeRequest) CreateChangeRequest(c echo.Context) error {
 //
 // @Summary     List change requests
 // @Description Filters compose. `mine` and `awaiting_review` are caller-relative; `orbId` matches any request whose changeset touches that entity, at any position. `status=active` means not-terminal (open plus approved) — the filter to use for "does this entity have a change in flight", since `approved` is derived and `status=open` excludes it.
+// @Description
+// @Description `orbId` is **repeatable** and the values are OR-ed (max 32; more is refused, never truncated). A change to an owned child records the CHILD's orbId — a server-maintenance edit lands as `<ns>:server-maintenance-<serial>` — so "is anything in flight for this server" means passing the server's orbId AND the orbIds of everything it owns, exactly as `/api/v1/audit-log` does.
 // @Tags        change-requests
 // @Produce     json
 // @Param       status query string false "open, approved, active (open+approved), rejected, merged or closed"
@@ -281,18 +287,43 @@ func (h *ChangeRequest) CreateChangeRequest(c echo.Context) error {
 // @Param       author query string false "Author email"
 // @Param       mine query boolean false "Only requests this caller authored"
 // @Param       awaiting_review query boolean false "Only requests this caller can still review"
-// @Param       orbId query string false "Only requests touching this entity"
+// @Param       orbId query []string false "Only requests touching this entity. Repeatable, max 128 — matches requests touching ANY of them. Over 128 the request is refused (400), not truncated."
 // @Success     200 {object} changeRequestListResponse
+// @Failure     400 {object} errorResponse
 // @Router      /api/v1/change-requests [get]
 func (h *ChangeRequest) ListChangeRequests(c echo.Context) error {
-	ctx := c.Request().Context()
+	// One request renders many rows, and every row's status derives from the
+	// same policy. Without this each row queries for it again.
+	ctx := withPolicyMemo(c.Request().Context())
 	actor := actorFromContext(c)
 	cr := resolveCallerRole(c, h.db)
 
 	wantStatus := c.QueryParam("status")
 	wantNamespace := c.QueryParam("namespace")
-	wantOrbID := c.QueryParam("orbId")
 	awaiting := c.QueryParam("awaiting_review") == "true"
+
+	// orbId is repeatable — ?orbId=server&orbId=idrac&orbId=maintenance — and
+	// the values are OR-ed, matching /api/v1/audit-log. Reading it with
+	// QueryParam took the FIRST value and silently answered about that one
+	// alone, so a page asking about a server and its owned children got an
+	// answer about the server only, and a pending change on a child read as
+	// "nothing in flight".
+	wantOrbIDs := make([]string, 0, len(c.QueryParams()["orbId"]))
+	for _, id := range c.QueryParams()["orbId"] {
+		// Drop empties so an attribute like data-related-orb-ids="" cannot
+		// insert "" and match nothing while looking like a filter.
+		if id = strings.TrimSpace(id); id != "" {
+			wantOrbIDs = append(wantOrbIDs, id)
+		}
+	}
+	if len(wantOrbIDs) > maxOrbIDFilter {
+		// Refused, not truncated. A truncated filter answers a question the
+		// caller did not ask and looks exactly like a correct answer — the same
+		// silent-wrong-answer failure the repeatable form exists to fix.
+		return writeError(c, http.StatusBadRequest, CodeBadUserInput,
+			fmt.Sprintf("too many orbId filters: %d (max %d)", len(wantOrbIDs), maxOrbIDFilter),
+			fmt.Sprintf("Query at most %d orbIds at a time, or drop orbId and filter by namespace instead.", maxOrbIDFilter))
+	}
 
 	q := h.db.ApprovalRequest.Query().WithApprovals().WithMergeAttempts()
 	if v := c.QueryParam("author"); v != "" {
@@ -326,12 +357,32 @@ func (h *ChangeRequest) ListChangeRequests(c echo.Context) error {
 	}
 	if awaiting {
 		q = q.Where(approvalrequest.StatusEQ(approvalrequest.StatusOpen))
+
+		// Two of the three reasons a row gets discarded after rendering are
+		// knowable in SQL, and this filter runs on EVERY page load — the nav
+		// badge has no namespace or orbId to narrow by, so without this it
+		// renders the entire open queue to produce one number.
+		if !cr.NoAuthz && !RoleAtLeast(cr.Role, user.RoleDev) {
+			// readonly can look but never approve, so nothing awaits them.
+			return c.JSON(http.StatusOK, changeRequestListResponse{Total: 0, Items: []changeRequestResponse{}})
+		}
+		// You cannot approve your own request — unless a policy lets your role
+		// bypass, which makes approve available on it after all. Asked once,
+		// against every enabled policy, rather than per row: if no policy grants
+		// your role bypass then no row can, and the filter is exact.
+		mayBypassSomewhere, err := h.roleBypassesAnyPolicy(ctx, cr)
+		if err != nil {
+			return err
+		}
+		if !mayBypassSomewhere {
+			q = q.Where(approvalrequest.AuthorNEQ(actor))
+		}
 	}
 	if wantNamespace != "" {
 		q = q.Where(payloadNamespaceEQ(wantNamespace))
 	}
-	if wantOrbID != "" {
-		q = q.Where(payloadTouchesOrbID(wantOrbID))
+	if len(wantOrbIDs) > 0 {
+		q = q.Where(payloadTouchesAnyOrbID(wantOrbIDs))
 	}
 
 	rows, err := q.Order(ent.Desc(approvalrequest.FieldCreatedAt)).All(ctx)
@@ -396,7 +447,7 @@ func (h *ChangeRequest) GetChangeRequestDiff(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	st, err := h.State(c.Request().Context(), cr)
+	st, err := h.StateWithSnapshot(c.Request().Context(), cr)
 	if err != nil {
 		return err
 	}
@@ -427,7 +478,7 @@ func (h *ChangeRequest) GetChangeRequestDiff(c echo.Context) error {
 // @Failure     409 {object} errorResponse
 // @Router      /api/v1/change-requests/{id} [patch]
 func (h *ChangeRequest) AmendChangeRequest(c echo.Context) error {
-	id, err := parseCRID(c)
+	id, err := h.parseCRID(c)
 	if err != nil {
 		return err
 	}
@@ -491,7 +542,7 @@ func (h *ChangeRequest) RejectChangeRequest(c echo.Context) error {
 }
 
 func (h *ChangeRequest) decideHTTP(c echo.Context, decision entapproval.Decision) error {
-	id, err := parseCRID(c)
+	id, err := h.parseCRID(c)
 	if err != nil {
 		return err
 	}
@@ -525,7 +576,7 @@ func (h *ChangeRequest) decideHTTP(c echo.Context, decision entapproval.Decision
 // @Failure     409 {object} errorResponse
 // @Router      /api/v1/change-requests/{id}/merge [post]
 func (h *ChangeRequest) MergeChangeRequest(c echo.Context) error {
-	id, err := parseCRID(c)
+	id, err := h.parseCRID(c)
 	if err != nil {
 		return err
 	}
@@ -548,7 +599,7 @@ func (h *ChangeRequest) MergeChangeRequest(c echo.Context) error {
 // @Failure     409 {object} errorResponse
 // @Router      /api/v1/change-requests/{id}/close [post]
 func (h *ChangeRequest) CloseChangeRequest(c echo.Context) error {
-	id, err := parseCRID(c)
+	id, err := h.parseCRID(c)
 	if err != nil {
 		return err
 	}
@@ -571,7 +622,7 @@ func (h *ChangeRequest) CloseChangeRequest(c echo.Context) error {
 // @Router      /api/v1/approval-policies [get]
 func (h *ChangeRequest) ListApprovalPolicies(c echo.Context) error {
 	rows, err := h.db.ApprovalPolicy.Query().
-		Order(ent.Asc(approvalpolicy.FieldNamespace), ent.Asc(approvalpolicy.FieldTypeName)).
+		Order(ent.Asc(approvalpolicy.FieldNamespace)).
 		All(c.Request().Context())
 	if err != nil {
 		return fmt.Errorf("list approval policies: %w", err)
@@ -587,6 +638,13 @@ func (h *ChangeRequest) ListApprovalPolicies(c echo.Context) error {
 //
 // @Summary     Create an approval policy
 // @Description Opt-in: with no enabled policy, writes behave exactly as they do today.
+// @Description
+// @Description One policy per namespace. Scope is an either/or: send allTypes:true with no
+// @Description types (covers every type, including ones added to the schema later), or
+// @Description allTypes:false with a non-empty types list. The other two combinations are
+// @Description refused with 400 — a policy that says both, or says nothing, cannot answer
+// @Description "what does this protect?". A second policy for the same namespace is 409;
+// @Description PATCH the existing one to change which types it covers.
 // @Tags        approval-policies
 // @Accept      json
 // @Produce     json
@@ -603,16 +661,41 @@ func (h *ChangeRequest) CreateApprovalPolicy(c echo.Context) error {
 	if strings.TrimSpace(body.Namespace) == "" {
 		return writeError(c, http.StatusBadRequest, CodeBadUserInput, "namespace is required", "")
 	}
+	// The default is the whole namespace, so a body that says nothing about
+	// scope gets allTypes. Sending only a type list is read as meaning it,
+	// rather than refused for omitting a field the caller clearly implied.
+	allTypes := body.AllTypes == nil || *body.AllTypes
+	if len(body.Types) > 0 && body.AllTypes == nil {
+		allTypes = false
+	}
+	// Store [] rather than JSON null: null is a scalar, and a scalar is not an
+	// empty list to anything that asks the column for its length.
+	if body.Types == nil {
+		body.Types = []string{}
+	}
+	if err := h.validatePolicyScope(c.Request().Context(), body.Namespace, allTypes, body.Types); err != nil {
+		var gerr *gatedError
+		if errors.As(err, &gerr) {
+			return writeError(c, gerr.Status, gerr.Code, gerr.Message, gerr.Hint)
+		}
+		return err
+	}
 
 	create := h.db.ApprovalPolicy.Create().
 		SetActionType(approval.ActionTypeConfigMutation).
 		SetNamespace(body.Namespace).
-		SetTypeName(body.TypeName).
+		SetAllTypes(allTypes).
+		SetTypes(body.Types).
 		SetCreatedBy(actorFromContext(c))
 	if body.RequiredApprovals > 0 {
 		create = create.SetRequiredApprovals(body.RequiredApprovals)
 	}
-	if len(body.BypassRoles) > 0 {
+	// nil means "not supplied, use the default"; an empty slice means "nobody
+	// bypasses, including admins" — a deliberate and meaningful choice. Testing
+	// len() > 0 collapses the two and silently restores the admin bypass an
+	// operator just removed, which is a false assurance in the opposite
+	// direction from an unenforced policy: the control looks stricter than it is.
+	if body.BypassRoles != nil {
 		create = create.SetBypassRoles(body.BypassRoles)
 	}
 	if body.Enabled != nil {
@@ -621,14 +704,29 @@ func (h *ChangeRequest) CreateApprovalPolicy(c echo.Context) error {
 
 	p, err := create.Save(c.Request().Context())
 	if err != nil {
+		// Two different constraints can fire here and ent reports both as a
+		// constraint error. Reporting the CHECK as "a policy already covers that
+		// namespace" would send an operator to look for a policy that isn't
+		// there, so the scope rule is named separately.
+		if isScopeCheckViolation(err) {
+			return writeError(c, http.StatusBadRequest, CodeBadUserInput,
+				"a policy covers either all types or a list of types, never both and never neither",
+				"Send allTypes:true with no types, or allTypes:false with the types to protect.")
+		}
 		if ent.IsConstraintError(err) {
 			return writeError(c, http.StatusConflict, CodeConflict,
-				"a policy already covers that namespace and type",
-				"PATCH the existing policy instead of creating a second one")
+				"a policy already covers that namespace",
+				"There is one policy per namespace — PATCH it to change which types it protects")
 		}
 		return fmt.Errorf("create approval policy: %w", err)
 	}
-	h.warnIfUnenforced(c, p)
+	// Written only after Save succeeds. A refused policy leaves NO audit trail —
+	// a record of something that never took effect is worse than none, because
+	// whoever reads it believes the gate changed.
+	h.auditPolicy(c, "createApprovalPolicy", p.Namespace, map[string]any{
+		"policyId": p.ID.String(),
+		"after":    policyFields(p),
+	})
 	return c.JSON(http.StatusCreated, renderPolicy(p))
 }
 
@@ -653,13 +751,41 @@ func (h *ChangeRequest) UpdateApprovalPolicy(c echo.Context) error {
 		return writeError(c, http.StatusBadRequest, CodeBadUserInput, "invalid request body", "")
 	}
 
+	// Read the row BEFORE changing it. "required_approvals is now 1" does not
+	// answer "was the bar lowered?", and that is the question an audit of a
+	// change-control system exists to answer.
+	prev, err := h.db.ApprovalPolicy.Get(c.Request().Context(), id)
+	if ent.IsNotFound(err) {
+		return writeError(c, http.StatusNotFound, CodeNotFound, "approval policy not found", "")
+	}
+	if err != nil {
+		return fmt.Errorf("load approval policy: %w", err)
+	}
+
 	upd := h.db.ApprovalPolicy.UpdateOneID(id).
 		SetUpdatedAt(time.Now()).
 		SetUpdatedBy(actorFromContext(c))
 	if body.RequiredApprovals > 0 {
 		upd = upd.SetRequiredApprovals(body.RequiredApprovals)
 	}
-	if len(body.BypassRoles) > 0 {
+	// Scope is edited in place — "also protect Rack" is a change to this policy,
+	// not a new one. Supplying either field means supplying the scope, so both
+	// are validated together.
+	if body.AllTypes != nil || body.Types != nil {
+		allTypes := body.AllTypes != nil && *body.AllTypes
+		if body.Types == nil {
+			body.Types = []string{}
+		}
+		if err := h.validatePolicyScope(c.Request().Context(), "", allTypes, body.Types); err != nil {
+			var gerr *gatedError
+			if errors.As(err, &gerr) {
+				return writeError(c, gerr.Status, gerr.Code, gerr.Message, gerr.Hint)
+			}
+			return err
+		}
+		upd = upd.SetAllTypes(allTypes).SetTypes(body.Types)
+	}
+	if body.BypassRoles != nil {
 		upd = upd.SetBypassRoles(body.BypassRoles)
 	}
 	if body.Enabled != nil {
@@ -673,7 +799,16 @@ func (h *ChangeRequest) UpdateApprovalPolicy(c echo.Context) error {
 	if err != nil {
 		return fmt.Errorf("update approval policy: %w", err)
 	}
-	h.warnIfUnenforced(c, p)
+	h.auditPolicy(c, "updateApprovalPolicy", p.Namespace, map[string]any{
+		"policyId": p.ID.String(),
+		"before":   policyFields(prev),
+		"after":    policyFields(p),
+		// Called out separately because it is the one change that stops the gate
+		// applying at all, and nobody scanning a diff of five fields should have
+		// to spot it.
+		"enforcementStopped": prev.Enabled && !p.Enabled,
+		"enforcementStarted": !prev.Enabled && p.Enabled,
+	})
 	return c.JSON(http.StatusOK, renderPolicy(p))
 }
 
@@ -691,14 +826,71 @@ func (h *ChangeRequest) DeleteApprovalPolicy(c echo.Context) error {
 	if err != nil {
 		return writeError(c, http.StatusBadRequest, CodeBadUserInput, "invalid policy id", "")
 	}
-	err = h.db.ApprovalPolicy.DeleteOneID(id).Exec(c.Request().Context())
+	// Read it first: after the row is gone the audit event is the ONLY record
+	// that the policy ever existed, so it has to carry enough to reconstruct it.
+	prev, err := h.db.ApprovalPolicy.Get(c.Request().Context(), id)
 	if ent.IsNotFound(err) {
 		return writeError(c, http.StatusNotFound, CodeNotFound, "approval policy not found", "")
 	}
 	if err != nil {
+		return fmt.Errorf("load approval policy: %w", err)
+	}
+	if err := h.db.ApprovalPolicy.DeleteOneID(id).Exec(c.Request().Context()); err != nil {
+		if ent.IsNotFound(err) {
+			return writeError(c, http.StatusNotFound, CodeNotFound, "approval policy not found", "")
+		}
 		return fmt.Errorf("delete approval policy: %w", err)
 	}
+	h.auditPolicy(c, "deleteApprovalPolicy", prev.Namespace, map[string]any{
+		"policyId": prev.ID.String(),
+		"before":   policyFields(prev),
+	})
 	return c.NoContent(http.StatusNoContent)
+}
+
+// auditPolicy records a change to a protected class.
+//
+// Policy administration is the MOST consequential act in change control — it
+// decides what needs review at all — and until now it was the only part of the
+// feature that left no trace. A bypassed write was audited; removing the policy
+// that would have gated it was not, which is backwards.
+//
+// The namespace is attached as the resource so `?resource_id=<namespace>`
+// surfaces every policy change for it. Category "management", matching
+// updateUserRole — the closest analogue, an admin changing an
+// authorization-relevant setting.
+func (h *ChangeRequest) auditPolicy(c echo.Context, action, namespace string, details map[string]any) {
+	details["namespace"] = namespace
+	writeAuditEvent(h.db, h.logger, "management", actorFromContext(c), action,
+		[]string{action},
+		[]string{"ApprovalPolicy"},
+		[]string{namespace},
+		details,
+	)
+}
+
+// policyFields is the audit-facing shape of a policy: everything that decides
+// what it governs and who escapes it. Deliberately not renderPolicy — that one
+// is a wire contract for clients and will change for presentation reasons; this
+// one is a historical record and must not.
+func policyFields(p *ent.ApprovalPolicy) map[string]any {
+	types := p.Types
+	if types == nil {
+		types = []string{}
+	}
+	roles := p.BypassRoles
+	if roles == nil {
+		roles = []string{}
+	}
+	return map[string]any{
+		"actionType":        p.ActionType,
+		"namespace":         p.Namespace,
+		"allTypes":          p.AllTypes,
+		"types":             types,
+		"requiredApprovals": p.RequiredApprovals,
+		"bypassRoles":       roles,
+		"enabled":           p.Enabled,
+	}
 }
 
 // ResolveApprovalPolicy answers "is this change gated for me?".
@@ -735,10 +927,6 @@ func (h *ChangeRequest) ResolveApprovalPolicy(c echo.Context) error {
 		RequiredApprovals: pol.required,
 		BypassRoles:       roles,
 		CallerMayBypass:   caller.NoAuthz || roleIn(caller.Role, pol.bypassRoles),
-		Enforced:          approvalGateInstalled && pol.required > 0,
-	}
-	if resp.Required {
-		resp.Notice = enforcementNotice()
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -746,7 +934,7 @@ func (h *ChangeRequest) ResolveApprovalPolicy(c echo.Context) error {
 // ── Rendering ───────────────────────────────────────────────────────────────
 
 func (h *ChangeRequest) load(c echo.Context) (*ent.ApprovalRequest, error) {
-	id, err := parseCRID(c)
+	id, err := h.parseCRID(c)
 	if err != nil {
 		return nil, err
 	}
@@ -772,7 +960,7 @@ func (h *ChangeRequest) render(ctx context.Context, cr *ent.ApprovalRequest, act
 	}
 
 	out := changeRequestResponse{
-		ID:               cr.ID.String(),
+		ID:               crHumanID(cr),
 		ActionType:       cr.ActionType,
 		Title:            cr.Title,
 		Description:      cr.Description,
@@ -828,14 +1016,11 @@ func renderPolicy(p *ent.ApprovalPolicy) approvalPolicyResponse {
 		ID:                p.ID.String(),
 		ActionType:        p.ActionType,
 		Namespace:         p.Namespace,
-		TypeName:          p.TypeName,
+		AllTypes:          p.AllTypes,
+		Types:             p.Types,
 		RequiredApprovals: p.RequiredApprovals,
 		BypassRoles:       roles,
 		Enabled:           p.Enabled,
-		Enforced:          approvalGateInstalled && p.Enabled,
-	}
-	if p.Enabled {
-		out.Notice = enforcementNotice()
 	}
 	return out
 }
@@ -863,12 +1048,73 @@ func crError(c echo.Context, err error) error {
 	return err
 }
 
-func parseCRID(c echo.Context) (uuid.UUID, error) {
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		return uuid.Nil, writeError(c, http.StatusBadRequest, CodeBadUserInput, "invalid change request id", "")
+// parseCRID resolves the `:id` path parameter to a row id.
+//
+// The parameter is the HUMAN identifier — `colo-42` — not the surrogate key.
+// Callers never see the bigint, and that is deliberate: the id in a URL is the
+// one people paste into chat, and it should say which data center it is about.
+//
+// Split on the LAST hyphen. Namespaces contain hyphens (`alaska-dot-cruiser`),
+// but the number is always the final segment and always digits, so the split is
+// unambiguous — `alaska-dot-cruiser-42` and even `dc-2-42` resolve correctly.
+func (h *ChangeRequest) parseCRID(c echo.Context) (int64, error) {
+	raw := c.Param("id")
+	ns, num, ok := splitCRID(raw)
+	if !ok {
+		return 0, handled(writeError(c, http.StatusBadRequest, CodeBadUserInput,
+			fmt.Sprintf("%q is not a change request id", raw),
+			"Change request ids look like colo-42 — the namespace, then its number."))
 	}
-	return id, nil
+	cr, err := h.db.ApprovalRequest.Query().
+		Where(approvalrequest.NamespaceEQ(ns), approvalrequest.NumberEQ(num)).
+		Only(c.Request().Context())
+	if ent.IsNotFound(err) {
+		return 0, handled(writeError(c, http.StatusNotFound, CodeNotFound, "change request not found", ""))
+	}
+	if err != nil {
+		return 0, fmt.Errorf("resolve change request %q: %w", raw, err)
+	}
+	return cr.ID, nil
+}
+
+// errResponseWritten marks an error whose response is already on the wire.
+//
+// writeError RETURNS NIL on success — it writes the envelope and reports that
+// the write worked. That is fine when a handler does `return writeError(...)`,
+// but in a helper returning (value, error) it means the caller's `if err != nil`
+// does not fire and execution continues with a zero value. The previous
+// parseCRID had exactly this shape and got away with it only because
+// Get(uuid.Nil) happened to 404 afterwards — a second response the committed-
+// response guard then swallowed.
+//
+// ErrorHandler no-ops on an already-committed response, so returning this
+// upward is safe and the caller's error check behaves as written.
+var errResponseWritten = errors.New("response already written")
+
+func handled(writeErr error) error {
+	if writeErr != nil {
+		return writeErr // the write itself failed; that is a real error
+	}
+	return errResponseWritten
+}
+
+// splitCRID parses "<namespace>-<number>".
+func splitCRID(raw string) (namespace string, number int, ok bool) {
+	i := strings.LastIndex(raw, "-")
+	if i <= 0 || i == len(raw)-1 {
+		return "", 0, false
+	}
+	n, err := strconv.Atoi(raw[i+1:])
+	if err != nil || n <= 0 {
+		return "", 0, false
+	}
+	return raw[:i], n, true
+}
+
+// crHumanID renders the identifier people use. Kept next to the parser so the
+// two can never drift into disagreeing about the format.
+func crHumanID(cr *ent.ApprovalRequest) string {
+	return fmt.Sprintf("%s-%d", cr.Namespace, cr.Number)
 }
 
 func toChangeItems(in []changeItemBody) []approval.ChangeItem {
@@ -944,40 +1190,71 @@ func writeChangesetProblems(c echo.Context, problems []approval.ValidationError)
 	})
 }
 
-// warnIfUnenforced logs when an admin declares a protected class that orbital
-// will not actually protect. The response says so too, but an admin acting
-// through orbctl or a script may never read the body — and "I turned approvals
-// on" is exactly the belief that must not go unchallenged.
-func (h *ChangeRequest) warnIfUnenforced(c echo.Context, p *ent.ApprovalPolicy) {
-	if approvalGateInstalled || !p.Enabled {
-		return
-	}
-	target := p.Namespace
-	if p.TypeName != "" {
-		target += "/" + p.TypeName
-	}
-	h.logger.Warn("approval policy recorded but NOT enforced — direct mutations on this class are still accepted",
-		"policy", target,
-		"actor", actorFromContext(c),
-		"request.id", c.Response().Header().Get(echo.HeaderXRequestID))
+// isScopeCheckViolation reports whether err is the database refusing a policy
+// whose scope says both "all types" and "these types" (or neither).
+//
+// Matched on the constraint name because that is the only part of a Postgres
+// check violation that is stable — the message text is not.
+func isScopeCheckViolation(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "approval_policy_scope_exclusive")
 }
 
-// WarnUnenforcedPolicies logs once at startup if any enabled policy exists
-// while the write gate is off. Called from server wiring so an operator who
-// inherited a configured deployment learns it from the log, not from a
-// mutation that should have been refused and was not.
-func (h *ChangeRequest) WarnUnenforcedPolicies(ctx context.Context) {
-	if approvalGateInstalled || h.db == nil {
-		return
+// validatePolicyScope refuses a policy that could never govern anything, and
+// the two scope shapes that contradict themselves.
+//
+// The database enforces the either/or too, via a CHECK constraint — that layer
+// is the one no future code path can skip. This one exists to say WHICH rule was
+// broken, which a constraint violation cannot.
+//
+// namespace may be empty to skip the namespace check (an update supplying only
+// a new scope).
+func (h *ChangeRequest) validatePolicyScope(ctx context.Context, namespace string, allTypes bool, types []string) error {
+	// Both invalid shapes. Together with the two valid ones these make the pair
+	// a proper either/or with no third state — and refusing beats "ignoring the
+	// unused field", which leaves a stored row that says two things and a reader
+	// who cannot tell which one was honoured.
+	switch {
+	case allTypes && len(types) > 0:
+		return &gatedError{
+			Status:  http.StatusBadRequest,
+			Code:    CodeBadUserInput,
+			Message: "a policy covering all types must not also list types — the two say different things and the row would not describe what is protected",
+			Hint:    "Send allTypes:true with no types, or allTypes:false with the types to protect.",
+		}
+	case !allTypes && len(types) == 0:
+		return &gatedError{
+			Status:  http.StatusBadRequest,
+			Code:    CodeBadUserInput,
+			Message: "a policy must protect something: either allTypes:true, or a non-empty list of types",
+			Hint:    "Send allTypes:true to cover every type in the namespace, including ones added later.",
+		}
 	}
-	n, err := h.db.ApprovalPolicy.Query().Where(approvalpolicy.EnabledEQ(true)).Count(ctx)
+
+	for _, t := range types {
+		if _, ok := configitems.FindByName(t); !ok {
+			return &gatedError{
+				Status:  http.StatusBadRequest,
+				Code:    CodeBadUserInput,
+				Message: fmt.Sprintf("%q is not a ConfigItem type, so a policy naming it would govern nothing", t),
+				Hint:    "Valid types: " + strings.Join(configitems.Names(), ", "),
+			}
+		}
+	}
+
+	if namespace == "" {
+		return nil
+	}
+	exists, err := h.schema.NamespaceExists(ctx, namespace)
 	if err != nil {
-		h.logger.Warn("could not check approval policies at startup", "err", err)
-		return
+		return fmt.Errorf("validate policy namespace: %w", err)
 	}
-	if n == 0 {
-		return
+	if !exists {
+		return &gatedError{
+			Status:  http.StatusBadRequest,
+			Code:    CodeBadUserInput,
+			Message: fmt.Sprintf("namespace %q holds no configuration items, so a policy for it would report itself active while gating nothing", namespace),
+			Hint:    "Check the spelling against the namespaces that exist — the UI offers them as a list.",
+		}
 	}
-	h.logger.Warn("APPROVAL POLICIES ARE NOT ENFORCED — enabled policies exist, but orbital does not yet refuse a direct mutation on a protected class. Change requests work; nothing forces their use.",
-		"enabled_policies", n)
+	return nil
 }

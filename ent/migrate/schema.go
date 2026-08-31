@@ -20,7 +20,7 @@ var (
 		{Name: "decision", Type: field.TypeEnum, Enums: []string{"approved", "rejected"}},
 		{Name: "comment", Type: field.TypeString, Nullable: true, Size: 2147483647, Default: ""},
 		{Name: "approved_at_hash", Type: field.TypeString},
-		{Name: "approval_request_id", Type: field.TypeUUID},
+		{Name: "approval_request_id", Type: field.TypeInt64},
 	}
 	// ApprovalsTable holds the schema information for the "approvals" table.
 	ApprovalsTable = &schema.Table{
@@ -52,7 +52,8 @@ var (
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "action_type", Type: field.TypeString},
 		{Name: "namespace", Type: field.TypeString},
-		{Name: "type_name", Type: field.TypeString, Nullable: true, Default: ""},
+		{Name: "all_types", Type: field.TypeBool, Default: true},
+		{Name: "types", Type: field.TypeJSON, Nullable: true},
 		{Name: "required_approvals", Type: field.TypeInt, Default: 1},
 		{Name: "bypass_roles", Type: field.TypeJSON},
 		{Name: "enabled", Type: field.TypeBool, Default: true},
@@ -64,19 +65,21 @@ var (
 		PrimaryKey: []*schema.Column{ApprovalPoliciesColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "approvalpolicy_action_type_namespace_type_name",
+				Name:    "approvalpolicy_action_type_namespace",
 				Unique:  true,
-				Columns: []*schema.Column{ApprovalPoliciesColumns[5], ApprovalPoliciesColumns[6], ApprovalPoliciesColumns[7]},
+				Columns: []*schema.Column{ApprovalPoliciesColumns[5], ApprovalPoliciesColumns[6]},
 			},
 		},
 	}
 	// ApprovalRequestsColumns holds the columns for the "approval_requests" table.
 	ApprovalRequestsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeUUID},
+		{Name: "id", Type: field.TypeInt64, Increment: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "created_by", Type: field.TypeString, Nullable: true},
 		{Name: "updated_at", Type: field.TypeTime, Nullable: true},
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "namespace", Type: field.TypeString},
+		{Name: "number", Type: field.TypeInt},
 		{Name: "action_type", Type: field.TypeString},
 		{Name: "title", Type: field.TypeString},
 		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647, Default: ""},
@@ -97,22 +100,27 @@ var (
 			{
 				Name:    "approvalrequest_status_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{ApprovalRequestsColumns[8], ApprovalRequestsColumns[1]},
+				Columns: []*schema.Column{ApprovalRequestsColumns[10], ApprovalRequestsColumns[1]},
 			},
 			{
 				Name:    "approvalrequest_author",
 				Unique:  false,
-				Columns: []*schema.Column{ApprovalRequestsColumns[9]},
+				Columns: []*schema.Column{ApprovalRequestsColumns[11]},
 			},
 			{
 				Name:    "approvalrequest_action_type",
 				Unique:  false,
-				Columns: []*schema.Column{ApprovalRequestsColumns[5]},
+				Columns: []*schema.Column{ApprovalRequestsColumns[7]},
+			},
+			{
+				Name:    "approvalrequest_namespace_number",
+				Unique:  true,
+				Columns: []*schema.Column{ApprovalRequestsColumns[5], ApprovalRequestsColumns[6]},
 			},
 			{
 				Name:    "approvalrequest_payload",
 				Unique:  false,
-				Columns: []*schema.Column{ApprovalRequestsColumns[12]},
+				Columns: []*schema.Column{ApprovalRequestsColumns[14]},
 				Annotation: &entsql.IndexAnnotation{
 					Types: map[string]string{
 						"postgres": "GIN",
@@ -344,7 +352,7 @@ var (
 		{Name: "attempted_at", Type: field.TypeTime},
 		{Name: "results", Type: field.TypeJSON, Nullable: true},
 		{Name: "error", Type: field.TypeString, Nullable: true, Size: 2147483647, Default: ""},
-		{Name: "approval_request_id", Type: field.TypeUUID},
+		{Name: "approval_request_id", Type: field.TypeInt64},
 	}
 	// MergeAttemptsTable holds the schema information for the "merge_attempts" table.
 	MergeAttemptsTable = &schema.Table{
@@ -480,6 +488,10 @@ var (
 
 func init() {
 	ApprovalsTable.ForeignKeys[0].RefTable = ApprovalRequestsTable
+	ApprovalPoliciesTable.Annotation = &entsql.Annotation{}
+	ApprovalPoliciesTable.Annotation.Checks = map[string]string{
+		"approval_policy_scope_exclusive": "(all_types AND (jsonb_typeof(types) <> 'array' OR jsonb_array_length(types) = 0)) OR ((NOT all_types) AND jsonb_typeof(types) = 'array' AND jsonb_array_length(types) > 0)",
+	}
 	AuditEventResourcesTable.ForeignKeys[0].RefTable = AuditEventsTable
 	AuditEventResourceTypesTable.ForeignKeys[0].RefTable = AuditEventsTable
 	MergeAttemptsTable.ForeignKeys[0].RefTable = ApprovalRequestsTable
