@@ -67,6 +67,22 @@ Changing which types a policy covers is a `PATCH` to that policy — **Edit** on
 
 *Not supported, and the thing that would justify revisiting it:* **exclusions** — "every type except X". Picking 17 of 19 is miserable and is also the wrong policy, since it does not cover future types. It needs a schema change plus a precedence rule of its own, so it waits for evidence someone wants it.
 
+### "Change control" is the mechanism; "change management" is the adopter's practice
+
+Orbital provides **change control** — a gate on the write path that refuses an unreviewed change. It does **not** provide **change management**, the surrounding practice: CAB, scheduling, risk assessment, reviewer routing, notifications, post-implementation review. That belongs to whatever ITSM the adopter already runs, and calling orbital's feature "change management" would over-claim it — the exact failure the *compose, don't replace* posture exists to prevent. Say: *"orbital enforces change control at its write path; it slots under your existing change-management process."*
+
+"Control" is also the precise word from **configuration management**, orbital's actual discipline: configuration control is the CM function governing how changes to a **baseline** are proposed, evaluated and approved, and orbital's baseline is design intent.
+
+*Known wrinkle:* ITIL v3 said "change management"; ITIL 4 (2019) renamed it "change control"; ITIL 4 (2020) renamed it again to "change enablement", on the grounds that *control* sounded too restrictive. Someone ITIL-fluent may flag the term as dated. Orbital uses it in the older configuration-management sense, which is the accurate one for a gate over a baseline — the ITIL 4 rename was a philosophical repositioning, not a semantic correction.
+
+### The term is "change request", from NetBox and ServiceNow
+
+Both call this object a **change request**, and they are the two most widely deployed systems in orbital's category, so the vocabulary is already familiar to the operators and integrators most likely to arrive with an opinion. Rejected: **"pull request"** (GitHub's term — VCS-shaped, and orbital has no fork/branch to pull from), **"proposed change"** (InfraHub's — accurate, but the less-recognised name of the three), and **"proposal"** (the working name during design; generic, and it never says *change to what*).
+
+**The name is borrowed from ServiceNow; the enforcement model is NOT.** ServiceNow's change request sits *beside* the CMDB — the store commits immediately and unauthorised writes are caught after the fact by detection. Orbital gates the write path itself, which is NetBox's model ("a branch cannot be merged unless it has an approved change request"). Sharing ServiceNow's vocabulary must not be read as sharing its architecture; see `change-control-research.md` for the survey behind that split.
+
+**`merge` is the terminal verb, not `apply`.** NetBox's word, and deliberately not orbital's own **guarded Apply** (`expectedContentHash` on export, `OCI.md`), which governs the *publish* boundary. Two different gates — authoring vs release — and reusing one verb for both would conflate them.
+
 ### Change requests are identified as `<namespace>-<number>`
 
 `colo-42`. Per-namespace numbering, so every data center counts from 1 and an id pasted into chat says which site it is about. The surrogate key is a plain auto-increment `bigint` and is **never exposed** — the API accepts and returns the human id everywhere, including `POST` responses, `/change-requests/colo-42`, `details.changeRequestId` on audit events, and `changeRequestId` in `/proposed-changes`.
@@ -83,22 +99,59 @@ Changing which types a policy covers is a `PATCH` to that policy — **Edit** on
 
 `approvals` and `merge_attempts` keep UUID primary keys: nobody says those out loud. They were switched to **UUIDv7** (time-ordered, so inserts append rather than scatter); the older tables still default to v4 and migrate under the sweep in `docs/planning/debt.md`.
 
-### The queue identifies a request by id, and titles it by what it changes
+### The queue identifies a request by id, and states its CHANGE
 
-Columns are `ID · Title · Namespace · Author · Status · Approvals · Age`. **The id is first and always shown** — it is the only column guaranteed to differ between two rows, and it is what someone quotes when asking a colleague to look at one.
+Columns are `ID · Change · Namespace · Author · Status · Approvals · Age`. **The id is first and always shown** — it is the only column guaranteed to differ between two rows, and it is what someone quotes when asking a colleague to look at one.
 
-**Titles are derived from the changeset, not the entity** (`changesetTitle` in `configitem-editor.js`): `server-CWJHDX3 · ServerMaintenance.enabled → true`, or `server-CWJHDX3 · 2 fields` when several change. The old form was `'Update ' + orbId`, which named what was touched rather than what changed — so *every* edit to a given server produced the same title and the queue could not tell two different proposals apart, let alone two identical ones. Owned children are qualified by type, because `enabled` alone does not say enabled on what. A value is inlined only when it is a short scalar; a title is a label, not a payload dump.
+**The Change column renders `effect` from the API — it does not compute one.** Every response carries `effect: {entities, fields, orbId, type, field, before, value, cleared}`. `orbId`/`type` are present whenever exactly one entity is touched; `field`/`before`/`value` only when exactly one field is.
+
+Named `effect`, not `summary`, for two reasons: `/diff` already returns a differently-shaped field called `summary` (`{added, removed, modified, unchanged}`), and two shapes under one name on adjacent endpoints is a trap; and `effect` names the distinction the field exists for — what the request would DO, as against `changes`, which is what it says. It matches the column that stores it (`base_effect`). Nothing upstream has a convention to copy here: git and GitHub call counts a *diffstat* and Terraform a *plan summary*, but all of them are counts only, while this states the change outright when there is exactly one. So a row is two branches — `server-CWJHDX3 · enabled → true` or `server-1W8Y2Z3 · 6 fields` — not a walk over `changes`. That walk is the point: **any client building a queue would otherwise re-implement it**, which is the bespoke-client-logic smell the API-first rule names by hand. It also means the row follows an amended changeset, where a stored string cannot.
+
+**The field is NOT qualified by type in the cell.** The orbId sits beside it and already names the kind, because orbIds are conventional `<kind>-<natural-key>` — `server-maintenance-CWJHDX3 · enabled` says enabled on what. `type` stays in the response for callers that want it.
+
+**`title` is a count, and belongs on the detail page** (`changesetTitle`): `server-1W8Y2Z3 · 6 fields`. It used to name the field and inline the value, which was a second copy of what the row now states — written once at creation, never recomputed. A count cannot drift into a lie the way a value can. The title should eventually be written by the PROPOSER (backlog); deriving it is a placeholder, not a design.
 
 **Age is relative** (`just now`, `6m ago`), with the absolute date on hover. Two requests made minutes apart both read `Aug 30, 2026` under date granularity, which is exactly when you most need to tell them apart.
 
+**Three tabs: `Needs my review` · `Open` · `Closed`.** State is the axis that partitions — `Open` is non-terminal, `Closed` is merged OR rejected OR withdrawn, and the Status column names which. GitHub's repo PR list collapses the same way: how a request ended is a property of the row, not of the list. `Needs my review` is a SHORTCUT to the actionable subset, not a state, and it exists because it is what the nav badge counts — clicking a badge must land somewhere visibly filtered. It renders only for `CanMutate` (`RoleAtLeast(dev)`, the same minimum the API enforces): readonly can never approve, so `?awaiting_review=true` returns zero rows for them by construction and the tab would be permanently empty; readonly lands on `Open`.
+
+Do NOT re-add `Mine` or `All`. Both overlapped the state tabs while looking like peers of them — the defect that made five tabs unreadable — and `Author` is already a column, which answers "what did I propose" by eye at this volume. **Orbital has no reviewer assignment**, so "needs my review" resolves to *open, minus the ones I wrote*; it is an actionable filter, not an inbox someone routed to you.
+
 Catching an accidental duplicate at CREATION is separate and still open — see `docs/planning/backlog.md`.
+
+### A changeset records what the author CHANGED — not the whole entity
+
+`buildChangeset` narrows every `update` item to fields whose value actually moved (`changedOnly`). The mutation path still sends an entity's whole scalar payload, which is harmless for DGraph — writing a field its current value is a no-op — but a changeset is not a mutation: a reviewer reads it, and **merging writes every field it names**. A six-field payload for a one-field edit claimed authority over five fields nobody touched, and every count derived from it read six. MVCC was the only thing preventing it from reverting a colleague's concurrent write.
+
+**Narrowed against the SNAPSHOT taken when the modal opened, never against current intent.** Only the editor knows which fields this person touched. The server can only ask "does this differ from intent *now*", which is a different question with a worse answer: if a colleague edited a field while the modal was open, comparing against current intent would KEEP the stale value and silently revert their write on merge.
+
+`create`/`upsert` items are not narrowed — a new entity legitimately needs every field.
+
+**The API still accepts a full end-state on purpose.** A reconcile-style client (orbctl, AEP) asserting a complete desired state is legitimate, so orbital does not reject or rewrite a wide changeset — no declarative system does (Terraform, Kubernetes and Argo all accept complete state and compute the delta separately).
+
+### `effect` is captured with the base — `base_effect`
+
+A queue row must say how much a reviewer is approving, and payload width is a bad proxy for it: a reconcile client's changeset can name 22 fields and change one. So the delta is computed ONCE at creation, against the same snapshot `base_hash` is captured from, and stored in `base_effect` (`storedEffect` in `changerequest_base.go`).
+
+That pairing IS a saved Terraform plan — a point-in-time delta plus the state anchor it was computed against, refused on apply when state moved. Orbital's derived `stale` is the refusal half, already built. GitHub stores diff stats the same way; `kubectl diff` and Argo recompute instead, which is the expensive shape.
+
+- **Stored, not derived, and that is consistent with derive-don't-maintain** — that rule governs state that changes ON ITS OWN (staleness, approval validity). A delta is a fact about a moment, exactly like `base_hash`.
+- **Recomputed on `PATCH`**, which re-anchors the base anyway. Carrying the old delta forward would describe changes the request no longer proposes.
+- **Never fails a create.** `storedEffect` returns its error for logging only; a nil effect falls back to deriving one from the changeset (`resolveEffect`). A display convenience must not cost someone a validated proposal — and that same fallback is what every row written before this field always used.
+- **`before` only exists on the effect path.** A payload states what a field becomes, never what it was, so a row rendered from the fallback shows `→ after` and is still correct.
+- **Field names are unqualified.** `graphdiff` yields `Server.hostname` because a diff spans entities; the summary carries `type` separately, so the prefix is stripped and both paths produce one shape.
+- **Do NOT** call `/diff` per row (N+1 of the expensive path: a subtree query AND a round trip each), recompute on every read (pays continuously for a number that changes only on a write), or reject/normalise wide changesets on write (breaks the client the full-state contract exists for).
+
+Pinned by `TestCREffect_*` — read back through `ListChangeRequests`, including the negative (a payload that changes nothing reports 0) and the fallback. Producers are named for their source (`effectFromDiff`, `effectFromChangeset`, chosen by `resolveEffect`) so the real thing and the approximation can never be mistaken for each other.
+
+**Watch the parameter chain.** The narrowing shipped broken once: `buildChangeset` did it correctly, the editor passed `rootBefore`, and `proposeChange` — which sits between them and destructures its parameters — forwarded a fixed list that dropped it. The pure-function test passed the whole time. A test calling a helper directly cannot see a caller that never reaches it; the e2e that drives the real editor is what caught it.
 
 ### Seeing what is already proposed
 
 Two surfaces, one purpose: stop someone retyping an edit a colleague already proposed.
 
-- **Banner** on the entity's detail page — how many requests are open for it *or anything it owns*, with links. `GET /api/v1/change-requests?orbId=…` (repeatable).
-- **Field marks** on the rendered fields — which field, and what is proposed for it. `GET /api/v1/proposed-changes?orbId=…`, keyed by orbId.
+- **Banner** on the entity's detail page — how many requests are open for it *or anything it owns*, linked **by id** (`colo-58`), never by title. A title is a stored string that can describe a changeset since amended; an id cannot go stale, and it is what people quote to each other. The banner says *something is in flight and here is the way through* — WHICH field and what value are the field marks' job, on the row where they are actionable. `GET /api/v1/change-requests?orbId=…` (repeatable).
+- **Field marks** on the rendered fields — which field, and what is proposed for it. **Two facts only: the value, and a Review link.** Author and age were on the row and are not: four facts crowded the cell in every layout — a dedicated column would have been *narrower* than the inline space, so it relocates the wrapping rather than fixing it — and neither is why anyone scans the table. Knowing a change is proposed is what stops you retyping it; who proposed it is the first thing on the review page one click away. `terraform plan` makes the same cut (`~ field = old -> new`). The verb carries the status, so `approved →` says "merges next" without a second clause. Spacing is ONE flex gap on `.js-field-mark-text`, never per-part `ml-*`: the parts are conditional, so per-part margins put the same fact at a different distance depending on what else rendered. `GET /api/v1/proposed-changes?orbId=…`, keyed by orbId. Wired on the **Server Summary** table (the server's own six editable scalars) and the **maintenance panel** (the owned child). A table opts in with `data-field-orbid` + `data-field-values`; a row opts in with `data-field="<name>"` and a `.js-field-mark` slot. Field names must match the type's `FormFields` in `configitems/registry.go` — those are the keys a changeset uses. Edge references (Data Center, OOB IP, Rack) get NO slot: the editor cannot write them, so a mark there could never fire. Marks shipped 2026-08-30 wired to the maintenance panel alone, so a proposal on `Server.manufacturer` raised the banner and annotated nothing.
 
 **A mark is an index INTO the proposal, never a second value.** One proposal names its value, author and age; two or more show a count; disagreement is called out. Rendering `enabled false (pending 'true')` reads as a fact when it is one of two competing claims, and a proposal touching five fields would be scattered across five rows with no way to see it as the unit a reviewer approves. Every comparable product does the same — [Infrahub](https://docs.infrahub.app/topics/proposed-change) puts field detail in the proposed change's own diff view, [NetBox branching](https://netboxlabs.com/docs/extensions/branching/) switches you into a branch context, MediaWiki's pending-changes uses a page banner.
 
@@ -121,6 +174,12 @@ Create, update and delete each write a `management` audit event: actor, the name
 `approval_policy.bypass_roles` (default `["admin"]`). Orbital's role model stays `readonly < dev < admin` with no per-user capability flags — "who may bypass" is a question the admin answers per protected class. A caller in `bypass_roles` also skips `proposer ≠ approver`: demanding a second pair of eyes from someone who could have written directly is friction with no control value.
 
 **A privileged write is recorded in the AUDIT LOG, not just logged.** `details.privileged` + `details.bypassedPolicy` land on the mutation's own audit event. A `logger.Warn` alone was the first implementation and it was wrong: "who bypassed review last quarter" is asked from `/api/v1/audit-log` by someone with no prior suspicion. See `AUDIT.md`.
+
+**A bypass-capable caller gets BOTH destinations in the editor, and review is the primary one.** The footer shows `Propose change` (green, first) *and* `Save directly` (solid amber — caution, and distinct from both the green primary and the plain Cancel). Holding the bypass role previously meant losing review entirely — one button that wrote through — so an admin who wanted a second pair of eyes on a production edit had to give up the role to get one. Being *allowed* to skip review is not the same as wanting to. A caller who may NOT bypass still gets one button: a second control that always 403s trains people to click through errors. `applyGateState` owns this for all four edit modals — do NOT add a propose button to a page's modal wiring. Pinned by `e2e/change-requests.spec.ts` "gets both actions, with Propose change as the primary".
+
+**The two labels ARE the notice — privileged mode renders no prose.** There used to be a paragraph explaining that this role may write directly; it said what the buttons already say, since the word *directly* set against *Propose change* is itself the statement that one path skips review. Prose was a third thing to read before a choice the labels had already made obvious. The one fact a label cannot carry — that the bypass is recorded — is the `title` on `Save directly`. This does NOT weaken "stated, never silent" (above): that rule was written when Save was the only button and read identically to an ungated one. The gated notice ("Needs approval") stays, because there the button alone cannot say that nothing changes until someone approves.
+
+**Both buttons share one submit handler**, differing by a `forcePropose` flag. Recomputing the changeset in a second handler would be the one place the two paths could disagree about what the user edited — and if the flag were ever dropped, Propose would fall through to the ordinary dispatch, write straight to the graph, and produce the audit row of a legitimate bypass with no trace that review was asked for. It would look like it worked. Pinned by "an admin's Propose change opens a request and writes nothing".
 
 ### Derive, don't maintain — there is no `stale` column and no stored `approved`
 
@@ -170,6 +229,12 @@ Target **end-state**, not a mutation replay. One entity per item; **an edge valu
 It dispatches with `gateEnforce` and, on an `APPROVAL_REQUIRED` refusal, opens a change request pre-filled from the entry and returns **`202 Accepted`** with a `changeRequestId`, recording **no resolution** — intent has not moved. One authority; asking the policy separately would be a second copy of the rule to keep in sync. Reject and Ignore are never gated: neither touches intent.
 
 The report's `type_name` is a **hint**, not a requirement — orbital resolves the type from the orbId. The old "update intent manually" `422` is gone; the gate made that advice circular.
+
+### `?status=` is repeatable and OR-ed, and an unknown value is refused
+
+`status=merged&status=rejected&status=closed` is every terminal state. There is **no aggregate keyword** for it — the three stored values already say it, and a coined term would have to be learned (`active` is the one exception, and only because `approved` is *derived* from the approval count and cannot be named as a stored value).
+
+An unrecognised value returns `400`. The switch this replaced had no default, so `status=Merged` matched nothing, applied no predicate, and returned the ENTIRE queue — the same silent-wrong-answer shape as a truncated filter and harder to spot, because the response looks right. Pinned by `TestValidStatusFilter` / `TestStoredStatePredicates` / `TestStatusWanted`.
 
 ### `?orbId=` filters in SQL, before rendering
 

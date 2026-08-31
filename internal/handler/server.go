@@ -310,8 +310,15 @@ type serverTabDetailData struct {
 	// when a proposal already matches the current value, and comparing a
 	// proposed `true` against the string "true" the table renders would be a
 	// guess.
-	MaintenanceOrbID       string
-	MaintenanceValuesJSON  string
+	MaintenanceOrbID      string
+	MaintenanceValuesJSON string
+	// SummaryValuesJSON carries the server's OWN editable scalars raw, for the
+	// same reason MaintenanceValuesJSON carries the child's: a field mark is
+	// suppressed when the proposed value already equals the current one, and
+	// comparing a proposed `5` against the string "5" the table renders would
+	// be a guess. Only the fields the editor can change are included — a mark
+	// on a field nobody can propose would never fire.
+	SummaryValuesJSON      string
 	MaintenanceEnabled     bool
 	MaintenanceWindowStart string
 	MaintenanceWindowEnd   string
@@ -458,17 +465,28 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 	editTargetsJSON, _ := json.Marshal(editTargets)
 
 	srv := serverTabDetailData{
-		ID:              raw.ID,
-		OrbID:           raw.OrbID,
-		DomID:           SafeDomID(raw.OrbID),
-		Name:            raw.Name,
-		Hostname:        raw.Hostname,
-		Model:           raw.Model,
-		Manufacturer:    raw.Manufacturer,
-		ServiceTag:      raw.ServiceTag,
-		RackPosition:    raw.RackPosition,
-		OobIP:           raw.OobIP.Address,
-		OobMAC:          raw.OobMAC,
+		ID:           raw.ID,
+		OrbID:        raw.OrbID,
+		DomID:        SafeDomID(raw.OrbID),
+		Name:         raw.Name,
+		Hostname:     raw.Hostname,
+		Model:        raw.Model,
+		Manufacturer: raw.Manufacturer,
+		ServiceTag:   raw.ServiceTag,
+		RackPosition: raw.RackPosition,
+		OobIP:        raw.OobIP.Address,
+		OobMAC:       raw.OobMAC,
+		SummaryValuesJSON: rawFieldValues(map[string]any{
+			// Exactly the Server FormFields in configitems/registry.go. OOB IP
+			// is absent on purpose: it is an IPAddress reference, not a scalar
+			// the editor writes.
+			"hostname":     raw.Hostname,
+			"manufacturer": raw.Manufacturer,
+			"model":        raw.Model,
+			"oobMAC":       raw.OobMAC,
+			"rackPosition": raw.RackPosition,
+			"serviceTag":   raw.ServiceTag,
+		}),
 		CreatedBy:       raw.CreatedBy,
 		CreatedAt:       raw.CreatedAt,
 		UpdatedBy:       raw.UpdatedBy,

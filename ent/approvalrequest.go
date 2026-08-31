@@ -44,6 +44,8 @@ type ApprovalRequest struct {
 	BaseHash string `json:"base_hash,omitempty"`
 	// BasePresent holds the value of the "base_present" field.
 	BasePresent []string `json:"base_present,omitempty"`
+	// BaseEffect holds the value of the "base_effect" field.
+	BaseEffect json.RawMessage `json:"base_effect,omitempty"`
 	// Payload holds the value of the "payload" field.
 	Payload json.RawMessage `json:"payload,omitempty"`
 	// ExecutedAt holds the value of the "executed_at" field.
@@ -90,7 +92,7 @@ func (*ApprovalRequest) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case approvalrequest.FieldBasePresent, approvalrequest.FieldPayload:
+		case approvalrequest.FieldBasePresent, approvalrequest.FieldBaseEffect, approvalrequest.FieldPayload:
 			values[i] = new([]byte)
 		case approvalrequest.FieldID, approvalrequest.FieldNumber:
 			values[i] = new(sql.NullInt64)
@@ -200,6 +202,14 @@ func (_m *ApprovalRequest) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field base_present: %w", err)
 				}
 			}
+		case approvalrequest.FieldBaseEffect:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field base_effect", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.BaseEffect); err != nil {
+					return fmt.Errorf("unmarshal field base_effect: %w", err)
+				}
+			}
 		case approvalrequest.FieldPayload:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field payload", values[i])
@@ -307,6 +317,9 @@ func (_m *ApprovalRequest) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("base_present=")
 	builder.WriteString(fmt.Sprintf("%v", _m.BasePresent))
+	builder.WriteString(", ")
+	builder.WriteString("base_effect=")
+	builder.WriteString(fmt.Sprintf("%v", _m.BaseEffect))
 	builder.WriteString(", ")
 	builder.WriteString("payload=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Payload))

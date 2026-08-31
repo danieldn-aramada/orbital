@@ -150,6 +150,12 @@ func (_c *ApprovalRequestCreate) SetBasePresent(v []string) *ApprovalRequestCrea
 	return _c
 }
 
+// SetBaseEffect sets the "base_effect" field.
+func (_c *ApprovalRequestCreate) SetBaseEffect(v json.RawMessage) *ApprovalRequestCreate {
+	_c.mutation.SetBaseEffect(v)
+	return _c
+}
+
 // SetPayload sets the "payload" field.
 func (_c *ApprovalRequestCreate) SetPayload(v json.RawMessage) *ApprovalRequestCreate {
 	_c.mutation.SetPayload(v)
@@ -420,6 +426,10 @@ func (_c *ApprovalRequestCreate) createSpec() (*ApprovalRequest, *sqlgraph.Creat
 	if value, ok := _c.mutation.BasePresent(); ok {
 		_spec.SetField(approvalrequest.FieldBasePresent, field.TypeJSON, value)
 		_node.BasePresent = value
+	}
+	if value, ok := _c.mutation.BaseEffect(); ok {
+		_spec.SetField(approvalrequest.FieldBaseEffect, field.TypeJSON, value)
+		_node.BaseEffect = value
 	}
 	if value, ok := _c.mutation.Payload(); ok {
 		_spec.SetField(approvalrequest.FieldPayload, field.TypeJSON, value)

@@ -146,6 +146,14 @@ Action-result status (Publish succeeded, etc.) shows in an existing `<div id="*-
 - Pattern reference: `showPublishStatus()` in `orb.js`; `#publish-status` on orb's divergence page.
 - Do NOT use fixed-position toasts — they vanish before slow readers see them, and we don't have a toast convention anywhere else.
 
+### Inside an action row, a notice is TEXT — not a `.notification` panel
+
+A tinted `.notification` next to buttons is another coloured rectangle competing with them. The edit-modal footer reached four — an amber panel above a green *Propose change*, an amber *Save directly* and a white *Cancel* — and nothing read as primary any more.
+
+**Colour in an action row belongs to the actions.** A notice sharing that row is `is-size-7` text with an `icon-text` glyph carrying the hue: `has-text-warning` + `fa-triangle-exclamation` for something to act on, `has-text-info` + `fa-circle-info` for context. One glyph carries the urgency a filled panel did.
+
+A `.notification` panel is still right where it OWNS its space — a page-level status slot with nothing competing (`#publish-status` above). The rule is about crowding, not about the component. Reference: `applyGateState` in `configitem-editor.js`.
+
 ## Iterating on CSS / templates
 
 - **Static assets are aggressively cached by browsers.** When a CSS or template change doesn't appear after server restart, **hard-refresh first** (Cmd+Shift+R). The `?v={{.Version}}` cache-bust on `head.gohtml` covers _real_ deploys, not iterative dev changes within the same `Version` value. Don't chase phantom JS / HTMX bugs before ruling out cache.

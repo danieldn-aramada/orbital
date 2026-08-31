@@ -397,3 +397,29 @@ func presentInVersions(versions map[string]int, scope []string) []string {
 	sort.Strings(out)
 	return out
 }
+
+// storedEffect computes the delta a changeset would apply, ready to persist as
+// base_effect and to be served as the response's `effect`.
+//
+// Computed against the same scope base_hash is captured from, in the same
+// breath, so the stored delta and the anchor that says when it went stale
+// describe one moment. That pairing is what a saved Terraform plan is.
+//
+// NEVER FAILS THE CALLER. A returned nil means "no stored effect", and the read
+// path falls back to counting the changeset. This is deliberate: the effect is
+// a display convenience, and a subtree read that hiccups must not cost someone
+// the proposal they just wrote — especially when the proposal itself is already
+// validated and its staleness anchor already captured. The error is returned so
+// the caller can log it, not so it can abort.
+func storedEffect(ctx context.Context, dgraphURL string, scope []string, cs approval.Changeset) (json.RawMessage, error) {
+	snap, err := baseSnapshot(ctx, dgraphURL, scope)
+	if err != nil {
+		return nil, fmt.Errorf("snapshot for effect summary: %w", err)
+	}
+	res := graphdiff.Compare(snap, applyChangesetTo(snap, cs))
+	out, err := json.Marshal(effectFromDiff(res))
+	if err != nil {
+		return nil, fmt.Errorf("marshal effect summary: %w", err)
+	}
+	return out, nil
+}

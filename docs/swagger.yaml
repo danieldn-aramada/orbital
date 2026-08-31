@@ -266,6 +266,52 @@ definitions:
       trigger:
         type: string
     type: object
+  handler.changeEffect:
+    properties:
+      before:
+        description: |-
+          Before is the value being replaced. Only an EFFECT-derived summary can
+          know it — a payload states what a field becomes, never what it was — so it
+          is absent on rows created before base_effect existed, and a client must
+          render `→ after` when it is missing rather than assume null meant empty.
+      cleared:
+        description: |-
+          Cleared distinguishes "set to nothing" from "set to a falsy value" —
+          `Value` alone cannot, since `false` and `0` are legitimate values.
+        example: false
+        type: boolean
+      entities:
+        description: Entities is how many distinct orbIds the changeset touches.
+        example: 1
+        type: integer
+      field:
+        description: |-
+          Field, Value and Cleared are present ONLY when Fields == 1 — the case a
+          row can state in full rather than count.
+        example: manufacturer
+        type: string
+      fields:
+        description: Fields is the total across every item, counting a cleared field
+          once.
+        example: 1
+        type: integer
+      orbId:
+        description: |-
+          OrbID and Type are present whenever the changeset touches exactly ONE
+          entity, whatever its field count — a row saying "3 fields" without saying
+          on what is a worse answer than the count alone.
+        example: colo:server-1W8Y2Z3
+        type: string
+      type:
+        example: Server
+        type: string
+      value:
+        description: |-
+          Value is the proposed value, omitted when the field is being cleared.
+          Rendered as-is: a scalar for scalars, an object for an edge reference.
+          No `example` tag: swag cannot render one for an `any`, and the type is
+          deliberately open — a scalar for scalars, an object for an edge reference.
+    type: object
   handler.changeItemBody:
     properties:
       clear:
@@ -370,6 +416,14 @@ definitions:
         type: string
       description:
         type: string
+      effect:
+        allOf:
+        - $ref: '#/definitions/handler.changeEffect'
+        description: |-
+          Summary is what a QUEUE ROW needs: how wide this change is, and — when it
+          is a single field — what that field becomes. Derived server-side so a
+          list view never walks `changes` to build a label. Orbital's own queue
+          renders straight from it, and so can anyone else's.
       executedAt:
         type: string
       executedBy:
@@ -1279,12 +1333,19 @@ paths:
       description: |-
         Filters compose. `mine` and `awaiting_review` are caller-relative; `orbId` matches any request whose changeset touches that entity, at any position. `status=active` means not-terminal (open plus approved) — the filter to use for "does this entity have a change in flight", since `approved` is derived and `status=open` excludes it.
 
+        `status` is **repeatable** and OR-ed, so "everything that has finished" is `status=merged&status=rejected&status=closed` — there is no aggregate keyword for it, because the three stored values already say it and a coined term would have to be learned. An unrecognised value is refused rather than ignored: a `status=Merged` typo used to match no filter at all and return the ENTIRE queue, which looks exactly like a correct answer.
+
         `orbId` is **repeatable** and the values are OR-ed (max 32; more is refused, never truncated). A change to an owned child records the CHILD's orbId — a server-maintenance edit lands as `<ns>:server-maintenance-<serial>` — so "is anything in flight for this server" means passing the server's orbId AND the orbIds of everything it owns, exactly as `/api/v1/audit-log` does.
       parameters:
-      - description: open, approved, active (open+approved), rejected, merged or closed
+      - collectionFormat: csv
+        description: 'open, approved, active (open+approved), rejected, merged or
+          closed. Repeatable and OR-ed: status=merged&status=rejected&status=closed
+          is every terminal state. An unrecognised value is refused (400), never ignored.'
         in: query
+        items:
+          type: string
         name: status
-        type: string
+        type: array
       - description: Namespace
         in: query
         name: namespace

@@ -38,6 +38,172 @@ type createChangeRequestBody struct {
 }
 
 // changeItemBody is one entity's proposed end-state.
+// changeEffect is what a changeset would actually DO, at a glance.
+//
+// It exists because a list view has ONE LINE per request and the changeset is a
+// nested array. Every client rendering a queue would otherwise write the same
+// walk — flatten the items, count the fields, special-case the single-field
+// row — which is the bespoke-client-logic smell the API-first rule names
+// explicitly. Computing it here costs nothing: `render` already holds the
+// changeset.
+//
+// It describes the request's SCOPE. Today that is derived from the changeset
+// alone, which is the same thing as its effect for anything orbital's editor
+// authored — `changedOnly` sends only edited fields. It is NOT the same for a
+// client that posts a complete end-state, which the API accepts on purpose so a
+// reconcile flow can assert one: that yields a wide scope and a narrow effect.
+//
+// The contract is worded as scope, not payload, deliberately. Closing the gap
+// (compute the effect once at creation and store it beside `base_hash`, the way
+// a saved Terraform plan carries its delta and its state anchor together) then
+// improves this number without changing what callers were promised. See
+// `docs/planning/debt.md`; `GET /{id}/diff` is the live authority meanwhile.
+type changeEffect struct {
+	// Entities is how many distinct orbIds the changeset touches.
+	Entities int `json:"entities" example:"1"`
+	// Fields is the total across every item, counting a cleared field once.
+	Fields int `json:"fields" example:"1"`
+	// OrbID and Type are present whenever the changeset touches exactly ONE
+	// entity, whatever its field count — a row saying "3 fields" without saying
+	// on what is a worse answer than the count alone.
+	OrbID string `json:"orbId,omitempty" example:"colo:server-1W8Y2Z3"`
+	Type  string `json:"type,omitempty" example:"Server"`
+	// Field, Value and Cleared are present ONLY when Fields == 1 — the case a
+	// row can state in full rather than count.
+	Field string `json:"field,omitempty" example:"manufacturer"`
+	// Before is the value being replaced. Only an EFFECT-derived summary can
+	// know it — a payload states what a field becomes, never what it was — so it
+	// is absent on rows created before base_effect existed, and a client must
+	// render `→ after` when it is missing rather than assume null meant empty.
+	Before any `json:"before,omitempty"`
+	// Value is the proposed value, omitted when the field is being cleared.
+	// Rendered as-is: a scalar for scalars, an object for an edge reference.
+	// No `example` tag: swag cannot render one for an `any`, and the type is
+	// deliberately open — a scalar for scalars, an object for an edge reference.
+	Value any `json:"value,omitempty"`
+	// Cleared distinguishes "set to nothing" from "set to a falsy value" —
+	// `Value` alone cannot, since `false` and `0` are legitimate values.
+	Cleared bool `json:"cleared,omitempty" example:"false"`
+}
+
+// summarize counts a changeset and, when exactly one field is in play, names it.
+//
+// Deletes count as an entity with no fields: `op: delete` carries no `set` or
+// `clear`, and reporting "0 fields" for one would read as an empty request.
+func effectFromChangeset(cs approval.Changeset) changeEffect {
+	out := changeEffect{}
+	seen := make(map[string]bool, len(cs.Changes))
+	var only *approval.ChangeItem
+	var onlyField string
+	var onlyCleared bool
+	for i := range cs.Changes {
+		item := &cs.Changes[i]
+		if item.OrbID != "" && !seen[item.OrbID] {
+			seen[item.OrbID] = true
+			out.Entities++
+		}
+		for name := range item.Set {
+			out.Fields++
+			only, onlyField, onlyCleared = item, name, false
+		}
+		for _, name := range item.Clear {
+			out.Fields++
+			only, onlyField, onlyCleared = item, name, true
+		}
+	}
+	if out.Entities == 1 {
+		for i := range cs.Changes {
+			if cs.Changes[i].OrbID != "" {
+				out.OrbID = cs.Changes[i].OrbID
+				out.Type = cs.Changes[i].Type
+				break
+			}
+		}
+	}
+	if out.Fields == 1 && only != nil {
+		out.Field = onlyField
+		out.Cleared = onlyCleared
+		if !onlyCleared {
+			out.Value = only.Set[onlyField]
+		}
+	}
+	return out
+}
+
+// resolveEffect returns the stored effect when the request has one, and falls
+// back to deriving one from the changeset.
+//
+// The fallback is not a degraded path for new rows — it is what every row
+// written before `base_effect` existed will always use, and it is exactly what
+// those rows have always reported. It also covers a creation where the effect
+// could not be computed (see storedEffect): a summary is a convenience, and
+// failing to produce one must never cost someone their proposal.
+func resolveEffect(stored json.RawMessage, cs approval.Changeset) changeEffect {
+	if len(stored) > 0 {
+		var out changeEffect
+		if err := json.Unmarshal(stored, &out); err == nil {
+			return out
+		}
+		// Unreadable stored value: fall through rather than return zeros. A row
+		// reading "0 fields" would be a lie; the scope count is at least true
+		// about something.
+	}
+	return effectFromChangeset(cs)
+}
+
+// effectFromDiff turns a computed diff into the same shape
+// effectFromChangeset produces, so one response field carries either and a
+// client renders one thing.
+//
+// The counts are FIELD-level, not entity-level: `graphdiff.Summary` counts
+// entities added/removed/modified, which answers a different question than a
+// queue row asks ("how much of this am I approving").
+func effectFromDiff(res *graphdiff.Result) changeEffect {
+	out := changeEffect{}
+	var only *graphdiff.Change
+	var onlyField *graphdiff.FieldChange
+	for _, ch := range res.Changes {
+		if ch == nil {
+			continue
+		}
+		out.Entities++
+		for i := range ch.Fields {
+			out.Fields++
+			only, onlyField = ch, &ch.Fields[i]
+		}
+		// An added or removed ENTITY with no field-level detail still counts as
+		// something happening — reporting "0 fields" for a delete would read as
+		// an empty request.
+		if len(ch.Fields) == 0 {
+			out.Fields++
+			only, onlyField = ch, nil
+		}
+	}
+	if out.Entities == 1 && only != nil {
+		out.OrbID = only.OrbID
+		out.Type = only.Type
+	}
+	if out.Fields == 1 && onlyField != nil {
+		// graphdiff qualifies field names by type (`Server.hostname`) because a
+		// diff spans entities and the name alone would be ambiguous. A summary
+		// already carries `type` as its own field, so qualifying again would
+		// force every client to strip it — and would make this path disagree
+		// with the payload-derived one, which yields a bare name. One shape,
+		// whichever path produced it.
+		out.Field = strings.TrimPrefix(onlyField.Field, only.Type+".")
+		out.Before = onlyField.Before
+		out.Value = onlyField.After
+		// A field whose new value is nothing is being cleared. Reading it off the
+		// diff rather than off the changeset means an `op: update` that happens to
+		// null a field is described the same way an explicit `clear` is.
+		out.Cleared = onlyField.After == nil
+		if out.Cleared {
+			out.Value = nil
+		}
+	}
+	return out
+}
+
 type changeItemBody struct {
 	// OrbID identifies the target. Globally unique, which is why Type is optional.
 	OrbID string `json:"orbId" validate:"required" example:"alaska-dot:server-4FK8K44"`
@@ -129,14 +295,19 @@ type changeRequestResponse struct {
 	AvailableActions []string `json:"availableActions"`
 	// MissingTargets are entities that existed when this request was opened and
 	// have since been deleted. A merge will fail with TARGET_MISSING.
-	MissingTargets []string             `json:"missingTargets,omitempty"`
-	Changes        []changeItemBody     `json:"changes"`
-	Reviews        []approvalResponse   `json:"reviews,omitempty"`
-	MergeAttempts  []mergeAttemptResult `json:"mergeAttempts,omitempty"`
-	CreatedAt      time.Time            `json:"createdAt"`
-	UpdatedAt      *time.Time           `json:"updatedAt,omitempty"`
-	ExecutedAt     *time.Time           `json:"executedAt,omitempty"`
-	ExecutedBy     string               `json:"executedBy,omitempty"`
+	MissingTargets []string `json:"missingTargets,omitempty"`
+	// Summary is what a QUEUE ROW needs: how wide this change is, and — when it
+	// is a single field — what that field becomes. Derived server-side so a
+	// list view never walks `changes` to build a label. Orbital's own queue
+	// renders straight from it, and so can anyone else's.
+	Effect        changeEffect         `json:"effect"`
+	Changes       []changeItemBody     `json:"changes"`
+	Reviews       []approvalResponse   `json:"reviews,omitempty"`
+	MergeAttempts []mergeAttemptResult `json:"mergeAttempts,omitempty"`
+	CreatedAt     time.Time            `json:"createdAt"`
+	UpdatedAt     *time.Time           `json:"updatedAt,omitempty"`
+	ExecutedAt    *time.Time           `json:"executedAt,omitempty"`
+	ExecutedBy    string               `json:"executedBy,omitempty"`
 }
 
 // approvalResponse is one reviewer's decision.
@@ -279,10 +450,12 @@ func (h *ChangeRequest) CreateChangeRequest(c echo.Context) error {
 // @Summary     List change requests
 // @Description Filters compose. `mine` and `awaiting_review` are caller-relative; `orbId` matches any request whose changeset touches that entity, at any position. `status=active` means not-terminal (open plus approved) — the filter to use for "does this entity have a change in flight", since `approved` is derived and `status=open` excludes it.
 // @Description
+// @Description `status` is **repeatable** and OR-ed, so "everything that has finished" is `status=merged&status=rejected&status=closed` — there is no aggregate keyword for it, because the three stored values already say it and a coined term would have to be learned. An unrecognised value is refused rather than ignored: a `status=Merged` typo used to match no filter at all and return the ENTIRE queue, which looks exactly like a correct answer.
+// @Description
 // @Description `orbId` is **repeatable** and the values are OR-ed (max 32; more is refused, never truncated). A change to an owned child records the CHILD's orbId — a server-maintenance edit lands as `<ns>:server-maintenance-<serial>` — so "is anything in flight for this server" means passing the server's orbId AND the orbIds of everything it owns, exactly as `/api/v1/audit-log` does.
 // @Tags        change-requests
 // @Produce     json
-// @Param       status query string false "open, approved, active (open+approved), rejected, merged or closed"
+// @Param       status query []string false "open, approved, active (open+approved), rejected, merged or closed. Repeatable and OR-ed: status=merged&status=rejected&status=closed is every terminal state. An unrecognised value is refused (400), never ignored."
 // @Param       namespace query string false "Namespace"
 // @Param       author query string false "Author email"
 // @Param       mine query boolean false "Only requests this caller authored"
@@ -298,7 +471,22 @@ func (h *ChangeRequest) ListChangeRequests(c echo.Context) error {
 	actor := actorFromContext(c)
 	cr := resolveCallerRole(c, h.db)
 
-	wantStatus := c.QueryParam("status")
+	// Repeatable, like orbId below, and for the same reason: QueryParam returns
+	// only the FIRST value, so a tab asking for three terminal states would
+	// silently answer about one.
+	wantStatuses := make([]string, 0, len(c.QueryParams()["status"]))
+	for _, v := range c.QueryParams()["status"] {
+		if v = strings.TrimSpace(v); v != "" && !containsStr(wantStatuses, v) {
+			wantStatuses = append(wantStatuses, v)
+		}
+	}
+	for _, v := range wantStatuses {
+		if !validStatusFilter(v) {
+			return writeError(c, http.StatusBadRequest, CodeBadUserInput,
+				fmt.Sprintf("unknown status filter: %q", v),
+				"Use one or more of: open, approved, active, rejected, merged, closed.")
+		}
+	}
 	wantNamespace := c.QueryParam("namespace")
 	awaiting := c.QueryParam("awaiting_review") == "true"
 
@@ -342,18 +530,8 @@ func (h *ChangeRequest) ListChangeRequests(c echo.Context) error {
 	// queue page a human opens now and then, ruinous for the pending-change
 	// badge, which fires on every detail view and almost always matches
 	// nothing. Ordering, not caching, is what makes that query free.
-	switch wantStatus {
-	case approval.StatusRejected:
-		q = q.Where(approvalrequest.StatusEQ(approvalrequest.StatusRejected))
-	case approval.StatusMerged:
-		q = q.Where(approvalrequest.StatusEQ(approvalrequest.StatusMerged))
-	case approval.StatusClosed:
-		q = q.Where(approvalrequest.StatusEQ(approvalrequest.StatusClosed))
-	case approval.StatusOpen, approval.StatusApproved, statusActive:
-		// All three live in the stored `open` state — `approved` is derived
-		// from the valid-approval count (D17), so SQL narrows to non-terminal
-		// and the exact split happens after rendering, where the count exists.
-		q = q.Where(approvalrequest.StatusEQ(approvalrequest.StatusOpen))
+	if preds := storedStatePredicates(wantStatuses); len(preds) > 0 {
+		q = q.Where(approvalrequest.Or(preds...))
 	}
 	if awaiting {
 		q = q.Where(approvalrequest.StatusEQ(approvalrequest.StatusOpen))
@@ -397,11 +575,10 @@ func (h *ChangeRequest) ListChangeRequests(c echo.Context) error {
 			return err
 		}
 		// The only filters left are the ones that need a rendered view, because
-		// they depend on derived state SQL cannot see.
-		if wantStatus == approval.StatusOpen || wantStatus == approval.StatusApproved {
-			if view.Status != wantStatus {
-				continue
-			}
+		// they depend on derived state SQL cannot see: `open` and `approved`
+		// share one stored value and are told apart by the valid-approval count.
+		if !statusWanted(wantStatuses, view.Status) {
+			continue
 		}
 		// "Awaiting MY review" is exactly "approve is one of the actions I can
 		// take" — the same verdict the buttons render from, so the badge count
@@ -972,6 +1149,7 @@ func (h *ChangeRequest) render(ctx context.Context, cr *ent.ApprovalRequest, act
 		Required:         st.Required,
 		AvailableActions: availableActions(cr, st, actor, caller.Role, caller.NoAuthz),
 		MissingTargets:   st.Missing,
+		Effect:           resolveEffect(cr.BaseEffect, st.Changeset),
 		Changes:          fromChangeItems(st.Changeset.Changes),
 		CreatedAt:        cr.CreatedAt,
 		UpdatedAt:        cr.UpdatedAt,

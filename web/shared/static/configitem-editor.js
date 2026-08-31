@@ -177,8 +177,31 @@ function withoutStamped(obj) {
 //
 // Exported for test: the fold-flattening is the part with no visual tell, so it
 // is asserted directly rather than inferred from a screenshot.
+// changedOnly drops fields whose value is what it already was.
+//
+// The mutation path sends an entity's WHOLE scalar payload on every update —
+// harmless for DGraph, since writing a field its current value is a no-op. A
+// changeset is not a mutation: it is a record of what someone proposed, it is
+// read by a reviewer, and merging it WRITES every field it names. Carrying six
+// fields for a one-field edit made the request claim authority over five the
+// author never touched, and made every count derived from it read six.
+//
+// Compared against the SNAPSHOT taken when the modal opened — not against
+// current intent. Only the editor knows which fields this person actually
+// touched; the server can only ask "does this differ from intent now?", which
+// is a different question with a worse answer: if a colleague edited a field
+// while this modal was open, comparing against current intent would KEEP the
+// stale value here and silently revert their write on merge.
+function changedOnly(next, prev) {
+  const out = {}
+  for (const k of Object.keys(next || {})) {
+    if (JSON.stringify(next[k]) !== JSON.stringify((prev || {})[k])) out[k] = next[k]
+  }
+  return out
+}
+
 export function buildChangeset({
-  namespace, rootTarget, rootOrbId, rootScalars, rootRemove,
+  namespace, rootTarget, rootOrbId, rootScalars, rootBefore, rootRemove,
   changes, wrappersNeeded, foldedOrbIds,
 }) {
   const items = []
@@ -207,7 +230,12 @@ export function buildChangeset({
 
   // 3. The root's own scalar edits, plus a REFERENCE to any wrapper just
   //    created — a reference, never the nested object the mutation path uses.
-  const rootSet = withoutStamped(rootScalars || {})
+  // Narrowed before the wrapper references go in: a new wrapper is a real
+  // change and has no prior value to compare against.
+  const rootSet = changedOnly(
+    withoutStamped(rootScalars || {}),
+    rootTarget && rootBefore ? withoutStamped(scalarPayload(rootTarget, rootBefore)) : {},
+  )
   for (const w of wrappersNeeded.values()) {
     rootSet[w.parentField] = { orbId: w.orbId }
   }
@@ -230,7 +258,12 @@ export function buildChangeset({
     if (foldedOrbIds.has(t.orbId)) continue  // folded child handled above
     const sub = ch.currentSub || {}
     if (ch.existed) {
-      const set = withoutStamped(scalarPayload(t, sub))
+      // `existed` is the branch that matters: a create legitimately needs every
+      // field, so only updates are narrowed.
+      const set = changedOnly(
+        withoutStamped(scalarPayload(t, sub)),
+        withoutStamped(scalarPayload(t, ch.before || {})),
+      )
       // `remove` carries the field's PRIOR VALUE because DGraph needs it to
       // clear; the store-neutral form needs only the name. Lossless: merge
       // re-reads the current value when it builds the mutation, and if that
@@ -290,7 +323,7 @@ export function activeChangeRequestsFor(orbIds) {
 //
 // Both reads are best-effort. If either call fails the editor stays exactly as
 // it was — an unreachable policy endpoint must not stop someone editing.
-function applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, targets, namespaceOf, setMode }) {
+function applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, targets, namespaceOf, setMode, proposeNow }) {
   const btn = submitBtnId ? document.getElementById(submitBtnId) : null
   const namespace = namespaceOf(reloadOrbId)
   if (!namespace) return
@@ -308,15 +341,63 @@ function applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, targets, na
   // Save button's left edge exactly. `.has-gate-notice` makes the footer wrap
   // (see main.scss) so the notice takes a full row of its own and the buttons
   // keep theirs.
-  function addNotice(el) {
+  // `atEnd` orders the two notices deterministically. They are inserted at
+  // different moments — the gate notice synchronously at init, the pending line
+  // when its fetch resolves — so a plain prepend would order them by network
+  // timing. The gate notice explains what the button does and comes first;
+  // "already proposed" follows it, and both stay above the action row.
+  function addNotice(el, { atEnd = false } = {}) {
     const foot = btn && btn.closest('.modal-card')?.querySelector('.modal-card-foot')
     if (foot) {
       el.classList.add('js-gate-notice')
       foot.classList.add('has-gate-notice')
-      foot.insertBefore(el, foot.firstChild)
+      foot.insertBefore(el, atEnd ? btn.closest('.buttons') : foot.firstChild)
     } else if (btn && btn.parentNode) {
       btn.parentNode.insertBefore(el, btn)
     }
+  }
+
+  // addProposeButton puts a second action next to Save for a caller who may
+  // bypass, so both destinations are one click away.
+  //
+  // Owned here rather than in each page's modal wiring: four copies of "does
+  // this footer need a propose button?" is exactly the drift this module exists
+  // to prevent, and the answer depends on a policy lookup only this function
+  // makes. Pages keep wiring their own Save button and know nothing about it.
+  //
+  // The button is created only in the privileged branch, so a gated caller
+  // never gets a control that would 403, and an ungated one never sees a footer
+  // that differs from the pre-approval-engine UI by so much as a pixel.
+  function addProposeButton() {
+    if (!btn || !btn.parentNode || !proposeNow) return null
+    if (btn.parentNode.querySelector('[data-testid="propose-change"]')) return null
+
+    const propose = document.createElement('button')
+    propose.className = 'button is-success'
+    propose.type = 'button'
+    propose.setAttribute('data-testid', 'propose-change')
+    propose.textContent = 'Propose change'
+    btn.parentNode.insertBefore(propose, btn)
+
+    propose.addEventListener('click', async () => {
+      propose.classList.add('is-loading')
+      propose.disabled = true
+      // Disable the sibling too: the two buttons submit the same edit to
+      // different destinations, and a second click mid-flight would either
+      // write the change it is currently proposing or propose it twice.
+      btn.disabled = true
+      try {
+        if (await proposeNow()) {
+          modal.classList.remove('is-active')
+          document.documentElement.style.overflow = ''
+        }
+      } finally {
+        propose.classList.remove('is-loading')
+        propose.disabled = false
+        btn.disabled = false
+      }
+    })
+    return propose
   }
 
   const notice = document.createElement('div')
@@ -324,9 +405,15 @@ function applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, targets, na
   notice.style.display = 'none'
   addNotice(notice)
 
-  const say = (cls, html) => {
-    notice.className = 'notification is-light py-2 is-size-7 js-gate-notice ' + cls
-    notice.innerHTML = html
+  // Notices are TEXT, not boxes. Colour in this footer belongs to the actions:
+  // once Propose, Save directly and Cancel each carry a hue, a tinted panel
+  // above them is a fourth coloured rectangle competing with three buttons, and
+  // the eye has nowhere to land. An icon carries the same urgency a filled
+  // panel did, in one glyph.
+  const say = (icon, html) => {
+    notice.className = 'is-size-7 js-gate-notice'
+    notice.innerHTML = '<span class="icon-text"><span class="icon ' + icon.cls
+      + '"><i class="' + icon.i + '"></i></span><span>' + html + '</span></span>'
     notice.style.display = ''
   }
 
@@ -338,20 +425,37 @@ function applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, targets, na
       if (!p || !p.required) return
       if (p.callerMayBypass) {
         setMode('privileged')
-        // Stated, never silent. The frictionless path is the audited one — an
-        // admin who bypasses review should know they did, at the moment they do
-        // it, not discover it later in an audit row.
-        // "Bypasses review" rather than "privileged write": it says what
-        // happens instead of naming an internal concept, and it is the same
-        // wording the audit log uses for the row this produces.
-        say('is-warning', '<strong>Bypasses review.</strong> Edits here need approval, '
-          + 'but your role writes directly. The audit log records it.')
+        // A bypass-capable caller gets BOTH paths, and review is the primary
+        // one. Being allowed to skip review is not the same as wanting to: the
+        // people holding the bypass role are also the ones most likely to want
+        // a second pair of eyes on a production edit, and until this button
+        // existed their only route to a change request was to lose the role.
+        //
+        // Propose keeps the green primary treatment every other Save in the app
+        // has, so the habitual click is the reviewed one. Direct write is solid
+        // amber: caution, distinct from both the green primary and the plain
+        // Cancel beside it.
+        //
+        // NO notice here, deliberately. A paragraph explaining that this role
+        // may write directly said what the two buttons already say — the word
+        // "directly", set against "Propose change", IS the statement that this
+        // one skips review. The prose was a third thing to read before a choice
+        // the labels had already made obvious. The one fact the labels cannot
+        // carry — that the bypass is recorded — rides on the button's tooltip.
+        addProposeButton()
+        if (btn) {
+          btn.textContent = 'Save directly'
+          btn.classList.remove('is-success')
+          btn.classList.add('is-warning')
+          btn.title = 'Writes straight to intent, skipping review. Recorded in the audit log as a privileged write.'
+        }
       } else {
         setMode('propose')
         if (btn) btn.textContent = 'Propose change'
         // Says what happens and what does NOT. "changing intent" was orbital's
         // own vocabulary leaking into a sentence aimed at whoever is editing.
-        say('is-info', '<strong>Needs approval.</strong> Your edit goes for review — '
+        say({ cls: 'has-text-info', i: 'fa-solid fa-circle-info' },
+          '<strong>Needs approval.</strong> Your edit goes for review — '
           + 'nothing changes until someone approves it.')
       }
     })
@@ -374,53 +478,46 @@ function applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, targets, na
       const cr = (j.items || [])[0]
       const link = cr ? ' <a href="' + BASE + '/change-requests/' + encodeURIComponent(cr.id) + '">Review it</a>.' : ''
       const pending = document.createElement('div')
-      pending.className = 'notification is-warning is-light py-2 is-size-7'
+      pending.className = 'is-size-7'
       pending.setAttribute('data-testid', 'pending-change-notice')
-      pending.innerHTML = '<strong>' + j.total + ' change' + (j.total === 1 ? '' : 's')
-        + ' already proposed</strong> for this item.' + link
-      addNotice(pending)
+      // Amber survives as the ICON, not as a panel. This line has to be noticed
+      // — it is what stops someone retyping an edit a colleague already
+      // proposed — but a filled amber box next to three coloured buttons made
+      // the footer read as four competing alerts.
+      pending.innerHTML = '<span class="icon-text"><span class="icon has-text-warning">'
+        + '<i class="fa-solid fa-triangle-exclamation"></i></span><span>'
+        + '<strong>' + j.total + ' change' + (j.total === 1 ? '' : 's')
+        + ' already proposed</strong> for this item.' + link + '</span></span>'
+      addNotice(pending, { atEnd: true })
     })
 }
 
-// changesetTitle names a proposal by WHAT IT CHANGES, not just what it touches.
+// changesetTitle labels a proposal by HOW WIDE it is — a count, nothing more.
 //
-// It used to be `'Update ' + orbId`, which named the entity. Every edit to the
-// same server produced the same title, so the queue showed rows that were
-// indistinguishable in every visible column — two different changes and two
-// identical proposals looked exactly alike, and only the second is a mistake
-// worth noticing.
+// It used to name the field and inline its value. That reads well until you ask
+// which view is authoritative: the queue now renders each row from the API's
+// `summary`, derived on read, so a title that ALSO described the change was a
+// second copy of the same fact — written once at creation, never updated, and
+// free to drift the moment a request is amended.
 //
-// Deriving from the changeset means two rows read the same only when the
-// changes really are the same. Owned children are qualified by their type,
-// because `enabled` alone does not say enabled on what.
+// A count cannot drift into a lie the way a value can. The change itself is
+// stated by the row and by the diff, both of which recompute.
+//
+// Longer term the title should be written by the PROPOSER — every comparable
+// system asks for one, because a diff answers "what" and only a person can
+// answer "why". Tracked in docs/planning/backlog.md; deriving it is a
+// placeholder for that, not a design.
 function changesetTitle(rootOrbId, changeset) {
   const entity = String(rootOrbId).replace(/^[^:]+:/, '')
   const items = (changeset && changeset.changes) || []
 
-  const fields = []
+  let fields = 0
   for (const item of items) {
-    // The root's own fields need no qualifier; a child's do.
-    const prefix = item.orbId === rootOrbId ? '' : (item.type ? item.type + '.' : '')
-    for (const name of Object.keys(item.set || {})) {
-      fields.push({ label: prefix + name, value: item.set[name], cleared: false })
-    }
-    for (const name of (item.clear || [])) {
-      fields.push({ label: prefix + name, value: null, cleared: true })
-    }
+    fields += Object.keys(item.set || {}).length
+    fields += (item.clear || []).length
   }
-
-  if (fields.length === 0) return 'Update ' + entity      // create-only, or nothing resolvable
-  if (fields.length > 1) return entity + ' · ' + fields.length + ' fields'
-
-  const f = fields[0]
-  if (f.cleared) return entity + ' · clear ' + f.label
-  // A value is shown only when it stays readable — same rule as the field
-  // marks. A title is a label, not a payload dump.
-  if (f.value !== null && typeof f.value !== 'object') {
-    const v = String(f.value)
-    if (v.length <= 40) return entity + ' · ' + f.label + ' → ' + v
-  }
-  return entity + ' · ' + f.label
+  if (fields === 0) return 'Update ' + entity      // create-only, or nothing resolvable
+  return entity + ' \u00b7 ' + fields + ' field' + (fields === 1 ? '' : 's')
 }
 
 // proposeChange opens a change request from the edit the user just made and
@@ -438,11 +535,11 @@ function changesetTitle(rootOrbId, changeset) {
 // it owns — …"), naming the request and linking to it. The confirmation and the
 // way through are the same element, and the user chooses when to leave.
 async function proposeChange({
-  namespace, rootTarget, rootOrbId, rootScalars, rootRemove,
+  namespace, rootTarget, rootOrbId, rootScalars, rootBefore, rootRemove,
   changes, wrappersNeeded, foldedOrbIds, showError, reloadFn,
 }) {
   const changeset = buildChangeset({
-    namespace, rootTarget, rootOrbId, rootScalars, rootRemove,
+    namespace, rootTarget, rootOrbId, rootScalars, rootBefore, rootRemove,
     changes, wrappersNeeded, foldedOrbIds,
   })
   if (!changeset.changes.length) {
@@ -512,7 +609,16 @@ export function initConfigItemEditor({
   const namespaceOf = (orbId) => String(orbId || '').split(':')[0]
   const rootKind = (targets.find(t => t.path.length === 0) || {}).kind
 
-  applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, targets, namespaceOf, setMode: (m) => { mode = m } })
+  // Forward reference. applyGateState resolves the policy asynchronously and may
+  // add a Propose button that submits the very handler defined below it. The
+  // indirection is read at click time, never at wiring time, so the order is
+  // safe — but it must be a closure, not a direct reference to `submit`.
+  let submit = null
+  applyGateState({
+    modal, submitBtnId, reloadOrbId, rootKind, targets, namespaceOf,
+    setMode: (m) => { mode = m },
+    proposeNow: () => submit ? submit({ forcePropose: true }) : false,
+  })
 
   // Snapshot every target's subtree at this moment. Each snapshot is a JSON
   // string of the field map (or null if the subtree didn't exist).
@@ -525,7 +631,12 @@ export function initConfigItemEditor({
   }
 
   // Returns the click handler the page attaches to its Save button.
-  return async function onSubmit() {
+  //
+  // `forcePropose` is how the Propose button reuses it: identical diff, identical
+  // validation, different destination. Recomputing the changeset in a second
+  // handler would be the one place the two paths could disagree about what the
+  // user actually edited.
+  submit = async function onSubmit(opts) {
     clearError()
 
     let current
@@ -550,7 +661,17 @@ export function initConfigItemEditor({
     }
 
     if (changes.length === 0) {
-      // Nothing changed — close the modal silently.
+      // Save closes silently: there is nothing to persist, and reporting that
+      // as a problem would be noise.
+      //
+      // Propose must NOT. A modal that closes on a button labelled "Propose
+      // change" reads as "a request was created" — and the reader would then go
+      // looking in the queue for one that does not exist. The two buttons owe
+      // different answers to the same no-op.
+      if (mode === 'propose' || (opts && opts.forcePropose)) {
+        showError('Nothing to propose — no fields changed.')
+        return false
+      }
       return true
     }
 
@@ -685,11 +806,12 @@ export function initConfigItemEditor({
     // The proposal path. Same computed edit, different destination: a change
     // request rather than the graph. Nothing is written here — that is the
     // point of the gate.
-    if (mode === 'propose') {
+    if (mode === 'propose' || (opts && opts.forcePropose)) {
       return await proposeChange({
         namespace: namespaceOf(reloadOrbId),
         rootTarget, rootOrbId: reloadOrbId,
-        rootScalars: rootSet, rootRemove: rootChange ? removePayload(rootTarget, rootChange.before, rootChange.currentSub) : {},
+        rootScalars: rootSet, rootBefore: rootChange ? rootChange.before : null,
+        rootRemove: rootChange ? removePayload(rootTarget, rootChange.before, rootChange.currentSub) : {},
         changes, wrappersNeeded, foldedOrbIds,
         showError, reloadFn,
       })
@@ -727,7 +849,8 @@ export function initConfigItemEditor({
               return await proposeChange({
                 namespace: namespaceOf(reloadOrbId),
                 rootTarget, rootOrbId: reloadOrbId,
-                rootScalars: rootSet, rootRemove: rootChange ? removePayload(rootTarget, rootChange.before, rootChange.currentSub) : {},
+                rootScalars: rootSet, rootBefore: rootChange ? rootChange.before : null,
+        rootRemove: rootChange ? removePayload(rootTarget, rootChange.before, rootChange.currentSub) : {},
                 changes, wrappersNeeded, foldedOrbIds,
                 showError, reloadFn,
               })
@@ -750,6 +873,8 @@ export function initConfigItemEditor({
     if (reloadFn) await reloadFn(reloadOrbId)
     return true
   }
+
+  return submit
 }
 
 function snapshotKey(target) {

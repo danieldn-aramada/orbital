@@ -129,7 +129,7 @@ func init() {
 	// approvalrequest.BaseHashValidator is a validator for the "base_hash" field. It is called by the builders before save.
 	approvalrequest.BaseHashValidator = approvalrequestDescBaseHash.Validators[0].(func(string) error)
 	// approvalrequestDescExecutedBy is the schema descriptor for executed_by field.
-	approvalrequestDescExecutedBy := approvalrequestFields[12].Descriptor()
+	approvalrequestDescExecutedBy := approvalrequestFields[13].Descriptor()
 	// approvalrequest.DefaultExecutedBy holds the default value on creation for the executed_by field.
 	approvalrequest.DefaultExecutedBy = approvalrequestDescExecutedBy.Default.(string)
 	auditeventFields := schema.AuditEvent{}.Fields()

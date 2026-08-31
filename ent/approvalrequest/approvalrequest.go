@@ -41,6 +41,8 @@ const (
 	FieldBaseHash = "base_hash"
 	// FieldBasePresent holds the string denoting the base_present field in the database.
 	FieldBasePresent = "base_present"
+	// FieldBaseEffect holds the string denoting the base_effect field in the database.
+	FieldBaseEffect = "base_effect"
 	// FieldPayload holds the string denoting the payload field in the database.
 	FieldPayload = "payload"
 	// FieldExecutedAt holds the string denoting the executed_at field in the database.
@@ -85,6 +87,7 @@ var Columns = []string{
 	FieldAuthor,
 	FieldBaseHash,
 	FieldBasePresent,
+	FieldBaseEffect,
 	FieldPayload,
 	FieldExecutedAt,
 	FieldExecutedBy,

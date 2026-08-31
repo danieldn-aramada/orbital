@@ -87,6 +87,7 @@ var (
 		{Name: "author", Type: field.TypeString},
 		{Name: "base_hash", Type: field.TypeString},
 		{Name: "base_present", Type: field.TypeJSON, Nullable: true},
+		{Name: "base_effect", Type: field.TypeJSON, Nullable: true},
 		{Name: "payload", Type: field.TypeJSON},
 		{Name: "executed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "executed_by", Type: field.TypeString, Nullable: true, Default: ""},
@@ -120,7 +121,7 @@ var (
 			{
 				Name:    "approvalrequest_payload",
 				Unique:  false,
-				Columns: []*schema.Column{ApprovalRequestsColumns[14]},
+				Columns: []*schema.Column{ApprovalRequestsColumns[15]},
 				Annotation: &entsql.IndexAnnotation{
 					Types: map[string]string{
 						"postgres": "GIN",

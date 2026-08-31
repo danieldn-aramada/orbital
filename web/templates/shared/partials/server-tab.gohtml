@@ -53,17 +53,43 @@
       <article class="box">
         <p class="is-size-4 pb-4">Server Summary</p>
         <div style="overflow-x: auto">
-        <table class="table is-fullwidth">
+        {{/* data-field-orbid / data-field-values drive the proposed-change field
+             marks, same wiring as the maintenance panel below. Rows carrying a
+             data-field name get a mark when a change request proposes that
+             field; the rows WITHOUT one (Data Center, OOB IP, Rack) are edge
+             references rather than editable scalars, so nothing can propose
+             them and a mark there would never fire. The names must match the
+             Server FormFields in configitems/registry.go — that is what a
+             changeset uses as keys. */}}
+        {{/* Three columns: field, current value, in review.
+
+             The mark used to sit INSIDE the value cell, which crowded a short
+             value against a long annotation while the rest of that column sat
+             empty — these values are `Dell` and `5` in a column hundreds of
+             pixels wide. Its own column takes that dead space, and every mark
+             starts at the same x whatever the value beside it is.
+
+             No header row, so an unmarked table looks exactly as it did: the
+             third column is invisible until something occupies it. That is
+             what makes the column free — the usual objection to one is the
+             permanent empty header, and there isn't one. */}}
+        <table class="table is-fullwidth"
+               data-field-orbid="{{.OrbID}}"
+               data-field-values="{{.SummaryValuesJSON}}">
+          {{/* The VALUE column is capped, not the mark column: values here are
+               short (`Dell`, `5`), so letting them span half the table only
+               pushed the annotation away from the thing it annotates. */}}
+          <colgroup><col style="width:1%"><col style="width:28%"><col></colgroup>
           <tbody>
-            <tr><td style="white-space:nowrap;width:1%">Data Center</td><td>{{if .DataCenterName}}{{.DataCenterName}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Hostname</td><td>{{if .Hostname}}{{.Hostname}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Manufacturer</td><td>{{if .Manufacturer}}{{.Manufacturer}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Model</td><td>{{if .Model}}{{.Model}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">OOB IP</td><td>{{if .OobIP}}{{.OobIP}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">OOB MAC</td><td>{{if .OobMAC}}{{.OobMAC}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Rack</td><td>{{if .Rack.Name}}{{.Rack.Name}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Rack Position</td><td>{{if .RackPosition}}{{.RackPosition}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Service Tag</td><td>{{if .ServiceTag}}{{.ServiceTag}}{{else}}—{{end}}</td></tr>
+            <tr><td style="white-space:nowrap">Data Center</td><td>{{if .DataCenterName}}{{.DataCenterName}}{{else}}—{{end}}</td><td></td></tr>
+            <tr data-field="hostname"><td style="white-space:nowrap">Hostname</td><td>{{if .Hostname}}{{.Hostname}}{{else}}—{{end}}</td><td><span class="js-field-mark"></span></td></tr>
+            <tr data-field="manufacturer"><td style="white-space:nowrap">Manufacturer</td><td>{{if .Manufacturer}}{{.Manufacturer}}{{else}}—{{end}}</td><td><span class="js-field-mark"></span></td></tr>
+            <tr data-field="model"><td style="white-space:nowrap">Model</td><td>{{if .Model}}{{.Model}}{{else}}—{{end}}</td><td><span class="js-field-mark"></span></td></tr>
+            <tr><td style="white-space:nowrap">OOB IP</td><td>{{if .OobIP}}{{.OobIP}}{{else}}—{{end}}</td><td></td></tr>
+            <tr data-field="oobMAC"><td style="white-space:nowrap">OOB MAC</td><td>{{if .OobMAC}}{{.OobMAC}}{{else}}—{{end}}</td><td><span class="js-field-mark"></span></td></tr>
+            <tr><td style="white-space:nowrap">Rack</td><td>{{if .Rack.Name}}{{.Rack.Name}}{{else}}—{{end}}</td><td></td></tr>
+            <tr data-field="rackPosition"><td style="white-space:nowrap">Rack Position</td><td>{{if .RackPosition}}{{.RackPosition}}{{else}}—{{end}}</td><td><span class="js-field-mark"></span></td></tr>
+            <tr data-field="serviceTag"><td style="white-space:nowrap">Service Tag</td><td>{{if .ServiceTag}}{{.ServiceTag}}{{else}}—{{end}}</td><td><span class="js-field-mark"></span></td></tr>
           </tbody>
         </table>
         </div>
@@ -223,14 +249,17 @@
                js-field-mark slot on any row whose field is proposed. The
                values are the RAW ones, so a proposal that already matches
                current state can be recognised as a no-op and left unmarked. */}}
+          {{/* Same three-column shape as Server Summary above — the two tables
+               are the same pattern and must not drift apart. */}}
           <table class="table is-fullwidth mt-2"
                  data-field-orbid="{{.MaintenanceOrbID}}"
                  data-field-values="{{.MaintenanceValuesJSON}}">
+            <colgroup><col style="width:1%"><col style="width:28%"><col></colgroup>
             <tbody>
-              <tr data-field="enabled"><td style="white-space:nowrap;width:1%">enabled</td><td><span class="tag">{{if .MaintenanceEnabled}}true{{else}}false{{end}}</span><span class="js-field-mark"></span></td></tr>
-              <tr data-field="windowStart"><td style="white-space:nowrap">windowStart</td><td>{{if .MaintenanceWindowStart}}{{.MaintenanceWindowStart}}{{else}}—{{end}}<span class="js-field-mark"></span></td></tr>
-              <tr data-field="windowEnd"><td style="white-space:nowrap">windowEnd</td><td>{{if .MaintenanceWindowEnd}}{{.MaintenanceWindowEnd}}{{else}}—{{end}}<span class="js-field-mark"></span></td></tr>
-              <tr data-field="reason"><td style="white-space:nowrap">reason</td><td>{{if .MaintenanceReason}}{{.MaintenanceReason}}{{else}}—{{end}}<span class="js-field-mark"></span></td></tr>
+              <tr data-field="enabled"><td style="white-space:nowrap">enabled</td><td><span class="tag">{{if .MaintenanceEnabled}}true{{else}}false{{end}}</span></td><td><span class="js-field-mark"></span></td></tr>
+              <tr data-field="windowStart"><td style="white-space:nowrap">windowStart</td><td>{{if .MaintenanceWindowStart}}{{.MaintenanceWindowStart}}{{else}}—{{end}}</td><td><span class="js-field-mark"></span></td></tr>
+              <tr data-field="windowEnd"><td style="white-space:nowrap">windowEnd</td><td>{{if .MaintenanceWindowEnd}}{{.MaintenanceWindowEnd}}{{else}}—{{end}}</td><td><span class="js-field-mark"></span></td></tr>
+              <tr data-field="reason"><td style="white-space:nowrap">reason</td><td>{{if .MaintenanceReason}}{{.MaintenanceReason}}{{else}}—{{end}}</td><td><span class="js-field-mark"></span></td></tr>
             </tbody>
           </table>
           {{else}}

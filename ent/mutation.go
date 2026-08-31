@@ -2014,6 +2014,8 @@ type ApprovalRequestMutation struct {
 	base_hash             *string
 	base_present          *[]string
 	appendbase_present    []string
+	base_effect           *json.RawMessage
+	appendbase_effect     json.RawMessage
 	payload               *json.RawMessage
 	appendpayload         json.RawMessage
 	executed_at           *time.Time
@@ -2703,6 +2705,71 @@ func (m *ApprovalRequestMutation) ResetBasePresent() {
 	delete(m.clearedFields, approvalrequest.FieldBasePresent)
 }
 
+// SetBaseEffect sets the "base_effect" field.
+func (m *ApprovalRequestMutation) SetBaseEffect(jm json.RawMessage) {
+	m.base_effect = &jm
+	m.appendbase_effect = nil
+}
+
+// BaseEffect returns the value of the "base_effect" field in the mutation.
+func (m *ApprovalRequestMutation) BaseEffect() (r json.RawMessage, exists bool) {
+	v := m.base_effect
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBaseEffect returns the old "base_effect" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldBaseEffect(ctx context.Context) (v json.RawMessage, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBaseEffect is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBaseEffect requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBaseEffect: %w", err)
+	}
+	return oldValue.BaseEffect, nil
+}
+
+// AppendBaseEffect adds jm to the "base_effect" field.
+func (m *ApprovalRequestMutation) AppendBaseEffect(jm json.RawMessage) {
+	m.appendbase_effect = append(m.appendbase_effect, jm...)
+}
+
+// AppendedBaseEffect returns the list of values that were appended to the "base_effect" field in this mutation.
+func (m *ApprovalRequestMutation) AppendedBaseEffect() (json.RawMessage, bool) {
+	if len(m.appendbase_effect) == 0 {
+		return nil, false
+	}
+	return m.appendbase_effect, true
+}
+
+// ClearBaseEffect clears the value of the "base_effect" field.
+func (m *ApprovalRequestMutation) ClearBaseEffect() {
+	m.base_effect = nil
+	m.appendbase_effect = nil
+	m.clearedFields[approvalrequest.FieldBaseEffect] = struct{}{}
+}
+
+// BaseEffectCleared returns if the "base_effect" field was cleared in this mutation.
+func (m *ApprovalRequestMutation) BaseEffectCleared() bool {
+	_, ok := m.clearedFields[approvalrequest.FieldBaseEffect]
+	return ok
+}
+
+// ResetBaseEffect resets all changes to the "base_effect" field.
+func (m *ApprovalRequestMutation) ResetBaseEffect() {
+	m.base_effect = nil
+	m.appendbase_effect = nil
+	delete(m.clearedFields, approvalrequest.FieldBaseEffect)
+}
+
 // SetPayload sets the "payload" field.
 func (m *ApprovalRequestMutation) SetPayload(jm json.RawMessage) {
 	m.payload = &jm
@@ -2994,7 +3061,7 @@ func (m *ApprovalRequestMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ApprovalRequestMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 17)
 	if m.created_at != nil {
 		fields = append(fields, approvalrequest.FieldCreatedAt)
 	}
@@ -3033,6 +3100,9 @@ func (m *ApprovalRequestMutation) Fields() []string {
 	}
 	if m.base_present != nil {
 		fields = append(fields, approvalrequest.FieldBasePresent)
+	}
+	if m.base_effect != nil {
+		fields = append(fields, approvalrequest.FieldBaseEffect)
 	}
 	if m.payload != nil {
 		fields = append(fields, approvalrequest.FieldPayload)
@@ -3077,6 +3147,8 @@ func (m *ApprovalRequestMutation) Field(name string) (ent.Value, bool) {
 		return m.BaseHash()
 	case approvalrequest.FieldBasePresent:
 		return m.BasePresent()
+	case approvalrequest.FieldBaseEffect:
+		return m.BaseEffect()
 	case approvalrequest.FieldPayload:
 		return m.Payload()
 	case approvalrequest.FieldExecutedAt:
@@ -3118,6 +3190,8 @@ func (m *ApprovalRequestMutation) OldField(ctx context.Context, name string) (en
 		return m.OldBaseHash(ctx)
 	case approvalrequest.FieldBasePresent:
 		return m.OldBasePresent(ctx)
+	case approvalrequest.FieldBaseEffect:
+		return m.OldBaseEffect(ctx)
 	case approvalrequest.FieldPayload:
 		return m.OldPayload(ctx)
 	case approvalrequest.FieldExecutedAt:
@@ -3224,6 +3298,13 @@ func (m *ApprovalRequestMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetBasePresent(v)
 		return nil
+	case approvalrequest.FieldBaseEffect:
+		v, ok := value.(json.RawMessage)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBaseEffect(v)
+		return nil
 	case approvalrequest.FieldPayload:
 		v, ok := value.(json.RawMessage)
 		if !ok {
@@ -3305,6 +3386,9 @@ func (m *ApprovalRequestMutation) ClearedFields() []string {
 	if m.FieldCleared(approvalrequest.FieldBasePresent) {
 		fields = append(fields, approvalrequest.FieldBasePresent)
 	}
+	if m.FieldCleared(approvalrequest.FieldBaseEffect) {
+		fields = append(fields, approvalrequest.FieldBaseEffect)
+	}
 	if m.FieldCleared(approvalrequest.FieldExecutedAt) {
 		fields = append(fields, approvalrequest.FieldExecutedAt)
 	}
@@ -3339,6 +3423,9 @@ func (m *ApprovalRequestMutation) ClearField(name string) error {
 		return nil
 	case approvalrequest.FieldBasePresent:
 		m.ClearBasePresent()
+		return nil
+	case approvalrequest.FieldBaseEffect:
+		m.ClearBaseEffect()
 		return nil
 	case approvalrequest.FieldExecutedAt:
 		m.ClearExecutedAt()
@@ -3392,6 +3479,9 @@ func (m *ApprovalRequestMutation) ResetField(name string) error {
 		return nil
 	case approvalrequest.FieldBasePresent:
 		m.ResetBasePresent()
+		return nil
+	case approvalrequest.FieldBaseEffect:
+		m.ResetBaseEffect()
 		return nil
 	case approvalrequest.FieldPayload:
 		m.ResetPayload()

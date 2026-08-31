@@ -104,7 +104,15 @@ test('the queue lists requests and each filter tab changes only the query param'
     await expect(page.locator(`[data-cr-row="${crId}"]`)).toBeVisible()
     // The row carries derived state the client must not recompute.
     const row = page.locator(`[data-cr-row="${crId}"]`)
-    await expect(row).toContainText('queue fixture')
+    // The row states the CHANGE, derived from the API's `effect` on every read —
+    // not the stored title, which is written once at creation and says nothing a
+    // reviewer can act on.
+    //
+    // `before → after`, not just `→ after`: only a stored effect knows the prior
+    // value, so this also pins that the row is rendered from it rather than from
+    // counting the payload.
+    await expect(row).toContainText(/server-5HSC3D4 · hostname: .+ → queued/)
+    await expect(row).not.toContainText('queue fixture')
     await expect(row).toContainText(NS)
     await expect(row).toContainText('0 of 1')
 
@@ -114,15 +122,18 @@ test('the queue lists requests and each filter tab changes only the query param'
     // identical in every visible column.
     await expect(page.locator('#cr-table thead th')).toHaveCount(7)
     await expect(page.locator('#cr-table thead th').first()).toHaveText('ID')
+    await expect(page.locator('#cr-table thead th').nth(1)).toHaveText('Change')
     // The id is the row's link, so a row can always be reached by the thing
     // people quote.
     await expect(row.locator('td').first()).toHaveText(/^[a-z0-9-]+-\d+$/)
     const headers = await page.locator('#cr-table thead th').allTextContents()
     expect(headers).not.toContain('Stale')
 
-    // "Merged" must exclude a request that has not merged — otherwise the tabs
-    // are decoration.
-    await page.locator('a[data-cr-filter="status=merged"]').click()
+    // "Closed" must exclude a request that has not finished — otherwise the
+    // tabs are decoration. It is three statuses OR-ed, which is also the
+    // coverage for the repeatable ?status= filter: read as a single value it
+    // would answer about `merged` alone.
+    await page.locator('a[data-cr-filter="status=merged&status=rejected&status=closed"]').click()
     await expect(page.locator(`[data-cr-row="${crId}"]`)).toHaveCount(0)
 
     await page.locator('a[data-cr-filter="status=active"]').click()
@@ -147,6 +158,11 @@ test('a gated class relabels Save to "Propose change", writes nothing, and lands
     await expect(btn).toHaveText('Propose change', { timeout: 10_000 })
     await expect(page.locator(`#edit-modal-srv-${domId}`)).toContainText('Needs approval')
 
+    // ONE button, not two. A caller who cannot bypass gets no direct-write
+    // control: a second button that always 403s trains people to click through
+    // errors, and the extra action here would be a dead one.
+    await expect(page.locator(`#edit-modal-srv-${domId} [data-testid="propose-change"]`)).toHaveCount(0)
+
     // The notice sits in the FOOTER, as a sibling of the button row.
     //
     // That is what makes its left edge the Save button's left edge: both are
@@ -164,7 +180,9 @@ test('a gated class relabels Save to "Propose change", writes nothing, and lands
     // alignment is the effect, and only the cause is stable to assert.
     const misplaced = await page.evaluate(({ id }) => {
       const card = document.querySelector(`#edit-modal-srv-${id} .modal-card`)
-      const notice = card?.querySelector('.notification')
+      // `.js-gate-notice`, not `.notification`: these are text lines, not
+      // tinted panels — colour in this footer belongs to the three buttons.
+      const notice = card?.querySelector('.js-gate-notice')
       if (!notice) return 'no notice found'
       if (notice.closest('.buttons')) return 'notice is inside the button row'
       if (notice.closest('.modal-card-body')) return 'notice is inside the scrolling body'
@@ -249,6 +267,33 @@ test('an edit that changes one field and clears another produces the right set a
   expect(result.changes[0].set).not.toHaveProperty('oobMAC')
 })
 
+// A changeset must record what the author CHANGED, not the whole entity.
+//
+// The mutation path sends every scalar on an update, which is harmless for
+// DGraph and wrong for a proposal: merging writes every field named, so a
+// six-field payload for a one-field edit claims authority over five fields
+// nobody touched — and every count derived from it reads six.
+test('a changeset carries only the fields whose value actually changed', async ({ page }) => {
+  await page.goto('/servers')
+  const result = await page.evaluate(async () => {
+    const mod: any = await import('/static/configitem-editor.js')
+    const target = {
+      path: [], kind: 'Server', orbId: 'ns:server-1',
+      fields: ['hostname', 'model', 'manufacturer'], payloadField: 'server',
+    }
+    return mod.buildChangeset({
+      namespace: 'ns', rootTarget: target, rootOrbId: 'ns:server-1',
+      // What the editor computes: the entity's whole scalar payload.
+      rootScalars: { hostname: 'unchanged', model: 'unchanged', manufacturer: 'Dell-edit' },
+      // What it looked like when the modal opened.
+      rootBefore: { hostname: 'unchanged', model: 'unchanged', manufacturer: 'Dell' },
+      rootRemove: {}, changes: [], wrappersNeeded: new Map(), foldedOrbIds: new Set(),
+    })
+  })
+  expect(result.changes).toHaveLength(1)
+  expect(result.changes[0].set).toEqual({ manufacturer: 'Dell-edit' })
+})
+
 // AC 8
 test('a nested wrapper create is FLATTENED into ordered items, never a nested object', async ({ page }) => {
   await page.goto('/servers')
@@ -292,17 +337,154 @@ test('a nested wrapper create is FLATTENED into ordered items, never a nested ob
   expect(root.set.backup).toEqual({ orbId: 'ns:backup-1' })
 })
 
-// AC 9
-test('an admin on a protected class sees Save plus a visible bypass notice, and the write goes through', async ({ page }) => {
+// AC 9 — being ALLOWED to skip review is not the same as wanting to.
+//
+// Holding the bypass role used to mean losing access to review entirely: the
+// footer offered one button, it wrote directly, and the only way for an admin to
+// get a second pair of eyes on a production edit was to give up the role. Both
+// destinations are now one click away, and review is the primary one.
+//
+// The direct-write half (it still writes, and the audit row still names the
+// policy it bypassed) is asserted in privileged-write-visibility.spec.ts —
+// asserting it again here would duplicate that without adding a guarantee.
+test('an admin on a protected class gets both actions, with Propose change as the primary', async ({ page }) => {
   const policyId = await protect(page, NS)
   try {
     const domId = await openServerEditModal(page, SERVER_ORB_ID)
     const modal = page.locator(`#edit-modal-srv-${domId}`)
-    // The seeded e2e identity is admin, which the default policy puts in
-    // bypass_roles — so the button must still say Save, and must say why.
-    await expect(modal).toContainText('Bypasses review', { timeout: 10_000 })
-    await expect(page.locator(`#srv-edit-submit-${domId}`)).toHaveText('Save')
+    const propose = modal.locator('[data-testid="propose-change"]')
+    const save = page.locator(`#srv-edit-submit-${domId}`)
+    // The policy resolve is async, and the second button appearing IS the
+    // resolution — the labels are what tell a privileged writer where each
+    // click goes, so there is no notice to wait on.
+    await expect(propose).toBeVisible({ timeout: 10_000 })
+    await expect(propose).toHaveText('Propose change')
+    // Relabelled: with two write destinations in one footer, "Save" no longer
+    // says which one it is.
+    await expect(save).toHaveText('Save directly')
+
+    // Order and emphasis are the point, not merely the presence of two buttons —
+    // a footer that offered both but made bypassing the default click would
+    // satisfy "both exist" and still push every admin past review.
+    const order = await page.evaluate(({ id }) => {
+      const p = document.querySelector(`#edit-modal-srv-${id} [data-testid="propose-change"]`)!
+      const b = document.getElementById(`srv-edit-submit-${id}`)!
+      if (p.parentElement !== b.parentElement) return 'propose is not in the same button row as save'
+      // DOCUMENT_POSITION_FOLLOWING === 4 when save comes after propose.
+      return p.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? 'propose-first' : 'save-first'
+    }, { id: domId })
+    expect(order).toBe('propose-first')
+    await expect(propose).toHaveClass(/is-success/)
+    await expect(save).not.toHaveClass(/is-success/)
+    // Amber, matching the notice above it: the colour says "this skips review"
+    // without disabling a control the role is entitled to use.
+    await expect(save).toHaveClass(/is-warning/)
+
+    // A no-op Propose says so and stays open. Save closes silently on an empty
+    // diff because there is nothing to persist, but a modal that closes on
+    // "Propose change" reads as "a request was created" — and sends the reader
+    // to the queue looking for one that was never made.
+    await propose.click()
+    await expect(modal).toContainText('Nothing to propose', { timeout: 10_000 })
+    await expect(modal).toHaveClass(/is-active/)
   } finally {
+    await unprotect(page, policyId)
+  }
+})
+
+// AC 9b — the admin's Propose button must actually PROPOSE.
+//
+// This is the regression that would be invisible. The two buttons share one
+// handler and differ by a single flag; if that flag were dropped, Propose would
+// fall through to the ordinary dispatch and write the edit straight to the
+// graph — producing the audit row of a perfectly legitimate bypass, with no
+// trace that the user asked for review. The button would look like it worked.
+test("an admin's Propose change opens a request and writes nothing", async ({ page }) => {
+  const policyId = await protect(page, NS)
+  await closeAllInFlight(page, SERVER_ORB_ID)
+  const before = await (await api(page, 'GET', `/api/v1/change-requests?orbId=${encodeURIComponent(SERVER_ORB_ID)}`)).json()
+  const newIds: string[] = []
+  try {
+    const domId = await openServerEditModal(page, SERVER_ORB_ID)
+    const modal = page.locator(`#edit-modal-srv-${domId}`)
+    await expect(modal.locator('[data-testid="propose-change"]')).toBeVisible({ timeout: 10_000 })
+
+    await page.evaluate(({ id }) => {
+      const ed = (window as any).srvEditors.get(id)
+      const cur = JSON.parse(ed.get().text)
+      cur.hostname = 'proposed-by-admin-e2e'
+      ed.set({ text: JSON.stringify(cur, null, 2) })
+    }, { id: domId })
+
+    await modal.locator('[data-testid="propose-change"]').click()
+
+    // Same completion behaviour as Save: the modal closes and you stay on the
+    // entity you were editing.
+    await expect(modal).not.toHaveClass(/is-active/, { timeout: 15_000 })
+    expect(page.url()).not.toMatch(/\/change-requests\//)
+
+    const after = await (await api(page, 'GET', `/api/v1/change-requests?orbId=${encodeURIComponent(SERVER_ORB_ID)}`)).json()
+    expect(after.total).toBe(before.total + 1)
+    for (const cr of after.items) {
+      if (!before.items.some((b: any) => b.id === cr.id)) newIds.push(cr.id)
+    }
+    expect(newIds).toHaveLength(1)
+
+    // The request carries the edit that was on screen — not an empty shell.
+    const detail = await (await api(page, 'GET', `/api/v1/change-requests/${newIds[0]}`)).json()
+    expect(JSON.stringify(detail.changes)).toContain('proposed-by-admin-e2e')
+
+    // And the graph is untouched, which is the whole difference between the two
+    // buttons.
+    const srv = await (await api(page, 'POST', '/graphql', {
+      query: `{ getServer(orbId: "${SERVER_ORB_ID}") { hostname } }`,
+    })).json()
+    expect(srv.data.getServer.hostname).not.toBe('proposed-by-admin-e2e')
+  } finally {
+    for (const id of newIds) await api(page, 'POST', `/api/v1/change-requests/${id}/close`)
+    await unprotect(page, policyId)
+  }
+})
+
+// The same guarantee, through the REAL path — and this is the one that matters.
+//
+// The pure-function test above passed while this was broken: `buildChangeset`
+// narrowed correctly, but `proposeChange` sits between the editor and it,
+// destructures its parameters, and forwarded a fixed list that had dropped
+// `rootBefore` on the floor. Calling the helper directly cannot see a caller
+// that never reaches it.
+test('a proposal from the editor carries only the edited field', async ({ page }) => {
+  const policyId = await protect(page, NS)          // admin bypasses, so both buttons show
+  await closeAllInFlight(page, SERVER_ORB_ID)
+  const before = await (await api(page, 'GET', `/api/v1/change-requests?orbId=${encodeURIComponent(SERVER_ORB_ID)}`)).json()
+  const created: string[] = []
+  try {
+    const domId = await openServerEditModal(page, SERVER_ORB_ID)
+    const modal = page.locator(`#edit-modal-srv-${domId}`)
+    await expect(modal.locator('[data-testid="propose-change"]')).toBeVisible({ timeout: 10_000 })
+
+    // One of the six editable scalars. The other five go untouched and must not
+    // appear in the payload.
+    await page.evaluate(({ id }) => {
+      const ed = (window as any).srvEditors.get(id)
+      const cur = JSON.parse(ed.get().text)
+      cur.manufacturer = 'Dell-narrowed'
+      ed.set({ text: JSON.stringify(cur, null, 2) })
+    }, { id: domId })
+    await modal.locator('[data-testid="propose-change"]').click()
+    await expect(modal).not.toHaveClass(/is-active/, { timeout: 15_000 })
+
+    const after = await (await api(page, 'GET', `/api/v1/change-requests?orbId=${encodeURIComponent(SERVER_ORB_ID)}`)).json()
+    for (const cr of after.items) if (!before.items.some((b: any) => b.id === cr.id)) created.push(cr.id)
+    expect(created).toHaveLength(1)
+
+    const d = await (await api(page, 'GET', `/api/v1/change-requests/${created[0]}`)).json()
+    expect(d.changes[0].set).toEqual({ manufacturer: 'Dell-narrowed' })
+    // The count and the payload are the same fact, so they cannot disagree.
+    expect(d.title).toBe('server-5HSC3D4 · 1 field')
+    expect(d.effect).toMatchObject({ entities: 1, fields: 1, field: 'manufacturer', value: 'Dell-narrowed' })
+  } finally {
+    for (const id of created) await api(page, 'POST', `/api/v1/change-requests/${id}/close`)
     await unprotect(page, policyId)
   }
 })
@@ -316,7 +498,11 @@ test('with no policy the editor behaves exactly as it does today', async ({ page
   // Give the async policy resolve time to have landed if it were going to.
   await page.waitForTimeout(1000)
   await expect(modal).not.toContainText('Needs approval')
-  await expect(modal).not.toContainText('Bypasses review')
+  // The opt-in promise reaches the footer too: no policy means no second button
+  // and no relabelling, so an installation that never configures change control
+  // sees the pre-approval-engine UI exactly.
+  await expect(modal.locator('[data-testid="propose-change"]')).toHaveCount(0)
+  await expect(page.locator(`#srv-edit-submit-${domId}`)).toHaveClass(/is-success/)
 })
 
 // AC 14 (browser half — the notice a person actually sees)

@@ -201,6 +201,24 @@ func (_u *ApprovalRequestUpdate) ClearBasePresent() *ApprovalRequestUpdate {
 	return _u
 }
 
+// SetBaseEffect sets the "base_effect" field.
+func (_u *ApprovalRequestUpdate) SetBaseEffect(v json.RawMessage) *ApprovalRequestUpdate {
+	_u.mutation.SetBaseEffect(v)
+	return _u
+}
+
+// AppendBaseEffect appends value to the "base_effect" field.
+func (_u *ApprovalRequestUpdate) AppendBaseEffect(v json.RawMessage) *ApprovalRequestUpdate {
+	_u.mutation.AppendBaseEffect(v)
+	return _u
+}
+
+// ClearBaseEffect clears the value of the "base_effect" field.
+func (_u *ApprovalRequestUpdate) ClearBaseEffect() *ApprovalRequestUpdate {
+	_u.mutation.ClearBaseEffect()
+	return _u
+}
+
 // SetPayload sets the "payload" field.
 func (_u *ApprovalRequestUpdate) SetPayload(v json.RawMessage) *ApprovalRequestUpdate {
 	_u.mutation.SetPayload(v)
@@ -448,6 +466,17 @@ func (_u *ApprovalRequestUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if _u.mutation.BasePresentCleared() {
 		_spec.ClearField(approvalrequest.FieldBasePresent, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.BaseEffect(); ok {
+		_spec.SetField(approvalrequest.FieldBaseEffect, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedBaseEffect(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, approvalrequest.FieldBaseEffect, value)
+		})
+	}
+	if _u.mutation.BaseEffectCleared() {
+		_spec.ClearField(approvalrequest.FieldBaseEffect, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Payload(); ok {
 		_spec.SetField(approvalrequest.FieldPayload, field.TypeJSON, value)
@@ -747,6 +776,24 @@ func (_u *ApprovalRequestUpdateOne) ClearBasePresent() *ApprovalRequestUpdateOne
 	return _u
 }
 
+// SetBaseEffect sets the "base_effect" field.
+func (_u *ApprovalRequestUpdateOne) SetBaseEffect(v json.RawMessage) *ApprovalRequestUpdateOne {
+	_u.mutation.SetBaseEffect(v)
+	return _u
+}
+
+// AppendBaseEffect appends value to the "base_effect" field.
+func (_u *ApprovalRequestUpdateOne) AppendBaseEffect(v json.RawMessage) *ApprovalRequestUpdateOne {
+	_u.mutation.AppendBaseEffect(v)
+	return _u
+}
+
+// ClearBaseEffect clears the value of the "base_effect" field.
+func (_u *ApprovalRequestUpdateOne) ClearBaseEffect() *ApprovalRequestUpdateOne {
+	_u.mutation.ClearBaseEffect()
+	return _u
+}
+
 // SetPayload sets the "payload" field.
 func (_u *ApprovalRequestUpdateOne) SetPayload(v json.RawMessage) *ApprovalRequestUpdateOne {
 	_u.mutation.SetPayload(v)
@@ -1024,6 +1071,17 @@ func (_u *ApprovalRequestUpdateOne) sqlSave(ctx context.Context) (_node *Approva
 	}
 	if _u.mutation.BasePresentCleared() {
 		_spec.ClearField(approvalrequest.FieldBasePresent, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.BaseEffect(); ok {
+		_spec.SetField(approvalrequest.FieldBaseEffect, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedBaseEffect(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, approvalrequest.FieldBaseEffect, value)
+		})
+	}
+	if _u.mutation.BaseEffectCleared() {
+		_spec.ClearField(approvalrequest.FieldBaseEffect, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Payload(); ok {
 		_spec.SetField(approvalrequest.FieldPayload, field.TypeJSON, value)

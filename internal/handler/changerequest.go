@@ -132,8 +132,18 @@ func (h *ChangeRequest) Create(ctx context.Context, actor, title, description st
 		return nil, nil, fmt.Errorf("marshal changeset: %w", err)
 	}
 
+	// The delta this request would apply, captured with the anchor that says
+	// when it stops being true. Best-effort by design — a nil effect falls back
+	// to counting the changeset, and losing a display convenience must never
+	// cost someone a validated proposal.
+	effect, effErr := storedEffect(ctx, h.dgraphURL, scope, *cs)
+	if effErr != nil {
+		h.logger.Warn("could not compute effect summary; falling back to scope counts",
+			"namespace", cs.Namespace, "err", effErr)
+	}
+
 	cr, err := h.createNumbered(ctx, cs.Namespace, func(b *ent.ApprovalRequestCreate) *ent.ApprovalRequestCreate {
-		return b.
+		b = b.
 			SetActionType(approval.ActionTypeConfigMutation).
 			SetTitle(title).
 			SetDescription(description).
@@ -142,6 +152,10 @@ func (h *ChangeRequest) Create(ctx context.Context, actor, title, description st
 			SetBaseHash(versionHash(versions)).
 			SetBasePresent(presentInVersions(versions, scope)).
 			SetPayload(payload)
+		if len(effect) > 0 {
+			b = b.SetBaseEffect(effect)
+		}
+		return b
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("create change request: %w", err)
@@ -621,6 +635,17 @@ func (h *ChangeRequest) Amend(ctx context.Context, id int64, actor string, role 
 			return nil, nil, fmt.Errorf("marshal changeset: %w", err)
 		}
 		upd = upd.SetPayload(payload).SetBaseHash(versionHash(versions)).SetBasePresent(presentInVersions(versions, scope))
+		// Recomputed with the anchor: an amended request is a new plan against a
+		// newly captured base, so carrying the old delta forward would describe
+		// changes the request no longer proposes.
+		effect, effErr := storedEffect(ctx, h.dgraphURL, scope, *cs)
+		if effErr != nil {
+			h.logger.Warn("could not recompute effect summary on amend",
+				"change_request", crHumanID(cr), "err", effErr)
+		}
+		if len(effect) > 0 {
+			upd = upd.SetBaseEffect(effect)
+		}
 	}
 
 	if _, err := upd.Save(ctx); err != nil {

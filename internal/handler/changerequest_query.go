@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent/approvalrequest"
 	"github.com/armada/orbital/ent/predicate"
+	"github.com/armada/orbital/internal/approval"
 )
 
 // statusActive is a filter value, not a stored status: everything that has not
@@ -18,6 +19,72 @@ import (
 // Making the client OR two queries together would put orbital's own lifecycle
 // logic in the client, which is exactly what the API-first rule forbids.
 const statusActive = "active"
+
+// validStatusFilter says whether a ?status= value is one this API defines.
+//
+// An unrecognised value must be REFUSED, not ignored. The switch it replaced
+// had no default, so `status=Merged` matched nothing, applied no predicate, and
+// returned the entire queue — the same silent-wrong-answer shape as a
+// truncated filter, and harder to notice because the response looks right.
+func validStatusFilter(v string) bool {
+	switch v {
+	case approval.StatusOpen, approval.StatusApproved, statusActive,
+		approval.StatusRejected, approval.StatusMerged, approval.StatusClosed:
+		return true
+	}
+	return false
+}
+
+// storedStatePredicates maps requested statuses onto the STORED state column.
+//
+// `open` and `approved` both live in the stored `open` row: `approved` is
+// derived from the valid-approval count (D17), so SQL can only narrow to
+// non-terminal and the exact split happens after rendering, where the count
+// exists. Duplicates collapse — asking for open+approved+active is one
+// predicate, not three.
+func storedStatePredicates(wanted []string) []predicate.ApprovalRequest {
+	var out []predicate.ApprovalRequest
+	nonTerminal := false
+	for _, v := range wanted {
+		switch v {
+		case approval.StatusRejected:
+			out = append(out, approvalrequest.StatusEQ(approvalrequest.StatusRejected))
+		case approval.StatusMerged:
+			out = append(out, approvalrequest.StatusEQ(approvalrequest.StatusMerged))
+		case approval.StatusClosed:
+			out = append(out, approvalrequest.StatusEQ(approvalrequest.StatusClosed))
+		case approval.StatusOpen, approval.StatusApproved, statusActive:
+			nonTerminal = true
+		}
+	}
+	if nonTerminal {
+		out = append(out, approvalrequest.StatusEQ(approvalrequest.StatusOpen))
+	}
+	return out
+}
+
+// statusWanted judges a RENDERED row against the filter, where `view.Status` is
+// the derived status rather than the stored one.
+//
+// No filter means everything. `active` accepts either non-terminal status,
+// which is the whole reason it exists as a filter value.
+func statusWanted(wanted []string, derived string) bool {
+	if len(wanted) == 0 {
+		return true
+	}
+	for _, v := range wanted {
+		if v == statusActive {
+			if derived == approval.StatusOpen || derived == approval.StatusApproved {
+				return true
+			}
+			continue
+		}
+		if v == derived {
+			return true
+		}
+	}
+	return false
+}
 
 // maxOrbIDFilter caps the repeatable ?orbId= filter. Same number as the
 // audit-log API's cap, for the same reason and against the same caller: a

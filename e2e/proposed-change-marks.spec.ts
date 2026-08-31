@@ -52,15 +52,18 @@ function markFor(page: Page, field: string) {
   return page.locator(`[data-field="${field}"] .js-field-mark`)
 }
 
-test('a single proposal names its value, its author and a way to review it', async ({ page }) => {
+test('a single proposal names its value and a way to review it', async ({ page }) => {
   // enabled is currently false, so proposing true is a real change.
   opened.push(await propose(page, { enabled: true }, 'MARKS single'))
   await openMaintenanceTab(page)
 
   const mark = markFor(page, 'enabled')
   await expect(mark).toContainText('proposed → true', { timeout: 15_000 })
-  await expect(mark).toContainText('admin@armada.ai')   // the e2e identity is the author
   await expect(mark.locator('a')).toHaveAttribute('href', /\/change-requests\//)
+  // Author and age are deliberately NOT here. Two facts fit a table row; four
+  // crowded it, and neither of those two is why someone scans this table.
+  // They are the first thing on the review page the link goes to.
+  await expect(mark).not.toContainText('admin@armada.ai')
   // Info, not danger: one proposal is not a disagreement.
   // The proposed value sits in a tag, in the same register as the current
   // value beside it — not a pale coloured run of text.
@@ -88,7 +91,11 @@ test('a proposal whose value already matches current state is NOT marked', async
 
   // ...but the request is real and the BANNER still shows it. Suppressing the
   // field mark must not make an open request disappear from the page.
-  await expect(page.locator(`[data-pending-changes-for="${SERVER}"]`)).toContainText('MARKS no-op')
+  //
+  // Asserted on the ID, which is what the banner links: a title is a stored
+  // string that can describe a changeset since amended, so the banner names the
+  // one thing that cannot go stale.
+  await expect(page.locator(`[data-pending-changes-for="${SERVER}"]`)).toContainText(noop)
 })
 
 test('two proposals that disagree show a count and are called out as conflicting', async ({ page }) => {
@@ -112,4 +119,41 @@ test('with nothing proposed, no field is marked', async ({ page }) => {
   for (const field of ['enabled', 'windowStart', 'windowEnd', 'reason']) {
     await expect(markFor(page, field)).toBeEmpty()
   }
+})
+
+// The server's OWN fields, not just its owned children.
+//
+// Marks shipped wired to the maintenance panel alone, so a proposal against
+// `Server.manufacturer` raised the banner and then annotated nothing — the
+// summary table had no data-field rows to annotate. The banner says "something
+// is proposed for this item"; only the mark says WHICH FIELD, which is the
+// whole point of it.
+test('a proposal on a server field is marked on the Server Summary table', async ({ page }) => {
+  const res = await api(page, 'POST', '/api/v1/change-requests', {
+    title: 'MARKS summary field', namespace: 'colo',
+    changes: [{ orbId: SERVER, op: 'update', set: { manufacturer: 'Dell-proposed' } }],
+  })
+  expect(res.ok(), 'propose manufacturer').toBeTruthy()
+  opened.push((await res.json()).id)
+
+  await page.goto(`/servers?open=${encodeURIComponent(SERVER)}&label=${encodeURIComponent(SERVER)}`)
+  await page.waitForSelector(`#tab-content-srv-${domId}[data-loaded="true"]`, { timeout: 15_000 })
+
+  const mark = page.locator(`#tab-content-srv-${domId} [data-field="manufacturer"] .js-field-mark`)
+  await expect(mark).toContainText('Dell-proposed', { timeout: 10_000 })
+
+  // Only the proposed field. A mark on every row would be noise indistinguish-
+  // able from a mark that means something.
+  for (const field of ['hostname', 'model', 'oobMAC', 'serviceTag']) {
+    await expect(page.locator(`#tab-content-srv-${domId} [data-field="${field}"] .js-field-mark`)).toBeEmpty()
+  }
+
+  // Exactly the six Server FormFields in configitems/registry.go carry a slot.
+  // Data Center, OOB IP and Rack are edge references the editor cannot write,
+  // so a mark on them could never fire — and a count is how that stays true
+  // when someone adds a row to this table.
+  // Scoped by orbId, not position: the maintenance panel on this same tab is
+  // also a data-field-orbid table, keyed to the CHILD's orbId.
+  const slots = await page.locator(`#tab-content-srv-${domId} table[data-field-orbid="${SERVER}"] tr[data-field]`).count()
+  expect(slots).toBe(6)
 })

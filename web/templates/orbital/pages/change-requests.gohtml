@@ -17,15 +17,34 @@
 
       <div id="cr-error" class="notification is-danger is-light" style="display:none;"></div>
 
-      <div class="tabs is-small is-boxed" id="cr-tabs">
+      {{/* Same shape as every other page-level tab strip (servers, clusters,
+           datacenters, network): `tabs is-boxed has-text-weight-medium` at
+           14px. `is-small` here made this the only page whose tabs were 12px
+           and unweighted. */}}
+      {{/* Three tabs, two axes kept apart.
+
+           State is the axis that partitions: Open (not terminal) and Closed
+           (merged, rejected or withdrawn — the Status column names which).
+           GitHub's repo PR list collapses the same way, and for the same
+           reason: how it ended is a property of the row, not of the list.
+
+           "Needs my review" is the third, and it is a SHORTCUT to the
+           actionable subset, not a state — it is what the nav badge counts, so
+           clicking that badge has to land somewhere visibly filtered. It is
+           gated on CanMutate (RoleAtLeast dev, the same minimum the API
+           enforces): readonly can never approve, so the tab would be
+           structurally empty for them and readonly lands on Open instead.
+
+           Dropped: `Mine` and `All`. Author is a column — scanning it answers
+           "what did I propose" without a tab, and both overlapped the state
+           tabs while looking like peers of them. */}}
+      <nav class="tabs is-boxed has-text-weight-medium" style="font-size: 14px;" id="cr-tabs">
         <ul>
-          <li class="is-active"><a data-cr-filter="awaiting_review=true">Awaiting my review</a></li>
-          <li><a data-cr-filter="mine=true">Mine</a></li>
-          <li><a data-cr-filter="status=active">Open</a></li>
-          <li><a data-cr-filter="status=merged">Merged</a></li>
-          <li><a data-cr-filter="">All</a></li>
+          {{if .CanMutate}}<li class="is-active"><a data-cr-filter="awaiting_review=true">Needs my review</a></li>{{end}}
+          <li{{if not .CanMutate}} class="is-active"{{end}}><a data-cr-filter="status=active">Open</a></li>
+          <li><a data-cr-filter="status=merged&amp;status=rejected&amp;status=closed">Closed</a></li>
         </ul>
-      </div>
+      </nav>
 
       <table class="table is-striped is-hoverable is-fullwidth is-size-7" id="cr-table">
         <colgroup>
@@ -36,8 +55,14 @@
           <tr>
             {{/* The id is FIRST and always shown: it is the only column
                  guaranteed to differ between two rows, and it is what someone
-                 quotes when they ask a colleague to look at one. */}}
-            <th>ID</th><th>Title</th><th>Namespace</th><th>Author</th>
+                 quotes when they ask a colleague to look at one.
+
+                 Change, not Title: rendered from the API's `summary`, which is
+                 derived on every read and so follows an amended changeset. The
+                 stored title is a label written once at creation — it belongs
+                 on the detail page, not in the column a reviewer scans to
+                 decide whether a row concerns them. */}}
+            <th>ID</th><th>Change</th><th>Namespace</th><th>Author</th>
             <th>Status</th><th>Approvals</th><th>Age</th>
           </tr>
         </thead>

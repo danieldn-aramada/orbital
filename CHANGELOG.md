@@ -43,15 +43,33 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   merging an already-approved change request is the one exemption. A divergence
   **Accept** on a protected class now returns `202 Accepted` with a `changeRequestId`
   and leaves the entry pending instead of mutating intent.
+  `GET /api/v1/change-requests?status=` is **repeatable and OR-ed** (`status=merged&status=rejected&status=closed`);
+  an unrecognised value is refused with `400` rather than silently matching everything.
+  Every change-request response carries an **`effect`** — how many entities and fields it
+  changes, and the field with its before/after when there is exactly one — so a client can
+  render a queue row without walking the changeset. It reports what the request would DO, not
+  what it says:
+  the delta is computed once at creation against the same snapshot the staleness anchor comes
+  from, so a client that posts a complete end-state (a reconcile flow) still gets `1 field`
+  when one field differs.
+  **A proposal now carries only the fields the author actually changed.** The editor previously
+  sent an entity's whole scalar payload, so a one-field edit opened a request claiming six
+  fields: the diff was right, every count derived from the payload was not, and merging would
+  have written all six.
   **UI**: a *Change Control* section with the review queue and an admin policies page;
   a review view showing the diff, the approvals (including "approved an earlier version"
   when one no longer counts) and only the actions the caller may actually take; and the
   config editor relabels **Save → Propose change** on a protected class, opening a change
   request instead of writing, and leaving you on the entity — where a banner names the
-  request and links to it. An admin keeps Save, with a visible notice that the write
-  bypasses review. An entity with a change already in flight says so before you start
-  editing it, including when the change targets an owned child such as its iDRAC or
-  maintenance window.
+  request and links to it. A caller whose role may bypass the policy gets **both** actions —
+  *Propose change* as the primary and *Save directly* beside it, so holding the bypass role no
+  longer means losing access to review. An entity with a change already
+  in flight says so before you start editing it, including when the change targets an owned
+  child such as its iDRAC or maintenance window — named by request id, which never goes stale.
+  Field marks now cover a server's own fields on the Server Summary table, not only its
+  maintenance panel, and sit in a column of their own.
+  The review queue shows three tabs — *Needs my review* (hidden for roles that cannot approve),
+  *Open*, *Closed* — and states each row's change instead of its stored title.
 - **Artifact-to-artifact compare** — `GET /api/v1/export/compare?from=&to=` returns the
   desired-state delta between any two published artifacts of a data center, pulled by immutable
   digest and diffed in memory. Surfaced as a **Compare** tab on Publish History with linkable

@@ -469,7 +469,7 @@
         },
         "/api/v1/change-requests": {
             "get": {
-                "description": "Filters compose. `mine` and `awaiting_review` are caller-relative; `orbId` matches any request whose changeset touches that entity, at any position. `status=active` means not-terminal (open plus approved) — the filter to use for \"does this entity have a change in flight\", since `approved` is derived and `status=open` excludes it.\n\n`orbId` is **repeatable** and the values are OR-ed (max 32; more is refused, never truncated). A change to an owned child records the CHILD's orbId — a server-maintenance edit lands as `\u003cns\u003e:server-maintenance-\u003cserial\u003e` — so \"is anything in flight for this server\" means passing the server's orbId AND the orbIds of everything it owns, exactly as `/api/v1/audit-log` does.",
+                "description": "Filters compose. `mine` and `awaiting_review` are caller-relative; `orbId` matches any request whose changeset touches that entity, at any position. `status=active` means not-terminal (open plus approved) — the filter to use for \"does this entity have a change in flight\", since `approved` is derived and `status=open` excludes it.\n\n`status` is **repeatable** and OR-ed, so \"everything that has finished\" is `status=merged\u0026status=rejected\u0026status=closed` — there is no aggregate keyword for it, because the three stored values already say it and a coined term would have to be learned. An unrecognised value is refused rather than ignored: a `status=Merged` typo used to match no filter at all and return the ENTIRE queue, which looks exactly like a correct answer.\n\n`orbId` is **repeatable** and the values are OR-ed (max 32; more is refused, never truncated). A change to an owned child records the CHILD's orbId — a server-maintenance edit lands as `\u003cns\u003e:server-maintenance-\u003cserial\u003e` — so \"is anything in flight for this server\" means passing the server's orbId AND the orbIds of everything it owns, exactly as `/api/v1/audit-log` does.",
                 "produces": [
                     "application/json"
                 ],
@@ -479,8 +479,12 @@
                 "summary": "List change requests",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "open, approved, active (open+approved), rejected, merged or closed",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "open, approved, active (open+approved), rejected, merged or closed. Repeatable and OR-ed: status=merged\u0026status=rejected\u0026status=closed is every terminal state. An unrecognised value is refused (400), never ignored.",
                         "name": "status",
                         "in": "query"
                     },
@@ -2227,6 +2231,46 @@
                 }
             }
         },
+        "handler.changeEffect": {
+            "type": "object",
+            "properties": {
+                "before": {
+                    "description": "Before is the value being replaced. Only an EFFECT-derived summary can\nknow it — a payload states what a field becomes, never what it was — so it\nis absent on rows created before base_effect existed, and a client must\nrender `→ after` when it is missing rather than assume null meant empty."
+                },
+                "cleared": {
+                    "description": "Cleared distinguishes \"set to nothing\" from \"set to a falsy value\" —\n`Value` alone cannot, since `false` and `0` are legitimate values.",
+                    "type": "boolean",
+                    "example": false
+                },
+                "entities": {
+                    "description": "Entities is how many distinct orbIds the changeset touches.",
+                    "type": "integer",
+                    "example": 1
+                },
+                "field": {
+                    "description": "Field, Value and Cleared are present ONLY when Fields == 1 — the case a\nrow can state in full rather than count.",
+                    "type": "string",
+                    "example": "manufacturer"
+                },
+                "fields": {
+                    "description": "Fields is the total across every item, counting a cleared field once.",
+                    "type": "integer",
+                    "example": 1
+                },
+                "orbId": {
+                    "description": "OrbID and Type are present whenever the changeset touches exactly ONE\nentity, whatever its field count — a row saying \"3 fields\" without saying\non what is a worse answer than the count alone.",
+                    "type": "string",
+                    "example": "colo:server-1W8Y2Z3"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "Server"
+                },
+                "value": {
+                    "description": "Value is the proposed value, omitted when the field is being cleared.\nRendered as-is: a scalar for scalars, an object for an edge reference.\nNo `example` tag: swag cannot render one for an `any`, and the type is\ndeliberately open — a scalar for scalars, an object for an edge reference."
+                }
+            }
+        },
         "handler.changeItemBody": {
             "type": "object",
             "required": [
@@ -2346,6 +2390,14 @@
                 },
                 "description": {
                     "type": "string"
+                },
+                "effect": {
+                    "description": "Summary is what a QUEUE ROW needs: how wide this change is, and — when it\nis a single field — what that field becomes. Derived server-side so a\nlist view never walks `changes` to build a label. Orbital's own queue\nrenders straight from it, and so can anyone else's.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/handler.changeEffect"
+                        }
+                    ]
                 },
                 "executedAt": {
                     "type": "string"

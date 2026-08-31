@@ -99,6 +99,30 @@ func (ApprovalRequest) Fields() []ent.Field {
 		// partial field-delta. See D13's table.
 		field.JSON("base_present", []string{}).Optional(),
 
+		// base_effect is the DELTA this request would apply, computed once against
+		// the same snapshot base_hash was captured from, and — like base_hash and
+		// base_present — never recomputed.
+		//
+		// It exists because `payload` states a request's SCOPE, not its effect.
+		// The API accepts a complete end-state on purpose so a reconcile-style
+		// client can assert one, so a payload naming 22 fields may change 1, and
+		// a queue counting payload fields tells a reviewer the wrong number.
+		// Every declarative system solves this the same way — accept full state,
+		// then make the delta a first-class artifact: Terraform's plan, GitHub's
+		// stored diff stat, `kubectl diff`.
+		//
+		// STORED, not derived, and that is consistent with the derive-don't-
+		// maintain rule above rather than an exception to it. That rule governs
+		// state which changes ON ITS OWN (staleness, approval validity). A delta
+		// is a fact about a moment — exactly like base_hash, which is stored for
+		// the same reason. A saved Terraform plan pairs its diff with the state
+		// anchor it was computed against, and refuses to apply when state moved;
+		// here `stale` is that refusal, already derived.
+		//
+		// Optional: rows written before this field existed decode to nil and fall
+		// back to the payload-derived summary, which is what they always showed.
+		field.JSON("base_effect", json.RawMessage{}).Optional(),
+
 		// payload is the action-type-specific body, opaque to the engine. For
 		// config.mutation: {"namespace": ..., "changes": [{orbId, type, op, set,
 		// clear}, ...]}. Filters like ?orbId= and ?namespace= are served from

@@ -1308,14 +1308,22 @@ function renderPendingChangeBanner(holder, items) {
   const lead = document.createElement('strong')
   lead.textContent = items.length + (items.length === 1 ? ' change' : ' changes') + ' in review'
   notice.appendChild(lead)
-  notice.appendChild(document.createTextNode(' for this item or something it owns — '))
+  notice.appendChild(document.createTextNode(': '))
 
   items.forEach((cr, i) => {
     if (i > 0) notice.appendChild(document.createTextNode(' · '))
     const a = document.createElement('a')
     a.href = BASE + '/change-requests/' + encodeURIComponent(cr.id)
-    // textContent, not innerHTML: the title is whatever the proposer typed.
-    a.textContent = cr.title || cr.id
+    // The ID, not the title. A title is a stored string — derived for orbital's
+    // own proposals, freeform for anyone else's — so it says nothing reliable
+    // and can describe a changeset that has since been amended. The id is what
+    // people quote to each other, and it cannot go stale.
+    //
+    // The banner's job is "something is in flight here, and here is the way
+    // through". WHICH field and what value are the field marks' job, on the
+    // row itself, where they are actually actionable.
+    a.className = 'is-family-monospace'
+    a.textContent = cr.id
     notice.appendChild(a)
   })
 
@@ -1372,15 +1380,25 @@ function fmtAge(iso) {
   return Math.round(hrs / 24) + 'd ago'
 }
 
-// inlineValue renders a proposed value only when doing so stays readable.
-// Structured or long values fall back to naming the proposal without it —
+// shortValue renders a value only when doing so stays readable. Structured or
+// long values return null, and the caller names the field without a value —
 // the API returns the value untouched and this is the client's call.
-function inlineValue(p) {
-  if (p.op === 'clear') return '(cleared)'
-  const v = p.value
-  if (v === null || typeof v === 'object') return null
+function shortValue(v) {
+  if (v === null || v === undefined || typeof v === 'object') return null
   const s = String(v)
   return s.length <= FIELD_MARK_VALUE_MAX ? s : null
+}
+
+// shortOrbId drops the namespace, which is already its own column wherever
+// this is used: `colo:server-1W8Y2Z3` reads as `server-1W8Y2Z3`.
+function shortOrbId(id) {
+  return String(id || '').replace(/^[^:]+:/, '')
+}
+
+// inlineValue is shortValue for a PROPOSAL, which can also be a clear.
+function inlineValue(p) {
+  if (p.op === 'clear') return '(cleared)'
+  return shortValue(p.value)
 }
 
 // sameValue decides whether a proposal has already come true.
@@ -1434,8 +1452,13 @@ function renderFieldMark(slot, field, current, basePath) {
   // not contradict the plain-coloured-text rule for dense tables — that rule is
   // about a status COLUMN, where a column of pills is noise. Here the pill sits
   // against another pill and the parallel is the point.
+  // No left margin: the mark has its own table cell now, so the column supplies
+  // the separation from the value. Spacing WITHIN the mark is one flex gap on
+  // the wrapper (see main.scss) rather than per-part `ml-*` helpers, because
+  // the parts are conditional and per-part margins put the same fact at a
+  // different distance depending on what else rendered.
   const wrap = document.createElement('span')
-  wrap.className = 'js-field-mark-text ml-3 is-size-7'
+  wrap.className = 'js-field-mark-text is-size-7'
   wrap.setAttribute('data-testid', 'field-mark')
 
   if (live.length > 1) {
@@ -1448,6 +1471,18 @@ function renderFieldMark(slot, field, current, basePath) {
       + (conflicting ? ' — conflicting' : '')
     wrap.appendChild(badge)
   } else {
+    // TWO facts on the row: what it becomes, and the way through. Author and
+    // age used to sit here too, and four facts crowded the cell in every
+    // layout — a column would have been NARROWER than this space, so it moved
+    // the wrapping rather than fixing it.
+    //
+    // Neither is something you scan a table for: knowing a change is proposed
+    // is what stops you retyping it, and who proposed it is the first thing on
+    // the review page one click away. terraform plan makes the same cut —
+    // `~ field = old -> new`, no author, no timestamp.
+    //
+    // The verb still carries the status, so `approved →` says "merges next"
+    // without a second clause saying it again.
     const p = live[0]
     const val = inlineValue(p)
     const verb = p.status === 'approved' ? 'approved' : 'proposed'
@@ -1460,17 +1495,12 @@ function renderFieldMark(slot, field, current, basePath) {
       tag.textContent = val
       wrap.appendChild(tag)
     }
-    const meta = document.createElement('span')
-    meta.className = 'has-text-grey ml-2'
-    meta.textContent = p.author + (fmtAge(p.createdAt) ? ', ' + fmtAge(p.createdAt) : '')
-      + (p.status === 'approved' ? ' · merges next' : '')
-    wrap.appendChild(meta)
   }
 
   // One word, whether there is one proposal or five. "Review them" made the
   // label depend on the count for no benefit — the count is already stated.
   const link = document.createElement('a')
-  link.className = 'ml-3 is-size-7'
+  link.className = 'is-size-7'
   link.href = basePath + '/change-requests'
     + (live.length === 1 ? '/' + encodeURIComponent(live[0].changeRequestId) : '')
   link.textContent = 'Review'
@@ -2499,6 +2529,41 @@ document.addEventListener('DOMContentLoaded', () => {
       })
   }
 
+  // changeCell renders the API's `effect` — it does not compute one.
+  //
+  // The row used to show the stored `title`, which for orbital-authored
+  // requests was a derived string and for anyone else's was whatever they
+  // typed. Neither told a reviewer what the request does. `effect` is what the
+  // request would DO — computed server-side against the same snapshot its
+  // staleness anchor comes from — so any client building a queue gets the same
+  // two branches instead of writing a walk over `changes`, which is the
+  // bespoke-client-logic smell the API-first rule names by hand.
+  function changeCell(sum) {
+    if (!sum || !sum.entities) return '<span class="has-text-grey">no changes</span>'
+    const where = shortOrbId(sum.orbId)
+    if (sum.fields === 1 && sum.field) {
+      // The field is NOT qualified by type: the orbId sits in the same cell and
+      // already names the kind, because orbIds are conventional
+      // (`<kind>-<natural-key>`) — `server-maintenance-CWJHDX3 · enabled` says
+      // enabled on what without `ServerMaintenance.` in front of it. The type
+      // stays in the response for callers that want it; deciding when a prefix
+      // would be redundant is not work this cell should be doing.
+      const label = esc(sum.field)
+      if (sum.cleared) return esc(where) + ' \u00b7 clear ' + label
+      const v = shortValue(sum.value)
+      if (v === null) return esc(where) + ' \u00b7 ' + label
+      // `before` is present only on an effect-derived summary — a payload knows
+      // what a field becomes, never what it was — so a row created before that
+      // existed renders `→ after` and is still correct, just less informative.
+      const b = shortValue(sum.before)
+      const from = b === null ? '' : esc(b) + ' '
+      return esc(where) + ' \u00b7 ' + label + ': ' + from + '\u2192 ' + esc(v)
+    }
+    const n = sum.fields + ' field' + (sum.fields === 1 ? '' : 's')
+    if (where) return esc(where) + ' \u00b7 ' + n
+    return esc(sum.entities + ' entities') + ' \u00b7 ' + n
+  }
+
   function render(items, total) {
     tbody.innerHTML = items.map(cr => {
       const href = BASE + '/change-requests/' + encodeURIComponent(cr.id)
@@ -2517,7 +2582,7 @@ document.addEventListener('DOMContentLoaded', () => {
         : 'not required'
       return '<tr data-cr-row="' + esc(cr.id) + '">'
         + '<td class="is-family-monospace"><a href="' + href + '">' + esc(cr.id) + '</a></td>'
-        + '<td>' + esc(cr.title) + '</td>'
+        + '<td>' + changeCell(cr.effect) + '</td>'
         + '<td>' + esc(cr.namespace) + '</td>'
         + '<td>' + esc(cr.author) + '</td>'
         + '<td>' + status + '</td>'
@@ -2528,11 +2593,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // What "empty" means depends on the tab, and the useful reading differs each
     // time — "nothing awaits you" is reassurance; "nothing exists" is a
     // statement about the system. A single "Nothing here." says neither.
+    // Keys are the tab's own filter string, so a tab and its empty state cannot
+    // drift apart — adding a tab without a message falls back to the generic
+    // one rather than to a wrong one.
     const EMPTY = {
       'awaiting_review=true': 'Nothing is waiting on your review.',
-      'mine=true': 'You have not opened any change requests.',
       'status=active': 'No change requests are open.',
-      'status=merged': 'Nothing has been merged yet.',
+      'status=merged&status=rejected&status=closed': 'Nothing has finished yet — no request has been merged, rejected or withdrawn.',
       '': 'No change requests yet. One is created when a change needs approval before it applies.',
     }
     empty.textContent = total === 0 ? (EMPTY[currentFilter] || EMPTY['']) : ''
