@@ -16,6 +16,10 @@ import (
 
 // Credential supplies the Postgres password for each new connection.
 //
+// A Password of "" means "leave whatever the DSN already carries in place". That is
+// the local-dev and air-gapped shape: orbital keeps its password inside DATABASE_URL
+// rather than as a separate field, so the hook must not clobber it.
+//
 // Two implementations, because orbital deploys to two very different places:
 //
 //   - AKS: Entra ID workload identity. The access token IS the password, scope
@@ -87,6 +91,12 @@ func beforeConnect(cred Credential) func(context.Context, *pgx.ConnConfig) error
 		password, err := cred.Password(ctx)
 		if err != nil {
 			return fmt.Errorf("resolving database credential: %w", err)
+		}
+		// Empty means the DSN owns the password - overwriting it here would wipe the
+		// credential local dev and air-gapped deployments rely on. A successful token
+		// mint is never empty, so the managed-identity path always assigns.
+		if password == "" {
+			return nil
 		}
 		cfg.Password = password
 		return nil
