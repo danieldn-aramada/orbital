@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 	"time"
 
@@ -28,19 +29,29 @@ type Config struct {
 	// a tighter bucket on POST /user/login to slow credential brute-force.
 	// Burst = 2×RPS. Behind a proxy, per-IP fairness needs c.RealIP() to
 	// resolve the true client via X-Forwarded-For (Istio sets it).
-	RateLimitEnabled        bool   `envconfig:"ORBITAL_RATE_LIMIT_ENABLED"   default:"false"`
-	RateLimitRPS            int    `envconfig:"ORBITAL_RATE_LIMIT_RPS"       default:"40"`
-	LoginRateLimitRPS       int    `envconfig:"ORBITAL_LOGIN_RATE_LIMIT_RPS" default:"5"`
-	DGraphURL               string `envconfig:"DGRAPH_URL"                      default:"http://localhost:8080/graphql"`
-	DGraphAdminURL          string `envconfig:"DGRAPH_ADMIN_URL"                default:"http://localhost:8080/admin"`
-	RatelURL                string `envconfig:"RATEL_URL"                       default:"http://localhost:8000"`
-	IssueTrackerURL         string `envconfig:"ORBITAL_ISSUE_TRACKER_URL"       default:"https://dev.azure.com/armadasystems/Commander/_workitems/create/Bug?[System.AreaPath]=Commander\\Edge\\Edge Platform"`
-	Dev                     bool   `envconfig:"ORBITAL_DEV"                     default:"true"`
-	LogLevel                string `envconfig:"ORBITAL_LOG_LEVEL"               default:"info"`
-	DGraphScratchURL        string `envconfig:"DGRAPH_SCRATCH_URL"              default:"http://localhost:8081/graphql"`
-	DGraphScratchAdminURL   string `envconfig:"DGRAPH_SCRATCH_ADMIN_URL"        default:"http://localhost:8081/admin"`
-	DGraphScratchZeroURL    string `envconfig:"DGRAPH_SCRATCH_ZERO_URL"         default:"http://localhost:6081"`
-	DatabaseURL             string `envconfig:"DATABASE_URL"                    default:"postgres://orbital:orbital-local-dev-secret@localhost:5432/orbital?sslmode=disable"`
+	RateLimitEnabled      bool   `envconfig:"ORBITAL_RATE_LIMIT_ENABLED"   default:"false"`
+	RateLimitRPS          int    `envconfig:"ORBITAL_RATE_LIMIT_RPS"       default:"40"`
+	LoginRateLimitRPS     int    `envconfig:"ORBITAL_LOGIN_RATE_LIMIT_RPS" default:"5"`
+	DGraphURL             string `envconfig:"DGRAPH_URL"                      default:"http://localhost:8080/graphql"`
+	DGraphAdminURL        string `envconfig:"DGRAPH_ADMIN_URL"                default:"http://localhost:8080/admin"`
+	RatelURL              string `envconfig:"RATEL_URL"                       default:"http://localhost:8000"`
+	IssueTrackerURL       string `envconfig:"ORBITAL_ISSUE_TRACKER_URL"       default:"https://dev.azure.com/armadasystems/Commander/_workitems/create/Bug?[System.AreaPath]=Commander\\Edge\\Edge Platform"`
+	Dev                   bool   `envconfig:"ORBITAL_DEV"                     default:"true"`
+	LogLevel              string `envconfig:"ORBITAL_LOG_LEVEL"               default:"info"`
+	DGraphScratchURL      string `envconfig:"DGRAPH_SCRATCH_URL"              default:"http://localhost:8081/graphql"`
+	DGraphScratchAdminURL string `envconfig:"DGRAPH_SCRATCH_ADMIN_URL"        default:"http://localhost:8081/admin"`
+	DGraphScratchZeroURL  string `envconfig:"DGRAPH_SCRATCH_ZERO_URL"         default:"http://localhost:6081"`
+	DatabaseURL           string `envconfig:"DATABASE_URL"                    default:"postgres://orbital:orbital-local-dev-secret@localhost:5432/orbital?sslmode=disable"`
+	// Discrete DB fields. Set DBUseAzMI to authenticate with the pod's workload
+	// identity instead of a password: the Entra token becomes the password, minted
+	// per connection. When DBUseAzMI is false these are ignored and DATABASE_URL is
+	// used as-is, which is what local dev and air-gapped deployments do.
+	DBUseAzMI               bool   `envconfig:"ORBITAL_DB_USE_AZ_MI"            default:"false"`
+	DBHost                  string `envconfig:"ORBITAL_DB_HOST"                 default:""`
+	DBPort                  int    `envconfig:"ORBITAL_DB_PORT"                 default:"5432"`
+	DBUser                  string `envconfig:"ORBITAL_DB_USER"                 default:""`
+	DBName                  string `envconfig:"ORBITAL_DB_NAME"                 default:""`
+	DBSSLMode               string `envconfig:"ORBITAL_DB_SSLMODE"              default:"require"`
 	ExportDir               string `envconfig:"ORBITAL_EXPORT_DIR"              default:"./subgraph-exports"`
 	DGraphScratchExportDir  string `envconfig:"DGRAPH_SCRATCH_EXPORT_DIR"       default:"/tmp/orbital-test-scratch"`
 	SchemaPath              string `envconfig:"ORBITAL_SCHEMA_PATH"             default:"schema/schema.graphql"`
@@ -185,6 +196,11 @@ func New() (*Config, error) {
 	} else if cfg.AuthMode != "" {
 		return nil, fmt.Errorf("ORBITAL_AUTH_MODE must be empty or \"external-jwt\", got %q", cfg.AuthMode)
 	}
+	if cfg.DBUseAzMI {
+		if cfg.DBHost == "" || cfg.DBUser == "" || cfg.DBName == "" {
+			return nil, fmt.Errorf("ORBITAL_DB_USE_AZ_MI=true requires ORBITAL_DB_HOST, ORBITAL_DB_USER, ORBITAL_DB_NAME")
+		}
+	}
 	cfg.sessionKeys = auth.NewSessionKeys(cfg.SessionHMACKey, cfg.SessionEncryptionKey, cfg.Dev, cfg.CookieSecure)
 	return &cfg, nil
 }
@@ -221,4 +237,24 @@ func (c *Config) SlogLevel() slog.Level {
 	default:
 		return slog.LevelInfo
 	}
+}
+
+// DatabaseDSN returns the connection string the pool is built from.
+//
+// Under managed identity it is assembled from the discrete fields with an EMPTY
+// password — internal/db's BeforeConnect hook fills that per connection with a
+// freshly minted Entra token. Otherwise DATABASE_URL is returned unchanged, which
+// keeps local dev and air-gapped deployments on a static password.
+func (c *Config) DatabaseDSN() string {
+	if !c.DBUseAzMI {
+		return c.DatabaseURL
+	}
+	u := url.URL{
+		Scheme:   "postgres",
+		User:     url.User(c.DBUser),
+		Host:     fmt.Sprintf("%s:%d", c.DBHost, c.DBPort),
+		Path:     "/" + c.DBName,
+		RawQuery: "sslmode=" + c.DBSSLMode,
+	}
+	return u.String()
 }
