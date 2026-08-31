@@ -22,6 +22,28 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
 - **Primary-action buttons use `is-link`, not `is-primary`.** Add / Create / Save / Enable use `button is-link` (orbital standardized on `is-link` as its action colour — do not mix in `is-primary`). Destructive actions use solid `is-danger` (match the config-item Delete — not `is-danger is-light`); approve/reject verdict pairs use `is-success` / `is-danger`; secondary actions (Cancel, Close) are plain (no colour).
 - **All HTML template rendering goes through `renderHTML` (buffer-then-write) — NEVER `tmpl.Execute` / `ExecuteTemplate` directly into `c.Response()`.** `html/template` streams output and only errors *after* partial bytes are written, so executing straight into the response commits a `200` + truncated body on any mid-render error (most commonly a template referencing a field the render struct lacks). Echo's error handler cannot touch a committed response, so the failure is **silent**: truncated HTML, no 500, nothing logged — it surfaces downstream as "a button does nothing." Real burn 2026-07-27: `cluster-tab.gohtml` rendered `.Backup.Etcd.RetentionDays` but the `backupKindTab` render struct was missing that field → the fragment truncated *before* the edit modal at the end of the template → the Edit button had no modal to open. `renderHTML(c, tmpl, name, data)` in `internal/handler/render.go` renders into a `bytes.Buffer` first: on error nothing is written and the error propagates to a real 500 (the access-log middleware escalates 5xx → ERROR, so it is visible); on success it writes the full body in one shot. Pass `name=""` to run the root template (`Execute`), or a defined-block name to run `ExecuteTemplate`. This buffering does NOT prevent struct/template field drift — it makes the drift fail *loud* (500 in dev/CI) instead of silently truncating in prod. New handlers MUST render through this helper.
 
+## House style — measured, not invented
+
+**Every orbital page is a page heading, a 14px line, and bare tables. There are no section containers.** Verified across `/servers`, `/audit-log`, `/change-requests`, `/approval-policies` (2026-08-31).
+
+| Element | Exact markup |
+|---|---|
+| Page heading | `<p class="is-size-4 mb-2" data-testid="page-heading">` — 24px |
+| Description under it | `<p class="has-text-grey mb-4">` — 14px |
+| Section label within a page | `<p class="mt-5 mb-2">` — 14px |
+| Every table | `class="table is-striped is-hoverable is-fullwidth is-size-7"` — 12px cells, `w700` headers |
+
+**The type scale is exactly three sizes: 24 / 14 / 12.** Nothing else. `is-size-5` (20px) appears in one place — the `/approval-policies` modal — and page content never uses it.
+
+- **Do NOT wrap page sections in `.box` or `.card`.** The only `.box` in the app is inside that modal. A boxed section reads as heavier than every other page, and `article.box` per panel was tried on the change-request review page and reverted the same day.
+- **Do NOT dim text inside a table.** Greying a field name, an arrow and a null glyph gives one row three shades and reads as inconsistency, not hierarchy — the columns already separate what is what. `has-text-grey` has exactly one sanctioned use: the description line under a page heading.
+- **Do NOT use `<strong>` for both section headings and inline emphasis on the same page.** Bold doing two jobs stops meaning either.
+- **Do NOT invent a fourth font size, a narrow table, or a per-cell `is-size-7`** — the table class carries it.
+
+**Before designing any page, measure an existing one rather than reading this table and hoping.** Open it in Playwright and read back the computed `fontSize`, the container elements and the first table's class list. The session that produced this section cost several rounds of "this doesn't match the other pages" — every one of which a 30-second measurement would have prevented.
+
+**Section cards on the change-request review page use `.box.cr-section`** (`main.scss`): Bulma's plain `.box` background resolves to the SAME colour as the page in dark mode, so a card renders invisible. Elevation must read lighter in dark mode and as a hairline border in light.
+
 ## Core rules
 
 - **JavaScript is split into ES modules — no bundler** — `web/shared/static/shared.js` (utilities used by both orbital and orb), `web/shared/static/orbital.js` (orbital-only features), `web/shared/static/orb.js` (orb-only features). `head.gohtml` conditionally loads `orbital.js` or `orb.js` based on `{{.UI.AppName}}`. Never inline `<script>` blocks in templates.

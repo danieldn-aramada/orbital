@@ -21662,7 +21662,7 @@ has-background-danger.is-hoverable:active {
      minimum blows the content column out to its widest child, defeating any
      inner overflow:auto. Capping the min at 0 lets the column shrink so inner
      scroll containers (e.g. the /schema <pre>) actually scroll. */
-  grid-template-columns: 12em minmax(0, 1fr);
+  grid-template-columns: 13.5em minmax(0, 1fr);
   border-top: 1px solid transparent;
   border-bottom: 1px solid transparent;
   border-color: hsl(var(--bulma-scheme-h), var(--bulma-scheme-s), calc(var(--bulma-scheme-main-l) - 6%));
@@ -21803,6 +21803,7 @@ has-background-danger.is-hoverable:active {
   align-items: center;
   padding: 0.3em 0.4em 0.3em var(--list-item-padding);
   font-size: inherit;
+  white-space: nowrap;
 }
 .app-menu .app-menu-link .tag {
   flex: 0 0 auto;
@@ -21992,6 +21993,26 @@ div.dt-container:has(#audit-log-table) .dt-paging .pagination-link {
   position: absolute !important;
   left: calc(50% - 0.5em);
   top: calc(50% - 0.5em);
+}
+
+.box.cr-section {
+  background-color: var(--bulma-scheme-main);
+  border: 1px solid var(--bulma-border);
+  box-shadow: none;
+}
+.box.cr-section .table,
+.box.cr-section .table td,
+.box.cr-section .table th {
+  background-color: transparent;
+}
+.box.cr-section .table.is-striped tbody tr:nth-child(even) td {
+  background-color: var(--bulma-scheme-main-ter);
+}
+
+@media (prefers-color-scheme: dark) {
+  .box.cr-section {
+    background-color: var(--bulma-scheme-main-bis);
+  }
 }
 
 /*# sourceMappingURL=main.css.map */

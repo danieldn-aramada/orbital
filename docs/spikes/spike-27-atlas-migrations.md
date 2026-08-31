@@ -4,7 +4,7 @@
 **Date:** 2026-08-26
 **Scope:** orbital's PostgreSQL schema evolution (`ent/migrate`, `cmd/orbital/main.go`), the deploy path, and CI. Orb's SQLite is a secondary target (§8).
 **Question:** How does orbital evolve its Postgres schema against long-lived data — adding constraints to populated tables — without crashlooping deploys?
-**Relationship to Spike 34:** independent. That spike's `events` → `audit_events` rename runs **first**, under auto-migration with an explicit drop of the old tables — so Atlas baselines an already-correct schema rather than inheriting a rename to unwind.
+**Relationship to Spike 34:** independent. That spike's `events` → `audit_events` rename runs **first**, under auto-migration. **Correction (2026-08-31):** there is no explicit drop of the old tables — ent auto-migration cannot rename, so it creates the new tables empty and leaves `events`/`event_resources`/`event_resource_types` in place. Atlas will therefore baseline a schema that still carries three orphaned tables; plan to drop them in the baseline migration. See AUDIT.md § Settled Decisions.
 
 **Evidence policy:** external claims carry sources in §10. ent behaviour below was verified against the **ent v0.14.6 source** in the module cache, not only the docs.
 

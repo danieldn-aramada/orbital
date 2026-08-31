@@ -650,14 +650,14 @@ function renderExportPreviewTable(changes, esc, fmt) {
     for (const r of inSec) {
       trs += '<tr>'
         + '<td class="is-family-monospace is-size-7" title="' + esc(r.orbId) + '">' + esc(short(r.orbId)) + '</td>'
-        + '<td class="has-text-grey is-size-7">' + esc(r.type) + '</td>'
+        + '<td class="is-size-7">' + esc(r.type) + '</td>'
         + '<td class="is-size-7">' + renderExportPreviewFields(r, esc, fmt) + '</td>'
         + '</tr>'
     }
 
     out += '<p class="mt-4 mb-1"><span class="tag is-small ' + sec.cls + '">' + sec.label + '</span> '
-      + '<span class="has-text-grey is-size-7">' + inSec.length + '</span></p>'
-      + '<div style="overflow-x:auto"><table class="table is-fullwidth is-narrow is-hoverable mb-0">'
+      + '<span class="is-size-7">' + inSec.length + '</span></p>'
+      + '<div style="overflow-x:auto"><table class="table is-striped is-hoverable is-fullwidth is-size-7">'
       + '<thead><tr>'
       + '<th class="is-size-7">orbId</th>'
       + '<th class="is-size-7">Type</th>'
@@ -672,14 +672,19 @@ function renderExportPreviewTable(changes, esc, fmt) {
 // removed rows show only a field count — every field of a new/gone entity is
 // trivially new/gone, so dumping them all is noise. The `Type.` prefix is
 // stripped from field names because the Type column already carries it.
+// One text colour throughout. Dimming the field name, the arrow and the null
+// glyph gave a single row three shades and read as inconsistency rather than as
+// hierarchy — the columns already separate what is what.
+// Shared by the export preview, the artifact compare and the change-request
+// review page, so this is deliberately a change to all three.
 function renderExportPreviewFields(node, esc, fmt) {
   const fields = node.fields || []
   if (node.change !== 'modified') {
-    return '<span class="has-text-grey">' + fields.length + (fields.length === 1 ? ' field' : ' fields') + '</span>'
+    return fields.length + (fields.length === 1 ? ' field' : ' fields')
   }
   return fields.map(f =>
-    '<div><span class="has-text-grey">' + esc(String(f.field).replace(/^[^.]+\./, '')) + '</span>: '
-    + fmt(f.before) + ' <span class="has-text-grey-light">→</span> ' + fmt(f.after) + '</div>'
+    '<div>' + esc(String(f.field).replace(/^[^.]+\./, '')) + ': '
+    + fmt(f.before) + ' → ' + fmt(f.after) + '</div>'
   ).join('')
 }
 
@@ -1393,6 +1398,40 @@ function shortValue(v) {
 // this is used: `colo:server-1W8Y2Z3` reads as `server-1W8Y2Z3`.
 function shortOrbId(id) {
   return String(id || '').replace(/^[^:]+:/, '')
+}
+
+// changeCell renders an `effect` as one line. Module scope because BOTH the
+// queue and the review view render it — a second copy in the detail IIFE is
+// how the two drift.
+function effectFieldText(sum) {
+  if (!sum || !sum.entities) return 'no changes'
+  if (sum.fields === 1 && sum.field) {
+    // The field is NOT qualified by type: whatever renders this already names
+    // the entity — an orbId in the same cell, or its own column — and orbIds are
+    // conventional (`<kind>-<natural-key>`), so `server-maintenance-CWJHDX3` plus
+    // `enabled` says enabled on what without `ServerMaintenance.` in front.
+    const label = esc(sum.field)
+    if (sum.cleared) return 'clear ' + label
+    const v = shortValue(sum.value)
+    if (v === null) return label
+    // `before` is present only on an effect-derived summary — a payload knows
+    // what a field becomes, never what it was — so a row created before that
+    // existed renders `\u2192 after` and is still correct, just less informative.
+    const b = shortValue(sum.before)
+    return label + ': ' + (b === null ? '' : esc(b) + ' ') + '\u2192 ' + esc(v)
+  }
+  return sum.fields + ' field' + (sum.fields === 1 ? '' : 's')
+}
+
+// changeCell is effectFieldText with the entity prepended — the queue has no
+// orbId column of its own. One implementation of "what changed" between them,
+// so a queue row and a review page can never word the same effect differently.
+function changeCell(sum) {
+  if (!sum || !sum.entities) return '<span class="has-text-grey">no changes</span>'
+  const where = shortOrbId(sum.orbId)
+  const text = effectFieldText(sum)
+  if (where) return esc(where) + ' \u00b7 ' + text
+  return esc(sum.entities + ' entities') + ' \u00b7 ' + text
 }
 
 // inlineValue is shortValue for a PROPOSAL, which can also be a clear.
@@ -2538,31 +2577,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // staleness anchor comes from — so any client building a queue gets the same
   // two branches instead of writing a walk over `changes`, which is the
   // bespoke-client-logic smell the API-first rule names by hand.
-  function changeCell(sum) {
-    if (!sum || !sum.entities) return '<span class="has-text-grey">no changes</span>'
-    const where = shortOrbId(sum.orbId)
-    if (sum.fields === 1 && sum.field) {
-      // The field is NOT qualified by type: the orbId sits in the same cell and
-      // already names the kind, because orbIds are conventional
-      // (`<kind>-<natural-key>`) — `server-maintenance-CWJHDX3 · enabled` says
-      // enabled on what without `ServerMaintenance.` in front of it. The type
-      // stays in the response for callers that want it; deciding when a prefix
-      // would be redundant is not work this cell should be doing.
-      const label = esc(sum.field)
-      if (sum.cleared) return esc(where) + ' \u00b7 clear ' + label
-      const v = shortValue(sum.value)
-      if (v === null) return esc(where) + ' \u00b7 ' + label
-      // `before` is present only on an effect-derived summary — a payload knows
-      // what a field becomes, never what it was — so a row created before that
-      // existed renders `→ after` and is still correct, just less informative.
-      const b = shortValue(sum.before)
-      const from = b === null ? '' : esc(b) + ' '
-      return esc(where) + ' \u00b7 ' + label + ': ' + from + '\u2192 ' + esc(v)
-    }
-    const n = sum.fields + ' field' + (sum.fields === 1 ? '' : 's')
-    if (where) return esc(where) + ' \u00b7 ' + n
-    return esc(sum.entities + ' entities') + ' \u00b7 ' + n
-  }
 
   function render(items, total) {
     tbody.innerHTML = items.map(cr => {
@@ -2648,15 +2662,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function render(cr, diff) {
     const fmt = (v) => v == null
-      ? '<span class="has-text-grey-light">∅</span>'
+      ? '<span class="is-family-monospace">∅</span>'
       : '<span class="is-family-monospace">' + esc(JSON.stringify(v)) + '</span>'
 
-    let out = '<p class="is-size-4 mb-1" data-testid="page-heading">' + esc(cr.title) + '</p>'
-    out += '<p class="has-text-grey is-size-7 mb-3">'
-      + esc(cr.namespace) + ' · opened by ' + esc(cr.author) + ' · ' + esc(fmtDate(cr.createdAt))
-      + ' · <strong>' + esc(cr.status) + '</strong>'
-      + (cr.requiredApprovals > 0 ? ' · ' + esc(cr.approvals + ' of ' + cr.requiredApprovals + ' approvals') : ' · no approval required')
-      + '</p>'
+    // House style, measured off /servers, /audit-log, /change-requests: a 24px
+    // `p.is-size-4 mb-2` heading, a 14px line under it, 12px for everything in a
+    // table. Three sizes, no more. There are NO section boxes anywhere in this
+    // app — the one `.box` on /approval-policies is inside a modal.
+    //
+    // Shape follows GitHub: title and id on one line, then state plus a factual
+    // sentence. The id was previously only in the URL, despite the cheatsheet
+    // calling change-request ids the thing people quote to each other.
+    // The stored title ends in "· N fields", which the Changes table below states
+    // exactly and better. Strip it for display rather than at creation — the
+    // stored value is what the API and every other client already carry.
+    let out = '<p class="is-size-4 mb-2" data-testid="page-heading">'
+      + esc(String(cr.title).replace(/\s*\u00b7\s*\d+\s+fields?$/, ''))
+      + ' <span class="is-family-monospace">' + esc(cr.id) + '</span></p>'
+    // Metadata is a record, not a sentence. The previous line ran a badge, a verb
+    // phrase, a namespace and a ratio together with `·` doing three different
+    // jobs. This is the key/value shape the Server Summary panel already uses
+    // (`server-tab.gohtml`): tbody only, no header row, label column shrunk to
+    // its content. No card — these are page attributes, so the two content
+    // sections below stay visually dominant.
+    //
+    // `title` is deliberately NOT a row: it is the page heading directly above.
+    const rows = [
+      ['Status', '<span class="tag ' + (STATUS_TAG[cr.status] || 'is-light') + '">' + esc(cr.status) + '</span>'],
+      ['Author', esc(cr.author)],
+      ['Namespace', esc(cr.namespace)],
+      ['Approvals', cr.requiredApprovals > 0
+        ? esc(cr.approvals + ' of ' + cr.requiredApprovals)
+        : '<span class="has-text-grey">none required</span>'],
+    ]
+    out += section('Details',
+      '<table class="table is-fullwidth is-size-7 mb-0"><tbody>'
+      + rows.map(([k, v], i) => '<tr><td style="white-space:nowrap'
+          + (i === 0 ? ';width:1%' : '') + '">' + k + '</td><td>' + v + '</td></tr>').join('')
+      + '</tbody></table>')
 
     if (cr.description) out += '<p class="mb-3" style="white-space:pre-wrap;">' + esc(cr.description) + '</p>'
 
@@ -2678,57 +2721,128 @@ document.addEventListener('DOMContentLoaded', () => {
     // The diff renderer is the same one the export preview and the artifact
     // compare use — all three consume the identical flat changes[] shape,
     // because one graphdiff core produces it.
+    // No "Plan: N changed · N added · N removed" line: renderExportPreviewTable
+    // already heads each group with a [Modified] N tag, and two counts of the
+    // same thing is one too many.
     if (diff && (diff.changes || []).length) {
-      const s = diff.summary || {}
-      out += '<p class="mb-1"><strong>Plan: ' + (s.modified || 0) + ' changed · '
-        + (s.added || 0) + ' added · ' + (s.removed || 0) + ' removed</strong></p>'
-      out += renderExportPreviewTable(diff.changes, esc, fmt)
+      out += section('Changes', renderExportPreviewTable(diff.changes, esc, fmt))
+    } else if (cr.status === 'open' || cr.status === 'approved') {
+      out += section('Changes', '<p class="is-size-7">No difference from current intent — this change is already applied.</p>')
     } else {
-      out += '<p class="has-text-grey is-size-7">No difference from current intent — this change is already applied.</p>'
+      // A terminal request's diff is empty BY CONSTRUCTION: it is measured
+      // against current intent, which already includes the merge. Saying "no
+      // difference" there restates the status line directly above it and drops
+      // the only thing worth keeping — what the request did. `effect` is the
+      // delta captured when it was opened, which is exactly that record. No
+      // prefix: the status above already says merged / rejected / closed.
+      out += renderEffectTable(cr)
     }
 
-    out += renderReviews(cr)
-    out += renderAttempts(cr)
+    out += renderTimeline(cr)
     out += renderActions(cr)
     host.innerHTML = out
   }
 
-  function renderReviews(cr) {
-    if (!cr.reviews || !cr.reviews.length) return ''
-    let rows = ''
-    for (const r of cr.reviews) {
-      // An approval cast against an earlier version is SHOWN, not hidden — the
-      // API keeps the row and marks it, so a reviewer sees "Alice approved an
-      // earlier version" instead of her approval silently vanishing.
-      const note = r.current
-        ? ''
-        : ' <span class="has-text-warning">(approved an earlier version)</span>'
-      rows += '<li class="is-size-7">'
-        + '<strong>' + esc(r.approver) + '</strong> ' + esc(r.decision) + note
-        + ' <span class="has-text-grey">' + esc(fmtDate(r.at)) + '</span>'
-        + (r.comment ? ' — ' + esc(r.comment) : '')
-        + '</li>'
-    }
-    return '<p class="mt-4 mb-1"><strong>Reviews</strong></p><ul data-testid="cr-reviews">' + rows + '</ul>'
+  // Bulma tag classes per status. is-light throughout: a state badge should read
+  // at a glance without shouting over the title beside it.
+  const STATUS_TAG = {
+    open: 'is-info is-light',
+    approved: 'is-success is-light',
+    merged: 'is-link is-light',
+    rejected: 'is-danger is-light',
+    closed: 'is-light',
   }
 
-  function renderAttempts(cr) {
-    if (!cr.mergeAttempts || !cr.mergeAttempts.length) return ''
-    let rows = ''
-    for (const a of cr.mergeAttempts) {
-      const items = (a.results || []).map(r =>
-        '<li class="is-size-7">' + (r.applied ? '✓ ' : '✗ ') + esc(r.orbId)
-        + (r.error ? ' — ' + esc(r.error) : '') + '</li>').join('')
-      rows += '<li class="is-size-7 mb-2">'
-        + esc(fmtDate(a.attemptedAt)) + ' by ' + esc(a.attemptedBy)
-        + (a.error ? ' — <span class="has-text-danger">' + esc(a.error) + '</span>' : ' — applied')
-        + (items ? '<ul class="ml-4">' + items + '</ul>' : '')
-        + '</li>'
+  // A section is a 14px label and a table — NO container. Measured off /servers,
+  // /audit-log and /change-requests: none of them wraps anything in a .box or
+  // .card, and the single .box in this app lives inside the /approval-policies
+  // modal. An earlier pass here used `article.box` per section and read as
+  // heavier than every other page.
+  function section(title, inner) {
+    return '<article class="box cr-section">'
+      + '<p class="mb-3">' + esc(title) + '</p>'
+      + inner
+      + '</article>'
+  }
+
+  // The table classes every other page in orbital uses, verbatim.
+  const TABLE_CLASS = 'table is-striped is-hoverable is-fullwidth is-size-7'
+
+  // A terminal request's live diff is empty by construction, so its record comes
+  // from the effect captured at open. It renders in the SAME columns as a live
+  // diff: a merged request and an open one should not look like two different
+  // kinds of page just because the data reached the table by a different route.
+  function renderEffectTable(cr) {
+    const e = cr.effect || {}
+    const title = cr.status === 'merged' ? 'Applied' : 'Proposed'
+    if (!e.entities) return section(title, '<p class="is-size-7">No recorded change.</p>')
+    const where = shortOrbId(e.orbId)
+    return section(title,
+      '<div style="overflow-x:auto"><table class="' + TABLE_CLASS + '" data-testid="cr-record">'
+      + '<thead><tr><th class="is-size-7">orbId</th><th class="is-size-7">Type</th>'
+      + '<th class="is-size-7">Change</th></tr></thead><tbody><tr>'
+      + '<td class="is-family-monospace is-size-7" title="' + esc(e.orbId || '') + '">'
+      + esc(where || (e.entities + ' entities')) + '</td>'
+      + '<td class="is-size-7">' + esc(e.type || '') + '</td>'
+      + '<td class="is-size-7">' + effectFieldText(e) + '</td>'
+      + '</tr></tbody></table></div>')
+  }
+
+  // ONE chronological table, replacing separate "Reviews" and "Merge attempts"
+  // sections. Both were fragments of the same timeline, and a bullet list beside
+  // a data table was the loudest of the mismatches. Columns mirror the diff
+  // table's subject-first shape: who, what, when.
+  //
+  // Nothing inside a row is bolded. Bold was doing two jobs here — heading a
+  // section AND naming an actor — so it stopped meaning anything.
+  function renderTimeline(cr) {
+    const rows = [{ at: cr.createdAt, who: cr.author, what: 'opened' }]
+
+    for (const r of (cr.reviews || [])) {
+      // An approval cast against an earlier version is SHOWN, not hidden — the
+      // API keeps the row and marks it, so a reviewer reads "approved an earlier
+      // version" instead of watching an approval silently vanish.
+      const note = r.current ? '' : ' <span class="has-text-warning">(approved an earlier version)</span>'
+      rows.push({ at: r.at, who: r.approver,
+        what: esc(r.decision) + note + (r.comment ? ' — ' + esc(r.comment) : ''), raw: true })
     }
-    return '<p class="mt-4 mb-1"><strong>Merge attempts</strong></p>'
-      + '<p class="has-text-grey is-size-7 mb-1">A partly-applied merge leaves this request open. '
-      + 'What already applied stays applied, and re-merging only does the remainder.</p>'
-      + '<ul>' + rows + '</ul>'
+
+    for (const a of (cr.mergeAttempts || [])) {
+      const results = a.results || []
+      const failed = results.filter(r => !r.applied)
+      let what = 'merged'
+      if (a.error) {
+        what = 'merge failed — <span class="has-text-danger">' + esc(a.error) + '</span>'
+      } else if (failed.length) {
+        // A partial merge is the one case that needs explaining, so it is
+        // explained HERE, where it happened — not as standing help text under
+        // every clean merge, which is most of why this page read as wordy.
+        what = 'merged in part — ' + esc(failed.length + ' of ' + results.length) + ' did not apply, '
+          + 'so this stays open. Re-merging does only the remainder.'
+          + '<ul class="ml-4">' + failed.map(r =>
+            '<li>\u2717 ' + esc(r.orbId) + (r.error ? ' — ' + esc(r.error) : '') + '</li>').join('') + '</ul>'
+      }
+      rows.push({ at: a.attemptedAt, who: a.attemptedBy, what, raw: true })
+    }
+
+    // ISO-8601 UTC throughout, so a string compare IS a chronological sort.
+    rows.sort((x, y) => String(x.at).localeCompare(String(y.at)))
+
+    // No count beside the title: "Activity 2" tells a reader nothing they cannot
+    // see by looking at the two rows underneath it.
+    return section('Activity',
+      '<div style="overflow-x:auto"><table class="' + TABLE_CLASS + '" data-testid="cr-reviews">'
+      + '<thead><tr>'
+      + '<th class="is-size-7">Who</th>'
+      + '<th class="is-size-7">What</th>'
+      + '<th class="is-size-7">When</th>'
+      + '</tr></thead><tbody>'
+      + rows.map(r => '<tr>'
+          + '<td class="is-size-7">' + esc(r.who) + '</td>'
+          + '<td class="is-size-7">' + (r.raw ? r.what : esc(r.what)) + '</td>'
+          + '<td class="is-size-7">' + esc(fmtDate(r.at)) + '</td>'
+          + '</tr>').join('')
+      + '</tbody></table></div>')
   }
 
   // Buttons are rendered STRAIGHT from availableActions. The API has already

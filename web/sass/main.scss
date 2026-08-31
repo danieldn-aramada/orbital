@@ -256,7 +256,7 @@ html {
      minimum blows the content column out to its widest child, defeating any
      inner overflow:auto. Capping the min at 0 lets the column shrink so inner
      scroll containers (e.g. the /schema <pre>) actually scroll. */
-  grid-template-columns: 12em minmax(0, 1fr);
+  grid-template-columns: 13.5em minmax(0, 1fr);
   border-top: 1px solid transparent;
   border-bottom: 1px solid transparent;
   border-color: hsl(var(--bulma-scheme-h), var(--bulma-scheme-s), calc(var(--bulma-scheme-main-l) + -6%));
@@ -476,6 +476,12 @@ html {
     align-items: center;
     padding: 0.3em 0.4em 0.3em var(--list-item-padding);
     font-size: inherit;
+    // A nav label never wraps. "Change Requests" plus its count sat ~3px inside
+    // the old 12em track, so ordinary font-rendering variance broke it across
+    // two rows while every other item stayed on one. The column was widened to
+    // give real headroom; this makes the failure impossible rather than
+    // marginal, which is what stops it coming back the next time a label grows.
+    white-space: nowrap;
 
     // A nav count is a count, not a tag. Bulma's .tag is a 2em-tall pill with
     // 0.75em of side padding, which in a fixed-width sidebar left "Change
@@ -886,5 +892,42 @@ div.dt-container:has(#audit-log-table) {
     position: absolute !important;
     left: calc(50% - 1em * 0.5);
     top: calc(50% - 1em * 0.5);
+  }
+}
+// A section card has to be visibly distinct from the page it sits on. Bulma's
+// `.box` background resolves to the SAME colour as the page in dark mode — both
+// hsl(0, 0%, 9%) — so the card was invisible and only its drop shadow hinted at
+// an edge. Elevation reads as LIGHTER in dark mode (never darker) and as a
+// hairline border in light mode, so this does both and drops the shadow.
+//
+// Scoped to .cr-section rather than `.box`: the only other .box in the app is
+// the /approval-policies modal, which sits over a dimmed backdrop and already
+// separates fine.
+.box.cr-section {
+  // Bulma's own box background: white in light mode. Do NOT tint it there — a
+  // grey fill reads as "darker" against a white page and was rejected on sight.
+  // The border alone gives the card its edge.
+  background-color: var(--bulma-scheme-main);
+  border: 1px solid var(--bulma-border);
+  box-shadow: none;
+
+  // Tables default to scheme-main, which is now a step darker than the card
+  // holding them; inheriting keeps the card one flat surface.
+  .table,
+  .table td,
+  .table th {
+    background-color: transparent;
+  }
+  .table.is-striped tbody tr:nth-child(even) td {
+    background-color: var(--bulma-scheme-main-ter);
+  }
+}
+
+// DARK MODE ONLY. Bulma resolves .box's background to the same colour as the
+// page here — both hsl(0, 0%, 9%) — so the card is present in the DOM and
+// invisible on screen. Elevation reads as LIGHTER in dark mode, never darker.
+@media (prefers-color-scheme: dark) {
+  .box.cr-section {
+    background-color: var(--bulma-scheme-main-bis);
   }
 }
