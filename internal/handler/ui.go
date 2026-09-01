@@ -342,10 +342,14 @@ func (h *UI) ChangeRequests(c echo.Context) error {
 // ChangeRequestDetail renders the review shell for one request. Same rule: the
 // request, its diff and its available actions all come from the API.
 func (h *UI) ChangeRequestDetail(c echo.Context) error {
+	id := c.Param("id")
 	return h.render(c, "change-request-detail", page.ChangeRequestDetail{
-		Base:      h.base(c),
-		PageTitle: "Change Request",
-		ID:        c.Param("id"),
+		Base: h.base(c),
+		// Id first: every review page used to render the tab as "Change Request",
+		// so three open reviews were three identical tabs. Leading with the id is
+		// what survives the truncation a narrow tab applies.
+		PageTitle: id + " \u00b7 Change Request",
+		ID:        id,
 	})
 }
 

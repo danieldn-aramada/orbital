@@ -69,7 +69,21 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   Field marks now cover a server's own fields on the Server Summary table, not only its
   maintenance panel, and sit in a column of their own.
   The review queue shows three tabs — *Needs my review* (hidden for roles that cannot approve),
-  *Open*, *Closed* — and states each row's change instead of its stored title.
+  *Open*, *Closed* — and lists each request by **title**, with a narrow column giving the change's
+  size (`1 field`, `12 fields`) beside it.
+  The review view follows the server detail page's shape: the title, then a row of rounded
+  actions, then the diff in a wide panel with a Details summary beside it and one Activity panel
+  below, with status rendered the same way as on the queue. Its activity is one chronological
+  table rather than separate reviews and merge-attempt lists. The queue remembers which tab you
+  last opened.
+  **The proposer now writes the title.** The propose footer carries a title input, prefilled with
+  the entity name and replaceable in one gesture; leaving it alone or clearing it stores that same
+  entity name. The generated title no longer appends a field count — the queue's `Change` column
+  states that, and requests created before this carry the old `<entity> · N fields` form.
+  Titles are capped at 255 characters — the length the `title` column always enforced, which until
+  now surfaced as a 500 instead of a 400 — and an open request can be **renamed in place** from
+  the review page, which patches the title alone and
+  leaves the changeset, the staleness anchor and every approval untouched.
 - **Artifact-to-artifact compare** — `GET /api/v1/export/compare?from=&to=` returns the
   desired-state delta between any two published artifacts of a data center, pulled by immutable
   digest and diffed in memory. Surfaced as a **Compare** tab on Publish History with linkable

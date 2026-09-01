@@ -191,6 +191,7 @@ convention). Orbital-authored proxy guards (role, MVCC) are the exception — th
 
 ## Settled Decisions
 
+- **`writeError` returns `c.JSON`'s `nil` on success — so a validation helper must NOT hand that value back as its only signal.** A helper written as `func validate(...) error { return writeError(...) }` reports "no problem" to its caller while having already committed a 400, and the handler carries on and appends a second body to the same response. This shipped for one build of `validateTitle` in `changerequest_api.go` and produced a `400` whose body contained the error envelope *and* a successfully created change request. Return `(ok bool, err error)` and branch on `ok`, as `validateTitle` now does. Do not rely on `ErrorHandler`'s `c.Response().Committed` guard to paper over it — that stops the second *error* render, not the handler's own happy path.
 - **`code` is a stable UPPER_SNAKE string, never the HTTP status number.** Confirmed against
   Stripe, Apollo, Google AIP-193, Kubernetes, GitHub GraphQL — the string identifier is what
   clients branch on; the HTTP number is coarse and lives elsewhere.

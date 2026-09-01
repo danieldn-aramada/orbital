@@ -1948,7 +1948,9 @@ const docTemplate = `{
                     "example": "alaska-dot"
                 },
                 "title": {
+                    "description": "Title renames the request. Sending it alone leaves the changeset, the base\nanchor and every approval untouched — a rename is not a re-proposal.\nMax 255 characters.",
                     "type": "string",
+                    "maxLength": 255,
                     "example": "Enable SSH on the Anchorage iDRACs"
                 }
             }
@@ -2541,8 +2543,9 @@ const docTemplate = `{
                     "example": "alaska-dot"
                 },
                 "title": {
-                    "description": "Title is the one-line summary reviewers see in the queue.",
+                    "description": "Title is the one-line summary reviewers see in the queue. Written by the\nproposer — a diff says what changed, only a person says why. Max 255\ncharacters; put longer context in description, which is unbounded.",
                     "type": "string",
+                    "maxLength": 255,
                     "example": "Enable SSH on the Anchorage iDRACs"
                 }
             }

@@ -24,27 +24,42 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
 
 ## House style — measured, not invented
 
-**Every orbital page is a page heading, a 14px line, and bare tables. There are no section containers.** Verified across `/servers`, `/audit-log`, `/change-requests`, `/approval-policies` (2026-08-31).
+**Measure the closest existing page and copy its markup. Do not derive the style from this table.** This section exists to tell you *which* page to copy and which mistakes have already been made; the templates are the authority.
 
 | Element | Exact markup |
 |---|---|
 | Page heading | `<p class="is-size-4 mb-2" data-testid="page-heading">` — 24px |
-| Description under it | `<p class="has-text-grey mb-4">` — 14px |
-| Section label within a page | `<p class="mt-5 mb-2">` — 14px |
+| Description under it, on a LIST or TOOL page | `<p class="has-text-grey mb-4" style="font-size: 0.875rem;">` — 14px |
+| Section label inside a box | `<p class="is-size-6 has-text-weight-semibold mb-3">` — 16px |
 | Every table | `class="table is-striped is-hoverable is-fullwidth is-size-7"` — 12px cells, `w700` headers |
+| Wide table wrapper | `<div class="table-container">` — Bulma's own `overflow-x: auto`, not an inline style |
+| Record-scoped actions | `<button class="button is-rounded is-small is-link mt-1">` in a `columns m-0 > column pt-0 pl-0` toolbar at the TOP |
+| List-page actions | `<button class="button is-small is-link">` — square, not rounded |
 
-**The type scale is exactly three sizes: 24 / 14 / 12.** Nothing else. `is-size-5` (20px) appears in one place — the `/approval-policies` modal — and page content never uses it.
+**Reference pages to copy, by shape:**
 
-- **Do NOT wrap page sections in `.box` or `.card`.** The only `.box` in the app is inside that modal. A boxed section reads as heavier than every other page, and `article.box` per panel was tried on the change-request review page and reverted the same day.
-- **Do NOT dim text inside a table.** Greying a field name, an arrow and a null glyph gives one row three shades and reads as inconsistency, not hierarchy — the columns already separate what is what. `has-text-grey` has exactly one sanctioned use: the description line under a page heading.
+| Building | Copy |
+|---|---|
+| A list page | `publish-history.gohtml` — heading, description, one `.table-container` table, pagination nav |
+| A page of boxed sections | `restore.gohtml` (stacked) or `schema.gohtml` (narrow box + wide box) |
+| A record detail view | `server-tab.gohtml` (toolbar, then `grid` of `.box` cells) or `change-request-detail.gohtml` |
+| A key/value summary | `schema.gohtml`'s "Active Version" — `column is-narrow`, boxed, `<tbody>`-only table |
+
+- **A wide table inside a Bulma `.cell` needs `min-width: 0` on the cell.** `main.scss` sets it for both `.tab-content .column` and `.tab-content .cell`: a flex/grid child defaults to `min-width: auto` and grows to its widest descendant, which defeats the child's own `overflow-x: auto` — the container has nothing to scroll and the *page* scrolls sideways instead. The `.cell` half of that rule was added when the change-request review page put a 3-column diff in a `is-col-span-2` cell.
+- **Box titles are 24px when the box IS the page, 16px when a page heading sits above it.** `server-tab.gohtml` uses `is-size-4` because a tab has no page heading, so its box titles are the largest text on the view. `restore.gohtml` and `schema.gohtml` — the two pages with both a heading and boxes — use `is-size-6`. Copying server-tab's 24px onto a page that already has a 24px heading flattens the hierarchy; that was a real defect on the change-request review page.
+- **A standalone page opts into the app-wide box treatment by wrapping content in `<div class="tab-content">`.** `main.scss` scopes padding, shadow, border-top and the 1%-darker fill to `.app-main .tab-content .box`. A bare `article.box` outside that scope gets Bulma's default, whose background is the SAME colour as the page in dark mode — the card is then present in the DOM and invisible on screen. `restore.gohtml` and `schema.gohtml` both use this wrapper; it is the reason they match the server detail panels. **Do NOT write a bespoke `.box.<page>` override to fix the colour** — that was tried on the change-request review page and rejected twice for not matching the reference page it was supposed to match.
+- **Boxes are NOT banned in page content.** An earlier version of this section claimed "there are no section containers", measured only from `/servers` and `/audit-log`, both list pages. `restore.gohtml`, `schema.gohtml`, `publish-history.gohtml`, `device-code.gohtml` and orb's `status.gohtml` all box their content. Use a box for a bounded summary; leave the page's main subject (a diff, a long log) as a bare table.
+- **A page description line belongs on a LIST or TOOL page, not a detail page.** On a list page it says what the list is. On a detail page it would describe the page type rather than the record, which is boilerplate. Give that slot to the record's own description instead.
+- **Status renders as plain coloured text inside row-per-record tables** — `has-text-link` / `-success` / `-danger` / `-grey`, optionally with `has-text-weight-medium` (`divergence-reports.gohtml:227`, `CR_STATUS_CLASS` in `orbital.js`). A `tag` pill is correct only for a single prominent scalar in a box (`schema.gohtml`'s version). **The same value must render the same way on a feature's list page and its detail page** — a pill on one and coloured text on the other was a real defect.
+- **Breadcrumbs are not used anywhere in orbital.** "Back to parent" is a rounded `is-warning` button with a left-arrow icon in the top toolbar (`server-tab.gohtml`).
+- **Do NOT build page structure in JavaScript.** Containers, headings and table classes go in the `.gohtml`; JS fills element ids. The change-request review page was assembled by string concatenation in `orbital.js`, so there was no template to copy and none of the house style was inherited — it took a full rewrite plus several rounds of "this doesn't match" to correct.
+- **Do NOT dim text inside a table.** Greying a field name, an arrow and a null glyph gives one row three shades and reads as inconsistency, not hierarchy — the columns already separate what is what.
 - **Do NOT use `<strong>` for both section headings and inline emphasis on the same page.** Bold doing two jobs stops meaning either.
-- **Do NOT invent a fourth font size, a narrow table, or a per-cell `is-size-7`** — the table class carries it.
-
-**Before designing any page, measure an existing one rather than reading this table and hoping.** Open it in Playwright and read back the computed `fontSize`, the container elements and the first table's class list. The session that produced this section cost several rounds of "this doesn't match the other pages" — every one of which a 30-second measurement would have prevented.
-
-**Section cards on the change-request review page use `.box.cr-section`** (`main.scss`): Bulma's plain `.box` background resolves to the SAME colour as the page in dark mode, so a card renders invisible. Elevation must read lighter in dark mode and as a hairline border in light.
+- **Do NOT add a per-cell `is-size-7`** — the table class carries it.
 
 ## Core rules
+
+- **A page that remembers UI state across navigation uses `localStorage`, and its key MUST be added to `clearTabStateOnFresh` in `shared.js`.** That function runs on `?fresh=1`, which the login redirect sets — login is a hard boundary and one user must not inherit another's view on a shared machine. Keys in use: `datacenterTabs`, `serverTabs` (open detail tabs), `dcTabCurrent`, `srvTabCurrent` (last-active detail tab, an element id), `crTabCurrent` (the change-request queue's active filter). **A restored value must fall back when it names something no longer on the page** — the change-request queue's *Needs my review* tab is rendered only for roles that can approve, so a demoted user would otherwise land on a tab that loads nothing; the fallback is the server-rendered `li.is-active`, which the template already picks correctly per role.
 
 - **JavaScript is split into ES modules — no bundler** — `web/shared/static/shared.js` (utilities used by both orbital and orb), `web/shared/static/orbital.js` (orbital-only features), `web/shared/static/orb.js` (orb-only features). `head.gohtml` conditionally loads `orbital.js` or `orb.js` based on `{{.UI.AppName}}`. Never inline `<script>` blocks in templates.
 - **Cross-app navigation and reload handlers live in `shared.js`** — `initRowNavigation()`, `initLinkNavigation()`, and `initReloadButtons(opts?)` are exported from `shared.js` and called by both `orbital.js` and `orb.js`. Any new navigation pattern (e.g. dblclick on a new resource type) belongs in these functions so both apps get it automatically. Orbital-only edit-modal handlers (`[data-*-edit-id]` click handlers) stay in `orbital.js` — they are gated on `Actions.Edit` and must not move to `shared.js`. `initReloadButtons` accepts an optional `opts` object: `onDcReloaded(domId)` and `onSrvReloaded(target)` callbacks let `orbital.js` clean up its editor Maps on tab reload; `orb.js` passes nothing. See ADR 011 for the full rationale.

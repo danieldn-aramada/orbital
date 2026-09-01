@@ -655,7 +655,7 @@ function renderExportPreviewTable(changes, esc, fmt) {
         + '</tr>'
     }
 
-    out += '<p class="mt-4 mb-1"><span class="tag is-small ' + sec.cls + '">' + sec.label + '</span> '
+    out += '<p class="mt-1 mb-1"><span class="tag is-small ' + sec.cls + '">' + sec.label + '</span> '
       + '<span class="is-size-7">' + inSec.length + '</span></p>'
       + '<div style="overflow-x:auto"><table class="table is-striped is-hoverable is-fullwidth is-size-7">'
       + '<thead><tr>'
@@ -1423,15 +1423,18 @@ function effectFieldText(sum) {
   return sum.fields + ' field' + (sum.fields === 1 ? '' : 's')
 }
 
-// changeCell is effectFieldText with the entity prepended — the queue has no
-// orbId column of its own. One implementation of "what changed" between them,
-// so a queue row and a review page can never word the same effect differently.
-function changeCell(sum) {
+// fieldCountCell is the queue's narrow Change column: a magnitude, not a
+// description. The description is the proposer's Title beside it, and the full
+// diff is one click away — rendering a before/after here made the widest column
+// in the table say a lot about a one-field request and almost nothing about a
+// twelve-field one, which is backwards.
+//
+// `effect.fields` is never 0 for a request that does anything: the API counts an
+// added or deleted entity as one field precisely so a delete does not read as an
+// empty request. So "no changes" here means genuinely nothing, not a delete.
+function fieldCountCell(sum) {
   if (!sum || !sum.entities) return '<span class="has-text-grey">no changes</span>'
-  const where = shortOrbId(sum.orbId)
-  const text = effectFieldText(sum)
-  if (where) return esc(where) + ' \u00b7 ' + text
-  return esc(sum.entities + ' entities') + ' \u00b7 ' + text
+  return sum.fields + ' field' + (sum.fields === 1 ? '' : 's')
 }
 
 // inlineValue is shortValue for a PROPOSAL, which can also be a clear.
@@ -2531,6 +2534,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 })
 
+// Status colours for a change request, shared by the queue and the review view.
+// Plain coloured text, not a tag pill: divergence-reports.gohtml renders its
+// resolution decisions the same way. One value must not render two ways on two
+// pages of one feature, which is what a pill on the detail page produced.
+const CR_STATUS_CLASS = {
+  open: 'has-text-link',
+  approved: 'has-text-success',
+  merged: 'has-text-grey',
+  rejected: 'has-text-danger',
+  closed: 'has-text-grey-light',
+}
+
 // ─── Change Control: request queue ──────────────────────────────────────────
 // Rows come from the public API, not from a server-rendered template: orbital's
 // UI is a consumer of that API like any other client. In particular the row's
@@ -2543,14 +2558,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const err = document.getElementById('cr-error')
   const empty = document.getElementById('cr-empty')
   const tabs = document.getElementById('cr-tabs')
-
-  const STATUS_CLASS = {
-    open: 'has-text-link',
-    approved: 'has-text-success',
-    merged: 'has-text-grey',
-    rejected: 'has-text-danger',
-    closed: 'has-text-grey-light',
-  }
 
   let currentFilter = ''
 
@@ -2587,7 +2594,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // same cell rather than a column of its own: it is a fact about the
       // request's state, and a second coloured column competes with the first
       // for the eye instead of adding to it.
-      let status = '<span class="' + (STATUS_CLASS[cr.status] || '') + '">' + esc(cr.status) + '</span>'
+      let status = '<span class="' + (CR_STATUS_CLASS[cr.status] || '') + '">' + esc(cr.status) + '</span>'
       if (cr.stale) status += ' <span class="has-text-warning">\u00b7 stale</span>'
       // Plain text, including the placeholder — a greyed "not required" is the
       // same per-cell styling the policies page dropped.
@@ -2596,7 +2603,13 @@ document.addEventListener('DOMContentLoaded', () => {
         : 'not required'
       return '<tr data-cr-row="' + esc(cr.id) + '">'
         + '<td class="is-family-monospace"><a href="' + href + '">' + esc(cr.id) + '</a></td>'
-        + '<td>' + changeCell(cr.effect) + '</td>'
+        // Free text since proposers write it, so the cell truncates (see
+        // #cr-table td.cr-title) and carries the whole thing on hover. The link
+        // is here as well as on the id: the title is the wide target and the
+        // one a reader is already looking at.
+        + '<td class="cr-title" title="' + esc(cr.title) + '">'
+        + '<a href="' + href + '">' + esc(cr.title) + '</a></td>'
+        + '<td>' + fieldCountCell(cr.effect) + '</td>'
         + '<td>' + esc(cr.namespace) + '</td>'
         + '<td>' + esc(cr.author) + '</td>'
         + '<td>' + status + '</td>'
@@ -2620,17 +2633,39 @@ document.addEventListener('DOMContentLoaded', () => {
     empty.style.display = total === 0 ? '' : 'none'
   }
 
+  // The selected tab survives navigating away and back, the same way the server
+  // and data-center pages remember their active tab. localStorage, not
+  // sessionStorage, to match them — and cleared at the login boundary by
+  // clearTabStateOnFresh in shared.js, so one user does not inherit another's
+  // view on a shared machine.
+  const TAB_KEY = 'crTabCurrent'
+
+  function selectTab(a) {
+    for (const li of tabs.querySelectorAll('li')) li.classList.remove('is-active')
+    a.closest('li').classList.add('is-active')
+    load(a.getAttribute('data-cr-filter'))
+  }
+
   tabs.addEventListener('click', (e) => {
     const a = e.target.closest('a[data-cr-filter]')
     if (!a) return
     e.preventDefault()
-    for (const li of tabs.querySelectorAll('li')) li.classList.remove('is-active')
-    a.closest('li').classList.add('is-active')
-    load(a.getAttribute('data-cr-filter'))
+    localStorage[TAB_KEY] = a.getAttribute('data-cr-filter')
+    selectTab(a)
   })
 
+  // A stored filter can name a tab that is not on the page: "Needs my review" is
+  // only rendered for roles that can approve, so a demoted user — or one whose
+  // stored value predates a change to the tab strip — must fall back rather than
+  // land on a page that loads nothing. The server-rendered `li.is-active` is
+  // that fallback, since the template already picks the right default per role.
+  const stored = localStorage[TAB_KEY]
+  const restored = stored
+    ? tabs.querySelector('a[data-cr-filter="' + CSS.escape(stored) + '"]')
+    : null
   const first = tabs.querySelector('li.is-active a[data-cr-filter]')
-  load(first ? first.getAttribute('data-cr-filter') : '')
+  if (restored) selectTab(restored)
+  else load(first ? first.getAttribute('data-cr-filter') : '')
 })
 
 // ─── Change Control: review view ────────────────────────────────────────────
@@ -2660,142 +2695,141 @@ document.addEventListener('DOMContentLoaded', () => {
       .catch(e => fail('Could not load this change request — ' + e.message))
   }
 
+  // Every container, heading and table class on this page lives in
+  // change-request-detail.gohtml. This fills the ids in it and builds nothing
+  // else. Assembling structure here — an <article>, a section heading, a box —
+  // is what made this page drift from every other one: there was no template to
+  // copy, so none of the house style was copied.
+  const el = (id) => document.getElementById(id)
+
+  // The last rendered request. Rename needs the current title to prefill with
+  // and to compare against, and re-fetching to get a value we already hold
+  // would race the click.
+  let current = null
+
+  // The app-wide timestamp convention: emit the ISO value in `data-timestamp`
+  // and let shared.js's renderTimestamps turn it into relative time with the
+  // absolute value on hover. fmtDate is deliberately NOT used here — it is
+  // date-only, which is fine for an export preview and wrong for an audit
+  // timeline, where two events on one day would render identically.
+  const ts = (iso) => '<span data-timestamp="' + esc(iso || '') + '"></span>'
+
   function render(cr, diff) {
     const fmt = (v) => v == null
       ? '<span class="is-family-monospace">∅</span>'
       : '<span class="is-family-monospace">' + esc(JSON.stringify(v)) + '</span>'
 
-    // House style, measured off /servers, /audit-log, /change-requests: a 24px
-    // `p.is-size-4 mb-2` heading, a 14px line under it, 12px for everything in a
-    // table. Three sizes, no more. There are NO section boxes anywhere in this
-    // app — the one `.box` on /approval-policies is inside a modal.
-    //
-    // Shape follows GitHub: title and id on one line, then state plus a factual
-    // sentence. The id was previously only in the URL, despite the cheatsheet
-    // calling change-request ids the thing people quote to each other.
-    // The stored title ends in "· N fields", which the Changes table below states
-    // exactly and better. Strip it for display rather than at creation — the
-    // stored value is what the API and every other client already carry.
-    let out = '<p class="is-size-4 mb-2" data-testid="page-heading">'
-      + esc(String(cr.title).replace(/\s*\u00b7\s*\d+\s+fields?$/, ''))
-      + ' <span class="is-family-monospace">' + esc(cr.id) + '</span></p>'
-    // Metadata is a record, not a sentence. The previous line ran a badge, a verb
-    // phrase, a namespace and a ratio together with `·` doing three different
-    // jobs. This is the key/value shape the Server Summary panel already uses
-    // (`server-tab.gohtml`): tbody only, no header row, label column shrunk to
-    // its content. No card — these are page attributes, so the two content
-    // sections below stay visually dominant.
-    //
-    // `title` is deliberately NOT a row: it is the page heading directly above.
+    // Title then id, the id muted — GitHub's `Title #123`. The id stays in the
+    // heading rather than moving to a Details row because it is what people
+    // quote, it is the only thing distinguishing two requests whose authors
+    // chose the same title, and the browser tab is the only other place it
+    // appears. The stored title is rendered VERBATIM: an earlier pass stripped
+    // its "· N fields" tail, which turned a machine label into something shaped
+    // exactly like a human title and read as a lie on requests predating the
+    // title field.
+    el('cr-heading').innerHTML = esc(cr.title)
+      + ' <span class="has-text-grey">' + esc(cr.id) + '</span>'
+
+    const desc = el('cr-description')
+    desc.textContent = cr.description || ''
+    desc.style.display = cr.description ? '' : 'none'
+
+    // Staleness is NOT repeated here — the banner below says it at length, and
+    // the same fact twice on one page is what made this read as noisy.
     const rows = [
-      ['Status', '<span class="tag ' + (STATUS_TAG[cr.status] || 'is-light') + '">' + esc(cr.status) + '</span>'],
+      ['Status', '<span class="' + (CR_STATUS_CLASS[cr.status] || '') + ' has-text-weight-medium">'
+        + esc(cr.status) + '</span>'],
       ['Author', esc(cr.author)],
       ['Namespace', esc(cr.namespace)],
+      ['Opened', ts(cr.createdAt)],
       ['Approvals', cr.requiredApprovals > 0
         ? esc(cr.approvals + ' of ' + cr.requiredApprovals)
         : '<span class="has-text-grey">none required</span>'],
     ]
-    out += section('Details',
-      '<table class="table is-fullwidth is-size-7 mb-0"><tbody>'
-      + rows.map(([k, v], i) => '<tr><td style="white-space:nowrap'
-          + (i === 0 ? ';width:1%' : '') + '">' + k + '</td><td>' + v + '</td></tr>').join('')
-      + '</tbody></table>')
+    el('cr-details-body').innerHTML = rows.map(([k, v]) =>
+      '<tr><td style="white-space:nowrap;width:1%">' + k + '</td><td>' + v + '</td></tr>').join('')
 
-    if (cr.description) out += '<p class="mb-3" style="white-space:pre-wrap;">' + esc(cr.description) + '</p>'
+    current = cr
+    renderBanner(cr)
+    renderChanges(cr, diff, fmt)
+    el('cr-activity').innerHTML = timelineTable(cr)
+    el('cr-actions').innerHTML = actionButtons(cr)
+    // Injected after DOMContentLoaded, so the automatic pass has already run.
+    renderTimestamps(host)
+    host.style.display = ''
+  }
 
-    // A deleted target is a hard failure with a specific remedy, so it is said
-    // loudly and before the diff, not discovered on a failed merge.
+  // A deleted target is a hard failure with a specific remedy, so it is said
+  // loudly and above the diff, not discovered on a failed merge.
+  function renderBanner(cr) {
+    const b = el('cr-banner')
     if (cr.missingTargets && cr.missingTargets.length) {
-      out += '<div class="notification is-danger is-light py-2 is-size-7 mb-3">'
+      b.innerHTML = '<div class="notification is-danger is-light py-2 is-size-7 mb-4">'
         + '<strong>Target missing.</strong> These entities existed when this was opened and are now deleted: '
         + esc(cr.missingTargets.join(', '))
         + '. Merging cannot proceed — close this request, drop that item, or recreate the entity and re-review.'
         + '</div>'
     } else if (cr.stale) {
-      out += '<div class="notification is-warning is-light py-2 is-size-7 mb-3">'
+      b.innerHTML = '<div class="notification is-warning is-light py-2 is-size-7 mb-4">'
         + 'Intent has changed since this was opened. The diff below is against <strong>current</strong> intent; '
         + 'approving again re-reviews it as it stands now.'
         + '</div>'
+    } else {
+      b.innerHTML = ''
     }
+  }
+
+  // The table classes every other page in orbital uses, verbatim. is-size-7 is
+  // on the table, so cells must not repeat it.
+  const TABLE_CLASS = 'table is-striped is-hoverable is-fullwidth is-size-7'
+
+  function renderChanges(cr, diff, fmt) {
+    const label = el('cr-changes-label')
+    const box = el('cr-changes')
 
     // The diff renderer is the same one the export preview and the artifact
     // compare use — all three consume the identical flat changes[] shape,
-    // because one graphdiff core produces it.
-    // No "Plan: N changed · N added · N removed" line: renderExportPreviewTable
-    // already heads each group with a [Modified] N tag, and two counts of the
-    // same thing is one too many.
+    // because one graphdiff core produces it. No "Plan: N changed · N added"
+    // line: the table already heads each group with a [Modified] N tag.
     if (diff && (diff.changes || []).length) {
-      out += section('Changes', renderExportPreviewTable(diff.changes, esc, fmt))
-    } else if (cr.status === 'open' || cr.status === 'approved') {
-      out += section('Changes', '<p class="is-size-7">No difference from current intent — this change is already applied.</p>')
-    } else {
-      // A terminal request's diff is empty BY CONSTRUCTION: it is measured
-      // against current intent, which already includes the merge. Saying "no
-      // difference" there restates the status line directly above it and drops
-      // the only thing worth keeping — what the request did. `effect` is the
-      // delta captured when it was opened, which is exactly that record. No
-      // prefix: the status above already says merged / rejected / closed.
-      out += renderEffectTable(cr)
+      label.textContent = 'Changes'
+      box.innerHTML = renderExportPreviewTable(diff.changes, esc, fmt)
+      return
     }
-
-    out += renderTimeline(cr)
-    out += renderActions(cr)
-    host.innerHTML = out
+    if (cr.status === 'open' || cr.status === 'approved') {
+      label.textContent = 'Changes'
+      box.innerHTML = '<p class="is-size-7 has-text-grey">'
+        + 'No difference from current intent — this change is already applied.</p>'
+      return
+    }
+    // A terminal request's live diff is empty BY CONSTRUCTION: it is measured
+    // against current intent, which already includes the merge. Saying "no
+    // difference" there restates the status and drops the only thing worth
+    // keeping — what the request did. `effect` is the delta captured at open,
+    // which is exactly that record, and it renders in the SAME columns as a
+    // live diff so a merged request is not a different kind of page.
+    label.textContent = cr.status === 'merged' ? 'Applied' : 'Proposed'
+    box.innerHTML = effectTable(cr)
   }
 
-  // Bulma tag classes per status. is-light throughout: a state badge should read
-  // at a glance without shouting over the title beside it.
-  const STATUS_TAG = {
-    open: 'is-info is-light',
-    approved: 'is-success is-light',
-    merged: 'is-link is-light',
-    rejected: 'is-danger is-light',
-    closed: 'is-light',
-  }
-
-  // A section is a 14px label and a table — NO container. Measured off /servers,
-  // /audit-log and /change-requests: none of them wraps anything in a .box or
-  // .card, and the single .box in this app lives inside the /approval-policies
-  // modal. An earlier pass here used `article.box` per section and read as
-  // heavier than every other page.
-  function section(title, inner) {
-    return '<article class="box cr-section">'
-      + '<p class="mb-3">' + esc(title) + '</p>'
-      + inner
-      + '</article>'
-  }
-
-  // The table classes every other page in orbital uses, verbatim.
-  const TABLE_CLASS = 'table is-striped is-hoverable is-fullwidth is-size-7'
-
-  // A terminal request's live diff is empty by construction, so its record comes
-  // from the effect captured at open. It renders in the SAME columns as a live
-  // diff: a merged request and an open one should not look like two different
-  // kinds of page just because the data reached the table by a different route.
-  function renderEffectTable(cr) {
+  function effectTable(cr) {
     const e = cr.effect || {}
-    const title = cr.status === 'merged' ? 'Applied' : 'Proposed'
-    if (!e.entities) return section(title, '<p class="is-size-7">No recorded change.</p>')
+    if (!e.entities) return '<p class="is-size-7 has-text-grey">No recorded change.</p>'
     const where = shortOrbId(e.orbId)
-    return section(title,
-      '<div style="overflow-x:auto"><table class="' + TABLE_CLASS + '" data-testid="cr-record">'
-      + '<thead><tr><th class="is-size-7">orbId</th><th class="is-size-7">Type</th>'
-      + '<th class="is-size-7">Change</th></tr></thead><tbody><tr>'
-      + '<td class="is-family-monospace is-size-7" title="' + esc(e.orbId || '') + '">'
+    return '<table class="' + TABLE_CLASS + '" data-testid="cr-record">'
+      + '<thead><tr><th>orbId</th><th>Type</th><th>Change</th></tr></thead><tbody><tr>'
+      + '<td class="is-family-monospace" title="' + esc(e.orbId || '') + '">'
       + esc(where || (e.entities + ' entities')) + '</td>'
-      + '<td class="is-size-7">' + esc(e.type || '') + '</td>'
-      + '<td class="is-size-7">' + effectFieldText(e) + '</td>'
-      + '</tr></tbody></table></div>')
+      + '<td>' + esc(e.type || '') + '</td>'
+      + '<td>' + effectFieldText(e) + '</td>'
+      + '</tr></tbody></table>'
   }
 
   // ONE chronological table, replacing separate "Reviews" and "Merge attempts"
-  // sections. Both were fragments of the same timeline, and a bullet list beside
-  // a data table was the loudest of the mismatches. Columns mirror the diff
-  // table's subject-first shape: who, what, when.
-  //
-  // Nothing inside a row is bolded. Bold was doing two jobs here — heading a
-  // section AND naming an actor — so it stopped meaning anything.
-  function renderTimeline(cr) {
+  // sections. Both were fragments of the same timeline. Columns mirror the diff
+  // table's subject-first shape: who, what, when. Nothing inside a row is
+  // bolded — bold was heading sections AND naming actors, so it meant nothing.
+  function timelineTable(cr) {
     const rows = [{ at: cr.createdAt, who: cr.author, what: 'opened' }]
 
     for (const r of (cr.reviews || [])) {
@@ -2820,58 +2854,123 @@ document.addEventListener('DOMContentLoaded', () => {
         what = 'merged in part — ' + esc(failed.length + ' of ' + results.length) + ' did not apply, '
           + 'so this stays open. Re-merging does only the remainder.'
           + '<ul class="ml-4">' + failed.map(r =>
-            '<li>\u2717 ' + esc(r.orbId) + (r.error ? ' — ' + esc(r.error) : '') + '</li>').join('') + '</ul>'
+            '<li>✗ ' + esc(r.orbId) + (r.error ? ' — ' + esc(r.error) : '') + '</li>').join('') + '</ul>'
       }
       rows.push({ at: a.attemptedAt, who: a.attemptedBy, what, raw: true })
     }
 
-    // ISO-8601 UTC throughout, so a string compare IS a chronological sort.
-    rows.sort((x, y) => String(x.at).localeCompare(String(y.at)))
+    // Parsed, not string-compared: the API emits a local UTC offset
+    // (…T16:58:39-07:00), not a Z suffix, so lexical order is not chronological
+    // order the moment two timestamps carry different offsets.
+    rows.sort((x, y) => new Date(x.at) - new Date(y.at))
 
-    // No count beside the title: "Activity 2" tells a reader nothing they cannot
-    // see by looking at the two rows underneath it.
-    return section('Activity',
-      '<div style="overflow-x:auto"><table class="' + TABLE_CLASS + '" data-testid="cr-reviews">'
-      + '<thead><tr>'
-      + '<th class="is-size-7">Who</th>'
-      + '<th class="is-size-7">What</th>'
-      + '<th class="is-size-7">When</th>'
-      + '</tr></thead><tbody>'
+    return '<table class="' + TABLE_CLASS + '" data-testid="cr-reviews">'
+      + '<thead><tr><th>Who</th><th>What</th><th style="white-space:nowrap">When</th></tr></thead><tbody>'
       + rows.map(r => '<tr>'
-          + '<td class="is-size-7">' + esc(r.who) + '</td>'
-          + '<td class="is-size-7">' + (r.raw ? r.what : esc(r.what)) + '</td>'
-          + '<td class="is-size-7">' + esc(fmtDate(r.at)) + '</td>'
+          + '<td>' + esc(r.who) + '</td>'
+          + '<td>' + (r.raw ? r.what : esc(r.what)) + '</td>'
+          + '<td style="white-space:nowrap">' + ts(r.at) + '</td>'
           + '</tr>').join('')
-      + '</tbody></table></div>')
+      + '</tbody></table>'
   }
 
   // Buttons are rendered STRAIGHT from availableActions. The API has already
   // decided eligibility (role, authorship, status, whether this caller already
   // approved); re-deriving any of that here would be a second copy of orbital's
-  // rules living in the browser.
-  function renderActions(cr) {
-    const actions = cr.availableActions || []
-    if (!actions.length) return ''
+  // rules living in the browser. Rounded and is-small to sit in the toolbar
+  // beside the back button, matching server-tab / datacenter-tab / cluster-tab.
+  function actionButtons(cr) {
     const LABEL = {
       approve: ['Approve', 'is-success'],
       reject: ['Reject', 'is-danger'],
       merge: ['Merge', 'is-link'],
       close: ['Close', ''],
-      edit: ['Edit', ''],
+      // `edit` is the API's name for amend, of which this UI implements only the
+      // rename half — changing the changeset from here is still unbuilt. Labelled
+      // for what it does, not for what the action is called.
+      edit: ['Rename', ''],
     }
-    let out = '<div class="mt-5" data-testid="cr-actions">'
-    for (const a of actions) {
-      if (a === 'edit') continue          // amend is a v2 UI; the API supports it
+    let out = ''
+    for (const a of (cr.availableActions || [])) {
       const [label, cls] = LABEL[a] || [a, '']
-      out += '<button class="button is-small ' + cls + ' mr-2 js-cr-action" data-cr-action="' + esc(a) + '">' + esc(label) + '</button>'
+      out += '<button class="button is-rounded is-small ' + cls + ' mt-1 ml-2 js-cr-action"'
+        + ' data-cr-action="' + esc(a) + '">' + esc(label) + '</button>'
     }
-    return out + '</div>'
+    return out
+  }
+
+  // Rename edits in place, the way GitHub renames a pull request: the heading
+  // becomes an input, Enter or Save commits, Escape or Cancel restores. No
+  // modal — a modal for one text field is heavier than the thing it edits.
+  //
+  // PATCHes `title` alone, which by construction leaves the changeset, the base
+  // anchor and every approval untouched (Amend re-anchors only when `changes` is
+  // supplied). A rename is not a re-proposal.
+  function startRename(cr) {
+    const h = el('cr-heading')
+    const restore = h.innerHTML
+
+    h.innerHTML = ''
+    const field = document.createElement('div')
+    field.className = 'field has-addons mb-0'
+    field.innerHTML = '<div class="control is-expanded"></div>'
+      + '<div class="control"><button class="button is-small is-link" data-cr-rename="save">Save</button></div>'
+      + '<div class="control"><button class="button is-small" data-cr-rename="cancel">Cancel</button></div>'
+
+    const input = document.createElement('input')
+    input.className = 'input is-small'
+    input.type = 'text'
+    input.maxLength = 255          // matches the API bound and the column
+    input.value = cr.title
+    field.querySelector('.control.is-expanded').appendChild(input)
+    h.appendChild(field)
+    input.focus()
+    input.select()
+
+    const cancel = () => { h.innerHTML = restore }
+    const save = () => {
+      const next = input.value.trim()
+      if (!next || next === cr.title) { cancel(); return }
+      input.disabled = true
+      fetch(BASE + '/api/v1/change-requests/' + encodeURIComponent(id), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: next }),
+      })
+        .then(async r => {
+          if (r.ok) { load(); return }
+          const body = await r.json().catch(() => ({}))
+          input.disabled = false
+          fail((body.error || 'Could not rename') + (body.hint ? ' — ' + body.hint : ''))
+        })
+        .catch(() => {
+          input.disabled = false
+          fail('Request failed — check your connection and try again.')
+        })
+    }
+
+    field.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-cr-rename]')
+      if (!b) return
+      if (b.getAttribute('data-cr-rename') === 'save') save()
+      else cancel()
+    })
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); save() }
+      if (e.key === 'Escape') { e.preventDefault(); cancel() }
+    })
   }
 
   host.addEventListener('click', (e) => {
     const btn = e.target.closest('.js-cr-action')
     if (!btn) return
     const action = btn.getAttribute('data-cr-action')
+    // Rename is not a POST to /{action} — it is a PATCH of one field, handled
+    // in place rather than by the generic action path below.
+    if (action === 'edit') {
+      if (current) startRename(current)
+      return
+    }
     btn.classList.add('is-loading')
     fetch(BASE + '/api/v1/change-requests/' + encodeURIComponent(id) + '/' + action, {
       method: 'POST',

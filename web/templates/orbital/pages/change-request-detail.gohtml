@@ -10,15 +10,95 @@
         </div>
       {{else}}
 
-      <nav class="breadcrumb is-small mb-2" aria-label="breadcrumbs">
-        <ul>
-          <li><a href="{{.BasePath}}/change-requests">Change Requests</a></li>
-          <li class="is-active"><a aria-current="page">Review</a></li>
-        </ul>
-      </nav>
-
       <div id="cr-detail-error" class="notification is-danger is-light" style="display:none;"></div>
-      <div id="cr-detail" data-testid="cr-detail"></div>
+
+      {{/* Every container, heading and table class on this page lives HERE, not
+           in orbital.js — the JS fills the ids below and nothing else. This page
+           was previously assembled by string concatenation in JS, which is why
+           it drifted from every other page: there was no template to copy.
+
+           `.tab-content` is how a standalone page opts into the app-wide box
+           treatment (padding, top hairline, shadow, 1%-darker fill) defined in
+           main.scss under `.tab-content .box`. restore.gohtml and schema.gohtml
+           do exactly this. A bare `article.box` outside that scope gets Bulma's
+           default, which in dark mode is the same colour as the page. */}}
+      <div class="tab-content" id="cr-detail" data-testid="cr-detail" style="display:none;">
+
+        <p class="is-size-4 mb-2" data-testid="page-heading" id="cr-heading"></p>
+        {{/* No grey page-description line. It is on nine other pages, but every
+             one is a list or tool page where it says what the page is FOR. On a
+             detail page that text describes the page type, not the record. This
+             slot carries the request's own description when it has one. */}}
+        <p class="mb-4" id="cr-description" style="white-space:pre-wrap; display:none;"></p>
+
+        {{/* Record-scoped actions in a rounded toolbar, the same shape as
+             server-tab / datacenter-tab / cluster-tab, with those partials'
+             left-arrow "back to parent" button (it replaces a breadcrumb that
+             was the only one in the app).
+
+             Placed BELOW the title block and above the panels: the heading names
+             what you are looking at, then the row of things you can do to it,
+             then the thing itself. Above the diff, not below it — a reviewer
+             should not have to scroll past a twenty-row changeset to approve it.
+             Buttons are injected from availableActions. */}}
+        <div class="columns m-0 mb-2">
+          <div class="column pt-0 pl-0">
+            <a class="button is-rounded is-small is-warning mt-1" href="{{.BasePath}}/change-requests">
+              <span class="icon"><i class="fa-solid fa-arrow-left"></i></span>
+              <span>Change Requests</span>
+            </a>
+            <span id="cr-actions" data-testid="cr-actions"></span>
+          </div>
+        </div>
+
+        {{/* Full-width, above the grid — the same position server-tab gives its
+             `data-pending-changes-for` slot. A staleness or missing-target
+             warning applies to the whole request, not to one panel. */}}
+        <div id="cr-banner"></div>
+
+        {{/* server-tab's grid, cell for cell: a 2-col box, a 1-col box beside
+             it, and a 3-col box below. Changes takes the wide cell because the
+             diff is what this page is for; Details is the narrow companion, the
+             way Metadata sits beside Server Summary.
+
+             Section labels are 16px, NOT server-tab's 24px. Its box titles are
+             the largest text on that view because a tab has no page heading;
+             here a 24px heading sits directly above, and two competing 24px
+             lines is what made this page's hierarchy unreadable the first time.
+             restore.gohtml and schema.gohtml — the two pages that have both a
+             page heading and boxes — both use 16px for the same reason.
+
+             No `height:100%` on the Details cell, deliberately: server-tab can
+             stretch Metadata to match Server Summary because both are bounded,
+             but the box beside Details here is an unbounded diff, and a 20-row
+             changeset would leave a five-row box padded out with void. */}}
+        <div class="fixed-grid has-3-cols">
+          <div class="grid">
+            <div class="cell is-col-span-2">
+              <article class="box">
+                <p class="is-size-6 has-text-weight-semibold mb-3" id="cr-changes-label">Changes</p>
+                <div class="table-container" id="cr-changes"></div>
+              </article>
+            </div>
+
+            <div class="cell">
+              <article class="box">
+                <p class="is-size-6 has-text-weight-semibold mb-3">Details</p>
+                <table class="table is-fullwidth is-size-7 mb-0">
+                  <tbody id="cr-details-body"></tbody>
+                </table>
+              </article>
+            </div>
+
+            <div class="cell is-col-span-3">
+              <article class="box">
+                <p class="is-size-6 has-text-weight-semibold mb-3">Activity</p>
+                <div class="table-container" id="cr-activity"></div>
+              </article>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {{end}}
     </div>

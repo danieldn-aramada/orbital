@@ -27,8 +27,10 @@ import (
 
 // createChangeRequestBody opens a change request.
 type createChangeRequestBody struct {
-	// Title is the one-line summary reviewers see in the queue.
-	Title string `json:"title" validate:"required" example:"Enable SSH on the Anchorage iDRACs"`
+	// Title is the one-line summary reviewers see in the queue. Written by the
+	// proposer — a diff says what changed, only a person says why. Max 255
+	// characters; put longer context in description, which is unbounded.
+	Title string `json:"title" validate:"required" maxLength:"255" example:"Enable SSH on the Anchorage iDRACs"`
 	// Description is optional free text — why, and anything a reviewer needs.
 	Description string `json:"description,omitempty" example:"Requested by field ops for the Nov maintenance window."`
 	// Namespace scopes the whole request. Every orbId in changes must be in it.
@@ -224,7 +226,10 @@ type changeItemBody struct {
 // left alone; supplying changes re-captures the base and therefore invalidates
 // the approvals cast against the previous one.
 type amendChangeRequestBody struct {
-	Title       *string          `json:"title,omitempty" example:"Enable SSH on the Anchorage iDRACs"`
+	// Title renames the request. Sending it alone leaves the changeset, the base
+	// anchor and every approval untouched — a rename is not a re-proposal.
+	// Max 255 characters.
+	Title       *string          `json:"title,omitempty" maxLength:"255" example:"Enable SSH on the Anchorage iDRACs"`
 	Description *string          `json:"description,omitempty" example:"Rescheduled to the Dec window."`
 	Namespace   string           `json:"namespace,omitempty" example:"alaska-dot"`
 	Changes     []changeItemBody `json:"changes,omitempty"`
@@ -428,8 +433,8 @@ func (h *ChangeRequest) CreateChangeRequest(c echo.Context) error {
 	if err := c.Bind(&body); err != nil {
 		return writeError(c, http.StatusBadRequest, CodeBadUserInput, "invalid request body", "")
 	}
-	if strings.TrimSpace(body.Title) == "" {
-		return writeError(c, http.StatusBadRequest, CodeBadUserInput, "title is required", "")
+	if ok, err := validateTitle(c, body.Title, true); !ok {
+		return err
 	}
 
 	cs := &approval.Changeset{Namespace: body.Namespace, Changes: toChangeItems(body.Changes)}
@@ -640,6 +645,34 @@ func (h *ChangeRequest) GetChangeRequestDiff(c echo.Context) error {
 	})
 }
 
+// maxTitleLen matches the `title` column, which ent generates as varchar(255)
+// because the field declares no Size (`description` declares one and gets text).
+// Without this check a longer title reached Postgres and failed at INSERT, so a
+// user error surfaced as a 500.
+const maxTitleLen = 255
+
+// validateTitle enforces what the column already enforced silently. `required`
+// is false for callers that treat an empty title as "leave it alone".
+//
+// Returns (ok, err) rather than a bare error BECAUSE writeError returns c.JSON's
+// nil on success: a helper that returned it directly would report "no problem"
+// to its caller while having already written a 400, and the handler would carry
+// on and append a second body to the same response. That is not hypothetical —
+// it shipped in the first draft of this function and produced a 400 whose body
+// held both the error and a created change request.
+func validateTitle(c echo.Context, title string, required bool) (bool, error) {
+	t := strings.TrimSpace(title)
+	if required && t == "" {
+		return false, writeError(c, http.StatusBadRequest, CodeBadUserInput, "title is required", "")
+	}
+	if len([]rune(t)) > maxTitleLen {
+		return false, writeError(c, http.StatusBadRequest, CodeBadUserInput,
+			fmt.Sprintf("title is too long: %d characters, limit is %d", len([]rune(t)), maxTitleLen),
+			"Shorten the title. Long context belongs in the description, which is unbounded.")
+	}
+	return true, nil
+}
+
 // AmendChangeRequest patches an open change request.
 //
 // @Summary     Amend an open change request
@@ -671,6 +704,12 @@ func (h *ChangeRequest) AmendChangeRequest(c echo.Context) error {
 				"namespace is required when changing the changeset", "")
 		}
 		cs = &approval.Changeset{Namespace: body.Namespace, Changes: toChangeItems(body.Changes)}
+	}
+
+	if body.Title != nil {
+		if ok, err := validateTitle(c, *body.Title, true); !ok {
+			return err
+		}
 	}
 
 	caller := resolveCallerRole(c, h.db)

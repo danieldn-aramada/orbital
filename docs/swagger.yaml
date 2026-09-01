@@ -44,7 +44,12 @@ definitions:
         example: alaska-dot
         type: string
       title:
+        description: |-
+          Title renames the request. Sending it alone leaves the changeset, the base
+          anchor and every approval untouched — a rename is not a re-proposal.
+          Max 255 characters.
         example: Enable SSH on the Anchorage iDRACs
+        maxLength: 255
         type: string
     type: object
   handler.approvalPolicyBody:
@@ -532,8 +537,12 @@ definitions:
         example: alaska-dot
         type: string
       title:
-        description: Title is the one-line summary reviewers see in the queue.
+        description: |-
+          Title is the one-line summary reviewers see in the queue. Written by the
+          proposer — a diff says what changed, only a person says why. Max 255
+          characters; put longer context in description, which is unbounded.
         example: Enable SSH on the Anchorage iDRACs
+        maxLength: 255
         type: string
     required:
     - changes

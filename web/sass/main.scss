@@ -296,6 +296,11 @@ html {
        child — which defeats a child's overflow:auto (nothing to scroll, the
        column just grows). Let them shrink so e.g. the /schema <pre> scrolls. */
     .column { min-width: 0; }
+    // Same reason, for Bulma's grid children. `.cell` is a grid item and also
+    // defaults to min-width:auto, so a wide table inside one stretches the grid
+    // instead of scrolling in its own .table-container — the change-request
+    // review page puts a 3-column diff in a cell and hit exactly this.
+    .cell { min-width: 0; }
     .box{
       padding: 1.5em;
       // box-shadow: 0 0.5em 1em -0.125em hsla(var(--bulma-shadow-h), var(--bulma-shadow-s), var(--bulma-shadow-l), 0.1), 0 0px 0 1px hsla(var(--bulma-shadow-h), var(--bulma-shadow-s), var(--bulma-shadow-l), 0.02);
@@ -314,6 +319,26 @@ html {
 .modal .modal-content {
   background: transparent;
   padding: 0;
+}
+
+// The change-request queue's Title column holds free text now that proposers
+// write it, so one long title must truncate rather than reflow every row. The
+// global `.th, .td` rule above only matches those CLASS names, not real cells,
+// so this has to be stated. The full text rides on the cell's title attribute.
+#cr-table td.cr-title {
+  max-width: 0;               // with table-layout:fixed, lets the colgroup win
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  // The title is a link but NOT link-blue: it is now the widest column, and
+  // colouring every row of it turns a third of the table into a blue wall
+  // beside an already-blue id column. GitHub renders pull-request titles in the
+  // default text colour for the same reason and puts the affordance on hover.
+  a {
+    color: var(--bulma-text-strong);
+    &:hover { text-decoration: underline; }
+  }
 }
 
 .notification {
@@ -892,42 +917,5 @@ div.dt-container:has(#audit-log-table) {
     position: absolute !important;
     left: calc(50% - 1em * 0.5);
     top: calc(50% - 1em * 0.5);
-  }
-}
-// A section card has to be visibly distinct from the page it sits on. Bulma's
-// `.box` background resolves to the SAME colour as the page in dark mode — both
-// hsl(0, 0%, 9%) — so the card was invisible and only its drop shadow hinted at
-// an edge. Elevation reads as LIGHTER in dark mode (never darker) and as a
-// hairline border in light mode, so this does both and drops the shadow.
-//
-// Scoped to .cr-section rather than `.box`: the only other .box in the app is
-// the /approval-policies modal, which sits over a dimmed backdrop and already
-// separates fine.
-.box.cr-section {
-  // Bulma's own box background: white in light mode. Do NOT tint it there — a
-  // grey fill reads as "darker" against a white page and was rejected on sight.
-  // The border alone gives the card its edge.
-  background-color: var(--bulma-scheme-main);
-  border: 1px solid var(--bulma-border);
-  box-shadow: none;
-
-  // Tables default to scheme-main, which is now a step darker than the card
-  // holding them; inheriting keeps the card one flat surface.
-  .table,
-  .table td,
-  .table th {
-    background-color: transparent;
-  }
-  .table.is-striped tbody tr:nth-child(even) td {
-    background-color: var(--bulma-scheme-main-ter);
-  }
-}
-
-// DARK MODE ONLY. Bulma resolves .box's background to the same colour as the
-// page here — both hsl(0, 0%, 9%) — so the card is present in the DOM and
-// invisible on screen. Elevation reads as LIGHTER in dark mode, never darker.
-@media (prefers-color-scheme: dark) {
-  .box.cr-section {
-    background-color: var(--bulma-scheme-main-bis);
   }
 }

@@ -1020,6 +1020,7 @@ function clearTabStateOnFresh() {
   localStorage.removeItem('datacenterTabs')
   localStorage.removeItem('serverTabs')
   localStorage.removeItem('tabCurrent')
+  localStorage.removeItem('crTabCurrent')   // change-request queue's active tab
   history.replaceState(null, '', window.location.pathname)
 }
 

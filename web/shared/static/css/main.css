@@ -21689,6 +21689,9 @@ has-background-danger.is-hoverable:active {
 .app-main .tab-content .column {
   min-width: 0;
 }
+.app-main .tab-content .cell {
+  min-width: 0;
+}
 .app-main .tab-content .box {
   padding: 1.5em;
   box-shadow: 0 0.1em 0.2em hsla(var(--bulma-scheme-h), var(--bulma-scheme-s), var(--bulma-scheme-invert-l), 0.1);
@@ -21699,6 +21702,19 @@ has-background-danger.is-hoverable:active {
 .modal .modal-content {
   background: transparent;
   padding: 0;
+}
+
+#cr-table td.cr-title {
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#cr-table td.cr-title a {
+  color: var(--bulma-text-strong);
+}
+#cr-table td.cr-title a:hover {
+  text-decoration: underline;
 }
 
 .notification:hover {
@@ -21993,26 +22009,6 @@ div.dt-container:has(#audit-log-table) .dt-paging .pagination-link {
   position: absolute !important;
   left: calc(50% - 0.5em);
   top: calc(50% - 0.5em);
-}
-
-.box.cr-section {
-  background-color: var(--bulma-scheme-main);
-  border: 1px solid var(--bulma-border);
-  box-shadow: none;
-}
-.box.cr-section .table,
-.box.cr-section .table td,
-.box.cr-section .table th {
-  background-color: transparent;
-}
-.box.cr-section .table.is-striped tbody tr:nth-child(even) td {
-  background-color: var(--bulma-scheme-main-ter);
-}
-
-@media (prefers-color-scheme: dark) {
-  .box.cr-section {
-    background-color: var(--bulma-scheme-main-bis);
-  }
 }
 
 /*# sourceMappingURL=main.css.map */

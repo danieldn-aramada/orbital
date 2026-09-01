@@ -357,6 +357,61 @@ function applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, targets, na
     }
   }
 
+  // addTitleField gives the proposer the one thing a diff cannot supply.
+  //
+  // Prefilled with the entity name and selected on first focus, so replacing it
+  // is one gesture and accepting it is none. Left untouched (or cleared), the
+  // submit path falls back to the fully derived label — entity plus field count
+  // — rather than storing the bare entity name, which is what made the review
+  // page look like it had a title when it did not.
+  //
+  // Built with DOM APIs, not an HTML string: the value is user text on the way
+  // back in, and there is no esc() in this module to get it wrong with.
+  function addTitleField(mode) {
+    if (!btn) return null
+    const card = btn.closest('.modal-card')
+    if (card && card.querySelector('#cr-propose-title')) return null
+
+    // Literally the same function the submit path falls back to, so the
+    // prefilled value and the stored-when-blank value cannot drift apart.
+    const entity = fallbackTitle(reloadOrbId)
+
+    const wrap = document.createElement('div')
+    wrap.className = 'field mb-2'
+
+    const label = document.createElement('label')
+    label.className = 'label is-size-7 mb-1'
+    label.setAttribute('for', 'cr-propose-title')
+    label.textContent = 'Change request title'
+    wrap.appendChild(label)
+
+    const control = document.createElement('div')
+    control.className = 'control'
+    const input = document.createElement('input')
+    input.className = 'input is-small'
+    input.id = 'cr-propose-title'
+    input.type = 'text'
+    // Matches the API bound, which matches the varchar(255) column.
+    input.maxLength = 255
+    input.value = entity
+    control.appendChild(input)
+    wrap.appendChild(control)
+
+    // Only the privileged footer needs this: there, one of the two buttons
+    // ignores the field, and nothing else on screen says so. In the gated
+    // footer Propose is the only way out, so a help line would be noise.
+    if (mode === 'privileged') {
+      const help = document.createElement('p')
+      help.className = 'help'
+      help.textContent = 'Used when proposing. Ignored by Save directly.'
+      wrap.appendChild(help)
+    }
+
+    addNotice(wrap, { atEnd: true })
+    input.addEventListener('focus', () => input.select(), { once: true })
+    return input
+  }
+
   // addProposeButton puts a second action next to Save for a caller who may
   // bypass, so both destinations are one click away.
   //
@@ -443,6 +498,7 @@ function applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, targets, na
         // the labels had already made obvious. The one fact the labels cannot
         // carry — that the bypass is recorded — rides on the button's tooltip.
         addProposeButton()
+        addTitleField('privileged')
         if (btn) {
           btn.textContent = 'Save directly'
           btn.classList.remove('is-success')
@@ -451,6 +507,7 @@ function applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, targets, na
         }
       } else {
         setMode('propose')
+        addTitleField('propose')
         if (btn) btn.textContent = 'Propose change'
         // Says what happens and what does NOT. "changing intent" was orbital's
         // own vocabulary leaking into a sentence aimed at whoever is editing.
@@ -492,32 +549,23 @@ function applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, targets, na
     })
 }
 
-// changesetTitle labels a proposal by HOW WIDE it is — a count, nothing more.
+// fallbackTitle names the thing being changed and nothing else — it is what a
+// proposal is called when nobody named it.
 //
-// It used to name the field and inline its value. That reads well until you ask
-// which view is authoritative: the queue now renders each row from the API's
-// `summary`, derived on read, so a title that ALSO described the change was a
-// second copy of the same fact — written once at creation, never updated, and
-// free to drift the moment a request is amended.
+// It used to append "· N fields", on the reasoning that a count makes a
+// generated value read as a label rather than as a human title. The queue then
+// gained a dedicated Change column carrying exactly that count, so the tail
+// became the same fact twice on one row. It also made accepting the prefill
+// differ from leaving the box empty, which nobody would predict.
 //
-// A count cannot drift into a lie the way a value can. The change itself is
-// stated by the row and by the diff, both of which recompute.
+// It also used to say "Update <entity>" when it could not count any fields —
+// i.e. for a create-only changeset, the least update-like case there is. One
+// form for every branch instead.
 //
-// Longer term the title should be written by the PROPOSER — every comparable
-// system asks for one, because a diff answers "what" and only a person can
-// answer "why". Tracked in docs/planning/backlog.md; deriving it is a
-// placeholder for that, not a design.
-function changesetTitle(rootOrbId, changeset) {
-  const entity = String(rootOrbId).replace(/^[^:]+:/, '')
-  const items = (changeset && changeset.changes) || []
-
-  let fields = 0
-  for (const item of items) {
-    fields += Object.keys(item.set || {}).length
-    fields += (item.clear || []).length
-  }
-  if (fields === 0) return 'Update ' + entity      // create-only, or nothing resolvable
-  return entity + ' \u00b7 ' + fields + ' field' + (fields === 1 ? '' : 's')
+// This is a FALLBACK, not a design: the title is the proposer's to write, and
+// addTitleField prefills this same string so the two can never disagree.
+function fallbackTitle(rootOrbId) {
+  return String(rootOrbId).replace(/^[^:]+:/, '')
 }
 
 // proposeChange opens a change request from the edit the user just made and
@@ -547,7 +595,13 @@ async function proposeChange({
     return false
   }
 
-  const title = changesetTitle(rootOrbId, changeset)
+  // The proposer's title wins; the entity name is the fallback. Accepting the
+  // prefill and clearing the box produce the SAME stored title, because the
+  // prefill IS the fallback — there is no third string that appears only when
+  // you leave the field alone.
+  const titleInput = document.getElementById('cr-propose-title')
+  const typed = titleInput ? titleInput.value.trim() : ''
+  const title = typed || fallbackTitle(rootOrbId)
   let resp
   try {
     resp = await fetch(BASE + '/api/v1/change-requests', {
