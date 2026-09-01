@@ -27,7 +27,6 @@ import (
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
-	_ "github.com/lib/pq" // postgres driver for database/sql
 	echoswagger "github.com/swaggo/echo-swagger"
 	"golang.org/x/time/rate"
 )
@@ -40,7 +39,7 @@ type Server struct {
 	divergenceIngester *divergenceingest.Ingester // non-nil when ORBITAL_DIVERGENCE_INGEST_ENABLED=true and S3 reachable; started in Start()
 }
 
-func New(cfg *config.Config, db *ent.Client) (*Server, error) {
+func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.SlogLevel()}))
 	var backupHandler *handler.BackupHandler
 
@@ -449,11 +448,11 @@ func New(cfg *config.Config, db *ent.Client) (*Server, error) {
 		if !s3Configured {
 			logger.Warn("S3 not configured (ORBITAL_S3_BUCKET, ORBITAL_S3_ACCESS_KEY, ORBITAL_S3_SECRET_KEY) — backup disabled")
 		} else {
-			var rawDB *sql.DB
-			if rdb, err := sql.Open("postgres", cfg.DatabaseURL); err != nil {
-				logger.Warn("raw sql.DB open failed — advisory lock disabled", "err", err)
-			} else {
-				rawDB = rdb
+			// Shares the caller's pool. Opening a second connection here would bypass
+			// the pool's BeforeConnect hook and, under managed identity, connect with
+			// no password.
+			if rawDB == nil {
+				logger.Warn("no raw sql.DB supplied — advisory lock disabled")
 			}
 
 			bk, err := handler.NewBackupHandler(context.Background(), db, handler.BackupConfig{

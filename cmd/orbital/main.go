@@ -22,13 +22,16 @@ import (
 	"os/signal"
 	"syscall"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
+
 	"github.com/armada/orbital/docs"
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/migrate"
 	"github.com/armada/orbital/internal/config"
+	orbitaldb "github.com/armada/orbital/internal/db"
 	"github.com/armada/orbital/internal/server"
 	"github.com/armada/orbital/internal/version"
-	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -58,17 +61,28 @@ func main() {
 	docs.SwaggerInfo.BasePath = cfg.BasePath
 	docs.SwaggerInfo.Version = version.Version
 
-	db, err := ent.Open("postgres", cfg.DatabaseURL)
+	// One pool for the whole process. Under managed identity its password is minted
+	// per connection, so every consumer must come from this pool - a second sql.Open
+	// would bypass that hook and connect with no password.
+	cred, err := orbitaldb.CredentialFor(cfg.DBUseAzMI, "")
+	if err != nil {
+		log.Fatalf("db credential: %v", err)
+	}
+	pool, err := orbitaldb.NewPool(ctx, cfg.DatabaseDSN(), cred, orbitaldb.DefaultMaxConns)
 	if err != nil {
 		log.Fatalf("db: %v", err)
 	}
+	defer pool.Close()
+
+	sqlDB := orbitaldb.SQLDB(pool)
+	db := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, sqlDB)))
 	defer db.Close()
 
 	if err := db.Schema.Create(ctx, migrate.WithDropColumn(true)); err != nil {
 		log.Fatalf("migrate: %v", err)
 	}
 
-	srv, err := server.New(cfg, db)
+	srv, err := server.New(cfg, db, sqlDB)
 	if err != nil {
 		log.Fatalf("server: %v", err)
 	}
