@@ -49,6 +49,7 @@ type RestoreConfig struct {
 	S3Bucket        string
 	S3AccessKey     string
 	S3SecretKey     string
+	S3UseAzMI       bool
 	DGraphAdminURL  string // e.g. http://dgraph-blue:8080/admin
 	DGraphAlphaGRPC string // gRPC address of DGraph alpha, e.g. dgraph-blue-dgraph-alpha:9080
 	DGraphZeroGRPC  string // gRPC address of DGraph zero, e.g. dgraph-blue-dgraph-zero:5080
@@ -58,11 +59,12 @@ type RestoreConfig struct {
 
 func NewRestoreHandler(ctx context.Context, db *ent.Client, cfg RestoreConfig, backend RestoreBackend, logger *slog.Logger) (*RestoreHandler, error) {
 	store, err := blobstore.New(ctx, blobstore.Config{
-		Endpoint:  cfg.S3Endpoint,
-		Region:    cfg.S3Region,
-		Bucket:    cfg.S3Bucket,
-		AccessKey: cfg.S3AccessKey,
-		SecretKey: cfg.S3SecretKey,
+		Endpoint:   cfg.S3Endpoint,
+		Region:     cfg.S3Region,
+		Bucket:     cfg.S3Bucket,
+		AccessKey:  cfg.S3AccessKey,
+		SecretKey:  cfg.S3SecretKey,
+		UseAzureMI: cfg.S3UseAzMI,
 	})
 	if err != nil {
 		return nil, err

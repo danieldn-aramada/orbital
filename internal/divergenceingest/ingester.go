@@ -39,6 +39,7 @@ type Config struct {
 	Bucket       string
 	AccessKey    string
 	SecretKey    string
+	UseAzMI      bool
 	PollInterval time.Duration
 
 	// DC discovery: orbital queries its own DGraph for live DataCenter nodes
@@ -88,11 +89,12 @@ func New(ctx context.Context, db *ent.Client, cfg Config, logger *slog.Logger) (
 		return nil, errors.New("ingester: RepoPrefix required for report path computation")
 	}
 	store, err := blobstore.New(ctx, blobstore.Config{
-		Endpoint:  cfg.Endpoint,
-		Region:    cfg.Region,
-		Bucket:    cfg.Bucket,
-		AccessKey: cfg.AccessKey,
-		SecretKey: cfg.SecretKey,
+		Endpoint:   cfg.Endpoint,
+		Region:     cfg.Region,
+		Bucket:     cfg.Bucket,
+		AccessKey:  cfg.AccessKey,
+		SecretKey:  cfg.SecretKey,
+		UseAzureMI: cfg.UseAzMI,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("ingester: %w", err)

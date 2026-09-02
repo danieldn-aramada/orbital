@@ -46,23 +46,27 @@ type Config struct {
 	// identity instead of a password: the Entra token becomes the password, minted
 	// per connection. When DBUseAzMI is false these are ignored and DATABASE_URL is
 	// used as-is, which is what local dev and air-gapped deployments do.
-	DBUseAzMI               bool   `envconfig:"ORBITAL_DB_USE_AZ_MI"            default:"false"`
-	DBHost                  string `envconfig:"ORBITAL_DB_HOST"                 default:""`
-	DBPort                  int    `envconfig:"ORBITAL_DB_PORT"                 default:"5432"`
-	DBUser                  string `envconfig:"ORBITAL_DB_USER"                 default:""`
-	DBName                  string `envconfig:"ORBITAL_DB_NAME"                 default:""`
-	DBSSLMode               string `envconfig:"ORBITAL_DB_SSLMODE"              default:"require"`
-	ExportDir               string `envconfig:"ORBITAL_EXPORT_DIR"              default:"./subgraph-exports"`
-	DGraphScratchExportDir  string `envconfig:"DGRAPH_SCRATCH_EXPORT_DIR"       default:"/tmp/orbital-test-scratch"`
-	SchemaPath              string `envconfig:"ORBITAL_SCHEMA_PATH"             default:"schema/schema.graphql"`
-	SessionHMACKey          string `envconfig:"ORBITAL_SESSION_HMAC_KEY"        default:"local-dev-hmac-key-change-in-prod"` // must be changed in prod
-	SessionEncryptionKey    string `envconfig:"ORBITAL_SESSION_ENCRYPTION_KEY"  default:"local-dev-enc-key-32-bytes-pad!!"`  // must be exactly 32 bytes for AES-256; empty disables cookie encryption
-	DGraphExportDir         string `envconfig:"DGRAPH_EXPORT_DIR"               default:"/tmp/orbital-test-blue"`            // host-side mount of /dgraph/export on blue alpha
-	S3Endpoint              string `envconfig:"ORBITAL_S3_ENDPOINT"             default:"http://localhost:9000"`
-	S3Region                string `envconfig:"ORBITAL_S3_REGION"               default:"us-east-1"`
-	S3Bucket                string `envconfig:"ORBITAL_S3_BUCKET"               default:"orbital"`
-	S3AccessKey             string `envconfig:"ORBITAL_S3_ACCESS_KEY"           default:"minioadmin"`
-	S3SecretKey             string `envconfig:"ORBITAL_S3_SECRET_KEY"           default:"minioadmin"`
+	DBUseAzMI              bool   `envconfig:"ORBITAL_DB_USE_AZ_MI"            default:"false"`
+	DBHost                 string `envconfig:"ORBITAL_DB_HOST"                 default:""`
+	DBPort                 int    `envconfig:"ORBITAL_DB_PORT"                 default:"5432"`
+	DBUser                 string `envconfig:"ORBITAL_DB_USER"                 default:""`
+	DBName                 string `envconfig:"ORBITAL_DB_NAME"                 default:""`
+	DBSSLMode              string `envconfig:"ORBITAL_DB_SSLMODE"              default:"require"`
+	ExportDir              string `envconfig:"ORBITAL_EXPORT_DIR"              default:"./subgraph-exports"`
+	DGraphScratchExportDir string `envconfig:"DGRAPH_SCRATCH_EXPORT_DIR"       default:"/tmp/orbital-test-scratch"`
+	SchemaPath             string `envconfig:"ORBITAL_SCHEMA_PATH"             default:"schema/schema.graphql"`
+	SessionHMACKey         string `envconfig:"ORBITAL_SESSION_HMAC_KEY"        default:"local-dev-hmac-key-change-in-prod"` // must be changed in prod
+	SessionEncryptionKey   string `envconfig:"ORBITAL_SESSION_ENCRYPTION_KEY"  default:"local-dev-enc-key-32-bytes-pad!!"`  // must be exactly 32 bytes for AES-256; empty disables cookie encryption
+	DGraphExportDir        string `envconfig:"DGRAPH_EXPORT_DIR"               default:"/tmp/orbital-test-blue"`            // host-side mount of /dgraph/export on blue alpha
+	S3Endpoint             string `envconfig:"ORBITAL_S3_ENDPOINT"             default:"http://localhost:9000"`
+	S3Region               string `envconfig:"ORBITAL_S3_REGION"               default:"us-east-1"`
+	S3Bucket               string `envconfig:"ORBITAL_S3_BUCKET"               default:"orbital"`
+	S3AccessKey            string `envconfig:"ORBITAL_S3_ACCESS_KEY"           default:"minioadmin"`
+	S3SecretKey            string `envconfig:"ORBITAL_S3_SECRET_KEY"           default:"minioadmin"`
+	// S3UseAzMI authenticates to Azure Blob with the pod's workload identity
+	// instead of an account key. S3AccessKey is still required (it is the
+	// storage account name); S3SecretKey is ignored. Azure endpoints only.
+	S3UseAzMI               bool   `envconfig:"ORBITAL_S3_USE_AZ_MI" default:"false"`
 	S3Prefix                string `envconfig:"ORBITAL_S3_PREFIX"                default:"backups/"` // optional path prefix within the bucket
 	S3RetentionCount        int    `envconfig:"ORBITAL_S3_RETENTION_COUNT"       default:"0"`        // deprecated: use ORBITAL_BACKUP_RETENTION_MIN_COUNT
 	BackupRetentionDays     int    `envconfig:"ORBITAL_BACKUP_RETENTION_DAYS"    default:"14"`       // delete backups older than N days; 0 = no time-based pruning
@@ -199,6 +203,16 @@ func New() (*Config, error) {
 	if cfg.DBUseAzMI {
 		if cfg.DBHost == "" || cfg.DBUser == "" || cfg.DBName == "" {
 			return nil, fmt.Errorf("ORBITAL_DB_USE_AZ_MI=true requires ORBITAL_DB_HOST, ORBITAL_DB_USER, ORBITAL_DB_NAME")
+		}
+	}
+	if cfg.S3UseAzMI {
+		// The Azure backend is chosen by endpoint sniffing, so a non-Azure
+		// endpoint would silently fall back to key auth and ignore this flag.
+		if !strings.Contains(cfg.S3Endpoint, ".blob.core.windows.net") {
+			return nil, fmt.Errorf("ORBITAL_S3_USE_AZ_MI=true requires an Azure Blob ORBITAL_S3_ENDPOINT (.blob.core.windows.net), got %q", cfg.S3Endpoint)
+		}
+		if cfg.S3AccessKey == "" {
+			return nil, fmt.Errorf("ORBITAL_S3_USE_AZ_MI=true requires ORBITAL_S3_ACCESS_KEY (the storage account name)")
 		}
 	}
 	cfg.sessionKeys = auth.NewSessionKeys(cfg.SessionHMACKey, cfg.SessionEncryptionKey, cfg.Dev, cfg.CookieSecure)

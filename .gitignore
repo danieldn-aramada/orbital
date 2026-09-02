@@ -25,6 +25,10 @@ playwright-report/
 /orb
 /orbital
 
+scripts/__pycache__/
+/scripts/migrate-namespace-job.yaml
+/scripts/migrate_namespace.py
+
 # IDE
 .idea/
 .vscode/
