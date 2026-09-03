@@ -115,20 +115,20 @@ func (h *GraphQL) checkApprovalPolicy(ctx context.Context, body []byte, caller c
 		// not a silent one. The label is returned so it lands on the audit
 		// event alongside the mutation itself.
 		h.logger.Warn("privileged write — bypassed an approval policy",
-			"policy", pol.Namespace,
+			"policy", policyLabel(pol),
 			"role", string(caller.Role),
 			"types", strings.Join(types, ","),
 			"orb_ids", strings.Join(orbIDs, ","))
-		return pol.Namespace, nil
+		return policyLabel(pol), nil
 	}
 
 	return "", &gatedError{
 		Status: http.StatusForbidden,
 		Code:   CodeApprovalRequired,
 		Message: fmt.Sprintf("changes to %s require approval (%d)",
-			pol.Namespace, pol.RequiredApprovals),
+			policyLabel(pol), pol.RequiredApprovals),
 		Hint:   "Open a change request: POST /api/v1/change-requests with this change as its changeset.",
-		Policy: pol.Namespace,
+		Policy: policyLabel(pol),
 	}
 }
 
@@ -190,19 +190,18 @@ func (h *GraphQL) matchingPolicy(ctx context.Context, namespaces, types []string
 	if len(namespaces) == 0 {
 		return nil, nil
 	}
-	rows, err := h.db.ApprovalPolicy.Query().
-		Where(
-			approvalpolicy.ActionTypeEQ(approval.ActionTypeConfigMutation),
-			approvalpolicy.EnabledEQ(true),
-			approvalpolicy.NamespaceIn(namespaces...),
-		).
-		Order(ent.Asc(approvalpolicy.FieldNamespace)).
-		All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("resolve approval policy: %w", err)
-	}
-
-	for _, p := range rows {
+	// One resolution rule, shared with the change-request engine — see
+	// governingPolicy. A mutation may touch several namespaces, so each is
+	// resolved separately and the first governing answer wins; namespacesOf
+	// returns them sorted, so which one that is stays deterministic.
+	for _, ns := range namespaces {
+		p, err := governingPolicy(ctx, h.db, approval.ActionTypeConfigMutation, ns)
+		if err != nil {
+			return nil, err
+		}
+		if p == nil {
+			continue
+		}
 		// AllTypes matches anything, including ConfigItem types that did not
 		// exist when the policy was written.
 		if p.AllTypes {

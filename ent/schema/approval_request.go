@@ -123,6 +123,28 @@ func (ApprovalRequest) Fields() []ent.Field {
 		// back to the payload-derived summary, which is what they always showed.
 		field.JSON("base_effect", json.RawMessage{}).Optional(),
 
+		// base_values is the ANCESTOR: orbId -> predicate -> value, for exactly
+		// the fields this changeset writes, as they stood when the request was
+		// opened. It is what a three-way comparison needs and what base_hash
+		// cannot supply — base_hash is a fingerprint of the version vector, so it
+		// answers "did anything move" but never "what was it".
+		//
+		// InfraHub and NetBox get this for free from a materialized branch: the
+		// branch point IS the ancestor. Orbital renders branches instead of
+		// copying them (orbId is @id, so a branch's copy of an entity cannot
+		// coexist with main's), so the ancestor has to be recorded.
+		//
+		// Stored in graphdiff-normalized, predicate-keyed form — the SAME shape a
+		// fresh snapshot produces — so the merge-time comparison is between two
+		// values that went through one normalizer. Comparing a stored raw value
+		// against a normalized one would disagree on exactly the scalars DGraph
+		// round-trips as strings.
+		//
+		// Optional: absent means "no ancestor recorded", and the guard falls back
+		// to the entity-level base_hash, which is what every row predating this
+		// field has.
+		field.JSON("base_values", map[string]map[string]any{}).Optional(),
+
 		// payload is the action-type-specific body, opaque to the engine. For
 		// config.mutation: {"namespace": ..., "changes": [{orbId, type, op, set,
 		// clear}, ...]}. Filters like ?orbId= and ?namespace= are served from

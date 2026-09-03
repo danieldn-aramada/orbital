@@ -2,6 +2,7 @@ package config
 
 import (
 	"log/slog"
+	"os"
 	"testing"
 )
 
@@ -44,6 +45,70 @@ func TestNewConfig_EncryptionKeyValidation(t *testing.T) {
 				t.Errorf("New() error = %v, wantErr = %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// external-jwt assigns ORBITAL_JWT_DEFAULT_ROLE to every valid bearer token
+// rather than reading a per-user role, so the default must be the LEAST
+// privileged tier. This fails if someone changes the default to dev/admin —
+// a change with no visible symptom at runtime, and one that would silently
+// grant write access to every valid token.
+func TestExternalJWT_DefaultRoleIsLeastPrivilege(t *testing.T) {
+	tests := []struct {
+		name    string
+		role    string
+		wantErr bool
+	}{
+		{"explicitly empty is refused — a config mistake, not a fallback", "", true},
+		{"readonly is accepted", "readonly", false},
+		{"dev is accepted", "dev", false},
+		{"admin is accepted", "admin", false},
+		{"garbage is refused", "superuser", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ORBITAL_AUTH_MODE", "external-jwt")
+			t.Setenv("ORBITAL_JWT_ISSUER", "https://keycloak.example.com/realms/x")
+			t.Setenv("ORBITAL_JWT_AUDIENCE", "account")
+			t.Setenv("ORBITAL_JWT_CLIENT_ID", "some-client")
+			t.Setenv("ORBITAL_JWT_DEFAULT_ROLE", tt.role)
+
+			_, err := New()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("New() error = %v, wantErr = %v", err, tt.wantErr)
+			}
+		})
+	}
+
+	// The load-bearing case: the var is absent entirely, which is what a
+	// deployment that never thought about it looks like.
+	t.Run("absent falls back to least privilege", func(t *testing.T) {
+		t.Setenv("ORBITAL_AUTH_MODE", "external-jwt")
+		t.Setenv("ORBITAL_JWT_ISSUER", "https://keycloak.example.com/realms/x")
+		t.Setenv("ORBITAL_JWT_AUDIENCE", "account")
+		t.Setenv("ORBITAL_JWT_CLIENT_ID", "some-client")
+		t.Setenv("ORBITAL_JWT_DEFAULT_ROLE", "placeholder") // registers cleanup
+		os.Unsetenv("ORBITAL_JWT_DEFAULT_ROLE")
+
+		cfg, err := New()
+		if err != nil {
+			t.Fatalf("New() error = %v, want nil", err)
+		}
+		if cfg.JWTDefaultRole != "readonly" {
+			t.Errorf("absent default = %q, want readonly — a default that grants writes is an authorization decision nobody made", cfg.JWTDefaultRole)
+		}
+	})
+}
+
+// The role is read only in external-jwt mode, so leaving it unset must NOT
+// break every other deployment — the negative half of the rule above.
+func TestDefaultRoleUnsetIsFineOutsideExternalJWT(t *testing.T) {
+	t.Setenv("ORBITAL_AUTH_MODE", "")
+	t.Setenv("ORBITAL_JWT_DEFAULT_ROLE", "")
+
+	if _, err := New(); err != nil {
+		t.Errorf("New() error = %v, want nil — the role is external-jwt-only", err)
 	}
 }
 

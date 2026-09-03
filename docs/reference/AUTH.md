@@ -79,7 +79,7 @@ An alternative auth stack that trusts bearer tokens issued by an external OIDC p
 | `ORBITAL_JWT_ISSUER` | The OIDC issuer URL. JWKS discovered via `/.well-known/openid-configuration`. |
 | `ORBITAL_JWT_AUDIENCE` | Required `aud` claim value. |
 | `ORBITAL_JWT_CLIENT_ID` | Required `azp` claim value — the trust anchor. See below. |
-| `ORBITAL_JWT_DEFAULT_ROLE` | Role every valid token maps to: `readonly`, `dev`, or `admin` (default `admin`). |
+| `ORBITAL_JWT_DEFAULT_ROLE` | Role every valid token maps to: `readonly`, `dev`, or `admin` (default **`readonly`** — least privilege, since this one value decides what every valid token may do). Leaving it unset logs a WARN naming the inherited tier. |
 
 **What the middleware does per request:** if a `Bearer` token is present, validates signature via JWKS, checks `iss`/`aud`/`exp` (standard OIDC), checks `azp == ORBITAL_JWT_CLIENT_ID`, extracts `email`/`preferred_username`/`name`/`sub` onto context, sets `role` = configured default. No PostgreSQL provisioning — external users don't appear in orbital's `users` table; `RequireRole` reads `role` from context and grants directly. If NO bearer is present, it falls back to session-cookie auth (see below).
 

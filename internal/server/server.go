@@ -188,8 +188,18 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		if err != nil {
 			logger.Error("external-jwt verifier init failed — API auth disabled", "err", err)
 		} else {
+			// Every bearer caller gets this one tier, so an operator who never
+			// set it should see that they inherited it rather than chose it.
+			// Warned, not refused: readonly is a safe fallback, and refusing to
+			// boot is for guarantees with no safe default (see apiAuth below).
+			_, roleWasSet := os.LookupEnv("ORBITAL_JWT_DEFAULT_ROLE")
+			if !roleWasSet {
+				logger.Warn("ORBITAL_JWT_DEFAULT_ROLE not set — defaulting to "+cfg.JWTDefaultRole+"; every valid bearer token receives this role. Set it explicitly to choose the tier.",
+					"role", cfg.JWTDefaultRole, "explicitly_set", false)
+			}
 			logger.Warn("ORBITAL_AUTH_MODE=external-jwt — Keycloak bearers (issuer "+cfg.JWTIssuer+") map to role "+cfg.JWTDefaultRole+"; other issuers fall back to AAD bearer auth. Intended for demo/dev; do not use in production without per-user role mapping.",
-				"issuer", cfg.JWTIssuer, "audience", cfg.JWTAudience, "client_id", cfg.JWTClientID, "aad_fallback", fallback != nil)
+				"issuer", cfg.JWTIssuer, "audience", cfg.JWTAudience, "client_id", cfg.JWTClientID,
+				"aad_fallback", fallback != nil, "role_explicitly_set", roleWasSet)
 			apiAuth = []echo.MiddlewareFunc{ejv.RequireAuth(), handler.ResolveUser(db, cfg.AdminEmailSet())}
 		}
 	case cfg.OIDCIssuerURL != "":

@@ -54,6 +54,16 @@ definitions:
     type: object
   handler.approvalPolicyBody:
     properties:
+      allNamespaces:
+        description: |-
+          AllNamespaces governs EVERY namespace, including data centers onboarded
+          after the policy was written. Mutually exclusive with Namespace.
+
+          It is a DEFAULT, not a floor: a namespace with its own policy is governed
+          by that one instead, even when it is weaker, and a namespace whose policy
+          is DISABLED is not gated at all.
+        example: false
+        type: boolean
       allTypes:
         description: |-
           AllTypes protects every type in the namespace, including ConfigItem types
@@ -78,7 +88,8 @@ definitions:
         example: true
         type: boolean
       namespace:
-        description: Namespace the policy governs.
+        description: Namespace the policy governs. Required unless allNamespaces is
+          true.
         example: alaska-dot
         type: string
       requiredApprovals:
@@ -96,8 +107,6 @@ definitions:
         items:
           type: string
         type: array
-    required:
-    - namespace
     type: object
   handler.approvalPolicyResolveResponse:
     properties:
@@ -124,6 +133,12 @@ definitions:
       actionType:
         example: config.mutation
         type: string
+      allNamespaces:
+        description: |-
+          AllNamespaces means this policy is the fallback for every namespace that
+          has no policy of its own. Namespace is empty when it is set.
+        example: false
+        type: boolean
       allTypes:
         example: true
         type: boolean
@@ -319,6 +334,14 @@ definitions:
     type: object
   handler.changeItemBody:
     properties:
+      before:
+        additionalProperties: {}
+        description: |-
+          Before makes the item CONDITIONAL: the values you read, keyed like Set.
+          Orbital refuses the request with 409 if any named field has already moved,
+          and refuses the merge if one moves between review and apply. Omit it for
+          an unconditional request, guarded only at entity level.
+        type: object
       clear:
         description: Clear is the fields to unset.
         example:
@@ -370,6 +393,23 @@ definitions:
           scope.
         example: sha256:045b8a51a0aea59fa
         type: string
+      satisfied:
+        description: |-
+          Satisfied is the part of the changeset that would do nothing: fields whose
+          current value already equals the proposed one, and deletes whose target is
+          already gone. Same flat shape as Changes, so a client renders it with the
+          same code.
+
+          It exists because `changes` alone cannot answer "what does this request
+          propose". A field someone else already set drops out of the diff, so the
+          request appears to shrink — with no signal that it did, or why. Listing
+          them separately keeps `changes` meaning exactly "what would change" while
+          making the whole proposal visible.
+
+          `before` and `after` are equal on every entry here, by definition.
+        items:
+          $ref: '#/definitions/graphdiff.Change'
+        type: array
       stale:
         description: |-
           Stale means the base moved; the diff below is against CURRENT intent, so

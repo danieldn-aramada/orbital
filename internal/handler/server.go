@@ -268,34 +268,39 @@ type networkAdapterTabData struct {
 }
 
 type serverTabDetailData struct {
-	ID                string
-	OrbID             string
-	DomID             string // SafeDomID(OrbID)
-	Name              string
-	Hostname          string
-	Model             string
-	Manufacturer      string
-	ServiceTag        string
-	RackPosition      int
-	OobIP             string
-	OobMAC            string
-	CreatedBy         string
-	CreatedAt         string
-	UpdatedBy         string
-	UpdatedAt         string
-	Namespace         string
-	Rack              struct{ ID, Name string }
-	Version           int
-	DataCenterID      string
-	DataCenterOrbID   string
-	DataCenterDomID   string // SafeDomID(DataCenterOrbID)
-	DataCenterName    string
-	ShowDCBack        bool // true when drilled from a DC tab
-	CurrentUser       string
-	EditDataJSON      template.JS
-	EditTargetsJSON   template.JS // configitem-editor.js consumes — see configitems.BuildEditTargets
-	IdracOrbID        string
-	IdracVersion      int
+	ID              string
+	OrbID           string
+	DomID           string // SafeDomID(OrbID)
+	Name            string
+	Hostname        string
+	Model           string
+	Manufacturer    string
+	ServiceTag      string
+	RackPosition    int
+	OobIP           string
+	OobMAC          string
+	CreatedBy       string
+	CreatedAt       string
+	UpdatedBy       string
+	UpdatedAt       string
+	Namespace       string
+	Rack            struct{ ID, Name string }
+	Version         int
+	DataCenterID    string
+	DataCenterOrbID string
+	DataCenterDomID string // SafeDomID(DataCenterOrbID)
+	DataCenterName  string
+	ShowDCBack      bool // true when drilled from a DC tab
+	CurrentUser     string
+	EditDataJSON    template.JS
+	EditTargetsJSON template.JS // configitem-editor.js consumes — see configitems.BuildEditTargets
+	IdracOrbID      string
+	IdracVersion    int
+	// IdracValuesJSON carries the child's RAW current values so the page can
+	// overlay proposed changes on iDRAC fields, exactly as MaintenanceValuesJSON
+	// does for the maintenance panel. An edit to an owned child records the
+	// CHILD's orbId, so a mark on these rows can only fire from IdracOrbID.
+	IdracValuesJSON   string
 	IdracSettings     *idracSettingsTabData
 	ConfigProfileJSON string
 	// Maintenance display (read-only, field-accurate — mirrors the edit modal).
@@ -509,6 +514,19 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 	if raw.IdracSettings != nil {
 		srv.IdracOrbID = raw.IdracSettings.OrbID
 		srv.IdracVersion = raw.IdracSettings.Version
+		// Keys MUST match the IdracSettings FormFields in configitems/registry.go
+		// — that list is what a changeset can name, so a key that drifts from it
+		// silently stops marking that field.
+		srv.IdracValuesJSON = rawFieldValues(map[string]any{
+			"firmwareVersion":             raw.IdracSettings.FirmwareVersion,
+			"sshEnabled":                  raw.IdracSettings.SshEnabled,
+			"ipmiEnabled":                 raw.IdracSettings.IpmiEnabled,
+			"lockdownModeEnabled":         raw.IdracSettings.LockdownModeEnabled,
+			"osToIdracPassThroughEnabled": raw.IdracSettings.OsToIdracPassThroughEnabled,
+			"usbManagementPortEnabled":    raw.IdracSettings.UsbManagementPortEnabled,
+			"dhcpEnabled":                 raw.IdracSettings.DhcpEnabled,
+			"racadmEnabled":               raw.IdracSettings.RacadmEnabled,
+		})
 		srv.IdracSettings = &idracSettingsTabData{
 			FirmwareVersion:             raw.IdracSettings.FirmwareVersion,
 			OsToIdracPassThroughEnabled: raw.IdracSettings.OsToIdracPassThroughEnabled,

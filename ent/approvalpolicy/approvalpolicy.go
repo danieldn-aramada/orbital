@@ -24,6 +24,8 @@ const (
 	FieldUpdatedBy = "updated_by"
 	// FieldActionType holds the string denoting the action_type field in the database.
 	FieldActionType = "action_type"
+	// FieldAllNamespaces holds the string denoting the all_namespaces field in the database.
+	FieldAllNamespaces = "all_namespaces"
 	// FieldNamespace holds the string denoting the namespace field in the database.
 	FieldNamespace = "namespace"
 	// FieldAllTypes holds the string denoting the all_types field in the database.
@@ -48,6 +50,7 @@ var Columns = []string{
 	FieldUpdatedAt,
 	FieldUpdatedBy,
 	FieldActionType,
+	FieldAllNamespaces,
 	FieldNamespace,
 	FieldAllTypes,
 	FieldTypes,
@@ -71,8 +74,8 @@ var (
 	DefaultCreatedAt func() time.Time
 	// ActionTypeValidator is a validator for the "action_type" field. It is called by the builders before save.
 	ActionTypeValidator func(string) error
-	// NamespaceValidator is a validator for the "namespace" field. It is called by the builders before save.
-	NamespaceValidator func(string) error
+	// DefaultAllNamespaces holds the default value on creation for the "all_namespaces" field.
+	DefaultAllNamespaces bool
 	// DefaultAllTypes holds the default value on creation for the "all_types" field.
 	DefaultAllTypes bool
 	// DefaultRequiredApprovals holds the default value on creation for the "required_approvals" field.
@@ -118,6 +121,11 @@ func ByUpdatedBy(opts ...sql.OrderTermOption) OrderOption {
 // ByActionType orders the results by the action_type field.
 func ByActionType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldActionType, opts...).ToFunc()
+}
+
+// ByAllNamespaces orders the results by the all_namespaces field.
+func ByAllNamespaces(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAllNamespaces, opts...).ToFunc()
 }
 
 // ByNamespace orders the results by the namespace field.

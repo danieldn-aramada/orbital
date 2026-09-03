@@ -220,6 +220,11 @@ type changeItemBody struct {
 	Set map[string]any `json:"set,omitempty"`
 	// Clear is the fields to unset.
 	Clear []string `json:"clear,omitempty" example:"oobMAC"`
+	// Before makes the item CONDITIONAL: the values you read, keyed like Set.
+	// Orbital refuses the request with 409 if any named field has already moved,
+	// and refuses the merge if one moves between review and apply. Omit it for
+	// an unconditional request, guarded only at entity level.
+	Before map[string]any `json:"before,omitempty"`
 }
 
 // amendChangeRequestBody patches an open change request. Omitted fields are
@@ -242,8 +247,15 @@ type decisionBody struct {
 
 // approvalPolicyBody declares a protected class.
 type approvalPolicyBody struct {
-	// Namespace the policy governs.
-	Namespace string `json:"namespace" validate:"required" example:"alaska-dot"`
+	// AllNamespaces governs EVERY namespace, including data centers onboarded
+	// after the policy was written. Mutually exclusive with Namespace.
+	//
+	// It is a DEFAULT, not a floor: a namespace with its own policy is governed
+	// by that one instead, even when it is weaker, and a namespace whose policy
+	// is DISABLED is not gated at all.
+	AllNamespaces *bool `json:"allNamespaces,omitempty" example:"false"`
+	// Namespace the policy governs. Required unless allNamespaces is true.
+	Namespace string `json:"namespace,omitempty" example:"alaska-dot"`
 	// AllTypes protects every type in the namespace, including ConfigItem types
 	// added to the schema later. Mutually exclusive with Types.
 	AllTypes *bool `json:"allTypes,omitempty" example:"true"`
@@ -366,13 +378,29 @@ type changeRequestDiffResponse struct {
 	Summary  graphdiff.Summary `json:"summary"`
 	// Changes is FLAT — one entry per changed entity, never a nested tree.
 	Changes []*graphdiff.Change `json:"changes"`
+	// Satisfied is the part of the changeset that would do nothing: fields whose
+	// current value already equals the proposed one, and deletes whose target is
+	// already gone. Same flat shape as Changes, so a client renders it with the
+	// same code.
+	//
+	// It exists because `changes` alone cannot answer "what does this request
+	// propose". A field someone else already set drops out of the diff, so the
+	// request appears to shrink — with no signal that it did, or why. Listing
+	// them separately keeps `changes` meaning exactly "what would change" while
+	// making the whole proposal visible.
+	//
+	// `before` and `after` are equal on every entry here, by definition.
+	Satisfied []*graphdiff.Change `json:"satisfied,omitempty"`
 }
 
 // approvalPolicyResponse is one protected class.
 type approvalPolicyResponse struct {
-	ID                string   `json:"id" example:"7c2e1f88-1a2b-4c3d-8e9f-0a1b2c3d4e5f"`
-	ActionType        string   `json:"actionType" example:"config.mutation"`
-	Namespace         string   `json:"namespace" example:"alaska-dot"`
+	ID         string `json:"id" example:"7c2e1f88-1a2b-4c3d-8e9f-0a1b2c3d4e5f"`
+	ActionType string `json:"actionType" example:"config.mutation"`
+	// AllNamespaces means this policy is the fallback for every namespace that
+	// has no policy of its own. Namespace is empty when it is set.
+	AllNamespaces     bool     `json:"allNamespaces" example:"false"`
+	Namespace         string   `json:"namespace,omitempty" example:"alaska-dot"`
 	AllTypes          bool     `json:"allTypes" example:"true"`
 	Types             []string `json:"types,omitempty"`
 	RequiredApprovals int      `json:"requiredApprovals" example:"1"`
@@ -442,6 +470,10 @@ func (h *ChangeRequest) CreateChangeRequest(c echo.Context) error {
 
 	cr, problems, err := h.Create(c.Request().Context(), actor, body.Title, body.Description, cs)
 	if err != nil {
+		var pf *preconditionFailed
+		if errors.As(err, &pf) {
+			return writePreconditionFailed(c, pf)
+		}
 		return err
 	}
 	if len(problems) > 0 {
@@ -642,6 +674,7 @@ func (h *ChangeRequest) GetChangeRequestDiff(c echo.Context) error {
 		BaseHash:    cr.BaseHash,
 		Summary:     res.Summary,
 		Changes:     res.Changes,
+		Satisfied:   satisfiedItems(st.Snapshot, st.Changeset, res),
 	})
 }
 
@@ -650,6 +683,10 @@ func (h *ChangeRequest) GetChangeRequestDiff(c echo.Context) error {
 // Without this check a longer title reached Postgres and failed at INSERT, so a
 // user error surfaced as a 500.
 const maxTitleLen = 255
+
+// allNamespacesResourceID is the audit resource id for a policy that governs
+// every namespace. See auditPolicy for why it is a sentinel rather than "".
+const allNamespacesResourceID = "*"
 
 // validateTitle enforces what the column already enforced silently. `required`
 // is false for callers that treat an empty title as "leave it alone".
@@ -716,6 +753,10 @@ func (h *ChangeRequest) AmendChangeRequest(c echo.Context) error {
 	cr, problems, err := h.Amend(c.Request().Context(), id, actorFromContext(c), caller.Role,
 		body.Title, body.Description, cs)
 	if err != nil {
+		var pf *preconditionFailed
+		if errors.As(err, &pf) {
+			return writePreconditionFailed(c, pf)
+		}
 		return crError(c, err)
 	}
 	if len(problems) > 0 {
@@ -799,6 +840,10 @@ func (h *ChangeRequest) MergeChangeRequest(c echo.Context) error {
 	caller := resolveCallerRole(c, h.db)
 	cr, err := h.Merge(c.Request().Context(), id, actorFromContext(c), caller.Role, caller.NoAuthz)
 	if err != nil {
+		var pf *preconditionFailed
+		if errors.As(err, &pf) {
+			return writePreconditionFailed(c, pf)
+		}
 		return crError(c, err)
 	}
 	return h.renderOne(c, cr, http.StatusOK)
@@ -874,8 +919,12 @@ func (h *ChangeRequest) CreateApprovalPolicy(c echo.Context) error {
 	if err := c.Bind(&body); err != nil {
 		return writeError(c, http.StatusBadRequest, CodeBadUserInput, "invalid request body", "")
 	}
-	if strings.TrimSpace(body.Namespace) == "" {
-		return writeError(c, http.StatusBadRequest, CodeBadUserInput, "namespace is required", "")
+	allNamespaces := body.AllNamespaces != nil && *body.AllNamespaces
+	if err := validatePolicyNamespace(c, allNamespaces, body.Namespace); err != nil {
+		return err
+	}
+	if allNamespaces {
+		body.Namespace = ""
 	}
 	// The default is the whole namespace, so a body that says nothing about
 	// scope gets allTypes. Sending only a type list is read as meaning it,
@@ -899,6 +948,7 @@ func (h *ChangeRequest) CreateApprovalPolicy(c echo.Context) error {
 
 	create := h.db.ApprovalPolicy.Create().
 		SetActionType(approval.ActionTypeConfigMutation).
+		SetAllNamespaces(allNamespaces).
 		SetNamespace(body.Namespace).
 		SetAllTypes(allTypes).
 		SetTypes(body.Types).
@@ -929,7 +979,17 @@ func (h *ChangeRequest) CreateApprovalPolicy(c echo.Context) error {
 				"a policy covers either all types or a list of types, never both and never neither",
 				"Send allTypes:true with no types, or allTypes:false with the types to protect.")
 		}
+		if isNamespaceCheckViolation(err) {
+			return writeError(c, http.StatusBadRequest, CodeBadUserInput,
+				"a policy covers either all namespaces or one namespace, never both and never neither",
+				"Send allNamespaces:true with no namespace, or a namespace with allNamespaces omitted.")
+		}
 		if ent.IsConstraintError(err) {
+			if allNamespaces {
+				return writeError(c, http.StatusConflict, CodeConflict,
+					"a policy already covers all namespaces",
+					"There is one all-namespaces policy — PATCH it instead of creating a second")
+			}
 			return writeError(c, http.StatusConflict, CodeConflict,
 				"a policy already covers that namespace",
 				"There is one policy per namespace — PATCH it to change which types it protects")
@@ -976,6 +1036,16 @@ func (h *ChangeRequest) UpdateApprovalPolicy(c echo.Context) error {
 	}
 	if err != nil {
 		return fmt.Errorf("load approval policy: %w", err)
+	}
+
+	// Moving a policy between "one namespace" and "all namespaces" is deleting
+	// one policy and creating another — the same reason the UI disables the
+	// namespace field while editing. Refused rather than silently ignored: a
+	// dropped scope change leaves the caller believing the gate widened.
+	if body.AllNamespaces != nil && *body.AllNamespaces != prev.AllNamespaces {
+		return writeError(c, http.StatusBadRequest, CodeBadUserInput,
+			"a policy's namespace scope cannot be changed",
+			"Delete this policy and create the one you want — moving the scope is not an edit to it.")
 	}
 
 	upd := h.db.ApprovalPolicy.UpdateOneID(id).
@@ -1075,7 +1145,17 @@ func (h *ChangeRequest) DeleteApprovalPolicy(c echo.Context) error {
 // surfaces every policy change for it. Category "management", matching
 // updateUserRole — the closest analogue, an admin changing an
 // authorization-relevant setting.
+//
+// A GLOBAL policy has no namespace, and an empty resource id would make the
+// most consequential policy in the system unfindable by the very query this
+// exists for. It is recorded under `*` — a filter key, deliberately not the
+// prose label `policyLabel` produces, and deliberately NOT stored in the row's
+// own `namespace` column, so the sentinel never reaches the data model or a
+// `WHERE namespace = $1`.
 func (h *ChangeRequest) auditPolicy(c echo.Context, action, namespace string, details map[string]any) {
+	if namespace == "" {
+		namespace = allNamespacesResourceID
+	}
 	details["namespace"] = namespace
 	writeAuditEvent(h.db, h.logger, "management", actorFromContext(c), action,
 		[]string{action},
@@ -1100,6 +1180,7 @@ func policyFields(p *ent.ApprovalPolicy) map[string]any {
 	}
 	return map[string]any{
 		"actionType":        p.ActionType,
+		"allNamespaces":     p.AllNamespaces,
 		"namespace":         p.Namespace,
 		"allTypes":          p.AllTypes,
 		"types":             types,
@@ -1232,6 +1313,7 @@ func renderPolicy(p *ent.ApprovalPolicy) approvalPolicyResponse {
 	out := approvalPolicyResponse{
 		ID:                p.ID.String(),
 		ActionType:        p.ActionType,
+		AllNamespaces:     p.AllNamespaces,
 		Namespace:         p.Namespace,
 		AllTypes:          p.AllTypes,
 		Types:             p.Types,
@@ -1338,11 +1420,12 @@ func toChangeItems(in []changeItemBody) []approval.ChangeItem {
 	out := make([]approval.ChangeItem, 0, len(in))
 	for _, b := range in {
 		out = append(out, approval.ChangeItem{
-			OrbID: b.OrbID,
-			Type:  b.Type,
-			Op:    approval.Op(b.Op),
-			Set:   b.Set,
-			Clear: b.Clear,
+			OrbID:  b.OrbID,
+			Type:   b.Type,
+			Op:     approval.Op(b.Op),
+			Set:    b.Set,
+			Clear:  b.Clear,
+			Before: b.Before,
 		})
 	}
 	return out
@@ -1352,11 +1435,12 @@ func fromChangeItems(in []approval.ChangeItem) []changeItemBody {
 	out := make([]changeItemBody, 0, len(in))
 	for _, ch := range in {
 		out = append(out, changeItemBody{
-			OrbID: ch.OrbID,
-			Type:  ch.Type,
-			Op:    string(ch.Op),
-			Set:   ch.Set,
-			Clear: ch.Clear,
+			OrbID:  ch.OrbID,
+			Type:   ch.Type,
+			Op:     string(ch.Op),
+			Set:    ch.Set,
+			Clear:  ch.Clear,
+			Before: ch.Before,
 		})
 	}
 	return out
@@ -1392,6 +1476,25 @@ func decodeItemResults(raw json.RawMessage) []mergeItemResult {
 // writeChangesetProblems renders a rejected changeset. Separate from
 // writeError because the envelope carries a LIST — a changeset can be wrong in
 // several places at once and a single `error` string would hide all but one.
+// writePreconditionFailed renders a `before` mismatch. 409, not 400: nothing
+// about the request is malformed — a value moved while the caller was composing
+// it, which is the same class of failure as the guarded-apply MVCC conflict and
+// carries the same code so a client branches on one thing.
+func writePreconditionFailed(c echo.Context, e *preconditionFailed) error {
+	out := make([]changesetProblem, 0, len(e.Problems))
+	for _, p := range e.Problems {
+		out = append(out, changesetProblem{
+			Index: p.Index, OrbID: p.OrbID, Field: p.Field, Msg: p.Msg, Hint: p.Hint,
+		})
+	}
+	return c.JSON(http.StatusConflict, validationErrorResponse{
+		Error:      "state moved since you read it",
+		Code:       CodeMVCCConflict,
+		HTTPStatus: http.StatusConflict,
+		Problems:   out,
+	})
+}
+
 func writeChangesetProblems(c echo.Context, problems []approval.ValidationError) error {
 	out := make([]changesetProblem, 0, len(problems))
 	for _, p := range problems {
@@ -1414,6 +1517,29 @@ func writeChangesetProblems(c echo.Context, problems []approval.ValidationError)
 // check violation that is stable — the message text is not.
 func isScopeCheckViolation(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "approval_policy_scope_exclusive")
+}
+
+func isNamespaceCheckViolation(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "approval_policy_namespace_exclusive")
+}
+
+// validatePolicyNamespace refuses the two shapes that contradict themselves on
+// the namespace axis, mirroring validatePolicyScope on the type axis.
+//
+// The database enforces this too, via a CHECK. This layer exists to say WHICH
+// rule was broken — a constraint violation cannot.
+func validatePolicyNamespace(c echo.Context, allNamespaces bool, namespace string) error {
+	switch {
+	case allNamespaces && strings.TrimSpace(namespace) != "":
+		return writeError(c, http.StatusBadRequest, CodeBadUserInput,
+			"a policy covering all namespaces must not also name one — the two say different things and the row would not describe what it protects",
+			"Send allNamespaces:true with no namespace, or a namespace with allNamespaces omitted.")
+	case !allNamespaces && strings.TrimSpace(namespace) == "":
+		return writeError(c, http.StatusBadRequest, CodeBadUserInput,
+			"namespace is required",
+			"Name the namespace to protect, or send allNamespaces:true to cover every namespace including ones onboarded later.")
+	}
+	return nil
 }
 
 // validatePolicyScope refuses a policy that could never govern anything, and

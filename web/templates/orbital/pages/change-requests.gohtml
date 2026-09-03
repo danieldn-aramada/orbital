@@ -17,27 +17,7 @@
 
       <div id="cr-error" class="notification is-danger is-light" style="display:none;"></div>
 
-      {{/* Same shape as every other page-level tab strip (servers, clusters,
-           datacenters, network): `tabs is-boxed has-text-weight-medium` at
-           14px. `is-small` here made this the only page whose tabs were 12px
-           and unweighted. */}}
-      {{/* Three tabs, two axes kept apart.
-
-           State is the axis that partitions: Open (not terminal) and Closed
-           (merged, rejected or withdrawn — the Status column names which).
-           GitHub's repo PR list collapses the same way, and for the same
-           reason: how it ended is a property of the row, not of the list.
-
-           "Needs my review" is the third, and it is a SHORTCUT to the
-           actionable subset, not a state — it is what the nav badge counts, so
-           clicking that badge has to land somewhere visibly filtered. It is
-           gated on CanMutate (RoleAtLeast dev, the same minimum the API
-           enforces): readonly can never approve, so the tab would be
-           structurally empty for them and readonly lands on Open instead.
-
-           Dropped: `Mine` and `All`. Author is a column — scanning it answers
-           "what did I propose" without a tab, and both overlapped the state
-           tabs while looking like peers of them. */}}
+      {{/* Do NOT add `is-small`: it makes these the only 12px tabs in the app. */}}
       <nav class="tabs is-boxed has-text-weight-medium" style="font-size: 14px;" id="cr-tabs">
         <ul>
           {{if .CanMutate}}<li class="is-active"><a data-cr-filter="awaiting_review=true">Needs my review</a></li>{{end}}
@@ -53,27 +33,6 @@
         </colgroup>
         <thead>
           <tr>
-            {{/* The id is FIRST and always shown: it is the only column
-                 guaranteed to differ between two rows, and it is what someone
-                 quotes when they ask a colleague to look at one.
-
-                 Title is the widest column, as it is in every comparable queue
-                 — GitHub and GitLab list a title, Jira a summary, ServiceNow a
-                 short description, Terraform Cloud a run message. None renders
-                 a diff into the list.
-
-                 This column USED to render the effect instead, and the reason
-                 given was that the stored title was "a label written once at
-                 creation". That was true while the title was derived
-                 (`server-GD206G4 · 1 field`), and a column of those is noise.
-                 Proposers write the title now, so the premise expired.
-
-                 Change survives beside it, narrowed to a count. Every one of
-                 the products above pairs the summary with a magnitude —
-                 Terraform's `+2 ~1 −0`, ServiceNow's risk, GitHub's checks —
-                 because "how much am I approving" is the one thing a title
-                 cannot promise to say. It stays derived on read, so it follows
-                 an amended changeset even when the title does not. */}}
             <th>ID</th><th>Title</th><th>Change</th><th>Namespace</th><th>Author</th>
             <th>Status</th><th>Approvals</th><th>Age</th>
           </tr>

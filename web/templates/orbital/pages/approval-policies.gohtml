@@ -45,6 +45,15 @@
             <div id="ap-modal-error" class="notification is-danger is-light py-2 is-size-7" style="display:none;"></div>
 
             <div class="field">
+              <label class="label is-small">Applies to</label>
+              <div class="control">
+                <label class="checkbox is-size-7">
+                  <input type="checkbox" id="ap-all-namespaces"> All namespaces
+                </label>
+              </div>
+            </div>
+
+            <div class="field" id="ap-namespace-field">
               <label class="label is-small" for="ap-namespace">Namespace</label>
               <div class="control">
                 <div class="select is-small is-fullwidth">
@@ -57,7 +66,7 @@
               <label class="label is-small">Scope</label>
               <div class="control">
                 <label class="checkbox is-size-7">
-                  <input type="checkbox" id="ap-all-types" checked> All types in this namespace
+                  <input type="checkbox" id="ap-all-types" checked> <span id="ap-all-types-label">All types in this namespace</span>
                 </label>
               </div>
             </div>
@@ -75,7 +84,6 @@
               <div class="control">
                 <input class="input is-small" type="number" id="ap-required" min="1" value="1">
               </div>
-              <p class="help">Distinct reviewers, never the author.</p>
             </div>
 
             <div class="field">
@@ -88,7 +96,6 @@
                   <input type="checkbox" class="ap-bypass" value="dev"> dev
                 </label>
               </div>
-              <p class="help">Write directly, recorded as privileged. Clear both to require review from everyone.</p>
             </div>
 
             <div class="field is-grouped mt-4">

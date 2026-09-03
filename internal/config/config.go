@@ -133,11 +133,22 @@ type Config struct {
 	// "external-jwt" to trust bearer tokens issued by an external OIDC provider
 	// (e.g. AEP's Keycloak client) instead of orbital's own login flow. See
 	// docs/reference/AUTH.md § External JWT Mode.
-	AuthMode                string        `envconfig:"ORBITAL_AUTH_MODE"               default:""`
-	JWTIssuer               string        `envconfig:"ORBITAL_JWT_ISSUER"              default:""`      // e.g. https://keycloak.example.com/realms/foo
-	JWTAudience             string        `envconfig:"ORBITAL_JWT_AUDIENCE"            default:""`      // expected `aud` claim
-	JWTClientID             string        `envconfig:"ORBITAL_JWT_CLIENT_ID"           default:""`      // required `azp` claim — the trust anchor when aud is a generic default like "account"
-	JWTDefaultRole          string        `envconfig:"ORBITAL_JWT_DEFAULT_ROLE"        default:"admin"` // role every valid token maps to: readonly | dev | admin
+	AuthMode    string `envconfig:"ORBITAL_AUTH_MODE"               default:""`
+	JWTIssuer   string `envconfig:"ORBITAL_JWT_ISSUER"              default:""` // e.g. https://keycloak.example.com/realms/foo
+	JWTAudience string `envconfig:"ORBITAL_JWT_AUDIENCE"            default:""` // expected `aud` claim
+	JWTClientID string `envconfig:"ORBITAL_JWT_CLIENT_ID"           default:""` // required `azp` claim — the trust anchor when aud is a generic default like "account"
+	// JWTDefaultRole is the role every valid bearer token receives in
+	// external-jwt mode (that mode assigns one tier to all callers rather than
+	// reading a per-user role), and is read nowhere else.
+	//
+	// Defaults to the LEAST-privileged tier deliberately. A default that grants
+	// write access is an authorization decision nobody made; least privilege
+	// fails in the safe direction, and an operator who wants a broader tier can
+	// say so. Not made a required field: refusing to boot is the right tool only
+	// where no safe fallback exists (see the apiAuth-empty guard in server.go),
+	// and here one does. server.go warns when this was left unset so the
+	// fallback is visible rather than silent.
+	JWTDefaultRole          string        `envconfig:"ORBITAL_JWT_DEFAULT_ROLE"        default:"readonly"`
 	OCIRegistry             string        `envconfig:"ORBITAL_OCI_REGISTRY"            default:"localhost:5001"`
 	OCIRepo                 string        `envconfig:"ORBITAL_OCI_REPO"                default:"orbital"`
 	OCIUsername             string        `envconfig:"ORBITAL_OCI_USERNAME"            default:""`

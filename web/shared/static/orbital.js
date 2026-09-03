@@ -458,9 +458,13 @@ document.addEventListener('DOMContentLoaded', () => {
     testRow.style.display = destSelect?.value === 'oci' ? 'flex' : 'none'
   }
 
+  const previewBtn = document.getElementById('export-preview-btn')
+
   const refreshSubmitEnabled = () => {
-    if (!submitBtn) return
-    submitBtn.disabled = !dcSelect?.value || !destSelect?.value
+    if (submitBtn) submitBtn.disabled = !dcSelect?.value || !destSelect?.value
+    // Preview needs only the data centre — it diffs the current graph against
+    // the last published artifact, which no destination choice affects.
+    if (previewBtn) previewBtn.disabled = !dcSelect?.value
   }
 
   const onAnyChange = () => {
@@ -548,11 +552,26 @@ function doExportRequest(id, download, btn, expectedContentHash, modal) {
 // preview failure never blocks publishing — the operator can still ship the
 // current state, just without the guard.
 // `note` renders a warning banner above the diff (used on a stale-hash retry).
-function openExportPreview(id) {
+//
+// readOnly opens the same modal as a pure look — the Preview button — with
+// Confirm hidden. Hidden rather than disabled: a greyed-out publish button
+// invites the reader to work out how to enable it, and the point of that mode is
+// that publishing is not on the table. The fallback below (missing modal ⇒
+// publish directly) is skipped in read-only mode for the same reason.
+function openExportPreview(id, readOnly) {
   const modal = document.getElementById('export-preview-modal')
   const body = document.getElementById('export-preview-body')
   const confirmBtn = document.getElementById('export-preview-confirm')
-  if (!modal || !body || !confirmBtn) { doExportRequest(id, false, null); return }
+  if (!modal || !body || !confirmBtn) {
+    if (!readOnly) doExportRequest(id, false, null)
+    return
+  }
+
+  confirmBtn.style.display = readOnly ? 'none' : ''
+  // "Cancel" implies aborting something; in a read-only look there is nothing
+  // to abort.
+  const closeBtn = document.getElementById('export-preview-close')
+  if (closeBtn) closeBtn.textContent = readOnly ? 'Close' : 'Cancel'
 
   confirmBtn.onclick = () => {
     // The modal deliberately stays OPEN through the request: the guard re-reads
@@ -815,6 +834,12 @@ function deleteExportArtifact(jobId) {
 document.addEventListener('click', (e) => {
   const submit = e.target.closest('.js-export-submit')
   if (submit) { handleExportSubmit(submit); return }
+  const preview = e.target.closest('.js-export-preview')
+  if (preview) {
+    const dc = document.getElementById('export-datacenter-select')?.value
+    if (dc) openExportPreview(dc, true)
+    return
+  }
   const dl = e.target.closest('.js-export-download')
   if (dl) { downloadExportJob(dl, dl.dataset.exportJobId); return }
   const del = e.target.closest('.js-export-artifact-delete')
@@ -1460,6 +1485,20 @@ function sameValue(proposal, current) {
   }
 }
 
+// sameProposal compares two PROPOSALS. `sameValue` above compares a proposal
+// against a current value, which is a different question: here neither side is
+// the graph, so a `clear` and an `update` are never the same claim even when
+// the update writes null.
+function sameProposal(a, b) {
+  if ((a.op === 'clear') !== (b.op === 'clear')) return false
+  if (a.op === 'clear') return true
+  try {
+    return JSON.stringify(a.value) === JSON.stringify(b.value)
+  } catch (_) {
+    return false
+  }
+}
+
 // conflictsAmong recomputes disagreement over the proposals that SURVIVED
 // suppression.
 //
@@ -1558,18 +1597,27 @@ function renderFieldMark(slot, field, current, basePath) {
 function loadFieldMarks(root = document) {
   const tables = root.querySelectorAll ? [...root.querySelectorAll('[data-field-orbid]')] : []
   const withIds = tables.filter(t => t.dataset.fieldOrbid)
-  if (!withIds.length) return
+  // Tabs declare their own orbIds, so a tab is asked about even when its panel
+  // holds no field table — and the dot never depends on marks having rendered.
+  const tabs = root.querySelectorAll ? [...root.querySelectorAll('[data-panel-orbids]')] : []
+  const tabOrbIds = tabs.flatMap(li => panelOrbIds(li))
+  if (!withIds.length && !tabOrbIds.length) return
 
-  const orbIds = [...new Set(withIds.map(t => t.dataset.fieldOrbid))]
+  const orbIds = [...new Set([...withIds.map(t => t.dataset.fieldOrbid), ...tabOrbIds])]
   const qs = orbIds.map(id => 'orbId=' + encodeURIComponent(id)).join('&')
   fetch(BASE + '/api/v1/proposed-changes?' + qs, { headers: { Accept: 'application/json' } })
     .then(r => (r.ok ? r.json() : null))
     .then(byOrbId => {
       if (!byOrbId) return
+      // Current values, keyed by orbId, so the tab dot suppresses a no-op
+      // proposal from the SAME source its rows do. Two sources would let a tab
+      // claim more than the panel beneath it shows.
+      const currentByOrbId = {}
       for (const table of withIds) {
         const entry = byOrbId[table.dataset.fieldOrbid]
         let current = {}
         try { current = JSON.parse(table.dataset.fieldValues || '{}') } catch (_) { /* marks still render */ }
+        currentByOrbId[table.dataset.fieldOrbid] = current
         for (const row of table.querySelectorAll('[data-field]')) {
           const slot = row.querySelector('.js-field-mark')
           if (!slot) continue
@@ -1578,8 +1626,64 @@ function loadFieldMarks(root = document) {
           if (field) renderFieldMark(slot, field, current[row.dataset.field], BASE)
         }
       }
+      renderTabDots(tabs, byOrbId, currentByOrbId)
     })
     .catch(() => {})                             // a mark is never worth an error banner
+}
+
+function panelOrbIds(li) {
+  return (li.dataset.panelOrbids || '').split(',').map(s => s.trim()).filter(Boolean)
+}
+
+// renderTabDots marks a TAB whose panel has something proposed inside it.
+//
+// A field mark is invisible until you open the tab holding it, so a proposal on
+// a server's maintenance window was discoverable only by clicking through every
+// panel. The dot answers the one question a tab strip can answer: is there
+// anything in here for me.
+//
+// PRESENCE, not a count. At this level the useful question is binary — one field
+// or three, you open the tab either way — and a count across tabs invites a
+// comparison that encodes nothing. The fields inside carry the detail, which is
+// the same division of labour the marks already make against the rows.
+function renderTabDots(tabs, byOrbId, currentByOrbId) {
+  for (const li of tabs) {
+    const slot = li.querySelector('.js-tab-dot')
+    if (!slot) continue
+    slot.replaceChildren()                       // idempotent across fragment reloads
+
+    let live = 0
+    let conflicting = false
+    for (const orbId of panelOrbIds(li)) {
+      const entry = byOrbId[orbId]
+      if (!entry || !entry.fields) continue
+      const current = currentByOrbId[orbId] || {}
+      for (const [field, f] of Object.entries(entry.fields)) {
+        // Same suppression the rows apply: a proposal already equal to current
+        // state would do nothing, and a dot that fires for it trains people to
+        // ignore the dot.
+        const survivors = (f.proposals || []).filter(p => !sameValue(p, current[field]))
+        if (!survivors.length) continue
+        live += survivors.length
+        if (conflictsAmong(survivors)) conflicting = true
+      }
+    }
+    if (!live) continue
+
+    // Conflict escalates here for the same reason it does on a row: it is the
+    // one state that decides an outcome rather than describing one.
+    const label = conflicting
+      ? 'conflicting proposals'
+      : live + ' proposed change' + (live === 1 ? '' : 's')
+    const dot = document.createElement('span')
+    dot.className = 'ml-1 is-size-7 ' + (conflicting ? 'has-text-danger' : 'has-text-link')
+    dot.setAttribute('data-testid', 'tab-dot')
+    // Colour is the signal, so it cannot be the only one.
+    dot.setAttribute('title', label)
+    dot.setAttribute('aria-label', label)
+    dot.textContent = '\u25CF'
+    slot.appendChild(dot)
+  }
 }
 
 document.addEventListener('htmx:afterSettle', (evt) => {
@@ -2509,14 +2613,8 @@ document.addEventListener('keydown', (e) => {
 })
 
 // ─── Change Control: async nav badge ────────────────────────────────────────
-// The menu renders an empty chip and this fills it, because "awaiting MY
-// review" needs each candidate request rendered to know whether this caller can
-// approve it — and the menu is on every page. Computing it server-side would
-// make every page load pay for a change-request scan to surface a number nobody
-// is blocking on.
-//
-// The count is `total` from the SAME endpoint the item links to, so the badge
-// and the page can never disagree.
+// Count is `total` from the SAME endpoint the chip links to, so the badge and
+// the page it opens can never disagree.
 document.addEventListener('DOMContentLoaded', () => {
   for (const el of document.querySelectorAll('.js-async-badge')) {
     const src = el.getAttribute('data-badge-src')
@@ -2534,10 +2632,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 })
 
-// Status colours for a change request, shared by the queue and the review view.
-// Plain coloured text, not a tag pill: divergence-reports.gohtml renders its
-// resolution decisions the same way. One value must not render two ways on two
-// pages of one feature, which is what a pill on the detail page produced.
+// Shared by the queue AND the review view — one value must not render two ways
+// on two pages of one feature.
 const CR_STATUS_CLASS = {
   open: 'has-text-link',
   approved: 'has-text-success',
@@ -2547,10 +2643,6 @@ const CR_STATUS_CLASS = {
 }
 
 // ─── Change Control: request queue ──────────────────────────────────────────
-// Rows come from the public API, not from a server-rendered template: orbital's
-// UI is a consumer of that API like any other client. In particular the row's
-// status, approval counts and staleness are all DERIVED server-side and arrive
-// ready to render — this file must never recompute them.
 document.addEventListener('DOMContentLoaded', () => {
   const tbody = document.getElementById('cr-tbody')
   if (!tbody) return
@@ -2575,38 +2667,19 @@ document.addEventListener('DOMContentLoaded', () => {
       })
   }
 
-  // changeCell renders the API's `effect` — it does not compute one.
-  //
-  // The row used to show the stored `title`, which for orbital-authored
-  // requests was a derived string and for anyone else's was whatever they
-  // typed. Neither told a reviewer what the request does. `effect` is what the
-  // request would DO — computed server-side against the same snapshot its
-  // staleness anchor comes from — so any client building a queue gets the same
-  // two branches instead of writing a walk over `changes`, which is the
-  // bespoke-client-logic smell the API-first rule names by hand.
+  // Renders the API's `effect`; never computes one.
 
   function render(items, total) {
     tbody.innerHTML = items.map(cr => {
       const href = BASE + '/change-requests/' + encodeURIComponent(cr.id)
-      // Status as plain coloured text, not a tag pill — house convention for
-      // dense tables.
-      // Status is the ONE column that carries colour. Staleness rides in the
-      // same cell rather than a column of its own: it is a fact about the
-      // request's state, and a second coloured column competes with the first
-      // for the eye instead of adding to it.
       let status = '<span class="' + (CR_STATUS_CLASS[cr.status] || '') + '">' + esc(cr.status) + '</span>'
       if (cr.stale) status += ' <span class="has-text-warning">\u00b7 stale</span>'
-      // Plain text, including the placeholder — a greyed "not required" is the
-      // same per-cell styling the policies page dropped.
       const approvals = cr.requiredApprovals > 0
         ? cr.approvals + ' of ' + cr.requiredApprovals
         : 'not required'
       return '<tr data-cr-row="' + esc(cr.id) + '">'
         + '<td class="is-family-monospace"><a href="' + href + '">' + esc(cr.id) + '</a></td>'
-        // Free text since proposers write it, so the cell truncates (see
-        // #cr-table td.cr-title) and carries the whole thing on hover. The link
-        // is here as well as on the id: the title is the wide target and the
-        // one a reader is already looking at.
+        // Free text, so the cell truncates — see `#cr-table td.cr-title` in main.scss.
         + '<td class="cr-title" title="' + esc(cr.title) + '">'
         + '<a href="' + href + '">' + esc(cr.title) + '</a></td>'
         + '<td>' + fieldCountCell(cr.effect) + '</td>'
@@ -2617,12 +2690,8 @@ document.addEventListener('DOMContentLoaded', () => {
         + '<td title="' + esc(fmtDate(cr.createdAt)) + '">' + esc(fmtAge(cr.createdAt)) + '</td>'
         + '</tr>'
     }).join('')
-    // What "empty" means depends on the tab, and the useful reading differs each
-    // time — "nothing awaits you" is reassurance; "nothing exists" is a
-    // statement about the system. A single "Nothing here." says neither.
-    // Keys are the tab's own filter string, so a tab and its empty state cannot
-    // drift apart — adding a tab without a message falls back to the generic
-    // one rather than to a wrong one.
+    // Keyed by the tab's own filter string, so a tab and its empty state cannot
+    // drift apart; an unknown key falls back to the generic message.
     const EMPTY = {
       'awaiting_review=true': 'Nothing is waiting on your review.',
       'status=active': 'No change requests are open.',
@@ -2633,11 +2702,8 @@ document.addEventListener('DOMContentLoaded', () => {
     empty.style.display = total === 0 ? '' : 'none'
   }
 
-  // The selected tab survives navigating away and back, the same way the server
-  // and data-center pages remember their active tab. localStorage, not
-  // sessionStorage, to match them — and cleared at the login boundary by
-  // clearTabStateOnFresh in shared.js, so one user does not inherit another's
-  // view on a shared machine.
+  // Add this key to clearTabStateOnFresh in shared.js if it is ever renamed —
+  // login must not leave one user looking at another's view.
   const TAB_KEY = 'crTabCurrent'
 
   function selectTab(a) {
@@ -2654,11 +2720,8 @@ document.addEventListener('DOMContentLoaded', () => {
     selectTab(a)
   })
 
-  // A stored filter can name a tab that is not on the page: "Needs my review" is
-  // only rendered for roles that can approve, so a demoted user — or one whose
-  // stored value predates a change to the tab strip — must fall back rather than
-  // land on a page that loads nothing. The server-rendered `li.is-active` is
-  // that fallback, since the template already picks the right default per role.
+  // A stored filter can name a tab this role does not get, so fall back to the
+  // server-rendered active tab rather than loading nothing.
   const stored = localStorage[TAB_KEY]
   const restored = stored
     ? tabs.querySelector('a[data-cr-filter="' + CSS.escape(stored) + '"]')
@@ -2681,6 +2744,31 @@ document.addEventListener('DOMContentLoaded', () => {
     err.style.display = ''
   }
 
+  // A refused action often carries `problems[]` — per-field detail naming what
+  // moved and what to do about it. Rendering only `error` reduced a merge
+  // conflict to "state moved since you read it", with the field, the old value
+  // and the new one all present in the response and discarded at the last step.
+  function failWithProblems(body, action) {
+    const head = esc(body.error || ('Could not ' + action))
+    const problems = body.problems || []
+    if (!problems.length) {
+      err.innerHTML = head + (body.hint ? ' — ' + esc(body.hint) : '')
+      err.style.display = ''
+      return
+    }
+    // Hints repeat across problems that share a cause, so the distinct set is
+    // shown once at the end rather than after every row.
+    const hints = [...new Set(problems.map(p => p.hint).filter(Boolean))]
+    err.innerHTML = '<p>' + head + '</p><ul class="mt-2 ml-4">'
+      + problems.map(p => '<li><span class="is-family-monospace">'
+          + esc(shortOrbId(p.orbId) || p.orbId || '') + '</span>'
+          + (p.field ? ' <strong>' + esc(String(p.field).replace(/^[^.]+\./, '')) + '</strong>' : '')
+          + (p.message ? ' — ' + esc(p.message) : '') + '</li>').join('')
+      + '</ul>'
+      + hints.map(h => '<p class="is-size-7 mt-2">' + esc(h) + '</p>').join('')
+    err.style.display = ''
+  }
+
   function load() {
     err.style.display = 'none'
     Promise.all([
@@ -2695,23 +2783,12 @@ document.addEventListener('DOMContentLoaded', () => {
       .catch(e => fail('Could not load this change request — ' + e.message))
   }
 
-  // Every container, heading and table class on this page lives in
-  // change-request-detail.gohtml. This fills the ids in it and builds nothing
-  // else. Assembling structure here — an <article>, a section heading, a box —
-  // is what made this page drift from every other one: there was no template to
-  // copy, so none of the house style was copied.
   const el = (id) => document.getElementById(id)
 
-  // The last rendered request. Rename needs the current title to prefill with
-  // and to compare against, and re-fetching to get a value we already hold
-  // would race the click.
   let current = null
 
-  // The app-wide timestamp convention: emit the ISO value in `data-timestamp`
-  // and let shared.js's renderTimestamps turn it into relative time with the
-  // absolute value on hover. fmtDate is deliberately NOT used here — it is
-  // date-only, which is fine for an export preview and wrong for an audit
-  // timeline, where two events on one day would render identically.
+  // Not fmtDate: that is date-only, so two events on one day would render
+  // identically. renderTimestamps turns this into relative time on load.
   const ts = (iso) => '<span data-timestamp="' + esc(iso || '') + '"></span>'
 
   function render(cr, diff) {
@@ -2719,14 +2796,6 @@ document.addEventListener('DOMContentLoaded', () => {
       ? '<span class="is-family-monospace">∅</span>'
       : '<span class="is-family-monospace">' + esc(JSON.stringify(v)) + '</span>'
 
-    // Title then id, the id muted — GitHub's `Title #123`. The id stays in the
-    // heading rather than moving to a Details row because it is what people
-    // quote, it is the only thing distinguishing two requests whose authors
-    // chose the same title, and the browser tab is the only other place it
-    // appears. The stored title is rendered VERBATIM: an earlier pass stripped
-    // its "· N fields" tail, which turned a machine label into something shaped
-    // exactly like a human title and read as a lie on requests predating the
-    // title field.
     el('cr-heading').innerHTML = esc(cr.title)
       + ' <span class="has-text-grey">' + esc(cr.id) + '</span>'
 
@@ -2734,8 +2803,6 @@ document.addEventListener('DOMContentLoaded', () => {
     desc.textContent = cr.description || ''
     desc.style.display = cr.description ? '' : 'none'
 
-    // Staleness is NOT repeated here — the banner below says it at length, and
-    // the same fact twice on one page is what made this read as noisy.
     const rows = [
       ['Status', '<span class="' + (CR_STATUS_CLASS[cr.status] || '') + ' has-text-weight-medium">'
         + esc(cr.status) + '</span>'],
@@ -2751,6 +2818,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     current = cr
     renderBanner(cr)
+    loadOverlap(cr)
     renderChanges(cr, diff, fmt)
     el('cr-activity').innerHTML = timelineTable(cr)
     el('cr-actions').innerHTML = actionButtons(cr)
@@ -2759,8 +2827,6 @@ document.addEventListener('DOMContentLoaded', () => {
     host.style.display = ''
   }
 
-  // A deleted target is a hard failure with a specific remedy, so it is said
-  // loudly and above the diff, not discovered on a failed merge.
   function renderBanner(cr) {
     const b = el('cr-banner')
     if (cr.missingTargets && cr.missingTargets.length) {
@@ -2770,46 +2836,177 @@ document.addEventListener('DOMContentLoaded', () => {
         + '. Merging cannot proceed — close this request, drop that item, or recreate the entity and re-review.'
         + '</div>'
     } else if (cr.stale) {
+      // States the CONSEQUENCE, not the mechanism: the diff is always computed
+      // against current intent, so it looks identical whether or not the request
+      // is stale — what the reader cannot see is that merge is blocked and why.
       b.innerHTML = '<div class="notification is-warning is-light py-2 is-size-7 mb-4">'
-        + 'Intent has changed since this was opened. The diff below is against <strong>current</strong> intent; '
-        + 'approving again re-reviews it as it stands now.'
+        + '<strong>Stale.</strong> Intent changed since this was opened — approve again to merge.'
         + '</div>'
     } else {
       b.innerHTML = ''
     }
   }
 
-  // The table classes every other page in orbital uses, verbatim. is-size-7 is
-  // on the table, so cells must not repeat it.
+  // loadOverlap warns that ANOTHER active request proposes a field this one
+  // touches.
+  //
+  // Invisible otherwise until one of them merges — at which point this request
+  // goes stale and its approvals stop counting, because an approval is stamped
+  // with the graph's hash. Two reviewers can spend attention on proposals where
+  // one is guaranteed to be discarded, and neither is told.
+  //
+  // REQUEST-level, not per-row. The Changes table is rendered by
+  // renderExportPreviewTable, shared with the export preview and artifact
+  // compare where a sibling-request mark is meaningless — and a reviewer needs
+  // "colo-45 also proposes enabled=false" as ONE fact, not the same fact
+  // scattered across however many fields overlap.
+  function loadOverlap(cr) {
+    const slot = el('cr-overlap')
+    slot.innerHTML = ''
+    // Only actionable while the request can still merge. A terminal request's
+    // collisions are history and the merge already resolved them.
+    if (cr.status !== 'open' && cr.status !== 'approved') return
+
+    const mine = new Map()                        // orbId -> Map(field -> proposal)
+    for (const item of cr.changes || []) {
+      const fields = new Map()
+      for (const [f, v] of Object.entries(item.set || {})) fields.set(f, { op: 'update', value: v })
+      for (const f of item.clear || []) fields.set(f, { op: 'clear' })
+      if (fields.size) mine.set(item.orbId, fields)
+    }
+    if (!mine.size) return
+
+    const qs = [...mine.keys()].map(id => 'orbId=' + encodeURIComponent(id)).join('&')
+    fetch(BASE + '/api/v1/proposed-changes?' + qs, { headers: { Accept: 'application/json' } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(byOrbId => { if (byOrbId) slot.innerHTML = overlapNotice(cr, mine, byOrbId) })
+      .catch(() => {})     // an overlap notice is never worth failing the review page for
+  }
+
+  // overlapNotice groups by the OTHER request, so one competing proposal reads
+  // as one line however many fields it touches.
+  function overlapNotice(cr, mine, byOrbId) {
+    const others = new Map()                      // id -> {title, fields:Set, conflicting}
+    for (const [orbId, fields] of mine) {
+      const entry = byOrbId[orbId]
+      if (!entry || !entry.fields) continue
+      for (const [field, ours] of fields) {
+        const f = entry.fields[field]
+        if (!f) continue
+        for (const p of f.proposals || []) {
+          // Never mark this request against itself. The endpoint reports every
+          // active proposal including ours, so without this every overlapping
+          // field would report a collision with no visible symptom other than a
+          // notice that is always present.
+          if (p.changeRequestId === cr.id) continue
+          const o = others.get(p.changeRequestId)
+            || { title: p.title || '', fields: new Set(), conflicting: false }
+          o.fields.add(field)
+          if (!sameProposal(p, ours)) o.conflicting = true
+          others.set(p.changeRequestId, o)
+        }
+      }
+    }
+    if (!others.size) return ''
+
+    const anyConflict = [...others.values()].some(o => o.conflicting)
+    const items = [...others.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([id, o]) => {
+      const href = BASE + '/change-requests/' + encodeURIComponent(id)
+      const fields = [...o.fields].sort().map(f => '<code>' + esc(f) + '</code>').join(', ')
+      return '<li><a href="' + esc(href) + '">' + esc(id) + '</a>'
+        + (o.title ? ' — ' + esc(o.title) : '')
+        + ' also proposes ' + fields
+        + (o.conflicting
+          ? ' <strong>with a different value</strong>'
+          : ' <span class="has-text-grey">with the same value</span>')
+        + '</li>'
+    }).join('')
+
+    // Conflicting is stronger because it decides an outcome: whichever merges
+    // first wins the field and the other is refused. Agreeing overlap costs
+    // only duplicated review, so it stays informational.
+    return '<div class="notification ' + (anyConflict ? 'is-danger' : 'is-info')
+      + ' is-light py-2 is-size-7 mb-4" data-testid="cr-overlap-notice">'
+      + '<strong>Also in flight.</strong> '
+      + (anyConflict
+        ? 'Whichever merges first wins the field; the other is then refused until it is re-reviewed.'
+        : 'Another request proposes the same values, so one of them will merge as a no-op.')
+      + '<ul class="mt-1" style="list-style:disc; margin-left:1.25rem;">' + items + '</ul>'
+      + '</div>'
+  }
+
   const TABLE_CLASS = 'table is-striped is-hoverable is-fullwidth is-size-7'
 
   function renderChanges(cr, diff, fmt) {
     const label = el('cr-changes-label')
     const box = el('cr-changes')
+    const changes = (diff && diff.changes) || []
+    const satisfied = (diff && diff.satisfied) || []
 
-    // The diff renderer is the same one the export preview and the artifact
-    // compare use — all three consume the identical flat changes[] shape,
-    // because one graphdiff core produces it. No "Plan: N changed · N added"
-    // line: the table already heads each group with a [Modified] N tag.
-    if (diff && (diff.changes || []).length) {
+    // Both lists are rendered, because `changes` alone does not say what the
+    // request PROPOSES — a field someone else already set drops out of the diff,
+    // so the table silently shrinks and the reader cannot tell whether the
+    // request ever asked for it.
+    if (changes.length || satisfied.length) {
       label.textContent = 'Changes'
-      box.innerHTML = renderExportPreviewTable(diff.changes, esc, fmt)
+      // Same renderer as the export preview and artifact compare — one graphdiff
+      // core produces this shape for all three. Do not fork it.
+      box.innerHTML = (changes.length ? renderExportPreviewTable(changes, esc, fmt) : '')
+        + satisfiedTable(satisfied, fmt)
       return
     }
     if (cr.status === 'open' || cr.status === 'approved') {
       label.textContent = 'Changes'
-      box.innerHTML = '<p class="is-size-7 has-text-grey">'
-        + 'No difference from current intent — this change is already applied.</p>'
+      box.innerHTML = '<p class="is-size-7 has-text-grey">This request proposes no changes.</p>'
       return
     }
     // A terminal request's live diff is empty BY CONSTRUCTION: it is measured
-    // against current intent, which already includes the merge. Saying "no
-    // difference" there restates the status and drops the only thing worth
-    // keeping — what the request did. `effect` is the delta captured at open,
-    // which is exactly that record, and it renders in the SAME columns as a
-    // live diff so a merged request is not a different kind of page.
+    // against current intent, which already includes the merge. `effect` is the
+    // delta captured at open, and the only record of what the request did.
     label.textContent = cr.status === 'merged' ? 'Applied' : 'Proposed'
     box.innerHTML = effectTable(cr)
+  }
+
+  // The part of the changeset that would do nothing — someone else already set
+  // it to the proposed value. Struck through, because the row is a statement
+  // about what was asked for, not about what will happen.
+  //
+  // Its own table rather than a fourth section inside renderExportPreviewTable:
+  // that renderer is shared with the export preview and artifact compare, and
+  // neither can ever produce a satisfied entry.
+  function satisfiedTable(items, fmt) {
+    if (!items.length) return ''
+    const rows = items.map(it => {
+      const where = shortOrbId(it.orbId)
+      // No strikethrough. It universally marks the superseded half of a
+      // transition, and there is no transition here — the proposed value IS the
+      // current one. Striking `enabled: true` reads as "enabled is not true",
+      // the opposite of the truth. The `No change` tag, the grey tbody and the
+      // caption already carry the de-emphasis.
+      // No arrow: `before` and `after` are BOTH the current value here
+      // (satisfiedItems sets `Before: cur, After: cur`), so `"Dell" → "Dell"`
+      // would depict a transition that does not exist. A bare value is the
+      // honest rendering — and it is why a fourth "current value" column would
+      // only reprint this same string.
+      const detail = (it.fields || []).length
+        ? (it.fields || []).map(f =>
+            '<div>' + esc(String(f.field).replace(/^[^.]+\./, '')) + ': ' + fmt(f.after) + '</div>'
+          ).join('')
+        : 'already deleted'
+      return '<tr><td class="is-family-monospace" title="' + esc(it.orbId) + '">' + esc(where)
+        + '</td><td>' + esc(it.type || '') + '</td><td>' + detail + '</td></tr>'
+    }).join('')
+    return '<p class="mt-4 mb-2">'
+      + '<span class="tag is-light">No change</span> '
+      + '<span class="is-size-7 has-text-grey">' + items.length
+      + ' already at the proposed value — merging would not alter ' + (items.length === 1 ? 'it' : 'them')
+      + '</span></p>'
+      + '<table class="' + TABLE_CLASS + '" data-testid="cr-satisfied">'
+      // Same three columns and header row as the changed table above, so the two
+      // read as one view. The third header says "Proposed value", not "Change" —
+      // these rows change nothing, and the caption above says so.
+      + '<thead><tr><th>orbId</th><th>Type</th><th>Proposed value</th></tr></thead>'
+      + '<tbody class="has-text-grey">' + rows + '</tbody></table>'
   }
 
   function effectTable(cr) {
@@ -2825,17 +3022,11 @@ document.addEventListener('DOMContentLoaded', () => {
       + '</tr></tbody></table>'
   }
 
-  // ONE chronological table, replacing separate "Reviews" and "Merge attempts"
-  // sections. Both were fragments of the same timeline. Columns mirror the diff
-  // table's subject-first shape: who, what, when. Nothing inside a row is
-  // bolded — bold was heading sections AND naming actors, so it meant nothing.
   function timelineTable(cr) {
     const rows = [{ at: cr.createdAt, who: cr.author, what: 'opened' }]
 
     for (const r of (cr.reviews || [])) {
-      // An approval cast against an earlier version is SHOWN, not hidden — the
-      // API keeps the row and marks it, so a reviewer reads "approved an earlier
-      // version" instead of watching an approval silently vanish.
+      // An approval cast against an earlier version is SHOWN, not hidden.
       const note = r.current ? '' : ' <span class="has-text-warning">(approved an earlier version)</span>'
       rows.push({ at: r.at, who: r.approver,
         what: esc(r.decision) + note + (r.comment ? ' — ' + esc(r.comment) : ''), raw: true })
@@ -2848,9 +3039,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (a.error) {
         what = 'merge failed — <span class="has-text-danger">' + esc(a.error) + '</span>'
       } else if (failed.length) {
-        // A partial merge is the one case that needs explaining, so it is
-        // explained HERE, where it happened — not as standing help text under
-        // every clean merge, which is most of why this page read as wordy.
         what = 'merged in part — ' + esc(failed.length + ' of ' + results.length) + ' did not apply, '
           + 'so this stays open. Re-merging does only the remainder.'
           + '<ul class="ml-4">' + failed.map(r =>
@@ -2859,9 +3047,8 @@ document.addEventListener('DOMContentLoaded', () => {
       rows.push({ at: a.attemptedAt, who: a.attemptedBy, what, raw: true })
     }
 
-    // Parsed, not string-compared: the API emits a local UTC offset
-    // (…T16:58:39-07:00), not a Z suffix, so lexical order is not chronological
-    // order the moment two timestamps carry different offsets.
+    // Parsed, not string-compared: the API emits a local UTC offset, not a Z, so
+    // lexical order stops being chronological the moment offsets differ.
     rows.sort((x, y) => new Date(x.at) - new Date(y.at))
 
     return '<table class="' + TABLE_CLASS + '" data-testid="cr-reviews">'
@@ -2874,38 +3061,37 @@ document.addEventListener('DOMContentLoaded', () => {
       + '</tbody></table>'
   }
 
-  // Buttons are rendered STRAIGHT from availableActions. The API has already
-  // decided eligibility (role, authorship, status, whether this caller already
-  // approved); re-deriving any of that here would be a second copy of orbital's
-  // rules living in the browser. Rounded and is-small to sit in the toolbar
-  // beside the back button, matching server-tab / datacenter-tab / cluster-tab.
+  // Order is imposed HERE. `availableActions` is a SET; the API sorts it only to
+  // keep the payload deterministic. Do not reorder it server-side — that leaks
+  // presentation into a contract other clients read.
+  const CR_ACTIONS = [
+    ['merge', 'Merge', 'is-link'],
+    ['approve', 'Approve', 'is-success'],
+    ['reject', 'Reject', 'is-danger'],
+    // `edit` is the API's name for amend; this UI implements only its rename half.
+    ['edit', 'Rename', ''],
+    ['close', 'Close', ''],
+  ]
+
   function actionButtons(cr) {
-    const LABEL = {
-      approve: ['Approve', 'is-success'],
-      reject: ['Reject', 'is-danger'],
-      merge: ['Merge', 'is-link'],
-      close: ['Close', ''],
-      // `edit` is the API's name for amend, of which this UI implements only the
-      // rename half — changing the changeset from here is still unbuilt. Labelled
-      // for what it does, not for what the action is called.
-      edit: ['Rename', ''],
-    }
+    const offered = new Set(cr.availableActions || [])
+    const btn = (action, label, cls) =>
+      '<button class="button is-rounded is-small ' + cls + ' mt-1 ml-2 js-cr-action"'
+      + ' data-cr-action="' + esc(action) + '">' + esc(label) + '</button>'
+
     let out = ''
-    for (const a of (cr.availableActions || [])) {
-      const [label, cls] = LABEL[a] || [a, '']
-      out += '<button class="button is-rounded is-small ' + cls + ' mt-1 ml-2 js-cr-action"'
-        + ' data-cr-action="' + esc(a) + '">' + esc(label) + '</button>'
+    for (const [action, label, cls] of CR_ACTIONS) {
+      if (offered.has(action)) out += btn(action, label, cls)
+    }
+    // An unknown action still renders: the click handler is generic, and filtering
+    // to a known list would make a new server-side action silently not exist.
+    const known = new Set(CR_ACTIONS.map(a => a[0]))
+    for (const action of offered) {
+      if (!known.has(action)) out += btn(action, action, '')
     }
     return out
   }
 
-  // Rename edits in place, the way GitHub renames a pull request: the heading
-  // becomes an input, Enter or Save commits, Escape or Cancel restores. No
-  // modal — a modal for one text field is heavier than the thing it edits.
-  //
-  // PATCHes `title` alone, which by construction leaves the changeset, the base
-  // anchor and every approval untouched (Amend re-anchors only when `changes` is
-  // supplied). A rename is not a re-proposal.
   function startRename(cr) {
     const h = el('cr-heading')
     const restore = h.innerHTML
@@ -2981,9 +3167,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.classList.remove('is-loading')
         if (r.ok) { load(); return }
         const body = await r.json().catch(() => ({}))
-        // The API's own message and hint are the useful thing — a 409 on merge
-        // says what moved and what to do about it. Do not paraphrase them.
-        fail((body.error || ('Could not ' + action)) + (body.hint ? ' — ' + body.hint : ''))
+        failWithProblems(body, action)
       })
       .catch(() => {
         btn.classList.remove('is-loading')
@@ -3029,6 +3213,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function render(policies) {
     lastPolicies = policies || []
+    // Resolved once for the whole table: whether a namespace row overrides
+    // anything is a property of the SET, not of the row.
+    const globalPolicy = lastPolicies.find(p => p.allNamespaces) || null
     if (!policies || !policies.length) {
       tbody.innerHTML = '<tr><td colspan="6" class="has-text-grey is-size-7">'
         + 'No protected classes. Every change writes directly, as it does without this feature.'
@@ -3059,8 +3246,18 @@ document.addEventListener('DOMContentLoaded', () => {
       // and Sentinel all put enforcement on the policy. Red on the off side
       // matches the Users role picker's severity ramp: not "bad", but *look at
       // this* — a disabled policy sits in the table looking like protection.
+      // A namespace row silently taking precedence over an all-namespaces row
+      // is correct under fallback resolution and still reads as a bug the first
+      // time someone meets it — most sharply when the namespace row is WEAKER,
+      // which is exactly when it matters. Say so on the row.
+      const overrides = !p.allNamespaces && globalPolicy && globalPolicy.enabled
       return '<tr data-ap-id="' + esc(p.id) + '">'
-        + '<td>' + esc(p.namespace) + '</td>'
+        + '<td>' + (p.allNamespaces
+          ? '<span class="has-text-weight-medium">All namespaces</span>'
+          : esc(p.namespace)
+            + (overrides
+              ? ' <span class="has-text-grey is-size-7" title="Fallback resolution: a namespace with its own policy uses it instead of the all-namespaces policy, even when it is weaker.">overrides all-namespaces</span>'
+              : '')) + '</td>'
         + '<td>' + (p.allTypes ? 'All types' : esc((p.types || []).join(', '))) + '</td>'
         + '<td>' + esc(p.requiredApprovals) + '</td>'
         + '<td>' + esc((p.bypassRoles || []).join(', ')) + '</td>'
@@ -3111,6 +3308,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const typeSel = document.getElementById('ap-type')
   const allTypes = document.getElementById('ap-all-types')
   const typeField = document.getElementById('ap-type-field')
+  const allNs = document.getElementById('ap-all-namespaces')
+  const nsField = document.getElementById('ap-namespace-field')
+  const allTypesLabel = document.getElementById('ap-all-types-label')
+
+  // Same mode-not-selection shape as the type scope below, one axis up. The
+  // namespace picker is hidden rather than disabled: a visible-but-dead select
+  // still showing a namespace invites reading the policy as covering it.
+  function syncNamespaceScope() {
+    nsField.style.display = allNs.checked ? 'none' : ''
+    allTypesLabel.textContent = allNs.checked ? 'All types' : 'All types in this namespace'
+  }
+  allNs.addEventListener('change', syncNamespaceScope)
 
   // Scope is a MODE, picked deliberately — not an empty selection standing in
   // for "everything".
@@ -3181,7 +3390,7 @@ document.addEventListener('DOMContentLoaded', () => {
     editingId = p ? p.id : null
     modalErr.style.display = 'none'
     document.getElementById('ap-modal-title').textContent =
-      p ? 'Edit policy — ' + p.namespace : 'Protect a class of changes'
+      p ? 'Edit policy — ' + (p.allNamespaces ? 'all namespaces' : p.namespace) : 'Protect a class of changes'
     document.getElementById('ap-modal-save').textContent = p ? 'Save changes' : 'Create policy'
     loadOptions()
       .then(() => {
@@ -3192,8 +3401,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // The namespace IS the policy's identity, so editing cannot move it —
         // that would be deleting one policy and creating another, and the two
         // have different audit stories.
-        nsSel.value = p ? p.namespace : nsSel.options[0].value
+        // The namespace axis is the policy's identity just as the namespace
+        // itself is, so editing cannot move a policy between the two — the API
+        // refuses it, and a live control the API will reject is a trap.
+        allNs.checked = p ? !!p.allNamespaces : false
+        allNs.disabled = !!p
+        nsSel.value = p && p.namespace ? p.namespace : nsSel.options[0].value
         nsSel.disabled = !!p
+        syncNamespaceScope()
         allTypes.checked = p ? !!p.allTypes : true
         const want = new Set(p ? (p.types || []) : [])
         for (const o of typeSel.options) o.selected = want.has(o.value)
@@ -3215,7 +3430,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const bypassRoles = Array.from(document.querySelectorAll('.ap-bypass:checked')).map(c => c.value)
     const chosen = Array.from(typeSel.selectedOptions).map(o => o.value).filter(Boolean)
     if (!allTypes.checked && !chosen.length) {
-      modalErr.textContent = 'Pick at least one type, or tick "All types in this namespace".'
+      modalErr.textContent = 'Pick at least one type, or tick "' + allTypesLabel.textContent + '".'
       modalErr.style.display = ''
       return
     }
@@ -3233,7 +3448,10 @@ document.addEventListener('DOMContentLoaded', () => {
       // would read as "use the default".
       bypassRoles: bypassRoles,
     }
-    if (!editingId) payload.namespace = nsSel.value
+    if (!editingId) {
+      payload.allNamespaces = allNs.checked
+      if (!allNs.checked) payload.namespace = nsSel.value
+    }
 
     let resp
     try {

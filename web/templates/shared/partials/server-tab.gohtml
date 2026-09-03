@@ -119,8 +119,14 @@
         <p class="is-size-4 pb-4">Details</p>
         <div class="tabs is-boxed" id="srv-detail-tabs-{{.DomID}}">
           <ul>
-            <li class="is-active" data-panel="srv-panel-idrac-{{.DomID}}">
-              <a><span class="icon is-small"><i class="fa-solid fa-microchip"></i></span><span>iDRAC Settings</span></a>
+            {{/* data-panel-orbids drives the tab dot: orbital.js lights it from the
+                 SAME /api/v1/proposed-changes response the field marks use, so a
+                 panel you have not opened still says it has something in flight.
+                 DECLARED here rather than scraped from rendered marks — the dot
+                 must be right whether or not the panel has rendered. */}}
+            <li class="is-active" data-panel="srv-panel-idrac-{{.DomID}}"
+                data-panel-orbids="{{.IdracOrbID}}">
+              <a><span class="icon is-small"><i class="fa-solid fa-microchip"></i></span><span>iDRAC Settings</span><span class="js-tab-dot"></span></a>
             </li>
             <li data-panel="srv-panel-storage-{{.DomID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-hard-drive"></i></span><span>Storage</span></a>
@@ -128,8 +134,9 @@
             <li data-panel="srv-panel-network-{{.DomID}}">
               <a><span class="icon is-small"><i class="fa-solid fa-network-wired"></i></span><span>Network</span></a>
             </li>
-            <li data-panel="srv-panel-maintenance-{{.DomID}}">
-              <a><span class="icon is-small"><i class="fa-solid fa-wrench"></i></span><span>Maintenance</span></a>
+            <li data-panel="srv-panel-maintenance-{{.DomID}}"
+                data-panel-orbids="{{.MaintenanceOrbID}}">
+              <a><span class="icon is-small"><i class="fa-solid fa-wrench"></i></span><span>Maintenance</span><span class="js-tab-dot"></span></a>
             </li>
             {{template "audit-tab-li" .}}
           </ul>
@@ -139,16 +146,26 @@
 
         <div id="srv-panel-idrac-{{.DomID}}">
           {{if .IdracSettings}}
-          <table class="table is-fullwidth mt-2">
+          {{/* data-field-orbid / data-field-values drive the proposed-change
+               marks — same wiring as Server Summary above and the maintenance
+               panel below; the three tables are one pattern and must not drift.
+               The orbId is the CHILD's: an edit to an owned child records the
+               child's orbId, never the server's, so a mark here can only fire
+               from IdracOrbID. data-field names must match the IdracSettings
+               FormFields in configitems/registry.go. */}}
+          <table class="table is-fullwidth mt-2"
+                 data-field-orbid="{{.IdracOrbID}}"
+                 data-field-values="{{.IdracValuesJSON}}">
+            <colgroup><col style="width:1%"><col style="width:28%"><col></colgroup>
             <tbody>
-              <tr><td style="white-space:nowrap;width:1%">firmwareVersion</td><td>{{if .IdracSettings.FirmwareVersion}}{{.IdracSettings.FirmwareVersion}}{{else}}—{{end}}</td></tr>
-              <tr><td style="white-space:nowrap">dhcpEnabled</td><td>{{if .IdracSettings.DhcpEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td></tr>
-              <tr><td style="white-space:nowrap">ipmiEnabled</td><td>{{if .IdracSettings.IpmiEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td></tr>
-              <tr><td style="white-space:nowrap">lockdownModeEnabled</td><td>{{if .IdracSettings.LockdownModeEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td></tr>
-              <tr><td style="white-space:nowrap">osToIdracPassThroughEnabled</td><td>{{if .IdracSettings.OsToIdracPassThroughEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td></tr>
-              <tr><td style="white-space:nowrap">racadmEnabled</td><td>{{if .IdracSettings.RacadmEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td></tr>
-              <tr><td style="white-space:nowrap">sshEnabled</td><td>{{if .IdracSettings.SshEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td></tr>
-              <tr><td style="white-space:nowrap">usbManagementPortEnabled</td><td>{{if .IdracSettings.UsbManagementPortEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td></tr>
+              <tr data-field="firmwareVersion"><td style="white-space:nowrap">firmwareVersion</td><td>{{if .IdracSettings.FirmwareVersion}}{{.IdracSettings.FirmwareVersion}}{{else}}—{{end}}</td><td><span class="js-field-mark"></span></td></tr>
+              <tr data-field="dhcpEnabled"><td style="white-space:nowrap">dhcpEnabled</td><td>{{if .IdracSettings.DhcpEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td><td><span class="js-field-mark"></span></td></tr>
+              <tr data-field="ipmiEnabled"><td style="white-space:nowrap">ipmiEnabled</td><td>{{if .IdracSettings.IpmiEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td><td><span class="js-field-mark"></span></td></tr>
+              <tr data-field="lockdownModeEnabled"><td style="white-space:nowrap">lockdownModeEnabled</td><td>{{if .IdracSettings.LockdownModeEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td><td><span class="js-field-mark"></span></td></tr>
+              <tr data-field="osToIdracPassThroughEnabled"><td style="white-space:nowrap">osToIdracPassThroughEnabled</td><td>{{if .IdracSettings.OsToIdracPassThroughEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td><td><span class="js-field-mark"></span></td></tr>
+              <tr data-field="racadmEnabled"><td style="white-space:nowrap">racadmEnabled</td><td>{{if .IdracSettings.RacadmEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td><td><span class="js-field-mark"></span></td></tr>
+              <tr data-field="sshEnabled"><td style="white-space:nowrap">sshEnabled</td><td>{{if .IdracSettings.SshEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td><td><span class="js-field-mark"></span></td></tr>
+              <tr data-field="usbManagementPortEnabled"><td style="white-space:nowrap">usbManagementPortEnabled</td><td>{{if .IdracSettings.UsbManagementPortEnabled}}<span class="tag">true</span>{{else}}<span class="tag">false</span>{{end}}</td><td><span class="js-field-mark"></span></td></tr>
             </tbody>
           </table>
           {{else}}

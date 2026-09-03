@@ -840,6 +840,16 @@ func BaseEffectNotNil() predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(sql.FieldNotNull(FieldBaseEffect))
 }
 
+// BaseValuesIsNil applies the IsNil predicate on the "base_values" field.
+func BaseValuesIsNil() predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldIsNull(FieldBaseValues))
+}
+
+// BaseValuesNotNil applies the NotNil predicate on the "base_values" field.
+func BaseValuesNotNil() predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldNotNull(FieldBaseValues))
+}
+
 // ExecutedAtEQ applies the EQ predicate on the "executed_at" field.
 func ExecutedAtEQ(v time.Time) predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(sql.FieldEQ(FieldExecutedAt, v))

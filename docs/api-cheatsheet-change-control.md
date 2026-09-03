@@ -41,7 +41,7 @@ curl -s -X POST $ORBITAL_URL/api/v1/change-requests -H "Authorization: Bearer $T
   "namespace": "colo",
   "description": "Field ops request for the Nov window.",
   "changes": [
-    { "op": "update", "orbId": "colo:idrac-CWJHDX3",              "set": { "sshEnabled": true } },
+    { "op": "update", "orbId": "colo:CWJHDX3-idrac",              "set": { "sshEnabled": true } },
     { "op": "update", "orbId": "colo:server-maintenance-CWJHDX3", "set": { "enabled": true } }
   ]
 }' | jq '{id, status, requiredApprovals}'
@@ -54,16 +54,34 @@ Response
 ### Change object 
 
 ```jsonc
-{ "op":    "update",                    // upsert | update | delete
-  "orbId": "colo:idrac-CWJHDX3",        // required — identifies the entity
-  "type":  "IdracSettings",             // only when CREATING something new
-  "set":   { "sshEnabled": true },      // fields to write
-  "clear": ["windowStart"] }            // field NAMES to unset
+{ "op":     "update",                   // upsert | update | delete
+  "orbId":  "colo:CWJHDX3-idrac",       // required — identifies the entity
+  "type":   "IdracSettings",            // only when CREATING something new
+  "set":    { "sshEnabled": true },     // fields to write
+  "clear":  ["windowStart"],            // field NAMES to unset
+  "before": { "sshEnabled": false } }   // optional — the values you READ
 ```
 
 - One entity per item. Two entities = two items.
+- **Copy orbIds, do not derive them.** `IdracSettings` predates the `<ns>:<kind>-<natural-key>` convention and is still `<ns>:<serviceTag>-idrac` — `colo:CWJHDX3-idrac`, *not* `colo:idrac-CWJHDX3` (`DGRAPH.md` § legacy). Every example here was wrong in the second direction until 2026-09-02, so it fails as a guess even when it reads right.
 - Point at another entity by orbId, never nest it: `"dataCenter": { "orbId": "colo:dc-01" }`. A nested entity is rejected `400`.
 - Bad fields are caught when you create the request, not at merge.
+
+### `before` — make an item conditional
+
+Send the values you read alongside the values you want. Orbital then refuses if the world moved under you, **twice**: when you create the request, and again at merge.
+
+```
+409 MVCC_CONFLICT
+{ "error": "state moved since you read it",
+  "problems": [{ "orbId": "colo:CWJHDX3-idrac", "field": "IdracSettings.sshEnabled",
+                 "message": "value moved since you read it: you saw false, it is now true",
+                 "hint": "Someone changed this while you were composing. Reload and propose again." }] }
+```
+
+- **Omit it** and the item is unconditional — guarded only at entity level, which cannot see a write that changes a value without bumping `version`.
+- **Send it** and you also get the merge-time check: a field moved to a *third* value is a conflict and refuses the whole merge; a field already at your proposed value is dropped from the write, so merging costs no version bump and writes no audit row for a change that changed nothing.
+- Read it back on `GET /{id}` — it round-trips in `changes[]`.
 - For full design see `docs/reference/CHANGE-CONTROL.md` § "Changeset contract".
 
 ### List change requests
@@ -72,7 +90,7 @@ Continuing the example above — what is in flight for the two entities you just
 
 ```bash
 curl -s "$ORBITAL_URL/api/v1/change-requests?status=active\
-&orbId=colo:idrac-CWJHDX3&orbId=colo:server-maintenance-CWJHDX3" \
+&orbId=colo:CWJHDX3-idrac&orbId=colo:server-maintenance-CWJHDX3" \
   -H "Authorization: Bearer $TOKEN" | jq '{total, items: [.items[] | {id, effect, author, status}]}'
 ```
 Response
@@ -108,12 +126,14 @@ curl -s $ORBITAL_URL/api/v1/change-requests/colo-42 -H "Authorization: Bearer $T
   | jq '{id, status, approvals, requiredApprovals, availableActions, missingTargets, mergeAttempts}'
 
 curl -s $ORBITAL_URL/api/v1/change-requests/colo-42/diff -H "Authorization: Bearer $TOKEN" \
-  | jq '{stale, baseHash, contentHash, summary, changes}'
+  | jq '{stale, baseHash, contentHash, summary, changes, satisfied}'
 ```
 
 Render your buttons straight from `availableActions` — it is caller-relative and already accounts for role, authorship and prior approval. Don't re-derive it.
 
 `changes` is flat — one entry per changed entity. The diff is always against *current* intent, so a stale request's diff already reflects the move.
+
+**Render `satisfied[]` too, or your table will lie by omission.** It is the part of the proposal that would do nothing — a field someone else already set to the value this request wants, or a delete whose target is already gone. Those drop out of `changes` by definition, so a request appears to shrink with no indication that it did. Same flat shape, `before == after` on every entry, so one renderer handles both. Orbital's own review page shows them struck through under a *No change* label.
 
 ### Approve / reject / close
 
@@ -199,7 +219,7 @@ A write to a gated class is refused — whether it arrives via `/graphql` or int
 ```bash
 curl -s -X POST $ORBITAL_URL/graphql -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"query":"mutation($orbId:String!,$set:IdracSettingsPatch!){ updateIdracSettings(input:{filter:{orbId:{eq:$orbId}},set:$set}){ numUids } }",
-       "variables":{"orbId":"colo:idrac-CWJHDX3","set":{"sshEnabled":true}}}'
+       "variables":{"orbId":"colo:CWJHDX3-idrac","set":{"sshEnabled":true}}}'
 ```
 
 ```json

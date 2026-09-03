@@ -200,6 +200,33 @@ function changedOnly(next, prev) {
   return out
 }
 
+// assertBefore picks the prior values for the fields an item actually writes,
+// so the request can be CONDITIONAL: orbital refuses it at creation if one of
+// them has already moved, and refuses the merge if one moves during review.
+//
+// The editor is the one place that knows what the author was looking at. The
+// server cannot infer it — Create reads state when it is called, which may be
+// minutes after the modal was opened, so an edit landing meanwhile would
+// silently become the recorded ancestor and the reviewer would diff against a
+// state the author never saw.
+//
+// PRIMITIVES ONLY, deliberately. Edge references are objects ({orbId: …}) and
+// live in a different part of the snapshot, so asserting them would compare two
+// shapes rather than two values and could refuse a legitimate proposal. Scalars
+// are also where a silent overwrite actually costs something.
+function assertBefore(set, clear, before) {
+  const out = {}
+  const take = (k) => {
+    if (!(k in before)) return
+    const v = before[k]
+    if (v !== null && typeof v === 'object') return
+    out[k] = v
+  }
+  for (const k of Object.keys(set || {})) take(k)
+  for (const k of (clear || [])) take(k)
+  return out
+}
+
 export function buildChangeset({
   namespace, rootTarget, rootOrbId, rootScalars, rootBefore, rootRemove,
   changes, wrappersNeeded, foldedOrbIds,
@@ -241,12 +268,16 @@ export function buildChangeset({
   }
   const rootClear = Object.keys(rootRemove || {}).filter(f => !STAMPED_FIELDS.has(f))
   if (Object.keys(rootSet).length > 0 || rootClear.length > 0) {
+    const rootPrior = rootTarget && rootBefore
+      ? withoutStamped(scalarPayload(rootTarget, rootBefore))
+      : {}
     items.push({
       orbId: rootOrbId,
       type: rootTarget ? rootTarget.kind : undefined,
       op: 'update',
       set: rootSet,
       clear: rootClear,
+      before: assertBefore(rootSet, rootClear, rootPrior),
     })
   }
 
@@ -271,7 +302,11 @@ export function buildChangeset({
       // value can never be needed and wrong at the same time.
       const clear = Object.keys(removePayload(t, ch.before, sub)).filter(f => !STAMPED_FIELDS.has(f))
       if (Object.keys(set).length === 0 && clear.length === 0) continue
-      items.push({ orbId: t.orbId, type: t.kind, op: 'update', set, clear })
+      const prior = withoutStamped(scalarPayload(t, ch.before || {}))
+      items.push({
+        orbId: t.orbId, type: t.kind, op: 'update', set, clear,
+        before: assertBefore(set, clear, prior),
+      })
     } else {
       const set = withoutStamped({ name: deriveName(t), ...scalarPayload(t, sub) })
       if (t.parentInverseField && t.parentOrbId) {

@@ -57,15 +57,38 @@ type ChangeItem struct {
 	Op Op `json:"op"`
 
 	// Set is the fields to write, as a field-name → value map matching the
-	// GraphQL schema. Nested owned children appear as nested maps and are split
-	// into their own mutations at merge — DGraph treats a nested object in a
-	// mutation input as a LINK, not a deep write, so a nested payload sent
-	// as-is silently discards the child's field values.
+	// GraphQL schema.
+	//
+	// FLAT — one item per entity, never a tree. An edge value may carry only an
+	// identity key (orbId/id); anything else is REJECTED at creation by
+	// validateFields, because DGraph LINKS on an edge rather than writing
+	// through it — a nested payload returns success and silently discards the
+	// child's field values. An owned child therefore gets its own entry in
+	// Changes under its own orbId; nothing is split at merge.
+	//
+	// Flatness is load-bearing, not stylistic: the field-level conflict guard
+	// keys on orbId → predicate → value, so a nested item would need conflicts
+	// located by path and BaseValues to become a tree diff.
 	Set map[string]any `json:"set,omitempty"`
 
 	// Clear is the fields to unset. Separate from Set because a GraphQL `set`
 	// of null is a no-op in DGraph — clearing requires a `remove`.
 	Clear []string `json:"clear,omitempty"`
+
+	// Before is the caller's assertion about the values it read, keyed like Set.
+	// Supplying it makes the request conditional: orbital refuses at creation if
+	// any named field has already moved, and refuses at merge if one moves
+	// between review and apply.
+	//
+	// It must come from the CALLER and cannot be inferred server-side. Create
+	// reads current state when it is invoked, not when the author was looking —
+	// so an edit landing while someone composes a change silently becomes part
+	// of the recorded ancestor, and the reviewer sees a diff against a state the
+	// author never saw. Only the client knows what it read.
+	//
+	// Omitted is legal and means "unconditional": the ancestor is taken from the
+	// snapshot at creation and only the entity-level base_hash guards the merge.
+	Before map[string]any `json:"before,omitempty"`
 }
 
 // Changeset is the config.mutation payload. Single-namespace by construction:

@@ -1957,10 +1957,12 @@ const docTemplate = `{
         },
         "handler.approvalPolicyBody": {
             "type": "object",
-            "required": [
-                "namespace"
-            ],
             "properties": {
+                "allNamespaces": {
+                    "description": "AllNamespaces governs EVERY namespace, including data centers onboarded\nafter the policy was written. Mutually exclusive with Namespace.\n\nIt is a DEFAULT, not a floor: a namespace with its own policy is governed\nby that one instead, even when it is weaker, and a namespace whose policy\nis DISABLED is not gated at all.",
+                    "type": "boolean",
+                    "example": false
+                },
                 "allTypes": {
                     "description": "AllTypes protects every type in the namespace, including ConfigItem types\nadded to the schema later. Mutually exclusive with Types.",
                     "type": "boolean",
@@ -1982,7 +1984,7 @@ const docTemplate = `{
                     "example": true
                 },
                 "namespace": {
-                    "description": "Namespace the policy governs.",
+                    "description": "Namespace the policy governs. Required unless allNamespaces is true.",
                     "type": "string",
                     "example": "alaska-dot"
                 },
@@ -2034,6 +2036,11 @@ const docTemplate = `{
                 "actionType": {
                     "type": "string",
                     "example": "config.mutation"
+                },
+                "allNamespaces": {
+                    "description": "AllNamespaces means this policy is the fallback for every namespace that\nhas no policy of its own. Namespace is empty when it is set.",
+                    "type": "boolean",
+                    "example": false
                 },
                 "allTypes": {
                     "type": "boolean",
@@ -2288,6 +2295,11 @@ const docTemplate = `{
                 "orbId"
             ],
             "properties": {
+                "before": {
+                    "description": "Before makes the item CONDITIONAL: the values you read, keyed like Set.\nOrbital refuses the request with 409 if any named field has already moved,\nand refuses the merge if one moves between review and apply. Omit it for\nan unconditional request, guarded only at entity level.",
+                    "type": "object",
+                    "additionalProperties": {}
+                },
                 "clear": {
                     "description": "Clear is the fields to unset.",
                     "type": "array",
@@ -2339,6 +2351,13 @@ const docTemplate = `{
                     "description": "ContentHash is the hash of current intent over this request's scope.",
                     "type": "string",
                     "example": "sha256:045b8a51a0aea59fa"
+                },
+                "satisfied": {
+                    "description": "Satisfied is the part of the changeset that would do nothing: fields whose\ncurrent value already equals the proposed one, and deletes whose target is\nalready gone. Same flat shape as Changes, so a client renders it with the\nsame code.\n\nIt exists because ` + "`" + `changes` + "`" + ` alone cannot answer \"what does this request\npropose\". A field someone else already set drops out of the diff, so the\nrequest appears to shrink — with no signal that it did, or why. Listing\nthem separately keeps ` + "`" + `changes` + "`" + ` meaning exactly \"what would change\" while\nmaking the whole proposal visible.\n\n` + "`" + `before` + "`" + ` and ` + "`" + `after` + "`" + ` are equal on every entry here, by definition.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/graphdiff.Change"
+                    }
                 },
                 "stale": {
                     "description": "Stale means the base moved; the diff below is against CURRENT intent, so\nit already reflects that.",

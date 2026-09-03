@@ -103,6 +103,20 @@ func (_u *ApprovalPolicyUpdate) SetNillableActionType(v *string) *ApprovalPolicy
 	return _u
 }
 
+// SetAllNamespaces sets the "all_namespaces" field.
+func (_u *ApprovalPolicyUpdate) SetAllNamespaces(v bool) *ApprovalPolicyUpdate {
+	_u.mutation.SetAllNamespaces(v)
+	return _u
+}
+
+// SetNillableAllNamespaces sets the "all_namespaces" field if the given value is not nil.
+func (_u *ApprovalPolicyUpdate) SetNillableAllNamespaces(v *bool) *ApprovalPolicyUpdate {
+	if v != nil {
+		_u.SetAllNamespaces(*v)
+	}
+	return _u
+}
+
 // SetNamespace sets the "namespace" field.
 func (_u *ApprovalPolicyUpdate) SetNamespace(v string) *ApprovalPolicyUpdate {
 	_u.mutation.SetNamespace(v)
@@ -114,6 +128,12 @@ func (_u *ApprovalPolicyUpdate) SetNillableNamespace(v *string) *ApprovalPolicyU
 	if v != nil {
 		_u.SetNamespace(*v)
 	}
+	return _u
+}
+
+// ClearNamespace clears the value of the "namespace" field.
+func (_u *ApprovalPolicyUpdate) ClearNamespace() *ApprovalPolicyUpdate {
+	_u.mutation.ClearNamespace()
 	return _u
 }
 
@@ -235,11 +255,6 @@ func (_u *ApprovalPolicyUpdate) check() error {
 			return &ValidationError{Name: "action_type", err: fmt.Errorf(`ent: validator failed for field "ApprovalPolicy.action_type": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.Namespace(); ok {
-		if err := approvalpolicy.NamespaceValidator(v); err != nil {
-			return &ValidationError{Name: "namespace", err: fmt.Errorf(`ent: validator failed for field "ApprovalPolicy.namespace": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.RequiredApprovals(); ok {
 		if err := approvalpolicy.RequiredApprovalsValidator(v); err != nil {
 			return &ValidationError{Name: "required_approvals", err: fmt.Errorf(`ent: validator failed for field "ApprovalPolicy.required_approvals": %w`, err)}
@@ -281,8 +296,14 @@ func (_u *ApprovalPolicyUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if value, ok := _u.mutation.ActionType(); ok {
 		_spec.SetField(approvalpolicy.FieldActionType, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.AllNamespaces(); ok {
+		_spec.SetField(approvalpolicy.FieldAllNamespaces, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.Namespace(); ok {
 		_spec.SetField(approvalpolicy.FieldNamespace, field.TypeString, value)
+	}
+	if _u.mutation.NamespaceCleared() {
+		_spec.ClearField(approvalpolicy.FieldNamespace, field.TypeString)
 	}
 	if value, ok := _u.mutation.AllTypes(); ok {
 		_spec.SetField(approvalpolicy.FieldAllTypes, field.TypeBool, value)
@@ -409,6 +430,20 @@ func (_u *ApprovalPolicyUpdateOne) SetNillableActionType(v *string) *ApprovalPol
 	return _u
 }
 
+// SetAllNamespaces sets the "all_namespaces" field.
+func (_u *ApprovalPolicyUpdateOne) SetAllNamespaces(v bool) *ApprovalPolicyUpdateOne {
+	_u.mutation.SetAllNamespaces(v)
+	return _u
+}
+
+// SetNillableAllNamespaces sets the "all_namespaces" field if the given value is not nil.
+func (_u *ApprovalPolicyUpdateOne) SetNillableAllNamespaces(v *bool) *ApprovalPolicyUpdateOne {
+	if v != nil {
+		_u.SetAllNamespaces(*v)
+	}
+	return _u
+}
+
 // SetNamespace sets the "namespace" field.
 func (_u *ApprovalPolicyUpdateOne) SetNamespace(v string) *ApprovalPolicyUpdateOne {
 	_u.mutation.SetNamespace(v)
@@ -420,6 +455,12 @@ func (_u *ApprovalPolicyUpdateOne) SetNillableNamespace(v *string) *ApprovalPoli
 	if v != nil {
 		_u.SetNamespace(*v)
 	}
+	return _u
+}
+
+// ClearNamespace clears the value of the "namespace" field.
+func (_u *ApprovalPolicyUpdateOne) ClearNamespace() *ApprovalPolicyUpdateOne {
+	_u.mutation.ClearNamespace()
 	return _u
 }
 
@@ -554,11 +595,6 @@ func (_u *ApprovalPolicyUpdateOne) check() error {
 			return &ValidationError{Name: "action_type", err: fmt.Errorf(`ent: validator failed for field "ApprovalPolicy.action_type": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.Namespace(); ok {
-		if err := approvalpolicy.NamespaceValidator(v); err != nil {
-			return &ValidationError{Name: "namespace", err: fmt.Errorf(`ent: validator failed for field "ApprovalPolicy.namespace": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.RequiredApprovals(); ok {
 		if err := approvalpolicy.RequiredApprovalsValidator(v); err != nil {
 			return &ValidationError{Name: "required_approvals", err: fmt.Errorf(`ent: validator failed for field "ApprovalPolicy.required_approvals": %w`, err)}
@@ -617,8 +653,14 @@ func (_u *ApprovalPolicyUpdateOne) sqlSave(ctx context.Context) (_node *Approval
 	if value, ok := _u.mutation.ActionType(); ok {
 		_spec.SetField(approvalpolicy.FieldActionType, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.AllNamespaces(); ok {
+		_spec.SetField(approvalpolicy.FieldAllNamespaces, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.Namespace(); ok {
 		_spec.SetField(approvalpolicy.FieldNamespace, field.TypeString, value)
+	}
+	if _u.mutation.NamespaceCleared() {
+		_spec.ClearField(approvalpolicy.FieldNamespace, field.TypeString)
 	}
 	if value, ok := _u.mutation.AllTypes(); ok {
 		_spec.SetField(approvalpolicy.FieldAllTypes, field.TypeBool, value)

@@ -984,6 +984,7 @@ type ApprovalPolicyMutation struct {
 	updated_at            *time.Time
 	updated_by            *string
 	action_type           *string
+	all_namespaces        *bool
 	namespace             *string
 	all_types             *bool
 	types                 *[]string
@@ -1322,6 +1323,42 @@ func (m *ApprovalPolicyMutation) ResetActionType() {
 	m.action_type = nil
 }
 
+// SetAllNamespaces sets the "all_namespaces" field.
+func (m *ApprovalPolicyMutation) SetAllNamespaces(b bool) {
+	m.all_namespaces = &b
+}
+
+// AllNamespaces returns the value of the "all_namespaces" field in the mutation.
+func (m *ApprovalPolicyMutation) AllNamespaces() (r bool, exists bool) {
+	v := m.all_namespaces
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAllNamespaces returns the old "all_namespaces" field's value of the ApprovalPolicy entity.
+// If the ApprovalPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalPolicyMutation) OldAllNamespaces(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAllNamespaces is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAllNamespaces requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAllNamespaces: %w", err)
+	}
+	return oldValue.AllNamespaces, nil
+}
+
+// ResetAllNamespaces resets all changes to the "all_namespaces" field.
+func (m *ApprovalPolicyMutation) ResetAllNamespaces() {
+	m.all_namespaces = nil
+}
+
 // SetNamespace sets the "namespace" field.
 func (m *ApprovalPolicyMutation) SetNamespace(s string) {
 	m.namespace = &s
@@ -1353,9 +1390,22 @@ func (m *ApprovalPolicyMutation) OldNamespace(ctx context.Context) (v string, er
 	return oldValue.Namespace, nil
 }
 
+// ClearNamespace clears the value of the "namespace" field.
+func (m *ApprovalPolicyMutation) ClearNamespace() {
+	m.namespace = nil
+	m.clearedFields[approvalpolicy.FieldNamespace] = struct{}{}
+}
+
+// NamespaceCleared returns if the "namespace" field was cleared in this mutation.
+func (m *ApprovalPolicyMutation) NamespaceCleared() bool {
+	_, ok := m.clearedFields[approvalpolicy.FieldNamespace]
+	return ok
+}
+
 // ResetNamespace resets all changes to the "namespace" field.
 func (m *ApprovalPolicyMutation) ResetNamespace() {
 	m.namespace = nil
+	delete(m.clearedFields, approvalpolicy.FieldNamespace)
 }
 
 // SetAllTypes sets the "all_types" field.
@@ -1636,7 +1686,7 @@ func (m *ApprovalPolicyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ApprovalPolicyMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 12)
 	if m.created_at != nil {
 		fields = append(fields, approvalpolicy.FieldCreatedAt)
 	}
@@ -1651,6 +1701,9 @@ func (m *ApprovalPolicyMutation) Fields() []string {
 	}
 	if m.action_type != nil {
 		fields = append(fields, approvalpolicy.FieldActionType)
+	}
+	if m.all_namespaces != nil {
+		fields = append(fields, approvalpolicy.FieldAllNamespaces)
 	}
 	if m.namespace != nil {
 		fields = append(fields, approvalpolicy.FieldNamespace)
@@ -1688,6 +1741,8 @@ func (m *ApprovalPolicyMutation) Field(name string) (ent.Value, bool) {
 		return m.UpdatedBy()
 	case approvalpolicy.FieldActionType:
 		return m.ActionType()
+	case approvalpolicy.FieldAllNamespaces:
+		return m.AllNamespaces()
 	case approvalpolicy.FieldNamespace:
 		return m.Namespace()
 	case approvalpolicy.FieldAllTypes:
@@ -1719,6 +1774,8 @@ func (m *ApprovalPolicyMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldUpdatedBy(ctx)
 	case approvalpolicy.FieldActionType:
 		return m.OldActionType(ctx)
+	case approvalpolicy.FieldAllNamespaces:
+		return m.OldAllNamespaces(ctx)
 	case approvalpolicy.FieldNamespace:
 		return m.OldNamespace(ctx)
 	case approvalpolicy.FieldAllTypes:
@@ -1774,6 +1831,13 @@ func (m *ApprovalPolicyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetActionType(v)
+		return nil
+	case approvalpolicy.FieldAllNamespaces:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAllNamespaces(v)
 		return nil
 	case approvalpolicy.FieldNamespace:
 		v, ok := value.(string)
@@ -1871,6 +1935,9 @@ func (m *ApprovalPolicyMutation) ClearedFields() []string {
 	if m.FieldCleared(approvalpolicy.FieldUpdatedBy) {
 		fields = append(fields, approvalpolicy.FieldUpdatedBy)
 	}
+	if m.FieldCleared(approvalpolicy.FieldNamespace) {
+		fields = append(fields, approvalpolicy.FieldNamespace)
+	}
 	if m.FieldCleared(approvalpolicy.FieldTypes) {
 		fields = append(fields, approvalpolicy.FieldTypes)
 	}
@@ -1897,6 +1964,9 @@ func (m *ApprovalPolicyMutation) ClearField(name string) error {
 	case approvalpolicy.FieldUpdatedBy:
 		m.ClearUpdatedBy()
 		return nil
+	case approvalpolicy.FieldNamespace:
+		m.ClearNamespace()
+		return nil
 	case approvalpolicy.FieldTypes:
 		m.ClearTypes()
 		return nil
@@ -1922,6 +1992,9 @@ func (m *ApprovalPolicyMutation) ResetField(name string) error {
 		return nil
 	case approvalpolicy.FieldActionType:
 		m.ResetActionType()
+		return nil
+	case approvalpolicy.FieldAllNamespaces:
+		m.ResetAllNamespaces()
 		return nil
 	case approvalpolicy.FieldNamespace:
 		m.ResetNamespace()
@@ -2016,6 +2089,7 @@ type ApprovalRequestMutation struct {
 	appendbase_present    []string
 	base_effect           *json.RawMessage
 	appendbase_effect     json.RawMessage
+	base_values           *map[string]map[string]interface{}
 	payload               *json.RawMessage
 	appendpayload         json.RawMessage
 	executed_at           *time.Time
@@ -2770,6 +2844,55 @@ func (m *ApprovalRequestMutation) ResetBaseEffect() {
 	delete(m.clearedFields, approvalrequest.FieldBaseEffect)
 }
 
+// SetBaseValues sets the "base_values" field.
+func (m *ApprovalRequestMutation) SetBaseValues(value map[string]map[string]interface{}) {
+	m.base_values = &value
+}
+
+// BaseValues returns the value of the "base_values" field in the mutation.
+func (m *ApprovalRequestMutation) BaseValues() (r map[string]map[string]interface{}, exists bool) {
+	v := m.base_values
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBaseValues returns the old "base_values" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldBaseValues(ctx context.Context) (v map[string]map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBaseValues is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBaseValues requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBaseValues: %w", err)
+	}
+	return oldValue.BaseValues, nil
+}
+
+// ClearBaseValues clears the value of the "base_values" field.
+func (m *ApprovalRequestMutation) ClearBaseValues() {
+	m.base_values = nil
+	m.clearedFields[approvalrequest.FieldBaseValues] = struct{}{}
+}
+
+// BaseValuesCleared returns if the "base_values" field was cleared in this mutation.
+func (m *ApprovalRequestMutation) BaseValuesCleared() bool {
+	_, ok := m.clearedFields[approvalrequest.FieldBaseValues]
+	return ok
+}
+
+// ResetBaseValues resets all changes to the "base_values" field.
+func (m *ApprovalRequestMutation) ResetBaseValues() {
+	m.base_values = nil
+	delete(m.clearedFields, approvalrequest.FieldBaseValues)
+}
+
 // SetPayload sets the "payload" field.
 func (m *ApprovalRequestMutation) SetPayload(jm json.RawMessage) {
 	m.payload = &jm
@@ -3061,7 +3184,7 @@ func (m *ApprovalRequestMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ApprovalRequestMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 18)
 	if m.created_at != nil {
 		fields = append(fields, approvalrequest.FieldCreatedAt)
 	}
@@ -3103,6 +3226,9 @@ func (m *ApprovalRequestMutation) Fields() []string {
 	}
 	if m.base_effect != nil {
 		fields = append(fields, approvalrequest.FieldBaseEffect)
+	}
+	if m.base_values != nil {
+		fields = append(fields, approvalrequest.FieldBaseValues)
 	}
 	if m.payload != nil {
 		fields = append(fields, approvalrequest.FieldPayload)
@@ -3149,6 +3275,8 @@ func (m *ApprovalRequestMutation) Field(name string) (ent.Value, bool) {
 		return m.BasePresent()
 	case approvalrequest.FieldBaseEffect:
 		return m.BaseEffect()
+	case approvalrequest.FieldBaseValues:
+		return m.BaseValues()
 	case approvalrequest.FieldPayload:
 		return m.Payload()
 	case approvalrequest.FieldExecutedAt:
@@ -3192,6 +3320,8 @@ func (m *ApprovalRequestMutation) OldField(ctx context.Context, name string) (en
 		return m.OldBasePresent(ctx)
 	case approvalrequest.FieldBaseEffect:
 		return m.OldBaseEffect(ctx)
+	case approvalrequest.FieldBaseValues:
+		return m.OldBaseValues(ctx)
 	case approvalrequest.FieldPayload:
 		return m.OldPayload(ctx)
 	case approvalrequest.FieldExecutedAt:
@@ -3305,6 +3435,13 @@ func (m *ApprovalRequestMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetBaseEffect(v)
 		return nil
+	case approvalrequest.FieldBaseValues:
+		v, ok := value.(map[string]map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBaseValues(v)
+		return nil
 	case approvalrequest.FieldPayload:
 		v, ok := value.(json.RawMessage)
 		if !ok {
@@ -3389,6 +3526,9 @@ func (m *ApprovalRequestMutation) ClearedFields() []string {
 	if m.FieldCleared(approvalrequest.FieldBaseEffect) {
 		fields = append(fields, approvalrequest.FieldBaseEffect)
 	}
+	if m.FieldCleared(approvalrequest.FieldBaseValues) {
+		fields = append(fields, approvalrequest.FieldBaseValues)
+	}
 	if m.FieldCleared(approvalrequest.FieldExecutedAt) {
 		fields = append(fields, approvalrequest.FieldExecutedAt)
 	}
@@ -3426,6 +3566,9 @@ func (m *ApprovalRequestMutation) ClearField(name string) error {
 		return nil
 	case approvalrequest.FieldBaseEffect:
 		m.ClearBaseEffect()
+		return nil
+	case approvalrequest.FieldBaseValues:
+		m.ClearBaseValues()
 		return nil
 	case approvalrequest.FieldExecutedAt:
 		m.ClearExecutedAt()
@@ -3482,6 +3625,9 @@ func (m *ApprovalRequestMutation) ResetField(name string) error {
 		return nil
 	case approvalrequest.FieldBaseEffect:
 		m.ResetBaseEffect()
+		return nil
+	case approvalrequest.FieldBaseValues:
+		m.ResetBaseValues()
 		return nil
 	case approvalrequest.FieldPayload:
 		m.ResetPayload()

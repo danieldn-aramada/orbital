@@ -68,6 +68,10 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   child such as its iDRAC or maintenance window — named by request id, which never goes stale.
   Field marks now cover a server's own fields on the Server Summary table, not only its
   maintenance panel, and sit in a column of their own.
+  **A detail tab whose panel holds a proposed field now carries a dot**, so a change to a
+  server's iDRAC or maintenance window is visible without clicking through every panel —
+  red when two requests inside disagree. A proposal that already matches current state
+  does not light it.
   The review queue shows three tabs — *Needs my review* (hidden for roles that cannot approve),
   *Open*, *Closed* — and lists each request by **title**, with a narrow column giving the change's
   size (`1 field`, `12 fields`) beside it.
@@ -84,6 +88,20 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   now surfaced as a 500 instead of a 400 — and an open request can be **renamed in place** from
   the review page, which patches the title alone and
   leaves the changeset, the staleness anchor and every approval untouched.
+  **A review view now warns when another active request proposes the same field**, naming and
+  linking each competing request and the fields it overlaps on, and distinguishing a competitor
+  proposing a *different* value — whichever merges first wins the field, and the other is refused
+  until re-reviewed — from one proposing the *same* value, where one of them merges as a no-op.
+  Until now the collision was invisible until a merge, at which point the other request silently
+  went stale and its approvals stopped counting.
+- **Approval policies can govern every namespace.** A policy is now created with either a
+  namespace or `allNamespaces: true`; the second covers every namespace, **including data
+  centers onboarded after the policy was written**. Resolution is **fallback**: a namespace
+  with its own policy uses that one instead, even when it is weaker, and a namespace whose
+  policy is **disabled** is not gated at all. So an all-namespaces policy is a **default,
+  not a floor**. Exactly one policy still governs any write, so "which policy did this?"
+  keeps a single answer. The policies page marks a namespace row that is overriding the
+  global one.
 - **Artifact-to-artifact compare** — `GET /api/v1/export/compare?from=&to=` returns the
   desired-state delta between any two published artifacts of a data center, pulled by immutable
   digest and diffed in memory. Surfaced as a **Compare** tab on Publish History with linkable
@@ -141,6 +159,38 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   `docs/planning/backlog.md` and technical debt to `docs/planning/debt.md`.
 
 ### Fixed
+- **A change request could overwrite an edit it never reviewed, and could merge as a no-op.**
+  Staleness was entity-level: `base_hash` fingerprints a version vector, so it answered "did
+  anything in scope move" but never "what was it", and a write that changed a value without
+  bumping `version` — a direct DQL write, a restore, `make seed` — left it matching. A changeset
+  item can now carry **`before`**, the values the caller read, and orbital records the ancestor
+  (`base_values`) for the fields the changeset touches. Every field then resolves to *applies*,
+  *already satisfied*, or *conflicts*: a conflict refuses the whole merge before anything is
+  applied, naming the field; an already-satisfied field is dropped from the write, so merging a
+  request someone else beat you to costs no version bump and writes no audit row for a change that
+  changed nothing. The write is narrowed to match the guard — a field-level check paired with a
+  whole-`set` write would push stale values over other people's edits. Orbital's own editor now
+  sends `before` for the scalars it changes, so an edit landing while someone has a modal open is
+  refused at creation and named rather than silently absorbed. A refused action renders the
+  per-field detail it already receives — a merge conflict now says which field moved, from what,
+  to what, instead of "state moved since you read it".
+- **A merged change request logged no field diff in the audit trail.** Merge read only `version`
+  plus the fields it was about to clear, so the audit event's `before` never contained the fields
+  being *set* — the diff had nothing to intersect and the row fell back to dumping raw mutation
+  variables, while the same edit saved directly through `/graphql` showed `-false / +true`. Merge
+  now reads the scalar fields it writes, so a merged change and a direct save produce the same
+  audit row.
+- **The Config Item inventory went permanently empty once a namespace filter was saved.** With
+  `stateSave: true`, DataTables restores saved state *during* the constructor, so `initComplete`
+  ran before `const inventoryTable` had bound and threw a TDZ `ReferenceError` out of the
+  constructor — taking the data fetch with it. Only reproduced once both a saved DataTables state
+  and a saved namespace filter existed, which is why a fresh profile looked fine. `initComplete`
+  now uses `this.api()` rather than the outer binding.
+- **The Config Item inventory could also show "No data available in table" indefinitely.** A page loaded
+  while the graph was empty — between `make up` and `make seed`, or before a restore finished —
+  cached `[]` in `sessionStorage`, and because `"[]"` is a truthy string every later load treated
+  it as a cache hit and skipped the fetch. Servers and Data Centers looked fine because they always
+  fetch. An empty cached list is now a cache miss.
 - **`/api/v1/audit-log` silently truncated an over-cap `orbId` filter**, so a resource panel whose
   subtree exceeded the limit dropped its overflow children with no signal — a Server audit tab
   looked complete and was not. Both filters now refuse over the cap instead of narrowing the

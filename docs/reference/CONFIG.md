@@ -73,7 +73,7 @@ Generated from `internal/config/config.go` — the struct tags are the source of
 | `ORBITAL_ISSUE_TRACKER_URL` | `https://dev.azure.com/armadasystems/Commander/_workitems/create/Bug?[System.AreaPath]=Commander\Edge\Edge Platform` |
 | `ORBITAL_JWT_AUDIENCE` | — |
 | `ORBITAL_JWT_CLIENT_ID` | — |
-| `ORBITAL_JWT_DEFAULT_ROLE` | `admin` |
+| `ORBITAL_JWT_DEFAULT_ROLE` | `readonly` |
 | `ORBITAL_JWT_ISSUER` | — |
 | `ORBITAL_LOGIN_RATE_LIMIT_RPS` | `5` |
 | `ORBITAL_LOG_LEVEL` | `info` |

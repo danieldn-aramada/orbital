@@ -104,25 +104,29 @@ test('the queue lists requests and each filter tab changes only the query param'
     await expect(page.locator(`[data-cr-row="${crId}"]`)).toBeVisible()
     // The row carries derived state the client must not recompute.
     const row = page.locator(`[data-cr-row="${crId}"]`)
-    // The row states the CHANGE, derived from the API's `effect` on every read —
-    // not the stored title, which is written once at creation and says nothing a
-    // reviewer can act on.
+    // The row carries BOTH: the proposer's title, which is what a reviewer
+    // scans for, and a narrow Change column with the size of the change,
+    // derived from the API's `effect` on every read.
     //
-    // `before → after`, not just `→ after`: only a stored effect knows the prior
-    // value, so this also pins that the row is rendered from it rather than from
-    // counting the payload.
-    await expect(row).toContainText(/server-5HSC3D4 · hostname: .+ → queued/)
-    await expect(row).not.toContainText('queue fixture')
+    // This reverses an earlier assertion that the title must NOT appear. That
+    // rested on titles being machine-generated once at creation; proposers now
+    // write them, so the title is the most actionable thing in the row and the
+    // count moved to its own column rather than being appended to the title.
+    await expect(row).toContainText('queue fixture')
+    await expect(row).toContainText('1 field')
     await expect(row).toContainText(NS)
     await expect(row).toContainText('0 of 1')
 
     // Status is the only coloured column, and staleness rides inside it rather
     // than in a second one competing for the eye. The count grew to seven when
     // the ID column was added — two requests on one entity were otherwise
-    // identical in every visible column.
-    await expect(page.locator('#cr-table thead th')).toHaveCount(7)
+    // identical in every visible column — and to eight when proposers began
+    // writing titles, which made the title worth its own wide column with the
+    // change size beside it rather than appended to it.
+    await expect(page.locator('#cr-table thead th')).toHaveCount(8)
     await expect(page.locator('#cr-table thead th').first()).toHaveText('ID')
-    await expect(page.locator('#cr-table thead th').nth(1)).toHaveText('Change')
+    await expect(page.locator('#cr-table thead th').nth(1)).toHaveText('Title')
+    await expect(page.locator('#cr-table thead th').nth(2)).toHaveText('Change')
     // The id is the row's link, so a row can always be reached by the thing
     // people quote.
     await expect(row.locator('td').first()).toHaveText(/^[a-z0-9-]+-\d+$/)
@@ -481,7 +485,9 @@ test('a proposal from the editor carries only the edited field', async ({ page }
     const d = await (await api(page, 'GET', `/api/v1/change-requests/${created[0]}`)).json()
     expect(d.changes[0].set).toEqual({ manufacturer: 'Dell-narrowed' })
     // The count and the payload are the same fact, so they cannot disagree.
-    expect(d.title).toBe('server-5HSC3D4 · 1 field')
+    // No `· 1 field` tail: the queue has a Change column for the count, and
+    // carrying it in the title too printed the same fact twice in one row.
+    expect(d.title).toBe('server-5HSC3D4')
     expect(d.effect).toMatchObject({ entities: 1, fields: 1, field: 'manufacturer', value: 'Dell-narrowed' })
   } finally {
     for (const id of created) await api(page, 'POST', `/api/v1/change-requests/${id}/close`)
@@ -546,9 +552,15 @@ test('the review page shows exactly the actions the API allows, and no others', 
     const actions = page.locator('[data-testid="cr-actions"] button')
     await expect(actions.first()).toBeVisible({ timeout: 10_000 })
 
-    const rendered = (await actions.allTextContents()).map(s => s.trim().toLowerCase()).sort()
+    // The ACTION, not the label: `edit` renders as "Rename" (the UI implements
+    // only amend's rename half), so comparing button text to action names
+    // compares two different vocabularies. Reading data-cr-action asserts the
+    // actual invariant — the UI renders exactly what the API allows — and needs
+    // no per-action exemption.
+    const rendered = (await actions.evaluateAll(
+      els => els.map(e => e.getAttribute('data-cr-action') || ''))).sort()
     const allowed = (await (await api(page, 'GET', `/api/v1/change-requests/${cr.id}`)).json())
-      .availableActions.filter((a: string) => a !== 'edit').sort()
+      .availableActions.sort()
 
     expect(rendered).toEqual(allowed)
     // The author opened it, so approve must NOT be offered — if the client were
@@ -591,7 +603,11 @@ test('an approval cast against an earlier version is shown as such, not hidden',
 
     await page.reload()
     await expect(page.locator('[data-testid="cr-reviews"]')).toContainText('approved an earlier version')
-    await expect(page.locator('[data-testid="cr-detail"]')).toContainText('Intent has changed')
+    // The banner names the CONSEQUENCE, not just the fact: the diff looks
+    // identical stale or not, so "merge is blocked and here is the way through"
+    // is the part a reader cannot see for themselves.
+    await expect(page.locator('[data-testid="cr-detail"]')).toContainText('Intent changed')
+    await expect(page.locator('[data-testid="cr-detail"]')).toContainText('approve again to merge')
   } finally {
     await api(page, 'POST', `/api/v1/change-requests/${cr.id}/close`)
     await unprotect(page, policyId)

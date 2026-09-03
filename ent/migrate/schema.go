@@ -51,7 +51,8 @@ var (
 		{Name: "updated_at", Type: field.TypeTime, Nullable: true},
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "action_type", Type: field.TypeString},
-		{Name: "namespace", Type: field.TypeString},
+		{Name: "all_namespaces", Type: field.TypeBool, Default: false},
+		{Name: "namespace", Type: field.TypeString, Nullable: true},
 		{Name: "all_types", Type: field.TypeBool, Default: true},
 		{Name: "types", Type: field.TypeJSON, Nullable: true},
 		{Name: "required_approvals", Type: field.TypeInt, Default: 1},
@@ -67,7 +68,15 @@ var (
 			{
 				Name:    "approvalpolicy_action_type_namespace",
 				Unique:  true,
-				Columns: []*schema.Column{ApprovalPoliciesColumns[5], ApprovalPoliciesColumns[6]},
+				Columns: []*schema.Column{ApprovalPoliciesColumns[5], ApprovalPoliciesColumns[7]},
+			},
+			{
+				Name:    "approvalpolicy_action_type",
+				Unique:  true,
+				Columns: []*schema.Column{ApprovalPoliciesColumns[5]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "all_namespaces",
+				},
 			},
 		},
 	}
@@ -88,6 +97,7 @@ var (
 		{Name: "base_hash", Type: field.TypeString},
 		{Name: "base_present", Type: field.TypeJSON, Nullable: true},
 		{Name: "base_effect", Type: field.TypeJSON, Nullable: true},
+		{Name: "base_values", Type: field.TypeJSON, Nullable: true},
 		{Name: "payload", Type: field.TypeJSON},
 		{Name: "executed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "executed_by", Type: field.TypeString, Nullable: true, Default: ""},
@@ -121,7 +131,7 @@ var (
 			{
 				Name:    "approvalrequest_payload",
 				Unique:  false,
-				Columns: []*schema.Column{ApprovalRequestsColumns[15]},
+				Columns: []*schema.Column{ApprovalRequestsColumns[16]},
 				Annotation: &entsql.IndexAnnotation{
 					Types: map[string]string{
 						"postgres": "GIN",
@@ -491,7 +501,8 @@ func init() {
 	ApprovalsTable.ForeignKeys[0].RefTable = ApprovalRequestsTable
 	ApprovalPoliciesTable.Annotation = &entsql.Annotation{}
 	ApprovalPoliciesTable.Annotation.Checks = map[string]string{
-		"approval_policy_scope_exclusive": "(all_types AND (jsonb_typeof(types) <> 'array' OR jsonb_array_length(types) = 0)) OR ((NOT all_types) AND jsonb_typeof(types) = 'array' AND jsonb_array_length(types) > 0)",
+		"approval_policy_namespace_exclusive": "(all_namespaces AND (namespace IS NULL OR namespace = '')) OR ((NOT all_namespaces) AND namespace IS NOT NULL AND namespace <> '')",
+		"approval_policy_scope_exclusive":     "(all_types AND (jsonb_typeof(types) <> 'array' OR jsonb_array_length(types) = 0)) OR ((NOT all_types) AND jsonb_typeof(types) = 'array' AND jsonb_array_length(types) > 0)",
 	}
 	AuditEventResourcesTable.ForeignKeys[0].RefTable = AuditEventsTable
 	AuditEventResourceTypesTable.ForeignKeys[0].RefTable = AuditEventsTable

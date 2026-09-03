@@ -219,6 +219,18 @@ func (_u *ApprovalRequestUpdate) ClearBaseEffect() *ApprovalRequestUpdate {
 	return _u
 }
 
+// SetBaseValues sets the "base_values" field.
+func (_u *ApprovalRequestUpdate) SetBaseValues(v map[string]map[string]interface{}) *ApprovalRequestUpdate {
+	_u.mutation.SetBaseValues(v)
+	return _u
+}
+
+// ClearBaseValues clears the value of the "base_values" field.
+func (_u *ApprovalRequestUpdate) ClearBaseValues() *ApprovalRequestUpdate {
+	_u.mutation.ClearBaseValues()
+	return _u
+}
+
 // SetPayload sets the "payload" field.
 func (_u *ApprovalRequestUpdate) SetPayload(v json.RawMessage) *ApprovalRequestUpdate {
 	_u.mutation.SetPayload(v)
@@ -477,6 +489,12 @@ func (_u *ApprovalRequestUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if _u.mutation.BaseEffectCleared() {
 		_spec.ClearField(approvalrequest.FieldBaseEffect, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.BaseValues(); ok {
+		_spec.SetField(approvalrequest.FieldBaseValues, field.TypeJSON, value)
+	}
+	if _u.mutation.BaseValuesCleared() {
+		_spec.ClearField(approvalrequest.FieldBaseValues, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Payload(); ok {
 		_spec.SetField(approvalrequest.FieldPayload, field.TypeJSON, value)
@@ -794,6 +812,18 @@ func (_u *ApprovalRequestUpdateOne) ClearBaseEffect() *ApprovalRequestUpdateOne 
 	return _u
 }
 
+// SetBaseValues sets the "base_values" field.
+func (_u *ApprovalRequestUpdateOne) SetBaseValues(v map[string]map[string]interface{}) *ApprovalRequestUpdateOne {
+	_u.mutation.SetBaseValues(v)
+	return _u
+}
+
+// ClearBaseValues clears the value of the "base_values" field.
+func (_u *ApprovalRequestUpdateOne) ClearBaseValues() *ApprovalRequestUpdateOne {
+	_u.mutation.ClearBaseValues()
+	return _u
+}
+
 // SetPayload sets the "payload" field.
 func (_u *ApprovalRequestUpdateOne) SetPayload(v json.RawMessage) *ApprovalRequestUpdateOne {
 	_u.mutation.SetPayload(v)
@@ -1082,6 +1112,12 @@ func (_u *ApprovalRequestUpdateOne) sqlSave(ctx context.Context) (_node *Approva
 	}
 	if _u.mutation.BaseEffectCleared() {
 		_spec.ClearField(approvalrequest.FieldBaseEffect, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.BaseValues(); ok {
+		_spec.SetField(approvalrequest.FieldBaseValues, field.TypeJSON, value)
+	}
+	if _u.mutation.BaseValuesCleared() {
+		_spec.ClearField(approvalrequest.FieldBaseValues, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Payload(); ok {
 		_spec.SetField(approvalrequest.FieldPayload, field.TypeJSON, value)
