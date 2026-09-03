@@ -92,7 +92,7 @@ spec:
       serviceAccountName: orbital-otel-collector
       containers:
         - name: otel-collector
-          image: armada.azurecr.io/chainguard/opentelemetry-collector-contrib-fips:0.154
+          image: armada.azurecr.io/chainguard/opentelemetry-collector-contrib-fips:0.159@sha256:ec3a20d303eed9d49e642283f447b031d019b94addc7e3cd0e46baa902b54c7a
           args: ["--config=/etc/otel-collector/config.yaml"]
           resources:
             requests:
