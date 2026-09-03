@@ -82,6 +82,7 @@ type BackupConfig struct {
 	S3Bucket                 string
 	S3AccessKey              string
 	S3SecretKey              string
+	S3UseAzMI                bool
 	S3Prefix                 string
 	RetentionDays            int     // delete backups older than N days; 0 = no time-based pruning
 	RetentionMinCount        int     // always keep at least N backups regardless of age
@@ -93,11 +94,12 @@ type BackupConfig struct {
 
 func NewBackupHandler(ctx context.Context, db *ent.Client, cfg BackupConfig, logger *slog.Logger) (*BackupHandler, error) {
 	store, err := blobstore.New(ctx, blobstore.Config{
-		Endpoint:  cfg.S3Endpoint,
-		Region:    cfg.S3Region,
-		Bucket:    cfg.S3Bucket,
-		AccessKey: cfg.S3AccessKey,
-		SecretKey: cfg.S3SecretKey,
+		Endpoint:   cfg.S3Endpoint,
+		Region:     cfg.S3Region,
+		Bucket:     cfg.S3Bucket,
+		AccessKey:  cfg.S3AccessKey,
+		SecretKey:  cfg.S3SecretKey,
+		UseAzureMI: cfg.S3UseAzMI,
 	})
 	if err != nil {
 		return nil, err

@@ -6,6 +6,8 @@ import (
 	"io"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
@@ -18,9 +20,33 @@ type azureStore struct {
 	container   string
 	accountName string
 	accountKey  string
+	useAzureMI  bool
 }
 
-func newAzureStore(endpoint, accountName, accountKey, container string) (*azureStore, error) {
+
+func newAzureStore(endpoint, accountName, accountKey, container string, useAzureMI bool) (*azureStore, error) {
+	if useAzureMI {
+		cred, err := azidentity.NewDefaultAzureCredential(nil)
+		if err != nil {
+			return nil, fmt.Errorf("blobstore azure: azure credential: %w", err)
+		}
+		client, err := azblob.NewClient(endpoint, cred, nil)
+		if err != nil {
+			return nil, fmt.Errorf("blobstore azure: blob client: %w", err)
+		}
+		svcClient, err := service.NewClient(endpoint, cred, nil)
+		if err != nil {
+			return nil, fmt.Errorf("blobstore azure: service client: %w", err)
+		}
+		return &azureStore{
+			client:      client,
+			svcClient:   svcClient,
+			container:   container,
+			accountName: accountName,
+			useAzureMI:  true,
+		}, nil
+	}
+
 	cred, err := azblob.NewSharedKeyCredential(accountName, accountKey)
 	if err != nil {
 		return nil, fmt.Errorf("blobstore azure: shared key credential: %w", err)
@@ -87,21 +113,38 @@ func (a *azureStore) Delete(ctx context.Context, key string) error {
 }
 
 func (a *azureStore) PresignURL(ctx context.Context, key string, ttl time.Duration) (string, error) {
-	cred, err := azblob.NewSharedKeyCredential(a.accountName, a.accountKey)
-	if err != nil {
-		return "", err
-	}
 	now := time.Now().UTC()
-	sasQueryParams, err := sas.BlobSignatureValues{
+	values := sas.BlobSignatureValues{
 		Protocol:      sas.ProtocolHTTPS,
 		StartTime:     now,
 		ExpiryTime:    now.Add(ttl),
 		Permissions:   blobReadPermissions(),
 		ContainerName: a.container,
 		BlobName:      key,
-	}.SignWithSharedKey(cred)
-	if err != nil {
-		return "", err
+	}
+
+	var sasQueryParams sas.QueryParameters
+	if a.useAzureMI {
+		udc, err := a.svcClient.GetUserDelegationCredential(ctx, service.KeyInfo{
+			Start:  to.Ptr(now.Format(sas.TimeFormat)),
+			Expiry: to.Ptr(now.Add(ttl).Format(sas.TimeFormat)),
+		}, nil)
+		if err != nil {
+			return "", fmt.Errorf("blobstore azure: user delegation key: %w", err)
+		}
+		sasQueryParams, err = values.SignWithUserDelegation(udc)
+		if err != nil {
+			return "", fmt.Errorf("blobstore azure: sign with user delegation: %w", err)
+		}
+	} else {
+		cred, err := azblob.NewSharedKeyCredential(a.accountName, a.accountKey)
+		if err != nil {
+			return "", err
+		}
+		sasQueryParams, err = values.SignWithSharedKey(cred)
+		if err != nil {
+			return "", err
+		}
 	}
 	return fmt.Sprintf("%s/%s/%s?%s", a.svcClient.URL(), a.container, key, sasQueryParams.Encode()), nil
 }
