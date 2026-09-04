@@ -172,7 +172,9 @@ Orbital's general MVCC (auto-increment `version: Int!` on every ConfigItem, opt-
 
 ### Auto-increment (general MVCC, still true)
 
-Orbital's GraphQL proxy (`internal/handler/graphql.go Handle`) injects `version: before.version + 1` on every UPDATE through the canonical `set: $set` pattern, and `version: 1` on every ADD through the `input: [$input]` pattern. Applies to every mutation orbital dispatches — including the one Accept fires — so `updateServer`, `updateIdracSettings`, etc., all bump the target ConfigItem's version. Clients don't need to track or send version.
+Orbital's single write path (`internal/handler/graphql.go writeToDGraph`) injects `version: current.version + 1` on every UPDATE through the canonical `set: $set` pattern, and `version: 1` on every ADD through the `input: [$input]` pattern. Clients don't need to track or send version.
+
+**"Including the one Accept fires" was aspirational until 2026-09-03.** Stamping lived in `Handle`, and Accept does not go through `Handle` — it dispatches internally — so an Accept wrote intent with no version bump for as long as the feature existed. Because `base_hash` is a hash of the scope's `orbId@version` vector, a write that does not move `version` does not move the hash: an open change request covering the accepted entity kept reading `stale: false`, and approvals cast before the Accept kept counting. Fixed by moving the pre-flight into `writeToDGraph` and by dispatching Accept in the canonical `update{Kind}($orbId, $set)` shape — the `$filter`-object form it used before resolved to no row, so no stamp was possible.
 
 ### `ifVersion` (general MVCC, opt-in, still true)
 

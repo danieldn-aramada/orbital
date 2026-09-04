@@ -366,10 +366,15 @@ var Types = []Type{
 
 	// ── Kubernetes cluster hierarchy ─────────────────────────────────────────
 	{
-		// KubernetesCluster is an INTERFACE; the entry covers interface-level
-		// mutations (updateKubernetesCluster/deleteKubernetesCluster) that
-		// touch only universal fields. Concrete cluster types have their own
-		// entries below.
+		// KubernetesCluster is an INTERFACE, and this entry is for BeforeFields
+		// and the audit allowlist — NOT for mutations.
+		//
+		// Corrected 2026-09-03: it used to claim it covered interface-level
+		// update/delete. It cannot. `KubernetesClusterFilter` has no `orbId` (an
+		// interface filter carries only its own @search fields, and orbId is
+		// declared on ConfigItem), so orbital's `filter: { orbId: { eq: $orbId } }`
+		// form cannot target it — verified by introspection. Writes go through the
+		// concrete types, which do carry orbId and version.
 		Name:         "KubernetesCluster",
 		BeforeFields: "id orbId name version kubernetesVersion cni environment",
 	},

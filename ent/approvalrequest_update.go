@@ -183,6 +183,18 @@ func (_u *ApprovalRequestUpdate) SetNillableBaseHash(v *string) *ApprovalRequest
 	return _u
 }
 
+// SetBaseVersions sets the "base_versions" field.
+func (_u *ApprovalRequestUpdate) SetBaseVersions(v map[string]int) *ApprovalRequestUpdate {
+	_u.mutation.SetBaseVersions(v)
+	return _u
+}
+
+// ClearBaseVersions clears the value of the "base_versions" field.
+func (_u *ApprovalRequestUpdate) ClearBaseVersions() *ApprovalRequestUpdate {
+	_u.mutation.ClearBaseVersions()
+	return _u
+}
+
 // SetBasePresent sets the "base_present" field.
 func (_u *ApprovalRequestUpdate) SetBasePresent(v []string) *ApprovalRequestUpdate {
 	_u.mutation.SetBasePresent(v)
@@ -467,6 +479,12 @@ func (_u *ApprovalRequestUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if value, ok := _u.mutation.BaseHash(); ok {
 		_spec.SetField(approvalrequest.FieldBaseHash, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.BaseVersions(); ok {
+		_spec.SetField(approvalrequest.FieldBaseVersions, field.TypeJSON, value)
+	}
+	if _u.mutation.BaseVersionsCleared() {
+		_spec.ClearField(approvalrequest.FieldBaseVersions, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.BasePresent(); ok {
 		_spec.SetField(approvalrequest.FieldBasePresent, field.TypeJSON, value)
@@ -773,6 +791,18 @@ func (_u *ApprovalRequestUpdateOne) SetNillableBaseHash(v *string) *ApprovalRequ
 	if v != nil {
 		_u.SetBaseHash(*v)
 	}
+	return _u
+}
+
+// SetBaseVersions sets the "base_versions" field.
+func (_u *ApprovalRequestUpdateOne) SetBaseVersions(v map[string]int) *ApprovalRequestUpdateOne {
+	_u.mutation.SetBaseVersions(v)
+	return _u
+}
+
+// ClearBaseVersions clears the value of the "base_versions" field.
+func (_u *ApprovalRequestUpdateOne) ClearBaseVersions() *ApprovalRequestUpdateOne {
+	_u.mutation.ClearBaseVersions()
 	return _u
 }
 
@@ -1090,6 +1120,12 @@ func (_u *ApprovalRequestUpdateOne) sqlSave(ctx context.Context) (_node *Approva
 	}
 	if value, ok := _u.mutation.BaseHash(); ok {
 		_spec.SetField(approvalrequest.FieldBaseHash, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.BaseVersions(); ok {
+		_spec.SetField(approvalrequest.FieldBaseVersions, field.TypeJSON, value)
+	}
+	if _u.mutation.BaseVersionsCleared() {
+		_spec.ClearField(approvalrequest.FieldBaseVersions, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.BasePresent(); ok {
 		_spec.SetField(approvalrequest.FieldBasePresent, field.TypeJSON, value)

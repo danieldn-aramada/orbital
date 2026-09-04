@@ -40,6 +40,16 @@ func TestApprovalRequest_RoundTrip(t *testing.T) {
 				Op:    approval.OpUpsert,
 				Set:   map[string]any{"timezone": "UTC", "sshEnabled": true},
 			},
+			{
+				// A guarded item. IfVersion is a *int precisely so absent and 0
+				// stay distinguishable, which is exactly the distinction a
+				// round-trip through jsonb can quietly destroy.
+				OrbID:     "alaska-dot:rack-01",
+				Type:      "Rack",
+				Op:        approval.OpUpdate,
+				Set:       map[string]any{"name": "rack-01"},
+				IfVersion: ptrInt(0),
+			},
 		},
 	}
 	payload, err := json.Marshal(changeset)
@@ -103,8 +113,8 @@ func TestApprovalRequest_RoundTrip(t *testing.T) {
 	if back.Namespace != changeset.Namespace {
 		t.Errorf("namespace = %q", back.Namespace)
 	}
-	if len(back.Changes) != 2 {
-		t.Fatalf("changes = %d, want 2", len(back.Changes))
+	if len(back.Changes) != 3 {
+		t.Fatalf("changes = %d, want 3", len(back.Changes))
 	}
 	if back.Changes[0].Op != approval.OpUpdate || back.Changes[1].Op != approval.OpUpsert {
 		t.Errorf("ops = %q,%q", back.Changes[0].Op, back.Changes[1].Op)
@@ -117,6 +127,25 @@ func TestApprovalRequest_RoundTrip(t *testing.T) {
 	}
 	if back.Changes[1].Set["sshEnabled"] != true {
 		t.Errorf("bool field lost: %#v", back.Changes[1].Set["sshEnabled"])
+	}
+
+	// IfVersion round-trip, both directions of the pointer.
+	//
+	// Version 0 is the case that matters: `omitempty` on a *int omits nil but
+	// keeps a pointer to 0, so a value type here would marshal 0 and read back
+	// as "the caller asserted version 0" for every unguarded item in the
+	// changeset — turning "I did not check" into a precondition nobody wrote.
+	if back.Changes[0].IfVersion != nil {
+		t.Errorf("changes[0].ifVersion = %v, want nil — an unguarded item came back guarded", *back.Changes[0].IfVersion)
+	}
+	if back.Changes[1].IfVersion != nil {
+		t.Errorf("changes[1].ifVersion = %v, want nil", *back.Changes[1].IfVersion)
+	}
+	if back.Changes[2].IfVersion == nil {
+		t.Fatal("changes[2].ifVersion came back nil — a guarded item lost its precondition in storage")
+	}
+	if *back.Changes[2].IfVersion != 0 {
+		t.Errorf("changes[2].ifVersion = %d, want 0", *back.Changes[2].IfVersion)
 	}
 
 	// executed_at is Nillable — a zero time must not read back as "merged".
@@ -349,3 +378,5 @@ func TestApprovalPolicy_ScopeConstraintRejectsContradictoryRows(t *testing.T) {
 		t.Error("all_types:false with no types was stored — the policy protects nothing while reporting itself active")
 	}
 }
+
+func ptrInt(v int) *int { return &v }

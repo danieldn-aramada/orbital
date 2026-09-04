@@ -74,21 +74,30 @@ type ChangeItem struct {
 	// Clear is the fields to unset. Separate from Set because a GraphQL `set`
 	// of null is a no-op in DGraph — clearing requires a `remove`.
 	Clear []string `json:"clear,omitempty"`
-
-	// Before is the caller's assertion about the values it read, keyed like Set.
-	// Supplying it makes the request conditional: orbital refuses at creation if
-	// any named field has already moved, and refuses at merge if one moves
-	// between review and apply.
+	// IfVersion is the entity's `version` as the caller read it. Supplying it
+	// makes the item conditional at ENTITY level: orbital refuses at creation if
+	// the entity has moved since, and refuses at merge if it moves between
+	// review and apply.
 	//
-	// It must come from the CALLER and cannot be inferred server-side. Create
-	// reads current state when it is invoked, not when the author was looking —
-	// so an edit landing while someone composes a change silently becomes part
-	// of the recorded ancestor, and the reviewer sees a diff against a state the
-	// author never saw. Only the client knows what it read.
+	// It means exactly what `ifVersion` means on /graphql, deliberately — a
+	// client integrating against both APIs should not meet two different
+	// concurrency concepts for the same question.
 	//
-	// Omitted is legal and means "unconditional": the ancestor is taken from the
-	// snapshot at creation and only the entity-level base_hash guards the merge.
-	Before map[string]any `json:"before,omitempty"`
+	// POINTER, because absent and 0 are different answers. 0 is a version a
+	// caller could legitimately have read, so a value type would silently turn
+	// "I did not check" into "I read version 0".
+	//
+	// ONE per item, never per field: an entity has one version, so it has one
+	// precondition. That is also the second reason two items on one orbId are
+	// refused — the first would bump the entity, making the second's
+	// precondition stale before it ran.
+	//
+	// Omitted is legal and means "unconditional at entity level"; the scope
+	// anchor (base_hash) still guards the merge. Supplying it against an entity
+	// that does not exist is REFUSED at validation rather than ignored: there is
+	// no version to match, and a caller that asked for a check and silently did
+	// not get one is worse off than one that never asked.
+	IfVersion *int `json:"ifVersion,omitempty"`
 }
 
 // Changeset is the config.mutation payload. Single-namespace by construction:

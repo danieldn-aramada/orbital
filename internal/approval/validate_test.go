@@ -312,6 +312,34 @@ func TestValidate_Rejects(t *testing.T) {
 			wantMatch: "duplicate orbId",
 		},
 		{
+			// The refusal predates ifVersion and was justified by ordering alone.
+			// It now has a second, independent reason, and the message has to
+			// carry it: an author who reads only "ordering" may believe two
+			// carefully ordered items are fine, when their preconditions cannot
+			// both hold no matter what order they run in.
+			name: "the duplicate refusal gives the ifVersion reason as well as the ordering one",
+			cs: Changeset{Namespace: "ns", Changes: []ChangeItem{
+				{OrbID: "ns:server-A", Op: OpUpdate, Set: map[string]any{"hostname": "a"}},
+				{OrbID: "ns:server-A", Op: OpUpdate, Set: map[string]any{"hostname": "b"}},
+			}},
+			wantMatch: "two ifVersion preconditions on it cannot both hold",
+		},
+		{
+			name: "ifVersion on an upsert against an entity that does not exist",
+			cs: Changeset{Namespace: "ns", Changes: []ChangeItem{
+				{OrbID: "ns:server-NEW", Type: "Server", Op: OpUpsert,
+					Set: map[string]any{"hostname": "new"}, IfVersion: intPtr(3)},
+			}},
+			wantMatch: "no version to match",
+		},
+		{
+			name: "ifVersion on a delete of an entity that does not exist",
+			cs: Changeset{Namespace: "ns", Changes: []ChangeItem{
+				{OrbID: "ns:server-GONE", Op: OpDelete, IfVersion: intPtr(3)},
+			}},
+			wantMatch: "no version to match",
+		},
+		{
 			name: "edge pointing at an orbId that does not exist",
 			cs: Changeset{Namespace: "ns", Changes: []ChangeItem{
 				{OrbID: "ns:server-A", Op: OpUpdate, Set: map[string]any{
@@ -419,5 +447,36 @@ func TestValidate_ReportsEveryProblem(t *testing.T) {
 			t.Errorf("errors are not ordered by item index: %v", res.Errors)
 			break
 		}
+	}
+}
+
+func intPtr(v int) *int { return &v }
+
+// The negative for the two cases above: a create WITHOUT ifVersion is ordinary
+// and must stay that way. A precondition check that fired on absence would make
+// every create against a fresh orbId unproposable.
+func TestValidate_CreateWithoutIfVersionIsFine(t *testing.T) {
+	cs := Changeset{Namespace: "ns", Changes: []ChangeItem{
+		{OrbID: "ns:server-NEW", Type: "Server", Op: OpUpsert, Set: map[string]any{
+			"hostname":   "new",
+			"dataCenter": map[string]any{"orbId": "ns:dc-1"},
+		}},
+	}}
+	res := validate(t, cs)
+	if len(res.Errors) != 0 {
+		t.Errorf("a create with no ifVersion was refused: %v", res.Errors)
+	}
+}
+
+// And an ifVersion on an entity that DOES exist is not a validation problem —
+// whether it matches is a concurrency question, answered at creation with a 409,
+// not a 400 here.
+func TestValidate_IfVersionOnExistingEntityIsNotAValidationError(t *testing.T) {
+	cs := Changeset{Namespace: "ns", Changes: []ChangeItem{
+		{OrbID: "ns:server-A", Op: OpUpdate, Set: map[string]any{"hostname": "a"}, IfVersion: intPtr(99)},
+	}}
+	res := validate(t, cs)
+	if len(res.Errors) != 0 {
+		t.Errorf("ifVersion on an existing entity was treated as invalid: %v", res.Errors)
 	}
 }

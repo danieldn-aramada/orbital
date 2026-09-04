@@ -401,7 +401,9 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		})
 	root.GET("/network/:orbId", networkDevice.Tab)
 
-	delH := handler.NewDeleteHandler(cfg.DGraphURL, db, logger)
+	// gql is passed for the approval gate only — this endpoint writes via DQL,
+	// so it cannot reach the check through writeToDGraph's chokepoint.
+	delH := handler.NewDeleteHandler(cfg.DGraphURL, db, logger, gql)
 	root.GET("/config-items/delete-preview", delH.Preview)
 	api.DELETE("/config-items/:type/:id", delH.Execute)
 

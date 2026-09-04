@@ -114,8 +114,9 @@ func Validate(ctx context.Context, src SchemaSource, cs *Changeset) (ValidationR
 		if prev, dup := seen[ch.OrbID]; dup {
 			res.Errors = append(res.Errors, ValidationError{
 				Index: i, OrbID: ch.OrbID,
-				Msg:  fmt.Sprintf("duplicate orbId — already changed at changes[%d]", prev),
-				Hint: "merge applies items in order, so two items on one entity make the outcome depend on ordering; combine them",
+				Msg: fmt.Sprintf("duplicate orbId — already changed at changes[%d]", prev),
+				Hint: "merge applies items in order, so two items on one entity make the outcome depend on ordering; " +
+					"and an entity has one version, so two ifVersion preconditions on it cannot both hold — the first item bumps it. Combine them",
 			})
 			continue
 		}
@@ -192,6 +193,20 @@ func Validate(ctx context.Context, src SchemaSource, cs *Changeset) (ValidationR
 			continue // failed pass 1
 		}
 		ref, exists := existing[ch.OrbID]
+
+		// A precondition that cannot be evaluated is refused, never ignored.
+		// Silently dropping it would hand back a 201 to a caller who believes
+		// their write is guarded — the exact failure mode the guard exists to
+		// prevent. Reported here rather than as a conflict because nothing has
+		// moved: the proposal is malformed, so it is a 400, not a 409.
+		if !exists && ch.IfVersion != nil {
+			res.Errors = append(res.Errors, ValidationError{
+				Index: i, OrbID: ch.OrbID,
+				Msg:  "ifVersion was supplied but no entity has this orbId, so there is no version to match",
+				Hint: "Drop ifVersion if you mean to create it; fix the orbId if you meant an entity that already exists.",
+			})
+			continue
+		}
 
 		switch {
 		case exists && ch.Type != "" && ch.Type != ref.Type:

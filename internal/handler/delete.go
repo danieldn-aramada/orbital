@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
 	"log/slog"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/armada/orbital/ent"
@@ -25,11 +28,16 @@ type DeleteGroup struct {
 }
 
 type DeletePreview struct {
-	Name       string        `json:"name"`
-	Type       string        `json:"type"`
-	TotalCount int           `json:"totalCount"`
-	Groups     []DeleteGroup `json:"groups"`
-	Preserved  []DeleteGroup `json:"preserved,omitempty"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	TotalCount int    `json:"totalCount"`
+	// Version is the root entity's OCC counter as the preview read it. The
+	// modal echoes it back on confirm as ?ifVersion=, so a delete is refused if
+	// the entity moved while the confirmation dialog sat open — which is
+	// precisely the window a confirmation dialog creates.
+	Version   int           `json:"version,omitempty"`
+	Groups    []DeleteGroup `json:"groups"`
+	Preserved []DeleteGroup `json:"preserved,omitempty"`
 }
 
 type DeleteHandler struct {
@@ -37,15 +45,20 @@ type DeleteHandler struct {
 	dgraphDQLBase string // dgraphURL with /graphql stripped
 	db            *ent.Client
 	logger        *slog.Logger
-	previewTmpl   *template.Template
+	// gql is here for ONE reason: the approval gate. This endpoint writes via
+	// DQL, so it cannot reuse writeToDGraph's chokepoint and has to ask the
+	// policy question directly. See guardDelete.
+	gql         *GraphQL
+	previewTmpl *template.Template
 }
 
-func NewDeleteHandler(dgraphURL string, db *ent.Client, logger *slog.Logger) *DeleteHandler {
+func NewDeleteHandler(dgraphURL string, db *ent.Client, logger *slog.Logger, gql *GraphQL) *DeleteHandler {
 	return &DeleteHandler{
 		dgraphURL:     dgraphURL,
 		dgraphDQLBase: strings.TrimSuffix(dgraphURL, "/graphql"),
 		db:            db,
 		logger:        logger,
+		gql:           gql,
 		previewTmpl:   parseDeletePreviewTmpl(),
 	}
 }
@@ -122,12 +135,23 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 	}
 	ctx := c.Request().Context()
 	actor := actorFromContext(c)
+	typeName := c.Param("type")
+	caller := resolveCallerRole(c, h.db)
 
-	switch c.Param("type") {
+	// Before planning: a caller holding a stale view should be told to reload,
+	// not have a cascade computed on their behalf.
+	if err := h.checkDeleteVersion(ctx, typeName, id, c.QueryParam("ifVersion")); err != nil {
+		return h.refuse(c, err)
+	}
+
+	switch typeName {
 	case "DataCenter":
 		plan, err := h.planDCDelete(ctx, id)
 		if err != nil {
 			return err
+		}
+		if err := h.guardDelete(ctx, caller, plan.orbID, plan.uids); err != nil {
+			return h.refuse(c, err)
 		}
 		if err := h.bulkDelete(ctx, plan.uids); err != nil {
 			h.logger.Error("dc delete failed", "orbId", plan.orbID, "err", err)
@@ -148,6 +172,9 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 		if err != nil {
 			return err
 		}
+		if err := h.guardDelete(ctx, caller, plan.orbID, plan.uids); err != nil {
+			return h.refuse(c, err)
+		}
 		if err := h.bulkDelete(ctx, plan.uids); err != nil {
 			h.logger.Error("server delete failed", "orbId", plan.orbID, "err", err)
 			return fmt.Errorf("delete server: %w", err)
@@ -166,6 +193,9 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 		plan, err := h.planClusterDelete(ctx, id)
 		if err != nil {
 			return err
+		}
+		if err := h.guardDelete(ctx, caller, plan.orbID, plan.uids); err != nil {
+			return h.refuse(c, err)
 		}
 		if err := h.bulkDelete(ctx, plan.uids); err != nil {
 			h.logger.Error("cluster delete failed", "orbId", plan.orbID, "err", err)
@@ -209,7 +239,7 @@ type serverDeletePlan struct {
 const dcDeleteGQL = `
   query GetDCForDelete($orbId: String!) {
     getDataCenter(orbId: $orbId) {
-      id name orbId namespace
+      id name orbId namespace version
       racks { id name }
       servers {
         id name hostname
@@ -241,6 +271,7 @@ type dcDeleteRaw struct {
 	Name      string `json:"name"`
 	OrbID     string `json:"orbId"`
 	Namespace string `json:"namespace"`
+	Version   int    `json:"version"`
 	Racks     []struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
@@ -393,6 +424,7 @@ func (h *DeleteHandler) planDCDelete(ctx context.Context, orbID string) (*dcDele
 			Name:       dc.Name,
 			Type:       "DataCenter",
 			TotalCount: len(uids),
+			Version:    dc.Version,
 			Groups:     groups,
 		},
 		uids:  uids,
@@ -414,7 +446,7 @@ func (h *DeleteHandler) planDCDelete(ctx context.Context, orbID string) (*dcDele
 const srvDeleteGQL = `
   query GetServerForDelete($orbId: String!) {
     getServer(orbId: $orbId) {
-      id name orbId hostname
+      id name orbId hostname version
       idracSettings { id }
       serverConfigurationProfile { id }
       storageControllers {
@@ -433,6 +465,7 @@ type srvDeleteRaw struct {
 	Name          string `json:"name"`
 	OrbID         string `json:"orbId"`
 	Hostname      string `json:"hostname"`
+	Version       int    `json:"version"`
 	IdracSettings *struct {
 		ID string `json:"id"`
 	} `json:"idracSettings"`
@@ -531,6 +564,7 @@ func (h *DeleteHandler) planServerDelete(ctx context.Context, orbID string) (*se
 			Name:       serverDisplayName(s.Hostname, s.Name),
 			Type:       "Server",
 			TotalCount: len(uids),
+			Version:    s.Version,
 			Groups:     groups,
 			Preserved:  preserved,
 		},
@@ -552,7 +586,7 @@ const clusterDeleteGQL = `
     queryConfigItem(filter: { orbId: { eq: $orbId } }, first: 1) {
       __typename
       ... on ConfigItem {
-        id orbId name namespace
+        id orbId name namespace version
       }
       ... on KubernetesCluster {
         controlPlaneEndpoint { id address }
@@ -579,6 +613,7 @@ type clusterDeleteRaw struct {
 	Name                 string `json:"name"`
 	OrbID                string `json:"orbId"`
 	Namespace            string `json:"namespace"`
+	Version              int    `json:"version"`
 	ControlPlaneEndpoint *struct {
 		ID      string `json:"id"`
 		Address string `json:"address"`
@@ -748,6 +783,7 @@ func (h *DeleteHandler) planClusterDelete(ctx context.Context, orbID string) (*c
 			Name:       c.Name,
 			Type:       "KubernetesCluster",
 			TotalCount: len(uids),
+			Version:    c.Version,
 			Groups:     groups,
 			Preserved:  preserved,
 		},
@@ -802,6 +838,169 @@ func (h *DeleteHandler) bulkDelete(ctx context.Context, uids []string) error {
 	if resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("dql mutate %d: %s", resp.StatusCode, raw)
+	}
+	return nil
+}
+
+// refuse renders a guard's decision, or passes a genuine error through.
+//
+// The guards return a DECISION and never write. They used to call writeError
+// directly, which was a fail-open bug worth remembering: writeError returns the
+// result of c.JSON, which is nil on success, so `if err != nil { return err }`
+// never fired — the 409 was written to the response AND the cascade went ahead
+// and deleted. Status said refused, body said refused, entity gone. Caught only
+// because the test asserted the entity still existed rather than stopping at
+// the status code.
+func (h *DeleteHandler) refuse(c echo.Context, err error) error {
+	var pe *preflightError
+	if errors.As(err, &pe) {
+		return writeError(c, pe.Status, pe.Code, pe.Message, pe.Hint)
+	}
+	return err
+}
+
+// typesOfUIDs reads the ConfigItem types of a planned cascade, straight from the
+// nodes it is about to delete.
+//
+// Derived rather than declared, deliberately. The alternative — tagging each
+// plan builder's branches with the type they append — puts the gate's input in
+// nine hand-maintained places across three functions, and the failure mode of
+// forgetting one is SILENT UNDER-GATING: a protected child quietly stops being
+// protected the day someone adds a branch. Asking DGraph what the uids actually
+// are cannot drift, and costs one read on a rare, destructive, human-driven
+// operation.
+//
+// Returns an error rather than an empty list when the read fails: an empty list
+// would read as "no protected types here" and wave the delete through.
+func (h *DeleteHandler) typesOfUIDs(ctx context.Context, uids []string) ([]string, error) {
+	if len(uids) == 0 {
+		return nil, nil
+	}
+	dql := fmt.Sprintf(`{ nodes(func: uid(%s)) { dgraph.type } }`, strings.Join(uids, ", "))
+	body, err := json.Marshal(map[string]string{"query": dql})
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.dgraphDQLBase+"/query", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("read cascade types: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		raw, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("read cascade types (%d): %s", resp.StatusCode, raw)
+	}
+	var decoded struct {
+		Data struct {
+			Nodes []struct {
+				Types []string `json:"dgraph.type"`
+			} `json:"nodes"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
+		return nil, fmt.Errorf("decode cascade types: %w", err)
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, n := range decoded.Data.Nodes {
+		for _, t := range n.Types {
+			if !seen[t] {
+				seen[t] = true
+				out = append(out, t)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// guardDelete is the pair of checks a cascade delete has to pass before
+// anything is removed: the caller's optimistic-concurrency precondition, and
+// the approval policy.
+//
+// The gate half closes a MEASURED bypass (debt.md Track A2): this endpoint
+// plans a cascade and POSTs a DQL delete, so it never passed through
+// writeToDGraph and checkApprovalPolicy never ran. Under a policy with no
+// bypass roles, `updateDataCenter` was refused 403 while DELETE of that same
+// entity returned 200 seconds later — a rename gated, a cascade delete not.
+//
+// Ordering: the version check runs BEFORE planning (a stale caller should be
+// told to reload, not have a cascade computed for them), the gate AFTER, so it
+// can see every type the cascade would remove rather than only the declared one.
+func (h *DeleteHandler) guardDelete(ctx context.Context, caller callerRole, orbID string, uids []string) error {
+	if h.gql == nil {
+		// Fail closed. A missing dependency must not silently disable a
+		// security control — that is how the bypass above went unnoticed.
+		return echo.NewHTTPError(http.StatusInternalServerError, "approval gate not configured")
+	}
+	types, err := h.typesOfUIDs(ctx, uids)
+	if err != nil {
+		return err
+	}
+	bypassed, err := h.gql.checkPolicyFor(ctx, []string{orbID}, types, caller)
+	if err != nil {
+		var gerr *gatedError
+		if errors.As(err, &gerr) {
+			// Same status, code and hint the /graphql refusal produces. A caller
+			// must not have to learn two refusals for one control.
+			return &preflightError{Status: gerr.Status, Code: gerr.Code, Message: gerr.Message, Hint: gerr.Hint}
+		}
+		return err
+	}
+	if bypassed != "" {
+		h.logger.Warn("privileged delete — bypassed an approval policy",
+			"policy", bypassed, "role", string(caller.Role), "orb_id", orbID,
+			"types", strings.Join(types, ","), "entities", len(uids))
+	}
+	return nil
+}
+
+// checkDeleteVersion enforces `?ifVersion=` on a delete.
+//
+// A query parameter rather than an If-Match header: orbital already spells this
+// precondition `ifVersion` on /graphql and in a changeset item, and a third
+// spelling for the same question is exactly the API cost this whole change set
+// exists to remove. DELETE carries no body by convention, so a parameter is
+// where it goes.
+//
+// Absent means unconditional, matching every other path. Present and
+// unparseable is a 400, not a 409 — retrying the same garbage would loop.
+func (h *DeleteHandler) checkDeleteVersion(ctx context.Context, typeName, orbID, raw string) error {
+	if raw == "" {
+		return nil
+	}
+	want, err := strconv.Atoi(raw)
+	if err != nil {
+		return &preflightError{Status: http.StatusBadRequest, Code: CodeBadUserInput, Message: "ifVersion must be an integer"}
+	}
+	data, err := h.gqlQuery(ctx, fmt.Sprintf(
+		`query GetVersion($orbId: String!) { get%s(orbId: $orbId) { version } }`, typeName),
+		map[string]any{"orbId": orbID})
+	if err != nil {
+		return err
+	}
+	var resp map[string]struct {
+		Version *int `json:"version"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return fmt.Errorf("decode version: %w", err)
+	}
+	node, ok := resp["get"+typeName]
+	if !ok || node.Version == nil {
+		// No version to compare. Refused rather than waved through: a caller
+		// that asked for a check and did not get one believes it is protected.
+		return &preflightError{Status: http.StatusConflict, Code: CodeMVCCConflict,
+			Message: "cannot verify this entity's version", Hint: "Reload the entity and try again."}
+	}
+	if *node.Version != want {
+		return &preflightError{Status: http.StatusConflict, Code: CodeMVCCConflict,
+			Message: fmt.Sprintf("This record was modified by someone else (you saw version %d, it is now %d). Please reload and try again.", want, *node.Version),
+			Hint:    "Reload the entity and delete again if you still want to."}
 	}
 	return nil
 }

@@ -2085,6 +2085,7 @@ type ApprovalRequestMutation struct {
 	status                *approvalrequest.Status
 	author                *string
 	base_hash             *string
+	base_versions         *map[string]int
 	base_present          *[]string
 	appendbase_present    []string
 	base_effect           *json.RawMessage
@@ -2714,6 +2715,55 @@ func (m *ApprovalRequestMutation) ResetBaseHash() {
 	m.base_hash = nil
 }
 
+// SetBaseVersions sets the "base_versions" field.
+func (m *ApprovalRequestMutation) SetBaseVersions(value map[string]int) {
+	m.base_versions = &value
+}
+
+// BaseVersions returns the value of the "base_versions" field in the mutation.
+func (m *ApprovalRequestMutation) BaseVersions() (r map[string]int, exists bool) {
+	v := m.base_versions
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBaseVersions returns the old "base_versions" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldBaseVersions(ctx context.Context) (v map[string]int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBaseVersions is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBaseVersions requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBaseVersions: %w", err)
+	}
+	return oldValue.BaseVersions, nil
+}
+
+// ClearBaseVersions clears the value of the "base_versions" field.
+func (m *ApprovalRequestMutation) ClearBaseVersions() {
+	m.base_versions = nil
+	m.clearedFields[approvalrequest.FieldBaseVersions] = struct{}{}
+}
+
+// BaseVersionsCleared returns if the "base_versions" field was cleared in this mutation.
+func (m *ApprovalRequestMutation) BaseVersionsCleared() bool {
+	_, ok := m.clearedFields[approvalrequest.FieldBaseVersions]
+	return ok
+}
+
+// ResetBaseVersions resets all changes to the "base_versions" field.
+func (m *ApprovalRequestMutation) ResetBaseVersions() {
+	m.base_versions = nil
+	delete(m.clearedFields, approvalrequest.FieldBaseVersions)
+}
+
 // SetBasePresent sets the "base_present" field.
 func (m *ApprovalRequestMutation) SetBasePresent(s []string) {
 	m.base_present = &s
@@ -3184,7 +3234,7 @@ func (m *ApprovalRequestMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ApprovalRequestMutation) Fields() []string {
-	fields := make([]string, 0, 18)
+	fields := make([]string, 0, 19)
 	if m.created_at != nil {
 		fields = append(fields, approvalrequest.FieldCreatedAt)
 	}
@@ -3220,6 +3270,9 @@ func (m *ApprovalRequestMutation) Fields() []string {
 	}
 	if m.base_hash != nil {
 		fields = append(fields, approvalrequest.FieldBaseHash)
+	}
+	if m.base_versions != nil {
+		fields = append(fields, approvalrequest.FieldBaseVersions)
 	}
 	if m.base_present != nil {
 		fields = append(fields, approvalrequest.FieldBasePresent)
@@ -3271,6 +3324,8 @@ func (m *ApprovalRequestMutation) Field(name string) (ent.Value, bool) {
 		return m.Author()
 	case approvalrequest.FieldBaseHash:
 		return m.BaseHash()
+	case approvalrequest.FieldBaseVersions:
+		return m.BaseVersions()
 	case approvalrequest.FieldBasePresent:
 		return m.BasePresent()
 	case approvalrequest.FieldBaseEffect:
@@ -3316,6 +3371,8 @@ func (m *ApprovalRequestMutation) OldField(ctx context.Context, name string) (en
 		return m.OldAuthor(ctx)
 	case approvalrequest.FieldBaseHash:
 		return m.OldBaseHash(ctx)
+	case approvalrequest.FieldBaseVersions:
+		return m.OldBaseVersions(ctx)
 	case approvalrequest.FieldBasePresent:
 		return m.OldBasePresent(ctx)
 	case approvalrequest.FieldBaseEffect:
@@ -3421,6 +3478,13 @@ func (m *ApprovalRequestMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetBaseHash(v)
 		return nil
+	case approvalrequest.FieldBaseVersions:
+		v, ok := value.(map[string]int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBaseVersions(v)
+		return nil
 	case approvalrequest.FieldBasePresent:
 		v, ok := value.([]string)
 		if !ok {
@@ -3520,6 +3584,9 @@ func (m *ApprovalRequestMutation) ClearedFields() []string {
 	if m.FieldCleared(approvalrequest.FieldDescription) {
 		fields = append(fields, approvalrequest.FieldDescription)
 	}
+	if m.FieldCleared(approvalrequest.FieldBaseVersions) {
+		fields = append(fields, approvalrequest.FieldBaseVersions)
+	}
 	if m.FieldCleared(approvalrequest.FieldBasePresent) {
 		fields = append(fields, approvalrequest.FieldBasePresent)
 	}
@@ -3560,6 +3627,9 @@ func (m *ApprovalRequestMutation) ClearField(name string) error {
 		return nil
 	case approvalrequest.FieldDescription:
 		m.ClearDescription()
+		return nil
+	case approvalrequest.FieldBaseVersions:
+		m.ClearBaseVersions()
 		return nil
 	case approvalrequest.FieldBasePresent:
 		m.ClearBasePresent()
@@ -3619,6 +3689,9 @@ func (m *ApprovalRequestMutation) ResetField(name string) error {
 		return nil
 	case approvalrequest.FieldBaseHash:
 		m.ResetBaseHash()
+		return nil
+	case approvalrequest.FieldBaseVersions:
+		m.ResetBaseVersions()
 		return nil
 	case approvalrequest.FieldBasePresent:
 		m.ResetBasePresent()

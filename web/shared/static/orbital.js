@@ -2555,8 +2555,30 @@ document.addEventListener('submit', (e) => {
     btn.disabled = true
 
     try {
-      const r = await fetch(BASE + '/api/v1/config-items/' + encodeURIComponent(type) + '/' + encodeURIComponent(id), { method: 'DELETE' })
+      // The version this dialog DISPLAYED, echoed back. A confirmation dialog
+      // is by construction a window in which the thing being confirmed can
+      // change; without this, a delete lands on whatever the entity became.
+      const versionEl = document.getElementById('cfg-delete-version')
+      const shown = versionEl ? parseInt(versionEl.dataset.version || '', 10) : NaN
+      const guard = Number.isInteger(shown) && shown > 0 ? '?ifVersion=' + shown : ''
+
+      const r = await fetch(BASE + '/api/v1/config-items/' + encodeURIComponent(type) + '/' + encodeURIComponent(id) + guard, { method: 'DELETE' })
       if (!r.ok) {
+        // A 409 is not a failure to report and forget — it is a redirect: the
+        // entity moved, so re-read it and decide again. The modal stays open
+        // with the reason, matching how a refused edit behaves.
+        if (r.status === 409) {
+          const body = await r.json().catch(() => ({}))
+          const err = document.getElementById('cfg-delete-modal-error')
+          if (err) {
+            err.textContent = (body.message || body.error
+              || 'Someone else changed this while the dialog was open — reload and try again.')
+            err.style.display = ''
+          }
+          btn.classList.remove('is-loading')
+          btn.disabled = false
+          return
+        }
         const t = await r.text()
         throw new Error(t || 'Delete failed')
       }
@@ -2839,8 +2861,20 @@ document.addEventListener('DOMContentLoaded', () => {
       // States the CONSEQUENCE, not the mechanism: the diff is always computed
       // against current intent, so it looks identical whether or not the request
       // is stale — what the reader cannot see is that merge is blocked and why.
+      //
+      // `staleEntities` comes from the API, which computes it from the same diff
+      // the merge refusal uses. Rendered when present so the reader knows WHERE
+      // to look; the generic sentence stays as the fallback for requests opened
+      // before orbital recorded the base version vector.
+      const movedList = (cr.staleEntities || []).map(e =>
+        '<li><span class="is-family-monospace">' + esc(shortOrbId(e.orbId) || e.orbId) + '</span>'
+        + (e.currentVersion === undefined || e.currentVersion === null
+            ? ' — deleted (was version ' + esc(String(e.reviewedVersion)) + ')'
+            : ' — version ' + esc(String(e.reviewedVersion)) + ' → ' + esc(String(e.currentVersion)))
+        + '</li>').join('')
       b.innerHTML = '<div class="notification is-warning is-light py-2 is-size-7 mb-4">'
-        + '<strong>Stale.</strong> Intent changed since this was opened — approve again to merge.'
+        + '<strong>Stale.</strong> Intent changed since this was reviewed — approve again to merge.'
+        + (movedList ? '<ul class="mt-2 ml-4">' + movedList + '</ul>' : '')
         + '</div>'
     } else {
       b.innerHTML = ''

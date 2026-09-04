@@ -820,6 +820,16 @@ func BaseHashContainsFold(v string) predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(sql.FieldContainsFold(FieldBaseHash, v))
 }
 
+// BaseVersionsIsNil applies the IsNil predicate on the "base_versions" field.
+func BaseVersionsIsNil() predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldIsNull(FieldBaseVersions))
+}
+
+// BaseVersionsNotNil applies the NotNil predicate on the "base_versions" field.
+func BaseVersionsNotNil() predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldNotNull(FieldBaseVersions))
+}
+
 // BasePresentIsNil applies the IsNil predicate on the "base_present" field.
 func BasePresentIsNil() predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(sql.FieldIsNull(FieldBasePresent))

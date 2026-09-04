@@ -40,8 +40,8 @@ func mutateReportingBypass(t *testing.T, gql *GraphQL, caller callerRole, query 
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	_, _, bypassed, err := gql.writeToDGraph(context.Background(), body, caller, gateEnforce)
-	return bypassed, err
+	res, err := gql.writeToDGraph(context.Background(), body, "gate-test", caller, gateEnforce, nil)
+	return res.Bypassed, err
 }
 
 func updateHostname(orbID, v string) (string, map[string]any) {

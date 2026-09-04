@@ -34,6 +34,16 @@ This sheet is the common paths; Swagger is the complete surface.
 
 Example creates a change request with 2 changes to 2 nodes (by orbId) related to target server `CWJHDX3`.
 
+`ifVersion` is optional but recommended — it is the entity's `version` **as you
+read it**, so orbital can refuse if someone changed that entity while you were
+composing. Read it from the same query you read the values from:
+
+```bash
+curl -s -X POST $ORBITAL_URL/graphql -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+-d '{"query":"{ getIdracSettings(orbId: \"colo:CWJHDX3-idrac\") { version sshEnabled } }"}' | jq .data
+# { "getIdracSettings": { "version": 7, "sshEnabled": false } }
+```
+
 ```bash
 curl -s -X POST $ORBITAL_URL/api/v1/change-requests -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
 -d '{
@@ -41,11 +51,15 @@ curl -s -X POST $ORBITAL_URL/api/v1/change-requests -H "Authorization: Bearer $T
   "namespace": "colo",
   "description": "Field ops request for the Nov window.",
   "changes": [
-    { "op": "update", "orbId": "colo:CWJHDX3-idrac",              "set": { "sshEnabled": true } },
-    { "op": "update", "orbId": "colo:server-maintenance-CWJHDX3", "set": { "enabled": true } }
+    { "op": "update", "orbId": "colo:CWJHDX3-idrac",              "set": { "sshEnabled": true }, "ifVersion": 7 },
+    { "op": "update", "orbId": "colo:server-maintenance-CWJHDX3", "set": { "enabled": true },    "ifVersion": 3 }
   ]
 }' | jq '{id, status, requiredApprovals}'
 ```
+
+Omit `ifVersion` and the item is unconditional — still valid, just unguarded at
+entity level. A **create** must omit it: there is no version to match, and
+supplying one is refused rather than ignored.
 Response
 ```json
 { "id": "colo-42", "status": "open", "requiredApprovals": 1 }
@@ -59,7 +73,7 @@ Response
   "type":   "IdracSettings",            // only when CREATING something new
   "set":    { "sshEnabled": true },     // fields to write
   "clear":  ["windowStart"],            // field NAMES to unset
-  "before": { "sshEnabled": false } }   // optional — the values you READ
+  "ifVersion": 7 }                      // optional — the version you READ
 ```
 
 - One entity per item. Two entities = two items.
@@ -67,22 +81,39 @@ Response
 - Point at another entity by orbId, never nest it: `"dataCenter": { "orbId": "colo:dc-01" }`. A nested entity is rejected `400`.
 - Bad fields are caught when you create the request, not at merge.
 
-### `before` — make an item conditional
+### `ifVersion` — make an item conditional
 
-Send the values you read alongside the values you want. Orbital then refuses if the world moved under you, **twice**: when you create the request, and again at merge.
+Send the entity's `version` as you read it. Orbital refuses if that entity moved
+under you. Same token `/graphql` mutations accept, meaning the same thing.
 
 ```
 409 MVCC_CONFLICT
 { "error": "state moved since you read it",
-  "problems": [{ "orbId": "colo:CWJHDX3-idrac", "field": "IdracSettings.sshEnabled",
-                 "message": "value moved since you read it: you saw false, it is now true",
-                 "hint": "Someone changed this while you were composing. Reload and propose again." }] }
+  "problems": [{ "orbId": "colo:CWJHDX3-idrac",
+                 "message": "entity moved since you read it: you saw version 7, it is now 9",
+                 "hint": "Someone changed this entity while you were composing. Reload it and propose again." }] }
 ```
 
-- **Omit it** and the item is unconditional — guarded only at entity level, which cannot see a write that changes a value without bumping `version`.
-- **Send it** and you also get the merge-time check: a field moved to a *third* value is a conflict and refuses the whole merge; a field already at your proposed value is dropped from the write, so merging costs no version bump and writes no audit row for a change that changed nothing.
+- **One per item, never per field** — an entity has one version.
+- **Omit it** and the item is unconditional; the request is still guarded at the
+  scope level, and a stale merge still refuses.
+- **Supplying it for an entity that does not exist is refused** (`400`), not
+  ignored — there is no version to match, and a check you asked for and did not
+  get is worse than no check.
+- Honoured on `op: "delete"`, where a stale precondition costs most.
 - Read it back on `GET /{id}` — it round-trips in `changes[]`.
-- For full design see `docs/reference/CHANGE-CONTROL.md` § "Changeset contract".
+
+**Field-level protection still exists, and you do not send it.** At merge,
+orbital compares against the ancestor it recorded when the request was opened: a
+field someone else moved to a *third* value refuses the merge and names the
+field, and a field already at your proposed value is dropped from the write.
+Those refusals carry `field`; an entity-level one does not — that is how you tell
+them apart.
+
+> **Removed 2026-09-03: the `before` field.** It carried the values you read and
+> made the item conditional per field. `ifVersion` answers the same question with
+> the token the rest of the API already uses. **A `before` you still send is
+> ignored** — update your client.
 
 ### List change requests
 
@@ -98,7 +129,7 @@ Response
 { "total": 1,
   "items": [ { "id": "colo-42",
                "effect": { "entities": 2, "fields": 2 },
-               "//": "one field only -> effect also carries field, before, value",
+               "//": "one field only -> effect also carries field, before, value (effect.before is the CURRENT value, unrelated to the removed request field)",
                "author": "dev@armada.ai",
                "status": "open" } ] }
 ```

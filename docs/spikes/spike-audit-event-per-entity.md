@@ -1,6 +1,6 @@
 # Spike: one audit event per entity, correlated by request id
 
-**Status:** Design, not started. Target shape decided (option B below); phasing and two open questions remain. §4 (write-path pre-flight) added 2026-09-01 with its own acceptance list — approved in principle, not implemented.
+**Status:** Partially shipped. **§4 (write-path pre-flight) is DONE — implemented 2026-09-03**, and its decisions now live in `docs/reference/AUDIT.md`; the section is kept below only for the deliberation, and can go when the rest of this spike closes. §§1–3 (one audit event per entity) are still design-only: target shape decided (option B below), phasing and two open questions remain.
 **Date:** 2026-09-01.
 **Folds into:** `docs/reference/AUDIT.md` on close; this doc is then deleted.
 
@@ -61,7 +61,7 @@ One mutation request producing N entities writes N events sharing a `request_id`
 
 **Extend `computeChanges`; do not add a second diff implementation.** `buildDiffHTML` is a pure renderer over it, which is why the API's `changes` and the HTML panel cannot disagree. The create path is a new branch *inside* it, not beside it.
 
-## 4. Companion work — the write-path pre-flight lives in the wrong function
+## 4. Companion work — the write-path pre-flight lives in the wrong function ✅ SHIPPED 2026-09-03
 
 **Added 2026-09-01**, after two bugs in one day traced to the same asymmetry. Not a hard blocker for §3's create branch, but it touches the same two functions this spike touches, and §3 assumes something only `Handle` can currently deliver.
 
@@ -96,6 +96,8 @@ They move together because they are coupled: stamping's UPDATE branch is gated o
 
 - An `ifVersion` mismatch returns a **typed error** that `Handle` maps to `409 MVCC_CONFLICT`, mirroring how `gatedError` already surfaces the approval refusal. `DispatchMutation` callers never set `ifVersion`, so it is inert for them.
 - `DispatchMutation`'s `before` parameter becomes a **fallback** — the fetched value wins when it resolves. This costs divergence-Accept its deliberate optimisation (its comment notes it avoids a round trip because the read was already paid at ingest) in exchange for a complete, current before-state: one extra read per Accept.
+  - **Refined while building, 2026-09-03.** "Fetched wins" is per FIELD, not wholesale. `BeforeFields` is a curated per-type selection — `NetworkInterface`'s is `id orbId name version` — and `dispatchAcceptMutation` names its field at runtime, so discarding the caller's map would have emptied the audit diff for exactly the fields outside the list. The fetch is overlaid ON the fallback.
+  - **Also found while building:** the move alone fixes nothing for Accept. Its mutation declared `$filter: {Type}Filter!`, and the row to stamp is resolved from the `orbId` VARIABLE — so the pre-flight resolved no row and the defect would have survived the refactor with the suite green. Accept now dispatches the canonical `update{Kind}($orbId, $set)` shape, and `TestAccept_DispatchesMutationAndRecordsResolution` asserts that shape rather than the old one.
 - **Merge keeps stamping `version` itself**; the stamping guard preserves a caller-set version, so there is no double-increment. Accepted cost: merge performs a second read it does not strictly need, since `fetchMergeTargets` already ran. Optimise later with a skip hint, not now.
 - The body is **parsed once** in `writeToDGraph` and shared with `checkApprovalPolicy`, which currently unmarshals it separately.
 - **Stays in `Handle`:** auth, the inline-selector rejection (it needs the echo context and returns a client-facing rewrite hint), operation-name context, and error mapping.
@@ -120,7 +122,7 @@ Items 4–8 and 10 are already pinned by the twelve tests in `graphql_handler_te
 
 ## 5. Phasing
 
-0. *(companion, either order — see §4)* Move the before-fetch, stamping and `ifVersion` check from `Handle` into `writeToDGraph`.
+0. ✅ **Done 2026-09-03** *(companion, either order — see §4)* Move the before-fetch, stamping and `ifVersion` check from `Handle` into `writeToDGraph`.
 1. Add `request_id` (nullable) to `audit_event`; stamp it from the existing request id.
 2. Write path emits one event per entity. `operations` becomes a single-element array for new rows (field kept, not narrowed, so old rows stay valid).
 3. Extend `computeChanges` with the create branch (`before: null`).

@@ -761,6 +761,10 @@ type auditEventView struct {
 	Actor         string         `json:"actor"`
 	EventCategory string         `json:"eventCategory"`
 	Details       map[string]any `json:"details"`
+	// Changes is the pre-computed field diff. Present only for a clean
+	// single-entity update, which is exactly what makes its ABSENCE worth
+	// asserting on: a write that lost its before-state still returns 200.
+	Changes []fieldChange `json:"changes"`
 }
 
 // auditEvents returns every event for an operation, newest first, via

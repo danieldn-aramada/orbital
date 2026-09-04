@@ -225,27 +225,31 @@ func TestHandle_MutationProxied(t *testing.T) {
 	}
 }
 
-func TestHandle_IfVersionStrippedBeforeProxy(t *testing.T) {
+// Replaced TestHandle_IfVersionStrippedBeforeProxy, which asserted that
+// `ifVersion` was removed before forwarding. That is no longer the contract:
+// with the version predicate injected into the query, `ifVersion` is DECLARED
+// and referenced, so stripping it would send an undefined variable.
+//
+// What is worth pinning now is the other half — a mutation that cannot carry the
+// precondition is REFUSED rather than having it quietly dropped. An `add` has no
+// entity to match, so this is the shape a confused client actually sends.
+func TestHandle_IfVersionOnAnAddIsRefusedNotSilentlyDropped(t *testing.T) {
 	srv, bodies := captureRequests(t, `{"data":{}}`)
 	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
 
-	c, _ := newGQLCtx(t, map[string]any{
-		"query":         `mutation { addServer(input:[]) { server { id } } }`,
-		"variables":     map[string]any{"ifVersion": 5},
-		"operationName": "",
+	c, rec := newGQLCtx(t, map[string]any{
+		"query":     `mutation { addServer(input:[]) { server { id } } }`,
+		"variables": map[string]any{"ifVersion": 5},
 	})
 
 	if err := h.Handle(c); err != nil {
 		t.Fatalf("Handle: %v", err)
 	}
-
-	lastBody := (*bodies)[len(*bodies)-1]
-	var forwarded gqlRequest
-	if err := json.Unmarshal(lastBody, &forwarded); err != nil {
-		t.Fatalf("unmarshal forwarded body: %v", err)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 — a precondition that cannot be applied was accepted: %s", rec.Code, rec.Body.String())
 	}
-	if _, ok := forwarded.Variables["ifVersion"]; ok {
-		t.Error("ifVersion should be stripped before forwarding to DGraph")
+	if len(*bodies) != 0 {
+		t.Errorf("the mutation reached DGraph anyway (%d bodies) — refused, then sent", len(*bodies))
 	}
 }
 
@@ -286,13 +290,17 @@ func TestHandle_MVCCConflict(t *testing.T) {
 
 func TestHandle_MVCCVersionMatch(t *testing.T) {
 	// Before-state version=5, ifVersion=5 → no conflict, mutation proceeds.
+	//
+	// Uses the canonical `$orbId` form because that is the only shape the
+	// version predicate can be injected into — the inline fixture this used to
+	// carry is now refused, which is the fail-closed guard working.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		body, _ := io.ReadAll(r.Body)
 		if strings.Contains(string(body), "BeforeFetch") {
-			w.Write([]byte(`{"data":{"getServer":{"id":"1","version":5}}}`)) //nolint:errcheck
+			w.Write([]byte(`{"data":{"queryServer":[{"id":"1","orbId":"alaska:SRV001","version":5}]}}`)) //nolint:errcheck
 		} else {
-			w.Write([]byte(`{"data":{"updateServer":{"server":{"orbId":"alaska:SRV001"}}}}`)) //nolint:errcheck
+			w.Write([]byte(`{"data":{"updateServer":{"server":[{"orbId":"alaska:SRV001"}]}}}`)) //nolint:errcheck
 		}
 	}))
 	t.Cleanup(srv.Close)
@@ -300,11 +308,10 @@ func TestHandle_MVCCVersionMatch(t *testing.T) {
 	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
 
 	c, rec := newGQLCtx(t, map[string]any{
-		"query":         `mutation UpdateServer { updateServer(input:{}) { server { orbId } } }`,
+		"query":         `mutation UpdateServer($orbId: String!, $set: ServerPatch!) { updateServer(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { server { orbId } } }`,
 		"operationName": "UpdateServer",
 		"variables": map[string]any{
-			"id":        "1",
-			"ifVersion": 5,
+			"orbId": "alaska:SRV001", "set": map[string]any{"hostname": "x"}, "ifVersion": 5,
 		},
 	})
 
@@ -312,10 +319,41 @@ func TestHandle_MVCCVersionMatch(t *testing.T) {
 		t.Fatalf("Handle: %v", err)
 	}
 	if rec.Code == http.StatusConflict {
-		t.Error("expected no conflict when versions match")
+		t.Errorf("expected no conflict when versions match: %s", rec.Body.String())
 	}
 	if !strings.Contains(rec.Body.String(), "alaska:SRV001") {
 		t.Errorf("expected mutation response, got: %s", rec.Body.String())
+	}
+}
+
+func TestHandle_MalformedIfVersionIsBadInputNotConflict(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		body, _ := io.ReadAll(r.Body)
+		if strings.Contains(string(body), "BeforeFetch") {
+			w.Write([]byte(`{"data":{"getServer":{"id":"1","version":5}}}`)) //nolint:errcheck
+			return
+		}
+		t.Error("the mutation reached DGraph despite a malformed ifVersion")
+		w.Write([]byte(`{"data":{}}`)) //nolint:errcheck
+	}))
+	t.Cleanup(srv.Close)
+
+	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
+	c, rec := newGQLCtx(t, map[string]any{
+		"query":         `mutation UpdateServer { updateServer(input:{}) { server { id } } }`,
+		"operationName": "UpdateServer",
+		"variables":     map[string]any{"id": "1", "ifVersion": "not-a-number"},
+	})
+
+	if err := h.Handle(c); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 — a malformed token must not be reported as a conflict: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), CodeBadUserInput) {
+		t.Errorf("body does not carry %s: %s", CodeBadUserInput, rec.Body.String())
 	}
 }
 

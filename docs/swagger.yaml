@@ -334,14 +334,6 @@ definitions:
     type: object
   handler.changeItemBody:
     properties:
-      before:
-        additionalProperties: {}
-        description: |-
-          Before makes the item CONDITIONAL: the values you read, keyed like Set.
-          Orbital refuses the request with 409 if any named field has already moved,
-          and refuses the merge if one moves between review and apply. Omit it for
-          an unconditional request, guarded only at entity level.
-        type: object
       clear:
         description: Clear is the fields to unset.
         example:
@@ -349,6 +341,16 @@ definitions:
         items:
           type: string
         type: array
+      ifVersion:
+        description: |-
+          IfVersion is the entity's `version` as you read it — the same concurrency
+          token `/graphql` mutations accept, meaning the same thing here. Orbital
+          refuses the request with 409 MVCC_CONFLICT if the entity has moved since,
+          naming the item and both versions. One per item, never per field: an
+          entity has one version. Omit for an unconditional item. Supplying it for
+          an entity that does not exist is refused — there is no version to match.
+        example: 7
+        type: integer
       op:
         description: |-
           Op is one of upsert, update, delete. Explicit, never inferred — a request
@@ -509,6 +511,21 @@ definitions:
           it was opened. Derived on every read — never a stored column.
         example: false
         type: boolean
+      staleEntities:
+        description: |-
+          StaleEntities names WHY this request is stale: the entities whose version
+          moved since it was last reviewed, each with the version reviewed and the
+          version now. Present only when Stale is true, and empty for requests
+          opened before orbital recorded the base version vector.
+
+          Server-computed on purpose. `stale` alone tells a reader that merge is
+          blocked but not what to look at, and a client that had to work it out
+          would need the base vector, the current vector and the scope-expansion
+          rules — three things orbital already has and no integrator should
+          reimplement.
+        items:
+          $ref: '#/definitions/handler.staleEntity'
+        type: array
       status:
         description: |-
           Status is the EFFECTIVE status: open, approved, rejected, merged, closed.
@@ -951,6 +968,21 @@ definitions:
         type: boolean
     required:
     - backupId
+    type: object
+  handler.staleEntity:
+    properties:
+      currentVersion:
+        example: 9
+        type: integer
+      orbId:
+        example: alaska-dot:server-4FK8K44
+        type: string
+      reviewedVersion:
+        description: |-
+          Reviewed is the version this request was last reviewed against; Current is
+          the version now. Current is omitted when the entity no longer exists.
+        example: 7
+        type: integer
     type: object
   handler.statusResponse:
     properties:

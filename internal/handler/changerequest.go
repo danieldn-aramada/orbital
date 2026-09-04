@@ -133,25 +133,30 @@ func (h *ChangeRequest) Create(ctx context.Context, actor, title, description st
 		return nil, nil, fmt.Errorf("marshal changeset: %w", err)
 	}
 
-	// One snapshot, three consumers: the effect summary, the stored ancestor, and
-	// the caller's `before` assertions. Fetching it once also means all three
-	// describe the same instant.
-	snap, snapErr := baseSnapshot(ctx, h.dgraphURL, scope)
-	if snapErr != nil {
-		// A conditional request cannot be honoured without reading state, so this
-		// is fatal when `before` was supplied and merely a lost convenience
-		// otherwise. Do NOT downgrade a guarantee to best-effort.
-		if changesetAsserts(*cs) {
-			return nil, nil, fmt.Errorf("read state for `before` assertions: %w", snapErr)
-		}
-		h.logger.Warn("could not snapshot base; effect summary and ancestor omitted",
-			"namespace", cs.Namespace, "err", snapErr)
+	// Entity-level preconditions first: they read only `versions`, which is
+	// already in hand, so a refusal here needs no snapshot and survives a failed
+	// one. Create reads state when it is INVOKED, not when the author was
+	// looking — so an entity that moved while the proposal was being composed is
+	// caught here rather than becoming a silent part of the recorded ancestor.
+	preconditions := ifVersionMismatches(versions, *cs)
+
+	if len(preconditions) > 0 {
+		return nil, nil, &preconditionFailed{Problems: preconditions}
 	}
 
-	if snap != nil {
-		if bad := beforeMismatches(snap, *cs); len(bad) > 0 {
-			return nil, nil, &preconditionFailed{Problems: bad}
-		}
+	// One snapshot, two consumers: the effect summary and the stored ancestor.
+	// Fetching it once means both describe the same instant.
+	//
+	// Best-effort, and it is allowed to be since `ifVersion` replaced the
+	// client-supplied `before`: the precondition above reads the version vector,
+	// which was already in hand, so a failed snapshot no longer costs a
+	// guarantee — only the display delta and the ancestor, and losing those
+	// degrades the merge to the entity-level guard rather than skipping a check
+	// the caller asked for.
+	snap, snapErr := baseSnapshot(ctx, h.dgraphURL, scope)
+	if snapErr != nil {
+		h.logger.Warn("could not snapshot base; effect summary and ancestor omitted",
+			"namespace", cs.Namespace, "err", snapErr)
 	}
 
 	// The delta this request would apply, captured with the anchor that says
@@ -176,6 +181,7 @@ func (h *ChangeRequest) Create(ctx context.Context, actor, title, description st
 			SetAuthor(actor).
 			SetCreatedBy(actor).
 			SetBaseHash(versionHash(versions)).
+			SetBaseVersions(versions).
 			SetBasePresent(presentInVersions(versions, scope)).
 			SetPayload(payload)
 		if len(effect) > 0 {
@@ -660,7 +666,7 @@ func (h *ChangeRequest) decide(ctx context.Context, id int64, actor string, role
 		// current state, so current state is what the ancestor must become.
 		needsRebase := cr.BaseHash != st.CurrentHash || len(cr.BaseValues) > 0
 		if needsRebase {
-			upd := cr.Update().SetBaseHash(st.CurrentHash)
+			upd := cr.Update().SetBaseHash(st.CurrentHash).SetBaseVersions(st.Versions)
 			if len(cr.BaseValues) > 0 {
 				snap, snapErr := baseSnapshot(ctx, h.dgraphURL, st.Scope)
 				if snapErr != nil {
@@ -753,21 +759,20 @@ func (h *ChangeRequest) Amend(ctx context.Context, id int64, actor string, role 
 		if err != nil {
 			return nil, nil, fmt.Errorf("marshal changeset: %w", err)
 		}
+		// Same two guards as Create, for the same reason: an amend re-proposes
+		// against a newly captured base, so it is a creation as far as
+		// concurrency is concerned.
+		if preconditions := ifVersionMismatches(versions, *cs); len(preconditions) > 0 {
+			return nil, nil, &preconditionFailed{Problems: preconditions}
+		}
+
 		snap, snapErr := baseSnapshot(ctx, h.dgraphURL, scope)
 		if snapErr != nil {
-			if changesetAsserts(*cs) {
-				return nil, nil, fmt.Errorf("read state for `before` assertions: %w", snapErr)
-			}
 			h.logger.Warn("could not snapshot base on amend; effect and ancestor omitted",
 				"change_request", crHumanID(cr), "err", snapErr)
 		}
-		if snap != nil {
-			if bad := beforeMismatches(snap, *cs); len(bad) > 0 {
-				return nil, nil, &preconditionFailed{Problems: bad}
-			}
-		}
 
-		upd = upd.SetPayload(payload).SetBaseHash(versionHash(versions)).SetBasePresent(presentInVersions(versions, scope))
+		upd = upd.SetPayload(payload).SetBaseHash(versionHash(versions)).SetBaseVersions(versions).SetBasePresent(presentInVersions(versions, scope))
 		// Recomputed with the anchor: an amended request is a new plan against a
 		// newly captured base, so carrying the old delta forward would describe
 		// changes the request no longer proposes. The ancestor moves with it, for
@@ -1007,23 +1012,143 @@ func planMerge(snap graphdiff.Snapshot, cs approval.Changeset, baseValues map[st
 	return out, conflicts
 }
 
+// ifVersionMismatches reports the items whose ENTITY has moved since the caller
+// read it.
+//
+// The whole creation-time precondition, since `before` was removed: one token
+// per item, meaning what `ifVersion` means on /graphql. Field-level protection
+// still exists, but at MERGE, from the server-recorded ancestor (`base_values`)
+// rather than from anything a client asserts.
+//
+// Costs nothing extra. `versions` is the same orbId→version map base_hash is
+// built from, already read for the whole scope in one query, so there is no
+// snapshot to take and nothing to fall back to when a read fails.
+//
+// An item with no IfVersion is unconditional and is skipped — omission is not
+// an error. An item whose entity is absent never reaches here: Validate refuses
+// it, because a precondition with nothing to compare against is a malformed
+// proposal rather than a conflict.
+func ifVersionMismatches(versions map[string]int, cs approval.Changeset) []approval.ValidationError {
+	var out []approval.ValidationError
+	for i, item := range cs.Changes {
+		if item.IfVersion == nil {
+			continue
+		}
+		cur, present := versions[item.OrbID]
+		if !present || cur == *item.IfVersion {
+			continue
+		}
+		out = append(out, approval.ValidationError{
+			Index: i, OrbID: item.OrbID,
+			Msg:  fmt.Sprintf("entity moved since you read it: you saw version %d, it is now %d", *item.IfVersion, cur),
+			Hint: "Someone changed this entity while you were composing. Reload it and propose again.",
+		})
+	}
+	return out
+}
+
+// staleWithEntities is errCRStale that can say WHICH entities moved.
+//
+// It wraps the sentinel rather than replacing it, so every `errors.Is(err,
+// errCRStale)` in the codebase keeps working and the HTTP status and code are
+// unchanged. What is added is `problems[]` — the same envelope a field-level
+// refusal already produces, so a client that renders one renders both.
+//
+// The entities come from base_versions, NOT from any client-supplied token. A
+// stored `ifVersion` is the author's read at proposal time: once anything moves
+// that entity the token is permanently wrong, and re-approval — which is how
+// staleness is meant to be cleared, in one click — could never satisfy it.
+// base_versions is re-captured wherever base_hash is, so it moves with the
+// review instead of outliving it.
+type staleWithEntities struct{ Problems []approval.ValidationError }
+
+func (e *staleWithEntities) Error() string { return errCRStale.Error() }
+func (e *staleWithEntities) Unwrap() error { return errCRStale }
+
+// namedStale explains a stale request by diffing the stored version vector
+// against the current one.
+//
+// Falls back to the bare sentinel in the two cases where the vector cannot
+// explain the staleness: a row written before base_versions existed, and a hash
+// that moved for a reason the vector does not show. The second is not
+// hypothetical — base_hash is a fingerprint of the vector, so if they disagree
+// something is wrong with our own bookkeeping, and inventing a per-entity story
+// from it would be worse than admitting the request is stale without saying why.
+func namedStale(cr *ent.ApprovalRequest, st crState) error {
+	if len(cr.BaseVersions) == 0 {
+		return errCRStale
+	}
+	moved := movedOrbIDs(cr.BaseVersions, st.Versions)
+	if len(moved) == 0 {
+		return errCRStale
+	}
+	ids := make([]string, 0, len(moved))
+	for id := range moved {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	problems := make([]approval.ValidationError, 0, len(ids))
+	for _, id := range ids {
+		was := cr.BaseVersions[id]
+		now, present := st.Versions[id]
+		if !present {
+			// Gone. TARGET_MISSING covers a DECLARED target that vanished; this
+			// is a subtree member, which makes the review stale rather than
+			// unmergeable.
+			problems = append(problems, approval.ValidationError{
+				OrbID: id,
+				Msg:   fmt.Sprintf("no longer exists (was version %d when this was reviewed)", was),
+				Hint:  "Review the recomputed diff, approve again, then merge.",
+			})
+			continue
+		}
+		problems = append(problems, approval.ValidationError{
+			OrbID: id,
+			Msg:   fmt.Sprintf("changed since this was reviewed: version %d, it is now %d", was, now),
+			Hint:  "Review the recomputed diff, approve again, then merge.",
+		})
+	}
+	return &staleWithEntities{Problems: problems}
+}
+
+// staleEntities is what namedStale reports, in the shape a view renders.
+//
+// Same source, same diff, deliberately: a banner that named different entities
+// from the refusal an operator gets when they click Merge would be worse than a
+// banner that named none.
+func staleEntities(cr *ent.ApprovalRequest, st crState) []staleEntity {
+	if !st.Stale || len(cr.BaseVersions) == 0 {
+		return nil
+	}
+	moved := movedOrbIDs(cr.BaseVersions, st.Versions)
+	if len(moved) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(moved))
+	for id := range moved {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	out := make([]staleEntity, 0, len(ids))
+	for _, id := range ids {
+		e := staleEntity{OrbID: id, Reviewed: cr.BaseVersions[id]}
+		if now, present := st.Versions[id]; present {
+			now := now
+			e.Current = &now
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
 // preconditionFailed carries the `before` assertions that did not match. It is
 // a 409, not a 400: nothing about the request is malformed — the world moved.
 type preconditionFailed struct{ Problems []approval.ValidationError }
 
 func (e *preconditionFailed) Error() string {
 	return fmt.Sprintf("precondition failed on %d field(s)", len(e.Problems))
-}
-
-// changesetAsserts reports whether any item carries a `before`, i.e. whether
-// this is a conditional request.
-func changesetAsserts(cs approval.Changeset) bool {
-	for _, item := range cs.Changes {
-		if len(item.Before) > 0 {
-			return true
-		}
-	}
-	return false
 }
 
 // baseValuesFrom projects the ANCESTOR out of a snapshot: for every field the
@@ -1073,62 +1198,6 @@ func baseValuesFrom(snap graphdiff.Snapshot, cs approval.Changeset) map[string]m
 	if len(out) == 0 {
 		return nil
 	}
-	return out
-}
-
-// beforeMismatches reports the caller's `before` assertions that do not match
-// current state — the fields that moved while the caller was composing.
-//
-// Implemented by running the assertions through the diff engine as if they were
-// a proposal: if asserting "this field is already X" would CHANGE anything, the
-// assertion is wrong. That borrows the one normalizer rather than writing a
-// second notion of equality, the same reasoning as satisfiedItems.
-func beforeMismatches(snap graphdiff.Snapshot, cs approval.Changeset) []approval.ValidationError {
-	probe := approval.Changeset{Namespace: cs.Namespace}
-	index := map[string]int{}
-	for i, item := range cs.Changes {
-		if len(item.Before) == 0 || item.Op == approval.OpDelete {
-			continue
-		}
-		index[item.OrbID] = i
-		probe.Changes = append(probe.Changes, approval.ChangeItem{
-			OrbID: item.OrbID, Type: item.Type, Op: approval.OpUpdate, Set: item.Before,
-		})
-	}
-	if len(probe.Changes) == 0 {
-		return nil
-	}
-
-	res := graphdiff.Compare(snap, applyChangesetTo(snap, probe))
-	var out []approval.ValidationError
-	for _, ch := range res.Changes {
-		if ch == nil {
-			continue
-		}
-		if len(ch.Fields) == 0 {
-			// The whole entity differs — it does not exist, so there was nothing
-			// to have read.
-			out = append(out, approval.ValidationError{
-				Index: index[ch.OrbID], OrbID: ch.OrbID,
-				Msg:  "before refers to an entity that does not exist",
-				Hint: "Reload the entity and propose again.",
-			})
-			continue
-		}
-		for _, f := range ch.Fields {
-			out = append(out, approval.ValidationError{
-				Index: index[ch.OrbID], OrbID: ch.OrbID, Field: f.Field,
-				Msg:  fmt.Sprintf("value moved since you read it: you saw %v, it is now %v", f.After, f.Before),
-				Hint: "Someone changed this while you were composing. Reload and propose again.",
-			})
-		}
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].OrbID != out[j].OrbID {
-			return out[i].OrbID < out[j].OrbID
-		}
-		return out[i].Field < out[j].Field
-	})
 	return out
 }
 

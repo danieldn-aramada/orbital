@@ -86,6 +86,25 @@ func (h *GraphQL) checkApprovalPolicy(ctx context.Context, body []byte, caller c
 	// respBody is nil on purpose: this runs BEFORE the write, so the only
 	// available orbIds are the ones the caller supplied.
 	orbIDs := extractResourceIDs(req.Query, req.Variables, nil)
+
+	return h.checkPolicyFor(ctx, orbIDs, types, caller)
+}
+
+// checkPolicyFor is the policy decision with no mutation body in sight.
+//
+// Extracted 2026-09-03 so the cascade-delete endpoint can ask the same question.
+// That path never had a body to parse — it plans a cascade over N entities and
+// several types, then POSTs a DQL delete — so it walked straight past a check
+// built around `req.Query`, and `DELETE` succeeded on an entity whose `update`
+// was refused seconds earlier. A control with a shape that only one caller can
+// satisfy is a control with a hole in it.
+//
+// Same rules, same order, same return contract as checkApprovalPolicy: the
+// label of the policy the caller BYPASSED, or "" when none was in play.
+func (h *GraphQL) checkPolicyFor(ctx context.Context, orbIDs, types []string, caller callerRole) (bypassed string, err error) {
+	if !changeControlEnabled || h.db == nil || len(types) == 0 {
+		return "", nil
+	}
 	namespaces := namespacesOf(orbIDs)
 
 	pol, err := h.matchingPolicy(ctx, namespaces, types)

@@ -69,6 +69,21 @@ func NewTestDB(t *testing.T) *ent.Client {
 	}
 	client := enttest.Open(t, "postgres", TestDatabaseURL())
 
+	// Registered FIRST so it runs LAST (t.Cleanup is LIFO): truncate while the
+	// client is still usable, then hand the connections back.
+	//
+	// Without this the pool leaks for the whole package run — enttest.Open does
+	// not close on cleanup — and a package with enough fixtures walks into
+	// `pq: sorry, too many clients already`. It surfaces as a wave of unrelated
+	// failures in whichever tests happen to run after the limit is hit, which is
+	// why it went unnoticed: the suite was sitting just under max_connections,
+	// so the tests that broke were never the tests that leaked.
+	t.Cleanup(func() {
+		if err := client.Close(); err != nil {
+			t.Logf("close test db client: %v (continuing)", err)
+		}
+	})
+
 	t.Cleanup(func() {
 		if err := truncateAll(TestDatabaseURL()); err != nil {
 			t.Logf("truncateAll: %v (continuing)", err)

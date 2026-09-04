@@ -82,3 +82,56 @@ test('a save sends ifVersion as a top-level variable, and never inside set', asy
   // undeclared-then-removed variable.
   expect(update.query).not.toContain('$ifVersion')
 })
+
+// The PROPOSE path, which is a second client of the same concurrency token.
+//
+// Same regression class as the save path above and the same reason it needs a
+// browser assertion: `ifVersion` is opt-in server-side, so a changeset that
+// stops carrying it is refused by nothing and looks identical to one whose
+// author chose not to guard. The server tests prove orbital honours it; only
+// this proves the editor sends it.
+test('a proposed changeset carries ifVersion per existing entity, and none for a create', async ({ page }) => {
+  await openEditor(page)
+
+  const proposals: any[] = []
+  await page.route('**/api/v1/change-requests', async (route) => {
+    if (route.request().method() === 'POST') {
+      const post = route.request().postData()
+      if (post) { try { proposals.push(JSON.parse(post)) } catch (_) { /* ignore */ } }
+    }
+    await route.continue()
+  })
+
+  const initial = JSON.parse(
+    (await page.locator(`#srv-edit-data-${domId}`).textContent()) || '{}')
+  await page.evaluate(({ id, next }) => {
+    const editor = (window as any).srvEditors.get(id)
+    editor.set({ text: JSON.stringify(next, null, 2) })
+  }, { id: domId, next: { ...initial, hostname: 'propose-e2e-' + Date.now() } })
+
+  // The propose button is injected by applyGateState only when a policy governs
+  // this namespace — it carries a data-testid rather than an id for that reason.
+  const propose = page.locator(`#edit-modal-srv-${domId} [data-testid="propose-change"]`)
+  if (await propose.count() === 0) {
+    test.skip(true, 'no propose control on this build — the write gate is off')
+  }
+  await propose.click()
+
+  await expect.poll(() => proposals.length, { timeout: 15_000 }).toBeGreaterThan(0)
+  const changes = proposals[proposals.length - 1].changes || []
+  expect(changes.length, 'no changeset items were sent').toBeGreaterThan(0)
+
+  for (const item of changes) {
+    if (item.op === 'update') {
+      // An update targets something that exists, so it has a version to assert.
+      expect(Number.isInteger(item.ifVersion),
+        `update item ${item.orbId} carries no ifVersion`).toBeTruthy()
+      expect(item.ifVersion).toBeGreaterThan(0)
+    } else {
+      // A create has no version to match, and orbital REFUSES a supplied one at
+      // validation rather than ignoring it — so sending one here would make
+      // every first-time create unproposable.
+      expect(item.ifVersion, `create item ${item.orbId} sent an ifVersion`).toBeUndefined()
+    }
+  }
+})

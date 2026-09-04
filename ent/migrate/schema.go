@@ -95,6 +95,7 @@ var (
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"open", "rejected", "merged", "closed"}, Default: "open"},
 		{Name: "author", Type: field.TypeString},
 		{Name: "base_hash", Type: field.TypeString},
+		{Name: "base_versions", Type: field.TypeJSON, Nullable: true},
 		{Name: "base_present", Type: field.TypeJSON, Nullable: true},
 		{Name: "base_effect", Type: field.TypeJSON, Nullable: true},
 		{Name: "base_values", Type: field.TypeJSON, Nullable: true},
@@ -131,7 +132,7 @@ var (
 			{
 				Name:    "approvalrequest_payload",
 				Unique:  false,
-				Columns: []*schema.Column{ApprovalRequestsColumns[16]},
+				Columns: []*schema.Column{ApprovalRequestsColumns[17]},
 				Annotation: &entsql.IndexAnnotation{
 					Types: map[string]string{
 						"postgres": "GIN",

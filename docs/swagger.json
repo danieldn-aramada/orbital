@@ -2287,11 +2287,6 @@
                 "orbId"
             ],
             "properties": {
-                "before": {
-                    "description": "Before makes the item CONDITIONAL: the values you read, keyed like Set.\nOrbital refuses the request with 409 if any named field has already moved,\nand refuses the merge if one moves between review and apply. Omit it for\nan unconditional request, guarded only at entity level.",
-                    "type": "object",
-                    "additionalProperties": {}
-                },
                 "clear": {
                     "description": "Clear is the fields to unset.",
                     "type": "array",
@@ -2301,6 +2296,11 @@
                     "example": [
                         "oobMAC"
                     ]
+                },
+                "ifVersion": {
+                    "description": "IfVersion is the entity's `version` as you read it — the same concurrency\ntoken `/graphql` mutations accept, meaning the same thing here. Orbital\nrefuses the request with 409 MVCC_CONFLICT if the entity has moved since,\nnaming the item and both versions. One per item, never per field: an\nentity has one version. Omit for an unconditional item. Supplying it for\nan entity that does not exist is refused — there is no version to match.",
+                    "type": "integer",
+                    "example": 7
                 },
                 "op": {
                     "description": "Op is one of upsert, update, delete. Explicit, never inferred — a request\napproved as an update must not silently become a create.",
@@ -2462,6 +2462,13 @@
                     "description": "Stale means the intent this request was written against has changed since\nit was opened. Derived on every read — never a stored column.",
                     "type": "boolean",
                     "example": false
+                },
+                "staleEntities": {
+                    "description": "StaleEntities names WHY this request is stale: the entities whose version\nmoved since it was last reviewed, each with the version reviewed and the\nversion now. Present only when Stale is true, and empty for requests\nopened before orbital recorded the base version vector.\n\nServer-computed on purpose. `stale` alone tells a reader that merge is\nblocked but not what to look at, and a client that had to work it out\nwould need the base vector, the current vector and the scope-expansion\nrules — three things orbital already has and no integrator should\nreimplement.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.staleEntity"
+                    }
                 },
                 "status": {
                     "description": "Status is the EFFECTIVE status: open, approved, rejected, merged, closed.\n`approved` is derived from the valid-approval count, so it can revert to\n`open` on its own when the base moves.",
@@ -3020,6 +3027,24 @@
                     "description": "ConfirmSchemaMismatch must be true to proceed when the backup's schema\nversion differs from the running schema. false (default) makes such a\nrestore fail fast rather than risk a mismatched load.",
                     "type": "boolean",
                     "example": false
+                }
+            }
+        },
+        "handler.staleEntity": {
+            "type": "object",
+            "properties": {
+                "currentVersion": {
+                    "type": "integer",
+                    "example": 9
+                },
+                "orbId": {
+                    "type": "string",
+                    "example": "alaska-dot:server-4FK8K44"
+                },
+                "reviewedVersion": {
+                    "description": "Reviewed is the version this request was last reviewed against; Current is\nthe version now. Current is omitted when the entity no longer exists.",
+                    "type": "integer",
+                    "example": 7
                 }
             }
         },

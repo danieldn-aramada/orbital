@@ -37,8 +37,11 @@ type User {
 
 # ConfigItem Interface
 #  orbId is the public stable identifier
-#  version is the optimistic-concurrency counter. Auto-incremented by orbital's
-#  GraphQL proxy on every mutation — clients don't need to set it.
+#  version is the optimistic-concurrency counter, auto-incremented by orbital's
+#  single write path. @search makes it FILTERABLE, which is what lets the
+#  concurrency check be a compare-and-swap: orbital injects
+#  `version: { eq: $ifVersion }` into the mutation's own filter. On the interface
+#  so every implementing type gets `version: IntFilter`.
 interface ConfigItem {
     id: ID!
     namespace: String! @search(by: [exact])
@@ -48,7 +51,7 @@ interface ConfigItem {
     createdAt: DateTime @search
     updatedBy: String @search(by: [hash])
     updatedAt: DateTime @search
-    version: Int!
+    version: Int! @search
 }
 
 ########################

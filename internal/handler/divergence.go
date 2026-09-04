@@ -442,20 +442,28 @@ func (h *DivergenceHandler) dispatchAcceptMutation(ctx context.Context, entry *e
 	// not pre-check that intent hasn't moved since the report — if it has,
 	// the post-Accept divergence-ingest cycle catches it via the supersede
 	// path. Audit log records the dispatched mutation; any racing edit shows
-	// up there too. Version-bumping on the mutation's set clause is handled
-	// by orbital's general mutation pipeline, not by this handler.
+	// up there too.
+	//
+	// The canonical update{Kind}($orbId, $set) shape, and it MUST stay that
+	// shape. writeToDGraph resolves the row to stamp from the `orbId` variable;
+	// the $filter-object form this used to send resolved to nothing, so an
+	// Accept wrote intent with no version bump — which made it invisible to
+	// change-request staleness, since base_hash only moves when a version does.
+	// Fixed 2026-09-03; see docs/planning/debt.md Track B.
 	mutation := fmt.Sprintf(
-		`mutation AcceptDivergence($filter: %sFilter!, $set: %sPatch!) { update%s(input: {filter: $filter, set: $set}) { numUids } }`,
-		typeName, typeName, typeName,
+		`mutation AcceptDivergence($orbId: String!, $set: %sPatch!) { update%s(input: {filter: {orbId: {eq: $orbId}}, set: $set}) { numUids } }`,
+		typeName, typeName,
 	)
 	variables := map[string]any{
-		"filter": map[string]any{"orbId": map[string]any{"eq": entry.EntryOrbID}},
-		"set":    map[string]any{entry.Field: overrideVal},
+		"orbId": entry.EntryOrbID,
+		"set":   map[string]any{entry.Field: overrideVal},
 	}
 
-	// The divergence entry already carries the intended value at report
-	// time — that's exactly what "before" is for the audit diff. No DGraph
-	// round-trip needed; we already paid for that read when ingesting.
+	// A FALLBACK for the audit diff, not the diff itself. writeToDGraph fetches
+	// current state anyway (it cannot stamp the next version otherwise) and the
+	// fetch wins field by field. This still earns its place: BeforeFields is a
+	// curated per-type selection and entry.Field is resolved at runtime, so for
+	// a field outside that list this is the only before-value there is.
 	var intended any
 	_ = json.Unmarshal(entry.IntendedValue, &intended)
 	before := map[string]any{entry.Field: intended}

@@ -42,6 +42,8 @@ type ApprovalRequest struct {
 	Author string `json:"author,omitempty"`
 	// BaseHash holds the value of the "base_hash" field.
 	BaseHash string `json:"base_hash,omitempty"`
+	// BaseVersions holds the value of the "base_versions" field.
+	BaseVersions map[string]int `json:"base_versions,omitempty"`
 	// BasePresent holds the value of the "base_present" field.
 	BasePresent []string `json:"base_present,omitempty"`
 	// BaseEffect holds the value of the "base_effect" field.
@@ -94,7 +96,7 @@ func (*ApprovalRequest) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case approvalrequest.FieldBasePresent, approvalrequest.FieldBaseEffect, approvalrequest.FieldBaseValues, approvalrequest.FieldPayload:
+		case approvalrequest.FieldBaseVersions, approvalrequest.FieldBasePresent, approvalrequest.FieldBaseEffect, approvalrequest.FieldBaseValues, approvalrequest.FieldPayload:
 			values[i] = new([]byte)
 		case approvalrequest.FieldID, approvalrequest.FieldNumber:
 			values[i] = new(sql.NullInt64)
@@ -195,6 +197,14 @@ func (_m *ApprovalRequest) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field base_hash", values[i])
 			} else if value.Valid {
 				_m.BaseHash = value.String
+			}
+		case approvalrequest.FieldBaseVersions:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field base_versions", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.BaseVersions); err != nil {
+					return fmt.Errorf("unmarshal field base_versions: %w", err)
+				}
 			}
 		case approvalrequest.FieldBasePresent:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -324,6 +334,9 @@ func (_m *ApprovalRequest) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("base_hash=")
 	builder.WriteString(_m.BaseHash)
+	builder.WriteString(", ")
+	builder.WriteString("base_versions=")
+	builder.WriteString(fmt.Sprintf("%v", _m.BaseVersions))
 	builder.WriteString(", ")
 	builder.WriteString("base_present=")
 	builder.WriteString(fmt.Sprintf("%v", _m.BasePresent))

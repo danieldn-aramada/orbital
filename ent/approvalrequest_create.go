@@ -144,6 +144,12 @@ func (_c *ApprovalRequestCreate) SetBaseHash(v string) *ApprovalRequestCreate {
 	return _c
 }
 
+// SetBaseVersions sets the "base_versions" field.
+func (_c *ApprovalRequestCreate) SetBaseVersions(v map[string]int) *ApprovalRequestCreate {
+	_c.mutation.SetBaseVersions(v)
+	return _c
+}
+
 // SetBasePresent sets the "base_present" field.
 func (_c *ApprovalRequestCreate) SetBasePresent(v []string) *ApprovalRequestCreate {
 	_c.mutation.SetBasePresent(v)
@@ -428,6 +434,10 @@ func (_c *ApprovalRequestCreate) createSpec() (*ApprovalRequest, *sqlgraph.Creat
 	if value, ok := _c.mutation.BaseHash(); ok {
 		_spec.SetField(approvalrequest.FieldBaseHash, field.TypeString, value)
 		_node.BaseHash = value
+	}
+	if value, ok := _c.mutation.BaseVersions(); ok {
+		_spec.SetField(approvalrequest.FieldBaseVersions, field.TypeJSON, value)
+		_node.BaseVersions = value
 	}
 	if value, ok := _c.mutation.BasePresent(); ok {
 		_spec.SetField(approvalrequest.FieldBasePresent, field.TypeJSON, value)

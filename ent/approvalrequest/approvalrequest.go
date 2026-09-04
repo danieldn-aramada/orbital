@@ -39,6 +39,8 @@ const (
 	FieldAuthor = "author"
 	// FieldBaseHash holds the string denoting the base_hash field in the database.
 	FieldBaseHash = "base_hash"
+	// FieldBaseVersions holds the string denoting the base_versions field in the database.
+	FieldBaseVersions = "base_versions"
 	// FieldBasePresent holds the string denoting the base_present field in the database.
 	FieldBasePresent = "base_present"
 	// FieldBaseEffect holds the string denoting the base_effect field in the database.
@@ -88,6 +90,7 @@ var Columns = []string{
 	FieldStatus,
 	FieldAuthor,
 	FieldBaseHash,
+	FieldBaseVersions,
 	FieldBasePresent,
 	FieldBaseEffect,
 	FieldBaseValues,

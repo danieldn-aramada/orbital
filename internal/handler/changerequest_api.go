@@ -220,11 +220,19 @@ type changeItemBody struct {
 	Set map[string]any `json:"set,omitempty"`
 	// Clear is the fields to unset.
 	Clear []string `json:"clear,omitempty" example:"oobMAC"`
-	// Before makes the item CONDITIONAL: the values you read, keyed like Set.
-	// Orbital refuses the request with 409 if any named field has already moved,
-	// and refuses the merge if one moves between review and apply. Omit it for
-	// an unconditional request, guarded only at entity level.
-	Before map[string]any `json:"before,omitempty"`
+	// Before is REMOVED as a feature and kept only to detect callers still
+	// sending it. Echo's binder ignores unknown fields, so without this a client
+	// that still supplies `before` loses its per-field guarantee silently — the
+	// failure mode the concurrency work exists to eliminate. Rejected with a 400
+	// naming `ifVersion` instead. Hidden from the published spec.
+	Before json.RawMessage `json:"before,omitempty" swaggerignore:"true"`
+	// IfVersion is the entity's `version` as you read it — the same concurrency
+	// token `/graphql` mutations accept, meaning the same thing here. Orbital
+	// refuses the request with 409 MVCC_CONFLICT if the entity has moved since,
+	// naming the item and both versions. One per item, never per field: an
+	// entity has one version. Omit for an unconditional item. Supplying it for
+	// an entity that does not exist is refused — there is no version to match.
+	IfVersion *int `json:"ifVersion,omitempty" example:"7"`
 }
 
 // amendChangeRequestBody patches an open change request. Omitted fields are
@@ -313,6 +321,17 @@ type changeRequestResponse struct {
 	// MissingTargets are entities that existed when this request was opened and
 	// have since been deleted. A merge will fail with TARGET_MISSING.
 	MissingTargets []string `json:"missingTargets,omitempty"`
+	// StaleEntities names WHY this request is stale: the entities whose version
+	// moved since it was last reviewed, each with the version reviewed and the
+	// version now. Present only when Stale is true, and empty for requests
+	// opened before orbital recorded the base version vector.
+	//
+	// Server-computed on purpose. `stale` alone tells a reader that merge is
+	// blocked but not what to look at, and a client that had to work it out
+	// would need the base vector, the current vector and the scope-expansion
+	// rules — three things orbital already has and no integrator should
+	// reimplement.
+	StaleEntities []staleEntity `json:"staleEntities,omitempty"`
 	// Summary is what a QUEUE ROW needs: how wide this change is, and — when it
 	// is a single field — what that field becomes. Derived server-side so a
 	// list view never walks `changes` to build a label. Orbital's own queue
@@ -325,6 +344,15 @@ type changeRequestResponse struct {
 	UpdatedAt     *time.Time           `json:"updatedAt,omitempty"`
 	ExecutedAt    *time.Time           `json:"executedAt,omitempty"`
 	ExecutedBy    string               `json:"executedBy,omitempty"`
+}
+
+// staleEntity is one entity that moved out from under a request.
+type staleEntity struct {
+	OrbID string `json:"orbId" example:"alaska-dot:server-4FK8K44"`
+	// Reviewed is the version this request was last reviewed against; Current is
+	// the version now. Current is omitted when the entity no longer exists.
+	Reviewed int  `json:"reviewedVersion" example:"7"`
+	Current  *int `json:"currentVersion,omitempty" example:"9"`
 }
 
 // approvalResponse is one reviewer's decision.
@@ -465,6 +493,9 @@ func (h *ChangeRequest) CreateChangeRequest(c echo.Context) error {
 		return err
 	}
 
+	if problems := removedBeforeProblems(body.Changes); len(problems) > 0 {
+		return writeChangesetProblems(c, problems)
+	}
 	cs := &approval.Changeset{Namespace: body.Namespace, Changes: toChangeItems(body.Changes)}
 	actor := actorFromContext(c)
 
@@ -739,6 +770,9 @@ func (h *ChangeRequest) AmendChangeRequest(c echo.Context) error {
 		if body.Namespace == "" {
 			return writeError(c, http.StatusBadRequest, CodeBadUserInput,
 				"namespace is required when changing the changeset", "")
+		}
+		if problems := removedBeforeProblems(body.Changes); len(problems) > 0 {
+			return writeChangesetProblems(c, problems)
 		}
 		cs = &approval.Changeset{Namespace: body.Namespace, Changes: toChangeItems(body.Changes)}
 	}
@@ -1269,6 +1303,7 @@ func (h *ChangeRequest) render(ctx context.Context, cr *ent.ApprovalRequest, act
 		Required:         st.Required,
 		AvailableActions: availableActions(cr, st, actor, caller.Role, caller.NoAuthz),
 		MissingTargets:   st.Missing,
+		StaleEntities:    staleEntities(cr, st),
 		Effect:           resolveEffect(cr.BaseEffect, st.Changeset),
 		Changes:          fromChangeItems(st.Changeset.Changes),
 		CreatedAt:        cr.CreatedAt,
@@ -1327,6 +1362,21 @@ func renderPolicy(p *ent.ApprovalPolicy) approvalPolicyResponse {
 // crError maps the engine's sentinel errors to orbital's error envelope. One
 // place, so a new call site cannot invent a status or a code.
 func crError(c echo.Context, err error) error {
+	// Checked before the switch: it wraps errCRStale, so the switch would match
+	// it and drop the per-entity detail on the floor.
+	var sw *staleWithEntities
+	if errors.As(err, &sw) {
+		out := make([]changesetProblem, 0, len(sw.Problems))
+		for _, p := range sw.Problems {
+			out = append(out, changesetProblem{Index: p.Index, OrbID: p.OrbID, Field: p.Field, Msg: p.Msg, Hint: p.Hint})
+		}
+		return c.JSON(http.StatusConflict, validationErrorResponse{
+			Error:      err.Error(),
+			Code:       CodeMVCCConflict,
+			HTTPStatus: http.StatusConflict,
+			Problems:   out,
+		})
+	}
 	switch {
 	case errors.Is(err, errCRNotFound):
 		return writeError(c, http.StatusNotFound, CodeNotFound, "change request not found", "")
@@ -1416,16 +1466,35 @@ func crHumanID(cr *ent.ApprovalRequest) string {
 	return fmt.Sprintf("%s-%d", cr.Namespace, cr.Number)
 }
 
+// removedBeforeProblems reports items still carrying the removed `before` field.
+//
+// A breaking change announced loudly. Silence would leave a client believing it
+// has a field-level precondition it no longer has.
+func removedBeforeProblems(in []changeItemBody) []approval.ValidationError {
+	var out []approval.ValidationError
+	for i, b := range in {
+		if len(b.Before) == 0 {
+			continue
+		}
+		out = append(out, approval.ValidationError{
+			Index: i, OrbID: b.OrbID,
+			Msg:  "`before` was removed; it is no longer a precondition and would be ignored",
+			Hint: "Send `ifVersion` — the entity's version as you read it — instead. Field-level protection still applies at merge, from the ancestor orbital records itself.",
+		})
+	}
+	return out
+}
+
 func toChangeItems(in []changeItemBody) []approval.ChangeItem {
 	out := make([]approval.ChangeItem, 0, len(in))
 	for _, b := range in {
 		out = append(out, approval.ChangeItem{
-			OrbID:  b.OrbID,
-			Type:   b.Type,
-			Op:     approval.Op(b.Op),
-			Set:    b.Set,
-			Clear:  b.Clear,
-			Before: b.Before,
+			OrbID:     b.OrbID,
+			Type:      b.Type,
+			Op:        approval.Op(b.Op),
+			Set:       b.Set,
+			Clear:     b.Clear,
+			IfVersion: b.IfVersion,
 		})
 	}
 	return out
@@ -1435,12 +1504,12 @@ func fromChangeItems(in []approval.ChangeItem) []changeItemBody {
 	out := make([]changeItemBody, 0, len(in))
 	for _, ch := range in {
 		out = append(out, changeItemBody{
-			OrbID:  ch.OrbID,
-			Type:   ch.Type,
-			Op:     string(ch.Op),
-			Set:    ch.Set,
-			Clear:  ch.Clear,
-			Before: ch.Before,
+			OrbID:     ch.OrbID,
+			Type:      ch.Type,
+			Op:        string(ch.Op),
+			Set:       ch.Set,
+			Clear:     ch.Clear,
+			IfVersion: ch.IfVersion,
 		})
 	}
 	return out

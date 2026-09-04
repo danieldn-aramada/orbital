@@ -23,6 +23,45 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 ## [Unreleased]
 
 ### Added
+- **Change-request preconditions are now one concept, not two — `before` was removed.**
+  An item's optional precondition is `ifVersion`, the entity's `version` as you read it: the same
+  token `/graphql` mutations accept, meaning the same thing. The field-level `before` a client used
+  to send is gone. It existed because server-side version stamping was unreliable on one write path,
+  and that is fixed — every writer now stamps — so it had become a second concurrency vocabulary for
+  a question already answered. **Field-level protection is unchanged at merge**, where it comes from
+  the ancestor orbital records itself (`base_values`) rather than from anything a client asserts:
+  a merge still refuses per field, naming the field, and still drops already-satisfied fields from
+  the write. **What this costs:** a creation-time refusal is now entity-grained, so a third party
+  editing a *different* field of the same entity while you compose refuses your proposal where
+  `before` would have accepted it — reload and propose again. It also retires the whole-value
+  false-conflict on composite JSON fields that `before` could not express. Orbital's editor sends
+  `ifVersion` per item on the propose path; a create sends none, since there is no version to match.
+- **A stale change request now says which entity moved.**
+  `base_hash` anchors a request to the version vector of its scope, so it has always refused a
+  merge whose intent moved — but it is a fingerprint, so it could only ever say "something
+  changed", leaving an operator to go and find out what. Requests now also store the vector that
+  hash is computed from, and a stale merge returns `409 MVCC_CONFLICT` with a `problems[]` entry
+  per moved entity carrying its orbId and both versions. This applies to every request, including
+  ones whose author sent no precondition, and the error still wraps the same sentinel so the
+  status, code and existing clients are unchanged. The vector is re-captured wherever the hash is
+  — create, amend, the rebase on approval, the rebase after a partial merge — so re-reviewing a
+  stale request still clears it in one click. A merge also now carries the version it planned
+  against into each write, so an edit landing between planning and the write refuses that item
+  rather than overwriting it.
+- **A change-request item can carry `ifVersion` — the same concurrency token `/graphql` accepts.**
+  `POST /api/v1/change-requests` items take an optional `ifVersion`: the entity's `version` as you
+  read it. If the entity has moved since, the request is refused with `409 MVCC_CONFLICT` naming
+  the item and both versions, instead of being accepted and only failing at merge — where
+  `base_hash` refuses wholesale and can never say which entity moved. It is entity-level where
+  the existing `before` is field-level, and the two stay distinguishable: an entity-level problem
+  carries no `field`. Honoured on `op: delete`, which `before` skips by construction — a delete is
+  where a stale precondition costs most, since it destroys work with no diff to recover it from.
+  One per item, never per field. Omission stays legal and leaves the item guarded by the scope
+  anchor alone. Supplying it against an entity that does not exist is refused at validation rather
+  than ignored — a caller that asked for a check and silently did not get one is worse off than
+  one that never asked. Duplicate orbIds in a changeset were already refused for ordering reasons;
+  the message now also gives the second reason, which is that two preconditions on one entity
+  cannot both hold.
 - **Change Requests — maker-checker approval for config mutations (Spike 36, backend).**
   `POST /api/v1/change-requests` proposes a set of ConfigItem changes as target end-state;
   a peer other than the author approves it; `POST .../merge` applies it MVCC-guarded.
@@ -168,6 +207,56 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   `docs/planning/backlog.md` and technical debt to `docs/planning/debt.md`.
 
 ### Fixed
+- **Concurrent writes to one entity could be silently lost even when the caller asked for a
+  concurrency check.** `ifVersion` was compared in Go against a snapshot fetched by a separate
+  request, then the mutation was written with a filter on `orbId` alone — two DGraph transactions,
+  so a writer committing in between was overwritten with no trace. Reproduced in the test suite:
+  12 concurrent writers all reported success against the same starting version, and 11 writes
+  vanished while `version` advanced once. Orbital now injects `version: { eq: $ifVersion }` into the
+  mutation's own filter, so the comparison happens inside the write; the loser gets
+  `409 MVCC_CONFLICT` instead of a success it did not get. Requires `schema/VERSION` **v7**, which
+  adds `@search` to `ConfigItem.version` — **apply the schema before rolling out the code**; the
+  wrong order refuses mutations with a clear message rather than writing anything. A mutation whose
+  shape cannot carry the predicate is now refused rather than sent unguarded, which also means an
+  `ifVersion` sent with a create is rejected instead of quietly dropped. Change-request merge
+  inherits the guard. Repeated transaction aborts — more likely now that writers contend on the same
+  predicate — are retried, and a persistent one surfaces as `503 WRITE_CONTENTION`, deliberately
+  distinct from `MVCC_CONFLICT`: the request is still valid, the store was busy.
+  The same change closes a second hole: a supplied `ifVersion` that orbital could not evaluate —
+  a failed pre-read, or a mutation touching more than one type — used to be dropped and the write
+  reported success. It is now either enforced by the database or refused, so there is no path where
+  a caller asks for a concurrency check and silently does not get one.
+- **The cascade-delete endpoint bypassed approval policies entirely.**
+  `DELETE /api/v1/config-items/{type}/{id}` planned its cascade and wrote to DGraph directly, so it
+  never passed through the function where the approval check lives. Measured on the same entity,
+  same policy and same caller seconds apart: `updateDataCenter` was refused `403 APPROVAL_REQUIRED`
+  while the `DELETE` returned `200` and removed it. The delete now asks the same policy question,
+  with the same status, code and hint the GraphQL path returns — and it asks it about every type the
+  cascade would remove, read from the planned nodes rather than declared per branch, so a policy
+  protecting only an owned child refuses the parent delete that would take it. The same endpoint
+  also accepts `?ifVersion=`, so a delete confirmed from a dialog that has been sitting open is
+  refused `409` rather than landing on whatever the entity has since become; the delete modal sends
+  the version it displayed and keeps itself open on a conflict. Omitting it stays unconditional, and
+  a namespace with no policy is unaffected.
+- **A divergence Accept wrote intent without bumping `version`, so it was invisible to change-request staleness.**
+  `base_hash` is a hash of the scope's `orbId@version` vector — a write that does not move a
+  version does not move the hash. An open change request covering the accepted entity kept
+  reporting `stale: false`, an approval cast *before* the Accept kept counting, and the merge
+  proceeded against a state nobody had reviewed. The Accept was in the audit log throughout, so
+  nothing looked wrong; it was found only by asking why an approved request still looked fresh.
+  Two causes, both fixed. The **write pre-flight** — the before-fetch, the
+  `version`/`updatedAt`/`updatedBy` stamping and the opt-in `ifVersion` check — lived in the
+  `/graphql` handler, which internal dispatchers do not go through, so each was left to the
+  caller and both callers forgot a different one (the change-request merge had passed an
+  incomplete before-state, rendering raw variables where a field diff belongs). All three now
+  live in `writeToDGraph`, the single function every write already passes through for the
+  approval-policy check, so no caller opts in and none can forget. And Accept dispatched its
+  mutation with a `$filter` object, while the row to stamp is resolved from the `orbId`
+  variable — it now uses the canonical `update{Kind}($orbId, $set)` shape every other writer
+  uses. An Accept consequently bumps the version, stamps the acting identity on the node, and
+  carries a field-level diff in the audit log; Reject and Ignore still touch nothing.
+  A caller-supplied before-state is now a *fallback* merged under the fetch rather than a
+  replacement for it, which keeps the diff for fields outside a type's `BeforeFields` selection.
 - **A change request could overwrite an edit it never reviewed, and could merge as a no-op.**
   Staleness was entity-level: `base_hash` fingerprints a version vector, so it answered "did
   anything in scope move" but never "what was it", and a write that changed a value without

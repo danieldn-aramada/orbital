@@ -91,6 +91,29 @@ func (ApprovalRequest) Fields() []ent.Field {
 		// precisely the copy that drifts — see D13.
 		field.String("base_hash").NotEmpty(),
 
+		// base_versions is the version vector base_hash is a fingerprint OF:
+		// orbId -> version, over the same scope, captured at the same instant and
+		// recomputed on exactly the same occasions (amend, and the rebase after a
+		// partial merge).
+		//
+		// It exists because a fingerprint cannot name the offender. base_hash
+		// answers "did anything in scope move" and never "which one", so a stale
+		// request refuses wholesale and an operator has to go and find out what
+		// changed. With the vector, merge diffs it against the current one and
+		// names the entities — for EVERY request, including ones whose author
+		// never sent a precondition.
+		//
+		// Deliberately NOT the client's `ifVersion`. That is the author's read at
+		// proposal time, and once anything moves that entity the token is
+		// permanently wrong: re-approval — which is how staleness is meant to be
+		// cleared, in one click — could never satisfy it, and only an amend
+		// could. base_versions moves with the review instead, because it is
+		// re-captured wherever base_hash is.
+		//
+		// Optional: rows written before this field existed decode to nil, and the
+		// refusal falls back to the unnamed one they have always produced.
+		field.JSON("base_versions", map[string]int{}).Optional(),
+
 		// base_present is the set of orbIds that EXISTED when base_hash was
 		// captured. Without it, an absent target at merge time is ambiguous: it
 		// is either a normal create (absent at open, absent at merge) or a
