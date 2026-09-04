@@ -23,8 +23,34 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 ## [Unreleased]
 
 ### Added
+- **Staleness is now two signals, and only the author can clear the one that matters.**
+  `stale` means at least one change object's `version` no longer matches its node — a fact about
+  what the *author* proposed. `subtreeChanged` means the reviewed scope moved without any change
+  object going out of date, typically an edit to an owned child — a fact about what the *reviewer*
+  looked at. Both block merge. Previously these were one flag, which let a reviewer clear, in one
+  click, a proposal written against a value that had since moved: approving re-anchored the request,
+  `stale` went false, and the merge wrote an outdated value over someone else's edit. The two facts
+  have different remedies, so a single flag could only ever offer the wrong one to somebody.
+  **Re-approving no longer clears `stale`** — the author rebases, by `PATCH`ing the changeset with
+  the current `version` or dropping the object. A request can now be `approved` *and* `stale`, in
+  which case `availableActions` drops `merge` and offers `edit` to the author. A rebase dismisses
+  approvals **even when the graph has not moved**, because the reviewer approved a different
+  proposal — the same rule as GitHub's "dismiss stale approvals on push", with the version vector
+  standing in for the commit sha. An item sent without a `version` can never be item-stale and is
+  guarded by the scope anchor alone, exactly as before.
+- **The concurrency precondition is `version`, not `ifVersion`** *(breaking; renamed before any
+  external client adopted it).* A precondition named after the node's own field is what Kubernetes
+  (`resourceVersion`), Google Cloud (`etag`), Firestore, DynamoDB, Hibernate and plain SQL all do;
+  `if`-prefixing is an HTTP **header** idiom (`If-Match`) that reads wrong on a body field. It could
+  not collide with the `version` orbital stamps, because a changeset rejects `version` inside `set`
+  outright and on `/graphql` the two sit at different nesting levels — the same separation
+  Kubernetes relies on between `metadata` and `spec`. Applies everywhere the token appears:
+  `/graphql` variables, change-request items, and `DELETE /api/v1/config-items/{type}/{id}?version=`.
+  **A client still sending `ifVersion` is refused `400` naming the new field** rather than having its
+  guarantee silently dropped. A mutation that declares its own `$version` is also refused — orbital
+  adds the predicate itself, and a hand-written one gets no conflict detection.
 - **Change-request preconditions are now one concept, not two — `before` was removed.**
-  An item's optional precondition is `ifVersion`, the entity's `version` as you read it: the same
+  An item's optional precondition is `version`, the entity's `version` as you read it: the same
   token `/graphql` mutations accept, meaning the same thing. The field-level `before` a client used
   to send is gone. It existed because server-side version stamping was unreliable on one write path,
   and that is fixed — every writer now stamps — so it had become a second concurrency vocabulary for
@@ -35,7 +61,7 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   editing a *different* field of the same entity while you compose refuses your proposal where
   `before` would have accepted it — reload and propose again. It also retires the whole-value
   false-conflict on composite JSON fields that `before` could not express. Orbital's editor sends
-  `ifVersion` per item on the propose path; a create sends none, since there is no version to match.
+  `version` per item on the propose path; a create sends none, since there is no version to match.
 - **A stale change request now says which entity moved.**
   `base_hash` anchors a request to the version vector of its scope, so it has always refused a
   merge whose intent moved — but it is a fingerprint, so it could only ever say "something
@@ -48,8 +74,8 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   stale request still clears it in one click. A merge also now carries the version it planned
   against into each write, so an edit landing between planning and the write refuses that item
   rather than overwriting it.
-- **A change-request item can carry `ifVersion` — the same concurrency token `/graphql` accepts.**
-  `POST /api/v1/change-requests` items take an optional `ifVersion`: the entity's `version` as you
+- **A change-request item can carry `version` — the same concurrency token `/graphql` accepts.**
+  `POST /api/v1/change-requests` items take an optional `version`: the entity's `version` as you
   read it. If the entity has moved since, the request is refused with `409 MVCC_CONFLICT` naming
   the item and both versions, instead of being accepted and only failing at merge — where
   `base_hash` refuses wholesale and can never say which entity moved. It is entity-level where
@@ -134,9 +160,9 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   Until now the collision was invisible until a merge, at which point the other request silently
   went stale and its approvals stopped counting.
 - **Config-item edits are guarded against concurrent writes again.** The editor sends
-  `ifVersion`, so saving a form someone else has changed underneath you is refused with
+  `version`, so saving a form someone else has changed underneath you is refused with
   `409` and a reload prompt instead of silently overwriting their edit. This had been lost
-  since 2026-06-20, when the per-page edit modals — each of which passed `ifVersion` — were
+  since 2026-06-20, when the per-page edit modals — each of which passed `version` — were
   replaced by the shared editor module, which did not carry it forward. Nothing failed in
   between: the check is opt-in server-side, so a client that omits it looks exactly like one
   that declined it. Covers a data center, cluster, network device, server and its iDRAC and
@@ -208,21 +234,21 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ### Fixed
 - **Concurrent writes to one entity could be silently lost even when the caller asked for a
-  concurrency check.** `ifVersion` was compared in Go against a snapshot fetched by a separate
+  concurrency check.** `version` was compared in Go against a snapshot fetched by a separate
   request, then the mutation was written with a filter on `orbId` alone — two DGraph transactions,
   so a writer committing in between was overwritten with no trace. Reproduced in the test suite:
   12 concurrent writers all reported success against the same starting version, and 11 writes
-  vanished while `version` advanced once. Orbital now injects `version: { eq: $ifVersion }` into the
+  vanished while `version` advanced once. Orbital now injects `version: { eq: $version }` into the
   mutation's own filter, so the comparison happens inside the write; the loser gets
   `409 MVCC_CONFLICT` instead of a success it did not get. Requires `schema/VERSION` **v7**, which
   adds `@search` to `ConfigItem.version` — **apply the schema before rolling out the code**; the
   wrong order refuses mutations with a clear message rather than writing anything. A mutation whose
   shape cannot carry the predicate is now refused rather than sent unguarded, which also means an
-  `ifVersion` sent with a create is rejected instead of quietly dropped. Change-request merge
+  `version` sent with a create is rejected instead of quietly dropped. Change-request merge
   inherits the guard. Repeated transaction aborts — more likely now that writers contend on the same
   predicate — are retried, and a persistent one surfaces as `503 WRITE_CONTENTION`, deliberately
   distinct from `MVCC_CONFLICT`: the request is still valid, the store was busy.
-  The same change closes a second hole: a supplied `ifVersion` that orbital could not evaluate —
+  The same change closes a second hole: a supplied `version` that orbital could not evaluate —
   a failed pre-read, or a mutation touching more than one type — used to be dropped and the write
   reported success. It is now either enforced by the database or refused, so there is no path where
   a caller asks for a concurrency check and silently does not get one.
@@ -234,7 +260,7 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   with the same status, code and hint the GraphQL path returns — and it asks it about every type the
   cascade would remove, read from the planned nodes rather than declared per branch, so a policy
   protecting only an owned child refuses the parent delete that would take it. The same endpoint
-  also accepts `?ifVersion=`, so a delete confirmed from a dialog that has been sitting open is
+  also accepts `?version=`, so a delete confirmed from a dialog that has been sitting open is
   refused `409` rather than landing on whatever the entity has since become; the delete modal sends
   the version it displayed and keeps itself open on a conflict. Omitting it stays unconditional, and
   a namespace with no policy is unaffected.
@@ -245,7 +271,7 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   proceeded against a state nobody had reviewed. The Accept was in the audit log throughout, so
   nothing looked wrong; it was found only by asking why an approved request still looked fresh.
   Two causes, both fixed. The **write pre-flight** — the before-fetch, the
-  `version`/`updatedAt`/`updatedBy` stamping and the opt-in `ifVersion` check — lived in the
+  `version`/`updatedAt`/`updatedBy` stamping and the opt-in `version` check — lived in the
   `/graphql` handler, which internal dispatchers do not go through, so each was left to the
   caller and both callers forgot a different one (the change-request merge had passed an
   incomplete before-state, rendering raw variables where a field diff belongs). All three now

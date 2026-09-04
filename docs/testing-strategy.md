@@ -232,7 +232,7 @@ e2e-tests (full orbital stack + Playwright)
 | Session management, CSRF | `auth/session_test.go` (10 tests) | Full roundtrip: set/get/clear session, CSRF create/validate/idempotent, OIDC state set/get/clear |
 | Bearer token validation | `auth/bearer_test.go` (6 tests) | Local OIDC httptest server with RSA key pair; valid/expired/wrong-audience/UPN-fallback |
 | Login handler | `handler/login_test.go` (7 integration tests) | CSRF failure, wrong password, unknown email, SSO account, success + HX-Redirect, logout valid/invalid CSRF |
-| GraphQL proxy handler | `handler/graphql_handler_test.go` (9 tests) | isMutation, hasGQLErrors, extractOperations (pure), proxy passthrough, mutation proxy, ifVersion stripping, MVCC conflict/match, GQL error audit suppression |
+| GraphQL proxy handler | `handler/graphql_handler_test.go` (9 tests) | isMutation, hasGQLErrors, extractOperations (pure), proxy passthrough, mutation proxy, version stripping, MVCC conflict/match, GQL error audit suppression |
 | OIDC callback handler | `handler/oidc_test.go` (6 integration tests) | Local httptest OIDC provider with RSA key, token endpoint, JWKS; login redirect, state validation (missing/wrong), new user provisioning, existing user reuse, empty email rejection |
 | Audit event write-through | `handler/graphql_event_test.go` (2 integration tests) | Mutation writes audit event with correct fields (operations, resourceTypes, resourceIds); GQL errors suppress audit event |
 | Export JSON API | `handler/export_api_test.go` (8 integration tests) | List empty/populated, Status happy/400/404, Trigger 409 conflict, Download 400/404 |

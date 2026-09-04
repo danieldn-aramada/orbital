@@ -42,7 +42,7 @@ func TestCASRace_ConcurrentUpdatesWithTheSameIfVersionYieldExactlyOneWinner(t *t
 				"query":         `mutation UpdateServer($orbId: String!, $set: ServerPatch!) { updateServer(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids } }`,
 				"operationName": "UpdateServer",
 				"variables": map[string]any{
-					"orbId": crServerA, "ifVersion": start,
+					"orbId": crServerA, "version": start,
 					"set": map[string]any{"hostname": "racer"},
 				},
 			})
@@ -87,7 +87,7 @@ func TestCASRace_ConcurrentUpdatesWithTheSameIfVersionYieldExactlyOneWinner(t *t
 	}
 }
 
-// The negative that keeps the guard usable: without `ifVersion`, concurrent
+// The negative that keeps the guard usable: without `version`, concurrent
 // writers are last-writer-wins as they always were. A guard that fired on
 // unguarded traffic would make every bulk client start seeing 409s.
 func TestCASRace_UnguardedConcurrentUpdatesAllSucceed(t *testing.T) {
@@ -119,7 +119,7 @@ func TestCASRace_UnguardedConcurrentUpdatesAllSucceed(t *testing.T) {
 
 	for i, code := range codes {
 		if code == http.StatusConflict {
-			t.Errorf("writer %d got 409 with no ifVersion supplied — the guard fired on unguarded traffic", i)
+			t.Errorf("writer %d got 409 with no version supplied — the guard fired on unguarded traffic", i)
 		}
 	}
 }
@@ -138,7 +138,7 @@ func TestCASRace_VersionIsFilterableOnTheDeployedSchema(t *testing.T) {
 		"query":         `mutation UpdateServer($orbId: String!, $set: ServerPatch!) { updateServer(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids } }`,
 		"operationName": "UpdateServer",
 		"variables": map[string]any{
-			"orbId": crServerA, "ifVersion": readVersion(t, crServerA),
+			"orbId": crServerA, "version": readVersion(t, crServerA),
 			"set": map[string]any{"hostname": "filterable"},
 		},
 	})

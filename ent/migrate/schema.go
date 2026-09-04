@@ -20,6 +20,7 @@ var (
 		{Name: "decision", Type: field.TypeEnum, Enums: []string{"approved", "rejected"}},
 		{Name: "comment", Type: field.TypeString, Nullable: true, Size: 2147483647, Default: ""},
 		{Name: "approved_at_hash", Type: field.TypeString},
+		{Name: "approved_at_revision", Type: field.TypeInt, Default: 0},
 		{Name: "approval_request_id", Type: field.TypeInt64},
 	}
 	// ApprovalsTable holds the schema information for the "approvals" table.
@@ -30,7 +31,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "approvals_approval_requests_approvals",
-				Columns:    []*schema.Column{ApprovalsColumns[9]},
+				Columns:    []*schema.Column{ApprovalsColumns[10]},
 				RefColumns: []*schema.Column{ApprovalRequestsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -39,7 +40,7 @@ var (
 			{
 				Name:    "approval_approval_request_id_approver",
 				Unique:  true,
-				Columns: []*schema.Column{ApprovalsColumns[9], ApprovalsColumns[5]},
+				Columns: []*schema.Column{ApprovalsColumns[10], ApprovalsColumns[5]},
 			},
 		},
 	}
@@ -95,6 +96,7 @@ var (
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"open", "rejected", "merged", "closed"}, Default: "open"},
 		{Name: "author", Type: field.TypeString},
 		{Name: "base_hash", Type: field.TypeString},
+		{Name: "changeset_revision", Type: field.TypeInt, Default: 1},
 		{Name: "base_versions", Type: field.TypeJSON, Nullable: true},
 		{Name: "base_present", Type: field.TypeJSON, Nullable: true},
 		{Name: "base_effect", Type: field.TypeJSON, Nullable: true},
@@ -132,7 +134,7 @@ var (
 			{
 				Name:    "approvalrequest_payload",
 				Unique:  false,
-				Columns: []*schema.Column{ApprovalRequestsColumns[17]},
+				Columns: []*schema.Column{ApprovalRequestsColumns[18]},
 				Annotation: &entsql.IndexAnnotation{
 					Types: map[string]string{
 						"postgres": "GIN",

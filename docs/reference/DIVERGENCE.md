@@ -168,7 +168,7 @@ See also: [AUDIT.md "Resolved divergence freeze-vs-supersede behavior on re-inge
 
 ## Version handling — Accept, Dismiss, staleness
 
-Orbital's general MVCC (auto-increment `version: Int!` on every ConfigItem, opt-in `ifVersion` for user-driven UI edits) applies to the DGraph mutation orbital dispatches inside Accept. But **the divergence path itself carries no version anchor** — no `intended_at_version` column on `divergence_entries` or `divergence_resolutions`, no version-based staleness gate on Accept or Dismiss. Per ADR 012, staleness on the ingest side is handled by supersede, and staleness on the bundler-filter side is handled by per-field value comparison. Both are described below.
+Orbital's general MVCC (auto-increment `version: Int!` on every ConfigItem, opt-in `version` for user-driven UI edits) applies to the DGraph mutation orbital dispatches inside Accept. But **the divergence path itself carries no version anchor** — no `intended_at_version` column on `divergence_entries` or `divergence_resolutions`, no version-based staleness gate on Accept or Dismiss. Per ADR 012, staleness on the ingest side is handled by supersede, and staleness on the bundler-filter side is handled by per-field value comparison. Both are described below.
 
 ### Auto-increment (general MVCC, still true)
 
@@ -176,9 +176,9 @@ Orbital's single write path (`internal/handler/graphql.go writeToDGraph`) inject
 
 **"Including the one Accept fires" was aspirational until 2026-09-03.** Stamping lived in `Handle`, and Accept does not go through `Handle` — it dispatches internally — so an Accept wrote intent with no version bump for as long as the feature existed. Because `base_hash` is a hash of the scope's `orbId@version` vector, a write that does not move `version` does not move the hash: an open change request covering the accepted entity kept reading `stale: false`, and approvals cast before the Accept kept counting. Fixed by moving the pre-flight into `writeToDGraph` and by dispatching Accept in the canonical `update{Kind}($orbId, $set)` shape — the `$filter`-object form it used before resolved to no row, so no stamp was possible.
 
-### `ifVersion` (general MVCC, opt-in, still true)
+### `version` (general MVCC, opt-in, still true)
 
-When a UI Edit modal wants strict optimistic-concurrency semantics, it includes `ifVersion: <currentVersion>` in the mutation variables. The proxy compares to the actual current version and returns 409 on mismatch. A **malformed** `ifVersion` (non-numeric) is rejected as `400 BAD_USER_INPUT`, not silently coerced to 0 — previously a bad token parsed to 0 and could pass the check (audit A.3; `toFloat64` now returns `(float64, ok)`). Raw GraphQL / Ratel users may omit and get last-writer-wins. This is deliberate: `ifVersion`-required-everywhere is K8s-strict (fine for K8s, friction-heavy for our usage pattern); opt-in matches HTTP ETags / DynamoDB conditional-update conventions and is enough for the actual race classes orbital faces.
+When a UI Edit modal wants strict optimistic-concurrency semantics, it includes `version: <currentVersion>` in the mutation variables. The proxy compares to the actual current version and returns 409 on mismatch. A **malformed** `version` (non-numeric) is rejected as `400 BAD_USER_INPUT`, not silently coerced to 0 — previously a bad token parsed to 0 and could pass the check (audit A.3; `toFloat64` now returns `(float64, ok)`). Raw GraphQL / Ratel users may omit and get last-writer-wins. This is deliberate: `version`-required-everywhere is K8s-strict (fine for K8s, friction-heavy for our usage pattern); opt-in matches HTTP ETags / DynamoDB conditional-update conventions and is enough for the actual race classes orbital faces.
 
 ### Accept is last-writer-wins (per ADR 012)
 
@@ -198,7 +198,7 @@ Per-field value comparison replaces an earlier version-based staleness anchor. S
 
 ### Implementation pins
 
-- `internal/handler/graphql.go Handle` — auto-increment + opt-in `ifVersion` (still active).
+- `internal/handler/graphql.go Handle` — auto-increment + opt-in `version` (still active).
 - `internal/handler/divergence.go dispatchAcceptMutation` — last-writer-wins Accept dispatch.
 - `internal/handler/divergence.go Dismiss` — no-gate delete.
 - `internal/handler/divergence.go List` — per-field value staleness check for `?action=accept&action=reject`.

@@ -312,30 +312,30 @@ func TestValidate_Rejects(t *testing.T) {
 			wantMatch: "duplicate orbId",
 		},
 		{
-			// The refusal predates ifVersion and was justified by ordering alone.
+			// The refusal predates version and was justified by ordering alone.
 			// It now has a second, independent reason, and the message has to
 			// carry it: an author who reads only "ordering" may believe two
 			// carefully ordered items are fine, when their preconditions cannot
 			// both hold no matter what order they run in.
-			name: "the duplicate refusal gives the ifVersion reason as well as the ordering one",
+			name: "the duplicate refusal gives the version reason as well as the ordering one",
 			cs: Changeset{Namespace: "ns", Changes: []ChangeItem{
 				{OrbID: "ns:server-A", Op: OpUpdate, Set: map[string]any{"hostname": "a"}},
 				{OrbID: "ns:server-A", Op: OpUpdate, Set: map[string]any{"hostname": "b"}},
 			}},
-			wantMatch: "two ifVersion preconditions on it cannot both hold",
+			wantMatch: "two version preconditions on it cannot both hold",
 		},
 		{
-			name: "ifVersion on an upsert against an entity that does not exist",
+			name: "version on an upsert against an entity that does not exist",
 			cs: Changeset{Namespace: "ns", Changes: []ChangeItem{
 				{OrbID: "ns:server-NEW", Type: "Server", Op: OpUpsert,
-					Set: map[string]any{"hostname": "new"}, IfVersion: intPtr(3)},
+					Set: map[string]any{"hostname": "new"}, Version: intPtr(3)},
 			}},
 			wantMatch: "no version to match",
 		},
 		{
-			name: "ifVersion on a delete of an entity that does not exist",
+			name: "version on a delete of an entity that does not exist",
 			cs: Changeset{Namespace: "ns", Changes: []ChangeItem{
-				{OrbID: "ns:server-GONE", Op: OpDelete, IfVersion: intPtr(3)},
+				{OrbID: "ns:server-GONE", Op: OpDelete, Version: intPtr(3)},
 			}},
 			wantMatch: "no version to match",
 		},
@@ -452,7 +452,7 @@ func TestValidate_ReportsEveryProblem(t *testing.T) {
 
 func intPtr(v int) *int { return &v }
 
-// The negative for the two cases above: a create WITHOUT ifVersion is ordinary
+// The negative for the two cases above: a create WITHOUT version is ordinary
 // and must stay that way. A precondition check that fired on absence would make
 // every create against a fresh orbId unproposable.
 func TestValidate_CreateWithoutIfVersionIsFine(t *testing.T) {
@@ -464,19 +464,19 @@ func TestValidate_CreateWithoutIfVersionIsFine(t *testing.T) {
 	}}
 	res := validate(t, cs)
 	if len(res.Errors) != 0 {
-		t.Errorf("a create with no ifVersion was refused: %v", res.Errors)
+		t.Errorf("a create with no version was refused: %v", res.Errors)
 	}
 }
 
-// And an ifVersion on an entity that DOES exist is not a validation problem —
+// And an version on an entity that DOES exist is not a validation problem —
 // whether it matches is a concurrency question, answered at creation with a 409,
 // not a 400 here.
 func TestValidate_IfVersionOnExistingEntityIsNotAValidationError(t *testing.T) {
 	cs := Changeset{Namespace: "ns", Changes: []ChangeItem{
-		{OrbID: "ns:server-A", Op: OpUpdate, Set: map[string]any{"hostname": "a"}, IfVersion: intPtr(99)},
+		{OrbID: "ns:server-A", Op: OpUpdate, Set: map[string]any{"hostname": "a"}, Version: intPtr(99)},
 	}}
 	res := validate(t, cs)
 	if len(res.Errors) != 0 {
-		t.Errorf("ifVersion on an existing entity was treated as invalid: %v", res.Errors)
+		t.Errorf("version on an existing entity was treated as invalid: %v", res.Errors)
 	}
 }

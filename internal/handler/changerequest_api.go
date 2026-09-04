@@ -220,19 +220,25 @@ type changeItemBody struct {
 	Set map[string]any `json:"set,omitempty"`
 	// Clear is the fields to unset.
 	Clear []string `json:"clear,omitempty" example:"oobMAC"`
+	// IfVersion is the OLD spelling of Version, kept only to detect callers that
+	// have not caught up. Renamed 2026-09-04: a precondition naming the node's
+	// own field is what Kubernetes, GCP, Firestore, DynamoDB and plain SQL all
+	// do; `ifVersion` was an HTTP-header idiom borrowed for a body field. Silence
+	// would drop the guard without saying so, so it is refused by name.
+	IfVersion *int `json:"ifVersion,omitempty" swaggerignore:"true"`
 	// Before is REMOVED as a feature and kept only to detect callers still
 	// sending it. Echo's binder ignores unknown fields, so without this a client
 	// that still supplies `before` loses its per-field guarantee silently — the
 	// failure mode the concurrency work exists to eliminate. Rejected with a 400
-	// naming `ifVersion` instead. Hidden from the published spec.
+	// naming `version` instead. Hidden from the published spec.
 	Before json.RawMessage `json:"before,omitempty" swaggerignore:"true"`
-	// IfVersion is the entity's `version` as you read it — the same concurrency
+	// Version is the entity's `version` as you read it — the same concurrency
 	// token `/graphql` mutations accept, meaning the same thing here. Orbital
 	// refuses the request with 409 MVCC_CONFLICT if the entity has moved since,
 	// naming the item and both versions. One per item, never per field: an
 	// entity has one version. Omit for an unconditional item. Supplying it for
 	// an entity that does not exist is refused — there is no version to match.
-	IfVersion *int `json:"ifVersion,omitempty" example:"7"`
+	Version *int `json:"version,omitempty" example:"7"`
 }
 
 // amendChangeRequestBody patches an open change request. Omitted fields are
@@ -321,6 +327,11 @@ type changeRequestResponse struct {
 	// MissingTargets are entities that existed when this request was opened and
 	// have since been deleted. A merge will fail with TARGET_MISSING.
 	MissingTargets []string `json:"missingTargets,omitempty"`
+	// SubtreeChanged means the reviewed scope moved without any change object
+	// going out of date — an edit to an owned child. Cleared by approving again;
+	// blocks merge on its own. Distinct from Stale, which only the author can
+	// clear by rebasing.
+	SubtreeChanged bool `json:"subtreeChanged" example:"false"`
 	// StaleEntities names WHY this request is stale: the entities whose version
 	// moved since it was last reviewed, each with the version reviewed and the
 	// version now. Present only when Stale is true, and empty for requests
@@ -336,8 +347,12 @@ type changeRequestResponse struct {
 	// is a single field — what that field becomes. Derived server-side so a
 	// list view never walks `changes` to build a label. Orbital's own queue
 	// renders straight from it, and so can anyone else's.
-	Effect        changeEffect         `json:"effect"`
-	Changes       []changeItemBody     `json:"changes"`
+	Effect  changeEffect     `json:"effect"`
+	Changes []changeItemBody `json:"changes"`
+	// Record is the per-entity account of what this request does, one entry per
+	// change object, with each item's applied status folded in. Built from the
+	// payload so it stays correct after a merge, when the live diff is empty.
+	Record        []changeRecordEntry  `json:"record"`
 	Reviews       []approvalResponse   `json:"reviews,omitempty"`
 	MergeAttempts []mergeAttemptResult `json:"mergeAttempts,omitempty"`
 	CreatedAt     time.Time            `json:"createdAt"`
@@ -365,6 +380,50 @@ type approvalResponse struct {
 	// the intent and no longer counts — surfaced rather than hidden so the UI
 	// can say "approved an earlier version" instead of the approval vanishing.
 	Current bool `json:"current" example:"true"`
+}
+
+// changeRecordEntry is one change object rendered as a ROW: what it targets,
+// what it does to each field, and whether it landed.
+//
+// It exists because `effect` cannot answer this. `effect` is a SUMMARY built for
+// a queue row — counts, plus the single entity and field when there happens to
+// be exactly one — so a two-entity request collapses to "2 entities / 2 fields"
+// and the per-entity detail is simply not in the shape. That is fine for a list
+// and useless for a detail view.
+//
+// Derived from the stored payload rather than from a live diff, which is what
+// makes it work on a MERGED request: once the changeset is applied the diff
+// against current intent is empty, and the record of what was done would vanish
+// exactly when it becomes the only account of it. Deriving from the payload also
+// makes this correct for every request already in the database, with no backfill.
+//
+// Server-side (not a client join of `changes` against `mergeAttempts`) per
+// CLAUDE.md's API-first rule: orbital's UI renders it, and so can anyone else's.
+type changeRecordEntry struct {
+	OrbID string `json:"orbId" example:"colo:CWJHDX3-idrac"`
+	Type  string `json:"type,omitempty" example:"IdracSettings"`
+	Op    string `json:"op" example:"update"`
+	// Fields is empty for an op with no field detail — a delete, or a create
+	// whose values were not recorded. The op still says what happened.
+	Fields []changeRecordField `json:"fields,omitempty"`
+	// Applied is whether this item landed. Nil when no merge has been attempted,
+	// which is different from false: a request nobody has merged has not failed.
+	Applied *bool `json:"applied,omitempty" example:"true"`
+}
+
+// changeRecordField is one field's intended end state.
+type changeRecordField struct {
+	Field string `json:"field" example:"sshEnabled"`
+	// Value is the intended value, absent when the field is being cleared.
+	Value any `json:"value,omitempty"`
+	// Before is the value at the time this was last reviewed, read from the
+	// recorded ancestor. Absent for a create, and for requests opened before
+	// orbital recorded one — the row then reads "\u2192 after", which is less
+	// informative but still true.
+	Before any `json:"before,omitempty"`
+	// Cleared distinguishes "unset this" from "set this to null" — the two are
+	// different mutations and a reader cannot tell them apart from a null Value.
+	Cleared bool `json:"cleared,omitempty" example:"false"`
 }
 
 // mergeAttemptResult is what one merge actually did, item by item.
@@ -419,6 +478,38 @@ type changeRequestDiffResponse struct {
 	//
 	// `before` and `after` are equal on every entry here, by definition.
 	Satisfied []*graphdiff.Change `json:"satisfied,omitempty"`
+	// Fields is the review table: one row per field the changeset writes, each
+	// resolved to what a merge would DO with it.
+	//
+	// It supersedes walking `changes` and `satisfied` separately. Those two
+	// answer "what would change" and "what would not", but neither can express
+	// the third outcome — a field someone else moved to a different value, which
+	// refuses the merge. Rendered from `changes` alone, a conflict is
+	// indistinguishable from an ordinary change: both are two differing values.
+	//
+	// Computed by the SAME classifier the merge uses, so the preview and the
+	// refusal cannot disagree.
+	Fields []fieldOutcomeBody `json:"fields"`
+}
+
+// fieldOutcomeBody is one row of the review table.
+type fieldOutcomeBody struct {
+	OrbID string `json:"orbId" example:"colo:server-maintenance-CWJHDX3"`
+	Type  string `json:"type" example:"ServerMaintenance"`
+	// Field is the bare field name, type prefix stripped — what a table shows.
+	Field string `json:"field" example:"enabled"`
+	// Outcome is `applies`, `satisfied` or `conflict`.
+	//
+	//   applies   — the merge writes Proposed over Current.
+	//   satisfied — Current already equals Proposed; the merge writes nothing.
+	//   conflict  — someone changed this field since the request was reviewed;
+	//               the merge REFUSES until it is re-reviewed or amended.
+	Outcome string `json:"outcome" example:"applies"`
+	// Reviewed is the value when the request was opened. Present only on a
+	// conflict — on the other two it equals Current and would be noise.
+	Reviewed any `json:"reviewed,omitempty" swaggertype:"string"`
+	Current  any `json:"current" swaggertype:"string"`
+	Proposed any `json:"proposed" swaggertype:"string"`
 }
 
 // approvalPolicyResponse is one protected class.
@@ -706,6 +797,7 @@ func (h *ChangeRequest) GetChangeRequestDiff(c echo.Context) error {
 		Summary:     res.Summary,
 		Changes:     res.Changes,
 		Satisfied:   satisfiedItems(st.Snapshot, st.Changeset, res),
+		Fields:      fieldOutcomeBodies(classifyChangeset(st.Snapshot, st.Changeset, cr.BaseValues)),
 	})
 }
 
@@ -1303,6 +1395,7 @@ func (h *ChangeRequest) render(ctx context.Context, cr *ent.ApprovalRequest, act
 		Required:         st.Required,
 		AvailableActions: availableActions(cr, st, actor, caller.Role, caller.NoAuthz),
 		MissingTargets:   st.Missing,
+		SubtreeChanged:   st.SubtreeChanged,
 		StaleEntities:    staleEntities(cr, st),
 		Effect:           resolveEffect(cr.BaseEffect, st.Changeset),
 		Changes:          fromChangeItems(st.Changeset.Changes),
@@ -1337,7 +1430,65 @@ func (h *ChangeRequest) render(ctx context.Context, cr *ent.ApprovalRequest, act
 	sort.Slice(out.MergeAttempts, func(i, j int) bool {
 		return out.MergeAttempts[i].AttemptedAt.Before(out.MergeAttempts[j].AttemptedAt)
 	})
+	out.Record = changeRecord(st.Changeset.Changes, out.MergeAttempts, cr.BaseValues)
 	return out, nil
+}
+
+// changeRecord turns the stored changeset into per-entity rows, folding in what
+// each merge attempt did.
+//
+// Applied in ANY attempt counts as applied: a retried merge re-attempts only the
+// items that failed, so a later attempt's silence about an item that already
+// landed must not read as a failure.
+func changeRecord(changes []approval.ChangeItem, attempts []mergeAttemptResult, ancestor map[string]map[string]any) []changeRecordEntry {
+	// nil means "never attempted", which is not the same as "did not apply".
+	var applied map[string]bool
+	for _, a := range attempts {
+		for _, r := range a.Results {
+			if applied == nil {
+				applied = map[string]bool{}
+			}
+			applied[r.OrbID] = applied[r.OrbID] || r.Applied
+		}
+	}
+
+	out := make([]changeRecordEntry, 0, len(changes))
+	for _, ch := range changes {
+		e := changeRecordEntry{OrbID: ch.OrbID, Type: ch.Type, Op: string(ch.Op)}
+
+		// Sorted: `set` is a map, so insertion order is not stable across reads
+		// and an unsorted render would reshuffle the rows on every refresh.
+		keys := make([]string, 0, len(ch.Set))
+		for k := range ch.Set {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		// The ancestor is keyed by DGraph predicate (`Server.hostname`), the
+		// changeset by bare field name, so the lookup goes through the same
+		// mapping that wrote it.
+		was := ancestor[ch.OrbID]
+		before := func(f string) any {
+			if was == nil {
+				return nil
+			}
+			return was[predicateFor(ch.Type, f)]
+		}
+		for _, k := range keys {
+			e.Fields = append(e.Fields, changeRecordField{Field: k, Value: ch.Set[k], Before: before(k)})
+		}
+		cleared := append([]string(nil), ch.Clear...)
+		sort.Strings(cleared)
+		for _, k := range cleared {
+			e.Fields = append(e.Fields, changeRecordField{Field: k, Cleared: true, Before: before(k)})
+		}
+
+		if applied != nil {
+			v := applied[ch.OrbID]
+			e.Applied = &v
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 func renderPolicy(p *ent.ApprovalPolicy) approvalPolicyResponse {
@@ -1473,14 +1624,46 @@ func crHumanID(cr *ent.ApprovalRequest) string {
 func removedBeforeProblems(in []changeItemBody) []approval.ValidationError {
 	var out []approval.ValidationError
 	for i, b := range in {
-		if len(b.Before) == 0 {
-			continue
+		if len(b.Before) > 0 {
+			out = append(out, approval.ValidationError{
+				Index: i, OrbID: b.OrbID,
+				Msg:  "`before` was removed; it is no longer a precondition and would be ignored",
+				Hint: "Send `version` — the entity's version as you read it — instead. Field-level protection still applies at merge, from the ancestor orbital records itself.",
+			})
 		}
-		out = append(out, approval.ValidationError{
-			Index: i, OrbID: b.OrbID,
-			Msg:  "`before` was removed; it is no longer a precondition and would be ignored",
-			Hint: "Send `ifVersion` — the entity's version as you read it — instead. Field-level protection still applies at merge, from the ancestor orbital records itself.",
-		})
+		if b.IfVersion != nil {
+			out = append(out, approval.ValidationError{
+				Index: i, OrbID: b.OrbID,
+				Msg:  "`ifVersion` was renamed to `version` and would be ignored",
+				Hint: "Rename the field to `version`; the value and its meaning are unchanged.",
+			})
+		}
+	}
+	return out
+}
+
+// fieldOutcomeBodies renders the classifier's output for the wire, stripping the
+// graphdiff type prefix from field names ("Server.hostname" → "hostname") and
+// omitting `reviewed` where it would only repeat `current`.
+func fieldOutcomeBodies(in []fieldOutcome) []fieldOutcomeBody {
+	out := make([]fieldOutcomeBody, 0, len(in))
+	for _, o := range in {
+		field := o.Field
+		row := fieldOutcomeBody{
+			OrbID: o.OrbID, Type: o.Type,
+			// Strip whatever type prefix graphdiff used, not just this entity's
+			// own: fields declared on the ConfigItem INTERFACE come back as
+			// "ConfigItem.name" on a DataCenter, so trimming o.Type+"." alone
+			// left the prefix on every inherited field.
+			Field:    field[strings.Index(field, ".")+1:],
+			Outcome:  o.Outcome,
+			Current:  o.Current,
+			Proposed: o.Proposed,
+		}
+		if o.Outcome == "conflict" {
+			row.Reviewed = o.Reviewed
+		}
+		out = append(out, row)
 	}
 	return out
 }
@@ -1489,12 +1672,12 @@ func toChangeItems(in []changeItemBody) []approval.ChangeItem {
 	out := make([]approval.ChangeItem, 0, len(in))
 	for _, b := range in {
 		out = append(out, approval.ChangeItem{
-			OrbID:     b.OrbID,
-			Type:      b.Type,
-			Op:        approval.Op(b.Op),
-			Set:       b.Set,
-			Clear:     b.Clear,
-			IfVersion: b.IfVersion,
+			OrbID:   b.OrbID,
+			Type:    b.Type,
+			Op:      approval.Op(b.Op),
+			Set:     b.Set,
+			Clear:   b.Clear,
+			Version: b.Version,
 		})
 	}
 	return out
@@ -1504,12 +1687,12 @@ func fromChangeItems(in []approval.ChangeItem) []changeItemBody {
 	out := make([]changeItemBody, 0, len(in))
 	for _, ch := range in {
 		out = append(out, changeItemBody{
-			OrbID:     ch.OrbID,
-			Type:      ch.Type,
-			Op:        string(ch.Op),
-			Set:       ch.Set,
-			Clear:     ch.Clear,
-			IfVersion: ch.IfVersion,
+			OrbID:   ch.OrbID,
+			Type:    ch.Type,
+			Op:      string(ch.Op),
+			Set:     ch.Set,
+			Clear:   ch.Clear,
+			Version: ch.Version,
 		})
 	}
 	return out

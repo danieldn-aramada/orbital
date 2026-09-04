@@ -17,7 +17,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// `ifVersion` on a change-request item is the same concurrency token /graphql
+// `version` on a change-request item is the same concurrency token /graphql
 // mutations accept, meaning the same thing: the version I read.
 //
 // Entity-level, where `before` is field-level. base_hash already anchors the
@@ -27,22 +27,22 @@ import (
 // Every one of them fails OPEN when it breaks: the request is created, the
 // caller gets a 201, and the proposal looks exactly like a guarded one.
 
-func ifVersionPtr(v int) *int { return &v }
+func versionPtr(v int) *int { return &v }
 
 // ── 5. a matching precondition is accepted ──────────────────────────────────
 
-func TestCRIfVersion_MatchingIsAccepted(t *testing.T) {
+func TestCRVersion_MatchingIsAccepted(t *testing.T) {
 	f := newCRFixture(t)
 
 	cur := readVersion(t, crServerA)
 	cr, problems, err := f.crh.Create(context.Background(), author, "matching", "",
 		&approval.Changeset{Namespace: crNS, Changes: []approval.ChangeItem{{
 			OrbID: crServerA, Op: approval.OpUpdate,
-			Set:       map[string]any{"hostname": "guarded"},
-			IfVersion: ifVersionPtr(cur),
+			Set:     map[string]any{"hostname": "guarded"},
+			Version: versionPtr(cur),
 		}}})
 	if err != nil {
-		t.Fatalf("create with a matching ifVersion was refused: %v", err)
+		t.Fatalf("create with a matching version was refused: %v", err)
 	}
 	if len(problems) > 0 {
 		t.Fatalf("validation problems: %v", problems)
@@ -54,7 +54,7 @@ func TestCRIfVersion_MatchingIsAccepted(t *testing.T) {
 
 // ── 6. a stale precondition is refused, naming the item and both versions ───
 
-func TestCRIfVersion_StaleIsRefusedNamingBothVersions(t *testing.T) {
+func TestCRVersion_StaleIsRefusedNamingBothVersions(t *testing.T) {
 	f := newCRFixture(t)
 
 	cur := readVersion(t, crServerA)
@@ -67,8 +67,8 @@ func TestCRIfVersion_StaleIsRefusedNamingBothVersions(t *testing.T) {
 	_, _, err := f.crh.Create(context.Background(), author, "stale", "",
 		&approval.Changeset{Namespace: crNS, Changes: []approval.ChangeItem{{
 			OrbID: crServerA, Op: approval.OpUpdate,
-			Set:       map[string]any{"hostname": "based-on-stale-read"},
-			IfVersion: ifVersionPtr(cur),
+			Set:     map[string]any{"hostname": "based-on-stale-read"},
+			Version: versionPtr(cur),
 		}}})
 
 	var pf *preconditionFailed
@@ -98,9 +98,9 @@ func TestCRIfVersion_StaleIsRefusedNamingBothVersions(t *testing.T) {
 
 // ── 7. omission is not an error ─────────────────────────────────────────────
 
-// The opt-in promise. `ifVersion` is a guard a caller may ask for; a caller that
+// The opt-in promise. `version` is a guard a caller may ask for; a caller that
 // does not ask must be no worse off than before the feature existed.
-func TestCRIfVersion_OmittedIsAcceptedAndStillScopeGuarded(t *testing.T) {
+func TestCRVersion_OmittedIsAcceptedAndStillScopeGuarded(t *testing.T) {
 	ctx := context.Background()
 	f := newCRFixture(t)
 
@@ -110,14 +110,14 @@ func TestCRIfVersion_OmittedIsAcceptedAndStillScopeGuarded(t *testing.T) {
 			Set: map[string]any{"hostname": "unconditional"},
 		}}})
 	if err != nil || len(problems) > 0 {
-		t.Fatalf("an item with no ifVersion was refused: err=%v problems=%v", err, problems)
+		t.Fatalf("an item with no version was refused: err=%v problems=%v", err, problems)
 	}
 
-	// The scope anchor still applies — omitting ifVersion drops the item-level
+	// The scope anchor still applies — omitting version drops the item-level
 	// guard, not every guard.
 	setHostname(t, crServerA, "third-party")
-	if st := f.state(t, cr.ID); !st.Stale {
-		t.Error("an unconditional request did not go stale when its target moved — the scope anchor is not covering it")
+	if st := f.state(t, cr.ID); !st.SubtreeChanged {
+		t.Error("an unconditional request was not flagged when its target moved — the scope anchor is not covering it")
 	}
 }
 
@@ -125,8 +125,8 @@ func TestCRIfVersion_OmittedIsAcceptedAndStillScopeGuarded(t *testing.T) {
 
 // A delete is where a stale precondition costs most: it destroys work with no
 // diff to recover it from. `before` deliberately skips deletes (there are no
-// fields to assert); `ifVersion` deliberately does not.
-func TestCRIfVersion_HonouredOnDelete(t *testing.T) {
+// fields to assert); `version` deliberately does not.
+func TestCRVersion_HonouredOnDelete(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("stale delete is refused", func(t *testing.T) {
@@ -136,7 +136,7 @@ func TestCRIfVersion_HonouredOnDelete(t *testing.T) {
 
 		_, _, err := f.crh.Create(ctx, author, "stale delete", "",
 			&approval.Changeset{Namespace: crNS, Changes: []approval.ChangeItem{{
-				OrbID: crServerB, Op: approval.OpDelete, IfVersion: ifVersionPtr(cur),
+				OrbID: crServerB, Op: approval.OpDelete, Version: versionPtr(cur),
 			}}})
 
 		var pf *preconditionFailed
@@ -157,10 +157,10 @@ func TestCRIfVersion_HonouredOnDelete(t *testing.T) {
 
 		cr, problems, err := f.crh.Create(ctx, author, "current delete", "",
 			&approval.Changeset{Namespace: crNS, Changes: []approval.ChangeItem{{
-				OrbID: crServerB, Op: approval.OpDelete, IfVersion: ifVersionPtr(readVersion(t, crServerB)),
+				OrbID: crServerB, Op: approval.OpDelete, Version: versionPtr(readVersion(t, crServerB)),
 			}}})
 		if err != nil || len(problems) > 0 {
-			t.Fatalf("a delete with a current ifVersion was refused: err=%v problems=%v", err, problems)
+			t.Fatalf("a delete with a current version was refused: err=%v problems=%v", err, problems)
 		}
 		if _, err := f.crh.Approve(ctx, cr.ID, reviewer, user.RoleDev, "ok"); err != nil {
 			t.Fatalf("approve: %v", err)
@@ -179,7 +179,7 @@ func TestCRIfVersion_HonouredOnDelete(t *testing.T) {
 // The domain-level test above proves the refusal happens; this proves what an
 // API client actually receives. They are different claims — a refusal that
 // surfaces as a 500 is still a refusal, and still useless to the caller.
-func TestCRIfVersion_StaleCreateIs409OverHTTP(t *testing.T) {
+func TestCRVersion_StaleCreateIs409OverHTTP(t *testing.T) {
 	f := newCRFixture(t)
 
 	cur := readVersion(t, crServerA)
@@ -190,8 +190,8 @@ func TestCRIfVersion_StaleCreateIs409OverHTTP(t *testing.T) {
 		"namespace": crNS,
 		"changes": []map[string]any{{
 			"orbId": crServerA, "op": "update",
-			"set":       map[string]any{"hostname": "based-on-stale-read"},
-			"ifVersion": cur,
+			"set":     map[string]any{"hostname": "based-on-stale-read"},
+			"version": cur,
 		}},
 	})
 	if err != nil {

@@ -63,23 +63,25 @@ const (
 // ApprovalMutation represents an operation that mutates the Approval nodes in the graph.
 type ApprovalMutation struct {
 	config
-	op               Op
-	typ              string
-	id               *uuid.UUID
-	created_at       *time.Time
-	created_by       *string
-	updated_at       *time.Time
-	updated_by       *string
-	approver         *string
-	decision         *approval.Decision
-	comment          *string
-	approved_at_hash *string
-	clearedFields    map[string]struct{}
-	request          *int64
-	clearedrequest   bool
-	done             bool
-	oldValue         func(context.Context) (*Approval, error)
-	predicates       []predicate.Approval
+	op                      Op
+	typ                     string
+	id                      *uuid.UUID
+	created_at              *time.Time
+	created_by              *string
+	updated_at              *time.Time
+	updated_by              *string
+	approver                *string
+	decision                *approval.Decision
+	comment                 *string
+	approved_at_hash        *string
+	approved_at_revision    *int
+	addapproved_at_revision *int
+	clearedFields           map[string]struct{}
+	request                 *int64
+	clearedrequest          bool
+	done                    bool
+	oldValue                func(context.Context) (*Approval, error)
+	predicates              []predicate.Approval
 }
 
 var _ ent.Mutation = (*ApprovalMutation)(nil)
@@ -562,6 +564,62 @@ func (m *ApprovalMutation) ResetApprovedAtHash() {
 	m.approved_at_hash = nil
 }
 
+// SetApprovedAtRevision sets the "approved_at_revision" field.
+func (m *ApprovalMutation) SetApprovedAtRevision(i int) {
+	m.approved_at_revision = &i
+	m.addapproved_at_revision = nil
+}
+
+// ApprovedAtRevision returns the value of the "approved_at_revision" field in the mutation.
+func (m *ApprovalMutation) ApprovedAtRevision() (r int, exists bool) {
+	v := m.approved_at_revision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldApprovedAtRevision returns the old "approved_at_revision" field's value of the Approval entity.
+// If the Approval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalMutation) OldApprovedAtRevision(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldApprovedAtRevision is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldApprovedAtRevision requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldApprovedAtRevision: %w", err)
+	}
+	return oldValue.ApprovedAtRevision, nil
+}
+
+// AddApprovedAtRevision adds i to the "approved_at_revision" field.
+func (m *ApprovalMutation) AddApprovedAtRevision(i int) {
+	if m.addapproved_at_revision != nil {
+		*m.addapproved_at_revision += i
+	} else {
+		m.addapproved_at_revision = &i
+	}
+}
+
+// AddedApprovedAtRevision returns the value that was added to the "approved_at_revision" field in this mutation.
+func (m *ApprovalMutation) AddedApprovedAtRevision() (r int, exists bool) {
+	v := m.addapproved_at_revision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetApprovedAtRevision resets all changes to the "approved_at_revision" field.
+func (m *ApprovalMutation) ResetApprovedAtRevision() {
+	m.approved_at_revision = nil
+	m.addapproved_at_revision = nil
+}
+
 // SetRequestID sets the "request" edge to the ApprovalRequest entity by id.
 func (m *ApprovalMutation) SetRequestID(id int64) {
 	m.request = &id
@@ -636,7 +694,7 @@ func (m *ApprovalMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ApprovalMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
 	if m.created_at != nil {
 		fields = append(fields, approval.FieldCreatedAt)
 	}
@@ -664,6 +722,9 @@ func (m *ApprovalMutation) Fields() []string {
 	if m.approved_at_hash != nil {
 		fields = append(fields, approval.FieldApprovedAtHash)
 	}
+	if m.approved_at_revision != nil {
+		fields = append(fields, approval.FieldApprovedAtRevision)
+	}
 	return fields
 }
 
@@ -690,6 +751,8 @@ func (m *ApprovalMutation) Field(name string) (ent.Value, bool) {
 		return m.Comment()
 	case approval.FieldApprovedAtHash:
 		return m.ApprovedAtHash()
+	case approval.FieldApprovedAtRevision:
+		return m.ApprovedAtRevision()
 	}
 	return nil, false
 }
@@ -717,6 +780,8 @@ func (m *ApprovalMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldComment(ctx)
 	case approval.FieldApprovedAtHash:
 		return m.OldApprovedAtHash(ctx)
+	case approval.FieldApprovedAtRevision:
+		return m.OldApprovedAtRevision(ctx)
 	}
 	return nil, fmt.Errorf("unknown Approval field %s", name)
 }
@@ -789,6 +854,13 @@ func (m *ApprovalMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetApprovedAtHash(v)
 		return nil
+	case approval.FieldApprovedAtRevision:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetApprovedAtRevision(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Approval field %s", name)
 }
@@ -797,6 +869,9 @@ func (m *ApprovalMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *ApprovalMutation) AddedFields() []string {
 	var fields []string
+	if m.addapproved_at_revision != nil {
+		fields = append(fields, approval.FieldApprovedAtRevision)
+	}
 	return fields
 }
 
@@ -805,6 +880,8 @@ func (m *ApprovalMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ApprovalMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case approval.FieldApprovedAtRevision:
+		return m.AddedApprovedAtRevision()
 	}
 	return nil, false
 }
@@ -814,6 +891,13 @@ func (m *ApprovalMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ApprovalMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case approval.FieldApprovedAtRevision:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddApprovedAtRevision(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Approval numeric field %s", name)
 }
@@ -894,6 +978,9 @@ func (m *ApprovalMutation) ResetField(name string) error {
 		return nil
 	case approval.FieldApprovedAtHash:
 		m.ResetApprovedAtHash()
+		return nil
+	case approval.FieldApprovedAtRevision:
+		m.ResetApprovedAtRevision()
 		return nil
 	}
 	return fmt.Errorf("unknown Approval field %s", name)
@@ -2085,6 +2172,8 @@ type ApprovalRequestMutation struct {
 	status                *approvalrequest.Status
 	author                *string
 	base_hash             *string
+	changeset_revision    *int
+	addchangeset_revision *int
 	base_versions         *map[string]int
 	base_present          *[]string
 	appendbase_present    []string
@@ -2715,6 +2804,62 @@ func (m *ApprovalRequestMutation) ResetBaseHash() {
 	m.base_hash = nil
 }
 
+// SetChangesetRevision sets the "changeset_revision" field.
+func (m *ApprovalRequestMutation) SetChangesetRevision(i int) {
+	m.changeset_revision = &i
+	m.addchangeset_revision = nil
+}
+
+// ChangesetRevision returns the value of the "changeset_revision" field in the mutation.
+func (m *ApprovalRequestMutation) ChangesetRevision() (r int, exists bool) {
+	v := m.changeset_revision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldChangesetRevision returns the old "changeset_revision" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldChangesetRevision(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldChangesetRevision is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldChangesetRevision requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldChangesetRevision: %w", err)
+	}
+	return oldValue.ChangesetRevision, nil
+}
+
+// AddChangesetRevision adds i to the "changeset_revision" field.
+func (m *ApprovalRequestMutation) AddChangesetRevision(i int) {
+	if m.addchangeset_revision != nil {
+		*m.addchangeset_revision += i
+	} else {
+		m.addchangeset_revision = &i
+	}
+}
+
+// AddedChangesetRevision returns the value that was added to the "changeset_revision" field in this mutation.
+func (m *ApprovalRequestMutation) AddedChangesetRevision() (r int, exists bool) {
+	v := m.addchangeset_revision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetChangesetRevision resets all changes to the "changeset_revision" field.
+func (m *ApprovalRequestMutation) ResetChangesetRevision() {
+	m.changeset_revision = nil
+	m.addchangeset_revision = nil
+}
+
 // SetBaseVersions sets the "base_versions" field.
 func (m *ApprovalRequestMutation) SetBaseVersions(value map[string]int) {
 	m.base_versions = &value
@@ -3234,7 +3379,7 @@ func (m *ApprovalRequestMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ApprovalRequestMutation) Fields() []string {
-	fields := make([]string, 0, 19)
+	fields := make([]string, 0, 20)
 	if m.created_at != nil {
 		fields = append(fields, approvalrequest.FieldCreatedAt)
 	}
@@ -3270,6 +3415,9 @@ func (m *ApprovalRequestMutation) Fields() []string {
 	}
 	if m.base_hash != nil {
 		fields = append(fields, approvalrequest.FieldBaseHash)
+	}
+	if m.changeset_revision != nil {
+		fields = append(fields, approvalrequest.FieldChangesetRevision)
 	}
 	if m.base_versions != nil {
 		fields = append(fields, approvalrequest.FieldBaseVersions)
@@ -3324,6 +3472,8 @@ func (m *ApprovalRequestMutation) Field(name string) (ent.Value, bool) {
 		return m.Author()
 	case approvalrequest.FieldBaseHash:
 		return m.BaseHash()
+	case approvalrequest.FieldChangesetRevision:
+		return m.ChangesetRevision()
 	case approvalrequest.FieldBaseVersions:
 		return m.BaseVersions()
 	case approvalrequest.FieldBasePresent:
@@ -3371,6 +3521,8 @@ func (m *ApprovalRequestMutation) OldField(ctx context.Context, name string) (en
 		return m.OldAuthor(ctx)
 	case approvalrequest.FieldBaseHash:
 		return m.OldBaseHash(ctx)
+	case approvalrequest.FieldChangesetRevision:
+		return m.OldChangesetRevision(ctx)
 	case approvalrequest.FieldBaseVersions:
 		return m.OldBaseVersions(ctx)
 	case approvalrequest.FieldBasePresent:
@@ -3478,6 +3630,13 @@ func (m *ApprovalRequestMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetBaseHash(v)
 		return nil
+	case approvalrequest.FieldChangesetRevision:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetChangesetRevision(v)
+		return nil
 	case approvalrequest.FieldBaseVersions:
 		v, ok := value.(map[string]int)
 		if !ok {
@@ -3538,6 +3697,9 @@ func (m *ApprovalRequestMutation) AddedFields() []string {
 	if m.addnumber != nil {
 		fields = append(fields, approvalrequest.FieldNumber)
 	}
+	if m.addchangeset_revision != nil {
+		fields = append(fields, approvalrequest.FieldChangesetRevision)
+	}
 	return fields
 }
 
@@ -3548,6 +3710,8 @@ func (m *ApprovalRequestMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case approvalrequest.FieldNumber:
 		return m.AddedNumber()
+	case approvalrequest.FieldChangesetRevision:
+		return m.AddedChangesetRevision()
 	}
 	return nil, false
 }
@@ -3563,6 +3727,13 @@ func (m *ApprovalRequestMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddNumber(v)
+		return nil
+	case approvalrequest.FieldChangesetRevision:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddChangesetRevision(v)
 		return nil
 	}
 	return fmt.Errorf("unknown ApprovalRequest numeric field %s", name)
@@ -3689,6 +3860,9 @@ func (m *ApprovalRequestMutation) ResetField(name string) error {
 		return nil
 	case approvalrequest.FieldBaseHash:
 		m.ResetBaseHash()
+		return nil
+	case approvalrequest.FieldChangesetRevision:
+		m.ResetChangesetRevision()
 		return nil
 	case approvalrequest.FieldBaseVersions:
 		m.ResetBaseVersions()

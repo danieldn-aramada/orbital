@@ -12,7 +12,7 @@ import (
 
 // Compare-and-swap: the version predicate goes INSIDE the write.
 //
-// Before this, `ifVersion` was compared in Go against a snapshot fetched by a
+// Before this, `version` was compared in Go against a snapshot fetched by a
 // separate HTTP request, then the mutation was written with a filter on `orbId`
 // alone — two DGraph transactions, so a writer committing in between was
 // silently overwritten. Measured at 30 concurrent writers on one entity: 183 of
@@ -63,7 +63,7 @@ func forwarded(t *testing.T, dgraphResp string, vars map[string]any, query strin
 // lost update is reported to the caller as success.
 func TestCAS_NoRowMatchedIsAConflictNotSuccess(t *testing.T) {
 	_, rec := forwarded(t, `{"data":{"updateServer":{"numUids":0}}}`,
-		map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "ifVersion": 7},
+		map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "version": 7},
 		`mutation UpdateServer($orbId: String!, $set: ServerPatch!) { updateServer(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids } }`)
 
 	if rec.Code != http.StatusConflict {
@@ -79,7 +79,7 @@ func TestCAS_NoRowMatchedIsAConflictNotSuccess(t *testing.T) {
 // only the caller that happened to be tested.
 func TestCAS_EmptyPayloadArrayIsAlsoAConflict(t *testing.T) {
 	_, rec := forwarded(t, `{"data":{"updateServer":{"server":[]}}}`,
-		map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "ifVersion": 7},
+		map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "version": 7},
 		casUpdateQuery)
 
 	if rec.Code != http.StatusConflict {
@@ -91,27 +91,27 @@ func TestCAS_EmptyPayloadArrayIsAlsoAConflict(t *testing.T) {
 
 func TestCAS_PredicateIsInjectedAndItsVariableDeclared(t *testing.T) {
 	fwd, rec := forwarded(t, `{"data":{"updateServer":{"server":[{"orbId":"ns:server-A"}]}}}`,
-		map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "ifVersion": 7},
+		map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "version": 7},
 		casUpdateQuery)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(fwd.Query, "version: { eq: $ifVersion }") {
+	if !strings.Contains(fwd.Query, "version: { eq: $version }") {
 		t.Errorf("no version predicate in the forwarded filter — the write is still unguarded: %s", fwd.Query)
 	}
 	// Declared, or DGraph rejects the whole mutation for an undefined variable.
-	if !strings.Contains(fwd.Query, "$ifVersion: Int!") {
-		t.Errorf("$ifVersion is referenced but not declared: %s", fwd.Query)
+	if !strings.Contains(fwd.Query, "$version: Int!") {
+		t.Errorf("$version is referenced but not declared: %s", fwd.Query)
 	}
 	// And the value must survive the strip that used to remove it as an
 	// orbital-only variable.
-	v, ok := fwd.Variables["ifVersion"]
+	v, ok := fwd.Variables["version"]
 	if !ok {
-		t.Fatalf("ifVersion was stripped from the variables it is now declared with: %v", fwd.Variables)
+		t.Fatalf("version was stripped from the variables it is now declared with: %v", fwd.Variables)
 	}
 	if n, _ := toFloat64(v); int(n) != 7 {
-		t.Errorf("ifVersion = %v, want 7", v)
+		t.Errorf("version = %v, want 7", v)
 	}
 	// The counter clients must not write still is not in `set`.
 	set, _ := fwd.Variables["set"].(map[string]any)
@@ -134,7 +134,7 @@ func TestCAS_UnguardedUpdateIsUnchangedAndZeroRowsStays200(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 — an unguarded update was turned into a conflict: %s", rec.Code, rec.Body.String())
 	}
-	if strings.Contains(fwd.Query, "ifVersion") {
+	if strings.Contains(fwd.Query, "version") {
 		t.Errorf("a predicate was injected into an unguarded mutation: %s", fwd.Query)
 	}
 }
@@ -177,7 +177,7 @@ func TestCAS_UnrecognisedShapeIsRefusedNotSentUnguarded(t *testing.T) {
 			h := NewGraphQL(srv.URL, nil, slog.Default(), false)
 			c, rec := newGQLCtx(t, map[string]any{
 				"query": tc.query, "operationName": "UpdateServer",
-				"variables": map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "ifVersion": 7},
+				"variables": map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "version": 7},
 			})
 			if err := h.Handle(c); err != nil {
 				t.Fatalf("Handle: %v", err)
@@ -195,14 +195,14 @@ func TestCAS_UnrecognisedShapeIsRefusedNotSentUnguarded(t *testing.T) {
 	}
 }
 
-// A malformed token is validated at injection too. checkIfVersion returns early
-// when no current state resolved, so without this a garbage `ifVersion` could
+// A malformed token is validated at injection too. checkVersion returns early
+// when no current state resolved, so without this a garbage `version` could
 // reach the rewriter unchecked.
 func TestCAS_MalformedIfVersionIsRefusedAtInjection(t *testing.T) {
-	req := &gqlRequest{Query: casUpdateQuery, Variables: map[string]any{"ifVersion": "not-a-number"}}
+	req := &gqlRequest{Query: casUpdateQuery, Variables: map[string]any{"version": "not-a-number"}}
 	perr := injectVersionPredicate(req)
 	if perr == nil {
-		t.Fatal("a malformed ifVersion was accepted by the injector")
+		t.Fatal("a malformed version was accepted by the injector")
 	}
 	if perr.Status != http.StatusBadRequest || perr.Code != CodeBadUserInput {
 		t.Errorf("status=%d code=%s, want 400 %s", perr.Status, perr.Code, CodeBadUserInput)
@@ -224,15 +224,15 @@ func TestCAS_InjectsIntoTheQueriesMergeBuilds(t *testing.T) {
 	}
 	for name, q := range cases {
 		t.Run(name, func(t *testing.T) {
-			req := &gqlRequest{Query: q, Variables: map[string]any{"orbId": "ns:server-A", "ifVersion": 3}}
+			req := &gqlRequest{Query: q, Variables: map[string]any{"orbId": "ns:server-A", "version": 3}}
 			if perr := injectVersionPredicate(req); perr != nil {
 				t.Fatalf("refused a query orbital itself builds: %v", perr.Message)
 			}
-			if !strings.Contains(req.Query, "version: { eq: $ifVersion }") {
+			if !strings.Contains(req.Query, "version: { eq: $version }") {
 				t.Errorf("no predicate injected: %s", req.Query)
 			}
-			if !strings.Contains(req.Query, "$ifVersion: Int!") {
-				t.Errorf("$ifVersion not declared: %s", req.Query)
+			if !strings.Contains(req.Query, "$version: Int!") {
+				t.Errorf("$version not declared: %s", req.Query)
 			}
 		})
 	}
@@ -245,7 +245,7 @@ func TestCAS_InjectsIntoTheQueriesMergeBuilds(t *testing.T) {
 // db is nil here, so any attempt to audit panics the goroutine.
 func TestCAS_ConflictWritesNoAuditEvent(t *testing.T) {
 	_, rec := forwarded(t, `{"data":{"updateServer":{"numUids":0}}}`,
-		map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "ifVersion": 7},
+		map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "version": 7},
 		`mutation UpdateServer($orbId: String!, $set: ServerPatch!) { updateServer(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids } }`)
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409", rec.Code)
@@ -280,7 +280,7 @@ func TestCAS_TransientTransactionAbortIsRetried(t *testing.T) {
 	c, rec := newGQLCtx(t, map[string]any{
 		"query":         casUpdateQuery,
 		"operationName": "UpdateServer",
-		"variables":     map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "ifVersion": 7},
+		"variables":     map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "version": 7},
 	})
 	if err := h.Handle(c); err != nil {
 		t.Fatalf("Handle: %v", err)
@@ -312,7 +312,7 @@ func TestCAS_PersistentAbortIsNotReportedAsAnMVCCConflict(t *testing.T) {
 	c, rec := newGQLCtx(t, map[string]any{
 		"query":         casUpdateQuery,
 		"operationName": "UpdateServer",
-		"variables":     map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "ifVersion": 7},
+		"variables":     map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "version": 7},
 	})
 	if err := h.Handle(c); err != nil {
 		t.Fatalf("Handle: %v", err)
@@ -330,8 +330,8 @@ func TestCAS_PersistentAbortIsNotReportedAsAnMVCCConflict(t *testing.T) {
 
 // ── the "silently ignored" hole, and whether CAS closed it ─────────────────
 
-// Filed as debt when the write pre-flight moved: `checkIfVersion` returns early
-// when no current state resolved, so a supplied `ifVersion` was dropped and the
+// Filed as debt when the write pre-flight moved: `checkVersion` returns early
+// when no current state resolved, so a supplied `version` was dropped and the
 // write proceeded UNGUARDED with a 200. A caller that asked for a check and did
 // not get one is worse off than one that never asked.
 //
@@ -340,7 +340,7 @@ func TestCAS_PersistentAbortIsNotReportedAsAnMVCCConflict(t *testing.T) {
 // still ENFORCED by DGraph. These pin that, because "it follows from the
 // design" is exactly the claim that turns out to be wrong later.
 func TestCAS_TokenIsStillEnforcedWhenThePreFlightCannotResolveTheEntity(t *testing.T) {
-	// Before-fetch comes back empty, so checkIfVersion sees current == nil and
+	// Before-fetch comes back empty, so checkVersion sees current == nil and
 	// returns without comparing anything.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
@@ -359,13 +359,13 @@ func TestCAS_TokenIsStillEnforcedWhenThePreFlightCannotResolveTheEntity(t *testi
 	c, rec := newGQLCtx(t, map[string]any{
 		"query":         casUpdateQuery,
 		"operationName": "UpdateServer",
-		"variables":     map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "ifVersion": 7},
+		"variables":     map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "version": 7},
 	})
 	if err := h.Handle(c); err != nil {
 		t.Fatalf("Handle: %v", err)
 	}
 	if rec.Code == http.StatusOK {
-		t.Fatalf("an unguardable ifVersion was dropped and the write reported success: %s", rec.Body.String())
+		t.Fatalf("an unguardable version was dropped and the write reported success: %s", rec.Body.String())
 	}
 	if rec.Code != http.StatusConflict {
 		t.Errorf("status = %d, want 409", rec.Code)
@@ -398,16 +398,57 @@ func TestCAS_MultiTypeMutationCarryingIfVersionIsRefusedNotDropped(t *testing.T)
 		"operationName": "Compound",
 		"variables": map[string]any{
 			"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"},
-			"rset": map[string]any{"name": "r"}, "ifVersion": 7,
+			"rset": map[string]any{"name": "r"}, "version": 7,
 		},
 	})
 	if err := h.Handle(c); err != nil {
 		t.Fatalf("Handle: %v", err)
 	}
 	if reached {
-		t.Fatal("a multi-target mutation carrying ifVersion was sent with the token dropped")
+		t.Fatal("a multi-target mutation carrying version was sent with the token dropped")
 	}
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// ── the pre-rename spelling is refused, not ignored ────────────────────────
+
+// `ifVersion` was renamed to `version` on 2026-09-04. GraphQL ignores unknown
+// variables, so without this a client that has not caught up writes UNGUARDED
+// and gets a 200 — losing the precondition it asked for with nothing to tell it.
+// That is the failure this whole area exists to remove, so the old name is
+// refused by name.
+func TestCAS_PreRenameIfVersionIsRefusedNotIgnored(t *testing.T) {
+	var reached bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(string(b), "BeforeFetch") {
+			w.Write([]byte(`{"data":{"queryServer":[{"id":"1","version":7}]}}`)) //nolint:errcheck
+			return
+		}
+		reached = true
+		w.Write([]byte(`{"data":{"updateServer":{"numUids":1}}}`)) //nolint:errcheck
+	}))
+	t.Cleanup(srv.Close)
+
+	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
+	c, rec := newGQLCtx(t, map[string]any{
+		"query":         casUpdateQuery,
+		"operationName": "UpdateServer",
+		"variables":     map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "ifVersion": 7},
+	})
+	if err := h.Handle(c); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if reached {
+		t.Fatal("a mutation carrying the old `ifVersion` was sent unguarded")
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "renamed to `version`") {
+		t.Errorf("refusal does not name the replacement: %s", rec.Body.String())
 	}
 }

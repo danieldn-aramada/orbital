@@ -73,18 +73,24 @@ test('Cluster delete cascades nodes but preserves servers', async ({ page }) => 
   }, { clusterOrbId, nodeOrbId })
 
   const cleanup = async () => {
+    // TWO single-entity mutations, each with its selector in a variable named
+    // `orbId`. The approval gate resolves the governing policy from the entity's
+    // orbId, and it reads that from a variable of that exact name — a compound
+    // mutation using `$clusterOrbId`/`$nodeOrbId` resolves to no namespace and is
+    // refused `VARIABLE_FORM_REQUIRED` whenever any policy exists, leaving this
+    // fixture behind and breaking every later run. See debt.md.
     await page.evaluate(async ({ clusterOrbId, nodeOrbId }) => {
-      await fetch('/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `mutation Cleanup($clusterOrbId: String!, $nodeOrbId: String!) {
-            deleteKubernetesNode(filter: { orbId: { eq: $nodeOrbId } }) { numUids }
-            deleteEksaKubernetesCluster(filter: { orbId: { eq: $clusterOrbId } }) { numUids }
-          }`,
-          variables: { clusterOrbId, nodeOrbId },
-        }),
-      })
+      const del = (op: string, orbId: string) =>
+        fetch('/graphql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: `mutation Cleanup($orbId: String!) { ${op}(filter: { orbId: { eq: $orbId } }) { numUids } }`,
+            variables: { orbId },
+          }),
+        })
+      await del('deleteKubernetesNode', nodeOrbId)
+      await del('deleteEksaKubernetesCluster', clusterOrbId)
     }, { clusterOrbId, nodeOrbId })
   }
 

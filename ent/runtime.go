@@ -48,6 +48,10 @@ func init() {
 	approvalDescApprovedAtHash := approvalFields[5].Descriptor()
 	// approval.ApprovedAtHashValidator is a validator for the "approved_at_hash" field. It is called by the builders before save.
 	approval.ApprovedAtHashValidator = approvalDescApprovedAtHash.Validators[0].(func(string) error)
+	// approvalDescApprovedAtRevision is the schema descriptor for approved_at_revision field.
+	approvalDescApprovedAtRevision := approvalFields[6].Descriptor()
+	// approval.DefaultApprovedAtRevision holds the default value on creation for the approved_at_revision field.
+	approval.DefaultApprovedAtRevision = approvalDescApprovedAtRevision.Default.(int)
 	// approvalDescID is the schema descriptor for id field.
 	approvalDescID := approvalFields[0].Descriptor()
 	// approval.DefaultID holds the default value on creation for the id field.
@@ -128,8 +132,12 @@ func init() {
 	approvalrequestDescBaseHash := approvalrequestFields[8].Descriptor()
 	// approvalrequest.BaseHashValidator is a validator for the "base_hash" field. It is called by the builders before save.
 	approvalrequest.BaseHashValidator = approvalrequestDescBaseHash.Validators[0].(func(string) error)
+	// approvalrequestDescChangesetRevision is the schema descriptor for changeset_revision field.
+	approvalrequestDescChangesetRevision := approvalrequestFields[9].Descriptor()
+	// approvalrequest.DefaultChangesetRevision holds the default value on creation for the changeset_revision field.
+	approvalrequest.DefaultChangesetRevision = approvalrequestDescChangesetRevision.Default.(int)
 	// approvalrequestDescExecutedBy is the schema descriptor for executed_by field.
-	approvalrequestDescExecutedBy := approvalrequestFields[15].Descriptor()
+	approvalrequestDescExecutedBy := approvalrequestFields[16].Descriptor()
 	// approvalrequest.DefaultExecutedBy holds the default value on creation for the executed_by field.
 	approvalrequest.DefaultExecutedBy = approvalrequestDescExecutedBy.Default.(string)
 	auditeventFields := schema.AuditEvent{}.Fields()

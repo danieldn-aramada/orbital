@@ -606,8 +606,15 @@ test('an approval cast against an earlier version is shown as such, not hidden',
     // The banner names the CONSEQUENCE, not just the fact: the diff looks
     // identical stale or not, so "merge is blocked and here is the way through"
     // is the part a reader cannot see for themselves.
-    await expect(page.locator('[data-testid="cr-detail"]')).toContainText('Intent changed')
-    await expect(page.locator('[data-testid="cr-detail"]')).toContainText('approve again to merge')
+    //
+    // Asserts the STATE and the way out, not the exact sentence — the wording has
+    // been revised twice and pinning prose makes copy edits look like failures.
+    // This fixture sends no `version`, so what moved is the reviewed SCOPE, not
+    // a change object — `subtreeChanged`, which the reviewer clears. Asserting
+    // the way out rather than the sentence: the wording has been revised twice
+    // and pinning prose makes copy edits look like failures.
+    const banner = page.locator('[data-testid="cr-detail"]')
+    await expect(banner).toContainText(/re-approve/i)
   } finally {
     await api(page, 'POST', `/api/v1/change-requests/${cr.id}/close`)
     await unprotect(page, policyId)

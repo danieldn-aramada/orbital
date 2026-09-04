@@ -71,7 +71,7 @@ func TestDeleteGuard_StaleIfVersionIsRefusedAndDeletesNothing(t *testing.T) {
 	saw := readVersion(t, crServerB)
 	setHostname(t, crServerB, "edited-after-the-dialog-opened")
 
-	rec := deleteReq(t, h, "Server", crServerB, fmt.Sprintf("?ifVersion=%d", saw), user.RoleAdmin)
+	rec := deleteReq(t, h, "Server", crServerB, fmt.Sprintf("?version=%d", saw), user.RoleAdmin)
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409: %s", rec.Code, rec.Body.String())
 	}
@@ -97,7 +97,7 @@ func TestDeleteGuard_CurrentIfVersionDeletesAndCascades(t *testing.T) {
 		t.Fatal("fixture is missing the owned child this asserts the cascade on")
 	}
 	rec := deleteReq(t, h, "Server", crServerA,
-		fmt.Sprintf("?ifVersion=%d", readVersion(t, crServerA)), user.RoleAdmin)
+		fmt.Sprintf("?version=%d", readVersion(t, crServerA)), user.RoleAdmin)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
@@ -114,7 +114,7 @@ func TestDeleteGuard_NoIfVersionIsUnconditional(t *testing.T) {
 	h, _ := deleteFixture(t)
 	rec := deleteReq(t, h, "Server", crServerB, "", user.RoleAdmin)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200 — omitting ifVersion must not be an error: %s", rec.Code, rec.Body.String())
+		t.Fatalf("status = %d, want 200 — omitting version must not be an error: %s", rec.Code, rec.Body.String())
 	}
 	if exists(t, "Server", crServerB) {
 		t.Error("the delete did not happen")
@@ -189,5 +189,74 @@ func TestDeleteGuard_UngovernedNamespaceIsUnaffected(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 — the gate refused a delete in an ungoverned namespace: %s",
 			rec.Code, rec.Body.String())
+	}
+}
+
+// ── the interface-type trap ────────────────────────────────────────────────
+
+// `KubernetesCluster` is an INTERFACE, so DGraph generates no
+// `getKubernetesCluster`. The version check originally built `get{Type}`, which
+// 500s on exactly the delete it is meant to guard — and only for interface
+// types, so DataCenter and Server deletes passed and hid it.
+//
+// Reproduces through the real endpoint rather than the helper, because the bug
+// was in the query the handler builds from the PATH parameter.
+func TestDeleteGuard_InterfaceTypedDeleteResolvesItsVersion(t *testing.T) {
+	h, _ := deleteFixture(t)
+	const dc = crNS + ":dc-iface"
+	const cluster = crNS + ":cluster-iface"
+
+	crGQL(t, `mutation($input:[AddDataCenterInput!]!){ addDataCenter(input:$input, upsert:true){ numUids } }`,
+		map[string]any{"input": []any{map[string]any{
+			"namespace": crNS, "orbId": dc, "name": "iface dc", "version": 1,
+		}}})
+	crGQL(t, `mutation($input:[AddEksaKubernetesClusterInput!]!){ addEksaKubernetesCluster(input:$input, upsert:true){ numUids } }`,
+		map[string]any{"input": []any{map[string]any{
+			"namespace": crNS, "orbId": cluster, "name": "iface cluster", "version": 1,
+			"dataCenter": map[string]any{"orbId": dc},
+		}}})
+	t.Cleanup(func() {
+		deleteEntity(t, "EksaKubernetesCluster", cluster)
+		deleteEntity(t, "DataCenter", dc)
+	})
+
+	// Deleted BY THE INTERFACE NAME, which is what the UI sends.
+	rec := deleteReq(t, h, "KubernetesCluster", cluster, "?version=1", user.RoleAdmin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 — an interface-typed delete could not resolve its own version: %s",
+			rec.Code, rec.Body.String())
+	}
+	if exists(t, "EksaKubernetesCluster", cluster) {
+		t.Error("the cluster was not deleted")
+	}
+}
+
+// And the guard still fires on that path — the fix must not have turned the
+// check into a no-op for interface types.
+func TestDeleteGuard_InterfaceTypedDeleteStillRefusesAStaleVersion(t *testing.T) {
+	h, _ := deleteFixture(t)
+	const dc = crNS + ":dc-iface2"
+	const cluster = crNS + ":cluster-iface2"
+
+	crGQL(t, `mutation($input:[AddDataCenterInput!]!){ addDataCenter(input:$input, upsert:true){ numUids } }`,
+		map[string]any{"input": []any{map[string]any{
+			"namespace": crNS, "orbId": dc, "name": "iface dc2", "version": 1,
+		}}})
+	crGQL(t, `mutation($input:[AddEksaKubernetesClusterInput!]!){ addEksaKubernetesCluster(input:$input, upsert:true){ numUids } }`,
+		map[string]any{"input": []any{map[string]any{
+			"namespace": crNS, "orbId": cluster, "name": "iface cluster2", "version": 5,
+			"dataCenter": map[string]any{"orbId": dc},
+		}}})
+	t.Cleanup(func() {
+		deleteEntity(t, "EksaKubernetesCluster", cluster)
+		deleteEntity(t, "DataCenter", dc)
+	})
+
+	rec := deleteReq(t, h, "KubernetesCluster", cluster, "?version=1", user.RoleAdmin)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409 for a stale version: %s", rec.Code, rec.Body.String())
+	}
+	if !exists(t, "EksaKubernetesCluster", cluster) {
+		t.Error("the refused delete removed the cluster anyway")
 	}
 }

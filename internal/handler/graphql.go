@@ -76,7 +76,7 @@ type gqlRequest struct {
 
 // Handle proxies GraphQL requests to DGraph and serves GraphiQL on GET.
 // Any mutation touching a known ConfigItem type is recorded as an audit event.
-// For single-entity mutations that include ifVersion, an MVCC check is performed.
+// For single-entity mutations that include version, an MVCC check is performed.
 //
 // @Summary     GraphQL endpoint
 // @Description POST: proxies GraphQL queries and mutations to DGraph. GET: serves the GraphiQL explorer UI.
@@ -163,7 +163,7 @@ func (h *GraphQL) Handle(c echo.Context) error {
 		}
 	}
 
-	// The write pre-flight — before-fetch, `ifVersion` check, stamping — is NOT
+	// The write pre-flight — before-fetch, `version` check, stamping — is NOT
 	// here. It lives in writeToDGraph so that EVERY write gets it and not only
 	// the ones that arrive over HTTP; see that function's doc comment.
 	//
@@ -211,7 +211,7 @@ func (h *GraphQL) Handle(c echo.Context) error {
 // already authz'd.
 //
 // It DOES get the full write pre-flight — before-fetch, version/updatedAt/
-// updatedBy stamping, and the ifVersion check — because all three live in
+// updatedBy stamping, and the version check — because all three live in
 // writeToDGraph, which every GraphQL write passes through. A caller neither opts
 // in nor can forget: the two that existed when this was written each forgot a
 // different half, and nothing failed. (The cascade-delete endpoint writes DQL
@@ -262,7 +262,7 @@ func (h *GraphQL) DispatchMutation(ctx context.Context, actor string, caller cal
 // writeResult is what the write path actually did.
 //
 // Before and Variables come back because the pre-flight below produces them and
-// the caller cannot: Variables is the map AS SENT (stamped, ifVersion removed),
+// the caller cannot: Variables is the map AS SENT (stamped, version removed),
 // and Before is the state the write replaced. A caller that rebuilt either from
 // its own inputs would be auditing something other than what happened — which
 // is the bug this whole function exists to make impossible.
@@ -274,7 +274,7 @@ type writeResult struct {
 	Variables map[string]any // variables as forwarded, post-stamp, with orbId restored
 }
 
-// preflightError is a refusal from the concurrency guard: a stale ifVersion, a
+// preflightError is a refusal from the concurrency guard: a stale version, a
 // malformed one, or a predicate that could not be applied.
 //
 // Named for where it USED to fire. One case is post-write: a compare-and-swap
@@ -308,7 +308,7 @@ func (e *preflightError) Error() string { return e.Message }
 //
 // The WRITE PRE-FLIGHT is here for exactly the same reason, and was moved down
 // out of Handle on 2026-09-03. It is three things over one read of the target:
-// the ifVersion comparison, the version auto-increment plus updatedBy/updatedAt
+// the version comparison, the version auto-increment plus updatedBy/updatedAt
 // stamping, and the before-state the audit diff needs. While they lived in
 // Handle, DispatchMutation got none of them and said so in its doc comment,
 // leaving each to the caller — and both callers forgot a different one. Merge
@@ -317,7 +317,7 @@ func (e *preflightError) Error() string { return e.Message }
 // change-request staleness (an approval cast before it kept counting). Neither
 // failed anything. Correct-by-default beats correct-by-remembering.
 //
-// Order is load-bearing and unchanged from Handle's: fetch → ifVersion → stamp →
+// Order is load-bearing and unchanged from Handle's: fetch → version → stamp →
 // strip → approval gate → POST. The gate sees the body as DGraph will, and an
 // MVCC conflict is refused before the gate, so a stale write is told to reload
 // rather than told to open a change request it would then have to redo.
@@ -348,13 +348,13 @@ func (h *GraphQL) writeToDGraph(ctx context.Context, body []byte, actor string, 
 
 		// Pre-flight first — it refuses the ordinary stale case before any write,
 		// with a better message. The predicate below catches only the race.
-		if perr := checkIfVersion(req.Variables, current); perr != nil {
+		if perr := checkVersion(req.Variables, current); perr != nil {
 			return res, perr
 		}
 		if perr := injectVersionPredicate(&req); perr != nil {
 			return res, perr
 		}
-		_, guarded = req.Variables["ifVersion"]
+		_, guarded = req.Variables["version"]
 		body = forwardBody(&req, body, stampMutation(&req, current, actor) || guarded)
 	}
 
@@ -436,7 +436,7 @@ func mutationOpName(req *gqlRequest) string {
 // when the mutation is not a single-entity shape (a bulk add, a multi-type
 // mutation, an inline selector) or the read failed.
 //
-// One read, three consumers: the ifVersion comparison, the version increment,
+// One read, three consumers: the version comparison, the version increment,
 // and the audit diff's before-state. They are not separable — all three need
 // the same row as of the same instant.
 //
@@ -504,7 +504,7 @@ func mergeBefore(fallback, fetched map[string]any) map[string]any {
 	return merged
 }
 
-// checkIfVersion is the opt-in MVCC guard. Auto-increment of `version` is
+// checkVersion is the opt-in MVCC guard. Auto-increment of `version` is
 // mandatory and server-managed; this race detection sits on top of it and fires
 // only when the caller supplies the version it read.
 // See docs/reference/DIVERGENCE.md "MVCC".
@@ -513,12 +513,23 @@ func mergeBefore(fallback, fetched map[string]any) map[string]any {
 // and the write proceeds unguarded — the caller asked for a check it did not
 // get. Preserved as-is in the 2026-09-03 move rather than quietly hardened;
 // tracked in docs/planning/debt.md.
-func checkIfVersion(variables map[string]any, current map[string]any) *preflightError {
-	ifVersion, hasIfVersion := variables["ifVersion"]
-	if !hasIfVersion || current == nil {
+func checkVersion(variables map[string]any, current map[string]any) *preflightError {
+	// The pre-rename spelling. An unknown variable is otherwise ignored by
+	// GraphQL, so a client that has not caught up would write UNGUARDED with a
+	// 200 — losing the precondition it asked for without being told. Refused by
+	// name instead. Renamed 2026-09-04.
+	if _, stale := variables["ifVersion"]; stale {
+		return &preflightError{
+			Status: http.StatusBadRequest, Code: CodeBadUserInput,
+			Message: "`ifVersion` was renamed to `version` and would be ignored, leaving this write unguarded",
+			Hint:    "Rename the variable to `version`; the value and its meaning are unchanged.",
+		}
+	}
+	version, hasVersion := variables["version"]
+	if !hasVersion || current == nil {
 		return nil
 	}
-	want, ok := toFloat64(ifVersion)
+	want, ok := toFloat64(version)
 	if !ok {
 		// A malformed concurrency token is a client error, not a conflict —
 		// 409 would tell the caller to reload and retry, but retrying the
@@ -526,7 +537,7 @@ func checkIfVersion(variables map[string]any, current map[string]any) *preflight
 		return &preflightError{
 			Status:  http.StatusBadRequest,
 			Code:    CodeBadUserInput,
-			Message: "ifVersion must be an integer",
+			Message: "version must be an integer",
 		}
 	}
 	cur, _ := toFloat64(current["version"]) // server-stamped, reliably numeric
@@ -626,29 +637,29 @@ var mutationVarsRe = regexp.MustCompile(`(?s)^\s*mutation\b[^(){]*\(([^)]*)\)`)
 // Requires EXACTLY ONE filter match — zero means an unrecognised shape, more
 // than one means other targets would be left unguarded.
 //
-// checkIfVersion's pre-flight stays; it catches the ordinary stale case with a
+// checkVersion's pre-flight stays; it catches the ordinary stale case with a
 // better message. This catches only the race the pre-flight cannot see.
 func injectVersionPredicate(req *gqlRequest) *preflightError {
-	raw, ok := req.Variables["ifVersion"]
+	raw, ok := req.Variables["version"]
 	if !ok {
 		return nil // unconditional write — nothing to inject, nothing to refuse
 	}
 
-	// Validated here too: checkIfVersion returns early when no current state
+	// Validated here too: checkVersion returns early when no current state
 	// resolved, so a malformed token can reach this point unchecked.
 	want, ok := toFloat64(raw)
 	if !ok {
 		return &preflightError{
 			Status: http.StatusBadRequest, Code: CodeBadUserInput,
-			Message: "ifVersion must be an integer",
+			Message: "version must be an integer",
 		}
 	}
 
 	refuse := func(why string) *preflightError {
 		return &preflightError{
 			Status: http.StatusBadRequest, Code: CodeBadUserInput,
-			Message: "ifVersion cannot be applied to this mutation, so it was not sent",
-			Hint:    why + ` ifVersion guards a single existing entity: update{Kind}($orbId: String!, $set: {Kind}Patch!) { update{Kind}(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids } }.`,
+			Message: "version cannot be applied to this mutation, so it was not sent",
+			Hint:    why + ` version guards a single existing entity: update{Kind}($orbId: String!, $set: {Kind}Patch!) { update{Kind}(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids } }.`,
 		}
 	}
 
@@ -660,23 +671,30 @@ func injectVersionPredicate(req *gqlRequest) *preflightError {
 	}
 	varDecl := mutationVarsRe.FindStringSubmatchIndex(req.Query)
 	if varDecl == nil {
-		return refuse("The mutation declares no variables, so `$ifVersion` cannot be declared.")
+		return refuse("The mutation declares no variables, so `$version` cannot be declared.")
+	}
+	// A caller who already declares $version is hand-writing the precondition.
+	// Injecting a second declaration produces invalid GraphQL, so refuse rather
+	// than emit it — and a caller doing this by hand gets no conflict detection
+	// anyway, since orbital only inspects the result when it injected the filter.
+	if strings.Contains(req.Query[varDecl[2]:varDecl[3]], "$version") {
+		return refuse("The mutation already declares `$version`; orbital adds the version predicate itself.")
 	}
 
 	// ReplaceAllLiteralString, NOT ReplaceAllString: `$` is a capture-group
 	// reference in a Go replacement template, so `$orbId` would expand to the
 	// empty group of that name and forward `eq: ` to DGraph.
 	q := casFilterRe.ReplaceAllLiteralString(req.Query,
-		`filter: { orbId: { eq: $orbId }, version: { eq: $ifVersion } }`)
+		`filter: { orbId: { eq: $orbId }, version: { eq: $version } }`)
 	// Insert before the closing paren of the variable list. Index 3 is the end
 	// of the captured group, i.e. immediately before `)`.
 	end := varDecl[3]
 	// The replace above shifted everything after the filter; the variable list
 	// comes first in a mutation, so its offsets are still valid.
-	q = q[:end] + ", $ifVersion: Int!" + q[end:]
+	q = q[:end] + ", $version: Int!" + q[end:]
 
 	req.Query = q
-	req.Variables["ifVersion"] = int(want)
+	req.Variables["version"] = int(want)
 	return nil
 }
 
@@ -718,7 +736,7 @@ func casMissed(body []byte) bool {
 // changed: stamping ran, the version predicate was injected, or orbId has to
 // come out.
 //
-// ifVersion is NO LONGER stripped. It used to be an orbital-only variable the
+// version is NO LONGER stripped. It used to be an orbital-only variable the
 // proxy consumed; now it is either injected into the query — which declares and
 // references it — or the write is refused. There is no path where it survives
 // unused.
@@ -1165,7 +1183,7 @@ func hasGQLErrors(body []byte) bool {
 // toFloat64 coerces a JSON-decoded numeric value to float64. The second return
 // is false when v is not a numeric type (nil, string, bool) or is a json.Number
 // that fails to parse. Callers MUST check it — treating a failed parse as 0
-// silently passes the MVCC check on a malformed ifVersion (audit A.3).
+// silently passes the MVCC check on a malformed version (audit A.3).
 func toFloat64(v any) (float64, bool) {
 	switch n := v.(type) {
 	case float64:

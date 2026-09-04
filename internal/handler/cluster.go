@@ -437,12 +437,12 @@ func (h *ClusterHandler) Tab(c echo.Context) error {
 		}
 	}
 
-	// OCC versions, so the editor sends `ifVersion` per target and a concurrent
+	// OCC versions, so the editor sends `version` per target and a concurrent
 	// edit is refused rather than silently overwritten. Stamped AFTER the orbId
 	// overrides above, because the stamp keys on orbId — a target still carrying
 	// its registry-derived id would not match. A child that does not exist yet
 	// has no version and stays at zero, which the editor reads as "omit
-	// ifVersion": a create has nothing to assert.
+	// version": a create has nothing to assert.
 	targets = configitems.StampEditTargetVersion(targets, raw.OrbID, raw.Version)
 	if raw.Backup != nil {
 		if raw.Backup.Etcd != nil {

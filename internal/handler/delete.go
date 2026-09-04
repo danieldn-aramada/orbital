@@ -32,7 +32,7 @@ type DeletePreview struct {
 	Type       string `json:"type"`
 	TotalCount int    `json:"totalCount"`
 	// Version is the root entity's OCC counter as the preview read it. The
-	// modal echoes it back on confirm as ?ifVersion=, so a delete is refused if
+	// modal echoes it back on confirm as ?version=, so a delete is refused if
 	// the entity moved while the confirmation dialog sat open — which is
 	// precisely the window a confirmation dialog creates.
 	Version   int           `json:"version,omitempty"`
@@ -140,7 +140,7 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 
 	// Before planning: a caller holding a stale view should be told to reload,
 	// not have a cascade computed on their behalf.
-	if err := h.checkDeleteVersion(ctx, typeName, id, c.QueryParam("ifVersion")); err != nil {
+	if err := h.checkDeleteVersion(ctx, id, c.QueryParam("version")); err != nil {
 		return h.refuse(c, err)
 	}
 
@@ -960,46 +960,52 @@ func (h *DeleteHandler) guardDelete(ctx context.Context, caller callerRole, orbI
 	return nil
 }
 
-// checkDeleteVersion enforces `?ifVersion=` on a delete.
+// checkDeleteVersion enforces `?version=` on a delete.
 //
 // A query parameter rather than an If-Match header: orbital already spells this
-// precondition `ifVersion` on /graphql and in a changeset item, and a third
+// precondition `version` on /graphql and in a changeset item, and a third
 // spelling for the same question is exactly the API cost this whole change set
 // exists to remove. DELETE carries no body by convention, so a parameter is
 // where it goes.
 //
 // Absent means unconditional, matching every other path. Present and
 // unparseable is a 400, not a 409 — retrying the same garbage would loop.
-func (h *DeleteHandler) checkDeleteVersion(ctx context.Context, typeName, orbID, raw string) error {
+func (h *DeleteHandler) checkDeleteVersion(ctx context.Context, orbID, raw string) error {
 	if raw == "" {
 		return nil
 	}
 	want, err := strconv.Atoi(raw)
 	if err != nil {
-		return &preflightError{Status: http.StatusBadRequest, Code: CodeBadUserInput, Message: "ifVersion must be an integer"}
+		return &preflightError{Status: http.StatusBadRequest, Code: CodeBadUserInput, Message: "version must be an integer"}
 	}
-	data, err := h.gqlQuery(ctx, fmt.Sprintf(
-		`query GetVersion($orbId: String!) { get%s(orbId: $orbId) { version } }`, typeName),
+	// queryConfigItem, NOT get{Type}: `KubernetesCluster` is an INTERFACE and
+	// DGraph generates no `getKubernetesCluster`, so the typed form 500s on
+	// exactly the delete this guards. Every ConfigItem carries orbId and version
+	// by definition, so the interface query works for concrete and interface
+	// types alike — it is what planClusterDelete already uses.
+	data, err := h.gqlQuery(ctx,
+		`query GetVersion($orbId: String!) { queryConfigItem(filter: { orbId: { eq: $orbId } }, first: 1) { version } }`,
 		map[string]any{"orbId": orbID})
 	if err != nil {
 		return err
 	}
-	var resp map[string]struct {
-		Version *int `json:"version"`
+	var resp struct {
+		Items []struct {
+			Version *int `json:"version"`
+		} `json:"queryConfigItem"`
 	}
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return fmt.Errorf("decode version: %w", err)
 	}
-	node, ok := resp["get"+typeName]
-	if !ok || node.Version == nil {
+	if len(resp.Items) == 0 || resp.Items[0].Version == nil {
 		// No version to compare. Refused rather than waved through: a caller
 		// that asked for a check and did not get one believes it is protected.
 		return &preflightError{Status: http.StatusConflict, Code: CodeMVCCConflict,
 			Message: "cannot verify this entity's version", Hint: "Reload the entity and try again."}
 	}
-	if *node.Version != want {
+	if *resp.Items[0].Version != want {
 		return &preflightError{Status: http.StatusConflict, Code: CodeMVCCConflict,
-			Message: fmt.Sprintf("This record was modified by someone else (you saw version %d, it is now %d). Please reload and try again.", want, *node.Version),
+			Message: fmt.Sprintf("This record was modified by someone else (you saw version %d, it is now %d). Please reload and try again.", want, *resp.Items[0].Version),
 			Hint:    "Reload the entity and delete again if you still want to."}
 	}
 	return nil

@@ -226,8 +226,8 @@ func TestHandle_MutationProxied(t *testing.T) {
 }
 
 // Replaced TestHandle_IfVersionStrippedBeforeProxy, which asserted that
-// `ifVersion` was removed before forwarding. That is no longer the contract:
-// with the version predicate injected into the query, `ifVersion` is DECLARED
+// `version` was removed before forwarding. That is no longer the contract:
+// with the version predicate injected into the query, `version` is DECLARED
 // and referenced, so stripping it would send an undefined variable.
 //
 // What is worth pinning now is the other half — a mutation that cannot carry the
@@ -239,7 +239,7 @@ func TestHandle_IfVersionOnAnAddIsRefusedNotSilentlyDropped(t *testing.T) {
 
 	c, rec := newGQLCtx(t, map[string]any{
 		"query":     `mutation { addServer(input:[]) { server { id } } }`,
-		"variables": map[string]any{"ifVersion": 5},
+		"variables": map[string]any{"version": 5},
 	})
 
 	if err := h.Handle(c); err != nil {
@@ -254,7 +254,7 @@ func TestHandle_IfVersionOnAnAddIsRefusedNotSilentlyDropped(t *testing.T) {
 }
 
 func TestHandle_MVCCConflict(t *testing.T) {
-	// DGraph returns before-state with version=5; client sends ifVersion=3 → conflict.
+	// DGraph returns before-state with version=5; client sends version=3 → conflict.
 	callCount := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -275,8 +275,8 @@ func TestHandle_MVCCConflict(t *testing.T) {
 		"query":         `mutation UpdateServer { updateServer(input:{}) { server { id } } }`,
 		"operationName": "UpdateServer",
 		"variables": map[string]any{
-			"id":        "1",
-			"ifVersion": 3, // client thinks it's version 3, server has version 5
+			"id":      "1",
+			"version": 3, // client thinks it's version 3, server has version 5
 		},
 	})
 
@@ -289,7 +289,7 @@ func TestHandle_MVCCConflict(t *testing.T) {
 }
 
 func TestHandle_MVCCVersionMatch(t *testing.T) {
-	// Before-state version=5, ifVersion=5 → no conflict, mutation proceeds.
+	// Before-state version=5, version=5 → no conflict, mutation proceeds.
 	//
 	// Uses the canonical `$orbId` form because that is the only shape the
 	// version predicate can be injected into — the inline fixture this used to
@@ -311,7 +311,7 @@ func TestHandle_MVCCVersionMatch(t *testing.T) {
 		"query":         `mutation UpdateServer($orbId: String!, $set: ServerPatch!) { updateServer(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { server { orbId } } }`,
 		"operationName": "UpdateServer",
 		"variables": map[string]any{
-			"orbId": "alaska:SRV001", "set": map[string]any{"hostname": "x"}, "ifVersion": 5,
+			"orbId": "alaska:SRV001", "set": map[string]any{"hostname": "x"}, "version": 5,
 		},
 	})
 
@@ -334,7 +334,7 @@ func TestHandle_MalformedIfVersionIsBadInputNotConflict(t *testing.T) {
 			w.Write([]byte(`{"data":{"getServer":{"id":"1","version":5}}}`)) //nolint:errcheck
 			return
 		}
-		t.Error("the mutation reached DGraph despite a malformed ifVersion")
+		t.Error("the mutation reached DGraph despite a malformed version")
 		w.Write([]byte(`{"data":{}}`)) //nolint:errcheck
 	}))
 	t.Cleanup(srv.Close)
@@ -343,7 +343,7 @@ func TestHandle_MalformedIfVersionIsBadInputNotConflict(t *testing.T) {
 	c, rec := newGQLCtx(t, map[string]any{
 		"query":         `mutation UpdateServer { updateServer(input:{}) { server { id } } }`,
 		"operationName": "UpdateServer",
-		"variables":     map[string]any{"id": "1", "ifVersion": "not-a-number"},
+		"variables":     map[string]any{"id": "1", "version": "not-a-number"},
 	})
 
 	if err := h.Handle(c); err != nil {

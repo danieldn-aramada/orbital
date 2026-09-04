@@ -71,7 +71,7 @@ One mutation request producing N entities writes N events sharing a `request_id`
 
 1. the **before-fetch** (`fetchBeforeByID` / `fetchBeforeByOrbID`) — the input to `computeChanges`,
 2. **stamping** — `version` auto-increment on update, `version: 1` on add, plus `createdBy`/`createdAt`/`updatedBy`/`updatedAt` from the authenticated identity and the server clock,
-3. the opt-in **`ifVersion` MVCC check**.
+3. the opt-in **`version` MVCC check**.
 
 All three live *inside* `Handle`. `writeToDGraph` — the function every write already funnels through, and where the approval gate was deliberately placed (Spike 36 D14: *a chokepoint for WRITES, not just for clients*) — does only the gate check and the POST. So `DispatchMutation` gets none of the three and says so in its own doc comment, leaving each to the caller with nothing enforcing that a caller remembers.
 
@@ -92,9 +92,9 @@ The Accept gap is measured, not inferred: with an open change request against `c
 
 ### Design — move all three into `writeToDGraph`
 
-They move together because they are coupled: stamping's UPDATE branch is gated on `before != nil` (it reads `before["version"]`), and `ifVersion` compares against `before["version"]`. Leaving `ifVersion` behind means `Handle` still needs the fetch, which defeats the move.
+They move together because they are coupled: stamping's UPDATE branch is gated on `before != nil` (it reads `before["version"]`), and `version` compares against `before["version"]`. Leaving `version` behind means `Handle` still needs the fetch, which defeats the move.
 
-- An `ifVersion` mismatch returns a **typed error** that `Handle` maps to `409 MVCC_CONFLICT`, mirroring how `gatedError` already surfaces the approval refusal. `DispatchMutation` callers never set `ifVersion`, so it is inert for them.
+- An `version` mismatch returns a **typed error** that `Handle` maps to `409 MVCC_CONFLICT`, mirroring how `gatedError` already surfaces the approval refusal. `DispatchMutation` callers never set `version`, so it is inert for them.
 - `DispatchMutation`'s `before` parameter becomes a **fallback** — the fetched value wins when it resolves. This costs divergence-Accept its deliberate optimisation (its comment notes it avoids a round trip because the read was already paid at ingest) in exchange for a complete, current before-state: one extra read per Accept.
   - **Refined while building, 2026-09-03.** "Fetched wins" is per FIELD, not wholesale. `BeforeFields` is a curated per-type selection — `NetworkInterface`'s is `id orbId name version` — and `dispatchAcceptMutation` names its field at runtime, so discarding the caller's map would have emptied the audit diff for exactly the fields outside the list. The fetch is overlaid ON the fallback.
   - **Also found while building:** the move alone fixes nothing for Accept. Its mutation declared `$filter: {Type}Filter!`, and the row to stamp is resolved from the `orbId` VARIABLE — so the pre-flight resolved no row and the defect would have survived the refactor with the suite green. Accept now dispatches the canonical `update{Kind}($orbId, $set)` shape, and `TestAccept_DispatchesMutationAndRecordsResolution` asserts that shape rather than the old one.
@@ -110,8 +110,8 @@ They move together because they are coupled: stamping's UPDATE branch is gated o
 3. The audit event for an Accept carries a field diff computed from the fetched before-state.
 4. A `/graphql` update increments `version` by exactly one — no double-stamp introduced by the move.
 5. A `/graphql` add still gets `version: 1` plus `createdBy`/`createdAt`/`updatedBy`/`updatedAt`.
-6. `ifVersion` mismatch is still `409 MVCC_CONFLICT`; a match still proceeds.
-7. `ifVersion` and `orbId` are still stripped before the body reaches DGraph, on the same conditions.
+6. `version` mismatch is still `409 MVCC_CONFLICT`; a match still proceeds.
+7. `version` and `orbId` are still stripped before the body reaches DGraph, on the same conditions.
 8. An inline-selector update is still refused `400 VARIABLE_FORM_REQUIRED` with the rewrite hint.
 9. A change-request merge still applies, writes `version = target+1` once, and still records its field diff.
 10. **The negative:** a direct DQL write still bypasses everything. `TestCR_OutOfBandWriteThatSkipsTheVersionCounterIsNotSeen` stays unchanged and passing — out-of-band writes remain invisible to staleness by design; what changes is that Accept stops being one.
@@ -122,7 +122,7 @@ Items 4–8 and 10 are already pinned by the twelve tests in `graphql_handler_te
 
 ## 5. Phasing
 
-0. ✅ **Done 2026-09-03** *(companion, either order — see §4)* Move the before-fetch, stamping and `ifVersion` check from `Handle` into `writeToDGraph`.
+0. ✅ **Done 2026-09-03** *(companion, either order — see §4)* Move the before-fetch, stamping and `version` check from `Handle` into `writeToDGraph`.
 1. Add `request_id` (nullable) to `audit_event`; stamp it from the existing request id.
 2. Write path emits one event per entity. `operations` becomes a single-element array for new rows (field kept, not narrowed, so old rows stay valid).
 3. Extend `computeChanges` with the create branch (`before: null`).

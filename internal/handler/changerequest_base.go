@@ -299,7 +299,7 @@ func fetchOrbIDSubgraph(ctx context.Context, dgraphURL string, orbIDs []string) 
 // What it does NOT see is a write that reaches DGraph without passing through
 // orbital and therefore never bumped the counter. That trade is deliberate: the
 // counter IS orbital's MVCC, and a check that trusts it is consistent with
-// every other place orbital relies on it — including the `ifVersion` conflict
+// every other place orbital relies on it — including the `version` conflict
 // check on the mutation path.
 //
 // Entities absent from the graph are absent from the map, which is what makes

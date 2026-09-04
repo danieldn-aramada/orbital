@@ -93,7 +93,6 @@ var skipDiffFields = map[string]bool{
 	"createdBy": true,
 	"updatedAt": true,
 	"updatedBy": true,
-	"ifVersion": true,
 }
 
 type eventsFragmentData struct {

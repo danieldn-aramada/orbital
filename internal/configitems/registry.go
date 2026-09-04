@@ -546,13 +546,13 @@ type EditTarget struct {
 	ParentWrapper      *EditWrapper `json:"parentWrapper,omitempty"`
 
 	// Version is the entity's OCC counter at the moment the page was rendered,
-	// so the editor can send it as `ifVersion` and have a concurrent edit
+	// so the editor can send it as `version` and have a concurrent edit
 	// refused instead of silently overwritten.
 	//
 	// NOT derivable from the registry — BuildEditTargets sees only types and
 	// naming conventions, never entity data — so the page handler stamps it
 	// from the rows it already fetched (see StampEditTargetVersion). Zero means
-	// "not known", and the editor then omits `ifVersion` rather than asserting
+	// "not known", and the editor then omits `version` rather than asserting
 	// version 0, which would refuse every edit.
 	//
 	// It travels on the TARGET, deliberately, not in the edit-data tree: that
@@ -682,7 +682,7 @@ func OverrideEditTargetOrbID(targets []EditTarget, kind, orbID string) []EditTar
 }
 
 // StampEditTargetVersion records an entity's current OCC version on its edit
-// target so the editor can send `ifVersion`.
+// target so the editor can send `version`.
 //
 // Keyed by orbId rather than kind: a root and its owned children are different
 // entities with independent counters, and several targets can share a kind

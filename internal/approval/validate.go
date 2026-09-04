@@ -116,7 +116,7 @@ func Validate(ctx context.Context, src SchemaSource, cs *Changeset) (ValidationR
 				Index: i, OrbID: ch.OrbID,
 				Msg: fmt.Sprintf("duplicate orbId — already changed at changes[%d]", prev),
 				Hint: "merge applies items in order, so two items on one entity make the outcome depend on ordering; " +
-					"and an entity has one version, so two ifVersion preconditions on it cannot both hold — the first item bumps it. Combine them",
+					"and an entity has one version, so two version preconditions on it cannot both hold — the first item bumps it. Combine them",
 			})
 			continue
 		}
@@ -199,11 +199,11 @@ func Validate(ctx context.Context, src SchemaSource, cs *Changeset) (ValidationR
 		// their write is guarded — the exact failure mode the guard exists to
 		// prevent. Reported here rather than as a conflict because nothing has
 		// moved: the proposal is malformed, so it is a 400, not a 409.
-		if !exists && ch.IfVersion != nil {
+		if !exists && ch.Version != nil {
 			res.Errors = append(res.Errors, ValidationError{
 				Index: i, OrbID: ch.OrbID,
-				Msg:  "ifVersion was supplied but no entity has this orbId, so there is no version to match",
-				Hint: "Drop ifVersion if you mean to create it; fix the orbId if you meant an entity that already exists.",
+				Msg:  "version was supplied but no entity has this orbId, so there is no version to match",
+				Hint: "Drop version if you mean to create it; fix the orbId if you meant an entity that already exists.",
 			})
 			continue
 		}

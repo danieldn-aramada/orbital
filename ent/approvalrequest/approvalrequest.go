@@ -39,6 +39,8 @@ const (
 	FieldAuthor = "author"
 	// FieldBaseHash holds the string denoting the base_hash field in the database.
 	FieldBaseHash = "base_hash"
+	// FieldChangesetRevision holds the string denoting the changeset_revision field in the database.
+	FieldChangesetRevision = "changeset_revision"
 	// FieldBaseVersions holds the string denoting the base_versions field in the database.
 	FieldBaseVersions = "base_versions"
 	// FieldBasePresent holds the string denoting the base_present field in the database.
@@ -90,6 +92,7 @@ var Columns = []string{
 	FieldStatus,
 	FieldAuthor,
 	FieldBaseHash,
+	FieldChangesetRevision,
 	FieldBaseVersions,
 	FieldBasePresent,
 	FieldBaseEffect,
@@ -126,6 +129,8 @@ var (
 	AuthorValidator func(string) error
 	// BaseHashValidator is a validator for the "base_hash" field. It is called by the builders before save.
 	BaseHashValidator func(string) error
+	// DefaultChangesetRevision holds the default value on creation for the "changeset_revision" field.
+	DefaultChangesetRevision int
 	// DefaultExecutedBy holds the default value on creation for the "executed_by" field.
 	DefaultExecutedBy string
 )
@@ -224,6 +229,11 @@ func ByAuthor(opts ...sql.OrderTermOption) OrderOption {
 // ByBaseHash orders the results by the base_hash field.
 func ByBaseHash(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBaseHash, opts...).ToFunc()
+}
+
+// ByChangesetRevision orders the results by the changeset_revision field.
+func ByChangesetRevision(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldChangesetRevision, opts...).ToFunc()
 }
 
 // ByExecutedAt orders the results by the executed_at field.

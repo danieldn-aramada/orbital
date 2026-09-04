@@ -74,12 +74,12 @@ type ChangeItem struct {
 	// Clear is the fields to unset. Separate from Set because a GraphQL `set`
 	// of null is a no-op in DGraph — clearing requires a `remove`.
 	Clear []string `json:"clear,omitempty"`
-	// IfVersion is the entity's `version` as the caller read it. Supplying it
+	// Version is the entity's `version` as the caller read it. Supplying it
 	// makes the item conditional at ENTITY level: orbital refuses at creation if
 	// the entity has moved since, and refuses at merge if it moves between
 	// review and apply.
 	//
-	// It means exactly what `ifVersion` means on /graphql, deliberately — a
+	// It means exactly what `version` means on /graphql, deliberately — a
 	// client integrating against both APIs should not meet two different
 	// concurrency concepts for the same question.
 	//
@@ -97,7 +97,7 @@ type ChangeItem struct {
 	// that does not exist is REFUSED at validation rather than ignored: there is
 	// no version to match, and a caller that asked for a check and silently did
 	// not get one is worse off than one that never asked.
-	IfVersion *int `json:"ifVersion,omitempty"`
+	Version *int `json:"version,omitempty"`
 }
 
 // Changeset is the config.mutation payload. Single-namespace by construction:

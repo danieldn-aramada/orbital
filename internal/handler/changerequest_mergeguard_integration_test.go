@@ -6,13 +6,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/approval"
+	"github.com/armada/orbital/internal/graphdiff"
 	"github.com/labstack/echo/v4"
 )
 
@@ -24,7 +27,7 @@ import (
 // refusal can name the offender — for every request, including ones whose
 // author never sent a precondition.
 //
-// Deliberately NOT the author's `ifVersion`: that is their read at proposal
+// Deliberately NOT the author's `version`: that is their read at proposal
 // time, so once anything moves the entity it is permanently unsatisfiable and
 // re-approval — one click, by design — could never clear it.
 
@@ -140,12 +143,12 @@ func TestCRMerge_EntityMoveAndFieldMoveAreDistinguishable(t *testing.T) {
 	// Field-level, for contrast: it names a FIELD and talks about values. It
 	// comes from the server-recorded ancestor (`base_values`) at merge, not from
 	// anything a client asserted — the client-supplied `before` was removed once
-	// `ifVersion` covered the entity-level question.
+	// `version` covered the entity-level question.
 	//
 	// Reaching it needs the VERSION to be current while a covered FIELD has
 	// moved to a third value. Writing straight to DGraph without bumping the
 	// counter produces exactly that — the class base_values exists to catch, and
-	// the one ifVersion is blind to.
+	// the one version is blind to.
 	crB := f.open(t, approval.ChangeItem{OrbID: crServerB, Op: approval.OpUpdate,
 		Set: map[string]any{"hostname": "proposed-b"}})
 	if _, err := f.crh.Approve(ctx, crB.ID, reviewer, user.RoleDev, "ok"); err != nil {
@@ -255,7 +258,7 @@ func TestCRMerge_BaseVersionsStaysInLockstepWithBaseHash(t *testing.T) {
 // ── the whole point: re-review still clears it in one click ────────────────
 
 // The reason base_versions carries the merge guard rather than the author's
-// ifVersion. A token captured at proposal time would make this flow impossible:
+// version. A token captured at proposal time would make this flow impossible:
 // the entity moved, so it can never match again, and no amount of re-approving
 // would help.
 func TestCRMerge_ReApprovalAfterAThirdPartyWriteStillMerges(t *testing.T) {
@@ -389,7 +392,7 @@ func TestCRMerge_StaleEntitiesAreCarriedOnTheGetResponse(t *testing.T) {
 	f.requireApproval(t, 1)
 
 	cr := f.open(t, approval.ChangeItem{OrbID: crServerA, Op: approval.OpUpdate,
-		Set: map[string]any{"hostname": "proposed"}})
+		Set: map[string]any{"hostname": "proposed"}, Version: intp(readVersion(t, crServerA))})
 
 	get := func(t *testing.T) struct {
 		Stale         bool `json:"stale"`
@@ -456,4 +459,115 @@ func TestCRMerge_StaleEntitiesAreCarriedOnTheGetResponse(t *testing.T) {
 	if !errors.As(mergeErr, &sw) || len(sw.Problems) != 1 || sw.Problems[0].OrbID != e.OrbID {
 		t.Errorf("the banner and the merge refusal name different entities: banner=%v merge=%v", e.OrbID, sw)
 	}
+}
+
+// ── the review table's data ────────────────────────────────────────────────
+
+// `fields` resolves every field to what a merge would DO with it. It exists
+// because a value pair cannot tell an ordinary change from a conflict — both are
+// two differing values — and the third value that separates them (what it was
+// when reviewed) lives only on the conflict rows.
+//
+// Same classifier the merge uses, so a preview that says "conflict" and a merge
+// that refuses cannot disagree. That agreement is asserted at the bottom.
+func TestCRFields_ResolvesAppliesSatisfiedAndConflict(t *testing.T) {
+	ctx := context.Background()
+	f := newCRFixture(t)
+	f.requireApproval(t, 1)
+
+	// Three fields on two entities, engineered into the three outcomes.
+	cr := f.open(t,
+		approval.ChangeItem{OrbID: crServerA, Op: approval.OpUpdate, Set: map[string]any{
+			"hostname": "a-proposed",  // will stay APPLIES
+			"model":    "already-set", // will be made SATISFIED below
+		}},
+		approval.ChangeItem{OrbID: crServerB, Op: approval.OpUpdate, Set: map[string]any{
+			"hostname": "b-proposed", // will be made CONFLICT below
+		}},
+	)
+
+	// Approve FIRST. Approving re-anchors the ancestor to current state — it is
+	// the act of attesting to it — so a third-party write made BEFORE approval
+	// would be absorbed into the base and could never read as a conflict. The
+	// realistic sequence is: reviewed, then someone else changed it.
+	if _, err := f.crh.Approve(ctx, cr.ID, reviewer, user.RoleDev, "ok"); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+
+	// Written WITHOUT bumping `version`, so the request does not go stale — the
+	// entity-level guard stays quiet and the field-level one is what fires.
+	// Someone else independently sets model to the proposed value → satisfied.
+	crGQL(t, `mutation($orbId: String!, $set: ServerPatch!) { updateServer(input: {filter: {orbId: {eq: $orbId}}, set: $set}) { numUids } }`,
+		map[string]any{"orbId": crServerA, "set": map[string]any{"model": "already-set"}})
+	// And moves B's hostname to a THIRD value → conflict.
+	crGQL(t, `mutation($orbId: String!, $set: ServerPatch!) { updateServer(input: {filter: {orbId: {eq: $orbId}}, set: $set}) { numUids } }`,
+		map[string]any{"orbId": crServerB, "set": map[string]any{"hostname": "someone-elses"}})
+
+	rows := fieldOutcomeBodies(classifyChangeset(
+		snapshotFor(t, f, cr), mustChangeset(t, cr), mustGet(t, f, cr.ID).BaseValues))
+
+	byKey := map[string]fieldOutcomeBody{}
+	for _, r := range rows {
+		byKey[r.OrbID+"/"+r.Field] = r
+	}
+
+	applies, ok := byKey[crServerA+"/hostname"]
+	if !ok || applies.Outcome != "applies" {
+		t.Errorf("hostname on A = %+v, want outcome applies", applies)
+	}
+	if applies.Reviewed != nil {
+		t.Errorf("an applying row carries `reviewed` (%v) — it only repeats current", applies.Reviewed)
+	}
+
+	satisfied, ok := byKey[crServerA+"/model"]
+	if !ok || satisfied.Outcome != "satisfied" {
+		t.Errorf("model on A = %+v, want outcome satisfied", satisfied)
+	}
+	// The whole point of the Current column: on a satisfied row the reader sees
+	// the two values are equal instead of inferring it from a caption.
+	if fmt.Sprint(satisfied.Current) != fmt.Sprint(satisfied.Proposed) {
+		t.Errorf("satisfied row: current %v != proposed %v", satisfied.Current, satisfied.Proposed)
+	}
+
+	conflict, ok := byKey[crServerB+"/hostname"]
+	if !ok || conflict.Outcome != "conflict" {
+		t.Fatalf("hostname on B = %+v, want outcome conflict", conflict)
+	}
+	// The third value, and the only row that carries it.
+	if fmt.Sprint(conflict.Reviewed) != "b-original" {
+		t.Errorf("conflict.reviewed = %v, want b-original — without it a conflict is indistinguishable from an ordinary change", conflict.Reviewed)
+	}
+	if fmt.Sprint(conflict.Current) != "someone-elses" {
+		t.Errorf("conflict.current = %v, want someone-elses", conflict.Current)
+	}
+
+	// And the preview agrees with the refusal: merge must refuse, naming the
+	// same field the table marked.
+	_, mergeErr := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false)
+	var pf *preconditionFailed
+	if !errors.As(mergeErr, &pf) {
+		t.Fatalf("merge err = %v, want a field conflict — the table and the merge disagree", mergeErr)
+	}
+	if len(pf.Problems) != 1 || !strings.Contains(pf.Problems[0].Field, "hostname") {
+		t.Errorf("merge refused on %v, want the one field the table called a conflict", pf.Problems)
+	}
+}
+
+// snapshotFor reads the same base snapshot the diff endpoint uses.
+func snapshotFor(t *testing.T, f *crFixture, cr *ent.ApprovalRequest) graphdiff.Snapshot {
+	t.Helper()
+	st, err := f.crh.StateWithSnapshot(context.Background(), mustGet(t, f, cr.ID))
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	return st.Snapshot
+}
+
+func mustChangeset(t *testing.T, cr *ent.ApprovalRequest) approval.Changeset {
+	t.Helper()
+	var cs approval.Changeset
+	if err := json.Unmarshal(cr.Payload, &cs); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	return cs
 }

@@ -75,7 +75,7 @@ func (h *ChangeRequest) Merge(ctx context.Context, id int64, actor string, role 
 		// stopped counting the moment the base moved. Report the more
 		// actionable of the two: "the intent changed, re-review" tells an
 		// operator what to do; "not enough approvals" does not.
-		if st.Stale {
+		if st.Stale || st.SubtreeChanged {
 			return nil, namedStale(cr, st)
 		}
 		return nil, fmt.Errorf("%w: %d of %d", errCRNotApproved, st.Valid, st.Required)
@@ -89,7 +89,9 @@ func (h *ChangeRequest) Merge(ctx context.Context, id int64, actor string, role 
 	// established that, because approvals are stamped with the hash they were
 	// cast against; this catches a write landing between the last approval and
 	// this call, and it is the ONLY guard on an ungoverned request.
-	if st.Stale {
+	// Both signals block: the author owes a rebase, or the reviewer owes a
+	// re-approval. Neither can be merged past.
+	if st.Stale || st.SubtreeChanged {
 		return nil, namedStale(cr, st)
 	}
 
@@ -276,7 +278,7 @@ func (h *ChangeRequest) applyItem(ctx context.Context, actor string, caller call
 		query := fmt.Sprintf(`mutation Delete%s($orbId: String!) { delete%s(filter: {orbId: {eq: $orbId}}) { numUids } }`,
 			item.Type, item.Type)
 		_, err := h.gql.DispatchMutation(ctx, actor, caller, gate, query,
-			map[string]any{"orbId": item.OrbID, "ifVersion": target.Version}, nil)
+			map[string]any{"orbId": item.OrbID, "version": target.Version}, nil)
 		return err
 
 	case !target.Exists:
@@ -325,9 +327,9 @@ func (h *ChangeRequest) applyItem(ctx context.Context, actor string, caller call
 		}
 
 		// The write-time half of the guard, and the reason it is target.Version
-		// rather than item.IfVersion: this asserts "the entity is still what I
+		// rather than item.Version: this asserts "the entity is still what I
 		// planned against", read moments ago in fetchMergeTargets. The author's
-		// ifVersion is a CREATION-time precondition and would be permanently
+		// version is a CREATION-time precondition and would be permanently
 		// stale here for any request that was legitimately re-approved.
 		//
 		// writeToDGraph re-reads the row immediately before the POST and refuses
@@ -335,7 +337,7 @@ func (h *ChangeRequest) applyItem(ctx context.Context, actor string, caller call
 		// mutation is caught. It narrows the window rather than closing it —
 		// DGraph's GraphQL layer has no conditional update, so a true
 		// compare-and-swap would need a DQL upsert block.
-		vars := map[string]any{"orbId": item.OrbID, "set": set, "ifVersion": target.Version}
+		vars := map[string]any{"orbId": item.OrbID, "set": set, "version": target.Version}
 		mutationBody := "set: $set"
 		decl := fmt.Sprintf("$orbId: String!, $set: %sPatch!", item.Type)
 		if len(remove) > 0 {

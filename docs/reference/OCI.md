@@ -117,7 +117,7 @@ sequenceDiagram
 
 **What the hash covers** (`graphdiff.Snapshot.ContentHash`, `internal/graphdiff/compare.go`): the **canonical normalized graph** — sorted orbIds, each node emitted as sorted-key JSON (`orbId`, `types`, `f:<scalar>`, `e:<edge>` as sorted target orbIds) streamed into one SHA-256. Therefore:
 
-- **In** — the set of orbIds present (so **adds and deletes** move it, which a per-node `version`/`ifVersion` check structurally cannot catch), type membership, every scalar value, every edge as target-orbId sets.
+- **In** — the set of orbIds present (so **adds and deletes** move it, which a per-node `version`/`version` check structurally cannot catch), type membership, every scalar value, every edge as target-orbId sets.
 - **Out** — `ConfigItem.version` / `updatedAt` / `updatedBy` and DGraph internals (`uid`, tenant `namespace`). So it is **UID-independent** (survives a restore's UID reassignment) and **noise-independent** (a save-with-no-change bumps `version` but does NOT trip the guard — it guards semantic change, not write activity).
 - **Not covered:** the GraphQL schema. A `schema.graphql` change between preview and Apply would alter `schema.gz` without moving the hash. Acceptable — that's a deploy event, not a concurrent-operator action.
 

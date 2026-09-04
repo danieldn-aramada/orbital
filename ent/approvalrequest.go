@@ -42,6 +42,8 @@ type ApprovalRequest struct {
 	Author string `json:"author,omitempty"`
 	// BaseHash holds the value of the "base_hash" field.
 	BaseHash string `json:"base_hash,omitempty"`
+	// ChangesetRevision holds the value of the "changeset_revision" field.
+	ChangesetRevision int `json:"changeset_revision,omitempty"`
 	// BaseVersions holds the value of the "base_versions" field.
 	BaseVersions map[string]int `json:"base_versions,omitempty"`
 	// BasePresent holds the value of the "base_present" field.
@@ -98,7 +100,7 @@ func (*ApprovalRequest) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case approvalrequest.FieldBaseVersions, approvalrequest.FieldBasePresent, approvalrequest.FieldBaseEffect, approvalrequest.FieldBaseValues, approvalrequest.FieldPayload:
 			values[i] = new([]byte)
-		case approvalrequest.FieldID, approvalrequest.FieldNumber:
+		case approvalrequest.FieldID, approvalrequest.FieldNumber, approvalrequest.FieldChangesetRevision:
 			values[i] = new(sql.NullInt64)
 		case approvalrequest.FieldCreatedBy, approvalrequest.FieldUpdatedBy, approvalrequest.FieldNamespace, approvalrequest.FieldActionType, approvalrequest.FieldTitle, approvalrequest.FieldDescription, approvalrequest.FieldStatus, approvalrequest.FieldAuthor, approvalrequest.FieldBaseHash, approvalrequest.FieldExecutedBy:
 			values[i] = new(sql.NullString)
@@ -197,6 +199,12 @@ func (_m *ApprovalRequest) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field base_hash", values[i])
 			} else if value.Valid {
 				_m.BaseHash = value.String
+			}
+		case approvalrequest.FieldChangesetRevision:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field changeset_revision", values[i])
+			} else if value.Valid {
+				_m.ChangesetRevision = int(value.Int64)
 			}
 		case approvalrequest.FieldBaseVersions:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -334,6 +342,9 @@ func (_m *ApprovalRequest) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("base_hash=")
 	builder.WriteString(_m.BaseHash)
+	builder.WriteString(", ")
+	builder.WriteString("changeset_revision=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ChangesetRevision))
 	builder.WriteString(", ")
 	builder.WriteString("base_versions=")
 	builder.WriteString(fmt.Sprintf("%v", _m.BaseVersions))

@@ -341,16 +341,6 @@ definitions:
         items:
           type: string
         type: array
-      ifVersion:
-        description: |-
-          IfVersion is the entity's `version` as you read it — the same concurrency
-          token `/graphql` mutations accept, meaning the same thing here. Orbital
-          refuses the request with 409 MVCC_CONFLICT if the entity has moved since,
-          naming the item and both versions. One per item, never per field: an
-          entity has one version. Omit for an unconditional item. Supplying it for
-          an entity that does not exist is refused — there is no version to match.
-        example: 7
-        type: integer
       op:
         description: |-
           Op is one of upsert, update, delete. Explicit, never inferred — a request
@@ -374,9 +364,64 @@ definitions:
           resolves it from OrbID); REQUIRED when creating one that does not exist.
         example: Server
         type: string
+      version:
+        description: |-
+          Version is the entity's `version` as you read it — the same concurrency
+          token `/graphql` mutations accept, meaning the same thing here. Orbital
+          refuses the request with 409 MVCC_CONFLICT if the entity has moved since,
+          naming the item and both versions. One per item, never per field: an
+          entity has one version. Omit for an unconditional item. Supplying it for
+          an entity that does not exist is refused — there is no version to match.
+        example: 7
+        type: integer
     required:
     - op
     - orbId
+    type: object
+  handler.changeRecordEntry:
+    properties:
+      applied:
+        description: |-
+          Applied is whether this item landed. Nil when no merge has been attempted,
+          which is different from false: a request nobody has merged has not failed.
+        example: true
+        type: boolean
+      fields:
+        description: |-
+          Fields is empty for an op with no field detail — a delete, or a create
+          whose values were not recorded. The op still says what happened.
+        items:
+          $ref: '#/definitions/handler.changeRecordField'
+        type: array
+      op:
+        example: update
+        type: string
+      orbId:
+        example: colo:CWJHDX3-idrac
+        type: string
+      type:
+        example: IdracSettings
+        type: string
+    type: object
+  handler.changeRecordField:
+    properties:
+      before:
+        description: |-
+          Before is the value at the time this was last reviewed, read from the
+          recorded ancestor. Absent for a create, and for requests opened before
+          orbital recorded one — the row then reads "\u2192 after", which is less
+          informative but still true.
+      cleared:
+        description: |-
+          Cleared distinguishes "unset this" from "set this to null" — the two are
+          different mutations and a reader cannot tell them apart from a null Value.
+        example: false
+        type: boolean
+      field:
+        example: sshEnabled
+        type: string
+      value:
+        description: Value is the intended value, absent when the field is being cleared.
     type: object
   handler.changeRequestDiffResponse:
     properties:
@@ -395,6 +440,22 @@ definitions:
           scope.
         example: sha256:045b8a51a0aea59fa
         type: string
+      fields:
+        description: |-
+          Fields is the review table: one row per field the changeset writes, each
+          resolved to what a merge would DO with it.
+
+          It supersedes walking `changes` and `satisfied` separately. Those two
+          answer "what would change" and "what would not", but neither can express
+          the third outcome — a field someone else moved to a different value, which
+          refuses the merge. Rendered from `changes` alone, a conflict is
+          indistinguishable from an ordinary change: both are two differing values.
+
+          Computed by the SAME classifier the merge uses, so the preview and the
+          refusal cannot disagree.
+        items:
+          $ref: '#/definitions/handler.fieldOutcomeBody'
+        type: array
       satisfied:
         description: |-
           Satisfied is the part of the changeset that would do nothing: fields whose
@@ -498,6 +559,14 @@ definitions:
       namespace:
         example: alaska-dot
         type: string
+      record:
+        description: |-
+          Record is the per-entity account of what this request does, one entry per
+          change object, with each item's applied status folded in. Built from the
+          payload so it stays correct after a merge, when the live diff is empty.
+        items:
+          $ref: '#/definitions/handler.changeRecordEntry'
+        type: array
       requiredApprovals:
         example: 1
         type: integer
@@ -533,6 +602,14 @@ definitions:
           `open` on its own when the base moves.
         example: open
         type: string
+      subtreeChanged:
+        description: |-
+          SubtreeChanged means the reviewed scope moved without any change object
+          going out of date — an edit to an owned child. Cleared by approving again;
+          blocks merge on its own. Distinct from Stale, which only the author can
+          clear by rebasing.
+        example: false
+        type: boolean
       title:
         example: Enable SSH on the Anchorage iDRACs
         type: string
@@ -749,6 +826,39 @@ definitions:
         type: object
       field:
         example: retentionDays
+        type: string
+    type: object
+  handler.fieldOutcomeBody:
+    properties:
+      current:
+        type: string
+      field:
+        description: Field is the bare field name, type prefix stripped — what a table
+          shows.
+        example: enabled
+        type: string
+      orbId:
+        example: colo:server-maintenance-CWJHDX3
+        type: string
+      outcome:
+        description: |-
+          Outcome is `applies`, `satisfied` or `conflict`.
+
+            applies   — the merge writes Proposed over Current.
+            satisfied — Current already equals Proposed; the merge writes nothing.
+            conflict  — someone changed this field since the request was reviewed;
+                        the merge REFUSES until it is re-reviewed or amended.
+        example: applies
+        type: string
+      proposed:
+        type: string
+      reviewed:
+        description: |-
+          Reviewed is the value when the request was opened. Present only on a
+          conflict — on the other two it equals Current and would be noise.
+        type: string
+      type:
+        example: ServerMaintenance
         type: string
     type: object
   handler.lastPublishedMeta:

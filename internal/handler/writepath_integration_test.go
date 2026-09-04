@@ -19,7 +19,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// The write pre-flight — before-fetch, ifVersion, stamping — moved out of the
+// The write pre-flight — before-fetch, version, stamping — moved out of the
 // /graphql handler and into writeToDGraph on 2026-09-03 so that every write
 // gets it, not only the ones arriving over HTTP.
 //
@@ -209,16 +209,16 @@ func TestWritePath_AcceptMakesAnOpenChangeRequestStaleAndVoidsApprovals(t *testi
 	if _, err := f.crh.Approve(ctx, cr.ID, reviewer, user.RoleDev, "ok"); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
-	if st := f.state(t, cr.ID); st.Stale || st.Valid != 1 {
-		t.Fatalf("before the Accept: stale=%v valid=%d, want fresh with 1 approval", st.Stale, st.Valid)
+	if st := f.state(t, cr.ID); st.SubtreeChanged || st.Valid != 1 {
+		t.Fatalf("before the Accept: subtreeChanged=%v valid=%d, want fresh with 1 approval", st.SubtreeChanged, st.Valid)
 	}
 
 	entryID := f.seedEntry(t, crServerA, "hostname", "Server", "a-original", "edge-observed-name")
 	f.resolve(t, entryID, "accept", "admin@test.com", user.RoleAdmin)
 
 	st := f.state(t, cr.ID)
-	if !st.Stale {
-		t.Error("the request is not stale after a third-party Accept moved its target — an approval now covers a state nobody reviewed")
+	if !st.SubtreeChanged {
+		t.Error("a third-party Accept moved the target without being noticed — an approval now covers a state nobody reviewed")
 	}
 	if st.Valid != 0 {
 		t.Errorf("valid approvals = %d, want 0 — the approval predates the Accept", st.Valid)

@@ -201,8 +201,10 @@ func TestCR_StaleBlocksMergeAndIsDerivedWithNoHook(t *testing.T) {
 	setHostname(t, crServerA, "someone-else-was-here")
 
 	st := f.state(t, cr.ID)
-	if !st.Stale {
-		t.Fatal("request is not stale after a direct DGraph write — staleness is not being derived")
+	// The change object carries no version, so it cannot be item-stale; what a
+	// direct write moves is the reviewed SCOPE. Same guarantee, named signal.
+	if !st.SubtreeChanged {
+		t.Fatal("request does not report subtreeChanged after a direct DGraph write — movement is not being derived")
 	}
 	// The approval was cast against the old hash, so it stops counting on its
 	// own. No dismissal step ran.
@@ -265,8 +267,8 @@ func TestCR_StaleWithValidApprovals_IsMVCCConflict(t *testing.T) {
 		t.Fatalf("force drift: %v", err)
 	}
 	st := f.state(t, cr.ID)
-	if !st.Stale {
-		t.Fatal("expected stale")
+	if !st.SubtreeChanged {
+		t.Fatal("expected the corrupted anchor to report subtreeChanged")
 	}
 	// Re-stamp the approval to the current hash so the approval count is
 	// satisfied while the base is still moved — the exact state the MVCC guard
@@ -411,8 +413,8 @@ func TestCR_PartialMerge_ThirdPartyWriteBlocksRebase(t *testing.T) {
 		t.Fatal("base was rebased even though an entity we did not touch changed")
 	}
 	final := f.state(t, cr.ID)
-	if !final.Stale {
-		t.Error("request is not stale after a third-party write")
+	if !final.SubtreeChanged {
+		t.Error("request does not report subtreeChanged after a third-party write")
 	}
 	if final.Valid != 0 {
 		t.Errorf("valid approvals = %d, want 0 — a third-party write must force re-review", final.Valid)
@@ -872,8 +874,8 @@ func TestCR_OutOfBandWriteThatSkipsTheVersionCounterIsNotSeen(t *testing.T) {
 		OrbID: crServerA, Op: approval.OpUpdate,
 		Set: map[string]any{"hostname": "proposed"},
 	})
-	if st := f.state(t, cr.ID); st.Stale {
-		t.Fatal("precondition: fresh request already reads stale")
+	if st := f.state(t, cr.ID); st.SubtreeChanged {
+		t.Fatal("precondition: fresh request already reads as moved")
 	}
 
 	// Straight to DGraph, content changed, version deliberately left alone.
@@ -883,15 +885,15 @@ func TestCR_OutOfBandWriteThatSkipsTheVersionCounterIsNotSeen(t *testing.T) {
 	if got := readHostname(t, crServerA); got != "changed-behind-orbitals-back" {
 		t.Fatalf("the out-of-band write did not land: hostname = %q", got)
 	}
-	if st := f.state(t, cr.ID); st.Stale {
-		t.Error("an out-of-band write marked the request stale — if this now works, the doc in CHANGE-CONTROL.md describing the limit is wrong")
+	if st := f.state(t, cr.ID); st.SubtreeChanged {
+		t.Error("an out-of-band write was noticed — if this now works, the doc in CHANGE-CONTROL.md describing the limit is wrong")
 	}
 
 	// And the counterpart: the SAME edit made the way intent is actually
 	// written does mark it stale. Together these two say the anchor tracks
 	// orbital's writes, not merely "some writes".
 	setHostname(t, crServerA, "changed-through-orbital")
-	if st := f.state(t, cr.ID); !st.Stale {
-		t.Error("a version-bumping write did not mark the request stale — the anchor is not tracking movement at all")
+	if st := f.state(t, cr.ID); !st.SubtreeChanged {
+		t.Error("a version-bumping write did not move the anchor — it is not tracking movement at all")
 	}
 }

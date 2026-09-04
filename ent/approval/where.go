@@ -96,6 +96,11 @@ func ApprovedAtHash(v string) predicate.Approval {
 	return predicate.Approval(sql.FieldEQ(FieldApprovedAtHash, v))
 }
 
+// ApprovedAtRevision applies equality check predicate on the "approved_at_revision" field. It's identical to ApprovedAtRevisionEQ.
+func ApprovedAtRevision(v int) predicate.Approval {
+	return predicate.Approval(sql.FieldEQ(FieldApprovedAtRevision, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Approval {
 	return predicate.Approval(sql.FieldEQ(FieldCreatedAt, v))
@@ -579,6 +584,46 @@ func ApprovedAtHashEqualFold(v string) predicate.Approval {
 // ApprovedAtHashContainsFold applies the ContainsFold predicate on the "approved_at_hash" field.
 func ApprovedAtHashContainsFold(v string) predicate.Approval {
 	return predicate.Approval(sql.FieldContainsFold(FieldApprovedAtHash, v))
+}
+
+// ApprovedAtRevisionEQ applies the EQ predicate on the "approved_at_revision" field.
+func ApprovedAtRevisionEQ(v int) predicate.Approval {
+	return predicate.Approval(sql.FieldEQ(FieldApprovedAtRevision, v))
+}
+
+// ApprovedAtRevisionNEQ applies the NEQ predicate on the "approved_at_revision" field.
+func ApprovedAtRevisionNEQ(v int) predicate.Approval {
+	return predicate.Approval(sql.FieldNEQ(FieldApprovedAtRevision, v))
+}
+
+// ApprovedAtRevisionIn applies the In predicate on the "approved_at_revision" field.
+func ApprovedAtRevisionIn(vs ...int) predicate.Approval {
+	return predicate.Approval(sql.FieldIn(FieldApprovedAtRevision, vs...))
+}
+
+// ApprovedAtRevisionNotIn applies the NotIn predicate on the "approved_at_revision" field.
+func ApprovedAtRevisionNotIn(vs ...int) predicate.Approval {
+	return predicate.Approval(sql.FieldNotIn(FieldApprovedAtRevision, vs...))
+}
+
+// ApprovedAtRevisionGT applies the GT predicate on the "approved_at_revision" field.
+func ApprovedAtRevisionGT(v int) predicate.Approval {
+	return predicate.Approval(sql.FieldGT(FieldApprovedAtRevision, v))
+}
+
+// ApprovedAtRevisionGTE applies the GTE predicate on the "approved_at_revision" field.
+func ApprovedAtRevisionGTE(v int) predicate.Approval {
+	return predicate.Approval(sql.FieldGTE(FieldApprovedAtRevision, v))
+}
+
+// ApprovedAtRevisionLT applies the LT predicate on the "approved_at_revision" field.
+func ApprovedAtRevisionLT(v int) predicate.Approval {
+	return predicate.Approval(sql.FieldLT(FieldApprovedAtRevision, v))
+}
+
+// ApprovedAtRevisionLTE applies the LTE predicate on the "approved_at_revision" field.
+func ApprovedAtRevisionLTE(v int) predicate.Approval {
+	return predicate.Approval(sql.FieldLTE(FieldApprovedAtRevision, v))
 }
 
 // HasRequest applies the HasEdge predicate on the "request" edge.

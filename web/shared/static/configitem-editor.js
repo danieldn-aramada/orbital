@@ -79,30 +79,30 @@ function rootWithoutSubtrees(state, targets) {
 // mutation. This shape triggers orbital's generic before-fetch + diff renderer.
 // Do NOT change to add{Kind}.upsert — that path skips the before-fetch and
 // shows raw variables instead of a colored diff. See docs/reference/AUDIT.md.
-function buildUpdateCall({ kind, orbId, set, remove, payloadField, ifVersion }) {
+function buildUpdateCall({ kind, orbId, set, remove, payloadField, version }) {
   // `remove` clears fields the user emptied. DGraph ignores null in `set` and
   // rejects "" on typed scalars (DateTime), so clearing requires `remove` with
   // the field's prior value. Only declare/send it when non-empty so existing
   // set-only edits are byte-for-byte unchanged.
   const hasRemove = remove && Object.keys(remove).length > 0
 
-  // ifVersion is orbital's OCC check: the proxy compares it to the entity's
+  // version is orbital's OCC check: the proxy compares it to the entity's
   // CURRENT version and returns 409 if someone else wrote in between. It is
   // stripped before the body reaches DGraph — a variable orbital consumes, not
   // one DGraph ever sees — so it is NOT declared in the query, only sent.
   //
   // This was lost in b1157ac (2026-06-20) when the per-page edit modals were
-  // replaced by this module: each of them passed ifVersion, and the shared
+  // replaced by this module: each of them passed version, and the shared
   // module never carried it forward. MVCC was off on every UI edit for two and
-  // a half months, and nothing failed — ifVersion is opt-in server-side, so an
+  // a half months, and nothing failed — version is opt-in server-side, so an
   // absent client is indistinguishable from one that declined to use it.
   //
   // Zero/undefined means the page did not know the version (a first-time
   // create has none). Omit rather than send 0, which would never match and
   // would refuse every edit.
-  const guarded = Number.isInteger(ifVersion) && ifVersion > 0
+  const guarded = Number.isInteger(version) && version > 0
   const variables = hasRemove ? { orbId, set, remove } : { orbId, set }
-  if (guarded) variables.ifVersion = ifVersion
+  if (guarded) variables.version = version
 
   return {
     query: `mutation Update${kind}($orbId: String!, $set: ${kind}Patch!${hasRemove ? `, $remove: ${kind}Patch` : ''}) {
@@ -222,7 +222,7 @@ function changedOnly(next, prev) {
 // guardVersion is the entity-level precondition for a changeset item: the
 // `version` this page was rendered from.
 //
-// Same token, same meaning, as the `ifVersion` a direct save sends — that is
+// Same token, same meaning, as the `version` a direct save sends — that is
 // the point. A client should not meet two concurrency concepts depending on
 // whether it saves or proposes.
 //
@@ -287,8 +287,8 @@ export function buildChangeset({
       set: rootSet,
       clear: rootClear,
     }
-    const rootIfVersion = guardVersion(rootTarget)
-    if (rootIfVersion !== undefined) rootItem.ifVersion = rootIfVersion
+    const rootVersion = guardVersion(rootTarget)
+    if (rootVersion !== undefined) rootItem.version = rootVersion
     items.push(rootItem)
   }
 
@@ -318,8 +318,8 @@ export function buildChangeset({
       }
       // Only on the `existed` branch. The create branch below deliberately gets
       // none — there is no version to match, and orbital refuses a supplied one.
-      const childIfVersion = guardVersion(t)
-      if (childIfVersion !== undefined) childItem.ifVersion = childIfVersion
+      const childVersion = guardVersion(t)
+      if (childVersion !== undefined) childItem.version = childVersion
       items.push(childItem)
     } else {
       const set = withoutStamped({ name: deriveName(t), ...scalarPayload(t, sub) })
@@ -876,7 +876,7 @@ export function initConfigItemEditor({
       calls.push(buildUpdateCall({
         kind: rootTarget.kind, orbId: reloadOrbId, set: rootSet, payloadField: rootTarget.payloadField,
         remove: rootChange ? removePayload(rootTarget, rootChange.before, rootChange.currentSub) : {},
-        ifVersion: rootTarget.version,
+        version: rootTarget.version,
       }))
     }
     for (const ch of changes) {
@@ -890,7 +890,7 @@ export function initConfigItemEditor({
           kind: t.kind, orbId: t.orbId, payloadField: t.payloadField,
           set: { ...scalarPayload(t, sub) },
           remove: removePayload(t, ch.before, sub),
-          ifVersion: t.version,
+          version: t.version,
         }))
       } else {
         // CREATE under an already-existing wrapper (sibling exists). Safe

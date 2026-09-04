@@ -21953,7 +21953,8 @@ div.dt-container:has(#audit-log-table) .dt-paging .pagination-link {
 #export-jobs-table td,
 #artifacts-table td,
 #import-history-table td,
-#publish-history-table td {
+#publish-history-table td,
+#cr-changes td {
   vertical-align: middle;
 }
 

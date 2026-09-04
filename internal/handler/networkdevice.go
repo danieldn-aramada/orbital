@@ -260,7 +260,7 @@ func (h *NetworkDeviceHandler) Tab(c echo.Context) error {
 	// Edit targets are derived from the configitems registry — one entry for the
 	// NetworkDevice root (it has no owned children).
 	targets := configitems.BuildEditTargets("NetworkDevice", raw.OrbID, raw.Namespace, raw.Name)
-	// OCC version, so the editor sends `ifVersion` and a concurrent edit is
+	// OCC version, so the editor sends `version` and a concurrent edit is
 	// refused rather than silently overwritten.
 	targets = configitems.StampEditTargetVersion(targets, raw.OrbID, raw.Version)
 	targetsJSON, _ := json.Marshal(targets)

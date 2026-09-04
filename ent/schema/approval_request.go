@@ -91,6 +91,16 @@ func (ApprovalRequest) Fields() []ent.Field {
 		// precisely the copy that drifts — see D13.
 		field.String("base_hash").NotEmpty(),
 
+		// changeset_revision bumps every time the CHANGESET is amended, and is
+		// stamped onto each approval. An approval counts only when both the
+		// graph hash AND the revision still match.
+		//
+		// The hash alone is not enough: a rebase that only corrects a version
+		// number changes the proposal without moving the graph, so hash-matched
+		// approvals would survive an edit the reviewer never saw. Same mechanic
+		// as GitHub dismissing reviews on a new push.
+		field.Int("changeset_revision").Default(1),
+
 		// base_versions is the version vector base_hash is a fingerprint OF:
 		// orbId -> version, over the same scope, captured at the same instant and
 		// recomputed on exactly the same occasions (amend, and the rebase after a
@@ -103,7 +113,7 @@ func (ApprovalRequest) Fields() []ent.Field {
 		// names the entities — for EVERY request, including ones whose author
 		// never sent a precondition.
 		//
-		// Deliberately NOT the client's `ifVersion`. That is the author's read at
+		// Deliberately NOT the client's `version`. That is the author's read at
 		// proposal time, and once anything moves that entity the token is
 		// permanently wrong: re-approval — which is how staleness is meant to be
 		// cleared, in one click — could never satisfy it, and only an amend

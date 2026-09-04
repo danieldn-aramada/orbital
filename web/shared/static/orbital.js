@@ -1485,20 +1485,6 @@ function sameValue(proposal, current) {
   }
 }
 
-// sameProposal compares two PROPOSALS. `sameValue` above compares a proposal
-// against a current value, which is a different question: here neither side is
-// the graph, so a `clear` and an `update` are never the same claim even when
-// the update writes null.
-function sameProposal(a, b) {
-  if ((a.op === 'clear') !== (b.op === 'clear')) return false
-  if (a.op === 'clear') return true
-  try {
-    return JSON.stringify(a.value) === JSON.stringify(b.value)
-  } catch (_) {
-    return false
-  }
-}
-
 // conflictsAmong recomputes disagreement over the proposals that SURVIVED
 // suppression.
 //
@@ -2560,7 +2546,7 @@ document.addEventListener('submit', (e) => {
       // change; without this, a delete lands on whatever the entity became.
       const versionEl = document.getElementById('cfg-delete-version')
       const shown = versionEl ? parseInt(versionEl.dataset.version || '', 10) : NaN
-      const guard = Number.isInteger(shown) && shown > 0 ? '?ifVersion=' + shown : ''
+      const guard = Number.isInteger(shown) && shown > 0 ? '?version=' + shown : ''
 
       const r = await fetch(BASE + '/api/v1/config-items/' + encodeURIComponent(type) + '/' + encodeURIComponent(id) + guard, { method: 'DELETE' })
       if (!r.ok) {
@@ -2808,6 +2794,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const el = (id) => document.getElementById(id)
 
   let current = null
+  let currentDiff = null
+  let currentFmt = (v) => String(v)
 
   // Not fmtDate: that is date-only, so two events on one day would render
   // identically. renderTimestamps turns this into relative time on load.
@@ -2839,6 +2827,8 @@ document.addEventListener('DOMContentLoaded', () => {
       '<tr><td style="white-space:nowrap;width:1%">' + k + '</td><td>' + v + '</td></tr>').join('')
 
     current = cr
+    currentDiff = diff
+    currentFmt = fmt
     renderBanner(cr)
     loadOverlap(cr)
     renderChanges(cr, diff, fmt)
@@ -2858,23 +2848,26 @@ document.addEventListener('DOMContentLoaded', () => {
         + '. Merging cannot proceed — close this request, drop that item, or recreate the entity and re-review.'
         + '</div>'
     } else if (cr.stale) {
-      // States the CONSEQUENCE, not the mechanism: the diff is always computed
-      // against current intent, so it looks identical whether or not the request
-      // is stale — what the reader cannot see is that merge is blocked and why.
+      // WHAT is stale belongs in the table, which marks the rows — a banner that
+      // lists entities and versions grows without bound and duplicates what is
+      // already on screen. This says the state and whose move it is; the rows
+      // say where to look.
       //
-      // `staleEntities` comes from the API, which computes it from the same diff
-      // the merge refusal uses. Rendered when present so the reader knows WHERE
-      // to look; the generic sentence stays as the fallback for requests opened
-      // before orbital recorded the base version vector.
-      const movedList = (cr.staleEntities || []).map(e =>
-        '<li><span class="is-family-monospace">' + esc(shortOrbId(e.orbId) || e.orbId) + '</span>'
-        + (e.currentVersion === undefined || e.currentVersion === null
-            ? ' — deleted (was version ' + esc(String(e.reviewedVersion)) + ')'
-            : ' — version ' + esc(String(e.reviewedVersion)) + ' → ' + esc(String(e.currentVersion)))
-        + '</li>').join('')
+      // Authorship is read off `actions` rather than compared here — the API
+      // already decided who may edit, and duplicating that rule in JS is how the
+      // two drift apart.
+      const canEdit = (cr.availableActions || []).includes('edit')
       b.innerHTML = '<div class="notification is-warning is-light py-2 is-size-7 mb-4">'
-        + '<strong>Stale.</strong> Intent changed since this was reviewed — approve again to merge.'
-        + (movedList ? '<ul class="mt-2 ml-4">' + movedList + '</ul>' : '')
+        + '<strong>Stale.</strong> '
+        + (canEdit
+            ? 'Edit the request to re-read what changed, then re-request review.'
+            : 'Only the author can rebase it.')
+        + '</div>'
+    } else if (cr.subtreeChanged) {
+      // The scope moved but nothing the author proposed went out of date —
+      // typically an owned child. The REVIEWER clears this one.
+      b.innerHTML = '<div class="notification is-warning is-light py-2 is-size-7 mb-4">'
+        + '<strong>Changed since review.</strong> Re-approve to merge.'
         + '</div>'
     } else {
       b.innerHTML = ''
@@ -2917,14 +2910,20 @@ document.addEventListener('DOMContentLoaded', () => {
       .catch(() => {})     // an overlap notice is never worth failing the review page for
   }
 
-  // overlapNotice groups by the OTHER request, so one competing proposal reads
-  // as one line however many fields it touches.
+  // overlapNotice names the OTHER active requests touching anything this one
+  // touches, and links them. That is all it does.
+  //
+  // It deliberately does NOT say which orbIds or fields collide. An overlap can
+  // span many entities and many fields, so spelling it out grows without bound
+  // in a banner sitting above the diff — and the detail is one click away in the
+  // request it names. What a reviewer needs here is "someone else is working on
+  // this, go look"; anything more is a second review page rendered badly.
   function overlapNotice(cr, mine, byOrbId) {
-    const others = new Map()                      // id -> {title, fields:Set, conflicting}
+    const others = new Set()
     for (const [orbId, fields] of mine) {
       const entry = byOrbId[orbId]
       if (!entry || !entry.fields) continue
-      for (const [field, ours] of fields) {
+      for (const [field] of fields) {
         const f = entry.fields[field]
         if (!f) continue
         for (const p of f.proposals || []) {
@@ -2932,40 +2931,22 @@ document.addEventListener('DOMContentLoaded', () => {
           // active proposal including ours, so without this every overlapping
           // field would report a collision with no visible symptom other than a
           // notice that is always present.
-          if (p.changeRequestId === cr.id) continue
-          const o = others.get(p.changeRequestId)
-            || { title: p.title || '', fields: new Set(), conflicting: false }
-          o.fields.add(field)
-          if (!sameProposal(p, ours)) o.conflicting = true
-          others.set(p.changeRequestId, o)
+          if (p.changeRequestId !== cr.id) others.add(p.changeRequestId)
         }
       }
     }
     if (!others.size) return ''
 
-    const anyConflict = [...others.values()].some(o => o.conflicting)
-    const items = [...others.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([id, o]) => {
-      const href = BASE + '/change-requests/' + encodeURIComponent(id)
-      const fields = [...o.fields].sort().map(f => '<code>' + esc(f) + '</code>').join(', ')
-      return '<li><a href="' + esc(href) + '">' + esc(id) + '</a>'
-        + (o.title ? ' — ' + esc(o.title) : '')
-        + ' also proposes ' + fields
-        + (o.conflicting
-          ? ' <strong>with a different value</strong>'
-          : ' <span class="has-text-grey">with the same value</span>')
-        + '</li>'
-    }).join('')
-
-    // Conflicting is stronger because it decides an outcome: whichever merges
-    // first wins the field and the other is refused. Agreeing overlap costs
-    // only duplicated review, so it stays informational.
-    return '<div class="notification ' + (anyConflict ? 'is-danger' : 'is-info')
-      + ' is-light py-2 is-size-7 mb-4" data-testid="cr-overlap-notice">'
+    const ids = [...others].sort((a, b) => a.localeCompare(b))
+    const links = ids.map(id =>
+      '<a href="' + esc(BASE + '/change-requests/' + encodeURIComponent(id)) + '">' + esc(id) + '</a>'
+    ).join(', ')
+    return '<div class="notification is-info is-light py-2 is-size-7 mb-4" data-testid="cr-overlap-notice">'
       + '<strong>Also in flight.</strong> '
-      + (anyConflict
-        ? 'Whichever merges first wins the field; the other is then refused until it is re-reviewed.'
-        : 'Another request proposes the same values, so one of them will merge as a no-op.')
-      + '<ul class="mt-1" style="list-style:disc; margin-left:1.25rem;">' + items + '</ul>'
+      + (ids.length === 1
+        ? 'Another change request overlaps this one: '
+        : ids.length + ' other change requests overlap this one: ')
+      + links
       + '</div>'
   }
 
@@ -2974,22 +2955,32 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderChanges(cr, diff, fmt) {
     const label = el('cr-changes-label')
     const box = el('cr-changes')
-    const changes = (diff && diff.changes) || []
-    const satisfied = (diff && diff.satisfied) || []
+    const fields = (diff && diff.fields) || []
 
-    // Both lists are rendered, because `changes` alone does not say what the
-    // request PROPOSES — a field someone else already set drops out of the diff,
-    // so the table silently shrinks and the reader cannot tell whether the
-    // request ever asked for it.
-    if (changes.length || satisfied.length) {
+    // ONE table, one row per field, from the API's `fields` — which resolves each
+    // field to what a merge would DO with it.
+    //
+    // Not `changes` + `satisfied` rendered separately, and not the export-preview
+    // renderer. Those show a value pair, and a value pair cannot tell an ordinary
+    // change from a conflict: both are simply two different values. The third
+    // value — what the field was when the request was reviewed — is what
+    // separates them, and it only exists on the conflict rows.
+    // LIVE requests only. `fields` lists every field the changeset writes
+    // whatever its outcome, so unlike the old `changes`/`satisfied` pair it is
+    // never empty and would swallow the terminal branch below — rendering a
+    // closed request as a live diff against current intent, where every row
+    // reads "No change" by construction and says nothing about what was
+    // proposed. A terminal request shows `effect`, the delta captured at open.
+    const live = cr.status === 'open' || cr.status === 'approved'
+    if (live && fields.length) {
       label.textContent = 'Changes'
-      // Same renderer as the export preview and artifact compare — one graphdiff
-      // core produces this shape for all three. Do not fork it.
-      box.innerHTML = (changes.length ? renderExportPreviewTable(changes, esc, fmt) : '')
-        + satisfiedTable(satisfied, fmt)
+      // The author may prune fields the world moved under; nobody else may, and
+      // `availableActions` already answers who — `edit` is author-only.
+      const canEdit = (cr.availableActions || []).includes('edit')
+      box.innerHTML = reviewFieldsTable(fields, fmt, canEdit, cr.staleEntities || [])
       return
     }
-    if (cr.status === 'open' || cr.status === 'approved') {
+    if (live) {
       label.textContent = 'Changes'
       box.innerHTML = '<p class="is-size-7 has-text-grey">This request proposes no changes.</p>'
       return
@@ -3001,59 +2992,201 @@ document.addEventListener('DOMContentLoaded', () => {
     box.innerHTML = effectTable(cr)
   }
 
-  // The part of the changeset that would do nothing — someone else already set
-  // it to the proposed value. Struck through, because the row is a statement
-  // about what was asked for, not about what will happen.
+  // reviewFieldsTable renders the review table: one row per field, each carrying
+  // what the merge would do with it.
   //
-  // Its own table rather than a fourth section inside renderExportPreviewTable:
-  // that renderer is shared with the export preview and artifact compare, and
-  // neither can ever produce a satisfied entry.
-  function satisfiedTable(items, fmt) {
-    if (!items.length) return ''
-    const rows = items.map(it => {
-      const where = shortOrbId(it.orbId)
-      // No strikethrough. It universally marks the superseded half of a
-      // transition, and there is no transition here — the proposed value IS the
-      // current one. Striking `enabled: true` reads as "enabled is not true",
-      // the opposite of the truth. The `No change` tag, the grey tbody and the
-      // caption already carry the de-emphasis.
-      // No arrow: `before` and `after` are BOTH the current value here
-      // (satisfiedItems sets `Before: cur, After: cur`), so `"Dell" → "Dell"`
-      // would depict a transition that does not exist. A bare value is the
-      // honest rendering — and it is why a fourth "current value" column would
-      // only reprint this same string.
-      const detail = (it.fields || []).length
-        ? (it.fields || []).map(f =>
-            '<div>' + esc(String(f.field).replace(/^[^.]+\./, '')) + ': ' + fmt(f.after) + '</div>'
-          ).join('')
-        : 'already deleted'
-      return '<tr><td class="is-family-monospace" title="' + esc(it.orbId) + '">' + esc(where)
-        + '</td><td>' + esc(it.type || '') + '</td><td>' + detail + '</td></tr>'
-    }).join('')
-    return '<p class="mt-4 mb-2">'
-      + '<span class="tag is-light">No change</span> '
-      + '<span class="is-size-7 has-text-grey">' + items.length
-      + ' already at the proposed value — merging would not alter ' + (items.length === 1 ? 'it' : 'them')
-      + '</span></p>'
-      + '<table class="' + TABLE_CLASS + '" data-testid="cr-satisfied">'
-      // Same three columns and header row as the changed table above, so the two
-      // read as one view. The third header says "Proposed value", not "Change" —
-      // these rows change nothing, and the caption above says so.
-      + '<thead><tr><th>orbId</th><th>Type</th><th>Proposed value</th></tr></thead>'
-      + '<tbody class="has-text-grey">' + rows + '</tbody></table>'
+  // Per field rather than per entity because the OUTCOME is per field — one
+  // entity can have a satisfied field and a conflicting one at the same time,
+  // and an entity-shaped row has nowhere to put two answers.
+  //
+  // `reviewed` appears only on conflicts. On the other two outcomes it equals
+  // `current`, so printing it would be a column that repeats its neighbour.
+  // staged holds "orbId\u0000field" for every field marked for removal.
+  //
+  // STAGED, not applied: a click changes nothing on the server. Removing a field
+  // is an amend, and every amend re-captures the base and voids every approval —
+  // so firing per click would dismiss the reviewers three times for a three-row
+  // cleanup, and could fail halfway leaving a changeset nobody chose. One apply,
+  // one amend, one invalidation. It is also what makes `keep | delete` honest as
+  // a segmented control: a toggle implies a state you can flip back, which is
+  // true right up until you apply.
+  let staged = new Set()
+  // Two data attributes rather than one delimited key: the pair has to survive a
+  // round trip through an HTML attribute, and orbIds contain ":" and "-" so any
+  // printable delimiter risks colliding with the data. (A NUL delimiter does not
+  // survive `getAttribute` at all — which is how this was found.)
+  const stagedKey = (orbId, field) => JSON.stringify([orbId, field])
+
+  // staleMark flags an entity that moved since it was proposed. The versions go
+  // in the tooltip, not the cell — they explain the mark to whoever asks and are
+  // noise to everyone else.
+  function staleMark(e) {
+    if (!e) return ''
+    const to = (e.currentVersion === undefined || e.currentVersion === null)
+      ? 'deleted' : 'version ' + e.currentVersion
+    return '<span title="' + esc('version ' + e.reviewedVersion + ' when proposed, now ' + to) + '">Stale</span>'
   }
 
+  function reviewFieldsTable(rows, fmt, canEdit, staleEntities) {
+    // Staleness is ENTITY-level — the node moved, whatever this particular field
+    // resolved to — so it marks the orbId cell rather than the per-field Note
+    // column, and a row can be both stale and conflicting without the two
+    // fighting over one cell.
+    //
+    // Every stale entity is guaranteed a row here: `staleEntities` is derived
+    // from the change objects, and every change object contributes at least one
+    // field. So the table can carry this and the banner no longer has to list it.
+    const staleBy = new Map((staleEntities || []).map(e => [e.orbId, e]))
+    if (!rows.length) return ''
+    // `applies` renders BLANK on purpose. It is the expected outcome — in a
+    // healthy request every row says it — and a word repeated down the whole
+    // column trains the reader to skip the column, which is exactly where the
+    // conflict warning lives. The column earns its width only when a row is
+    // something other than ordinary.
+    //
+    // Which is why the header is "Note" and not "Status": it no longer reports a
+    // status for every row, and `#cr-table` on the queue page already uses
+    // "Status" for the REQUEST's status (open / approved / merged). Same word,
+    // two unrelated meanings, one page.
+    const STATUS = {
+      applies: { label: '', cls: '' },
+      satisfied: { label: 'No change', cls: 'has-text-grey' },
+      conflict: { label: 'Conflict', cls: 'has-text-danger has-text-weight-semibold' },
+    }
+    const conflicts = rows.filter(r => r.outcome === 'conflict').length
+    const body = rows.map(r => {
+      const st = STATUS[r.outcome] || { label: r.outcome || '', cls: '' }
+      // The ROW background highlights the CONFLICT, not the staleness. An entity
+      // can be stale while every one of its fields is satisfied, and colouring
+      // those rows red would point the reviewer at the one thing needing no
+      // action. Staleness is entity-level, so it marks the entity cell instead —
+      // visible without competing with the field-level outcome.
+      const rowCls = r.outcome === 'conflict' ? ' class="has-background-danger-light"' : ''
+      // `fmt` returns MARKUP and escapes its own values — the Current and
+      // Proposed cells below interpolate it raw for that reason. Escaping the
+      // whole sentence here put the tags on screen as text.
+      const detail = r.outcome === 'conflict'
+        ? esc(st.label) + ' — was ' + fmt(r.reviewed) + ' when reviewed'
+        : esc(st.label)
+      // Both facts land in Note, staleness first: it is the one that blocks the
+      // merge, and a row reading "No change" while its entity had moved was the
+      // exact misread this fixes.
+      //
+      // ONE colour for the cell, not one per part. Three tones inside a single
+      // cell read as three things demanding attention when the cell is making a
+      // single point, and the row already alternates two font families across
+      // its data columns. The colour is the most severe thing present; the text
+      // carries the rest.
+      const stale = staleMark(staleBy.get(r.orbId))
+      const note = [stale, st.label ? detail : ''].filter(Boolean).join(' · ')
+      const noteCls = r.outcome === 'conflict' ? 'has-text-danger'
+        : stale ? 'has-text-warning-dark'
+        : st.cls
+      // The control appears ONLY where the world moved under you — a satisfied
+      // field or a conflicting one. Not on `applies`: that is ordinary changeset
+      // editing, which belongs in the entity editor, and offering it here is how
+      // this quietly becomes the full editor.
+      const prunable = canEdit && (r.outcome === 'satisfied' || r.outcome === 'conflict')
+      const key = stagedKey(r.orbId, r.field)
+      const marked = staged.has(key)
+      const control = prunable
+        ? '<td><div class="buttons has-addons is-flex-wrap-nowrap mb-0" data-cr-orbid="' + esc(r.orbId) + '" data-cr-field="' + esc(r.field) + '">'
+          + '<button type="button" class="button is-small' + (marked ? '' : ' is-info is-selected') + '" data-cr-keep>keep</button>'
+          + '<button type="button" class="button is-small' + (marked ? ' is-danger is-selected' : '') + '" data-cr-drop>delete</button>'
+          + '</div></td>'
+        : '<td></td>'
+      const strike = marked ? ' style="text-decoration: line-through; opacity: .55"' : ''
+      return '<tr' + rowCls + strike + '>'
+        + '<td class="is-family-monospace" title="' + esc(r.orbId) + '">' + esc(shortOrbId(r.orbId) || r.orbId) + '</td>'
+        + '<td class="is-family-monospace">' + esc(r.type || '') + '</td>'
+        + '<td class="is-family-monospace">' + esc(r.field || '') + '</td>'
+        + '<td>' + fmt(r.current) + '</td>'
+        + '<td>' + fmt(r.proposed) + '</td>'
+        + '<td class="' + noteCls + '">' + note + '</td>'
+        + control
+        + '</tr>'
+    }).join('')
+
+    return (conflicts
+        ? '<p class="mb-2 is-size-7 has-text-danger">' + conflicts
+          + (conflicts === 1 ? ' field has' : ' fields have')
+          + ' changed since this was reviewed — merging is blocked until it is re-reviewed or amended.</p>'
+        : '')
+      + '<table class="' + TABLE_CLASS + '" data-testid="cr-fields">'
+      + '<thead><tr><th>orbId</th><th>Type</th><th>Field</th><th>Current</th><th>Proposed</th><th>Note</th><th></th></tr></thead>'
+      + '<tbody>' + body + '</tbody></table>'
+      + stagingBar(rows)
+  }
+
+  // stagingBar is the only thing that talks to the server, and it appears only
+  // once something is marked.
+  function stagingBar(rows) {
+    if (!staged.size) return ''
+    const remaining = rows.length - staged.size
+    return '<div class="notification is-warning is-light py-2 is-size-7 mt-3" data-testid="cr-staging">'
+      + '<strong>' + staged.size + (staged.size === 1 ? ' field' : ' fields')
+      + '</strong> will be removed from this proposal'
+      + (remaining === 0
+        ? ' — that is all of them. A proposal cannot be empty; close the request instead.'
+        : '. Updating re-captures the base, so <strong>every approval is dismissed</strong> and it must be reviewed again.')
+      + '<div class="buttons mt-2">'
+      + '<button type="button" class="button is-small is-warning" data-cr-apply-prune'
+      + (remaining === 0 ? ' disabled' : '') + '>Update proposal</button>'
+      + '<button type="button" class="button is-small" data-cr-cancel-prune>Cancel</button>'
+      + '</div></div>'
+  }
+
+  // The record of what this request does — one row per change object.
+  //
+  // Renders `record` from the API, NOT `effect`. `effect` is a queue-row summary
+  // that carries an orbId and a field only when there is exactly one of each, so
+  // a two-entity request rendered as "2 entities / 2 fields" and the detail was
+  // not recoverable here — it was never in the shape. The server derives `record`
+  // from the stored payload, so it survives the merge that empties the live diff.
   function effectTable(cr) {
-    const e = cr.effect || {}
-    if (!e.entities) return '<p class="is-size-7 has-text-grey">No recorded change.</p>'
-    const where = shortOrbId(e.orbId)
-    return '<table class="' + TABLE_CLASS + '" data-testid="cr-record">'
-      + '<thead><tr><th>orbId</th><th>Type</th><th>Change</th></tr></thead><tbody><tr>'
-      + '<td class="is-family-monospace" title="' + esc(e.orbId || '') + '">'
-      + esc(where || (e.entities + ' entities')) + '</td>'
-      + '<td>' + esc(e.type || '') + '</td>'
-      + '<td>' + effectFieldText(e) + '</td>'
-      + '</tr></tbody></table>'
+    const rows = cr.record || []
+    if (!rows.length) return '<p class="is-size-7 has-text-grey">No recorded change.</p>'
+    // A request nobody has merged has not failed, so the column is omitted
+    // rather than showing a row of falses.
+    const showApplied = rows.some(r => r.applied !== undefined && r.applied !== null)
+    let html = '<table class="' + TABLE_CLASS + '" data-testid="cr-record">'
+      + '<thead><tr><th>orbId</th><th>Type</th><th>Change</th>'
+      + (showApplied ? '<th>Applied</th>' : '') + '</tr></thead><tbody>'
+    for (const r of rows) {
+      html += '<tr>'
+        + '<td class="is-family-monospace" title="' + esc(r.orbId || '') + '">'
+        + esc(shortOrbId(r.orbId) || r.orbId || '') + '</td>'
+        + '<td>' + esc(r.type || '') + '</td>'
+        + '<td>' + recordChangeText(r) + '</td>'
+        + (showApplied ? '<td>' + appliedText(r) + '</td>' : '')
+        + '</tr>'
+    }
+    return html + '</tbody></table>'
+  }
+
+  // One cell describing every field this item touches. A delete carries no
+  // fields, and rendering "0 fields" for one would read as an empty request —
+  // the op is the description in that case.
+  function recordChangeText(r) {
+    const fields = r.fields || []
+    if (!fields.length) return esc(r.op || '')
+    return fields.map(f => {
+      const label = esc(f.field)
+      if (f.cleared) return 'clear ' + label
+      const v = shortValue(f.value)
+      if (v === null) return label
+      // `before` comes from the recorded ancestor, so a request opened before
+      // orbital stored one renders `\u2192 after` — less informative, still true.
+      const b = shortValue(f.before)
+      return label + ': ' + (b === null ? '' : esc(b) + ' ') + '\u2192 ' + esc(v)
+    }).join('<br>')
+  }
+
+  function appliedText(r) {
+    if (r.applied === undefined || r.applied === null) return ''
+    return r.applied
+      ? '<span class="has-text-success">yes</span>'
+      : '<span class="has-text-danger">no</span>'
   }
 
   function timelineTable(cr) {
@@ -3180,6 +3313,63 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.key === 'Escape') { e.preventDefault(); cancel() }
     })
   }
+
+  // Staging clicks: local only, nothing leaves the browser until Update.
+  host.addEventListener('click', (e) => {
+    const seg = e.target.closest('[data-cr-orbid]')
+    if (seg) {
+      const key = stagedKey(seg.getAttribute('data-cr-orbid'), seg.getAttribute('data-cr-field'))
+      if (e.target.closest('[data-cr-drop]')) staged.add(key)
+      else if (e.target.closest('[data-cr-keep]')) staged.delete(key)
+      else return
+      if (current) renderChanges(current, currentDiff, currentFmt)
+      return
+    }
+    if (e.target.closest('[data-cr-cancel-prune]')) {
+      staged.clear()
+      if (current) renderChanges(current, currentDiff, currentFmt)
+      return
+    }
+    const apply = e.target.closest('[data-cr-apply-prune]')
+    if (!apply) return
+
+    // ONE amend for the whole selection. The changeset is per ENTITY while the
+    // table is per FIELD, so a removed field comes out of that item's `set` /
+    // `clear`; an item left with neither is dropped entirely.
+    const items = ((current && current.changes) || []).map(it => {
+      const set = {}
+      for (const [k, v] of Object.entries(it.set || {})) {
+        if (!staged.has(stagedKey(it.orbId, k))) set[k] = v
+      }
+      const clear = (it.clear || []).filter(f => !staged.has(stagedKey(it.orbId, f)))
+      return { ...it, set, clear }
+    }).filter(it => Object.keys(it.set).length > 0 || (it.clear || []).length > 0)
+
+    if (!items.length) {
+      fail('A proposal cannot be empty — close the request instead of removing every field.')
+      return
+    }
+    if (!window.confirm('Remove ' + staged.size + ' field' + (staged.size === 1 ? '' : 's')
+      + ' from this proposal?\n\nEvery approval is dismissed and it must be reviewed again.')) return
+
+    apply.classList.add('is-loading')
+    fetch(BASE + '/api/v1/change-requests/' + encodeURIComponent(id), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ namespace: current.namespace, changes: items }),
+    })
+      .then(async r => {
+        apply.classList.remove('is-loading')
+        if (r.ok) { staged.clear(); load(); return }
+        // Validation lands per item — a removed create that a later item still
+        // references dangles, and the server names which one.
+        failWithProblems(await r.json().catch(() => ({})), 'update the proposal')
+      })
+      .catch(() => {
+        apply.classList.remove('is-loading')
+        fail('Request failed — check your connection and try again.')
+      })
+  })
 
   host.addEventListener('click', (e) => {
     const btn = e.target.closest('.js-cr-action')

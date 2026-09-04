@@ -34,9 +34,13 @@
 
         {{/* Do NOT put `height:100%` on the Details cell: the panel beside it is an
              unbounded diff, so matching it pads five rows out with void. */}}
-        <div class="fixed-grid has-3-cols">
+        {{/* 4 columns, not 3: Details is a fixed handful of short label/value
+             pairs, while Changes is a wide table that scrolls horizontally when
+             squeezed. A quarter is enough for the former and buys the latter a
+             column's worth of room. */}}
+        <div class="fixed-grid has-4-cols">
           <div class="grid">
-            <div class="cell is-col-span-2">
+            <div class="cell is-col-span-3">
               <article class="box">
                 <p class="is-size-6 has-text-weight-semibold mb-3" id="cr-changes-label">Changes</p>
                 <div class="table-container" id="cr-changes"></div>
@@ -52,7 +56,7 @@
               </article>
             </div>
 
-            <div class="cell is-col-span-3">
+            <div class="cell is-col-span-4">
               <article class="box">
                 <p class="is-size-6 has-text-weight-semibold mb-3">Activity</p>
                 <div class="table-container" id="cr-activity"></div>

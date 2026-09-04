@@ -116,6 +116,20 @@ func (_c *ApprovalCreate) SetApprovedAtHash(v string) *ApprovalCreate {
 	return _c
 }
 
+// SetApprovedAtRevision sets the "approved_at_revision" field.
+func (_c *ApprovalCreate) SetApprovedAtRevision(v int) *ApprovalCreate {
+	_c.mutation.SetApprovedAtRevision(v)
+	return _c
+}
+
+// SetNillableApprovedAtRevision sets the "approved_at_revision" field if the given value is not nil.
+func (_c *ApprovalCreate) SetNillableApprovedAtRevision(v *int) *ApprovalCreate {
+	if v != nil {
+		_c.SetApprovedAtRevision(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *ApprovalCreate) SetID(v uuid.UUID) *ApprovalCreate {
 	_c.mutation.SetID(v)
@@ -184,6 +198,10 @@ func (_c *ApprovalCreate) defaults() {
 		v := approval.DefaultComment
 		_c.mutation.SetComment(v)
 	}
+	if _, ok := _c.mutation.ApprovedAtRevision(); !ok {
+		v := approval.DefaultApprovedAtRevision
+		_c.mutation.SetApprovedAtRevision(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := approval.DefaultID()
 		_c.mutation.SetID(v)
@@ -221,6 +239,9 @@ func (_c *ApprovalCreate) check() error {
 		if err := approval.ApprovedAtHashValidator(v); err != nil {
 			return &ValidationError{Name: "approved_at_hash", err: fmt.Errorf(`ent: validator failed for field "Approval.approved_at_hash": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.ApprovedAtRevision(); !ok {
+		return &ValidationError{Name: "approved_at_revision", err: errors.New(`ent: missing required field "Approval.approved_at_revision"`)}
 	}
 	if len(_c.mutation.RequestIDs()) == 0 {
 		return &ValidationError{Name: "request", err: errors.New(`ent: missing required edge "Approval.request"`)}
@@ -291,6 +312,10 @@ func (_c *ApprovalCreate) createSpec() (*Approval, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ApprovedAtHash(); ok {
 		_spec.SetField(approval.FieldApprovedAtHash, field.TypeString, value)
 		_node.ApprovedAtHash = value
+	}
+	if value, ok := _c.mutation.ApprovedAtRevision(); ok {
+		_spec.SetField(approval.FieldApprovedAtRevision, field.TypeInt, value)
+		_node.ApprovedAtRevision = value
 	}
 	if nodes := _c.mutation.RequestIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

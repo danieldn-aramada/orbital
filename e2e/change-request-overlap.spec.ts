@@ -5,13 +5,15 @@
 // approval is stamped with the graph's hash. Two reviewers can otherwise spend
 // attention on proposals where one is guaranteed to be discarded.
 //
-// Only the cases a click cannot show are here. That a notice renders, names the
-// other request, and stays absent on a terminal request is checked visually;
-// these three are not: self-exclusion fails SILENTLY (the endpoint reports our
-// own proposal, so a missing filter means a notice that is always present and
-// always wrong), the conflicting/agreeing branch is invertible and an inverted
-// one tells a reviewer "same value" when the values differ, and the error path
-// has no visible trigger at all.
+// The notice names the other requests and links them — deliberately NOT which
+// orbIds or fields collide, which can run to any length and is one click away in
+// the request it names.
+//
+// Only the cases a click cannot show are here. That a notice renders and stays
+// absent on a terminal request is checked visually; these two are not:
+// self-exclusion fails SILENTLY (the endpoint reports our own proposal, so a
+// missing filter means a notice that is always present and always wrong), and
+// the error path has no visible trigger at all.
 
 import { test, expect, Page } from '@playwright/test'
 
@@ -68,30 +70,16 @@ test('a request with no competitor is never marked against itself', async ({ pag
   await expect(notice(page)).toHaveCount(0)
 })
 
-test('a competitor proposing a different value is named and flagged conflicting', async ({ page }) => {
-  const mine = await propose(page, 'OVERLAP mine', 'OVERLAP conflicting A')
-  const theirs = await propose(page, 'OVERLAP theirs', 'OVERLAP conflicting B')
+test('a competitor is named and linked, and this request is not named against itself', async ({ page }) => {
+  const mine = await propose(page, 'OVERLAP mine', 'OVERLAP competitor A')
+  const theirs = await propose(page, 'OVERLAP theirs', 'OVERLAP competitor B')
   await openReview(page, mine)
 
-  await expect(notice(page)).toContainText('different value', { timeout: 15_000 })
-  await expect(notice(page)).toContainText(theirs)
-  await expect(notice(page)).toContainText('reason')
+  await expect(notice(page)).toContainText(theirs, { timeout: 15_000 })
   await expect(notice(page)).not.toContainText(mine)
-  // Conflict decides an outcome — whichever merges first wins the field — so it
-  // is the one state here worth interrupting for.
-  await expect(page.locator('[data-testid="cr-overlap-notice"].is-danger')).toHaveCount(1)
-})
-
-test('a competitor proposing the same value is named as agreeing, not conflicting', async ({ page }) => {
-  const mine = await propose(page, 'OVERLAP identical', 'OVERLAP agreeing A')
-  const theirs = await propose(page, 'OVERLAP identical', 'OVERLAP agreeing B')
-  await openReview(page, mine)
-
-  await expect(notice(page)).toContainText('same value', { timeout: 15_000 })
-  await expect(notice(page)).toContainText(theirs)
-  await expect(notice(page)).not.toContainText('different value')
-  // Agreeing overlap costs only duplicated review, so it stays informational.
-  await expect(page.locator('[data-testid="cr-overlap-notice"].is-info')).toHaveCount(1)
+  await expect(notice(page).locator(`a[href*="${theirs}"]`)).toHaveCount(1)
+  // The whole point of the simplification: no per-field detail in the banner.
+  await expect(notice(page)).not.toContainText('reason')
 })
 
 test('the review page renders fully when the overlap lookup fails', async ({ page }) => {

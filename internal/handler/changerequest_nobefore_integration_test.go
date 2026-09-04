@@ -16,7 +16,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// The client-supplied `before` is gone: `ifVersion` answers the entity-level
+// The client-supplied `before` is gone: `version` answers the entity-level
 // question with the same token /graphql uses, and the field-level question is
 // answered at merge from the SERVER-recorded ancestor (`base_values`), which no
 // client ever supplied.
@@ -28,7 +28,7 @@ import (
 
 // `base_hash` covers each declared orbId's OWNED SUBTREE, not just the entity.
 // A reviewer approving a Server approved its IdracSettings too, so a third party
-// editing the child has to invalidate that review. Nothing about `ifVersion`
+// editing the child has to invalidate that review. Nothing about `version`
 // covers this — it is per declared item — so removing `before` must not have
 // been read as "the item-level token is now the whole guard".
 func TestNoBefore_ThirdPartyChildEditStillStalesTheParent(t *testing.T) {
@@ -41,8 +41,8 @@ func TestNoBefore_ThirdPartyChildEditStillStalesTheParent(t *testing.T) {
 	if _, err := f.crh.Approve(ctx, cr.ID, reviewer, user.RoleDev, "ok"); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
-	if st := f.state(t, cr.ID); st.Stale || st.Valid != 1 {
-		t.Fatalf("before the child edit: stale=%v valid=%d", st.Stale, st.Valid)
+	if st := f.state(t, cr.ID); st.SubtreeChanged || st.Valid != 1 {
+		t.Fatalf("before the child edit: subtreeChanged=%v valid=%d", st.SubtreeChanged, st.Valid)
 	}
 
 	// The CHILD moves. The declared item is untouched.
@@ -52,8 +52,8 @@ func TestNoBefore_ThirdPartyChildEditStillStalesTheParent(t *testing.T) {
 		}})
 
 	st := f.state(t, cr.ID)
-	if !st.Stale {
-		t.Error("editing an owned child no longer stales the parent's request — a reviewer's approval now covers a subtree they did not see")
+	if !st.SubtreeChanged {
+		t.Error("editing an owned child no longer flags the parent's request — a reviewer's approval now covers a subtree they did not see")
 	}
 	if st.Valid != 0 {
 		t.Errorf("valid approvals = %d, want 0", st.Valid)
@@ -135,7 +135,7 @@ func TestNoBefore_SatisfiedAndThreeWayMergeStillWork(t *testing.T) {
 // ── 17. the 409 envelope is unchanged; only the producer moved ─────────────
 
 // Clients already render `problems[]` from this envelope. The producer changed
-// from a `before` mismatch to an `ifVersion` mismatch; `code`, the array shape
+// from a `before` mismatch to an `version` mismatch; `code`, the array shape
 // and the hint semantics must not have.
 func TestNoBefore_ConflictEnvelopeIsUnchanged(t *testing.T) {
 	f := newCRFixture(t)
@@ -147,8 +147,8 @@ func TestNoBefore_ConflictEnvelopeIsUnchanged(t *testing.T) {
 		"title": "envelope", "namespace": crNS,
 		"changes": []map[string]any{{
 			"orbId": crServerA, "op": "update",
-			"set":       map[string]any{"hostname": "mine"},
-			"ifVersion": saw,
+			"set":     map[string]any{"hostname": "mine"},
+			"version": saw,
 		}},
 	})
 	if err != nil {
@@ -246,7 +246,7 @@ func TestNoBefore_AClientStillSendingBeforeIsToldNotIgnored(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400 — `before` was accepted and silently ignored: %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "ifVersion") {
+	if !strings.Contains(rec.Body.String(), "version") {
 		t.Errorf("the refusal does not name the replacement: %s", rec.Body.String())
 	}
 }

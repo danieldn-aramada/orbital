@@ -183,6 +183,27 @@ func (_u *ApprovalRequestUpdate) SetNillableBaseHash(v *string) *ApprovalRequest
 	return _u
 }
 
+// SetChangesetRevision sets the "changeset_revision" field.
+func (_u *ApprovalRequestUpdate) SetChangesetRevision(v int) *ApprovalRequestUpdate {
+	_u.mutation.ResetChangesetRevision()
+	_u.mutation.SetChangesetRevision(v)
+	return _u
+}
+
+// SetNillableChangesetRevision sets the "changeset_revision" field if the given value is not nil.
+func (_u *ApprovalRequestUpdate) SetNillableChangesetRevision(v *int) *ApprovalRequestUpdate {
+	if v != nil {
+		_u.SetChangesetRevision(*v)
+	}
+	return _u
+}
+
+// AddChangesetRevision adds value to the "changeset_revision" field.
+func (_u *ApprovalRequestUpdate) AddChangesetRevision(v int) *ApprovalRequestUpdate {
+	_u.mutation.AddChangesetRevision(v)
+	return _u
+}
+
 // SetBaseVersions sets the "base_versions" field.
 func (_u *ApprovalRequestUpdate) SetBaseVersions(v map[string]int) *ApprovalRequestUpdate {
 	_u.mutation.SetBaseVersions(v)
@@ -479,6 +500,12 @@ func (_u *ApprovalRequestUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if value, ok := _u.mutation.BaseHash(); ok {
 		_spec.SetField(approvalrequest.FieldBaseHash, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ChangesetRevision(); ok {
+		_spec.SetField(approvalrequest.FieldChangesetRevision, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedChangesetRevision(); ok {
+		_spec.AddField(approvalrequest.FieldChangesetRevision, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.BaseVersions(); ok {
 		_spec.SetField(approvalrequest.FieldBaseVersions, field.TypeJSON, value)
@@ -791,6 +818,27 @@ func (_u *ApprovalRequestUpdateOne) SetNillableBaseHash(v *string) *ApprovalRequ
 	if v != nil {
 		_u.SetBaseHash(*v)
 	}
+	return _u
+}
+
+// SetChangesetRevision sets the "changeset_revision" field.
+func (_u *ApprovalRequestUpdateOne) SetChangesetRevision(v int) *ApprovalRequestUpdateOne {
+	_u.mutation.ResetChangesetRevision()
+	_u.mutation.SetChangesetRevision(v)
+	return _u
+}
+
+// SetNillableChangesetRevision sets the "changeset_revision" field if the given value is not nil.
+func (_u *ApprovalRequestUpdateOne) SetNillableChangesetRevision(v *int) *ApprovalRequestUpdateOne {
+	if v != nil {
+		_u.SetChangesetRevision(*v)
+	}
+	return _u
+}
+
+// AddChangesetRevision adds value to the "changeset_revision" field.
+func (_u *ApprovalRequestUpdateOne) AddChangesetRevision(v int) *ApprovalRequestUpdateOne {
+	_u.mutation.AddChangesetRevision(v)
 	return _u
 }
 
@@ -1120,6 +1168,12 @@ func (_u *ApprovalRequestUpdateOne) sqlSave(ctx context.Context) (_node *Approva
 	}
 	if value, ok := _u.mutation.BaseHash(); ok {
 		_spec.SetField(approvalrequest.FieldBaseHash, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ChangesetRevision(); ok {
+		_spec.SetField(approvalrequest.FieldChangesetRevision, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedChangesetRevision(); ok {
+		_spec.AddField(approvalrequest.FieldChangesetRevision, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.BaseVersions(); ok {
 		_spec.SetField(approvalrequest.FieldBaseVersions, field.TypeJSON, value)

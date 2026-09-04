@@ -110,6 +110,11 @@ func BaseHash(v string) predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(sql.FieldEQ(FieldBaseHash, v))
 }
 
+// ChangesetRevision applies equality check predicate on the "changeset_revision" field. It's identical to ChangesetRevisionEQ.
+func ChangesetRevision(v int) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldEQ(FieldChangesetRevision, v))
+}
+
 // ExecutedAt applies equality check predicate on the "executed_at" field. It's identical to ExecutedAtEQ.
 func ExecutedAt(v time.Time) predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(sql.FieldEQ(FieldExecutedAt, v))
@@ -818,6 +823,46 @@ func BaseHashEqualFold(v string) predicate.ApprovalRequest {
 // BaseHashContainsFold applies the ContainsFold predicate on the "base_hash" field.
 func BaseHashContainsFold(v string) predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(sql.FieldContainsFold(FieldBaseHash, v))
+}
+
+// ChangesetRevisionEQ applies the EQ predicate on the "changeset_revision" field.
+func ChangesetRevisionEQ(v int) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldEQ(FieldChangesetRevision, v))
+}
+
+// ChangesetRevisionNEQ applies the NEQ predicate on the "changeset_revision" field.
+func ChangesetRevisionNEQ(v int) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldNEQ(FieldChangesetRevision, v))
+}
+
+// ChangesetRevisionIn applies the In predicate on the "changeset_revision" field.
+func ChangesetRevisionIn(vs ...int) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldIn(FieldChangesetRevision, vs...))
+}
+
+// ChangesetRevisionNotIn applies the NotIn predicate on the "changeset_revision" field.
+func ChangesetRevisionNotIn(vs ...int) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldNotIn(FieldChangesetRevision, vs...))
+}
+
+// ChangesetRevisionGT applies the GT predicate on the "changeset_revision" field.
+func ChangesetRevisionGT(v int) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldGT(FieldChangesetRevision, v))
+}
+
+// ChangesetRevisionGTE applies the GTE predicate on the "changeset_revision" field.
+func ChangesetRevisionGTE(v int) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldGTE(FieldChangesetRevision, v))
+}
+
+// ChangesetRevisionLT applies the LT predicate on the "changeset_revision" field.
+func ChangesetRevisionLT(v int) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldLT(FieldChangesetRevision, v))
+}
+
+// ChangesetRevisionLTE applies the LTE predicate on the "changeset_revision" field.
+func ChangesetRevisionLTE(v int) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(sql.FieldLTE(FieldChangesetRevision, v))
 }
 
 // BaseVersionsIsNil applies the IsNil predicate on the "base_versions" field.

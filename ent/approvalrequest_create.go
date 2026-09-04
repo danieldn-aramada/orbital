@@ -144,6 +144,20 @@ func (_c *ApprovalRequestCreate) SetBaseHash(v string) *ApprovalRequestCreate {
 	return _c
 }
 
+// SetChangesetRevision sets the "changeset_revision" field.
+func (_c *ApprovalRequestCreate) SetChangesetRevision(v int) *ApprovalRequestCreate {
+	_c.mutation.SetChangesetRevision(v)
+	return _c
+}
+
+// SetNillableChangesetRevision sets the "changeset_revision" field if the given value is not nil.
+func (_c *ApprovalRequestCreate) SetNillableChangesetRevision(v *int) *ApprovalRequestCreate {
+	if v != nil {
+		_c.SetChangesetRevision(*v)
+	}
+	return _c
+}
+
 // SetBaseVersions sets the "base_versions" field.
 func (_c *ApprovalRequestCreate) SetBaseVersions(v map[string]int) *ApprovalRequestCreate {
 	_c.mutation.SetBaseVersions(v)
@@ -285,6 +299,10 @@ func (_c *ApprovalRequestCreate) defaults() {
 		v := approvalrequest.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
+	if _, ok := _c.mutation.ChangesetRevision(); !ok {
+		v := approvalrequest.DefaultChangesetRevision
+		_c.mutation.SetChangesetRevision(v)
+	}
 	if _, ok := _c.mutation.ExecutedBy(); !ok {
 		v := approvalrequest.DefaultExecutedBy
 		_c.mutation.SetExecutedBy(v)
@@ -351,6 +369,9 @@ func (_c *ApprovalRequestCreate) check() error {
 		if err := approvalrequest.BaseHashValidator(v); err != nil {
 			return &ValidationError{Name: "base_hash", err: fmt.Errorf(`ent: validator failed for field "ApprovalRequest.base_hash": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.ChangesetRevision(); !ok {
+		return &ValidationError{Name: "changeset_revision", err: errors.New(`ent: missing required field "ApprovalRequest.changeset_revision"`)}
 	}
 	if _, ok := _c.mutation.Payload(); !ok {
 		return &ValidationError{Name: "payload", err: errors.New(`ent: missing required field "ApprovalRequest.payload"`)}
@@ -434,6 +455,10 @@ func (_c *ApprovalRequestCreate) createSpec() (*ApprovalRequest, *sqlgraph.Creat
 	if value, ok := _c.mutation.BaseHash(); ok {
 		_spec.SetField(approvalrequest.FieldBaseHash, field.TypeString, value)
 		_node.BaseHash = value
+	}
+	if value, ok := _c.mutation.ChangesetRevision(); ok {
+		_spec.SetField(approvalrequest.FieldChangesetRevision, field.TypeInt, value)
+		_node.ChangesetRevision = value
 	}
 	if value, ok := _c.mutation.BaseVersions(); ok {
 		_spec.SetField(approvalrequest.FieldBaseVersions, field.TypeJSON, value)
