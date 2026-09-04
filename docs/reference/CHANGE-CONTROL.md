@@ -32,7 +32,9 @@ Orbital's maker-checker layer: a **change request** proposes a set of ConfigItem
 - **The review page heading is `<title>` then the id in muted grey** — GitHub's `Title #123`. The id stays in the heading rather than moving to a Details row: it is what people quote, it is the only thing distinguishing two requests whose authors chose the same title, and the browser tab (`<id> · Change Request`) is the only other place it appears.
 ### The gate lives in `writeToDGraph`, and has exactly ONE exemption
 
-`GraphQL.writeToDGraph` is the single function every DGraph write passes through. The policy check is there — **not** in the `/graphql` handler, which is a chokepoint for CLIENTS but not for WRITES: divergence-Accept dispatches `update{Type}` internally and would have walked straight past a check placed in `Handle`.
+`GraphQL.writeToDGraph` is where the policy check lives — **not** in the `/graphql` handler, which is a chokepoint for CLIENTS but not for WRITES: divergence-Accept dispatches `update{Type}` internally and would have walked straight past a check placed in `Handle`.
+
+> **⚠️ It is NOT yet true that every DGraph write passes through it, and this section claimed otherwise until 2026-09-03.** `DELETE /api/v1/config-items/:type/:id` (`DeleteHandler.Execute`) plans a cascade and calls `bulkDelete`, which POSTs straight to DGraph — the gate never runs. **Measured:** under a policy with `bypassRoles: []`, `updateDataCenter` on an entity was refused `403 APPROVAL_REQUIRED` while `DELETE` of that same entity returned `200 {"deleted":1}` seconds later. A rename refused, a cascade delete allowed. Tracked in `docs/planning/debt.md` § Track A2. **Do not rely on this section's guarantee for deletes until that is closed** — and when adding any new write path, the rule the claim was meant to express still holds: route it through `writeToDGraph`, or the gate does not see it.
 
 `gateMode` is an **explicit argument**, never a context value, so every exemption is visible at its call site and findable with one `grep gateExempt`.
 

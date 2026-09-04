@@ -539,6 +539,22 @@ type EditTarget struct {
 	ParentInverseField string       `json:"parentInverseField,omitempty"`
 	ParentOrbID        string       `json:"parentOrbId,omitempty"`
 	ParentWrapper      *EditWrapper `json:"parentWrapper,omitempty"`
+
+	// Version is the entity's OCC counter at the moment the page was rendered,
+	// so the editor can send it as `ifVersion` and have a concurrent edit
+	// refused instead of silently overwritten.
+	//
+	// NOT derivable from the registry — BuildEditTargets sees only types and
+	// naming conventions, never entity data — so the page handler stamps it
+	// from the rows it already fetched (see StampEditTargetVersion). Zero means
+	// "not known", and the editor then omits `ifVersion` rather than asserting
+	// version 0, which would refuse every edit.
+	//
+	// It travels on the TARGET, deliberately, not in the edit-data tree: that
+	// tree is what the JSON editor renders for a human, and the OCC counter is
+	// not a field anyone should see or type into. `withoutStamped` exists to
+	// keep it out of `set`, and that stays true.
+	Version int `json:"version,omitempty"`
 }
 
 // EditWrapper describes a structural parent ConfigItem that may need to be
@@ -655,6 +671,27 @@ func OverrideEditTargetOrbID(targets []EditTarget, kind, orbID string) []EditTar
 		out[i] = t
 		if t.Kind == kind && orbID != "" {
 			out[i].OrbID = orbID
+		}
+	}
+	return out
+}
+
+// StampEditTargetVersion records an entity's current OCC version on its edit
+// target so the editor can send `ifVersion`.
+//
+// Keyed by orbId rather than kind: a root and its owned children are different
+// entities with independent counters, and several targets can share a kind
+// (two StorageDevices under one controller). OverrideEditTargetOrbID keys by
+// kind because an orbId convention is per-type; this is the opposite question.
+func StampEditTargetVersion(targets []EditTarget, orbID string, version int) []EditTarget {
+	if orbID == "" || version <= 0 {
+		return targets
+	}
+	out := make([]EditTarget, len(targets))
+	for i, t := range targets {
+		out[i] = t
+		if t.OrbID == orbID {
+			out[i].Version = version
 		}
 	}
 	return out

@@ -467,6 +467,21 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 	// value the server's own orbId (server-<serial>) is keyed on.
 	maintenanceOrbID := raw.Namespace + ":server-maintenance-" + raw.ServiceTag
 	editTargets = configitems.OverrideEditTargetOrbID(editTargets, "ServerMaintenance", maintenanceOrbID)
+
+	// OCC versions, so the editor can send `ifVersion` and have a concurrent
+	// edit refused rather than silently overwritten. Stamped AFTER the orbId
+	// overrides above, because the stamp keys on orbId — a target still
+	// carrying its registry-derived id would not match.
+	//
+	// A child that does not exist yet has no version and is left at zero, which
+	// the editor reads as "omit ifVersion": a create has nothing to assert.
+	editTargets = configitems.StampEditTargetVersion(editTargets, raw.OrbID, raw.Version)
+	if raw.IdracSettings != nil {
+		editTargets = configitems.StampEditTargetVersion(editTargets, raw.IdracSettings.OrbID, raw.IdracSettings.Version)
+	}
+	if raw.ServerMaintenance != nil {
+		editTargets = configitems.StampEditTargetVersion(editTargets, raw.ServerMaintenance.OrbID, raw.ServerMaintenance.Version)
+	}
 	editTargetsJSON, _ := json.Marshal(editTargets)
 
 	srv := serverTabDetailData{

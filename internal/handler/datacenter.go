@@ -239,6 +239,9 @@ func (h *DataCenter) Tab(c echo.Context) error {
 	}
 	editJSON, _ := json.Marshal(editFields)
 	editTargets := configitems.BuildEditTargets("DataCenter", raw.OrbID, raw.Namespace, raw.Name)
+	// OCC version, so the editor sends `ifVersion` and a concurrent edit is
+	// refused rather than silently overwritten.
+	editTargets = configitems.StampEditTargetVersion(editTargets, raw.OrbID, raw.Version)
 	editTargetsJSON, _ := json.Marshal(editTargets)
 
 	domID := SafeDomID(raw.OrbID)

@@ -94,6 +94,15 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   until re-reviewed — from one proposing the *same* value, where one of them merges as a no-op.
   Until now the collision was invisible until a merge, at which point the other request silently
   went stale and its approvals stopped counting.
+- **Config-item edits are guarded against concurrent writes again.** The editor sends
+  `ifVersion`, so saving a form someone else has changed underneath you is refused with
+  `409` and a reload prompt instead of silently overwriting their edit. This had been lost
+  since 2026-06-20, when the per-page edit modals — each of which passed `ifVersion` — were
+  replaced by the shared editor module, which did not carry it forward. Nothing failed in
+  between: the check is opt-in server-side, so a client that omits it looks exactly like one
+  that declined it. Covers a data center, cluster, network device, server and its iDRAC and
+  maintenance settings.
+
 - **Approval policies can govern every namespace.** A policy is now created with either a
   namespace or `allNamespaces: true`; the second covers every namespace, **including data
   centers onboarded after the policy was written**. Resolution is **fallback**: a namespace
