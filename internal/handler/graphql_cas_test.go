@@ -89,34 +89,66 @@ func TestCAS_EmptyPayloadArrayIsAlsoAConflict(t *testing.T) {
 
 // ── 6. the forwarded body declares every variable it references ────────────
 
+// Both spellings, one table. Orbital resolves the selector and the patch by
+// REFERENCE, not by the name the caller happened to choose, so `$serverOrbId` /
+// `$patch` must be guarded and stamped exactly as `$orbId` / `$set` is.
+//
+// The renamed row is the regression guard: every lookup on this path used to be
+// a literal map read, so a renamed selector produced no predicate, no version
+// bump and no diff — and the shape was refused upstream, which is what hid it.
 func TestCAS_PredicateIsInjectedAndItsVariableDeclared(t *testing.T) {
-	fwd, rec := forwarded(t, `{"data":{"updateServer":{"server":[{"orbId":"ns:server-A"}]}}}`,
-		map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "version": 7},
-		casUpdateQuery)
+	cases := []struct {
+		name, query, orbIDVar, setVar string
+	}{
+		{
+			name:     "canonical $orbId / $set",
+			query:    casUpdateQuery,
+			orbIDVar: "orbId", setVar: "set",
+		},
+		{
+			name:     "renamed $serverOrbId / $patch",
+			query:    `mutation UpdateServer($serverOrbId: String!, $patch: ServerPatch!) { updateServer(input: { filter: { orbId: { eq: $serverOrbId } }, set: $patch }) { server { orbId } } }`,
+			orbIDVar: "serverOrbId", setVar: "patch",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fwd, rec := forwarded(t, `{"data":{"updateServer":{"server":[{"orbId":"ns:server-A"}]}}}`,
+				map[string]any{tc.orbIDVar: "ns:server-A", tc.setVar: map[string]any{"hostname": "x"}, "version": 7},
+				tc.query)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(fwd.Query, "version: { eq: $version }") {
-		t.Errorf("no version predicate in the forwarded filter — the write is still unguarded: %s", fwd.Query)
-	}
-	// Declared, or DGraph rejects the whole mutation for an undefined variable.
-	if !strings.Contains(fwd.Query, "$version: Int!") {
-		t.Errorf("$version is referenced but not declared: %s", fwd.Query)
-	}
-	// And the value must survive the strip that used to remove it as an
-	// orbital-only variable.
-	v, ok := fwd.Variables["version"]
-	if !ok {
-		t.Fatalf("version was stripped from the variables it is now declared with: %v", fwd.Variables)
-	}
-	if n, _ := toFloat64(v); int(n) != 7 {
-		t.Errorf("version = %v, want 7", v)
-	}
-	// The counter clients must not write still is not in `set`.
-	set, _ := fwd.Variables["set"].(map[string]any)
-	if _, has := set["version"]; !has {
-		t.Error("set.version missing — stamping stopped happening")
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+			}
+			// The predicate must carry the caller's OWN variable name back out.
+			// Re-emitting a fixed `$orbId` would reference a variable the query
+			// never declares, and DGraph rejects the whole mutation for it.
+			want := "eq: $" + tc.orbIDVar + " }, version: { eq: $version }"
+			if !strings.Contains(fwd.Query, want) {
+				t.Errorf("forwarded filter is missing %q — the write is unguarded or names the wrong variable: %s", want, fwd.Query)
+			}
+			// Declared, or DGraph rejects the whole mutation for an undefined variable.
+			if !strings.Contains(fwd.Query, "$version: Int!") {
+				t.Errorf("$version is referenced but not declared: %s", fwd.Query)
+			}
+			// And the value must survive the strip that used to remove it as an
+			// orbital-only variable.
+			v, ok := fwd.Variables["version"]
+			if !ok {
+				t.Fatalf("version was stripped from the variables it is now declared with: %v", fwd.Variables)
+			}
+			if n, _ := toFloat64(v); int(n) != 7 {
+				t.Errorf("version = %v, want 7", v)
+			}
+			// Stamping lands in the caller's patch variable, whatever it is called.
+			set, _ := fwd.Variables[tc.setVar].(map[string]any)
+			if n, _ := toFloat64(set["version"]); n != 8 {
+				t.Errorf("%s.version = %v, want 8 (current 7 + 1) — stamping stopped happening", tc.setVar, set["version"])
+			}
+			if set["updatedBy"] == nil || set["updatedAt"] == nil {
+				t.Errorf("%s is missing server-stamped updatedBy/updatedAt: %#v", tc.setVar, set)
+			}
+		})
 	}
 }
 
@@ -157,6 +189,25 @@ func TestCAS_UnrecognisedShapeIsRefusedNotSentUnguarded(t *testing.T) {
 			name:  "two filters, so guarding one leaves the other unguarded",
 			query: `mutation UpdateServer($orbId: String!, $set: ServerPatch!) { a: updateServer(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids } b: updateServer(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids } }`,
 			why:   "more than one orbId filter",
+		},
+		// The three below pin that resolving variable REFERENCES did not widen
+		// what the rewriter accepts. Each names an orbId it can genuinely read,
+		// and each must still be refused: a predicate guards ONE row, so a shape
+		// that writes more than one cannot be guarded by placing it.
+		{
+			name:  "in-list names more than one target",
+			query: `mutation UpdateServer($orbId: String!, $set: ServerPatch!) { updateServer(input: { filter: { orbId: { in: [$orbId, "ns:server-B"] } }, set: $set }) { numUids } }`,
+			why:   "No `filter:",
+		},
+		{
+			name:  "two differently-named selector variables",
+			query: `mutation UpdateServer($orbId: String!, $other: String!, $set: ServerPatch!) { a: updateServer(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids } b: updateServer(input: { filter: { orbId: { eq: $other } }, set: $set }) { numUids } }`,
+			why:   "more than one orbId filter",
+		},
+		{
+			name:  "whole filter behind a variable — nowhere to splice the predicate",
+			query: `mutation UpdateServer($f: ServerFilter!, $set: ServerPatch!) { updateServer(input: { filter: $f, set: $set }) { numUids } }`,
+			why:   "No `filter:",
 		},
 	}
 	for _, tc := range cases {

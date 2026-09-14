@@ -245,9 +245,21 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   gate can become stricter but never laxer — the fail-closed default is unchanged. The same lookup
   feeds the audit log, so these mutations now record their `resource_ids` and are findable through
   `GET /api/v1/audit-log?resource_id=` instead of landing with an empty one.
-  **`update` mutations are not yet covered**: the write pre-flight resolves its target by variable
-  name to bump `version` and stamp the audit before-state, so a renamed-variable update is still
-  refused — correctly, since it could not otherwise be stamped. Tracked in `docs/planning/debt.md`.
+  **`update` mutations are covered too.** The write pre-flight resolved its target by variable name
+  to bump `version` and stamp the audit before-state, so a renamed-variable update was refused
+  before the gate ever saw it — correctly, since it could not otherwise have been stamped. It now
+  resolves the selector and the patch by reference as well, and a renamed update is stamped,
+  version-guarded and diffed identically to the `$orbId`/`$set` spelling. A shape that still cannot
+  be pinned to exactly one row — two orbIds, an `in:` list, an inline literal, or a filter behind a
+  variable — is refused exactly as before: resolution can turn a refusal into a fully stamped
+  write, never into an unstamped one.
+- **The audit log no longer renders an empty diff when the patch variable is not called `set`.**
+  The field differ read after-values from `variables["set"]` and otherwise fell back to the whole
+  variables map, which for `set: $patch` intersects `{orbId, patch}` with the before-state, matches
+  nothing, and renders an audit row with **no changes at all** — while the write itself lands
+  normally, with no error anywhere. The differ and the stamper now resolve the patch variable
+  through one helper, so they cannot disagree about which map holds the new values. Audit events
+  persist the mutation query alongside its variables, so historical rows render correctly too.
 - **A merged change request no longer tells you to re-approve it.** Merging bumps the version
   vector by definition, so the scope-moved signal fired on every terminal request and the detail
   view rendered "Changed since review. Re-approve to merge." above a request already applied. The

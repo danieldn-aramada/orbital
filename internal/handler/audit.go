@@ -75,6 +75,7 @@ type fieldChange struct {
 
 type eventDetails struct {
 	OperationName string         `json:"operationName"`
+	Query         string         `json:"query"`
 	Variables     map[string]any `json:"variables"`
 	Before        map[string]any `json:"before"`
 }
@@ -272,11 +273,11 @@ func (h *AuditHandler) List(c echo.Context) error {
 		// Structured diff for the JSON API — present only for a clean
 		// single-entity update (same guard the HTML panel uses below).
 		if d.Before != nil && len(resTypes) > 0 {
-			item.Changes = computeChanges(d.Before, d.Variables)
+			item.Changes = computeChanges(d.Before, d.Variables, d.Query)
 		}
 		if c.Request().Header.Get("HX-Request") == "true" {
 			if d.Before != nil && len(resTypes) > 0 {
-				item.DiffHTML = buildDiffHTML(d.Before, d.Variables)
+				item.DiffHTML = buildDiffHTML(d.Before, d.Variables, d.Query)
 			}
 			if item.DiffHTML == "" {
 				item.VarSummary = buildVarSummary(e.Details)
@@ -349,12 +350,20 @@ func buildVarSummary(raw json.RawMessage) template.HTML {
 // (buildDiffHTML) derive from this, so they can never disagree about a diff.
 //
 // Patch-style mutations (`update{Type}(input: {filter, set: $set})`) keep
-// after-values nested under variables["set"]; user-driven flat-shape edits keep
+// after-values nested under a patch variable; user-driven flat-shape edits keep
 // them at the top level. Both shapes work. Generic across resource types — new
 // ConfigItem types diff automatically with no edits here.
-func computeChanges(before, variables map[string]any) []fieldChange {
+//
+// `query` is needed because the patch variable need not be called `set`. Reading
+// only variables["set"] and falling back to the WHOLE variables map is the
+// dangerous shape: for `set: $patch` the fallback intersects {"orbId","patch"}
+// with the before-state, matches nothing, and renders an audit row with no
+// changes at all — no error, while the write itself lands normally. Resolved
+// through resolveSetMap, the same helper the stamper writes through. Audit rows
+// persist `query` alongside `variables`, so historical rows resolve too.
+func computeChanges(before, variables map[string]any, query string) []fieldChange {
 	after := variables
-	if set, ok := variables["set"].(map[string]any); ok {
+	if set, _, ok := resolveSetMap(query, variables); ok {
 		after = set
 	}
 	// Intersection of before and after keys, stable-sorted, metadata excluded.
@@ -385,9 +394,9 @@ func computeChanges(before, variables map[string]any) []fieldChange {
 // the audit panel shows. Returns "" when nothing changed. It is a pure renderer
 // over computeChanges — the field selection lives there, so the HTML and the JSON
 // `changes` array always agree.
-func buildDiffHTML(before, variables map[string]any) template.HTML {
+func buildDiffHTML(before, variables map[string]any, query string) template.HTML {
 	var sections strings.Builder
-	for _, c := range computeChanges(before, variables) {
+	for _, c := range computeChanges(before, variables, query) {
 		beforeStr := valStr(c.Before, c.After)
 		afterStr := valStr(c.After, c.After)
 		beforeLines := prettyLines(beforeStr)

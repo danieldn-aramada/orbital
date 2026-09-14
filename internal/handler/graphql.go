@@ -60,6 +60,10 @@ var filterVarRe = regexp.MustCompile(`filter\s*:\s*\$(\w+)`)
 // listItemRe pulls `"literal"` and `$variable` items out of an `in` list body.
 var listItemRe = regexp.MustCompile(`"([^"]*)"|\$(\w+)`)
 
+// setVarRe: set: $anyVariableName — the patch map behind a variable whose name
+// is not literally "set". The leading `\b` keeps it off `offset:`.
+var setVarRe = regexp.MustCompile(`\bset\s*:\s*\$(\w+)`)
+
 var mutationOpRe = regexp.MustCompile(`(?i)^\s*mutation\s+(\w+)`)
 var queryOpRe = regexp.MustCompile(`(?i)^\s*query\s+(\w+)`)
 
@@ -179,6 +183,14 @@ func (h *GraphQL) Handle(c echo.Context) error {
 			_, setIsVar := req.Variables["set"].(map[string]any)
 			if (entityID != "" || orbID != "") && setIsVar {
 				continue // variable form — stamping will fire
+			}
+			// Same shape, different spelling. The guard exists to refuse writes
+			// the proxy cannot stamp, so anything it CAN stamp must pass —
+			// otherwise it refuses on the variable's name rather than on the
+			// property it is defending. resolveWriteSelector answers exactly the
+			// question this guard asks, and the write path asks it again.
+			if sel := resolveWriteSelector(&req); sel.OrbID != "" && sel.SetVar != "" {
+				continue
 			}
 			h.logger.Warn("inline-selector update rejected — bypasses server-side stamping",
 				"op", op, "actor", actor,
@@ -462,6 +474,71 @@ func mutationOpName(req *gqlRequest) string {
 	return strings.Join(ops, ",")
 }
 
+// writeSelector names the variables a single-entity update selects and patches
+// through, whatever the caller spelled them. An empty field means "could not be
+// resolved", which every consumer must treat as "refuse or skip" — never as
+// "proceed anyway". Resolution only ever turns a refusal into a fully stamped
+// write; it can never turn a refusal into an unstamped one.
+//
+// Deliberately NARROWER than extractResourceIDs. The gate only needs to KNOW an
+// orbId to look up a policy, so it reads every shape it can. The write path must
+// additionally fetch exactly that row, stamp its successor version, and splice a
+// CAS predicate into the query text — so it requires:
+//
+//   - EXACTLY ONE `orbId: { eq: $x }` and no other orbId predicate anywhere in
+//     the query. Two targets, an `in:` list, or an inline literal all mean the
+//     fetched row would not be the only row written, and stamping one row's
+//     successor version onto the others is worse than refusing.
+//   - the selector in the QUERY TEXT. `filter: $wholeFilter` resolves for the
+//     gate but not here: an opaque filter variable has nowhere to splice
+//     `version: { eq: $version }`, so it could be stamped but never guarded.
+type writeSelector struct {
+	OrbIDVar string // variable name holding the orbId ("" = unresolvable)
+	OrbID    string // its resolved value
+	SetVar   string // variable name holding the patch map ("" = none)
+}
+
+func resolveWriteSelector(req *gqlRequest) writeSelector {
+	var sel writeSelector
+	if len(req.Variables) == 0 {
+		return sel
+	}
+	// Any competing orbId predicate disqualifies the whole query — see above.
+	if len(orbIdFilterRe.FindAllStringIndex(req.Query, -1)) == 0 &&
+		len(orbIdInRe.FindAllStringIndex(req.Query, -1)) == 0 {
+		if m := orbIdEqVarRe.FindAllStringSubmatch(req.Query, -1); len(m) == 1 {
+			if v, ok := req.Variables[m[0][1]].(string); ok && v != "" {
+				sel.OrbIDVar, sel.OrbID = m[0][1], v
+			}
+		}
+	}
+	_, sel.SetVar, _ = resolveSetMap(req.Query, req.Variables)
+	return sel
+}
+
+// resolveSetMap returns the patch map an update mutation carries, and the name
+// of the variable holding it, whatever the caller called it.
+//
+// The literal "set" is tried first and without consulting the query, because a
+// caller may pass `set` as an orbital-only variable the query never declares —
+// and because it makes the overwhelmingly common path a single map lookup.
+//
+// ONE source of truth on purpose: the stamper writes updatedBy/updatedAt into
+// this map and the audit differ reads after-values out of it. If they resolved
+// it separately they could disagree, and the way that failure presents is an
+// audit row that renders no changes at all while the write lands normally.
+func resolveSetMap(query string, variables map[string]any) (map[string]any, string, bool) {
+	if m, ok := variables["set"].(map[string]any); ok {
+		return m, "set", true
+	}
+	if names := setVarRe.FindAllStringSubmatch(query, -1); len(names) == 1 {
+		if m, ok := variables[names[0][1]].(map[string]any); ok {
+			return m, names[0][1], true
+		}
+	}
+	return nil, "", false
+}
+
 // fetchCurrentState reads the entity a single-entity mutation targets, or nil
 // when the mutation is not a single-entity shape (a bulk add, a multi-type
 // mutation, an inline selector) or the read failed.
@@ -470,11 +547,13 @@ func mutationOpName(req *gqlRequest) string {
 // and the audit diff's before-state. They are not separable — all three need
 // the same row as of the same instant.
 //
-// The target is resolved from the `id` or `orbId` VARIABLE. A mutation that
-// hides its selector anywhere else — inline literals, or a $filter object —
-// resolves to nothing here and is therefore neither guarded nor stamped. That
-// is why the inline-selector rejection exists on the client path, and why
-// internal dispatchers must use the canonical update{Kind}($orbId, $set) shape.
+// The target is resolved from the `id` or `orbId` VARIABLE, or — failing that —
+// from the single `orbId: { eq: $x }` reference in the query, whatever `$x` is
+// called (resolveWriteSelector). A mutation that hides its selector anywhere
+// else — inline literals, an `in:` list, or a $filter object — resolves to
+// nothing here and is therefore neither guarded nor stamped. That is why the
+// inline-selector rejection exists on the client path, and why internal
+// dispatchers must use the canonical update{Kind}($orbId, $set) shape.
 func (h *GraphQL) fetchCurrentState(req *gqlRequest) map[string]any {
 	opName := mutationOpName(req)
 
@@ -491,6 +570,13 @@ func (h *GraphQL) fetchCurrentState(req *gqlRequest) map[string]any {
 
 	entityID, _ := req.Variables["id"].(string)
 	orbID, _ := req.Variables["orbId"].(string)
+	if entityID == "" && orbID == "" {
+		// The literal lookups stay FIRST: a caller may pass `orbId` as an
+		// orbital-only variable the query never declares (orbctl does — see
+		// forwardBody's strip), and that shape must keep resolving even though
+		// there is no `$orbId` in the query text to find.
+		orbID = resolveWriteSelector(req).OrbID
+	}
 
 	var (
 		current  map[string]any
@@ -585,9 +671,11 @@ func checkVersion(variables map[string]any, current map[string]any) *preflightEr
 // mutation variables, in place. Reports whether it changed anything.
 //
 // Two patterns, both via top-level variables:
-//   - UPDATE with a `set` map → inject set.version = current.version + 1 when
-//     `set` lacks version. A caller-set version is preserved, which is what
-//     lets change-request merge stamp its own without double-incrementing.
+//   - UPDATE with a patch map → inject set.version = current.version + 1 when
+//     the patch lacks version. A caller-set version is preserved, which is what
+//     lets change-request merge stamp its own without double-incrementing. The
+//     variable need not be named `set`; resolveSetMap finds it either way, and
+//     the audit differ resolves it the same way so the two cannot disagree.
 //   - ADD with any array-of-maps variable → inject version: 1 into each entry
 //     that lacks one. The variable name does not matter (callers use `input`,
 //     `idracInput`, …) — every array-of-maps payload is an add/upsert input.
@@ -607,7 +695,7 @@ func stampMutation(req *gqlRequest, current map[string]any, actor string) bool {
 	stamped := false
 
 	if current != nil {
-		if setMap, ok := req.Variables["set"].(map[string]any); ok {
+		if setMap, setVar, ok := resolveSetMap(req.Query, req.Variables); ok {
 			if _, has := setMap["version"]; !has {
 				if cur, ok := toFloat64(current["version"]); ok {
 					setMap["version"] = int(cur) + 1
@@ -615,7 +703,7 @@ func stampMutation(req *gqlRequest, current map[string]any, actor string) bool {
 			}
 			setMap["updatedBy"] = actor
 			setMap["updatedAt"] = now
-			req.Variables["set"] = setMap
+			req.Variables[setVar] = setMap
 			stamped = true
 		}
 	}
@@ -649,7 +737,13 @@ func stampMutation(req *gqlRequest, current map[string]any, actor string) bool {
 // client's canonical update and the two queries change-request merge builds
 // itself use it — merge's delete puts it directly on the field rather than
 // inside `input:`, which does not change the target.
-var casFilterRe = regexp.MustCompile(`filter:\s*\{\s*orbId:\s*\{\s*eq:\s*\$orbId\s*\}\s*\}`)
+//
+// Group 1 captures the VARIABLE NAME: orbital resolves the selector by
+// reference, not by spelling, so `$serverOrbId` guards exactly as `$orbId`
+// does. The rewrite below re-emits the captured name rather than a fixed one —
+// emitting `$orbId` against a query that declares `$serverOrbId` would produce
+// a mutation DGraph rejects for an undefined variable.
+var casFilterRe = regexp.MustCompile(`filter:\s*\{\s*orbId:\s*\{\s*eq:\s*\$(\w+)\s*\}\s*\}`)
 
 // mutationVarsRe finds a mutation's variable-definition list so the injected
 // variable can be declared. Anchored on `mutation` so it cannot match a
@@ -693,8 +787,9 @@ func injectVersionPredicate(req *gqlRequest) *preflightError {
 		}
 	}
 
-	if n := len(casFilterRe.FindAllStringIndex(req.Query, -1)); n != 1 {
-		if n == 0 {
+	filterLoc := casFilterRe.FindAllStringSubmatchIndex(req.Query, -1)
+	if len(filterLoc) != 1 {
+		if len(filterLoc) == 0 {
 			return refuse("No `filter: { orbId: { eq: $orbId } }` was found in the mutation.")
 		}
 		return refuse("The mutation has more than one orbId filter, so guarding one would leave the others unguarded.")
@@ -711,11 +806,15 @@ func injectVersionPredicate(req *gqlRequest) *preflightError {
 		return refuse("The mutation already declares `$version`; orbital adds the version predicate itself.")
 	}
 
-	// ReplaceAllLiteralString, NOT ReplaceAllString: `$` is a capture-group
-	// reference in a Go replacement template, so `$orbId` would expand to the
-	// empty group of that name and forward `eq: ` to DGraph.
-	q := casFilterRe.ReplaceAllLiteralString(req.Query,
-		`filter: { orbId: { eq: $orbId }, version: { eq: $version } }`)
+	// Spliced by index rather than via Replace*: the replacement has to carry the
+	// caller's own variable name back out, and a Go replacement template would
+	// read the `$` in `$serverOrbId` as a capture-group reference — expanding it
+	// to the empty group of that name and forwarding `eq: ` to DGraph.
+	// Exactly one match, asserted above, so a single splice covers the query.
+	m := filterLoc[0]
+	q := req.Query[:m[0]] +
+		"filter: { orbId: { eq: $" + req.Query[m[2]:m[3]] + " }, version: { eq: $version } }" +
+		req.Query[m[1]:]
 	// Insert before the closing paren of the variable list. Index 3 is the end
 	// of the captured group, i.e. immediately before `)`.
 	end := varDecl[3]

@@ -251,3 +251,117 @@ func TestExtractResourceIDs(t *testing.T) {
 		})
 	}
 }
+
+// resolveWriteSelector is the write path's answer to "which single row does this
+// mutation target, and which variable carries its patch" — and it is deliberately
+// STRICTER than extractResourceIDs, which only has to know an orbId to look up a
+// policy. Pure, and every interesting case is a shape it must REFUSE to resolve:
+// a selector it reads wrongly would stamp one row's successor version onto
+// another, which is worse than the 400 the caller gets instead.
+func TestResolveWriteSelector(t *testing.T) {
+	const canonical = `mutation U($orbId: String!, $set: ServerPatch!) { updateServer(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids } }`
+
+	patch := map[string]any{"hostname": "x"}
+	cases := []struct {
+		name         string
+		query        string
+		vars         map[string]any
+		wantOrbID    string
+		wantOrbIDVar string
+		wantSetVar   string
+	}{
+		{
+			name:      "canonical spelling",
+			query:     canonical,
+			vars:      map[string]any{"orbId": "ns:server-A", "set": patch},
+			wantOrbID: "ns:server-A", wantOrbIDVar: "orbId", wantSetVar: "set",
+		},
+		{
+			name:      "renamed selector and patch resolve identically",
+			query:     `mutation U($sOrb: String!, $patch: ServerPatch!) { updateServer(input: { filter: { orbId: { eq: $sOrb } }, set: $patch }) { numUids } }`,
+			vars:      map[string]any{"sOrb": "ns:server-A", "patch": patch},
+			wantOrbID: "ns:server-A", wantOrbIDVar: "sOrb", wantSetVar: "patch",
+		},
+		{
+			name:  "orbId passed as an orbital-only variable the query never declares",
+			query: `mutation U($set: ServerPatch!) { updateServer(input: { filter: { orbId: { eq: "ns:server-A" } }, set: $set }) { numUids } }`,
+			vars:  map[string]any{"orbId": "ns:server-A", "set": patch},
+			// Not resolvable HERE — an inline literal disqualifies the query.
+			// fetchCurrentState still finds it, by reading the variable directly
+			// and BEFORE calling this; that ordering is what keeps orbctl working.
+			wantOrbID: "", wantOrbIDVar: "", wantSetVar: "set",
+		},
+		{
+			name:       "in-list names more than one row",
+			query:      `mutation U($a: String!, $set: ServerPatch!) { updateServer(input: { filter: { orbId: { in: [$a] } }, set: $set }) { numUids } }`,
+			vars:       map[string]any{"a": "ns:server-A", "set": patch},
+			wantSetVar: "set",
+		},
+		{
+			name:       "two eq filters, so no single target",
+			query:      `mutation U($a: String!, $b: String!, $set: ServerPatch!) { x: updateServer(input: { filter: { orbId: { eq: $a } }, set: $set }) { numUids } y: updateServer(input: { filter: { orbId: { eq: $b } }, set: $set }) { numUids } }`,
+			vars:       map[string]any{"a": "ns:server-A", "b": "ns:server-B", "set": patch},
+			wantSetVar: "set",
+		},
+		{
+			name:       "a literal alongside a variable still disqualifies",
+			query:      `mutation U($a: String!, $set: ServerPatch!) { x: updateServer(input: { filter: { orbId: { eq: $a } }, set: $set }) { numUids } y: updateServer(input: { filter: { orbId: { eq: "ns:server-B" } }, set: $set }) { numUids } }`,
+			vars:       map[string]any{"a": "ns:server-A", "set": patch},
+			wantSetVar: "set",
+		},
+		{
+			name:  "whole filter behind a variable is readable by the gate, not by the writer",
+			query: `mutation U($f: ServerFilter!, $set: ServerPatch!) { updateServer(input: { filter: $f, set: $set }) { numUids } }`,
+			vars: map[string]any{
+				"f":   map[string]any{"orbId": map[string]any{"eq": "ns:server-A"}},
+				"set": patch,
+			},
+			wantSetVar: "set",
+		},
+		{
+			name:       "reference to a variable that was never supplied",
+			query:      canonical,
+			vars:       map[string]any{"set": patch},
+			wantSetVar: "set",
+		},
+		{
+			name:       "selector variable holding a non-string",
+			query:      canonical,
+			vars:       map[string]any{"orbId": 42, "set": patch},
+			wantSetVar: "set",
+		},
+		{
+			name:      "two patch variables — ambiguous, so neither is chosen",
+			query:     `mutation U($orbId: String!, $p: ServerPatch!, $q: ServerPatch!) { x: updateServer(input: { filter: { orbId: { eq: $orbId } }, set: $p }) { numUids } y: updateIdracSettings(input: { filter: { orbId: { eq: $orbId } }, set: $q }) { numUids } }`,
+			vars:      map[string]any{"orbId": "ns:server-A", "p": patch, "q": patch},
+			wantOrbID: "", wantOrbIDVar: "", wantSetVar: "",
+		},
+		{
+			name:      "no patch at all (a delete)",
+			query:     `mutation D($orbId: String!) { deleteServer(filter: { orbId: { eq: $orbId } }) { numUids } }`,
+			vars:      map[string]any{"orbId": "ns:server-A"},
+			wantOrbID: "ns:server-A", wantOrbIDVar: "orbId", wantSetVar: "",
+		},
+		{
+			name:      "offset: $x must not be mistaken for a patch",
+			query:     `mutation U($orbId: String!, $n: Int!) { updateServer(input: { filter: { orbId: { eq: $orbId } } }, offset: $n) { numUids } }`,
+			vars:      map[string]any{"orbId": "ns:server-A", "n": map[string]any{"nope": true}},
+			wantOrbID: "ns:server-A", wantOrbIDVar: "orbId", wantSetVar: "",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := resolveWriteSelector(&gqlRequest{Query: tc.query, Variables: tc.vars})
+			if got.OrbID != tc.wantOrbID {
+				t.Errorf("OrbID = %q, want %q", got.OrbID, tc.wantOrbID)
+			}
+			if got.OrbIDVar != tc.wantOrbIDVar {
+				t.Errorf("OrbIDVar = %q, want %q", got.OrbIDVar, tc.wantOrbIDVar)
+			}
+			if got.SetVar != tc.wantSetVar {
+				t.Errorf("SetVar = %q, want %q", got.SetVar, tc.wantSetVar)
+			}
+		})
+	}
+}
