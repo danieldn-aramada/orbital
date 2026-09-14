@@ -21581,6 +21581,7 @@ has-background-danger.is-hoverable:active {
   --orange: #f19646;
   --dt-row-selected: var(--bulma-link-rgb);
   --dt-row-selected-text: var(--bulma-white-rgb);
+  --bulma-light-light-invert-l: var(--bulma-light-invert-l);
 }
 
 .modal-card.is-large {
