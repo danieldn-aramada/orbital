@@ -233,6 +233,21 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   `docs/planning/backlog.md` and technical debt to `docs/planning/debt.md`.
 
 ### Fixed
+- **A governed namespace no longer locks out clients that name their orbId variable something
+  other than `orbId`.** The approval gate resolves the governing policy from the orbIds a mutation
+  names, and it could only see them as literals or behind a variable called exactly `orbId`. Any
+  other spelling — `$clusterOrbId`, or a compound mutation, which *cannot* have two variables of
+  one name — resolved to no namespace and was refused `400 VARIABLE_FORM_REQUIRED`, telling the
+  caller to use the variable form they were already using. Three shapes now resolve:
+  `orbId: { eq: $anyName }`, `orbId: { in: [...] }` with literals and variables mixed, and a whole
+  filter object behind `filter: $anyName`. Resolution descends only through the `orbId` key, so a
+  filter on another field is never mined for a resource id; and it only ever *adds* orbIds, so the
+  gate can become stricter but never laxer — the fail-closed default is unchanged. The same lookup
+  feeds the audit log, so these mutations now record their `resource_ids` and are findable through
+  `GET /api/v1/audit-log?resource_id=` instead of landing with an empty one.
+  **`update` mutations are not yet covered**: the write pre-flight resolves its target by variable
+  name to bump `version` and stamp the audit before-state, so a renamed-variable update is still
+  refused — correctly, since it could not otherwise be stamped. Tracked in `docs/planning/debt.md`.
 - **A merged change request no longer tells you to re-approve it.** Merging bumps the version
   vector by definition, so the scope-moved signal fired on every terminal request and the detail
   view rendered "Changed since review. Re-approve to merge." above a request already applied. The

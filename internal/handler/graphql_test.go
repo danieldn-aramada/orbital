@@ -157,6 +157,73 @@ func TestExtractResourceIDs(t *testing.T) {
 			want:     []string{"alaska:SRV001"},
 		},
 		{
+			// (a) The reported bug: the variable is not named `orbId`, so every
+			// lookup missed and the gate refused a valid variable-form mutation.
+			name:  "orbId behind a differently-named variable reference",
+			query: `mutation UpdateCluster($clusterOrbId: String!, $set: KubernetesClusterPatch!) { updateKubernetesCluster(input: {filter: {orbId: {eq: $clusterOrbId}}, set: $set}) { numUids } }`,
+			variables: map[string]any{
+				"clusterOrbId": "colo:cluster-a",
+				"set":          map[string]any{"cni": "cilium"},
+			},
+			respBody: []byte(`{"data":{"updateKubernetesCluster":{"numUids":1}}}`),
+			want:     []string{"colo:cluster-a"},
+		},
+		{
+			// A compound mutation CANNOT have two variables named orbId, so this
+			// shape was unresolvable by construction.
+			name:  "compound mutation with two differently-named variables",
+			query: `mutation Del($a: String!, $b: String!) { d1: deleteServer(filter: {orbId: {eq: $a}}) { numUids } d2: deleteRack(filter: {orbId: {eq: $b}}) { numUids } }`,
+			variables: map[string]any{
+				"a": "alaska:SRV001",
+				"b": "alaska:Rack-5",
+			},
+			respBody: []byte(`{}`),
+			want:     []string{"alaska:Rack-5", "alaska:SRV001"},
+		},
+		{
+			// (b) inline `in` list, literals and variable references mixed.
+			name:  "inline in-list mixing literals and variable references",
+			query: `mutation Bulk($second: String!) { updateServer(filter: {orbId: {in: ["alaska:SRV001", $second]}}, set: {}) { numUids } }`,
+			variables: map[string]any{
+				"second": "alaska:SRV002",
+			},
+			respBody: []byte(`{}`),
+			want:     []string{"alaska:SRV001", "alaska:SRV002"},
+		},
+		{
+			// (c) the whole filter object behind a variable that is not named
+			// "filter" — the literal key was the only one ever read.
+			name:  "filter object behind a differently-named variable",
+			query: `mutation Apply($myFilter: ServerFilter!, $set: ServerPatch!) { updateServer(input: {filter: $myFilter, set: $set}) { numUids } }`,
+			variables: map[string]any{
+				"myFilter": map[string]any{"orbId": map[string]any{"in": []any{"colo:SRV009", "colo:SRV010"}}},
+				"set":      map[string]any{"hostname": "h"},
+			},
+			respBody: []byte(`{}`),
+			want:     []string{"colo:SRV009", "colo:SRV010"},
+		},
+		{
+			// A reference we cannot resolve must yield NOTHING, so the gate
+			// still refuses it rather than waving it through on a guess.
+			name:      "unresolvable variable reference yields no ids",
+			query:     `mutation U($missing: String!) { updateServer(filter: {orbId: {eq: $missing}}, set: {}) { numUids } }`,
+			variables: map[string]any{"set": map[string]any{"hostname": "h"}},
+			respBody:  []byte(`{}`),
+			want:      nil,
+		},
+		{
+			// A filter on a field that is not orbId must not be mined for ids:
+			// a wrongly-attributed resource id reads as fact on an audit row.
+			name:  "filter variable on a non-orbId field contributes nothing",
+			query: `mutation ByName($f: ServerFilter!, $set: ServerPatch!) { updateServer(input: {filter: $f, set: $set}) { numUids } }`,
+			variables: map[string]any{
+				"f":   map[string]any{"hostname": map[string]any{"eq": "not-an-orbid"}},
+				"set": map[string]any{"model": "m"},
+			},
+			respBody: []byte(`{}`),
+			want:     nil,
+		},
+		{
 			name:      "empty variables and body returns empty",
 			query:     `mutation { addServer(input: []) { server { id } } }`,
 			variables: map[string]any{},

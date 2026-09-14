@@ -23,7 +23,12 @@ import (
 func gateFixture(t *testing.T) (*GraphQL, *crFixture) {
 	t.Helper()
 	f := newCRFixture(t)
-	return NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), false), f
+	// true is what production runs (ORBITAL_INLINE_SELECTOR_REJECT). It makes no
+	// difference to the tests below — they drive writeToDGraph directly, and the
+	// inline-selector guard lives in Handle — but passing production's value keeps
+	// the fixture from asserting against a configuration nothing deploys.
+	// The guard's own effect is pinned in TestHandle_* below, through Handle.
+	return NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), true), f
 }
 
 // mutate runs a mutation through the chokepoint exactly as Handle would.
@@ -295,5 +300,153 @@ func TestGate_MultiTypeMutationTakesTheStrictestPolicy(t *testing.T) {
 		map[string]any{"s": map[string]any{"hostname": "x"}, "i": map[string]any{"firmwareVersion": "3.0.0"}})
 	if err == nil {
 		t.Fatal("a multi-type mutation dodged the policy by including an ungoverned type")
+	}
+}
+
+// ── 12. orbIds named through a VARIABLE REFERENCE ──────────────────────────
+//
+// The gate resolves the governing namespace from the orbIds a mutation names.
+// Until 2026-09-14 it could only see them as literals, or behind a variable
+// named exactly `orbId` — so a mutation in perfectly good variable form whose
+// variable happened to be called something else resolved to NO namespace and
+// was refused `400 VARIABLE_FORM_REQUIRED`, advising the caller to use the
+// variable form they were already using.
+//
+// Fail-closed was right and is unchanged; the refusal was aimed at the wrong
+// request. These pin the difference.
+
+// updateHostnameAs is updateHostname with the orbId variable under a caller-
+// chosen name — the shape any client not copying orbital's own examples writes.
+func updateHostnameAs(varName, orbID, v string) (string, map[string]any) {
+	return `mutation UpdateServer($` + varName + `: String!, $set: ServerPatch!) { updateServer(input: {filter: {orbId: {eq: $` + varName + `}}, set: $set}) { numUids } }`,
+		map[string]any{varName: orbID, "set": map[string]any{"hostname": v}}
+}
+
+// Acceptance 1: a differently-named variable is gated IDENTICALLY — same
+// refusal, same code, same bypass behaviour as the `$orbId` spelling.
+func TestGate_OrbIdBehindADifferentlyNamedVariableIsGatedIdentically(t *testing.T) {
+	gql, f := gateFixture(t)
+	f.requireApproval(t, 1)
+
+	q, v := updateHostnameAs("serverOrbId", crServerA, "should-not-land")
+	err := mutate(t, gql, devCaller(), q, v)
+	if err == nil {
+		t.Fatal("a covered mutation was allowed through because its variable was not named orbId")
+	}
+	var gerr *gatedError
+	if !errors.As(err, &gerr) {
+		t.Fatalf("error = %v, want a gatedError", err)
+	}
+	// The whole bug: this used to be VARIABLE_FORM_REQUIRED, which is the wrong
+	// refusal — the request IS in variable form.
+	if gerr.Code != CodeApprovalRequired || gerr.Status != http.StatusForbidden {
+		t.Fatalf("status=%d code=%s, want 403 APPROVAL_REQUIRED (not VARIABLE_FORM_REQUIRED)", gerr.Status, gerr.Code)
+	}
+	if got := readHostname(t, crServerA); got == "should-not-land" {
+		t.Fatal("refused, but the write still landed")
+	}
+
+	// ...and the bypass path resolves the same policy, so break-glass still works.
+	q, v = updateHostnameAs("serverOrbId", crServerA, "privileged-write")
+	bypassed, err := mutateReportingBypass(t, gql, adminCaller(), q, v)
+	if err != nil {
+		t.Fatalf("admin bypass refused on the differently-named variable: %v", err)
+	}
+	if bypassed != crNS {
+		t.Errorf("bypassed policy = %q, want %q", bypassed, crNS)
+	}
+}
+
+// Acceptance 2: a compound mutation cannot have two variables named orbId, so
+// this shape was unresolvable by construction. Every orbId it names must
+// resolve, or a governed entity rides along inside an ungoverned request.
+func TestGate_CompoundMutationResolvesEveryOrbIdItNames(t *testing.T) {
+	gql, f := gateFixture(t)
+	f.requireApproval(t, 1)
+
+	q := `mutation Both($a: String!, $b: String!, $set: ServerPatch!) {
+		one: updateServer(input: {filter: {orbId: {eq: $a}}, set: $set}) { numUids }
+		two: updateServer(input: {filter: {orbId: {eq: $b}}, set: $set}) { numUids }
+	}`
+	v := map[string]any{"a": crServerA, "b": crServerB, "set": map[string]any{"hostname": "should-not-land"}}
+
+	err := mutate(t, gql, devCaller(), q, v)
+	if err == nil {
+		t.Fatal("a compound mutation over two governed entities was allowed through")
+	}
+	var gerr *gatedError
+	if !errors.As(err, &gerr) || gerr.Code != CodeApprovalRequired {
+		t.Fatalf("error = %v, want APPROVAL_REQUIRED", err)
+	}
+	for _, id := range []string{crServerA, crServerB} {
+		if got := readHostname(t, id); got == "should-not-land" {
+			t.Fatalf("%s was written despite the refusal", id)
+		}
+	}
+}
+
+// Acceptance 4: resolution must not become a guess. A reference that cannot be
+// resolved yields nothing and is still refused — the fail-closed default is
+// exactly what must NOT be relaxed to fix the false refusal above.
+func TestGate_UnresolvableVariableReferenceIsRefusedNotAllowed(t *testing.T) {
+	gql, f := gateFixture(t)
+	f.requireApproval(t, 1)
+
+	// $missing is declared and referenced, but never supplied.
+	q := `mutation U($missing: String!, $set: ServerPatch!) { updateServer(input: {filter: {orbId: {eq: $missing}}, set: $set}) { numUids } }`
+	v := map[string]any{"set": map[string]any{"hostname": "should-not-land"}}
+
+	err := mutate(t, gql, devCaller(), q, v)
+	if err == nil {
+		t.Fatal("an unresolvable mutation was waved through — the gate guessed instead of refusing")
+	}
+	var gerr *gatedError
+	if !errors.As(err, &gerr) || gerr.Code != CodeVariableFormRequired {
+		t.Fatalf("error = %v, want VARIABLE_FORM_REQUIRED", err)
+	}
+
+	// A filter on a non-orbId field is the same story: nothing to attribute.
+	q2 := `mutation ByName($f: ServerFilter!, $set: ServerPatch!) { updateServer(input: {filter: $f, set: $set}) { numUids } }`
+	v2 := map[string]any{
+		"f":   map[string]any{"hostname": map[string]any{"eq": "nothing-here"}},
+		"set": map[string]any{"model": "m"},
+	}
+	if err := mutate(t, gql, devCaller(), q2, v2); err == nil {
+		t.Error("a non-orbId filter resolved to a namespace it never named")
+	}
+}
+
+// Acceptance 5: an ungated deployment must not notice any of this. Resolution
+// only ever ADDS orbIds, so the risk is a new refusal where there was none.
+func TestGate_NewlyResolvableShapesChangeNothingWithoutAPolicy(t *testing.T) {
+	gql, _ := gateFixture(t) // no policy anywhere
+
+	named, namedV := updateHostnameAs("serverOrbId", crServerA, "ungated-named-var")
+	shapes := []struct {
+		name  string
+		query string
+		vars  map[string]any
+	}{
+		{"differently-named variable", named, namedV},
+		{
+			"filter object behind a variable",
+			`mutation Apply($myFilter: ServerFilter!, $set: ServerPatch!) { updateServer(input: {filter: $myFilter, set: $set}) { numUids } }`,
+			map[string]any{
+				"myFilter": map[string]any{"orbId": map[string]any{"eq": crServerA}},
+				"set":      map[string]any{"hostname": "ungated-filter-var"},
+			},
+		},
+		{
+			"in-list mixing a literal and a variable",
+			`mutation Bulk($second: String!, $set: ServerPatch!) { updateServer(input: {filter: {orbId: {in: ["` + crServerA + `", $second]}}, set: $set}) { numUids } }`,
+			map[string]any{"second": crServerB, "set": map[string]any{"hostname": "ungated-in-list"}},
+		},
+	}
+	for _, s := range shapes {
+		t.Run(s.name, func(t *testing.T) {
+			if err := mutate(t, gql, devCaller(), s.query, s.vars); err != nil {
+				t.Fatalf("an ungated deployment was refused: %v", err)
+			}
+		})
 	}
 }

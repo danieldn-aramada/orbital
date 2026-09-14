@@ -141,8 +141,15 @@ Read the relevant doc(s) BEFORE writing code in that area — they encode conven
 | Milestones / status / timeline — the one-pager | `ROADMAP.md` |
 | Known technical debt | `docs/planning/debt.md` |
 | Historical context: SDD, architectural proposal, SSA notes | `docs/reference/SDD-CONTEXT.md` (lookup-only; grep for keywords) |
+| **Copy-paste API calls against AKS dev** (GraphQL + REST, external-jwt mode) | `docs/api-cheatsheet.md` · change-control endpoints: `docs/api-cheatsheet-change-control.md` |
+| "Who owns configuration, and where does a change go?" — the mental model | `docs/architecture-cheatsheet.md` |
+| Authenticating **to** orbital as an external service or developer (consumer-facing; `AUTH.md` is the internal design) | `docs/auth.md` |
+| Cluster monitoring stack — Prometheus/Grafana/collector findings | `docs/reference/MONITORING-STACK.md` |
+| Network topology design record (NIC / interface / NetworkDevice) | `docs/network-model.md` |
+| Step-by-step local runbooks (divergence e2e; AAD app-role assignment) | `docs/runbooks/` |
+| Pre-work history and how the project got here | `docs/project-background.md` |
 
-**If unsure which doc fits**, grep the docs/reference directory for a noun in your task — every doc starts with `Read this before: ...` so the first 5 lines tell you whether you're in the right place. Settled decisions live under `## Settled Decisions` in each doc.
+**If unsure which doc fits**, grep `docs/` for a noun in your task — every doc starts with `Read this before: ...` so the first 5 lines tell you whether you're in the right place. Settled decisions live under `## Settled Decisions` in each doc.
 
 ### Cross-project references
 

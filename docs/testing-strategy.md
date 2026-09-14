@@ -127,11 +127,23 @@ One shared DGraph instance per test run. Drop-all + schema-apply + minimal seed 
 
 **Exception -- restore tests:** Restore performs `drop_all` on DGraph, which wipes everything. Restore tests need their own isolated DGraph instance or must run last in the suite.
 
+**⚠️ `TestMain` wipes your LOCAL DGraph, and `-run` does NOT protect it.** `setupExportSuite` (`internal/handler/export_integration_test.go`) calls `testutil.ResetDGraphE` — package-level setup that runs *before* test selection, so scoping with `-run` to "safe" tests changes nothing. Any `go test -tags=integration ./internal/handler/` wipes the blue graph you were developing against. **Sequence the work accordingly: run integration tests FIRST, restore your data LAST.** Restoring mid-session and then running one more test costs you the restore. (PostgreSQL is unaffected — tests use a separate `orbital_test` database.)
+
+**Recovering a wiped local graph:** `POST /api/v1/restore {"backupId": "<id>"}` from `GET /api/v1/backup/jobs`. On macOS you must start orbital with **`TMPDIR=/tmp`** — restore uses `os.MkdirTemp("")`, which resolves to `$TMPDIR` (`/var/folders/...`), while the `dgraph` host wrapper mounts only `/tmp`, so `dgraph live` fails with `no such file or directory` *after* `drop_all` has already run. Tracked in `docs/planning/debt.md`.
+
 ### PostgreSQL isolation strategy
 
 Use `ent/enttest` backed by the test PostgreSQL instance. Truncate all tables in `TestMain` before the suite runs. Individual tests that create records should use `t.Cleanup` to delete them, or rely on the next suite-level truncation.
 
 **When adding a new ent schema type, add its table to `truncateAll` in `internal/testutil/db.go`.** Missing tables leak cursor/state rows between tests and produce silent failures (tests skip work rather than error, so nothing fails loudly at the skip site).
+
+### Test the configuration production actually runs
+
+**A test that constructs a handler with non-production settings asserts nothing about production.** Real burn 2026-09-14: `NewGraphQL(..., rejectInlineSelectors)` took `false` in every test while production runs `true`, so 21 green tests certified a bug fix that was only half done — the guard the fix had to clear lives behind that flag. Flipping the sites that drive `Handle` surfaced **three** tests asserting success through a request shape production refuses outright (`updateX(input:{})`).
+
+- **Pass production's value** unless the test's subject IS the other setting (one site in `graphql_inline_selector_test.go` legitimately passes `false` — it tests the kill switch).
+- **Prefer a named constructor over a bare bool** so the configuration under test is stated, not positional.
+- **Cover the layer clients hit.** The approval-gate suite drives `writeToDGraph` directly; the guard lives in `Handle`, so no gate test ever crossed the boundary a real caller does. When a change guards a write, add at least one test through `Handle`.
 
 ### Playwright isolation strategy
 

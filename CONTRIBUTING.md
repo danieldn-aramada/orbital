@@ -18,7 +18,7 @@ Run `make help` for the full list. The most-used:
 
 ### Divergence flow gotchas
 
-The full divergence workflow is covered in [`docs/getting-started.md`](docs/getting-started.md) and [`docs/reference/DIVERGENCE.md`](docs/reference/DIVERGENCE.md). Two recurring footguns when working on it locally:
+The full divergence workflow is covered in [`docs/runbooks/divergence-e2e-local.md`](docs/runbooks/divergence-e2e-local.md) (step-by-step local run, with the service/port inventory) and [`docs/reference/DIVERGENCE.md`](docs/reference/DIVERGENCE.md) (semantics). Two recurring footguns when working on it locally:
 
 - **Orb doesn't auto-import.** Its poller only detects new tags; trigger imports with `POST /api/v1/import {"tag":"vN"}`.
 - **cb-controller's reporter defaults to 5 min.** For local dev, set `DIVERGENCE_REPORTER_INTERVAL=15s` when running it.

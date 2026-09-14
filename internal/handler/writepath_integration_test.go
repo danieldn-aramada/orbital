@@ -42,7 +42,7 @@ type acceptFixture struct {
 func newAcceptFixture(t *testing.T) *acceptFixture {
 	t.Helper()
 	f := newCRFixture(t)
-	gql := NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), false)
+	gql := NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), true)
 	return &acceptFixture{crFixture: f, gql: gql, dh: NewDivergenceHandler(f.db, slog.Default(), gql)}
 }
 

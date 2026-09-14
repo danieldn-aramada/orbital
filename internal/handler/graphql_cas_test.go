@@ -42,7 +42,7 @@ func forwarded(t *testing.T, dgraphResp string, vars map[string]any, query strin
 	}))
 	t.Cleanup(srv.Close)
 
-	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
+	h := NewGraphQL(srv.URL, nil, slog.Default(), true)
 	c, rec := newGQLCtx(t, map[string]any{
 		"query": query, "operationName": "UpdateServer", "variables": vars,
 	})
@@ -174,7 +174,7 @@ func TestCAS_UnrecognisedShapeIsRefusedNotSentUnguarded(t *testing.T) {
 			}))
 			t.Cleanup(srv.Close)
 
-			h := NewGraphQL(srv.URL, nil, slog.Default(), false)
+			h := NewGraphQL(srv.URL, nil, slog.Default(), true)
 			c, rec := newGQLCtx(t, map[string]any{
 				"query": tc.query, "operationName": "UpdateServer",
 				"variables": map[string]any{"orbId": "ns:server-A", "set": map[string]any{"hostname": "x"}, "version": 7},
@@ -276,7 +276,7 @@ func TestCAS_TransientTransactionAbortIsRetried(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
+	h := NewGraphQL(srv.URL, nil, slog.Default(), true)
 	c, rec := newGQLCtx(t, map[string]any{
 		"query":         casUpdateQuery,
 		"operationName": "UpdateServer",
@@ -308,7 +308,7 @@ func TestCAS_PersistentAbortIsNotReportedAsAnMVCCConflict(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
+	h := NewGraphQL(srv.URL, nil, slog.Default(), true)
 	c, rec := newGQLCtx(t, map[string]any{
 		"query":         casUpdateQuery,
 		"operationName": "UpdateServer",
@@ -355,7 +355,7 @@ func TestCAS_TokenIsStillEnforcedWhenThePreFlightCannotResolveTheEntity(t *testi
 	}))
 	t.Cleanup(srv.Close)
 
-	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
+	h := NewGraphQL(srv.URL, nil, slog.Default(), true)
 	c, rec := newGQLCtx(t, map[string]any{
 		"query":         casUpdateQuery,
 		"operationName": "UpdateServer",
@@ -389,7 +389,7 @@ func TestCAS_MultiTypeMutationCarryingIfVersionIsRefusedNotDropped(t *testing.T)
 	}))
 	t.Cleanup(srv.Close)
 
-	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
+	h := NewGraphQL(srv.URL, nil, slog.Default(), true)
 	c, rec := newGQLCtx(t, map[string]any{
 		"query": `mutation Compound($orbId: String!, $set: ServerPatch!, $rset: RackPatch!) {
 			updateServer(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids }
@@ -433,7 +433,7 @@ func TestCAS_PreRenameIfVersionIsRefusedNotIgnored(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	h := NewGraphQL(srv.URL, nil, slog.Default(), false)
+	h := NewGraphQL(srv.URL, nil, slog.Default(), true)
 	c, rec := newGQLCtx(t, map[string]any{
 		"query":         casUpdateQuery,
 		"operationName": "UpdateServer",

@@ -27,7 +27,7 @@ import (
 
 func TestCASRace_ConcurrentUpdatesWithTheSameIfVersionYieldExactlyOneWinner(t *testing.T) {
 	f := newCRFixture(t)
-	gql := NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), false)
+	gql := NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), true)
 
 	start := readVersion(t, crServerA)
 	const writers = 12
@@ -92,7 +92,7 @@ func TestCASRace_ConcurrentUpdatesWithTheSameIfVersionYieldExactlyOneWinner(t *t
 // unguarded traffic would make every bulk client start seeing 409s.
 func TestCASRace_UnguardedConcurrentUpdatesAllSucceed(t *testing.T) {
 	f := newCRFixture(t)
-	gql := NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), false)
+	gql := NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), true)
 
 	const writers = 6
 	var wg sync.WaitGroup
@@ -132,7 +132,7 @@ func TestCASRace_UnguardedConcurrentUpdatesAllSucceed(t *testing.T) {
 // code ships before schema.
 func TestCASRace_VersionIsFilterableOnTheDeployedSchema(t *testing.T) {
 	f := newCRFixture(t)
-	gql := NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), false)
+	gql := NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), true)
 
 	c, rec := newGQLCtx(t, map[string]any{
 		"query":         `mutation UpdateServer($orbId: String!, $set: ServerPatch!) { updateServer(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids } }`,

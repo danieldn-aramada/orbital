@@ -30,6 +30,36 @@ var knownMutationRe = configitems.KnownMutationsRegex()
 // e.g. filter: { orbId: { eq: "alaska-dot:GRTLY24" } }
 var orbIdFilterRe = regexp.MustCompile(`orbId\s*:\s*\{\s*eq\s*:\s*"([^"]+)"`)
 
+// The three regexes below exist because an orbId can be named through a
+// VARIABLE REFERENCE rather than a literal, and every one of those shapes used
+// to resolve to nothing.
+//
+// That is not merely a missing audit row. `checkApprovalPolicy` derives the
+// governing namespace from these same orbIds, so an unresolved reference meant
+// a perfectly valid variable-form mutation was refused `400
+// VARIABLE_FORM_REQUIRED` — telling the caller to use the variable form they
+// were already using. Any client not naming its variable exactly `orbId`, and
+// every compound mutation (which cannot have two variables of one name), was
+// locked out of a governed namespace. Fixed 2026-09-14.
+//
+// Resolution only ever ADDS orbIds, so the gate can become stricter but never
+// laxer: a reference we still cannot resolve yields nothing and is refused by
+// rejectUndeterminable exactly as before.
+
+// orbIdEqVarRe: orbId: { eq: $anyVariableName }
+var orbIdEqVarRe = regexp.MustCompile(`orbId\s*:\s*\{\s*eq\s*:\s*\$(\w+)`)
+
+// orbIdInRe: orbId: { in: [...] } — the list body is parsed separately because
+// its elements may be quoted literals, variable references, or a mix.
+var orbIdInRe = regexp.MustCompile(`orbId\s*:\s*\{\s*in\s*:\s*\[([^\]]*)\]`)
+
+// filterVarRe: filter: $anyVariableName — a whole filter object behind a
+// variable whose name is not literally "filter".
+var filterVarRe = regexp.MustCompile(`filter\s*:\s*\$(\w+)`)
+
+// listItemRe pulls `"literal"` and `$variable` items out of an `in` list body.
+var listItemRe = regexp.MustCompile(`"([^"]*)"|\$(\w+)`)
+
 var mutationOpRe = regexp.MustCompile(`(?i)^\s*mutation\s+(\w+)`)
 var queryOpRe = regexp.MustCompile(`(?i)^\s*query\s+(\w+)`)
 
@@ -1027,24 +1057,35 @@ func extractResourceIDs(query string, variables map[string]any, respBody []byte)
 	// Shape: {"filter": {"orbId": {"eq": "..."}}} or {"filter": {"orbId": {"in": [...]}}}.
 	// This is the shape used by update{Type}/delete{Type} when the caller wants
 	// the audit-log expanded row to show variables instead of inlined values.
-	if filter, ok := variables["filter"].(map[string]any); ok {
-		if orbIdF, ok := filter["orbId"].(map[string]any); ok {
-			if eq, ok := orbIdF["eq"].(string); ok {
-				add(eq)
-			}
-			if in, ok := orbIdF["in"].([]any); ok {
-				for _, v := range in {
-					if s, ok := v.(string); ok {
-						add(s)
-					}
-				}
-			}
-		}
-	}
+	addFilterOrbIDs(variables["filter"], add)
 
 	// Inline filter expressions: orbId: { eq: "..." }
 	for _, m := range orbIdFilterRe.FindAllStringSubmatch(query, -1) {
 		add(m[1])
+	}
+
+	// Inline filter naming a variable: orbId: { eq: $whatever }. The variable
+	// holds the orbId predicate's value — normally a bare string.
+	for _, m := range orbIdEqVarRe.FindAllStringSubmatch(query, -1) {
+		addOrbIDPredicate(variables[m[1]], add)
+	}
+
+	// Inline `in` list: orbId: { in: ["a", $b] }. Literals and variable
+	// references may be mixed in one list.
+	for _, m := range orbIdInRe.FindAllStringSubmatch(query, -1) {
+		for _, item := range listItemRe.FindAllStringSubmatch(m[1], -1) {
+			if item[1] != "" || item[2] == "" {
+				add(item[1]) // quoted literal
+				continue
+			}
+			addOrbIDPredicate(variables[item[2]], add) // $variable
+		}
+	}
+
+	// A whole filter object behind a variable of any name: filter: $myFilter.
+	// The literal key "filter" is already read above; this covers the rest.
+	for _, m := range filterVarRe.FindAllStringSubmatch(query, -1) {
+		addFilterOrbIDs(variables[m[1]], add)
 	}
 
 	// Response body: recursively collect every orbId value in the returned JSON.
@@ -1058,6 +1099,48 @@ func extractResourceIDs(query string, variables map[string]any, respBody []byte)
 
 	sort.Strings(ids)
 	return ids
+}
+
+// addFilterOrbIDs reads orbIds out of a resolved FILTER object — the value a
+// `filter: $var` reference points at, e.g. {"orbId": {"eq": "ns:thing"}}.
+//
+// It descends only through the "orbId" key. A filter on any other field
+// contributes nothing, deliberately: attributing someone else's predicate to
+// orbId would put a wrong resource id on an audit row, and a wrong id is worse
+// than a missing one because it reads as fact.
+func addFilterOrbIDs(v any, add func(string)) {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return
+	}
+	if pred, ok := m["orbId"]; ok {
+		addOrbIDPredicate(pred, add)
+	}
+}
+
+// addOrbIDPredicate reads orbIds out of a resolved orbId PREDICATE — the value
+// sitting under an "orbId" key, or behind an `orbId: { eq: $var }` reference.
+//
+// Accepts every shape DGraph's generated filters allow for it: a bare string,
+// a list of strings, or an {eq}/{in} map. Anything else yields nothing.
+func addOrbIDPredicate(v any, add func(string)) {
+	switch t := v.(type) {
+	case string:
+		add(t)
+	case []any:
+		for _, e := range t {
+			if s, ok := e.(string); ok {
+				add(s)
+			}
+		}
+	case map[string]any:
+		if eq, ok := t["eq"].(string); ok {
+			add(eq)
+		}
+		if in, ok := t["in"]; ok {
+			addOrbIDPredicate(in, add)
+		}
+	}
 }
 
 // collectOrbIDs recursively walks an arbitrary JSON value and calls add for
