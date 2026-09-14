@@ -233,6 +233,19 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   `docs/planning/backlog.md` and technical debt to `docs/planning/debt.md`.
 
 ### Fixed
+- **A merged change request no longer tells you to re-approve it.** Merging bumps the version
+  vector by definition, so the scope-moved signal fired on every terminal request and the detail
+  view rendered "Changed since review. Re-approve to merge." above a request already applied. The
+  terminal branch cleared the other two staleness flags and not this one.
+- **A multi-entity change request now lists what it did.** The record on a merged request rendered
+  one aggregate row — "2 entities / 2 fields" — because it was built from the queue-row summary,
+  which carries an orbId only when there is exactly one. The response now carries `record`: one
+  entry per change object with its fields, the value each had when last reviewed, and whether it
+  applied. Derived from the stored changeset, so every request already in the database renders
+  correctly with no backfill.
+- **The review table's Note column rendered raw markup** (`&lt;span class="is-family-monospace"&gt;`)
+  inside the conflict explanation — the value formatter returns escaped HTML and the whole sentence
+  was being escaped a second time around it.
 - **Concurrent writes to one entity could be silently lost even when the caller asked for a
   concurrency check.** `version` was compared in Go against a snapshot fetched by a separate
   request, then the mutation was written with a filter on `orbId` alone — two DGraph transactions,
