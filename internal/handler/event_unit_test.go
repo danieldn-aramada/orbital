@@ -107,10 +107,15 @@ func TestBuildVarSummary_WithUserFields(t *testing.T) {
 
 // ── buildDiffHTML ────────────────────────────────────────────────────────────
 
+// The trailing "" is the mutation query. Every case below uses a shape that
+// resolves without it — flat-shape variables, or a patch variable named
+// literally `set`. A patch behind a differently-named variable needs the query
+// to be found at all; that path is covered in graphql_test.go.
+
 func TestBuildDiffHTML_NoChange(t *testing.T) {
 	before := map[string]any{"name": "alpha"}
 	variables := map[string]any{"name": "alpha"}
-	got := buildDiffHTML(before, variables)
+	got := buildDiffHTML(before, variables, "")
 	if got != "" {
 		t.Errorf("no change: expected empty HTML, got %q", got)
 	}
@@ -119,7 +124,7 @@ func TestBuildDiffHTML_NoChange(t *testing.T) {
 func TestBuildDiffHTML_FieldChanged(t *testing.T) {
 	before := map[string]any{"name": "alpha"}
 	variables := map[string]any{"name": "beta"}
-	got := string(buildDiffHTML(before, variables))
+	got := string(buildDiffHTML(before, variables, ""))
 	if got == "" {
 		t.Fatal("changed field: expected non-empty HTML, got empty")
 	}
@@ -233,7 +238,7 @@ func TestBuildDiffHTML_IdracOnlyChange(t *testing.T) {
 			"sshEnabled":      true,
 		},
 	}
-	got := string(buildDiffHTML(before, variables))
+	got := string(buildDiffHTML(before, variables, ""))
 	if got == "" {
 		t.Fatal("expected non-empty diff for idrac-only change")
 	}
@@ -260,7 +265,7 @@ func TestBuildDiffHTML_UnchangedJSONFieldSuppressed(t *testing.T) {
 	before := map[string]any{"name": "old-name", "assetDataV2": assetJSON}
 	variables := map[string]any{"name": "new-name", "assetDataV2": assetMap}
 
-	got := string(buildDiffHTML(before, variables))
+	got := string(buildDiffHTML(before, variables, ""))
 	if strings.Contains(got, "assetDataV2") {
 		t.Errorf("unchanged assetDataV2 should not appear in diff, got: %s", got)
 	}
@@ -290,7 +295,7 @@ func TestComputeChanges(t *testing.T) {
 			"version":       float64(2),  // metadata (skipDiffFields) → excluded
 		},
 	}
-	got := computeChanges(before, variables)
+	got := computeChanges(before, variables, "")
 	if len(got) != 1 {
 		t.Fatalf("expected exactly 1 change (retentionDays), got %d: %#v", len(got), got)
 	}
@@ -311,7 +316,7 @@ func TestComputeChanges(t *testing.T) {
 func TestComputeChanges_NoChange(t *testing.T) {
 	before := map[string]any{"retentionDays": float64(7)}
 	variables := map[string]any{"set": map[string]any{"retentionDays": float64(7)}}
-	if got := computeChanges(before, variables); got != nil {
+	if got := computeChanges(before, variables, ""); got != nil {
 		t.Errorf("expected nil (no change → omitted), got %#v", got)
 	}
 }

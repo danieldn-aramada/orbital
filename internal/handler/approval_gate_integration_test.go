@@ -3,17 +3,20 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/approval"
 	"github.com/armada/orbital/internal/testutil"
+	"github.com/labstack/echo/v4"
 )
 
 // The gate's whole job is to say no. These prove it says no to the right things
@@ -23,11 +26,12 @@ import (
 func gateFixture(t *testing.T) (*GraphQL, *crFixture) {
 	t.Helper()
 	f := newCRFixture(t)
-	// true is what production runs (ORBITAL_INLINE_SELECTOR_REJECT). It makes no
-	// difference to the tests below — they drive writeToDGraph directly, and the
+	// true is what production runs (ORBITAL_INLINE_SELECTOR_REJECT). Most tests
+	// below drive writeToDGraph directly, where the flag is inert because the
 	// inline-selector guard lives in Handle — but passing production's value keeps
-	// the fixture from asserting against a configuration nothing deploys.
-	// The guard's own effect is pinned in TestHandle_* below, through Handle.
+	// the fixture from asserting against a configuration nothing deploys, and
+	// TestGate_RenamedVariableUpdateIsRefused403ThroughHandle depends on it: that
+	// one goes through Handle precisely because no other test here does.
 	return NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), true), f
 }
 
@@ -448,5 +452,48 @@ func TestGate_NewlyResolvableShapesChangeNothingWithoutAPolicy(t *testing.T) {
 				t.Fatalf("an ungated deployment was refused: %v", err)
 			}
 		})
+	}
+}
+
+// Acceptance 6: the same refusal over HTTP, through Handle.
+//
+// Every other test in this file drives writeToDGraph directly, so none of them
+// crosses the layer a real client actually hits — and that is precisely how the
+// previous half-fix looked complete: the gate resolved the namespace correctly
+// while Handle's inline-selector guard refused the request one layer earlier,
+// with a different code, before the gate was ever consulted. A green gate suite
+// said nothing about what a caller received.
+func TestGate_RenamedVariableUpdateIsRefused403ThroughHandle(t *testing.T) {
+	gql, f := gateFixture(t)
+	f.requireApproval(t, 1)
+
+	q, v := updateHostnameAs("serverOrbId", crServerA, "should-not-land")
+	body, err := json.Marshal(gqlRequest{Query: q, Variables: v})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user_email", "gate-handle-actor")
+	c.Set("role", string(user.RoleDev)) // dev may mutate, but may not bypass
+
+	if err := gql.Handle(c); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403 — a governed write was not stopped at the HTTP layer: %s",
+			rec.Code, rec.Body.String())
+	}
+	var got struct{ Code string }
+	_ = json.Unmarshal(rec.Body.Bytes(), &got)
+	if got.Code != CodeApprovalRequired {
+		t.Fatalf("code = %q, want %s (VARIABLE_FORM_REQUIRED here means the guard fired before the gate)",
+			got.Code, CodeApprovalRequired)
+	}
+	if h := readHostname(t, crServerA); h == "should-not-land" {
+		t.Fatal("refused with 403, but the write still landed")
 	}
 }
