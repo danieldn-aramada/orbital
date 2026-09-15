@@ -49,6 +49,8 @@ import {
   showClusterSkeleton,
   fetchWithMinDelay,
   initDetailTabs,
+  apiErrorFromBody,
+  apiErrorText,
   dtWrapLengthSelect,
   openServerTab,
   initServerEventsTable,
@@ -395,7 +397,7 @@ function confirmDelete() {
         closeDeleteModal()
         loadBackups()
       } else {
-        return r.json().then(d => { throw new Error(d.error || 'Delete failed') })
+        return r.json().then(d => { throw new Error(apiErrorFromBody(d, 'Delete failed')) })
       }
     })
     .catch(err => {
@@ -825,7 +827,7 @@ function deleteExportArtifact(jobId) {
   fetch(BASE + `/api/v1/export/jobs/${jobId}/artifact`, { method: 'DELETE' })
     .then(r => {
       if (r.ok) loadExportJobsTable()
-      else r.json().then(j => alert(`Delete failed: ${j.error ?? 'unknown'}`))
+      else r.json().then(j => alert(apiErrorFromBody(j, 'Delete failed')))
     })
     .catch(() => alert('Failed to delete artifact.'))
 }
@@ -1971,7 +1973,7 @@ function setUserRole(userId, role, btn) {
     body: JSON.stringify({ role }),
   })
     .then(r => {
-      if (!r.ok) return r.json().then(j => Promise.reject(j.message || 'Request failed'))
+      if (!r.ok) return r.json().then(j => Promise.reject(apiErrorFromBody(j, 'Could not change the role')))
       window.location.reload()
     })
     .catch(msg => {
@@ -2195,7 +2197,7 @@ function confirmDivergenceBatch() {
       }
       if (resp.ok) return { id: r.id, ok: true }
       const body = await resp.json().catch(() => ({}))
-      const errMessage = body.message || body.error || `HTTP ${resp.status}`
+      const errMessage = apiErrorFromBody(body, `HTTP ${resp.status}`)
       throw Object.assign(new Error(errMessage), { id: r.id, status: resp.status })
     })
   )).then(outcomes => {
@@ -2417,7 +2419,7 @@ function divergenceDeleteReportForDC(button) {
   })
     .then(r => r.json().then(body => ({ ok: r.ok, status: r.status, body })))
     .then(({ ok, status, body }) => {
-      if (!ok) throw new Error(body.message || `HTTP ${status}`)
+      if (!ok) throw new Error(apiErrorFromBody(body, `HTTP ${status}`))
       // Hard-reload — page server-renders divergence state, so we need a fresh fetch.
       window.location.reload()
     })
@@ -2557,8 +2559,8 @@ document.addEventListener('submit', (e) => {
           const body = await r.json().catch(() => ({}))
           const err = document.getElementById('cfg-delete-modal-error')
           if (err) {
-            err.textContent = (body.message || body.error
-              || 'Someone else changed this while the dialog was open — reload and try again.')
+            err.textContent = apiErrorFromBody(body,
+              'Someone else changed this while the dialog was open — reload and try again.')
             err.style.display = ''
           }
           btn.classList.remove('is-loading')
@@ -2651,73 +2653,154 @@ const CR_STATUS_CLASS = {
 }
 
 // ─── Change Control: request queue ──────────────────────────────────────────
+//
+// A DataTable like every other list in the app (clusters, servers, audit log),
+// not a hand-rolled tbody: this was the only long table with no paging, search
+// or sort. Client-side paging over a server-capped fetch is the house pattern —
+// the audit log does exactly this with ?limit=200.
 document.addEventListener('DOMContentLoaded', () => {
-  const tbody = document.getElementById('cr-tbody')
-  if (!tbody) return
+  const tableEl = document.getElementById('cr-table')
+  if (!tableEl) return
 
   const err = document.getElementById('cr-error')
   const empty = document.getElementById('cr-empty')
   const tabs = document.getElementById('cr-tabs')
 
-  let currentFilter = ''
+  // The API's `total` (how many MATCHED) rather than how many were fetched.
+  // DataTables counts the rows it was handed, which is capped at
+  // CR_FETCH_LIMIT — so without this the info line states a total that is
+  // simply wrong once more requests exist than one page-load carries.
+  let serverTotal = 0
 
-  function load(filter) {
-    currentFilter = filter || ''
-    err.style.display = 'none'
-    fetch(BASE + '/api/v1/change-requests' + (filter ? '?' + filter : ''), {
-      headers: { Accept: 'application/json' },
-    })
-      .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
-      .then(j => render(j.items || [], j.total || 0))
-      .catch(e => {
-        err.textContent = 'Could not load change requests — ' + e.message
-        err.style.display = ''
-      })
-  }
+  // Matches the audit log. The queue pages client-side from here; `total` in the
+  // response says how many matched, so a capped fetch can SAY it was capped
+  // instead of quietly showing a prefix.
+  const CR_FETCH_LIMIT = 200
 
-  // Renders the API's `effect`; never computes one.
-
-  function render(items, total) {
-    tbody.innerHTML = items.map(cr => {
-      const href = BASE + '/change-requests/' + encodeURIComponent(cr.id)
-      let status = '<span class="' + (CR_STATUS_CLASS[cr.status] || '') + '">' + esc(cr.status) + '</span>'
-      if (cr.stale) status += ' <span class="has-text-warning">\u00b7 stale</span>'
-      const approvals = cr.requiredApprovals > 0
-        ? cr.approvals + ' of ' + cr.requiredApprovals
-        : 'not required'
-      return '<tr data-cr-row="' + esc(cr.id) + '">'
-        + '<td class="is-family-monospace"><a href="' + href + '">' + esc(cr.id) + '</a></td>'
-        // Free text, so the cell truncates — see `#cr-table td.cr-title` in main.scss.
-        + '<td class="cr-title" title="' + esc(cr.title) + '">'
-        + '<a href="' + href + '">' + esc(cr.title) + '</a></td>'
-        + '<td>' + fieldCountCell(cr.effect) + '</td>'
-        + '<td>' + esc(cr.namespace) + '</td>'
-        + '<td>' + esc(cr.author) + '</td>'
-        + '<td>' + status + '</td>'
-        + '<td>' + esc(approvals) + '</td>'
-        + '<td title="' + esc(fmtDate(cr.createdAt)) + '">' + esc(fmtAge(cr.createdAt)) + '</td>'
-        + '</tr>'
-    }).join('')
-    // Keyed by the tab's own filter string, so a tab and its empty state cannot
-    // drift apart; an unknown key falls back to the generic message.
-    const EMPTY = {
-      'awaiting_review=true': 'Nothing is waiting on your review.',
-      'status=active': 'No change requests are open.',
-      'status=merged&status=rejected&status=closed': 'Nothing has finished yet — no request has been merged, rejected or withdrawn.',
-      '': 'No change requests yet. One is created when a change needs approval before it applies.',
-    }
-    empty.textContent = total === 0 ? (EMPTY[currentFilter] || EMPTY['']) : ''
-    empty.style.display = total === 0 ? '' : 'none'
+  // Keyed by the tab's own filter string, so a tab and its empty state cannot
+  // drift apart; an unknown key falls back to the generic message. Kept out of
+  // DataTables' `emptyTable`, which is one static string and cannot say which
+  // tab is empty.
+  const EMPTY = {
+    'awaiting_review=true': 'Nothing is waiting on your review.',
+    'status=active': 'No change requests are open.',
+    'status=merged&status=rejected&status=closed': 'Nothing has finished yet — no request has been merged, rejected or withdrawn.',
+    '': 'No change requests yet. One is created when a change needs approval before it applies.',
   }
 
   // Add this key to clearTabStateOnFresh in shared.js if it is ever renamed —
   // login must not leave one user looking at another's view.
   const TAB_KEY = 'crTabCurrent'
 
-  function selectTab(a) {
+  // Resolved BEFORE the table is constructed. DataTables issues its own first
+  // request the moment `ajax.url` is set, so a selectTab() call afterwards
+  // would fire a second one and ABORT the first — surfacing as "HTTP 0", an
+  // error for a request that was never really in trouble.
+  //
+  // A stored filter can name a tab this role does not get, so fall back to the
+  // server-rendered active tab rather than loading nothing.
+  const stored = localStorage[TAB_KEY]
+  const initialTab =
+    (stored ? tabs.querySelector('a[data-cr-filter="' + CSS.escape(stored) + '"]') : null) ||
+    tabs.querySelector('li.is-active a[data-cr-filter]') ||
+    tabs.querySelector('a[data-cr-filter]')
+
+  let currentFilter = initialTab ? (initialTab.getAttribute('data-cr-filter') || '') : ''
+  const crURL = () =>
+    BASE + '/api/v1/change-requests?limit=' + CR_FETCH_LIMIT + (currentFilter ? '&' + currentFilter : '')
+
+  const href = (id) => BASE + '/change-requests/' + encodeURIComponent(id)
+
+  const crTable = new DataTable('#cr-table', {
+    pageLength: 25,
+    layout: {
+      topStart: [
+        { pageLength: { menu: [10, 25, 50] } },
+        { buttons: [
+          { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
+          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-crs' }, action: () => reload() },
+        ] },
+      ],
+      topEnd: { search: { placeholder: 'Search change requests' } },
+    },
+    autoWidth: true,
+    // No scrollX: eight narrow columns fit, and the header clone scrollX
+    // introduces is not worth adding for a table that does not overflow.
+    stateSave: true,
+    // Newest first, matching the API's own ordering. Column 7 sorts on the raw
+    // createdAt timestamp, never on the rendered "3d" — see its render below.
+    order: [[7, 'desc']],
+    language: {
+      info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
+      entries: { _: 'change requests', 1: 'change request' },
+      // Left blank: the per-tab message below is more useful than one static
+      // string, and two empty states would contradict each other.
+      emptyTable: '',
+      infoEmpty: '',
+    },
+    initComplete: function () { dtWrapLengthSelect(this.api()) },
+    // `max` is the number of rows loaded; serverTotal is how many matched. When
+    // the fetch was capped the two differ, and only then is the extra clause
+    // added. Appended to `pre` rather than replacing it so a search still
+    // reports its own filtered count truthfully.
+    infoCallback: (settings, start, end, max, total, pre) =>
+      serverTotal > max ? pre + ' (' + serverTotal + ' match)' : pre,
+    columns: [
+      { data: 'id', className: 'is-family-monospace', render: (v, type) => type === 'display' ? '<a href="' + href(v) + '">' + esc(v) + '</a>' : v },
+      {
+        data: 'title',
+        className: 'cr-title',
+        // Free text, so the cell truncates — see `#cr-table td.cr-title` in main.scss.
+        render: (v, type, row) => type === 'display' ? '<a href="' + href(row.id) + '" title="' + esc(v) + '">' + esc(v) + '</a>' : v,
+      },
+      { data: 'effect', render: (v, type) => type === 'display' ? fieldCountCell(v) : (v && v.fields) || 0 },
+      { data: 'namespace' },
+      { data: 'author' },
+      { data: 'status', render: (v, type) => type === 'display' ? '<span class="' + (CR_STATUS_CLASS[v] || '') + '">' + esc(v) + '</span>' : v },
+      {
+        data: null,
+        render: (v, type, row) => row.requiredApprovals > 0 ? row.approvals + ' of ' + row.requiredApprovals : 'not required',
+      },
+      {
+        data: 'createdAt',
+        // display renders the age; every other type gets the raw timestamp, so
+        // sorting is chronological rather than lexicographic on "3d"/"10h".
+        render: (v, type) => type === 'display' ? '<span title="' + esc(fmtDate(v)) + '">' + esc(fmtAge(v)) + '</span>' : v,
+      },
+    ],
+    createdRow: (row, data) => { row.dataset.crRow = data.id },
+    ajax: {
+      url: crURL(),
+      dataSrc: (json) => {
+        const items = json.items || []
+        const total = json.total || 0
+        serverTotal = total
+        empty.textContent = total === 0 ? (EMPTY[currentFilter] || EMPTY['']) : ''
+        empty.style.display = total === 0 ? '' : 'none'
+        return items
+      },
+      error: (xhr) => {
+        // '' means an aborted request — a tab switched mid-flight, or the page
+        // being left. apiErrorText returns the server's error + hint otherwise.
+        apiErrorText(xhr, 'Could not load change requests').then(msg => {
+          if (!msg) return
+          err.textContent = msg
+          err.style.display = ''
+        })
+      },
+    },
+  })
+
+  // resetPaging true: after switching tabs or reloading, a restored page 3 would
+  // hide the rows the caller just asked for.
+  function reload() {
+    err.style.display = 'none'
+    crTable.ajax.url(crURL()).load(null, true)
+  }
+
+  function markActive(a) {
     for (const li of tabs.querySelectorAll('li')) li.classList.remove('is-active')
     a.closest('li').classList.add('is-active')
-    load(a.getAttribute('data-cr-filter'))
   }
 
   tabs.addEventListener('click', (e) => {
@@ -2725,18 +2808,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!a) return
     e.preventDefault()
     localStorage[TAB_KEY] = a.getAttribute('data-cr-filter')
-    selectTab(a)
+    markActive(a)
+    currentFilter = a.getAttribute('data-cr-filter') || ''
+    reload()
   })
 
-  // A stored filter can name a tab this role does not get, so fall back to the
-  // server-rendered active tab rather than loading nothing.
-  const stored = localStorage[TAB_KEY]
-  const restored = stored
-    ? tabs.querySelector('a[data-cr-filter="' + CSS.escape(stored) + '"]')
-    : null
-  const first = tabs.querySelector('li.is-active a[data-cr-filter]')
-  if (restored) selectTab(restored)
-  else load(first ? first.getAttribute('data-cr-filter') : '')
+  // Only the highlight: the table already loaded this filter on construction.
+  if (initialTab) markActive(initialTab)
 })
 
 // ─── Change Control: review view ────────────────────────────────────────────
@@ -2760,7 +2838,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const head = esc(body.error || ('Could not ' + action))
     const problems = body.problems || []
     if (!problems.length) {
-      err.innerHTML = head + (body.hint ? ' — ' + esc(body.hint) : '')
+      // No per-field detail: this is the ordinary envelope, rendered the one
+      // way every other surface renders it. esc() wraps the helper's plain
+      // text because this element is written via innerHTML.
+      err.innerHTML = esc(apiErrorFromBody(body, 'Could not ' + action))
       err.style.display = ''
       return
     }
@@ -2784,11 +2865,11 @@ document.addEventListener('DOMContentLoaded', () => {
       fetch(BASE + '/api/v1/change-requests/' + encodeURIComponent(id) + '/diff', { headers: { Accept: 'application/json' } }),
     ])
       .then(async ([a, b]) => {
-        if (!a.ok) throw new Error('HTTP ' + a.status)
+        if (!a.ok) throw new Error(await apiErrorText(a, 'Could not load this change request'))
         return [await a.json(), b.ok ? await b.json() : null]
       })
       .then(([cr, diff]) => render(cr, diff))
-      .catch(e => fail('Could not load this change request — ' + e.message))
+      .catch(e => fail(e.message || 'Could not load this change request'))
   }
 
   const el = (id) => document.getElementById(id)
@@ -3294,7 +3375,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (r.ok) { load(); return }
           const body = await r.json().catch(() => ({}))
           input.disabled = false
-          fail((body.error || 'Could not rename') + (body.hint ? ' — ' + body.hint : ''))
+          fail(apiErrorFromBody(body, 'Could not rename'))
         })
         .catch(() => {
           input.disabled = false
@@ -3426,9 +3507,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function load() {
     err.style.display = 'none'
     fetch(BASE + '/api/v1/approval-policies', { headers: { Accept: 'application/json' } })
-      .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+      .then(async r => r.ok ? r.json() : Promise.reject(new Error(await apiErrorText(r, 'Could not load policies'))))
       .then(render)
-      .catch(e => fail('Could not load policies — ' + e.message))
+      .catch(e => fail(e.message || 'Could not load policies'))
   }
 
   // The last rendered list, so Edit can prefill from what the operator is
@@ -3514,7 +3595,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }).then(async r => {
       if (r.ok || r.status === 204) { load(); return }
       const j = await r.json().catch(() => ({}))
-      fail((j.error || ('Could not ' + method)) + (j.hint ? ' — ' + j.hint : ''))
+      fail(apiErrorFromBody(j, 'Could not ' + method))
     }).catch(() => fail('Request failed — check your connection and try again.'))
   }
 
@@ -3583,7 +3664,7 @@ document.addEventListener('DOMContentLoaded', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query }),
-    }).then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+    }).then(async r => r.ok ? r.json() : Promise.reject(new Error(await apiErrorText(r, 'Query failed'))))
   }
 
   let optionsLoaded = false
@@ -3693,7 +3774,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (resp.ok) { closeModal(); load(); return }
     const j = await resp.json().catch(() => ({}))
     const what = editingId ? 'save the policy' : 'create the policy'
-    modalErr.textContent = (j.error || `Could not ${what} (${resp.status}).`) + (j.hint ? ' — ' + j.hint : '')
+    modalErr.textContent = apiErrorFromBody(j, `Could not ${what} (${resp.status}).`)
     modalErr.style.display = ''
   })
 
@@ -3893,7 +3974,7 @@ function runCompare(from, to) {
     .then(r => r.json().then(json => ({ status: r.status, json })))
     .then(({ status, json }) => {
       if (status !== 200) {
-        out.innerHTML = `<div class="notification is-warning is-light">${esc(json.error || 'Comparison failed.')}</div>`
+        out.innerHTML = `<div class="notification is-warning is-light">${esc(apiErrorFromBody(json, 'Comparison failed.'))}</div>`
         return
       }
       renderCompare(out, json)

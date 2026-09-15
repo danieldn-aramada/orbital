@@ -5,10 +5,12 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/armada/orbital/ent/user"
@@ -258,5 +260,114 @@ func TestDeleteGuard_InterfaceTypedDeleteStillRefusesAStaleVersion(t *testing.T)
 	}
 	if !exists(t, "EksaKubernetesCluster", cluster) {
 		t.Error("the refused delete removed the cluster anyway")
+	}
+}
+
+// ── 14g. the window between planning and deletion ──────────────────────────
+//
+// The hole `checkDeleteVersion` never covered. It guards the PARENT, check-then-
+// act, and the window it leaves contains planning AND the approval gate's
+// Postgres round trip. Children were not checked at any point — the DQL delete
+// posted bare uids with no predicate, so whatever was there at commit time was
+// destroyed. That made DELETE weaker than UPDATE, where a concurrent edit gets a
+// 409 because the version sits inside the write.
+//
+// Driven through bulkDeleteGuarded rather than Execute: the race is a window
+// inside one handler call, and this is the lowest level at which it is
+// deterministic rather than timing-dependent.
+
+func TestDeleteGuard_ChildEditedAfterPlanningRefusesAndDeletesNothing(t *testing.T) {
+	h, _ := deleteFixture(t)
+	ctx := context.Background()
+
+	plan, err := h.planServerDelete(ctx, crServerA)
+	if err != nil {
+		t.Fatalf("plan: %v", err)
+	}
+	if !exists(t, "IdracSettings", crIdracA) {
+		t.Fatal("fixture is missing the owned child this test turns on")
+	}
+
+	// A third party edits an OWNED CHILD — not the parent — after planning.
+	// `?version=` would not have noticed this even if the caller had sent it.
+	crGQL(t, `mutation($orbId: String!, $set: IdracSettingsPatch!) { updateIdracSettings(input: {filter: {orbId: {eq: $orbId}}, set: $set}) { numUids } }`,
+		map[string]any{"orbId": crIdracA, "set": map[string]any{
+			"firmwareVersion": "edited-after-planning",
+			"version":         99,
+		}})
+
+	err = h.bulkDeleteGuarded(ctx, plan.uids, plan.versions)
+	if err == nil {
+		t.Fatal("the cascade deleted a child that had been edited since planning — with no conflict")
+	}
+	var perr *preflightError
+	if !errors.As(err, &perr) || perr.Code != CodeMVCCConflict {
+		t.Fatalf("error = %v, want a 409 MVCC_CONFLICT", err)
+	}
+	// All-or-nothing: one conditional mutation, so the parent must survive too.
+	if !exists(t, "Server", crServerA) {
+		t.Error("the parent was deleted despite the refusal — the delete is not atomic")
+	}
+	if !exists(t, "IdracSettings", crIdracA) {
+		t.Error("the edited child was deleted despite the refusal")
+	}
+	// The message has to name what moved: "something changed" is not actionable
+	// when a cascade spans a hundred entities.
+	if !strings.Contains(perr.Message, crIdracA) {
+		t.Errorf("refusal does not name the changed entity (%s): %q", crIdracA, perr.Message)
+	}
+}
+
+// The positive half, at the same level: an untouched plan still deletes its
+// whole set. Without this the test above passes on an implementation that
+// refuses everything.
+func TestDeleteGuard_UntouchedPlanDeletesTheWholeSet(t *testing.T) {
+	h, _ := deleteFixture(t)
+	ctx := context.Background()
+
+	plan, err := h.planServerDelete(ctx, crServerA)
+	if err != nil {
+		t.Fatalf("plan: %v", err)
+	}
+	if err := h.bulkDeleteGuarded(ctx, plan.uids, plan.versions); err != nil {
+		t.Fatalf("an unchanged plan was refused: %v", err)
+	}
+	if exists(t, "Server", crServerA) {
+		t.Error("the server survived a clean guarded delete")
+	}
+	if exists(t, "IdracSettings", crIdracA) {
+		t.Error("the owned child survived — the cascade changed")
+	}
+}
+
+// A node orbital cannot guard must not be deleted blind: that is the bug being
+// fixed, not an acceptable fallback. Fires only on data written before version
+// stamping existed (0 of 2064 nodes locally, but an adopter's restored graph
+// may differ).
+func TestDeleteGuard_NodeWithNoVersionFailsClosed(t *testing.T) {
+	h, _ := deleteFixture(t)
+	ctx := context.Background()
+
+	plan, err := h.planServerDelete(ctx, crServerA)
+	if err != nil {
+		t.Fatalf("plan: %v", err)
+	}
+	// Simulate a node the baseline read could not resolve a version for.
+	stripped := make(map[string]int, len(plan.versions))
+	for k, v := range plan.versions {
+		stripped[k] = v
+	}
+	delete(stripped, plan.uids[0])
+
+	err = h.bulkDeleteGuarded(ctx, plan.uids, stripped)
+	if err == nil {
+		t.Fatal("a node with no version was deleted unguarded")
+	}
+	var perr *preflightError
+	if !errors.As(err, &perr) || perr.Code != CodeMVCCConflict {
+		t.Fatalf("error = %v, want a 409 MVCC_CONFLICT", err)
+	}
+	if !exists(t, "Server", crServerA) {
+		t.Error("the refusal still deleted the entity")
 	}
 }

@@ -54,6 +54,11 @@ type eventItem struct {
 	Timestamp     string          `json:"timestamp"     example:"2026-07-29T17:26:55Z"`
 	Details       json.RawMessage `json:"details,omitempty" swaggertype:"object"` // raw {operationName, query, variables, before}
 	EventCategory string          `json:"eventCategory" example:"data"`           // data | management | auth
+	// CloudTrail parity. All three are omitempty: absent means "no HTTP request
+	// behind this event" (a background writer), which is different from empty.
+	EventSource     string `json:"eventSource,omitempty"     example:"graphql"`  // graphql | rest | internal
+	SourceIPAddress string `json:"sourceIpAddress,omitempty" example:"10.1.2.3"` // caller address
+	RequestID       string `json:"requestId,omitempty"       example:"a1b2c3d4"` // correlates events from one request
 	// Changes is the pre-computed field-level diff. **Present ONLY for a clean
 	// single-entity update** (omitted otherwise via omitempty) — so its presence
 	// is the client's signal that a field diff is available; no need to inspect
@@ -265,6 +270,10 @@ func (h *AuditHandler) List(c echo.Context) error {
 			Timestamp:     e.Timestamp.UTC().Format(time.RFC3339),
 			Details:       e.Details,
 			EventCategory: e.EventCategory,
+
+			EventSource:     e.EventSource,
+			SourceIPAddress: e.SourceIPAddress,
+			RequestID:       e.RequestID,
 		}
 		var d eventDetails
 		if len(e.Details) > 0 {
@@ -521,10 +530,42 @@ func valStr(v, ref any) string {
 	return fmt.Sprintf("%v", v)
 }
 
+// auditOrigin is WHERE a write came from: which surface, which caller, which
+// HTTP request. CloudTrail parity — see docs/reference/AUDIT.md.
+//
+// A plain value, and that is the point. The audit write runs in a goroutine
+// (`go h.auditMutation(...)`), and Echo POOLS AND REUSES its Context objects —
+// holding one past the handler's return reads whatever request recycled it
+// next, so the IP on an audit row could belong to a different caller. A wrong
+// IP is worse than a missing one: it reads as fact. Capture at the boundary
+// with originFromContext, pass the value.
+//
+// Zero value = an internal write with no request behind it, which is the honest
+// record for the backup scheduler, the restore job and DispatchMutation.
+type auditOrigin struct {
+	Source    string // "graphql" | "rest" | "internal"
+	IP        string // caller address; empty for internal writers
+	RequestID string // X-Request-Id, correlating every event from one request
+}
+
+// auditInternal is the origin for writes with no HTTP request behind them.
+func auditInternal() auditOrigin { return auditOrigin{Source: "internal"} }
+
+// originFromContext captures the request-scoped values an audit row needs,
+// at the boundary, while the Context is still valid. source is the surface:
+// "graphql" for the proxy, "rest" for /api/v1 handlers.
+func originFromContext(c echo.Context, source string) auditOrigin {
+	return auditOrigin{
+		Source:    source,
+		IP:        c.RealIP(),
+		RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
+	}
+}
+
 // writeAuditEvent persists a single audit event row. Failures are logged and
 // swallowed — audit writes must never block or fail a request.
 // eventCategory must be "data" (entity mutations), "management" (system operations), or "auth" (login/logout events).
-func writeAuditEvent(db *ent.Client, logger *slog.Logger, eventCategory, actor, opName string, operations, resourceTypes, resourceIDs []string, details map[string]any) {
+func writeAuditEvent(db *ent.Client, logger *slog.Logger, eventCategory, actor, opName string, operations, resourceTypes, resourceIDs []string, details map[string]any, origin auditOrigin) {
 	raw, _ := json.Marshal(details)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -542,6 +583,18 @@ func writeAuditEvent(db *ent.Client, logger *slog.Logger, eventCategory, actor, 
 		SetDetails(json.RawMessage(raw))
 	if len(operations) > 0 {
 		ec = ec.SetOperations(operations)
+	}
+	// Set only what we actually have. Writing "" would turn "no HTTP request
+	// behind this event" into an empty-string value an operator filtering the
+	// column has to learn to ignore.
+	if origin.Source != "" {
+		ec = ec.SetEventSource(origin.Source)
+	}
+	if origin.IP != "" {
+		ec = ec.SetSourceIPAddress(origin.IP)
+	}
+	if origin.RequestID != "" {
+		ec = ec.SetRequestID(origin.RequestID)
 	}
 
 	ev, err := ec.Save(ctx)

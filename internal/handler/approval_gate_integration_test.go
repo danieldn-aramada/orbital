@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/armada/orbital/ent/user"
@@ -496,4 +497,150 @@ func TestGate_RenamedVariableUpdateIsRefused403ThroughHandle(t *testing.T) {
 	if h := readHostname(t, crServerA); h == "should-not-land" {
 		t.Fatal("refused with 403, but the write still landed")
 	}
+}
+
+// ── 13. the refusal is visible in the app log ──────────────────────────────
+//
+// Refusals are deliberately NOT audited (AUDIT.md § Row admission, ratified
+// 2026-09-02: the caller has the role, the workflow says "not yet", so no state
+// changed and no security event occurred). That decision routes "what was
+// blocked pending review" to the app log — which makes this line the durable
+// answer, not a debugging aid, and its fields a contract.
+//
+// It was not one. The bypass branch logged policy/role/types/orb_ids; the
+// refusal branch ten lines below it logged nothing, and two of the three
+// entry points logged nothing anywhere. The log could say someone was blocked
+// without saying from changing what.
+
+// logCapture collects slog records so a test can assert what an operator sees.
+type logCapture struct {
+	mu      sync.Mutex
+	records []map[string]string
+}
+
+func (lc *logCapture) Enabled(context.Context, slog.Level) bool { return true }
+func (lc *logCapture) WithAttrs([]slog.Attr) slog.Handler       { return lc }
+func (lc *logCapture) WithGroup(string) slog.Handler            { return lc }
+func (lc *logCapture) Handle(_ context.Context, r slog.Record) error {
+	m := map[string]string{"msg": r.Message, "level": r.Level.String()}
+	r.Attrs(func(a slog.Attr) bool { m[a.Key] = a.Value.String(); return true })
+	lc.mu.Lock()
+	defer lc.mu.Unlock()
+	lc.records = append(lc.records, m)
+	return nil
+}
+
+// refusals returns every "write refused" record seen so far.
+func (lc *logCapture) refusals() []map[string]string {
+	lc.mu.Lock()
+	defer lc.mu.Unlock()
+	var out []map[string]string
+	for _, r := range lc.records {
+		if strings.HasPrefix(r["msg"], "write refused") {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func gateFixtureWithLog(t *testing.T) (*GraphQL, *crFixture, *logCapture) {
+	t.Helper()
+	f := newCRFixture(t)
+	lc := &logCapture{}
+	return NewGraphQL(testutil.DGraphURL(), f.db, slog.New(lc), true), f, lc
+}
+
+// Acceptance 4 + 7: one line, naming the entity — not just the policy.
+func TestGate_RefusalIsLoggedOnceAndNamesTheEntity(t *testing.T) {
+	gql, f, lc := gateFixtureWithLog(t)
+	f.requireApproval(t, 1)
+
+	q, v := updateHostname(crServerA, "should-not-land")
+	if err := mutate(t, gql, devCaller(), q, v); err == nil {
+		t.Fatal("expected a refusal")
+	}
+
+	got := lc.refusals()
+	if len(got) != 1 {
+		t.Fatalf("got %d refusal lines, want exactly 1 — two entry points logging the same refusal is as wrong as none: %+v", len(got), got)
+	}
+	rec := got[0]
+	if rec["level"] != "WARN" {
+		t.Errorf("level = %q, want WARN", rec["level"])
+	}
+	// orb_ids is the field the decision actually depends on: without it the log
+	// says someone was blocked but not from changing what.
+	if !strings.Contains(rec["orb_ids"], crServerA) {
+		t.Errorf("orb_ids = %q, want it to name %s", rec["orb_ids"], crServerA)
+	}
+	for _, k := range []string{"policy", "actor", "role", "types"} {
+		if rec[k] == "" {
+			t.Errorf("refusal line is missing %q: %+v", k, rec)
+		}
+	}
+}
+
+// Acceptance 5: the internal dispatch path logs too. It is the entry point that
+// previously had no refusal line ANYWHERE — Handle at least had a partial one.
+// Logged at the chokepoint rather than per caller, which is what makes this hold
+// for cascade-delete as well without a third copy of the same line.
+func TestGate_RefusalIsLoggedFromTheInternalDispatchPathToo(t *testing.T) {
+	gql, f, lc := gateFixtureWithLog(t)
+	f.requireApproval(t, 1)
+
+	q, v := updateHostname(crServerA, "should-not-land")
+	if _, err := gql.DispatchMutation(context.Background(), "dispatch-actor", devCaller(), gateEnforce, q, v, nil); err == nil {
+		t.Fatal("expected a refusal")
+	}
+
+	got := lc.refusals()
+	if len(got) != 1 {
+		t.Fatalf("got %d refusal lines, want 1: %+v", len(got), got)
+	}
+	if got[0]["actor"] != "dispatch-actor" {
+		t.Errorf("actor = %q, want dispatch-actor — the dispatcher's identity must reach the line", got[0]["actor"])
+	}
+	if !strings.Contains(got[0]["orb_ids"], crServerA) {
+		t.Errorf("orb_ids = %q, want it to name %s", got[0]["orb_ids"], crServerA)
+	}
+}
+
+// Acceptance 8: assert the negative. A refusal signal that fires when nothing
+// was refused trains whoever reads the log to ignore the field — which costs
+// more than having no signal, because the decision above leans on it.
+func TestGate_AllowedAndBypassedWritesLogNoRefusal(t *testing.T) {
+	t.Run("no policy at all", func(t *testing.T) {
+		gql, _, lc := gateFixtureWithLog(t)
+		q, v := updateHostname(crServerA, "ungated-write")
+		if err := mutate(t, gql, devCaller(), q, v); err != nil {
+			t.Fatalf("ungated write refused: %v", err)
+		}
+		if got := lc.refusals(); len(got) != 0 {
+			t.Fatalf("an allowed write logged %d refusal(s): %+v", len(got), got)
+		}
+	})
+
+	t.Run("policy bypassed by an admin", func(t *testing.T) {
+		gql, f, lc := gateFixtureWithLog(t)
+		f.requireApproval(t, 1)
+		q, v := updateHostname(crServerA, "privileged-write")
+		if err := mutate(t, gql, adminCaller(), q, v); err != nil {
+			t.Fatalf("admin bypass refused: %v", err)
+		}
+		if got := lc.refusals(); len(got) != 0 {
+			t.Fatalf("a bypassed write logged %d refusal(s) — it was allowed, not blocked: %+v", len(got), got)
+		}
+		// ...and the bypass line now says WHO, not only which role.
+		var found bool
+		lc.mu.Lock()
+		for _, r := range lc.records {
+			if strings.HasPrefix(r["msg"], "privileged write") && r["actor"] == "gate-test" {
+				found = true
+			}
+		}
+		lc.mu.Unlock()
+		if !found {
+			t.Error("the privileged-write line does not name the actor that bypassed review")
+		}
+	})
 }

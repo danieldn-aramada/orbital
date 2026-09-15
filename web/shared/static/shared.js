@@ -2274,3 +2274,50 @@ export function initReloadButtons(opts = {}) {
   })
 }
 
+
+// ─── API error rendering ────────────────────────────────────────────────────
+//
+// Orbital answers every failure with one envelope — `{error, code, httpStatus,
+// hint}` (docs/reference/ERROR-RESPONSES.md). `error` says what went wrong and
+// `hint` says what to do about it, and the hint is the half most worth showing:
+// it is where "Open a change request: POST /api/v1/change-requests" and
+// "Rename the variable to `version`" live.
+//
+// These exist because the convention was documented server-side and enforced
+// nowhere on the client. Seven call sites re-implemented it inline, four
+// discarded it and printed a bare status code, and new code picked whichever
+// neighbour it was copied from. A shared helper makes rendering the envelope
+// the shortest thing to write, which is the only way a convention survives.
+//
+// `code` is deliberately NOT rendered. It is the machine identifier clients
+// branch on — never prose for a reader.
+
+// apiErrorFromBody renders an already-parsed envelope.
+export function apiErrorFromBody(body, fallback = 'Request failed') {
+  // `message` is the pre-envelope echo shape. A few endpoints were read that
+  // way before the central ErrorHandler normalised everything, and falling
+  // through costs nothing while guaranteeing this helper is never worse than
+  // the inline code it replaces.
+  const head = (body && (body.error || body.message)) || fallback
+  return body && body.hint ? head + ' — ' + body.hint : head
+}
+
+// apiErrorText is apiErrorFromBody for a response you have not read yet.
+// Accepts a fetch Response or a jQuery jqXHR (DataTables' `ajax.error`).
+//
+// Returns '' when the request was ABORTED (status 0) — a superseded fetch, or a
+// page being navigated away from. That is not a failure anyone can act on, and
+// showing it buries the ones they can. **Treat '' as "display nothing".**
+export async function apiErrorText(source, fallback = 'Request failed') {
+  const status = Number(source && source.status) || 0
+  if (status === 0) return ''
+  let body = null
+  if (typeof source.json === 'function') {
+    body = await source.json().catch(() => null)
+  } else if (source.responseJSON) {
+    body = source.responseJSON
+  } else if (typeof source.responseText === 'string') {
+    try { body = JSON.parse(source.responseText) } catch (_) { /* not the envelope */ }
+  }
+  return apiErrorFromBody(body, fallback + ' (HTTP ' + status + ')')
+}

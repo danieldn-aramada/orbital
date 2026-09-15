@@ -60,7 +60,7 @@ func (e *gatedError) Error() string { return e.Message }
 // in play. Callers stamp that onto the audit event: a bypass has to be
 // queryable after the fact, not merely visible in a log stream someone would
 // have to already suspect something to go looking through.
-func (h *GraphQL) checkApprovalPolicy(ctx context.Context, body []byte, caller callerRole) (bypassed string, err error) {
+func (h *GraphQL) checkApprovalPolicy(ctx context.Context, body []byte, caller callerRole, actor string) (bypassed string, err error) {
 	// Feature switched off entirely: policies may still sit in the database, and
 	// none of them applies. Checked first and before any work.
 	if !changeControlEnabled {
@@ -87,7 +87,7 @@ func (h *GraphQL) checkApprovalPolicy(ctx context.Context, body []byte, caller c
 	// available orbIds are the ones the caller supplied.
 	orbIDs := extractResourceIDs(req.Query, req.Variables, nil)
 
-	return h.checkPolicyFor(ctx, orbIDs, types, caller)
+	return h.checkPolicyFor(ctx, orbIDs, types, caller, actor)
 }
 
 // checkPolicyFor is the policy decision with no mutation body in sight.
@@ -101,7 +101,7 @@ func (h *GraphQL) checkApprovalPolicy(ctx context.Context, body []byte, caller c
 //
 // Same rules, same order, same return contract as checkApprovalPolicy: the
 // label of the policy the caller BYPASSED, or "" when none was in play.
-func (h *GraphQL) checkPolicyFor(ctx context.Context, orbIDs, types []string, caller callerRole) (bypassed string, err error) {
+func (h *GraphQL) checkPolicyFor(ctx context.Context, orbIDs, types []string, caller callerRole, actor string) (bypassed string, err error) {
 	if !changeControlEnabled || h.db == nil || len(types) == 0 {
 		return "", nil
 	}
@@ -118,7 +118,7 @@ func (h *GraphQL) checkPolicyFor(ctx context.Context, orbIDs, types []string, ca
 	// deployments untouched while closing the bypass for governed ones. See
 	// rejectUndeterminable for why this fails closed.
 	if len(namespaces) == 0 {
-		return "", h.rejectUndeterminable(ctx, types)
+		return "", h.rejectUndeterminable(ctx, types, actor)
 	}
 
 	if pol == nil {
@@ -135,11 +135,26 @@ func (h *GraphQL) checkPolicyFor(ctx context.Context, orbIDs, types []string, ca
 		// event alongside the mutation itself.
 		h.logger.Warn("privileged write — bypassed an approval policy",
 			"policy", policyLabel(pol),
+			"actor", actor,
 			"role", string(caller.Role),
 			"types", strings.Join(types, ","),
 			"orb_ids", strings.Join(orbIDs, ","))
 		return policyLabel(pol), nil
 	}
+
+	// Refusals are NOT audited — that is ratified (AUDIT.md § Row admission: the
+	// caller has the role, the workflow says "not yet", so no state changed and
+	// no security event occurred). The decision explicitly routes the question
+	// "what was blocked pending review" to the app log instead, which makes THIS
+	// line the durable answer rather than a debugging aid. It therefore carries
+	// the same fields as the bypass line ten lines up: without orb_ids the log
+	// could say someone was blocked but not from changing what.
+	h.logger.Warn("write refused — approval required",
+		"policy", policyLabel(pol),
+		"actor", actor,
+		"role", string(caller.Role),
+		"types", strings.Join(types, ","),
+		"orb_ids", strings.Join(orbIDs, ","))
 
 	return "", &gatedError{
 		Status: http.StatusForbidden,
@@ -169,7 +184,7 @@ func (h *GraphQL) checkPolicyFor(ctx context.Context, orbIDs, types []string, ca
 // while the dev stack had no policies, then failed the moment a developer
 // configured one. That is the guard working. Write fixtures in the variable
 // form like every real client does.
-func (h *GraphQL) rejectUndeterminable(ctx context.Context, types []string) error {
+func (h *GraphQL) rejectUndeterminable(ctx context.Context, types []string, actor string) error {
 	n, err := h.db.ApprovalPolicy.Query().
 		Where(
 			approvalpolicy.ActionTypeEQ(approval.ActionTypeConfigMutation),
@@ -182,6 +197,14 @@ func (h *GraphQL) rejectUndeterminable(ctx context.Context, types []string) erro
 		return nil
 	}
 	kind := types[0]
+	// No orb_ids field: there are none, and that IS the refusal. Logged anyway so
+	// a governed deployment can see that someone tried, which is the whole point
+	// of failing closed here.
+	h.logger.Warn("write refused — governing namespace undeterminable",
+		"actor", actor,
+		"types", strings.Join(types, ","),
+		"reason", "no orbId could be resolved from the mutation")
+
 	return &gatedError{
 		Status:  http.StatusBadRequest,
 		Code:    CodeVariableFormRequired,

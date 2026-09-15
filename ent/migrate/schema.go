@@ -151,6 +151,9 @@ var (
 		{Name: "timestamp", Type: field.TypeTime},
 		{Name: "details", Type: field.TypeJSON, Nullable: true},
 		{Name: "event_category", Type: field.TypeString, Default: "data"},
+		{Name: "event_source", Type: field.TypeString, Nullable: true},
+		{Name: "source_ip_address", Type: field.TypeString, Nullable: true},
+		{Name: "request_id", Type: field.TypeString, Nullable: true},
 	}
 	// AuditEventsTable holds the schema information for the "audit_events" table.
 	AuditEventsTable = &schema.Table{
@@ -162,6 +165,16 @@ var (
 				Name:    "auditevent_timestamp",
 				Unique:  false,
 				Columns: []*schema.Column{AuditEventsColumns[3]},
+			},
+			{
+				Name:    "auditevent_request_id",
+				Unique:  false,
+				Columns: []*schema.Column{AuditEventsColumns[8]},
+			},
+			{
+				Name:    "auditevent_source_ip_address",
+				Unique:  false,
+				Columns: []*schema.Column{AuditEventsColumns[7]},
 			},
 		},
 	}

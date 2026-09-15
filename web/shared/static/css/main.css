@@ -21928,7 +21928,8 @@ div.dt-container div.dt-length {
 
 div.dt-container:has(#inventory-table),
 div.dt-container:has(#server-list-table),
-div.dt-container:has(#audit-log-table) {
+div.dt-container:has(#audit-log-table),
+div.dt-container:has(#cr-table) {
   font-size: 0.75rem;
 }
 div.dt-container:has(#inventory-table) .dt-search .input,
@@ -21936,17 +21937,21 @@ div.dt-container:has(#inventory-table) .dt-paging .pagination-link,
 div.dt-container:has(#server-list-table) .dt-search .input,
 div.dt-container:has(#server-list-table) .dt-paging .pagination-link,
 div.dt-container:has(#audit-log-table) .dt-search .input,
-div.dt-container:has(#audit-log-table) .dt-paging .pagination-link {
+div.dt-container:has(#audit-log-table) .dt-paging .pagination-link,
+div.dt-container:has(#cr-table) .dt-search .input,
+div.dt-container:has(#cr-table) .dt-paging .pagination-link {
   font-size: 0.75rem;
 }
 div.dt-container:has(#inventory-table) .dt-search .input,
 div.dt-container:has(#server-list-table) .dt-search .input,
-div.dt-container:has(#audit-log-table) .dt-search .input {
+div.dt-container:has(#audit-log-table) .dt-search .input,
+div.dt-container:has(#cr-table) .dt-search .input {
   width: 16rem;
 }
 div.dt-container:has(#inventory-table) .dt-paging .pagination-link,
 div.dt-container:has(#server-list-table) .dt-paging .pagination-link,
-div.dt-container:has(#audit-log-table) .dt-paging .pagination-link {
+div.dt-container:has(#audit-log-table) .dt-paging .pagination-link,
+div.dt-container:has(#cr-table) .dt-paging .pagination-link {
   min-width: 2em;
   height: 2em;
 }

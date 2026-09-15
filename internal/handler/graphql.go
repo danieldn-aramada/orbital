@@ -219,9 +219,12 @@ func (h *GraphQL) Handle(c echo.Context) error {
 	if err != nil {
 		var gerr *gatedError
 		if errors.As(err, &gerr) {
-			h.logger.Warn("mutation refused — approval required",
-				"policy", gerr.Policy, "actor", actor,
-				"request.id", c.Response().Header().Get(echo.HeaderXRequestID))
+			// Not logged here. checkPolicyFor logs the refusal at the chokepoint,
+			// where it also covers DispatchMutation and cascade-delete — logging
+			// again would give this one path two lines and the other two none.
+			// request.id is not on that line (writeToDGraph runs on
+			// context.Background() by design); correlate via the access-log entry
+			// for the same 403.
 			return writeError(c, gerr.Status, gerr.Code, gerr.Message, gerr.Hint)
 		}
 		var perr *preflightError
@@ -237,7 +240,11 @@ func (h *GraphQL) Handle(c echo.Context) error {
 	if touchesKnownType && h.db != nil && !hasGQLErrors(res.Body) {
 		operations, resourceTypes := extractOperations(req.Query)
 		resourceIDs := extractResourceIDs(req.Query, res.Variables, res.Body)
-		go h.auditMutation(opName, operations, resourceTypes, resourceIDs, actor, req.Query, res.Variables, res.Before, res.Bypassed)
+		// Captured HERE, not inside the goroutine: Echo pools and reuses Context
+		// objects, so reading c after Handle returns yields another request's
+		// values — and a wrong source IP on an audit row reads as fact.
+		origin := originFromContext(c, "graphql")
+		go h.auditMutation(opName, operations, resourceTypes, resourceIDs, actor, req.Query, res.Variables, res.Before, res.Bypassed, origin)
 	}
 
 	c.Response().Header().Set("Content-Type", "application/json")
@@ -296,7 +303,7 @@ func (h *GraphQL) DispatchMutation(ctx context.Context, actor string, caller cal
 		}
 		operations, resourceTypes := extractOperations(query)
 		resourceIDs := extractResourceIDs(query, res.Variables, res.Body)
-		go h.auditMutation(opName, operations, resourceTypes, resourceIDs, actor, query, res.Variables, res.Before, res.Bypassed)
+		go h.auditMutation(opName, operations, resourceTypes, resourceIDs, actor, query, res.Variables, res.Before, res.Bypassed, auditInternal())
 	}
 	return res.Body, nil
 }
@@ -401,7 +408,7 @@ func (h *GraphQL) writeToDGraph(ctx context.Context, body []byte, actor string, 
 	}
 
 	if gate == gateEnforce {
-		bypassed, err := h.checkApprovalPolicy(ctx, body, caller)
+		bypassed, err := h.checkApprovalPolicy(ctx, body, caller, actor)
 		if err != nil {
 			return res, err
 		}
@@ -1032,7 +1039,7 @@ func (h *GraphQL) doFetch(getter string, body []byte) (map[string]any, error) {
 // (query, variables, before-state), writeAuditEvent knows how to store any
 // audit record. The old name (`writeEvent`) read as a duplicate of
 // `writeAuditEvent` and hid that layering.
-func (h *GraphQL) auditMutation(opName string, operations, resourceTypes, resourceIDs []string, actor, query string, variables map[string]any, before map[string]any, bypassedPolicy string) {
+func (h *GraphQL) auditMutation(opName string, operations, resourceTypes, resourceIDs []string, actor, query string, variables map[string]any, before map[string]any, bypassedPolicy string, origin auditOrigin) {
 	details := map[string]any{
 		"operationName": opName,
 		"query":         query,
@@ -1050,7 +1057,7 @@ func (h *GraphQL) auditMutation(opName string, operations, resourceTypes, resour
 	if before != nil {
 		details["before"] = stripDGraphIDs(before)
 	}
-	writeAuditEvent(h.db, h.logger, "data", actor, opName, operations, resourceTypes, resourceIDs, details)
+	writeAuditEvent(h.db, h.logger, "data", actor, opName, operations, resourceTypes, resourceIDs, details, origin)
 }
 
 // stripDGraphIDs returns a deep copy of v with every "id" key removed. DGraph

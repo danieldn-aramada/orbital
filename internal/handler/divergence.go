@@ -304,7 +304,7 @@ func (h *DivergenceHandler) PutResolution(c echo.Context) error {
 	if actor == "" {
 		return echo.NewHTTPError(http.StatusUnauthorized, "actor required")
 	}
-	out, err := h.applyResolution(c.Request().Context(), id, action, actor, resolveCallerRole(c, h.db))
+	out, err := h.applyResolution(c.Request().Context(), originFromContext(c, "rest"), id, action, actor, resolveCallerRole(c, h.db))
 	if err != nil {
 		return err
 	}
@@ -329,7 +329,7 @@ func (h *DivergenceHandler) PutResolution(c echo.Context) error {
 // Accept on a protected class does NOT mutate: it opens a change request and
 // returns it as `Pending`, leaving the entry unresolved. Reject and Ignore are
 // never gated because neither touches intent.
-func (h *DivergenceHandler) applyResolution(ctx context.Context, id uuid.UUID, action divergenceresolution.Action, actor string, caller callerRole) (resolutionOutcome, error) {
+func (h *DivergenceHandler) applyResolution(ctx context.Context, origin auditOrigin, id uuid.UUID, action divergenceresolution.Action, actor string, caller callerRole) (resolutionOutcome, error) {
 	entry, err := h.db.DivergenceEntry.Get(ctx, id)
 	if ent.IsNotFound(err) {
 		return resolutionOutcome{}, echo.NewHTTPError(http.StatusNotFound, "divergence entry not found")
@@ -402,6 +402,7 @@ func (h *DivergenceHandler) applyResolution(ctx context.Context, id uuid.UUID, a
 			"intendedValue": intendedVal,
 			"overrideValue": overrideVal,
 		},
+		origin,
 	)
 
 	return resolutionOutcome{Resolution: &resolutionItem{
@@ -625,6 +626,7 @@ func (h *DivergenceHandler) Dismiss(c echo.Context) error {
 			"field":   entry.Field,
 			"dcOrbId": entry.DcOrbID,
 		},
+		originFromContext(c, "rest"),
 	)
 	return c.NoContent(http.StatusNoContent)
 }
@@ -744,6 +746,7 @@ func (h *DivergenceHandler) ClearByDC(c echo.Context) error {
 			"dcOrbId":        dc,
 			"entriesDropped": len(entries),
 		},
+		originFromContext(c, "rest"),
 	)
 
 	return c.JSON(http.StatusOK, map[string]any{

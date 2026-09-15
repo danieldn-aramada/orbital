@@ -74,6 +74,8 @@ type errorResponse struct {
 |----------|--------|----------|-----------|
 | `error`      | string | **yes**  | Human-readable message. Safe to surface in the UI. Present tense, no trailing period required. |
 | `code`       | string | **yes**  | Stable machine identifier, UPPER_SNAKE. This is what clients branch on — never parse `error`. See registry. |
+
+**The client half of this contract lives in [UI.md](./UI.md):** orbital's own UI must render `error` and `hint` through `apiErrorText`/`apiErrorFromBody` in `shared.js`, and must never surface a bare status code. Documented there because this envelope was specified here, enforced nowhere on the client, and quietly bypassed by four call sites — a contract with only one end held up is not held up.
 | `httpStatus` | int    | **yes**  | Mirrors the HTTP status on the response line (e.g. `403`). A convenience/robustness copy — see below. Named `httpStatus`, not `status`, to avoid colliding with orbital's job/operation `status` (the export API's `{"status":"completed"}`). |
 | `hint`       | string | no       | Actionable remediation for a human. Omit if `error` already says everything. |
 | `docUrl`     | string | no       | **Reserved — not populated today** (orbital serves no docs host yet). Kept in the DTO for when docs are hosted. |

@@ -70,6 +70,48 @@ func (_c *AuditEventCreate) SetNillableEventCategory(v *string) *AuditEventCreat
 	return _c
 }
 
+// SetEventSource sets the "event_source" field.
+func (_c *AuditEventCreate) SetEventSource(v string) *AuditEventCreate {
+	_c.mutation.SetEventSource(v)
+	return _c
+}
+
+// SetNillableEventSource sets the "event_source" field if the given value is not nil.
+func (_c *AuditEventCreate) SetNillableEventSource(v *string) *AuditEventCreate {
+	if v != nil {
+		_c.SetEventSource(*v)
+	}
+	return _c
+}
+
+// SetSourceIPAddress sets the "source_ip_address" field.
+func (_c *AuditEventCreate) SetSourceIPAddress(v string) *AuditEventCreate {
+	_c.mutation.SetSourceIPAddress(v)
+	return _c
+}
+
+// SetNillableSourceIPAddress sets the "source_ip_address" field if the given value is not nil.
+func (_c *AuditEventCreate) SetNillableSourceIPAddress(v *string) *AuditEventCreate {
+	if v != nil {
+		_c.SetSourceIPAddress(*v)
+	}
+	return _c
+}
+
+// SetRequestID sets the "request_id" field.
+func (_c *AuditEventCreate) SetRequestID(v string) *AuditEventCreate {
+	_c.mutation.SetRequestID(v)
+	return _c
+}
+
+// SetNillableRequestID sets the "request_id" field if the given value is not nil.
+func (_c *AuditEventCreate) SetNillableRequestID(v *string) *AuditEventCreate {
+	if v != nil {
+		_c.SetRequestID(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AuditEventCreate) SetID(v uuid.UUID) *AuditEventCreate {
 	_c.mutation.SetID(v)
@@ -228,6 +270,18 @@ func (_c *AuditEventCreate) createSpec() (*AuditEvent, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.EventCategory(); ok {
 		_spec.SetField(auditevent.FieldEventCategory, field.TypeString, value)
 		_node.EventCategory = value
+	}
+	if value, ok := _c.mutation.EventSource(); ok {
+		_spec.SetField(auditevent.FieldEventSource, field.TypeString, value)
+		_node.EventSource = value
+	}
+	if value, ok := _c.mutation.SourceIPAddress(); ok {
+		_spec.SetField(auditevent.FieldSourceIPAddress, field.TypeString, value)
+		_node.SourceIPAddress = value
+	}
+	if value, ok := _c.mutation.RequestID(); ok {
+		_spec.SetField(auditevent.FieldRequestID, field.TypeString, value)
+		_node.RequestID = value
 	}
 	if nodes := _c.mutation.ResourcesIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

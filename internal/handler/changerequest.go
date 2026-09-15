@@ -82,6 +82,12 @@ type crState struct {
 	// rebasing the object — re-approving cannot clear it, because it is computed
 	// from the changeset and not from the base anchor.
 	Stale bool
+	// StalenessKnown reports whether the DGraph reads behind Stale,
+	// SubtreeChanged and Missing actually ran. FALSE on the list path, which is
+	// Postgres-only by design — see storedState. Consumers must treat false as
+	// "not asked", never as "not stale": a `stale: false` on a question nobody
+	// asked is a wrong answer, not a missing one.
+	StalenessKnown bool
 	// SubtreeChanged means the reviewed scope moved without any change object
 	// going out of date — typically an edit to an owned child. It is the
 	// REVIEWER's to clear, by approving again, which re-anchors the base.
@@ -309,6 +315,7 @@ func (h *ChangeRequest) State(ctx context.Context, cr *ent.ApprovalRequest) (crS
 		return st, fmt.Errorf("read current state: %w", err)
 	}
 	st.CurrentHash = versionHash(st.Versions)
+	st.StalenessKnown = true
 	st.SubtreeChanged = st.CurrentHash != cr.BaseHash
 	st.Stale = len(staleItems(st.Versions, st.Changeset)) > 0
 
@@ -365,6 +372,69 @@ func (h *ChangeRequest) State(ctx context.Context, cr *ent.ApprovalRequest) (crS
 		// voluntarily-opened request in an ungoverned namespace must still be
 		// mergeable, and installing the engine must not make anything harder
 		// than it was. Its only guard is then the staleness check at merge.
+		st.Status = approval.StatusApproved
+	}
+	return st, nil
+}
+
+// storedState is State's cheap sibling: everything derivable from PostgreSQL
+// alone, with NO DGraph reads at all.
+//
+// It exists because the queue was an N+1. Every row went through State, which
+// reads the changeset's scope and its version vector — measured at **1,222
+// DGraph queries for one unfiltered page load** of 507 requests. The list does
+// not need any of it: staleness answers "has the world moved under this
+// proposal", which matters when someone is about to act, not when they are
+// scanning titles. GitHub draws the same line — `mergeable` is returned by the
+// single-PR endpoint and never by the list.
+//
+// So there are three rungs, cheapest first:
+//
+//	storedState        — PostgreSQL only.                    List.
+//	State              — + scope and version vector.          Detail view.
+//	StateWithSnapshot  — + the scope's full content.          Diff, merge.
+//
+// What it deliberately CANNOT answer: Stale, SubtreeChanged and Missing are
+// left zero with StalenessKnown false, and the renderer omits the fields rather
+// than emitting `false`.
+//
+// Valid counts approvals cast against the CURRENT CHANGESET REVISION, without
+// the hash check State applies. So an amend still invalidates approvals here —
+// that is a Postgres fact — while a change to the underlying entity does not.
+// The queue can therefore show one more approval than the detail view, for
+// exactly the window the deferred staleness question covers.
+func (h *ChangeRequest) storedState(ctx context.Context, cr *ent.ApprovalRequest) (crState, error) {
+	var st crState
+	if err := json.Unmarshal(cr.Payload, &st.Changeset); err != nil {
+		return st, fmt.Errorf("decode changeset: %w", err)
+	}
+
+	st.Approvals = cr.Edges.Approvals
+	if st.Approvals == nil {
+		var err error
+		st.Approvals, err = cr.QueryApprovals().Order(ent.Asc(entapproval.FieldCreatedAt)).All(ctx)
+		if err != nil {
+			return st, fmt.Errorf("load approvals: %w", err)
+		}
+	}
+	terminal := cr.Status != approvalrequest.StatusOpen
+	for _, a := range st.Approvals {
+		switch {
+		case a.Decision == entapproval.DecisionRejected:
+			st.Rejected++
+		case terminal || approvalRevisionMatches(a, cr):
+			st.Valid++
+		}
+	}
+
+	pol, err := h.resolvePolicy(ctx, cr.ActionType, &st.Changeset)
+	if err != nil {
+		return st, err
+	}
+	st.Required, st.BypassRoles = pol.required, pol.bypassRoles
+
+	st.Status = string(cr.Status)
+	if st.Status == approval.StatusOpen && st.Valid >= st.Required {
 		st.Status = approval.StatusApproved
 	}
 	return st, nil
@@ -839,8 +909,15 @@ func availableActions(cr *ent.ApprovalRequest, st crState, actor string, role us
 			out = append(out, "edit", "close")
 		}
 	case approval.StatusApproved:
+		// merge and the rebase-`edit` below are the only actions whose
+		// eligibility depends on staleness, so they are the only ones the list
+		// path cannot answer. Omitted there rather than guessed: offering merge
+		// on a request that would 409 is worse than not offering it, and the
+		// queue renders no action buttons anyway — availableActions is read on
+		// the list ONLY by the awaiting_review filter, which looks for
+		// "approve" and is unaffected.
 		blocked := st.Stale || st.SubtreeChanged
-		if !blocked && (isAuthor || approvedBy(st, actor) || bypass) {
+		if st.StalenessKnown && !blocked && (isAuthor || approvedBy(st, actor) || bypass) {
 			out = append(out, "merge")
 		}
 		if !isAuthor || bypass {
@@ -850,7 +927,7 @@ func availableActions(cr *ent.ApprovalRequest, st crState, actor string, role us
 			out = append(out, "close")
 		}
 		// An approved request that went stale is the author's to rebase.
-		if st.Stale && (isAuthor || bypass) {
+		if st.StalenessKnown && st.Stale && (isAuthor || bypass) {
 			out = append(out, "edit")
 		}
 	}

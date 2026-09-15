@@ -881,6 +881,7 @@ func (h *Export) emitExportEvent(actor, dcOrbID string, jobID uuid.UUID, mode st
 		[]string{"DataCenter"},
 		resourceIDs,
 		details,
+		auditInternal(),
 	)
 }
 

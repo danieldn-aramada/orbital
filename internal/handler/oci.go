@@ -208,6 +208,7 @@ func (h *OCI) DeleteArtifact(c echo.Context) error {
 		nil,
 		nil,
 		map[string]any{"jobId": jobID.String(), "artifactPath": artifactPath},
+		originFromContext(c, "rest"),
 	)
 	return c.NoContent(http.StatusNoContent)
 }

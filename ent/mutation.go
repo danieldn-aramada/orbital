@@ -4012,6 +4012,9 @@ type AuditEventMutation struct {
 	details               *json.RawMessage
 	appenddetails         json.RawMessage
 	event_category        *string
+	event_source          *string
+	source_ip_address     *string
+	request_id            *string
 	clearedFields         map[string]struct{}
 	resources             map[int]struct{}
 	removedresources      map[int]struct{}
@@ -4366,6 +4369,153 @@ func (m *AuditEventMutation) ResetEventCategory() {
 	m.event_category = nil
 }
 
+// SetEventSource sets the "event_source" field.
+func (m *AuditEventMutation) SetEventSource(s string) {
+	m.event_source = &s
+}
+
+// EventSource returns the value of the "event_source" field in the mutation.
+func (m *AuditEventMutation) EventSource() (r string, exists bool) {
+	v := m.event_source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEventSource returns the old "event_source" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldEventSource(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEventSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEventSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEventSource: %w", err)
+	}
+	return oldValue.EventSource, nil
+}
+
+// ClearEventSource clears the value of the "event_source" field.
+func (m *AuditEventMutation) ClearEventSource() {
+	m.event_source = nil
+	m.clearedFields[auditevent.FieldEventSource] = struct{}{}
+}
+
+// EventSourceCleared returns if the "event_source" field was cleared in this mutation.
+func (m *AuditEventMutation) EventSourceCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldEventSource]
+	return ok
+}
+
+// ResetEventSource resets all changes to the "event_source" field.
+func (m *AuditEventMutation) ResetEventSource() {
+	m.event_source = nil
+	delete(m.clearedFields, auditevent.FieldEventSource)
+}
+
+// SetSourceIPAddress sets the "source_ip_address" field.
+func (m *AuditEventMutation) SetSourceIPAddress(s string) {
+	m.source_ip_address = &s
+}
+
+// SourceIPAddress returns the value of the "source_ip_address" field in the mutation.
+func (m *AuditEventMutation) SourceIPAddress() (r string, exists bool) {
+	v := m.source_ip_address
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceIPAddress returns the old "source_ip_address" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldSourceIPAddress(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceIPAddress is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceIPAddress requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceIPAddress: %w", err)
+	}
+	return oldValue.SourceIPAddress, nil
+}
+
+// ClearSourceIPAddress clears the value of the "source_ip_address" field.
+func (m *AuditEventMutation) ClearSourceIPAddress() {
+	m.source_ip_address = nil
+	m.clearedFields[auditevent.FieldSourceIPAddress] = struct{}{}
+}
+
+// SourceIPAddressCleared returns if the "source_ip_address" field was cleared in this mutation.
+func (m *AuditEventMutation) SourceIPAddressCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldSourceIPAddress]
+	return ok
+}
+
+// ResetSourceIPAddress resets all changes to the "source_ip_address" field.
+func (m *AuditEventMutation) ResetSourceIPAddress() {
+	m.source_ip_address = nil
+	delete(m.clearedFields, auditevent.FieldSourceIPAddress)
+}
+
+// SetRequestID sets the "request_id" field.
+func (m *AuditEventMutation) SetRequestID(s string) {
+	m.request_id = &s
+}
+
+// RequestID returns the value of the "request_id" field in the mutation.
+func (m *AuditEventMutation) RequestID() (r string, exists bool) {
+	v := m.request_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestID returns the old "request_id" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldRequestID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestID: %w", err)
+	}
+	return oldValue.RequestID, nil
+}
+
+// ClearRequestID clears the value of the "request_id" field.
+func (m *AuditEventMutation) ClearRequestID() {
+	m.request_id = nil
+	m.clearedFields[auditevent.FieldRequestID] = struct{}{}
+}
+
+// RequestIDCleared returns if the "request_id" field was cleared in this mutation.
+func (m *AuditEventMutation) RequestIDCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldRequestID]
+	return ok
+}
+
+// ResetRequestID resets all changes to the "request_id" field.
+func (m *AuditEventMutation) ResetRequestID() {
+	m.request_id = nil
+	delete(m.clearedFields, auditevent.FieldRequestID)
+}
+
 // AddResourceIDs adds the "resources" edge to the AuditEventResource entity by ids.
 func (m *AuditEventMutation) AddResourceIDs(ids ...int) {
 	if m.resources == nil {
@@ -4508,7 +4658,7 @@ func (m *AuditEventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AuditEventMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 8)
 	if m.operations != nil {
 		fields = append(fields, auditevent.FieldOperations)
 	}
@@ -4523,6 +4673,15 @@ func (m *AuditEventMutation) Fields() []string {
 	}
 	if m.event_category != nil {
 		fields = append(fields, auditevent.FieldEventCategory)
+	}
+	if m.event_source != nil {
+		fields = append(fields, auditevent.FieldEventSource)
+	}
+	if m.source_ip_address != nil {
+		fields = append(fields, auditevent.FieldSourceIPAddress)
+	}
+	if m.request_id != nil {
+		fields = append(fields, auditevent.FieldRequestID)
 	}
 	return fields
 }
@@ -4542,6 +4701,12 @@ func (m *AuditEventMutation) Field(name string) (ent.Value, bool) {
 		return m.Details()
 	case auditevent.FieldEventCategory:
 		return m.EventCategory()
+	case auditevent.FieldEventSource:
+		return m.EventSource()
+	case auditevent.FieldSourceIPAddress:
+		return m.SourceIPAddress()
+	case auditevent.FieldRequestID:
+		return m.RequestID()
 	}
 	return nil, false
 }
@@ -4561,6 +4726,12 @@ func (m *AuditEventMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldDetails(ctx)
 	case auditevent.FieldEventCategory:
 		return m.OldEventCategory(ctx)
+	case auditevent.FieldEventSource:
+		return m.OldEventSource(ctx)
+	case auditevent.FieldSourceIPAddress:
+		return m.OldSourceIPAddress(ctx)
+	case auditevent.FieldRequestID:
+		return m.OldRequestID(ctx)
 	}
 	return nil, fmt.Errorf("unknown AuditEvent field %s", name)
 }
@@ -4605,6 +4776,27 @@ func (m *AuditEventMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetEventCategory(v)
 		return nil
+	case auditevent.FieldEventSource:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEventSource(v)
+		return nil
+	case auditevent.FieldSourceIPAddress:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceIPAddress(v)
+		return nil
+	case auditevent.FieldRequestID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown AuditEvent field %s", name)
 }
@@ -4641,6 +4833,15 @@ func (m *AuditEventMutation) ClearedFields() []string {
 	if m.FieldCleared(auditevent.FieldDetails) {
 		fields = append(fields, auditevent.FieldDetails)
 	}
+	if m.FieldCleared(auditevent.FieldEventSource) {
+		fields = append(fields, auditevent.FieldEventSource)
+	}
+	if m.FieldCleared(auditevent.FieldSourceIPAddress) {
+		fields = append(fields, auditevent.FieldSourceIPAddress)
+	}
+	if m.FieldCleared(auditevent.FieldRequestID) {
+		fields = append(fields, auditevent.FieldRequestID)
+	}
 	return fields
 }
 
@@ -4660,6 +4861,15 @@ func (m *AuditEventMutation) ClearField(name string) error {
 		return nil
 	case auditevent.FieldDetails:
 		m.ClearDetails()
+		return nil
+	case auditevent.FieldEventSource:
+		m.ClearEventSource()
+		return nil
+	case auditevent.FieldSourceIPAddress:
+		m.ClearSourceIPAddress()
+		return nil
+	case auditevent.FieldRequestID:
+		m.ClearRequestID()
 		return nil
 	}
 	return fmt.Errorf("unknown AuditEvent nullable field %s", name)
@@ -4683,6 +4893,15 @@ func (m *AuditEventMutation) ResetField(name string) error {
 		return nil
 	case auditevent.FieldEventCategory:
 		m.ResetEventCategory()
+		return nil
+	case auditevent.FieldEventSource:
+		m.ResetEventSource()
+		return nil
+	case auditevent.FieldSourceIPAddress:
+		m.ResetSourceIPAddress()
+		return nil
+	case auditevent.FieldRequestID:
+		m.ResetRequestID()
 		return nil
 	}
 	return fmt.Errorf("unknown AuditEvent field %s", name)

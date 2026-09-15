@@ -52,7 +52,7 @@ func (h *Login) Post(c echo.Context) error {
 		Where(user.Email(email)).
 		Only(c.Request().Context())
 	if err != nil {
-		h.writeAuthAudit("loginFailed", email, map[string]any{"method": "local", "reason": "unknown_email", "user_agent": ua})
+		h.writeAuthAudit(c, "loginFailed", email, map[string]any{"method": "local", "reason": "unknown_email", "user_agent": ua})
 		return h.renderForm(c, "Invalid email or password.")
 	}
 
@@ -60,7 +60,7 @@ func (h *Login) Post(c echo.Context) error {
 		return h.renderForm(c, "This account uses SSO login.")
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(*u.PasswordHash), []byte(password)); err != nil {
-		h.writeAuthAudit("loginFailed", email, map[string]any{"method": "local", "reason": "invalid_password", "user_agent": ua})
+		h.writeAuthAudit(c, "loginFailed", email, map[string]any{"method": "local", "reason": "invalid_password", "user_agent": ua})
 		return h.renderForm(c, "Invalid email or password.")
 	}
 
@@ -68,7 +68,7 @@ func (h *Login) Post(c echo.Context) error {
 		return fmt.Errorf("set session: %w", err)
 	}
 
-	h.writeAuthAudit("loginSuccess", email, map[string]any{"method": "local", "user_agent": ua})
+	h.writeAuthAudit(c, "loginSuccess", email, map[string]any{"method": "local", "user_agent": ua})
 	c.Response().Header().Set("HX-Redirect", h.basePath+"/?fresh=1")
 	return c.NoContent(http.StatusOK)
 }
@@ -85,12 +85,12 @@ func (h *Login) Logout(c echo.Context) error {
 	if err := auth.ClearSession(h.sessionKeys, c.Request(), c.Response()); err != nil {
 		return fmt.Errorf("clear session: %w", err)
 	}
-	h.writeAuthAudit("logout", actor, map[string]any{"user_agent": ua})
+	h.writeAuthAudit(c, "logout", actor, map[string]any{"user_agent": ua})
 	return c.Redirect(http.StatusSeeOther, h.basePath+"/")
 }
 
 // writeAuthAudit persists an authentication audit event. No-op if db is nil.
-func (h *Login) writeAuthAudit(operation, actor string, details map[string]any) {
+func (h *Login) writeAuthAudit(c echo.Context, operation, actor string, details map[string]any) {
 	if h.db == nil {
 		return
 	}
@@ -99,5 +99,6 @@ func (h *Login) writeAuthAudit(operation, actor string, details map[string]any) 
 		[]string{},
 		[]string{},
 		details,
+		originFromContext(c, "rest"),
 	)
 }
