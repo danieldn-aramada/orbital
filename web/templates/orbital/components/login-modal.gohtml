@@ -9,34 +9,23 @@
         </span>
       </p>
 
-    {{if .OIDCEnabled}}
-    {{if .DeviceCodeEnabled}}
-    <a href="{{.BasePath}}/auth/device" class="button is-fullwidth mb-4" style="gap: 0.5rem;">
-      <span class="icon">
-        <img src="{{.BasePath}}/static/logo/microsoft.svg" alt="Microsoft" style="width:18px;height:18px;">
-      </span>
-      <span>Sign in with Microsoft</span>
-    </a>
-    {{else}}
-    <a href="{{.BasePath}}/auth/login" class="button is-fullwidth mb-4" style="gap: 0.5rem;">
-      <span class="icon">
-        <img src="{{.BasePath}}/static/logo/microsoft.svg" alt="Microsoft" style="width:18px;height:18px;">
-      </span>
-      <span>Sign in with Microsoft</span>
-    </a>
-    {{end}}
-    <div class="is-divider" data-content="OR"></div>
-    {{end}}
-
-    <form id="form-login" hx-post="{{.BasePath}}/user/login" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type='submit']">
-
+      {{if .OIDCEnabled}}
+      {{if .DeviceCodeEnabled}}
+      <a href="{{.BasePath}}/auth/device" class="button is-fullwidth mb-4" style="gap: 0.5rem;">
+        <span class="icon">
+          <img src="{{.BasePath}}/static/logo/microsoft.svg" alt="Microsoft" style="width:18px;height:18px;">
+        </span>
+        <span>Sign in with Microsoft</span>
+      </a>
+      {{else}}
       <div class="field">
         <label class="label">Email</label>
         <div class="control has-icons-left">
           <input
             type="email"
+            id="sso-email"
             class="input"
-            name="email"
+            name="sso-email"
             placeholder="user@example.com"
             autocomplete="on"
           />
@@ -47,31 +36,62 @@
       </div>
 
       <div class="field">
-        <label class="label">Password</label>
-        <div class="control has-icons-left">
-          <input
-            type="password"
-            class="input"
-            name="password"
-            placeholder="password"
-            autocomplete="on"
-          />
-          <span class="icon is-small is-left">
-            <i class="fas fa-lock"></i>
-          </span>
-        </div>
-      </div>
-
-      <input type="hidden" name="csrf" value="{{.CsrfToken}}"/>
-
-      <div class="field">
         <div class="control">
-          <button class="button is-link" type="submit">Sign in</button>
+          <button type="button" id="btn-keycloak-login" class="button is-link is-fullwidth" style="gap: 0.5rem;">
+            <span class="icon"><i class="fa-solid fa-key"></i></span>
+            <span>Armada SSO</span>
+          </button>
         </div>
       </div>
+      {{end}}
+      <div class="is-divider" data-content="OR"></div>
+      {{end}}
 
-    </form>
+      <form id="form-login" hx-post="{{.BasePath}}/user/login" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type='submit']">
 
+        <div class="field">
+          <label class="label">Email</label>
+          <div class="control has-icons-left">
+            <input
+              type="email"
+              class="input"
+              name="email"
+              placeholder="user@example.com"
+              autocomplete="on"
+            />
+            <span class="icon is-small is-left">
+              <i class="fas fa-envelope"></i>
+            </span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="label">Password</label>
+          <div class="control has-icons-left">
+            <input
+              type="password"
+              class="input"
+              name="password"
+              placeholder="password"
+              autocomplete="on"
+            />
+            <span class="icon is-small is-left">
+              <i class="fas fa-lock"></i>
+            </span>
+          </div>
+        </div>
+
+        <input type="hidden" name="csrf" value="{{.CsrfToken}}"/>
+
+        <div class="field">
+          <div class="control">
+            <button class="button is-link" type="submit">Sign in</button>
+          </div>
+        </div>
+
+      </form>
+
+    </div>
   </div>
   <button class="modal-close is-large" aria-label="close"></button>
 </div>
@@ -81,7 +101,8 @@
   }
 
   function closeModal($el) {
-    document.getElementById("form-login").reset();
+    const form = document.getElementById("form-login");
+    if (form) form.reset();
     $el.classList.remove('is-active');
   }
 
@@ -92,6 +113,30 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    const keycloakBtn = document.getElementById('btn-keycloak-login');
+    if (keycloakBtn) {
+      keycloakBtn.addEventListener('click', () => {
+        const emailInput = document.getElementById('sso-email');
+        const email = emailInput ? emailInput.value.trim() : '';
+        if (!email) {
+          if (emailInput) emailInput.focus();
+          window.bulmaToast.toast({
+            message: 'Enter your email first.',
+            closeOnClick: true,
+            type: 'is-warning is-light',
+            position: 'top-right',
+            dismissible: false,
+            duration: 3000,
+            offsetTop: '4em',
+            pauseOnHover: true,
+            animate: { in: 'fadeInRight', out: 'fadeOutRight' },
+          });
+          return;
+        }
+        window.location.href = '{{.BasePath}}/auth/login?email=' + encodeURIComponent(email);
+      });
+    }
+
     (document.querySelectorAll('.js-modal-trigger') || []).forEach((trigger) => {
       const modalId = trigger.dataset.target;
       const $target = document.getElementById(modalId);

@@ -108,18 +108,27 @@ type Config struct {
 	// policy administration writes PostgreSQL, never DGraph, so it is never
 	// itself gated.
 	ChangeControlEnabled bool `envconfig:"ORBITAL_CHANGE_CONTROL_ENABLED" default:"true"`
-	// OIDCIssuerURL defaults to the Azure AD tenant URL so the SSO login button
-	// is available in `make run-orbital` for daily UI work (provided the user
-	// also sets ORBITAL_OIDC_CLIENT_SECRET). In dev mode (ORBITAL_DEV=true),
-	// bearer auth on /api/v1 + /graphql is bypassed at the middleware layer
-	// (see internal/server/server.go), so machine-to-machine callers like
-	// cb-bundler can query without an OAuth2 token. Production (Dev=false)
-	// enforces bearer auth strictly.
+	// OIDCIssuerURL/OIDCClientID/OIDCClientSecret/OIDCRedirectURL back BOTH the
+	// AAD bearer verifier (API auth for orbctl and third-party clients) AND
+	// browser login — ONE identity provider per deployment, selected by
+	// OAuth2DeviceCode: true points these at Azure AD/EntraID (device-code
+	// browser flow); false points these at a Keycloak realm instead, and
+	// browser login is then routed through armada-organization-svc
+	// (OrganizationSvcURL) rather than orbital holding a Keycloak session
+	// itself. Whichever provider these point at, the bearer verifier trusts
+	// it too — do not point this at Keycloak in a deployment that still needs
+	// to accept real AAD-issued API tokens (orbctl, cb-bundler client
+	// credentials); that fallback would stop validating them.
 	OIDCIssuerURL    string `envconfig:"ORBITAL_OIDC_ISSUER_URL"         default:"https://login.microsoftonline.com/8f231c2a-9551-4b40-be17-5b24afe5e890/v2.0"`
 	OIDCClientID     string `envconfig:"ORBITAL_OIDC_CLIENT_ID"          default:"5fc832f6-843e-4207-93dd-b3c3a77c06f2"`
 	OIDCClientSecret string `envconfig:"ORBITAL_OIDC_CLIENT_SECRET"      default:""`
 	OIDCRedirectURL  string `envconfig:"ORBITAL_OIDC_REDIRECT_URL"       default:"http://localhost:8001/auth/callback"`
-	OAuth2DeviceCode bool   `envconfig:"ORBITAL_OAUTH2_DEVICE_CODE"      default:"true"` // enables device code flow for browser SSO; set false to use Authorization Code + PKCE (requires publicly resolvable redirect URI). RFC 8628 — OAuth 2.0, not OIDC despite living next to ORBITAL_OIDC_* settings.
+	OAuth2DeviceCode bool   `envconfig:"ORBITAL_OAUTH2_DEVICE_CODE"      default:"true"` // true = Microsoft/EntraID device-code login; false = Keycloak-via-org-svc login. RFC 8628 — OAuth 2.0, not OIDC despite living next to ORBITAL_OIDC_* settings.
+	// OrganizationSvcURL is armada-organization-svc's base URL. Only used
+	// when OAuth2DeviceCode is false — orbital's login/callback handlers call
+	// its /api/v1/login/sso and /api/v1/login/token/sso endpoints instead of
+	// talking to Keycloak directly.
+	OrganizationSvcURL string `envconfig:"ORBITAL_ORGANIZATION_SVC_URL" default:""`
 	// AppTokenAllowedAppIDs gates which app-only (client-credentials) bearer
 	// tokens orbital accepts on /api/v1 and /graphql. Defaults to allowing
 	// only the orbital app itself (in-pod cb-bundler authenticates as the

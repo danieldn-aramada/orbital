@@ -139,9 +139,20 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	}))
 
 	externalJWTMode := cfg.AuthMode == "external-jwt"
-	oidcEnabled := cfg.OIDCIssuerURL != "" && cfg.OIDCClientSecret != ""
-	if cfg.OIDCIssuerURL != "" && cfg.OIDCClientSecret == "" {
+	// oidcEnabled gates browser SSO login (in addition to local email/password,
+	// which is always available separately). ORBITAL_OAUTH2_DEVICE_CODE picks
+	// WHICH provider cfg.OIDCIssuerURL points at: true = AAD device-code
+	// (needs OIDCClientSecret — a confidential client doing its own code
+	// exchange); false = Keycloak via armada-organization-svc (needs
+	// OrganizationSvcURL instead — org-svc holds the Keycloak client secret,
+	// orbital never does). See the OIDCIssuerURL doc comment in config.go for
+	// the AAD-bearer-verifier trade-off of repointing this at Keycloak.
+	oidcEnabled := cfg.OIDCIssuerURL != "" && (cfg.OAuth2DeviceCode && cfg.OIDCClientSecret != "" || !cfg.OAuth2DeviceCode && cfg.OrganizationSvcURL != "")
+	if cfg.OIDCIssuerURL != "" && cfg.OAuth2DeviceCode && cfg.OIDCClientSecret == "" {
 		logger.Warn("ORBITAL_OIDC_CLIENT_SECRET is not set — SSO login disabled")
+	}
+	if cfg.OIDCIssuerURL != "" && !cfg.OAuth2DeviceCode && cfg.OrganizationSvcURL == "" {
+		logger.Warn("ORBITAL_ORGANIZATION_SVC_URL is not set — SSO login disabled")
 	}
 
 	root := e.Group(cfg.BasePath)
@@ -155,8 +166,8 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	//     accept a bearer signed by ORBITAL_JWT_ISSUER (assigned
 	//     ORBITAL_JWT_DEFAULT_ROLE via context) OR a session cookie (role
 	//     resolved from the DB). The session fallback keeps orbital's own UI
-	//     usable — humans sign in via local/OIDC login; AEP's proxied calls
-	//     carry a bearer. Login routes stay registered (oidcEnabled unchanged).
+	//     usable — humans sign in via Keycloak; AEP's proxied calls carry a
+	//     bearer. Login routes stay registered (oidcEnabled unchanged).
 	//     See AUTH.md § External JWT mode.
 	//   - Dev (cfg.Dev=true): apiAuth stays empty so machine-to-machine
 	//     callers like cb-bundler can query /graphql plain-HTTP. Session
@@ -227,7 +238,7 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	switch {
 	case externalJWTMode:
 		authMode = "external-jwt"
-	case !oidcEnabled:
+	case cfg.OIDCIssuerURL == "":
 		authMode = "none"
 	}
 	if len(apiAuth) == 0 {
@@ -346,7 +357,8 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		}
 		root.POST("/user/logout", login.Logout)
 
-		if oidcEnabled {
+		if oidcEnabled && cfg.OAuth2DeviceCode {
+			// Microsoft/EntraID device-code browser login.
 			oidc, err := handler.NewOIDC(
 				context.Background(),
 				db,
@@ -358,17 +370,33 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 				cfg.BasePath,
 				logger,
 				cfg.AdminEmailSet(),
-				cfg.OAuth2DeviceCode,
+				true,
 			)
 			if err != nil {
 				logger.Error("oidc provider init failed", "err", err)
 			} else {
-				root.GET("/auth/login", oidc.Login)
-				root.GET("/auth/callback", oidc.Callback)
-				if cfg.OAuth2DeviceCode {
-					root.GET("/auth/device", oidc.DeviceCodeStart)
-					root.POST("/auth/device/poll", oidc.DeviceCodePoll)
-				}
+				root.GET("/auth/device", oidc.DeviceCodeStart)
+				root.POST("/auth/device/poll", oidc.DeviceCodePoll)
+			}
+		} else if oidcEnabled {
+			// Keycloak browser login routed through armada-organization-svc —
+			// see docs/reference/AUTH.md § Keycloak web login.
+			orgSvcOIDC, err := handler.NewOrgSvcOIDC(
+				context.Background(),
+				db,
+				cfg.SessionKeys(),
+				cfg.OIDCIssuerURL,
+				cfg.OrganizationSvcURL,
+				cfg.OIDCRedirectURL,
+				cfg.BasePath,
+				logger,
+				cfg.AdminEmailSet(),
+			)
+			if err != nil {
+				logger.Error("org-svc oidc provider init failed", "err", err)
+			} else {
+				root.GET("/auth/login", orgSvcOIDC.Login)
+				root.GET("/auth/callback", orgSvcOIDC.Callback)
 			}
 		}
 	}

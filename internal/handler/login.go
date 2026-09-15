@@ -15,6 +15,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Login handles orbital's local email/password login, kept as a separate
+// option alongside Keycloak SSO (see internal/handler/orgsvc_oidc.go).
 type Login struct {
 	db          *ent.Client
 	sessionKeys auth.SessionKeys

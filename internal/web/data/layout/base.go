@@ -12,8 +12,8 @@ type Base struct {
 	Domain            string // default localhost:8080, production console.com
 	Links             []string
 	IsAuthn           bool
-	OIDCEnabled       bool
-	DeviceCodeEnabled bool
+	OIDCEnabled       bool // SSO login is configured — either AAD device-code or Keycloak-via-org-svc, per DeviceCodeEnabled
+	DeviceCodeEnabled bool // true = Microsoft/EntraID device-code; false = Keycloak via armada-organization-svc
 	CsrfToken         string
 	AppVersion        string
 	BasePath          string
