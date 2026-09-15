@@ -25,6 +25,12 @@ const (
 	FieldDetails = "details"
 	// FieldEventCategory holds the string denoting the event_category field in the database.
 	FieldEventCategory = "event_category"
+	// FieldEventSource holds the string denoting the event_source field in the database.
+	FieldEventSource = "event_source"
+	// FieldSourceIPAddress holds the string denoting the source_ip_address field in the database.
+	FieldSourceIPAddress = "source_ip_address"
+	// FieldRequestID holds the string denoting the request_id field in the database.
+	FieldRequestID = "request_id"
 	// EdgeResources holds the string denoting the resources edge name in mutations.
 	EdgeResources = "resources"
 	// EdgeResourceTypes holds the string denoting the resource_types edge name in mutations.
@@ -55,6 +61,9 @@ var Columns = []string{
 	FieldTimestamp,
 	FieldDetails,
 	FieldEventCategory,
+	FieldEventSource,
+	FieldSourceIPAddress,
+	FieldRequestID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -97,6 +106,21 @@ func ByTimestamp(opts ...sql.OrderTermOption) OrderOption {
 // ByEventCategory orders the results by the event_category field.
 func ByEventCategory(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEventCategory, opts...).ToFunc()
+}
+
+// ByEventSource orders the results by the event_source field.
+func ByEventSource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEventSource, opts...).ToFunc()
+}
+
+// BySourceIPAddress orders the results by the source_ip_address field.
+func BySourceIPAddress(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSourceIPAddress, opts...).ToFunc()
+}
+
+// ByRequestID orders the results by the request_id field.
+func ByRequestID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRequestID, opts...).ToFunc()
 }
 
 // ByResourcesCount orders the results by resources count.

@@ -809,10 +809,12 @@ div.dt-container {
   }
 }
 
-// Inventory, server-list, and audit-log tables — match all toolbar controls to is-size-7 table content
+// Inventory, server-list, audit-log and change-request tables — match all
+// toolbar controls to is-size-7 table content
 div.dt-container:has(#inventory-table),
 div.dt-container:has(#server-list-table),
-div.dt-container:has(#audit-log-table) {
+div.dt-container:has(#audit-log-table),
+div.dt-container:has(#cr-table) {
   font-size: 0.75rem;
 
   .dt-search .input,

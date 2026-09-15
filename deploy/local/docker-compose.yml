@@ -35,6 +35,51 @@ services:
       timeout: 5s
       retries: 12
 
+  # Test cluster — the integration suite's live graph. Exists so `go test
+  # -tags=integration` cannot reach the blue cluster above, which is the
+  # developer's own working graph. TestMain drop_all's whatever DGraphURL()
+  # points at, before test selection, so `-run` never protected it and three
+  # separate sessions lost a restored graph to a routine test run.
+  #
+  # Why a THIRD cluster and not the scratch one: the suite itself needs two
+  # graphs, because the export tests exercise blue→green (read from the live
+  # graph, stage into scratch, export from there) and Export.wipeScratch
+  # drop_all's the scratch target on every run. Pointing the suite's live graph
+  # at scratch would wipe shared suite state mid-run.
+  dgraph-zero-test:
+    image: dgraph/dgraph:v25.3.1
+    command: dgraph zero --my=dgraph-zero-test:5080
+    ports:
+      - "6083:6080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6080/state"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  dgraph-alpha-test:
+    image: dgraph/dgraph:v25.3.1
+    command: >
+      dgraph alpha
+      --my=dgraph-alpha-test:7080
+      --zero=dgraph-zero-test:5080
+      --graphql extensions=false
+      --security whitelist=0.0.0.0/0
+    ports:
+      - "7083:7080"
+      - "8083:8080"
+      - "9083:9080"
+    volumes:
+      - /tmp/orbital-test-main:/dgraph/export
+    depends_on:
+      dgraph-zero-test:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
   # Scratch cluster — isolated, used only for subgraph export
   dgraph-zero-scratch:
     image: dgraph/dgraph:v25.3.1

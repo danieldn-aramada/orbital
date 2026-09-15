@@ -14,22 +14,36 @@ import (
 	"time"
 )
 
+// The integration suite's LIVE graph is dgraph-alpha-test (:8083), a dedicated
+// cluster in deploy/local/docker-compose.yml — NOT blue (:8080), which is the
+// developer's own working graph.
+//
+// This is not a preference. TestMain calls ResetDGraphE, which drop_all's
+// whatever these return, and it runs as package-level setup BEFORE test
+// selection — so narrowing with `-run` never protected anything. Three separate
+// sessions lost a restored graph to a routine `go test -tags=integration`, and
+// the fix each time was a rule about the order to run things in, which is a
+// human protocol guarding a shared mutable resource. It failed every time.
+//
+// PostgreSQL never had this problem: EnsureTestDatabase gives the suite its own
+// `orbital_test` database. This is the same answer for DGraph.
+//
+// Do NOT point these back at :8080. blueAdminURL below refuses it outright.
+
 // DGraphAdminURL returns the DGraph admin URL for the test stack.
-// Defaults to http://localhost:18080/admin.
 func DGraphAdminURL() string {
 	if v := os.Getenv("TEST_DGRAPH_ADMIN_URL"); v != "" {
 		return v
 	}
-	return "http://localhost:8080/admin"
+	return "http://localhost:8083/admin"
 }
 
 // DGraphURL returns the DGraph GraphQL URL for the test stack.
-// Defaults to http://localhost:18080/graphql.
 func DGraphURL() string {
 	if v := os.Getenv("TEST_DGRAPH_URL"); v != "" {
 		return v
 	}
-	return "http://localhost:8080/graphql"
+	return "http://localhost:8083/graphql"
 }
 
 // DGraphScratchAdminURL returns the scratch DGraph admin URL for the test stack.
@@ -57,8 +71,36 @@ func ResetDGraph(t *testing.T, adminURL, schemaPath string) {
 	}
 }
 
+// devGraphPorts are the host ports of clusters a test must never drop_all:
+// blue (the developer's working graph) and orb's own graph. Matched on the
+// authority so a URL reaching them by any path or scheme is still caught.
+var devGraphPorts = []string{":8080", ":9080", ":8082", ":9082"}
+
+// refuseDevGraph is the backstop for the failure this file's header describes.
+// The default URLs are safe; this catches the ways they get overridden — a
+// stale TEST_DGRAPH_URL exported in a shell, a copied CI snippet, a Makefile
+// edit. The override exists because "never" would be a lie, but it has to be
+// typed on purpose.
+func refuseDevGraph(url string) error {
+	if os.Getenv("ORBITAL_ALLOW_DEV_DGRAPH_WIPE") == "true" {
+		return nil
+	}
+	for _, p := range devGraphPorts {
+		if strings.Contains(url, p) {
+			return fmt.Errorf(
+				"refusing to drop_all %s: that is a DEV DGraph (blue :8080 / orb :8082), not the test cluster. "+
+					"The integration suite uses dgraph-alpha-test on :8083 — run `make up` to start it. "+
+					"If you really mean to wipe your own graph, set ORBITAL_ALLOW_DEV_DGRAPH_WIPE=true", url)
+		}
+	}
+	return nil
+}
+
 // ResetDGraphE is the error-returning variant of ResetDGraph for use in TestMain.
 func ResetDGraphE(adminURL, schemaPath string) error {
+	if err := refuseDevGraph(adminURL); err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

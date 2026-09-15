@@ -456,3 +456,70 @@ func TestWritePath_MergeStillAppliesAndBumpsVersionExactlyOnce(t *testing.T) {
 		t.Errorf("changes[hostname].before = %v, want a-original", ch.Before)
 	}
 }
+
+// ── 10. where the write came from ──────────────────────────────────────────
+
+// CloudTrail parity: `event_source`, `source_ip_address` and `request_id`
+// (AUDIT.md § CloudTrail field parity). Asserted from BOTH entry points for the
+// same reason the bypass mark is — the two paths record independently, and the
+// one that is easy to forget is the one nobody is looking at.
+//
+// The interesting half is the NEGATIVE. An internal dispatch has no HTTP request
+// behind it, so its IP must be ABSENT rather than empty-or-zero: an operator
+// filtering on the column has to be able to tell "this came from nowhere" from
+// "this came from an address we failed to record". A wrong or blank-but-present
+// IP reads as fact.
+func TestWritePath_AuditEventRecordsWhereTheWriteCameFrom(t *testing.T) {
+	t.Run("via /graphql — source, IP and request id", func(t *testing.T) {
+		f := newAcceptFixture(t)
+
+		c, rec := newGQLCtx(t, map[string]any{
+			"query":         `mutation UpdateServer($orbId: String!, $set: ServerPatch!) { updateServer(input: {filter: {orbId: {eq: $orbId}}, set: $set}) { numUids } }`,
+			"operationName": "UpdateServer",
+			"variables":     map[string]any{"orbId": crServerA, "set": map[string]any{"hostname": "from-http"}},
+		})
+		c.Set("user_email", "admin@test.com")
+		c.Set("role", string(user.RoleAdmin))
+		// What echomw.RequestID() sets in production (server.go:126) and what
+		// c.RealIP() reads. Set here so the assertions below are about orbital's
+		// plumbing rather than about httptest's defaults.
+		c.Request().RemoteAddr = "203.0.113.7:54321"
+		c.Response().Header().Set(echo.HeaderXRequestID, "req-origin-test")
+
+		if err := f.gql.Handle(c); err != nil {
+			t.Fatalf("Handle: %v", err)
+		}
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+		}
+
+		ev := waitForAuditEvent(t, f.crFixture, "updateServer")
+		if ev.EventSource != "graphql" {
+			t.Errorf("eventSource = %q, want graphql", ev.EventSource)
+		}
+		if ev.SourceIPAddress != "203.0.113.7" {
+			t.Errorf("sourceIpAddress = %q, want 203.0.113.7", ev.SourceIPAddress)
+		}
+		if ev.RequestID != "req-origin-test" {
+			t.Errorf("requestId = %q, want req-origin-test — without it, two events from one request cannot be tied together", ev.RequestID)
+		}
+	})
+
+	t.Run("via DispatchMutation — internal, and NO ip", func(t *testing.T) {
+		f := newAcceptFixture(t)
+
+		entryID := f.seedEntry(t, crServerA, "hostname", "Server", "a-original", "from-accept")
+		f.resolve(t, entryID, "accept", "admin@test.com", user.RoleAdmin)
+
+		ev := waitForAuditEvent(t, f.crFixture, "updateServer")
+		if ev.EventSource != "internal" {
+			t.Errorf("eventSource = %q, want internal", ev.EventSource)
+		}
+		if ev.SourceIPAddress != "" {
+			t.Errorf("sourceIpAddress = %q, want empty — there was no HTTP request, and inventing an address is worse than recording none", ev.SourceIPAddress)
+		}
+		if ev.RequestID != "" {
+			t.Errorf("requestId = %q, want empty", ev.RequestID)
+		}
+	})
+}

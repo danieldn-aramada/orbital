@@ -4,6 +4,8 @@ Read this before: export job work, OCI publish/signing, backup/restore, Swagger 
 
 ## Settled Decisions
 
+- **Do NOT clean up job-owned files with `defer os.RemoveAll`.** *(Moved here from `debt.md` 2026-09-15 — it was an implementation note on an open row, which is the wrong place for a standing rule.)* Per-job scratch dirs under `h.scratchExportDir` (`export.go:948`) are created and never removed, and the obvious fix is the wrong one: a deferred delete runs on paths that outlive the job, and it contradicts the "no automatic cleanup of job-owned files" decision — artifacts are removed on an explicit delete, never on the way out of a function. Use an orphan reaper on a controlled directory instead.
+
 - **Orbital is the sole OCI producer** — no downstream system needs registry write credentials. Orbital calls bundlers, bundles all layers, signs once, pushes once. ConfigBundle is a bundler — it queries Orbital's GraphQL and returns layers; it never pushes directly to ACR.
 - **Bundler URLs are per-request, not server-side config** — callers supply `{"bundlers": ["url"]}` in the publish request body. A future migration to named server-side bundlers is tracked in a code comment in `publisher.go`. Do not pre-emptively add server-side bundler config.
 - **Bundling is all-or-nothing** — if any bundler fails (non-2xx, timeout, size exceeded), the publish job fails and nothing is pushed to ACR. No partial pushes. Clients can retry without bundlers for a raw-export-only artifact.

@@ -486,6 +486,7 @@ func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 		resourceTypes,
 		dcOrbIDs,
 		map[string]any{"id": jobID.String(), "backupKey": bk.S3Key},
+		auditInternal(),
 	)
 	if _, err := h.db.RestoreJob.UpdateOneID(jobID).
 		SetStatus(restorejob.StatusCompleted).

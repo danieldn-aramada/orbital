@@ -267,3 +267,9 @@ ps auxf                                                # running processes
 
 `dev-orbital` additionally includes `postgres.yaml` for the in-cluster
 PostgreSQL StatefulSet.
+
+## Do NOT scale orbital past `replicas: 1`
+
+*(Moved here from `docs/planning/debt.md` 2026-09-15 — an operational constraint belongs with the manifests, not in a debt row nobody reads before scaling.)*
+
+Orbital is deployed `replicas: 1` with `strategy: Recreate`, and several subsystems assume it. The divergence ingester keeps `lastIngestedByDC` in process memory, so a second replica double-ingests and corrupts divergence state; the backup scheduler would fire twice. Raising the replica count is a design change (leader election or externalised cursors), not a config change. Tracked in `docs/planning/debt.md` under "needs design first".

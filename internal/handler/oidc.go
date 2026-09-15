@@ -155,7 +155,7 @@ func (h *OIDC) Callback(c echo.Context) error {
 	}
 
 	ua := c.Request().UserAgent()
-	h.writeAuthAudit("loginSuccess", email, map[string]any{"method": "oidc", "user_agent": ua})
+	h.writeAuthAudit(c, "loginSuccess", email, map[string]any{"method": "oidc", "user_agent": ua})
 	return c.Redirect(http.StatusSeeOther, h.basePath+"/?fresh=1")
 }
 
@@ -273,7 +273,7 @@ func (h *OIDC) DeviceCodePoll(c echo.Context) error {
 	default:
 		h.logger.Info("device code auth failed", "error", result.Error)
 		ua := c.Request().UserAgent()
-		h.writeAuthAudit("loginFailed", "", map[string]any{"method": "device_code", "error": result.Error, "user_agent": ua})
+		h.writeAuthAudit(c, "loginFailed", "", map[string]any{"method": "device_code", "error": result.Error, "user_agent": ua})
 		return c.JSON(http.StatusOK, devicePollResponse{Status: "expired"})
 	}
 
@@ -323,12 +323,12 @@ func (h *OIDC) DeviceCodePoll(c echo.Context) error {
 	}
 
 	h.logger.Info("device code auth success", "email", email)
-	h.writeAuthAudit("loginSuccess", email, map[string]any{"method": "device_code", "user_agent": c.Request().UserAgent()})
+	h.writeAuthAudit(c, "loginSuccess", email, map[string]any{"method": "device_code", "user_agent": c.Request().UserAgent()})
 	return c.JSON(http.StatusOK, devicePollResponse{Status: "complete"})
 }
 
 // writeAuthAudit persists an authentication audit event. No-op if db is nil.
-func (h *OIDC) writeAuthAudit(operation, actor string, details map[string]any) {
+func (h *OIDC) writeAuthAudit(c echo.Context, operation, actor string, details map[string]any) {
 	if h.db == nil {
 		return
 	}
@@ -337,5 +337,6 @@ func (h *OIDC) writeAuthAudit(operation, actor string, details map[string]any) {
 		[]string{},
 		[]string{},
 		details,
+		originFromContext(c, "rest"),
 	)
 }

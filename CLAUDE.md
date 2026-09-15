@@ -177,7 +177,7 @@ Then open both UIs side by side:
 
 **Nothing we commit should break this flow.** Before merging any change that touches templates, handlers, routes, or the template loader, verify both UIs load without 500 errors.
 
-Starts DGraph (blue `:8080`/`:9080` + scratch `:8081`/`:9081`), PostgreSQL (`:5432`), Valkey, MinIO, OCI registry, and orb's DGraph (`:8082`/`:9082`). No env sourcing required — all local dev defaults are in `config.go` / `orbconfig/config.go`. See `deploy/local/docker-compose.yml` for full port map.
+Starts DGraph (blue `:8080`/`:9080` + scratch `:8081`/`:9081` + **test `:8083`/`:9083`**), PostgreSQL (`:5432`), Valkey, MinIO, OCI registry, and orb's DGraph (`:8082`/`:9082`). **Blue is YOURS — the integration suite runs against `:8083` and cannot touch it.** No env sourcing required — all local dev defaults are in `config.go` / `orbconfig/config.go`. See `deploy/local/docker-compose.yml` for full port map.
 
 ### Seeding
 

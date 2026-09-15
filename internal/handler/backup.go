@@ -227,6 +227,7 @@ func (h *BackupHandler) fire(ctx context.Context) {
 	writeAuditEvent(h.db, h.logger, "management", "scheduler", "createBackup",
 		[]string{"createBackup"}, nil, nil,
 		map[string]any{"id": job.ID.String(), "trigger": "scheduled"},
+		auditInternal(),
 	)
 	h.logger.Info("scheduled backup triggered", "jobId", job.ID)
 }
@@ -386,6 +387,7 @@ func (h *BackupHandler) Trigger(c echo.Context) error {
 		nil,
 		nil,
 		map[string]any{"id": job.ID.String(), "trigger": string(triggerVal)},
+		originFromContext(c, "rest"),
 	)
 
 	return c.JSON(http.StatusAccepted, triggerResponse{
@@ -529,6 +531,7 @@ func (h *BackupHandler) Delete(c echo.Context) error {
 		nil,
 		nil,
 		map[string]any{"id": j.ID.String(), "s3Key": j.S3Key},
+		originFromContext(c, "rest"),
 	)
 	return c.NoContent(http.StatusNoContent)
 }

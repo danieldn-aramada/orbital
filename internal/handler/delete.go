@@ -150,10 +150,14 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 		if err != nil {
 			return err
 		}
-		if err := h.guardDelete(ctx, caller, plan.orbID, plan.uids); err != nil {
+		if err := h.guardDelete(ctx, caller, actor, plan.orbID, plan.uids); err != nil {
 			return h.refuse(c, err)
 		}
-		if err := h.bulkDelete(ctx, plan.uids); err != nil {
+		if err := h.bulkDeleteGuarded(ctx, plan.uids, plan.versions); err != nil {
+			var perr *preflightError
+			if errors.As(err, &perr) {
+				return h.refuse(c, err) // concurrent edit — a decision, not a failure
+			}
 			h.logger.Error("dc delete failed", "orbId", plan.orbID, "err", err)
 			return fmt.Errorf("delete data center: %w", err)
 		}
@@ -164,6 +168,7 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 				"before": plan.before,
 				"result": map[string]any{"totalDeleted": len(plan.uids), "breakdown": plan.preview.Groups},
 			},
+			originFromContext(c, "rest"),
 		)
 		return c.JSON(http.StatusOK, map[string]any{"deleted": len(plan.uids)})
 
@@ -172,10 +177,14 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 		if err != nil {
 			return err
 		}
-		if err := h.guardDelete(ctx, caller, plan.orbID, plan.uids); err != nil {
+		if err := h.guardDelete(ctx, caller, actor, plan.orbID, plan.uids); err != nil {
 			return h.refuse(c, err)
 		}
-		if err := h.bulkDelete(ctx, plan.uids); err != nil {
+		if err := h.bulkDeleteGuarded(ctx, plan.uids, plan.versions); err != nil {
+			var perr *preflightError
+			if errors.As(err, &perr) {
+				return h.refuse(c, err) // concurrent edit — a decision, not a failure
+			}
 			h.logger.Error("server delete failed", "orbId", plan.orbID, "err", err)
 			return fmt.Errorf("delete server: %w", err)
 		}
@@ -186,6 +195,7 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 				"before": plan.before,
 				"result": map[string]any{"totalDeleted": len(plan.uids), "breakdown": plan.preview.Groups},
 			},
+			originFromContext(c, "rest"),
 		)
 		return c.JSON(http.StatusOK, map[string]any{"deleted": len(plan.uids)})
 
@@ -194,10 +204,14 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 		if err != nil {
 			return err
 		}
-		if err := h.guardDelete(ctx, caller, plan.orbID, plan.uids); err != nil {
+		if err := h.guardDelete(ctx, caller, actor, plan.orbID, plan.uids); err != nil {
 			return h.refuse(c, err)
 		}
-		if err := h.bulkDelete(ctx, plan.uids); err != nil {
+		if err := h.bulkDeleteGuarded(ctx, plan.uids, plan.versions); err != nil {
+			var perr *preflightError
+			if errors.As(err, &perr) {
+				return h.refuse(c, err) // concurrent edit — a decision, not a failure
+			}
 			h.logger.Error("cluster delete failed", "orbId", plan.orbID, "err", err)
 			return fmt.Errorf("delete cluster: %w", err)
 		}
@@ -208,6 +222,7 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 				"before": plan.before,
 				"result": map[string]any{"totalDeleted": len(plan.uids), "breakdown": plan.preview.Groups},
 			},
+			originFromContext(c, "rest"),
 		)
 		return c.JSON(http.StatusOK, map[string]any{"deleted": len(plan.uids)})
 
@@ -224,6 +239,11 @@ type dcDeletePlan struct {
 	orbID   string
 	name    string
 	before  map[string]any
+	// versions is the version of every uid above AS OF PLANNING — the baseline
+	// bulkDeleteGuarded compares against. Captured here so the window it closes
+	// spans everything between planning and the delete, including the approval
+	// gate's round trip.
+	versions map[string]int
 }
 
 type serverDeletePlan struct {
@@ -232,6 +252,11 @@ type serverDeletePlan struct {
 	orbID   string
 	name    string
 	before  map[string]any
+	// versions is the version of every uid above AS OF PLANNING — the baseline
+	// bulkDeleteGuarded compares against. Captured here so the window it closes
+	// spans everything between planning and the delete, including the approval
+	// gate's round trip.
+	versions map[string]int
 }
 
 // ── DataCenter ────────────────────────────────────────────────────────────────
@@ -419,6 +444,12 @@ func (h *DeleteHandler) planDCDelete(ctx context.Context, orbID string) (*dcDele
 		groups = append(groups, countGroup("Kubernetes Nodes", k8sNodeCount))
 	}
 
+	// Baseline for the compare-and-swap, read at the same instant as the plan.
+	versions, err := h.planVersions(ctx, uids)
+	if err != nil {
+		return nil, err
+	}
+
 	return &dcDeletePlan{
 		preview: DeletePreview{
 			Name:       dc.Name,
@@ -427,9 +458,10 @@ func (h *DeleteHandler) planDCDelete(ctx context.Context, orbID string) (*dcDele
 			Version:    dc.Version,
 			Groups:     groups,
 		},
-		uids:  uids,
-		orbID: dc.OrbID,
-		name:  dc.Name,
+		uids:     uids,
+		versions: versions,
+		orbID:    dc.OrbID,
+		name:     dc.Name,
 		before: map[string]any{
 			"name":            dc.Name,
 			"orbId":           dc.OrbID,
@@ -559,6 +591,12 @@ func (h *DeleteHandler) planServerDelete(ctx context.Context, orbID string) (*se
 		srvBefore["oobIP"] = s.OobIP.Address
 	}
 
+	// Baseline for the compare-and-swap, read at the same instant as the plan.
+	versions, err := h.planVersions(ctx, uids)
+	if err != nil {
+		return nil, err
+	}
+
 	return &serverDeletePlan{
 		preview: DeletePreview{
 			Name:       serverDisplayName(s.Hostname, s.Name),
@@ -568,10 +606,11 @@ func (h *DeleteHandler) planServerDelete(ctx context.Context, orbID string) (*se
 			Groups:     groups,
 			Preserved:  preserved,
 		},
-		uids:   uids,
-		orbID:  s.OrbID,
-		name:   serverDisplayName(s.Hostname, s.Name),
-		before: srvBefore,
+		uids:     uids,
+		versions: versions,
+		orbID:    s.OrbID,
+		name:     serverDisplayName(s.Hostname, s.Name),
+		before:   srvBefore,
 	}, nil
 }
 
@@ -652,6 +691,11 @@ type clusterDeletePlan struct {
 	orbID   string
 	name    string
 	before  map[string]any
+	// versions is the version of every uid above AS OF PLANNING — the baseline
+	// bulkDeleteGuarded compares against. Captured here so the window it closes
+	// spans everything between planning and the delete, including the approval
+	// gate's round trip.
+	versions map[string]int
 }
 
 func nodeUIDFromOrbID(ctx context.Context, h *DeleteHandler, orbID string) (string, error) {
@@ -778,6 +822,12 @@ func (h *DeleteHandler) planClusterDelete(ctx context.Context, orbID string) (*c
 		"nodeCount": len(c.Nodes),
 	}
 
+	// Baseline for the compare-and-swap, read at the same instant as the plan.
+	versions, err := h.planVersions(ctx, uids)
+	if err != nil {
+		return nil, err
+	}
+
 	return &clusterDeletePlan{
 		preview: DeletePreview{
 			Name:       c.Name,
@@ -787,10 +837,11 @@ func (h *DeleteHandler) planClusterDelete(ctx context.Context, orbID string) (*c
 			Groups:     groups,
 			Preserved:  preserved,
 		},
-		uids:   uids,
-		orbID:  c.OrbID,
-		name:   c.Name,
-		before: before,
+		uids:     uids,
+		versions: versions,
+		orbID:    c.OrbID,
+		name:     c.Name,
+		before:   before,
 	}, nil
 }
 
@@ -817,29 +868,222 @@ func (h *DeleteHandler) gqlQuery(ctx context.Context, query string, variables ma
 	return result.Data, nil
 }
 
-func (h *DeleteHandler) bulkDelete(ctx context.Context, uids []string) error {
+// planVersions reads the version of every node a plan intends to delete, as of
+// planning time. It is the BASELINE for the compare-and-swap below.
+//
+// Read separately rather than threaded through the three plan queries: those
+// select four levels of owned children (server → controller → device → volume)
+// and adding `version` to each selection and its struct would touch far more
+// code for the same value. One DQL read of the already-collected uid set gives
+// the same snapshot at the same instant.
+func (h *DeleteHandler) planVersions(ctx context.Context, uids []string) (map[string]int, error) {
+	out := make(map[string]int, len(uids))
+	if len(uids) == 0 {
+		return out, nil
+	}
+	q := fmt.Sprintf(`{ q(func: uid(%s)) { uid ConfigItem.version } }`, strings.Join(uids, ","))
+	body, _ := json.Marshal(map[string]any{"query": q})
+	resp, err := http.Post(h.dgraphDQLBase+"/query", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("read plan versions: %w", err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("read plan versions %d: %s", resp.StatusCode, raw)
+	}
+	var parsed struct {
+		Data struct {
+			Q []struct {
+				UID     string `json:"uid"`
+				Version *int   `json:"ConfigItem.version"`
+			} `json:"q"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, fmt.Errorf("decode plan versions: %w", err)
+	}
+	for _, n := range parsed.Data.Q {
+		if n.Version != nil {
+			out[n.UID] = *n.Version
+		}
+	}
+	return out, nil
+}
+
+// bulkDeleteGuarded deletes the planned set as a COMPARE-AND-SWAP: the delete
+// is applied only if every node is still at the version planning saw.
+//
+// Why this exists. The previous implementation posted `{"delete": [{uid}…]}`
+// with no predicate at all, so a cascade destroyed whatever was there at commit
+// time. `checkDeleteVersion` guards the PARENT and does so check-then-act, with
+// planning and an approval-gate round trip inside the window; children were
+// never checked at any point. That made DELETE — the irreversible operation —
+// weaker than UPDATE, where injectVersionPredicate puts the version inside the
+// write and a loser gets a 409.
+//
+// Grouped by version value rather than one block per node, and that is EXACT,
+// not an approximation: `func: uid(…)` pins the set so no foreign node can
+// enter a group, and versions are server-stamped and monotonic so nothing moves
+// to a lower one. Any edit therefore strictly drops its group's count. Most
+// nodes sit at version 1, so a large cascade is a handful of blocks.
+//
+// All-or-nothing: one conditional mutation, so a refusal can never leave a
+// half-collapsed tree.
+func (h *DeleteHandler) bulkDeleteGuarded(ctx context.Context, uids []string, versions map[string]int) error {
 	if len(uids) == 0 {
 		return nil
 	}
-	type uidNode struct {
-		UID string `json:"uid"`
+	// A node we cannot guard is a node we would delete blind — which is the bug
+	// being fixed. Refuse instead. Every ConfigItem is stamped on create, so this
+	// fires only on data written before stamping existed.
+	var unversioned []string
+	byVersion := map[int][]string{}
+	for _, uid := range uids {
+		v, ok := versions[uid]
+		if !ok {
+			unversioned = append(unversioned, uid)
+			continue
+		}
+		byVersion[v] = append(byVersion[v], uid)
 	}
-	nodes := make([]uidNode, len(uids))
+	if len(unversioned) > 0 {
+		h.logger.Warn("cascade delete refused — planned nodes carry no version, so the delete cannot be guarded",
+			"count", len(unversioned), "uids", strings.Join(unversioned, ","))
+		return &preflightError{
+			Status: http.StatusConflict, Code: CodeMVCCConflict,
+			Message: fmt.Sprintf("%d of the %d records in this delete carry no version, so the delete cannot be checked for concurrent edits and was not performed.", len(unversioned), len(uids)),
+			Hint:    "This usually means the records predate version stamping. Re-save them, or contact an administrator.",
+		}
+	}
+
+	var blocks, conds []string
+	want := map[string]int{}
+	i := 0
+	for v, group := range byVersion {
+		name := fmt.Sprintf("v%d", i)
+		i++
+		blocks = append(blocks, fmt.Sprintf(`%s as var(func: uid(%s)) @filter(eq(ConfigItem.version, %d))`,
+			name, strings.Join(group, ","), v))
+		blocks = append(blocks, fmt.Sprintf(`c%s(func: uid(%s)) { count(uid) }`, name, name))
+		conds = append(conds, fmt.Sprintf("eq(len(%s), %d)", name, len(group)))
+		want["c"+name] = len(group)
+	}
+	// Stable order: map iteration is random, and a query that differs run to run
+	// is one nobody can diff against a log line.
+	sort.Strings(blocks)
+	sort.Strings(conds)
+
+	delNodes := make([]map[string]string, len(uids))
 	for i, uid := range uids {
-		nodes[i] = uidNode{UID: uid}
+		delNodes[i] = map[string]string{"uid": uid}
 	}
-	body, _ := json.Marshal(map[string]any{"delete": nodes})
-	url := h.dgraphDQLBase + "/mutate?commitNow=true"
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	body, _ := json.Marshal(map[string]any{
+		"query": "{ " + strings.Join(blocks, " ") + " }",
+		"mutations": []map[string]any{{
+			"cond":   "@if(" + strings.Join(conds, " AND ") + ")",
+			"delete": delNodes,
+		}},
+	})
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.dgraphDQLBase+"/mutate?commitNow=true", bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("dql mutate: %w", err)
+		return fmt.Errorf("build dql upsert: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("dql upsert: %w", err)
 	}
 	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("dql mutate %d: %s", resp.StatusCode, raw)
+		return fmt.Errorf("dql upsert %d: %s", resp.StatusCode, raw)
+	}
+
+	// DGraph answers an unmet `@if` with a 200 and an empty mutation — success-
+	// shaped, exactly like the numUids:0 case the GraphQL CAS had to learn to
+	// read. The per-group counts come back in the same response, so a miss is
+	// detected without a second round trip.
+	var parsed struct {
+		Data struct {
+			Queries map[string][]struct {
+				Count int `json:"count"`
+			} `json:"queries"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return fmt.Errorf("decode dql upsert: %w", err)
+	}
+	for name, n := range want {
+		got := 0
+		if rows := parsed.Data.Queries[name]; len(rows) > 0 {
+			got = rows[0].Count
+		}
+		if got != n {
+			h.logger.Warn("cascade delete refused — a record changed between planning and deletion",
+				"group", name, "want", n, "got", got, "planned", len(uids))
+			return &preflightError{
+				Status: http.StatusConflict, Code: CodeMVCCConflict,
+				Message: h.describeStaleNodes(ctx, uids, versions),
+				Hint:    "Reload and try again — the delete preview is out of date.",
+			}
+		}
 	}
 	return nil
+}
+
+// describeStaleNodes names what changed, for the refusal message. Runs only on
+// the rare conflict path: "this record was modified" is not actionable when a
+// cascade spans a hundred entities and the caller cannot see which one moved.
+func (h *DeleteHandler) describeStaleNodes(ctx context.Context, uids []string, planned map[string]int) string {
+	generic := "Part of this delete was modified by someone else. Nothing was deleted — reload and try again."
+	current, err := h.planVersions(ctx, uids)
+	if err != nil {
+		return generic
+	}
+	q := fmt.Sprintf(`{ q(func: uid(%s)) { uid ConfigItem.orbId dgraph.type } }`, strings.Join(uids, ","))
+	body, _ := json.Marshal(map[string]any{"query": q})
+	resp, err := http.Post(h.dgraphDQLBase+"/query", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return generic
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	var parsed struct {
+		Data struct {
+			Q []struct {
+				UID   string   `json:"uid"`
+				OrbID string   `json:"ConfigItem.orbId"`
+				Types []string `json:"dgraph.type"`
+			} `json:"q"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return generic
+	}
+	var names []string
+	for _, n := range parsed.Data.Q {
+		if cur, ok := current[n.UID]; !ok || cur != planned[n.UID] {
+			label := n.OrbID
+			if len(n.Types) > 0 && label != "" {
+				label = n.Types[len(n.Types)-1] + " " + label
+			}
+			if label != "" {
+				names = append(names, label)
+			}
+		}
+	}
+	if len(names) == 0 {
+		return generic
+	}
+	sort.Strings(names)
+	if len(names) > 3 {
+		return fmt.Sprintf("%s and %d more were modified by someone else. Nothing was deleted — reload and try again.",
+			strings.Join(names[:3], ", "), len(names)-3)
+	}
+	return fmt.Sprintf("%s was modified by someone else. Nothing was deleted — reload and try again.",
+		strings.Join(names, ", "))
 }
 
 // refuse renders a guard's decision, or passes a genuine error through.
@@ -932,7 +1176,7 @@ func (h *DeleteHandler) typesOfUIDs(ctx context.Context, uids []string) ([]strin
 // Ordering: the version check runs BEFORE planning (a stale caller should be
 // told to reload, not have a cascade computed for them), the gate AFTER, so it
 // can see every type the cascade would remove rather than only the declared one.
-func (h *DeleteHandler) guardDelete(ctx context.Context, caller callerRole, orbID string, uids []string) error {
+func (h *DeleteHandler) guardDelete(ctx context.Context, caller callerRole, actor, orbID string, uids []string) error {
 	if h.gql == nil {
 		// Fail closed. A missing dependency must not silently disable a
 		// security control — that is how the bypass above went unnoticed.
@@ -942,7 +1186,7 @@ func (h *DeleteHandler) guardDelete(ctx context.Context, caller callerRole, orbI
 	if err != nil {
 		return err
 	}
-	bypassed, err := h.gql.checkPolicyFor(ctx, []string{orbID}, types, caller)
+	bypassed, err := h.gql.checkPolicyFor(ctx, []string{orbID}, types, caller, actor)
 	if err != nil {
 		var gerr *gatedError
 		if errors.As(err, &gerr) {
@@ -954,7 +1198,7 @@ func (h *DeleteHandler) guardDelete(ctx context.Context, caller callerRole, orbI
 	}
 	if bypassed != "" {
 		h.logger.Warn("privileged delete — bypassed an approval policy",
-			"policy", bypassed, "role", string(caller.Role), "orb_id", orbID,
+			"policy", bypassed, "actor", actor, "role", string(caller.Role), "orb_id", orbID,
 			"types", strings.Join(types, ","), "entities", len(uids))
 	}
 	return nil

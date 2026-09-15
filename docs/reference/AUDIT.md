@@ -71,6 +71,8 @@ A row exists if and only if one of these holds. Everything else belongs in the a
 
 **The one earned exception is advisory enforcement** (`backlog.md`): a would-have-been-blocked write must be recorded, because unlike a refusal there is **no caller reading the result** — the point is a report an operator reads later to decide whether to enforce. That asymmetry, not the success or failure of the write, is what decides admission; Kyverno writes a PolicyReport for the same reason.
 
+**Because the app log is the answer, it has to be able to answer.** *(Added 2026-09-15.)* Routing refusals there makes that `WARN` the durable record, not a debugging aid — so it is written at the CHOKEPOINT (`checkPolicyFor` in `approval_gate.go`), where it covers `/graphql`, `DispatchMutation` and cascade-delete from one place, and it carries the same fields as the privileged-write line ten lines above it: policy, actor, role, types, **orb_ids**. It did not, until this was noticed: the bypass branch named what it touched, the refusal branch logged nothing at all, and two of the three entry points had no line anywhere — so the log could say someone was blocked without saying from changing what, while this section pointed readers at it. **Do not "simplify" it to policy + actor**, and do not add a second line at a call site: one refusal, one line. Pinned by `TestGate_RefusalIsLoggedOnceAndNamesTheEntity`, `…FromTheInternalDispatchPathToo`, and `TestGate_AllowedAndBypassedWritesLogNoRefusal` (the negative — a refusal signal that fires when nothing was refused trains people to ignore it).
+
 Two consequences worth stating, because both are easy to get backwards. **A refusal is not evidence of nothing happening** — "how many writes were blocked pending review" is answerable from the app log, not this table, and that is deliberate. And **do not re-adopt CloudTrail's failed-call records** without reversing this section first (§ CloudTrail field parity explains what is being declined) — a half-adoption yields a table where some refusals appear and others do not, which is worse than either rule applied consistently.
 
 **The rule:**
@@ -121,11 +123,16 @@ CloudTrail is the structural anchor (see § Naming), so this is the checklist fo
 | `eventName` | `operations[]` (array) | ~ **deliberate** — one row per HTTP request, so compound mutations produce an array |
 | `userIdentity` (nested union) | `actor` (flat string) | ~ flattened; adequate at current scale. CloudTrail's is a discriminated union with only `type` required — do not half-adopt it |
 | `responseElements` | — (we store `details.before` instead) | ~ **deliberate and better for a CMDB** — see below |
-| `eventSource` | — | ❌ missing — `graphql` / `rest` / `internal` (`DispatchMutation`) is currently unknowable |
-| `sourceIPAddress` | — | ❌ missing (the OWASP gap) |
-| `userAgent` | — | ❌ missing |
+| `eventSource` | `event_source` | ✅ *(2026-09-15)* — `graphql` / `rest` / `internal` |
+| `sourceIPAddress` | `source_ip_address` | ✅ *(2026-09-15)* — `c.RealIP()`; absent for internal writers |
+| `userAgent` | `details.user_agent` on auth events only | ~ **deliberate** — CLAUDE.md settles UA at session boundaries (`loginSuccess`/`loginFailed`/`logout`), following Stripe/Datadog. Putting it on every data event would reverse that; do not "complete" this row without reversing it first |
 | `errorCode` / `errorMessage` | — | ~ **deliberately not adopted** — a rejected write records no row at all; see below |
+| *(no CloudTrail equivalent)* | `request_id` | ✅ *(2026-09-15)* — Echo's `X-Request-Id`, ties every event from one request together. CloudTrail has no such field; one request yields one record there, while orbital can emit several |
 | `readOnly` | — | n/a — mutations only |
+
+**An async job records `event_source: internal`, not the surface that triggered it.** *(Added 2026-09-15.)* Export, restore and scheduled backup write their audit row from a background worker, long after the HTTP request returned — so there is no IP and no request id to record, and `internal` is the truthful answer for all three. `actor` still carries who asked. The alternative (carrying the triggering request's origin into the job) needs the origin persisted on the job row and is deliberately not done: it buys correlation for three endpoints at the cost of a schema change per job type. If it is ever wanted, do it for all of them at once.
+
+**Capture origin at the HTTP boundary and pass it BY VALUE — never hold the `echo.Context`.** The audit write runs in a goroutine (`go h.auditMutation(...)`) and Echo pools and reuses Context objects, so reading `c` after the handler returns yields whatever request recycled it next. That failure is invisible in testing and produces an audit row attributing a write to another caller's address — a wrong IP reads as fact, which is worse than a missing one. `originFromContext(c, source)` exists to be called on the handler's own goroutine; `auditOrigin` is a plain struct so it can safely outlive the request. Pinned by `TestWritePath_AuditEventRecordsWhereTheWriteCameFrom`.
 
 **Deliberately NOT adopted: CloudTrail's failed-call records.** These three behaviours were listed here as "copy deliberately" until 2026-09-02, when they were reversed in favour of the NetBox/GitHub model — see § Row admission. Recorded so the decision is checkable rather than merely absent, and because each is a genuine CloudTrail behaviour someone will rediscover:
 

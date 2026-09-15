@@ -143,6 +143,7 @@ func ReconcileAdminEmails(ctx context.Context, db *ent.Client, adminEmails map[s
 				"newRole":      "admin",
 				"reason":       "ORBITAL_ADMIN_EMAILS reconciliation on startup",
 			},
+			auditInternal(),
 		)
 	}
 }
@@ -298,6 +299,7 @@ func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 						"requiredRole": string(minRole),
 						"userRole":     string(u.Role),
 					},
+					originFromContext(c, "rest"),
 				)
 				return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("role %q is below required %q for this action", u.Role, minRole))
 			}

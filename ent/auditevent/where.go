@@ -71,6 +71,21 @@ func EventCategory(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldEQ(FieldEventCategory, v))
 }
 
+// EventSource applies equality check predicate on the "event_source" field. It's identical to EventSourceEQ.
+func EventSource(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldEventSource, v))
+}
+
+// SourceIPAddress applies equality check predicate on the "source_ip_address" field. It's identical to SourceIPAddressEQ.
+func SourceIPAddress(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldSourceIPAddress, v))
+}
+
+// RequestID applies equality check predicate on the "request_id" field. It's identical to RequestIDEQ.
+func RequestID(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldRequestID, v))
+}
+
 // OperationsIsNil applies the IsNil predicate on the "operations" field.
 func OperationsIsNil() predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldIsNull(FieldOperations))
@@ -259,6 +274,231 @@ func EventCategoryEqualFold(v string) predicate.AuditEvent {
 // EventCategoryContainsFold applies the ContainsFold predicate on the "event_category" field.
 func EventCategoryContainsFold(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldContainsFold(FieldEventCategory, v))
+}
+
+// EventSourceEQ applies the EQ predicate on the "event_source" field.
+func EventSourceEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldEventSource, v))
+}
+
+// EventSourceNEQ applies the NEQ predicate on the "event_source" field.
+func EventSourceNEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNEQ(FieldEventSource, v))
+}
+
+// EventSourceIn applies the In predicate on the "event_source" field.
+func EventSourceIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIn(FieldEventSource, vs...))
+}
+
+// EventSourceNotIn applies the NotIn predicate on the "event_source" field.
+func EventSourceNotIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotIn(FieldEventSource, vs...))
+}
+
+// EventSourceGT applies the GT predicate on the "event_source" field.
+func EventSourceGT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGT(FieldEventSource, v))
+}
+
+// EventSourceGTE applies the GTE predicate on the "event_source" field.
+func EventSourceGTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGTE(FieldEventSource, v))
+}
+
+// EventSourceLT applies the LT predicate on the "event_source" field.
+func EventSourceLT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLT(FieldEventSource, v))
+}
+
+// EventSourceLTE applies the LTE predicate on the "event_source" field.
+func EventSourceLTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLTE(FieldEventSource, v))
+}
+
+// EventSourceContains applies the Contains predicate on the "event_source" field.
+func EventSourceContains(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContains(FieldEventSource, v))
+}
+
+// EventSourceHasPrefix applies the HasPrefix predicate on the "event_source" field.
+func EventSourceHasPrefix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasPrefix(FieldEventSource, v))
+}
+
+// EventSourceHasSuffix applies the HasSuffix predicate on the "event_source" field.
+func EventSourceHasSuffix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasSuffix(FieldEventSource, v))
+}
+
+// EventSourceIsNil applies the IsNil predicate on the "event_source" field.
+func EventSourceIsNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIsNull(FieldEventSource))
+}
+
+// EventSourceNotNil applies the NotNil predicate on the "event_source" field.
+func EventSourceNotNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotNull(FieldEventSource))
+}
+
+// EventSourceEqualFold applies the EqualFold predicate on the "event_source" field.
+func EventSourceEqualFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEqualFold(FieldEventSource, v))
+}
+
+// EventSourceContainsFold applies the ContainsFold predicate on the "event_source" field.
+func EventSourceContainsFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContainsFold(FieldEventSource, v))
+}
+
+// SourceIPAddressEQ applies the EQ predicate on the "source_ip_address" field.
+func SourceIPAddressEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldSourceIPAddress, v))
+}
+
+// SourceIPAddressNEQ applies the NEQ predicate on the "source_ip_address" field.
+func SourceIPAddressNEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNEQ(FieldSourceIPAddress, v))
+}
+
+// SourceIPAddressIn applies the In predicate on the "source_ip_address" field.
+func SourceIPAddressIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIn(FieldSourceIPAddress, vs...))
+}
+
+// SourceIPAddressNotIn applies the NotIn predicate on the "source_ip_address" field.
+func SourceIPAddressNotIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotIn(FieldSourceIPAddress, vs...))
+}
+
+// SourceIPAddressGT applies the GT predicate on the "source_ip_address" field.
+func SourceIPAddressGT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGT(FieldSourceIPAddress, v))
+}
+
+// SourceIPAddressGTE applies the GTE predicate on the "source_ip_address" field.
+func SourceIPAddressGTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGTE(FieldSourceIPAddress, v))
+}
+
+// SourceIPAddressLT applies the LT predicate on the "source_ip_address" field.
+func SourceIPAddressLT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLT(FieldSourceIPAddress, v))
+}
+
+// SourceIPAddressLTE applies the LTE predicate on the "source_ip_address" field.
+func SourceIPAddressLTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLTE(FieldSourceIPAddress, v))
+}
+
+// SourceIPAddressContains applies the Contains predicate on the "source_ip_address" field.
+func SourceIPAddressContains(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContains(FieldSourceIPAddress, v))
+}
+
+// SourceIPAddressHasPrefix applies the HasPrefix predicate on the "source_ip_address" field.
+func SourceIPAddressHasPrefix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasPrefix(FieldSourceIPAddress, v))
+}
+
+// SourceIPAddressHasSuffix applies the HasSuffix predicate on the "source_ip_address" field.
+func SourceIPAddressHasSuffix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasSuffix(FieldSourceIPAddress, v))
+}
+
+// SourceIPAddressIsNil applies the IsNil predicate on the "source_ip_address" field.
+func SourceIPAddressIsNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIsNull(FieldSourceIPAddress))
+}
+
+// SourceIPAddressNotNil applies the NotNil predicate on the "source_ip_address" field.
+func SourceIPAddressNotNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotNull(FieldSourceIPAddress))
+}
+
+// SourceIPAddressEqualFold applies the EqualFold predicate on the "source_ip_address" field.
+func SourceIPAddressEqualFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEqualFold(FieldSourceIPAddress, v))
+}
+
+// SourceIPAddressContainsFold applies the ContainsFold predicate on the "source_ip_address" field.
+func SourceIPAddressContainsFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContainsFold(FieldSourceIPAddress, v))
+}
+
+// RequestIDEQ applies the EQ predicate on the "request_id" field.
+func RequestIDEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldRequestID, v))
+}
+
+// RequestIDNEQ applies the NEQ predicate on the "request_id" field.
+func RequestIDNEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNEQ(FieldRequestID, v))
+}
+
+// RequestIDIn applies the In predicate on the "request_id" field.
+func RequestIDIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIn(FieldRequestID, vs...))
+}
+
+// RequestIDNotIn applies the NotIn predicate on the "request_id" field.
+func RequestIDNotIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotIn(FieldRequestID, vs...))
+}
+
+// RequestIDGT applies the GT predicate on the "request_id" field.
+func RequestIDGT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGT(FieldRequestID, v))
+}
+
+// RequestIDGTE applies the GTE predicate on the "request_id" field.
+func RequestIDGTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGTE(FieldRequestID, v))
+}
+
+// RequestIDLT applies the LT predicate on the "request_id" field.
+func RequestIDLT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLT(FieldRequestID, v))
+}
+
+// RequestIDLTE applies the LTE predicate on the "request_id" field.
+func RequestIDLTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLTE(FieldRequestID, v))
+}
+
+// RequestIDContains applies the Contains predicate on the "request_id" field.
+func RequestIDContains(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContains(FieldRequestID, v))
+}
+
+// RequestIDHasPrefix applies the HasPrefix predicate on the "request_id" field.
+func RequestIDHasPrefix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasPrefix(FieldRequestID, v))
+}
+
+// RequestIDHasSuffix applies the HasSuffix predicate on the "request_id" field.
+func RequestIDHasSuffix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasSuffix(FieldRequestID, v))
+}
+
+// RequestIDIsNil applies the IsNil predicate on the "request_id" field.
+func RequestIDIsNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIsNull(FieldRequestID))
+}
+
+// RequestIDNotNil applies the NotNil predicate on the "request_id" field.
+func RequestIDNotNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotNull(FieldRequestID))
+}
+
+// RequestIDEqualFold applies the EqualFold predicate on the "request_id" field.
+func RequestIDEqualFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEqualFold(FieldRequestID, v))
+}
+
+// RequestIDContainsFold applies the ContainsFold predicate on the "request_id" field.
+func RequestIDContainsFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContainsFold(FieldRequestID, v))
 }
 
 // HasResources applies the HasEdge predicate on the "resources" edge.

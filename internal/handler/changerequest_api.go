@@ -316,7 +316,13 @@ type changeRequestResponse struct {
 	Author    string `json:"author" example:"proposer@armada.ai"`
 	// Stale means the intent this request was written against has changed since
 	// it was opened. Derived on every read — never a stored column.
-	Stale bool `json:"stale" example:"false"`
+	//
+	// ABSENT on list responses, which are PostgreSQL-only and do not ask the
+	// question (see storedState). Absent is not false: a client must treat a
+	// missing `stale` as "open the request to find out", which is what the
+	// detail endpoint is for. Same for subtreeChanged, staleEntities and
+	// missingTargets.
+	Stale *bool `json:"stale,omitempty" example:"false"`
 	// Approvals is how many currently-counting approvals exist, and Required is
 	// how many the policy demands. Required 0 means nothing governs this change.
 	Approvals int `json:"approvals" example:"0"`
@@ -331,7 +337,7 @@ type changeRequestResponse struct {
 	// going out of date — an edit to an owned child. Cleared by approving again;
 	// blocks merge on its own. Distinct from Stale, which only the author can
 	// clear by rebasing.
-	SubtreeChanged bool `json:"subtreeChanged" example:"false"`
+	SubtreeChanged *bool `json:"subtreeChanged,omitempty" example:"false"`
 	// StaleEntities names WHY this request is stale: the entities whose version
 	// moved since it was last reviewed, each with the version reviewed and the
 	// version now. Present only when Stale is true, and empty for requests
@@ -729,7 +735,11 @@ func (h *ChangeRequest) ListChangeRequests(c echo.Context) error {
 
 	items := make([]changeRequestResponse, 0, len(rows))
 	for _, row := range rows {
-		view, err := h.render(ctx, row, actor, cr)
+		// renderListItem, NOT render: the list is PostgreSQL-only. Rendering a
+		// queue through State cost 1,222 DGraph queries for 507 rows — an N+1,
+		// measured 2026-09-15 — to derive a staleness signal the queue does not
+		// need. See storedState.
+		view, err := h.renderListItem(ctx, row, actor, cr)
 		if err != nil {
 			return err
 		}
@@ -747,7 +757,54 @@ func (h *ChangeRequest) ListChangeRequests(c echo.Context) error {
 		}
 		items = append(items, view)
 	}
-	return c.JSON(http.StatusOK, changeRequestListResponse{Total: len(items), Items: items})
+
+	// Paged AFTER filtering, so `total` is the number of matches and not the
+	// number of rows SQL happened to return. Two of the filters above need a
+	// rendered view — `open` and `approved` share one stored value — so a SQL
+	// LIMIT would page over a superset and report a count that quietly included
+	// rows the caller never sees. Rendering is PostgreSQL-only now, which is
+	// what makes filtering-then-paging affordable; it would not have been
+	// before. Refused, not truncated, is the rule elsewhere on this endpoint —
+	// a wrong total is the same failure wearing a number.
+	total := len(items)
+	items, err = pageSlice(c, items)
+	if err != nil {
+		return writeError(c, http.StatusBadRequest, CodeBadUserInput, err.Error(),
+			"Use non-negative integers, e.g. ?limit=50&offset=0.")
+	}
+	return c.JSON(http.StatusOK, changeRequestListResponse{Total: total, Items: items})
+}
+
+// pageSlice applies ?limit and ?offset to an already-filtered list.
+//
+// Both are OPT-IN: with neither, the response is byte-for-byte what it was
+// before paging existed, so no client that assumed it received everything is
+// broken by this. An offset past the end returns an empty page rather than an
+// error — that is a legal position in a list that shrank, not a bad request.
+func pageSlice(c echo.Context, items []changeRequestResponse) ([]changeRequestResponse, error) {
+	offset := 0
+	if v := strings.TrimSpace(c.QueryParam("offset")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			return nil, fmt.Errorf("offset must be a non-negative integer, got %q", v)
+		}
+		offset = n
+	}
+	if offset >= len(items) {
+		return []changeRequestResponse{}, nil
+	}
+	items = items[offset:]
+
+	if v := strings.TrimSpace(c.QueryParam("limit")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			return nil, fmt.Errorf("limit must be a non-negative integer, got %q", v)
+		}
+		if n < len(items) {
+			items = items[:n]
+		}
+	}
+	return items, nil
 }
 
 // GetChangeRequest returns one change request.
@@ -1288,6 +1345,7 @@ func (h *ChangeRequest) auditPolicy(c echo.Context, action, namespace string, de
 		[]string{"ApprovalPolicy"},
 		[]string{namespace},
 		details,
+		originFromContext(c, "rest"),
 	)
 }
 
@@ -1381,7 +1439,22 @@ func (h *ChangeRequest) render(ctx context.Context, cr *ent.ApprovalRequest, act
 	if err != nil {
 		return changeRequestResponse{}, err
 	}
+	return renderFrom(cr, st, actor, caller), nil
+}
 
+// renderListItem is render's PostgreSQL-only counterpart, used for every row of
+// the queue. Same renderer, cheaper state — so the two cannot drift in the
+// fields they share, and the fields the list cannot know are omitted rather
+// than defaulted. See storedState.
+func (h *ChangeRequest) renderListItem(ctx context.Context, cr *ent.ApprovalRequest, actor string, caller callerRole) (changeRequestResponse, error) {
+	st, err := h.storedState(ctx, cr)
+	if err != nil {
+		return changeRequestResponse{}, err
+	}
+	return renderFrom(cr, st, actor, caller), nil
+}
+
+func renderFrom(cr *ent.ApprovalRequest, st crState, actor string, caller callerRole) changeRequestResponse {
 	out := changeRequestResponse{
 		ID:               crHumanID(cr),
 		ActionType:       cr.ActionType,
@@ -1390,19 +1463,21 @@ func (h *ChangeRequest) render(ctx context.Context, cr *ent.ApprovalRequest, act
 		Status:           st.Status,
 		Namespace:        st.Changeset.Namespace,
 		Author:           cr.Author,
-		Stale:            st.Stale,
 		Approvals:        st.Valid,
 		Required:         st.Required,
 		AvailableActions: availableActions(cr, st, actor, caller.Role, caller.NoAuthz),
 		MissingTargets:   st.Missing,
-		SubtreeChanged:   st.SubtreeChanged,
-		StaleEntities:    staleEntities(cr, st),
 		Effect:           resolveEffect(cr.BaseEffect, st.Changeset),
 		Changes:          fromChangeItems(st.Changeset.Changes),
 		CreatedAt:        cr.CreatedAt,
 		UpdatedAt:        cr.UpdatedAt,
 		ExecutedAt:       cr.ExecutedAt,
 		ExecutedBy:       cr.ExecutedBy,
+	}
+	if st.StalenessKnown {
+		stale, subtree := st.Stale, st.SubtreeChanged
+		out.Stale, out.SubtreeChanged = &stale, &subtree
+		out.StaleEntities = staleEntities(cr, st)
 	}
 	if out.AvailableActions == nil {
 		out.AvailableActions = []string{}
@@ -1431,7 +1506,7 @@ func (h *ChangeRequest) render(ctx context.Context, cr *ent.ApprovalRequest, act
 		return out.MergeAttempts[i].AttemptedAt.Before(out.MergeAttempts[j].AttemptedAt)
 	})
 	out.Record = changeRecord(st.Changeset.Changes, out.MergeAttempts, cr.BaseValues)
-	return out, nil
+	return out
 }
 
 // changeRecord turns the stored changeset into per-entity rows, folding in what

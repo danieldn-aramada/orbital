@@ -284,7 +284,10 @@ func (h *UI) buildMenuSections(path, userRole string, pendingDivergences int) []
 				// to know whether this caller can approve it, and the menu is on
 				// every page. Computing it inline would make every page load pay
 				// for a change-request scan.
-				BadgeSrc: "/api/v1/change-requests?awaiting_review=true",
+				// limit=0: the badge reads only `total`, so there is no reason to
+				// transfer every matching request's changes/record/reviews to
+				// render one number — on every page in the app.
+				BadgeSrc: "/api/v1/change-requests?awaiting_review=true&limit=0",
 			},
 		}
 		// readonly+, matching the API: apiReadonly serves GET /approval-policies,

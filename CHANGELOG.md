@@ -209,8 +209,38 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   no data; see `docs/reference/CONFIG.md`.
 - **`ServerMaintenance` config item** (schema v6) — maintenance-window flag per server.
 - **Request payload-size guard and rate limiting** on the API surface.
+- **Audit events record where a write came from.** Every event now carries `eventSource`
+  (`graphql`, `rest`, or `internal` for work done by a background job), `sourceIpAddress`, and
+  `requestId` — all three exposed through `GET /api/v1/audit-log` and indexed, so "what else
+  happened in that request" and "what came from that address" are answerable without scanning.
+  All three are **omitted rather than blank** when there is no HTTP request behind the event: a
+  scheduled backup or an internally dispatched write reports `internal` and no address, because an
+  empty string in a column an operator filters on reads as a recorded fact rather than as "not
+  applicable". Existing events keep rendering with the fields absent; no backfill.
+  `userAgent` is deliberately NOT added — it stays on session-boundary events
+  (`loginSuccess`/`loginFailed`/`logout`) where orbital already records it.
+
+
+- **`limit` and `offset` on `GET /api/v1/change-requests`.** `total` always counts every match,
+  never the page. Both are opt-in: a request with neither returns exactly what it did before.
+- **The change-request queue is now a sortable, searchable, paged table** like every other list in
+  the UI — 25 rows a page, a page-length menu and a search box. It fetches the 200 most recent
+  matches and **says so** when more matched ("Showing the 200 most recent of 531"), rather than
+  showing a prefix that looks like the whole list.
 
 ### Changed
+- **The change-request queue no longer computes staleness, and is ~130x faster.** Listing requests
+  derived each row's staleness from the graph — 1,222 DGraph queries and 1.21s for one unfiltered
+  page of 507 requests, scaling linearly with the queue. The list now answers from PostgreSQL
+  alone: **0 DGraph queries, 0.009s.** `stale`, `subtreeChanged`, `staleEntities` and
+  `missingTargets` are **omitted from list items** — absent rather than `false`, because the
+  endpoint no longer asks the question; read a missing `stale` as "open the request to find out".
+  `GET /api/v1/change-requests/{id}` is unchanged and still reports all four. This follows GitHub,
+  where `mergeable` is returned by the single-PR endpoint and never by the list. One accepted
+  divergence: a list item's `approvals` counts decisions cast against the current changeset
+  revision, while the detail view additionally requires the scope hash to match.
+
+
 - **`GET /api/v1/change-requests` filters `orbId` and `namespace` in SQL** (jsonb
   containment, GIN-indexed) instead of after rendering each row. Rendering derives
   staleness, so the old order paid several DGraph round-trips per row before discarding
@@ -233,6 +263,16 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   `docs/planning/backlog.md` and technical debt to `docs/planning/debt.md`.
 
 ### Fixed
+- **A cascade delete can no longer destroy a record that changed while it was being planned.**
+  Deleting a data center, server or cluster collects the whole owned subtree and then removes it;
+  the removal carried no concurrency check at all, and the `?version=` precondition covers only the
+  top-level entity, check-then-act, with planning and the approval check inside the window. An edit
+  to any child in that window was destroyed silently — `DELETE`, the irreversible operation, had a
+  weaker guarantee than `update`, which returns `409` in the same situation. The delete is now a
+  compare-and-swap over the entire planned set: if anything moved, **nothing** is deleted and the
+  `409 MVCC_CONFLICT` names which records changed. Unchanged when nothing has moved.
+
+
 - **A governed namespace no longer locks out clients that name their orbId variable something
   other than `orbId`.** The approval gate resolves the governing policy from the orbIds a mutation
   names, and it could only see them as literals or behind a variable called exactly `orbId`. Any

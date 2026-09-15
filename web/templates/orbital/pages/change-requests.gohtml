@@ -26,11 +26,9 @@
         </ul>
       </nav>
 
+      {{/* No <colgroup>: this is a DataTable and `autoWidth` sizes the columns,
+           as on every other list page. A colgroup fights it. */}}
       <table class="table is-striped is-hoverable is-fullwidth is-size-7" id="cr-table">
-        <colgroup>
-          <col style="width:8%"><col style="width:30%"><col style="width:9%"><col style="width:10%">
-          <col style="width:15%"><col style="width:10%"><col style="width:9%"><col style="width:9%">
-        </colgroup>
         <thead>
           <tr>
             <th>ID</th><th>Title</th><th>Change</th><th>Namespace</th><th>Author</th>
@@ -40,6 +38,8 @@
         <tbody id="cr-tbody"></tbody>
       </table>
 
+      {{/* Per-tab, so it can say WHICH view is empty — DataTables' emptyTable is
+           one static string and is left blank so the two cannot contradict. */}}
       <p id="cr-empty" class="has-text-grey is-size-7" style="display:none;"></p>
 
       {{end}}

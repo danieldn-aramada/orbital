@@ -34,6 +34,14 @@ make test-integration  # ~30s, requires: make up
 make test-e2e          # ~30s, requires both UIs running (Playwright for orbital + orb)
 ```
 
+The integration suite runs against its **own** DGraph (`dgraph-alpha-test`, `:8083`, started by
+`make up`). It never touches the blue cluster on `:8080`, so your working graph survives a test run
+and there is no ordering to get right. `testutil.ResetDGraphE` refuses to wipe `:8080`/`:8082` even
+if something overrides the URL.
+
+If export or backup tests fail with `resolving export failed because task failed`, run
+`bash scripts/check-export-mounts.sh` — that error means a stale Docker bind mount, not a code bug.
+
 Before cutting a release, run the full release-check flow once:
 
 ```bash
