@@ -60,6 +60,7 @@ selection, and the architecture design that became the SDD.*
 | Audit log — convention, rename, retention *decision* | ✅ Shipped | Q3 2026 |
 | **Observability** — OTel, metrics, dashboards | 🟡 **In progress** | Q3–Q4 2026 |
 | **Change Requests + approval engine** | ✅ Shipped | Q4 2026 |
+| **High availability** — multi-replica safe; deploy path pending | 🟡 **In progress** | Q4 2026 |
 | Postgres migrations (Atlas) | 📋 Design complete | Q4 2026 |
 | Test-suite audit | 📋 Not started | Q4 2026 |
 | Provider-portable identity (OIDC `id_token`) | 📋 Not started | Q4 2026 |

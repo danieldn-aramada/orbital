@@ -237,6 +237,34 @@ func (_c *BackupCreate) SetNillableCompletedAt(v *time.Time) *BackupCreate {
 	return _c
 }
 
+// SetLockedBy sets the "locked_by" field.
+func (_c *BackupCreate) SetLockedBy(v string) *BackupCreate {
+	_c.mutation.SetLockedBy(v)
+	return _c
+}
+
+// SetNillableLockedBy sets the "locked_by" field if the given value is not nil.
+func (_c *BackupCreate) SetNillableLockedBy(v *string) *BackupCreate {
+	if v != nil {
+		_c.SetLockedBy(*v)
+	}
+	return _c
+}
+
+// SetHeartbeatAt sets the "heartbeat_at" field.
+func (_c *BackupCreate) SetHeartbeatAt(v time.Time) *BackupCreate {
+	_c.mutation.SetHeartbeatAt(v)
+	return _c
+}
+
+// SetNillableHeartbeatAt sets the "heartbeat_at" field if the given value is not nil.
+func (_c *BackupCreate) SetNillableHeartbeatAt(v *time.Time) *BackupCreate {
+	if v != nil {
+		_c.SetHeartbeatAt(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *BackupCreate) SetID(v uuid.UUID) *BackupCreate {
 	_c.mutation.SetID(v)
@@ -419,6 +447,14 @@ func (_c *BackupCreate) createSpec() (*Backup, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CompletedAt(); ok {
 		_spec.SetField(backup.FieldCompletedAt, field.TypeTime, value)
 		_node.CompletedAt = &value
+	}
+	if value, ok := _c.mutation.LockedBy(); ok {
+		_spec.SetField(backup.FieldLockedBy, field.TypeString, value)
+		_node.LockedBy = &value
+	}
+	if value, ok := _c.mutation.HeartbeatAt(); ok {
+		_spec.SetField(backup.FieldHeartbeatAt, field.TypeTime, value)
+		_node.HeartbeatAt = &value
 	}
 	return _node, _spec
 }

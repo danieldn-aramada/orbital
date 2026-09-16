@@ -27,7 +27,6 @@ import (
 
 	"github.com/armada/orbital/docs"
 	"github.com/armada/orbital/ent"
-	"github.com/armada/orbital/ent/migrate"
 	"github.com/armada/orbital/internal/config"
 	orbitaldb "github.com/armada/orbital/internal/db"
 	"github.com/armada/orbital/internal/server"
@@ -78,7 +77,11 @@ func main() {
 	db := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, sqlDB)))
 	defer db.Close()
 
-	if err := db.Schema.Create(ctx, migrate.WithDropColumn(true)); err != nil {
+	// Under an advisory lock: every replica migrates at boot, and replicas
+	// starting together would otherwise race the same DDL. A fresh install at
+	// two replicas fails deterministically without this — see
+	// orbitaldb.Migrate's doc comment.
+	if err := orbitaldb.Migrate(ctx, sqlDB, db, cfg.MigrationLockTimeout, slog.Default()); err != nil {
 		log.Fatalf("migrate: %v", err)
 	}
 

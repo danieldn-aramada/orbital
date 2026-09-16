@@ -35,8 +35,21 @@ type Server struct {
 	cfg                *config.Config
 	echo               *echo.Echo
 	logger             *slog.Logger
+	db                 *ent.Client                // for the job reaper, started in Start()
+	rawDB              *sql.DB                    // advisory locks; nil disables them
 	backupHandler      *handler.BackupHandler     // non-nil when S3 is configured; started in Start()
 	divergenceIngester *divergenceingest.Ingester // non-nil when ORBITAL_DIVERGENCE_INGEST_ENABLED=true and S3 reachable; started in Start()
+}
+
+// jobLeaseFromConfig maps the env-sourced durations onto the handler package's
+// lease config. Lives here rather than on config.Config so the config package
+// never has to import handler.
+func jobLeaseFromConfig(cfg *config.Config) handler.JobLeaseConfig {
+	return handler.JobLeaseConfig{
+		HeartbeatInterval: cfg.JobHeartbeatInterval,
+		StaleAfter:        cfg.JobStaleAfter,
+		OrphanGrace:       cfg.JobOrphanGrace,
+	}
 }
 
 func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
@@ -44,7 +57,11 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	var backupHandler *handler.BackupHandler
 
 	handler.ReconcileAdminEmails(context.Background(), db, cfg.AdminEmailSet(), logger)
-	handler.ReconcileStaleJobs(context.Background(), db, logger)
+	// Stale jobs are NOT swept here. Doing it at boot fails every running job
+	// on the assumption that a process starting means none can be alive —
+	// true at one replica, destructive at two, where a second pod booting
+	// would kill the first pod's in-flight restore mid-drop_all. The reaper
+	// runs on a ticker from Start() and decides death by stale heartbeat.
 
 	e := echo.New()
 	e.HideBanner = true
@@ -64,8 +81,15 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 
 	// Rate limiting (audit S.12) — opt-in via ORBITAL_RATE_LIMIT_ENABLED, so
 	// local dev, e2e, and the AKS-dev smoke suite are never throttled;
-	// production enables it explicitly. Per-IP token buckets, in-memory
-	// (orbital is single-replica). Denials return a 429 that the central
+	// production enables it explicitly. Per-IP token buckets, in-memory.
+	//
+	// APPROXIMATE AT MULTIPLE REPLICAS, deliberately. Buckets are per-pod, so
+	// the effective ceiling is ORBITAL_RATE_LIMIT_RPS x replicas — including
+	// the tighter login bucket below. Divide the configured value by the
+	// expected replica count. Making it exact would require shared state,
+	// which promotes Valkey from optimisation to hard dependency and
+	// contradicts a settled decision; an approximate limit that degrades
+	// gracefully is the better trade. See docs/reference/CONFIG.md. Denials return a 429 that the central
 	// ErrorHandler renders as the standard envelope (code RATE_LIMITED), with a
 	// Retry-After header. A tighter bucket is attached to POST /user/login
 	// below to slow credential brute-force. loginRateLimiter stays nil (and the
@@ -409,6 +433,7 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 
 	if db != nil {
 		exp := handler.NewExport(db, cfg.DGraphURL, cfg.DGraphScratchURL, cfg.DGraphScratchAdminURL, cfg.DGraphScratchZeroURL, cfg.ExportDir, cfg.DGraphScratchExportDir, cfg.SchemaPath, logger)
+		exp.SetJobCoordination(jobLeaseFromConfig(cfg), rawDB)
 		exp.SetBasePath(cfg.BasePath)
 		exp.SetTimeout(cfg.ExportTimeout)
 		api.POST("/export", exp.Trigger)
@@ -494,6 +519,7 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 				api.GET("/backup/jobs/:jobId/download", bk.Download)
 				api.DELETE("/backup/jobs/:jobId", bk.Delete)
 				api.POST("/backup/test-connection", bk.TestConnection)
+				bk.SetJobCoordination(jobLeaseFromConfig(cfg), rawDB)
 				backupHandler = bk
 			}
 
@@ -516,6 +542,7 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 
 				api.GET("/restore/jobs/:jobId", rh.Status)
 				api.POST("/restore", rh.Trigger)
+				rh.SetJobCoordination(jobLeaseFromConfig(cfg), rawDB)
 			}
 		}
 
@@ -610,6 +637,8 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		cfg:                cfg,
 		echo:               e,
 		logger:             logger,
+		db:                 db,
+		rawDB:              rawDB,
 		backupHandler:      backupHandler,
 		divergenceIngester: divIngester,
 	}, nil
@@ -653,6 +682,10 @@ func (s *Server) Start(ctx context.Context) error {
 	if s.divergenceIngester != nil {
 		go s.divergenceIngester.Start(ctx)
 	}
+
+	// Every replica runs the reaper; the advisory lock inside each sweep means
+	// only one does the work on any given tick.
+	go handler.StartReaper(ctx, s.db, s.rawDB, jobLeaseFromConfig(s.cfg), s.logger)
 
 	select {
 	case err := <-errCh:

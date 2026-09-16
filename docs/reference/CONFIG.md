@@ -71,6 +71,9 @@ Generated from `internal/config/config.go` — the struct tags are the source of
 | `ORBITAL_EXPORT_TIMEOUT` | `30m` |
 | `ORBITAL_INLINE_SELECTOR_REJECT` | `true` |
 | `ORBITAL_ISSUE_TRACKER_URL` | `https://dev.azure.com/armadasystems/Commander/_workitems/create/Bug?[System.AreaPath]=Commander\Edge\Edge Platform` |
+| `ORBITAL_JOB_HEARTBEAT_INTERVAL` | `10s` |
+| `ORBITAL_JOB_ORPHAN_GRACE` | `1h` |
+| `ORBITAL_JOB_STALE_AFTER` | `60s` |
 | `ORBITAL_JWT_AUDIENCE` | — |
 | `ORBITAL_JWT_CLIENT_ID` | — |
 | `ORBITAL_JWT_DEFAULT_ROLE` | `readonly` |
@@ -78,6 +81,7 @@ Generated from `internal/config/config.go` — the struct tags are the source of
 | `ORBITAL_LOGIN_RATE_LIMIT_RPS` | `5` |
 | `ORBITAL_LOG_LEVEL` | `info` |
 | `ORBITAL_MAX_REQUEST_BODY` | `10M` |
+| `ORBITAL_MIGRATION_LOCK_TIMEOUT` | `5m` |
 | `ORBITAL_OCI_ALLOW_HTTP` | `true` |
 | `ORBITAL_OCI_PASSWORD` | — |
 | `ORBITAL_OCI_PUBLISH_TIMEOUT` | `10m` |
@@ -97,3 +101,14 @@ Generated from `internal/config/config.go` — the struct tags are the source of
 | `ORBITAL_SESSION_ENCRYPTION_KEY` | `local-dev-enc-key-32-bytes-pad!!` |
 | `ORBITAL_SESSION_HMAC_KEY` | `local-dev-hmac-key-change-in-prod` |
 | `ORBITAL_SHUTDOWN_TIMEOUT` | `10s` |
+
+---
+
+## Multi-replica notes
+
+Orbital runs safely at any replica count (see [`deploy/README.md`](../../deploy/README.md) § High availability). Two settings behave **per pod**, not per cluster:
+
+- **`ORBITAL_RATE_LIMIT_RPS`** — token buckets are in-memory, so the effective ceiling is `RPS x replicas`, including the tighter login bucket. Divide the configured value by the expected replica count. Making it exact would require shared state, promoting Valkey from optimisation to hard dependency — against a settled decision. An approximate limit that degrades gracefully is the better trade.
+- **Connection pool** (`DefaultMaxConns`, 10, not env-configurable) — total load on PostgreSQL is `10 x replicas`; keep it under the server's `max_connections`.
+
+The three `ORBITAL_JOB_*` durations govern job liveness. **`STALE_AFTER` does not need to exceed job duration** — a running job refreshes its heartbeat, so it is provably alive throughout. `ORPHAN_GRACE` applies only to jobs with no heartbeat at all and must stay far longer, because a rolling update can leave one still executing in the outgoing pod. Rationale and precedents: [`OCI.md`](OCI.md) § Job leases.

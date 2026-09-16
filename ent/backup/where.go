@@ -125,6 +125,16 @@ func CompletedAt(v time.Time) predicate.Backup {
 	return predicate.Backup(sql.FieldEQ(FieldCompletedAt, v))
 }
 
+// LockedBy applies equality check predicate on the "locked_by" field. It's identical to LockedByEQ.
+func LockedBy(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldEQ(FieldLockedBy, v))
+}
+
+// HeartbeatAt applies equality check predicate on the "heartbeat_at" field. It's identical to HeartbeatAtEQ.
+func HeartbeatAt(v time.Time) predicate.Backup {
+	return predicate.Backup(sql.FieldEQ(FieldHeartbeatAt, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Backup {
 	return predicate.Backup(sql.FieldEQ(FieldCreatedAt, v))
@@ -1078,6 +1088,131 @@ func CompletedAtIsNil() predicate.Backup {
 // CompletedAtNotNil applies the NotNil predicate on the "completed_at" field.
 func CompletedAtNotNil() predicate.Backup {
 	return predicate.Backup(sql.FieldNotNull(FieldCompletedAt))
+}
+
+// LockedByEQ applies the EQ predicate on the "locked_by" field.
+func LockedByEQ(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldEQ(FieldLockedBy, v))
+}
+
+// LockedByNEQ applies the NEQ predicate on the "locked_by" field.
+func LockedByNEQ(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldNEQ(FieldLockedBy, v))
+}
+
+// LockedByIn applies the In predicate on the "locked_by" field.
+func LockedByIn(vs ...string) predicate.Backup {
+	return predicate.Backup(sql.FieldIn(FieldLockedBy, vs...))
+}
+
+// LockedByNotIn applies the NotIn predicate on the "locked_by" field.
+func LockedByNotIn(vs ...string) predicate.Backup {
+	return predicate.Backup(sql.FieldNotIn(FieldLockedBy, vs...))
+}
+
+// LockedByGT applies the GT predicate on the "locked_by" field.
+func LockedByGT(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldGT(FieldLockedBy, v))
+}
+
+// LockedByGTE applies the GTE predicate on the "locked_by" field.
+func LockedByGTE(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldGTE(FieldLockedBy, v))
+}
+
+// LockedByLT applies the LT predicate on the "locked_by" field.
+func LockedByLT(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldLT(FieldLockedBy, v))
+}
+
+// LockedByLTE applies the LTE predicate on the "locked_by" field.
+func LockedByLTE(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldLTE(FieldLockedBy, v))
+}
+
+// LockedByContains applies the Contains predicate on the "locked_by" field.
+func LockedByContains(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldContains(FieldLockedBy, v))
+}
+
+// LockedByHasPrefix applies the HasPrefix predicate on the "locked_by" field.
+func LockedByHasPrefix(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldHasPrefix(FieldLockedBy, v))
+}
+
+// LockedByHasSuffix applies the HasSuffix predicate on the "locked_by" field.
+func LockedByHasSuffix(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldHasSuffix(FieldLockedBy, v))
+}
+
+// LockedByIsNil applies the IsNil predicate on the "locked_by" field.
+func LockedByIsNil() predicate.Backup {
+	return predicate.Backup(sql.FieldIsNull(FieldLockedBy))
+}
+
+// LockedByNotNil applies the NotNil predicate on the "locked_by" field.
+func LockedByNotNil() predicate.Backup {
+	return predicate.Backup(sql.FieldNotNull(FieldLockedBy))
+}
+
+// LockedByEqualFold applies the EqualFold predicate on the "locked_by" field.
+func LockedByEqualFold(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldEqualFold(FieldLockedBy, v))
+}
+
+// LockedByContainsFold applies the ContainsFold predicate on the "locked_by" field.
+func LockedByContainsFold(v string) predicate.Backup {
+	return predicate.Backup(sql.FieldContainsFold(FieldLockedBy, v))
+}
+
+// HeartbeatAtEQ applies the EQ predicate on the "heartbeat_at" field.
+func HeartbeatAtEQ(v time.Time) predicate.Backup {
+	return predicate.Backup(sql.FieldEQ(FieldHeartbeatAt, v))
+}
+
+// HeartbeatAtNEQ applies the NEQ predicate on the "heartbeat_at" field.
+func HeartbeatAtNEQ(v time.Time) predicate.Backup {
+	return predicate.Backup(sql.FieldNEQ(FieldHeartbeatAt, v))
+}
+
+// HeartbeatAtIn applies the In predicate on the "heartbeat_at" field.
+func HeartbeatAtIn(vs ...time.Time) predicate.Backup {
+	return predicate.Backup(sql.FieldIn(FieldHeartbeatAt, vs...))
+}
+
+// HeartbeatAtNotIn applies the NotIn predicate on the "heartbeat_at" field.
+func HeartbeatAtNotIn(vs ...time.Time) predicate.Backup {
+	return predicate.Backup(sql.FieldNotIn(FieldHeartbeatAt, vs...))
+}
+
+// HeartbeatAtGT applies the GT predicate on the "heartbeat_at" field.
+func HeartbeatAtGT(v time.Time) predicate.Backup {
+	return predicate.Backup(sql.FieldGT(FieldHeartbeatAt, v))
+}
+
+// HeartbeatAtGTE applies the GTE predicate on the "heartbeat_at" field.
+func HeartbeatAtGTE(v time.Time) predicate.Backup {
+	return predicate.Backup(sql.FieldGTE(FieldHeartbeatAt, v))
+}
+
+// HeartbeatAtLT applies the LT predicate on the "heartbeat_at" field.
+func HeartbeatAtLT(v time.Time) predicate.Backup {
+	return predicate.Backup(sql.FieldLT(FieldHeartbeatAt, v))
+}
+
+// HeartbeatAtLTE applies the LTE predicate on the "heartbeat_at" field.
+func HeartbeatAtLTE(v time.Time) predicate.Backup {
+	return predicate.Backup(sql.FieldLTE(FieldHeartbeatAt, v))
+}
+
+// HeartbeatAtIsNil applies the IsNil predicate on the "heartbeat_at" field.
+func HeartbeatAtIsNil() predicate.Backup {
+	return predicate.Backup(sql.FieldIsNull(FieldHeartbeatAt))
+}
+
+// HeartbeatAtNotNil applies the NotNil predicate on the "heartbeat_at" field.
+func HeartbeatAtNotNil() predicate.Backup {
+	return predicate.Backup(sql.FieldNotNull(FieldHeartbeatAt))
 }
 
 // And groups predicates with the AND operator between them.

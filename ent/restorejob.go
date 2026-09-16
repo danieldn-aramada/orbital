@@ -39,7 +39,11 @@ type RestoreJob struct {
 	// StartedAt holds the value of the "started_at" field.
 	StartedAt *time.Time `json:"started_at,omitempty"`
 	// CompletedAt holds the value of the "completed_at" field.
-	CompletedAt  *time.Time `json:"completed_at,omitempty"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	// LockedBy holds the value of the "locked_by" field.
+	LockedBy *string `json:"locked_by,omitempty"`
+	// HeartbeatAt holds the value of the "heartbeat_at" field.
+	HeartbeatAt  *time.Time `json:"heartbeat_at,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -50,9 +54,9 @@ func (*RestoreJob) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case restorejob.FieldBackupID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
-		case restorejob.FieldCreatedBy, restorejob.FieldUpdatedBy, restorejob.FieldStatus, restorejob.FieldBackupKey, restorejob.FieldLog, restorejob.FieldError:
+		case restorejob.FieldCreatedBy, restorejob.FieldUpdatedBy, restorejob.FieldStatus, restorejob.FieldBackupKey, restorejob.FieldLog, restorejob.FieldError, restorejob.FieldLockedBy:
 			values[i] = new(sql.NullString)
-		case restorejob.FieldCreatedAt, restorejob.FieldUpdatedAt, restorejob.FieldStartedAt, restorejob.FieldCompletedAt:
+		case restorejob.FieldCreatedAt, restorejob.FieldUpdatedAt, restorejob.FieldStartedAt, restorejob.FieldCompletedAt, restorejob.FieldHeartbeatAt:
 			values[i] = new(sql.NullTime)
 		case restorejob.FieldID:
 			values[i] = new(uuid.UUID)
@@ -150,6 +154,20 @@ func (_m *RestoreJob) assignValues(columns []string, values []any) error {
 				_m.CompletedAt = new(time.Time)
 				*_m.CompletedAt = value.Time
 			}
+		case restorejob.FieldLockedBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field locked_by", values[i])
+			} else if value.Valid {
+				_m.LockedBy = new(string)
+				*_m.LockedBy = value.String
+			}
+		case restorejob.FieldHeartbeatAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field heartbeat_at", values[i])
+			} else if value.Valid {
+				_m.HeartbeatAt = new(time.Time)
+				*_m.HeartbeatAt = value.Time
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -230,6 +248,16 @@ func (_m *RestoreJob) String() string {
 	builder.WriteString(", ")
 	if v := _m.CompletedAt; v != nil {
 		builder.WriteString("completed_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.LockedBy; v != nil {
+		builder.WriteString("locked_by=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.HeartbeatAt; v != nil {
+		builder.WriteString("heartbeat_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteByte(')')

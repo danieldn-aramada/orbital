@@ -135,3 +135,22 @@ func truncateAll(dsn string) error {
 	}
 	return nil
 }
+
+// RawTestDB opens a plain *sql.DB against the test PostgreSQL instance.
+//
+// Advisory locks are taken on a raw connection rather than through ent, so a
+// test that exercises them needs the same handle production uses. Separate
+// from NewTestDB because the two serve different layers and a test usually
+// wants only one of them.
+func RawTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+	if err := EnsureTestDatabase(); err != nil {
+		t.Fatalf("ensure test database: %v", err)
+	}
+	db, err := sql.Open("postgres", TestDatabaseURL())
+	if err != nil {
+		t.Fatalf("open raw test db: %v", err)
+	}
+	t.Cleanup(func() { db.Close() }) //nolint:errcheck
+	return db
+}

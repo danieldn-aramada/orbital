@@ -261,6 +261,8 @@ var (
 		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime, Nullable: true},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "locked_by", Type: field.TypeString, Nullable: true},
+		{Name: "heartbeat_at", Type: field.TypeTime, Nullable: true},
 	}
 	// BackupsTable holds the schema information for the "backups" table.
 	BackupsTable = &schema.Table{
@@ -361,6 +363,8 @@ var (
 		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime, Nullable: true},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "locked_by", Type: field.TypeString, Nullable: true},
+		{Name: "heartbeat_at", Type: field.TypeTime, Nullable: true},
 	}
 	// ExportJobsTable holds the schema information for the "export_jobs" table.
 	ExportJobsTable = &schema.Table{
@@ -468,6 +472,8 @@ var (
 		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime, Nullable: true},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "locked_by", Type: field.TypeString, Nullable: true},
+		{Name: "heartbeat_at", Type: field.TypeTime, Nullable: true},
 	}
 	// RestoreJobsTable holds the schema information for the "restore_jobs" table.
 	RestoreJobsTable = &schema.Table{

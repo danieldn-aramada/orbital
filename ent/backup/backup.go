@@ -47,6 +47,10 @@ const (
 	FieldStartedAt = "started_at"
 	// FieldCompletedAt holds the string denoting the completed_at field in the database.
 	FieldCompletedAt = "completed_at"
+	// FieldLockedBy holds the string denoting the locked_by field in the database.
+	FieldLockedBy = "locked_by"
+	// FieldHeartbeatAt holds the string denoting the heartbeat_at field in the database.
+	FieldHeartbeatAt = "heartbeat_at"
 	// Table holds the table name of the backup in the database.
 	Table = "backups"
 )
@@ -70,6 +74,8 @@ var Columns = []string{
 	FieldError,
 	FieldStartedAt,
 	FieldCompletedAt,
+	FieldLockedBy,
+	FieldHeartbeatAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -227,4 +233,14 @@ func ByStartedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByCompletedAt orders the results by the completed_at field.
 func ByCompletedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCompletedAt, opts...).ToFunc()
+}
+
+// ByLockedBy orders the results by the locked_by field.
+func ByLockedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLockedBy, opts...).ToFunc()
+}
+
+// ByHeartbeatAt orders the results by the heartbeat_at field.
+func ByHeartbeatAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHeartbeatAt, opts...).ToFunc()
 }

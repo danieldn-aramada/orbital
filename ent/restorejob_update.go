@@ -223,6 +223,46 @@ func (_u *RestoreJobUpdate) ClearCompletedAt() *RestoreJobUpdate {
 	return _u
 }
 
+// SetLockedBy sets the "locked_by" field.
+func (_u *RestoreJobUpdate) SetLockedBy(v string) *RestoreJobUpdate {
+	_u.mutation.SetLockedBy(v)
+	return _u
+}
+
+// SetNillableLockedBy sets the "locked_by" field if the given value is not nil.
+func (_u *RestoreJobUpdate) SetNillableLockedBy(v *string) *RestoreJobUpdate {
+	if v != nil {
+		_u.SetLockedBy(*v)
+	}
+	return _u
+}
+
+// ClearLockedBy clears the value of the "locked_by" field.
+func (_u *RestoreJobUpdate) ClearLockedBy() *RestoreJobUpdate {
+	_u.mutation.ClearLockedBy()
+	return _u
+}
+
+// SetHeartbeatAt sets the "heartbeat_at" field.
+func (_u *RestoreJobUpdate) SetHeartbeatAt(v time.Time) *RestoreJobUpdate {
+	_u.mutation.SetHeartbeatAt(v)
+	return _u
+}
+
+// SetNillableHeartbeatAt sets the "heartbeat_at" field if the given value is not nil.
+func (_u *RestoreJobUpdate) SetNillableHeartbeatAt(v *time.Time) *RestoreJobUpdate {
+	if v != nil {
+		_u.SetHeartbeatAt(*v)
+	}
+	return _u
+}
+
+// ClearHeartbeatAt clears the value of the "heartbeat_at" field.
+func (_u *RestoreJobUpdate) ClearHeartbeatAt() *RestoreJobUpdate {
+	_u.mutation.ClearHeartbeatAt()
+	return _u
+}
+
 // Mutation returns the RestoreJobMutation object of the builder.
 func (_u *RestoreJobUpdate) Mutation() *RestoreJobMutation {
 	return _u.mutation
@@ -333,6 +373,18 @@ func (_u *RestoreJobUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if _u.mutation.CompletedAtCleared() {
 		_spec.ClearField(restorejob.FieldCompletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.LockedBy(); ok {
+		_spec.SetField(restorejob.FieldLockedBy, field.TypeString, value)
+	}
+	if _u.mutation.LockedByCleared() {
+		_spec.ClearField(restorejob.FieldLockedBy, field.TypeString)
+	}
+	if value, ok := _u.mutation.HeartbeatAt(); ok {
+		_spec.SetField(restorejob.FieldHeartbeatAt, field.TypeTime, value)
+	}
+	if _u.mutation.HeartbeatAtCleared() {
+		_spec.ClearField(restorejob.FieldHeartbeatAt, field.TypeTime)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -548,6 +600,46 @@ func (_u *RestoreJobUpdateOne) ClearCompletedAt() *RestoreJobUpdateOne {
 	return _u
 }
 
+// SetLockedBy sets the "locked_by" field.
+func (_u *RestoreJobUpdateOne) SetLockedBy(v string) *RestoreJobUpdateOne {
+	_u.mutation.SetLockedBy(v)
+	return _u
+}
+
+// SetNillableLockedBy sets the "locked_by" field if the given value is not nil.
+func (_u *RestoreJobUpdateOne) SetNillableLockedBy(v *string) *RestoreJobUpdateOne {
+	if v != nil {
+		_u.SetLockedBy(*v)
+	}
+	return _u
+}
+
+// ClearLockedBy clears the value of the "locked_by" field.
+func (_u *RestoreJobUpdateOne) ClearLockedBy() *RestoreJobUpdateOne {
+	_u.mutation.ClearLockedBy()
+	return _u
+}
+
+// SetHeartbeatAt sets the "heartbeat_at" field.
+func (_u *RestoreJobUpdateOne) SetHeartbeatAt(v time.Time) *RestoreJobUpdateOne {
+	_u.mutation.SetHeartbeatAt(v)
+	return _u
+}
+
+// SetNillableHeartbeatAt sets the "heartbeat_at" field if the given value is not nil.
+func (_u *RestoreJobUpdateOne) SetNillableHeartbeatAt(v *time.Time) *RestoreJobUpdateOne {
+	if v != nil {
+		_u.SetHeartbeatAt(*v)
+	}
+	return _u
+}
+
+// ClearHeartbeatAt clears the value of the "heartbeat_at" field.
+func (_u *RestoreJobUpdateOne) ClearHeartbeatAt() *RestoreJobUpdateOne {
+	_u.mutation.ClearHeartbeatAt()
+	return _u
+}
+
 // Mutation returns the RestoreJobMutation object of the builder.
 func (_u *RestoreJobUpdateOne) Mutation() *RestoreJobMutation {
 	return _u.mutation
@@ -688,6 +780,18 @@ func (_u *RestoreJobUpdateOne) sqlSave(ctx context.Context) (_node *RestoreJob, 
 	}
 	if _u.mutation.CompletedAtCleared() {
 		_spec.ClearField(restorejob.FieldCompletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.LockedBy(); ok {
+		_spec.SetField(restorejob.FieldLockedBy, field.TypeString, value)
+	}
+	if _u.mutation.LockedByCleared() {
+		_spec.ClearField(restorejob.FieldLockedBy, field.TypeString)
+	}
+	if value, ok := _u.mutation.HeartbeatAt(); ok {
+		_spec.SetField(restorejob.FieldHeartbeatAt, field.TypeTime, value)
+	}
+	if _u.mutation.HeartbeatAtCleared() {
+		_spec.ClearField(restorejob.FieldHeartbeatAt, field.TypeTime)
 	}
 	_node = &RestoreJob{config: _u.config}
 	_spec.Assign = _node.assignValues
