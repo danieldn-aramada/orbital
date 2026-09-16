@@ -229,6 +229,16 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   showing a prefix that looks like the whole list.
 
 ### Changed
+- **A config-item edit no longer half-saves.** Saving a server (or cluster, or data center) can touch
+  several entities at once, and every mutation was dispatched in parallel — so if one failed, the
+  others had already been written while the message read "Conflict — please reload and try again".
+  A save now checks every entity for concurrent edits **before writing anything** and refuses the
+  whole save if any moved, naming them; the remaining writes go one at a time, so a failure stops
+  the rest. If something does fail partway, the message says which entities were saved. The
+  approval check also now covers every type in the edit tree rather than the top-level one, which
+  removes a case where a policy on a child refused *after* the parent had been written.
+
+
 - **The change-request queue no longer computes staleness, and is ~130x faster.** Listing requests
   derived each row's staleness from the graph — 1,222 DGraph queries and 1.21s for one unfiltered
   page of 507 requests, scaling linearly with the queue. The list now answers from PostgreSQL

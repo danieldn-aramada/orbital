@@ -14,7 +14,7 @@ Every entry is **open**. Closed items are **deleted, not struck through** — `C
 
 | Item | Sev | Notes |
 |---|---|---|
-| Config editor Save is not atomic | Hi | One Save fires N mutations; a mid-sequence failure commits a partial edit with no rollback and no signal. `configitem-editor.js` |
+| Config editor Save is not atomic | Med | **Narrowed 2026-09-16** — pre-flight + sequential fail-fast means a detectable failure now writes nothing, and the exposure is milliseconds rather than minutes ([UI.md](../reference/UI.md)). What remains: a DGraph/network outage mid-sequence still partials, reported not silent. True atomicity needs one DQL transaction, which bypasses `@id`, `!` and `@hasInverse` — investigated and deferred, notes in `.local/editor-atomic-save-investigation.md`. |
 | `orbId` cross-type uniqueness is unenforced | Hi | DGraph's `@id` is unique *per implementing type*, so a Rack and a Server may share an orbId. Convention holds today (2064 ids, 0 collisions). → [DGRAPH.md](../reference/DGRAPH.md) |
 | Restore fails on macOS — `TMPDIR` vs the `/tmp` mount | Med | `restore.go:402` uses `os.MkdirTemp("")`; the dgraph host wrapper mounts only `/tmp`. Worse: `drop_all` runs *before* the load is proven possible. |
 | `orb scan` fabricates success | Med | Returns a hardcoded "Found 3 BMC interfaces" instead of "not implemented". `scan.go:16` |
