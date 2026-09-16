@@ -22,6 +22,8 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ## [Unreleased]
 
+## [v0.0.41] - 2026-09-16
+
 ### Added
 - **Orbital runs safely at any replica count.** Previously `deploy/base/deploy.yaml` carried
   `replicas: 1` with a written warning not to raise it, and nothing enforced that — a one-line
