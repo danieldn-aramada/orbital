@@ -63,7 +63,13 @@ test('a save sends version as a top-level variable, and never inside set', async
 
   await page.locator(`#srv-edit-submit-${domId}`).click()
 
-  await expect.poll(() => bodies.length, { timeout: 15_000 }).toBeGreaterThan(0)
+  // Poll for the MUTATION, not for "any body". A save now sends a pre-flight
+  // version query to /graphql first, so `bodies.length > 0` is satisfied before
+  // the mutation exists and the find below would read an empty list. The
+  // assertion is unchanged — only what it waits for.
+  await expect
+    .poll(() => bodies.filter((b) => /mutation Update/.test(b.query || '')).length, { timeout: 15_000 })
+    .toBeGreaterThan(0)
   const update = bodies.find(b => /mutation Update/.test(b.query || ''))
   expect(update, 'no update mutation was sent').toBeTruthy()
 

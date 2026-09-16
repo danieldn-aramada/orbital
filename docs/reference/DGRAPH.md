@@ -88,6 +88,92 @@ GraphQL cannot traverse typed back-refs polymorphically. For queries like "is th
 ### DGraph update mutation syntax
 `update{Type}(input: { filter: ..., set: ... })` — filter and set are wrapped inside `input`, not top-level args.
 
+### A nested child update in a `set` is SILENTLY DISCARDED
+
+**Do NOT try to update an owned child by nesting it inside the parent's `set`.** It looks like it works and it does not. *(Measured 2026-09-16 against DGraph v25.3.1.)*
+
+```graphql
+updateServer(input: { filter: { orbId: { eq: "ns:server" } },
+                      set: { hostname: "h-NEW",
+                             idracSettings: { orbId: "ns:idrac", firmwareVersion: "9.9.9" } } })
+```
+```
+→ numUids: 1, no errors array, HTTP 200
+→ hostname                       = "h-NEW"   ✅ parent updated
+→ idracSettings.firmwareVersion  = "1.0.0"   ❌ 9.9.9 discarded
+```
+
+A nested object in `set` **links by `@id`**; the field values it carries are dropped. There is no error, no warning, and `numUids` counts the parent — so every signal says success. `add{Type}(input: […], upsert: true)` behaves the same way: the parent upserts, the child is untouched.
+
+**Update an existing child with its own `update{Kind}(orbId, set)` mutation.** This is why `configitem-editor.js` dispatches one mutation per affected concrete type rather than one nested mutation — it is a constraint, not a style choice.
+
+**The one nesting that DOES work is a CREATE.** `addServer(input: [{…, idracSettings: {…}}])` creates parent and child together, in one mutation, atomically. So nesting is correct for a new subtree and wrong for editing an existing one.
+
+### One mutation is one transaction — so N mutations are N transactions, never one
+
+**A single GraphQL mutation IS atomic.** That is not the problem, and reading it as reassurance is the trap. The problem is that *one user action is often several mutations*, and nothing binds them together:
+
+| Scope | One transaction? |
+|---|---|
+| One mutation field — `updateServer(…)` | **Yes**, atomic |
+| N fields in one document — `{ updateServer(…) updateIdracSettings(…) }` | **No** — N transactions |
+| N separate HTTP requests | **No** — N transactions |
+| N mutation blocks in one **DQL upsert** | **Yes** — one transaction |
+
+So editing a Server and its iDRAC is **two** atomic writes with no relationship: the first can commit while the second fails. Two atomic operations, one half-finished result. Say "a save is several transactions", not "each mutation is a transaction" — the load-bearing word is *several*.
+
+**Do NOT batch mutations into a single GraphQL document expecting all-or-nothing** — batching changes nothing, because the document is not the unit. This is vendor-confirmed, not merely observed — Dgraph maintainer Arijit Das, [Transactions in GraphQL](https://discuss.dgraph.io/t/transactions-in-graphql/6861):
+
+> "Every GraphQL mutation starts a new transaction. A mutation is done via an upsert query, and then a request is sent to Dgraph to commit the transaction." … "if `txn 1` passes but `txn 2` errors out, **Only `txn 2` is rolled back, not `txn 1`.**"
+
+An RFC to add native GraphQL transactions (Jira `GRAPHQL-429`, May 2020) never shipped; a [2021 thread](https://discuss.dgraph.io/t/graphql-transaction-for-entire-mutation/6998) is still asking for it.
+
+```graphql
+mutation { addDataCenter(input:$dc){ numUids }   addRack(input:$r){ numUids } }
+→ addDataCenter: numUids 1   (PERSISTED)
+→ addRack: null + error
+```
+
+**Order matters, and it is not "all fields run and some fail".** Root mutation fields execute **serially**. A genuine error aborts the fields AFTER it — Dgraph says so explicitly: *"Mutation second was not executed because of a previous error."* — while any field that already committed **stays committed**. So the damage is every field before the failure, never after it.
+
+**But a compare-and-swap miss is not an error**, so it does not stop anything. That is the case that actually bites, because the response looks clean:
+
+```
+updateServer        → numUids: 1   ← committed
+updateIdracSettings → numUids: 0   ← compare-and-swap missed
+HTTP 200, no errors array
+```
+
+Half the write lands, nothing reports a problem, and the later fields ran anyway.
+
+**For a genuinely atomic multi-entity write, use a DQL upsert block.** The whole upsert — the query plus every mutation block in it — commits or rolls back as one transaction. `bulkDeleteGuarded` in `delete.go` is the reference implementation.
+
+⚠️ **Atomicity and conditionality are separate things here, and conflating them is the trap.**
+
+- **Failure** rolls back the entire upsert, across every mutation block.
+- **`@if` is evaluated per block.** A false condition skips *that block only* — silently, with `code: Success` and no `errors` array — and the remaining blocks still commit.
+
+So several blocks each carrying their own `@if` ARE still one transaction; what they are not is one *guard*. If the intent is "all these entities or none of them", put them under a **single** condition — otherwise a condition that goes false on one block is a silent partial write, which is the failure mode that actually bites.
+
+**Verification (re-run independently 2026-09-16, dgraph v25.3.1).**
+
+*Structural, and the most durable evidence:* a successful two-block upsert returns **one `start_ts` and one `commit_ts`**, with `preds` spanning predicates from every block — `start_ts: 20435, commit_ts: 20436, preds: [atomtest_name, atomtest_num]`. Both blocks are in one transaction, so Dgraph's snapshot-isolation guarantee gives all-or-nothing.
+
+*Commit-time rollback,* shown with a transaction-conflict abort — the only failure mode that unambiguously happens **after** a write is staged:
+
+```
+txn A (2 blocks, no commitNow), block 1 modifies node X  → start_ts 20444, 3 keys, NO commit_ts   (staged)
+txn B (commitNow) writes X                               → X = 999, commit_ts 20450
+commit txn A                                             → "Transaction has been aborted"
+FINAL: X = 999, and block 2's node absent
+```
+
+Block 1's write was staged and then discarded at commit. Rollback crosses the block boundary.
+
+⚠️ **Do NOT use a `@unique` violation to test transactional rollback — it cannot.** Verified: a block that DELETES the conflicting value does not clear the way for a later block to insert it; the check reads committed state plus the request's own values and **ignores deletes in the same request**. Its error code is `ErrorInvalidRequest`, the same class as an RDF parse error. So a `@unique` failure is decided **before execution**, and every such test is equally consistent with "rolled back" and "never executed". An earlier version of this section rested on exactly that test and claimed more than it showed.
+
+⚠️ **Dgraph's own documentation does not state multi-block atomicity.** [Upsert](https://docs.dgraph.io/dql/upserts/) says *"The upsert block contains one query block and mutation blocks"* — plural, so the structure is documented — but its only atomicity statement is *"the upsert has to be an atomic operation such that either a new node is created, or an existing node is modified"*, which is the create-or-modify race, not N mutation blocks. `@if` semantics across blocks are undocumented too. Treat all of the above as local measurement and re-verify on a Dgraph upgrade.
+
 ### GraphQL get vs query
 `get{Type}(id: ID!)` — reliable for most types. For acronym-named types (e.g. `IPAddress`), prefer `query{Type}(filter: { orbId: { eq: $orbId } })` which is more reliable than `getIPAddress`.
 

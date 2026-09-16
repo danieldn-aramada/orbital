@@ -1381,7 +1381,7 @@ func policyFields(p *ent.ApprovalPolicy) map[string]any {
 // @Tags        approval-policies
 // @Produce     json
 // @Param       namespace query string true "Namespace"
-// @Param       type query string false "ConfigItem type"
+// @Param       type query []string false "ConfigItem type(s) — repeatable"
 // @Success     200 {object} approvalPolicyResolveResponse
 // @Failure     400 {object} errorResponse
 // @Router      /api/v1/approval-policies/resolve [get]
@@ -1390,9 +1390,17 @@ func (h *ChangeRequest) ResolveApprovalPolicy(c echo.Context) error {
 	if ns == "" {
 		return writeError(c, http.StatusBadRequest, CodeBadUserInput, "namespace is required", "")
 	}
+	// REPEATABLE, like orbId on the change-request list and for the same reason:
+	// QueryParam returns only the FIRST value, so an editor asking about a tree
+	// spanning Server + IdracSettings would get an answer about Server alone —
+	// and then meet the child's refusal mid-save, after the parent had already
+	// been written. resolvePolicy already reasons over every type in a
+	// changeset; this just stops throwing the others away.
 	cs := &approval.Changeset{Namespace: ns}
-	if t := c.QueryParam("type"); t != "" {
-		cs.Changes = []approval.ChangeItem{{Type: t}}
+	for _, t := range c.QueryParams()["type"] {
+		if t = strings.TrimSpace(t); t != "" {
+			cs.Changes = append(cs.Changes, approval.ChangeItem{Type: t})
+		}
 	}
 	pol, err := h.resolvePolicy(c.Request().Context(), approval.ActionTypeConfigMutation, cs)
 	if err != nil {
