@@ -231,6 +231,46 @@ func (_u *ExportJobUpdate) ClearCompletedAt() *ExportJobUpdate {
 	return _u
 }
 
+// SetLockedBy sets the "locked_by" field.
+func (_u *ExportJobUpdate) SetLockedBy(v string) *ExportJobUpdate {
+	_u.mutation.SetLockedBy(v)
+	return _u
+}
+
+// SetNillableLockedBy sets the "locked_by" field if the given value is not nil.
+func (_u *ExportJobUpdate) SetNillableLockedBy(v *string) *ExportJobUpdate {
+	if v != nil {
+		_u.SetLockedBy(*v)
+	}
+	return _u
+}
+
+// ClearLockedBy clears the value of the "locked_by" field.
+func (_u *ExportJobUpdate) ClearLockedBy() *ExportJobUpdate {
+	_u.mutation.ClearLockedBy()
+	return _u
+}
+
+// SetHeartbeatAt sets the "heartbeat_at" field.
+func (_u *ExportJobUpdate) SetHeartbeatAt(v time.Time) *ExportJobUpdate {
+	_u.mutation.SetHeartbeatAt(v)
+	return _u
+}
+
+// SetNillableHeartbeatAt sets the "heartbeat_at" field if the given value is not nil.
+func (_u *ExportJobUpdate) SetNillableHeartbeatAt(v *time.Time) *ExportJobUpdate {
+	if v != nil {
+		_u.SetHeartbeatAt(*v)
+	}
+	return _u
+}
+
+// ClearHeartbeatAt clears the value of the "heartbeat_at" field.
+func (_u *ExportJobUpdate) ClearHeartbeatAt() *ExportJobUpdate {
+	_u.mutation.ClearHeartbeatAt()
+	return _u
+}
+
 // AddRegistryArtifactIDs adds the "registry_artifacts" edge to the RegistryArtifact entity by IDs.
 func (_u *ExportJobUpdate) AddRegistryArtifactIDs(ids ...int) *ExportJobUpdate {
 	_u.mutation.AddRegistryArtifactIDs(ids...)
@@ -377,6 +417,18 @@ func (_u *ExportJobUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.CompletedAtCleared() {
 		_spec.ClearField(exportjob.FieldCompletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.LockedBy(); ok {
+		_spec.SetField(exportjob.FieldLockedBy, field.TypeString, value)
+	}
+	if _u.mutation.LockedByCleared() {
+		_spec.ClearField(exportjob.FieldLockedBy, field.TypeString)
+	}
+	if value, ok := _u.mutation.HeartbeatAt(); ok {
+		_spec.SetField(exportjob.FieldHeartbeatAt, field.TypeTime, value)
+	}
+	if _u.mutation.HeartbeatAtCleared() {
+		_spec.ClearField(exportjob.FieldHeartbeatAt, field.TypeTime)
 	}
 	if _u.mutation.RegistryArtifactsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -645,6 +697,46 @@ func (_u *ExportJobUpdateOne) ClearCompletedAt() *ExportJobUpdateOne {
 	return _u
 }
 
+// SetLockedBy sets the "locked_by" field.
+func (_u *ExportJobUpdateOne) SetLockedBy(v string) *ExportJobUpdateOne {
+	_u.mutation.SetLockedBy(v)
+	return _u
+}
+
+// SetNillableLockedBy sets the "locked_by" field if the given value is not nil.
+func (_u *ExportJobUpdateOne) SetNillableLockedBy(v *string) *ExportJobUpdateOne {
+	if v != nil {
+		_u.SetLockedBy(*v)
+	}
+	return _u
+}
+
+// ClearLockedBy clears the value of the "locked_by" field.
+func (_u *ExportJobUpdateOne) ClearLockedBy() *ExportJobUpdateOne {
+	_u.mutation.ClearLockedBy()
+	return _u
+}
+
+// SetHeartbeatAt sets the "heartbeat_at" field.
+func (_u *ExportJobUpdateOne) SetHeartbeatAt(v time.Time) *ExportJobUpdateOne {
+	_u.mutation.SetHeartbeatAt(v)
+	return _u
+}
+
+// SetNillableHeartbeatAt sets the "heartbeat_at" field if the given value is not nil.
+func (_u *ExportJobUpdateOne) SetNillableHeartbeatAt(v *time.Time) *ExportJobUpdateOne {
+	if v != nil {
+		_u.SetHeartbeatAt(*v)
+	}
+	return _u
+}
+
+// ClearHeartbeatAt clears the value of the "heartbeat_at" field.
+func (_u *ExportJobUpdateOne) ClearHeartbeatAt() *ExportJobUpdateOne {
+	_u.mutation.ClearHeartbeatAt()
+	return _u
+}
+
 // AddRegistryArtifactIDs adds the "registry_artifacts" edge to the RegistryArtifact entity by IDs.
 func (_u *ExportJobUpdateOne) AddRegistryArtifactIDs(ids ...int) *ExportJobUpdateOne {
 	_u.mutation.AddRegistryArtifactIDs(ids...)
@@ -821,6 +913,18 @@ func (_u *ExportJobUpdateOne) sqlSave(ctx context.Context) (_node *ExportJob, er
 	}
 	if _u.mutation.CompletedAtCleared() {
 		_spec.ClearField(exportjob.FieldCompletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.LockedBy(); ok {
+		_spec.SetField(exportjob.FieldLockedBy, field.TypeString, value)
+	}
+	if _u.mutation.LockedByCleared() {
+		_spec.ClearField(exportjob.FieldLockedBy, field.TypeString)
+	}
+	if value, ok := _u.mutation.HeartbeatAt(); ok {
+		_spec.SetField(exportjob.FieldHeartbeatAt, field.TypeTime, value)
+	}
+	if _u.mutation.HeartbeatAtCleared() {
+		_spec.ClearField(exportjob.FieldHeartbeatAt, field.TypeTime)
 	}
 	if _u.mutation.RegistryArtifactsCleared() {
 		edge := &sqlgraph.EdgeSpec{

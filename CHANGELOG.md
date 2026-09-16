@@ -23,6 +23,30 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 ## [Unreleased]
 
 ### Added
+- **Orbital runs safely at any replica count.** Previously `deploy/base/deploy.yaml` carried
+  `replicas: 1` with a written warning not to raise it, and nothing enforced that — a one-line
+  kustomize patch deployed a broken configuration with no error. Every long-running job (export,
+  backup, restore) is now *claimed* with a conditional `UPDATE` so exactly one runner executes it,
+  proves liveness through a refreshed `heartbeat_at`, and is *fenced* on `locked_by` so a runner
+  that stalls and resumes aborts instead of racing its replacement. Job admission runs under a
+  transaction-scoped advisory lock, and a divergence report is claimed before it is applied rather
+  than after — the previous order let two replicas both apply a report, which silently drops
+  operator resolutions via the supersede branch. No new dependency, no worker tier, no leader to
+  configure: coordination is PostgreSQL, which orbital already requires.
+  See `deploy/README.md` § High availability and `docs/reference/OCI.md` § Job leases.
+- `GET /api/v1/export/jobs/:id` now returns `lockedBy` and `heartbeatAt`, so an operator
+  investigating a stuck or reaped job can tell which pod is running it.
+- `ORBITAL_JOB_HEARTBEAT_INTERVAL` (`10s`), `ORBITAL_JOB_STALE_AFTER` (`60s`) and
+  `ORBITAL_JOB_ORPHAN_GRACE` (`1h`) govern job liveness.
+- **Schema migration is serialized across replicas.** Migration runs in every replica at boot, so
+  replicas starting together raced the same DDL — and the failure is fatal. This was not
+  theoretical: a **fresh install at `replicas: 2` crashlooped one pod on 4 of 4 attempts**, because
+  an empty database means both pods try to create every table (`create "orbs" table: duplicate key
+  value violates unique constraint "pg_type_typname_nsp_index"`). It is now taken under a
+  PostgreSQL advisory lock — the same approach Rails, Flyway and Alembic use — with a bounded retry
+  so a holder that died mid-migration produces a diagnosable error rather than a silent hang.
+  `ORBITAL_MIGRATION_LOCK_TIMEOUT` (`5m`) bounds the wait.
+
 - **Staleness is now two signals, and only the author can clear the one that matters.**
   `stale` means at least one change object's `version` no longer matches its node — a fact about
   what the *author* proposed. `subtreeChanged` means the reviewed scope moved without any change
@@ -229,6 +253,15 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   showing a prefix that looks like the whole list.
 
 ### Changed
+- **A job interrupted by a restart is now failed by a reaper on a ticker, not at the next boot.**
+  The startup sweep failed *every* pending or running job on the assumption that a process starting
+  meant none could be alive — true at one replica, destructive at two, where a second pod booting
+  would mark the first pod's in-flight restore failed while it was still executing `drop_all`. The
+  visible difference at `replicas: 1` is that an interrupted job is marked failed a minute or so
+  later rather than instantly, and its error now names the runner that died.
+- Rate limiting and the database connection pool are **per pod**, so their effective values scale
+  with replica count. Divide `ORBITAL_RATE_LIMIT_RPS` by the expected number of replicas; see
+  `docs/reference/CONFIG.md` § Multi-replica notes.
 - **A config-item edit no longer half-saves.** Saving a server (or cluster, or data center) can touch
   several entities at once, and every mutation was dispatched in parallel — so if one failed, the
   others had already been written while the message read "Conflict — please reload and try again".

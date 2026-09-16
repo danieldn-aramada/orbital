@@ -67,7 +67,8 @@ type BackupHandler struct {
 	timeout                  time.Duration // max duration for the async backup goroutine
 	version                  string
 	logger                   *slog.Logger
-	cronJob                  *cron.Cron // nil when scheduler is stopped or disabled
+	leaseCfg                 JobLeaseConfig // job-lease durations; zero values fall back to defaults
+	cronJob                  *cron.Cron     // nil when scheduler is stopped or disabled
 	cronMu                   sync.Mutex
 }
 
@@ -135,31 +136,6 @@ func NewBackupHandler(ctx context.Context, db *ent.Client, cfg BackupConfig, log
 
 // ── Scheduler ─────────────────────────────────────────────────────────────────
 
-// tryAdvisoryLock attempts a PostgreSQL transaction-scoped advisory lock.
-// Returns (acquired=true, unlock) or (acquired=false, nil, nil).
-// The unlock func rolls back the transaction, releasing the lock.
-// Using pg_try_advisory_xact_lock: auto-releases on transaction end (crash-safe).
-// If rawDB is nil, locking is skipped and acquired=true is returned (single-replica safe).
-func tryAdvisoryLock(ctx context.Context, rawDB *sql.DB) (bool, func(), error) {
-	if rawDB == nil {
-		return true, func() {}, nil
-	}
-	tx, err := rawDB.BeginTx(ctx, nil)
-	if err != nil {
-		return false, nil, fmt.Errorf("advisory lock begin tx: %w", err)
-	}
-	var acquired bool
-	if err := tx.QueryRowContext(ctx, "SELECT pg_try_advisory_xact_lock($1)", schedulerAdvisoryLockKey).Scan(&acquired); err != nil {
-		tx.Rollback() //nolint:errcheck
-		return false, nil, fmt.Errorf("advisory lock query: %w", err)
-	}
-	if !acquired {
-		tx.Rollback() //nolint:errcheck
-		return false, nil, nil
-	}
-	return true, func() { tx.Rollback() }, nil //nolint:errcheck
-}
-
 // cronParser is the robfig/cron parser used for validation.
 var cronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
 
@@ -189,7 +165,7 @@ func (h *BackupHandler) isMissedRun(ctx context.Context) bool {
 // fire creates a scheduled backup job and launches it. Acquires the advisory
 // lock so concurrent replicas don't double-fire.
 func (h *BackupHandler) fire(ctx context.Context) {
-	acquired, unlock, err := tryAdvisoryLock(ctx, h.rawDB)
+	acquired, unlock, err := tryAdvisoryLockKey(ctx, h.rawDB, schedulerAdvisoryLockKey)
 	if err != nil {
 		h.logger.Warn("scheduler advisory lock error", "err", err)
 		return
@@ -231,6 +207,9 @@ func (h *BackupHandler) fire(ctx context.Context) {
 	)
 	h.logger.Info("scheduled backup triggered", "jobId", job.ID)
 }
+
+// SetJobCoordination supplies the job-lease durations; zero values fall back to defaults.
+func (h *BackupHandler) SetJobCoordination(cfg JobLeaseConfig, _ *sql.DB) { h.leaseCfg = cfg }
 
 // StartScheduler fires any missed run, then runs the cron scheduler until ctx
 // is cancelled. Call as a goroutine. No-ops if ORBITAL_BACKUP_SCHEDULE is empty.
@@ -341,6 +320,16 @@ type backupRequest struct {
 // @Failure     409 {object} errorResponse
 // @Router      /api/v1/backup [post]
 func (h *BackupHandler) Trigger(c echo.Context) error {
+	// Admission is a check-then-create: two triggers landing on two replicas
+	// would otherwise both find "nothing running" and both proceed. The
+	// advisory lock makes the whole window exclusive. Transaction-scoped, so
+	// a crashed admitter cannot hold it.
+	releaseAdmission, err := acquireAdmissionLock(c.Request().Context(), h.rawDB)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "could not acquire job admission lock: "+err.Error())
+	}
+	defer releaseAdmission()
+
 	existing, err := h.db.Backup.Query().
 		Where(backup.StatusIn(backup.StatusPending, backup.StatusRunning)).
 		First(c.Request().Context())
@@ -547,22 +536,32 @@ func (h *BackupHandler) runBackup(jobID uuid.UUID) {
 	defer cancel()
 	log := h.logger.With("backupId", jobID)
 
-	_, err := h.db.Backup.UpdateOneID(jobID).
-		SetStatus(backup.StatusRunning).
-		SetStartedAt(time.Now()).
-		Save(ctx)
+	claimed, err := claimBackup(ctx, h.db, jobID, runnerID)
 	if err != nil {
-		log.Error("failed to mark backup running", "err", err)
+		log.Error("failed to claim backup", "err", err)
 		return
 	}
+	if !claimed {
+		log.Warn("backup not claimed — another runner owns it", "runner", runnerID)
+		return
+	}
+
+	leaseCtx, leaseDone := context.WithCancel(ctx)
+	defer leaseDone()
+	go keepLease(leaseCtx, h.leaseCfg.withDefaults().HeartbeatInterval, log, jobID.String(),
+		func(c context.Context) (bool, error) { return beatBackup(c, h.db, jobID, runnerID) },
+		cancel)
 
 	if err := h.doBackup(ctx, jobID, log); err != nil {
 		log.Error("backup failed", "err", err)
 		errStr := err.Error()
-		h.db.Backup.UpdateOneID(jobID). //nolint:errcheck
-						SetStatus(backup.StatusFailed).
-						SetError(errStr).
-						Save(ctx)
+		writeCtx, writeCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer writeCancel()
+		h.db.Backup.Update(). //nolint:errcheck
+					Where(backup.ID(jobID), backup.LockedByEQ(runnerID)).
+					SetStatus(backup.StatusFailed).
+					SetError(errStr).
+					Save(writeCtx)
 	}
 }
 
@@ -663,7 +662,10 @@ func (h *BackupHandler) doBackup(ctx context.Context, jobID uuid.UUID, log *slog
 		sizeBytes = zipInfo.Size()
 	}
 
-	u := h.db.Backup.UpdateOneID(jobID).
+	// Fenced on locked_by: a runner that lost its lease must not overwrite the
+	// terminal state of the run that replaced it.
+	u := h.db.Backup.Update().
+		Where(backup.ID(jobID), backup.LockedByEQ(runnerID)).
 		SetStatus(backup.StatusCompleted).
 		SetS3Bucket(h.s3Bucket).
 		SetS3Key(storageKey).
@@ -675,9 +677,12 @@ func (h *BackupHandler) doBackup(ctx context.Context, jobID uuid.UUID, log *slog
 	if schemaVersion != "" {
 		u = u.SetSchemaVersion(schemaVersion)
 	}
-	_, err = u.Save(ctx)
+	n, err := u.Save(ctx)
 	if err != nil {
 		return fmt.Errorf("mark completed: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("lease lost during backup — another runner owns job %s", jobID)
 	}
 
 	if h.retentionMinCount > 0 || h.retentionDays > 0 {

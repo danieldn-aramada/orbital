@@ -5908,6 +5908,8 @@ type BackupMutation struct {
 	error          *string
 	started_at     *time.Time
 	completed_at   *time.Time
+	locked_by      *string
+	heartbeat_at   *time.Time
 	clearedFields  map[string]struct{}
 	done           bool
 	oldValue       func(context.Context) (*Backup, error)
@@ -6784,6 +6786,104 @@ func (m *BackupMutation) ResetCompletedAt() {
 	delete(m.clearedFields, backup.FieldCompletedAt)
 }
 
+// SetLockedBy sets the "locked_by" field.
+func (m *BackupMutation) SetLockedBy(s string) {
+	m.locked_by = &s
+}
+
+// LockedBy returns the value of the "locked_by" field in the mutation.
+func (m *BackupMutation) LockedBy() (r string, exists bool) {
+	v := m.locked_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLockedBy returns the old "locked_by" field's value of the Backup entity.
+// If the Backup object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BackupMutation) OldLockedBy(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLockedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLockedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLockedBy: %w", err)
+	}
+	return oldValue.LockedBy, nil
+}
+
+// ClearLockedBy clears the value of the "locked_by" field.
+func (m *BackupMutation) ClearLockedBy() {
+	m.locked_by = nil
+	m.clearedFields[backup.FieldLockedBy] = struct{}{}
+}
+
+// LockedByCleared returns if the "locked_by" field was cleared in this mutation.
+func (m *BackupMutation) LockedByCleared() bool {
+	_, ok := m.clearedFields[backup.FieldLockedBy]
+	return ok
+}
+
+// ResetLockedBy resets all changes to the "locked_by" field.
+func (m *BackupMutation) ResetLockedBy() {
+	m.locked_by = nil
+	delete(m.clearedFields, backup.FieldLockedBy)
+}
+
+// SetHeartbeatAt sets the "heartbeat_at" field.
+func (m *BackupMutation) SetHeartbeatAt(t time.Time) {
+	m.heartbeat_at = &t
+}
+
+// HeartbeatAt returns the value of the "heartbeat_at" field in the mutation.
+func (m *BackupMutation) HeartbeatAt() (r time.Time, exists bool) {
+	v := m.heartbeat_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHeartbeatAt returns the old "heartbeat_at" field's value of the Backup entity.
+// If the Backup object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BackupMutation) OldHeartbeatAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHeartbeatAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHeartbeatAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHeartbeatAt: %w", err)
+	}
+	return oldValue.HeartbeatAt, nil
+}
+
+// ClearHeartbeatAt clears the value of the "heartbeat_at" field.
+func (m *BackupMutation) ClearHeartbeatAt() {
+	m.heartbeat_at = nil
+	m.clearedFields[backup.FieldHeartbeatAt] = struct{}{}
+}
+
+// HeartbeatAtCleared returns if the "heartbeat_at" field was cleared in this mutation.
+func (m *BackupMutation) HeartbeatAtCleared() bool {
+	_, ok := m.clearedFields[backup.FieldHeartbeatAt]
+	return ok
+}
+
+// ResetHeartbeatAt resets all changes to the "heartbeat_at" field.
+func (m *BackupMutation) ResetHeartbeatAt() {
+	m.heartbeat_at = nil
+	delete(m.clearedFields, backup.FieldHeartbeatAt)
+}
+
 // Where appends a list predicates to the BackupMutation builder.
 func (m *BackupMutation) Where(ps ...predicate.Backup) {
 	m.predicates = append(m.predicates, ps...)
@@ -6818,7 +6918,7 @@ func (m *BackupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *BackupMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 18)
 	if m.created_at != nil {
 		fields = append(fields, backup.FieldCreatedAt)
 	}
@@ -6867,6 +6967,12 @@ func (m *BackupMutation) Fields() []string {
 	if m.completed_at != nil {
 		fields = append(fields, backup.FieldCompletedAt)
 	}
+	if m.locked_by != nil {
+		fields = append(fields, backup.FieldLockedBy)
+	}
+	if m.heartbeat_at != nil {
+		fields = append(fields, backup.FieldHeartbeatAt)
+	}
 	return fields
 }
 
@@ -6907,6 +7013,10 @@ func (m *BackupMutation) Field(name string) (ent.Value, bool) {
 		return m.StartedAt()
 	case backup.FieldCompletedAt:
 		return m.CompletedAt()
+	case backup.FieldLockedBy:
+		return m.LockedBy()
+	case backup.FieldHeartbeatAt:
+		return m.HeartbeatAt()
 	}
 	return nil, false
 }
@@ -6948,6 +7058,10 @@ func (m *BackupMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldStartedAt(ctx)
 	case backup.FieldCompletedAt:
 		return m.OldCompletedAt(ctx)
+	case backup.FieldLockedBy:
+		return m.OldLockedBy(ctx)
+	case backup.FieldHeartbeatAt:
+		return m.OldHeartbeatAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown Backup field %s", name)
 }
@@ -7069,6 +7183,20 @@ func (m *BackupMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCompletedAt(v)
 		return nil
+	case backup.FieldLockedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLockedBy(v)
+		return nil
+	case backup.FieldHeartbeatAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHeartbeatAt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Backup field %s", name)
 }
@@ -7153,6 +7281,12 @@ func (m *BackupMutation) ClearedFields() []string {
 	if m.FieldCleared(backup.FieldCompletedAt) {
 		fields = append(fields, backup.FieldCompletedAt)
 	}
+	if m.FieldCleared(backup.FieldLockedBy) {
+		fields = append(fields, backup.FieldLockedBy)
+	}
+	if m.FieldCleared(backup.FieldHeartbeatAt) {
+		fields = append(fields, backup.FieldHeartbeatAt)
+	}
 	return fields
 }
 
@@ -7205,6 +7339,12 @@ func (m *BackupMutation) ClearField(name string) error {
 		return nil
 	case backup.FieldCompletedAt:
 		m.ClearCompletedAt()
+		return nil
+	case backup.FieldLockedBy:
+		m.ClearLockedBy()
+		return nil
+	case backup.FieldHeartbeatAt:
+		m.ClearHeartbeatAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Backup nullable field %s", name)
@@ -7261,6 +7401,12 @@ func (m *BackupMutation) ResetField(name string) error {
 		return nil
 	case backup.FieldCompletedAt:
 		m.ResetCompletedAt()
+		return nil
+	case backup.FieldLockedBy:
+		m.ResetLockedBy()
+		return nil
+	case backup.FieldHeartbeatAt:
+		m.ResetHeartbeatAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Backup field %s", name)
@@ -9997,6 +10143,8 @@ type ExportJobMutation struct {
 	error                     *string
 	started_at                *time.Time
 	completed_at              *time.Time
+	locked_by                 *string
+	heartbeat_at              *time.Time
 	clearedFields             map[string]struct{}
 	registry_artifacts        map[int]struct{}
 	removedregistry_artifacts map[int]struct{}
@@ -10646,6 +10794,104 @@ func (m *ExportJobMutation) ResetCompletedAt() {
 	delete(m.clearedFields, exportjob.FieldCompletedAt)
 }
 
+// SetLockedBy sets the "locked_by" field.
+func (m *ExportJobMutation) SetLockedBy(s string) {
+	m.locked_by = &s
+}
+
+// LockedBy returns the value of the "locked_by" field in the mutation.
+func (m *ExportJobMutation) LockedBy() (r string, exists bool) {
+	v := m.locked_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLockedBy returns the old "locked_by" field's value of the ExportJob entity.
+// If the ExportJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExportJobMutation) OldLockedBy(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLockedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLockedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLockedBy: %w", err)
+	}
+	return oldValue.LockedBy, nil
+}
+
+// ClearLockedBy clears the value of the "locked_by" field.
+func (m *ExportJobMutation) ClearLockedBy() {
+	m.locked_by = nil
+	m.clearedFields[exportjob.FieldLockedBy] = struct{}{}
+}
+
+// LockedByCleared returns if the "locked_by" field was cleared in this mutation.
+func (m *ExportJobMutation) LockedByCleared() bool {
+	_, ok := m.clearedFields[exportjob.FieldLockedBy]
+	return ok
+}
+
+// ResetLockedBy resets all changes to the "locked_by" field.
+func (m *ExportJobMutation) ResetLockedBy() {
+	m.locked_by = nil
+	delete(m.clearedFields, exportjob.FieldLockedBy)
+}
+
+// SetHeartbeatAt sets the "heartbeat_at" field.
+func (m *ExportJobMutation) SetHeartbeatAt(t time.Time) {
+	m.heartbeat_at = &t
+}
+
+// HeartbeatAt returns the value of the "heartbeat_at" field in the mutation.
+func (m *ExportJobMutation) HeartbeatAt() (r time.Time, exists bool) {
+	v := m.heartbeat_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHeartbeatAt returns the old "heartbeat_at" field's value of the ExportJob entity.
+// If the ExportJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExportJobMutation) OldHeartbeatAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHeartbeatAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHeartbeatAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHeartbeatAt: %w", err)
+	}
+	return oldValue.HeartbeatAt, nil
+}
+
+// ClearHeartbeatAt clears the value of the "heartbeat_at" field.
+func (m *ExportJobMutation) ClearHeartbeatAt() {
+	m.heartbeat_at = nil
+	m.clearedFields[exportjob.FieldHeartbeatAt] = struct{}{}
+}
+
+// HeartbeatAtCleared returns if the "heartbeat_at" field was cleared in this mutation.
+func (m *ExportJobMutation) HeartbeatAtCleared() bool {
+	_, ok := m.clearedFields[exportjob.FieldHeartbeatAt]
+	return ok
+}
+
+// ResetHeartbeatAt resets all changes to the "heartbeat_at" field.
+func (m *ExportJobMutation) ResetHeartbeatAt() {
+	m.heartbeat_at = nil
+	delete(m.clearedFields, exportjob.FieldHeartbeatAt)
+}
+
 // AddRegistryArtifactIDs adds the "registry_artifacts" edge to the RegistryArtifact entity by ids.
 func (m *ExportJobMutation) AddRegistryArtifactIDs(ids ...int) {
 	if m.registry_artifacts == nil {
@@ -10734,7 +10980,7 @@ func (m *ExportJobMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ExportJobMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 14)
 	if m.created_at != nil {
 		fields = append(fields, exportjob.FieldCreatedAt)
 	}
@@ -10771,6 +11017,12 @@ func (m *ExportJobMutation) Fields() []string {
 	if m.completed_at != nil {
 		fields = append(fields, exportjob.FieldCompletedAt)
 	}
+	if m.locked_by != nil {
+		fields = append(fields, exportjob.FieldLockedBy)
+	}
+	if m.heartbeat_at != nil {
+		fields = append(fields, exportjob.FieldHeartbeatAt)
+	}
 	return fields
 }
 
@@ -10803,6 +11055,10 @@ func (m *ExportJobMutation) Field(name string) (ent.Value, bool) {
 		return m.StartedAt()
 	case exportjob.FieldCompletedAt:
 		return m.CompletedAt()
+	case exportjob.FieldLockedBy:
+		return m.LockedBy()
+	case exportjob.FieldHeartbeatAt:
+		return m.HeartbeatAt()
 	}
 	return nil, false
 }
@@ -10836,6 +11092,10 @@ func (m *ExportJobMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldStartedAt(ctx)
 	case exportjob.FieldCompletedAt:
 		return m.OldCompletedAt(ctx)
+	case exportjob.FieldLockedBy:
+		return m.OldLockedBy(ctx)
+	case exportjob.FieldHeartbeatAt:
+		return m.OldHeartbeatAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown ExportJob field %s", name)
 }
@@ -10929,6 +11189,20 @@ func (m *ExportJobMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCompletedAt(v)
 		return nil
+	case exportjob.FieldLockedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLockedBy(v)
+		return nil
+	case exportjob.FieldHeartbeatAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHeartbeatAt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown ExportJob field %s", name)
 }
@@ -10983,6 +11257,12 @@ func (m *ExportJobMutation) ClearedFields() []string {
 	if m.FieldCleared(exportjob.FieldCompletedAt) {
 		fields = append(fields, exportjob.FieldCompletedAt)
 	}
+	if m.FieldCleared(exportjob.FieldLockedBy) {
+		fields = append(fields, exportjob.FieldLockedBy)
+	}
+	if m.FieldCleared(exportjob.FieldHeartbeatAt) {
+		fields = append(fields, exportjob.FieldHeartbeatAt)
+	}
 	return fields
 }
 
@@ -11020,6 +11300,12 @@ func (m *ExportJobMutation) ClearField(name string) error {
 		return nil
 	case exportjob.FieldCompletedAt:
 		m.ClearCompletedAt()
+		return nil
+	case exportjob.FieldLockedBy:
+		m.ClearLockedBy()
+		return nil
+	case exportjob.FieldHeartbeatAt:
+		m.ClearHeartbeatAt()
 		return nil
 	}
 	return fmt.Errorf("unknown ExportJob nullable field %s", name)
@@ -11064,6 +11350,12 @@ func (m *ExportJobMutation) ResetField(name string) error {
 		return nil
 	case exportjob.FieldCompletedAt:
 		m.ResetCompletedAt()
+		return nil
+	case exportjob.FieldLockedBy:
+		m.ResetLockedBy()
+		return nil
+	case exportjob.FieldHeartbeatAt:
+		m.ResetHeartbeatAt()
 		return nil
 	}
 	return fmt.Errorf("unknown ExportJob field %s", name)
@@ -14288,6 +14580,8 @@ type RestoreJobMutation struct {
 	error         *string
 	started_at    *time.Time
 	completed_at  *time.Time
+	locked_by     *string
+	heartbeat_at  *time.Time
 	clearedFields map[string]struct{}
 	done          bool
 	oldValue      func(context.Context) (*RestoreJob, error)
@@ -14911,6 +15205,104 @@ func (m *RestoreJobMutation) ResetCompletedAt() {
 	delete(m.clearedFields, restorejob.FieldCompletedAt)
 }
 
+// SetLockedBy sets the "locked_by" field.
+func (m *RestoreJobMutation) SetLockedBy(s string) {
+	m.locked_by = &s
+}
+
+// LockedBy returns the value of the "locked_by" field in the mutation.
+func (m *RestoreJobMutation) LockedBy() (r string, exists bool) {
+	v := m.locked_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLockedBy returns the old "locked_by" field's value of the RestoreJob entity.
+// If the RestoreJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RestoreJobMutation) OldLockedBy(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLockedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLockedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLockedBy: %w", err)
+	}
+	return oldValue.LockedBy, nil
+}
+
+// ClearLockedBy clears the value of the "locked_by" field.
+func (m *RestoreJobMutation) ClearLockedBy() {
+	m.locked_by = nil
+	m.clearedFields[restorejob.FieldLockedBy] = struct{}{}
+}
+
+// LockedByCleared returns if the "locked_by" field was cleared in this mutation.
+func (m *RestoreJobMutation) LockedByCleared() bool {
+	_, ok := m.clearedFields[restorejob.FieldLockedBy]
+	return ok
+}
+
+// ResetLockedBy resets all changes to the "locked_by" field.
+func (m *RestoreJobMutation) ResetLockedBy() {
+	m.locked_by = nil
+	delete(m.clearedFields, restorejob.FieldLockedBy)
+}
+
+// SetHeartbeatAt sets the "heartbeat_at" field.
+func (m *RestoreJobMutation) SetHeartbeatAt(t time.Time) {
+	m.heartbeat_at = &t
+}
+
+// HeartbeatAt returns the value of the "heartbeat_at" field in the mutation.
+func (m *RestoreJobMutation) HeartbeatAt() (r time.Time, exists bool) {
+	v := m.heartbeat_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHeartbeatAt returns the old "heartbeat_at" field's value of the RestoreJob entity.
+// If the RestoreJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RestoreJobMutation) OldHeartbeatAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHeartbeatAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHeartbeatAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHeartbeatAt: %w", err)
+	}
+	return oldValue.HeartbeatAt, nil
+}
+
+// ClearHeartbeatAt clears the value of the "heartbeat_at" field.
+func (m *RestoreJobMutation) ClearHeartbeatAt() {
+	m.heartbeat_at = nil
+	m.clearedFields[restorejob.FieldHeartbeatAt] = struct{}{}
+}
+
+// HeartbeatAtCleared returns if the "heartbeat_at" field was cleared in this mutation.
+func (m *RestoreJobMutation) HeartbeatAtCleared() bool {
+	_, ok := m.clearedFields[restorejob.FieldHeartbeatAt]
+	return ok
+}
+
+// ResetHeartbeatAt resets all changes to the "heartbeat_at" field.
+func (m *RestoreJobMutation) ResetHeartbeatAt() {
+	m.heartbeat_at = nil
+	delete(m.clearedFields, restorejob.FieldHeartbeatAt)
+}
+
 // Where appends a list predicates to the RestoreJobMutation builder.
 func (m *RestoreJobMutation) Where(ps ...predicate.RestoreJob) {
 	m.predicates = append(m.predicates, ps...)
@@ -14945,7 +15337,7 @@ func (m *RestoreJobMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *RestoreJobMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 13)
 	if m.created_at != nil {
 		fields = append(fields, restorejob.FieldCreatedAt)
 	}
@@ -14979,6 +15371,12 @@ func (m *RestoreJobMutation) Fields() []string {
 	if m.completed_at != nil {
 		fields = append(fields, restorejob.FieldCompletedAt)
 	}
+	if m.locked_by != nil {
+		fields = append(fields, restorejob.FieldLockedBy)
+	}
+	if m.heartbeat_at != nil {
+		fields = append(fields, restorejob.FieldHeartbeatAt)
+	}
 	return fields
 }
 
@@ -15009,6 +15407,10 @@ func (m *RestoreJobMutation) Field(name string) (ent.Value, bool) {
 		return m.StartedAt()
 	case restorejob.FieldCompletedAt:
 		return m.CompletedAt()
+	case restorejob.FieldLockedBy:
+		return m.LockedBy()
+	case restorejob.FieldHeartbeatAt:
+		return m.HeartbeatAt()
 	}
 	return nil, false
 }
@@ -15040,6 +15442,10 @@ func (m *RestoreJobMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldStartedAt(ctx)
 	case restorejob.FieldCompletedAt:
 		return m.OldCompletedAt(ctx)
+	case restorejob.FieldLockedBy:
+		return m.OldLockedBy(ctx)
+	case restorejob.FieldHeartbeatAt:
+		return m.OldHeartbeatAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown RestoreJob field %s", name)
 }
@@ -15126,6 +15532,20 @@ func (m *RestoreJobMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCompletedAt(v)
 		return nil
+	case restorejob.FieldLockedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLockedBy(v)
+		return nil
+	case restorejob.FieldHeartbeatAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHeartbeatAt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown RestoreJob field %s", name)
 }
@@ -15183,6 +15603,12 @@ func (m *RestoreJobMutation) ClearedFields() []string {
 	if m.FieldCleared(restorejob.FieldCompletedAt) {
 		fields = append(fields, restorejob.FieldCompletedAt)
 	}
+	if m.FieldCleared(restorejob.FieldLockedBy) {
+		fields = append(fields, restorejob.FieldLockedBy)
+	}
+	if m.FieldCleared(restorejob.FieldHeartbeatAt) {
+		fields = append(fields, restorejob.FieldHeartbeatAt)
+	}
 	return fields
 }
 
@@ -15224,6 +15650,12 @@ func (m *RestoreJobMutation) ClearField(name string) error {
 	case restorejob.FieldCompletedAt:
 		m.ClearCompletedAt()
 		return nil
+	case restorejob.FieldLockedBy:
+		m.ClearLockedBy()
+		return nil
+	case restorejob.FieldHeartbeatAt:
+		m.ClearHeartbeatAt()
+		return nil
 	}
 	return fmt.Errorf("unknown RestoreJob nullable field %s", name)
 }
@@ -15264,6 +15696,12 @@ func (m *RestoreJobMutation) ResetField(name string) error {
 		return nil
 	case restorejob.FieldCompletedAt:
 		m.ResetCompletedAt()
+		return nil
+	case restorejob.FieldLockedBy:
+		m.ResetLockedBy()
+		return nil
+	case restorejob.FieldHeartbeatAt:
+		m.ResetHeartbeatAt()
 		return nil
 	}
 	return fmt.Errorf("unknown RestoreJob field %s", name)

@@ -323,6 +323,46 @@ func (_u *BackupUpdate) ClearCompletedAt() *BackupUpdate {
 	return _u
 }
 
+// SetLockedBy sets the "locked_by" field.
+func (_u *BackupUpdate) SetLockedBy(v string) *BackupUpdate {
+	_u.mutation.SetLockedBy(v)
+	return _u
+}
+
+// SetNillableLockedBy sets the "locked_by" field if the given value is not nil.
+func (_u *BackupUpdate) SetNillableLockedBy(v *string) *BackupUpdate {
+	if v != nil {
+		_u.SetLockedBy(*v)
+	}
+	return _u
+}
+
+// ClearLockedBy clears the value of the "locked_by" field.
+func (_u *BackupUpdate) ClearLockedBy() *BackupUpdate {
+	_u.mutation.ClearLockedBy()
+	return _u
+}
+
+// SetHeartbeatAt sets the "heartbeat_at" field.
+func (_u *BackupUpdate) SetHeartbeatAt(v time.Time) *BackupUpdate {
+	_u.mutation.SetHeartbeatAt(v)
+	return _u
+}
+
+// SetNillableHeartbeatAt sets the "heartbeat_at" field if the given value is not nil.
+func (_u *BackupUpdate) SetNillableHeartbeatAt(v *time.Time) *BackupUpdate {
+	if v != nil {
+		_u.SetHeartbeatAt(*v)
+	}
+	return _u
+}
+
+// ClearHeartbeatAt clears the value of the "heartbeat_at" field.
+func (_u *BackupUpdate) ClearHeartbeatAt() *BackupUpdate {
+	_u.mutation.ClearHeartbeatAt()
+	return _u
+}
+
 // Mutation returns the BackupMutation object of the builder.
 func (_u *BackupUpdate) Mutation() *BackupMutation {
 	return _u.mutation
@@ -468,6 +508,18 @@ func (_u *BackupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.CompletedAtCleared() {
 		_spec.ClearField(backup.FieldCompletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.LockedBy(); ok {
+		_spec.SetField(backup.FieldLockedBy, field.TypeString, value)
+	}
+	if _u.mutation.LockedByCleared() {
+		_spec.ClearField(backup.FieldLockedBy, field.TypeString)
+	}
+	if value, ok := _u.mutation.HeartbeatAt(); ok {
+		_spec.SetField(backup.FieldHeartbeatAt, field.TypeTime, value)
+	}
+	if _u.mutation.HeartbeatAtCleared() {
+		_spec.ClearField(backup.FieldHeartbeatAt, field.TypeTime)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -784,6 +836,46 @@ func (_u *BackupUpdateOne) ClearCompletedAt() *BackupUpdateOne {
 	return _u
 }
 
+// SetLockedBy sets the "locked_by" field.
+func (_u *BackupUpdateOne) SetLockedBy(v string) *BackupUpdateOne {
+	_u.mutation.SetLockedBy(v)
+	return _u
+}
+
+// SetNillableLockedBy sets the "locked_by" field if the given value is not nil.
+func (_u *BackupUpdateOne) SetNillableLockedBy(v *string) *BackupUpdateOne {
+	if v != nil {
+		_u.SetLockedBy(*v)
+	}
+	return _u
+}
+
+// ClearLockedBy clears the value of the "locked_by" field.
+func (_u *BackupUpdateOne) ClearLockedBy() *BackupUpdateOne {
+	_u.mutation.ClearLockedBy()
+	return _u
+}
+
+// SetHeartbeatAt sets the "heartbeat_at" field.
+func (_u *BackupUpdateOne) SetHeartbeatAt(v time.Time) *BackupUpdateOne {
+	_u.mutation.SetHeartbeatAt(v)
+	return _u
+}
+
+// SetNillableHeartbeatAt sets the "heartbeat_at" field if the given value is not nil.
+func (_u *BackupUpdateOne) SetNillableHeartbeatAt(v *time.Time) *BackupUpdateOne {
+	if v != nil {
+		_u.SetHeartbeatAt(*v)
+	}
+	return _u
+}
+
+// ClearHeartbeatAt clears the value of the "heartbeat_at" field.
+func (_u *BackupUpdateOne) ClearHeartbeatAt() *BackupUpdateOne {
+	_u.mutation.ClearHeartbeatAt()
+	return _u
+}
+
 // Mutation returns the BackupMutation object of the builder.
 func (_u *BackupUpdateOne) Mutation() *BackupMutation {
 	return _u.mutation
@@ -959,6 +1051,18 @@ func (_u *BackupUpdateOne) sqlSave(ctx context.Context) (_node *Backup, err erro
 	}
 	if _u.mutation.CompletedAtCleared() {
 		_spec.ClearField(backup.FieldCompletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.LockedBy(); ok {
+		_spec.SetField(backup.FieldLockedBy, field.TypeString, value)
+	}
+	if _u.mutation.LockedByCleared() {
+		_spec.ClearField(backup.FieldLockedBy, field.TypeString)
+	}
+	if value, ok := _u.mutation.HeartbeatAt(); ok {
+		_spec.SetField(backup.FieldHeartbeatAt, field.TypeTime, value)
+	}
+	if _u.mutation.HeartbeatAtCleared() {
+		_spec.ClearField(backup.FieldHeartbeatAt, field.TypeTime)
 	}
 	_node = &Backup{config: _u.config}
 	_spec.Assign = _node.assignValues

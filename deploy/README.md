@@ -268,8 +268,49 @@ ps auxf                                                # running processes
 `dev-orbital` additionally includes `postgres.yaml` for the in-cluster
 PostgreSQL StatefulSet.
 
-## Do NOT scale orbital past `replicas: 1`
+## High availability
 
-*(Moved here from `docs/planning/debt.md` 2026-09-15 — an operational constraint belongs with the manifests, not in a debt row nobody reads before scaling.)*
+**Orbital is not in the control path.** Nothing in the cloud executes against a
+modular data center, authoritative reconcilers run locally, and the CMDB is not
+in the reconciliation path. Orb serves intent at the edge, offline. An orbital
+outage means operators cannot change intent and orbs cannot pull new intent —
+it does not degrade a data center. Size the availability target accordingly.
 
-Orbital is deployed `replicas: 1` with `strategy: Recreate`, and several subsystems assume it. The divergence ingester keeps `lastIngestedByDC` in process memory, so a second replica double-ingests and corrupts divergence state; the backup scheduler would fire twice. Raising the replica count is a design change (leader election or externalised cursors), not a config change. Tracked in `docs/planning/debt.md` under "needs design first".
+**The service is one Deployment. Scale it.** Every replica is identical and any
+replica count is safe. Background work is coordinated through PostgreSQL —
+advisory locks for "may I act now", leases for "is that runner still alive" —
+not through replica counts or operator runbooks. There is no worker tier, no
+leader to configure, and no pod-to-pod networking to open.
+
+| Concern | How it is safe at N replicas |
+|---|---|
+| Export / backup / restore execution | Claimed with a conditional `UPDATE`; exactly one runner wins. A runner proves liveness with `heartbeat_at` and is fenced on `locked_by`, so one that stalls and resumes aborts instead of racing its replacement. |
+| Job admission | The check-then-create window is held under a transaction-scoped advisory lock, so two triggers cannot both find "nothing running". |
+| Dead runners | A reaper sweeps on a ticker and fails jobs whose heartbeat went stale. It does **not** run at boot — a starting pod must never assume another pod's running job is dead. |
+| Schema migration at startup | Every replica migrates at boot, under an advisory lock so they cannot race the same DDL. Without it a **fresh install at two replicas crashloops one pod deterministically** — an empty database means both try to create every table. |
+| Backup schedule | `fire()` takes an advisory lock, so one backup per cron tick regardless of replica count. |
+| Divergence ingest | A report is claimed by advancing the cursor *before* applying it, so exactly one replica ingests. |
+| Sessions, CSRF, OIDC state | Cookie-based off `ORBITAL_SESSION_HMAC_KEY`. No session store, no sticky sessions. |
+| Caching | Every cache is per-request by design. Valkey is not required. |
+
+### Requirements
+
+- **Highly available PostgreSQL.** It holds all coordination state.
+- **Highly available DGraph.** Orbital in front of a single alpha is not highly
+  available however many orbital pods run. See the DGraph chart values —
+  `zero.replicaCount` and `alpha.replicaCount` are `1` in `values-dev.yaml`.
+- **`ReadWriteMany` export volumes**, so any replica can serve a download any
+  other replica produced. Both PVCs already use `azurefile-csi`.
+- All replicas must share `ORBITAL_SESSION_HMAC_KEY` (one Secret — already the case).
+
+### Known limits
+
+- **Rate limiting is per-pod and therefore approximate.** The effective ceiling
+  is `ORBITAL_RATE_LIMIT_RPS x replicas`, including the tighter login bucket.
+  Divide the configured value by the expected replica count. Making it exact
+  would promote Valkey from optimisation to hard dependency.
+- **The connection pool is per-pod too.** Total load on PostgreSQL is
+  `DefaultMaxConns (10) x replicas`; keep it under `max_connections`.
+- **`strategy: Recreate` with no PodDisruptionBudget** means orbital is still
+  down during every deploy and every node drain — at any replica count. Fixing
+  that is a separate change from replica safety.

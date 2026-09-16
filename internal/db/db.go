@@ -10,7 +10,9 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 )
 
-// DefaultMaxConns caps the pool. Orbital is a single replica serving a UI and a
+// DefaultMaxConns caps the pool PER REPLICA — total load on PostgreSQL is
+// DefaultMaxConns x replicas, which must stay under the server's
+// max_connections. Orbital serves a UI and a
 // GraphQL proxy; the ent client and the backup advisory lock share this pool.
 const DefaultMaxConns = 10
 

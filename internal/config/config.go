@@ -166,7 +166,25 @@ type Config struct {
 	//   "configbundle-bundler=http://localhost:8020/bundle"
 	// or comma-separated for multiple bundlers. Bare URLs (no `=`) are also
 	// accepted for back-compat; the name defaults to the URL host.
-	BundlerURLs       []string      `envconfig:"ORBITAL_BUNDLER_URLS"                default:"configbundle-bundler=http://localhost:8020/bundle"`
+	BundlerURLs []string `envconfig:"ORBITAL_BUNDLER_URLS"                default:"configbundle-bundler=http://localhost:8020/bundle"`
+	// Job leases (HA). The staleness threshold does NOT need to exceed job
+	// duration — that is the difference between a refreshed heartbeat and a
+	// static claim timestamp; it need only exceed one interval plus the worst
+	// plausible pause. Wider than controller-runtime's 15s lease because a
+	// false positive kills a live restore, where a controller merely re-elects.
+	// OrphanGrace applies ONLY to jobs with no heartbeat at all — those left
+	// running by the deploy that introduced leases, which under a rolling
+	// update may still be executing in the outgoing pod.
+	// MigrationLockTimeout bounds how long a replica waits for another
+	// replica's schema migration. The wait is legitimate — the holder is
+	// migrating — so this is generous; exceeding it is reported as a
+	// diagnosable error rather than a hang. See internal/db.Migrate.
+	MigrationLockTimeout time.Duration `envconfig:"ORBITAL_MIGRATION_LOCK_TIMEOUT" default:"5m"`
+
+	JobHeartbeatInterval time.Duration `envconfig:"ORBITAL_JOB_HEARTBEAT_INTERVAL" default:"10s"`
+	JobStaleAfter        time.Duration `envconfig:"ORBITAL_JOB_STALE_AFTER"        default:"60s"`
+	JobOrphanGrace       time.Duration `envconfig:"ORBITAL_JOB_ORPHAN_GRACE"       default:"1h"`
+
 	RestoreTimeout    time.Duration `envconfig:"ORBITAL_RESTORE_TIMEOUT"         default:"10m"`
 	ExportTimeout     time.Duration `envconfig:"ORBITAL_EXPORT_TIMEOUT"          default:"30m"`
 	BackupTimeout     time.Duration `envconfig:"ORBITAL_BACKUP_TIMEOUT"          default:"30m"`

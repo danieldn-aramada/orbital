@@ -20,7 +20,8 @@ Every entry is **open**. Closed items are **deleted, not struck through** — `C
 | `orb scan` fabricates success | Med | Returns a hardcoded "Found 3 BMC interfaces" instead of "not implemented". `scan.go:16` |
 | DGraph query string interpolation | Med | Parameterize — `export.go:1012`, `:1105`, `:1279` (bare `%s`). |
 | Export/restore job-creation TOCTOU | Med | Concurrent triggers corrupt scratch DGraph; serialize with a mutex or unique partial index. `export.go` |
-| Async jobs orphaned on shutdown | Med | SIGTERM mid-restore can leave DGraph wiped. Needs WaitGroup + cancellable ctx. `restore.go:286` |
+| Async jobs orphaned on shutdown | Med | SIGTERM mid-restore can leave DGraph wiped. The reaper now marks the row failed, but the work itself is still not drained — needs WaitGroup + cancellable ctx. `restore.go` |
+| Orbital deploys with downtime — `Recreate`, no PDB | Med | Replica safety shipped 2026-09-16; this did not. `strategy: Recreate` with no PodDisruptionBudget means orbital is down during every deploy and node drain, at any replica count. → [deploy/README.md](../../deploy/README.md) |
 | OIDC nonce + constant-time state | Med | Add `nonce` binding; `subtle.ConstantTimeCompare` for state. `oidc.go:95` |
 | OIDC config ships real Armada identifiers as defaults | Med | Blank tenant/app-ID/authority before OSS. → [AUTH.md](../reference/AUTH.md) |
 | `docs/auth.md` documents two auth flows; orbital has three | Med | external-jwt is missing and the default changed under it. `config.go:122` |
@@ -57,7 +58,6 @@ A 15–20 min design session before implementation — these have a choice in th
 
 | Item | Sev | Notes |
 |---|---|---|
-| Orbital HA — pervasive single-replica assumptions | Hi | Do **not** scale past `replicas: 1`. → [deploy/README.md](../../deploy/README.md) |
 | DGraph client abstraction | Med | 30 raw `http.Post`/`NewRequest` calls across 12 handler files. |
 | `internal/handler/` god package | Med | 16,604 lines across 33 files. |
 | Registry-driven orbId derivation | Med | Kill the `leafSuffix` escape hatch. `registry.go:633` → [DGRAPH.md](../reference/DGRAPH.md) |

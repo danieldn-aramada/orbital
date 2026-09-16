@@ -111,6 +111,16 @@ func CompletedAt(v time.Time) predicate.ExportJob {
 	return predicate.ExportJob(sql.FieldEQ(FieldCompletedAt, v))
 }
 
+// LockedBy applies equality check predicate on the "locked_by" field. It's identical to LockedByEQ.
+func LockedBy(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldEQ(FieldLockedBy, v))
+}
+
+// HeartbeatAt applies equality check predicate on the "heartbeat_at" field. It's identical to HeartbeatAtEQ.
+func HeartbeatAt(v time.Time) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldEQ(FieldHeartbeatAt, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.ExportJob {
 	return predicate.ExportJob(sql.FieldEQ(FieldCreatedAt, v))
@@ -824,6 +834,131 @@ func CompletedAtIsNil() predicate.ExportJob {
 // CompletedAtNotNil applies the NotNil predicate on the "completed_at" field.
 func CompletedAtNotNil() predicate.ExportJob {
 	return predicate.ExportJob(sql.FieldNotNull(FieldCompletedAt))
+}
+
+// LockedByEQ applies the EQ predicate on the "locked_by" field.
+func LockedByEQ(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldEQ(FieldLockedBy, v))
+}
+
+// LockedByNEQ applies the NEQ predicate on the "locked_by" field.
+func LockedByNEQ(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldNEQ(FieldLockedBy, v))
+}
+
+// LockedByIn applies the In predicate on the "locked_by" field.
+func LockedByIn(vs ...string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldIn(FieldLockedBy, vs...))
+}
+
+// LockedByNotIn applies the NotIn predicate on the "locked_by" field.
+func LockedByNotIn(vs ...string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldNotIn(FieldLockedBy, vs...))
+}
+
+// LockedByGT applies the GT predicate on the "locked_by" field.
+func LockedByGT(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldGT(FieldLockedBy, v))
+}
+
+// LockedByGTE applies the GTE predicate on the "locked_by" field.
+func LockedByGTE(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldGTE(FieldLockedBy, v))
+}
+
+// LockedByLT applies the LT predicate on the "locked_by" field.
+func LockedByLT(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldLT(FieldLockedBy, v))
+}
+
+// LockedByLTE applies the LTE predicate on the "locked_by" field.
+func LockedByLTE(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldLTE(FieldLockedBy, v))
+}
+
+// LockedByContains applies the Contains predicate on the "locked_by" field.
+func LockedByContains(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldContains(FieldLockedBy, v))
+}
+
+// LockedByHasPrefix applies the HasPrefix predicate on the "locked_by" field.
+func LockedByHasPrefix(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldHasPrefix(FieldLockedBy, v))
+}
+
+// LockedByHasSuffix applies the HasSuffix predicate on the "locked_by" field.
+func LockedByHasSuffix(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldHasSuffix(FieldLockedBy, v))
+}
+
+// LockedByIsNil applies the IsNil predicate on the "locked_by" field.
+func LockedByIsNil() predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldIsNull(FieldLockedBy))
+}
+
+// LockedByNotNil applies the NotNil predicate on the "locked_by" field.
+func LockedByNotNil() predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldNotNull(FieldLockedBy))
+}
+
+// LockedByEqualFold applies the EqualFold predicate on the "locked_by" field.
+func LockedByEqualFold(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldEqualFold(FieldLockedBy, v))
+}
+
+// LockedByContainsFold applies the ContainsFold predicate on the "locked_by" field.
+func LockedByContainsFold(v string) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldContainsFold(FieldLockedBy, v))
+}
+
+// HeartbeatAtEQ applies the EQ predicate on the "heartbeat_at" field.
+func HeartbeatAtEQ(v time.Time) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldEQ(FieldHeartbeatAt, v))
+}
+
+// HeartbeatAtNEQ applies the NEQ predicate on the "heartbeat_at" field.
+func HeartbeatAtNEQ(v time.Time) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldNEQ(FieldHeartbeatAt, v))
+}
+
+// HeartbeatAtIn applies the In predicate on the "heartbeat_at" field.
+func HeartbeatAtIn(vs ...time.Time) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldIn(FieldHeartbeatAt, vs...))
+}
+
+// HeartbeatAtNotIn applies the NotIn predicate on the "heartbeat_at" field.
+func HeartbeatAtNotIn(vs ...time.Time) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldNotIn(FieldHeartbeatAt, vs...))
+}
+
+// HeartbeatAtGT applies the GT predicate on the "heartbeat_at" field.
+func HeartbeatAtGT(v time.Time) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldGT(FieldHeartbeatAt, v))
+}
+
+// HeartbeatAtGTE applies the GTE predicate on the "heartbeat_at" field.
+func HeartbeatAtGTE(v time.Time) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldGTE(FieldHeartbeatAt, v))
+}
+
+// HeartbeatAtLT applies the LT predicate on the "heartbeat_at" field.
+func HeartbeatAtLT(v time.Time) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldLT(FieldHeartbeatAt, v))
+}
+
+// HeartbeatAtLTE applies the LTE predicate on the "heartbeat_at" field.
+func HeartbeatAtLTE(v time.Time) predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldLTE(FieldHeartbeatAt, v))
+}
+
+// HeartbeatAtIsNil applies the IsNil predicate on the "heartbeat_at" field.
+func HeartbeatAtIsNil() predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldIsNull(FieldHeartbeatAt))
+}
+
+// HeartbeatAtNotNil applies the NotNil predicate on the "heartbeat_at" field.
+func HeartbeatAtNotNil() predicate.ExportJob {
+	return predicate.ExportJob(sql.FieldNotNull(FieldHeartbeatAt))
 }
 
 // HasRegistryArtifacts applies the HasEdge predicate on the "registry_artifacts" edge.

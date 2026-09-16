@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -17,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"entgo.io/ent/dialect/sql"
+	entsql "entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/registryartifact"
@@ -56,8 +57,10 @@ type Export struct {
 	scratchExportDir      string // host-side mount of /dgraph/export in scratch container
 	schemaPath            string // path to the GraphQL schema file
 	logger                *slog.Logger
-	basePath              string        // URL base path for fragment-rendered hx-* attributes
-	timeout               time.Duration // max duration for the async export goroutine
+	basePath              string         // URL base path for fragment-rendered hx-* attributes
+	timeout               time.Duration  // max duration for the async export goroutine
+	leaseCfg              JobLeaseConfig // job-lease durations; zero values fall back to defaults
+	rawDB                 *sql.DB        // advisory locks for job admission; nil disables them
 	// Bundler settings for Download's on-the-fly bundle assembly. When set,
 	// Download calls each configured bundler and packages its layers alongside
 	// data.json.gz + schema.gz into a courier-ready zip. When empty, Download
@@ -90,6 +93,14 @@ func (h *Export) SetTimeout(d time.Duration) { h.timeout = d }
 // can call bundlers on the fly and package the result as a courier-ready zip.
 // urls is a slice of "name=url" specs (parsed via bundler.ParseSpec). Empty urls
 // keeps the plain-zip download behavior.
+// SetJobCoordination supplies the job-lease durations. Follows the SetBundlers /
+// SetIngester pattern rather than widening the constructor, so existing
+// callers and tests are unaffected; zero values fall back to defaults.
+func (h *Export) SetJobCoordination(cfg JobLeaseConfig, rawDB *sql.DB) {
+	h.leaseCfg = cfg
+	h.rawDB = rawDB
+}
+
 func (h *Export) SetBundlers(urls []string, timeout time.Duration, opts ...bundler.ClientOption) {
 	h.defaultBundlerURLs = urls
 	h.bundlerTimeout = timeout
@@ -144,6 +155,14 @@ type statusResponse struct {
 	Error       *string `json:"error,omitempty"`
 	CompletedAt *string `json:"completedAt,omitempty"`
 	CreatedAt   string  `json:"createdAt"`
+	// LockedBy names the runner executing this job, as <hostname>_<uuid>.
+	// Surfaced so an operator investigating a stuck or reaped job knows which
+	// pod to look at — the reason the column holds a readable locator rather
+	// than a bare token. Absent for jobs no runner has claimed.
+	LockedBy *string `json:"lockedBy,omitempty" example:"orbital-7d9f8c6b5-x2kqp_5f1c2e2a-..."`
+	// HeartbeatAt is when the runner last proved it was alive. A running job
+	// whose heartbeat has stopped advancing is about to be reaped.
+	HeartbeatAt *string `json:"heartbeatAt,omitempty" example:"2026-09-16T10:04:11Z"`
 }
 
 // Trigger handles POST /api/v1/export
@@ -198,6 +217,16 @@ func (h *Export) Trigger(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "could not resolve datacenter: "+err.Error())
 	}
+
+	// Admission is a check-then-create: two triggers landing on two replicas
+	// would otherwise both find "nothing running" and both proceed. The
+	// advisory lock makes the whole window exclusive. Transaction-scoped, so
+	// a crashed admitter cannot hold it.
+	releaseAdmission, err := acquireAdmissionLock(c.Request().Context(), h.rawDB)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "could not acquire job admission lock: "+err.Error())
+	}
+	defer releaseAdmission()
 
 	// Scratch DGraph is shared — only one export can run at a time across all data centers.
 	existing, err := h.db.ExportJob.Query().
@@ -284,7 +313,7 @@ func (h *Export) Trigger(c echo.Context) error {
 // @Router      /api/v1/export/jobs [get]
 func (h *Export) List(c echo.Context) error {
 	jobs, err := h.db.ExportJob.Query().
-		Order(exportjob.ByCreatedAt(sql.OrderDesc())).
+		Order(exportjob.ByCreatedAt(entsql.OrderDesc())).
 		Limit(50).
 		All(c.Request().Context())
 	if err != nil {
@@ -421,6 +450,11 @@ func (h *Export) Status(c echo.Context) error {
 	}
 	if job.Error != nil {
 		resp.Error = job.Error
+	}
+	resp.LockedBy = job.LockedBy
+	if job.HeartbeatAt != nil {
+		hb := job.HeartbeatAt.Format(time.RFC3339)
+		resp.HeartbeatAt = &hb
 	}
 	if job.CompletedAt != nil {
 		s := job.CompletedAt.Format(time.RFC3339)
@@ -765,13 +799,27 @@ func (h *Export) runExport(jobID uuid.UUID, download bool, actor string, dcOrbID
 		}
 	}()
 
-	if _, err := h.db.ExportJob.UpdateOneID(jobID).
-		SetStatus(exportjob.StatusRunning).
-		SetStartedAt(time.Now()).
-		Save(ctx); err != nil {
-		log.Error("failed to mark job running", "err", err)
+	// Claim before doing any work. The claim is a conditional UPDATE on
+	// status='pending', so exactly one runner wins it however many replicas
+	// are running; losing means someone else owns this job and we must not
+	// touch the shared scratch DGraph.
+	claimed, err := claimExportJob(ctx, h.db, jobID, runnerID)
+	if err != nil {
+		log.Error("failed to claim export job", "err", err)
 		return
 	}
+	if !claimed {
+		log.Warn("export job not claimed — another runner owns it", "runner", runnerID)
+		return
+	}
+
+	// Prove liveness until the job ends. Losing the lease cancels ctx, so
+	// doExport and publishFn abort rather than racing the replacement runner.
+	leaseCtx, leaseDone := context.WithCancel(ctx)
+	defer leaseDone()
+	go keepLease(leaseCtx, h.leaseCfg.withDefaults().HeartbeatInterval, log, jobID.String(),
+		func(c context.Context) (bool, error) { return beatExportJob(c, h.db, jobID, runnerID) },
+		cancel)
 
 	if err := h.doExport(ctx, jobID, log, pinned); err != nil {
 		log.Error("export failed", "err", err)
@@ -802,12 +850,18 @@ func (h *Export) runExport(jobID uuid.UUID, download bool, actor string, dcOrbID
 	// retainZip stays false → defer removes the zip. OCI has the bytes.
 }
 
-// markFailed writes the terminal failure state for the ExportJob row.
+// markFailed writes the terminal failure state for the ExportJob row, fenced
+// on locked_by so a superseded runner cannot fail the job that replaced it.
+// Uses a detached context: the job's own context is usually already cancelled
+// by the time a failure is being recorded.
 func (h *Export) markFailed(ctx context.Context, jobID uuid.UUID, errStr string) {
-	h.db.ExportJob.UpdateOneID(jobID). //nolint:errcheck
-						SetStatus(exportjob.StatusFailed).
-						SetError(errStr).
-						Save(ctx)
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	h.db.ExportJob.Update(). //nolint:errcheck
+					Where(exportjob.ID(jobID), exportjob.LockedByEQ(runnerID)).
+					SetStatus(exportjob.StatusFailed).
+					SetError(errStr).
+					Save(writeCtx)
 }
 
 // derivePhase collapses ExportJob + RegistryArtifact state into a single
@@ -990,13 +1044,22 @@ func (h *Export) doExport(ctx context.Context, jobID uuid.UUID, log *slog.Logger
 	}
 	log.Info("artifact written", "path", zipPath)
 
-	// 12. Mark completed
-	_, err = h.db.ExportJob.UpdateOneID(jobID).
+	// 12. Mark completed — fenced on locked_by. A runner that lost its lease
+	// between the last heartbeat and here must not overwrite the terminal
+	// state of the run that replaced it.
+	n, err := h.db.ExportJob.Update().
+		Where(exportjob.ID(jobID), exportjob.LockedByEQ(runnerID)).
 		SetStatus(exportjob.StatusCompleted).
 		SetArtifactPath(zipPath).
 		SetCompletedAt(time.Now()).
 		Save(ctx)
-	return err
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("lease lost during export — another runner owns job %s", jobID)
+	}
+	return nil
 }
 
 // ── DGraph helpers ────────────────────────────────────────────────────────────

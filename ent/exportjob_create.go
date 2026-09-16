@@ -166,6 +166,34 @@ func (_c *ExportJobCreate) SetNillableCompletedAt(v *time.Time) *ExportJobCreate
 	return _c
 }
 
+// SetLockedBy sets the "locked_by" field.
+func (_c *ExportJobCreate) SetLockedBy(v string) *ExportJobCreate {
+	_c.mutation.SetLockedBy(v)
+	return _c
+}
+
+// SetNillableLockedBy sets the "locked_by" field if the given value is not nil.
+func (_c *ExportJobCreate) SetNillableLockedBy(v *string) *ExportJobCreate {
+	if v != nil {
+		_c.SetLockedBy(*v)
+	}
+	return _c
+}
+
+// SetHeartbeatAt sets the "heartbeat_at" field.
+func (_c *ExportJobCreate) SetHeartbeatAt(v time.Time) *ExportJobCreate {
+	_c.mutation.SetHeartbeatAt(v)
+	return _c
+}
+
+// SetNillableHeartbeatAt sets the "heartbeat_at" field if the given value is not nil.
+func (_c *ExportJobCreate) SetNillableHeartbeatAt(v *time.Time) *ExportJobCreate {
+	if v != nil {
+		_c.SetHeartbeatAt(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *ExportJobCreate) SetID(v uuid.UUID) *ExportJobCreate {
 	_c.mutation.SetID(v)
@@ -341,6 +369,14 @@ func (_c *ExportJobCreate) createSpec() (*ExportJob, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CompletedAt(); ok {
 		_spec.SetField(exportjob.FieldCompletedAt, field.TypeTime, value)
 		_node.CompletedAt = &value
+	}
+	if value, ok := _c.mutation.LockedBy(); ok {
+		_spec.SetField(exportjob.FieldLockedBy, field.TypeString, value)
+		_node.LockedBy = &value
+	}
+	if value, ok := _c.mutation.HeartbeatAt(); ok {
+		_spec.SetField(exportjob.FieldHeartbeatAt, field.TypeTime, value)
+		_node.HeartbeatAt = &value
 	}
 	if nodes := _c.mutation.RegistryArtifactsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

@@ -157,6 +157,21 @@ Tests share the same orbital instance and seeded DGraph. Tests that mutate data 
 
 ---
 
+## Multi-replica behaviour
+
+**A guarantee about N processes must be validated with N processes.** Concurrent requests to one instance, and racing goroutines in one test process, exercise the *database* guarantee only — they do not prove that a second replica booting leaves the first replica's running job alone, which is the failure this class of work exists to prevent.
+
+Run a second replica locally; `ORBITAL_PORT` is all it takes, and both share the same PostgreSQL and DGraph:
+
+```bash
+ORBITAL_PORT=8001 ./bin/orbital &
+ORBITAL_PORT=8002 ./bin/orbital &
+```
+
+**Demonstrate the regression, not only the fix.** A throwaway binary built from the pre-change code path, pointed at the same row, turns "this would have been destructive" from a claim into evidence. Revert it immediately.
+
+**Grep the process's own startup log for every setting you passed** before trusting the run. An experiment whose flags were ignored looks exactly like one that passed. Note that **zsh does not word-split unquoted variables**, so `env $COMMON ./bin/orbital` sends the entire string as ONE assignment and silently drops the rest — pass vars explicitly.
+
 ## Async Pipeline Testing
 
 Export, backup, OCI publish, and restore are all async -- triggered by an HTTP call, run in a goroutine, polled for completion.
