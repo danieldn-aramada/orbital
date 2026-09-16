@@ -43,12 +43,8 @@
         </span>
       </a>
 
-      {{if .RatelURL}}
-      {{if eq .RatelURL "#"}}
-      <a class="navbar-item todo" href="#">
-      {{else}}
-      <a class="navbar-item" href="{{.RatelURL}}" target="_blank" rel="noopener">
-      {{end}}
+      {{if .UI.RatelPath}}
+      <a class="navbar-item" href="{{.BasePath}}{{.UI.RatelPath}}" target="_blank" rel="noopener">
         <span class="icon-text">
           <span class="icon has-text-warning">
             <i class="fa-solid fa-bolt"></i>

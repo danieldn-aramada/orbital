@@ -22,6 +22,12 @@ type UIConfig struct {
 	// Both orbital and orb use "/graphql" — GraphQL is not URL-versioned,
 	// per convention (GitHub, GitLab, NetBox, Apollo). See CLAUDE.md.
 	GraphQLPath string
+	// RatelPath is the navbar link target for Ratel, proxied by orbital's own
+	// RatelProxy handler at BasePath+"/dgraph". Relative (not RatelURL, which is
+	// absolute) so the link stays on whatever host:port is currently serving
+	// the page — a direct pod port-forward included. Empty in orb, which has
+	// no DGraph/Ratel of its own.
+	RatelPath string
 	// AuditPanelLimit is rendered into window.ORBITAL_CONFIG and read by
 	// shared.js when fetching in-page audit tabs. Defaults to
 	// AuditPanelDefaultLimit; override per-page only if a panel genuinely

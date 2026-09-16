@@ -214,6 +214,7 @@ func (h *UI) base(c echo.Context) layout.Base {
 			ShowAuth:        true,
 			APIDocPath:      h.basePath + "/swagger/index.html",
 			GraphQLPath:     "/graphql",
+			RatelPath:       "/dgraph/",
 			AuditPanelLimit: layout.AuditPanelDefaultLimit,
 			MoreLinks: []layout.NavItem{
 				{Label: "GitHub", URL: "https://github.com/danieldn-aramada/demo"},
