@@ -168,7 +168,7 @@ func requestError(err error, base string) error {
 }
 
 const dcFields = `
-  id name orbId createdBy createdAt updatedBy updatedAt assetDataV2
+  id name orbId createdBy createdAt updatedBy updatedAt assetDataV2 model
   namespace
   racks(order: { asc: name }) { id orbId name }
   serversAggregate { count }
@@ -188,6 +188,7 @@ type dcSummary struct {
 	UpdatedBy   string `json:"updatedBy"`
 	UpdatedAt   string `json:"updatedAt"`
 	AssetDataV2 string `json:"assetDataV2"`
+	Model       string `json:"model"`
 	Namespace   string `json:"namespace"`
 	Racks       []struct {
 		ID    string `json:"id"`

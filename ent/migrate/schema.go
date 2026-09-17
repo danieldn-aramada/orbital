@@ -269,6 +269,13 @@ var (
 		Name:       "backups",
 		Columns:    BackupsColumns,
 		PrimaryKey: []*schema.Column{BackupsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "backup_status",
+				Unique:  false,
+				Columns: []*schema.Column{BackupsColumns[5]},
+			},
+		},
 	}
 	// DivergenceEntriesColumns holds the columns for the "divergence_entries" table.
 	DivergenceEntriesColumns = []*schema.Column{
@@ -371,6 +378,13 @@ var (
 		Name:       "export_jobs",
 		Columns:    ExportJobsColumns,
 		PrimaryKey: []*schema.Column{ExportJobsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "exportjob_status",
+				Unique:  false,
+				Columns: []*schema.Column{ExportJobsColumns[8]},
+			},
+		},
 	}
 	// MergeAttemptsColumns holds the columns for the "merge_attempts" table.
 	MergeAttemptsColumns = []*schema.Column{
@@ -480,6 +494,13 @@ var (
 		Name:       "restore_jobs",
 		Columns:    RestoreJobsColumns,
 		PrimaryKey: []*schema.Column{RestoreJobsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "restorejob_status",
+				Unique:  false,
+				Columns: []*schema.Column{RestoreJobsColumns[5]},
+			},
+		},
 	}
 	// UsersColumns holds the columns for the "users" table.
 	UsersColumns = []*schema.Column{

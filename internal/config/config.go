@@ -108,25 +108,32 @@ type Config struct {
 	// policy administration writes PostgreSQL, never DGraph, so it is never
 	// itself gated.
 	ChangeControlEnabled bool `envconfig:"ORBITAL_CHANGE_CONTROL_ENABLED" default:"true"`
-	// OIDCIssuerURL defaults to the Azure AD tenant URL so the SSO login button
-	// is available in `make run-orbital` for daily UI work (provided the user
-	// also sets ORBITAL_OIDC_CLIENT_SECRET). In dev mode (ORBITAL_DEV=true),
+	// OIDC identifiers have NO defaults on purpose: a tenant or client id baked
+	// in as a default silently points someone else's deployment at OUR identity
+	// provider. They are public values, not secrets, so this is about wrong
+	// defaults rather than disclosure. Empty disables SSO (server.go gates on
+	// OIDCIssuerURL and OIDCClientSecret both being set) and the password login
+	// still works, so `make run-orbital` needs no setup. For local SSO, copy
+	// deploy/local/orbital.env.example to deploy/local/orbital.env — the
+	// Makefile sources it when present. In dev mode (ORBITAL_DEV=true),
 	// bearer auth on /api/v1 + /graphql is bypassed at the middleware layer
 	// (see internal/server/server.go), so machine-to-machine callers like
 	// cb-bundler can query without an OAuth2 token. Production (Dev=false)
 	// enforces bearer auth strictly.
-	OIDCIssuerURL    string `envconfig:"ORBITAL_OIDC_ISSUER_URL"         default:"https://login.microsoftonline.com/8f231c2a-9551-4b40-be17-5b24afe5e890/v2.0"`
-	OIDCClientID     string `envconfig:"ORBITAL_OIDC_CLIENT_ID"          default:"5fc832f6-843e-4207-93dd-b3c3a77c06f2"`
+	OIDCIssuerURL    string `envconfig:"ORBITAL_OIDC_ISSUER_URL"         default:""`
+	OIDCClientID     string `envconfig:"ORBITAL_OIDC_CLIENT_ID"          default:""`
 	OIDCClientSecret string `envconfig:"ORBITAL_OIDC_CLIENT_SECRET"      default:""`
 	OIDCRedirectURL  string `envconfig:"ORBITAL_OIDC_REDIRECT_URL"       default:"http://localhost:8001/auth/callback"`
 	OAuth2DeviceCode bool   `envconfig:"ORBITAL_OAUTH2_DEVICE_CODE"      default:"true"` // enables device code flow for browser SSO; set false to use Authorization Code + PKCE (requires publicly resolvable redirect URI). RFC 8628 — OAuth 2.0, not OIDC despite living next to ORBITAL_OIDC_* settings.
 	// AppTokenAllowedAppIDs gates which app-only (client-credentials) bearer
-	// tokens orbital accepts on /api/v1 and /graphql. Defaults to allowing
-	// only the orbital app itself (in-pod cb-bundler authenticates as the
-	// orbital app via client credentials). Set explicitly to widen for other
-	// internal callers, or empty to allow any AAD app token bound to the
-	// orbital audience. See docs/reference/AUTH.md § App Caller Authorization.
-	AppTokenAllowedAppIDs []string `envconfig:"ORBITAL_APP_TOKEN_ALLOWED_APPIDS" default:"5fc832f6-843e-4207-93dd-b3c3a77c06f2"`
+	// tokens orbital accepts on /api/v1 and /graphql. EMPTY DENIES every app
+	// token: a deployment that uses them must list the application ids, or "*"
+	// to accept any app token already bound to the orbital audience. There is
+	// deliberately no default app id — "unconfigured" and "allow everything"
+	// must not be the same input, and a baked-in id belongs to a deployment,
+	// not to the code. deploy/base/deploy.yaml sets it for the in-pod
+	// cb-bundler. See docs/reference/AUTH.md § App Caller Authorization.
+	AppTokenAllowedAppIDs []string `envconfig:"ORBITAL_APP_TOKEN_ALLOWED_APPIDS" default:""`
 	AdminEmails           string   `envconfig:"ORBITAL_ADMIN_EMAILS"            default:"admin@armada.ai"` // comma-separated emails promoted to admin on first OIDC login
 	// AuthMode selects the authentication stack. Empty (default) keeps today's
 	// behavior — session cookie + optional OIDC bearer per OIDCIssuerURL. Set to

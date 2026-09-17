@@ -19,6 +19,5 @@ func Execute() {
 
 func init() {
 	rootCmd.AddCommand(startCmd)
-	rootCmd.AddCommand(scanCmd)
 	rootCmd.AddCommand(loginCmd)
 }

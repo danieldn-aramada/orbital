@@ -272,7 +272,11 @@ func TestRequireAuth_WrongAudience_Returns401(t *testing.T) {
 func TestRequireAuth_AppOnlyToken_v1_Accepted(t *testing.T) {
 	issuerURL, sign := newTestOIDCServer(t)
 
-	v, err := NewBearerVerifier(context.Background(), issuerURL, "orbital-test", nil)
+	// Allowlisted explicitly: this test is about v1 `appid` / v2 `azp` claim
+	// shape, not authorization. It passed with nil until 2026-09-17 only
+	// because an empty allowlist used to allow everything.
+	v, err := NewBearerVerifier(context.Background(), issuerURL, "orbital-test",
+		[]string{"5fc832f6-843e-4207-93dd-b3c3a77c06f2"})
 	if err != nil {
 		t.Fatalf("NewBearerVerifier: %v", err)
 	}
@@ -314,7 +318,11 @@ func TestRequireAuth_AppOnlyToken_v1_Accepted(t *testing.T) {
 func TestRequireAuth_AppOnlyToken_v2_AZP_Accepted(t *testing.T) {
 	issuerURL, sign := newTestOIDCServer(t)
 
-	v, err := NewBearerVerifier(context.Background(), issuerURL, "orbital-test", nil)
+	// Allowlisted explicitly: this test is about v1 `appid` / v2 `azp` claim
+	// shape, not authorization. It passed with nil until 2026-09-17 only
+	// because an empty allowlist used to allow everything.
+	v, err := NewBearerVerifier(context.Background(), issuerURL, "orbital-test",
+		[]string{"5fc832f6-843e-4207-93dd-b3c3a77c06f2"})
 	if err != nil {
 		t.Fatalf("NewBearerVerifier: %v", err)
 	}
@@ -411,5 +419,93 @@ func TestRequireAuth_AppOnlyToken_AllowlistAccepts(t *testing.T) {
 
 	if !called {
 		t.Errorf("next handler should be called for allowlisted appid")
+	}
+}
+
+// ── App-token allowlist ──────────────────────────────────────────────────────
+//
+// Empty means DENY and `*` means allow-any (2026-09-17). Before that, empty
+// skipped the check entirely, so a valid app token from ANY app bound to the
+// audience was accepted — the shape AWS eliminated from IAM/GitHub OIDC trust
+// policies after it was found exploitable in the wild. These four tests are the
+// guarantee; without the negatives a permanently-allowing gate would pass.
+
+// appTokenRequest signs an app-only token (no email/upn, appid set) and returns
+// a request carrying it, exercising the same middleware a real caller hits.
+func appTokenRequest(sign func(map[string]any) string, issuerURL, appID string) *http.Request {
+	tok := sign(map[string]any{
+		"iss": issuerURL, "aud": "orbital-test",
+		"exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Unix(),
+		"sub": appID, "appid": appID,
+	})
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	return req
+}
+
+func appTokenStatus(t *testing.T, allowed []string, appID string) int {
+	t.Helper()
+	issuerURL, sign := newTestOIDCServer(t)
+	v, err := NewBearerVerifier(context.Background(), issuerURL, "orbital-test", allowed)
+	if err != nil {
+		t.Fatalf("NewBearerVerifier: %v", err)
+	}
+	c, rec := echoCtx(appTokenRequest(sign, issuerURL, appID))
+	h := v.RequireAuth()(func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+	if err := h(c); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	return rec.Code
+}
+
+func TestAppTokenAllowlist_UnsetRejectsAppTokens(t *testing.T) {
+	for _, allowed := range [][]string{nil, {}, {""}, {"  "}} {
+		if got := appTokenStatus(t, allowed, "some-app"); got != http.StatusUnauthorized {
+			t.Errorf("allowed=%q: got %d, want 401 — an empty allowlist must DENY, not allow any app", allowed, got)
+		}
+	}
+}
+
+func TestAppTokenAllowlist_WildcardAcceptsAnyAppToken(t *testing.T) {
+	if got := appTokenStatus(t, []string{"*"}, "any-unlisted-app"); got != http.StatusOK {
+		t.Errorf("got %d, want 200 — `*` must accept any app token bound to the audience", got)
+	}
+}
+
+func TestAppTokenAllowlist_SpecificListAcceptsListedRejectsOthers(t *testing.T) {
+	if got := appTokenStatus(t, []string{"app-a", "app-b"}, "app-b"); got != http.StatusOK {
+		t.Errorf("listed app: got %d, want 200", got)
+	}
+	if got := appTokenStatus(t, []string{"app-a", "app-b"}, "app-c"); got != http.StatusUnauthorized {
+		t.Errorf("unlisted app: got %d, want 401", got)
+	}
+}
+
+func TestAppTokenAllowlist_UserTokensUnaffected(t *testing.T) {
+	// A user token carries an email; the allowlist gates app-only tokens and
+	// must not become a second gate on human callers.
+	issuerURL, sign := newTestOIDCServer(t)
+	v, err := NewBearerVerifier(context.Background(), issuerURL, "orbital-test", nil)
+	if err != nil {
+		t.Fatalf("NewBearerVerifier: %v", err)
+	}
+	tok := sign(map[string]any{
+		"iss": issuerURL, "aud": "orbital-test",
+		"exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Unix(),
+		"sub": "u1", "preferred_username": "dev@armada.ai", "name": "Dev",
+		"appid": "some-app", // present on user tokens too — must not trigger the gate
+	})
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	c, rec := echoCtx(req)
+	h := v.RequireAuth()(func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+	if err := h(c); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("user token got %d, want 200 — the app allowlist must not gate user callers", rec.Code)
+	}
+	if got := c.Get("user_email"); got != "dev@armada.ai" {
+		t.Errorf("user_email = %v, want dev@armada.ai", got)
 	}
 }

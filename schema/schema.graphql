@@ -3,7 +3,7 @@
 # Rules:
 #   - Schema changes must be backwards compatible. Orbs may be on older versions.
 #   - New types and nullable fields are safe. Removing or renaming fields is not.
-#   - Schema is NOT auto-applied on startup (yet — auto-apply is a tracked ROADMAP item).
+#   - Schema is NOT auto-applied on startup (auto-apply is tracked in docs/planning/debt.md).
 #     It is applied only by `make seed`, restore, export-to-scratch, and orb import. On any
 #     schema-version bump you MUST apply it to the target DGraph as a deploy step — see
 #     docs/reference/DGRAPH.md "Schema rules". A schema-bumping image deploy does NOT reach
@@ -57,8 +57,16 @@ interface ConfigItem {
 ########################
 # Config Items
 ########################
+enum DataCenterModel {
+    Beacon
+    Cruiser
+    Triton
+    Leviathan
+}
+
 type DataCenter implements ConfigItem {
     assetDataV2: String @search(by: [regexp]) # json
+    model: DataCenterModel @search(by: [hash])
 
     servers: [Server] @hasInverse(field: dataCenter)
     racks: [Rack] @hasInverse(field: dataCenter)

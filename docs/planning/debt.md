@@ -16,13 +16,11 @@ Every entry is **open**. Closed items are **deleted, not struck through** — `C
 |---|---|---|
 | Config editor Save is not atomic | Med | **Narrowed 2026-09-16** — pre-flight + sequential fail-fast means a detectable failure now writes nothing, and the exposure is milliseconds rather than minutes ([UI.md](../reference/UI.md)). What remains: a DGraph/network outage mid-sequence still partials, reported not silent. True atomicity needs one DQL transaction, which bypasses `@id`, `!` and `@hasInverse` — investigated and deferred, notes in `.local/editor-atomic-save-investigation.md`. |
 | Restore fails on macOS — `TMPDIR` vs the `/tmp` mount | Med | `restore.go:402` uses `os.MkdirTemp("")`; the dgraph host wrapper mounts only `/tmp`. Worse: `drop_all` runs *before* the load is proven possible. |
-| `orb scan` fabricates success | Med | Returns a hardcoded "Found 3 BMC interfaces" instead of "not implemented". `scan.go:16` |
 | DGraph query string interpolation | Med | Parameterize — `export.go:1012`, `:1105`, `:1279` (bare `%s`). |
 | Export/restore job-creation TOCTOU | Med | Concurrent triggers corrupt scratch DGraph; serialize with a mutex or unique partial index. `export.go` |
 | Async jobs orphaned on shutdown | Med | SIGTERM mid-restore can leave DGraph wiped. The reaper now marks the row failed, but the work itself is still not drained — needs WaitGroup + cancellable ctx. `restore.go` |
-| Orbital deploys with downtime — `Recreate`, no PDB | Med | Replica safety shipped 2026-09-16; this did not. `strategy: Recreate` with no PodDisruptionBudget means orbital is down during every deploy and node drain, at any replica count. → [deploy/README.md](../../deploy/README.md) |
+| `deploy/base` still deploys with downtime — `Recreate`, `replicas: 1`, no PDB | Med | Fixed in the `dev-netbox` overlay 2026-09-16, not in base — so an adopter copying `deploy/base` gets downtime on every deploy and drain while [deploy/README.md](../../deploy/README.md) § High availability tells them multi-replica is safe. |
 | OIDC nonce + constant-time state | Med | Add `nonce` binding; `subtle.ConstantTimeCompare` for state. `oidc.go:95` |
-| OIDC config ships real Armada identifiers as defaults | Med | Blank tenant/app-ID/authority before OSS. → [AUTH.md](../reference/AUTH.md) |
 | `docs/auth.md` documents two auth flows; orbital has three | Med | external-jwt is missing and the default changed under it. `config.go:122` |
 | No test asserts a destructive delete writes its audit event | Med | `delete.go` DC/Server/Cluster paths plus `backup.go:527`, `oci.go:206`. |
 | No e2e covers two concurrent edits | Med | The MVCC regression that motivated the spec has no browser-level test. |
@@ -39,8 +37,7 @@ Every entry is **open**. Closed items are **deleted, not struck through** — `C
 | UUIDv4 primary keys should be v7 | Low | 8 tables still `Default(uuid.New)`; helper at `ent/schema/uuidv7.go`. Do **not** rewrite existing ids — v4 and v7 coexist in one column. |
 | Edit-modal e2e covers 1 of 5 ConfigItem families | Low | Server only. |
 | `NewGraphQL` test constructions don't state their configuration | Low | ~23 remaining sites pass a flag they never exercise; prefer a named constructor. |
-| Orb registration not unique | Low | Unique indexes on `datacenter_id` + `public_key`. `ent/schema/orb.go` |
-| Job-status columns unindexed | Low | Conflict queries full-scan ExportJob/Backup/RestoreJob. |
+| The `Orb` ent type is a table with no writer | Low | **Blocked, not ready** — no code anywhere creates, queries or updates an `Orb` (the `orbs` table is empty), and no orb→orbital registration flow is designed in [ORB.md](../reference/ORB.md). The unique indexes this row used to ask for (`datacenter_id`, `public_key`) would encode a guess about registration semantics — one orb per DC? an HA pair? — with no consumer to check it against. Add them when registration is built, in the same change. |
 | Backup zip in `/tmp`, defer-only cleanup | Low | Write to a controlled dir + orphan reaper. `backup.go:627` |
 | Export scratch-dir leak | Low | Per-job dirs never removed. `export.go:948` → [OCI.md](../reference/OCI.md) for why the obvious fix is wrong |
 | GET `/export/jobs` writes to the DB | Low | `StatusStale` marking inside a List handler. `export.go:285` |
@@ -64,7 +61,7 @@ A 15–20 min design session before implementation — these have a choice in th
 | A changeset cannot distinguish ASSERTED from INCIDENTAL fields | Med | `set` is target end-state, so an untouched field is indistinguishable from one deliberately set. → [CHANGE-CONTROL.md](../reference/CHANGE-CONTROL.md) |
 | graphdiff surfaces build HTML in JavaScript | Med | Against the house pattern; convert whole surfaces only. → [UI.md](../reference/UI.md) |
 | Storage and Network panels cannot surface a proposed change | Med | The field-mark renderer assumes a field table. → [UI.md](../reference/UI.md) |
-| Auto-apply the DGraph GraphQL schema on startup | Med | Orbital does not apply `schema.graphql` on boot, so a schema-bumping deploy needs a manual step. → [DGRAPH.md](../reference/DGRAPH.md) |
+| Auto-apply the DGraph GraphQL schema on startup | Med | **Drift is now detected and reported** (boot log + `/schema` page, 2026-09-17); applying it is still manual. Before automating, settle which SDL diffs are safe unattended — `@search` on an existing predicate reads as additive and reindexes the whole graph. → [DGRAPH.md](../reference/DGRAPH.md) |
 
 ---
 

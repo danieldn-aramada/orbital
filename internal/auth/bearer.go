@@ -19,33 +19,53 @@ const AppPrincipalPrefix = "app:"
 type BearerVerifier struct {
 	verifier *gooidc.IDTokenVerifier
 
-	// allowedAppIDs, when non-empty, restricts which appid claims are accepted
-	// for app-only tokens. Empty means "any app token bound to the configured
-	// audience is allowed" — useful in dev but more permissive than typical
-	// production posture. See docs/reference/AUTH.md § App Caller Authorization.
+	// allowedAppIDs restricts which appid claims are accepted for app-only
+	// tokens. EMPTY DENIES every app token — omission is never permissive in an
+	// authorization allowlist. allowAnyAppID is the explicit opt-out, spelled
+	// "*". See docs/reference/AUTH.md § App Caller Authorization.
 	allowedAppIDs map[string]struct{}
+	allowAnyAppID bool
 }
+
+// AppIDWildcard accepts any app-only token whose signature, issuer and audience
+// already verified, regardless of which application minted it.
+//
+// It is spelled as a value rather than inferred from an empty list because
+// "I did not configure this" and "I intend to allow everything" must not be the
+// same input. That equivalence is a documented, exploited failure mode: AWS IAM
+// trust policies that omitted the `sub` condition accepted tokens from ANY
+// GitHub Actions workflow, and AWS now refuses to create such a policy at all.
+// Vault spells its wildcard "*" for the same reason; an Istio AuthorizationPolicy
+// with no rules denies rather than allows.
+const AppIDWildcard = "*"
 
 // NewBearerVerifier creates a verifier that validates OIDC bearer tokens
 // against the given issuer's JWKS. The audience string is the expected `aud`
 // claim — for Microsoft Entra v2.0 tokens this is the application's client ID
-// (the bare GUID). allowedAppIDs gates which app-only tokens are accepted; nil
-// or empty allows any.
+// (the bare GUID). allowedAppIDs gates which app-only tokens are accepted: nil
+// or empty rejects every app token, AppIDWildcard ("*") accepts any, and a list
+// accepts exactly those application ids.
 func NewBearerVerifier(ctx context.Context, issuerURL, audience string, allowedAppIDs []string) (*BearerVerifier, error) {
 	provider, err := gooidc.NewProvider(ctx, issuerURL)
 	if err != nil {
 		return nil, fmt.Errorf("oidc provider discovery: %w", err)
 	}
 	allowed := make(map[string]struct{}, len(allowedAppIDs))
+	anyApp := false
 	for _, id := range allowedAppIDs {
 		id = strings.TrimSpace(id)
-		if id != "" {
+		switch id {
+		case "":
+		case AppIDWildcard:
+			anyApp = true
+		default:
 			allowed[id] = struct{}{}
 		}
 	}
 	return &BearerVerifier{
 		verifier:      provider.Verifier(&gooidc.Config{ClientID: audience}),
 		allowedAppIDs: allowed,
+		allowAnyAppID: anyApp,
 	}, nil
 }
 
@@ -90,11 +110,10 @@ func (v *BearerVerifier) verifyBearer(c echo.Context, next echo.HandlerFunc, raw
 	// is present, email/upn are empty. Synthesize an actor string for audit
 	// attribution and gate on the allowlist if configured. See ADR 010.
 	if appID := claims.effectiveAppID(); email == "" && appID != "" {
-		if len(v.allowedAppIDs) > 0 {
-			if _, ok := v.allowedAppIDs[appID]; !ok {
-				slog.Warn("bearer token rejected — appid not in allowlist", "appid", appID)
-				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-			}
+		if !v.appIDAllowed(appID) {
+			slog.Warn("bearer token rejected — appid not in allowlist",
+				"appid", appID, "allowlist_size", len(v.allowedAppIDs))
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		}
 		c.Set("user_name", AppPrincipalPrefix+appID)
 		c.Set("user_email", "")
@@ -127,4 +146,14 @@ func (c azureClaims) effectiveAppID() string {
 		return c.AppID
 	}
 	return c.AZP
+}
+
+// appIDAllowed reports whether an app-only token from appID may proceed. An
+// unconfigured allowlist returns false for every appID — that is the point.
+func (v *BearerVerifier) appIDAllowed(appID string) bool {
+	if v.allowAnyAppID {
+		return true
+	}
+	_, ok := v.allowedAppIDs[appID]
+	return ok
 }

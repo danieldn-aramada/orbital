@@ -18,13 +18,25 @@
 
         <div class="column is-narrow">
           <article class="box" style="min-width: 280px;">
-            <p class="is-size-6 has-text-weight-semibold mb-3">Active Version</p>
+            <p class="is-size-6 has-text-weight-semibold mb-3">Applied Schema</p>
             <table class="table is-fullwidth is-size-7">
               <tbody>
-                <tr><td style="width:45%">Version</td><td><span class="tag is-info is-light">{{.Version}}</span></td></tr>
-                <tr><td>Checksum</td><td><code>{{.Checksum}}</code></td></tr>
+                <tr><td style="width:45%">Checksum</td><td><code>{{.Checksum}}</code></td></tr>
+                <tr><td>Build ships</td><td><span class="tag is-info is-light">{{.Version}}</span></td></tr>
+                <tr><td>Matches build</td><td>
+                  {{if .Drift}}<span class="has-text-danger has-text-weight-semibold">no — {{len .Drift}} missing</span>
+                  {{else}}<span class="has-text-success">yes</span>{{end}}
+                </td></tr>
               </tbody>
             </table>
+            {{if .Drift}}
+            <p class="is-size-7 has-text-danger mt-2">
+              DGraph is behind this build. Queries for these will fail:
+            </p>
+            <pre class="is-size-7 mt-2" style="max-height: 180px; overflow: auto;">{{range .Drift}}{{.}}
+{{end}}</pre>
+            <p class="is-size-7 mt-2">Orbital does not apply the schema — apply it to DGraph (deploy/README.md step 8).</p>
+            {{end}}
           </article>
         </div>
 

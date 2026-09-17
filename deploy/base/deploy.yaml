@@ -74,6 +74,13 @@ spec:
               value: https://login.microsoftonline.com/8f231c2a-9551-4b40-be17-5b24afe5e890/v2.0
             - name: ORBITAL_OIDC_CLIENT_ID
               value: 5fc832f6-843e-4207-93dd-b3c3a77c06f2
+            # App-only bearer callers. EMPTY DENIES ALL app tokens, so this must
+            # list every service that calls orbital with client credentials — today
+            # that is the in-pod cb-bundler below, which mints a token AS THE ORBITAL
+            # APP (same client id). "*" would accept any app token bound to the
+            # audience. See docs/reference/AUTH.md § App Caller Authorization.
+            - name: ORBITAL_APP_TOKEN_ALLOWED_APPIDS
+              value: 5fc832f6-843e-4207-93dd-b3c3a77c06f2
             - name: ORBITAL_OIDC_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
