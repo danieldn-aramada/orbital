@@ -239,8 +239,8 @@ var Types = []Type{
 	{
 		Name:             "DataCenter",
 		IsRoot:           true,
-		BeforeFields:     "id orbId name version assetDataV2",
-		FormFields:       []string{"name", "assetDataV2"},
+		BeforeFields:     "id orbId name version assetDataV2 model",
+		FormFields:       []string{"name", "assetDataV2", "model"},
 		JSONStringFields: []string{"assetDataV2"},
 		PayloadField:     "dataCenter",
 	},

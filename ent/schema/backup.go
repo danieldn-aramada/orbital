@@ -3,6 +3,7 @@ package schema
 import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 	"github.com/google/uuid"
 )
 
@@ -36,6 +37,13 @@ func (Backup) Fields() []ent.Field {
 		// that predate this, which the orphan grace handles.
 		field.String("locked_by").Optional().Nillable(),
 		field.Time("heartbeat_at").Optional().Nillable(),
+	}
+}
+
+func (Backup) Indexes() []ent.Index {
+	return []ent.Index{
+		// Conflict checks filter status IN (pending, running) on every job trigger.
+		index.Fields("status"),
 	}
 }
 

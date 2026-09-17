@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -670,12 +671,20 @@ func (h *UI) Schema(c echo.Context) error {
 		return fmt.Errorf("read schema version: %w", err)
 	}
 	sum := sha256.Sum256([]byte(sdl))
+	// The SDL above is what DGraph is RUNNING; version is what this build
+	// SHIPS. Orbital never applies the schema, so showing the two side by side
+	// without saying whether they agree is how a v8 graph gets captioned "v9".
+	var drift []string
+	if shipped, err := os.ReadFile(h.schemaPath); err == nil {
+		drift = dgraphschema.Drift(string(shipped), sdl)
+	}
 	return h.render(c, "schema", page.Schema{
 		Base:      h.base(c),
 		PageTitle: "Schema",
 		Version:   version,
 		Checksum:  fmt.Sprintf("%x", sum[:6]),
 		SDL:       sdl,
+		Drift:     drift,
 	})
 }
 

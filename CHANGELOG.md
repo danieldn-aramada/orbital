@@ -22,7 +22,42 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ## [Unreleased]
 
+### Removed
+- **`orb scan` is gone from the orb CLI.** It never scanned anything — it slept, printed a
+  hardcoded "Found 3 BMC interfaces" and a fake progress bar, then reported "Scan complete".
+  An operator running it against real hardware would have believed a discovery had happened.
+  The feature remains post-MVP (`docs/reference/ORB.md` § orb scan); only the placeholder
+  command is removed.
+
+### Added
+- **Orbital now reports when DGraph is running an older schema than the build ships.** It logs a
+  `WARN` at startup naming every missing declaration, and the Schema page states whether the applied
+  schema matches. Orbital still does not *apply* the schema — that remains a manual deploy step —
+  but forgetting it used to produce no signal at all until users hit 404s or silently truncated
+  pages (v0.0.25 queried `retentionDays` against a DGraph on v3; every cluster 404'd, 2026-07-27).
+  The Schema page previously labelled the shipped `schema/VERSION` as the "Active Version" beside
+  DGraph's real SDL, so it could caption a v8 graph "v9".
+
 ### Changed
+- **BREAKING — `ORBITAL_APP_TOKEN_ALLOWED_APPIDS` empty now DENIES every app-only bearer token.**
+  It previously skipped the allowlist check when empty, so any AAD app token bound to orbital's
+  audience was accepted regardless of which application minted it — the same shape AWS eliminated
+  from IAM/GitHub-Actions OIDC trust policies after it was found exploitable. The wildcard is now
+  explicit: set `*` for the old permissive behaviour. The default is no longer orbital's own app id
+  and is now empty, so **a deployment that authenticates any service with client credentials must
+  list its application ids or publish will 401** — `deploy/base/deploy.yaml` sets it for the in-pod
+  cb-bundler. User (non-app) tokens are unaffected.
+- **Job tables gained a `status` index** (`export_jobs`, `backups`, `restore_jobs`). Every job
+  trigger runs a conflict check filtering `status IN (pending, running)`, which previously scanned
+  the whole table. Applied by the boot migration; additive, no data change.
+- **`ORBITAL_OIDC_ISSUER_URL` and `ORBITAL_OIDC_CLIENT_ID` no longer have code defaults.** They
+  shipped defaulted to Armada's AAD tenant and app id — public identifiers rather than secrets, but
+  a default that silently points another organisation's deployment at our identity provider. Empty
+  disables SSO cleanly (password login is unaffected), so nothing breaks at zero configuration.
+  **A deployment relying on those defaults must now set both explicitly, or orbctl bearer tokens
+  will 401** — `deploy/base/deploy.yaml` already sets them. For local SSO, copy
+  `deploy/local/orbital.env.example` to `deploy/local/orbital.env`; `make run-orbital` sources it
+  when present and runs normally when it is absent.
 - **`orbId` is now unique across every ConfigItem type, enforced by DGraph** (`schema/VERSION` → `v8`).
   It was `@id`, which DGraph scopes *per implementing type* — a `Rack` and a `Server` could hold the
   same `orbId`, and only the `<kind>-` prefix convention kept them apart. A collision breaks reads

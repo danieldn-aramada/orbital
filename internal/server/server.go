@@ -16,6 +16,7 @@ import (
 	"github.com/armada/orbital/internal/auth"
 	"github.com/armada/orbital/internal/bundler"
 	"github.com/armada/orbital/internal/config"
+	"github.com/armada/orbital/internal/dgraphschema"
 	"github.com/armada/orbital/internal/divergenceingest"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/metrics"
@@ -686,6 +687,13 @@ func (s *Server) Start(ctx context.Context) error {
 	// Every replica runs the reaper; the advisory lock inside each sweep means
 	// only one does the work on any given tick.
 	go handler.StartReaper(ctx, s.db, s.rawDB, jobLeaseFromConfig(s.cfg), s.logger)
+
+	// Report, once, whether DGraph is actually running the schema this build
+	// ships. Orbital does not apply it (docs/reference/DGRAPH.md § Schema rules),
+	// so a schema-bumping deploy reaches a DGraph still on the old schema unless
+	// someone runs the manual step — and until this check existed, forgetting
+	// produced no signal until users hit 404s.
+	dgraphschema.StartCheck(ctx, s.cfg.DGraphAdminURL, s.cfg.SchemaPath, s.logger)
 
 	select {
 	case err := <-errCh:

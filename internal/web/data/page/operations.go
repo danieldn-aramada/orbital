@@ -74,7 +74,11 @@ type AuditLog struct {
 type Schema struct {
 	layout.Base
 	PageTitle string
-	Version   string
-	Checksum  string
-	SDL       string
+	// Version is what THIS BUILD ships (schema/VERSION), not what DGraph is
+	// running — orbital does not apply the schema, so the two can differ. Drift
+	// is what actually separates them; do not label Version as "active".
+	Version  string
+	Checksum string
+	SDL      string
+	Drift    []string
 }

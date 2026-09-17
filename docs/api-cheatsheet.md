@@ -100,6 +100,67 @@ Focused on iDRAC settings and backup config, not the full schema.
 query { queryDataCenter(filter: { assetDataV2: { regexp: "/<asset_id>/" } }) { orbId name assetDataV2 } }
 ```
 
+### Discover the valid `model` values (enum introspection)
+
+`DataCenter.model` is a GraphQL enum, so the valid set is readable from the API — clients
+render a picker or generate a union type instead of hardcoding a list. Standard `__type`
+meta-field on the same `/graphql` endpoint; no special route.
+
+```graphql
+query {
+  __type(name: "DataCenterModel"){
+    enumValues{
+      name
+    }
+  }
+}
+```
+Response
+```json
+{
+  "data": {
+    "__type": {
+      "enumValues": [
+        { "name": "Beacon" },
+        { "name": "Cruiser" },
+        { "name": "Triton" },
+        { "name": "Leviathan" }
+      ]
+    }
+  }
+}
+```
+
+### Look up data centers by model
+```graphql
+query { queryDataCenter(filter: { model: { eq: Beacon } }) { orbId name model } }
+```
+Response
+```json
+{ "data": { "queryDataCenter": [
+  { "orbId": "colo:colo-galleon", "name": "colo-galleon", "model": "Beacon" } ] } }
+```
+
+### Update a data center's model — by its orbId (variable form, required)
+query
+```graphql
+mutation UpdateDataCenter($orbId: String!, $set: DataCenterPatch!) {
+  updateDataCenter(input: { filter: { orbId: { eq: $orbId } }, set: $set }) {
+    numUids dataCenter { orbId name model version updatedBy }
+  }
+}
+```
+variables
+```json
+{ "orbId": "demo:demo-galleon", "set": { "model": "Leviathan" } }
+```
+Response
+```json
+{ "data": { "updateDataCenter": { "numUids": 1, "dataCenter": [
+  { "orbId": "demo:demo-galleon", "name": "demo-galleon", "model": "Leviathan",
+    "version": 2, "updatedBy": "admin@armada.ai" } ] } } }
+```
+
 ## Servers
 
 ### List servers in a data center

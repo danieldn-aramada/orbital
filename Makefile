@@ -67,6 +67,11 @@ run-orbital: fmt ## Run orbital server (go run; fast dev iteration). Restore req
 	@# dialog per credential lookup. Prod containers don't have this problem
 	@# (no ~/.docker/config.json, no helpers), so this workaround stays here
 	@# in the dev-only Makefile target, not in orbital's code.
+	@# Optional local SSO: deploy/local/orbital.env (gitignored) supplies the OIDC
+	@# tenant/client/secret that config.go deliberately does not default. Absent is
+	@# fine — orbital runs and password login works, so a fresh clone needs no setup.
+	@[ -f deploy/local/orbital.env ] && echo "sourcing deploy/local/orbital.env (local SSO enabled)" || true
+	if [ -f deploy/local/orbital.env ]; then set -a; . ./deploy/local/orbital.env; set +a; fi; \
 	DOCKER_CONFIG=$$(mktemp -d) go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orbital
 
 run-orbital-aep: fmt ## Run orbital in external-jwt mode (accepts AEP/Keycloak bearers as admin) on :8001

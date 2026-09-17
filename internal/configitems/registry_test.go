@@ -199,7 +199,7 @@ func TestParity_WithLegacyHandMaintainedValues(t *testing.T) {
 
 	// Every BeforeFields value from the legacy map must still be returned verbatim.
 	legacyBeforeFields := map[string]string{
-		"DataCenter":            "id orbId name version assetDataV2",
+		"DataCenter":            "id orbId name version assetDataV2 model",
 		"Server":                "id orbId name version hostname model manufacturer serviceTag rackPosition oobMAC idracSettings { firmwareVersion sshEnabled ipmiEnabled lockdownModeEnabled osToIdracPassThroughEnabled usbManagementPortEnabled dhcpEnabled racadmEnabled } serverMaintenance { enabled windowStart windowEnd reason }",
 		"KubernetesCluster":     "id orbId name version kubernetesVersion cni environment",
 		"EksaKubernetesCluster": "id orbId name version kubernetesVersion cni environment clusterType",
