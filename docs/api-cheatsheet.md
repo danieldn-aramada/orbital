@@ -95,17 +95,14 @@ Focused on iDRAC settings and backup config, not the full schema.
 
 ## Data centers
 
-### Look up a data center by asset ID
+### Look up by asset ID
 ```graphql
 query { queryDataCenter(filter: { assetDataV2: { regexp: "/<asset_id>/" } }) { orbId name assetDataV2 } }
 ```
 
-### Discover the valid `model` values (enum introspection)
+### Lookup by model
 
-`DataCenter.model` is a GraphQL enum, so the valid set is readable from the API — clients
-render a picker or generate a union type instead of hardcoding a list. Standard `__type`
-meta-field on the same `/graphql` endpoint; no special route.
-
+View models
 ```graphql
 query {
   __type(name: "DataCenterModel"){
@@ -115,7 +112,7 @@ query {
   }
 }
 ```
-Response
+response
 ```json
 {
   "data": {
@@ -130,18 +127,13 @@ Response
   }
 }
 ```
-
-### Look up data centers by model
+Query by model
 ```graphql
 query { queryDataCenter(filter: { model: { eq: Beacon } }) { orbId name model } }
 ```
-Response
-```json
-{ "data": { "queryDataCenter": [
-  { "orbId": "colo:colo-galleon", "name": "colo-galleon", "model": "Beacon" } ] } }
-```
 
-### Update a data center's model — by its orbId (variable form, required)
+### Update model
+
 query
 ```graphql
 mutation UpdateDataCenter($orbId: String!, $set: DataCenterPatch!) {
@@ -154,7 +146,7 @@ variables
 ```json
 { "orbId": "demo:demo-galleon", "set": { "model": "Leviathan" } }
 ```
-Response
+response
 ```json
 { "data": { "updateDataCenter": { "numUids": 1, "dataCenter": [
   { "orbId": "demo:demo-galleon", "name": "demo-galleon", "model": "Leviathan",
