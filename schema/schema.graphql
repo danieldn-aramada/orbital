@@ -45,7 +45,7 @@ type User {
 interface ConfigItem {
     id: ID!
     namespace: String! @search(by: [exact])
-    orbId: String! @id @search(by: [hash])
+    orbId: String! @id(interface: true) @search(by: [hash])
     name: String @search(by: [term])
     createdBy: String @search(by: [hash])
     createdAt: DateTime @search

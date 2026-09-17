@@ -13,8 +13,7 @@ The definitions behind `ROADMAP.md`'s one-line entries.
 | Spike | Status | Question |
 |---|---|---|
 | [One audit event per entity](../spikes/spike-audit-event-per-entity.md) | §4 + `request_id` shipped; §§1–3 design-only | Should an event describe one entity rather than a whole request, so `?orbId=` is exact and `changes` is single-entity by construction? |
-| [Advisory enforcement](../spikes/spike-advisory-enforcement.md) | Not started | Should a policy have a middle state — evaluate and record, but do not block — so a team can see what *would* be gated before turning it on? **Verdict: yes.** |
-| [Change-request lifecycle in the audit log](../spikes/spike-change-request-lifecycle-audit.md) | Not started | Should create/amend/approve/reject/close/merge emit audit events, or stay in the approval tables? |
+| [Advisory enforcement](../spikes/spike-advisory-enforcement.md) | Not started | Should a policy have a middle state — evaluate and record, but do not block? **Verdict "yes" withdrawn 2026-09-17** — a lockout is not possible (disabling is never gated) and the retrospective dry run is already an audit-log filter. Ergonomics, not safety. |
 | [Approval on publish (`export.publish`)](../spikes/spike-approval-on-publish.md) | Not started | Should publishing an artifact require approval? **Verdict: yes** — publish is the last reversible point. |
 | [Spike 27 — Atlas migrations](../spikes/spike-27-atlas-migrations.md) | **Design complete** | How does orbital evolve the Postgres schema against legacy data without crashlooping the deploy? |
 | [Spike 37 — GraphQL AST parse](../spikes/spike-37-graphql-ast-parse.md) | Not started | Should the `/graphql` proxy parse mutations with a real AST instead of the regex pile the approval gate now depends on? |
@@ -29,7 +28,7 @@ The definitions behind `ROADMAP.md`'s one-line entries.
 | Network topology rollout | Data migration, not a spike | Remaining DCs need NetworkDevice/Adapter/Interface seeded from NetBox + Redfish. → [network-model.md](../network-model.md) |
 
 **Closed spikes** — decisions live in the domain docs, deliberation in git (`git log docs/spikes/`):
-**30** pre-export change preview · **31** guarded apply + selective revert · **33** ConfigItem ownership unification · **34** audit log convention → [DGRAPH.md](../reference/DGRAPH.md), [CHANGE-CONTROL.md](../reference/CHANGE-CONTROL.md), [AUDIT.md](../reference/AUDIT.md)
+**30** pre-export change preview · **31** guarded apply + selective revert · **33** ConfigItem ownership unification · **34** audit log convention · **change-request lifecycle in the audit log** — verdict: stays in the approval tables, no audit events → [DGRAPH.md](../reference/DGRAPH.md), [CHANGE-CONTROL.md](../reference/CHANGE-CONTROL.md), [AUDIT.md](../reference/AUDIT.md)
 
 ---
 
