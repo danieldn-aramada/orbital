@@ -22,6 +22,20 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ## [Unreleased]
 
+### Changed
+- **`orbId` is now unique across every ConfigItem type, enforced by DGraph** (`schema/VERSION` → `v8`).
+  It was `@id`, which DGraph scopes *per implementing type* — a `Rack` and a `Server` could hold the
+  same `orbId`, and only the `<kind>-` prefix convention kept them apart. A collision breaks reads
+  (`getConfigItem` returns *"A list was returned, but GraphQL was expecting just one item"*) and makes
+  one of the two nodes vanish silently from every diff, export preview and change-request base
+  capture, because `internal/graphdiff` keys its snapshot by `orbId`. Now `@id(interface: true)`, and
+  a second type reusing an `orbId` is refused.
+
+  **The constraint is not retroactive** — applying the schema succeeds with duplicates already stored,
+  without scanning or rejecting them. Audit an existing graph before applying it and after any bulk
+  import; the query is in `docs/reference/DGRAPH.md` § orbId convention. Orbital does not apply the
+  DGraph schema at startup, so this reaches a running cluster only when the schema is applied.
+
 ## [v0.0.41] - 2026-09-16
 
 ### Added

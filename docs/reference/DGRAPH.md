@@ -22,7 +22,7 @@ Read this before: DGraph schema changes, query/mutation work, export/import, see
 
 ## orbId convention
 
-`orbId` is `@id` on the `ConfigItem` interface and is kept unique **per implementing type** — cross-type uniqueness is a **convention the `<kind>-` prefix upholds, not a constraint DGraph enforces** (corrected 2026-09-03; previously stated here as enforced). DGraph's own docs: *"By default, if used in an interface, the `@id` directive will ensure field uniqueness for each implementing type separately … this allows two different types implementing the same interface to have the same value for the inherited `@id` field."* Reproduced on this schema: a `Rack` and a `Server` both accepted `orbId: "zz-verify:collide-test"`; a second `Rack` with it was refused (*"already exists for field orbId inside type Rack"* — note the scope in DGraph's own error). `@id(interface: true)` would enforce it globally but is **not retroactive**; see `docs/planning/debt.md` for the audit query and blast radius. **Keep following the prefix convention — it is what keeps the graph correct.** It is **always derivable, never random**: **`<namespace>:<kind>-<natural-key>`**. This makes upserts idempotent (same input → same id) and lets clients construct ids without a lookup. The rule lives in CLAUDE.md Settled Decisions; **adding a new type means adding a row here.**
+`orbId` is `@id(interface: true)` on the `ConfigItem` interface — unique **across every implementing type**, enforced by DGraph as of **schema v8 (2026-09-17)**. A second type reusing an existing orbId is refused: *"already exists for field orbId in some other implementing type of interface ConfigItem"*. Before v8 the directive was a bare `@id`, which DGraph scopes **per implementing type** — a `Rack` and a `Server` could hold the same orbId, and only cross-type *convention* kept them apart. **The directive is NOT retroactive**: altering the schema succeeds even with duplicates already stored, without scanning or rejecting them, so applying it does not prove a graph is clean (verified on v25.3.1). The audit that does is at the end of this section; it passed 2064/2064 with 0 collisions before v8 was applied. **Keep following the prefix convention anyway** — it is what makes an orbId readable and derivable, and the constraint is a backstop, not a substitute. It is **always derivable, never random**: **`<namespace>:<kind>-<natural-key>`**. This makes upserts idempotent (same input → same id) and lets clients construct ids without a lookup. The rule lives in CLAUDE.md Settled Decisions; **adding a new type means adding a row here.**
 
 | Type | `orbId` | Natural key |
 |---|---|---|
@@ -35,6 +35,25 @@ Read this before: DGraph schema changes, query/mutation work, export/import, see
 | `NetworkInterface` (device port) | `<ns>:network-interface-<deviceSerial>-<port>` | device serial + port (`ge-0/0/0`) |
 
 **Legacy (pre-convention — migrate when next touched, don't treat network types as the special case):** `IPAddress` = `<ns>:<address>`, `Rack` = `<ns>:<rackName>`, `IdracSettings` = `<ns>:<serviceTag>-idrac`, cluster children = `<ns>:<clusterName>-<kind>`. (`Server` migrated to `server-<serial>` 2026-08-12.)
+
+**The audit — run it before applying the constraint to any graph, and after a bulk import:**
+
+```bash
+curl -s localhost:8080/query -H 'Content-Type: application/json' \
+  -d '{"query":"{ q(func: has(ConfigItem.orbId)) { ConfigItem.orbId dgraph.type } }"}' \
+| python3 -c "
+import json,sys,collections
+n=json.load(sys.stdin)['data']['q']
+by=collections.defaultdict(set)
+for x in n:
+    by[x['ConfigItem.orbId']].add(tuple(sorted(t for t in x.get('dgraph.type',[]) if t!='ConfigItem')))
+dups={k:v for k,v in by.items() if len(v)>1}
+print(f'nodes {len(n)}  distinct orbIds {len(by)}  cross-type collisions {len(dups)}')
+for k,v in list(dups.items())[:10]: print('  COLLISION', k, v)
+"
+```
+
+A clean graph reports equal node and orbId counts and zero collisions. **A collision found here cannot be fixed by the constraint** — it is already stored, and it breaks reads today: `getConfigItem` on a duplicated orbId returns *"A list was returned, but GraphQL was expecting just one item"*, and `internal/graphdiff` keys its `Snapshot` by orbId (`graphdiff.go:203`), so one of the two nodes silently disappears from every diff, export preview and change-request base capture.
 
 ## ConfigItem ownership (owned-child model)
 

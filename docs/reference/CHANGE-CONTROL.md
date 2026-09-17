@@ -223,6 +223,24 @@ Create, update and delete each write a `management` audit event: actor, the name
 
 **Why it is not optional:** policy administration decides what needs review *at all*, so it is the most consequential act in the feature — and it was the only part leaving no trace. A bypassed write was audited; removing the policy that would have gated it was not. A delete carries the whole policy because afterwards the event is the only record it existed. A **refused** write records nothing: a trail entry for a change that never took effect is worse than none.
 
+### The change-request LIFECYCLE stays in the approval tables — it emits no audit events
+
+*(Settled 2026-09-17.)* Create, amend, approve, reject, close and merge write **no** `audit_events` row. The approval tables are the record, and `GET /api/v1/change-requests/:id` is how it is read.
+
+| Transition | Recorded in | Fields |
+|---|---|---|
+| create | `approval_requests` | `author`, immutable `created_at` |
+| approve / reject | `approvals` — one row per approver | `approver`, `decision`, `comment`, `created_at`, `approved_at_hash`, `approved_at_revision` |
+| merge | `merge_attempts` — one row per execution | `attempted_by`, `attempted_at`, `results`, `error`. The writes it produces are audited normally, via `DispatchMutation` |
+| close | `approval_requests` | `status`, `updated_at`, `updated_by` |
+| amend | `approval_requests` | `changeset_revision` — the count only |
+
+**Why not the audit log: it would not answer the question it was proposed for.** The case for auditing the lifecycle was *"show me every review action in colo last month"* in one query. It does not land. `?namespace=` on `/api/v1/audit-log` filters `OrbIDHasPrefix(ns + ":")` (`audit.go:221`) — an orbId-prefix filter built for the resource panel — while a lifecycle row's resource id would be a bare namespace or a CRID (`colo-58`), and neither matches. Policy-admin events already sit in that blind spot: `?namespace=colo` does **not** return that namespace's own policy events. So the audit-log route buys a second copy of the record and still leaves the query unanswered. If the namespace-wide review question is ever genuinely wanted, the cheaper home is `since`/`until` on `GET /api/v1/change-requests`, which already filters by `namespace`, `status`, `author` and `orbId`.
+
+**Two things are genuinely not recorded, and neither earns work.** *Amend* overwrites `payload`, so revisions 1..n-1 are gone — but amend cannot launder an approval: it bumps `changeset_revision` and recomputes `base_hash`, and `approvalRevisionMatches` stops counting approvals stamped at an older revision (GitHub's dismiss-on-push). The safety guarantee holds; what is missing is the forensic *"what did it used to say"*, and nothing consumes it. *Close* leaves `status` + `updated_by` + `updated_at` rather than an event — durable, because nothing follows a terminal state, so the slot cannot be overwritten.
+
+**Do NOT re-adopt the claim that reject leaves only `updated_by`** — it is wrong, and it was a premise of the audit-log proposal. `decide` writes an `approvals` row for **both** decisions (`changerequest.go:703`), carrying the approver, the comment, and the hash and revision it was stamped at. The real hole is narrower and is filed in [`debt.md`](../planning/debt.md): re-deciding is delete-then-create, so an approver's earlier rejection and its comment are erased when they later approve.
+
 ### Bypass belongs to the POLICY, not the user
 
 `approval_policy.bypass_roles` (default `["admin"]`). Orbital's role model stays `readonly < dev < admin` with no per-user capability flags — "who may bypass" is a question the admin answers per protected class. A caller in `bypass_roles` also skips `proposer ≠ approver`: demanding a second pair of eyes from someone who could have written directly is friction with no control value.
