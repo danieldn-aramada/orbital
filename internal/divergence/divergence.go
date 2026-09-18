@@ -285,16 +285,18 @@ type PublisherConfig struct {
 	Bucket    string
 	AccessKey string
 	SecretKey string
+	UseAzMI   bool
 	OCIRepo   string
 }
 
 func NewPublisher(ctx context.Context, cfg PublisherConfig) (*Publisher, error) {
 	store, err := blobstore.New(ctx, blobstore.Config{
-		Endpoint:  cfg.Endpoint,
-		Region:    cfg.Region,
-		Bucket:    cfg.Bucket,
-		AccessKey: cfg.AccessKey,
-		SecretKey: cfg.SecretKey,
+		Endpoint:   cfg.Endpoint,
+		Region:     cfg.Region,
+		Bucket:     cfg.Bucket,
+		AccessKey:  cfg.AccessKey,
+		SecretKey:  cfg.SecretKey,
+		UseAzureMI: cfg.UseAzMI,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("divergence publisher: %w", err)
