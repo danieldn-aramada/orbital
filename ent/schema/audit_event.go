@@ -38,7 +38,15 @@ func (AuditEvent) Fields() []ent.Field {
 		// HTTP request behind it, and NULL is the honest answer. Never default
 		// them to "" — an empty string in a column an operator filters on reads
 		// as a recorded fact rather than as "not applicable".
-		field.String("event_source").Optional(),      // "graphql" | "rest" | "internal"
+		field.String("event_source").Optional(), // "graphql" | "rest" | "internal"
+		// acting_client is the OAuth client that presented the token, when that
+		// differs from the human in `actor`. A trusted upstream service (AEP's
+		// BFF) authenticates its own users and calls orbital on their behalf, so
+		// without this the row says only "daniel did X" and cannot distinguish a
+		// direct action from one taken through that service. RFC 8693 calls this
+		// the actor and carries it in the `act` claim; until orbital consumes
+		// exchanged tokens this is inferred from the verified `azp`.
+		field.String("acting_client").Optional(),
 		field.String("source_ip_address").Optional(), // caller IP (c.RealIP()); empty for internal writers
 		field.String("request_id").Optional(),        // X-Request-Id: ties every event from one HTTP request together
 	}

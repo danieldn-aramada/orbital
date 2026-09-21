@@ -130,6 +130,26 @@ func (_u *AuditEventUpdate) ClearEventSource() *AuditEventUpdate {
 	return _u
 }
 
+// SetActingClient sets the "acting_client" field.
+func (_u *AuditEventUpdate) SetActingClient(v string) *AuditEventUpdate {
+	_u.mutation.SetActingClient(v)
+	return _u
+}
+
+// SetNillableActingClient sets the "acting_client" field if the given value is not nil.
+func (_u *AuditEventUpdate) SetNillableActingClient(v *string) *AuditEventUpdate {
+	if v != nil {
+		_u.SetActingClient(*v)
+	}
+	return _u
+}
+
+// ClearActingClient clears the value of the "acting_client" field.
+func (_u *AuditEventUpdate) ClearActingClient() *AuditEventUpdate {
+	_u.mutation.ClearActingClient()
+	return _u
+}
+
 // SetSourceIPAddress sets the "source_ip_address" field.
 func (_u *AuditEventUpdate) SetSourceIPAddress(v string) *AuditEventUpdate {
 	_u.mutation.SetSourceIPAddress(v)
@@ -319,6 +339,12 @@ func (_u *AuditEventUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if _u.mutation.EventSourceCleared() {
 		_spec.ClearField(auditevent.FieldEventSource, field.TypeString)
+	}
+	if value, ok := _u.mutation.ActingClient(); ok {
+		_spec.SetField(auditevent.FieldActingClient, field.TypeString, value)
+	}
+	if _u.mutation.ActingClientCleared() {
+		_spec.ClearField(auditevent.FieldActingClient, field.TypeString)
 	}
 	if value, ok := _u.mutation.SourceIPAddress(); ok {
 		_spec.SetField(auditevent.FieldSourceIPAddress, field.TypeString, value)
@@ -537,6 +563,26 @@ func (_u *AuditEventUpdateOne) SetNillableEventSource(v *string) *AuditEventUpda
 // ClearEventSource clears the value of the "event_source" field.
 func (_u *AuditEventUpdateOne) ClearEventSource() *AuditEventUpdateOne {
 	_u.mutation.ClearEventSource()
+	return _u
+}
+
+// SetActingClient sets the "acting_client" field.
+func (_u *AuditEventUpdateOne) SetActingClient(v string) *AuditEventUpdateOne {
+	_u.mutation.SetActingClient(v)
+	return _u
+}
+
+// SetNillableActingClient sets the "acting_client" field if the given value is not nil.
+func (_u *AuditEventUpdateOne) SetNillableActingClient(v *string) *AuditEventUpdateOne {
+	if v != nil {
+		_u.SetActingClient(*v)
+	}
+	return _u
+}
+
+// ClearActingClient clears the value of the "acting_client" field.
+func (_u *AuditEventUpdateOne) ClearActingClient() *AuditEventUpdateOne {
+	_u.mutation.ClearActingClient()
 	return _u
 }
 
@@ -759,6 +805,12 @@ func (_u *AuditEventUpdateOne) sqlSave(ctx context.Context) (_node *AuditEvent, 
 	}
 	if _u.mutation.EventSourceCleared() {
 		_spec.ClearField(auditevent.FieldEventSource, field.TypeString)
+	}
+	if value, ok := _u.mutation.ActingClient(); ok {
+		_spec.SetField(auditevent.FieldActingClient, field.TypeString, value)
+	}
+	if _u.mutation.ActingClientCleared() {
+		_spec.ClearField(auditevent.FieldActingClient, field.TypeString)
 	}
 	if value, ok := _u.mutation.SourceIPAddress(); ok {
 		_spec.SetField(auditevent.FieldSourceIPAddress, field.TypeString, value)

@@ -22,6 +22,68 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ## [Unreleased]
 
+### Added
+- **Orbital accepts bearer tokens from multiple identity providers.**
+  `ORBITAL_AUTH_PROVIDERS` takes a JSON array of providers, each with its own
+  issuer, audiences, claim validation and role handling. A token selects its
+  provider by the `(iss, azp)` pair, which must be unique, so exactly one provider
+  ever attempts cryptographic validation and there is no "try each until one
+  accepts" fallback. Keying on the pair rather than the issuer alone lets one
+  Keycloak realm host several clients orbital treats differently. A token whose
+  `azp` matches no entry is refused, which makes `clientID` the app-token gate —
+  `ORBITAL_APP_TOKEN_ALLOWED_APPIDS` is ignored when the provider list is set, and
+  orbital warns rather than leaving it silently inoperative. Unset, everything
+  behaves as before; setting it alongside `ORBITAL_AUTH_MODE` is a startup error.
+
+  Each provider sets exactly ONE of `defaultRole` (orbital's users table owns
+  roles; a new user is created with it and existing users keep theirs),
+  `roleMapping` (the provider's group claim owns roles, re-derived at every login;
+  no matching group is denied rather than dropped to readonly), or `trustedService`
+  (a caller whose authorization happens upstream: every valid token gets the
+  assigned role and no user row is provisioned). Two or zero is a startup error.
+  `trustedService` replaces `ORBITAL_AUTH_MODE=external-jwt` and its
+  `ORBITAL_JWT_DEFAULT_ROLE` — same behaviour, named as the deliberate trust
+  delegation it is rather than a default nobody overrode.
+
+  Orbital keys users by email, so one address cannot be shared across providers —
+  a second provider asserting an existing address is refused rather than
+  inheriting the row.
+
+  Role changes driven by a provider write an audit event naming the provider and
+  the causing group — the transition only, not every login. The users page shows
+  provider-owned roles read-only with their provenance, because an editable field
+  that reverts at the next login is worse than one that says who owns it.
+
+  Client-credentials tokens are treated as app principals: no user row, gated by
+  `ORBITAL_APP_TOKEN_ALLOWED_APPIDS` as before. Design and rationale in
+  `docs/reference/AUTH.md` § Multiple identity providers.
+
+  Browser sign-in uses the same mapping as bearer callers, so one identity from
+  one provider cannot end up with two different roles depending on whether it
+  arrived with a cookie or a token. A refused sign-in now shows a reason —
+  `NO_ROLE_MAPPED` or `IDENTITY_INCOMPLETE`, rendered as `error — hint` per
+  `ERROR-RESPONSES.md` — where it previously bounced silently to the home page.
+  `ORBITAL_LOG_LEVEL=debug` logs the decoded ID token claims (never the raw
+  token) for diagnosing a mapping, since the ID token arrives back-channel and
+  is otherwise invisible to an operator.
+
+  Audit events gain `acting_client`, recording the OAuth client that presented
+  the token when it differs from the human in `actor` — so a request made by a
+  trusted upstream service on a user's behalf is distinguishable from that user
+  acting directly. Empty when the caller is their own actor. Inferred from the
+  verified `azp`; RFC 8693's `act` claim supersedes it when token exchange lands.
+
+  `users` gains a nullable `issuer` column recording which provider owns each
+  row. A provider only ever resolves rows it owns — a login for an address owned
+  by a local account or another provider is refused with `IDENTITY_CONFLICT`
+  rather than claiming the row. Without that, any configured provider could mint
+  a token for an existing address and inherit that user's role, including the
+  local break-glass admin. Local password accounts have no issuer, which is what
+  keeps break-glass representable and unclaimable. The one exception is a row with
+  neither an issuer nor a password — unowned and never a local account — which the
+  first provider to resolve it claims, so users predating the column are not
+  locked out of SSO.
+
 ### Removed
 - **BREAKING — device-code browser SSO is gone.** `ORBITAL_OAUTH2_DEVICE_CODE` (which defaulted to
   `true`), `GET /auth/device`, `POST /auth/device/poll` and `pages/device-code.gohtml` are all
@@ -67,6 +129,17 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   DGraph's real SDL, so it could caption a v8 graph "v9".
 
 ### Changed
+- **BREAKING (deployment) — orbital trusts Keycloak only; Entra is gone from
+  `deploy/base`.** The UI's OIDC client, the bearer providers and cb-bundler's
+  client-credentials grant all point at one Keycloak realm. cb-bundler needed no
+  code change — it already took `ORBITAL_TOKEN_URL` and `ORBITAL_TOKEN_SCOPE`
+  overrides for non-Entra providers; both are now set, and the scope matters
+  because Keycloak rejects Entra's `api://{clientID}/.default` form.
+  **`orbctl login` is broken by this** and is tracked in
+  `docs/planning/backlog.md` — it builds Entra URLs by string concatenation
+  instead of using OIDC discovery.
+
+
 - **BREAKING — `ORBITAL_APP_TOKEN_ALLOWED_APPIDS` empty now DENIES every app-only bearer token.**
   It previously skipped the allowlist check when empty, so any AAD app token bound to orbital's
   audience was accepted regardless of which application minted it — the same shape AWS eliminated

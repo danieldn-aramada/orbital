@@ -546,6 +546,11 @@ type auditOrigin struct {
 	Source    string // "graphql" | "rest" | "internal"
 	IP        string // caller address; empty for internal writers
 	RequestID string // X-Request-Id, correlating every event from one request
+	// ActingClient is the OAuth client that presented the token, when it is not
+	// the human named in `actor` — a trusted upstream service acting on a user's
+	// behalf. Empty when the caller IS the subject, so the field means something
+	// when present rather than being noise on every row.
+	ActingClient string
 }
 
 // auditInternal is the origin for writes with no HTTP request behind them.
@@ -555,11 +560,18 @@ func auditInternal() auditOrigin { return auditOrigin{Source: "internal"} }
 // at the boundary, while the Context is still valid. source is the surface:
 // "graphql" for the proxy, "rest" for /api/v1 handlers.
 func originFromContext(c echo.Context, source string) auditOrigin {
-	return auditOrigin{
+	o := auditOrigin{
 		Source:    source,
 		IP:        c.RealIP(),
 		RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
 	}
+	// Only when the acting client differs from the subject. A user signing in
+	// directly is their own actor, and stamping that on every row would train
+	// readers to ignore the column.
+	if ac, _ := c.Get("acting_client").(string); ac != "" {
+		o.ActingClient = ac
+	}
+	return o
 }
 
 // writeAuditEvent persists a single audit event row. Failures are logged and
@@ -595,6 +607,9 @@ func writeAuditEvent(db *ent.Client, logger *slog.Logger, eventCategory, actor, 
 	}
 	if origin.RequestID != "" {
 		ec = ec.SetRequestID(origin.RequestID)
+	}
+	if origin.ActingClient != "" {
+		ec = ec.SetActingClient(origin.ActingClient)
 	}
 
 	ev, err := ec.Save(ctx)

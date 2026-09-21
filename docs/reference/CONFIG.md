@@ -51,8 +51,9 @@ Generated from `internal/config/config.go` — the struct tags are the source of
 |---|---|
 | `ORBITAL_ADMIN_EMAILS` | `admin@armada.ai` |
 | `ORBITAL_API_AUTH_ENABLED` | — |
-| `ORBITAL_APP_TOKEN_ALLOWED_APPIDS` | `5fc832f6-843e-4207-93dd-b3c3a77c06f2` |
+| `ORBITAL_APP_TOKEN_ALLOWED_APPIDS` | — |
 | `ORBITAL_AUTH_MODE` | — |
+| `ORBITAL_AUTH_PROVIDERS` | — |
 | `ORBITAL_BACKUP_RETENTION_DAYS` | `14` |
 | `ORBITAL_BACKUP_RETENTION_MIN_COUNT` | `3` |
 | `ORBITAL_BACKUP_SCHEDULE` | — |
@@ -91,9 +92,9 @@ Generated from `internal/config/config.go` — the struct tags are the source of
 | `ORBITAL_OCI_REPO` | `orbital` |
 | `ORBITAL_OCI_SIGNING_KEY_PATH` | `deploy/local/cosign.key` |
 | `ORBITAL_OCI_USERNAME` | — |
-| `ORBITAL_OIDC_CLIENT_ID` | `5fc832f6-843e-4207-93dd-b3c3a77c06f2` |
+| `ORBITAL_OIDC_CLIENT_ID` | — |
 | `ORBITAL_OIDC_CLIENT_SECRET` | — |
-| `ORBITAL_OIDC_ISSUER_URL` | `https://login.microsoftonline.com/8f231c2a-9551-4b40-be17-5b24afe5e890/v2.0` |
+| `ORBITAL_OIDC_ISSUER_URL` | — |
 | `ORBITAL_OIDC_REDIRECT_URL` | `http://localhost:8001/auth/callback` |
 | `ORBITAL_PORT` | `8001` |
 | `ORBITAL_RATE_LIMIT_ENABLED` | `false` |
@@ -105,6 +106,48 @@ Generated from `internal/config/config.go` — the struct tags are the source of
 | `ORBITAL_SHUTDOWN_TIMEOUT` | `10s` |
 
 ---
+
+## `ORBITAL_AUTH_PROVIDERS`
+
+A JSON array of identity providers orbital accepts bearer tokens from. Unset means
+the legacy single-issuer path (`ORBITAL_OIDC_ISSUER_URL`, or `ORBITAL_AUTH_MODE=external-jwt`)
+still serves, so no existing deployment changes. Setting it alongside
+`ORBITAL_AUTH_MODE` is a **startup error**, not a merge.
+
+```json
+[
+  { "issuer": { "url": "https://keycloak.example.com/realms/aep", "audiences": ["armada-orbital"] },
+    "clientID": "aep-fleet-commander",
+    "claimMappings": { "username": { "claim": "email" } },
+    "trustedService": { "assignedRole": "admin" } },
+  { "issuer": { "url": "https://keycloak.example.com/realms/aep", "audiences": ["account"] },
+    "clientID": "orbital-ui",
+    "claimValidationRules": [ { "claim": "azp", "requiredValue": "aep-fleet-commander" } ],
+    "claimMappings": { "username": { "claim": "email" }, "groups": { "claim": "groups" } },
+    "roleMapping": [ { "group": "orbital-admins", "role": "admin" } ] }
+]
+```
+
+In a manifest this is a block scalar, which reviews fine in a diff:
+
+```yaml
+- name: ORBITAL_AUTH_PROVIDERS
+  value: |
+    [ … ]
+```
+
+Per provider: exactly ONE of `defaultRole` (orbital's users table owns roles),
+`roleMapping` (the provider's groups do), or `trustedService` (an upstream service
+authorizes its own users; every valid token gets the assigned role and no user row
+is created). Two or zero is a startup error.
+
+`clientID` is the `azp` an entry matches, so one Keycloak realm can host several
+clients treated differently. The `(issuer.url, clientID)` pair must be unique, and
+a token whose `azp` matches no entry is refused — which makes `clientID` the
+app-token gate. `ORBITAL_APP_TOKEN_ALLOWED_APPIDS` is ignored when this is set.
+Issuer URLs must be unique and https, and audiences non-empty. Applying a change
+needs a restart — see
+[AUTH.md](AUTH.md) § Multiple identity providers for why, and for the full model.
 
 ## Multi-replica notes
 

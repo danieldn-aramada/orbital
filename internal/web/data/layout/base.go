@@ -13,12 +13,18 @@ type Base struct {
 	Links       []string
 	IsAuthn     bool
 	OIDCEnabled bool
-	CsrfToken   string
-	AppVersion  string
-	BasePath    string
-	CurrentPath string
-	CanMutate   bool
-	AdminEmails []string
+	// LoginError carries a human-readable reason when a sign-in was refused and
+	// the user was redirected back. Without it a refusal is a silent bounce to
+	// the home page, which reads as "the button does nothing" — the failure mode
+	// this exists to prevent.
+	LoginError     string
+	LoginErrorCode string
+	CsrfToken      string
+	AppVersion     string
+	BasePath       string
+	CurrentPath    string
+	CanMutate      bool
+	AdminEmails    []string
 	// PendingDivergences is the count of divergence entries with no operator
 	// resolution yet. Rendered as a badge on the menu so edge drift is visible
 	// without navigating to /divergence-reports — divergence is a notification,

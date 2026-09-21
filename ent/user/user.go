@@ -26,6 +26,8 @@ const (
 	FieldVerified = "verified"
 	// FieldRole holds the string denoting the role field in the database.
 	FieldRole = "role"
+	// FieldIssuer holds the string denoting the issuer field in the database.
+	FieldIssuer = "issuer"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// Table holds the table name of the user in the database.
@@ -41,6 +43,7 @@ var Columns = []string{
 	FieldPasswordHash,
 	FieldVerified,
 	FieldRole,
+	FieldIssuer,
 	FieldCreatedAt,
 }
 
@@ -130,6 +133,11 @@ func ByVerified(opts ...sql.OrderTermOption) OrderOption {
 // ByRole orders the results by the role field.
 func ByRole(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRole, opts...).ToFunc()
+}
+
+// ByIssuer orders the results by the issuer field.
+func ByIssuer(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIssuer, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

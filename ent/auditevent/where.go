@@ -76,6 +76,11 @@ func EventSource(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldEQ(FieldEventSource, v))
 }
 
+// ActingClient applies equality check predicate on the "acting_client" field. It's identical to ActingClientEQ.
+func ActingClient(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldActingClient, v))
+}
+
 // SourceIPAddress applies equality check predicate on the "source_ip_address" field. It's identical to SourceIPAddressEQ.
 func SourceIPAddress(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldEQ(FieldSourceIPAddress, v))
@@ -349,6 +354,81 @@ func EventSourceEqualFold(v string) predicate.AuditEvent {
 // EventSourceContainsFold applies the ContainsFold predicate on the "event_source" field.
 func EventSourceContainsFold(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldContainsFold(FieldEventSource, v))
+}
+
+// ActingClientEQ applies the EQ predicate on the "acting_client" field.
+func ActingClientEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldActingClient, v))
+}
+
+// ActingClientNEQ applies the NEQ predicate on the "acting_client" field.
+func ActingClientNEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNEQ(FieldActingClient, v))
+}
+
+// ActingClientIn applies the In predicate on the "acting_client" field.
+func ActingClientIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIn(FieldActingClient, vs...))
+}
+
+// ActingClientNotIn applies the NotIn predicate on the "acting_client" field.
+func ActingClientNotIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotIn(FieldActingClient, vs...))
+}
+
+// ActingClientGT applies the GT predicate on the "acting_client" field.
+func ActingClientGT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGT(FieldActingClient, v))
+}
+
+// ActingClientGTE applies the GTE predicate on the "acting_client" field.
+func ActingClientGTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGTE(FieldActingClient, v))
+}
+
+// ActingClientLT applies the LT predicate on the "acting_client" field.
+func ActingClientLT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLT(FieldActingClient, v))
+}
+
+// ActingClientLTE applies the LTE predicate on the "acting_client" field.
+func ActingClientLTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLTE(FieldActingClient, v))
+}
+
+// ActingClientContains applies the Contains predicate on the "acting_client" field.
+func ActingClientContains(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContains(FieldActingClient, v))
+}
+
+// ActingClientHasPrefix applies the HasPrefix predicate on the "acting_client" field.
+func ActingClientHasPrefix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasPrefix(FieldActingClient, v))
+}
+
+// ActingClientHasSuffix applies the HasSuffix predicate on the "acting_client" field.
+func ActingClientHasSuffix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasSuffix(FieldActingClient, v))
+}
+
+// ActingClientIsNil applies the IsNil predicate on the "acting_client" field.
+func ActingClientIsNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIsNull(FieldActingClient))
+}
+
+// ActingClientNotNil applies the NotNil predicate on the "acting_client" field.
+func ActingClientNotNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotNull(FieldActingClient))
+}
+
+// ActingClientEqualFold applies the EqualFold predicate on the "acting_client" field.
+func ActingClientEqualFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEqualFold(FieldActingClient, v))
+}
+
+// ActingClientContainsFold applies the ContainsFold predicate on the "acting_client" field.
+func ActingClientContainsFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContainsFold(FieldActingClient, v))
 }
 
 // SourceIPAddressEQ applies the EQ predicate on the "source_ip_address" field.

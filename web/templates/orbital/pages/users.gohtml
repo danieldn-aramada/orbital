@@ -39,6 +39,10 @@
             <td>{{.Email}}</td>
             <td>{{if .Name}}{{.Name}}{{else}}—{{end}}</td>
             <td>
+              {{if .ProviderOwned}}
+              <span class="has-text-weight-semibold">{{.Role}}</span>
+              <span class="is-size-7 has-text-grey ml-2" title="Role comes from a group claim issued by {{.RoleSource}}, and is re-derived at every login. Change it in the identity provider.">from identity provider</span>
+              {{else}}
               <div class="buttons has-addons" style="margin-bottom:0; flex-wrap:nowrap;">
                 <button
                   class="button is-small js-user-role-set{{if eq .Role "readonly"}} is-primary is-selected{{end}}"
@@ -65,6 +69,7 @@
                   style="width:5rem;"
                 >Admin</button>
               </div>
+              {{end}}
             </td>
             <td><span data-timestamp="{{.CreatedAt}}">{{.CreatedAt}}</span></td>
           </tr>

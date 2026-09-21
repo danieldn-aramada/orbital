@@ -88,6 +88,282 @@ RFC 8252, the correct native-app pattern. It never called orbital's device endpo
 
 **User tokens are unaffected.** The gate is inside the `email == "" && appID != ""` branch, so a human caller carrying an `appid` claim is never checked against it. Pinned by `TestAppTokenAllowlist_UserTokensUnaffected`, alongside `…_UnsetRejectsAppTokens`, `…_WildcardAcceptsAnyAppToken` and `…_SpecificListAcceptsListedRejectsOthers` — the negatives matter most here, since a permanently-allowing gate passes every positive test.
 
+> **Superseded by `ORBITAL_AUTH_PROVIDERS`** (see § Multiple identity providers
+> above). external-jwt still works and is still accurate as written, but it is
+> the single-issuer path: one provider, one blanket role. The two are mutually
+> exclusive — `config.New` refuses both. New deployments should use the provider
+> list.
+
+## Multiple identity providers (`ORBITAL_AUTH_PROVIDERS`)
+
+Orbital's API is a resource server: it verifies bearer tokens it did not issue,
+holds no client secret, and has no login flow of its own — the same role the
+kube-apiserver plays. The browser UI is a separate thing (a confidential OAuth
+client, which is what `ORBITAL_OIDC_CLIENT_SECRET` is for) and orbctl a third (a
+public client using authorization code + PKCE). Keep the three apart; only the
+first is what this section describes.
+
+- **Trust is a LIST of providers, not one, and not a mode.** `ORBITAL_AUTH_PROVIDERS`
+  is a JSON array decoded by an `envconfig.Decoder`, the same shape `ORB_CONSUMERS`
+  uses. Unset means the legacy single-issuer path still serves, so no existing
+  deployment changes. Setting it alongside `ORBITAL_AUTH_MODE` is a startup error
+  — merging two sources of truth for who may authenticate is how they drift.
+  **Do NOT move this to a config file**: orbital reads no config file, an env var
+  needs a restart to apply which matches the restart-to-apply decision below, and
+  `ORBITAL_BUNDLER_URLS` is not a counter-example (it is a hand-rolled `name=url`
+  micro-DSL — the lesson there is do not invent a format, not do not put
+  structured data in an env var).
+- **A token selects its provider by `iss`, and issuer URLs are unique.** Enforced
+  in `AuthProviders.Validate`. So exactly one provider ever attempts cryptographic
+  validation. **Never implement "try each verifier until one accepts"** — that
+  lets an attacker aim at whichever configured provider is weakest, and it is why
+  Kubernetes makes issuer URLs unique in `AuthenticationConfiguration` rather than
+  leaving ordering to the operator. The `iss` peek is unverified and only selects
+  WHICH provider runs; that provider still checks the signature against its own
+  JWKS, so a token claiming provider A's issuer but signed by B is refused
+  (`TestProviderSet_TokenSignedByAnotherProviderIsRejected`).
+- **`claimValidationRules` is how `azp` anchoring is expressed, per provider.**
+  Keycloak issues `aud: account` to every client in a realm, so an audience check
+  there proves only "some client in this realm" and `azp` is what identifies the
+  caller. Per provider rather than global, so a second provider can differ.
+- **Applying the config requires a restart.** Kubernetes hot-reloads because you
+  cannot casually restart an API server; orbital rolls with `maxUnavailable: 0`,
+  so a change costs a zero-downtime rollout. Reload would add a failure mode —
+  bad config arriving at runtime rather than at boot, and replicas disagreeing
+  about who may authenticate mid-propagation.
+- **A provider that fails discovery does not block startup.** It is logged and
+  its tokens are refused until a restart; the other providers keep working. An
+  IdP outage must not stop orbital serving what does not need it.
+- **An unmatched `iss` gets a generic 401.** The issuer is logged server-side and
+  never echoed — an unauthenticated caller learns nothing about what is configured.
+
+### Selection is keyed on `(iss, azp)`, not the issuer alone
+
+One Keycloak realm hosts several clients that orbital must treat differently — a
+trusted upstream service and a direct caller share an issuer but not a policy. So
+a provider entry carries a `clientID` (the `azp` it matches), and the
+**`(issuer.url, clientID)` pair must be unique**. An empty `clientID` matches any
+client of that issuer as an issuer-wide default; a specific entry always wins, so
+selection stays two exact lookups rather than an ordered scan.
+
+Kubernetes keys on issuer alone because a cluster typically has one OIDC client.
+That premise does not hold for a Keycloak realm, which is why this diverges —
+**do not "simplify" it back to issuer-only**.
+
+**`clientID` is also the app-token gate.** A token whose `azp` matches no entry is
+refused before any role logic runs, so listing a client IS the allowlist — per
+provider, and the same mechanism that selects the entry.
+`ORBITAL_APP_TOKEN_ALLOWED_APPIDS` belongs to the legacy single-issuer path and is
+**ignored** here; orbital warns at startup when it is set alongside
+`ORBITAL_AUTH_PROVIDERS` rather than leaving it present and inoperative.
+
+### Trusted services: authorization delegated upstream
+
+A caller whose own authorization layer decides what its users may do. `AEP FC`
+authenticates and authorizes through `organization-svc`, then calls orbital on a
+user's behalf; it does not configure users in orbital or Keycloak.
+
+    "clientID": "aep-fleet-commander",
+    "trustedService": { "assignedRole": "admin" }
+
+Every valid token gets that role, on every request, and **no user row is
+provisioned** — the caller is a service acting for its own users, not an orbital
+user, so it gets the same treatment as an app principal for the same reason.
+
+**This is a deliberate trust delegation, and it is named so that is visible.** It
+was previously `ORBITAL_JWT_DEFAULT_ROLE` — a default that happened to apply to
+everyone, which reads like an unset value rather than a decision.
+
+**What it costs, stated plainly:** orbital's own authorization is not the control
+for these callers, so if the upstream service fails open, orbital does too. What
+limits the damage is `acting_client` on audit events (see `AUDIT.md`), which is
+how the log distinguishes "AEP acting as someone" from that person acting
+directly. **The standard answer is RFC 8693 token exchange**, where the IdP signs
+an `act` claim instead of orbital inferring one from `azp` — filed in
+`backlog.md`. `azp` names only the last client in a chain and does not nest;
+`act` does. Treat the current shape as the interim it is.
+
+### Roles: three modes per provider, and only one at a time
+
+Orbital owns authorization. A provider asserts identity and group membership;
+orbital's operator decides what that membership is worth. **A provider never
+names an orbital role** — `roleMapping` is written by the operator.
+
+Plus `trustedService` above, which owns the role wholesale and stores nothing.
+
+| | mode A — `defaultRole` | mode B — `roleMapping` |
+|---|---|---|
+| Who owns the role | orbital's users table | the provider's groups |
+| New user | created with `defaultRole` | created with the matched role |
+| Later logins | table wins; admin edits stick | re-derived every login; provider wins |
+| No group matches | n/a | **denied** — no user created |
+| Users page | role editable | read-only, with provenance |
+
+**Exactly ONE of `defaultRole`, `roleMapping` or `trustedService` per provider.
+Two or zero is a startup error** — they are three different answers to who owns
+this caller's role, and a provider carrying more than one would have to pick,
+silently.
+NetBox makes the same pair exclusive (`REMOTE_AUTH_DEFAULT_PERMISSIONS` is "only
+operational when REMOTE_AUTH_GROUP_SYNC_ENABLED is False") but resolves it by
+silently ignoring the unused setting; orbital refuses instead, because a setting
+that is present and inoperative is how someone comes to believe it is doing
+something it is not.
+
+- **`defaultRole` means "the role a NEW user is created with", never a fallback
+  for unmatched groups.** Copied from NetBox's `REMOTE_AUTH_DEFAULT_GROUPS`
+  wording. So a user who already has a role in orbital keeps it when their token
+  carries nothing that matches — that is mode A working, not a bug.
+- **Mode B denies on no match rather than falling back to readonly.** A provider
+  may have thousands of users; a mapping enumerates which of them may use
+  orbital. A readonly floor would silently grant read of the whole infrastructure
+  graph to every employee. An adopter who wants a floor writes it as a rule — a
+  group everyone is in, mapped to readonly — which is explicit and reviewable.
+  Grafana's `role_attribute_strict` is the same rule.
+- **Mode B re-derives at every login, so the provider wins in both directions.**
+  Losing a group demotes; gaining one promotes, overwriting a local edit. That is
+  what "the provider owns roles" means, and it is why the users page must not
+  offer an edit there. NetBox behaves identically and documents it.
+- **Most privileged rule wins** when several groups match (Grafana does the same).
+- **`ORBITAL_ADMIN_EMAILS` applies in mode A only.** In mode B the groups are
+  authoritative; a second mechanism that could grant admin outside the mapping
+  would defeat the mapping. Mode B needs no bootstrap — whoever is in the admin
+  group is admin from their first login.
+
+### A role change takes effect at the NEXT login, not immediately
+
+`SetUserSession` captures the role into the session cookie at sign-in, so a
+provider-driven promotion or demotion lands when the user next authenticates —
+not on their next request. "Re-derived at every login" means every login.
+
+Worth knowing before an incident: revoking someone's admin group does **not**
+end their current admin session. If that matters, the operator has to invalidate
+the session, not just the group. NetBox and Grafana behave the same way; this is
+the normal trade for session auth rather than an orbital quirk.
+
+The bearer path has no such lag — there is no session, so every request carries
+a token and the role is resolved from it each time.
+
+### Debugging a mapping: claims are logged at DEBUG, tokens never
+
+`ORBITAL_LOG_LEVEL=debug` logs the decoded ID token claims on the browser login
+path. Off by default.
+
+**Claims only, never the raw token.** A raw token is a bearer credential — anyone
+with the log could replay it — while decoded claims cannot be replayed. GitLab
+reached the same split for the same reason ([gitlab#345435](https://gitlab.com/gitlab-org/gitlab/-/issues/345435));
+Grafana exposes the equivalent through `oauth.generic_oauth:debug`.
+
+This exists because the ID token arrives **back-channel**, so an operator cannot
+see it in the browser the way they can see a redirect. Without it, "no group
+matched" is indistinguishable between a missing mapper, an unassigned role, a
+claim of the wrong shape, and a name mismatch. The refusal log therefore also
+names every claim the token carried and the groups claim's own value at WARN —
+that is not debug-only, because a refusal nobody can diagnose is a refusal that
+gets worked around.
+
+### A provider only resolves rows it owns
+
+`users.issuer` records which provider owns a row. A login whose issuer does not
+match is refused `IDENTITY_CONFLICT`, and the row is left untouched. Without this,
+any configured provider could mint a token for an existing address and inherit
+that user's role — including the local break-glass admin, which is the account
+that exists to survive a broken provider.
+
+**One narrow claim path, and only one:** a row with **no issuer AND no password**
+is claimed by the first provider that resolves it. Both halves are load-bearing —
+no issuer means nobody owns it, no password means it was never a local account,
+which is what keeps break-glass unclaimable however old the row is. Claiming
+records ownership; it does not reassign a role.
+
+That path exists because rows predating the `issuer` column have neither, so
+without it every existing user is locked out of SSO until an admin backfills. It
+stops firing permanently once a row has an issuer. Residual exposure: a deployment
+configuring a second provider BEFORE its existing users have signed in once — an
+unowned row goes to whichever provider asks first. First-come on a row nobody
+owned, not theft from one that was.
+
+**Do NOT widen it to "update the row when the issuer differs."** That is the whole
+attack — it would let any configured provider take over an existing user,
+including one holding a password. Pinned by
+`TestIdentityOwnership_LocalAccountCannotBeClaimedByAProvider`,
+`…SecondProviderCannotClaimAnotherProvidersUser`,
+`…UnownedRowWithNoPasswordIsClaimedOnFirstLogin`, and the positive control
+`…SameProviderResolvesItsOwnUserNormally` — three refusals would all pass against
+an implementation that refused everything.
+
+### Identities are keyed by email today, and that is the known weak point
+
+`users.email` is the key, and OIDC is explicit that this is the wrong one: the
+only guaranteed unique identifier for an end-user is `(iss, sub)`. An issuer may
+reuse an email across different end-users over time, an end-user's email may
+change, and `email`/`preferred_username` are mutable and can be falsified.
+
+What holds the line in the meantime is the ownership rule above. Safe, but it
+means
+**one address cannot be shared across providers** — the same person reachable
+through two IdPs can only use one.
+
+**The fix is an identity-link table keyed `(issuer, subject)`**, which is what
+every comparable product that stores users does: Keycloak's own
+`federated_identity`, Auth0's account linking, django-social-auth's
+`usersocialauth`. One user row, N provider links. Tracked in
+[backlog.md](../planning/backlog.md).
+
+**Do NOT reach for a username prefix instead.** One was built and removed
+(2026-09-20). Prefixing is what STATELESS systems do — Kubernetes recommends a
+per-authenticator `usernamePrefix` because it has no user table and nowhere to
+store a link, so the prefix is the only way to keep two providers' subjects
+apart. Orbital stores users, so it can store the link, and prefixing merely
+papers over the wrong primary key while making every identifier uglier. Grafana
+is the cautionary case at the other extreme: it supports neither, and its
+documented answer is "make sure no user account overlaps between providers".
+
+### Service accounts are app principals, not users
+
+A client-credentials token is a valid caller — the in-pod cb-bundler authenticates
+this way — but there is no human behind it, so it must not land in the users table
+with a role. Detected as **carries a client identity (`azp`/`appid`) and no
+`email` claim**, which is the generalisation of the test `BearerVerifier` already
+applies. Such a caller gets `AppPrincipalPrefix + appid` as its name, an empty
+email, and no provisioning.
+
+**The gate is the provider entry's `clientID`, not `ORBITAL_APP_TOKEN_ALLOWED_APPIDS`.**
+A token whose `azp` matches no entry is refused before any of this runs, so
+listing the client IS the allowlist — per provider rather than one global list,
+and the same mechanism that selects the entry. `ORBITAL_APP_TOKEN_ALLOWED_APPIDS`
+belongs to the legacy single-issuer path and is **ignored** when
+`ORBITAL_AUTH_PROVIDERS` is set; orbital logs a warning rather than leaving it
+present and inoperative.
+
+**This is not hypothetical and the trap is config-dependent.** Validating against
+the dev Keycloak, a real service-account token provisioned
+`service-account-armada-orbital` as a readonly user: Keycloak creates a real user
+object for a service-enabled client, so `preferred_username` is populated while
+`email` is absent — meaning the bug only fires for providers that map username to
+`preferred_username`. Eleven synthetic tests passed while it happened. Kubernetes
+gives service accounts their own `system:serviceaccount:` namespace and Grafana
+and ArgoCD make them a separate principal type; none let one become a row in the
+human user table.
+
+### Break-glass when a provider breaks
+
+**Local password login always works and is not gated on SSO.** In
+`login-modal.gohtml` the `{{if .OIDCEnabled}}` block wraps only the Microsoft
+button and the divider; the email and password form sits outside it. So an admin
+with local credentials can always sign in and repair a broken provider or mapping.
+
+This is the mechanism, deliberately — not special cases inside the authorization
+path. ArgoCD keeps a local `admin` account as documented break-glass, Grafana
+keeps local admin login wired alongside SSO, Kubernetes never relies on OIDC alone
+(x509 client certs and the admin kubeconfig), Vault has the root token. **Do NOT
+add "refuse to demote the last admin" or similar logic to the role path** — that
+was considered and rejected as inventing a path upstream does not have.
+
+`ORBITAL_ADMIN_EMAILS` is **not** this mechanism. It is bootstrapping — how the
+first admin gets in. Break-glass is getting back in after the provider breaks.
+If orbital ever gains an option to disable local password auth, the break-glass
+procedure becomes "re-enable it" and must be documented when that option ships.
+
 ## External JWT mode (`ORBITAL_AUTH_MODE=external-jwt`)
 
 An alternative auth stack that trusts bearer tokens issued by an external OIDC provider (e.g. AEP's Keycloak `aep-fleet-commander` client) instead of running orbital's own login flow. Intended for API-only integrations where an upstream service has already authenticated the user and is proxying to orbital.
@@ -126,6 +402,19 @@ An alternative auth stack that trusts bearer tokens issued by an external OIDC p
 ## Third-party API clients
 
 Orbital is an OAuth **resource server**, not an identity provider. Client applications authenticate with Azure AD directly and present the resulting JWT to orbital. Orbital does not issue tokens or proxy auth.
+
+> **⚠️ Written for the Azure AD era and NOT updated for the Keycloak cutover
+> (2026-09-20).** Orbital's deployed config now trusts Keycloak only, so the
+> Entra-specific values below — tenant GUID, `api://…/.default` scopes, the
+> `login.microsoftonline.com` issuer — would produce a token orbital rejects.
+> The *topologies* below are still correct and provider-agnostic; only the
+> concrete values are wrong. Use `ORBITAL_AUTH_PROVIDERS` (above) as the source
+> of truth for what is actually trusted.
+>
+> Worth reading the OBO discussion with RFC 8693 in mind: Azure's
+> On-Behalf-Of is the same delegation problem orbital now handles with
+> `trustedService` plus an inferred `acting_client`, and token exchange is the
+> standard version of it. See `docs/planning/backlog.md`.
 
 **Integrator quickstart (give this to client teams):**
 

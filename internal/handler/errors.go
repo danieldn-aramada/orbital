@@ -34,6 +34,9 @@ const (
 	CodeWriteContention      = "WRITE_CONTENTION"
 	CodeTargetMissing        = "TARGET_MISSING"
 	CodeApprovalRequired     = "APPROVAL_REQUIRED"
+	CodeNoRoleMapped         = "NO_ROLE_MAPPED"
+	CodeIdentityIncomplete   = "IDENTITY_INCOMPLETE"
+	CodeIdentityConflict     = "IDENTITY_CONFLICT"
 	CodeUnavailable          = "UNAVAILABLE"
 	CodeInternal             = "INTERNAL"
 )
