@@ -174,9 +174,37 @@ kubectl rollout status deployment/orbital -n "$NS"
 kubectl logs -f deployment/orbital -n "$NS"
 ```
 
-Orbital applies the DGraph schema on first boot.
+> **Orbital does NOT apply the DGraph schema — not on first boot, not on rollout.** The rollout
+> alone leaves DGraph on the old schema. See step 8.
 
-### 8. Seed PostgreSQL admin user
+### 8. Apply the DGraph schema — REQUIRED after any `schema/VERSION` bump
+
+**Nothing applies it for you.** Not orbital on boot, not the rollout, not `kubectl apply -k`.
+An image whose queries reference a new field, running against a DGraph still on the old schema,
+returns errors → zero rows → a 404 or a silently truncated page. This has happened: v0.0.25 added
+`retentionDays` while AKS DGraph was on v3, and **every cluster 404'd, then the edit modal
+vanished** (2026-07-27).
+
+Apply it **before or with** the rollout, not after users hit 404s:
+
+```bash
+kubectl port-forward -n "$NS" svc/dgraph-blue-dgraph-alpha 8080:8080 &
+curl -X POST localhost:8080/admin/schema \
+  -H 'Content-Type: application/graphql' --data-binary @schema/schema.graphql
+```
+
+Additive changes (new nullable fields, new enum values) are non-destructive. Some are not:
+`v7` added `@search` to `ConfigItem.version`, which reindexes every ConfigItem and **blocks
+mutations until it returns** — schedule those like a migration. Per-version notes are in
+[DGRAPH.md](../docs/reference/DGRAPH.md) § Schema rules.
+
+`main.go` does migrate at boot, but that is the **PostgreSQL** ent schema — a different system with
+a confusingly similar name. It tells you nothing about DGraph's.
+
+Step 10 also applies the schema (it is the first thing `seed-aks.sh` does), so if you are running
+that anyway, it covers this step.
+
+### 9. Seed PostgreSQL admin user
 
 Creates `admin@armada.ai` / `admin` and `user@armada.ai` / `user`.
 
@@ -197,9 +225,14 @@ psql "<DATABASE_URL>" -c "
 
 > The bcrypt hash is for password `admin` (cost 12). Dev only.
 
-### 9. Seed DGraph (optional — example data)
+### 10. Seed DGraph (optional — example data)
 
 Run once after initial deployment, or any time you need to reset graph data.
+
+**"Optional" refers to the example data, not the schema.** `seed-aks.sh` applies
+`schema/schema.graphql` to blue and scratch before it seeds anything, so running this covers
+step 8 — but it applies the schema **from your local working tree**, which may differ from the one
+baked into the deployed image. Step 8 is the path to use when you only want the schema.
 The `seed-aks.sh` script opens and closes DGraph port-forwards automatically:
 
 ```bash
@@ -267,3 +300,50 @@ ps auxf                                                # running processes
 
 `dev-orbital` additionally includes `postgres.yaml` for the in-cluster
 PostgreSQL StatefulSet.
+
+## High availability
+
+**Orbital is not in the control path.** Nothing in the cloud executes against a
+modular data center, authoritative reconcilers run locally, and the CMDB is not
+in the reconciliation path. Orb serves intent at the edge, offline. An orbital
+outage means operators cannot change intent and orbs cannot pull new intent —
+it does not degrade a data center. Size the availability target accordingly.
+
+**The service is one Deployment. Scale it.** Every replica is identical and any
+replica count is safe. Background work is coordinated through PostgreSQL —
+advisory locks for "may I act now", leases for "is that runner still alive" —
+not through replica counts or operator runbooks. There is no worker tier, no
+leader to configure, and no pod-to-pod networking to open.
+
+| Concern | How it is safe at N replicas |
+|---|---|
+| Export / backup / restore execution | Claimed with a conditional `UPDATE`; exactly one runner wins. A runner proves liveness with `heartbeat_at` and is fenced on `locked_by`, so one that stalls and resumes aborts instead of racing its replacement. |
+| Job admission | The check-then-create window is held under a transaction-scoped advisory lock, so two triggers cannot both find "nothing running". |
+| Dead runners | A reaper sweeps on a ticker and fails jobs whose heartbeat went stale. It does **not** run at boot — a starting pod must never assume another pod's running job is dead. |
+| Schema migration at startup | Every replica migrates at boot, under an advisory lock so they cannot race the same DDL. Without it a **fresh install at two replicas crashloops one pod deterministically** — an empty database means both try to create every table. |
+| Backup schedule | `fire()` takes an advisory lock, so one backup per cron tick regardless of replica count. |
+| Divergence ingest | A report is claimed by advancing the cursor *before* applying it, so exactly one replica ingests. |
+| Sessions, CSRF, OIDC state | Cookie-based off `ORBITAL_SESSION_HMAC_KEY`. No session store, no sticky sessions. |
+| Caching | Every cache is per-request by design. Valkey is not required. |
+
+### Requirements
+
+- **Highly available PostgreSQL.** It holds all coordination state.
+- **Highly available DGraph.** Orbital in front of a single alpha is not highly
+  available however many orbital pods run. See the DGraph chart values —
+  `zero.replicaCount` and `alpha.replicaCount` are `1` in `values-dev.yaml`.
+- **`ReadWriteMany` export volumes**, so any replica can serve a download any
+  other replica produced. Both PVCs already use `azurefile-csi`.
+- All replicas must share `ORBITAL_SESSION_HMAC_KEY` (one Secret — already the case).
+
+### Known limits
+
+- **Rate limiting is per-pod and therefore approximate.** The effective ceiling
+  is `ORBITAL_RATE_LIMIT_RPS x replicas`, including the tighter login bucket.
+  Divide the configured value by the expected replica count. Making it exact
+  would promote Valkey from optimisation to hard dependency.
+- **The connection pool is per-pod too.** Total load on PostgreSQL is
+  `DefaultMaxConns (10) x replicas`; keep it under `max_connections`.
+- **`strategy: Recreate` with no PodDisruptionBudget** means orbital is still
+  down during every deploy and every node drain — at any replica count. Fixing
+  that is a separate change from replica safety.

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -74,10 +75,26 @@ type crState struct {
 	// Versions is the scope's OCC version vector, and the thing CurrentHash is
 	// computed from. Always populated.
 	Versions map[string]int
-	// CurrentHash hashes Scope's version vector right now. Stale is simply
-	// CurrentHash != the hash captured at open.
+	// CurrentHash hashes Scope's version vector right now.
 	CurrentHash string
-	Stale       bool
+	// Stale means at least one CHANGE OBJECT is out of date: its `version` no
+	// longer matches that node's current version. It is the AUTHOR's to fix, by
+	// rebasing the object — re-approving cannot clear it, because it is computed
+	// from the changeset and not from the base anchor.
+	Stale bool
+	// StalenessKnown reports whether the DGraph reads behind Stale,
+	// SubtreeChanged and Missing actually ran. FALSE on the list path, which is
+	// Postgres-only by design — see storedState. Consumers must treat false as
+	// "not asked", never as "not stale": a `stale: false` on a question nobody
+	// asked is a wrong answer, not a missing one.
+	StalenessKnown bool
+	// SubtreeChanged means the reviewed scope moved without any change object
+	// going out of date — typically an edit to an owned child. It is the
+	// REVIEWER's to clear, by approving again, which re-anchors the base.
+	//
+	// Two signals, two owners: the author owns what they proposed, the reviewer
+	// owns what they reviewed. Both block merge.
+	SubtreeChanged bool
 	// Approvals is every decision cast, newest last. Valid counts only the
 	// approvals whose hash still matches — the rest are shown as "approved an
 	// earlier version" rather than silently disappearing.
@@ -132,15 +149,45 @@ func (h *ChangeRequest) Create(ctx context.Context, actor, title, description st
 		return nil, nil, fmt.Errorf("marshal changeset: %w", err)
 	}
 
+	// Entity-level preconditions first: they read only `versions`, which is
+	// already in hand, so a refusal here needs no snapshot and survives a failed
+	// one. Create reads state when it is INVOKED, not when the author was
+	// looking — so an entity that moved while the proposal was being composed is
+	// caught here rather than becoming a silent part of the recorded ancestor.
+	preconditions := versionMismatches(versions, *cs)
+
+	if len(preconditions) > 0 {
+		return nil, nil, &preconditionFailed{Problems: preconditions}
+	}
+
+	// One snapshot, two consumers: the effect summary and the stored ancestor.
+	// Fetching it once means both describe the same instant.
+	//
+	// Best-effort, and it is allowed to be since `version` replaced the
+	// client-supplied `before`: the precondition above reads the version vector,
+	// which was already in hand, so a failed snapshot no longer costs a
+	// guarantee — only the display delta and the ancestor, and losing those
+	// degrades the merge to the entity-level guard rather than skipping a check
+	// the caller asked for.
+	snap, snapErr := baseSnapshot(ctx, h.dgraphURL, scope)
+	if snapErr != nil {
+		h.logger.Warn("could not snapshot base; effect summary and ancestor omitted",
+			"namespace", cs.Namespace, "err", snapErr)
+	}
+
 	// The delta this request would apply, captured with the anchor that says
 	// when it stops being true. Best-effort by design — a nil effect falls back
 	// to counting the changeset, and losing a display convenience must never
 	// cost someone a validated proposal.
-	effect, effErr := storedEffect(ctx, h.dgraphURL, scope, *cs)
-	if effErr != nil {
-		h.logger.Warn("could not compute effect summary; falling back to scope counts",
-			"namespace", cs.Namespace, "err", effErr)
+	var effect json.RawMessage
+	if snap != nil {
+		var effErr error
+		if effect, effErr = storedEffect(snap, *cs); effErr != nil {
+			h.logger.Warn("could not compute effect summary; falling back to scope counts",
+				"namespace", cs.Namespace, "err", effErr)
+		}
 	}
+	baseValues := baseValuesFrom(snap, *cs)
 
 	cr, err := h.createNumbered(ctx, cs.Namespace, func(b *ent.ApprovalRequestCreate) *ent.ApprovalRequestCreate {
 		b = b.
@@ -150,10 +197,14 @@ func (h *ChangeRequest) Create(ctx context.Context, actor, title, description st
 			SetAuthor(actor).
 			SetCreatedBy(actor).
 			SetBaseHash(versionHash(versions)).
+			SetBaseVersions(versions).
 			SetBasePresent(presentInVersions(versions, scope)).
 			SetPayload(payload)
 		if len(effect) > 0 {
 			b = b.SetBaseEffect(effect)
+		}
+		if len(baseValues) > 0 {
+			b = b.SetBaseValues(baseValues)
 		}
 		return b
 	})
@@ -264,7 +315,9 @@ func (h *ChangeRequest) State(ctx context.Context, cr *ent.ApprovalRequest) (crS
 		return st, fmt.Errorf("read current state: %w", err)
 	}
 	st.CurrentHash = versionHash(st.Versions)
-	st.Stale = st.CurrentHash != cr.BaseHash
+	st.StalenessKnown = true
+	st.SubtreeChanged = st.CurrentHash != cr.BaseHash
+	st.Stale = len(staleItems(st.Versions, st.Changeset)) > 0
 
 	// Present at open, gone now. Detected here so both the detail view and
 	// merge see it — the view can warn before anyone spends a review on it.
@@ -292,13 +345,16 @@ func (h *ChangeRequest) State(ctx context.Context, cr *ent.ApprovalRequest) (crS
 	terminal := cr.Status != approvalrequest.StatusOpen
 	if terminal {
 		st.Stale = false
+		// Merging bumps the version vector by definition, so this one is
+		// GUARANTEED to fire afterwards if left alone.
+		st.SubtreeChanged = false
 		st.Missing = nil
 	}
 	for _, a := range st.Approvals {
 		switch {
 		case a.Decision == entapproval.DecisionRejected:
 			st.Rejected++
-		case terminal || a.ApprovedAtHash == st.CurrentHash:
+		case terminal || (a.ApprovedAtHash == st.CurrentHash && approvalRevisionMatches(a, cr)):
 			st.Valid++
 		}
 	}
@@ -316,6 +372,69 @@ func (h *ChangeRequest) State(ctx context.Context, cr *ent.ApprovalRequest) (crS
 		// voluntarily-opened request in an ungoverned namespace must still be
 		// mergeable, and installing the engine must not make anything harder
 		// than it was. Its only guard is then the staleness check at merge.
+		st.Status = approval.StatusApproved
+	}
+	return st, nil
+}
+
+// storedState is State's cheap sibling: everything derivable from PostgreSQL
+// alone, with NO DGraph reads at all.
+//
+// It exists because the queue was an N+1. Every row went through State, which
+// reads the changeset's scope and its version vector — measured at **1,222
+// DGraph queries for one unfiltered page load** of 507 requests. The list does
+// not need any of it: staleness answers "has the world moved under this
+// proposal", which matters when someone is about to act, not when they are
+// scanning titles. GitHub draws the same line — `mergeable` is returned by the
+// single-PR endpoint and never by the list.
+//
+// So there are three rungs, cheapest first:
+//
+//	storedState        — PostgreSQL only.                    List.
+//	State              — + scope and version vector.          Detail view.
+//	StateWithSnapshot  — + the scope's full content.          Diff, merge.
+//
+// What it deliberately CANNOT answer: Stale, SubtreeChanged and Missing are
+// left zero with StalenessKnown false, and the renderer omits the fields rather
+// than emitting `false`.
+//
+// Valid counts approvals cast against the CURRENT CHANGESET REVISION, without
+// the hash check State applies. So an amend still invalidates approvals here —
+// that is a Postgres fact — while a change to the underlying entity does not.
+// The queue can therefore show one more approval than the detail view, for
+// exactly the window the deferred staleness question covers.
+func (h *ChangeRequest) storedState(ctx context.Context, cr *ent.ApprovalRequest) (crState, error) {
+	var st crState
+	if err := json.Unmarshal(cr.Payload, &st.Changeset); err != nil {
+		return st, fmt.Errorf("decode changeset: %w", err)
+	}
+
+	st.Approvals = cr.Edges.Approvals
+	if st.Approvals == nil {
+		var err error
+		st.Approvals, err = cr.QueryApprovals().Order(ent.Asc(entapproval.FieldCreatedAt)).All(ctx)
+		if err != nil {
+			return st, fmt.Errorf("load approvals: %w", err)
+		}
+	}
+	terminal := cr.Status != approvalrequest.StatusOpen
+	for _, a := range st.Approvals {
+		switch {
+		case a.Decision == entapproval.DecisionRejected:
+			st.Rejected++
+		case terminal || approvalRevisionMatches(a, cr):
+			st.Valid++
+		}
+	}
+
+	pol, err := h.resolvePolicy(ctx, cr.ActionType, &st.Changeset)
+	if err != nil {
+		return st, err
+	}
+	st.Required, st.BypassRoles = pol.required, pol.bypassRoles
+
+	st.Status = string(cr.Status)
+	if st.Status == approval.StatusOpen && st.Valid >= st.Required {
 		st.Status = approval.StatusApproved
 	}
 	return st, nil
@@ -360,12 +479,26 @@ type resolvedPolicy struct {
 // reads as approved immediately and merges without review. That is the opt-in
 // property — installing the engine changes nothing until an admin declares a
 // protected class.
-// policyRow returns the one enabled policy for a namespace, or nil.
+// policyRow returns the one enabled policy governing a namespace, or nil.
 //
 // Separated from resolvePolicy because WHICH row applies depends only on
 // (actionType, namespace) — one policy per namespace — while whether it
 // governs a given changeset depends on that changeset's types. Splitting them
 // is what makes the row memoisable.
+//
+// Resolution is FALLBACK, in two steps, and the order carries the semantics:
+//
+//  1. The namespace's OWN row, read regardless of `enabled`. If one exists it
+//     is the answer — including when it is disabled, in which case the answer
+//     is "not gated". A disabled row SHADOWS the global rather than falling
+//     through to it: `enabled=false` means "this namespace is deliberately
+//     exempt", and it is the only per-namespace off switch there is.
+//  2. Only when the namespace has NO row of its own, the enabled global
+//     (`all_namespaces`) row, if there is one.
+//
+// Exactly one row is ever returned, which is what keeps "which policy did
+// this?" answerable with a single name. A global is therefore a DEFAULT, never
+// a floor: a namespace row overrides it even when it is weaker.
 func (h *ChangeRequest) policyRow(ctx context.Context, actionType, namespace string) (*ent.ApprovalPolicy, error) {
 	memo := policyMemoFrom(ctx)
 	key := actionType + "\x00" + namespace
@@ -375,22 +508,73 @@ func (h *ChangeRequest) policyRow(ctx context.Context, actionType, namespace str
 		}
 	}
 
-	p, err := h.db.ApprovalPolicy.Query().
-		Where(
-			approvalpolicy.ActionTypeEQ(actionType),
-			approvalpolicy.NamespaceEQ(namespace),
-			approvalpolicy.EnabledEQ(true),
-		).First(ctx)
-	if err != nil && !ent.IsNotFound(err) {
-		return nil, fmt.Errorf("resolve approval policy: %w", err)
-	}
-	if ent.IsNotFound(err) {
-		p = nil
+	p, err := governingPolicy(ctx, h.db, actionType, namespace)
+	if err != nil {
+		return nil, err
 	}
 	if memo != nil {
 		memo.put(key, p)
 	}
 	return p, nil
+}
+
+// governingPolicy is THE resolution rule, and there is exactly one of it.
+//
+// Both callers that need "which policy governs this namespace" go through here
+// — the change-request engine via policyRow, and the write gate via
+// matchingPolicy. They used to each run their own query, which is how the
+// all-namespaces feature initially shipped working in the engine and invisible
+// to the gate: the engine refused to merge without approval while a direct
+// mutation wrote straight through. Two implementations of one authorization
+// rule fail in exactly that direction — open — so do not add a third.
+func governingPolicy(ctx context.Context, db *ent.Client, actionType, namespace string) (*ent.ApprovalPolicy, error) {
+	// Step 1 — the namespace's own row. Deliberately NOT filtered on enabled:
+	// the disabled case has to be distinguishable from the absent case, because
+	// they resolve to opposite answers. Disabled means "this namespace is
+	// deliberately exempt" and SHADOWS the global; absent falls through to it.
+	own, err := db.ApprovalPolicy.Query().
+		Where(
+			approvalpolicy.ActionTypeEQ(actionType),
+			approvalpolicy.NamespaceEQ(namespace),
+		).First(ctx)
+	if err != nil && !ent.IsNotFound(err) {
+		return nil, fmt.Errorf("resolve approval policy: %w", err)
+	}
+	if err == nil {
+		if !own.Enabled {
+			return nil, nil
+		}
+		return own, nil
+	}
+
+	// Step 2 — no row of its own, so the global applies if one is enabled.
+	global, err := db.ApprovalPolicy.Query().
+		Where(
+			approvalpolicy.ActionTypeEQ(actionType),
+			approvalpolicy.AllNamespacesEQ(true),
+			approvalpolicy.EnabledEQ(true),
+		).First(ctx)
+	if err != nil && !ent.IsNotFound(err) {
+		return nil, fmt.Errorf("resolve global approval policy: %w", err)
+	}
+	if ent.IsNotFound(err) {
+		return nil, nil
+	}
+	return global, nil
+}
+
+// policyLabel names a policy in prose — a refusal message, a privileged-write
+// warning, the `bypassedPolicy` audit field.
+//
+// A global row has no namespace, and an empty string there would render
+// "changes to  require approval". Distinct from the audit RESOURCE ID, which
+// uses `*`: that one is a filter key people type into `?resource_id=`, this one
+// is a sentence.
+func policyLabel(p *ent.ApprovalPolicy) string {
+	if p.AllNamespaces {
+		return "all namespaces"
+	}
+	return p.Namespace
 }
 
 // policyMemo caches policy rows for the lifetime of ONE request.
@@ -462,7 +646,7 @@ func (h *ChangeRequest) resolvePolicy(ctx context.Context, actionType string, cs
 	return resolvedPolicy{
 		required:    p.RequiredApprovals,
 		bypassRoles: roles,
-		namespace:   p.Namespace,
+		namespace:   policyLabel(p),
 		found:       true,
 	}, nil
 }
@@ -523,6 +707,7 @@ func (h *ChangeRequest) decide(ctx context.Context, id int64, actor string, role
 		SetDecision(decision).
 		SetComment(comment).
 		SetApprovedAtHash(st.CurrentHash).
+		SetApprovedAtRevision(cr.ChangesetRevision).
 		Exec(ctx); err != nil {
 		return nil, fmt.Errorf("record decision: %w", err)
 	}
@@ -548,8 +733,33 @@ func (h *ChangeRequest) decide(ctx context.Context, id int64, actor string, role
 		// This does not touch approval validity, which is compared against the
 		// current hash, not the base. It only moves what "unchanged since it
 		// was last reviewed" means — which is what stale should mean.
-		if cr.BaseHash != st.CurrentHash {
-			if cr, err = cr.Update().SetBaseHash(st.CurrentHash).Save(ctx); err != nil {
+		//
+		// The ANCESTOR moves with the anchor. Leaving base_values behind would
+		// make the field-level guard permanently disagree with the entity-level
+		// one: the reviewer has just attested to current state, so current state
+		// is what the merge must be checked against. A re-anchor that moved only
+		// the hash would clear `stale` while every moved field stayed a conflict
+		// forever.
+		//
+		// The ancestor is recomputed UNCONDITIONALLY, not only when the hash
+		// moved. base_hash is a version-vector fingerprint, so a write that
+		// changes a value without bumping `version` leaves it matching while
+		// base_values goes stale — and gating the recompute on the hash made
+		// that conflict unclearable by any action: approving returned 200,
+		// changed nothing, and merge kept refusing. The only escape was closing
+		// the request and proposing again. Approving IS the act of attesting to
+		// current state, so current state is what the ancestor must become.
+		needsRebase := cr.BaseHash != st.CurrentHash || len(cr.BaseValues) > 0
+		if needsRebase {
+			upd := cr.Update().SetBaseHash(st.CurrentHash).SetBaseVersions(st.Versions)
+			if len(cr.BaseValues) > 0 {
+				snap, snapErr := baseSnapshot(ctx, h.dgraphURL, st.Scope)
+				if snapErr != nil {
+					return nil, fmt.Errorf("re-anchor ancestor: %w", snapErr)
+				}
+				upd = upd.SetBaseValues(baseValuesFrom(snap, st.Changeset))
+			}
+			if cr, err = upd.Save(ctx); err != nil {
 				return nil, fmt.Errorf("re-anchor base: %w", err)
 			}
 		}
@@ -634,17 +844,40 @@ func (h *ChangeRequest) Amend(ctx context.Context, id int64, actor string, role 
 		if err != nil {
 			return nil, nil, fmt.Errorf("marshal changeset: %w", err)
 		}
-		upd = upd.SetPayload(payload).SetBaseHash(versionHash(versions)).SetBasePresent(presentInVersions(versions, scope))
+		// Same two guards as Create, for the same reason: an amend re-proposes
+		// against a newly captured base, so it is a creation as far as
+		// concurrency is concerned.
+		if preconditions := versionMismatches(versions, *cs); len(preconditions) > 0 {
+			return nil, nil, &preconditionFailed{Problems: preconditions}
+		}
+
+		snap, snapErr := baseSnapshot(ctx, h.dgraphURL, scope)
+		if snapErr != nil {
+			h.logger.Warn("could not snapshot base on amend; effect and ancestor omitted",
+				"change_request", crHumanID(cr), "err", snapErr)
+		}
+
+		// Bump the revision: a rebase that only corrects a version number changes
+		// the proposal without moving the graph, so hash-matched approvals would
+		// otherwise survive an edit the reviewer never saw.
+		upd = upd.SetPayload(payload).SetChangesetRevision(cr.ChangesetRevision + 1).
+			SetBaseHash(versionHash(versions)).SetBaseVersions(versions).SetBasePresent(presentInVersions(versions, scope))
 		// Recomputed with the anchor: an amended request is a new plan against a
 		// newly captured base, so carrying the old delta forward would describe
-		// changes the request no longer proposes.
-		effect, effErr := storedEffect(ctx, h.dgraphURL, scope, *cs)
-		if effErr != nil {
-			h.logger.Warn("could not recompute effect summary on amend",
-				"change_request", crHumanID(cr), "err", effErr)
-		}
-		if len(effect) > 0 {
-			upd = upd.SetBaseEffect(effect)
+		// changes the request no longer proposes. The ancestor moves with it, for
+		// the same reason.
+		if snap != nil {
+			effect, effErr := storedEffect(snap, *cs)
+			if effErr != nil {
+				h.logger.Warn("could not recompute effect summary on amend",
+					"change_request", crHumanID(cr), "err", effErr)
+			}
+			if len(effect) > 0 {
+				upd = upd.SetBaseEffect(effect)
+			}
+			if bv := baseValuesFrom(snap, *cs); len(bv) > 0 {
+				upd = upd.SetBaseValues(bv)
+			}
 		}
 	}
 
@@ -676,7 +909,15 @@ func availableActions(cr *ent.ApprovalRequest, st crState, actor string, role us
 			out = append(out, "edit", "close")
 		}
 	case approval.StatusApproved:
-		if isAuthor || approvedBy(st, actor) || bypass {
+		// merge and the rebase-`edit` below are the only actions whose
+		// eligibility depends on staleness, so they are the only ones the list
+		// path cannot answer. Omitted there rather than guessed: offering merge
+		// on a request that would 409 is worse than not offering it, and the
+		// queue renders no action buttons anyway — availableActions is read on
+		// the list ONLY by the awaiting_review filter, which looks for
+		// "approve" and is unaffected.
+		blocked := st.Stale || st.SubtreeChanged
+		if st.StalenessKnown && !blocked && (isAuthor || approvedBy(st, actor) || bypass) {
 			out = append(out, "merge")
 		}
 		if !isAuthor || bypass {
@@ -684,6 +925,10 @@ func availableActions(cr *ent.ApprovalRequest, st crState, actor string, role us
 		}
 		if isAuthor || bypass {
 			out = append(out, "close")
+		}
+		// An approved request that went stale is the author's to rebase.
+		if st.StalenessKnown && st.Stale && (isAuthor || bypass) {
+			out = append(out, "edit")
 		}
 	}
 	sort.Strings(out)
@@ -741,6 +986,543 @@ func predicateFor(typeName, field string) string {
 // Apply produce, computed by the same graphdiff core, so "what will this do"
 // has one answer across the whole product. Nothing is written; the target
 // snapshot exists only for the length of the comparison.
+// sameValue compares two ancestor/current values by their JSON encoding.
+//
+// Not reflect.DeepEqual: base_values round-trips through jsonb, so an edge's
+// []string comes back as []any{string} and an int as float64, while the live
+// snapshot side is decoded straight from DGraph. Encoding both and comparing
+// bytes makes those representations agree — Go sorts map keys when marshalling,
+// so the encoding is deterministic.
+func sameValue(a, b any) bool {
+	ja, errA := json.Marshal(a)
+	jb, errB := json.Marshal(b)
+	if errA != nil || errB != nil {
+		return false // unencodable: treat as different rather than as equal
+	}
+	return bytes.Equal(ja, jb)
+}
+
+// currentValue reads a predicate off a snapshot node, looking in fields then
+// edges. Absent reads as nil, which is a legitimate ancestor value.
+func currentValue(node *graphdiff.Node, pred string) any {
+	if node == nil {
+		return nil
+	}
+	if v, ok := node.Fields[pred]; ok {
+		return v
+	}
+	if e, ok := node.Edges[pred]; ok {
+		return e
+	}
+	return nil
+}
+
+// planMerge decides, per field, what a merge would do — and narrows the write to
+// match.
+//
+// Three outcomes per field:
+//
+//   - CONFLICT: the ancestor says X, the field is not X now, and it is not at
+//     the proposed value either. Someone else moved it to a third value and
+//     writing would destroy their edit.
+//   - SATISFIED: already at the proposed value. Dropped from the write. It stays
+//     in the stored changeset — that is the author's declared intent and orbital
+//     does not edit it — but writing it again would only bump the version and
+//     emit an audit row for a change that changed nothing.
+//   - APPLIES: written.
+//
+// Narrowing the write is not an optimisation, it is what makes the field-level
+// guard SAFE. applyItem writes the whole `set`, so a guard that only checks the
+// fields a request changes, paired with a write that touches every field it
+// names, would silently push a stale status-quo value over someone else's edit.
+// Guard narrowly and write narrowly, or guard widely and write widely; the
+// mixture is the one combination that loses data.
+//
+// Items with no ancestor recorded (created before base_values existed, or whose
+// snapshot failed) are passed through untouched and stay governed by the
+// entity-level base_hash alone.
+// fieldOutcome is what a merge would do to ONE field, and the row the review
+// table renders. Per field rather than per entity because the outcome is per
+// field: one entity can have a satisfied field and a conflicting one at once.
+type fieldOutcome struct {
+	OrbID string
+	Type  string
+	Field string // graphdiff predicate, e.g. "Server.hostname"
+	// Outcome is "applies", "satisfied" or "conflict" — the three answers a
+	// three-way merge can give.
+	Outcome string
+	// Reviewed is the ancestor: the value when the request was opened. Carries
+	// information ONLY on a conflict — for the other two it equals Current.
+	Reviewed any
+	Current  any
+	Proposed any
+}
+
+// classifyChangeset resolves every field a changeset writes into one of the
+// three merge outcomes.
+//
+// ONE classifier, two consumers: `planMerge` narrows the write from it, and the
+// diff endpoint renders it. They must agree — a preview that says "conflict"
+// where merge says otherwise, or the reverse, is worse than no preview.
+//
+// Items with no recorded ancestor, and deletes, are passed through as applying:
+// there is nothing to compare them against, and they stay governed by the
+// entity-level anchor alone.
+func classifyChangeset(snap graphdiff.Snapshot, cs approval.Changeset, baseValues map[string]map[string]any) []fieldOutcome {
+	res := graphdiff.Compare(snap, applyChangesetTo(snap, cs))
+	satisfied := make(map[string]map[string]bool, len(cs.Changes))
+	for _, ch := range satisfiedItems(snap, cs, res) {
+		m := make(map[string]bool, len(ch.Fields))
+		for _, f := range ch.Fields {
+			m[f.Field] = true
+		}
+		satisfied[ch.OrbID] = m
+	}
+
+	var out []fieldOutcome
+	for _, item := range cs.Changes {
+		node := snap[item.OrbID]
+		typeName := item.Type
+		if typeName == "" && node != nil && len(node.Types) > 0 {
+			typeName = node.Types[0]
+		}
+		base := baseValues[item.OrbID]
+
+		add := func(field string, proposed any) {
+			pred := predicateFor(typeName, field)
+			cur := currentValue(node, pred)
+			row := fieldOutcome{
+				OrbID: item.OrbID, Type: typeName, Field: pred,
+				Reviewed: cur, Current: cur, Proposed: proposed,
+			}
+			switch {
+			case len(base) == 0 || item.Op == approval.OpDelete:
+				row.Outcome = "applies"
+			case satisfied[item.OrbID][pred]:
+				row.Outcome = "satisfied"
+			default:
+				if want, recorded := base[pred]; recorded && !sameValue(want, cur) {
+					row.Outcome = "conflict"
+					row.Reviewed = want
+				} else {
+					row.Outcome = "applies"
+				}
+			}
+			out = append(out, row)
+		}
+
+		for _, f := range sortedKeysOf(item.Set) {
+			add(f, item.Set[f])
+		}
+		for _, f := range item.Clear {
+			add(f, nil)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].OrbID != out[j].OrbID {
+			return out[i].OrbID < out[j].OrbID
+		}
+		return out[i].Field < out[j].Field
+	})
+	return out
+}
+
+func sortedKeysOf(m map[string]any) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func planMerge(snap graphdiff.Snapshot, cs approval.Changeset, baseValues map[string]map[string]any) ([]approval.ChangeItem, []approval.ValidationError) {
+	outcomes := classifyChangeset(snap, cs, baseValues)
+	byOrbID := map[string]map[string]fieldOutcome{}
+	for _, o := range outcomes {
+		if byOrbID[o.OrbID] == nil {
+			byOrbID[o.OrbID] = map[string]fieldOutcome{}
+		}
+		byOrbID[o.OrbID][o.Field] = o
+	}
+	index := map[string]int{}
+	for i, item := range cs.Changes {
+		index[item.OrbID] = i
+	}
+
+	var conflicts []approval.ValidationError
+	out := make([]approval.ChangeItem, 0, len(cs.Changes))
+
+	for _, item := range cs.Changes {
+		node := snap[item.OrbID]
+		typeName := item.Type
+		if typeName == "" && node != nil && len(node.Types) > 0 {
+			typeName = node.Types[0]
+		}
+
+		narrowed := item
+		narrowed.Set = map[string]any{}
+		narrowed.Clear = nil
+
+		outcomeOf := func(f string) fieldOutcome {
+			return byOrbID[item.OrbID][predicateFor(typeName, f)]
+		}
+		note := func(o fieldOutcome) {
+			conflicts = append(conflicts, approval.ValidationError{
+				Index: index[item.OrbID], OrbID: item.OrbID, Field: o.Field,
+				Msg: fmt.Sprintf("changed since this was proposed: was %v, is now %v",
+					o.Reviewed, o.Current),
+				Hint: "Re-review the request, or amend it to propose against the current value.",
+			})
+		}
+
+		for f, v := range item.Set {
+			switch o := outcomeOf(f); o.Outcome {
+			case "satisfied": // already at the proposed value: drop from the write
+			case "conflict":
+				note(o)
+			default:
+				narrowed.Set[f] = v
+			}
+		}
+		for _, f := range item.Clear {
+			switch o := outcomeOf(f); o.Outcome {
+			case "satisfied":
+			case "conflict":
+				note(o)
+			default:
+				narrowed.Clear = append(narrowed.Clear, f)
+			}
+		}
+
+		if len(narrowed.Set) == 0 && len(narrowed.Clear) == 0 {
+			continue // nothing left to write for this entity
+		}
+		sort.Strings(narrowed.Clear)
+		out = append(out, narrowed)
+	}
+
+	sort.Slice(conflicts, func(i, j int) bool {
+		if conflicts[i].OrbID != conflicts[j].OrbID {
+			return conflicts[i].OrbID < conflicts[j].OrbID
+		}
+		return conflicts[i].Field < conflicts[j].Field
+	})
+	return out, conflicts
+}
+
+// staleItems reports the change objects whose node has moved since the version
+// they carry — the author-owned half of staleness.
+//
+// Per change object, not per scope: an object carrying no `version` is
+// unconditional and can never be item-stale, since there is nothing to compare.
+// Those requests rely on SubtreeChanged alone.
+func staleItems(versions map[string]int, cs approval.Changeset) []fieldOutcome {
+	var out []fieldOutcome
+	for _, item := range cs.Changes {
+		if item.Version == nil {
+			continue
+		}
+		cur, present := versions[item.OrbID]
+		if !present || cur == *item.Version {
+			continue
+		}
+		out = append(out, fieldOutcome{
+			OrbID: item.OrbID, Type: item.Type,
+			Reviewed: *item.Version, Current: cur,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].OrbID < out[j].OrbID })
+	return out
+}
+
+// approvalRevisionMatches reports whether a decision was cast against the
+// current changeset. Revision 0 predates the column and is treated as matching,
+// so historical approvals are not retroactively dismissed.
+func approvalRevisionMatches(a *ent.Approval, cr *ent.ApprovalRequest) bool {
+	return a.ApprovedAtRevision == 0 || a.ApprovedAtRevision == cr.ChangesetRevision
+}
+
+// versionMismatches reports the items whose ENTITY has moved since the caller
+// read it.
+//
+// The whole creation-time precondition, since `before` was removed: one token
+// per item, meaning what `version` means on /graphql. Field-level protection
+// still exists, but at MERGE, from the server-recorded ancestor (`base_values`)
+// rather than from anything a client asserts.
+//
+// Costs nothing extra. `versions` is the same orbId→version map base_hash is
+// built from, already read for the whole scope in one query, so there is no
+// snapshot to take and nothing to fall back to when a read fails.
+//
+// An item with no Version is unconditional and is skipped — omission is not
+// an error. An item whose entity is absent never reaches here: Validate refuses
+// it, because a precondition with nothing to compare against is a malformed
+// proposal rather than a conflict.
+func versionMismatches(versions map[string]int, cs approval.Changeset) []approval.ValidationError {
+	var out []approval.ValidationError
+	for i, item := range cs.Changes {
+		if item.Version == nil {
+			continue
+		}
+		cur, present := versions[item.OrbID]
+		if !present || cur == *item.Version {
+			continue
+		}
+		out = append(out, approval.ValidationError{
+			Index: i, OrbID: item.OrbID,
+			Msg:  fmt.Sprintf("entity moved since you read it: you saw version %d, it is now %d", *item.Version, cur),
+			Hint: "Someone changed this entity while you were composing. Reload it and propose again.",
+		})
+	}
+	return out
+}
+
+// staleWithEntities is errCRStale that can say WHICH entities moved.
+//
+// It wraps the sentinel rather than replacing it, so every `errors.Is(err,
+// errCRStale)` in the codebase keeps working and the HTTP status and code are
+// unchanged. What is added is `problems[]` — the same envelope a field-level
+// refusal already produces, so a client that renders one renders both.
+//
+// The entities come from base_versions, NOT from any client-supplied token. A
+// stored `version` is the author's read at proposal time: once anything moves
+// that entity the token is permanently wrong, and re-approval — which is how
+// staleness is meant to be cleared, in one click — could never satisfy it.
+// base_versions is re-captured wherever base_hash is, so it moves with the
+// review instead of outliving it.
+type staleWithEntities struct{ Problems []approval.ValidationError }
+
+func (e *staleWithEntities) Error() string { return errCRStale.Error() }
+func (e *staleWithEntities) Unwrap() error { return errCRStale }
+
+// namedStale explains a stale request by diffing the stored version vector
+// against the current one.
+//
+// Falls back to the bare sentinel in the two cases where the vector cannot
+// explain the staleness: a row written before base_versions existed, and a hash
+// that moved for a reason the vector does not show. The second is not
+// hypothetical — base_hash is a fingerprint of the vector, so if they disagree
+// something is wrong with our own bookkeeping, and inventing a per-entity story
+// from it would be worse than admitting the request is stale without saying why.
+func namedStale(cr *ent.ApprovalRequest, st crState) error {
+	// Item staleness first — it is the author's to fix, and saying "re-approve"
+	// to a request only the author can unblock sends the reviewer in a circle.
+	if items := staleItems(st.Versions, st.Changeset); len(items) > 0 {
+		problems := make([]approval.ValidationError, 0, len(items))
+		for _, it := range items {
+			problems = append(problems, approval.ValidationError{
+				OrbID: it.OrbID,
+				Msg:   fmt.Sprintf("changed since it was proposed: you sent version %v, it is now %v", it.Reviewed, it.Current),
+				Hint:  "The author rebases this change: re-read the entity, then PATCH the request with the current version.",
+			})
+		}
+		return &staleWithEntities{Problems: problems}
+	}
+	if len(cr.BaseVersions) == 0 {
+		return errCRStale
+	}
+	moved := movedOrbIDs(cr.BaseVersions, st.Versions)
+	if len(moved) == 0 {
+		return errCRStale
+	}
+	ids := make([]string, 0, len(moved))
+	for id := range moved {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	problems := make([]approval.ValidationError, 0, len(ids))
+	for _, id := range ids {
+		was := cr.BaseVersions[id]
+		now, present := st.Versions[id]
+		if !present {
+			// Gone. TARGET_MISSING covers a DECLARED target that vanished; this
+			// is a subtree member, which makes the review stale rather than
+			// unmergeable.
+			problems = append(problems, approval.ValidationError{
+				OrbID: id,
+				Msg:   fmt.Sprintf("no longer exists (was version %d when this was reviewed)", was),
+				Hint:  "Review the recomputed diff, approve again, then merge.",
+			})
+			continue
+		}
+		problems = append(problems, approval.ValidationError{
+			OrbID: id,
+			Msg:   fmt.Sprintf("changed since this was reviewed: version %d, it is now %d", was, now),
+			Hint:  "Review the recomputed diff, approve again, then merge.",
+		})
+	}
+	return &staleWithEntities{Problems: problems}
+}
+
+// staleEntities is what namedStale reports, in the shape a view renders.
+//
+// Same source, same diff, deliberately: a banner that named different entities
+// from the refusal an operator gets when they click Merge would be worse than a
+// banner that named none.
+func staleEntities(cr *ent.ApprovalRequest, st crState) []staleEntity {
+	items := staleItems(st.Versions, st.Changeset)
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]staleEntity, 0, len(items))
+	for _, it := range items {
+		reviewed, _ := it.Reviewed.(int)
+		cur, _ := it.Current.(int)
+		cur2 := cur
+		out = append(out, staleEntity{OrbID: it.OrbID, Reviewed: reviewed, Current: &cur2})
+	}
+	return out
+}
+
+// preconditionFailed carries the `before` assertions that did not match. It is
+// a 409, not a 400: nothing about the request is malformed — the world moved.
+type preconditionFailed struct{ Problems []approval.ValidationError }
+
+func (e *preconditionFailed) Error() string {
+	return fmt.Sprintf("precondition failed on %d field(s)", len(e.Problems))
+}
+
+// baseValuesFrom projects the ANCESTOR out of a snapshot: for every field the
+// changeset writes or clears, the value that field holds right now.
+//
+// Predicate-keyed and taken straight off the normalized snapshot, so a merge-time
+// comparison is between two values that went through the same normalizer. Storing
+// the caller's raw input instead would put a hand-written value on one side of
+// that comparison and a DGraph round-trip on the other.
+//
+// Scoped to the fields the changeset touches, not the whole subtree: a six-field
+// changeset stores six values.
+func baseValuesFrom(snap graphdiff.Snapshot, cs approval.Changeset) map[string]map[string]any {
+	out := make(map[string]map[string]any, len(cs.Changes))
+	for _, item := range cs.Changes {
+		node := snap[item.OrbID]
+		if node == nil {
+			continue // a create has no ancestor
+		}
+		typeName := item.Type
+		if typeName == "" && len(node.Types) > 0 {
+			typeName = node.Types[0]
+		}
+		vals := map[string]any{}
+		record := func(f string) {
+			pred := predicateFor(typeName, f)
+			if v, ok := node.Fields[pred]; ok {
+				vals[pred] = v
+				return
+			}
+			if e, ok := node.Edges[pred]; ok {
+				vals[pred] = e
+				return
+			}
+			vals[pred] = nil // absent now; "still absent" is a meaningful ancestor
+		}
+		for f := range item.Set {
+			record(f)
+		}
+		for _, f := range item.Clear {
+			record(f)
+		}
+		if len(vals) > 0 {
+			out[item.OrbID] = vals
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// satisfiedItems reports the part of a changeset that would do nothing: fields
+// whose current value already equals the proposed one, and deletes whose target
+// is already gone.
+//
+// Derived FROM the computed diff rather than by re-comparing values. A second
+// comparison would need its own view of what "equal" means — DGraph round-trips
+// some scalars as strings, and graphdiff normalizes before comparing — so two
+// implementations would disagree on exactly the edge cases this exists to
+// surface. Absence from the diff IS the definition of satisfied.
+//
+// Entries carry equal before/after so a client can render them with the same
+// table it uses for changes.
+func satisfiedItems(current graphdiff.Snapshot, cs approval.Changeset, res *graphdiff.Result) []*graphdiff.Change {
+	// Predicates the diff already reports as changing, per orbId.
+	changed := make(map[string]map[string]bool, len(res.Changes))
+	for _, ch := range res.Changes {
+		if ch == nil {
+			continue
+		}
+		m := make(map[string]bool, len(ch.Fields))
+		for _, f := range ch.Fields {
+			m[f.Field] = true
+		}
+		changed[ch.OrbID] = m
+	}
+
+	var out []*graphdiff.Change
+	for _, item := range cs.Changes {
+		node := current[item.OrbID]
+
+		if item.Op == approval.OpDelete {
+			// Already gone: the delete is a no-op. An entity still present is a
+			// real removal and belongs in `changes`, not here.
+			if node == nil {
+				out = append(out, &graphdiff.Change{OrbID: item.OrbID, Type: item.Type, Change: "satisfied"})
+			}
+			continue
+		}
+		// A create has no current node, so every field is genuinely new and the
+		// diff reports the whole entity as added. Nothing to report here.
+		if node == nil {
+			continue
+		}
+
+		typeName := item.Type
+		if typeName == "" && len(node.Types) > 0 {
+			typeName = node.Types[0]
+		}
+
+		var fields []graphdiff.FieldChange
+		for f := range item.Set {
+			pred := predicateFor(typeName, f)
+			if changed[item.OrbID][pred] {
+				continue // the diff says this one moves
+			}
+			cur, isField := node.Fields[pred]
+			if !isField {
+				// Edge references live in Edges, not Fields. An edge the diff
+				// does not report is likewise already pointing where the
+				// changeset wants it.
+				if _, isEdge := node.Edges[pred]; !isEdge {
+					continue // neither field nor edge: nothing to say about it
+				}
+				cur = nil
+			}
+			fields = append(fields, graphdiff.FieldChange{Field: pred, Before: cur, After: cur})
+		}
+		for _, f := range item.Clear {
+			pred := predicateFor(typeName, f)
+			if changed[item.OrbID][pred] {
+				continue
+			}
+			if _, present := node.Fields[pred]; present {
+				continue // still set, so clearing it would change something
+			}
+			fields = append(fields, graphdiff.FieldChange{Field: pred, Before: nil, After: nil})
+		}
+		if len(fields) == 0 {
+			continue
+		}
+		sort.Slice(fields, func(i, j int) bool { return fields[i].Field < fields[j].Field })
+		out = append(out, &graphdiff.Change{
+			OrbID: item.OrbID, Type: typeName, Change: "satisfied", Fields: fields,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].OrbID < out[j].OrbID })
+	return out
+}
+
 func applyChangesetTo(current graphdiff.Snapshot, cs approval.Changeset) graphdiff.Snapshot {
 	target := make(graphdiff.Snapshot, len(current))
 	for id, n := range current {

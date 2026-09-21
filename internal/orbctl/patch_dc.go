@@ -82,6 +82,7 @@ var patchJSON string
 var dcPatchFieldTypes = map[string]string{
 	"name":        "String",
 	"assetDataV2": "String",
+	"model":       "DataCenterModel",
 }
 
 func init() {

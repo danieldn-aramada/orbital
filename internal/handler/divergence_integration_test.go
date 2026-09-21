@@ -139,20 +139,25 @@ func TestAccept_DispatchesMutationAndRecordsResolution(t *testing.T) {
 		t.Fatalf("PutResolution(accept) failed: %v", err)
 	}
 
-	// Sanity-check the dispatched mutation hits the right type, declares
-	// {Type}Filter/{Type}Patch, and carries the override value as a variable.
+	// The dispatched mutation must hit the right type AND use the canonical
+	// update{Kind}($orbId, $set) shape. The shape is not cosmetic: writeToDGraph
+	// resolves the row to stamp from the `orbId` VARIABLE, so the $filter-object
+	// form this used to send produced an unstamped write — no version bump, and
+	// therefore invisible to change-request staleness. Asserting the shape is
+	// asserting the stamp is reachable.
 	if receivedBody.Query == "" {
 		t.Fatal("expected DGraph to be called with a mutation, got nothing")
 	}
-	for _, want := range []string{"updateServer", "ServerFilter!", "ServerPatch!"} {
+	for _, want := range []string{"updateServer", "$orbId: String!", "ServerPatch!"} {
 		if !strings.Contains(receivedBody.Query, want) {
 			t.Errorf("mutation missing %q; got: %s", want, receivedBody.Query)
 		}
 	}
-	filter, _ := receivedBody.Variables["filter"].(map[string]any)
-	orbIDFilter, _ := filter["orbId"].(map[string]any)
-	if got, _ := orbIDFilter["eq"].(string); got != "colo:srv-001" {
-		t.Errorf("variables.filter.orbId.eq: got %q, want %q", got, "colo:srv-001")
+	if strings.Contains(receivedBody.Query, "ServerFilter") {
+		t.Errorf("mutation still declares a $filter object — the row cannot be resolved for stamping: %s", receivedBody.Query)
+	}
+	if got, _ := receivedBody.Variables["orbId"].(string); got != "colo:srv-001" {
+		t.Errorf("variables.orbId: got %q, want %q", got, "colo:srv-001")
 	}
 	set, _ := receivedBody.Variables["set"].(map[string]any)
 	if got, _ := set["sshEnabled"].(bool); got != true {

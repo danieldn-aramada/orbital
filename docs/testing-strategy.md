@@ -127,17 +127,50 @@ One shared DGraph instance per test run. Drop-all + schema-apply + minimal seed 
 
 **Exception -- restore tests:** Restore performs `drop_all` on DGraph, which wipes everything. Restore tests need their own isolated DGraph instance or must run last in the suite.
 
+**The integration suite has its OWN DGraph — `dgraph-alpha-test` on `:8083`.** Blue (`:8080`) is your working graph and the suite never reaches it, so there is no ordering to get right: run tests whenever, restore whenever, in any order. `testutil.DGraphURL()` defaults to `:8083`, and `ResetDGraphE` **refuses** to `drop_all` `:8080`/`:8082` even if something overrides the URL — override with `ORBITAL_ALLOW_DEV_DGRAPH_WIPE=true` only if you genuinely mean to wipe your own graph.
+
+*This replaces a rule that said "run integration tests FIRST, restore your data LAST." That rule was correct and still lost the graph three times, because it was a human protocol guarding a shared mutable resource — `TestMain` calls `ResetDGraphE` as package-level setup, before test selection, so `-run` never protected anything and one unplanned second test run undid a restore. PostgreSQL never had the problem: `EnsureTestDatabase` gives the suite its own `orbital_test` database. The DGraph half was simply never done. Added `:8083` on 2026-09-15; if you find yourself writing another sequencing rule, add isolation instead.*
+
+**"resolving export failed because task failed" means a STALE BIND MOUNT, not a code defect.** DGraph's native export writes into a host directory bind-mounted at `/dgraph/export`. On macOS, if that host directory is deleted and recreated after the container started, the container holds the old inode: `ls -ld /dgraph/export` still succeeds, but every write inside it returns ENOENT. DGraph reports only the sentence above, naming neither the mount nor the path, and the tests that consume it (`TestExportPipeline_*`, `TestExportCompare_*`, `TestBackup*`) fail by 16-second timeout — which reads exactly like a product bug. It cost two days of "known pre-existing failures" on 2026-09-15; the fix was `docker compose restart`, and the code was never wrong.
+
+Run `bash scripts/check-export-mounts.sh` to find it — it probes a write from inside each alpha and checks the host sees it, then prints the restart command for whichever is stale. `make up` now pre-creates the three mount targets (a missing host path at container start is the trigger) and `make test-integration` runs the probe before the suite, so this should fail loudly rather than as a mystery timeout.
+
+**Recovering a wiped local graph:** `POST /api/v1/restore {"backupId": "<id>"}` from `GET /api/v1/backup/jobs`. On macOS you must start orbital with **`TMPDIR=/tmp`** — restore uses `os.MkdirTemp("")`, which resolves to `$TMPDIR` (`/var/folders/...`), while the `dgraph` host wrapper mounts only `/tmp`, so `dgraph live` fails with `no such file or directory` *after* `drop_all` has already run. Tracked in `docs/planning/debt.md`.
+
 ### PostgreSQL isolation strategy
 
 Use `ent/enttest` backed by the test PostgreSQL instance. Truncate all tables in `TestMain` before the suite runs. Individual tests that create records should use `t.Cleanup` to delete them, or rely on the next suite-level truncation.
 
 **When adding a new ent schema type, add its table to `truncateAll` in `internal/testutil/db.go`.** Missing tables leak cursor/state rows between tests and produce silent failures (tests skip work rather than error, so nothing fails loudly at the skip site).
 
+### Test the configuration production actually runs
+
+**A test that constructs a handler with non-production settings asserts nothing about production.** Real burn 2026-09-14: `NewGraphQL(..., rejectInlineSelectors)` took `false` in every test while production runs `true`, so 21 green tests certified a bug fix that was only half done — the guard the fix had to clear lives behind that flag. Flipping the sites that drive `Handle` surfaced **three** tests asserting success through a request shape production refuses outright (`updateX(input:{})`).
+
+- **Pass production's value** unless the test's subject IS the other setting (one site in `graphql_inline_selector_test.go` legitimately passes `false` — it tests the kill switch).
+- **Prefer a named constructor over a bare bool** so the configuration under test is stated, not positional.
+- **Cover the layer clients hit.** The approval-gate suite drives `writeToDGraph` directly; the guard lives in `Handle`, so no gate test ever crossed the boundary a real caller does. When a change guards a write, add at least one test through `Handle`.
+
 ### Playwright isolation strategy
 
 Tests share the same orbital instance and seeded DGraph. Tests that mutate data (e.g., edit a DC name) must restore original values in cleanup (`afterEach`) or use a value unlikely to conflict with other tests. The global `?fresh=1` URL parameter (which clears `localStorage` tab state) should be used at the start of any test that cares about tab state.
 
 ---
+
+## Multi-replica behaviour
+
+**A guarantee about N processes must be validated with N processes.** Concurrent requests to one instance, and racing goroutines in one test process, exercise the *database* guarantee only — they do not prove that a second replica booting leaves the first replica's running job alone, which is the failure this class of work exists to prevent.
+
+Run a second replica locally; `ORBITAL_PORT` is all it takes, and both share the same PostgreSQL and DGraph:
+
+```bash
+ORBITAL_PORT=8001 ./bin/orbital &
+ORBITAL_PORT=8002 ./bin/orbital &
+```
+
+**Demonstrate the regression, not only the fix.** A throwaway binary built from the pre-change code path, pointed at the same row, turns "this would have been destructive" from a claim into evidence. Revert it immediately.
+
+**Grep the process's own startup log for every setting you passed** before trusting the run. An experiment whose flags were ignored looks exactly like one that passed. Note that **zsh does not word-split unquoted variables**, so `env $COMMON ./bin/orbital` sends the entire string as ONE assignment and silently drops the rest — pass vars explicitly.
 
 ## Async Pipeline Testing
 
@@ -232,7 +265,7 @@ e2e-tests (full orbital stack + Playwright)
 | Session management, CSRF | `auth/session_test.go` (10 tests) | Full roundtrip: set/get/clear session, CSRF create/validate/idempotent, OIDC state set/get/clear |
 | Bearer token validation | `auth/bearer_test.go` (6 tests) | Local OIDC httptest server with RSA key pair; valid/expired/wrong-audience/UPN-fallback |
 | Login handler | `handler/login_test.go` (7 integration tests) | CSRF failure, wrong password, unknown email, SSO account, success + HX-Redirect, logout valid/invalid CSRF |
-| GraphQL proxy handler | `handler/graphql_handler_test.go` (9 tests) | isMutation, hasGQLErrors, extractOperations (pure), proxy passthrough, mutation proxy, ifVersion stripping, MVCC conflict/match, GQL error audit suppression |
+| GraphQL proxy handler | `handler/graphql_handler_test.go` (9 tests) | isMutation, hasGQLErrors, extractOperations (pure), proxy passthrough, mutation proxy, version stripping, MVCC conflict/match, GQL error audit suppression |
 | OIDC callback handler | `handler/oidc_test.go` (6 integration tests) | Local httptest OIDC provider with RSA key, token endpoint, JWKS; login redirect, state validation (missing/wrong), new user provisioning, existing user reuse, empty email rejection |
 | Audit event write-through | `handler/graphql_event_test.go` (2 integration tests) | Mutation writes audit event with correct fields (operations, resourceTypes, resourceIds); GQL errors suppress audit event |
 | Export JSON API | `handler/export_api_test.go` (8 integration tests) | List empty/populated, Status happy/400/404, Trigger 409 conflict, Download 400/404 |

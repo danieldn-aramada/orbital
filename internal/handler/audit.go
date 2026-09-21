@@ -54,6 +54,11 @@ type eventItem struct {
 	Timestamp     string          `json:"timestamp"     example:"2026-07-29T17:26:55Z"`
 	Details       json.RawMessage `json:"details,omitempty" swaggertype:"object"` // raw {operationName, query, variables, before}
 	EventCategory string          `json:"eventCategory" example:"data"`           // data | management | auth
+	// CloudTrail parity. All three are omitempty: absent means "no HTTP request
+	// behind this event" (a background writer), which is different from empty.
+	EventSource     string `json:"eventSource,omitempty"     example:"graphql"`  // graphql | rest | internal
+	SourceIPAddress string `json:"sourceIpAddress,omitempty" example:"10.1.2.3"` // caller address
+	RequestID       string `json:"requestId,omitempty"       example:"a1b2c3d4"` // correlates events from one request
 	// Changes is the pre-computed field-level diff. **Present ONLY for a clean
 	// single-entity update** (omitted otherwise via omitempty) — so its presence
 	// is the client's signal that a field diff is available; no need to inspect
@@ -75,6 +80,7 @@ type fieldChange struct {
 
 type eventDetails struct {
 	OperationName string         `json:"operationName"`
+	Query         string         `json:"query"`
 	Variables     map[string]any `json:"variables"`
 	Before        map[string]any `json:"before"`
 }
@@ -93,7 +99,6 @@ var skipDiffFields = map[string]bool{
 	"createdBy": true,
 	"updatedAt": true,
 	"updatedBy": true,
-	"ifVersion": true,
 }
 
 type eventsFragmentData struct {
@@ -265,6 +270,10 @@ func (h *AuditHandler) List(c echo.Context) error {
 			Timestamp:     e.Timestamp.UTC().Format(time.RFC3339),
 			Details:       e.Details,
 			EventCategory: e.EventCategory,
+
+			EventSource:     e.EventSource,
+			SourceIPAddress: e.SourceIPAddress,
+			RequestID:       e.RequestID,
 		}
 		var d eventDetails
 		if len(e.Details) > 0 {
@@ -273,11 +282,11 @@ func (h *AuditHandler) List(c echo.Context) error {
 		// Structured diff for the JSON API — present only for a clean
 		// single-entity update (same guard the HTML panel uses below).
 		if d.Before != nil && len(resTypes) > 0 {
-			item.Changes = computeChanges(d.Before, d.Variables)
+			item.Changes = computeChanges(d.Before, d.Variables, d.Query)
 		}
 		if c.Request().Header.Get("HX-Request") == "true" {
 			if d.Before != nil && len(resTypes) > 0 {
-				item.DiffHTML = buildDiffHTML(d.Before, d.Variables)
+				item.DiffHTML = buildDiffHTML(d.Before, d.Variables, d.Query)
 			}
 			if item.DiffHTML == "" {
 				item.VarSummary = buildVarSummary(e.Details)
@@ -350,12 +359,20 @@ func buildVarSummary(raw json.RawMessage) template.HTML {
 // (buildDiffHTML) derive from this, so they can never disagree about a diff.
 //
 // Patch-style mutations (`update{Type}(input: {filter, set: $set})`) keep
-// after-values nested under variables["set"]; user-driven flat-shape edits keep
+// after-values nested under a patch variable; user-driven flat-shape edits keep
 // them at the top level. Both shapes work. Generic across resource types — new
 // ConfigItem types diff automatically with no edits here.
-func computeChanges(before, variables map[string]any) []fieldChange {
+//
+// `query` is needed because the patch variable need not be called `set`. Reading
+// only variables["set"] and falling back to the WHOLE variables map is the
+// dangerous shape: for `set: $patch` the fallback intersects {"orbId","patch"}
+// with the before-state, matches nothing, and renders an audit row with no
+// changes at all — no error, while the write itself lands normally. Resolved
+// through resolveSetMap, the same helper the stamper writes through. Audit rows
+// persist `query` alongside `variables`, so historical rows resolve too.
+func computeChanges(before, variables map[string]any, query string) []fieldChange {
 	after := variables
-	if set, ok := variables["set"].(map[string]any); ok {
+	if set, _, ok := resolveSetMap(query, variables); ok {
 		after = set
 	}
 	// Intersection of before and after keys, stable-sorted, metadata excluded.
@@ -386,9 +403,9 @@ func computeChanges(before, variables map[string]any) []fieldChange {
 // the audit panel shows. Returns "" when nothing changed. It is a pure renderer
 // over computeChanges — the field selection lives there, so the HTML and the JSON
 // `changes` array always agree.
-func buildDiffHTML(before, variables map[string]any) template.HTML {
+func buildDiffHTML(before, variables map[string]any, query string) template.HTML {
 	var sections strings.Builder
-	for _, c := range computeChanges(before, variables) {
+	for _, c := range computeChanges(before, variables, query) {
 		beforeStr := valStr(c.Before, c.After)
 		afterStr := valStr(c.After, c.After)
 		beforeLines := prettyLines(beforeStr)
@@ -513,10 +530,42 @@ func valStr(v, ref any) string {
 	return fmt.Sprintf("%v", v)
 }
 
+// auditOrigin is WHERE a write came from: which surface, which caller, which
+// HTTP request. CloudTrail parity — see docs/reference/AUDIT.md.
+//
+// A plain value, and that is the point. The audit write runs in a goroutine
+// (`go h.auditMutation(...)`), and Echo POOLS AND REUSES its Context objects —
+// holding one past the handler's return reads whatever request recycled it
+// next, so the IP on an audit row could belong to a different caller. A wrong
+// IP is worse than a missing one: it reads as fact. Capture at the boundary
+// with originFromContext, pass the value.
+//
+// Zero value = an internal write with no request behind it, which is the honest
+// record for the backup scheduler, the restore job and DispatchMutation.
+type auditOrigin struct {
+	Source    string // "graphql" | "rest" | "internal"
+	IP        string // caller address; empty for internal writers
+	RequestID string // X-Request-Id, correlating every event from one request
+}
+
+// auditInternal is the origin for writes with no HTTP request behind them.
+func auditInternal() auditOrigin { return auditOrigin{Source: "internal"} }
+
+// originFromContext captures the request-scoped values an audit row needs,
+// at the boundary, while the Context is still valid. source is the surface:
+// "graphql" for the proxy, "rest" for /api/v1 handlers.
+func originFromContext(c echo.Context, source string) auditOrigin {
+	return auditOrigin{
+		Source:    source,
+		IP:        c.RealIP(),
+		RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
+	}
+}
+
 // writeAuditEvent persists a single audit event row. Failures are logged and
 // swallowed — audit writes must never block or fail a request.
 // eventCategory must be "data" (entity mutations), "management" (system operations), or "auth" (login/logout events).
-func writeAuditEvent(db *ent.Client, logger *slog.Logger, eventCategory, actor, opName string, operations, resourceTypes, resourceIDs []string, details map[string]any) {
+func writeAuditEvent(db *ent.Client, logger *slog.Logger, eventCategory, actor, opName string, operations, resourceTypes, resourceIDs []string, details map[string]any, origin auditOrigin) {
 	raw, _ := json.Marshal(details)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -534,6 +583,18 @@ func writeAuditEvent(db *ent.Client, logger *slog.Logger, eventCategory, actor, 
 		SetDetails(json.RawMessage(raw))
 	if len(operations) > 0 {
 		ec = ec.SetOperations(operations)
+	}
+	// Set only what we actually have. Writing "" would turn "no HTTP request
+	// behind this event" into an empty-string value an operator filtering the
+	// column has to learn to ignore.
+	if origin.Source != "" {
+		ec = ec.SetEventSource(origin.Source)
+	}
+	if origin.IP != "" {
+		ec = ec.SetSourceIPAddress(origin.IP)
+	}
+	if origin.RequestID != "" {
+		ec = ec.SetRequestID(origin.RequestID)
 	}
 
 	ev, err := ec.Save(ctx)

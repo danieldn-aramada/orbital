@@ -299,7 +299,7 @@ func fetchOrbIDSubgraph(ctx context.Context, dgraphURL string, orbIDs []string) 
 // What it does NOT see is a write that reaches DGraph without passing through
 // orbital and therefore never bumped the counter. That trade is deliberate: the
 // counter IS orbital's MVCC, and a check that trusts it is consistent with
-// every other place orbital relies on it — including the `ifVersion` conflict
+// every other place orbital relies on it — including the `version` conflict
 // check on the mutation path.
 //
 // Entities absent from the graph are absent from the map, which is what makes
@@ -411,11 +411,7 @@ func presentInVersions(versions map[string]int, scope []string) []string {
 // the proposal they just wrote — especially when the proposal itself is already
 // validated and its staleness anchor already captured. The error is returned so
 // the caller can log it, not so it can abort.
-func storedEffect(ctx context.Context, dgraphURL string, scope []string, cs approval.Changeset) (json.RawMessage, error) {
-	snap, err := baseSnapshot(ctx, dgraphURL, scope)
-	if err != nil {
-		return nil, fmt.Errorf("snapshot for effect summary: %w", err)
-	}
+func storedEffect(snap graphdiff.Snapshot, cs approval.Changeset) (json.RawMessage, error) {
 	res := graphdiff.Compare(snap, applyChangesetTo(snap, cs))
 	out, err := json.Marshal(effectFromDiff(res))
 	if err != nil {

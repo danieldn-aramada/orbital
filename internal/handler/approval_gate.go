@@ -60,7 +60,7 @@ func (e *gatedError) Error() string { return e.Message }
 // in play. Callers stamp that onto the audit event: a bypass has to be
 // queryable after the fact, not merely visible in a log stream someone would
 // have to already suspect something to go looking through.
-func (h *GraphQL) checkApprovalPolicy(ctx context.Context, body []byte, caller callerRole) (bypassed string, err error) {
+func (h *GraphQL) checkApprovalPolicy(ctx context.Context, body []byte, caller callerRole, actor string) (bypassed string, err error) {
 	// Feature switched off entirely: policies may still sit in the database, and
 	// none of them applies. Checked first and before any work.
 	if !changeControlEnabled {
@@ -86,6 +86,25 @@ func (h *GraphQL) checkApprovalPolicy(ctx context.Context, body []byte, caller c
 	// respBody is nil on purpose: this runs BEFORE the write, so the only
 	// available orbIds are the ones the caller supplied.
 	orbIDs := extractResourceIDs(req.Query, req.Variables, nil)
+
+	return h.checkPolicyFor(ctx, orbIDs, types, caller, actor)
+}
+
+// checkPolicyFor is the policy decision with no mutation body in sight.
+//
+// Extracted 2026-09-03 so the cascade-delete endpoint can ask the same question.
+// That path never had a body to parse — it plans a cascade over N entities and
+// several types, then POSTs a DQL delete — so it walked straight past a check
+// built around `req.Query`, and `DELETE` succeeded on an entity whose `update`
+// was refused seconds earlier. A control with a shape that only one caller can
+// satisfy is a control with a hole in it.
+//
+// Same rules, same order, same return contract as checkApprovalPolicy: the
+// label of the policy the caller BYPASSED, or "" when none was in play.
+func (h *GraphQL) checkPolicyFor(ctx context.Context, orbIDs, types []string, caller callerRole, actor string) (bypassed string, err error) {
+	if !changeControlEnabled || h.db == nil || len(types) == 0 {
+		return "", nil
+	}
 	namespaces := namespacesOf(orbIDs)
 
 	pol, err := h.matchingPolicy(ctx, namespaces, types)
@@ -99,7 +118,7 @@ func (h *GraphQL) checkApprovalPolicy(ctx context.Context, body []byte, caller c
 	// deployments untouched while closing the bypass for governed ones. See
 	// rejectUndeterminable for why this fails closed.
 	if len(namespaces) == 0 {
-		return "", h.rejectUndeterminable(ctx, types)
+		return "", h.rejectUndeterminable(ctx, types, actor)
 	}
 
 	if pol == nil {
@@ -115,20 +134,35 @@ func (h *GraphQL) checkApprovalPolicy(ctx context.Context, body []byte, caller c
 		// not a silent one. The label is returned so it lands on the audit
 		// event alongside the mutation itself.
 		h.logger.Warn("privileged write — bypassed an approval policy",
-			"policy", pol.Namespace,
+			"policy", policyLabel(pol),
+			"actor", actor,
 			"role", string(caller.Role),
 			"types", strings.Join(types, ","),
 			"orb_ids", strings.Join(orbIDs, ","))
-		return pol.Namespace, nil
+		return policyLabel(pol), nil
 	}
+
+	// Refusals are NOT audited — that is ratified (AUDIT.md § Row admission: the
+	// caller has the role, the workflow says "not yet", so no state changed and
+	// no security event occurred). The decision explicitly routes the question
+	// "what was blocked pending review" to the app log instead, which makes THIS
+	// line the durable answer rather than a debugging aid. It therefore carries
+	// the same fields as the bypass line ten lines up: without orb_ids the log
+	// could say someone was blocked but not from changing what.
+	h.logger.Warn("write refused — approval required",
+		"policy", policyLabel(pol),
+		"actor", actor,
+		"role", string(caller.Role),
+		"types", strings.Join(types, ","),
+		"orb_ids", strings.Join(orbIDs, ","))
 
 	return "", &gatedError{
 		Status: http.StatusForbidden,
 		Code:   CodeApprovalRequired,
 		Message: fmt.Sprintf("changes to %s require approval (%d)",
-			pol.Namespace, pol.RequiredApprovals),
+			policyLabel(pol), pol.RequiredApprovals),
 		Hint:   "Open a change request: POST /api/v1/change-requests with this change as its changeset.",
-		Policy: pol.Namespace,
+		Policy: policyLabel(pol),
 	}
 }
 
@@ -150,7 +184,7 @@ func (h *GraphQL) checkApprovalPolicy(ctx context.Context, body []byte, caller c
 // while the dev stack had no policies, then failed the moment a developer
 // configured one. That is the guard working. Write fixtures in the variable
 // form like every real client does.
-func (h *GraphQL) rejectUndeterminable(ctx context.Context, types []string) error {
+func (h *GraphQL) rejectUndeterminable(ctx context.Context, types []string, actor string) error {
 	n, err := h.db.ApprovalPolicy.Query().
 		Where(
 			approvalpolicy.ActionTypeEQ(approval.ActionTypeConfigMutation),
@@ -163,6 +197,14 @@ func (h *GraphQL) rejectUndeterminable(ctx context.Context, types []string) erro
 		return nil
 	}
 	kind := types[0]
+	// No orb_ids field: there are none, and that IS the refusal. Logged anyway so
+	// a governed deployment can see that someone tried, which is the whole point
+	// of failing closed here.
+	h.logger.Warn("write refused — governing namespace undeterminable",
+		"actor", actor,
+		"types", strings.Join(types, ","),
+		"reason", "no orbId could be resolved from the mutation")
+
 	return &gatedError{
 		Status:  http.StatusBadRequest,
 		Code:    CodeVariableFormRequired,
@@ -190,19 +232,18 @@ func (h *GraphQL) matchingPolicy(ctx context.Context, namespaces, types []string
 	if len(namespaces) == 0 {
 		return nil, nil
 	}
-	rows, err := h.db.ApprovalPolicy.Query().
-		Where(
-			approvalpolicy.ActionTypeEQ(approval.ActionTypeConfigMutation),
-			approvalpolicy.EnabledEQ(true),
-			approvalpolicy.NamespaceIn(namespaces...),
-		).
-		Order(ent.Asc(approvalpolicy.FieldNamespace)).
-		All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("resolve approval policy: %w", err)
-	}
-
-	for _, p := range rows {
+	// One resolution rule, shared with the change-request engine — see
+	// governingPolicy. A mutation may touch several namespaces, so each is
+	// resolved separately and the first governing answer wins; namespacesOf
+	// returns them sorted, so which one that is stays deterministic.
+	for _, ns := range namespaces {
+		p, err := governingPolicy(ctx, h.db, approval.ActionTypeConfigMutation, ns)
+		if err != nil {
+			return nil, err
+		}
+		if p == nil {
+			continue
+		}
 		// AllTypes matches anything, including ConfigItem types that did not
 		// exist when the policy was written.
 		if p.AllTypes {

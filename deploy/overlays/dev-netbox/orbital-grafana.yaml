@@ -38,7 +38,7 @@ spec:
         runAsNonRoot: true
       containers:
         - name: grafana
-          image: armada.azurecr.io/chainguard/grafana-fips:13.1.1
+          image: armada.azurecr.io/chainguard/grafana-fips:13.1.5@sha256:cac4a9bba3f0bf433a662cbb58b325c32f0f69cd1c2b1383502ab31d484e0956
           ports:
             - name: http
               containerPort: 3000

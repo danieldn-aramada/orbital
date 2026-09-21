@@ -75,8 +75,8 @@ func (h *ChangeRequest) Merge(ctx context.Context, id int64, actor string, role 
 		// stopped counting the moment the base moved. Report the more
 		// actionable of the two: "the intent changed, re-review" tells an
 		// operator what to do; "not enough approvals" does not.
-		if st.Stale {
-			return nil, errCRStale
+		if st.Stale || st.SubtreeChanged {
+			return nil, namedStale(cr, st)
 		}
 		return nil, fmt.Errorf("%w: %d of %d", errCRNotApproved, st.Valid, st.Required)
 	}
@@ -89,11 +89,44 @@ func (h *ChangeRequest) Merge(ctx context.Context, id int64, actor string, role 
 	// established that, because approvals are stamped with the hash they were
 	// cast against; this catches a write landing between the last approval and
 	// this call, and it is the ONLY guard on an ungoverned request.
-	if st.Stale {
-		return nil, errCRStale
+	// Both signals block: the author owes a rebase, or the reviewer owes a
+	// re-approval. Neither can be merged past.
+	if st.Stale || st.SubtreeChanged {
+		return nil, namedStale(cr, st)
 	}
 
-	targets, err := h.fetchMergeTargets(ctx, st.Changeset.Changes)
+	// Field-level pre-check, ALL items before ANY is applied.
+	//
+	// Atomic on purpose. Kubernetes Server-Side Apply refuses a whole apply when
+	// one field conflicts rather than landing the rest, and the same reasoning
+	// holds here: a reviewer approved a set of changes, so applying an arbitrary
+	// subset of it is not something anyone signed off. The partial-merge
+	// machinery below stays for RUNTIME failures — an entity that vanishes
+	// mid-apply — which is a different thing from a conflict known in advance.
+	//
+	// Requests with no recorded ancestor pass through and remain governed by the
+	// entity-level base_hash alone.
+	items := st.Changeset.Changes
+	if len(cr.BaseValues) > 0 {
+		snap, snapErr := baseSnapshot(ctx, h.dgraphURL, st.Scope)
+		if snapErr != nil {
+			return nil, fmt.Errorf("read current state for conflict check: %w", snapErr)
+		}
+		planned, conflicts := planMerge(snap, st.Changeset, cr.BaseValues)
+		if len(conflicts) > 0 {
+			return nil, &preconditionFailed{Problems: conflicts}
+		}
+		if len(planned) == 0 {
+			// Every field is already at its proposed value. Merging would write
+			// nothing, so record the request as merged without touching intent
+			// rather than emitting version bumps and audit rows for no-ops.
+			h.logger.Info("merge is a no-op; every field already at the proposed value",
+				"change_request", crHumanID(cr))
+		}
+		items = planned
+	}
+
+	targets, err := h.fetchMergeTargets(ctx, items)
 	if err != nil {
 		return nil, fmt.Errorf("read merge targets: %w", err)
 	}
@@ -109,10 +142,10 @@ func (h *ChangeRequest) Merge(ctx context.Context, id int64, actor string, role 
 	// never reproduce, leaving the request permanently stale.
 	before := st.Versions
 	applied := map[string]bool{}
-	results := make([]approval.ItemResult, 0, len(st.Changeset.Changes))
+	results := make([]approval.ItemResult, 0, len(items))
 	var failure error
 
-	for _, item := range st.Changeset.Changes {
+	for _, item := range items {
 		// Fail fast rather than skipping ahead: items may depend on order (a
 		// later item can reference an entity an earlier one creates), so
 		// continuing past a failure produces a cascade of errors that say
@@ -151,7 +184,7 @@ func (h *ChangeRequest) Merge(ctx context.Context, id int64, actor string, role 
 	}
 
 	h.rebaseOrStale(ctx, cr, st, before, applied)
-	return nil, fmt.Errorf("merge applied %d of %d items: %w", len(applied), len(st.Changeset.Changes), failure)
+	return nil, fmt.Errorf("merge applied %d of %d items: %w", len(applied), len(items), failure)
 }
 
 // rebaseOrStale decides whether the approvals on a partly-merged request
@@ -193,7 +226,7 @@ func (h *ChangeRequest) rebaseOrStale(ctx context.Context, cr *ent.ApprovalReque
 	if newHash == cr.BaseHash {
 		return // nothing actually changed; approvals already valid
 	}
-	if _, err := cr.Update().SetBaseHash(newHash).Save(ctx); err != nil {
+	if _, err := cr.Update().SetBaseHash(newHash).SetBaseVersions(after).Save(ctx); err != nil {
 		h.logger.Error("rebase base hash", "change_request", cr.ID, "err", err)
 		return
 	}
@@ -239,10 +272,13 @@ func (h *ChangeRequest) applyItem(ctx context.Context, actor string, caller call
 		return nil // deleting what is not there is an idempotent success
 
 	case item.Op == approval.OpDelete:
+		// Guarded for the same reason as the update branch, and more urgently: a
+		// delete that loses this race destroys an edit with no diff to recover
+		// it from.
 		query := fmt.Sprintf(`mutation Delete%s($orbId: String!) { delete%s(filter: {orbId: {eq: $orbId}}) { numUids } }`,
 			item.Type, item.Type)
 		_, err := h.gql.DispatchMutation(ctx, actor, caller, gate, query,
-			map[string]any{"orbId": item.OrbID}, nil)
+			map[string]any{"orbId": item.OrbID, "version": target.Version}, nil)
 		return err
 
 	case !target.Exists:
@@ -290,7 +326,18 @@ func (h *ChangeRequest) applyItem(ctx context.Context, actor string, caller call
 			remove[f] = cur
 		}
 
-		vars := map[string]any{"orbId": item.OrbID, "set": set}
+		// The write-time half of the guard, and the reason it is target.Version
+		// rather than item.Version: this asserts "the entity is still what I
+		// planned against", read moments ago in fetchMergeTargets. The author's
+		// version is a CREATION-time precondition and would be permanently
+		// stale here for any request that was legitimately re-approved.
+		//
+		// writeToDGraph re-reads the row immediately before the POST and refuses
+		// on mismatch, so a version that moves between fetchMergeTargets and the
+		// mutation is caught. It narrows the window rather than closing it —
+		// DGraph's GraphQL layer has no conditional update, so a true
+		// compare-and-swap would need a DQL upsert block.
+		vars := map[string]any{"orbId": item.OrbID, "set": set, "version": target.Version}
 		mutationBody := "set: $set"
 		decl := fmt.Sprintf("$orbId: String!, $set: %sPatch!", item.Type)
 		if len(remove) > 0 {
@@ -330,6 +377,24 @@ func (h *ChangeRequest) fetchMergeTargets(ctx context.Context, items []approval.
 		fields := map[string]bool{"version": true}
 		for _, f := range item.Clear {
 			fields[f] = true
+		}
+		// The fields being SET are read too, so the audit event's `before` has
+		// something to diff the new values against. Without them a merged change
+		// request logged `before: {version: N}` only, computeChanges intersected
+		// that with the mutation variables, found nothing outside skipDiffFields,
+		// and the audit row fell back to dumping raw variables — while the same
+		// edit saved directly through /graphql showed a proper field diff, because
+		// that path fetches the whole entity first.
+		//
+		// Scalars only: an edge value is a map (`{orbId: …}`) and selecting it
+		// bare is invalid GraphQL — it needs a subselection — and an edge is not
+		// scalar-diffable anyway.
+		for k, v := range item.Set {
+			switch v.(type) {
+			case map[string]any, []any:
+				continue
+			}
+			fields[k] = true
 		}
 		names := make([]string, 0, len(fields))
 		for f := range fields {

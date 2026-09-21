@@ -29,6 +29,8 @@ type ApprovalPolicy struct {
 	UpdatedBy string `json:"updated_by,omitempty"`
 	// ActionType holds the value of the "action_type" field.
 	ActionType string `json:"action_type,omitempty"`
+	// AllNamespaces holds the value of the "all_namespaces" field.
+	AllNamespaces bool `json:"all_namespaces,omitempty"`
 	// Namespace holds the value of the "namespace" field.
 	Namespace string `json:"namespace,omitempty"`
 	// AllTypes holds the value of the "all_types" field.
@@ -51,7 +53,7 @@ func (*ApprovalPolicy) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case approvalpolicy.FieldTypes, approvalpolicy.FieldBypassRoles:
 			values[i] = new([]byte)
-		case approvalpolicy.FieldAllTypes, approvalpolicy.FieldEnabled:
+		case approvalpolicy.FieldAllNamespaces, approvalpolicy.FieldAllTypes, approvalpolicy.FieldEnabled:
 			values[i] = new(sql.NullBool)
 		case approvalpolicy.FieldRequiredApprovals:
 			values[i] = new(sql.NullInt64)
@@ -112,6 +114,12 @@ func (_m *ApprovalPolicy) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field action_type", values[i])
 			} else if value.Valid {
 				_m.ActionType = value.String
+			}
+		case approvalpolicy.FieldAllNamespaces:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field all_namespaces", values[i])
+			} else if value.Valid {
+				_m.AllNamespaces = value.Bool
 			}
 		case approvalpolicy.FieldNamespace:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -205,6 +213,9 @@ func (_m *ApprovalPolicy) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("action_type=")
 	builder.WriteString(_m.ActionType)
+	builder.WriteString(", ")
+	builder.WriteString("all_namespaces=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AllNamespaces))
 	builder.WriteString(", ")
 	builder.WriteString("namespace=")
 	builder.WriteString(_m.Namespace)

@@ -37,6 +37,7 @@ Borrowed from Kubernetes' feature-gate policy — Alpha off by default, Beta on,
 | `ORBITAL_CHANGE_CONTROL_ENABLED` | **Ops** | `true` | Removes the change-control feature entirely: the Change Requests queue, the Approval Policies page, their REST endpoints (**404**, not 403 — the routes are never registered) and the nav section. No mutation is gated. With it off the approval gate never runs either, whatever policies remain in the database. **Deletes nothing**: change requests, approvals and policies stay in PostgreSQL and reappear if it is switched back on. Earns a toggle because the feature is *actively harmful* to an adopter running their own change management — two systems answering "was this approved", with orbital's flow invisible to their org's audit. |
 | `ORBITAL_INLINE_SELECTOR_REJECT` | **Ops** | `true` | Stops rejecting single-entity `update{Kind}` mutations that inline their `orbId`/`set` instead of passing variables. Those writes then proceed **unstamped** — no `version` bump, no `updatedAt`/`updatedBy`. See [`ERROR-RESPONSES.md`](./ERROR-RESPONSES.md). |
 | `ORBITAL_DIVERGENCE_INGEST_ENABLED` | **Ops** | `true` | Stops the S3 poller ingesting divergence reports. Existing entries stay; nothing new arrives. |
+| `ORBITAL_API_AUTH_ENABLED` | **Ops** | *(unset)* | Decides whether bearer verification is installed on `/api/v1` and `/graphql`. **Unset it follows `!ORBITAL_DEV`** — the historical coupling, so nothing changes for an existing deployment. Set explicitly, it wins in every auth mode, which is the point: `ORBITAL_DEV=true` + this `=true` gives API auth **and** template hot-reload, a combination `ORBITAL_DEV` alone cannot express. Explicit `false` switches auth off even in `external-jwt` mode; inherited false does not, because that mode never consulted `ORBITAL_DEV` and silently dropping auth there would be a regression. If auth resolves to enabled but no verifier can be built, orbital **refuses to start**. |
 
 There are currently **no maturity toggles**. Adding one requires naming its removal trigger in this table.
 
@@ -49,6 +50,7 @@ Generated from `internal/config/config.go` — the struct tags are the source of
 | Variable | Default |
 |---|---|
 | `ORBITAL_ADMIN_EMAILS` | `admin@armada.ai` |
+| `ORBITAL_API_AUTH_ENABLED` | — |
 | `ORBITAL_APP_TOKEN_ALLOWED_APPIDS` | `5fc832f6-843e-4207-93dd-b3c3a77c06f2` |
 | `ORBITAL_AUTH_MODE` | — |
 | `ORBITAL_BACKUP_RETENTION_DAYS` | `14` |
@@ -71,13 +73,17 @@ Generated from `internal/config/config.go` — the struct tags are the source of
 | `ORBITAL_EXPORT_TIMEOUT` | `30m` |
 | `ORBITAL_INLINE_SELECTOR_REJECT` | `true` |
 | `ORBITAL_ISSUE_TRACKER_URL` | `https://dev.azure.com/armadasystems/Commander/_workitems/create/Bug?[System.AreaPath]=Commander\Edge\Edge Platform` |
+| `ORBITAL_JOB_HEARTBEAT_INTERVAL` | `10s` |
+| `ORBITAL_JOB_ORPHAN_GRACE` | `1h` |
+| `ORBITAL_JOB_STALE_AFTER` | `60s` |
 | `ORBITAL_JWT_AUDIENCE` | — |
 | `ORBITAL_JWT_CLIENT_ID` | — |
-| `ORBITAL_JWT_DEFAULT_ROLE` | `admin` |
+| `ORBITAL_JWT_DEFAULT_ROLE` | `readonly` |
 | `ORBITAL_JWT_ISSUER` | — |
 | `ORBITAL_LOGIN_RATE_LIMIT_RPS` | `5` |
 | `ORBITAL_LOG_LEVEL` | `info` |
 | `ORBITAL_MAX_REQUEST_BODY` | `10M` |
+| `ORBITAL_MIGRATION_LOCK_TIMEOUT` | `5m` |
 | `ORBITAL_OCI_ALLOW_HTTP` | `true` |
 | `ORBITAL_OCI_PASSWORD` | — |
 | `ORBITAL_OCI_PUBLISH_TIMEOUT` | `10m` |
@@ -97,3 +103,14 @@ Generated from `internal/config/config.go` — the struct tags are the source of
 | `ORBITAL_SESSION_ENCRYPTION_KEY` | `local-dev-enc-key-32-bytes-pad!!` |
 | `ORBITAL_SESSION_HMAC_KEY` | `local-dev-hmac-key-change-in-prod` |
 | `ORBITAL_SHUTDOWN_TIMEOUT` | `10s` |
+
+---
+
+## Multi-replica notes
+
+Orbital runs safely at any replica count (see [`deploy/README.md`](../../deploy/README.md) § High availability). Two settings behave **per pod**, not per cluster:
+
+- **`ORBITAL_RATE_LIMIT_RPS`** — token buckets are in-memory, so the effective ceiling is `RPS x replicas`, including the tighter login bucket. Divide the configured value by the expected replica count. Making it exact would require shared state, promoting Valkey from optimisation to hard dependency — against a settled decision. An approximate limit that degrades gracefully is the better trade.
+- **Connection pool** (`DefaultMaxConns`, 10, not env-configurable) — total load on PostgreSQL is `10 x replicas`; keep it under the server's `max_connections`.
+
+The three `ORBITAL_JOB_*` durations govern job liveness. **`STALE_AFTER` does not need to exceed job duration** — a running job refreshes its heartbeat, so it is provably alive throughout. `ORPHAN_GRACE` applies only to jobs with no heartbeat at all and must stay far longer, because a rolling update can leave one still executing in the outgoing pod. Rationale and precedents: [`OCI.md`](OCI.md) § Job leases.

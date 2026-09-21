@@ -80,6 +80,11 @@ func ActionType(v string) predicate.ApprovalPolicy {
 	return predicate.ApprovalPolicy(sql.FieldEQ(FieldActionType, v))
 }
 
+// AllNamespaces applies equality check predicate on the "all_namespaces" field. It's identical to AllNamespacesEQ.
+func AllNamespaces(v bool) predicate.ApprovalPolicy {
+	return predicate.ApprovalPolicy(sql.FieldEQ(FieldAllNamespaces, v))
+}
+
 // Namespace applies equality check predicate on the "namespace" field. It's identical to NamespaceEQ.
 func Namespace(v string) predicate.ApprovalPolicy {
 	return predicate.ApprovalPolicy(sql.FieldEQ(FieldNamespace, v))
@@ -405,6 +410,16 @@ func ActionTypeContainsFold(v string) predicate.ApprovalPolicy {
 	return predicate.ApprovalPolicy(sql.FieldContainsFold(FieldActionType, v))
 }
 
+// AllNamespacesEQ applies the EQ predicate on the "all_namespaces" field.
+func AllNamespacesEQ(v bool) predicate.ApprovalPolicy {
+	return predicate.ApprovalPolicy(sql.FieldEQ(FieldAllNamespaces, v))
+}
+
+// AllNamespacesNEQ applies the NEQ predicate on the "all_namespaces" field.
+func AllNamespacesNEQ(v bool) predicate.ApprovalPolicy {
+	return predicate.ApprovalPolicy(sql.FieldNEQ(FieldAllNamespaces, v))
+}
+
 // NamespaceEQ applies the EQ predicate on the "namespace" field.
 func NamespaceEQ(v string) predicate.ApprovalPolicy {
 	return predicate.ApprovalPolicy(sql.FieldEQ(FieldNamespace, v))
@@ -458,6 +473,16 @@ func NamespaceHasPrefix(v string) predicate.ApprovalPolicy {
 // NamespaceHasSuffix applies the HasSuffix predicate on the "namespace" field.
 func NamespaceHasSuffix(v string) predicate.ApprovalPolicy {
 	return predicate.ApprovalPolicy(sql.FieldHasSuffix(FieldNamespace, v))
+}
+
+// NamespaceIsNil applies the IsNil predicate on the "namespace" field.
+func NamespaceIsNil() predicate.ApprovalPolicy {
+	return predicate.ApprovalPolicy(sql.FieldIsNull(FieldNamespace))
+}
+
+// NamespaceNotNil applies the NotNil predicate on the "namespace" field.
+func NamespaceNotNil() predicate.ApprovalPolicy {
+	return predicate.ApprovalPolicy(sql.FieldNotNull(FieldNamespace))
 }
 
 // NamespaceEqualFold applies the EqualFold predicate on the "namespace" field.

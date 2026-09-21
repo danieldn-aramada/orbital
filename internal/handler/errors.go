@@ -31,6 +31,7 @@ const (
 	CodeRateLimited          = "RATE_LIMITED"
 	CodeConflict             = "CONFLICT"
 	CodeMVCCConflict         = "MVCC_CONFLICT"
+	CodeWriteContention      = "WRITE_CONTENTION"
 	CodeTargetMissing        = "TARGET_MISSING"
 	CodeApprovalRequired     = "APPROVAL_REQUIRED"
 	CodeUnavailable          = "UNAVAILABLE"

@@ -79,17 +79,36 @@ function rootWithoutSubtrees(state, targets) {
 // mutation. This shape triggers orbital's generic before-fetch + diff renderer.
 // Do NOT change to add{Kind}.upsert — that path skips the before-fetch and
 // shows raw variables instead of a colored diff. See docs/reference/AUDIT.md.
-function buildUpdateCall({ kind, orbId, set, remove, payloadField }) {
+function buildUpdateCall({ kind, orbId, set, remove, payloadField, version }) {
   // `remove` clears fields the user emptied. DGraph ignores null in `set` and
   // rejects "" on typed scalars (DateTime), so clearing requires `remove` with
   // the field's prior value. Only declare/send it when non-empty so existing
   // set-only edits are byte-for-byte unchanged.
   const hasRemove = remove && Object.keys(remove).length > 0
+
+  // version is orbital's OCC check: the proxy compares it to the entity's
+  // CURRENT version and returns 409 if someone else wrote in between. It is
+  // stripped before the body reaches DGraph — a variable orbital consumes, not
+  // one DGraph ever sees — so it is NOT declared in the query, only sent.
+  //
+  // This was lost in b1157ac (2026-06-20) when the per-page edit modals were
+  // replaced by this module: each of them passed version, and the shared
+  // module never carried it forward. MVCC was off on every UI edit for two and
+  // a half months, and nothing failed — version is opt-in server-side, so an
+  // absent client is indistinguishable from one that declined to use it.
+  //
+  // Zero/undefined means the page did not know the version (a first-time
+  // create has none). Omit rather than send 0, which would never match and
+  // would refuse every edit.
+  const guarded = Number.isInteger(version) && version > 0
+  const variables = hasRemove ? { orbId, set, remove } : { orbId, set }
+  if (guarded) variables.version = version
+
   return {
     query: `mutation Update${kind}($orbId: String!, $set: ${kind}Patch!${hasRemove ? `, $remove: ${kind}Patch` : ''}) {
       update${kind}(input: { filter: { orbId: { eq: $orbId } }, set: $set${hasRemove ? ', remove: $remove' : ''} }) { ${payloadField} { orbId } }
     }`,
-    variables: hasRemove ? { orbId, set, remove } : { orbId, set },
+    variables,
   }
 }
 
@@ -200,6 +219,112 @@ function changedOnly(next, prev) {
   return out
 }
 
+// guardVersion is the entity-level precondition for a changeset item: the
+// `version` this page was rendered from.
+//
+// Same token, same meaning, as the `version` a direct save sends — that is
+// the point. A client should not meet two concurrency concepts depending on
+// whether it saves or proposes.
+//
+// Returns undefined when the page has no version for the target, and the item
+// is then unconditional at entity level. Two cases, both legitimate: a
+// first-time CREATE has no version to match (orbital refuses a supplied one at
+// validation, so sending 0 would break every create), and StorageDevice /
+// NetworkInterface targets still carry no version because BuildEditTargets
+// derives their orbIds from the legacy convention — the `leafSuffix` item in
+// debt.md. Those edits stay unguarded on this path exactly as they do on the
+// direct-save path; fix it there and the version arrives for both at once.
+function guardVersion(target) {
+  const v = target && target.version
+  return Number.isInteger(v) && v > 0 ? v : undefined
+}
+
+// staleTargets reads the CURRENT version of every entity this save will update
+// and returns the labels of those that moved since the modal opened. [] when
+// nothing moved, null when the check itself could not run.
+//
+// One aliased query, not one per entity: N round trips here would reintroduce
+// the window this exists to close. query{Kind} rather than get{Kind} — the
+// getter is unreliable for acronym-named types (docs/reference/DGRAPH.md).
+//
+// Creates are skipped: there is no prior version to be stale against. Targets
+// carrying no version are skipped too — they are unguarded by construction, and
+// silently inventing a check for them here would be worse than the honest gap.
+async function staleTargets(changes, rootChange, rootTarget, rootOrbId) {
+  const want = []
+  if (rootChange && rootTarget && Number.isInteger(rootTarget.version) && rootTarget.version > 0) {
+    want.push({ orbId: rootOrbId, kind: rootTarget.kind, version: rootTarget.version })
+  }
+  for (const ch of changes) {
+    const t = ch.target
+    if (t.path.length === 0 || !ch.existed) continue
+    if (!Number.isInteger(t.version) || t.version <= 0) continue
+    want.push({ orbId: t.orbId, kind: t.kind, version: t.version })
+  }
+  if (want.length === 0) return []
+
+  const query = 'query PreflightVersions {\n' + want.map((w, i) =>
+    `  a${i}: query${w.kind}(filter: {orbId: {eq: ${JSON.stringify(w.orbId)}}}) { orbId version }`
+  ).join('\n') + '\n}'
+
+  let body
+  try {
+    const r = await fetch(BASE + '/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    })
+    if (!r.ok) return null
+    body = await r.json()
+  } catch (_) {
+    return null
+  }
+  // A GraphQL-level error means the check did not run. Refusing to save is the
+  // safe answer: proceeding would be exactly the unchecked write this prevents.
+  if (window.gqlErrorMessage && window.gqlErrorMessage(body)) return null
+  const data = (body && body.data) || {}
+
+  const moved = []
+  want.forEach((w, i) => {
+    const rows = data['a' + i]
+    const node = Array.isArray(rows) ? rows[0] : rows
+    if (!node) { moved.push(shortLabel(w)); return }          // vanished since the modal opened
+    if (node.version !== w.version) moved.push(shortLabel(w))
+  })
+  return moved
+}
+
+// matchedNothing reports whether a mutation response wrote nothing: numUids 0,
+// or an empty payload array. The editor selects the payload (`{ x { orbId } }`)
+// and merge selects numUids, so both shapes have to be read — the same two the
+// server's casMissed handles.
+function matchedNothing(body) {
+  const data = body && body.data
+  if (!data || typeof data !== 'object') return false
+  for (const v of Object.values(data)) {
+    if (!v || typeof v !== 'object') continue
+    if (typeof v.numUids === 'number') return v.numUids === 0
+    for (const inner of Object.values(v)) {
+      if (Array.isArray(inner)) return inner.length === 0
+    }
+  }
+  return false
+}
+
+function shortLabel(t) {
+  const id = t.orbId || ''
+  const short = id.includes(':') ? id.slice(id.indexOf(':') + 1) : id
+  return t.kind ? `${t.kind} ${short}` : short
+}
+
+// partialMsg names what DID land. "Conflict — please reload" while two thirds
+// of the edit is committed is worse than the partial write itself: it makes the
+// operator's next decision wrong.
+function partialMsg(applied, reason) {
+  if (!applied.length) return `Nothing was saved — ${reason}.`
+  return `${reason}. SAVED: ${applied.join(', ')}. The rest was not saved — reload before editing again.`
+}
+
 export function buildChangeset({
   namespace, rootTarget, rootOrbId, rootScalars, rootBefore, rootRemove,
   changes, wrappersNeeded, foldedOrbIds,
@@ -241,13 +366,16 @@ export function buildChangeset({
   }
   const rootClear = Object.keys(rootRemove || {}).filter(f => !STAMPED_FIELDS.has(f))
   if (Object.keys(rootSet).length > 0 || rootClear.length > 0) {
-    items.push({
+    const rootItem = {
       orbId: rootOrbId,
       type: rootTarget ? rootTarget.kind : undefined,
       op: 'update',
       set: rootSet,
       clear: rootClear,
-    })
+    }
+    const rootVersion = guardVersion(rootTarget)
+    if (rootVersion !== undefined) rootItem.version = rootVersion
+    items.push(rootItem)
   }
 
   // 4. Everything else — edits to existing children, and creates under a
@@ -271,7 +399,14 @@ export function buildChangeset({
       // value can never be needed and wrong at the same time.
       const clear = Object.keys(removePayload(t, ch.before, sub)).filter(f => !STAMPED_FIELDS.has(f))
       if (Object.keys(set).length === 0 && clear.length === 0) continue
-      items.push({ orbId: t.orbId, type: t.kind, op: 'update', set, clear })
+      const childItem = {
+        orbId: t.orbId, type: t.kind, op: 'update', set, clear,
+      }
+      // Only on the `existed` branch. The create branch below deliberately gets
+      // none — there is no version to match, and orbital refuses a supplied one.
+      const childVersion = guardVersion(t)
+      if (childVersion !== undefined) childItem.version = childVersion
+      items.push(childItem)
     } else {
       const set = withoutStamped({ name: deriveName(t), ...scalarPayload(t, sub) })
       if (t.parentInverseField && t.parentOrbId) {
@@ -472,8 +607,16 @@ function applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, targets, na
     notice.style.display = ''
   }
 
+  // EVERY type in the tree, not just the root. A type-scoped policy governing a
+  // CHILD (say IdracSettings but not Server) used to be invisible here: the
+  // modal offered a plain Save, and the child's mutation then refused 403
+  // mid-sequence — after the parent had already been written. Asking about the
+  // whole tree is the only way the answer can match what the save will do.
   const q = new URLSearchParams({ namespace })
-  if (rootKind) q.set('type', rootKind)
+  const kinds = new Set()
+  if (rootKind) kinds.add(rootKind)
+  for (const t of targets || []) if (t.kind) kinds.add(t.kind)
+  for (const k of kinds) q.append('type', k)
   fetch(BASE + '/api/v1/approval-policies/resolve?' + q.toString(), { headers: { Accept: 'application/json' } })
     .then(r => r.ok ? r.json() : null)
     .then(p => {
@@ -823,11 +966,20 @@ export function initConfigItemEditor({
     // for everything not folded above. Everything is independent at this
     // point — no cross-call ordering dependencies — so parallel is safe.
     const calls = []
+    // labels[i] names calls[i], kept ALONGSIDE rather than on the call object:
+    // the call is JSON.stringify'd straight into the request body, and a stray
+    // field would travel to DGraph. Used only to say which entities landed when
+    // a later call fails.
+    const labels = []
+    const isCreate = []
+    const push = (call, label, create) => { calls.push(call); labels.push(label); isCreate.push(!!create) }
+
     if (rootSet !== null) {
-      calls.push(buildUpdateCall({
+      push(buildUpdateCall({
         kind: rootTarget.kind, orbId: reloadOrbId, set: rootSet, payloadField: rootTarget.payloadField,
         remove: rootChange ? removePayload(rootTarget, rootChange.before, rootChange.currentSub) : {},
-      }))
+        version: rootTarget.version,
+      }), shortLabel({ kind: rootTarget.kind, orbId: reloadOrbId }), false)
     }
     for (const ch of changes) {
       const t = ch.target
@@ -836,14 +988,14 @@ export function initConfigItemEditor({
       const sub = ch.currentSub || {}
       if (ch.existed) {
         // EDIT — canonical update{Kind} triggers the diff renderer.
-        calls.push(buildUpdateCall({
+        push(buildUpdateCall({
           kind: t.kind, orbId: t.orbId, payloadField: t.payloadField,
           set: { ...scalarPayload(t, sub) },
           remove: removePayload(t, ch.before, sub),
-        }))
+          version: t.version,
+        }), shortLabel(t), false)
       } else {
-        // CREATE under an already-existing wrapper (sibling exists). Safe
-        // to parallelize — the wrapper is in DGraph, this is just a link.
+        // CREATE under an already-existing wrapper (sibling exists).
         const input = {
           orbId: t.orbId, name: deriveName(t),
           namespace: t.namespace || '',
@@ -853,8 +1005,19 @@ export function initConfigItemEditor({
         if (t.parentInverseField && t.parentOrbId) {
           input[t.parentInverseField] = { orbId: t.parentOrbId }
         }
-        calls.push(buildAddCall({ kind: t.kind, input, payloadField: t.payloadField }))
+        push(buildAddCall({ kind: t.kind, input, payloadField: t.payloadField }), shortLabel(t), true)
       }
+    }
+
+    // Order: root first — it may CREATE the wrappers the calls below reference
+    // by orbId, so it cannot move. Then creates, then updates: a create is the
+    // likelier failure (required fields, validation), and with sequential
+    // dispatch whatever fails first means everything after it never wrote.
+    {
+      const head = rootSet !== null ? 1 : 0
+      const rest = calls.slice(head).map((c, i) => ({ c, l: labels[head + i], k: isCreate[head + i] }))
+      rest.sort((a, b) => Number(!a.k) - Number(!b.k)) // creates (true) first; stable otherwise
+      rest.forEach((e, i) => { calls[head + i] = e.c; labels[head + i] = e.l; isCreate[head + i] = e.k })
     }
 
     // The proposal path. Same computed edit, different destination: a change
@@ -871,19 +1034,66 @@ export function initConfigItemEditor({
       })
     }
 
-    // Dispatch in parallel. Each becomes its own audit row.
-    let responses
-    try {
-      responses = await Promise.all(calls.map(c =>
-        fetch(BASE + '/graphql', {
+    // PRE-FLIGHT. Every failure orbital can see in advance is checked here,
+    // before the first write, so it becomes a refusal that changed nothing
+    // rather than a partial edit.
+    //
+    // The window this closes is the big one: without it, each mutation
+    // discovers its own staleness mid-sequence, so the exposure is
+    // modal-open-to-save — minutes, while a human reads a form. With it the
+    // exposure is pre-flight-to-write: milliseconds.
+    //
+    // It is NOT the guarantee. The server's per-mutation `version` check is,
+    // and it still runs. This only stops us from writing half a tree.
+    const stale = await staleTargets(changes, rootChange, rootTarget, reloadOrbId)
+    if (stale === null) {
+      showError('Could not check for concurrent edits — nothing was saved. Try again.')
+      return false
+    }
+    if (stale.length > 0) {
+      showError('Nothing was saved: ' + stale.join(', ')
+        + (stale.length === 1 ? ' was' : ' were') + ' changed by someone else. Reload and try again.')
+      return false
+    }
+
+    // Sequential, fail-fast — NOT Promise.all.
+    //
+    // Parallel meant every call landed regardless: a failure on item 2 still
+    // committed items 1 and 3, and the operator was told "conflict" while two
+    // thirds of the edit was in the graph. Sequential bounds the damage to the
+    // items BEFORE the failure; everything after never fires.
+    //
+    // This is not atomicity. It is the smallest blast radius GraphQL allows —
+    // DGraph runs each mutation as its own transaction (docs/reference/DGRAPH.md).
+    const responses = []
+    const applied = []
+    for (let i = 0; i < calls.length; i++) {
+      const call = calls[i]
+      let r
+      try {
+        r = await fetch(BASE + '/graphql', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(c),
+          body: JSON.stringify(call),
         })
-      ))
-    } catch (_) {
-      showError('Request failed — check your connection and try again.')
-      return false
+      } catch (_) {
+        showError(partialMsg(applied, 'the connection failed'))
+        return false
+      }
+      responses.push(r)
+      if (!r.ok) break
+      const peek = await r.clone().json().catch(() => null)
+      if (peek && window.gqlErrorMessage && window.gqlErrorMessage(peek)) break
+      // A mutation that MATCHED NOTHING is a 200 with no errors array — "not an
+      // error" is a documented DGraph property (docs/reference/DGRAPH.md), and
+      // orbital only converts it to a 409 when the write was version-guarded.
+      // An unguarded update that matched nothing would otherwise be counted as
+      // saved, so the report would name an entity that was never written.
+      // Every reachable edit target carries a version today, so this is belt
+      // and braces — but it is exactly the case that goes live the moment a
+      // target without one becomes editable.
+      if (matchedNothing(peek)) break
+      applied.push(labels[i] || 'an entity')
     }
 
     // Fail-fast on the first error.
@@ -891,7 +1101,7 @@ export function initConfigItemEditor({
       if (!r.ok) {
         if (r.status === 409) {
           const body = await r.json().catch(() => ({}))
-          showError(body.error || 'Conflict — please reload and try again.')
+          showError(partialMsg(applied, body.error || 'Someone else changed this while the dialog was open'))
         } else if (r.status === 403) {
           const body = await r.json().catch(() => ({}))
           if (body.code === 'APPROVAL_REQUIRED') {
@@ -909,12 +1119,12 @@ export function initConfigItemEditor({
                 showError, reloadFn,
               })
             }
-            showError(body.error || 'This change needs approval.')
+            showError(partialMsg(applied, body.error || 'This change needs approval'))
           } else {
-            showError(body.error || 'You do not have permission to make this change.')
+            showError(partialMsg(applied, body.error || 'You do not have permission to make this change'))
           }
         } else {
-          showError(`Server error (${r.status}) — try again.`)
+          showError(partialMsg(applied, `The server returned ${r.status}`))
         }
         return false
       }

@@ -83,9 +83,31 @@ func (_c *ApprovalPolicyCreate) SetActionType(v string) *ApprovalPolicyCreate {
 	return _c
 }
 
+// SetAllNamespaces sets the "all_namespaces" field.
+func (_c *ApprovalPolicyCreate) SetAllNamespaces(v bool) *ApprovalPolicyCreate {
+	_c.mutation.SetAllNamespaces(v)
+	return _c
+}
+
+// SetNillableAllNamespaces sets the "all_namespaces" field if the given value is not nil.
+func (_c *ApprovalPolicyCreate) SetNillableAllNamespaces(v *bool) *ApprovalPolicyCreate {
+	if v != nil {
+		_c.SetAllNamespaces(*v)
+	}
+	return _c
+}
+
 // SetNamespace sets the "namespace" field.
 func (_c *ApprovalPolicyCreate) SetNamespace(v string) *ApprovalPolicyCreate {
 	_c.mutation.SetNamespace(v)
+	return _c
+}
+
+// SetNillableNamespace sets the "namespace" field if the given value is not nil.
+func (_c *ApprovalPolicyCreate) SetNillableNamespace(v *string) *ApprovalPolicyCreate {
+	if v != nil {
+		_c.SetNamespace(*v)
+	}
 	return _c
 }
 
@@ -196,6 +218,10 @@ func (_c *ApprovalPolicyCreate) defaults() {
 		v := approvalpolicy.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
+	if _, ok := _c.mutation.AllNamespaces(); !ok {
+		v := approvalpolicy.DefaultAllNamespaces
+		_c.mutation.SetAllNamespaces(v)
+	}
 	if _, ok := _c.mutation.AllTypes(); !ok {
 		v := approvalpolicy.DefaultAllTypes
 		_c.mutation.SetAllTypes(v)
@@ -231,13 +257,8 @@ func (_c *ApprovalPolicyCreate) check() error {
 			return &ValidationError{Name: "action_type", err: fmt.Errorf(`ent: validator failed for field "ApprovalPolicy.action_type": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.Namespace(); !ok {
-		return &ValidationError{Name: "namespace", err: errors.New(`ent: missing required field "ApprovalPolicy.namespace"`)}
-	}
-	if v, ok := _c.mutation.Namespace(); ok {
-		if err := approvalpolicy.NamespaceValidator(v); err != nil {
-			return &ValidationError{Name: "namespace", err: fmt.Errorf(`ent: validator failed for field "ApprovalPolicy.namespace": %w`, err)}
-		}
+	if _, ok := _c.mutation.AllNamespaces(); !ok {
+		return &ValidationError{Name: "all_namespaces", err: errors.New(`ent: missing required field "ApprovalPolicy.all_namespaces"`)}
 	}
 	if _, ok := _c.mutation.AllTypes(); !ok {
 		return &ValidationError{Name: "all_types", err: errors.New(`ent: missing required field "ApprovalPolicy.all_types"`)}
@@ -310,6 +331,10 @@ func (_c *ApprovalPolicyCreate) createSpec() (*ApprovalPolicy, *sqlgraph.CreateS
 	if value, ok := _c.mutation.ActionType(); ok {
 		_spec.SetField(approvalpolicy.FieldActionType, field.TypeString, value)
 		_node.ActionType = value
+	}
+	if value, ok := _c.mutation.AllNamespaces(); ok {
+		_spec.SetField(approvalpolicy.FieldAllNamespaces, field.TypeBool, value)
+		_node.AllNamespaces = value
 	}
 	if value, ok := _c.mutation.Namespace(); ok {
 		_spec.SetField(approvalpolicy.FieldNamespace, field.TypeString, value)

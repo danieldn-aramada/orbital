@@ -41,6 +41,11 @@ help: ## Show this help
 ## ── daily ─────────────────────────────────────────────────────────────────────
 
 up: ## Start the local stack (DGraph, Postgres, MinIO, Zot, orb DGraph)
+	@# Create the export bind-mount targets BEFORE the containers start. If the
+	@# host path is missing at start, Docker binds a directory that only exists
+	@# inside its VM, and DGraph's native export fails with the unhelpful
+	@# "resolving export failed because task failed".
+	@mkdir -p /tmp/orbital-test-blue /tmp/orbital-test-scratch /tmp/orbital-test-main
 	docker compose -f $(COMPOSE_FILE) up -d
 	@# `make down` runs -v and wipes the Postgres volume, taking orbital_test with
 	@# it. Recreating here means `make up` leaves you ready to run anything,
@@ -62,6 +67,11 @@ run-orbital: fmt ## Run orbital server (go run; fast dev iteration). Restore req
 	@# dialog per credential lookup. Prod containers don't have this problem
 	@# (no ~/.docker/config.json, no helpers), so this workaround stays here
 	@# in the dev-only Makefile target, not in orbital's code.
+	@# Optional local SSO: deploy/local/orbital.env (gitignored) supplies the OIDC
+	@# tenant/client/secret that config.go deliberately does not default. Absent is
+	@# fine — orbital runs and password login works, so a fresh clone needs no setup.
+	@[ -f deploy/local/orbital.env ] && echo "sourcing deploy/local/orbital.env (local SSO enabled)" || true
+	if [ -f deploy/local/orbital.env ]; then set -a; . ./deploy/local/orbital.env; set +a; fi; \
 	DOCKER_CONFIG=$$(mktemp -d) go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orbital
 
 run-orbital-aep: fmt ## Run orbital in external-jwt mode (accepts AEP/Keycloak bearers as admin) on :8001
@@ -104,10 +114,16 @@ test-integration: ## Run integration tests against real services (requires: make
 	@# so a direct `go test -tags=integration` works too. `make down` runs -v and
 	@# wipes the volume, so it genuinely goes missing.
 	@docker compose -f $(COMPOSE_FILE) exec -T postgres psql -U orbital -c "CREATE DATABASE orbital_test;" 2>&1 | grep -v "already exists" || true
+	@# The suite's live graph is dgraph-alpha-test (:8083), NOT blue (:8080) —
+	@# TestMain drop_all's it. Checked here so a stack started before this cluster
+	@# existed fails with the reason instead of a connection error 3 layers down.
+	@curl -fsS -o /dev/null http://localhost:8083/health 2>/dev/null || { \
+		echo "ERROR: test DGraph (:8083) is not up — run 'make up'."; \
+		echo "       It is a separate cluster so the suite cannot wipe your dev graph on :8080."; \
+		exit 1; }
+	@bash scripts/check-export-mounts.sh
 	@echo "Running integration tests..."
 	@go test -count=1 -tags integration -timeout 10m -p 1 $(TEST_PKGS)
-	@echo "Reseeding DGraph for E2E tests..."
-	@bash scripts/seed.sh
 
 test-e2e: ## Run Playwright UI tests for orbital + orb (requires both running; HEADED=true to watch)
 	npx playwright test

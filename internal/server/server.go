@@ -16,6 +16,7 @@ import (
 	"github.com/armada/orbital/internal/auth"
 	"github.com/armada/orbital/internal/bundler"
 	"github.com/armada/orbital/internal/config"
+	"github.com/armada/orbital/internal/dgraphschema"
 	"github.com/armada/orbital/internal/divergenceingest"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/metrics"
@@ -35,8 +36,21 @@ type Server struct {
 	cfg                *config.Config
 	echo               *echo.Echo
 	logger             *slog.Logger
+	db                 *ent.Client                // for the job reaper, started in Start()
+	rawDB              *sql.DB                    // advisory locks; nil disables them
 	backupHandler      *handler.BackupHandler     // non-nil when S3 is configured; started in Start()
 	divergenceIngester *divergenceingest.Ingester // non-nil when ORBITAL_DIVERGENCE_INGEST_ENABLED=true and S3 reachable; started in Start()
+}
+
+// jobLeaseFromConfig maps the env-sourced durations onto the handler package's
+// lease config. Lives here rather than on config.Config so the config package
+// never has to import handler.
+func jobLeaseFromConfig(cfg *config.Config) handler.JobLeaseConfig {
+	return handler.JobLeaseConfig{
+		HeartbeatInterval: cfg.JobHeartbeatInterval,
+		StaleAfter:        cfg.JobStaleAfter,
+		OrphanGrace:       cfg.JobOrphanGrace,
+	}
 }
 
 func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
@@ -44,7 +58,11 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	var backupHandler *handler.BackupHandler
 
 	handler.ReconcileAdminEmails(context.Background(), db, cfg.AdminEmailSet(), logger)
-	handler.ReconcileStaleJobs(context.Background(), db, logger)
+	// Stale jobs are NOT swept here. Doing it at boot fails every running job
+	// on the assumption that a process starting means none can be alive —
+	// true at one replica, destructive at two, where a second pod booting
+	// would kill the first pod's in-flight restore mid-drop_all. The reaper
+	// runs on a ticker from Start() and decides death by stale heartbeat.
 
 	e := echo.New()
 	e.HideBanner = true
@@ -64,8 +82,15 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 
 	// Rate limiting (audit S.12) — opt-in via ORBITAL_RATE_LIMIT_ENABLED, so
 	// local dev, e2e, and the AKS-dev smoke suite are never throttled;
-	// production enables it explicitly. Per-IP token buckets, in-memory
-	// (orbital is single-replica). Denials return a 429 that the central
+	// production enables it explicitly. Per-IP token buckets, in-memory.
+	//
+	// APPROXIMATE AT MULTIPLE REPLICAS, deliberately. Buckets are per-pod, so
+	// the effective ceiling is ORBITAL_RATE_LIMIT_RPS x replicas — including
+	// the tighter login bucket below. Divide the configured value by the
+	// expected replica count. Making it exact would require shared state,
+	// which promotes Valkey from optimisation to hard dependency and
+	// contradicts a settled decision; an approximate limit that degrades
+	// gracefully is the better trade. See docs/reference/CONFIG.md. Denials return a 429 that the central
 	// ErrorHandler renders as the standard envelope (code RATE_LIMITED), with a
 	// Retry-After header. A tighter bucket is attached to POST /user/login
 	// below to slow credential brute-force. loginRateLimiter stays nil (and the
@@ -131,7 +156,6 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		Logger:         logger,
 		SkipPrefixes:   []string{"/static/"},
 		SkipExactPaths: []string{"/favicon.ico", "/healthz"},
-		SkipSuffixes:   []string{"/auth/device/poll"},
 		ActorFromContext: func(c echo.Context) string {
 			actor, _ := c.Get("user_email").(string)
 			return actor
@@ -188,16 +212,27 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		if err != nil {
 			logger.Error("external-jwt verifier init failed — API auth disabled", "err", err)
 		} else {
+			// Every bearer caller gets this one tier, so an operator who never
+			// set it should see that they inherited it rather than chose it.
+			// Warned, not refused: readonly is a safe fallback, and refusing to
+			// boot is for guarantees with no safe default (see apiAuth below).
+			_, roleWasSet := os.LookupEnv("ORBITAL_JWT_DEFAULT_ROLE")
+			if !roleWasSet {
+				logger.Warn("ORBITAL_JWT_DEFAULT_ROLE not set — defaulting to "+cfg.JWTDefaultRole+"; every valid bearer token receives this role. Set it explicitly to choose the tier.",
+					"role", cfg.JWTDefaultRole, "explicitly_set", false)
+			}
 			logger.Warn("ORBITAL_AUTH_MODE=external-jwt — Keycloak bearers (issuer "+cfg.JWTIssuer+") map to role "+cfg.JWTDefaultRole+"; other issuers fall back to AAD bearer auth. Intended for demo/dev; do not use in production without per-user role mapping.",
-				"issuer", cfg.JWTIssuer, "audience", cfg.JWTAudience, "client_id", cfg.JWTClientID, "aad_fallback", fallback != nil)
+				"issuer", cfg.JWTIssuer, "audience", cfg.JWTAudience, "client_id", cfg.JWTClientID,
+				"aad_fallback", fallback != nil, "role_explicitly_set", roleWasSet)
 			apiAuth = []echo.MiddlewareFunc{ejv.RequireAuth(), handler.ResolveUser(db, cfg.AdminEmailSet())}
 		}
 	case cfg.OIDCIssuerURL != "":
 		bv, err := auth.NewBearerVerifier(context.Background(), cfg.OIDCIssuerURL, cfg.OIDCClientID, cfg.AppTokenAllowedAppIDs)
 		if err != nil {
 			logger.Warn("bearer verifier init failed — API auth disabled", "err", err)
-		} else if cfg.Dev {
-			logger.Warn("ORBITAL_DEV=true — bearer verification on /api/v1 and /graphql is BYPASSED; session-cookie auth remains. Production must set ORBITAL_DEV=false.")
+		} else if !cfg.APIAuthEnabled {
+			logger.Warn("API auth disabled by "+cfg.APIAuthSource()+" — bearer verification on /api/v1 and /graphql is BYPASSED; session-cookie auth remains. Set ORBITAL_API_AUTH_ENABLED=true to verify bearers without giving up template hot-reload.",
+				"decided_by", cfg.APIAuthSource(), "dev", cfg.Dev)
 			// apiAuth stays nil — session middleware sets user info for UI;
 			// unauthenticated callers (cb-bundler) pass through to handlers
 			// which decide based on operation type (mutations require user_id).
@@ -206,6 +241,15 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		}
 	default:
 		logger.Warn("ORBITAL_OIDC_ISSUER_URL is not set — API auth disabled")
+	}
+
+	// An operator who explicitly set ORBITAL_API_AUTH_ENABLED=false means it in
+	// every auth mode. Applied here rather than inside the switch so no mode can
+	// be forgotten. Inherited-false is deliberately NOT applied: external-jwt
+	// never consulted Dev, and making it do so now would silently turn auth off
+	// for anyone running that mode locally.
+	if cfg.APIAuthExplicitlyDisabled() {
+		apiAuth = nil
 	}
 
 	// Single authoritative summary of the effective auth posture, logged
@@ -222,9 +266,10 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	}
 	if len(apiAuth) == 0 {
 		logger.Warn("auth: API AUTHENTICATION DISABLED — /graphql and /api/v1 accept unauthenticated requests; only session-identity mutations are gated",
-			"mode", authMode, "enabled", false, "dev", cfg.Dev)
+			"mode", authMode, "enabled", false, "decided_by", cfg.APIAuthSource(), "dev", cfg.Dev)
 	} else {
-		logger.Info("auth: API authentication enabled", "mode", authMode, "enabled", true)
+		logger.Info("auth: API authentication enabled",
+			"mode", authMode, "enabled", true, "decided_by", cfg.APIAuthSource(), "dev", cfg.Dev)
 	}
 
 	// Fail-closed in production. An empty apiAuth means /graphql and /api/v1
@@ -234,8 +279,8 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	// no-auth, whatever the cause: OIDC discovery unreachable at boot, a
 	// verifier-init error, or an unset issuer. The preceding WARN carries the
 	// specific reason. (audit S.16)
-	if !cfg.Dev && len(apiAuth) == 0 {
-		return nil, fmt.Errorf("refusing to start: API authentication is disabled in production (ORBITAL_DEV=false) — ensure ORBITAL_OIDC_ISSUER_URL is set and OIDC discovery is reachable at startup")
+	if cfg.APIAuthEnabled && len(apiAuth) == 0 {
+		return nil, fmt.Errorf("refusing to start: API authentication is required (per %s) but could not be enabled — ensure ORBITAL_OIDC_ISSUER_URL is set and OIDC discovery is reachable at startup", cfg.APIAuthSource())
 	}
 
 	// Default API group — dev+ required for mutating methods (POST/PUT/PATCH/DELETE).
@@ -278,7 +323,7 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		logger.Warn("OCI publishing not configured (ORBITAL_OCI_REGISTRY and ORBITAL_OCI_SIGNING_KEY_PATH) — publish disabled")
 	}
 
-	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, cfg.OAuth2DeviceCode, s3Configured, cfg.S3Endpoint, cfg.S3Bucket, cfg.BasePath, db, logger)
+	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, s3Configured, cfg.S3Endpoint, cfg.S3Bucket, cfg.BasePath, db, logger)
 	ui.SetOCIConfig(ociConfigured, cfg.OCIRegistry, cfg.OCIRepo)
 	ui.SetExportDir(cfg.ExportDir)
 	ui.SetSchemaPath(cfg.SchemaPath)
@@ -348,17 +393,12 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 				cfg.BasePath,
 				logger,
 				cfg.AdminEmailSet(),
-				cfg.OAuth2DeviceCode,
 			)
 			if err != nil {
 				logger.Error("oidc provider init failed", "err", err)
 			} else {
 				root.GET("/auth/login", oidc.Login)
 				root.GET("/auth/callback", oidc.Callback)
-				if cfg.OAuth2DeviceCode {
-					root.GET("/auth/device", oidc.DeviceCodeStart)
-					root.POST("/auth/device/poll", oidc.DeviceCodePoll)
-				}
 			}
 		}
 	}
@@ -391,12 +431,15 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		})
 	root.GET("/network/:orbId", networkDevice.Tab)
 
-	delH := handler.NewDeleteHandler(cfg.DGraphURL, db, logger)
+	// gql is passed for the approval gate only — this endpoint writes via DQL,
+	// so it cannot reach the check through writeToDGraph's chokepoint.
+	delH := handler.NewDeleteHandler(cfg.DGraphURL, db, logger, gql)
 	root.GET("/config-items/delete-preview", delH.Preview)
 	api.DELETE("/config-items/:type/:id", delH.Execute)
 
 	if db != nil {
 		exp := handler.NewExport(db, cfg.DGraphURL, cfg.DGraphScratchURL, cfg.DGraphScratchAdminURL, cfg.DGraphScratchZeroURL, cfg.ExportDir, cfg.DGraphScratchExportDir, cfg.SchemaPath, logger)
+		exp.SetJobCoordination(jobLeaseFromConfig(cfg), rawDB)
 		exp.SetBasePath(cfg.BasePath)
 		exp.SetTimeout(cfg.ExportTimeout)
 		api.POST("/export", exp.Trigger)
@@ -483,6 +526,7 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 				api.GET("/backup/jobs/:jobId/download", bk.Download)
 				api.DELETE("/backup/jobs/:jobId", bk.Delete)
 				api.POST("/backup/test-connection", bk.TestConnection)
+				bk.SetJobCoordination(jobLeaseFromConfig(cfg), rawDB)
 				backupHandler = bk
 			}
 
@@ -506,6 +550,7 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 
 				api.GET("/restore/jobs/:jobId", rh.Status)
 				api.POST("/restore", rh.Trigger)
+				rh.SetJobCoordination(jobLeaseFromConfig(cfg), rawDB)
 			}
 		}
 
@@ -601,6 +646,8 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		cfg:                cfg,
 		echo:               e,
 		logger:             logger,
+		db:                 db,
+		rawDB:              rawDB,
 		backupHandler:      backupHandler,
 		divergenceIngester: divIngester,
 	}, nil
@@ -644,6 +691,17 @@ func (s *Server) Start(ctx context.Context) error {
 	if s.divergenceIngester != nil {
 		go s.divergenceIngester.Start(ctx)
 	}
+
+	// Every replica runs the reaper; the advisory lock inside each sweep means
+	// only one does the work on any given tick.
+	go handler.StartReaper(ctx, s.db, s.rawDB, jobLeaseFromConfig(s.cfg), s.logger)
+
+	// Report, once, whether DGraph is actually running the schema this build
+	// ships. Orbital does not apply it (docs/reference/DGRAPH.md § Schema rules),
+	// so a schema-bumping deploy reaches a DGraph still on the old schema unless
+	// someone runs the manual step — and until this check existed, forgetting
+	// produced no signal until users hit 404s.
+	dgraphschema.StartCheck(ctx, s.cfg.DGraphAdminURL, s.cfg.SchemaPath, s.logger)
 
 	select {
 	case err := <-errCh:

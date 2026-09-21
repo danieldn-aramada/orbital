@@ -28,7 +28,23 @@ func (ApprovalPolicy) Fields() []ent.Field {
 		// action_type matches ApprovalRequest.action_type (e.g. "config.mutation").
 		field.String("action_type").NotEmpty(),
 
-		field.String("namespace").NotEmpty(),
+		// AllNamespaces and Namespace are an either/or, exactly like AllTypes and
+		// Types below, and for the same reason: a row setting both would say two
+		// contradictory things and would no longer describe what it protects.
+		//
+		// Resolution is FALLBACK, not overlay — a global policy governs a
+		// namespace only where that namespace has no policy row of its own. That
+		// is what keeps "which policy did this?" answerable with ONE name, which
+		// is the property the unique index below exists to protect. Composition
+		// (max(required), intersection(bypass)) was considered and rejected: it
+		// produces a governing policy that exists in no row.
+		//
+		// AllNamespaces is not "every namespace that exists today": it matches
+		// ANY namespace, so a data center onboarded next month is covered the day
+		// it lands. That is the whole point — enumerating today's namespaces
+		// cannot express it.
+		field.Bool("all_namespaces").Default(false),
+		field.String("namespace").Optional(),
 
 		// AllTypes and Types are an either/or, and the CHECK constraint in
 		// Annotations makes the other two combinations unrepresentable rather
@@ -72,6 +88,17 @@ func (ApprovalPolicy) Indexes() []ent.Index {
 		// to compose and exactly one policy can ever govern a mutation — which
 		// is what makes "why was this gated?" answerable with a single name.
 		index.Fields("action_type", "namespace").Unique(),
+		// ONE global policy per action type.
+		//
+		// A PARTIAL index, and it is not optional: `namespace` is nullable now,
+		// and Postgres treats NULLs as DISTINCT in a unique index — so the index
+		// above constrains nothing for global rows and two of them would insert
+		// happily. Two rows both claiming every namespace is precisely the
+		// multiple-candidates problem this design exists to prevent, and it
+		// would ship green.
+		index.Fields("action_type").
+			Annotations(entsql.IndexWhere("all_namespaces")).
+			Unique(),
 	}
 }
 
@@ -93,6 +120,10 @@ func (ApprovalPolicy) Annotations() []schema.Annotation {
 		// rather than about representation.
 		entsql.Checks(map[string]string{
 			"approval_policy_scope_exclusive": "(all_types AND (jsonb_typeof(types) <> 'array' OR jsonb_array_length(types) = 0)) OR ((NOT all_types) AND jsonb_typeof(types) = 'array' AND jsonb_array_length(types) > 0)",
+			// Same either/or, one axis up: a global row carries no namespace and
+			// a namespace row is not global. Neither set would be a policy that
+			// governs nothing while looking like it governs something.
+			"approval_policy_namespace_exclusive": "(all_namespaces AND (namespace IS NULL OR namespace = '')) OR ((NOT all_namespaces) AND namespace IS NOT NULL AND namespace <> '')",
 		}),
 	}
 }

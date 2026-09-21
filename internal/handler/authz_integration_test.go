@@ -6,7 +6,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -473,12 +472,13 @@ func TestReconcileAdminEmails_UnknownEmailSkipped(t *testing.T) {
 	handler.ReconcileAdminEmails(ctx, testDB, map[string]struct{}{"nobody-yet@authztest.com": {}}, nil)
 }
 
-// TestDeviceCodePoll_AdminEmail_SetsAdminRole verifies that a user whose email is in
-// ORBITAL_ADMIN_EMAILS is provisioned with the admin role on first device code login.
-func TestDeviceCodePoll_AdminEmail_SetsAdminRole(t *testing.T) {
-	t.Chdir("../..") // template file paths are relative to the repo root
-
-	const testEmail = "device-admin@authztest.com"
+// TestOIDCCallback_AdminEmail_SetsAdminRole verifies that a user whose email is
+// in ORBITAL_ADMIN_EMAILS is provisioned with the admin role on first OIDC login.
+// Previously exercised through the device-code poller; that flow was removed, but
+// the role-assignment behaviour it happened to cover is unrelated to the transport
+// and still needs a guard.
+func TestOIDCCallback_AdminEmail_SetsAdminRole(t *testing.T) {
+	const testEmail = "oidc-admin@authztest.com"
 	ctx := context.Background()
 
 	t.Cleanup(func() { testDB.User.Delete().Where(user.Email(testEmail)).ExecX(ctx) })
@@ -486,9 +486,7 @@ func TestDeviceCodePoll_AdminEmail_SetsAdminRole(t *testing.T) {
 	p := newOIDCProvider(t)
 	p.TokenClaims["email"] = testEmail
 	p.TokenClaims["preferred_username"] = testEmail
-	p.TokenClaims["name"] = "Device Admin"
-
-	adminEmails := map[string]struct{}{testEmail: {}}
+	p.TokenClaims["name"] = "OIDC Admin"
 
 	h, err := handler.NewOIDC(
 		ctx,
@@ -500,21 +498,16 @@ func TestDeviceCodePoll_AdminEmail_SetsAdminRole(t *testing.T) {
 		p.Server.URL+"/callback",
 		"",
 		nil,
-		adminEmails,
-		true, // deviceCodeEnabled
+		map[string]struct{}{testEmail: {}},
 	)
 	if err != nil {
 		t.Fatalf("NewOIDC: %v", err)
 	}
 
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/auth/device/poll", strings.NewReader(`{"device_code":"test-device-code"}`))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	if err := h.DeviceCodePoll(c); err != nil {
-		t.Fatalf("DeviceCodePoll: %v", err)
+	cookies := oidcStateSession(t, "state-admin")
+	c, _ := oidcCallbackCtx(cookies, "state-admin", "code-admin")
+	if err := h.Callback(c); err != nil {
+		t.Fatalf("Callback: %v", err)
 	}
 
 	u, err := testDB.User.Query().Where(user.Email(testEmail)).Only(ctx)
@@ -526,12 +519,10 @@ func TestDeviceCodePoll_AdminEmail_SetsAdminRole(t *testing.T) {
 	}
 }
 
-// TestDeviceCodePoll_RegularEmail_SetsReadonlyRole verifies that a user whose email is NOT
-// in ORBITAL_ADMIN_EMAILS is provisioned with the readonly role.
-func TestDeviceCodePoll_RegularEmail_SetsReadonlyRole(t *testing.T) {
-	t.Chdir("../..") // template file paths are relative to the repo root
-
-	const testEmail = "device-readonly@authztest.com"
+// TestOIDCCallback_RegularEmail_SetsReadonlyRole is the negative half of the
+// above: an email absent from ORBITAL_ADMIN_EMAILS must NOT get admin.
+func TestOIDCCallback_RegularEmail_SetsReadonlyRole(t *testing.T) {
+	const testEmail = "oidc-readonly@authztest.com"
 	ctx := context.Background()
 
 	t.Cleanup(func() { testDB.User.Delete().Where(user.Email(testEmail)).ExecX(ctx) })
@@ -539,7 +530,7 @@ func TestDeviceCodePoll_RegularEmail_SetsReadonlyRole(t *testing.T) {
 	p := newOIDCProvider(t)
 	p.TokenClaims["email"] = testEmail
 	p.TokenClaims["preferred_username"] = testEmail
-	p.TokenClaims["name"] = "Device Readonly"
+	p.TokenClaims["name"] = "OIDC Readonly"
 
 	h, err := handler.NewOIDC(
 		ctx,
@@ -552,20 +543,15 @@ func TestDeviceCodePoll_RegularEmail_SetsReadonlyRole(t *testing.T) {
 		"",
 		nil,
 		nil, // no admin emails
-		true,
 	)
 	if err != nil {
 		t.Fatalf("NewOIDC: %v", err)
 	}
 
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/auth/device/poll", strings.NewReader(`{"device_code":"test-device-code"}`))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	if err := h.DeviceCodePoll(c); err != nil {
-		t.Fatalf("DeviceCodePoll: %v", err)
+	cookies := oidcStateSession(t, "state-readonly")
+	c, _ := oidcCallbackCtx(cookies, "state-readonly", "code-readonly")
+	if err := h.Callback(c); err != nil {
+		t.Fatalf("Callback: %v", err)
 	}
 
 	u, err := testDB.User.Query().Where(user.Email(testEmail)).Only(ctx)

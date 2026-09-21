@@ -3,17 +3,21 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/approval"
 	"github.com/armada/orbital/internal/testutil"
+	"github.com/labstack/echo/v4"
 )
 
 // The gate's whole job is to say no. These prove it says no to the right things
@@ -23,7 +27,13 @@ import (
 func gateFixture(t *testing.T) (*GraphQL, *crFixture) {
 	t.Helper()
 	f := newCRFixture(t)
-	return NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), false), f
+	// true is what production runs (ORBITAL_INLINE_SELECTOR_REJECT). Most tests
+	// below drive writeToDGraph directly, where the flag is inert because the
+	// inline-selector guard lives in Handle — but passing production's value keeps
+	// the fixture from asserting against a configuration nothing deploys, and
+	// TestGate_RenamedVariableUpdateIsRefused403ThroughHandle depends on it: that
+	// one goes through Handle precisely because no other test here does.
+	return NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), true), f
 }
 
 // mutate runs a mutation through the chokepoint exactly as Handle would.
@@ -40,8 +50,8 @@ func mutateReportingBypass(t *testing.T, gql *GraphQL, caller callerRole, query 
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	_, _, bypassed, err := gql.writeToDGraph(context.Background(), body, caller, gateEnforce)
-	return bypassed, err
+	res, err := gql.writeToDGraph(context.Background(), body, "gate-test", caller, gateEnforce, nil)
+	return res.Bypassed, err
 }
 
 func updateHostname(orbID, v string) (string, map[string]any) {
@@ -296,4 +306,341 @@ func TestGate_MultiTypeMutationTakesTheStrictestPolicy(t *testing.T) {
 	if err == nil {
 		t.Fatal("a multi-type mutation dodged the policy by including an ungoverned type")
 	}
+}
+
+// ── 12. orbIds named through a VARIABLE REFERENCE ──────────────────────────
+//
+// The gate resolves the governing namespace from the orbIds a mutation names.
+// Until 2026-09-14 it could only see them as literals, or behind a variable
+// named exactly `orbId` — so a mutation in perfectly good variable form whose
+// variable happened to be called something else resolved to NO namespace and
+// was refused `400 VARIABLE_FORM_REQUIRED`, advising the caller to use the
+// variable form they were already using.
+//
+// Fail-closed was right and is unchanged; the refusal was aimed at the wrong
+// request. These pin the difference.
+
+// updateHostnameAs is updateHostname with the orbId variable under a caller-
+// chosen name — the shape any client not copying orbital's own examples writes.
+func updateHostnameAs(varName, orbID, v string) (string, map[string]any) {
+	return `mutation UpdateServer($` + varName + `: String!, $set: ServerPatch!) { updateServer(input: {filter: {orbId: {eq: $` + varName + `}}, set: $set}) { numUids } }`,
+		map[string]any{varName: orbID, "set": map[string]any{"hostname": v}}
+}
+
+// Acceptance 1: a differently-named variable is gated IDENTICALLY — same
+// refusal, same code, same bypass behaviour as the `$orbId` spelling.
+func TestGate_OrbIdBehindADifferentlyNamedVariableIsGatedIdentically(t *testing.T) {
+	gql, f := gateFixture(t)
+	f.requireApproval(t, 1)
+
+	q, v := updateHostnameAs("serverOrbId", crServerA, "should-not-land")
+	err := mutate(t, gql, devCaller(), q, v)
+	if err == nil {
+		t.Fatal("a covered mutation was allowed through because its variable was not named orbId")
+	}
+	var gerr *gatedError
+	if !errors.As(err, &gerr) {
+		t.Fatalf("error = %v, want a gatedError", err)
+	}
+	// The whole bug: this used to be VARIABLE_FORM_REQUIRED, which is the wrong
+	// refusal — the request IS in variable form.
+	if gerr.Code != CodeApprovalRequired || gerr.Status != http.StatusForbidden {
+		t.Fatalf("status=%d code=%s, want 403 APPROVAL_REQUIRED (not VARIABLE_FORM_REQUIRED)", gerr.Status, gerr.Code)
+	}
+	if got := readHostname(t, crServerA); got == "should-not-land" {
+		t.Fatal("refused, but the write still landed")
+	}
+
+	// ...and the bypass path resolves the same policy, so break-glass still works.
+	q, v = updateHostnameAs("serverOrbId", crServerA, "privileged-write")
+	bypassed, err := mutateReportingBypass(t, gql, adminCaller(), q, v)
+	if err != nil {
+		t.Fatalf("admin bypass refused on the differently-named variable: %v", err)
+	}
+	if bypassed != crNS {
+		t.Errorf("bypassed policy = %q, want %q", bypassed, crNS)
+	}
+}
+
+// Acceptance 2: a compound mutation cannot have two variables named orbId, so
+// this shape was unresolvable by construction. Every orbId it names must
+// resolve, or a governed entity rides along inside an ungoverned request.
+func TestGate_CompoundMutationResolvesEveryOrbIdItNames(t *testing.T) {
+	gql, f := gateFixture(t)
+	f.requireApproval(t, 1)
+
+	q := `mutation Both($a: String!, $b: String!, $set: ServerPatch!) {
+		one: updateServer(input: {filter: {orbId: {eq: $a}}, set: $set}) { numUids }
+		two: updateServer(input: {filter: {orbId: {eq: $b}}, set: $set}) { numUids }
+	}`
+	v := map[string]any{"a": crServerA, "b": crServerB, "set": map[string]any{"hostname": "should-not-land"}}
+
+	err := mutate(t, gql, devCaller(), q, v)
+	if err == nil {
+		t.Fatal("a compound mutation over two governed entities was allowed through")
+	}
+	var gerr *gatedError
+	if !errors.As(err, &gerr) || gerr.Code != CodeApprovalRequired {
+		t.Fatalf("error = %v, want APPROVAL_REQUIRED", err)
+	}
+	for _, id := range []string{crServerA, crServerB} {
+		if got := readHostname(t, id); got == "should-not-land" {
+			t.Fatalf("%s was written despite the refusal", id)
+		}
+	}
+}
+
+// Acceptance 4: resolution must not become a guess. A reference that cannot be
+// resolved yields nothing and is still refused — the fail-closed default is
+// exactly what must NOT be relaxed to fix the false refusal above.
+func TestGate_UnresolvableVariableReferenceIsRefusedNotAllowed(t *testing.T) {
+	gql, f := gateFixture(t)
+	f.requireApproval(t, 1)
+
+	// $missing is declared and referenced, but never supplied.
+	q := `mutation U($missing: String!, $set: ServerPatch!) { updateServer(input: {filter: {orbId: {eq: $missing}}, set: $set}) { numUids } }`
+	v := map[string]any{"set": map[string]any{"hostname": "should-not-land"}}
+
+	err := mutate(t, gql, devCaller(), q, v)
+	if err == nil {
+		t.Fatal("an unresolvable mutation was waved through — the gate guessed instead of refusing")
+	}
+	var gerr *gatedError
+	if !errors.As(err, &gerr) || gerr.Code != CodeVariableFormRequired {
+		t.Fatalf("error = %v, want VARIABLE_FORM_REQUIRED", err)
+	}
+
+	// A filter on a non-orbId field is the same story: nothing to attribute.
+	q2 := `mutation ByName($f: ServerFilter!, $set: ServerPatch!) { updateServer(input: {filter: $f, set: $set}) { numUids } }`
+	v2 := map[string]any{
+		"f":   map[string]any{"hostname": map[string]any{"eq": "nothing-here"}},
+		"set": map[string]any{"model": "m"},
+	}
+	if err := mutate(t, gql, devCaller(), q2, v2); err == nil {
+		t.Error("a non-orbId filter resolved to a namespace it never named")
+	}
+}
+
+// Acceptance 5: an ungated deployment must not notice any of this. Resolution
+// only ever ADDS orbIds, so the risk is a new refusal where there was none.
+func TestGate_NewlyResolvableShapesChangeNothingWithoutAPolicy(t *testing.T) {
+	gql, _ := gateFixture(t) // no policy anywhere
+
+	named, namedV := updateHostnameAs("serverOrbId", crServerA, "ungated-named-var")
+	shapes := []struct {
+		name  string
+		query string
+		vars  map[string]any
+	}{
+		{"differently-named variable", named, namedV},
+		{
+			"filter object behind a variable",
+			`mutation Apply($myFilter: ServerFilter!, $set: ServerPatch!) { updateServer(input: {filter: $myFilter, set: $set}) { numUids } }`,
+			map[string]any{
+				"myFilter": map[string]any{"orbId": map[string]any{"eq": crServerA}},
+				"set":      map[string]any{"hostname": "ungated-filter-var"},
+			},
+		},
+		{
+			"in-list mixing a literal and a variable",
+			`mutation Bulk($second: String!, $set: ServerPatch!) { updateServer(input: {filter: {orbId: {in: ["` + crServerA + `", $second]}}, set: $set}) { numUids } }`,
+			map[string]any{"second": crServerB, "set": map[string]any{"hostname": "ungated-in-list"}},
+		},
+	}
+	for _, s := range shapes {
+		t.Run(s.name, func(t *testing.T) {
+			if err := mutate(t, gql, devCaller(), s.query, s.vars); err != nil {
+				t.Fatalf("an ungated deployment was refused: %v", err)
+			}
+		})
+	}
+}
+
+// Acceptance 6: the same refusal over HTTP, through Handle.
+//
+// Every other test in this file drives writeToDGraph directly, so none of them
+// crosses the layer a real client actually hits — and that is precisely how the
+// previous half-fix looked complete: the gate resolved the namespace correctly
+// while Handle's inline-selector guard refused the request one layer earlier,
+// with a different code, before the gate was ever consulted. A green gate suite
+// said nothing about what a caller received.
+func TestGate_RenamedVariableUpdateIsRefused403ThroughHandle(t *testing.T) {
+	gql, f := gateFixture(t)
+	f.requireApproval(t, 1)
+
+	q, v := updateHostnameAs("serverOrbId", crServerA, "should-not-land")
+	body, err := json.Marshal(gqlRequest{Query: q, Variables: v})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user_email", "gate-handle-actor")
+	c.Set("role", string(user.RoleDev)) // dev may mutate, but may not bypass
+
+	if err := gql.Handle(c); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403 — a governed write was not stopped at the HTTP layer: %s",
+			rec.Code, rec.Body.String())
+	}
+	var got struct{ Code string }
+	_ = json.Unmarshal(rec.Body.Bytes(), &got)
+	if got.Code != CodeApprovalRequired {
+		t.Fatalf("code = %q, want %s (VARIABLE_FORM_REQUIRED here means the guard fired before the gate)",
+			got.Code, CodeApprovalRequired)
+	}
+	if h := readHostname(t, crServerA); h == "should-not-land" {
+		t.Fatal("refused with 403, but the write still landed")
+	}
+}
+
+// ── 13. the refusal is visible in the app log ──────────────────────────────
+//
+// Refusals are deliberately NOT audited (AUDIT.md § Row admission, ratified
+// 2026-09-02: the caller has the role, the workflow says "not yet", so no state
+// changed and no security event occurred). That decision routes "what was
+// blocked pending review" to the app log — which makes this line the durable
+// answer, not a debugging aid, and its fields a contract.
+//
+// It was not one. The bypass branch logged policy/role/types/orb_ids; the
+// refusal branch ten lines below it logged nothing, and two of the three
+// entry points logged nothing anywhere. The log could say someone was blocked
+// without saying from changing what.
+
+// logCapture collects slog records so a test can assert what an operator sees.
+type logCapture struct {
+	mu      sync.Mutex
+	records []map[string]string
+}
+
+func (lc *logCapture) Enabled(context.Context, slog.Level) bool { return true }
+func (lc *logCapture) WithAttrs([]slog.Attr) slog.Handler       { return lc }
+func (lc *logCapture) WithGroup(string) slog.Handler            { return lc }
+func (lc *logCapture) Handle(_ context.Context, r slog.Record) error {
+	m := map[string]string{"msg": r.Message, "level": r.Level.String()}
+	r.Attrs(func(a slog.Attr) bool { m[a.Key] = a.Value.String(); return true })
+	lc.mu.Lock()
+	defer lc.mu.Unlock()
+	lc.records = append(lc.records, m)
+	return nil
+}
+
+// refusals returns every "write refused" record seen so far.
+func (lc *logCapture) refusals() []map[string]string {
+	lc.mu.Lock()
+	defer lc.mu.Unlock()
+	var out []map[string]string
+	for _, r := range lc.records {
+		if strings.HasPrefix(r["msg"], "write refused") {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func gateFixtureWithLog(t *testing.T) (*GraphQL, *crFixture, *logCapture) {
+	t.Helper()
+	f := newCRFixture(t)
+	lc := &logCapture{}
+	return NewGraphQL(testutil.DGraphURL(), f.db, slog.New(lc), true), f, lc
+}
+
+// Acceptance 4 + 7: one line, naming the entity — not just the policy.
+func TestGate_RefusalIsLoggedOnceAndNamesTheEntity(t *testing.T) {
+	gql, f, lc := gateFixtureWithLog(t)
+	f.requireApproval(t, 1)
+
+	q, v := updateHostname(crServerA, "should-not-land")
+	if err := mutate(t, gql, devCaller(), q, v); err == nil {
+		t.Fatal("expected a refusal")
+	}
+
+	got := lc.refusals()
+	if len(got) != 1 {
+		t.Fatalf("got %d refusal lines, want exactly 1 — two entry points logging the same refusal is as wrong as none: %+v", len(got), got)
+	}
+	rec := got[0]
+	if rec["level"] != "WARN" {
+		t.Errorf("level = %q, want WARN", rec["level"])
+	}
+	// orb_ids is the field the decision actually depends on: without it the log
+	// says someone was blocked but not from changing what.
+	if !strings.Contains(rec["orb_ids"], crServerA) {
+		t.Errorf("orb_ids = %q, want it to name %s", rec["orb_ids"], crServerA)
+	}
+	for _, k := range []string{"policy", "actor", "role", "types"} {
+		if rec[k] == "" {
+			t.Errorf("refusal line is missing %q: %+v", k, rec)
+		}
+	}
+}
+
+// Acceptance 5: the internal dispatch path logs too. It is the entry point that
+// previously had no refusal line ANYWHERE — Handle at least had a partial one.
+// Logged at the chokepoint rather than per caller, which is what makes this hold
+// for cascade-delete as well without a third copy of the same line.
+func TestGate_RefusalIsLoggedFromTheInternalDispatchPathToo(t *testing.T) {
+	gql, f, lc := gateFixtureWithLog(t)
+	f.requireApproval(t, 1)
+
+	q, v := updateHostname(crServerA, "should-not-land")
+	if _, err := gql.DispatchMutation(context.Background(), "dispatch-actor", devCaller(), gateEnforce, q, v, nil); err == nil {
+		t.Fatal("expected a refusal")
+	}
+
+	got := lc.refusals()
+	if len(got) != 1 {
+		t.Fatalf("got %d refusal lines, want 1: %+v", len(got), got)
+	}
+	if got[0]["actor"] != "dispatch-actor" {
+		t.Errorf("actor = %q, want dispatch-actor — the dispatcher's identity must reach the line", got[0]["actor"])
+	}
+	if !strings.Contains(got[0]["orb_ids"], crServerA) {
+		t.Errorf("orb_ids = %q, want it to name %s", got[0]["orb_ids"], crServerA)
+	}
+}
+
+// Acceptance 8: assert the negative. A refusal signal that fires when nothing
+// was refused trains whoever reads the log to ignore the field — which costs
+// more than having no signal, because the decision above leans on it.
+func TestGate_AllowedAndBypassedWritesLogNoRefusal(t *testing.T) {
+	t.Run("no policy at all", func(t *testing.T) {
+		gql, _, lc := gateFixtureWithLog(t)
+		q, v := updateHostname(crServerA, "ungated-write")
+		if err := mutate(t, gql, devCaller(), q, v); err != nil {
+			t.Fatalf("ungated write refused: %v", err)
+		}
+		if got := lc.refusals(); len(got) != 0 {
+			t.Fatalf("an allowed write logged %d refusal(s): %+v", len(got), got)
+		}
+	})
+
+	t.Run("policy bypassed by an admin", func(t *testing.T) {
+		gql, f, lc := gateFixtureWithLog(t)
+		f.requireApproval(t, 1)
+		q, v := updateHostname(crServerA, "privileged-write")
+		if err := mutate(t, gql, adminCaller(), q, v); err != nil {
+			t.Fatalf("admin bypass refused: %v", err)
+		}
+		if got := lc.refusals(); len(got) != 0 {
+			t.Fatalf("a bypassed write logged %d refusal(s) — it was allowed, not blocked: %+v", len(got), got)
+		}
+		// ...and the bypass line now says WHO, not only which role.
+		var found bool
+		lc.mu.Lock()
+		for _, r := range lc.records {
+			if strings.HasPrefix(r["msg"], "privileged write") && r["actor"] == "gate-test" {
+				found = true
+			}
+		}
+		lc.mu.Unlock()
+		if !found {
+			t.Error("the privileged-write line does not name the actor that bypassed review")
+		}
+	})
 }

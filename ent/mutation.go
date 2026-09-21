@@ -63,23 +63,25 @@ const (
 // ApprovalMutation represents an operation that mutates the Approval nodes in the graph.
 type ApprovalMutation struct {
 	config
-	op               Op
-	typ              string
-	id               *uuid.UUID
-	created_at       *time.Time
-	created_by       *string
-	updated_at       *time.Time
-	updated_by       *string
-	approver         *string
-	decision         *approval.Decision
-	comment          *string
-	approved_at_hash *string
-	clearedFields    map[string]struct{}
-	request          *int64
-	clearedrequest   bool
-	done             bool
-	oldValue         func(context.Context) (*Approval, error)
-	predicates       []predicate.Approval
+	op                      Op
+	typ                     string
+	id                      *uuid.UUID
+	created_at              *time.Time
+	created_by              *string
+	updated_at              *time.Time
+	updated_by              *string
+	approver                *string
+	decision                *approval.Decision
+	comment                 *string
+	approved_at_hash        *string
+	approved_at_revision    *int
+	addapproved_at_revision *int
+	clearedFields           map[string]struct{}
+	request                 *int64
+	clearedrequest          bool
+	done                    bool
+	oldValue                func(context.Context) (*Approval, error)
+	predicates              []predicate.Approval
 }
 
 var _ ent.Mutation = (*ApprovalMutation)(nil)
@@ -562,6 +564,62 @@ func (m *ApprovalMutation) ResetApprovedAtHash() {
 	m.approved_at_hash = nil
 }
 
+// SetApprovedAtRevision sets the "approved_at_revision" field.
+func (m *ApprovalMutation) SetApprovedAtRevision(i int) {
+	m.approved_at_revision = &i
+	m.addapproved_at_revision = nil
+}
+
+// ApprovedAtRevision returns the value of the "approved_at_revision" field in the mutation.
+func (m *ApprovalMutation) ApprovedAtRevision() (r int, exists bool) {
+	v := m.approved_at_revision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldApprovedAtRevision returns the old "approved_at_revision" field's value of the Approval entity.
+// If the Approval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalMutation) OldApprovedAtRevision(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldApprovedAtRevision is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldApprovedAtRevision requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldApprovedAtRevision: %w", err)
+	}
+	return oldValue.ApprovedAtRevision, nil
+}
+
+// AddApprovedAtRevision adds i to the "approved_at_revision" field.
+func (m *ApprovalMutation) AddApprovedAtRevision(i int) {
+	if m.addapproved_at_revision != nil {
+		*m.addapproved_at_revision += i
+	} else {
+		m.addapproved_at_revision = &i
+	}
+}
+
+// AddedApprovedAtRevision returns the value that was added to the "approved_at_revision" field in this mutation.
+func (m *ApprovalMutation) AddedApprovedAtRevision() (r int, exists bool) {
+	v := m.addapproved_at_revision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetApprovedAtRevision resets all changes to the "approved_at_revision" field.
+func (m *ApprovalMutation) ResetApprovedAtRevision() {
+	m.approved_at_revision = nil
+	m.addapproved_at_revision = nil
+}
+
 // SetRequestID sets the "request" edge to the ApprovalRequest entity by id.
 func (m *ApprovalMutation) SetRequestID(id int64) {
 	m.request = &id
@@ -636,7 +694,7 @@ func (m *ApprovalMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ApprovalMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
 	if m.created_at != nil {
 		fields = append(fields, approval.FieldCreatedAt)
 	}
@@ -664,6 +722,9 @@ func (m *ApprovalMutation) Fields() []string {
 	if m.approved_at_hash != nil {
 		fields = append(fields, approval.FieldApprovedAtHash)
 	}
+	if m.approved_at_revision != nil {
+		fields = append(fields, approval.FieldApprovedAtRevision)
+	}
 	return fields
 }
 
@@ -690,6 +751,8 @@ func (m *ApprovalMutation) Field(name string) (ent.Value, bool) {
 		return m.Comment()
 	case approval.FieldApprovedAtHash:
 		return m.ApprovedAtHash()
+	case approval.FieldApprovedAtRevision:
+		return m.ApprovedAtRevision()
 	}
 	return nil, false
 }
@@ -717,6 +780,8 @@ func (m *ApprovalMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldComment(ctx)
 	case approval.FieldApprovedAtHash:
 		return m.OldApprovedAtHash(ctx)
+	case approval.FieldApprovedAtRevision:
+		return m.OldApprovedAtRevision(ctx)
 	}
 	return nil, fmt.Errorf("unknown Approval field %s", name)
 }
@@ -789,6 +854,13 @@ func (m *ApprovalMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetApprovedAtHash(v)
 		return nil
+	case approval.FieldApprovedAtRevision:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetApprovedAtRevision(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Approval field %s", name)
 }
@@ -797,6 +869,9 @@ func (m *ApprovalMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *ApprovalMutation) AddedFields() []string {
 	var fields []string
+	if m.addapproved_at_revision != nil {
+		fields = append(fields, approval.FieldApprovedAtRevision)
+	}
 	return fields
 }
 
@@ -805,6 +880,8 @@ func (m *ApprovalMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ApprovalMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case approval.FieldApprovedAtRevision:
+		return m.AddedApprovedAtRevision()
 	}
 	return nil, false
 }
@@ -814,6 +891,13 @@ func (m *ApprovalMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ApprovalMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case approval.FieldApprovedAtRevision:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddApprovedAtRevision(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Approval numeric field %s", name)
 }
@@ -894,6 +978,9 @@ func (m *ApprovalMutation) ResetField(name string) error {
 		return nil
 	case approval.FieldApprovedAtHash:
 		m.ResetApprovedAtHash()
+		return nil
+	case approval.FieldApprovedAtRevision:
+		m.ResetApprovedAtRevision()
 		return nil
 	}
 	return fmt.Errorf("unknown Approval field %s", name)
@@ -984,6 +1071,7 @@ type ApprovalPolicyMutation struct {
 	updated_at            *time.Time
 	updated_by            *string
 	action_type           *string
+	all_namespaces        *bool
 	namespace             *string
 	all_types             *bool
 	types                 *[]string
@@ -1322,6 +1410,42 @@ func (m *ApprovalPolicyMutation) ResetActionType() {
 	m.action_type = nil
 }
 
+// SetAllNamespaces sets the "all_namespaces" field.
+func (m *ApprovalPolicyMutation) SetAllNamespaces(b bool) {
+	m.all_namespaces = &b
+}
+
+// AllNamespaces returns the value of the "all_namespaces" field in the mutation.
+func (m *ApprovalPolicyMutation) AllNamespaces() (r bool, exists bool) {
+	v := m.all_namespaces
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAllNamespaces returns the old "all_namespaces" field's value of the ApprovalPolicy entity.
+// If the ApprovalPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalPolicyMutation) OldAllNamespaces(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAllNamespaces is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAllNamespaces requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAllNamespaces: %w", err)
+	}
+	return oldValue.AllNamespaces, nil
+}
+
+// ResetAllNamespaces resets all changes to the "all_namespaces" field.
+func (m *ApprovalPolicyMutation) ResetAllNamespaces() {
+	m.all_namespaces = nil
+}
+
 // SetNamespace sets the "namespace" field.
 func (m *ApprovalPolicyMutation) SetNamespace(s string) {
 	m.namespace = &s
@@ -1353,9 +1477,22 @@ func (m *ApprovalPolicyMutation) OldNamespace(ctx context.Context) (v string, er
 	return oldValue.Namespace, nil
 }
 
+// ClearNamespace clears the value of the "namespace" field.
+func (m *ApprovalPolicyMutation) ClearNamespace() {
+	m.namespace = nil
+	m.clearedFields[approvalpolicy.FieldNamespace] = struct{}{}
+}
+
+// NamespaceCleared returns if the "namespace" field was cleared in this mutation.
+func (m *ApprovalPolicyMutation) NamespaceCleared() bool {
+	_, ok := m.clearedFields[approvalpolicy.FieldNamespace]
+	return ok
+}
+
 // ResetNamespace resets all changes to the "namespace" field.
 func (m *ApprovalPolicyMutation) ResetNamespace() {
 	m.namespace = nil
+	delete(m.clearedFields, approvalpolicy.FieldNamespace)
 }
 
 // SetAllTypes sets the "all_types" field.
@@ -1636,7 +1773,7 @@ func (m *ApprovalPolicyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ApprovalPolicyMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 12)
 	if m.created_at != nil {
 		fields = append(fields, approvalpolicy.FieldCreatedAt)
 	}
@@ -1651,6 +1788,9 @@ func (m *ApprovalPolicyMutation) Fields() []string {
 	}
 	if m.action_type != nil {
 		fields = append(fields, approvalpolicy.FieldActionType)
+	}
+	if m.all_namespaces != nil {
+		fields = append(fields, approvalpolicy.FieldAllNamespaces)
 	}
 	if m.namespace != nil {
 		fields = append(fields, approvalpolicy.FieldNamespace)
@@ -1688,6 +1828,8 @@ func (m *ApprovalPolicyMutation) Field(name string) (ent.Value, bool) {
 		return m.UpdatedBy()
 	case approvalpolicy.FieldActionType:
 		return m.ActionType()
+	case approvalpolicy.FieldAllNamespaces:
+		return m.AllNamespaces()
 	case approvalpolicy.FieldNamespace:
 		return m.Namespace()
 	case approvalpolicy.FieldAllTypes:
@@ -1719,6 +1861,8 @@ func (m *ApprovalPolicyMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldUpdatedBy(ctx)
 	case approvalpolicy.FieldActionType:
 		return m.OldActionType(ctx)
+	case approvalpolicy.FieldAllNamespaces:
+		return m.OldAllNamespaces(ctx)
 	case approvalpolicy.FieldNamespace:
 		return m.OldNamespace(ctx)
 	case approvalpolicy.FieldAllTypes:
@@ -1774,6 +1918,13 @@ func (m *ApprovalPolicyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetActionType(v)
+		return nil
+	case approvalpolicy.FieldAllNamespaces:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAllNamespaces(v)
 		return nil
 	case approvalpolicy.FieldNamespace:
 		v, ok := value.(string)
@@ -1871,6 +2022,9 @@ func (m *ApprovalPolicyMutation) ClearedFields() []string {
 	if m.FieldCleared(approvalpolicy.FieldUpdatedBy) {
 		fields = append(fields, approvalpolicy.FieldUpdatedBy)
 	}
+	if m.FieldCleared(approvalpolicy.FieldNamespace) {
+		fields = append(fields, approvalpolicy.FieldNamespace)
+	}
 	if m.FieldCleared(approvalpolicy.FieldTypes) {
 		fields = append(fields, approvalpolicy.FieldTypes)
 	}
@@ -1897,6 +2051,9 @@ func (m *ApprovalPolicyMutation) ClearField(name string) error {
 	case approvalpolicy.FieldUpdatedBy:
 		m.ClearUpdatedBy()
 		return nil
+	case approvalpolicy.FieldNamespace:
+		m.ClearNamespace()
+		return nil
 	case approvalpolicy.FieldTypes:
 		m.ClearTypes()
 		return nil
@@ -1922,6 +2079,9 @@ func (m *ApprovalPolicyMutation) ResetField(name string) error {
 		return nil
 	case approvalpolicy.FieldActionType:
 		m.ResetActionType()
+		return nil
+	case approvalpolicy.FieldAllNamespaces:
+		m.ResetAllNamespaces()
 		return nil
 	case approvalpolicy.FieldNamespace:
 		m.ResetNamespace()
@@ -2012,10 +2172,14 @@ type ApprovalRequestMutation struct {
 	status                *approvalrequest.Status
 	author                *string
 	base_hash             *string
+	changeset_revision    *int
+	addchangeset_revision *int
+	base_versions         *map[string]int
 	base_present          *[]string
 	appendbase_present    []string
 	base_effect           *json.RawMessage
 	appendbase_effect     json.RawMessage
+	base_values           *map[string]map[string]interface{}
 	payload               *json.RawMessage
 	appendpayload         json.RawMessage
 	executed_at           *time.Time
@@ -2640,6 +2804,111 @@ func (m *ApprovalRequestMutation) ResetBaseHash() {
 	m.base_hash = nil
 }
 
+// SetChangesetRevision sets the "changeset_revision" field.
+func (m *ApprovalRequestMutation) SetChangesetRevision(i int) {
+	m.changeset_revision = &i
+	m.addchangeset_revision = nil
+}
+
+// ChangesetRevision returns the value of the "changeset_revision" field in the mutation.
+func (m *ApprovalRequestMutation) ChangesetRevision() (r int, exists bool) {
+	v := m.changeset_revision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldChangesetRevision returns the old "changeset_revision" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldChangesetRevision(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldChangesetRevision is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldChangesetRevision requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldChangesetRevision: %w", err)
+	}
+	return oldValue.ChangesetRevision, nil
+}
+
+// AddChangesetRevision adds i to the "changeset_revision" field.
+func (m *ApprovalRequestMutation) AddChangesetRevision(i int) {
+	if m.addchangeset_revision != nil {
+		*m.addchangeset_revision += i
+	} else {
+		m.addchangeset_revision = &i
+	}
+}
+
+// AddedChangesetRevision returns the value that was added to the "changeset_revision" field in this mutation.
+func (m *ApprovalRequestMutation) AddedChangesetRevision() (r int, exists bool) {
+	v := m.addchangeset_revision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetChangesetRevision resets all changes to the "changeset_revision" field.
+func (m *ApprovalRequestMutation) ResetChangesetRevision() {
+	m.changeset_revision = nil
+	m.addchangeset_revision = nil
+}
+
+// SetBaseVersions sets the "base_versions" field.
+func (m *ApprovalRequestMutation) SetBaseVersions(value map[string]int) {
+	m.base_versions = &value
+}
+
+// BaseVersions returns the value of the "base_versions" field in the mutation.
+func (m *ApprovalRequestMutation) BaseVersions() (r map[string]int, exists bool) {
+	v := m.base_versions
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBaseVersions returns the old "base_versions" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldBaseVersions(ctx context.Context) (v map[string]int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBaseVersions is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBaseVersions requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBaseVersions: %w", err)
+	}
+	return oldValue.BaseVersions, nil
+}
+
+// ClearBaseVersions clears the value of the "base_versions" field.
+func (m *ApprovalRequestMutation) ClearBaseVersions() {
+	m.base_versions = nil
+	m.clearedFields[approvalrequest.FieldBaseVersions] = struct{}{}
+}
+
+// BaseVersionsCleared returns if the "base_versions" field was cleared in this mutation.
+func (m *ApprovalRequestMutation) BaseVersionsCleared() bool {
+	_, ok := m.clearedFields[approvalrequest.FieldBaseVersions]
+	return ok
+}
+
+// ResetBaseVersions resets all changes to the "base_versions" field.
+func (m *ApprovalRequestMutation) ResetBaseVersions() {
+	m.base_versions = nil
+	delete(m.clearedFields, approvalrequest.FieldBaseVersions)
+}
+
 // SetBasePresent sets the "base_present" field.
 func (m *ApprovalRequestMutation) SetBasePresent(s []string) {
 	m.base_present = &s
@@ -2768,6 +3037,55 @@ func (m *ApprovalRequestMutation) ResetBaseEffect() {
 	m.base_effect = nil
 	m.appendbase_effect = nil
 	delete(m.clearedFields, approvalrequest.FieldBaseEffect)
+}
+
+// SetBaseValues sets the "base_values" field.
+func (m *ApprovalRequestMutation) SetBaseValues(value map[string]map[string]interface{}) {
+	m.base_values = &value
+}
+
+// BaseValues returns the value of the "base_values" field in the mutation.
+func (m *ApprovalRequestMutation) BaseValues() (r map[string]map[string]interface{}, exists bool) {
+	v := m.base_values
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBaseValues returns the old "base_values" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldBaseValues(ctx context.Context) (v map[string]map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBaseValues is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBaseValues requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBaseValues: %w", err)
+	}
+	return oldValue.BaseValues, nil
+}
+
+// ClearBaseValues clears the value of the "base_values" field.
+func (m *ApprovalRequestMutation) ClearBaseValues() {
+	m.base_values = nil
+	m.clearedFields[approvalrequest.FieldBaseValues] = struct{}{}
+}
+
+// BaseValuesCleared returns if the "base_values" field was cleared in this mutation.
+func (m *ApprovalRequestMutation) BaseValuesCleared() bool {
+	_, ok := m.clearedFields[approvalrequest.FieldBaseValues]
+	return ok
+}
+
+// ResetBaseValues resets all changes to the "base_values" field.
+func (m *ApprovalRequestMutation) ResetBaseValues() {
+	m.base_values = nil
+	delete(m.clearedFields, approvalrequest.FieldBaseValues)
 }
 
 // SetPayload sets the "payload" field.
@@ -3061,7 +3379,7 @@ func (m *ApprovalRequestMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ApprovalRequestMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 20)
 	if m.created_at != nil {
 		fields = append(fields, approvalrequest.FieldCreatedAt)
 	}
@@ -3098,11 +3416,20 @@ func (m *ApprovalRequestMutation) Fields() []string {
 	if m.base_hash != nil {
 		fields = append(fields, approvalrequest.FieldBaseHash)
 	}
+	if m.changeset_revision != nil {
+		fields = append(fields, approvalrequest.FieldChangesetRevision)
+	}
+	if m.base_versions != nil {
+		fields = append(fields, approvalrequest.FieldBaseVersions)
+	}
 	if m.base_present != nil {
 		fields = append(fields, approvalrequest.FieldBasePresent)
 	}
 	if m.base_effect != nil {
 		fields = append(fields, approvalrequest.FieldBaseEffect)
+	}
+	if m.base_values != nil {
+		fields = append(fields, approvalrequest.FieldBaseValues)
 	}
 	if m.payload != nil {
 		fields = append(fields, approvalrequest.FieldPayload)
@@ -3145,10 +3472,16 @@ func (m *ApprovalRequestMutation) Field(name string) (ent.Value, bool) {
 		return m.Author()
 	case approvalrequest.FieldBaseHash:
 		return m.BaseHash()
+	case approvalrequest.FieldChangesetRevision:
+		return m.ChangesetRevision()
+	case approvalrequest.FieldBaseVersions:
+		return m.BaseVersions()
 	case approvalrequest.FieldBasePresent:
 		return m.BasePresent()
 	case approvalrequest.FieldBaseEffect:
 		return m.BaseEffect()
+	case approvalrequest.FieldBaseValues:
+		return m.BaseValues()
 	case approvalrequest.FieldPayload:
 		return m.Payload()
 	case approvalrequest.FieldExecutedAt:
@@ -3188,10 +3521,16 @@ func (m *ApprovalRequestMutation) OldField(ctx context.Context, name string) (en
 		return m.OldAuthor(ctx)
 	case approvalrequest.FieldBaseHash:
 		return m.OldBaseHash(ctx)
+	case approvalrequest.FieldChangesetRevision:
+		return m.OldChangesetRevision(ctx)
+	case approvalrequest.FieldBaseVersions:
+		return m.OldBaseVersions(ctx)
 	case approvalrequest.FieldBasePresent:
 		return m.OldBasePresent(ctx)
 	case approvalrequest.FieldBaseEffect:
 		return m.OldBaseEffect(ctx)
+	case approvalrequest.FieldBaseValues:
+		return m.OldBaseValues(ctx)
 	case approvalrequest.FieldPayload:
 		return m.OldPayload(ctx)
 	case approvalrequest.FieldExecutedAt:
@@ -3291,6 +3630,20 @@ func (m *ApprovalRequestMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetBaseHash(v)
 		return nil
+	case approvalrequest.FieldChangesetRevision:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetChangesetRevision(v)
+		return nil
+	case approvalrequest.FieldBaseVersions:
+		v, ok := value.(map[string]int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBaseVersions(v)
+		return nil
 	case approvalrequest.FieldBasePresent:
 		v, ok := value.([]string)
 		if !ok {
@@ -3304,6 +3657,13 @@ func (m *ApprovalRequestMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetBaseEffect(v)
+		return nil
+	case approvalrequest.FieldBaseValues:
+		v, ok := value.(map[string]map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBaseValues(v)
 		return nil
 	case approvalrequest.FieldPayload:
 		v, ok := value.(json.RawMessage)
@@ -3337,6 +3697,9 @@ func (m *ApprovalRequestMutation) AddedFields() []string {
 	if m.addnumber != nil {
 		fields = append(fields, approvalrequest.FieldNumber)
 	}
+	if m.addchangeset_revision != nil {
+		fields = append(fields, approvalrequest.FieldChangesetRevision)
+	}
 	return fields
 }
 
@@ -3347,6 +3710,8 @@ func (m *ApprovalRequestMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case approvalrequest.FieldNumber:
 		return m.AddedNumber()
+	case approvalrequest.FieldChangesetRevision:
+		return m.AddedChangesetRevision()
 	}
 	return nil, false
 }
@@ -3362,6 +3727,13 @@ func (m *ApprovalRequestMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddNumber(v)
+		return nil
+	case approvalrequest.FieldChangesetRevision:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddChangesetRevision(v)
 		return nil
 	}
 	return fmt.Errorf("unknown ApprovalRequest numeric field %s", name)
@@ -3383,11 +3755,17 @@ func (m *ApprovalRequestMutation) ClearedFields() []string {
 	if m.FieldCleared(approvalrequest.FieldDescription) {
 		fields = append(fields, approvalrequest.FieldDescription)
 	}
+	if m.FieldCleared(approvalrequest.FieldBaseVersions) {
+		fields = append(fields, approvalrequest.FieldBaseVersions)
+	}
 	if m.FieldCleared(approvalrequest.FieldBasePresent) {
 		fields = append(fields, approvalrequest.FieldBasePresent)
 	}
 	if m.FieldCleared(approvalrequest.FieldBaseEffect) {
 		fields = append(fields, approvalrequest.FieldBaseEffect)
+	}
+	if m.FieldCleared(approvalrequest.FieldBaseValues) {
+		fields = append(fields, approvalrequest.FieldBaseValues)
 	}
 	if m.FieldCleared(approvalrequest.FieldExecutedAt) {
 		fields = append(fields, approvalrequest.FieldExecutedAt)
@@ -3421,11 +3799,17 @@ func (m *ApprovalRequestMutation) ClearField(name string) error {
 	case approvalrequest.FieldDescription:
 		m.ClearDescription()
 		return nil
+	case approvalrequest.FieldBaseVersions:
+		m.ClearBaseVersions()
+		return nil
 	case approvalrequest.FieldBasePresent:
 		m.ClearBasePresent()
 		return nil
 	case approvalrequest.FieldBaseEffect:
 		m.ClearBaseEffect()
+		return nil
+	case approvalrequest.FieldBaseValues:
+		m.ClearBaseValues()
 		return nil
 	case approvalrequest.FieldExecutedAt:
 		m.ClearExecutedAt()
@@ -3477,11 +3861,20 @@ func (m *ApprovalRequestMutation) ResetField(name string) error {
 	case approvalrequest.FieldBaseHash:
 		m.ResetBaseHash()
 		return nil
+	case approvalrequest.FieldChangesetRevision:
+		m.ResetChangesetRevision()
+		return nil
+	case approvalrequest.FieldBaseVersions:
+		m.ResetBaseVersions()
+		return nil
 	case approvalrequest.FieldBasePresent:
 		m.ResetBasePresent()
 		return nil
 	case approvalrequest.FieldBaseEffect:
 		m.ResetBaseEffect()
+		return nil
+	case approvalrequest.FieldBaseValues:
+		m.ResetBaseValues()
 		return nil
 	case approvalrequest.FieldPayload:
 		m.ResetPayload()
@@ -3619,6 +4012,9 @@ type AuditEventMutation struct {
 	details               *json.RawMessage
 	appenddetails         json.RawMessage
 	event_category        *string
+	event_source          *string
+	source_ip_address     *string
+	request_id            *string
 	clearedFields         map[string]struct{}
 	resources             map[int]struct{}
 	removedresources      map[int]struct{}
@@ -3973,6 +4369,153 @@ func (m *AuditEventMutation) ResetEventCategory() {
 	m.event_category = nil
 }
 
+// SetEventSource sets the "event_source" field.
+func (m *AuditEventMutation) SetEventSource(s string) {
+	m.event_source = &s
+}
+
+// EventSource returns the value of the "event_source" field in the mutation.
+func (m *AuditEventMutation) EventSource() (r string, exists bool) {
+	v := m.event_source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEventSource returns the old "event_source" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldEventSource(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEventSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEventSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEventSource: %w", err)
+	}
+	return oldValue.EventSource, nil
+}
+
+// ClearEventSource clears the value of the "event_source" field.
+func (m *AuditEventMutation) ClearEventSource() {
+	m.event_source = nil
+	m.clearedFields[auditevent.FieldEventSource] = struct{}{}
+}
+
+// EventSourceCleared returns if the "event_source" field was cleared in this mutation.
+func (m *AuditEventMutation) EventSourceCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldEventSource]
+	return ok
+}
+
+// ResetEventSource resets all changes to the "event_source" field.
+func (m *AuditEventMutation) ResetEventSource() {
+	m.event_source = nil
+	delete(m.clearedFields, auditevent.FieldEventSource)
+}
+
+// SetSourceIPAddress sets the "source_ip_address" field.
+func (m *AuditEventMutation) SetSourceIPAddress(s string) {
+	m.source_ip_address = &s
+}
+
+// SourceIPAddress returns the value of the "source_ip_address" field in the mutation.
+func (m *AuditEventMutation) SourceIPAddress() (r string, exists bool) {
+	v := m.source_ip_address
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceIPAddress returns the old "source_ip_address" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldSourceIPAddress(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceIPAddress is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceIPAddress requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceIPAddress: %w", err)
+	}
+	return oldValue.SourceIPAddress, nil
+}
+
+// ClearSourceIPAddress clears the value of the "source_ip_address" field.
+func (m *AuditEventMutation) ClearSourceIPAddress() {
+	m.source_ip_address = nil
+	m.clearedFields[auditevent.FieldSourceIPAddress] = struct{}{}
+}
+
+// SourceIPAddressCleared returns if the "source_ip_address" field was cleared in this mutation.
+func (m *AuditEventMutation) SourceIPAddressCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldSourceIPAddress]
+	return ok
+}
+
+// ResetSourceIPAddress resets all changes to the "source_ip_address" field.
+func (m *AuditEventMutation) ResetSourceIPAddress() {
+	m.source_ip_address = nil
+	delete(m.clearedFields, auditevent.FieldSourceIPAddress)
+}
+
+// SetRequestID sets the "request_id" field.
+func (m *AuditEventMutation) SetRequestID(s string) {
+	m.request_id = &s
+}
+
+// RequestID returns the value of the "request_id" field in the mutation.
+func (m *AuditEventMutation) RequestID() (r string, exists bool) {
+	v := m.request_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestID returns the old "request_id" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldRequestID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestID: %w", err)
+	}
+	return oldValue.RequestID, nil
+}
+
+// ClearRequestID clears the value of the "request_id" field.
+func (m *AuditEventMutation) ClearRequestID() {
+	m.request_id = nil
+	m.clearedFields[auditevent.FieldRequestID] = struct{}{}
+}
+
+// RequestIDCleared returns if the "request_id" field was cleared in this mutation.
+func (m *AuditEventMutation) RequestIDCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldRequestID]
+	return ok
+}
+
+// ResetRequestID resets all changes to the "request_id" field.
+func (m *AuditEventMutation) ResetRequestID() {
+	m.request_id = nil
+	delete(m.clearedFields, auditevent.FieldRequestID)
+}
+
 // AddResourceIDs adds the "resources" edge to the AuditEventResource entity by ids.
 func (m *AuditEventMutation) AddResourceIDs(ids ...int) {
 	if m.resources == nil {
@@ -4115,7 +4658,7 @@ func (m *AuditEventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AuditEventMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 8)
 	if m.operations != nil {
 		fields = append(fields, auditevent.FieldOperations)
 	}
@@ -4130,6 +4673,15 @@ func (m *AuditEventMutation) Fields() []string {
 	}
 	if m.event_category != nil {
 		fields = append(fields, auditevent.FieldEventCategory)
+	}
+	if m.event_source != nil {
+		fields = append(fields, auditevent.FieldEventSource)
+	}
+	if m.source_ip_address != nil {
+		fields = append(fields, auditevent.FieldSourceIPAddress)
+	}
+	if m.request_id != nil {
+		fields = append(fields, auditevent.FieldRequestID)
 	}
 	return fields
 }
@@ -4149,6 +4701,12 @@ func (m *AuditEventMutation) Field(name string) (ent.Value, bool) {
 		return m.Details()
 	case auditevent.FieldEventCategory:
 		return m.EventCategory()
+	case auditevent.FieldEventSource:
+		return m.EventSource()
+	case auditevent.FieldSourceIPAddress:
+		return m.SourceIPAddress()
+	case auditevent.FieldRequestID:
+		return m.RequestID()
 	}
 	return nil, false
 }
@@ -4168,6 +4726,12 @@ func (m *AuditEventMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldDetails(ctx)
 	case auditevent.FieldEventCategory:
 		return m.OldEventCategory(ctx)
+	case auditevent.FieldEventSource:
+		return m.OldEventSource(ctx)
+	case auditevent.FieldSourceIPAddress:
+		return m.OldSourceIPAddress(ctx)
+	case auditevent.FieldRequestID:
+		return m.OldRequestID(ctx)
 	}
 	return nil, fmt.Errorf("unknown AuditEvent field %s", name)
 }
@@ -4212,6 +4776,27 @@ func (m *AuditEventMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetEventCategory(v)
 		return nil
+	case auditevent.FieldEventSource:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEventSource(v)
+		return nil
+	case auditevent.FieldSourceIPAddress:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceIPAddress(v)
+		return nil
+	case auditevent.FieldRequestID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown AuditEvent field %s", name)
 }
@@ -4248,6 +4833,15 @@ func (m *AuditEventMutation) ClearedFields() []string {
 	if m.FieldCleared(auditevent.FieldDetails) {
 		fields = append(fields, auditevent.FieldDetails)
 	}
+	if m.FieldCleared(auditevent.FieldEventSource) {
+		fields = append(fields, auditevent.FieldEventSource)
+	}
+	if m.FieldCleared(auditevent.FieldSourceIPAddress) {
+		fields = append(fields, auditevent.FieldSourceIPAddress)
+	}
+	if m.FieldCleared(auditevent.FieldRequestID) {
+		fields = append(fields, auditevent.FieldRequestID)
+	}
 	return fields
 }
 
@@ -4267,6 +4861,15 @@ func (m *AuditEventMutation) ClearField(name string) error {
 		return nil
 	case auditevent.FieldDetails:
 		m.ClearDetails()
+		return nil
+	case auditevent.FieldEventSource:
+		m.ClearEventSource()
+		return nil
+	case auditevent.FieldSourceIPAddress:
+		m.ClearSourceIPAddress()
+		return nil
+	case auditevent.FieldRequestID:
+		m.ClearRequestID()
 		return nil
 	}
 	return fmt.Errorf("unknown AuditEvent nullable field %s", name)
@@ -4290,6 +4893,15 @@ func (m *AuditEventMutation) ResetField(name string) error {
 		return nil
 	case auditevent.FieldEventCategory:
 		m.ResetEventCategory()
+		return nil
+	case auditevent.FieldEventSource:
+		m.ResetEventSource()
+		return nil
+	case auditevent.FieldSourceIPAddress:
+		m.ResetSourceIPAddress()
+		return nil
+	case auditevent.FieldRequestID:
+		m.ResetRequestID()
 		return nil
 	}
 	return fmt.Errorf("unknown AuditEvent field %s", name)
@@ -5296,6 +5908,8 @@ type BackupMutation struct {
 	error          *string
 	started_at     *time.Time
 	completed_at   *time.Time
+	locked_by      *string
+	heartbeat_at   *time.Time
 	clearedFields  map[string]struct{}
 	done           bool
 	oldValue       func(context.Context) (*Backup, error)
@@ -6172,6 +6786,104 @@ func (m *BackupMutation) ResetCompletedAt() {
 	delete(m.clearedFields, backup.FieldCompletedAt)
 }
 
+// SetLockedBy sets the "locked_by" field.
+func (m *BackupMutation) SetLockedBy(s string) {
+	m.locked_by = &s
+}
+
+// LockedBy returns the value of the "locked_by" field in the mutation.
+func (m *BackupMutation) LockedBy() (r string, exists bool) {
+	v := m.locked_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLockedBy returns the old "locked_by" field's value of the Backup entity.
+// If the Backup object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BackupMutation) OldLockedBy(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLockedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLockedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLockedBy: %w", err)
+	}
+	return oldValue.LockedBy, nil
+}
+
+// ClearLockedBy clears the value of the "locked_by" field.
+func (m *BackupMutation) ClearLockedBy() {
+	m.locked_by = nil
+	m.clearedFields[backup.FieldLockedBy] = struct{}{}
+}
+
+// LockedByCleared returns if the "locked_by" field was cleared in this mutation.
+func (m *BackupMutation) LockedByCleared() bool {
+	_, ok := m.clearedFields[backup.FieldLockedBy]
+	return ok
+}
+
+// ResetLockedBy resets all changes to the "locked_by" field.
+func (m *BackupMutation) ResetLockedBy() {
+	m.locked_by = nil
+	delete(m.clearedFields, backup.FieldLockedBy)
+}
+
+// SetHeartbeatAt sets the "heartbeat_at" field.
+func (m *BackupMutation) SetHeartbeatAt(t time.Time) {
+	m.heartbeat_at = &t
+}
+
+// HeartbeatAt returns the value of the "heartbeat_at" field in the mutation.
+func (m *BackupMutation) HeartbeatAt() (r time.Time, exists bool) {
+	v := m.heartbeat_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHeartbeatAt returns the old "heartbeat_at" field's value of the Backup entity.
+// If the Backup object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BackupMutation) OldHeartbeatAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHeartbeatAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHeartbeatAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHeartbeatAt: %w", err)
+	}
+	return oldValue.HeartbeatAt, nil
+}
+
+// ClearHeartbeatAt clears the value of the "heartbeat_at" field.
+func (m *BackupMutation) ClearHeartbeatAt() {
+	m.heartbeat_at = nil
+	m.clearedFields[backup.FieldHeartbeatAt] = struct{}{}
+}
+
+// HeartbeatAtCleared returns if the "heartbeat_at" field was cleared in this mutation.
+func (m *BackupMutation) HeartbeatAtCleared() bool {
+	_, ok := m.clearedFields[backup.FieldHeartbeatAt]
+	return ok
+}
+
+// ResetHeartbeatAt resets all changes to the "heartbeat_at" field.
+func (m *BackupMutation) ResetHeartbeatAt() {
+	m.heartbeat_at = nil
+	delete(m.clearedFields, backup.FieldHeartbeatAt)
+}
+
 // Where appends a list predicates to the BackupMutation builder.
 func (m *BackupMutation) Where(ps ...predicate.Backup) {
 	m.predicates = append(m.predicates, ps...)
@@ -6206,7 +6918,7 @@ func (m *BackupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *BackupMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 18)
 	if m.created_at != nil {
 		fields = append(fields, backup.FieldCreatedAt)
 	}
@@ -6255,6 +6967,12 @@ func (m *BackupMutation) Fields() []string {
 	if m.completed_at != nil {
 		fields = append(fields, backup.FieldCompletedAt)
 	}
+	if m.locked_by != nil {
+		fields = append(fields, backup.FieldLockedBy)
+	}
+	if m.heartbeat_at != nil {
+		fields = append(fields, backup.FieldHeartbeatAt)
+	}
 	return fields
 }
 
@@ -6295,6 +7013,10 @@ func (m *BackupMutation) Field(name string) (ent.Value, bool) {
 		return m.StartedAt()
 	case backup.FieldCompletedAt:
 		return m.CompletedAt()
+	case backup.FieldLockedBy:
+		return m.LockedBy()
+	case backup.FieldHeartbeatAt:
+		return m.HeartbeatAt()
 	}
 	return nil, false
 }
@@ -6336,6 +7058,10 @@ func (m *BackupMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldStartedAt(ctx)
 	case backup.FieldCompletedAt:
 		return m.OldCompletedAt(ctx)
+	case backup.FieldLockedBy:
+		return m.OldLockedBy(ctx)
+	case backup.FieldHeartbeatAt:
+		return m.OldHeartbeatAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown Backup field %s", name)
 }
@@ -6457,6 +7183,20 @@ func (m *BackupMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCompletedAt(v)
 		return nil
+	case backup.FieldLockedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLockedBy(v)
+		return nil
+	case backup.FieldHeartbeatAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHeartbeatAt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Backup field %s", name)
 }
@@ -6541,6 +7281,12 @@ func (m *BackupMutation) ClearedFields() []string {
 	if m.FieldCleared(backup.FieldCompletedAt) {
 		fields = append(fields, backup.FieldCompletedAt)
 	}
+	if m.FieldCleared(backup.FieldLockedBy) {
+		fields = append(fields, backup.FieldLockedBy)
+	}
+	if m.FieldCleared(backup.FieldHeartbeatAt) {
+		fields = append(fields, backup.FieldHeartbeatAt)
+	}
 	return fields
 }
 
@@ -6593,6 +7339,12 @@ func (m *BackupMutation) ClearField(name string) error {
 		return nil
 	case backup.FieldCompletedAt:
 		m.ClearCompletedAt()
+		return nil
+	case backup.FieldLockedBy:
+		m.ClearLockedBy()
+		return nil
+	case backup.FieldHeartbeatAt:
+		m.ClearHeartbeatAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Backup nullable field %s", name)
@@ -6649,6 +7401,12 @@ func (m *BackupMutation) ResetField(name string) error {
 		return nil
 	case backup.FieldCompletedAt:
 		m.ResetCompletedAt()
+		return nil
+	case backup.FieldLockedBy:
+		m.ResetLockedBy()
+		return nil
+	case backup.FieldHeartbeatAt:
+		m.ResetHeartbeatAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Backup field %s", name)
@@ -9385,6 +10143,8 @@ type ExportJobMutation struct {
 	error                     *string
 	started_at                *time.Time
 	completed_at              *time.Time
+	locked_by                 *string
+	heartbeat_at              *time.Time
 	clearedFields             map[string]struct{}
 	registry_artifacts        map[int]struct{}
 	removedregistry_artifacts map[int]struct{}
@@ -10034,6 +10794,104 @@ func (m *ExportJobMutation) ResetCompletedAt() {
 	delete(m.clearedFields, exportjob.FieldCompletedAt)
 }
 
+// SetLockedBy sets the "locked_by" field.
+func (m *ExportJobMutation) SetLockedBy(s string) {
+	m.locked_by = &s
+}
+
+// LockedBy returns the value of the "locked_by" field in the mutation.
+func (m *ExportJobMutation) LockedBy() (r string, exists bool) {
+	v := m.locked_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLockedBy returns the old "locked_by" field's value of the ExportJob entity.
+// If the ExportJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExportJobMutation) OldLockedBy(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLockedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLockedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLockedBy: %w", err)
+	}
+	return oldValue.LockedBy, nil
+}
+
+// ClearLockedBy clears the value of the "locked_by" field.
+func (m *ExportJobMutation) ClearLockedBy() {
+	m.locked_by = nil
+	m.clearedFields[exportjob.FieldLockedBy] = struct{}{}
+}
+
+// LockedByCleared returns if the "locked_by" field was cleared in this mutation.
+func (m *ExportJobMutation) LockedByCleared() bool {
+	_, ok := m.clearedFields[exportjob.FieldLockedBy]
+	return ok
+}
+
+// ResetLockedBy resets all changes to the "locked_by" field.
+func (m *ExportJobMutation) ResetLockedBy() {
+	m.locked_by = nil
+	delete(m.clearedFields, exportjob.FieldLockedBy)
+}
+
+// SetHeartbeatAt sets the "heartbeat_at" field.
+func (m *ExportJobMutation) SetHeartbeatAt(t time.Time) {
+	m.heartbeat_at = &t
+}
+
+// HeartbeatAt returns the value of the "heartbeat_at" field in the mutation.
+func (m *ExportJobMutation) HeartbeatAt() (r time.Time, exists bool) {
+	v := m.heartbeat_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHeartbeatAt returns the old "heartbeat_at" field's value of the ExportJob entity.
+// If the ExportJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExportJobMutation) OldHeartbeatAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHeartbeatAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHeartbeatAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHeartbeatAt: %w", err)
+	}
+	return oldValue.HeartbeatAt, nil
+}
+
+// ClearHeartbeatAt clears the value of the "heartbeat_at" field.
+func (m *ExportJobMutation) ClearHeartbeatAt() {
+	m.heartbeat_at = nil
+	m.clearedFields[exportjob.FieldHeartbeatAt] = struct{}{}
+}
+
+// HeartbeatAtCleared returns if the "heartbeat_at" field was cleared in this mutation.
+func (m *ExportJobMutation) HeartbeatAtCleared() bool {
+	_, ok := m.clearedFields[exportjob.FieldHeartbeatAt]
+	return ok
+}
+
+// ResetHeartbeatAt resets all changes to the "heartbeat_at" field.
+func (m *ExportJobMutation) ResetHeartbeatAt() {
+	m.heartbeat_at = nil
+	delete(m.clearedFields, exportjob.FieldHeartbeatAt)
+}
+
 // AddRegistryArtifactIDs adds the "registry_artifacts" edge to the RegistryArtifact entity by ids.
 func (m *ExportJobMutation) AddRegistryArtifactIDs(ids ...int) {
 	if m.registry_artifacts == nil {
@@ -10122,7 +10980,7 @@ func (m *ExportJobMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ExportJobMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 14)
 	if m.created_at != nil {
 		fields = append(fields, exportjob.FieldCreatedAt)
 	}
@@ -10159,6 +11017,12 @@ func (m *ExportJobMutation) Fields() []string {
 	if m.completed_at != nil {
 		fields = append(fields, exportjob.FieldCompletedAt)
 	}
+	if m.locked_by != nil {
+		fields = append(fields, exportjob.FieldLockedBy)
+	}
+	if m.heartbeat_at != nil {
+		fields = append(fields, exportjob.FieldHeartbeatAt)
+	}
 	return fields
 }
 
@@ -10191,6 +11055,10 @@ func (m *ExportJobMutation) Field(name string) (ent.Value, bool) {
 		return m.StartedAt()
 	case exportjob.FieldCompletedAt:
 		return m.CompletedAt()
+	case exportjob.FieldLockedBy:
+		return m.LockedBy()
+	case exportjob.FieldHeartbeatAt:
+		return m.HeartbeatAt()
 	}
 	return nil, false
 }
@@ -10224,6 +11092,10 @@ func (m *ExportJobMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldStartedAt(ctx)
 	case exportjob.FieldCompletedAt:
 		return m.OldCompletedAt(ctx)
+	case exportjob.FieldLockedBy:
+		return m.OldLockedBy(ctx)
+	case exportjob.FieldHeartbeatAt:
+		return m.OldHeartbeatAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown ExportJob field %s", name)
 }
@@ -10317,6 +11189,20 @@ func (m *ExportJobMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCompletedAt(v)
 		return nil
+	case exportjob.FieldLockedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLockedBy(v)
+		return nil
+	case exportjob.FieldHeartbeatAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHeartbeatAt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown ExportJob field %s", name)
 }
@@ -10371,6 +11257,12 @@ func (m *ExportJobMutation) ClearedFields() []string {
 	if m.FieldCleared(exportjob.FieldCompletedAt) {
 		fields = append(fields, exportjob.FieldCompletedAt)
 	}
+	if m.FieldCleared(exportjob.FieldLockedBy) {
+		fields = append(fields, exportjob.FieldLockedBy)
+	}
+	if m.FieldCleared(exportjob.FieldHeartbeatAt) {
+		fields = append(fields, exportjob.FieldHeartbeatAt)
+	}
 	return fields
 }
 
@@ -10408,6 +11300,12 @@ func (m *ExportJobMutation) ClearField(name string) error {
 		return nil
 	case exportjob.FieldCompletedAt:
 		m.ClearCompletedAt()
+		return nil
+	case exportjob.FieldLockedBy:
+		m.ClearLockedBy()
+		return nil
+	case exportjob.FieldHeartbeatAt:
+		m.ClearHeartbeatAt()
 		return nil
 	}
 	return fmt.Errorf("unknown ExportJob nullable field %s", name)
@@ -10452,6 +11350,12 @@ func (m *ExportJobMutation) ResetField(name string) error {
 		return nil
 	case exportjob.FieldCompletedAt:
 		m.ResetCompletedAt()
+		return nil
+	case exportjob.FieldLockedBy:
+		m.ResetLockedBy()
+		return nil
+	case exportjob.FieldHeartbeatAt:
+		m.ResetHeartbeatAt()
 		return nil
 	}
 	return fmt.Errorf("unknown ExportJob field %s", name)
@@ -13676,6 +14580,8 @@ type RestoreJobMutation struct {
 	error         *string
 	started_at    *time.Time
 	completed_at  *time.Time
+	locked_by     *string
+	heartbeat_at  *time.Time
 	clearedFields map[string]struct{}
 	done          bool
 	oldValue      func(context.Context) (*RestoreJob, error)
@@ -14299,6 +15205,104 @@ func (m *RestoreJobMutation) ResetCompletedAt() {
 	delete(m.clearedFields, restorejob.FieldCompletedAt)
 }
 
+// SetLockedBy sets the "locked_by" field.
+func (m *RestoreJobMutation) SetLockedBy(s string) {
+	m.locked_by = &s
+}
+
+// LockedBy returns the value of the "locked_by" field in the mutation.
+func (m *RestoreJobMutation) LockedBy() (r string, exists bool) {
+	v := m.locked_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLockedBy returns the old "locked_by" field's value of the RestoreJob entity.
+// If the RestoreJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RestoreJobMutation) OldLockedBy(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLockedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLockedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLockedBy: %w", err)
+	}
+	return oldValue.LockedBy, nil
+}
+
+// ClearLockedBy clears the value of the "locked_by" field.
+func (m *RestoreJobMutation) ClearLockedBy() {
+	m.locked_by = nil
+	m.clearedFields[restorejob.FieldLockedBy] = struct{}{}
+}
+
+// LockedByCleared returns if the "locked_by" field was cleared in this mutation.
+func (m *RestoreJobMutation) LockedByCleared() bool {
+	_, ok := m.clearedFields[restorejob.FieldLockedBy]
+	return ok
+}
+
+// ResetLockedBy resets all changes to the "locked_by" field.
+func (m *RestoreJobMutation) ResetLockedBy() {
+	m.locked_by = nil
+	delete(m.clearedFields, restorejob.FieldLockedBy)
+}
+
+// SetHeartbeatAt sets the "heartbeat_at" field.
+func (m *RestoreJobMutation) SetHeartbeatAt(t time.Time) {
+	m.heartbeat_at = &t
+}
+
+// HeartbeatAt returns the value of the "heartbeat_at" field in the mutation.
+func (m *RestoreJobMutation) HeartbeatAt() (r time.Time, exists bool) {
+	v := m.heartbeat_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHeartbeatAt returns the old "heartbeat_at" field's value of the RestoreJob entity.
+// If the RestoreJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RestoreJobMutation) OldHeartbeatAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHeartbeatAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHeartbeatAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHeartbeatAt: %w", err)
+	}
+	return oldValue.HeartbeatAt, nil
+}
+
+// ClearHeartbeatAt clears the value of the "heartbeat_at" field.
+func (m *RestoreJobMutation) ClearHeartbeatAt() {
+	m.heartbeat_at = nil
+	m.clearedFields[restorejob.FieldHeartbeatAt] = struct{}{}
+}
+
+// HeartbeatAtCleared returns if the "heartbeat_at" field was cleared in this mutation.
+func (m *RestoreJobMutation) HeartbeatAtCleared() bool {
+	_, ok := m.clearedFields[restorejob.FieldHeartbeatAt]
+	return ok
+}
+
+// ResetHeartbeatAt resets all changes to the "heartbeat_at" field.
+func (m *RestoreJobMutation) ResetHeartbeatAt() {
+	m.heartbeat_at = nil
+	delete(m.clearedFields, restorejob.FieldHeartbeatAt)
+}
+
 // Where appends a list predicates to the RestoreJobMutation builder.
 func (m *RestoreJobMutation) Where(ps ...predicate.RestoreJob) {
 	m.predicates = append(m.predicates, ps...)
@@ -14333,7 +15337,7 @@ func (m *RestoreJobMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *RestoreJobMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 13)
 	if m.created_at != nil {
 		fields = append(fields, restorejob.FieldCreatedAt)
 	}
@@ -14367,6 +15371,12 @@ func (m *RestoreJobMutation) Fields() []string {
 	if m.completed_at != nil {
 		fields = append(fields, restorejob.FieldCompletedAt)
 	}
+	if m.locked_by != nil {
+		fields = append(fields, restorejob.FieldLockedBy)
+	}
+	if m.heartbeat_at != nil {
+		fields = append(fields, restorejob.FieldHeartbeatAt)
+	}
 	return fields
 }
 
@@ -14397,6 +15407,10 @@ func (m *RestoreJobMutation) Field(name string) (ent.Value, bool) {
 		return m.StartedAt()
 	case restorejob.FieldCompletedAt:
 		return m.CompletedAt()
+	case restorejob.FieldLockedBy:
+		return m.LockedBy()
+	case restorejob.FieldHeartbeatAt:
+		return m.HeartbeatAt()
 	}
 	return nil, false
 }
@@ -14428,6 +15442,10 @@ func (m *RestoreJobMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldStartedAt(ctx)
 	case restorejob.FieldCompletedAt:
 		return m.OldCompletedAt(ctx)
+	case restorejob.FieldLockedBy:
+		return m.OldLockedBy(ctx)
+	case restorejob.FieldHeartbeatAt:
+		return m.OldHeartbeatAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown RestoreJob field %s", name)
 }
@@ -14514,6 +15532,20 @@ func (m *RestoreJobMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCompletedAt(v)
 		return nil
+	case restorejob.FieldLockedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLockedBy(v)
+		return nil
+	case restorejob.FieldHeartbeatAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHeartbeatAt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown RestoreJob field %s", name)
 }
@@ -14571,6 +15603,12 @@ func (m *RestoreJobMutation) ClearedFields() []string {
 	if m.FieldCleared(restorejob.FieldCompletedAt) {
 		fields = append(fields, restorejob.FieldCompletedAt)
 	}
+	if m.FieldCleared(restorejob.FieldLockedBy) {
+		fields = append(fields, restorejob.FieldLockedBy)
+	}
+	if m.FieldCleared(restorejob.FieldHeartbeatAt) {
+		fields = append(fields, restorejob.FieldHeartbeatAt)
+	}
 	return fields
 }
 
@@ -14612,6 +15650,12 @@ func (m *RestoreJobMutation) ClearField(name string) error {
 	case restorejob.FieldCompletedAt:
 		m.ClearCompletedAt()
 		return nil
+	case restorejob.FieldLockedBy:
+		m.ClearLockedBy()
+		return nil
+	case restorejob.FieldHeartbeatAt:
+		m.ClearHeartbeatAt()
+		return nil
 	}
 	return fmt.Errorf("unknown RestoreJob nullable field %s", name)
 }
@@ -14652,6 +15696,12 @@ func (m *RestoreJobMutation) ResetField(name string) error {
 		return nil
 	case restorejob.FieldCompletedAt:
 		m.ResetCompletedAt()
+		return nil
+	case restorejob.FieldLockedBy:
+		m.ResetLockedBy()
+		return nil
+	case restorejob.FieldHeartbeatAt:
+		m.ResetHeartbeatAt()
 		return nil
 	}
 	return fmt.Errorf("unknown RestoreJob field %s", name)

@@ -2,6 +2,7 @@ package config
 
 import (
 	"log/slog"
+	"os"
 	"testing"
 )
 
@@ -44,6 +45,70 @@ func TestNewConfig_EncryptionKeyValidation(t *testing.T) {
 				t.Errorf("New() error = %v, wantErr = %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// external-jwt assigns ORBITAL_JWT_DEFAULT_ROLE to every valid bearer token
+// rather than reading a per-user role, so the default must be the LEAST
+// privileged tier. This fails if someone changes the default to dev/admin —
+// a change with no visible symptom at runtime, and one that would silently
+// grant write access to every valid token.
+func TestExternalJWT_DefaultRoleIsLeastPrivilege(t *testing.T) {
+	tests := []struct {
+		name    string
+		role    string
+		wantErr bool
+	}{
+		{"explicitly empty is refused — a config mistake, not a fallback", "", true},
+		{"readonly is accepted", "readonly", false},
+		{"dev is accepted", "dev", false},
+		{"admin is accepted", "admin", false},
+		{"garbage is refused", "superuser", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ORBITAL_AUTH_MODE", "external-jwt")
+			t.Setenv("ORBITAL_JWT_ISSUER", "https://keycloak.example.com/realms/x")
+			t.Setenv("ORBITAL_JWT_AUDIENCE", "account")
+			t.Setenv("ORBITAL_JWT_CLIENT_ID", "some-client")
+			t.Setenv("ORBITAL_JWT_DEFAULT_ROLE", tt.role)
+
+			_, err := New()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("New() error = %v, wantErr = %v", err, tt.wantErr)
+			}
+		})
+	}
+
+	// The load-bearing case: the var is absent entirely, which is what a
+	// deployment that never thought about it looks like.
+	t.Run("absent falls back to least privilege", func(t *testing.T) {
+		t.Setenv("ORBITAL_AUTH_MODE", "external-jwt")
+		t.Setenv("ORBITAL_JWT_ISSUER", "https://keycloak.example.com/realms/x")
+		t.Setenv("ORBITAL_JWT_AUDIENCE", "account")
+		t.Setenv("ORBITAL_JWT_CLIENT_ID", "some-client")
+		t.Setenv("ORBITAL_JWT_DEFAULT_ROLE", "placeholder") // registers cleanup
+		os.Unsetenv("ORBITAL_JWT_DEFAULT_ROLE")
+
+		cfg, err := New()
+		if err != nil {
+			t.Fatalf("New() error = %v, want nil", err)
+		}
+		if cfg.JWTDefaultRole != "readonly" {
+			t.Errorf("absent default = %q, want readonly — a default that grants writes is an authorization decision nobody made", cfg.JWTDefaultRole)
+		}
+	})
+}
+
+// The role is read only in external-jwt mode, so leaving it unset must NOT
+// break every other deployment — the negative half of the rule above.
+func TestDefaultRoleUnsetIsFineOutsideExternalJWT(t *testing.T) {
+	t.Setenv("ORBITAL_AUTH_MODE", "")
+	t.Setenv("ORBITAL_JWT_DEFAULT_ROLE", "")
+
+	if _, err := New(); err != nil {
+		t.Errorf("New() error = %v, want nil — the role is external-jwt-only", err)
 	}
 }
 
@@ -92,5 +157,88 @@ func TestSlogLevel(t *testing.T) {
 				t.Errorf("SlogLevel() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestAPIAuthResolution pins the acceptance list for splitting API auth out of
+// ORBITAL_DEV. One case per item: the hierarchy is resolved once here, and the
+// regression it guards is someone re-coupling API auth to Dev (or flipping the
+// unset default, which would silently change every existing deployment).
+func TestAPIAuthResolution(t *testing.T) {
+	tests := []struct {
+		name        string
+		dev         string
+		apiAuth     string // "" = leave ORBITAL_API_AUTH_ENABLED unset
+		wantEnabled bool
+		wantSource  string
+		wantExplOff bool
+	}{
+		{
+			name:        "item 1: dev=true, unset — disabled, matching historical default",
+			dev:         "true",
+			wantEnabled: false,
+			wantSource:  "ORBITAL_DEV",
+		},
+		{
+			name:        "item 2: dev=false, unset — enabled, matching historical default",
+			dev:         "false",
+			wantEnabled: true,
+			wantSource:  "ORBITAL_DEV",
+		},
+		{
+			name:        "item 3: dev=true + explicit true — enabled, hot-reload retained",
+			dev:         "true",
+			apiAuth:     "true",
+			wantEnabled: true,
+			wantSource:  "ORBITAL_API_AUTH_ENABLED",
+		},
+		{
+			name:        "item 4: dev=false + explicit false — disabled, and explicitly so",
+			dev:         "false",
+			apiAuth:     "false",
+			wantEnabled: false,
+			wantSource:  "ORBITAL_API_AUTH_ENABLED",
+			wantExplOff: true,
+		},
+		{
+			name:        "inherited false is not an explicit disable",
+			dev:         "true",
+			wantEnabled: false,
+			wantSource:  "ORBITAL_DEV",
+			wantExplOff: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ORBITAL_DEV", tt.dev)
+			// Dev=false refuses the placeholder HMAC key; unrelated to this test.
+			t.Setenv("ORBITAL_SESSION_HMAC_KEY", "test-hmac-key-not-the-placeholder")
+			if tt.apiAuth != "" {
+				t.Setenv("ORBITAL_API_AUTH_ENABLED", tt.apiAuth)
+			} else {
+				os.Unsetenv("ORBITAL_API_AUTH_ENABLED")
+			}
+			cfg, err := New()
+			if err != nil {
+				t.Fatalf("New(): %v", err)
+			}
+			if cfg.APIAuthEnabled != tt.wantEnabled {
+				t.Errorf("APIAuthEnabled = %v, want %v", cfg.APIAuthEnabled, tt.wantEnabled)
+			}
+			if got := cfg.APIAuthSource(); got != tt.wantSource {
+				t.Errorf("APIAuthSource() = %q, want %q", got, tt.wantSource)
+			}
+			if got := cfg.APIAuthExplicitlyDisabled(); got != tt.wantExplOff {
+				t.Errorf("APIAuthExplicitlyDisabled() = %v, want %v", got, tt.wantExplOff)
+			}
+		})
+	}
+}
+
+func TestAPIAuthResolution_NonBooleanIsRefused(t *testing.T) {
+	t.Setenv("ORBITAL_DEV", "true")
+	t.Setenv("ORBITAL_API_AUTH_ENABLED", "yes-please")
+	if _, err := New(); err == nil {
+		t.Fatal("expected an error for a non-boolean ORBITAL_API_AUTH_ENABLED, got nil")
 	}
 }

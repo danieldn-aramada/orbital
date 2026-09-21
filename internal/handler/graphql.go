@@ -30,6 +30,40 @@ var knownMutationRe = configitems.KnownMutationsRegex()
 // e.g. filter: { orbId: { eq: "alaska-dot:GRTLY24" } }
 var orbIdFilterRe = regexp.MustCompile(`orbId\s*:\s*\{\s*eq\s*:\s*"([^"]+)"`)
 
+// The three regexes below exist because an orbId can be named through a
+// VARIABLE REFERENCE rather than a literal, and every one of those shapes used
+// to resolve to nothing.
+//
+// That is not merely a missing audit row. `checkApprovalPolicy` derives the
+// governing namespace from these same orbIds, so an unresolved reference meant
+// a perfectly valid variable-form mutation was refused `400
+// VARIABLE_FORM_REQUIRED` — telling the caller to use the variable form they
+// were already using. Any client not naming its variable exactly `orbId`, and
+// every compound mutation (which cannot have two variables of one name), was
+// locked out of a governed namespace. Fixed 2026-09-14.
+//
+// Resolution only ever ADDS orbIds, so the gate can become stricter but never
+// laxer: a reference we still cannot resolve yields nothing and is refused by
+// rejectUndeterminable exactly as before.
+
+// orbIdEqVarRe: orbId: { eq: $anyVariableName }
+var orbIdEqVarRe = regexp.MustCompile(`orbId\s*:\s*\{\s*eq\s*:\s*\$(\w+)`)
+
+// orbIdInRe: orbId: { in: [...] } — the list body is parsed separately because
+// its elements may be quoted literals, variable references, or a mix.
+var orbIdInRe = regexp.MustCompile(`orbId\s*:\s*\{\s*in\s*:\s*\[([^\]]*)\]`)
+
+// filterVarRe: filter: $anyVariableName — a whole filter object behind a
+// variable whose name is not literally "filter".
+var filterVarRe = regexp.MustCompile(`filter\s*:\s*\$(\w+)`)
+
+// listItemRe pulls `"literal"` and `$variable` items out of an `in` list body.
+var listItemRe = regexp.MustCompile(`"([^"]*)"|\$(\w+)`)
+
+// setVarRe: set: $anyVariableName — the patch map behind a variable whose name
+// is not literally "set". The leading `\b` keeps it off `offset:`.
+var setVarRe = regexp.MustCompile(`\bset\s*:\s*\$(\w+)`)
+
 var mutationOpRe = regexp.MustCompile(`(?i)^\s*mutation\s+(\w+)`)
 var queryOpRe = regexp.MustCompile(`(?i)^\s*query\s+(\w+)`)
 
@@ -76,7 +110,7 @@ type gqlRequest struct {
 
 // Handle proxies GraphQL requests to DGraph and serves GraphiQL on GET.
 // Any mutation touching a known ConfigItem type is recorded as an audit event.
-// For single-entity mutations that include ifVersion, an MVCC check is performed.
+// For single-entity mutations that include version, an MVCC check is performed.
 //
 // @Summary     GraphQL endpoint
 // @Description POST: proxies GraphQL queries and mutations to DGraph. GET: serves the GraphiQL explorer UI.
@@ -123,16 +157,7 @@ func (h *GraphQL) Handle(c echo.Context) error {
 
 	touchesKnownType := knownMutationRe.MatchString(req.Query)
 
-	opName := req.OperationName
-	if opName == "" {
-		if m := mutationOpRe.FindStringSubmatch(req.Query); len(m) > 1 {
-			opName = m[1]
-		}
-	}
-	if opName == "" {
-		ops, _ := extractOperations(req.Query)
-		opName = strings.Join(ops, ",")
-	}
+	opName := mutationOpName(&req)
 	c.Set("graphql.operation.name", opName)
 	c.Set("graphql.operation.type", "mutation")
 
@@ -159,6 +184,14 @@ func (h *GraphQL) Handle(c echo.Context) error {
 			if (entityID != "" || orbID != "") && setIsVar {
 				continue // variable form — stamping will fire
 			}
+			// Same shape, different spelling. The guard exists to refuse writes
+			// the proxy cannot stamp, so anything it CAN stamp must pass —
+			// otherwise it refuses on the variable's name rather than on the
+			// property it is defending. resolveWriteSelector answers exactly the
+			// question this guard asks, and the write path asks it again.
+			if sel := resolveWriteSelector(&req); sel.OrbID != "" && sel.SetVar != "" {
+				continue
+			}
 			h.logger.Warn("inline-selector update rejected — bypasses server-side stamping",
 				"op", op, "actor", actor,
 				"request.id", c.Response().Header().Get(echo.HeaderXRequestID))
@@ -172,13 +205,365 @@ func (h *GraphQL) Handle(c echo.Context) error {
 		}
 	}
 
-	// Fetch before-state for any single-entity mutation (used for MVCC and audit diff).
+	// The write pre-flight — before-fetch, `version` check, stamping — is NOT
+	// here. It lives in writeToDGraph so that EVERY write gets it and not only
+	// the ones that arrive over HTTP; see that function's doc comment.
 	//
-	// Default rule: derive the resource type from the mutation body. If exactly
-	// one ConfigItem type is touched AND variables carry `id` or `orbId`, fetch
-	// before. Override map kicks in only when the diff source differs from the
-	// body's resource type (compound/nested cases — see beforeFetchOverrides).
-	var before map[string]any
+	// context.Background(), not c.Request().Context(), and deliberately so: the
+	// previous http.Post carried no context, so a client disconnect never aborted
+	// an in-flight mutation. Propagating the request context here would let a
+	// dropped connection cancel a write mid-flight, leaving the caller unable to
+	// know whether it applied. Preserving the existing behaviour is both the safer
+	// semantics for a mutation and a strict no-op for this refactor.
+	res, err := h.writeToDGraph(context.Background(), bodyBytes, actor, resolveCallerRole(c, h.db), gateEnforce, nil)
+	if err != nil {
+		var gerr *gatedError
+		if errors.As(err, &gerr) {
+			// Not logged here. checkPolicyFor logs the refusal at the chokepoint,
+			// where it also covers DispatchMutation and cascade-delete — logging
+			// again would give this one path two lines and the other two none.
+			// request.id is not on that line (writeToDGraph runs on
+			// context.Background() by design); correlate via the access-log entry
+			// for the same 403.
+			return writeError(c, gerr.Status, gerr.Code, gerr.Message, gerr.Hint)
+		}
+		var perr *preflightError
+		if errors.As(err, &perr) {
+			return writeError(c, perr.Status, perr.Code, perr.Message, perr.Hint)
+		}
+		return err
+	}
+
+	// res.Variables, not req.Variables: the pre-flight stamped its own parse of
+	// the body, so the map Handle unmarshalled is the UNSTAMPED one. Auditing it
+	// would record a mutation orbital did not send.
+	if touchesKnownType && h.db != nil && !hasGQLErrors(res.Body) {
+		operations, resourceTypes := extractOperations(req.Query)
+		resourceIDs := extractResourceIDs(req.Query, res.Variables, res.Body)
+		// Captured HERE, not inside the goroutine: Echo pools and reuses Context
+		// objects, so reading c after Handle returns yields another request's
+		// values — and a wrong source IP on an audit row reads as fact.
+		origin := originFromContext(c, "graphql")
+		go h.auditMutation(opName, operations, resourceTypes, resourceIDs, actor, req.Query, res.Variables, res.Before, res.Bypassed, origin)
+	}
+
+	c.Response().Header().Set("Content-Type", "application/json")
+	_, err = c.Response().Write(res.Body)
+	return err
+}
+
+// DispatchMutation runs a server-internal GraphQL mutation against DGraph.
+//
+// Use it when an orbital-internal action (e.g. accepting a divergence override)
+// needs to mutate intent and have the change appear in the audit log just like
+// a user-driven mutation. It does NOT enforce role gating — callers must have
+// already authz'd.
+//
+// It DOES get the full write pre-flight — before-fetch, version/updatedAt/
+// updatedBy stamping, and the version check — because all three live in
+// writeToDGraph, which every GraphQL write passes through. A caller neither opts
+// in nor can forget: the two that existed when this was written each forgot a
+// different half, and nothing failed. (The cascade-delete endpoint writes DQL
+// and does not come through here; it carries its own checks.)
+//
+// before is an optional FALLBACK for the audit diff, not a substitute for the
+// fetch. writeToDGraph reads current state regardless — it has to, since the
+// next version is one more than the current one, and a counter cannot be
+// incremented unread — and overlays that read on whatever the caller supplied.
+// Pass it only when you hold field values the type's BeforeFields selection
+// does not cover; nil is the right answer for most callers.
+//
+// Returns the raw DGraph response body alongside the error so callers can
+// inspect specific GraphQL errors when needed. A non-nil error means the
+// mutation did not succeed and any side-effects (e.g. recording a resolution)
+// MUST be skipped.
+//
+// caller is the identity the approval gate judges — an `actor` string cannot
+// answer "is this role allowed to bypass". gate says whether the approval check
+// applies; pass gateExempt ONLY with a reason at the call site.
+func (h *GraphQL) DispatchMutation(ctx context.Context, actor string, caller callerRole, gate gateMode, query string, variables map[string]any, before map[string]any) ([]byte, error) {
+	body, err := json.Marshal(gqlRequest{Query: query, Variables: variables})
+	if err != nil {
+		return nil, fmt.Errorf("marshal mutation: %w", err)
+	}
+	res, err := h.writeToDGraph(ctx, body, actor, caller, gate, before)
+	if err != nil {
+		return res.Body, err
+	}
+	if res.Status != http.StatusOK {
+		return res.Body, fmt.Errorf("dgraph returned %d", res.Status)
+	}
+	if hasGQLErrors(res.Body) {
+		return res.Body, errors.New(firstGQLError(res.Body))
+	}
+	if h.db != nil {
+		opName := ""
+		if m := mutationOpRe.FindStringSubmatch(query); len(m) > 1 {
+			opName = m[1]
+		}
+		operations, resourceTypes := extractOperations(query)
+		resourceIDs := extractResourceIDs(query, res.Variables, res.Body)
+		go h.auditMutation(opName, operations, resourceTypes, resourceIDs, actor, query, res.Variables, res.Before, res.Bypassed, auditInternal())
+	}
+	return res.Body, nil
+}
+
+// writeResult is what the write path actually did.
+//
+// Before and Variables come back because the pre-flight below produces them and
+// the caller cannot: Variables is the map AS SENT (stamped, version removed),
+// and Before is the state the write replaced. A caller that rebuilt either from
+// its own inputs would be auditing something other than what happened — which
+// is the bug this whole function exists to make impossible.
+type writeResult struct {
+	Body      []byte         // raw DGraph response, unjudged
+	Status    int            // DGraph's HTTP status
+	Bypassed  string         // approval policy this caller bypassed, or ""
+	Before    map[string]any // pre-write state: the fetch overlaid on the caller's fallback
+	Variables map[string]any // variables as forwarded, post-stamp, with orbId restored
+}
+
+// preflightError is a refusal from the concurrency guard: a stale version, a
+// malformed one, or a predicate that could not be applied.
+//
+// Named for where it USED to fire. One case is post-write: a compare-and-swap
+// that matched no row is detected from the response. Name kept because both
+// entry points already unwrap this type.
+//
+// A typed error for the same reason gatedError is one — the status and code are
+// decided where the refusal happens, so the two entry points cannot each invent
+// their own answer to "what does a conflict look like".
+type preflightError struct {
+	Status  int
+	Code    string
+	Message string
+	Hint    string
+}
+
+func (e *preflightError) Error() string { return e.Message }
+
+// writeToDGraph is THE single place a mutation reaches the graph. Both entry
+// points — the client-facing Handle and the internal DispatchMutation — go
+// through here.
+//
+// Why one function rather than two call sites: Spike 36 D14. `/graphql` is a
+// chokepoint for CLIENTS, not for WRITES — Handle and DispatchMutation each used
+// to POST independently, so a policy check placed in Handle alone was bypassable
+// via divergence-Accept (which dispatches update{Type} to make intent match the
+// edge). Gating both call sites separately means two checks to keep in sync and a
+// third path, added later, that nobody remembers to gate. The approval gate
+// (Session 2) installs its check HERE, making it structurally unbypassable rather
+// than unbypassable by convention.
+//
+// The WRITE PRE-FLIGHT is here for exactly the same reason, and was moved down
+// out of Handle on 2026-09-03. It is three things over one read of the target:
+// the version comparison, the version auto-increment plus updatedBy/updatedAt
+// stamping, and the before-state the audit diff needs. While they lived in
+// Handle, DispatchMutation got none of them and said so in its doc comment,
+// leaving each to the caller — and both callers forgot a different one. Merge
+// passed an incomplete before, so its audit row carried no diff; divergence-
+// Accept wrote intent with no version bump, which made an Accept invisible to
+// change-request staleness (an approval cast before it kept counting). Neither
+// failed anything. Correct-by-default beats correct-by-remembering.
+//
+// Order is load-bearing and unchanged from Handle's: fetch → version → stamp →
+// strip → approval gate → POST. The gate sees the body as DGraph will, and an
+// MVCC conflict is refused before the gate, so a stale write is told to reload
+// rather than told to open a change request it would then have to redo.
+//
+// Deliberately does NOT judge the response: it returns the raw body and the HTTP
+// status and lets callers decide. Handle passes DGraph's body through to the
+// client untouched (including GraphQL `errors`); DispatchMutation treats a non-200
+// or a GraphQL error as a Go error. Encoding either policy here would change the
+// other caller's behaviour.
+//
+// ctx: callers pass context.Background() for client-facing mutations — see the
+// note at Handle's call site.
+//
+// caller and gate exist because a chokepoint that cannot see WHO is writing and
+// WHY can only decide nothing. gate is an explicit argument rather than a
+// context value so every exemption is visible at its call site and greppable in
+// one command — a reviewer must be able to enumerate the ways around a security
+// control without reading call graphs.
+func (h *GraphQL) writeToDGraph(ctx context.Context, body []byte, actor string, caller callerRole, gate gateMode, beforeFallback map[string]any) (writeResult, error) {
+	res := writeResult{Before: beforeFallback}
+
+	var req gqlRequest
+	guarded := false
+	if json.Unmarshal(body, &req) == nil {
+		current := h.fetchCurrentState(&req)
+		res.Before = mergeBefore(beforeFallback, current)
+		res.Variables = req.Variables
+
+		// Pre-flight first — it refuses the ordinary stale case before any write,
+		// with a better message. The predicate below catches only the race.
+		if perr := checkVersion(req.Variables, current); perr != nil {
+			return res, perr
+		}
+		if perr := injectVersionPredicate(&req); perr != nil {
+			return res, perr
+		}
+		_, guarded = req.Variables["version"]
+		body = forwardBody(&req, body, stampMutation(&req, current, actor) || guarded)
+	}
+
+	if gate == gateEnforce {
+		bypassed, err := h.checkApprovalPolicy(ctx, body, caller, actor)
+		if err != nil {
+			return res, err
+		}
+		res.Bypassed = bypassed
+	}
+
+	// Retried because the version predicate makes aborts MORE likely: two writers
+	// filtering the same predicate contend where an unfiltered write would not.
+	// An abort means the transaction did NOT commit, so re-sending is safe.
+	for attempt := 0; ; attempt++ {
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, h.dgraphURL, bytes.NewReader(body))
+		if err != nil {
+			return res, fmt.Errorf("build dgraph request: %w", err)
+		}
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		dgStart := time.Now()
+		resp, err := http.DefaultClient.Do(httpReq)
+		metrics.ObserveDGraphCall("mutation", time.Since(dgStart))
+		if err != nil {
+			return res, fmt.Errorf("proxy to dgraph: %w", err)
+		}
+		res.Status = resp.StatusCode
+		res.Body, err = io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return res, fmt.Errorf("read dgraph response: %w", err)
+		}
+		if !isTxnAborted(res.Body) {
+			break
+		}
+		if attempt >= txnAbortRetries {
+			// Distinct from MVCC_CONFLICT on purpose: that means "your data is
+			// stale, re-read". This means "the same request is still valid, the
+			// store was busy" — different remedy, so a different code.
+			h.logger.Warn("dgraph write abandoned after repeated transaction aborts", "attempts", attempt+1)
+			return res, &preflightError{
+				Status: http.StatusServiceUnavailable, Code: CodeWriteContention,
+				Message: "the write could not be committed because another write kept landing on the same records",
+				Hint:    "Retry the same request.",
+			}
+		}
+		time.Sleep(time.Duration(20*(attempt+1)) * time.Millisecond)
+	}
+
+	// A guarded write that matched nothing lost the race. Without this it is a
+	// 200 with `numUids: 0` — success-shaped, and the silent lost update the
+	// predicate exists to prevent. Gated on `guarded` so an unguarded update
+	// that legitimately matches nothing still returns 200.
+	if guarded && res.Status == http.StatusOK && !hasGQLErrors(res.Body) && casMissed(res.Body) {
+		return res, &preflightError{
+			Status: http.StatusConflict, Code: CodeMVCCConflict,
+			Message: "This record was modified by someone else. Please reload and try again.",
+		}
+	}
+	return res, nil
+}
+
+// mutationOpName is the operation name orbital uses for logs, audit rows and the
+// beforeFetchOverrides lookup. Derived identically wherever it is needed, so the
+// override map cannot be keyed on a string one call site would not produce.
+func mutationOpName(req *gqlRequest) string {
+	if req.OperationName != "" {
+		return req.OperationName
+	}
+	if m := mutationOpRe.FindStringSubmatch(req.Query); len(m) > 1 {
+		return m[1]
+	}
+	ops, _ := extractOperations(req.Query)
+	return strings.Join(ops, ",")
+}
+
+// writeSelector names the variables a single-entity update selects and patches
+// through, whatever the caller spelled them. An empty field means "could not be
+// resolved", which every consumer must treat as "refuse or skip" — never as
+// "proceed anyway". Resolution only ever turns a refusal into a fully stamped
+// write; it can never turn a refusal into an unstamped one.
+//
+// Deliberately NARROWER than extractResourceIDs. The gate only needs to KNOW an
+// orbId to look up a policy, so it reads every shape it can. The write path must
+// additionally fetch exactly that row, stamp its successor version, and splice a
+// CAS predicate into the query text — so it requires:
+//
+//   - EXACTLY ONE `orbId: { eq: $x }` and no other orbId predicate anywhere in
+//     the query. Two targets, an `in:` list, or an inline literal all mean the
+//     fetched row would not be the only row written, and stamping one row's
+//     successor version onto the others is worse than refusing.
+//   - the selector in the QUERY TEXT. `filter: $wholeFilter` resolves for the
+//     gate but not here: an opaque filter variable has nowhere to splice
+//     `version: { eq: $version }`, so it could be stamped but never guarded.
+type writeSelector struct {
+	OrbIDVar string // variable name holding the orbId ("" = unresolvable)
+	OrbID    string // its resolved value
+	SetVar   string // variable name holding the patch map ("" = none)
+}
+
+func resolveWriteSelector(req *gqlRequest) writeSelector {
+	var sel writeSelector
+	if len(req.Variables) == 0 {
+		return sel
+	}
+	// Any competing orbId predicate disqualifies the whole query — see above.
+	if len(orbIdFilterRe.FindAllStringIndex(req.Query, -1)) == 0 &&
+		len(orbIdInRe.FindAllStringIndex(req.Query, -1)) == 0 {
+		if m := orbIdEqVarRe.FindAllStringSubmatch(req.Query, -1); len(m) == 1 {
+			if v, ok := req.Variables[m[0][1]].(string); ok && v != "" {
+				sel.OrbIDVar, sel.OrbID = m[0][1], v
+			}
+		}
+	}
+	_, sel.SetVar, _ = resolveSetMap(req.Query, req.Variables)
+	return sel
+}
+
+// resolveSetMap returns the patch map an update mutation carries, and the name
+// of the variable holding it, whatever the caller called it.
+//
+// The literal "set" is tried first and without consulting the query, because a
+// caller may pass `set` as an orbital-only variable the query never declares —
+// and because it makes the overwhelmingly common path a single map lookup.
+//
+// ONE source of truth on purpose: the stamper writes updatedBy/updatedAt into
+// this map and the audit differ reads after-values out of it. If they resolved
+// it separately they could disagree, and the way that failure presents is an
+// audit row that renders no changes at all while the write lands normally.
+func resolveSetMap(query string, variables map[string]any) (map[string]any, string, bool) {
+	if m, ok := variables["set"].(map[string]any); ok {
+		return m, "set", true
+	}
+	if names := setVarRe.FindAllStringSubmatch(query, -1); len(names) == 1 {
+		if m, ok := variables[names[0][1]].(map[string]any); ok {
+			return m, names[0][1], true
+		}
+	}
+	return nil, "", false
+}
+
+// fetchCurrentState reads the entity a single-entity mutation targets, or nil
+// when the mutation is not a single-entity shape (a bulk add, a multi-type
+// mutation, an inline selector) or the read failed.
+//
+// One read, three consumers: the version comparison, the version increment,
+// and the audit diff's before-state. They are not separable — all three need
+// the same row as of the same instant.
+//
+// The target is resolved from the `id` or `orbId` VARIABLE, or — failing that —
+// from the single `orbId: { eq: $x }` reference in the query, whatever `$x` is
+// called (resolveWriteSelector). A mutation that hides its selector anywhere
+// else — inline literals, an `in:` list, or a $filter object — resolves to
+// nothing here and is therefore neither guarded nor stamped. That is why the
+// inline-selector rejection exists on the client path, and why internal
+// dispatchers must use the canonical update{Kind}($orbId, $set) shape.
+func (h *GraphQL) fetchCurrentState(req *gqlRequest) map[string]any {
+	opName := mutationOpName(req)
+
 	resourceType, hasOverride := beforeFetchOverrides[opName]
 	if !hasOverride {
 		_, resourceTypes := extractOperations(req.Query)
@@ -186,72 +571,150 @@ func (h *GraphQL) Handle(c echo.Context) error {
 			resourceType = resourceTypes[0]
 		}
 	}
-	if resourceType != "" {
-		entityID, _ := req.Variables["id"].(string)
-		orbID, _ := req.Variables["orbId"].(string)
-
-		var fetchErr error
-		if entityID != "" {
-			before, fetchErr = h.fetchBeforeByID("get"+resourceType, resourceType, entityID)
-		} else if orbID != "" {
-			before, fetchErr = h.fetchBeforeByOrbID("query"+resourceType, resourceType, orbID)
-		}
-		if fetchErr != nil {
-			h.logger.Warn("before-fetch failed", "op", opName, "err", fetchErr)
-			before = nil
-		}
+	if resourceType == "" {
+		return nil
 	}
 
-	// MVCC check — opt-in via ifVersion variable. Auto-increment of `version`
-	// below is mandatory and server-managed; MVCC race detection here is the
-	// opt-in layer on top. See docs/reference/DIVERGENCE.md "MVCC" section.
-	ifVersion, hasIfVersion := req.Variables["ifVersion"]
-	if hasIfVersion && before != nil {
-		want, ok := toFloat64(ifVersion)
-		if !ok {
-			// A malformed concurrency token is a client error, not a conflict —
-			// 409 would tell the caller to reload and retry, but retrying the
-			// same garbage loops forever. Reject as bad input. (audit A.3)
-			return writeError(c, http.StatusBadRequest, CodeBadUserInput,
-				"ifVersion must be an integer", "")
-		}
-		cur, _ := toFloat64(before["version"]) // server-stamped, reliably numeric
-		if int(cur) != int(want) {
-			return writeError(c, http.StatusConflict, CodeMVCCConflict,
-				"This record was modified by someone else. Please reload and try again.", "")
-		}
+	entityID, _ := req.Variables["id"].(string)
+	orbID, _ := req.Variables["orbId"].(string)
+	if entityID == "" && orbID == "" {
+		// The literal lookups stay FIRST: a caller may pass `orbId` as an
+		// orbital-only variable the query never declares (orbctl does — see
+		// forwardBody's strip), and that shape must keep resolving even though
+		// there is no `$orbId` in the query text to find.
+		orbID = resolveWriteSelector(req).OrbID
 	}
 
-	// Auto-increment version. Two patterns handled, both via top-level variables:
-	//   - UPDATE with `set` map variable → inject `set.version = before.version + 1`
-	//     when set lacks version. Skipped if caller explicitly set it.
-	//   - ADD with any array-of-maps variable → inject `version: 1` into each
-	//     entry that lacks one. The variable name doesn't matter (callers use
-	//     `input`, `idracInput`, etc.) — every array-of-maps payload is treated
-	//     as an add/upsert input. Caller-set version is preserved.
-	// Server-authoritative audit metadata. `version` is the OCC counter;
-	// `updatedBy`/`updatedAt` (and `createdBy`/`createdAt` on create) are stamped
-	// from the authenticated identity + server clock so they are consistent and
-	// unspoofable for EVERY caller — orbital's own UI, orbctl, and direct API
-	// clients alike. Clients must NOT supply these. See docs/reference/AUDIT.md.
+	var (
+		current  map[string]any
+		fetchErr error
+	)
+	switch {
+	case entityID != "":
+		current, fetchErr = h.fetchBeforeByID("get"+resourceType, resourceType, entityID)
+	case orbID != "":
+		current, fetchErr = h.fetchBeforeByOrbID("query"+resourceType, resourceType, orbID)
+	default:
+		return nil
+	}
+	if fetchErr != nil {
+		h.logger.Warn("before-fetch failed", "op", opName, "err", fetchErr)
+		return nil
+	}
+	return current
+}
+
+// mergeBefore overlays the fetched state on the caller's fallback, field by
+// field, with the fetch winning.
+//
+// Not "the fetch replaces the fallback": BeforeFields is a curated per-type
+// selection, so a caller can legitimately hold a field the fetch never asked
+// for — divergence-Accept resolves a field by name at runtime and may name one
+// outside the list. Discarding the fallback would silently empty the audit diff
+// for exactly those fields. Returns nil when there is nothing on either side, so
+// "no before-state" stays distinguishable from "before-state was empty".
+func mergeBefore(fallback, fetched map[string]any) map[string]any {
+	if len(fallback) == 0 && len(fetched) == 0 {
+		return nil
+	}
+	merged := make(map[string]any, len(fallback)+len(fetched))
+	for k, v := range fallback {
+		merged[k] = v
+	}
+	for k, v := range fetched {
+		merged[k] = v
+	}
+	return merged
+}
+
+// checkVersion is the opt-in MVCC guard. Auto-increment of `version` is
+// mandatory and server-managed; this race detection sits on top of it and fires
+// only when the caller supplies the version it read.
+// See docs/reference/DIVERGENCE.md "MVCC".
+//
+// current == nil means no single entity resolved, so there is nothing to compare
+// and the write proceeds unguarded — the caller asked for a check it did not
+// get. Preserved as-is in the 2026-09-03 move rather than quietly hardened;
+// tracked in docs/planning/debt.md.
+func checkVersion(variables map[string]any, current map[string]any) *preflightError {
+	// The pre-rename spelling. An unknown variable is otherwise ignored by
+	// GraphQL, so a client that has not caught up would write UNGUARDED with a
+	// 200 — losing the precondition it asked for without being told. Refused by
+	// name instead. Renamed 2026-09-04.
+	if _, stale := variables["ifVersion"]; stale {
+		return &preflightError{
+			Status: http.StatusBadRequest, Code: CodeBadUserInput,
+			Message: "`ifVersion` was renamed to `version` and would be ignored, leaving this write unguarded",
+			Hint:    "Rename the variable to `version`; the value and its meaning are unchanged.",
+		}
+	}
+	version, hasVersion := variables["version"]
+	if !hasVersion || current == nil {
+		return nil
+	}
+	want, ok := toFloat64(version)
+	if !ok {
+		// A malformed concurrency token is a client error, not a conflict —
+		// 409 would tell the caller to reload and retry, but retrying the
+		// same garbage loops forever. Reject as bad input. (audit A.3)
+		return &preflightError{
+			Status:  http.StatusBadRequest,
+			Code:    CodeBadUserInput,
+			Message: "version must be an integer",
+		}
+	}
+	cur, _ := toFloat64(current["version"]) // server-stamped, reliably numeric
+	if int(cur) != int(want) {
+		return &preflightError{
+			Status:  http.StatusConflict,
+			Code:    CodeMVCCConflict,
+			Message: "This record was modified by someone else. Please reload and try again.",
+		}
+	}
+	return nil
+}
+
+// stampMutation writes orbital's server-authoritative metadata into the
+// mutation variables, in place. Reports whether it changed anything.
+//
+// Two patterns, both via top-level variables:
+//   - UPDATE with a patch map → inject set.version = current.version + 1 when
+//     the patch lacks version. A caller-set version is preserved, which is what
+//     lets change-request merge stamp its own without double-incrementing. The
+//     variable need not be named `set`; resolveSetMap finds it either way, and
+//     the audit differ resolves it the same way so the two cannot disagree.
+//   - ADD with any array-of-maps variable → inject version: 1 into each entry
+//     that lacks one. The variable name does not matter (callers use `input`,
+//     `idracInput`, …) — every array-of-maps payload is an add/upsert input.
+//
+// `version` is the OCC counter; updatedBy/updatedAt (and createdBy/createdAt on
+// create) are stamped from the authenticated identity and the server clock so
+// they are consistent and unspoofable for EVERY caller — orbital's own UI,
+// orbctl, direct API clients, and orbital's internal dispatchers alike. Clients
+// must NOT supply them. See docs/reference/AUDIT.md.
+//
+// The UPDATE branch is gated on a resolved current state, not merely on a
+// non-nil before: without a current version there is no next version, and
+// writing one anyway would reset the counter to 1 and make every open change
+// request against the entity read as unchanged.
+func stampMutation(req *gqlRequest, current map[string]any, actor string) bool {
 	now := time.Now().UTC().Format(time.RFC3339)
-	autoIncremented := false
-	// UPDATE: `set` is a map. Gated on before!=nil, which means we resolved a
-	// single versioned ConfigItem — the only shape that owns these fields.
-	if before != nil {
-		if setMap, ok := req.Variables["set"].(map[string]any); ok {
+	stamped := false
+
+	if current != nil {
+		if setMap, setVar, ok := resolveSetMap(req.Query, req.Variables); ok {
 			if _, has := setMap["version"]; !has {
-				cur, _ := toFloat64(before["version"])
-				setMap["version"] = int(cur) + 1
+				if cur, ok := toFloat64(current["version"]); ok {
+					setMap["version"] = int(cur) + 1
+				}
 			}
 			setMap["updatedBy"] = actor
 			setMap["updatedAt"] = now
-			req.Variables["set"] = setMap
-			autoIncremented = true
+			req.Variables[setVar] = setMap
+			stamped = true
 		}
 	}
-	// ADD: any array-of-maps input is an add/upsert of ConfigItem(s). Stamp both
-	// created and updated (updatedAt == createdAt on insert).
+
 	for _, v := range req.Variables {
 		arr, ok := v.([]any)
 		if !ok {
@@ -269,160 +732,172 @@ func (h *GraphQL) Handle(c echo.Context) error {
 			m["createdAt"] = now
 			m["updatedBy"] = actor
 			m["updatedAt"] = now
-			autoIncremented = true
+			stamped = true
 		}
 	}
 
-	// Strip orbital-meta variables before forwarding to DGraph.
-	// ifVersion is always orbital-only (MVCC). orbId is orbital-only unless the
-	// query itself declares $orbId as a variable — in that case DGraph needs it.
-	auditOrbID, _ := req.Variables["orbId"].(string)
-	orbIdIsQueryVar := strings.Contains(req.Query, "$orbId")
-	shouldStripOrbID := auditOrbID != "" && !orbIdIsQueryVar
-	needsReMarshal := hasIfVersion || shouldStripOrbID || autoIncremented
-	if hasIfVersion {
-		delete(req.Variables, "ifVersion")
+	return stamped
+}
+
+// casFilterRe matches the ONE filter shape orbital's write path allows:
+// `filter: { orbId: { eq: $orbId } }`, with or without whitespace. Both the
+// client's canonical update and the two queries change-request merge builds
+// itself use it — merge's delete puts it directly on the field rather than
+// inside `input:`, which does not change the target.
+//
+// Group 1 captures the VARIABLE NAME: orbital resolves the selector by
+// reference, not by spelling, so `$serverOrbId` guards exactly as `$orbId`
+// does. The rewrite below re-emits the captured name rather than a fixed one —
+// emitting `$orbId` against a query that declares `$serverOrbId` would produce
+// a mutation DGraph rejects for an undefined variable.
+var casFilterRe = regexp.MustCompile(`filter:\s*\{\s*orbId:\s*\{\s*eq:\s*\$(\w+)\s*\}\s*\}`)
+
+// mutationVarsRe finds a mutation's variable-definition list so the injected
+// variable can be declared. Anchored on `mutation` so it cannot match a
+// selection-set argument list.
+var mutationVarsRe = regexp.MustCompile(`(?s)^\s*mutation\b[^(){]*\(([^)]*)\)`)
+
+// injectVersionPredicate moves the version comparison INSIDE the write, making
+// the concurrency check a compare-and-swap rather than check-then-act.
+//
+// FAILS CLOSED: if the predicate cannot be placed, the write is refused rather
+// than sent unguarded — a caller that asked for a check and silently did not get
+// one is the failure being fixed. That is also what makes the regex acceptable
+// here: a miss is a loud refusal, not a quiet bypass.
+//
+// Requires EXACTLY ONE filter match — zero means an unrecognised shape, more
+// than one means other targets would be left unguarded.
+//
+// checkVersion's pre-flight stays; it catches the ordinary stale case with a
+// better message. This catches only the race the pre-flight cannot see.
+func injectVersionPredicate(req *gqlRequest) *preflightError {
+	raw, ok := req.Variables["version"]
+	if !ok {
+		return nil // unconditional write — nothing to inject, nothing to refuse
 	}
-	if shouldStripOrbID {
+
+	// Validated here too: checkVersion returns early when no current state
+	// resolved, so a malformed token can reach this point unchecked.
+	want, ok := toFloat64(raw)
+	if !ok {
+		return &preflightError{
+			Status: http.StatusBadRequest, Code: CodeBadUserInput,
+			Message: "version must be an integer",
+		}
+	}
+
+	refuse := func(why string) *preflightError {
+		return &preflightError{
+			Status: http.StatusBadRequest, Code: CodeBadUserInput,
+			Message: "version cannot be applied to this mutation, so it was not sent",
+			Hint:    why + ` version guards a single existing entity: update{Kind}($orbId: String!, $set: {Kind}Patch!) { update{Kind}(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids } }.`,
+		}
+	}
+
+	filterLoc := casFilterRe.FindAllStringSubmatchIndex(req.Query, -1)
+	if len(filterLoc) != 1 {
+		if len(filterLoc) == 0 {
+			return refuse("No `filter: { orbId: { eq: $orbId } }` was found in the mutation.")
+		}
+		return refuse("The mutation has more than one orbId filter, so guarding one would leave the others unguarded.")
+	}
+	varDecl := mutationVarsRe.FindStringSubmatchIndex(req.Query)
+	if varDecl == nil {
+		return refuse("The mutation declares no variables, so `$version` cannot be declared.")
+	}
+	// A caller who already declares $version is hand-writing the precondition.
+	// Injecting a second declaration produces invalid GraphQL, so refuse rather
+	// than emit it — and a caller doing this by hand gets no conflict detection
+	// anyway, since orbital only inspects the result when it injected the filter.
+	if strings.Contains(req.Query[varDecl[2]:varDecl[3]], "$version") {
+		return refuse("The mutation already declares `$version`; orbital adds the version predicate itself.")
+	}
+
+	// Spliced by index rather than via Replace*: the replacement has to carry the
+	// caller's own variable name back out, and a Go replacement template would
+	// read the `$` in `$serverOrbId` as a capture-group reference — expanding it
+	// to the empty group of that name and forwarding `eq: ` to DGraph.
+	// Exactly one match, asserted above, so a single splice covers the query.
+	m := filterLoc[0]
+	q := req.Query[:m[0]] +
+		"filter: { orbId: { eq: $" + req.Query[m[2]:m[3]] + " }, version: { eq: $version } }" +
+		req.Query[m[1]:]
+	// Insert before the closing paren of the variable list. Index 3 is the end
+	// of the captured group, i.e. immediately before `)`.
+	end := varDecl[3]
+	// The replace above shifted everything after the filter; the variable list
+	// comes first in a mutation, so its offsets are still valid.
+	q = q[:end] + ", $version: Int!" + q[end:]
+
+	req.Query = q
+	req.Variables["version"] = int(want)
+	return nil
+}
+
+// casMissed reports whether a version-filtered mutation matched nothing.
+//
+// Only meaningful when the predicate was injected — an unguarded update that
+// legitimately matches nothing must keep returning 200.
+//
+// Two shapes, because callers select differently: merge asks for `numUids`, the
+// editor for the payload. A miss is `numUids: 0` or an empty payload array.
+func casMissed(body []byte) bool {
+	var env struct {
+		Data map[string]json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(body, &env); err != nil || len(env.Data) == 0 {
+		return false
+	}
+	for _, raw := range env.Data {
+		var payload map[string]any
+		if err := json.Unmarshal(raw, &payload); err != nil || payload == nil {
+			continue
+		}
+		if n, present := payload["numUids"]; present {
+			if v, ok := toFloat64(n); ok && int(v) == 0 {
+				return true
+			}
+			continue
+		}
+		for _, v := range payload {
+			if arr, ok := v.([]any); ok && len(arr) == 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// forwardBody returns the body to POST, re-marshalling only when something
+// changed: stamping ran, the version predicate was injected, or orbId has to
+// come out.
+//
+// version is NO LONGER stripped. It used to be an orbital-only variable the
+// proxy consumed; now it is either injected into the query — which declares and
+// references it — or the write is refused. There is no path where it survives
+// unused.
+//
+// orbId is orbital-only UNLESS the query declares $orbId; stripping it then
+// makes DGraph reject the request for an undefined variable. req.Variables is
+// left with orbId RESTORED: it is what the caller audits, and extractResourceIDs
+// reads the entity id out of it.
+func forwardBody(req *gqlRequest, body []byte, changed bool) []byte {
+	orbID, _ := req.Variables["orbId"].(string)
+	stripOrbID := orbID != "" && !strings.Contains(req.Query, "$orbId")
+
+	if !changed && !stripOrbID {
+		return body
+	}
+	if stripOrbID {
 		delete(req.Variables, "orbId")
 	}
-	if needsReMarshal {
-		if modified, err := json.Marshal(req); err == nil {
-			bodyBytes = modified
-		}
-		// Restore orbId so extractResourceIDs can find it after the DGraph call
-		if shouldStripOrbID {
-			req.Variables["orbId"] = auditOrbID
-		}
+	if modified, err := json.Marshal(req); err == nil {
+		body = modified
 	}
-
-	// context.Background(), not c.Request().Context(), and deliberately so: the
-	// previous http.Post carried no context, so a client disconnect never aborted
-	// an in-flight mutation. Propagating the request context here would let a
-	// dropped connection cancel a write mid-flight, leaving the caller unable to
-	// know whether it applied. Preserving the existing behaviour is both the safer
-	// semantics for a mutation and a strict no-op for this refactor.
-	respBytes, _, bypassedPolicy, err := h.writeToDGraph(context.Background(), bodyBytes, resolveCallerRole(c, h.db), gateEnforce)
-	if err != nil {
-		var gerr *gatedError
-		if errors.As(err, &gerr) {
-			h.logger.Warn("mutation refused — approval required",
-				"policy", gerr.Policy, "actor", actor,
-				"request.id", c.Response().Header().Get(echo.HeaderXRequestID))
-			return writeError(c, gerr.Status, gerr.Code, gerr.Message, gerr.Hint)
-		}
-		return err
+	if stripOrbID {
+		req.Variables["orbId"] = orbID
 	}
-
-	if touchesKnownType && h.db != nil && !hasGQLErrors(respBytes) {
-		operations, resourceTypes := extractOperations(req.Query)
-		resourceIDs := extractResourceIDs(req.Query, req.Variables, respBytes)
-		go h.auditMutation(opName, operations, resourceTypes, resourceIDs, actor, req.Query, req.Variables, before, bypassedPolicy)
-	}
-
-	c.Response().Header().Set("Content-Type", "application/json")
-	_, err = c.Response().Write(respBytes)
-	return err
-}
-
-// DispatchMutation runs a server-internal GraphQL mutation against DGraph.
-//
-// Use it when an orbital-internal action (e.g. accepting a divergence override)
-// needs to mutate intent and have the change appear in the audit log just like
-// a user-driven mutation. It does NOT enforce role gating — callers must have
-// already authz'd. It does NOT perform MVCC checks or auto before-fetches;
-// callers that want a diff in the audit row must supply `before` directly
-// (e.g. the divergence-accept path passes the entry's intended_value).
-//
-// Returns the raw DGraph response body alongside the error so callers can
-// inspect specific GraphQL errors when needed. A non-nil error means the
-// mutation did not succeed and any side-effects (e.g. recording a resolution)
-// MUST be skipped.
-//
-// caller is the identity the approval gate judges — an `actor` string cannot
-// answer "is this role allowed to bypass". gate says whether the approval check
-// applies; pass gateExempt ONLY with a reason at the call site.
-func (h *GraphQL) DispatchMutation(ctx context.Context, actor string, caller callerRole, gate gateMode, query string, variables map[string]any, before map[string]any) ([]byte, error) {
-	body, err := json.Marshal(gqlRequest{Query: query, Variables: variables})
-	if err != nil {
-		return nil, fmt.Errorf("marshal mutation: %w", err)
-	}
-	respBytes, status, bypassedPolicy, err := h.writeToDGraph(ctx, body, caller, gate)
-	if err != nil {
-		return respBytes, err
-	}
-	if status != http.StatusOK {
-		return respBytes, fmt.Errorf("dgraph returned %d", status)
-	}
-	if hasGQLErrors(respBytes) {
-		return respBytes, errors.New(firstGQLError(respBytes))
-	}
-	if h.db != nil {
-		opName := ""
-		if m := mutationOpRe.FindStringSubmatch(query); len(m) > 1 {
-			opName = m[1]
-		}
-		operations, resourceTypes := extractOperations(query)
-		resourceIDs := extractResourceIDs(query, variables, respBytes)
-		go h.auditMutation(opName, operations, resourceTypes, resourceIDs, actor, query, variables, before, bypassedPolicy)
-	}
-	return respBytes, nil
-}
-
-// writeToDGraph is THE single place a mutation reaches the graph. Both entry
-// points — the client-facing Handle and the internal DispatchMutation — go
-// through here.
-//
-// Why one function rather than two call sites: Spike 36 D14. `/graphql` is a
-// chokepoint for CLIENTS, not for WRITES — Handle and DispatchMutation each used
-// to POST independently, so a policy check placed in Handle alone was bypassable
-// via divergence-Accept (which dispatches update{Type} to make intent match the
-// edge). Gating both call sites separately means two checks to keep in sync and a
-// third path, added later, that nobody remembers to gate. The approval gate
-// (Session 2) installs its check HERE, making it structurally unbypassable rather
-// than unbypassable by convention.
-//
-// Deliberately does NOT judge the response: it returns the raw body and the HTTP
-// status and lets callers decide. Handle passes DGraph's body through to the
-// client untouched (including GraphQL `errors`); DispatchMutation treats a non-200
-// or a GraphQL error as a Go error. Encoding either policy here would change the
-// other caller's behaviour.
-//
-// ctx: callers pass context.Background() for client-facing mutations — see the
-// note at Handle's call site.
-//
-// caller and gate exist because a chokepoint that cannot see WHO is writing and
-// WHY can only decide nothing. gate is an explicit argument rather than a
-// context value so every exemption is visible at its call site and greppable in
-// one command — a reviewer must be able to enumerate the ways around a security
-// control without reading call graphs.
-func (h *GraphQL) writeToDGraph(ctx context.Context, body []byte, caller callerRole, gate gateMode) (respBytes []byte, status int, bypassed string, err error) {
-	if gate == gateEnforce {
-		bypassed, err = h.checkApprovalPolicy(ctx, body, caller)
-		if err != nil {
-			return nil, 0, "", err
-		}
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.dgraphURL, bytes.NewReader(body))
-	if err != nil {
-		return nil, 0, bypassed, fmt.Errorf("build dgraph request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	dgStart := time.Now()
-	resp, err := http.DefaultClient.Do(req)
-	metrics.ObserveDGraphCall("mutation", time.Since(dgStart))
-	if err != nil {
-		return nil, 0, bypassed, fmt.Errorf("proxy to dgraph: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBytes, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, resp.StatusCode, bypassed, fmt.Errorf("read dgraph response: %w", err)
-	}
-	return respBytes, resp.StatusCode, bypassed, nil
+	return body
 }
 
 // readFromDGraph POSTs a GraphQL READ and returns the raw body and status.
@@ -451,6 +926,20 @@ func (h *GraphQL) readFromDGraph(ctx context.Context, body []byte) ([]byte, int,
 		return nil, resp.StatusCode, fmt.Errorf("read dgraph response: %w", err)
 	}
 	return respBytes, resp.StatusCode, nil
+}
+
+// txnAbortRetries bounds the retry above. Three attempts covers the contention
+// the predicate introduces without turning a persistent problem into a hang.
+const txnAbortRetries = 2
+
+// isTxnAborted reports DGraph's retryable "Transaction has been aborted" — a
+// write that lost a commit race and did not apply, as opposed to one that was
+// refused.
+func isTxnAborted(body []byte) bool {
+	if !hasGQLErrors(body) {
+		return false
+	}
+	return strings.Contains(firstGQLError(body), "Transaction has been aborted")
 }
 
 // firstGQLError extracts the first error.message from a DGraph response body,
@@ -550,7 +1039,7 @@ func (h *GraphQL) doFetch(getter string, body []byte) (map[string]any, error) {
 // (query, variables, before-state), writeAuditEvent knows how to store any
 // audit record. The old name (`writeEvent`) read as a duplicate of
 // `writeAuditEvent` and hid that layering.
-func (h *GraphQL) auditMutation(opName string, operations, resourceTypes, resourceIDs []string, actor, query string, variables map[string]any, before map[string]any, bypassedPolicy string) {
+func (h *GraphQL) auditMutation(opName string, operations, resourceTypes, resourceIDs []string, actor, query string, variables map[string]any, before map[string]any, bypassedPolicy string, origin auditOrigin) {
 	details := map[string]any{
 		"operationName": opName,
 		"query":         query,
@@ -568,7 +1057,7 @@ func (h *GraphQL) auditMutation(opName string, operations, resourceTypes, resour
 	if before != nil {
 		details["before"] = stripDGraphIDs(before)
 	}
-	writeAuditEvent(h.db, h.logger, "data", actor, opName, operations, resourceTypes, resourceIDs, details)
+	writeAuditEvent(h.db, h.logger, "data", actor, opName, operations, resourceTypes, resourceIDs, details, origin)
 }
 
 // stripDGraphIDs returns a deep copy of v with every "id" key removed. DGraph
@@ -674,24 +1163,35 @@ func extractResourceIDs(query string, variables map[string]any, respBody []byte)
 	// Shape: {"filter": {"orbId": {"eq": "..."}}} or {"filter": {"orbId": {"in": [...]}}}.
 	// This is the shape used by update{Type}/delete{Type} when the caller wants
 	// the audit-log expanded row to show variables instead of inlined values.
-	if filter, ok := variables["filter"].(map[string]any); ok {
-		if orbIdF, ok := filter["orbId"].(map[string]any); ok {
-			if eq, ok := orbIdF["eq"].(string); ok {
-				add(eq)
-			}
-			if in, ok := orbIdF["in"].([]any); ok {
-				for _, v := range in {
-					if s, ok := v.(string); ok {
-						add(s)
-					}
-				}
-			}
-		}
-	}
+	addFilterOrbIDs(variables["filter"], add)
 
 	// Inline filter expressions: orbId: { eq: "..." }
 	for _, m := range orbIdFilterRe.FindAllStringSubmatch(query, -1) {
 		add(m[1])
+	}
+
+	// Inline filter naming a variable: orbId: { eq: $whatever }. The variable
+	// holds the orbId predicate's value — normally a bare string.
+	for _, m := range orbIdEqVarRe.FindAllStringSubmatch(query, -1) {
+		addOrbIDPredicate(variables[m[1]], add)
+	}
+
+	// Inline `in` list: orbId: { in: ["a", $b] }. Literals and variable
+	// references may be mixed in one list.
+	for _, m := range orbIdInRe.FindAllStringSubmatch(query, -1) {
+		for _, item := range listItemRe.FindAllStringSubmatch(m[1], -1) {
+			if item[1] != "" || item[2] == "" {
+				add(item[1]) // quoted literal
+				continue
+			}
+			addOrbIDPredicate(variables[item[2]], add) // $variable
+		}
+	}
+
+	// A whole filter object behind a variable of any name: filter: $myFilter.
+	// The literal key "filter" is already read above; this covers the rest.
+	for _, m := range filterVarRe.FindAllStringSubmatch(query, -1) {
+		addFilterOrbIDs(variables[m[1]], add)
 	}
 
 	// Response body: recursively collect every orbId value in the returned JSON.
@@ -705,6 +1205,48 @@ func extractResourceIDs(query string, variables map[string]any, respBody []byte)
 
 	sort.Strings(ids)
 	return ids
+}
+
+// addFilterOrbIDs reads orbIds out of a resolved FILTER object — the value a
+// `filter: $var` reference points at, e.g. {"orbId": {"eq": "ns:thing"}}.
+//
+// It descends only through the "orbId" key. A filter on any other field
+// contributes nothing, deliberately: attributing someone else's predicate to
+// orbId would put a wrong resource id on an audit row, and a wrong id is worse
+// than a missing one because it reads as fact.
+func addFilterOrbIDs(v any, add func(string)) {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return
+	}
+	if pred, ok := m["orbId"]; ok {
+		addOrbIDPredicate(pred, add)
+	}
+}
+
+// addOrbIDPredicate reads orbIds out of a resolved orbId PREDICATE — the value
+// sitting under an "orbId" key, or behind an `orbId: { eq: $var }` reference.
+//
+// Accepts every shape DGraph's generated filters allow for it: a bare string,
+// a list of strings, or an {eq}/{in} map. Anything else yields nothing.
+func addOrbIDPredicate(v any, add func(string)) {
+	switch t := v.(type) {
+	case string:
+		add(t)
+	case []any:
+		for _, e := range t {
+			if s, ok := e.(string); ok {
+				add(s)
+			}
+		}
+	case map[string]any:
+		if eq, ok := t["eq"].(string); ok {
+			add(eq)
+		}
+		if in, ok := t["in"]; ok {
+			addOrbIDPredicate(in, add)
+		}
+	}
 }
 
 // collectOrbIDs recursively walks an arbitrary JSON value and calls add for
@@ -830,7 +1372,7 @@ func hasGQLErrors(body []byte) bool {
 // toFloat64 coerces a JSON-decoded numeric value to float64. The second return
 // is false when v is not a numeric type (nil, string, bool) or is a json.Number
 // that fails to parse. Callers MUST check it — treating a failed parse as 0
-// silently passes the MVCC check on a malformed ifVersion (audit A.3).
+// silently passes the MVCC check on a malformed version (audit A.3).
 func toFloat64(v any) (float64, bool) {
 	switch n := v.(type) {
 	case float64:

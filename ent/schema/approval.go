@@ -39,6 +39,11 @@ func (Approval) Fields() []ent.Field {
 		// approved_at_hash is the request's base_hash at the moment this decision
 		// was cast. An approval counts only while it matches the current hash.
 		field.String("approved_at_hash").NotEmpty(),
+
+		// approved_at_revision is the changeset revision this decision was cast
+		// against. Zero for rows written before the column existed — treated as
+		// matching, so historical approvals are not retroactively dismissed.
+		field.Int("approved_at_revision").Default(0),
 	}
 }
 

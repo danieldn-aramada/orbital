@@ -220,6 +220,25 @@ type changeItemBody struct {
 	Set map[string]any `json:"set,omitempty"`
 	// Clear is the fields to unset.
 	Clear []string `json:"clear,omitempty" example:"oobMAC"`
+	// IfVersion is the OLD spelling of Version, kept only to detect callers that
+	// have not caught up. Renamed 2026-09-04: a precondition naming the node's
+	// own field is what Kubernetes, GCP, Firestore, DynamoDB and plain SQL all
+	// do; `ifVersion` was an HTTP-header idiom borrowed for a body field. Silence
+	// would drop the guard without saying so, so it is refused by name.
+	IfVersion *int `json:"ifVersion,omitempty" swaggerignore:"true"`
+	// Before is REMOVED as a feature and kept only to detect callers still
+	// sending it. Echo's binder ignores unknown fields, so without this a client
+	// that still supplies `before` loses its per-field guarantee silently — the
+	// failure mode the concurrency work exists to eliminate. Rejected with a 400
+	// naming `version` instead. Hidden from the published spec.
+	Before json.RawMessage `json:"before,omitempty" swaggerignore:"true"`
+	// Version is the entity's `version` as you read it — the same concurrency
+	// token `/graphql` mutations accept, meaning the same thing here. Orbital
+	// refuses the request with 409 MVCC_CONFLICT if the entity has moved since,
+	// naming the item and both versions. One per item, never per field: an
+	// entity has one version. Omit for an unconditional item. Supplying it for
+	// an entity that does not exist is refused — there is no version to match.
+	Version *int `json:"version,omitempty" example:"7"`
 }
 
 // amendChangeRequestBody patches an open change request. Omitted fields are
@@ -242,8 +261,15 @@ type decisionBody struct {
 
 // approvalPolicyBody declares a protected class.
 type approvalPolicyBody struct {
-	// Namespace the policy governs.
-	Namespace string `json:"namespace" validate:"required" example:"alaska-dot"`
+	// AllNamespaces governs EVERY namespace, including data centers onboarded
+	// after the policy was written. Mutually exclusive with Namespace.
+	//
+	// It is a DEFAULT, not a floor: a namespace with its own policy is governed
+	// by that one instead, even when it is weaker, and a namespace whose policy
+	// is DISABLED is not gated at all.
+	AllNamespaces *bool `json:"allNamespaces,omitempty" example:"false"`
+	// Namespace the policy governs. Required unless allNamespaces is true.
+	Namespace string `json:"namespace,omitempty" example:"alaska-dot"`
 	// AllTypes protects every type in the namespace, including ConfigItem types
 	// added to the schema later. Mutually exclusive with Types.
 	AllTypes *bool `json:"allTypes,omitempty" example:"true"`
@@ -290,7 +316,13 @@ type changeRequestResponse struct {
 	Author    string `json:"author" example:"proposer@armada.ai"`
 	// Stale means the intent this request was written against has changed since
 	// it was opened. Derived on every read — never a stored column.
-	Stale bool `json:"stale" example:"false"`
+	//
+	// ABSENT on list responses, which are PostgreSQL-only and do not ask the
+	// question (see storedState). Absent is not false: a client must treat a
+	// missing `stale` as "open the request to find out", which is what the
+	// detail endpoint is for. Same for subtreeChanged, staleEntities and
+	// missingTargets.
+	Stale *bool `json:"stale,omitempty" example:"false"`
 	// Approvals is how many currently-counting approvals exist, and Required is
 	// how many the policy demands. Required 0 means nothing governs this change.
 	Approvals int `json:"approvals" example:"0"`
@@ -301,18 +333,47 @@ type changeRequestResponse struct {
 	// MissingTargets are entities that existed when this request was opened and
 	// have since been deleted. A merge will fail with TARGET_MISSING.
 	MissingTargets []string `json:"missingTargets,omitempty"`
+	// SubtreeChanged means the reviewed scope moved without any change object
+	// going out of date — an edit to an owned child. Cleared by approving again;
+	// blocks merge on its own. Distinct from Stale, which only the author can
+	// clear by rebasing.
+	SubtreeChanged *bool `json:"subtreeChanged,omitempty" example:"false"`
+	// StaleEntities names WHY this request is stale: the entities whose version
+	// moved since it was last reviewed, each with the version reviewed and the
+	// version now. Present only when Stale is true, and empty for requests
+	// opened before orbital recorded the base version vector.
+	//
+	// Server-computed on purpose. `stale` alone tells a reader that merge is
+	// blocked but not what to look at, and a client that had to work it out
+	// would need the base vector, the current vector and the scope-expansion
+	// rules — three things orbital already has and no integrator should
+	// reimplement.
+	StaleEntities []staleEntity `json:"staleEntities,omitempty"`
 	// Summary is what a QUEUE ROW needs: how wide this change is, and — when it
 	// is a single field — what that field becomes. Derived server-side so a
 	// list view never walks `changes` to build a label. Orbital's own queue
 	// renders straight from it, and so can anyone else's.
-	Effect        changeEffect         `json:"effect"`
-	Changes       []changeItemBody     `json:"changes"`
+	Effect  changeEffect     `json:"effect"`
+	Changes []changeItemBody `json:"changes"`
+	// Record is the per-entity account of what this request does, one entry per
+	// change object, with each item's applied status folded in. Built from the
+	// payload so it stays correct after a merge, when the live diff is empty.
+	Record        []changeRecordEntry  `json:"record"`
 	Reviews       []approvalResponse   `json:"reviews,omitempty"`
 	MergeAttempts []mergeAttemptResult `json:"mergeAttempts,omitempty"`
 	CreatedAt     time.Time            `json:"createdAt"`
 	UpdatedAt     *time.Time           `json:"updatedAt,omitempty"`
 	ExecutedAt    *time.Time           `json:"executedAt,omitempty"`
 	ExecutedBy    string               `json:"executedBy,omitempty"`
+}
+
+// staleEntity is one entity that moved out from under a request.
+type staleEntity struct {
+	OrbID string `json:"orbId" example:"alaska-dot:server-4FK8K44"`
+	// Reviewed is the version this request was last reviewed against; Current is
+	// the version now. Current is omitted when the entity no longer exists.
+	Reviewed int  `json:"reviewedVersion" example:"7"`
+	Current  *int `json:"currentVersion,omitempty" example:"9"`
 }
 
 // approvalResponse is one reviewer's decision.
@@ -325,6 +386,50 @@ type approvalResponse struct {
 	// the intent and no longer counts — surfaced rather than hidden so the UI
 	// can say "approved an earlier version" instead of the approval vanishing.
 	Current bool `json:"current" example:"true"`
+}
+
+// changeRecordEntry is one change object rendered as a ROW: what it targets,
+// what it does to each field, and whether it landed.
+//
+// It exists because `effect` cannot answer this. `effect` is a SUMMARY built for
+// a queue row — counts, plus the single entity and field when there happens to
+// be exactly one — so a two-entity request collapses to "2 entities / 2 fields"
+// and the per-entity detail is simply not in the shape. That is fine for a list
+// and useless for a detail view.
+//
+// Derived from the stored payload rather than from a live diff, which is what
+// makes it work on a MERGED request: once the changeset is applied the diff
+// against current intent is empty, and the record of what was done would vanish
+// exactly when it becomes the only account of it. Deriving from the payload also
+// makes this correct for every request already in the database, with no backfill.
+//
+// Server-side (not a client join of `changes` against `mergeAttempts`) per
+// CLAUDE.md's API-first rule: orbital's UI renders it, and so can anyone else's.
+type changeRecordEntry struct {
+	OrbID string `json:"orbId" example:"colo:CWJHDX3-idrac"`
+	Type  string `json:"type,omitempty" example:"IdracSettings"`
+	Op    string `json:"op" example:"update"`
+	// Fields is empty for an op with no field detail — a delete, or a create
+	// whose values were not recorded. The op still says what happened.
+	Fields []changeRecordField `json:"fields,omitempty"`
+	// Applied is whether this item landed. Nil when no merge has been attempted,
+	// which is different from false: a request nobody has merged has not failed.
+	Applied *bool `json:"applied,omitempty" example:"true"`
+}
+
+// changeRecordField is one field's intended end state.
+type changeRecordField struct {
+	Field string `json:"field" example:"sshEnabled"`
+	// Value is the intended value, absent when the field is being cleared.
+	Value any `json:"value,omitempty"`
+	// Before is the value at the time this was last reviewed, read from the
+	// recorded ancestor. Absent for a create, and for requests opened before
+	// orbital recorded one — the row then reads "\u2192 after", which is less
+	// informative but still true.
+	Before any `json:"before,omitempty"`
+	// Cleared distinguishes "unset this" from "set this to null" — the two are
+	// different mutations and a reader cannot tell them apart from a null Value.
+	Cleared bool `json:"cleared,omitempty" example:"false"`
 }
 
 // mergeAttemptResult is what one merge actually did, item by item.
@@ -366,13 +471,61 @@ type changeRequestDiffResponse struct {
 	Summary  graphdiff.Summary `json:"summary"`
 	// Changes is FLAT — one entry per changed entity, never a nested tree.
 	Changes []*graphdiff.Change `json:"changes"`
+	// Satisfied is the part of the changeset that would do nothing: fields whose
+	// current value already equals the proposed one, and deletes whose target is
+	// already gone. Same flat shape as Changes, so a client renders it with the
+	// same code.
+	//
+	// It exists because `changes` alone cannot answer "what does this request
+	// propose". A field someone else already set drops out of the diff, so the
+	// request appears to shrink — with no signal that it did, or why. Listing
+	// them separately keeps `changes` meaning exactly "what would change" while
+	// making the whole proposal visible.
+	//
+	// `before` and `after` are equal on every entry here, by definition.
+	Satisfied []*graphdiff.Change `json:"satisfied,omitempty"`
+	// Fields is the review table: one row per field the changeset writes, each
+	// resolved to what a merge would DO with it.
+	//
+	// It supersedes walking `changes` and `satisfied` separately. Those two
+	// answer "what would change" and "what would not", but neither can express
+	// the third outcome — a field someone else moved to a different value, which
+	// refuses the merge. Rendered from `changes` alone, a conflict is
+	// indistinguishable from an ordinary change: both are two differing values.
+	//
+	// Computed by the SAME classifier the merge uses, so the preview and the
+	// refusal cannot disagree.
+	Fields []fieldOutcomeBody `json:"fields"`
+}
+
+// fieldOutcomeBody is one row of the review table.
+type fieldOutcomeBody struct {
+	OrbID string `json:"orbId" example:"colo:server-maintenance-CWJHDX3"`
+	Type  string `json:"type" example:"ServerMaintenance"`
+	// Field is the bare field name, type prefix stripped — what a table shows.
+	Field string `json:"field" example:"enabled"`
+	// Outcome is `applies`, `satisfied` or `conflict`.
+	//
+	//   applies   — the merge writes Proposed over Current.
+	//   satisfied — Current already equals Proposed; the merge writes nothing.
+	//   conflict  — someone changed this field since the request was reviewed;
+	//               the merge REFUSES until it is re-reviewed or amended.
+	Outcome string `json:"outcome" example:"applies"`
+	// Reviewed is the value when the request was opened. Present only on a
+	// conflict — on the other two it equals Current and would be noise.
+	Reviewed any `json:"reviewed,omitempty" swaggertype:"string"`
+	Current  any `json:"current" swaggertype:"string"`
+	Proposed any `json:"proposed" swaggertype:"string"`
 }
 
 // approvalPolicyResponse is one protected class.
 type approvalPolicyResponse struct {
-	ID                string   `json:"id" example:"7c2e1f88-1a2b-4c3d-8e9f-0a1b2c3d4e5f"`
-	ActionType        string   `json:"actionType" example:"config.mutation"`
-	Namespace         string   `json:"namespace" example:"alaska-dot"`
+	ID         string `json:"id" example:"7c2e1f88-1a2b-4c3d-8e9f-0a1b2c3d4e5f"`
+	ActionType string `json:"actionType" example:"config.mutation"`
+	// AllNamespaces means this policy is the fallback for every namespace that
+	// has no policy of its own. Namespace is empty when it is set.
+	AllNamespaces     bool     `json:"allNamespaces" example:"false"`
+	Namespace         string   `json:"namespace,omitempty" example:"alaska-dot"`
 	AllTypes          bool     `json:"allTypes" example:"true"`
 	Types             []string `json:"types,omitempty"`
 	RequiredApprovals int      `json:"requiredApprovals" example:"1"`
@@ -437,11 +590,18 @@ func (h *ChangeRequest) CreateChangeRequest(c echo.Context) error {
 		return err
 	}
 
+	if problems := removedBeforeProblems(body.Changes); len(problems) > 0 {
+		return writeChangesetProblems(c, problems)
+	}
 	cs := &approval.Changeset{Namespace: body.Namespace, Changes: toChangeItems(body.Changes)}
 	actor := actorFromContext(c)
 
 	cr, problems, err := h.Create(c.Request().Context(), actor, body.Title, body.Description, cs)
 	if err != nil {
+		var pf *preconditionFailed
+		if errors.As(err, &pf) {
+			return writePreconditionFailed(c, pf)
+		}
 		return err
 	}
 	if len(problems) > 0 {
@@ -575,7 +735,11 @@ func (h *ChangeRequest) ListChangeRequests(c echo.Context) error {
 
 	items := make([]changeRequestResponse, 0, len(rows))
 	for _, row := range rows {
-		view, err := h.render(ctx, row, actor, cr)
+		// renderListItem, NOT render: the list is PostgreSQL-only. Rendering a
+		// queue through State cost 1,222 DGraph queries for 507 rows — an N+1,
+		// measured 2026-09-15 — to derive a staleness signal the queue does not
+		// need. See storedState.
+		view, err := h.renderListItem(ctx, row, actor, cr)
 		if err != nil {
 			return err
 		}
@@ -593,7 +757,54 @@ func (h *ChangeRequest) ListChangeRequests(c echo.Context) error {
 		}
 		items = append(items, view)
 	}
-	return c.JSON(http.StatusOK, changeRequestListResponse{Total: len(items), Items: items})
+
+	// Paged AFTER filtering, so `total` is the number of matches and not the
+	// number of rows SQL happened to return. Two of the filters above need a
+	// rendered view — `open` and `approved` share one stored value — so a SQL
+	// LIMIT would page over a superset and report a count that quietly included
+	// rows the caller never sees. Rendering is PostgreSQL-only now, which is
+	// what makes filtering-then-paging affordable; it would not have been
+	// before. Refused, not truncated, is the rule elsewhere on this endpoint —
+	// a wrong total is the same failure wearing a number.
+	total := len(items)
+	items, err = pageSlice(c, items)
+	if err != nil {
+		return writeError(c, http.StatusBadRequest, CodeBadUserInput, err.Error(),
+			"Use non-negative integers, e.g. ?limit=50&offset=0.")
+	}
+	return c.JSON(http.StatusOK, changeRequestListResponse{Total: total, Items: items})
+}
+
+// pageSlice applies ?limit and ?offset to an already-filtered list.
+//
+// Both are OPT-IN: with neither, the response is byte-for-byte what it was
+// before paging existed, so no client that assumed it received everything is
+// broken by this. An offset past the end returns an empty page rather than an
+// error — that is a legal position in a list that shrank, not a bad request.
+func pageSlice(c echo.Context, items []changeRequestResponse) ([]changeRequestResponse, error) {
+	offset := 0
+	if v := strings.TrimSpace(c.QueryParam("offset")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			return nil, fmt.Errorf("offset must be a non-negative integer, got %q", v)
+		}
+		offset = n
+	}
+	if offset >= len(items) {
+		return []changeRequestResponse{}, nil
+	}
+	items = items[offset:]
+
+	if v := strings.TrimSpace(c.QueryParam("limit")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			return nil, fmt.Errorf("limit must be a non-negative integer, got %q", v)
+		}
+		if n < len(items) {
+			items = items[:n]
+		}
+	}
+	return items, nil
 }
 
 // GetChangeRequest returns one change request.
@@ -642,6 +853,8 @@ func (h *ChangeRequest) GetChangeRequestDiff(c echo.Context) error {
 		BaseHash:    cr.BaseHash,
 		Summary:     res.Summary,
 		Changes:     res.Changes,
+		Satisfied:   satisfiedItems(st.Snapshot, st.Changeset, res),
+		Fields:      fieldOutcomeBodies(classifyChangeset(st.Snapshot, st.Changeset, cr.BaseValues)),
 	})
 }
 
@@ -650,6 +863,10 @@ func (h *ChangeRequest) GetChangeRequestDiff(c echo.Context) error {
 // Without this check a longer title reached Postgres and failed at INSERT, so a
 // user error surfaced as a 500.
 const maxTitleLen = 255
+
+// allNamespacesResourceID is the audit resource id for a policy that governs
+// every namespace. See auditPolicy for why it is a sentinel rather than "".
+const allNamespacesResourceID = "*"
 
 // validateTitle enforces what the column already enforced silently. `required`
 // is false for callers that treat an empty title as "leave it alone".
@@ -703,6 +920,9 @@ func (h *ChangeRequest) AmendChangeRequest(c echo.Context) error {
 			return writeError(c, http.StatusBadRequest, CodeBadUserInput,
 				"namespace is required when changing the changeset", "")
 		}
+		if problems := removedBeforeProblems(body.Changes); len(problems) > 0 {
+			return writeChangesetProblems(c, problems)
+		}
 		cs = &approval.Changeset{Namespace: body.Namespace, Changes: toChangeItems(body.Changes)}
 	}
 
@@ -716,6 +936,10 @@ func (h *ChangeRequest) AmendChangeRequest(c echo.Context) error {
 	cr, problems, err := h.Amend(c.Request().Context(), id, actorFromContext(c), caller.Role,
 		body.Title, body.Description, cs)
 	if err != nil {
+		var pf *preconditionFailed
+		if errors.As(err, &pf) {
+			return writePreconditionFailed(c, pf)
+		}
 		return crError(c, err)
 	}
 	if len(problems) > 0 {
@@ -799,6 +1023,10 @@ func (h *ChangeRequest) MergeChangeRequest(c echo.Context) error {
 	caller := resolveCallerRole(c, h.db)
 	cr, err := h.Merge(c.Request().Context(), id, actorFromContext(c), caller.Role, caller.NoAuthz)
 	if err != nil {
+		var pf *preconditionFailed
+		if errors.As(err, &pf) {
+			return writePreconditionFailed(c, pf)
+		}
 		return crError(c, err)
 	}
 	return h.renderOne(c, cr, http.StatusOK)
@@ -874,8 +1102,12 @@ func (h *ChangeRequest) CreateApprovalPolicy(c echo.Context) error {
 	if err := c.Bind(&body); err != nil {
 		return writeError(c, http.StatusBadRequest, CodeBadUserInput, "invalid request body", "")
 	}
-	if strings.TrimSpace(body.Namespace) == "" {
-		return writeError(c, http.StatusBadRequest, CodeBadUserInput, "namespace is required", "")
+	allNamespaces := body.AllNamespaces != nil && *body.AllNamespaces
+	if err := validatePolicyNamespace(c, allNamespaces, body.Namespace); err != nil {
+		return err
+	}
+	if allNamespaces {
+		body.Namespace = ""
 	}
 	// The default is the whole namespace, so a body that says nothing about
 	// scope gets allTypes. Sending only a type list is read as meaning it,
@@ -899,6 +1131,7 @@ func (h *ChangeRequest) CreateApprovalPolicy(c echo.Context) error {
 
 	create := h.db.ApprovalPolicy.Create().
 		SetActionType(approval.ActionTypeConfigMutation).
+		SetAllNamespaces(allNamespaces).
 		SetNamespace(body.Namespace).
 		SetAllTypes(allTypes).
 		SetTypes(body.Types).
@@ -929,7 +1162,17 @@ func (h *ChangeRequest) CreateApprovalPolicy(c echo.Context) error {
 				"a policy covers either all types or a list of types, never both and never neither",
 				"Send allTypes:true with no types, or allTypes:false with the types to protect.")
 		}
+		if isNamespaceCheckViolation(err) {
+			return writeError(c, http.StatusBadRequest, CodeBadUserInput,
+				"a policy covers either all namespaces or one namespace, never both and never neither",
+				"Send allNamespaces:true with no namespace, or a namespace with allNamespaces omitted.")
+		}
 		if ent.IsConstraintError(err) {
+			if allNamespaces {
+				return writeError(c, http.StatusConflict, CodeConflict,
+					"a policy already covers all namespaces",
+					"There is one all-namespaces policy — PATCH it instead of creating a second")
+			}
 			return writeError(c, http.StatusConflict, CodeConflict,
 				"a policy already covers that namespace",
 				"There is one policy per namespace — PATCH it to change which types it protects")
@@ -976,6 +1219,16 @@ func (h *ChangeRequest) UpdateApprovalPolicy(c echo.Context) error {
 	}
 	if err != nil {
 		return fmt.Errorf("load approval policy: %w", err)
+	}
+
+	// Moving a policy between "one namespace" and "all namespaces" is deleting
+	// one policy and creating another — the same reason the UI disables the
+	// namespace field while editing. Refused rather than silently ignored: a
+	// dropped scope change leaves the caller believing the gate widened.
+	if body.AllNamespaces != nil && *body.AllNamespaces != prev.AllNamespaces {
+		return writeError(c, http.StatusBadRequest, CodeBadUserInput,
+			"a policy's namespace scope cannot be changed",
+			"Delete this policy and create the one you want — moving the scope is not an edit to it.")
 	}
 
 	upd := h.db.ApprovalPolicy.UpdateOneID(id).
@@ -1075,13 +1328,24 @@ func (h *ChangeRequest) DeleteApprovalPolicy(c echo.Context) error {
 // surfaces every policy change for it. Category "management", matching
 // updateUserRole — the closest analogue, an admin changing an
 // authorization-relevant setting.
+//
+// A GLOBAL policy has no namespace, and an empty resource id would make the
+// most consequential policy in the system unfindable by the very query this
+// exists for. It is recorded under `*` — a filter key, deliberately not the
+// prose label `policyLabel` produces, and deliberately NOT stored in the row's
+// own `namespace` column, so the sentinel never reaches the data model or a
+// `WHERE namespace = $1`.
 func (h *ChangeRequest) auditPolicy(c echo.Context, action, namespace string, details map[string]any) {
+	if namespace == "" {
+		namespace = allNamespacesResourceID
+	}
 	details["namespace"] = namespace
 	writeAuditEvent(h.db, h.logger, "management", actorFromContext(c), action,
 		[]string{action},
 		[]string{"ApprovalPolicy"},
 		[]string{namespace},
 		details,
+		originFromContext(c, "rest"),
 	)
 }
 
@@ -1100,6 +1364,7 @@ func policyFields(p *ent.ApprovalPolicy) map[string]any {
 	}
 	return map[string]any{
 		"actionType":        p.ActionType,
+		"allNamespaces":     p.AllNamespaces,
 		"namespace":         p.Namespace,
 		"allTypes":          p.AllTypes,
 		"types":             types,
@@ -1116,7 +1381,7 @@ func policyFields(p *ent.ApprovalPolicy) map[string]any {
 // @Tags        approval-policies
 // @Produce     json
 // @Param       namespace query string true "Namespace"
-// @Param       type query string false "ConfigItem type"
+// @Param       type query []string false "ConfigItem type(s) — repeatable"
 // @Success     200 {object} approvalPolicyResolveResponse
 // @Failure     400 {object} errorResponse
 // @Router      /api/v1/approval-policies/resolve [get]
@@ -1125,9 +1390,17 @@ func (h *ChangeRequest) ResolveApprovalPolicy(c echo.Context) error {
 	if ns == "" {
 		return writeError(c, http.StatusBadRequest, CodeBadUserInput, "namespace is required", "")
 	}
+	// REPEATABLE, like orbId on the change-request list and for the same reason:
+	// QueryParam returns only the FIRST value, so an editor asking about a tree
+	// spanning Server + IdracSettings would get an answer about Server alone —
+	// and then meet the child's refusal mid-save, after the parent had already
+	// been written. resolvePolicy already reasons over every type in a
+	// changeset; this just stops throwing the others away.
 	cs := &approval.Changeset{Namespace: ns}
-	if t := c.QueryParam("type"); t != "" {
-		cs.Changes = []approval.ChangeItem{{Type: t}}
+	for _, t := range c.QueryParams()["type"] {
+		if t = strings.TrimSpace(t); t != "" {
+			cs.Changes = append(cs.Changes, approval.ChangeItem{Type: t})
+		}
 	}
 	pol, err := h.resolvePolicy(c.Request().Context(), approval.ActionTypeConfigMutation, cs)
 	if err != nil {
@@ -1174,7 +1447,22 @@ func (h *ChangeRequest) render(ctx context.Context, cr *ent.ApprovalRequest, act
 	if err != nil {
 		return changeRequestResponse{}, err
 	}
+	return renderFrom(cr, st, actor, caller), nil
+}
 
+// renderListItem is render's PostgreSQL-only counterpart, used for every row of
+// the queue. Same renderer, cheaper state — so the two cannot drift in the
+// fields they share, and the fields the list cannot know are omitted rather
+// than defaulted. See storedState.
+func (h *ChangeRequest) renderListItem(ctx context.Context, cr *ent.ApprovalRequest, actor string, caller callerRole) (changeRequestResponse, error) {
+	st, err := h.storedState(ctx, cr)
+	if err != nil {
+		return changeRequestResponse{}, err
+	}
+	return renderFrom(cr, st, actor, caller), nil
+}
+
+func renderFrom(cr *ent.ApprovalRequest, st crState, actor string, caller callerRole) changeRequestResponse {
 	out := changeRequestResponse{
 		ID:               crHumanID(cr),
 		ActionType:       cr.ActionType,
@@ -1183,7 +1471,6 @@ func (h *ChangeRequest) render(ctx context.Context, cr *ent.ApprovalRequest, act
 		Status:           st.Status,
 		Namespace:        st.Changeset.Namespace,
 		Author:           cr.Author,
-		Stale:            st.Stale,
 		Approvals:        st.Valid,
 		Required:         st.Required,
 		AvailableActions: availableActions(cr, st, actor, caller.Role, caller.NoAuthz),
@@ -1194,6 +1481,11 @@ func (h *ChangeRequest) render(ctx context.Context, cr *ent.ApprovalRequest, act
 		UpdatedAt:        cr.UpdatedAt,
 		ExecutedAt:       cr.ExecutedAt,
 		ExecutedBy:       cr.ExecutedBy,
+	}
+	if st.StalenessKnown {
+		stale, subtree := st.Stale, st.SubtreeChanged
+		out.Stale, out.SubtreeChanged = &stale, &subtree
+		out.StaleEntities = staleEntities(cr, st)
 	}
 	if out.AvailableActions == nil {
 		out.AvailableActions = []string{}
@@ -1221,7 +1513,65 @@ func (h *ChangeRequest) render(ctx context.Context, cr *ent.ApprovalRequest, act
 	sort.Slice(out.MergeAttempts, func(i, j int) bool {
 		return out.MergeAttempts[i].AttemptedAt.Before(out.MergeAttempts[j].AttemptedAt)
 	})
-	return out, nil
+	out.Record = changeRecord(st.Changeset.Changes, out.MergeAttempts, cr.BaseValues)
+	return out
+}
+
+// changeRecord turns the stored changeset into per-entity rows, folding in what
+// each merge attempt did.
+//
+// Applied in ANY attempt counts as applied: a retried merge re-attempts only the
+// items that failed, so a later attempt's silence about an item that already
+// landed must not read as a failure.
+func changeRecord(changes []approval.ChangeItem, attempts []mergeAttemptResult, ancestor map[string]map[string]any) []changeRecordEntry {
+	// nil means "never attempted", which is not the same as "did not apply".
+	var applied map[string]bool
+	for _, a := range attempts {
+		for _, r := range a.Results {
+			if applied == nil {
+				applied = map[string]bool{}
+			}
+			applied[r.OrbID] = applied[r.OrbID] || r.Applied
+		}
+	}
+
+	out := make([]changeRecordEntry, 0, len(changes))
+	for _, ch := range changes {
+		e := changeRecordEntry{OrbID: ch.OrbID, Type: ch.Type, Op: string(ch.Op)}
+
+		// Sorted: `set` is a map, so insertion order is not stable across reads
+		// and an unsorted render would reshuffle the rows on every refresh.
+		keys := make([]string, 0, len(ch.Set))
+		for k := range ch.Set {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		// The ancestor is keyed by DGraph predicate (`Server.hostname`), the
+		// changeset by bare field name, so the lookup goes through the same
+		// mapping that wrote it.
+		was := ancestor[ch.OrbID]
+		before := func(f string) any {
+			if was == nil {
+				return nil
+			}
+			return was[predicateFor(ch.Type, f)]
+		}
+		for _, k := range keys {
+			e.Fields = append(e.Fields, changeRecordField{Field: k, Value: ch.Set[k], Before: before(k)})
+		}
+		cleared := append([]string(nil), ch.Clear...)
+		sort.Strings(cleared)
+		for _, k := range cleared {
+			e.Fields = append(e.Fields, changeRecordField{Field: k, Cleared: true, Before: before(k)})
+		}
+
+		if applied != nil {
+			v := applied[ch.OrbID]
+			e.Applied = &v
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 func renderPolicy(p *ent.ApprovalPolicy) approvalPolicyResponse {
@@ -1232,6 +1582,7 @@ func renderPolicy(p *ent.ApprovalPolicy) approvalPolicyResponse {
 	out := approvalPolicyResponse{
 		ID:                p.ID.String(),
 		ActionType:        p.ActionType,
+		AllNamespaces:     p.AllNamespaces,
 		Namespace:         p.Namespace,
 		AllTypes:          p.AllTypes,
 		Types:             p.Types,
@@ -1245,6 +1596,21 @@ func renderPolicy(p *ent.ApprovalPolicy) approvalPolicyResponse {
 // crError maps the engine's sentinel errors to orbital's error envelope. One
 // place, so a new call site cannot invent a status or a code.
 func crError(c echo.Context, err error) error {
+	// Checked before the switch: it wraps errCRStale, so the switch would match
+	// it and drop the per-entity detail on the floor.
+	var sw *staleWithEntities
+	if errors.As(err, &sw) {
+		out := make([]changesetProblem, 0, len(sw.Problems))
+		for _, p := range sw.Problems {
+			out = append(out, changesetProblem{Index: p.Index, OrbID: p.OrbID, Field: p.Field, Msg: p.Msg, Hint: p.Hint})
+		}
+		return c.JSON(http.StatusConflict, validationErrorResponse{
+			Error:      err.Error(),
+			Code:       CodeMVCCConflict,
+			HTTPStatus: http.StatusConflict,
+			Problems:   out,
+		})
+	}
 	switch {
 	case errors.Is(err, errCRNotFound):
 		return writeError(c, http.StatusNotFound, CodeNotFound, "change request not found", "")
@@ -1334,15 +1700,67 @@ func crHumanID(cr *ent.ApprovalRequest) string {
 	return fmt.Sprintf("%s-%d", cr.Namespace, cr.Number)
 }
 
+// removedBeforeProblems reports items still carrying the removed `before` field.
+//
+// A breaking change announced loudly. Silence would leave a client believing it
+// has a field-level precondition it no longer has.
+func removedBeforeProblems(in []changeItemBody) []approval.ValidationError {
+	var out []approval.ValidationError
+	for i, b := range in {
+		if len(b.Before) > 0 {
+			out = append(out, approval.ValidationError{
+				Index: i, OrbID: b.OrbID,
+				Msg:  "`before` was removed; it is no longer a precondition and would be ignored",
+				Hint: "Send `version` — the entity's version as you read it — instead. Field-level protection still applies at merge, from the ancestor orbital records itself.",
+			})
+		}
+		if b.IfVersion != nil {
+			out = append(out, approval.ValidationError{
+				Index: i, OrbID: b.OrbID,
+				Msg:  "`ifVersion` was renamed to `version` and would be ignored",
+				Hint: "Rename the field to `version`; the value and its meaning are unchanged.",
+			})
+		}
+	}
+	return out
+}
+
+// fieldOutcomeBodies renders the classifier's output for the wire, stripping the
+// graphdiff type prefix from field names ("Server.hostname" → "hostname") and
+// omitting `reviewed` where it would only repeat `current`.
+func fieldOutcomeBodies(in []fieldOutcome) []fieldOutcomeBody {
+	out := make([]fieldOutcomeBody, 0, len(in))
+	for _, o := range in {
+		field := o.Field
+		row := fieldOutcomeBody{
+			OrbID: o.OrbID, Type: o.Type,
+			// Strip whatever type prefix graphdiff used, not just this entity's
+			// own: fields declared on the ConfigItem INTERFACE come back as
+			// "ConfigItem.name" on a DataCenter, so trimming o.Type+"." alone
+			// left the prefix on every inherited field.
+			Field:    field[strings.Index(field, ".")+1:],
+			Outcome:  o.Outcome,
+			Current:  o.Current,
+			Proposed: o.Proposed,
+		}
+		if o.Outcome == "conflict" {
+			row.Reviewed = o.Reviewed
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
 func toChangeItems(in []changeItemBody) []approval.ChangeItem {
 	out := make([]approval.ChangeItem, 0, len(in))
 	for _, b := range in {
 		out = append(out, approval.ChangeItem{
-			OrbID: b.OrbID,
-			Type:  b.Type,
-			Op:    approval.Op(b.Op),
-			Set:   b.Set,
-			Clear: b.Clear,
+			OrbID:   b.OrbID,
+			Type:    b.Type,
+			Op:      approval.Op(b.Op),
+			Set:     b.Set,
+			Clear:   b.Clear,
+			Version: b.Version,
 		})
 	}
 	return out
@@ -1352,11 +1770,12 @@ func fromChangeItems(in []approval.ChangeItem) []changeItemBody {
 	out := make([]changeItemBody, 0, len(in))
 	for _, ch := range in {
 		out = append(out, changeItemBody{
-			OrbID: ch.OrbID,
-			Type:  ch.Type,
-			Op:    string(ch.Op),
-			Set:   ch.Set,
-			Clear: ch.Clear,
+			OrbID:   ch.OrbID,
+			Type:    ch.Type,
+			Op:      string(ch.Op),
+			Set:     ch.Set,
+			Clear:   ch.Clear,
+			Version: ch.Version,
 		})
 	}
 	return out
@@ -1392,6 +1811,25 @@ func decodeItemResults(raw json.RawMessage) []mergeItemResult {
 // writeChangesetProblems renders a rejected changeset. Separate from
 // writeError because the envelope carries a LIST — a changeset can be wrong in
 // several places at once and a single `error` string would hide all but one.
+// writePreconditionFailed renders a `before` mismatch. 409, not 400: nothing
+// about the request is malformed — a value moved while the caller was composing
+// it, which is the same class of failure as the guarded-apply MVCC conflict and
+// carries the same code so a client branches on one thing.
+func writePreconditionFailed(c echo.Context, e *preconditionFailed) error {
+	out := make([]changesetProblem, 0, len(e.Problems))
+	for _, p := range e.Problems {
+		out = append(out, changesetProblem{
+			Index: p.Index, OrbID: p.OrbID, Field: p.Field, Msg: p.Msg, Hint: p.Hint,
+		})
+	}
+	return c.JSON(http.StatusConflict, validationErrorResponse{
+		Error:      "state moved since you read it",
+		Code:       CodeMVCCConflict,
+		HTTPStatus: http.StatusConflict,
+		Problems:   out,
+	})
+}
+
 func writeChangesetProblems(c echo.Context, problems []approval.ValidationError) error {
 	out := make([]changesetProblem, 0, len(problems))
 	for _, p := range problems {
@@ -1414,6 +1852,29 @@ func writeChangesetProblems(c echo.Context, problems []approval.ValidationError)
 // check violation that is stable — the message text is not.
 func isScopeCheckViolation(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "approval_policy_scope_exclusive")
+}
+
+func isNamespaceCheckViolation(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "approval_policy_namespace_exclusive")
+}
+
+// validatePolicyNamespace refuses the two shapes that contradict themselves on
+// the namespace axis, mirroring validatePolicyScope on the type axis.
+//
+// The database enforces this too, via a CHECK. This layer exists to say WHICH
+// rule was broken — a constraint violation cannot.
+func validatePolicyNamespace(c echo.Context, allNamespaces bool, namespace string) error {
+	switch {
+	case allNamespaces && strings.TrimSpace(namespace) != "":
+		return writeError(c, http.StatusBadRequest, CodeBadUserInput,
+			"a policy covering all namespaces must not also name one — the two say different things and the row would not describe what it protects",
+			"Send allNamespaces:true with no namespace, or a namespace with allNamespaces omitted.")
+	case !allNamespaces && strings.TrimSpace(namespace) == "":
+		return writeError(c, http.StatusBadRequest, CodeBadUserInput,
+			"namespace is required",
+			"Name the namespace to protect, or send allNamespaces:true to cover every namespace including ones onboarded later.")
+	}
+	return nil
 }
 
 // validatePolicyScope refuses a policy that could never govern anything, and

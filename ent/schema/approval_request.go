@@ -91,6 +91,39 @@ func (ApprovalRequest) Fields() []ent.Field {
 		// precisely the copy that drifts — see D13.
 		field.String("base_hash").NotEmpty(),
 
+		// changeset_revision bumps every time the CHANGESET is amended, and is
+		// stamped onto each approval. An approval counts only when both the
+		// graph hash AND the revision still match.
+		//
+		// The hash alone is not enough: a rebase that only corrects a version
+		// number changes the proposal without moving the graph, so hash-matched
+		// approvals would survive an edit the reviewer never saw. Same mechanic
+		// as GitHub dismissing reviews on a new push.
+		field.Int("changeset_revision").Default(1),
+
+		// base_versions is the version vector base_hash is a fingerprint OF:
+		// orbId -> version, over the same scope, captured at the same instant and
+		// recomputed on exactly the same occasions (amend, and the rebase after a
+		// partial merge).
+		//
+		// It exists because a fingerprint cannot name the offender. base_hash
+		// answers "did anything in scope move" and never "which one", so a stale
+		// request refuses wholesale and an operator has to go and find out what
+		// changed. With the vector, merge diffs it against the current one and
+		// names the entities — for EVERY request, including ones whose author
+		// never sent a precondition.
+		//
+		// Deliberately NOT the client's `version`. That is the author's read at
+		// proposal time, and once anything moves that entity the token is
+		// permanently wrong: re-approval — which is how staleness is meant to be
+		// cleared, in one click — could never satisfy it, and only an amend
+		// could. base_versions moves with the review instead, because it is
+		// re-captured wherever base_hash is.
+		//
+		// Optional: rows written before this field existed decode to nil, and the
+		// refusal falls back to the unnamed one they have always produced.
+		field.JSON("base_versions", map[string]int{}).Optional(),
+
 		// base_present is the set of orbIds that EXISTED when base_hash was
 		// captured. Without it, an absent target at merge time is ambiguous: it
 		// is either a normal create (absent at open, absent at merge) or a
@@ -122,6 +155,28 @@ func (ApprovalRequest) Fields() []ent.Field {
 		// Optional: rows written before this field existed decode to nil and fall
 		// back to the payload-derived summary, which is what they always showed.
 		field.JSON("base_effect", json.RawMessage{}).Optional(),
+
+		// base_values is the ANCESTOR: orbId -> predicate -> value, for exactly
+		// the fields this changeset writes, as they stood when the request was
+		// opened. It is what a three-way comparison needs and what base_hash
+		// cannot supply — base_hash is a fingerprint of the version vector, so it
+		// answers "did anything move" but never "what was it".
+		//
+		// InfraHub and NetBox get this for free from a materialized branch: the
+		// branch point IS the ancestor. Orbital renders branches instead of
+		// copying them (orbId is @id, so a branch's copy of an entity cannot
+		// coexist with main's), so the ancestor has to be recorded.
+		//
+		// Stored in graphdiff-normalized, predicate-keyed form — the SAME shape a
+		// fresh snapshot produces — so the merge-time comparison is between two
+		// values that went through one normalizer. Comparing a stored raw value
+		// against a normalized one would disagree on exactly the scalars DGraph
+		// round-trips as strings.
+		//
+		// Optional: absent means "no ancestor recorded", and the guard falls back
+		// to the entity-level base_hash, which is what every row predating this
+		// field has.
+		field.JSON("base_values", map[string]map[string]any{}).Optional(),
 
 		// payload is the action-type-specific body, opaque to the engine. For
 		// config.mutation: {"namespace": ..., "changes": [{orbId, type, op, set,

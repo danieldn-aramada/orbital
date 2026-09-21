@@ -129,26 +129,48 @@ func (i *Ingester) readCursor(ctx context.Context, dcID string) (time.Time, bool
 	return rec.LastPublishedAt, true, nil
 }
 
-// writeCursor upserts the cursor for a DC. Single-replica ingest at MVP, so
-// the update-then-create race is acceptable.
-func (i *Ingester) writeCursor(ctx context.Context, dcID string, publishedAt time.Time) error {
+// advanceCursor moves the cursor for a DC forward, and reports whether THIS
+// caller was the one that moved it.
+//
+// The update is conditional on last_published_at < publishedAt, so when two
+// replicas poll the same report concurrently exactly one of them advances the
+// cursor and the other sees zero rows. Callers must ingest only when this
+// returns true — re-ingesting a report fires the supersede branch and silently
+// drops operator resolutions, which is why the guard lives at the write rather
+// than at the read. The create path is guarded by the unique index on
+// dc_orb_id: a losing racer gets a constraint violation, not a second cursor.
+//
+// This replaced a read-then-write that was explicitly documented as
+// "single-replica ingest at MVP, so the update-then-create race is
+// acceptable". It no longer is.
+func (i *Ingester) advanceCursor(ctx context.Context, dcID string, publishedAt time.Time) (bool, error) {
 	n, err := i.db.DivergenceIngestCursor.Update().
-		Where(divergenceingestcursor.DcOrbID(dcID)).
+		Where(
+			divergenceingestcursor.DcOrbID(dcID),
+			divergenceingestcursor.LastPublishedAtLT(publishedAt),
+		).
 		SetLastPublishedAt(publishedAt).
 		Save(ctx)
 	if err != nil {
-		return fmt.Errorf("update cursor for %s: %w", dcID, err)
+		return false, fmt.Errorf("advance cursor for %s: %w", dcID, err)
 	}
 	if n > 0 {
-		return nil
+		return true, nil
 	}
+
+	// No row advanced: either no cursor exists yet, or another replica already
+	// moved it to this publishedAt or beyond. Distinguish by trying to create.
 	if _, err := i.db.DivergenceIngestCursor.Create().
 		SetDcOrbID(dcID).
 		SetLastPublishedAt(publishedAt).
 		Save(ctx); err != nil {
-		return fmt.Errorf("create cursor for %s: %w", dcID, err)
+		if ent.IsConstraintError(err) {
+			// Another replica created or advanced it first — it owns this report.
+			return false, nil
+		}
+		return false, fmt.Errorf("create cursor for %s: %w", dcID, err)
 	}
-	return nil
+	return true, nil
 }
 
 // Start runs the poll loop until ctx is cancelled. Call as a goroutine.
@@ -320,11 +342,38 @@ func (i *Ingester) pollDC(ctx context.Context, dc dcRef) error {
 		return nil
 	}
 
-	if err := i.applyReport(ctx, dc, publishedAt, snap.Overrides); err != nil {
-		return fmt.Errorf("apply report %s: %w", latestKey, err)
+	// CLAIM THE REPORT BEFORE APPLYING IT. The read above is advisory only —
+	// two replicas polling the same tick both pass it. Advancing the cursor is
+	// a conditional update, so exactly one of them wins, and only the winner
+	// applies. Doing this after applyReport (as it was) would let both apply
+	// and merely race the bookkeeping, which is the outcome that drops
+	// operator resolutions via the supersede branch.
+	won, err := i.advanceCursor(ctx, dc.id, publishedAt)
+	if err != nil {
+		return fmt.Errorf("advance cursor: %w", err)
 	}
-	if err := i.writeCursor(ctx, dc.id, publishedAt); err != nil {
-		return fmt.Errorf("write cursor: %w", err)
+	if !won {
+		i.logger.Debug("divergence ingester: report claimed by another replica",
+			"dc", dc.id, "publishedAt", snap.PublishedAt)
+		return nil
+	}
+
+	if err := i.applyReport(ctx, dc, publishedAt, snap.Overrides); err != nil {
+		// Release the claim so the next poll retries this report — otherwise a
+		// transient failure would skip it until orb publishes a newer one.
+		// Conditional on the cursor still being ours: if another replica has
+		// since advanced past us, its ingest is newer and must not be undone.
+		if _, rbErr := i.db.DivergenceIngestCursor.Update().
+			Where(
+				divergenceingestcursor.DcOrbID(dc.id),
+				divergenceingestcursor.LastPublishedAtEQ(publishedAt),
+			).
+			SetLastPublishedAt(last).
+			Save(ctx); rbErr != nil {
+			i.logger.Error("divergence ingester: could not roll back cursor after failed apply — this report will be skipped until a newer one is published",
+				"dc", dc.id, "publishedAt", snap.PublishedAt, "err", rbErr)
+		}
+		return fmt.Errorf("apply report %s: %w", latestKey, err)
 	}
 	i.logger.Info("divergence ingester: applied report",
 		"dc", dc.id,

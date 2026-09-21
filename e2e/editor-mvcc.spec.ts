@@ -1,0 +1,143 @@
+// The config editor sends `version`, so a concurrent edit is refused rather
+// than silently overwritten.
+//
+// This exists because it was silently lost once already. `b1157ac "Fix orb ui"`
+// (2026-06-20) replaced the per-page edit modals — each of which passed
+// `version` — with the shared configitem-editor module, which never carried it
+// forward. MVCC was off on every UI edit for two and a half months and nothing
+// failed, because `version` is opt-in server-side: a client that omits it is
+// indistinguishable from one that declined to use it.
+//
+// So the regression class is precisely "a refactor drops it from the client
+// again", and the only way to catch that is to assert on the REQUEST the browser
+// sends. The server-side tests in graphql_handler_test.go already prove orbital
+// honours `version` when supplied; nothing proved anyone supplied it.
+
+import { test, expect, Page } from '@playwright/test'
+
+const SERVER = 'colo:server-6CVD664'
+const domId = SERVER.replace(/[^a-zA-Z0-9_-]/g, '_')
+
+async function openEditor(page: Page) {
+  await page.goto(`/servers?open=${encodeURIComponent(SERVER)}&label=${encodeURIComponent(SERVER)}`)
+  await page.waitForSelector(`#tab-content-srv-${domId}[data-loaded="true"]`, { timeout: 15_000 })
+  await page.locator(`[data-srv-edit-id="${domId}"]`).click()
+  await expect(page.locator(`#edit-modal-srv-${domId}`)).toHaveClass(/is-active/, { timeout: 10_000 })
+}
+
+test('the page hands the editor an OCC version for every entity it can edit', async ({ page }) => {
+  await page.goto(`/servers?open=${encodeURIComponent(SERVER)}&label=${encodeURIComponent(SERVER)}`)
+  await page.waitForSelector(`#tab-content-srv-${domId}[data-loaded="true"]`, { timeout: 15_000 })
+
+  const targets = await page.locator(`#srv-edit-targets-${domId}`).textContent()
+  const parsed = JSON.parse(targets || '[]')
+
+  // The root and its owned children exist, so each must carry a version. A
+  // target whose entity does not exist yet legitimately has none — a create has
+  // nothing to assert — so this asserts only the ones that do.
+  const byKind = Object.fromEntries(parsed.map((t: any) => [t.kind, t]))
+  for (const kind of ['Server', 'IdracSettings', 'ServerMaintenance']) {
+    expect(byKind[kind], `${kind} target missing`).toBeTruthy()
+    expect(byKind[kind].version, `${kind} has no version — the editor cannot send version`).toBeGreaterThan(0)
+  }
+})
+
+test('a save sends version as a top-level variable, and never inside set', async ({ page }) => {
+  await openEditor(page)
+
+  const bodies: any[] = []
+  await page.route('**/graphql', async (route) => {
+    const post = route.request().postData()
+    if (post) { try { bodies.push(JSON.parse(post)) } catch (_) { /* ignore */ } }
+    await route.continue()
+  })
+
+  // Drive the JSONEditor through its instance, the way configitem-editor.spec
+  // does — clicking into the tree is brittle and tests the widget, not us.
+  const initial = JSON.parse(
+    (await page.locator(`#srv-edit-data-${domId}`).textContent()) || '{}')
+  await page.evaluate(({ id, next }) => {
+    const editor = (window as any).srvEditors.get(id)
+    editor.set({ text: JSON.stringify(next, null, 2) })
+  }, { id: domId, next: { ...initial, hostname: 'mvcc-e2e-' + Date.now() } })
+
+  await page.locator(`#srv-edit-submit-${domId}`).click()
+
+  // Poll for the MUTATION, not for "any body". A save now sends a pre-flight
+  // version query to /graphql first, so `bodies.length > 0` is satisfied before
+  // the mutation exists and the find below would read an empty list. The
+  // assertion is unchanged — only what it waits for.
+  await expect
+    .poll(() => bodies.filter((b) => /mutation Update/.test(b.query || '')).length, { timeout: 15_000 })
+    .toBeGreaterThan(0)
+  const update = bodies.find(b => /mutation Update/.test(b.query || ''))
+  expect(update, 'no update mutation was sent').toBeTruthy()
+
+  // The guard itself.
+  expect(Number.isInteger(update.variables.version)).toBeTruthy()
+  expect(update.variables.version).toBeGreaterThan(0)
+
+  // `version` in `set` and `version` as a variable are two different things
+  // wearing one name — the counter the server stamps and clients must not
+  // write, versus the precondition clients must send. Sending the first breaks
+  // the auto-increment; omitting the second is the regression above.
+  expect(update.variables.set).not.toHaveProperty('version')
+
+  // Not declared in the query: orbital consumes version and strips it before
+  // the body reaches DGraph, so declaring it would make DGraph reject an
+  // undeclared-then-removed variable.
+  expect(update.query).not.toContain('$version')
+})
+
+// The PROPOSE path, which is a second client of the same concurrency token.
+//
+// Same regression class as the save path above and the same reason it needs a
+// browser assertion: `version` is opt-in server-side, so a changeset that
+// stops carrying it is refused by nothing and looks identical to one whose
+// author chose not to guard. The server tests prove orbital honours it; only
+// this proves the editor sends it.
+test('a proposed changeset carries version per existing entity, and none for a create', async ({ page }) => {
+  await openEditor(page)
+
+  const proposals: any[] = []
+  await page.route('**/api/v1/change-requests', async (route) => {
+    if (route.request().method() === 'POST') {
+      const post = route.request().postData()
+      if (post) { try { proposals.push(JSON.parse(post)) } catch (_) { /* ignore */ } }
+    }
+    await route.continue()
+  })
+
+  const initial = JSON.parse(
+    (await page.locator(`#srv-edit-data-${domId}`).textContent()) || '{}')
+  await page.evaluate(({ id, next }) => {
+    const editor = (window as any).srvEditors.get(id)
+    editor.set({ text: JSON.stringify(next, null, 2) })
+  }, { id: domId, next: { ...initial, hostname: 'propose-e2e-' + Date.now() } })
+
+  // The propose button is injected by applyGateState only when a policy governs
+  // this namespace — it carries a data-testid rather than an id for that reason.
+  const propose = page.locator(`#edit-modal-srv-${domId} [data-testid="propose-change"]`)
+  if (await propose.count() === 0) {
+    test.skip(true, 'no propose control on this build — the write gate is off')
+  }
+  await propose.click()
+
+  await expect.poll(() => proposals.length, { timeout: 15_000 }).toBeGreaterThan(0)
+  const changes = proposals[proposals.length - 1].changes || []
+  expect(changes.length, 'no changeset items were sent').toBeGreaterThan(0)
+
+  for (const item of changes) {
+    if (item.op === 'update') {
+      // An update targets something that exists, so it has a version to assert.
+      expect(Number.isInteger(item.version),
+        `update item ${item.orbId} carries no version`).toBeTruthy()
+      expect(item.version).toBeGreaterThan(0)
+    } else {
+      // A create has no version to match, and orbital REFUSES a supplied one at
+      // validation rather than ignoring it — so sending one here would make
+      // every first-time create unproposable.
+      expect(item.version, `create item ${item.orbId} sent an version`).toBeUndefined()
+    }
+  }
+})

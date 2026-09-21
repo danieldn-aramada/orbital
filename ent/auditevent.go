@@ -29,6 +29,12 @@ type AuditEvent struct {
 	Details json.RawMessage `json:"details,omitempty"`
 	// EventCategory holds the value of the "event_category" field.
 	EventCategory string `json:"event_category,omitempty"`
+	// EventSource holds the value of the "event_source" field.
+	EventSource string `json:"event_source,omitempty"`
+	// SourceIPAddress holds the value of the "source_ip_address" field.
+	SourceIPAddress string `json:"source_ip_address,omitempty"`
+	// RequestID holds the value of the "request_id" field.
+	RequestID string `json:"request_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the AuditEventQuery when eager-loading is set.
 	Edges        AuditEventEdges `json:"edges"`
@@ -71,7 +77,7 @@ func (*AuditEvent) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case auditevent.FieldOperations, auditevent.FieldDetails:
 			values[i] = new([]byte)
-		case auditevent.FieldActor, auditevent.FieldEventCategory:
+		case auditevent.FieldActor, auditevent.FieldEventCategory, auditevent.FieldEventSource, auditevent.FieldSourceIPAddress, auditevent.FieldRequestID:
 			values[i] = new(sql.NullString)
 		case auditevent.FieldTimestamp:
 			values[i] = new(sql.NullTime)
@@ -131,6 +137,24 @@ func (_m *AuditEvent) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field event_category", values[i])
 			} else if value.Valid {
 				_m.EventCategory = value.String
+			}
+		case auditevent.FieldEventSource:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field event_source", values[i])
+			} else if value.Valid {
+				_m.EventSource = value.String
+			}
+		case auditevent.FieldSourceIPAddress:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field source_ip_address", values[i])
+			} else if value.Valid {
+				_m.SourceIPAddress = value.String
+			}
+		case auditevent.FieldRequestID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field request_id", values[i])
+			} else if value.Valid {
+				_m.RequestID = value.String
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -192,6 +216,15 @@ func (_m *AuditEvent) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("event_category=")
 	builder.WriteString(_m.EventCategory)
+	builder.WriteString(", ")
+	builder.WriteString("event_source=")
+	builder.WriteString(_m.EventSource)
+	builder.WriteString(", ")
+	builder.WriteString("source_ip_address=")
+	builder.WriteString(_m.SourceIPAddress)
+	builder.WriteString(", ")
+	builder.WriteString("request_id=")
+	builder.WriteString(_m.RequestID)
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -20,6 +20,7 @@ var (
 		{Name: "decision", Type: field.TypeEnum, Enums: []string{"approved", "rejected"}},
 		{Name: "comment", Type: field.TypeString, Nullable: true, Size: 2147483647, Default: ""},
 		{Name: "approved_at_hash", Type: field.TypeString},
+		{Name: "approved_at_revision", Type: field.TypeInt, Default: 0},
 		{Name: "approval_request_id", Type: field.TypeInt64},
 	}
 	// ApprovalsTable holds the schema information for the "approvals" table.
@@ -30,7 +31,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "approvals_approval_requests_approvals",
-				Columns:    []*schema.Column{ApprovalsColumns[9]},
+				Columns:    []*schema.Column{ApprovalsColumns[10]},
 				RefColumns: []*schema.Column{ApprovalRequestsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -39,7 +40,7 @@ var (
 			{
 				Name:    "approval_approval_request_id_approver",
 				Unique:  true,
-				Columns: []*schema.Column{ApprovalsColumns[9], ApprovalsColumns[5]},
+				Columns: []*schema.Column{ApprovalsColumns[10], ApprovalsColumns[5]},
 			},
 		},
 	}
@@ -51,7 +52,8 @@ var (
 		{Name: "updated_at", Type: field.TypeTime, Nullable: true},
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "action_type", Type: field.TypeString},
-		{Name: "namespace", Type: field.TypeString},
+		{Name: "all_namespaces", Type: field.TypeBool, Default: false},
+		{Name: "namespace", Type: field.TypeString, Nullable: true},
 		{Name: "all_types", Type: field.TypeBool, Default: true},
 		{Name: "types", Type: field.TypeJSON, Nullable: true},
 		{Name: "required_approvals", Type: field.TypeInt, Default: 1},
@@ -67,7 +69,15 @@ var (
 			{
 				Name:    "approvalpolicy_action_type_namespace",
 				Unique:  true,
-				Columns: []*schema.Column{ApprovalPoliciesColumns[5], ApprovalPoliciesColumns[6]},
+				Columns: []*schema.Column{ApprovalPoliciesColumns[5], ApprovalPoliciesColumns[7]},
+			},
+			{
+				Name:    "approvalpolicy_action_type",
+				Unique:  true,
+				Columns: []*schema.Column{ApprovalPoliciesColumns[5]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "all_namespaces",
+				},
 			},
 		},
 	}
@@ -86,8 +96,11 @@ var (
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"open", "rejected", "merged", "closed"}, Default: "open"},
 		{Name: "author", Type: field.TypeString},
 		{Name: "base_hash", Type: field.TypeString},
+		{Name: "changeset_revision", Type: field.TypeInt, Default: 1},
+		{Name: "base_versions", Type: field.TypeJSON, Nullable: true},
 		{Name: "base_present", Type: field.TypeJSON, Nullable: true},
 		{Name: "base_effect", Type: field.TypeJSON, Nullable: true},
+		{Name: "base_values", Type: field.TypeJSON, Nullable: true},
 		{Name: "payload", Type: field.TypeJSON},
 		{Name: "executed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "executed_by", Type: field.TypeString, Nullable: true, Default: ""},
@@ -121,7 +134,7 @@ var (
 			{
 				Name:    "approvalrequest_payload",
 				Unique:  false,
-				Columns: []*schema.Column{ApprovalRequestsColumns[15]},
+				Columns: []*schema.Column{ApprovalRequestsColumns[18]},
 				Annotation: &entsql.IndexAnnotation{
 					Types: map[string]string{
 						"postgres": "GIN",
@@ -138,6 +151,9 @@ var (
 		{Name: "timestamp", Type: field.TypeTime},
 		{Name: "details", Type: field.TypeJSON, Nullable: true},
 		{Name: "event_category", Type: field.TypeString, Default: "data"},
+		{Name: "event_source", Type: field.TypeString, Nullable: true},
+		{Name: "source_ip_address", Type: field.TypeString, Nullable: true},
+		{Name: "request_id", Type: field.TypeString, Nullable: true},
 	}
 	// AuditEventsTable holds the schema information for the "audit_events" table.
 	AuditEventsTable = &schema.Table{
@@ -149,6 +165,16 @@ var (
 				Name:    "auditevent_timestamp",
 				Unique:  false,
 				Columns: []*schema.Column{AuditEventsColumns[3]},
+			},
+			{
+				Name:    "auditevent_request_id",
+				Unique:  false,
+				Columns: []*schema.Column{AuditEventsColumns[8]},
+			},
+			{
+				Name:    "auditevent_source_ip_address",
+				Unique:  false,
+				Columns: []*schema.Column{AuditEventsColumns[7]},
 			},
 		},
 	}
@@ -235,12 +261,21 @@ var (
 		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime, Nullable: true},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "locked_by", Type: field.TypeString, Nullable: true},
+		{Name: "heartbeat_at", Type: field.TypeTime, Nullable: true},
 	}
 	// BackupsTable holds the schema information for the "backups" table.
 	BackupsTable = &schema.Table{
 		Name:       "backups",
 		Columns:    BackupsColumns,
 		PrimaryKey: []*schema.Column{BackupsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "backup_status",
+				Unique:  false,
+				Columns: []*schema.Column{BackupsColumns[5]},
+			},
+		},
 	}
 	// DivergenceEntriesColumns holds the columns for the "divergence_entries" table.
 	DivergenceEntriesColumns = []*schema.Column{
@@ -335,12 +370,21 @@ var (
 		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime, Nullable: true},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "locked_by", Type: field.TypeString, Nullable: true},
+		{Name: "heartbeat_at", Type: field.TypeTime, Nullable: true},
 	}
 	// ExportJobsTable holds the schema information for the "export_jobs" table.
 	ExportJobsTable = &schema.Table{
 		Name:       "export_jobs",
 		Columns:    ExportJobsColumns,
 		PrimaryKey: []*schema.Column{ExportJobsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "exportjob_status",
+				Unique:  false,
+				Columns: []*schema.Column{ExportJobsColumns[8]},
+			},
+		},
 	}
 	// MergeAttemptsColumns holds the columns for the "merge_attempts" table.
 	MergeAttemptsColumns = []*schema.Column{
@@ -442,12 +486,21 @@ var (
 		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime, Nullable: true},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "locked_by", Type: field.TypeString, Nullable: true},
+		{Name: "heartbeat_at", Type: field.TypeTime, Nullable: true},
 	}
 	// RestoreJobsTable holds the schema information for the "restore_jobs" table.
 	RestoreJobsTable = &schema.Table{
 		Name:       "restore_jobs",
 		Columns:    RestoreJobsColumns,
 		PrimaryKey: []*schema.Column{RestoreJobsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "restorejob_status",
+				Unique:  false,
+				Columns: []*schema.Column{RestoreJobsColumns[5]},
+			},
+		},
 	}
 	// UsersColumns holds the columns for the "users" table.
 	UsersColumns = []*schema.Column{
@@ -491,7 +544,8 @@ func init() {
 	ApprovalsTable.ForeignKeys[0].RefTable = ApprovalRequestsTable
 	ApprovalPoliciesTable.Annotation = &entsql.Annotation{}
 	ApprovalPoliciesTable.Annotation.Checks = map[string]string{
-		"approval_policy_scope_exclusive": "(all_types AND (jsonb_typeof(types) <> 'array' OR jsonb_array_length(types) = 0)) OR ((NOT all_types) AND jsonb_typeof(types) = 'array' AND jsonb_array_length(types) > 0)",
+		"approval_policy_namespace_exclusive": "(all_namespaces AND (namespace IS NULL OR namespace = '')) OR ((NOT all_namespaces) AND namespace IS NOT NULL AND namespace <> '')",
+		"approval_policy_scope_exclusive":     "(all_types AND (jsonb_typeof(types) <> 'array' OR jsonb_array_length(types) = 0)) OR ((NOT all_types) AND jsonb_typeof(types) = 'array' AND jsonb_array_length(types) > 0)",
 	}
 	AuditEventResourcesTable.ForeignKeys[0].RefTable = AuditEventsTable
 	AuditEventResourceTypesTable.ForeignKeys[0].RefTable = AuditEventsTable

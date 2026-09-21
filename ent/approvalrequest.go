@@ -42,10 +42,16 @@ type ApprovalRequest struct {
 	Author string `json:"author,omitempty"`
 	// BaseHash holds the value of the "base_hash" field.
 	BaseHash string `json:"base_hash,omitempty"`
+	// ChangesetRevision holds the value of the "changeset_revision" field.
+	ChangesetRevision int `json:"changeset_revision,omitempty"`
+	// BaseVersions holds the value of the "base_versions" field.
+	BaseVersions map[string]int `json:"base_versions,omitempty"`
 	// BasePresent holds the value of the "base_present" field.
 	BasePresent []string `json:"base_present,omitempty"`
 	// BaseEffect holds the value of the "base_effect" field.
 	BaseEffect json.RawMessage `json:"base_effect,omitempty"`
+	// BaseValues holds the value of the "base_values" field.
+	BaseValues map[string]map[string]interface{} `json:"base_values,omitempty"`
 	// Payload holds the value of the "payload" field.
 	Payload json.RawMessage `json:"payload,omitempty"`
 	// ExecutedAt holds the value of the "executed_at" field.
@@ -92,9 +98,9 @@ func (*ApprovalRequest) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case approvalrequest.FieldBasePresent, approvalrequest.FieldBaseEffect, approvalrequest.FieldPayload:
+		case approvalrequest.FieldBaseVersions, approvalrequest.FieldBasePresent, approvalrequest.FieldBaseEffect, approvalrequest.FieldBaseValues, approvalrequest.FieldPayload:
 			values[i] = new([]byte)
-		case approvalrequest.FieldID, approvalrequest.FieldNumber:
+		case approvalrequest.FieldID, approvalrequest.FieldNumber, approvalrequest.FieldChangesetRevision:
 			values[i] = new(sql.NullInt64)
 		case approvalrequest.FieldCreatedBy, approvalrequest.FieldUpdatedBy, approvalrequest.FieldNamespace, approvalrequest.FieldActionType, approvalrequest.FieldTitle, approvalrequest.FieldDescription, approvalrequest.FieldStatus, approvalrequest.FieldAuthor, approvalrequest.FieldBaseHash, approvalrequest.FieldExecutedBy:
 			values[i] = new(sql.NullString)
@@ -194,6 +200,20 @@ func (_m *ApprovalRequest) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.BaseHash = value.String
 			}
+		case approvalrequest.FieldChangesetRevision:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field changeset_revision", values[i])
+			} else if value.Valid {
+				_m.ChangesetRevision = int(value.Int64)
+			}
+		case approvalrequest.FieldBaseVersions:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field base_versions", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.BaseVersions); err != nil {
+					return fmt.Errorf("unmarshal field base_versions: %w", err)
+				}
+			}
 		case approvalrequest.FieldBasePresent:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field base_present", values[i])
@@ -208,6 +228,14 @@ func (_m *ApprovalRequest) assignValues(columns []string, values []any) error {
 			} else if value != nil && len(*value) > 0 {
 				if err := json.Unmarshal(*value, &_m.BaseEffect); err != nil {
 					return fmt.Errorf("unmarshal field base_effect: %w", err)
+				}
+			}
+		case approvalrequest.FieldBaseValues:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field base_values", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.BaseValues); err != nil {
+					return fmt.Errorf("unmarshal field base_values: %w", err)
 				}
 			}
 		case approvalrequest.FieldPayload:
@@ -315,11 +343,20 @@ func (_m *ApprovalRequest) String() string {
 	builder.WriteString("base_hash=")
 	builder.WriteString(_m.BaseHash)
 	builder.WriteString(", ")
+	builder.WriteString("changeset_revision=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ChangesetRevision))
+	builder.WriteString(", ")
+	builder.WriteString("base_versions=")
+	builder.WriteString(fmt.Sprintf("%v", _m.BaseVersions))
+	builder.WriteString(", ")
 	builder.WriteString("base_present=")
 	builder.WriteString(fmt.Sprintf("%v", _m.BasePresent))
 	builder.WriteString(", ")
 	builder.WriteString("base_effect=")
 	builder.WriteString(fmt.Sprintf("%v", _m.BaseEffect))
+	builder.WriteString(", ")
+	builder.WriteString("base_values=")
+	builder.WriteString(fmt.Sprintf("%v", _m.BaseValues))
 	builder.WriteString(", ")
 	builder.WriteString("payload=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Payload))

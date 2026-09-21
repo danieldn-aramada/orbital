@@ -788,124 +788,6 @@ document.addEventListener('click', e => {
   })
 })
 
-// ─── Device code SSO poller ───────────────────────────────────────────────────
-
-function initDeviceCodePoller() {
-  const el = document.getElementById('device-code-poller')
-  if (!el) return
-
-  const deviceCode = el.dataset.deviceCode
-  const basePath = el.dataset.basePath || ''
-  let interval = (parseInt(el.dataset.interval) || 5) * 1000
-
-  const statusEl = document.getElementById('device-code-status')
-
-  async function poll() {
-    try {
-      const resp = await fetch(`${basePath}/auth/device/poll`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ device_code: deviceCode }),
-      })
-      const data = await resp.json()
-      if (data.status === 'complete') {
-        if (statusEl) statusEl.textContent = 'Authenticated — redirecting…'
-        window.location.href = basePath + '/'
-        return
-      }
-      if (data.status === 'expired') {
-        if (statusEl) statusEl.innerHTML = 'Code expired — <a href="">try again</a>.'
-        return
-      }
-      if (data.interval) interval = data.interval * 1000
-    } catch (_) {}
-    setTimeout(poll, interval)
-  }
-
-  setTimeout(poll, interval)
-}
-
-document.addEventListener('DOMContentLoaded', initDeviceCodePoller)
-
-// ─── Device code copy-to-clipboard ────────────────────────────────────────────
-//
-// Lets the user one-click copy the device code so they can paste it into
-// the Microsoft device-login page in the other tab.
-
-function initDeviceCodeCopy() {
-  const btn = document.getElementById('device-code-copy')
-  if (!btn) return
-
-  // execCommand('copy') copies whatever is currently selected. Using a
-  // hidden <textarea> is the maximally compatible approach: contenteditable
-  // selection works in Chrome but flakes in Safari, and selecting a <p>
-  // element's text content isn't reliably copyable across browsers.
-  function legacyCopy(text) {
-    const ta = document.createElement('textarea')
-    ta.value = text
-    ta.setAttribute('readonly', '')
-    // Position off-screen but still rendered (visibility:hidden / display:none
-    // disqualify the textarea from being selected on iOS Safari).
-    ta.style.position = 'fixed'
-    ta.style.top = '0'
-    ta.style.left = '0'
-    ta.style.opacity = '0'
-    ta.style.pointerEvents = 'none'
-    document.body.appendChild(ta)
-    ta.focus()
-    ta.select()
-    ta.setSelectionRange(0, text.length)
-    let ok = false
-    try { ok = document.execCommand('copy') } catch (_) { /* ignore */ }
-    document.body.removeChild(ta)
-    return ok
-  }
-
-  function showSuccess(label, icon, orig) {
-    label.textContent = 'Copied!'
-    icon.className = 'fa-solid fa-check'
-    btn.classList.remove('is-light')
-    btn.classList.add('is-success')
-    setTimeout(() => {
-      label.textContent = orig.label
-      icon.className = orig.icon
-      btn.classList.remove('is-success')
-      btn.classList.add('is-light')
-    }, 1500)
-  }
-
-  btn.addEventListener('click', () => {
-    const text = btn.dataset.copyText || ''
-    const label = btn.querySelector('span:last-child')
-    const icon = btn.querySelector('i')
-    const orig = { label: label.textContent, icon: icon.className }
-
-    // Secure context (HTTPS or localhost): modern API is allowed. Non-secure
-    // (plain HTTP on AKS dev): navigator.clipboard.writeText rejects, often
-    // asynchronously after user-activation expires — skip it entirely and
-    // go straight to the legacy path so execCommand runs inside the click.
-    if (window.isSecureContext && navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(text).then(
-        () => showSuccess(label, icon, orig),
-        () => {
-          if (legacyCopy(text)) showSuccess(label, icon, orig)
-          else { label.textContent = 'Copy failed'; setTimeout(() => { label.textContent = orig.label }, 2500) }
-        },
-      )
-      return
-    }
-
-    if (legacyCopy(text)) {
-      showSuccess(label, icon, orig)
-    } else {
-      label.textContent = 'Copy failed'
-      setTimeout(() => { label.textContent = orig.label }, 2500)
-    }
-  })
-}
-
-document.addEventListener('DOMContentLoaded', initDeviceCodeCopy)
-
 // ─── DataCenter / Server tab loading ──────────────────────────────────────────
 //
 // Shared between orbital and orb. Both apps' /datacenters/:id and /servers/:id
@@ -1120,8 +1002,14 @@ export function initInventoryTable() {
 
   const savedType = localStorage.getItem('inventoryTypeFilter') || ''
   const savedNamespace = localStorage.getItem('inventoryNamespaceFilter') || ''
-  const cached = sessionStorage.getItem(INVENTORY_CACHE_KEY)
-  const initialData = cached ? JSON.parse(cached) : []
+  const cachedRaw = sessionStorage.getItem(INVENTORY_CACHE_KEY)
+  const initialData = cachedRaw ? JSON.parse(cachedRaw) : []
+  // An EMPTY cached array is not a cache hit. "[]" is a truthy string, so a page
+  // loaded while the graph was empty — between `make up` and `make seed`, or
+  // before a restore finishes — used to cache [], skip the fetch on every
+  // subsequent load, and show "No data available in table" indefinitely while
+  // /servers and /datacenters (which always fetch) showed data.
+  const cached = initialData.length > 0
 
   const typeFilterEl = $('<div class="select is-small" style="margin-right:0.25rem"><select id="inventory-type-select"><option value="">All Types</option></select></div>')
 
@@ -1153,23 +1041,32 @@ export function initInventoryTable() {
       entries: { _: 'items', 1: 'item' },
     },
     searchCols: [savedType ? { search: savedType } : null, null, null, null, null, null],
+    // Use `this.api()`, never the outer `inventoryTable` const. With
+    // stateSave:true DataTables restores saved state DURING the constructor
+    // (_fnLoadState -> _fnImplementState -> _fnInitComplete), so this callback
+    // can run before `const inventoryTable = new DataTable(...)` has bound —
+    // touching it then throws a TDZ ReferenceError out of the constructor, and
+    // everything after it in initInventoryTable (including the data fetch)
+    // never runs. The table then sits empty forever. Only reproduces once a
+    // saved state exists, which is why it hid on a fresh profile.
     initComplete: function () {
-      dtWrapLengthSelect(this.api())
+      const api = this.api()
+      dtWrapLengthSelect(api)
 
       document.getElementById('inventory-type-select').addEventListener('change', function () {
         localStorage.setItem('inventoryTypeFilter', this.value)
-        inventoryTable.column(0).search(this.value, { exact: !!this.value }).draw()
+        api.column(0).search(this.value, { exact: !!this.value }).draw()
       })
 
       const nsSelect = document.getElementById('inventory-namespace-select')
       if (nsSelect) {
         nsSelect.addEventListener('change', function () {
           localStorage.setItem('inventoryNamespaceFilter', this.value)
-          applyNamespaceFilter(this.value)
+          applyNamespaceFilter(this.value, api)
         })
       }
 
-      if (savedNamespace) applyNamespaceFilter(savedNamespace)
+      if (savedNamespace) applyNamespaceFilter(savedNamespace, api)
     },
     columns: [
       { data: 'type' },
@@ -1190,8 +1087,9 @@ export function initInventoryTable() {
     data: initialData,
   })
 
-  function applyNamespaceFilter(ns) {
-    inventoryTable.column(1).search(ns ? '^' + ns + ':' : '', { regex: true }).draw()
+  // `table` is passed by callers that may run before the outer const binds.
+  function applyNamespaceFilter(ns, table) {
+    ;(table || inventoryTable).column(1).search(ns ? '^' + ns + ':' : '', { regex: true }).draw()
   }
 
   function populateDropdowns() {
@@ -2258,3 +2156,50 @@ export function initReloadButtons(opts = {}) {
   })
 }
 
+
+// ─── API error rendering ────────────────────────────────────────────────────
+//
+// Orbital answers every failure with one envelope — `{error, code, httpStatus,
+// hint}` (docs/reference/ERROR-RESPONSES.md). `error` says what went wrong and
+// `hint` says what to do about it, and the hint is the half most worth showing:
+// it is where "Open a change request: POST /api/v1/change-requests" and
+// "Rename the variable to `version`" live.
+//
+// These exist because the convention was documented server-side and enforced
+// nowhere on the client. Seven call sites re-implemented it inline, four
+// discarded it and printed a bare status code, and new code picked whichever
+// neighbour it was copied from. A shared helper makes rendering the envelope
+// the shortest thing to write, which is the only way a convention survives.
+//
+// `code` is deliberately NOT rendered. It is the machine identifier clients
+// branch on — never prose for a reader.
+
+// apiErrorFromBody renders an already-parsed envelope.
+export function apiErrorFromBody(body, fallback = 'Request failed') {
+  // `message` is the pre-envelope echo shape. A few endpoints were read that
+  // way before the central ErrorHandler normalised everything, and falling
+  // through costs nothing while guaranteeing this helper is never worse than
+  // the inline code it replaces.
+  const head = (body && (body.error || body.message)) || fallback
+  return body && body.hint ? head + ' — ' + body.hint : head
+}
+
+// apiErrorText is apiErrorFromBody for a response you have not read yet.
+// Accepts a fetch Response or a jQuery jqXHR (DataTables' `ajax.error`).
+//
+// Returns '' when the request was ABORTED (status 0) — a superseded fetch, or a
+// page being navigated away from. That is not a failure anyone can act on, and
+// showing it buries the ones they can. **Treat '' as "display nothing".**
+export async function apiErrorText(source, fallback = 'Request failed') {
+  const status = Number(source && source.status) || 0
+  if (status === 0) return ''
+  let body = null
+  if (typeof source.json === 'function') {
+    body = await source.json().catch(() => null)
+  } else if (source.responseJSON) {
+    body = source.responseJSON
+  } else if (typeof source.responseText === 'string') {
+    try { body = JSON.parse(source.responseText) } catch (_) { /* not the envelope */ }
+  }
+  return apiErrorFromBody(body, fallback + ' (HTTP ' + status + ')')
+}

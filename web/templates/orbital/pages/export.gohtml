@@ -84,6 +84,18 @@
               <span>Export Subgraph</span>
             </button>
           </div>
+          {{/* Opens the SAME review modal the publish flow uses, minus the
+               Confirm button — a way to answer "is there anything to publish?"
+               without touching the control that publishes. Enabled on data
+               centre alone: a preview is current graph vs last published
+               artifact, so the destination is irrelevant to it, and the download
+               destination has no review step of its own. */}}
+          <div class="control">
+            <button id="export-preview-btn" class="button is-light js-export-preview" type="button" disabled>
+              <span class="icon"><i class="fa-solid fa-magnifying-glass"></i></span>
+              <span>Preview changes</span>
+            </button>
+          </div>
           <div class="control">
             <a class="button is-light" href="{{.BasePath}}/">Cancel</a>
           </div>
@@ -136,7 +148,7 @@
             <div id="export-preview-body"></div>
           </section>
           <footer class="modal-card-foot" style="justify-content: flex-end; gap: 0.5rem;">
-            <button class="button" onclick="document.getElementById('export-preview-modal').classList.remove('is-active')">Cancel</button>
+            <button id="export-preview-close" class="button" onclick="document.getElementById('export-preview-modal').classList.remove('is-active')">Cancel</button>
             <button id="export-preview-confirm" class="button is-primary" type="button" disabled>
               <span class="icon"><i class="fa-solid fa-cloud-arrow-up"></i></span>
               <span>Confirm &amp; Publish</span>

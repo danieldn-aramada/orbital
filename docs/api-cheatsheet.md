@@ -23,9 +23,30 @@ curl -s -X POST $ORBITAL_URL/graphql -H "Authorization: Bearer $TOKEN" -H "Conte
 -d '{"query":"query { queryDataCenter { orbId name } }"}' | jq .
 ```
 
-**Reads** send only `query`. **Mutations** send two fields — `query` **and** `variables`: the `query` holds the operation with `$orbId`/`$set` placeholders; `variables` holds the values. Always put `orbId` (and the `set` payload) in **`variables`**, never inline in the query. A single-entity `update{Kind}` with an inline `orbId` or `set` is **rejected with `400 VARIABLE_FORM_REQUIRED`** — orbital stamps `version`/`updatedAt`/`updatedBy` into a variable `set` resolved via a variable `orbId`, and can't do that against inline literals. Reads with inline filters are fine.
+**Reads** send only `query`. **Mutations** send two fields — `query` **and** `variables`: the `query` holds the operation with `$orbId`/`$set` placeholders; `variables` holds the values. The names are yours to choose — `$serverOrbId`/`$patch` works identically; what matters is that the mutation names exactly one row. Always put `orbId` (and the `set` payload) in **`variables`**, never inline in the query. A single-entity `update{Kind}` with an inline `orbId` or `set` is **rejected with `400 VARIABLE_FORM_REQUIRED`** — orbital stamps `version`/`updatedAt`/`updatedBy` into a variable `set` resolved via a variable `orbId`, and can't do that against inline literals. Reads with inline filters are fine.
 
 The `-d` body is JSON and may span multiple lines for readability — only the `query` string stays on one line. A mutation's returned entity confirms the write: the server stamps `updatedAt`/`updatedBy` (**no milliseconds**) and bumps `version`.
+
+### Guard a write with `version` (optimistic concurrency)
+
+Add `version` to **`variables`** — the value you read. Concurrent edit ⇒ `409
+MVCC_CONFLICT` instead of a silent overwrite. Omit it ⇒ last-writer-wins.
+
+```jsonc
+{ "orbId": "houston:BB52FZ3-idrac", "version": 7, "set": { "sshEnabled": false } }
+```
+
+Leave your query alone — orbital rewrites it before DGraph sees it, so the check
+happens inside the write:
+
+```graphql
+mutation UpdateIdracSettings($orbId: String!, $set: IdracSettingsPatch!, $version: Int!) {
+  updateIdracSettings(input: { filter: { orbId: { eq: $orbId }, version: { eq: $version } }, set: $set }) { numUids }
+}
+```
+
+Do not write the version filter yourself or put `version` in `set` — orbital does
+both. Full detail: `docs/api-cheatsheet-change-control.md`.
 
 ### Clearing a field — use `remove` (with a `set`)
 
@@ -55,6 +76,7 @@ The full request body on the wire (what the UI editor sends — kept fields go i
   "query": "mutation UpdateServerMaintenance($orbId: String!, $set: ServerMaintenancePatch!, $remove: ServerMaintenancePatch) { updateServerMaintenance(input: { filter: { orbId: { eq: $orbId } }, set: $set, remove: $remove }) { serverMaintenance { orbId } } }",
   "variables": {
     "orbId": "colo:server-maintenance-CWJHDX3",
+    "version": 4,
     "set":    { "enabled": true, "reason": "test" },
     "remove": { "windowStart": "2026-08-14T18:00:00Z", "windowEnd": "2026-08-14T22:00:00Z" }
   }
@@ -73,9 +95,62 @@ Focused on iDRAC settings and backup config, not the full schema.
 
 ## Data centers
 
-### Look up a data center by asset ID
+### Look up by asset ID
 ```graphql
 query { queryDataCenter(filter: { assetDataV2: { regexp: "/<asset_id>/" } }) { orbId name assetDataV2 } }
+```
+
+### Lookup by model
+
+View models
+```graphql
+query {
+  __type(name: "DataCenterModel"){
+    enumValues{
+      name
+    }
+  }
+}
+```
+response
+```json
+{
+  "data": {
+    "__type": {
+      "enumValues": [
+        { "name": "Beacon" },
+        { "name": "Cruiser" },
+        { "name": "Triton" },
+        { "name": "Leviathan" }
+      ]
+    }
+  }
+}
+```
+Query by model
+```graphql
+query { queryDataCenter(filter: { model: { eq: Beacon } }) { orbId name model } }
+```
+
+### Update model
+
+query
+```graphql
+mutation UpdateDataCenter($orbId: String!, $set: DataCenterPatch!) {
+  updateDataCenter(input: { filter: { orbId: { eq: $orbId } }, set: $set }) {
+    numUids dataCenter { orbId name model version updatedBy }
+  }
+}
+```
+variables
+```json
+{ "orbId": "demo:demo-galleon", "set": { "model": "Leviathan" } }
+```
+response
+```json
+{ "data": { "updateDataCenter": { "numUids": 1, "dataCenter": [
+  { "orbId": "demo:demo-galleon", "name": "demo-galleon", "model": "Leviathan",
+    "version": 2, "updatedBy": "admin@armada.ai" } ] } } }
 ```
 
 ## Servers
@@ -110,7 +185,7 @@ mutation UpdateIdracSettings($orbId: String!, $set: IdracSettingsPatch!) {
 ```
 variables
 ```json
-{ "orbId": "houston:BB52FZ3-idrac", "set": { "sshEnabled": false } }
+{ "orbId": "houston:BB52FZ3-idrac", "version": 7, "set": { "sshEnabled": false } }
 ```
 
 ## Clusters
@@ -148,7 +223,7 @@ mutation UpdateEtcdBackup($orbId: String!, $set: EtcdBackupPatch!) {
 ```
 variables
 ```json
-{ "orbId": "colo:dev-main-etcd-backup", "set": { "schedule": "0 */6 * * *", "retentionDays": 7 } }
+{ "orbId": "colo:dev-main-etcd-backup", "version": 2, "set": { "schedule": "0 */6 * * *", "retentionDays": 7 } }
 ```
 
 Example using curl
@@ -156,7 +231,7 @@ Example using curl
 curl -s -X POST $ORBITAL_URL/graphql -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
 -d '{
   "query": "mutation UpdateVeleroBackup($orbId: String!, $set: VeleroBackupPatch!) { updateVeleroBackup(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids veleroBackup { orbId retentionDays version updatedAt updatedBy } } }",
-  "variables": { "orbId": "colo:dev-main-velero-backup", "set": { "retentionDays": 14 } }
+  "variables": { "orbId": "colo:dev-main-velero-backup", "version": 5, "set": { "retentionDays": 14 } }
 }' | jq .
 ```
 Response
@@ -243,7 +318,7 @@ mutation UpdateNetworkDevice($orbId: String!, $set: NetworkDevicePatch!) {
 ```
 variables
 ```json
-{ "orbId": "colo:network-device-XH3123090344", "set": { "role": "core" } }
+{ "orbId": "colo:network-device-XH3123090344", "version": 1, "set": { "role": "core" } }
 ```
 
 ### Add a new network device — orbital stamps `version`/`createdBy`/`createdAt`

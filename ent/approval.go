@@ -37,6 +37,8 @@ type Approval struct {
 	Comment string `json:"comment,omitempty"`
 	// ApprovedAtHash holds the value of the "approved_at_hash" field.
 	ApprovedAtHash string `json:"approved_at_hash,omitempty"`
+	// ApprovedAtRevision holds the value of the "approved_at_revision" field.
+	ApprovedAtRevision int `json:"approved_at_revision,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ApprovalQuery when eager-loading is set.
 	Edges        ApprovalEdges `json:"edges"`
@@ -68,7 +70,7 @@ func (*Approval) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case approval.FieldApprovalRequestID:
+		case approval.FieldApprovalRequestID, approval.FieldApprovedAtRevision:
 			values[i] = new(sql.NullInt64)
 		case approval.FieldCreatedBy, approval.FieldUpdatedBy, approval.FieldApprover, approval.FieldDecision, approval.FieldComment, approval.FieldApprovedAtHash:
 			values[i] = new(sql.NullString)
@@ -152,6 +154,12 @@ func (_m *Approval) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ApprovedAtHash = value.String
 			}
+		case approval.FieldApprovedAtRevision:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field approved_at_revision", values[i])
+			} else if value.Valid {
+				_m.ApprovedAtRevision = int(value.Int64)
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -221,6 +229,9 @@ func (_m *Approval) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("approved_at_hash=")
 	builder.WriteString(_m.ApprovedAtHash)
+	builder.WriteString(", ")
+	builder.WriteString("approved_at_revision=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ApprovedAtRevision))
 	builder.WriteByte(')')
 	return builder.String()
 }

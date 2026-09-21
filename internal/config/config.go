@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,13 +30,18 @@ type Config struct {
 	// a tighter bucket on POST /user/login to slow credential brute-force.
 	// Burst = 2×RPS. Behind a proxy, per-IP fairness needs c.RealIP() to
 	// resolve the true client via X-Forwarded-For (Istio sets it).
-	RateLimitEnabled      bool   `envconfig:"ORBITAL_RATE_LIMIT_ENABLED"   default:"false"`
-	RateLimitRPS          int    `envconfig:"ORBITAL_RATE_LIMIT_RPS"       default:"40"`
-	LoginRateLimitRPS     int    `envconfig:"ORBITAL_LOGIN_RATE_LIMIT_RPS" default:"5"`
-	DGraphURL             string `envconfig:"DGRAPH_URL"                      default:"http://localhost:8080/graphql"`
-	DGraphAdminURL        string `envconfig:"DGRAPH_ADMIN_URL"                default:"http://localhost:8080/admin"`
-	RatelURL              string `envconfig:"RATEL_URL"                       default:"http://localhost:8000"`
-	IssueTrackerURL       string `envconfig:"ORBITAL_ISSUE_TRACKER_URL"       default:"https://dev.azure.com/armadasystems/Commander/_workitems/create/Bug?[System.AreaPath]=Commander\\Edge\\Edge Platform"`
+	RateLimitEnabled  bool   `envconfig:"ORBITAL_RATE_LIMIT_ENABLED"   default:"false"`
+	RateLimitRPS      int    `envconfig:"ORBITAL_RATE_LIMIT_RPS"       default:"40"`
+	LoginRateLimitRPS int    `envconfig:"ORBITAL_LOGIN_RATE_LIMIT_RPS" default:"5"`
+	DGraphURL         string `envconfig:"DGRAPH_URL"                      default:"http://localhost:8080/graphql"`
+	DGraphAdminURL    string `envconfig:"DGRAPH_ADMIN_URL"                default:"http://localhost:8080/admin"`
+	RatelURL          string `envconfig:"RATEL_URL"                       default:"http://localhost:8000"`
+	IssueTrackerURL   string `envconfig:"ORBITAL_ISSUE_TRACKER_URL"       default:"https://dev.azure.com/armadasystems/Commander/_workitems/create/Bug?[System.AreaPath]=Commander\\Edge\\Edge Platform"`
+	// Dev means "a developer is running this", not "auth is off". It enables
+	// template hot-reload (handlers re-parse .gohtml per request) and permits
+	// the placeholder session HMAC key. API auth is NOT its business — see
+	// APIAuthEnabled, which defaults to !Dev only to preserve the historical
+	// coupling.
 	Dev                   bool   `envconfig:"ORBITAL_DEV"                     default:"true"`
 	LogLevel              string `envconfig:"ORBITAL_LOG_LEVEL"               default:"info"`
 	DGraphScratchURL      string `envconfig:"DGRAPH_SCRATCH_URL"              default:"http://localhost:8081/graphql"`
@@ -112,36 +118,53 @@ type Config struct {
 	// policy administration writes PostgreSQL, never DGraph, so it is never
 	// itself gated.
 	ChangeControlEnabled bool `envconfig:"ORBITAL_CHANGE_CONTROL_ENABLED" default:"true"`
-	// OIDCIssuerURL defaults to the Azure AD tenant URL so the SSO login button
-	// is available in `make run-orbital` for daily UI work (provided the user
-	// also sets ORBITAL_OIDC_CLIENT_SECRET). In dev mode (ORBITAL_DEV=true),
+	// OIDC identifiers have NO defaults on purpose: a tenant or client id baked
+	// in as a default silently points someone else's deployment at OUR identity
+	// provider. They are public values, not secrets, so this is about wrong
+	// defaults rather than disclosure. Empty disables SSO (server.go gates on
+	// OIDCIssuerURL and OIDCClientSecret both being set) and the password login
+	// still works, so `make run-orbital` needs no setup. For local SSO, copy
+	// deploy/local/orbital.env.example to deploy/local/orbital.env — the
+	// Makefile sources it when present. In dev mode (ORBITAL_DEV=true),
 	// bearer auth on /api/v1 + /graphql is bypassed at the middleware layer
 	// (see internal/server/server.go), so machine-to-machine callers like
 	// cb-bundler can query without an OAuth2 token. Production (Dev=false)
 	// enforces bearer auth strictly.
-	OIDCIssuerURL    string `envconfig:"ORBITAL_OIDC_ISSUER_URL"         default:"https://login.microsoftonline.com/8f231c2a-9551-4b40-be17-5b24afe5e890/v2.0"`
-	OIDCClientID     string `envconfig:"ORBITAL_OIDC_CLIENT_ID"          default:"5fc832f6-843e-4207-93dd-b3c3a77c06f2"`
+	OIDCIssuerURL    string `envconfig:"ORBITAL_OIDC_ISSUER_URL"         default:""`
+	OIDCClientID     string `envconfig:"ORBITAL_OIDC_CLIENT_ID"          default:""`
 	OIDCClientSecret string `envconfig:"ORBITAL_OIDC_CLIENT_SECRET"      default:""`
 	OIDCRedirectURL  string `envconfig:"ORBITAL_OIDC_REDIRECT_URL"       default:"http://localhost:8001/auth/callback"`
-	OAuth2DeviceCode bool   `envconfig:"ORBITAL_OAUTH2_DEVICE_CODE"      default:"true"` // enables device code flow for browser SSO; set false to use Authorization Code + PKCE (requires publicly resolvable redirect URI). RFC 8628 — OAuth 2.0, not OIDC despite living next to ORBITAL_OIDC_* settings.
 	// AppTokenAllowedAppIDs gates which app-only (client-credentials) bearer
-	// tokens orbital accepts on /api/v1 and /graphql. Defaults to allowing
-	// only the orbital app itself (in-pod cb-bundler authenticates as the
-	// orbital app via client credentials). Set explicitly to widen for other
-	// internal callers, or empty to allow any AAD app token bound to the
-	// orbital audience. See docs/reference/AUTH.md § App Caller Authorization.
-	AppTokenAllowedAppIDs []string `envconfig:"ORBITAL_APP_TOKEN_ALLOWED_APPIDS" default:"5fc832f6-843e-4207-93dd-b3c3a77c06f2"`
+	// tokens orbital accepts on /api/v1 and /graphql. EMPTY DENIES every app
+	// token: a deployment that uses them must list the application ids, or "*"
+	// to accept any app token already bound to the orbital audience. There is
+	// deliberately no default app id — "unconfigured" and "allow everything"
+	// must not be the same input, and a baked-in id belongs to a deployment,
+	// not to the code. deploy/base/deploy.yaml sets it for the in-pod
+	// cb-bundler. See docs/reference/AUTH.md § App Caller Authorization.
+	AppTokenAllowedAppIDs []string `envconfig:"ORBITAL_APP_TOKEN_ALLOWED_APPIDS" default:""`
 	AdminEmails           string   `envconfig:"ORBITAL_ADMIN_EMAILS"            default:"admin@armada.ai"` // comma-separated emails promoted to admin on first OIDC login
 	// AuthMode selects the authentication stack. Empty (default) keeps today's
 	// behavior — session cookie + optional OIDC bearer per OIDCIssuerURL. Set to
 	// "external-jwt" to trust bearer tokens issued by an external OIDC provider
 	// (e.g. AEP's Keycloak client) instead of orbital's own login flow. See
 	// docs/reference/AUTH.md § External JWT Mode.
-	AuthMode                string        `envconfig:"ORBITAL_AUTH_MODE"               default:""`
-	JWTIssuer               string        `envconfig:"ORBITAL_JWT_ISSUER"              default:""`      // e.g. https://keycloak.example.com/realms/foo
-	JWTAudience             string        `envconfig:"ORBITAL_JWT_AUDIENCE"            default:""`      // expected `aud` claim
-	JWTClientID             string        `envconfig:"ORBITAL_JWT_CLIENT_ID"           default:""`      // required `azp` claim — the trust anchor when aud is a generic default like "account"
-	JWTDefaultRole          string        `envconfig:"ORBITAL_JWT_DEFAULT_ROLE"        default:"admin"` // role every valid token maps to: readonly | dev | admin
+	AuthMode    string `envconfig:"ORBITAL_AUTH_MODE"               default:""`
+	JWTIssuer   string `envconfig:"ORBITAL_JWT_ISSUER"              default:""` // e.g. https://keycloak.example.com/realms/foo
+	JWTAudience string `envconfig:"ORBITAL_JWT_AUDIENCE"            default:""` // expected `aud` claim
+	JWTClientID string `envconfig:"ORBITAL_JWT_CLIENT_ID"           default:""` // required `azp` claim — the trust anchor when aud is a generic default like "account"
+	// JWTDefaultRole is the role every valid bearer token receives in
+	// external-jwt mode (that mode assigns one tier to all callers rather than
+	// reading a per-user role), and is read nowhere else.
+	//
+	// Defaults to the LEAST-privileged tier deliberately. A default that grants
+	// write access is an authorization decision nobody made; least privilege
+	// fails in the safe direction, and an operator who wants a broader tier can
+	// say so. Not made a required field: refusing to boot is the right tool only
+	// where no safe fallback exists (see the apiAuth-empty guard in server.go),
+	// and here one does. server.go warns when this was left unset so the
+	// fallback is visible rather than silent.
+	JWTDefaultRole          string        `envconfig:"ORBITAL_JWT_DEFAULT_ROLE"        default:"readonly"`
 	OCIRegistry             string        `envconfig:"ORBITAL_OCI_REGISTRY"            default:"localhost:5001"`
 	OCIRepo                 string        `envconfig:"ORBITAL_OCI_REPO"                default:"orbital"`
 	OCIUsername             string        `envconfig:"ORBITAL_OCI_USERNAME"            default:""`
@@ -159,7 +182,25 @@ type Config struct {
 	//   "configbundle-bundler=http://localhost:8020/bundle"
 	// or comma-separated for multiple bundlers. Bare URLs (no `=`) are also
 	// accepted for back-compat; the name defaults to the URL host.
-	BundlerURLs       []string      `envconfig:"ORBITAL_BUNDLER_URLS"                default:"configbundle-bundler=http://localhost:8020/bundle"`
+	BundlerURLs []string `envconfig:"ORBITAL_BUNDLER_URLS"                default:"configbundle-bundler=http://localhost:8020/bundle"`
+	// Job leases (HA). The staleness threshold does NOT need to exceed job
+	// duration — that is the difference between a refreshed heartbeat and a
+	// static claim timestamp; it need only exceed one interval plus the worst
+	// plausible pause. Wider than controller-runtime's 15s lease because a
+	// false positive kills a live restore, where a controller merely re-elects.
+	// OrphanGrace applies ONLY to jobs with no heartbeat at all — those left
+	// running by the deploy that introduced leases, which under a rolling
+	// update may still be executing in the outgoing pod.
+	// MigrationLockTimeout bounds how long a replica waits for another
+	// replica's schema migration. The wait is legitimate — the holder is
+	// migrating — so this is generous; exceeding it is reported as a
+	// diagnosable error rather than a hang. See internal/db.Migrate.
+	MigrationLockTimeout time.Duration `envconfig:"ORBITAL_MIGRATION_LOCK_TIMEOUT" default:"5m"`
+
+	JobHeartbeatInterval time.Duration `envconfig:"ORBITAL_JOB_HEARTBEAT_INTERVAL" default:"10s"`
+	JobStaleAfter        time.Duration `envconfig:"ORBITAL_JOB_STALE_AFTER"        default:"60s"`
+	JobOrphanGrace       time.Duration `envconfig:"ORBITAL_JOB_ORPHAN_GRACE"       default:"1h"`
+
 	RestoreTimeout    time.Duration `envconfig:"ORBITAL_RESTORE_TIMEOUT"         default:"10m"`
 	ExportTimeout     time.Duration `envconfig:"ORBITAL_EXPORT_TIMEOUT"          default:"30m"`
 	BackupTimeout     time.Duration `envconfig:"ORBITAL_BACKUP_TIMEOUT"          default:"30m"`
@@ -175,6 +216,27 @@ type Config struct {
 	DGraphZeroGRPC  string `envconfig:"ORBITAL_DGRAPH_ZERO_GRPC"        default:"localhost:5080"`
 
 	sessionKeys auth.SessionKeys // built once in New(); returned by SessionKeys()
+
+	// APIAuthEnabledRaw is the unparsed ORBITAL_API_AUTH_ENABLED. Declared as a
+	// struct tag (not read via os.LookupEnv) so the generated settings table in
+	// docs/reference/CONFIG.md still sees it; empty means unset, which is the
+	// third state the hierarchy below needs. Read APIAuthEnabled, never this.
+	APIAuthEnabledRaw string `envconfig:"ORBITAL_API_AUTH_ENABLED"`
+
+	// APIAuthEnabled decides whether bearer verification is installed on
+	// /api/v1 and /graphql. Hierarchical, never an independent boolean
+	// (docs/reference/CONFIG.md): unset it follows !Dev, which is exactly the
+	// historical behaviour; ORBITAL_API_AUTH_ENABLED set explicitly wins.
+	// Resolved once in New() so no read site re-derives it from Dev — that is
+	// how one site ends up disagreeing with another.
+	APIAuthEnabled bool
+	// apiAuthExplicit records whether ORBITAL_API_AUTH_ENABLED was set at all.
+	// An explicit false must switch auth off in every auth mode; an unset
+	// value must not change any mode's existing behaviour.
+	apiAuthExplicit bool
+	// apiAuthSource names the setting that decided APIAuthEnabled, so the
+	// startup log states it rather than leaving an operator to infer it.
+	apiAuthSource string
 }
 
 func New() (*Config, error) {
@@ -215,12 +277,34 @@ func New() (*Config, error) {
 			return nil, fmt.Errorf("ORBITAL_S3_USE_AZ_MI=true requires ORBITAL_S3_ACCESS_KEY (the storage account name)")
 		}
 	}
+	cfg.APIAuthEnabled = !cfg.Dev
+	cfg.apiAuthSource = "ORBITAL_DEV"
+	if raw := cfg.APIAuthEnabledRaw; raw != "" {
+		enabled, err := strconv.ParseBool(raw)
+		if err != nil {
+			return nil, fmt.Errorf("ORBITAL_API_AUTH_ENABLED must be a boolean, got %q", raw)
+		}
+		cfg.APIAuthEnabled = enabled
+		cfg.apiAuthExplicit = true
+		cfg.apiAuthSource = "ORBITAL_API_AUTH_ENABLED"
+	}
 	cfg.sessionKeys = auth.NewSessionKeys(cfg.SessionHMACKey, cfg.SessionEncryptionKey, cfg.Dev, cfg.CookieSecure)
 	return &cfg, nil
 }
 
 func (c *Config) SessionKeys() auth.SessionKeys {
 	return c.sessionKeys
+}
+
+// APIAuthSource names the env var that decided APIAuthEnabled.
+func (c *Config) APIAuthSource() string { return c.apiAuthSource }
+
+// APIAuthExplicitlyDisabled reports an operator deliberately setting
+// ORBITAL_API_AUTH_ENABLED=false. Distinct from APIAuthEnabled being false by
+// inheritance from Dev: an explicit false switches auth off in every auth mode,
+// an inherited one only preserves the historical OIDC-mode bypass.
+func (c *Config) APIAuthExplicitlyDisabled() bool {
+	return c.apiAuthExplicit && !c.APIAuthEnabled
 }
 
 // AdminEmailSet parses ORBITAL_ADMIN_EMAILS into a lowercase set for O(1) lookup.

@@ -132,8 +132,9 @@
   // --bulma-family-primary: Arial, sans-serif;
   --list-item-padding: 1em;
   --orange:  #f19646;
-  --dt-row-selected: var(--bulma-link-rgb); 
-  --dt-row-selected-text: var(--bulma-white-rgb); 
+  --dt-row-selected: var(--bulma-link-rgb);
+  --dt-row-selected-text: var(--bulma-white-rgb);
+  --bulma-light-light-invert-l: var(--bulma-light-invert-l);
 }
 
 html {
@@ -808,10 +809,12 @@ div.dt-container {
   }
 }
 
-// Inventory, server-list, and audit-log tables — match all toolbar controls to is-size-7 table content
+// Inventory, server-list, audit-log and change-request tables — match all
+// toolbar controls to is-size-7 table content
 div.dt-container:has(#inventory-table),
 div.dt-container:has(#server-list-table),
-div.dt-container:has(#audit-log-table) {
+div.dt-container:has(#audit-log-table),
+div.dt-container:has(#cr-table) {
   font-size: 0.75rem;
 
   .dt-search .input,
@@ -836,7 +839,8 @@ div.dt-container:has(#audit-log-table) {
 #export-jobs-table td,
 #artifacts-table td,
 #import-history-table td,
-#publish-history-table td {
+#publish-history-table td,
+#cr-changes td {
   vertical-align: middle;
 }
 

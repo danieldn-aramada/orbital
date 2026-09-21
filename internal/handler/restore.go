@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -17,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"entgo.io/ent/dialect/sql"
+	entsql "entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/backup"
 	"github.com/armada/orbital/ent/exportjob"
@@ -39,6 +40,8 @@ type RestoreHandler struct {
 	dgraphZeroGRPC   string // e.g. dgraph-blue-dgraph-zero:5080
 	schemaPath       string // path to the GraphQL SDL schema file
 	restoreTimeout   time.Duration
+	leaseCfg         JobLeaseConfig // job-lease durations; zero values fall back to defaults
+	rawDB            *sql.DB        // advisory locks for job admission; nil disables them
 	logger           *slog.Logger
 }
 
@@ -214,6 +217,17 @@ func (h *RestoreHandler) Trigger(c echo.Context) error {
 
 	ctx := c.Request().Context()
 
+	// Admission is a check-then-create: two triggers landing on two replicas
+	// would otherwise both find "nothing running" and both proceed. Restore
+	// runs drop_all, so this is the worst case in the product. The advisory
+	// lock makes the whole window exclusive; transaction-scoped, so a crashed
+	// admitter cannot hold it.
+	releaseAdmission, err := acquireAdmissionLock(ctx, h.rawDB)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "could not acquire job admission lock: "+err.Error())
+	}
+	defer releaseAdmission()
+
 	existingBackup, err := h.db.Backup.Query().
 		Where(backup.StatusIn(backup.StatusPending, backup.StatusRunning)).
 		First(ctx)
@@ -296,7 +310,7 @@ func (h *RestoreHandler) Trigger(c echo.Context) error {
 // @Router      /api/v1/restore/jobs [get]
 func (h *RestoreHandler) List(c echo.Context) error {
 	jobs, err := h.db.RestoreJob.Query().
-		Order(restorejob.ByCreatedAt(sql.OrderDesc())).
+		Order(restorejob.ByCreatedAt(entsql.OrderDesc())).
 		Limit(50).
 		All(c.Request().Context())
 	if err != nil {
@@ -346,6 +360,12 @@ func (h *RestoreHandler) Status(c echo.Context) error {
 	return c.JSON(http.StatusOK, toRestoreJobResponse(j))
 }
 
+// SetJobCoordination supplies the job-lease durations; zero values fall back to defaults.
+func (h *RestoreHandler) SetJobCoordination(cfg JobLeaseConfig, rawDB *sql.DB) {
+	h.leaseCfg = cfg
+	h.rawDB = rawDB
+}
+
 func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 	ctx, cancel := context.WithTimeout(context.Background(), h.restoreTimeout)
 	defer cancel()
@@ -355,7 +375,8 @@ func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 	fail := func(step string, err error) {
 		h.logger.Error("restore failed", "jobId", jobID, "step", step, "err", err)
 		errStr := fmt.Sprintf("%s: %v", step, err)
-		if _, saveErr := h.db.RestoreJob.UpdateOneID(jobID).
+		if _, saveErr := h.db.RestoreJob.Update().
+			Where(restorejob.ID(jobID), restorejob.LockedByEQ(runnerID)).
 			SetStatus(restorejob.StatusFailed).
 			SetError(errStr).
 			SetLog(logBuf.String()).
@@ -370,13 +391,26 @@ func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 		fmt.Fprintln(&logBuf, msg)
 	}
 
-	if _, err := h.db.RestoreJob.UpdateOneID(jobID).
-		SetStatus(restorejob.StatusRunning).
-		SetStartedAt(time.Now()).
-		Save(ctx); err != nil {
-		fail("mark running", err)
+	// Claim before touching DGraph. Restore runs drop_all, so two runners on
+	// one job is the worst case in the product — the claim is a conditional
+	// UPDATE on status='pending' and exactly one runner can win it.
+	claimed, err := claimRestoreJob(ctx, h.db, jobID, runnerID)
+	if err != nil {
+		fail("claim job", err)
 		return
 	}
+	if !claimed {
+		h.logger.Warn("restore job not claimed — another runner owns it", "jobId", jobID, "runner", runnerID)
+		return
+	}
+
+	// Losing the lease cancels ctx, aborting the restore rather than letting
+	// two processes drop_all the same graph.
+	leaseCtx, leaseDone := context.WithCancel(ctx)
+	defer leaseDone()
+	go keepLease(leaseCtx, h.leaseCfg.withDefaults().HeartbeatInterval, h.logger, jobID.String(),
+		func(c context.Context) (bool, error) { return beatRestoreJob(c, h.db, jobID, runnerID) },
+		cancel)
 
 	job, err := h.db.RestoreJob.Get(ctx, jobID)
 	if err != nil {
@@ -488,13 +522,21 @@ func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 		resourceTypes,
 		dcOrbIDs,
 		map[string]any{"id": jobID.String(), "backupKey": bk.S3Key},
+		auditInternal(),
 	)
-	if _, err := h.db.RestoreJob.UpdateOneID(jobID).
+	// Fenced on locked_by: a runner that lost its lease must not overwrite the
+	// terminal state of the run that replaced it.
+	n, err := h.db.RestoreJob.Update().
+		Where(restorejob.ID(jobID), restorejob.LockedByEQ(runnerID)).
 		SetStatus(restorejob.StatusCompleted).
 		SetLog(logBuf.String()).
 		SetCompletedAt(time.Now()).
-		Save(context.Background()); err != nil {
+		Save(context.Background())
+	if err != nil {
 		h.logger.Error("failed to mark restore job completed", "jobId", jobID, "err", err)
+	} else if n == 0 {
+		h.logger.Warn("restore completed but lease was lost — terminal state left to the owning runner",
+			"jobId", jobID, "runner", runnerID)
 	}
 }
 

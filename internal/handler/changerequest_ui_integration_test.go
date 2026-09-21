@@ -86,8 +86,16 @@ func TestUINav_ChangeRequestsBadgeMatchesAwaitingReviewTotal(t *testing.T) {
 			}
 		}
 	}
-	if src != "/api/v1/change-requests?awaiting_review=true" {
+	// Two properties, not one literal: it must ask the awaiting-review question,
+	// and it must not drag the matching requests' payloads along to render one
+	// number. `limit=0` returns `total` with no items — the badge reads only
+	// `total` (see layout.MenuItem.BadgeSrc), so anything else is transfer this
+	// menu pays for on EVERY page in the app.
+	if !strings.HasPrefix(src, "/api/v1/change-requests?") || !strings.Contains(src, "awaiting_review=true") {
 		t.Fatalf("BadgeSrc = %q, want the awaiting-review query", src)
+	}
+	if !strings.Contains(src, "limit=0") {
+		t.Errorf("BadgeSrc = %q, want limit=0 — the badge reads only `total`, so it must not fetch the rows", src)
 	}
 
 	f := newCRFixture(t)
@@ -761,6 +769,15 @@ type auditEventView struct {
 	Actor         string         `json:"actor"`
 	EventCategory string         `json:"eventCategory"`
 	Details       map[string]any `json:"details"`
+	// CloudTrail parity fields. Read through the API, not the ent row: the point
+	// of the column is that a consumer can see it.
+	EventSource     string `json:"eventSource"`
+	SourceIPAddress string `json:"sourceIpAddress"`
+	RequestID       string `json:"requestId"`
+	// Changes is the pre-computed field diff. Present only for a clean
+	// single-entity update, which is exactly what makes its ABSENCE worth
+	// asserting on: a write that lost its before-state still returns 200.
+	Changes []fieldChange `json:"changes"`
 }
 
 // auditEvents returns every event for an operation, newest first, via

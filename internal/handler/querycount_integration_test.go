@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -319,4 +320,190 @@ func awaitingFor(t *testing.T, f *crFixture, actor string, role user.Role) (int,
 		t.Fatalf("decode: %v", err)
 	}
 	return out.Total, out
+}
+
+// ── the queue was an N+1 against DGRAPH, not PostgreSQL ────────────────────
+//
+// Measured 2026-09-15 on the local stack: **1,222 DGraph queries for one
+// unfiltered page load** of 507 change requests, ~1.2s. Every row went through
+// State, which reads the changeset's scope and its version vector to derive
+// staleness — a signal the queue does not need. 506 of those 507 rows were
+// terminal, so most of the work was discarded the moment it was computed.
+//
+// The fix is not a faster query, it is not asking: the list renders from
+// PostgreSQL alone and staleness moved to the detail view, which is where
+// GitHub draws the same line (`mergeable` is on the single-PR endpoint, never
+// on the list).
+//
+// Asserted with a DGraph that FAILS the test if it is contacted at all. A
+// counter would let a regression through at "only a few"; this cannot.
+
+func TestQueueList_MakesNoDGraphCallsAtAll(t *testing.T) {
+	f := newCRFixture(t)
+
+	var hits []string
+	forbidden := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		hits = append(hits, r.URL.Path+" "+string(body))
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"data":{}}`)) //nolint:errcheck
+	}))
+	t.Cleanup(forbidden.Close)
+
+	// Same fixture, but any DGraph traffic lands on the trap instead of a real
+	// cluster. Rendering must not notice.
+	gql := NewGraphQL(forbidden.URL, f.db, slog.Default(), false)
+	crh := NewChangeRequest(f.db, gql, forbidden.URL, slog.Default())
+
+	for i := 0; i < 5; i++ {
+		f.open(t, approval.ChangeItem{
+			OrbID: crServerA, Op: approval.OpUpdate,
+			Set: map[string]any{"hostname": fmt.Sprintf("n1-%d", i)},
+		})
+	}
+
+	e := echo.New()
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httptest.NewRequest(http.MethodGet, "/api/v1/change-requests", nil), rec)
+	c.Set("user_email", "queue-reader@test.com")
+	c.Set("role", string(user.RoleDev))
+	if err := crh.ListChangeRequests(c); err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	var out changeRequestListResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode: %v (body %s)", err, rec.Body.String())
+	}
+	if out.Total != 5 {
+		t.Fatalf("total = %d, want 5 — the assertion below would be vacuous", out.Total)
+	}
+	if len(hits) != 0 {
+		t.Fatalf("the queue made %d DGraph call(s); want 0:\n  %s", len(hits), strings.Join(hits, "\n  "))
+	}
+
+	// Absent, not false. A `stale: false` asserts "not stale" about a question
+	// this endpoint no longer asks — a wrong answer rather than a missing one.
+	var raw struct {
+		Items []map[string]json.RawMessage `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("decode raw: %v", err)
+	}
+	for _, field := range []string{"stale", "subtreeChanged", "staleEntities", "missingTargets"} {
+		if _, present := raw.Items[0][field]; present {
+			t.Errorf("list item carries %q — the list cannot know it, so it must be omitted", field)
+		}
+	}
+	// ...and what the queue DOES render is all still there.
+	for _, field := range []string{"id", "title", "status", "approvals", "requiredApprovals", "namespace", "author", "effect", "createdAt"} {
+		if _, present := raw.Items[0][field]; !present {
+			t.Errorf("list item is missing %q, which the queue renders", field)
+		}
+	}
+}
+
+// The detail view still asks, and still answers. Without this the test above
+// passes on an implementation that simply deleted staleness.
+func TestQueueList_DetailViewStillComputesStaleness(t *testing.T) {
+	f := newCRFixture(t)
+	cr := f.open(t, approval.ChangeItem{
+		OrbID: crServerA, Op: approval.OpUpdate,
+		Set: map[string]any{"hostname": "detail-still-knows"},
+	})
+
+	e := echo.New()
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httptest.NewRequest(http.MethodGet, "/api/v1/change-requests/"+crHumanID(cr), nil), rec)
+	c.SetParamNames("id")
+	c.SetParamValues(crHumanID(cr))
+	c.Set("user_email", "reader@test.com")
+	c.Set("role", string(user.RoleDev))
+	if err := f.crh.GetChangeRequest(c); err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	for _, field := range []string{"stale", "subtreeChanged"} {
+		if _, present := raw[field]; !present {
+			t.Errorf("detail response is missing %q — staleness moved off the list, not out of the product", field)
+		}
+	}
+}
+
+// `total` counts MATCHES, not the page. Two of the list's filters need a
+// rendered view, so a SQL LIMIT would page over a superset and report a count
+// including rows the caller never receives.
+func TestQueueList_PagingKeepsTheTotalExact(t *testing.T) {
+	f := newCRFixture(t)
+	const n = 7
+	for i := 0; i < n; i++ {
+		f.open(t, approval.ChangeItem{
+			OrbID: crServerA, Op: approval.OpUpdate,
+			Set: map[string]any{"hostname": fmt.Sprintf("page-%d", i)},
+		})
+	}
+
+	list := func(qs string) changeRequestListResponse {
+		t.Helper()
+		e := echo.New()
+		rec := httptest.NewRecorder()
+		c := e.NewContext(httptest.NewRequest(http.MethodGet, "/api/v1/change-requests"+qs, nil), rec)
+		c.Set("user_email", "pager@test.com")
+		c.Set("role", string(user.RoleDev))
+		if err := f.crh.ListChangeRequests(c); err != nil {
+			t.Fatalf("list%s: %v", qs, err)
+		}
+		var out changeRequestListResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		return out
+	}
+
+	all := list("")
+	if all.Total != n || len(all.Items) != n {
+		t.Fatalf("unpaged: total=%d items=%d, want %d/%d — no limit must behave exactly as before", all.Total, len(all.Items), n, n)
+	}
+
+	page := list("?limit=3")
+	if page.Total != n {
+		t.Errorf("total with ?limit=3 = %d, want %d — total counts matches, not the page", page.Total, n)
+	}
+	if len(page.Items) != 3 {
+		t.Errorf("items with ?limit=3 = %d, want 3", len(page.Items))
+	}
+
+	// Pages must tile the list without overlap or gaps.
+	seen := map[string]bool{}
+	for off := 0; off < n; off += 3 {
+		for _, it := range list(fmt.Sprintf("?limit=3&offset=%d", off)).Items {
+			if seen[it.ID] {
+				t.Errorf("%s appeared on two pages", it.ID)
+			}
+			seen[it.ID] = true
+		}
+	}
+	if len(seen) != n {
+		t.Errorf("paging covered %d of %d requests", len(seen), n)
+	}
+
+	// Past the end is an empty page, not an error: a legal position in a list
+	// that shrank between two requests.
+	if past := list("?offset=999"); len(past.Items) != 0 || past.Total != n {
+		t.Errorf("offset past the end: items=%d total=%d, want 0/%d", len(past.Items), past.Total, n)
+	}
+	// Garbage is refused rather than silently treated as zero.
+	e := echo.New()
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httptest.NewRequest(http.MethodGet, "/api/v1/change-requests?limit=-1", nil), rec)
+	c.Set("user_email", "pager@test.com")
+	c.Set("role", string(user.RoleDev))
+	if err := f.crh.ListChangeRequests(c); err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("?limit=-1 status = %d, want 400", rec.Code)
+	}
 }

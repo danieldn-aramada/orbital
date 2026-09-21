@@ -165,6 +165,27 @@ func (_u *ApprovalUpdate) SetNillableApprovedAtHash(v *string) *ApprovalUpdate {
 	return _u
 }
 
+// SetApprovedAtRevision sets the "approved_at_revision" field.
+func (_u *ApprovalUpdate) SetApprovedAtRevision(v int) *ApprovalUpdate {
+	_u.mutation.ResetApprovedAtRevision()
+	_u.mutation.SetApprovedAtRevision(v)
+	return _u
+}
+
+// SetNillableApprovedAtRevision sets the "approved_at_revision" field if the given value is not nil.
+func (_u *ApprovalUpdate) SetNillableApprovedAtRevision(v *int) *ApprovalUpdate {
+	if v != nil {
+		_u.SetApprovedAtRevision(*v)
+	}
+	return _u
+}
+
+// AddApprovedAtRevision adds value to the "approved_at_revision" field.
+func (_u *ApprovalUpdate) AddApprovedAtRevision(v int) *ApprovalUpdate {
+	_u.mutation.AddApprovedAtRevision(v)
+	return _u
+}
+
 // SetRequestID sets the "request" edge to the ApprovalRequest entity by ID.
 func (_u *ApprovalUpdate) SetRequestID(id int64) *ApprovalUpdate {
 	_u.mutation.SetRequestID(id)
@@ -281,6 +302,12 @@ func (_u *ApprovalUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.ApprovedAtHash(); ok {
 		_spec.SetField(approval.FieldApprovedAtHash, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ApprovedAtRevision(); ok {
+		_spec.SetField(approval.FieldApprovedAtRevision, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedApprovedAtRevision(); ok {
+		_spec.AddField(approval.FieldApprovedAtRevision, field.TypeInt, value)
 	}
 	if _u.mutation.RequestCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -467,6 +494,27 @@ func (_u *ApprovalUpdateOne) SetNillableApprovedAtHash(v *string) *ApprovalUpdat
 	return _u
 }
 
+// SetApprovedAtRevision sets the "approved_at_revision" field.
+func (_u *ApprovalUpdateOne) SetApprovedAtRevision(v int) *ApprovalUpdateOne {
+	_u.mutation.ResetApprovedAtRevision()
+	_u.mutation.SetApprovedAtRevision(v)
+	return _u
+}
+
+// SetNillableApprovedAtRevision sets the "approved_at_revision" field if the given value is not nil.
+func (_u *ApprovalUpdateOne) SetNillableApprovedAtRevision(v *int) *ApprovalUpdateOne {
+	if v != nil {
+		_u.SetApprovedAtRevision(*v)
+	}
+	return _u
+}
+
+// AddApprovedAtRevision adds value to the "approved_at_revision" field.
+func (_u *ApprovalUpdateOne) AddApprovedAtRevision(v int) *ApprovalUpdateOne {
+	_u.mutation.AddApprovedAtRevision(v)
+	return _u
+}
+
 // SetRequestID sets the "request" edge to the ApprovalRequest entity by ID.
 func (_u *ApprovalUpdateOne) SetRequestID(id int64) *ApprovalUpdateOne {
 	_u.mutation.SetRequestID(id)
@@ -613,6 +661,12 @@ func (_u *ApprovalUpdateOne) sqlSave(ctx context.Context) (_node *Approval, err 
 	}
 	if value, ok := _u.mutation.ApprovedAtHash(); ok {
 		_spec.SetField(approval.FieldApprovedAtHash, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ApprovedAtRevision(); ok {
+		_spec.SetField(approval.FieldApprovedAtRevision, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedApprovedAtRevision(); ok {
+		_spec.AddField(approval.FieldApprovedAtRevision, field.TypeInt, value)
 	}
 	if _u.mutation.RequestCleared() {
 		edge := &sqlgraph.EdgeSpec{

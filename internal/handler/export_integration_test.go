@@ -34,8 +34,10 @@ import (
 const scratchExportDir = "/tmp/orbital-test-scratch"
 
 // blueExportDir is the host-side path mounted to /dgraph/export inside the
-// test blue DGraph container. Used by backup tests.
-const blueExportDir = "/tmp/orbital-test-blue"
+// suite's LIVE DGraph container — dgraph-alpha-test (:8083), not blue (:8080).
+// "blue" here is the blue-green role (the live side that scratch stages from),
+// which is still what this graph is to the suite. Used by backup tests.
+const blueExportDir = "/tmp/orbital-test-main"
 
 var (
 	testDB   *ent.Client
@@ -341,7 +343,7 @@ func TestExportPage_RendersExpectedElements(t *testing.T) {
 
 	ui := handler.NewUI(
 		false, "", "",
-		false, false,
+		false,
 		false,
 		"", "",
 		"",

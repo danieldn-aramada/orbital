@@ -304,7 +304,7 @@ func (h *DivergenceHandler) PutResolution(c echo.Context) error {
 	if actor == "" {
 		return echo.NewHTTPError(http.StatusUnauthorized, "actor required")
 	}
-	out, err := h.applyResolution(c.Request().Context(), id, action, actor, resolveCallerRole(c, h.db))
+	out, err := h.applyResolution(c.Request().Context(), originFromContext(c, "rest"), id, action, actor, resolveCallerRole(c, h.db))
 	if err != nil {
 		return err
 	}
@@ -329,7 +329,7 @@ func (h *DivergenceHandler) PutResolution(c echo.Context) error {
 // Accept on a protected class does NOT mutate: it opens a change request and
 // returns it as `Pending`, leaving the entry unresolved. Reject and Ignore are
 // never gated because neither touches intent.
-func (h *DivergenceHandler) applyResolution(ctx context.Context, id uuid.UUID, action divergenceresolution.Action, actor string, caller callerRole) (resolutionOutcome, error) {
+func (h *DivergenceHandler) applyResolution(ctx context.Context, origin auditOrigin, id uuid.UUID, action divergenceresolution.Action, actor string, caller callerRole) (resolutionOutcome, error) {
 	entry, err := h.db.DivergenceEntry.Get(ctx, id)
 	if ent.IsNotFound(err) {
 		return resolutionOutcome{}, echo.NewHTTPError(http.StatusNotFound, "divergence entry not found")
@@ -402,6 +402,7 @@ func (h *DivergenceHandler) applyResolution(ctx context.Context, id uuid.UUID, a
 			"intendedValue": intendedVal,
 			"overrideValue": overrideVal,
 		},
+		origin,
 	)
 
 	return resolutionOutcome{Resolution: &resolutionItem{
@@ -442,20 +443,28 @@ func (h *DivergenceHandler) dispatchAcceptMutation(ctx context.Context, entry *e
 	// not pre-check that intent hasn't moved since the report — if it has,
 	// the post-Accept divergence-ingest cycle catches it via the supersede
 	// path. Audit log records the dispatched mutation; any racing edit shows
-	// up there too. Version-bumping on the mutation's set clause is handled
-	// by orbital's general mutation pipeline, not by this handler.
+	// up there too.
+	//
+	// The canonical update{Kind}($orbId, $set) shape, and it MUST stay that
+	// shape. writeToDGraph resolves the row to stamp from the `orbId` variable;
+	// the $filter-object form this used to send resolved to nothing, so an
+	// Accept wrote intent with no version bump — which made it invisible to
+	// change-request staleness, since base_hash only moves when a version does.
+	// Fixed 2026-09-03; see docs/planning/debt.md Track B.
 	mutation := fmt.Sprintf(
-		`mutation AcceptDivergence($filter: %sFilter!, $set: %sPatch!) { update%s(input: {filter: $filter, set: $set}) { numUids } }`,
-		typeName, typeName, typeName,
+		`mutation AcceptDivergence($orbId: String!, $set: %sPatch!) { update%s(input: {filter: {orbId: {eq: $orbId}}, set: $set}) { numUids } }`,
+		typeName, typeName,
 	)
 	variables := map[string]any{
-		"filter": map[string]any{"orbId": map[string]any{"eq": entry.EntryOrbID}},
-		"set":    map[string]any{entry.Field: overrideVal},
+		"orbId": entry.EntryOrbID,
+		"set":   map[string]any{entry.Field: overrideVal},
 	}
 
-	// The divergence entry already carries the intended value at report
-	// time — that's exactly what "before" is for the audit diff. No DGraph
-	// round-trip needed; we already paid for that read when ingesting.
+	// A FALLBACK for the audit diff, not the diff itself. writeToDGraph fetches
+	// current state anyway (it cannot stamp the next version otherwise) and the
+	// fetch wins field by field. This still earns its place: BeforeFields is a
+	// curated per-type selection and entry.Field is resolved at runtime, so for
+	// a field outside that list this is the only before-value there is.
 	var intended any
 	_ = json.Unmarshal(entry.IntendedValue, &intended)
 	before := map[string]any{entry.Field: intended}
@@ -617,6 +626,7 @@ func (h *DivergenceHandler) Dismiss(c echo.Context) error {
 			"field":   entry.Field,
 			"dcOrbId": entry.DcOrbID,
 		},
+		originFromContext(c, "rest"),
 	)
 	return c.NoContent(http.StatusNoContent)
 }
@@ -736,6 +746,7 @@ func (h *DivergenceHandler) ClearByDC(c echo.Context) error {
 			"dcOrbId":        dc,
 			"entriesDropped": len(entries),
 		},
+		originFromContext(c, "rest"),
 	)
 
 	return c.JSON(http.StatusOK, map[string]any{

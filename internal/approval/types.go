@@ -57,15 +57,47 @@ type ChangeItem struct {
 	Op Op `json:"op"`
 
 	// Set is the fields to write, as a field-name → value map matching the
-	// GraphQL schema. Nested owned children appear as nested maps and are split
-	// into their own mutations at merge — DGraph treats a nested object in a
-	// mutation input as a LINK, not a deep write, so a nested payload sent
-	// as-is silently discards the child's field values.
+	// GraphQL schema.
+	//
+	// FLAT — one item per entity, never a tree. An edge value may carry only an
+	// identity key (orbId/id); anything else is REJECTED at creation by
+	// validateFields, because DGraph LINKS on an edge rather than writing
+	// through it — a nested payload returns success and silently discards the
+	// child's field values. An owned child therefore gets its own entry in
+	// Changes under its own orbId; nothing is split at merge.
+	//
+	// Flatness is load-bearing, not stylistic: the field-level conflict guard
+	// keys on orbId → predicate → value, so a nested item would need conflicts
+	// located by path and BaseValues to become a tree diff.
 	Set map[string]any `json:"set,omitempty"`
 
 	// Clear is the fields to unset. Separate from Set because a GraphQL `set`
 	// of null is a no-op in DGraph — clearing requires a `remove`.
 	Clear []string `json:"clear,omitempty"`
+	// Version is the entity's `version` as the caller read it. Supplying it
+	// makes the item conditional at ENTITY level: orbital refuses at creation if
+	// the entity has moved since, and refuses at merge if it moves between
+	// review and apply.
+	//
+	// It means exactly what `version` means on /graphql, deliberately — a
+	// client integrating against both APIs should not meet two different
+	// concurrency concepts for the same question.
+	//
+	// POINTER, because absent and 0 are different answers. 0 is a version a
+	// caller could legitimately have read, so a value type would silently turn
+	// "I did not check" into "I read version 0".
+	//
+	// ONE per item, never per field: an entity has one version, so it has one
+	// precondition. That is also the second reason two items on one orbId are
+	// refused — the first would bump the entity, making the second's
+	// precondition stale before it ran.
+	//
+	// Omitted is legal and means "unconditional at entity level"; the scope
+	// anchor (base_hash) still guards the merge. Supplying it against an entity
+	// that does not exist is REFUSED at validation rather than ignored: there is
+	// no version to match, and a caller that asked for a check and silently did
+	// not get one is worse off than one that never asked.
+	Version *int `json:"version,omitempty"`
 }
 
 // Changeset is the config.mutation payload. Single-namespace by construction:

@@ -110,6 +110,66 @@ func (_u *AuditEventUpdate) SetNillableEventCategory(v *string) *AuditEventUpdat
 	return _u
 }
 
+// SetEventSource sets the "event_source" field.
+func (_u *AuditEventUpdate) SetEventSource(v string) *AuditEventUpdate {
+	_u.mutation.SetEventSource(v)
+	return _u
+}
+
+// SetNillableEventSource sets the "event_source" field if the given value is not nil.
+func (_u *AuditEventUpdate) SetNillableEventSource(v *string) *AuditEventUpdate {
+	if v != nil {
+		_u.SetEventSource(*v)
+	}
+	return _u
+}
+
+// ClearEventSource clears the value of the "event_source" field.
+func (_u *AuditEventUpdate) ClearEventSource() *AuditEventUpdate {
+	_u.mutation.ClearEventSource()
+	return _u
+}
+
+// SetSourceIPAddress sets the "source_ip_address" field.
+func (_u *AuditEventUpdate) SetSourceIPAddress(v string) *AuditEventUpdate {
+	_u.mutation.SetSourceIPAddress(v)
+	return _u
+}
+
+// SetNillableSourceIPAddress sets the "source_ip_address" field if the given value is not nil.
+func (_u *AuditEventUpdate) SetNillableSourceIPAddress(v *string) *AuditEventUpdate {
+	if v != nil {
+		_u.SetSourceIPAddress(*v)
+	}
+	return _u
+}
+
+// ClearSourceIPAddress clears the value of the "source_ip_address" field.
+func (_u *AuditEventUpdate) ClearSourceIPAddress() *AuditEventUpdate {
+	_u.mutation.ClearSourceIPAddress()
+	return _u
+}
+
+// SetRequestID sets the "request_id" field.
+func (_u *AuditEventUpdate) SetRequestID(v string) *AuditEventUpdate {
+	_u.mutation.SetRequestID(v)
+	return _u
+}
+
+// SetNillableRequestID sets the "request_id" field if the given value is not nil.
+func (_u *AuditEventUpdate) SetNillableRequestID(v *string) *AuditEventUpdate {
+	if v != nil {
+		_u.SetRequestID(*v)
+	}
+	return _u
+}
+
+// ClearRequestID clears the value of the "request_id" field.
+func (_u *AuditEventUpdate) ClearRequestID() *AuditEventUpdate {
+	_u.mutation.ClearRequestID()
+	return _u
+}
+
 // AddResourceIDs adds the "resources" edge to the AuditEventResource entity by IDs.
 func (_u *AuditEventUpdate) AddResourceIDs(ids ...int) *AuditEventUpdate {
 	_u.mutation.AddResourceIDs(ids...)
@@ -253,6 +313,24 @@ func (_u *AuditEventUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if value, ok := _u.mutation.EventCategory(); ok {
 		_spec.SetField(auditevent.FieldEventCategory, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.EventSource(); ok {
+		_spec.SetField(auditevent.FieldEventSource, field.TypeString, value)
+	}
+	if _u.mutation.EventSourceCleared() {
+		_spec.ClearField(auditevent.FieldEventSource, field.TypeString)
+	}
+	if value, ok := _u.mutation.SourceIPAddress(); ok {
+		_spec.SetField(auditevent.FieldSourceIPAddress, field.TypeString, value)
+	}
+	if _u.mutation.SourceIPAddressCleared() {
+		_spec.ClearField(auditevent.FieldSourceIPAddress, field.TypeString)
+	}
+	if value, ok := _u.mutation.RequestID(); ok {
+		_spec.SetField(auditevent.FieldRequestID, field.TypeString, value)
+	}
+	if _u.mutation.RequestIDCleared() {
+		_spec.ClearField(auditevent.FieldRequestID, field.TypeString)
 	}
 	if _u.mutation.ResourcesCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -442,6 +520,66 @@ func (_u *AuditEventUpdateOne) SetNillableEventCategory(v *string) *AuditEventUp
 	return _u
 }
 
+// SetEventSource sets the "event_source" field.
+func (_u *AuditEventUpdateOne) SetEventSource(v string) *AuditEventUpdateOne {
+	_u.mutation.SetEventSource(v)
+	return _u
+}
+
+// SetNillableEventSource sets the "event_source" field if the given value is not nil.
+func (_u *AuditEventUpdateOne) SetNillableEventSource(v *string) *AuditEventUpdateOne {
+	if v != nil {
+		_u.SetEventSource(*v)
+	}
+	return _u
+}
+
+// ClearEventSource clears the value of the "event_source" field.
+func (_u *AuditEventUpdateOne) ClearEventSource() *AuditEventUpdateOne {
+	_u.mutation.ClearEventSource()
+	return _u
+}
+
+// SetSourceIPAddress sets the "source_ip_address" field.
+func (_u *AuditEventUpdateOne) SetSourceIPAddress(v string) *AuditEventUpdateOne {
+	_u.mutation.SetSourceIPAddress(v)
+	return _u
+}
+
+// SetNillableSourceIPAddress sets the "source_ip_address" field if the given value is not nil.
+func (_u *AuditEventUpdateOne) SetNillableSourceIPAddress(v *string) *AuditEventUpdateOne {
+	if v != nil {
+		_u.SetSourceIPAddress(*v)
+	}
+	return _u
+}
+
+// ClearSourceIPAddress clears the value of the "source_ip_address" field.
+func (_u *AuditEventUpdateOne) ClearSourceIPAddress() *AuditEventUpdateOne {
+	_u.mutation.ClearSourceIPAddress()
+	return _u
+}
+
+// SetRequestID sets the "request_id" field.
+func (_u *AuditEventUpdateOne) SetRequestID(v string) *AuditEventUpdateOne {
+	_u.mutation.SetRequestID(v)
+	return _u
+}
+
+// SetNillableRequestID sets the "request_id" field if the given value is not nil.
+func (_u *AuditEventUpdateOne) SetNillableRequestID(v *string) *AuditEventUpdateOne {
+	if v != nil {
+		_u.SetRequestID(*v)
+	}
+	return _u
+}
+
+// ClearRequestID clears the value of the "request_id" field.
+func (_u *AuditEventUpdateOne) ClearRequestID() *AuditEventUpdateOne {
+	_u.mutation.ClearRequestID()
+	return _u
+}
+
 // AddResourceIDs adds the "resources" edge to the AuditEventResource entity by IDs.
 func (_u *AuditEventUpdateOne) AddResourceIDs(ids ...int) *AuditEventUpdateOne {
 	_u.mutation.AddResourceIDs(ids...)
@@ -615,6 +753,24 @@ func (_u *AuditEventUpdateOne) sqlSave(ctx context.Context) (_node *AuditEvent, 
 	}
 	if value, ok := _u.mutation.EventCategory(); ok {
 		_spec.SetField(auditevent.FieldEventCategory, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.EventSource(); ok {
+		_spec.SetField(auditevent.FieldEventSource, field.TypeString, value)
+	}
+	if _u.mutation.EventSourceCleared() {
+		_spec.ClearField(auditevent.FieldEventSource, field.TypeString)
+	}
+	if value, ok := _u.mutation.SourceIPAddress(); ok {
+		_spec.SetField(auditevent.FieldSourceIPAddress, field.TypeString, value)
+	}
+	if _u.mutation.SourceIPAddressCleared() {
+		_spec.ClearField(auditevent.FieldSourceIPAddress, field.TypeString)
+	}
+	if value, ok := _u.mutation.RequestID(); ok {
+		_spec.SetField(auditevent.FieldRequestID, field.TypeString, value)
+	}
+	if _u.mutation.RequestIDCleared() {
+		_spec.ClearField(auditevent.FieldRequestID, field.TypeString)
 	}
 	if _u.mutation.ResourcesCleared() {
 		edge := &sqlgraph.EdgeSpec{

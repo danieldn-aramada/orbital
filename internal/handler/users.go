@@ -157,6 +157,7 @@ func (h *UsersHandler) UpdateRole(c echo.Context) error {
 			"oldRole":      string(target.Role),
 			"newRole":      string(newRole),
 		},
+		originFromContext(c, "rest"),
 	)
 
 	item := toUserItem(updated)

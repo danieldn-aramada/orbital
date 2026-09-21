@@ -34,6 +34,8 @@ const (
 	FieldComment = "comment"
 	// FieldApprovedAtHash holds the string denoting the approved_at_hash field in the database.
 	FieldApprovedAtHash = "approved_at_hash"
+	// FieldApprovedAtRevision holds the string denoting the approved_at_revision field in the database.
+	FieldApprovedAtRevision = "approved_at_revision"
 	// EdgeRequest holds the string denoting the request edge name in mutations.
 	EdgeRequest = "request"
 	// Table holds the table name of the approval in the database.
@@ -59,6 +61,7 @@ var Columns = []string{
 	FieldDecision,
 	FieldComment,
 	FieldApprovedAtHash,
+	FieldApprovedAtRevision,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -80,6 +83,8 @@ var (
 	DefaultComment string
 	// ApprovedAtHashValidator is a validator for the "approved_at_hash" field. It is called by the builders before save.
 	ApprovedAtHashValidator func(string) error
+	// DefaultApprovedAtRevision holds the default value on creation for the "approved_at_revision" field.
+	DefaultApprovedAtRevision int
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -158,6 +163,11 @@ func ByComment(opts ...sql.OrderTermOption) OrderOption {
 // ByApprovedAtHash orders the results by the approved_at_hash field.
 func ByApprovedAtHash(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldApprovedAtHash, opts...).ToFunc()
+}
+
+// ByApprovedAtRevision orders the results by the approved_at_revision field.
+func ByApprovedAtRevision(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldApprovedAtRevision, opts...).ToFunc()
 }
 
 // ByRequestField orders the results by request field.

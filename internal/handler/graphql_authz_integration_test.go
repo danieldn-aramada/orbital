@@ -48,7 +48,7 @@ func mockDGraphSuccess(t *testing.T) *httptest.Server {
 func TestGraphQL_ReadonlyCanQuery(t *testing.T) {
 	userID := createTestUser(t, "readonly-gql@authztest.com", user.RoleReadonly)
 	srv := mockDGraphSuccess(t)
-	h := handler.NewGraphQL(srv.URL, testDB, slog.Default(), false)
+	h := handler.NewGraphQL(srv.URL, testDB, slog.Default(), true)
 
 	c, rec := newAuthzGQLContext(t, userID, `{"query":"{ queryDataCenter { id name } }"}`)
 	if err := h.Handle(c); err != nil {
@@ -62,7 +62,7 @@ func TestGraphQL_ReadonlyCanQuery(t *testing.T) {
 func TestGraphQL_ReadonlyMutationBlocked(t *testing.T) {
 	userID := createTestUser(t, "readonly-mut@authztest.com", user.RoleReadonly)
 	srv := mockDGraphSuccess(t)
-	h := handler.NewGraphQL(srv.URL, testDB, slog.Default(), false)
+	h := handler.NewGraphQL(srv.URL, testDB, slog.Default(), true)
 
 	c, rec := newAuthzGQLContext(t, userID, `{"query":"mutation { addServer(input:[]) { server { id } } }"}`)
 	if err := h.Handle(c); err != nil {
@@ -87,7 +87,7 @@ func TestGraphQL_ReadonlyMutationBypassAttemptBlocked(t *testing.T) {
 	// readonly user is correctly blocked.
 	userID := createTestUser(t, "readonly-bypass@authztest.com", user.RoleReadonly)
 	srv := mockDGraphSuccess(t)
-	h := handler.NewGraphQL(srv.URL, testDB, slog.Default(), false)
+	h := handler.NewGraphQL(srv.URL, testDB, slog.Default(), true)
 
 	body := `{"query":"# looks like a query\nmutation Bar { addServer(input:[]) { server { id } } }"}`
 	c, rec := newAuthzGQLContext(t, userID, body)
@@ -109,7 +109,7 @@ func TestGraphQL_DevCanMutate(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	h := handler.NewGraphQL(srv.URL, testDB, slog.Default(), false)
+	h := handler.NewGraphQL(srv.URL, testDB, slog.Default(), true)
 	c, rec := newAuthzGQLContext(t, userID, `{"query":"mutation { addServer(input:[]) { server { id } } }"}`)
 	if err := h.Handle(c); err != nil {
 		t.Fatalf("Handle: %v", err)
@@ -128,8 +128,12 @@ func TestGraphQL_AdminCanMutate(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	h := handler.NewGraphQL(srv.URL, testDB, slog.Default(), false)
-	c, rec := newAuthzGQLContext(t, userID, `{"query":"mutation { updateDataCenter(input:{}) { dataCenter { id } } }"}`)
+	h := handler.NewGraphQL(srv.URL, testDB, slog.Default(), true)
+	// Canonical variable form. The inline `input:{}` this used to send is
+	// refused by the inline-selector guard in production, so asserting "admin
+	// can mutate" through it proved the authz check only because the guard was
+	// switched off in the fixture.
+	c, rec := newAuthzGQLContext(t, userID, `{"query":"mutation UpdateDataCenter($orbId: String!, $set: DataCenterPatch!) { updateDataCenter(input: {filter: {orbId: {eq: $orbId}}, set: $set}) { numUids } }","variables":{"orbId":"authz:dc1","set":{"description":"d"}}}`)
 	if err := h.Handle(c); err != nil {
 		t.Fatalf("Handle: %v", err)
 	}
@@ -143,7 +147,7 @@ func TestGraphQL_UnauthenticatedMutationBlocked(t *testing.T) {
 	// (or pre-resolution). The handler's defensive check at graphql.go:93-96
 	// should still reject mutations.
 	srv := mockDGraphSuccess(t)
-	h := handler.NewGraphQL(srv.URL, testDB, slog.Default(), false)
+	h := handler.NewGraphQL(srv.URL, testDB, slog.Default(), true)
 
 	c, rec := newAuthzGQLContext(t, 0, `{"query":"mutation { addServer(input:[]) { server { id } } }"}`)
 	if err := h.Handle(c); err != nil {

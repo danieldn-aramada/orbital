@@ -23,7 +23,10 @@ const SNAPSHOT = path.join(__dirname, '.policies-snapshot.json')
 
 type Policy = {
   id: string
+  // Empty for an all-namespaces policy — the two are mutually exclusive, and
+  // the API rejects a body carrying neither.
   namespace: string
+  allNamespaces?: boolean
   allTypes?: boolean
   types?: string[]
   requiredApprovals: number
@@ -63,8 +66,12 @@ export async function restorePolicies(request: APIRequestContext) {
     const res = await request.fetch('/api/v1/approval-policies', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      // allNamespaces and namespace are exclusive: a global policy has no
+      // namespace, and sending `namespace: undefined` alongside no
+      // allNamespaces is rejected as "namespace is required" — which made a
+      // global policy impossible to round-trip, failing every later run.
       data: JSON.stringify({
-        namespace: p.namespace,
+        ...(p.allNamespaces ? { allNamespaces: true } : { namespace: p.namespace }),
         allTypes: p.allTypes ?? true,
         types: p.types ?? [],
         requiredApprovals: p.requiredApprovals,
@@ -74,7 +81,7 @@ export async function restorePolicies(request: APIRequestContext) {
     })
     if (!res.ok()) {
       // Keep the file: whatever went wrong, the baseline is still recoverable.
-      throw new Error(`restore policy for ${p.namespace} failed: ${res.status()} ${await res.text()}`)
+      throw new Error(`restore policy for ${p.allNamespaces ? "(all namespaces)" : p.namespace} failed: ${res.status()} ${await res.text()}`)
     }
   }
   fs.unlinkSync(SNAPSHOT)

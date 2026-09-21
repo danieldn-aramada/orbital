@@ -27,6 +27,7 @@ const getDataCenterQuery = `
       updatedAt
       version
       assetDataV2
+      model
       namespace
       racks(order: { asc: name }) {
         id
@@ -92,6 +93,7 @@ type dcQueryResponse struct {
 	UpdatedAt   string `json:"updatedAt"`
 	Version     int    `json:"version"`
 	AssetDataV2 string `json:"assetDataV2"`
+	Model       string `json:"model"`
 	Namespace   string `json:"namespace"`
 	Racks       []struct {
 		ID    string `json:"id"`
@@ -155,6 +157,7 @@ type dataCenterTabData struct {
 	Servers         []serverTabData
 	Version         int
 	AssetDataV2     string
+	Model           string
 	CurrentUser     string
 	EditDataJSON    template.JS // pre-serialized JSON for the edit modal
 	EditTargetsJSON template.JS // configitem-editor.js targets list
@@ -229,6 +232,9 @@ func (h *DataCenter) Tab(c echo.Context) error {
 	currentUser := actorFromContext(c)
 
 	editFields := map[string]any{"name": raw.Name}
+	if raw.Model != "" {
+		editFields["model"] = raw.Model
+	}
 	if raw.AssetDataV2 != "" {
 		var parsed any
 		if err := json.Unmarshal([]byte(raw.AssetDataV2), &parsed); err == nil {
@@ -239,6 +245,9 @@ func (h *DataCenter) Tab(c echo.Context) error {
 	}
 	editJSON, _ := json.Marshal(editFields)
 	editTargets := configitems.BuildEditTargets("DataCenter", raw.OrbID, raw.Namespace, raw.Name)
+	// OCC version, so the editor sends `version` and a concurrent edit is
+	// refused rather than silently overwritten.
+	editTargets = configitems.StampEditTargetVersion(editTargets, raw.OrbID, raw.Version)
 	editTargetsJSON, _ := json.Marshal(editTargets)
 
 	domID := SafeDomID(raw.OrbID)
@@ -257,6 +266,7 @@ func (h *DataCenter) Tab(c echo.Context) error {
 		ServerCount:      raw.ServersAggregate.Count,
 		Version:          raw.Version,
 		AssetDataV2:      prettyAssetData,
+		Model:            raw.Model,
 		CurrentUser:      currentUser,
 		EditDataJSON:     template.JS(editJSON),
 		EditTargetsJSON:  template.JS(editTargetsJSON),

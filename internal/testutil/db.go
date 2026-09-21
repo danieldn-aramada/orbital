@@ -69,6 +69,21 @@ func NewTestDB(t *testing.T) *ent.Client {
 	}
 	client := enttest.Open(t, "postgres", TestDatabaseURL())
 
+	// Registered FIRST so it runs LAST (t.Cleanup is LIFO): truncate while the
+	// client is still usable, then hand the connections back.
+	//
+	// Without this the pool leaks for the whole package run — enttest.Open does
+	// not close on cleanup — and a package with enough fixtures walks into
+	// `pq: sorry, too many clients already`. It surfaces as a wave of unrelated
+	// failures in whichever tests happen to run after the limit is hit, which is
+	// why it went unnoticed: the suite was sitting just under max_connections,
+	// so the tests that broke were never the tests that leaked.
+	t.Cleanup(func() {
+		if err := client.Close(); err != nil {
+			t.Logf("close test db client: %v (continuing)", err)
+		}
+	})
+
 	t.Cleanup(func() {
 		if err := truncateAll(TestDatabaseURL()); err != nil {
 			t.Logf("truncateAll: %v (continuing)", err)
@@ -119,4 +134,23 @@ func truncateAll(dsn string) error {
 		}
 	}
 	return nil
+}
+
+// RawTestDB opens a plain *sql.DB against the test PostgreSQL instance.
+//
+// Advisory locks are taken on a raw connection rather than through ent, so a
+// test that exercises them needs the same handle production uses. Separate
+// from NewTestDB because the two serve different layers and a test usually
+// wants only one of them.
+func RawTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+	if err := EnsureTestDatabase(); err != nil {
+		t.Fatalf("ensure test database: %v", err)
+	}
+	db, err := sql.Open("postgres", TestDatabaseURL())
+	if err != nil {
+		t.Fatalf("open raw test db: %v", err)
+	}
+	t.Cleanup(func() { db.Close() }) //nolint:errcheck
+	return db
 }

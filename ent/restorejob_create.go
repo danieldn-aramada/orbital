@@ -167,6 +167,34 @@ func (_c *RestoreJobCreate) SetNillableCompletedAt(v *time.Time) *RestoreJobCrea
 	return _c
 }
 
+// SetLockedBy sets the "locked_by" field.
+func (_c *RestoreJobCreate) SetLockedBy(v string) *RestoreJobCreate {
+	_c.mutation.SetLockedBy(v)
+	return _c
+}
+
+// SetNillableLockedBy sets the "locked_by" field if the given value is not nil.
+func (_c *RestoreJobCreate) SetNillableLockedBy(v *string) *RestoreJobCreate {
+	if v != nil {
+		_c.SetLockedBy(*v)
+	}
+	return _c
+}
+
+// SetHeartbeatAt sets the "heartbeat_at" field.
+func (_c *RestoreJobCreate) SetHeartbeatAt(v time.Time) *RestoreJobCreate {
+	_c.mutation.SetHeartbeatAt(v)
+	return _c
+}
+
+// SetNillableHeartbeatAt sets the "heartbeat_at" field if the given value is not nil.
+func (_c *RestoreJobCreate) SetNillableHeartbeatAt(v *time.Time) *RestoreJobCreate {
+	if v != nil {
+		_c.SetHeartbeatAt(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *RestoreJobCreate) SetID(v uuid.UUID) *RestoreJobCreate {
 	_c.mutation.SetID(v)
@@ -317,6 +345,14 @@ func (_c *RestoreJobCreate) createSpec() (*RestoreJob, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CompletedAt(); ok {
 		_spec.SetField(restorejob.FieldCompletedAt, field.TypeTime, value)
 		_node.CompletedAt = &value
+	}
+	if value, ok := _c.mutation.LockedBy(); ok {
+		_spec.SetField(restorejob.FieldLockedBy, field.TypeString, value)
+		_node.LockedBy = &value
+	}
+	if value, ok := _c.mutation.HeartbeatAt(); ok {
+		_spec.SetField(restorejob.FieldHeartbeatAt, field.TypeTime, value)
+		_node.HeartbeatAt = &value
 	}
 	return _node, _spec
 }

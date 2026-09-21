@@ -48,6 +48,7 @@ deploy/local/sync-credentials.json
 
 # Edge sim env — contains Azure Blob secret + DC config
 deploy/local/edge.env
+deploy/local/orbital.env
 
 # Orb local data
 orb-data/

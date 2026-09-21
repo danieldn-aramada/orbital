@@ -24,7 +24,7 @@ func TestDataCenterPage_RendersExpectedElements(t *testing.T) {
 	// app-version badge appears on all UI pages; use Export (simple, no extra setup)
 	ui := handler.NewUI(
 		false, "", "",
-		false, false,
+		false,
 		false,
 		"", "",
 		"",

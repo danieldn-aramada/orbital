@@ -217,7 +217,7 @@ A bypass must exist (every comparable system has one: InfraHub Super Admin break
 ### D4 — Worked example: changing a server's iDRAC setting
 iDRAC is an owned child of Server, so "change an iDRAC setting" is an `updateServer` mutation (edited through the server's nested JSON tree).
 
-**Today (no approval):** client POSTs `/graphql` `updateServer` → `graphql.go` (auth `RequireRole≥dev` → rate limit → MVCC `ifVersion` → forward to blue DGraph → audit) → authoritative intent immediately.
+**Today (no approval):** client POSTs `/graphql` `updateServer` → `graphql.go` (auth `RequireRole≥dev` → rate limit → MVCC `version` → forward to blue DGraph → audit) → authoritative intent immediately.
 
 **Changeset world, caller=`dev`, class protected:**
 1. Client POSTs `/graphql` `updateServer`.

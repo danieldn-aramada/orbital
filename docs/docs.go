@@ -1957,10 +1957,12 @@ const docTemplate = `{
         },
         "handler.approvalPolicyBody": {
             "type": "object",
-            "required": [
-                "namespace"
-            ],
             "properties": {
+                "allNamespaces": {
+                    "description": "AllNamespaces governs EVERY namespace, including data centers onboarded\nafter the policy was written. Mutually exclusive with Namespace.\n\nIt is a DEFAULT, not a floor: a namespace with its own policy is governed\nby that one instead, even when it is weaker, and a namespace whose policy\nis DISABLED is not gated at all.",
+                    "type": "boolean",
+                    "example": false
+                },
                 "allTypes": {
                     "description": "AllTypes protects every type in the namespace, including ConfigItem types\nadded to the schema later. Mutually exclusive with Types.",
                     "type": "boolean",
@@ -1982,7 +1984,7 @@ const docTemplate = `{
                     "example": true
                 },
                 "namespace": {
-                    "description": "Namespace the policy governs.",
+                    "description": "Namespace the policy governs. Required unless allNamespaces is true.",
                     "type": "string",
                     "example": "alaska-dot"
                 },
@@ -2034,6 +2036,11 @@ const docTemplate = `{
                 "actionType": {
                     "type": "string",
                     "example": "config.mutation"
+                },
+                "allNamespaces": {
+                    "description": "AllNamespaces means this policy is the fallback for every namespace that\nhas no policy of its own. Namespace is empty when it is set.",
+                    "type": "boolean",
+                    "example": false
                 },
                 "allTypes": {
                     "type": "boolean",
@@ -2317,6 +2324,60 @@ const docTemplate = `{
                     "description": "Type is the ConfigItem type. Optional for an existing entity (orbital\nresolves it from OrbID); REQUIRED when creating one that does not exist.",
                     "type": "string",
                     "example": "Server"
+                },
+                "version": {
+                    "description": "Version is the entity's ` + "`" + `version` + "`" + ` as you read it — the same concurrency\ntoken ` + "`" + `/graphql` + "`" + ` mutations accept, meaning the same thing here. Orbital\nrefuses the request with 409 MVCC_CONFLICT if the entity has moved since,\nnaming the item and both versions. One per item, never per field: an\nentity has one version. Omit for an unconditional item. Supplying it for\nan entity that does not exist is refused — there is no version to match.",
+                    "type": "integer",
+                    "example": 7
+                }
+            }
+        },
+        "handler.changeRecordEntry": {
+            "type": "object",
+            "properties": {
+                "applied": {
+                    "description": "Applied is whether this item landed. Nil when no merge has been attempted,\nwhich is different from false: a request nobody has merged has not failed.",
+                    "type": "boolean",
+                    "example": true
+                },
+                "fields": {
+                    "description": "Fields is empty for an op with no field detail — a delete, or a create\nwhose values were not recorded. The op still says what happened.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.changeRecordField"
+                    }
+                },
+                "op": {
+                    "type": "string",
+                    "example": "update"
+                },
+                "orbId": {
+                    "type": "string",
+                    "example": "colo:CWJHDX3-idrac"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "IdracSettings"
+                }
+            }
+        },
+        "handler.changeRecordField": {
+            "type": "object",
+            "properties": {
+                "before": {
+                    "description": "Before is the value at the time this was last reviewed, read from the\nrecorded ancestor. Absent for a create, and for requests opened before\norbital recorded one — the row then reads \"\\u2192 after\", which is less\ninformative but still true."
+                },
+                "cleared": {
+                    "description": "Cleared distinguishes \"unset this\" from \"set this to null\" — the two are\ndifferent mutations and a reader cannot tell them apart from a null Value.",
+                    "type": "boolean",
+                    "example": false
+                },
+                "field": {
+                    "type": "string",
+                    "example": "sshEnabled"
+                },
+                "value": {
+                    "description": "Value is the intended value, absent when the field is being cleared."
                 }
             }
         },
@@ -2339,6 +2400,20 @@ const docTemplate = `{
                     "description": "ContentHash is the hash of current intent over this request's scope.",
                     "type": "string",
                     "example": "sha256:045b8a51a0aea59fa"
+                },
+                "fields": {
+                    "description": "Fields is the review table: one row per field the changeset writes, each\nresolved to what a merge would DO with it.\n\nIt supersedes walking ` + "`" + `changes` + "`" + ` and ` + "`" + `satisfied` + "`" + ` separately. Those two\nanswer \"what would change\" and \"what would not\", but neither can express\nthe third outcome — a field someone else moved to a different value, which\nrefuses the merge. Rendered from ` + "`" + `changes` + "`" + ` alone, a conflict is\nindistinguishable from an ordinary change: both are two differing values.\n\nComputed by the SAME classifier the merge uses, so the preview and the\nrefusal cannot disagree.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.fieldOutcomeBody"
+                    }
+                },
+                "satisfied": {
+                    "description": "Satisfied is the part of the changeset that would do nothing: fields whose\ncurrent value already equals the proposed one, and deletes whose target is\nalready gone. Same flat shape as Changes, so a client renders it with the\nsame code.\n\nIt exists because ` + "`" + `changes` + "`" + ` alone cannot answer \"what does this request\npropose\". A field someone else already set drops out of the diff, so the\nrequest appears to shrink — with no signal that it did, or why. Listing\nthem separately keeps ` + "`" + `changes` + "`" + ` meaning exactly \"what would change\" while\nmaking the whole proposal visible.\n\n` + "`" + `before` + "`" + ` and ` + "`" + `after` + "`" + ` are equal on every entry here, by definition.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/graphdiff.Change"
+                    }
                 },
                 "stale": {
                     "description": "Stale means the base moved; the diff below is against CURRENT intent, so\nit already reflects that.",
@@ -2437,6 +2512,13 @@ const docTemplate = `{
                     "type": "string",
                     "example": "alaska-dot"
                 },
+                "record": {
+                    "description": "Record is the per-entity account of what this request does, one entry per\nchange object, with each item's applied status folded in. Built from the\npayload so it stays correct after a merge, when the live diff is empty.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.changeRecordEntry"
+                    }
+                },
                 "requiredApprovals": {
                     "type": "integer",
                     "example": 1
@@ -2452,10 +2534,22 @@ const docTemplate = `{
                     "type": "boolean",
                     "example": false
                 },
+                "staleEntities": {
+                    "description": "StaleEntities names WHY this request is stale: the entities whose version\nmoved since it was last reviewed, each with the version reviewed and the\nversion now. Present only when Stale is true, and empty for requests\nopened before orbital recorded the base version vector.\n\nServer-computed on purpose. ` + "`" + `stale` + "`" + ` alone tells a reader that merge is\nblocked but not what to look at, and a client that had to work it out\nwould need the base vector, the current vector and the scope-expansion\nrules — three things orbital already has and no integrator should\nreimplement.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.staleEntity"
+                    }
+                },
                 "status": {
                     "description": "Status is the EFFECTIVE status: open, approved, rejected, merged, closed.\n` + "`" + `approved` + "`" + ` is derived from the valid-approval count, so it can revert to\n` + "`" + `open` + "`" + ` on its own when the base moves.",
                     "type": "string",
                     "example": "open"
+                },
+                "subtreeChanged": {
+                    "description": "SubtreeChanged means the reviewed scope moved without any change object\ngoing out of date — an edit to an owned child. Cleared by approving again;\nblocks merge on its own. Distinct from Stale, which only the author can\nclear by rebasing.",
+                    "type": "boolean",
+                    "example": false
                 },
                 "title": {
                     "type": "string",
@@ -2734,6 +2828,39 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.fieldOutcomeBody": {
+            "type": "object",
+            "properties": {
+                "current": {
+                    "type": "string"
+                },
+                "field": {
+                    "description": "Field is the bare field name, type prefix stripped — what a table shows.",
+                    "type": "string",
+                    "example": "enabled"
+                },
+                "orbId": {
+                    "type": "string",
+                    "example": "colo:server-maintenance-CWJHDX3"
+                },
+                "outcome": {
+                    "description": "Outcome is ` + "`" + `applies` + "`" + `, ` + "`" + `satisfied` + "`" + ` or ` + "`" + `conflict` + "`" + `.\n\n  applies   — the merge writes Proposed over Current.\n  satisfied — Current already equals Proposed; the merge writes nothing.\n  conflict  — someone changed this field since the request was reviewed;\n              the merge REFUSES until it is re-reviewed or amended.",
+                    "type": "string",
+                    "example": "applies"
+                },
+                "proposed": {
+                    "type": "string"
+                },
+                "reviewed": {
+                    "description": "Reviewed is the value when the request was opened. Present only on a\nconflict — on the other two it equals Current and would be noise.",
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "ServerMaintenance"
+                }
+            }
+        },
         "handler.lastPublishedMeta": {
             "type": "object",
             "properties": {
@@ -3009,6 +3136,24 @@ const docTemplate = `{
                     "description": "ConfirmSchemaMismatch must be true to proceed when the backup's schema\nversion differs from the running schema. false (default) makes such a\nrestore fail fast rather than risk a mismatched load.",
                     "type": "boolean",
                     "example": false
+                }
+            }
+        },
+        "handler.staleEntity": {
+            "type": "object",
+            "properties": {
+                "currentVersion": {
+                    "type": "integer",
+                    "example": 9
+                },
+                "orbId": {
+                    "type": "string",
+                    "example": "alaska-dot:server-4FK8K44"
+                },
+                "reviewedVersion": {
+                    "description": "Reviewed is the version this request was last reviewed against; Current is\nthe version now. Current is omitted when the entity no longer exists.",
+                    "type": "integer",
+                    "example": 7
                 }
             }
         },

@@ -4,6 +4,8 @@ Read this before: export job work, OCI publish/signing, backup/restore, Swagger 
 
 ## Settled Decisions
 
+- **Do NOT clean up job-owned files with `defer os.RemoveAll`.** *(Moved here from `debt.md` 2026-09-15 — it was an implementation note on an open row, which is the wrong place for a standing rule.)* Per-job scratch dirs under `h.scratchExportDir` (`export.go:948`) are created and never removed, and the obvious fix is the wrong one: a deferred delete runs on paths that outlive the job, and it contradicts the "no automatic cleanup of job-owned files" decision — artifacts are removed on an explicit delete, never on the way out of a function. Use an orphan reaper on a controlled directory instead.
+
 - **Orbital is the sole OCI producer** — no downstream system needs registry write credentials. Orbital calls bundlers, bundles all layers, signs once, pushes once. ConfigBundle is a bundler — it queries Orbital's GraphQL and returns layers; it never pushes directly to ACR.
 - **Bundler URLs are per-request, not server-side config** — callers supply `{"bundlers": ["url"]}` in the publish request body. A future migration to named server-side bundlers is tracked in a code comment in `publisher.go`. Do not pre-emptively add server-side bundler config.
 - **Bundling is all-or-nothing** — if any bundler fails (non-2xx, timeout, size exceeded), the publish job fails and nothing is pushed to ACR. No partial pushes. Clients can retry without bundlers for a raw-export-only artifact.
@@ -23,7 +25,52 @@ Read this before: export job work, OCI publish/signing, backup/restore, Swagger 
 - **Stale detection** — on export job list page load, orbital checks scratch file existence for each completed job and marks stale if missing.
 - **Delete** removes the PostgreSQL record, export zip, and the job's scratch directory.
 - **Export and publish are separate actions** — publish never happens automatically on export. Publish button appears on completed jobs. Re-publishing is allowed and creates a new `registry_artifacts` row (full audit trail).
-- **Globally serialized** — scratch DGraph is shared state; only one export job may be pending or running at a time. Returns 409 if another is in progress.
+- **Globally serialized** — scratch DGraph is shared state; only one export job may be pending or running at a time. Returns 409 if another is in progress. The check-then-create window runs under an advisory lock so this holds across replicas, not just within one process — see § Job leases.
+
+## Job leases — how export, backup and restore stay correct at N replicas
+
+*(Settled 2026-09-16. `internal/handler/joblease.go` + `reaper.go`; pinned by `joblease_integration_test.go`.)*
+
+**Every job is claimed before it runs, and the claimant proves it is still alive.** Nothing here depends on how many replicas exist — that is the point.
+
+| Step | Mechanism |
+|---|---|
+| **Claim** | `UPDATE … WHERE id=$1 AND status='pending'`, setting `locked_by` + `heartbeat_at`. PostgreSQL row-locks, so exactly one runner changes a row and the rest get zero. A runner that does not win **must not execute the job**. |
+| **Heartbeat** | Refreshed on a ticker (`ORBITAL_JOB_HEARTBEAT_INTERVAL`, 10s) while the job runs. |
+| **Fence** | Every heartbeat and terminal write carries `AND locked_by = <me>`. A runner that stalled, was reaped, and woke up updates zero rows — it learns it was superseded, cancels its context and aborts rather than writing to the same scratch DGraph as its replacement. |
+| **Reap** | A ticker fails jobs whose heartbeat is older than `ORBITAL_JOB_STALE_AFTER` (60s). |
+
+**Two primitives, deliberately not interchangeable.** An *advisory lock* answers "may I act right now" — short-lived, transaction-scoped; it guards job admission and the reaper sweep. A *lease* answers "is the runner that claimed this still alive". A lock cannot answer the second: one held by a partitioned node is indistinguishable from one held by a working node, and PostgreSQL will not notice the dead connection until TCP keepalives fire — **7200s by default on Linux**. A lease that must be renewed fails *closed* on a partition; a held connection fails *open*.
+
+**Do NOT replace the lease with a session-scoped `pg_advisory_lock` held for the job's duration.** It looks attractive — no columns, no reaper, no threshold to tune, auto-release on death — and it is wrong for exactly the keepalive reason above, in precisely the failure mode it would exist to handle. It also pins one of ten pool connections per running job and breaks behind a transaction-mode pooler.
+
+### The three durations
+
+`ORBITAL_JOB_HEARTBEAT_INTERVAL` (10s) · `ORBITAL_JOB_STALE_AFTER` (60s) · `ORBITAL_JOB_ORPHAN_GRACE` (1h)
+
+**The staleness threshold does not need to exceed job duration.** That is the whole difference between a refreshed heartbeat and a static claim timestamp — a three-hour restore heartbeating every 10s is provably alive throughout. Getting this backwards produces an hour-long admission block after every crash. Reference points: controller-runtime's Lease is 15s duration / 10s renew deadline; River's leadership TTL is 5s. Orbital goes wider because the cost is asymmetric — a controller losing leadership re-elects, a false reap kills a live restore mid-`drop_all`.
+
+**`ORBITAL_JOB_ORPHAN_GRACE` applies only to jobs with NO heartbeat at all** and must stay much longer than `STALE_AFTER`. Under a rolling update a job started by the outgoing pod is genuinely still running while the incoming pod's reaper is live; reaping those on the short threshold kills real work. One-time condition — after the first deploy carrying leases, no job is created without a heartbeat.
+
+### Column names are borrowed, not invented
+
+`locked_by` is delayed_job's column (2008) and the most recognisable holder name in job schemas; Oban and River spell it `attempted_by`, the Kubernetes Lease calls it `holderIdentity`. Upstream's `locked_at`/`attempted_at` is **static claim time**, which orbital already has as `started_at` — hence the honest name `heartbeat_at` for the refreshed value.
+
+**`locked_by` format is `<hostname>_<uuid>`** — controller-runtime's lease-holder format. **Never a bare hostname**: a pod that restarts in place reuses its name, so a zombie from the previous process would match and the fence would silently stop fencing. Never a bare UUID either — an operator reading a reaped job needs to know which pod to look at, which is why the reaper's error message names it.
+
+**Orbital fences; River does not.** River's rescuer reschedules a stuck job "potentially alongside an existing execution attempt", because it assumes idempotent jobs. Orbital's restore runs `drop_all`. That assumption does not transfer, so `locked_by` is a real fencing token here, not only a visibility column.
+
+### No audit event
+
+The reaper writes none. Per `AUDIT.md` § Row admission, technical failures are not audited, and `markFailed` — the path the reaper replaces — writes none either. **The job row is the durable record**: `status`, `error` and `locked_by`, readable at `GET /api/v1/export/jobs/:id`.
+
+### Do not adopt a job framework yet
+
+*Evaluated 2026-09-16. Re-open only on a named trigger.*
+
+- **River** (Go + Postgres) is the correct *next* step if the workload grows — same DB, same process, no new infrastructure, air-gap preserved. Not now: orbital's jobs are domain records served directly as public API objects rather than queue entries; there is no concurrency to manage (one scratch DGraph serialises everything); and it is still 0.x and brings its own migrations. If ever adopted it must land **after** Atlas migrations, never alongside.
+- **Temporal** is disqualified, and not on technical merit. It is a four-service cluster plus its own datastore plus Elasticsearch for visibility — the largest operational component in a product that ships to air-gapped environments and is built to compose with an adopter's stack rather than impose on it. This does not soften as orbital grows.
+- **Triggers to revisit:** River, when job types pass ~8 or users (not operators) enqueue work at rate. Temporal, when workflows run for hours across services with real sagas or durable timers. **Neither trigger is "we want HA."**
 
 ## Export preview — `POST /api/v1/export/preview`
 
@@ -117,7 +164,7 @@ sequenceDiagram
 
 **What the hash covers** (`graphdiff.Snapshot.ContentHash`, `internal/graphdiff/compare.go`): the **canonical normalized graph** — sorted orbIds, each node emitted as sorted-key JSON (`orbId`, `types`, `f:<scalar>`, `e:<edge>` as sorted target orbIds) streamed into one SHA-256. Therefore:
 
-- **In** — the set of orbIds present (so **adds and deletes** move it, which a per-node `version`/`ifVersion` check structurally cannot catch), type membership, every scalar value, every edge as target-orbId sets.
+- **In** — the set of orbIds present (so **adds and deletes** move it, which a per-node `version`/`version` check structurally cannot catch), type membership, every scalar value, every edge as target-orbId sets.
 - **Out** — `ConfigItem.version` / `updatedAt` / `updatedBy` and DGraph internals (`uid`, tenant `namespace`). So it is **UID-independent** (survives a restore's UID reassignment) and **noise-independent** (a save-with-no-change bumps `version` but does NOT trip the guard — it guards semantic change, not write activity).
 - **Not covered:** the GraphQL schema. A `schema.graphql` change between preview and Apply would alter `schema.gz` without moving the hash. Acceptable — that's a deploy event, not a concurrent-operator action.
 

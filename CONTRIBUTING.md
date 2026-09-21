@@ -18,7 +18,7 @@ Run `make help` for the full list. The most-used:
 
 ### Divergence flow gotchas
 
-The full divergence workflow is covered in [`docs/getting-started.md`](docs/getting-started.md) and [`docs/reference/DIVERGENCE.md`](docs/reference/DIVERGENCE.md). Two recurring footguns when working on it locally:
+The full divergence workflow is covered in [`docs/runbooks/divergence-e2e-local.md`](docs/runbooks/divergence-e2e-local.md) (step-by-step local run, with the service/port inventory) and [`docs/reference/DIVERGENCE.md`](docs/reference/DIVERGENCE.md) (semantics). Two recurring footguns when working on it locally:
 
 - **Orb doesn't auto-import.** Its poller only detects new tags; trigger imports with `POST /api/v1/import {"tag":"vN"}`.
 - **cb-controller's reporter defaults to 5 min.** For local dev, set `DIVERGENCE_REPORTER_INTERVAL=15s` when running it.
@@ -33,6 +33,14 @@ make test-unit         # ~10s, no external services
 make test-integration  # ~30s, requires: make up
 make test-e2e          # ~30s, requires both UIs running (Playwright for orbital + orb)
 ```
+
+The integration suite runs against its **own** DGraph (`dgraph-alpha-test`, `:8083`, started by
+`make up`). It never touches the blue cluster on `:8080`, so your working graph survives a test run
+and there is no ordering to get right. `testutil.ResetDGraphE` refuses to wipe `:8080`/`:8082` even
+if something overrides the URL.
+
+If export or backup tests fail with `resolving export failed because task failed`, run
+`bash scripts/check-export-mounts.sh` — that error means a stale Docker bind mount, not a code bug.
 
 Before cutting a release, run the full release-check flow once:
 
