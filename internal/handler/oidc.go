@@ -36,11 +36,16 @@ type OIDC struct {
 	// two roles depending on whether they arrived with a cookie or a token.
 	// nil means mode A, where orbital's users table owns the role.
 	roleMapper *auth.RoleMapper
+	// defaultRole is the floor applied when roleMapper matches nothing. Empty
+	// means strict: an unmatched login is refused.
+	defaultRole string
 }
 
 // SetRoleMapper wires group-to-role mapping into the browser login flow. Called
 // from server.New when the UI's issuer matches a configured provider.
-func (h *OIDC) SetRoleMapper(m *auth.RoleMapper) { h.roleMapper = m }
+func (h *OIDC) SetRoleMapper(m *auth.RoleMapper, defaultRole string) {
+	h.roleMapper, h.defaultRole = m, defaultRole
+}
 
 func NewOIDC(ctx context.Context, db *ent.Client, sessionKeys auth.SessionKeys, issuerURL, clientID, clientSecret, redirectURL, basePath string, logger *slog.Logger, adminEmails map[string]struct{}) (*OIDC, error) {
 	provider, err := gooidc.NewProvider(ctx, issuerURL)
@@ -135,6 +140,7 @@ func (h *OIDC) Callback(c echo.Context) error {
 	// a caller whose groups match nothing is refused rather than provisioned.
 	// Same rule as the bearer path — a mapping enumerates who may use orbital.
 	mappedRole, mappedGroup := "", ""
+	floored := false
 	if h.roleMapper != nil {
 		var raw map[string]any
 		if err := idToken.Claims(&raw); err != nil {
@@ -154,6 +160,15 @@ func (h *OIDC) Callback(c echo.Context) error {
 			h.logger.Debug("oidc id token claims", "email", email, "claims", string(b))
 		}
 		role, group, ok := h.roleMapper.RoleFor(raw)
+		if !ok && h.defaultRole != "" {
+			floored = true
+			// Floor: the provider declares a defaultRole alongside its mapping,
+			// so a token matching no group lands there instead of being refused.
+			// Applies only when the provider already owned this role — an admin's
+			// deliberate promotion of someone the mapping never covered is not
+			// reverted. A matched group still wins; that is explicit.
+			role, group, ok = h.defaultRole, "(no group matched — defaultRole)", true
+		}
 		if !ok {
 			// Name what the token DID carry. "No group matched" is
 			// indistinguishable between a missing mapper, an unassigned role and
@@ -193,6 +208,9 @@ func (h *OIDC) Callback(c echo.Context) error {
 			SetVerified(true).
 			SetRole(newRole).
 			SetIssuer(h.issuerURL)
+		if mappedRole != "" {
+			create = create.SetRoleSource(user.RoleSourceProvider)
+		}
 		u, err = create.Save(ctx)
 		if err != nil {
 			h.logger.Error("provision oidc user", "err", err)
@@ -218,9 +236,10 @@ func (h *OIDC) Callback(c echo.Context) error {
 		h.logger.Warn("oidc login refused — identity already belongs to another principal",
 			"email", email, "token_issuer", h.issuerURL, "row_owner", owner)
 		return c.Redirect(http.StatusSeeOther, h.basePath+"/?error="+CodeIdentityConflict)
-	} else if mappedRole != "" && string(u.Role) != mappedRole {
+	} else if mappedRole != "" && string(u.Role) != mappedRole &&
+		(!floored || (u.RoleSource != nil && *u.RoleSource == user.RoleSourceProvider)) {
 		before := string(u.Role)
-		updated, uerr := u.Update().SetRole(user.Role(mappedRole)).Save(ctx)
+		updated, uerr := u.Update().SetRole(user.Role(mappedRole)).SetRoleSource(user.RoleSourceProvider).Save(ctx)
 		if uerr != nil {
 			h.logger.Error("apply provider role on oidc login", "email", email, "err", uerr)
 			return fmt.Errorf("apply provider role: %w", uerr)

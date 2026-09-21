@@ -29,11 +29,10 @@ func TestAuthProviders_MalformedConfigIsRefusedAndNamesTheProblem(t *testing.T) 
 			{"issuer":{"url":"https://a.example.com","audiences":["y"]},"claimMappings":{"username":{"claim":"email"}},"defaultRole":"dev"}]`, "must be unique"},
 		{"no audiences", `[{"issuer":{"url":"https://a.example.com","audiences":[]},"claimMappings":{"username":{"claim":"email"}},"defaultRole":"dev"}]`, "at least one audience"},
 		{"no username claim", `[{"issuer":{"url":"https://a.example.com","audiences":["x"]},"defaultRole":"dev"}]`, "claimMappings.username.claim is required"},
-		{"both role modes", `[{"issuer":{"url":"https://a.example.com","audiences":["x"]},"claimMappings":{"username":{"claim":"email"},"groups":{"claim":"groups"}},"defaultRole":"dev","roleMapping":[{"group":"g","role":"admin"}]}]`, "set exactly ONE"},
-		{"neither role mode", `[{"issuer":{"url":"https://a.example.com","audiences":["x"]},"claimMappings":{"username":{"claim":"email"}}}]`, "set exactly one of defaultRole, roleMapping or trustedService"},
+		{"neither role mode", `[{"issuer":{"url":"https://a.example.com","audiences":["x"]},"claimMappings":{"username":{"claim":"email"}}}]`, "set defaultRole, roleMapping or trustedService"},
 		{"bad default role", `[{"issuer":{"url":"https://a.example.com","audiences":["x"]},"claimMappings":{"username":{"claim":"email"}},"defaultRole":"superuser"}]`, "must be readonly, dev or admin"},
 		{"bad mapped role", `[{"issuer":{"url":"https://a.example.com","audiences":["x"]},"claimMappings":{"username":{"claim":"email"},"groups":{"claim":"groups"}},"roleMapping":[{"group":"g","role":"root"}]}]`, "must be readonly, dev or admin"},
-		{"three modes at once", `[{"issuer":{"url":"https://a.example.com","audiences":["x"]},"claimMappings":{"username":{"claim":"email"},"groups":{"claim":"g"}},"defaultRole":"dev","roleMapping":[{"group":"g","role":"admin"}],"trustedService":{"assignedRole":"admin"}}]`, "set exactly ONE"},
+		{"trustedService combined with a role mode", `[{"issuer":{"url":"https://a.example.com","audiences":["x"]},"claimMappings":{"username":{"claim":"email"},"groups":{"claim":"g"}},"defaultRole":"dev","roleMapping":[{"group":"g","role":"admin"}],"trustedService":{"assignedRole":"admin"}}]`, "cannot be combined"},
 		{"bad trusted role", `[{"issuer":{"url":"https://a.example.com","audiences":["x"]},"claimMappings":{"username":{"claim":"email"}},"trustedService":{"assignedRole":"root"}}]`, "must be readonly, dev or admin"},
 		{"same issuer and client twice", `[
 			{"issuer":{"url":"https://a.example.com","audiences":["x"]},"clientID":"c1","claimMappings":{"username":{"claim":"email"}},"defaultRole":"dev"},
@@ -123,5 +122,25 @@ func TestAuthProviders_SameIssuerDifferentClientsIsAllowed(t *testing.T) {
 	}
 	if a[0].TrustedService == nil || a[0].TrustedService.AssignedRole != "admin" {
 		t.Errorf("trustedService did not survive decode: %+v", a[0].TrustedService)
+	}
+}
+
+func TestAuthProviders_DefaultRoleAlongsideRoleMappingIsTheFloor(t *testing.T) {
+	// Mapping decides; defaultRole is what an unmatched token gets instead of
+	// being refused. Same pair Grafana exposes as role_attribute_path plus
+	// role_attribute_strict, where strict=true is this combination omitted.
+	const cfg = `[{"issuer":{"url":"https://kc.example.com/realms/a","audiences":["x"]},
+	  "claimMappings":{"username":{"claim":"email"},"groups":{"claim":"orbital_roles"}},
+	  "roleMapping":[{"group":"orbital-admin","role":"admin"}],
+	  "defaultRole":"readonly"}]`
+	var a AuthProviders
+	if err := a.Decode(cfg); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if err := a.Validate(); err != nil {
+		t.Fatalf("defaultRole + roleMapping must be allowed: %v", err)
+	}
+	if a[0].DefaultRole != "readonly" || len(a[0].RoleMapping) != 1 {
+		t.Errorf("both survived decode? defaultRole=%q rules=%d", a[0].DefaultRole, len(a[0].RoleMapping))
 	}
 }

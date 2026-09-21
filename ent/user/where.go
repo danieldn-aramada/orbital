@@ -464,6 +464,36 @@ func IssuerContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldIssuer, v))
 }
 
+// RoleSourceEQ applies the EQ predicate on the "role_source" field.
+func RoleSourceEQ(v RoleSource) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldRoleSource, v))
+}
+
+// RoleSourceNEQ applies the NEQ predicate on the "role_source" field.
+func RoleSourceNEQ(v RoleSource) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldRoleSource, v))
+}
+
+// RoleSourceIn applies the In predicate on the "role_source" field.
+func RoleSourceIn(vs ...RoleSource) predicate.User {
+	return predicate.User(sql.FieldIn(FieldRoleSource, vs...))
+}
+
+// RoleSourceNotIn applies the NotIn predicate on the "role_source" field.
+func RoleSourceNotIn(vs ...RoleSource) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldRoleSource, vs...))
+}
+
+// RoleSourceIsNil applies the IsNil predicate on the "role_source" field.
+func RoleSourceIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldRoleSource))
+}
+
+// RoleSourceNotNil applies the NotNil predicate on the "role_source" field.
+func RoleSourceNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldRoleSource))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldCreatedAt, v))

@@ -49,6 +49,16 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   a second provider asserting an existing address is refused rather than
   inheriting the row.
 
+  `defaultRole` may be set alongside `roleMapping`, where it is the floor for a
+  token whose groups match nothing — without it an unmatched login is refused
+  (Grafana's `role_attribute_strict`). `users.role_source` records whether the
+  provider or an admin last set a role: a matched group always wins, but the floor
+  applies only to users the provider already owned, so an admin's promotion is not
+  reverted at the next login. The users page renders provider-set roles read-only
+  with provenance and leaves locally-set ones editable — Grafana and NetBox
+  overwrite manual changes silently, which is the behaviour their users complain
+  about.
+
   Role changes driven by a provider write an audit event naming the provider and
   the causing group — the transition only, not every login. The users page shows
   provider-owned roles read-only with their provenance, because an editable field

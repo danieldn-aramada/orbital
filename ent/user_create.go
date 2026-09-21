@@ -94,6 +94,20 @@ func (_c *UserCreate) SetNillableIssuer(v *string) *UserCreate {
 	return _c
 }
 
+// SetRoleSource sets the "role_source" field.
+func (_c *UserCreate) SetRoleSource(v user.RoleSource) *UserCreate {
+	_c.mutation.SetRoleSource(v)
+	return _c
+}
+
+// SetNillableRoleSource sets the "role_source" field if the given value is not nil.
+func (_c *UserCreate) SetNillableRoleSource(v *user.RoleSource) *UserCreate {
+	if v != nil {
+		_c.SetRoleSource(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *UserCreate) SetCreatedAt(v time.Time) *UserCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -194,6 +208,11 @@ func (_c *UserCreate) check() error {
 			return &ValidationError{Name: "role", err: fmt.Errorf(`ent: validator failed for field "User.role": %w`, err)}
 		}
 	}
+	if v, ok := _c.mutation.RoleSource(); ok {
+		if err := user.RoleSourceValidator(v); err != nil {
+			return &ValidationError{Name: "role_source", err: fmt.Errorf(`ent: validator failed for field "User.role_source": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "User.created_at"`)}
 	}
@@ -250,6 +269,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Issuer(); ok {
 		_spec.SetField(user.FieldIssuer, field.TypeString, value)
 		_node.Issuer = &value
+	}
+	if value, ok := _c.mutation.RoleSource(); ok {
+		_spec.SetField(user.FieldRoleSource, field.TypeEnum, value)
+		_node.RoleSource = &value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(user.FieldCreatedAt, field.TypeTime, value)

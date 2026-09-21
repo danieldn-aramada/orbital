@@ -141,7 +141,10 @@ func (h *UsersHandler) UpdateRole(c echo.Context) error {
 		}
 	}
 
-	updated, err := h.db.User.UpdateOneID(id).SetRole(newRole).Save(ctx)
+	// An admin setting a role is a statement that orbital's table owns it for
+	// this user, so a provider's defaultRole floor will not revert it. A MATCHED
+	// group still wins — that is explicit.
+	updated, err := h.db.User.UpdateOneID(id).SetRole(newRole).SetRoleSource(user.RoleSourceLocal).Save(ctx)
 	if err != nil {
 		return fmt.Errorf("update role: %w", err)
 	}

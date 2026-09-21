@@ -49,9 +49,13 @@ spec:
             #    events as `acting_client`, so the log distinguishes "AEP acting
             #    as someone" from that person acting directly.
             #  - armada-orbital covers direct callers: the in-pod cb-bundler
-            #    (client credentials, no email, so an app principal gated by
-            #    ORBITAL_APP_TOKEN_ALLOWED_APPIDS) and any human bearer, whose
-            #    role comes from the orbital_roles claim.
+            #    (client credentials, no email, so an app principal) and any
+            #    human, whose role comes from the orbital_roles claim.
+            #    defaultRole alongside roleMapping is the FLOOR: a token matching
+            #    no mapped group gets readonly instead of being refused. Applied
+            #    authoritatively, so losing a group demotes to the floor rather
+            #    than keeping the role the mapping gave. Drop defaultRole to make
+            #    an unmatched login a refusal instead.
             #
             # Replaces ORBITAL_AUTH_MODE=external-jwt. The two are mutually
             # exclusive and setting both is a startup error.
@@ -80,6 +84,7 @@ spec:
                     },
                     "roleMapping": [
                       { "group": "orbital-admin", "role": "admin" }
-                    ]
+                    ],
+                    "defaultRole": "readonly"
                   }
                 ]

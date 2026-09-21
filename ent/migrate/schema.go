@@ -513,6 +513,7 @@ var (
 		{Name: "verified", Type: field.TypeBool, Default: false},
 		{Name: "role", Type: field.TypeEnum, Enums: []string{"readonly", "dev", "admin"}, Default: "readonly"},
 		{Name: "issuer", Type: field.TypeString, Nullable: true},
+		{Name: "role_source", Type: field.TypeEnum, Nullable: true, Enums: []string{"provider", "local"}},
 		{Name: "created_at", Type: field.TypeTime},
 	}
 	// UsersTable holds the schema information for the "users" table.

@@ -445,9 +445,10 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 						rules = append(rules, struct{ Group, Role string }{r.Group, r.Role})
 					}
 					if m := auth.NewRoleMapper(p.ClaimMappings.Groups.Claim, rules); m != nil {
-						oidc.SetRoleMapper(m)
+						oidc.SetRoleMapper(m, p.DefaultRole)
 						logger.Info("browser login roles come from the provider's group claim",
-							"issuer", p.Issuer.URL, "claim", p.ClaimMappings.Groups.Claim)
+							"issuer", p.Issuer.URL, "claim", p.ClaimMappings.Groups.Claim,
+							"no_match", map[bool]string{true: "refuse", false: "defaultRole=" + p.DefaultRole}[p.DefaultRole == ""])
 					}
 					break
 				}

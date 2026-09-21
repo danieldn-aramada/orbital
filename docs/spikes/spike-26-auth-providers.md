@@ -277,6 +277,55 @@ break-glass, Grafana keeps local admin login wired alongside SSO, Kubernetes
 never relies on OIDC alone (x509 client certs and the admin kubeconfig), Vault
 has the root token and generate-root.
 
+## Upstream survey: role ownership when an IdP and a local table disagree
+
+Researched 2026-09-21, when deciding whether orbital should track who set a
+user's role. The finding is that **nobody solves this well**, which is an
+opportunity rather than a gap to copy.
+
+**Grafana.** With role sync configured, its own docs state: *"any changes of user
+roles and organization membership made manually in Grafana will be overwritten on
+next user login."* The only escape is `skip_org_role_sync`, a **global** switch —
+either the IdP owns every user's role or the local table does. No per-user
+distinction. It generates recurring issues (grafana#68827) because the revert is
+**silent**: an operator edits a role, it appears to save, and it is gone after the
+user next signs in with nothing explaining why.
+
+**NetBox.** Same shape. `REMOTE_AUTH_GROUP_SYNC_ENABLED` is global, and with it on
+a manually added group and the Superuser flag are both removed at next login.
+`REMOTE_AUTH_DEFAULT_PERMISSIONS` is documented as inoperative while group sync is
+on — the two mechanisms are made exclusive rather than reconciled.
+
+**Kubernetes.** Not comparable: stateless, so there is no stored role to disagree
+with.
+
+**Neither product tracks provenance per user.** The convention is: pick one owner
+per provider and accept the other side's edits are discarded.
+
+### Where orbital differs deliberately
+
+Two improvements, separable — the first is the one that answers the complaint:
+
+1. **Ownership is visible.** A provider-owned role renders read-only with its
+   provenance ("dev, from group platform-engineers"). Grafana offers an editable
+   control that silently reverts; that is the actual defect in the reports, not
+   the policy behind it.
+2. **Ownership is per user, not per provider** (`users.role_source`). A matched
+   group always wins — being added to `orbital-admin` is explicit. The
+   `defaultRole` floor applies only to users the provider already owned, so an
+   admin promoting someone the mapping never covered is not reverted.
+
+Point 2 is NOT conventional and must not be defended as such. It exists because
+the two cases are otherwise indistinguishable — "removed from a group" and "never
+in a group, promoted locally" produce identical inputs — and each alternative
+breaks one: an authoritative floor reverts the admin's promotion; a seed-only
+floor leaves a removed user's role in place forever.
+
+**It earns its place only while the UI shows the difference.** A hidden per-user
+rule is worse than either blanket rule, because nobody can predict what their next
+login does. If the users page ever stops distinguishing locally-set from
+provider-set roles, delete the column and follow Grafana.
+
 ## The one deliberate deviation
 
 In mode B the users page shows the role read-only with its provenance — "dev,
