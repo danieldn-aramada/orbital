@@ -162,7 +162,6 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		},
 	}))
 
-	externalJWTMode := cfg.AuthMode == "external-jwt"
 	oidcEnabled := cfg.OIDCIssuerURL != "" && cfg.OIDCClientSecret != ""
 	if cfg.OIDCIssuerURL != "" && cfg.OIDCClientSecret == "" {
 		logger.Warn("ORBITAL_OIDC_CLIENT_SECRET is not set — SSO login disabled")
@@ -175,13 +174,11 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	// API surface stay in sync.
 	//
 	// Three modes:
-	//   - external-jwt (ORBITAL_AUTH_MODE=external-jwt): API/GraphQL requests
-	//     accept a bearer signed by ORBITAL_JWT_ISSUER (assigned
-	//     ORBITAL_JWT_DEFAULT_ROLE via context) OR a session cookie (role
-	//     resolved from the DB). The session fallback keeps orbital's own UI
-	//     usable — humans sign in via local/OIDC login; AEP's proxied calls
-	//     carry a bearer. Login routes stay registered (oidcEnabled unchanged).
-	//     See AUTH.md § External JWT mode.
+	//   - Multi-provider (ORBITAL_AUTH_PROVIDERS): bearer tokens are verified
+	//     against a list of trusted providers, each selected by the token's
+	//     (iss, azp). A session cookie still serves orbital's own UI, since a
+	//     browser cannot attach a bearer to a plain page navigation.
+	//     See AUTH.md § Multiple identity providers.
 	//   - Dev (cfg.Dev=true): apiAuth stays empty so machine-to-machine
 	//     callers like cb-bundler can query /graphql plain-HTTP. Session
 	//     middleware still populates user info for the UI.
@@ -190,9 +187,8 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	var apiAuth []echo.MiddlewareFunc
 	switch {
 	case len(cfg.AuthProviders) > 0:
-		// Multi-provider bearer auth (Spike 26). When configured this is the
-		// SOLE source of bearer verification — config.New refuses it alongside
-		// ORBITAL_AUTH_MODE, so there is no second path to disagree with.
+		// When configured this is the SOLE source of bearer verification, so
+		// there is no second path to disagree with it.
 		// ORBITAL_OIDC_* still drives the browser login flow, which is a
 		// different job: there orbital is an OAuth client, here a resource
 		// server.
@@ -203,77 +199,19 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 			logger.Warn("API auth disabled by "+cfg.APIAuthSource()+" — bearer verification on /api/v1 and /graphql is BYPASSED",
 				"decided_by", cfg.APIAuthSource())
 		} else {
-			// The provider list's clientID is the gate here: a token whose azp
-			// matches no entry is refused. ORBITAL_APP_TOKEN_ALLOWED_APPIDS is
-			// the legacy single-issuer equivalent and does nothing on this path.
-			// Say so rather than leave it present and inoperative.
-			if len(cfg.AppTokenAllowedAppIDs) > 0 {
-				logger.Warn("ORBITAL_APP_TOKEN_ALLOWED_APPIDS is IGNORED when ORBITAL_AUTH_PROVIDERS is set — "+
-					"each provider's clientID is the gate. Remove it to avoid implying a control that is not running.",
-					"ignored_value", cfg.AppTokenAllowedAppIDs)
-			}
+			// Each provider entry's clientID is the gate: a token whose azp
+			// matches no entry is refused before any role logic runs.
 			logger.Info("multi-provider bearer auth enabled", "issuers", ps.Issuers())
 			apiAuth = []echo.MiddlewareFunc{ps.RequireAuth(), handler.ResolveUser(db, cfg.AdminEmailSet())}
 		}
-	case externalJWTMode:
-		// Build the AAD bearer verifier as a fallback so internal service
-		// callers (in-pod cb-bundler, AAD client-credentials) keep working.
-		// external-jwt ADDS Keycloak-user acceptance; it must not remove the
-		// AAD service-token path the bundler's publish callback depends on.
-		var fallback *auth.BearerVerifier
-		if cfg.OIDCIssuerURL != "" {
-			if bv, err := auth.NewBearerVerifier(context.Background(), cfg.OIDCIssuerURL, cfg.OIDCClientID, cfg.AppTokenAllowedAppIDs); err != nil {
-				logger.Warn("external-jwt: AAD fallback verifier init failed — internal service callers (bundler) will fail auth", "err", err)
-			} else {
-				fallback = bv
-			}
-		}
-		ejv, err := auth.NewExternalJWTVerifier(context.Background(), auth.ExternalJWTConfig{
-			IssuerURL:   cfg.JWTIssuer,
-			Audience:    cfg.JWTAudience,
-			ClientID:    cfg.JWTClientID,
-			DefaultRole: cfg.JWTDefaultRole,
-			Fallback:    fallback,
-		})
-		if err != nil {
-			logger.Error("external-jwt verifier init failed — API auth disabled", "err", err)
-		} else {
-			// Every bearer caller gets this one tier, so an operator who never
-			// set it should see that they inherited it rather than chose it.
-			// Warned, not refused: readonly is a safe fallback, and refusing to
-			// boot is for guarantees with no safe default (see apiAuth below).
-			_, roleWasSet := os.LookupEnv("ORBITAL_JWT_DEFAULT_ROLE")
-			if !roleWasSet {
-				logger.Warn("ORBITAL_JWT_DEFAULT_ROLE not set — defaulting to "+cfg.JWTDefaultRole+"; every valid bearer token receives this role. Set it explicitly to choose the tier.",
-					"role", cfg.JWTDefaultRole, "explicitly_set", false)
-			}
-			logger.Warn("ORBITAL_AUTH_MODE=external-jwt — Keycloak bearers (issuer "+cfg.JWTIssuer+") map to role "+cfg.JWTDefaultRole+"; other issuers fall back to AAD bearer auth. Intended for demo/dev; do not use in production without per-user role mapping.",
-				"issuer", cfg.JWTIssuer, "audience", cfg.JWTAudience, "client_id", cfg.JWTClientID,
-				"aad_fallback", fallback != nil, "role_explicitly_set", roleWasSet)
-			apiAuth = []echo.MiddlewareFunc{ejv.RequireAuth(), handler.ResolveUser(db, cfg.AdminEmailSet())}
-		}
-	case cfg.OIDCIssuerURL != "":
-		bv, err := auth.NewBearerVerifier(context.Background(), cfg.OIDCIssuerURL, cfg.OIDCClientID, cfg.AppTokenAllowedAppIDs)
-		if err != nil {
-			logger.Warn("bearer verifier init failed — API auth disabled", "err", err)
-		} else if !cfg.APIAuthEnabled {
-			logger.Warn("API auth disabled by "+cfg.APIAuthSource()+" — bearer verification on /api/v1 and /graphql is BYPASSED; session-cookie auth remains. Set ORBITAL_API_AUTH_ENABLED=true to verify bearers without giving up template hot-reload.",
-				"decided_by", cfg.APIAuthSource(), "dev", cfg.Dev)
-			// apiAuth stays nil — session middleware sets user info for UI;
-			// unauthenticated callers (cb-bundler) pass through to handlers
-			// which decide based on operation type (mutations require user_id).
-		} else {
-			apiAuth = []echo.MiddlewareFunc{bv.RequireAuth(), handler.ResolveUser(db, cfg.AdminEmailSet())}
-		}
 	default:
-		logger.Warn("ORBITAL_OIDC_ISSUER_URL is not set — API auth disabled")
+		logger.Warn("ORBITAL_AUTH_PROVIDERS is not set — API auth disabled. Bearer verification exists only through the provider list; ORBITAL_OIDC_* configures the browser login flow, which is a different job.")
 	}
 
 	// An operator who explicitly set ORBITAL_API_AUTH_ENABLED=false means it in
 	// every auth mode. Applied here rather than inside the switch so no mode can
-	// be forgotten. Inherited-false is deliberately NOT applied: external-jwt
-	// never consulted Dev, and making it do so now would silently turn auth off
-	// for anyone running that mode locally.
+	// be forgotten. Inherited-false is deliberately NOT applied here: it is
+	// resolved once in config.New, so a mode cannot quietly opt itself out.
 	if cfg.APIAuthExplicitlyDisabled() {
 		apiAuth = nil
 	}
@@ -283,12 +221,9 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	// infer the active mode from the presence/absence of a mode-specific
 	// banner above — an empty apiAuth means unauthenticated requests are
 	// accepted, which is the most dangerous state and must be loud.
-	authMode := "oidc"
-	switch {
-	case externalJWTMode:
-		authMode = "external-jwt"
-	case !oidcEnabled:
-		authMode = "none"
+	authMode := "none"
+	if len(cfg.AuthProviders) > 0 {
+		authMode = "providers"
 	}
 	if len(apiAuth) == 0 {
 		logger.Warn("auth: API AUTHENTICATION DISABLED — /graphql and /api/v1 accept unauthenticated requests; only session-identity mutations are gated",
@@ -306,7 +241,7 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	// verifier-init error, or an unset issuer. The preceding WARN carries the
 	// specific reason. (audit S.16)
 	if cfg.APIAuthEnabled && len(apiAuth) == 0 {
-		return nil, fmt.Errorf("refusing to start: API authentication is required (per %s) but could not be enabled — ensure ORBITAL_OIDC_ISSUER_URL is set and OIDC discovery is reachable at startup", cfg.APIAuthSource())
+		return nil, fmt.Errorf("refusing to start: API authentication is required (per %s) but could not be enabled — set ORBITAL_AUTH_PROVIDERS and ensure each provider's OIDC discovery is reachable at startup", cfg.APIAuthSource())
 	}
 
 	// Default API group — dev+ required for mutating methods (POST/PUT/PATCH/DELETE).
@@ -788,11 +723,8 @@ func authProviderSpecs(cfg *config.Config) []auth.ProviderSpec {
 			GroupsClaim:          p.ClaimMappings.Groups.Claim,
 			DefaultRole:          p.DefaultRole,
 		}
-		if p.TrustedService != nil {
-			s.AssignedRole = p.TrustedService.AssignedRole
-		}
-		for _, r := range p.ClaimValidationRules {
-			s.ValidationRules = append(s.ValidationRules, struct{ Claim, RequiredValue string }{r.Claim, r.RequiredValue})
+		if p.DelegatedAuthorization != nil {
+			s.DelegatedRole = p.DelegatedAuthorization.Role
 		}
 		for _, r := range p.RoleMapping {
 			s.RoleMapping = append(s.RoleMapping, struct{ Group, Role string }{r.Group, r.Role})

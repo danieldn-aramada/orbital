@@ -10,20 +10,21 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// TestAuthorizeMutation_ExternalJWTRole pins the regression where external-jwt
-// callers (ORBITAL_AUTH_MODE=external-jwt) were 403'd on every GraphQL mutation:
-// they have no users-table row, so the old user_id→DB check always failed. The
-// mutation gate must honor the pre-mapped context role instead. No DB needed —
-// the external-jwt path never touches h.db.
-func TestAuthorizeMutation_ExternalJWTRole(t *testing.T) {
-	h := &GraphQL{} // db nil — external-jwt path is role-only
+// TestAuthorizeMutation_ContextRole pins the regression where a caller whose
+// role arrives on the context rather than from the users table was 403'd on
+// every GraphQL mutation: no users-table row, so the old user_id→DB check always
+// failed. A delegatedAuthorization provider is that caller today (the removed
+// external-jwt mode was the first one), so the gate must honour the context role
+// instead. No DB needed — that path never touches h.db.
+func TestAuthorizeMutation_ContextRole(t *testing.T) {
+	h := &GraphQL{} // db nil — the context-role path is role-only
 	for _, tc := range []struct {
 		role string
 		want bool
 	}{
-		{"admin", true},     // AEP default (ORBITAL_JWT_DEFAULT_ROLE) — must be allowed
+		{"admin", true},     // a delegatedAuthorization role — must be allowed
 		{"dev", true},       // minimum for mutations
-		{"readonly", false}, // below dev — denied even via external-jwt
+		{"readonly", false}, // below dev — denied even with a context role
 	} {
 		t.Run(tc.role, func(t *testing.T) {
 			e := echo.New()
@@ -37,7 +38,7 @@ func TestAuthorizeMutation_ExternalJWTRole(t *testing.T) {
 }
 
 // TestAuthorizeMutation_DevModeNoDB confirms the nil-db dev path still passes
-// (no authz backend), unchanged by the external-jwt short-circuit.
+// (no authz backend), unchanged by the context-role short-circuit.
 func TestAuthorizeMutation_DevModeNoDB(t *testing.T) {
 	h := &GraphQL{} // db nil, no context role
 	e := echo.New()

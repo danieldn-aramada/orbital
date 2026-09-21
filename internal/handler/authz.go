@@ -33,7 +33,8 @@ func RoleAtLeast(actual, minimum user.Role) bool {
 type callerRole struct {
 	// Role is empty only when NoAuthz is true or Reason is set.
 	Role user.Role
-	// Source is "context" (pre-mapped external-JWT claim) or "user" (users
+	// Source is "context" (a role assigned by the provider, e.g. a
+	// delegatedAuthorization caller) or "user" (users
 	// table). Used for log/error wording.
 	Source string
 	// NoAuthz means no authz backend is configured at all (nil db) — local dev
@@ -46,8 +47,8 @@ type callerRole struct {
 
 // resolveCallerRole reads the caller's role. Three caller shapes, checked in
 // order:
-//   - External-JWT callers (ORBITAL_AUTH_MODE=external-jwt) carry a pre-mapped
-//     role in context and have NO users-table row, so there is no user_id to
+//   - Callers carrying a role on the context (a delegatedAuthorization provider) have a
+//     pre-mapped role in context and have NO users-table row, so there is no user_id to
 //     look up — honor the context role directly. Mirrors the short-circuit in
 //     RequireRole; without it, AEP/Keycloak clients get 403 on every config
 //     mutation even though they map to admin.
@@ -162,17 +163,22 @@ func ResolveUser(db *ent.Client, adminEmails map[string]struct{}) echo.Middlewar
 			if id, _ := c.Get("user_id").(int); id != 0 {
 				return next(c) // session auth already resolved
 			}
-			// External-JWT callers (ORBITAL_AUTH_MODE=external-jwt) carry a
-			// pre-mapped role and are intentionally NOT provisioned into the
-			// users table. Skip the lookup/provision so RequireRole's role
-			// short-circuit governs them.
+			// A caller whose role came from its provider (delegatedAuthorization) is
+			// intentionally NOT provisioned into the users table — its
+			// authorization happened upstream. Skip the lookup/provision so
+			// RequireRole's role short-circuit governs it.
 			if role, _ := c.Get("role").(string); role != "" {
 				return next(c)
 			}
 			// App-only (client credentials) tokens have no email and no users-table
-			// row, by design — the appid allowlist in BearerVerifier is the authz
-			// gate. Pass through without a DB lookup. See ADR 010.
-			if name, _ := c.Get("user_name").(string); strings.HasPrefix(name, auth.AppPrincipalPrefix) {
+			// row, by design — the matching provider entry's clientID is the
+			// authz gate. Pass through without a DB lookup.
+			//
+			// Keyed on the marker the verifier set, NOT on the "app:" name
+			// prefix: user_name comes from the token's unvalidated `name` claim,
+			// so prefix-matching let a human token classify itself as a machine
+			// and take this branch, skipping both provisioning and its role.
+			if auth.IsAppPrincipal(c) {
 				return next(c)
 			}
 			email, _ := c.Get("user_email").(string)
@@ -304,10 +310,9 @@ func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 			if db == nil {
 				return next(c)
 			}
-			// External-JWT callers (ORBITAL_AUTH_MODE=external-jwt) carry a
-			// pre-mapped role from the middleware, since they aren't provisioned
-			// into orbital's users table. Trust it directly and skip the DB
-			// lookup below.
+			// A delegated-authorization caller carries a pre-mapped role from the
+			// middleware, since it is not provisioned into orbital's users
+			// table. Trust it directly and skip the DB lookup below.
 			if roleStr, _ := c.Get("role").(string); roleStr != "" {
 				if RoleAtLeast(user.Role(roleStr), minRole) {
 					return next(c)
@@ -318,21 +323,21 @@ func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 					"uri", c.Request().URL.Path,
 					"required_role", string(minRole),
 					"user_role", roleStr,
-					"reason", "external_jwt_role_below_required",
+					"reason", "context_role_below_required",
 				)
 				return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("role %q is below required %q for this action", roleStr, minRole))
 			}
 			// App-only (client credentials) callers were authenticated by the
-			// BearerVerifier allowlist (ORBITAL_APP_TOKEN_ALLOWED_APPIDS). MVP
-			// policy: any allowlist-passed app caller is treated as `dev`-
-			// equivalent — sufficient for all mutating API routes today. Future
-			// best practice: check the `roles` claim against required role using
-			// Microsoft Entra App Roles, once Application Administrator perms
+			// provider entry whose clientID matched their azp. MVP policy: any
+			// such app caller is treated as `dev`-equivalent — sufficient for
+			// all mutating API routes today. Future best practice: check a
+			// roles claim against the required role, once the provider can
 			// allow defining them. See ADR 010 §App Caller Authorization.
-			if name, _ := c.Get("user_name").(string); strings.HasPrefix(name, auth.AppPrincipalPrefix) {
+			if auth.IsAppPrincipal(c) {
 				if RoleAtLeast(user.RoleDev, minRole) {
 					return next(c)
 				}
+				name, _ := c.Get("user_name").(string)
 				slog.Default().Warn("authorization denied",
 					"actor", name,
 					"method", c.Request().Method,

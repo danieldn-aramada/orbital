@@ -141,7 +141,7 @@ Read the relevant doc(s) BEFORE writing code in that area — they encode conven
 | Milestones / status / timeline — the one-pager | `ROADMAP.md` |
 | Known technical debt | `docs/planning/debt.md` |
 | Historical context: SDD, architectural proposal, SSA notes | `docs/reference/SDD-CONTEXT.md` (lookup-only; grep for keywords) |
-| **Copy-paste API calls against AKS dev** (GraphQL + REST, external-jwt mode) | `docs/api-cheatsheet.md` · change-control endpoints: `docs/api-cheatsheet-change-control.md` |
+| **Copy-paste API calls against AKS dev** (GraphQL + REST, bearer auth) | `docs/api-cheatsheet.md` · change-control endpoints: `docs/api-cheatsheet-change-control.md` |
 | "Who owns configuration, and where does a change go?" — the mental model | `docs/architecture-cheatsheet.md` |
 | Authenticating **to** orbital as an external service or developer (consumer-facing; `AUTH.md` is the internal design) | `docs/auth.md` |
 | Cluster monitoring stack — Prometheus/Grafana/collector findings | `docs/reference/MONITORING-STACK.md` |

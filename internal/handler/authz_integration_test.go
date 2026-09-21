@@ -272,9 +272,9 @@ func TestResolveUser_NoEmail_Returns401(t *testing.T) {
 // ── App-principal authorization (ADR 010 §App Caller Authorization) ──────────
 
 // TestRequireRole_AppPrincipal_DevMinRole_Allowed verifies the MVP policy: an
-// app-only caller (BearerVerifier set user_name="app:<appid>", user_id=0) passes
+// app-only caller (the provider set sets user_name="app:<appid>", user_id=0) passes
 // RequireRole(dev) without a users-table row. The allowlist gate happened in
-// BearerVerifier; RequireRole grants dev-equivalent access.
+// the provider set; RequireRole grants dev-equivalent access.
 func TestRequireRole_AppPrincipal_DevMinRole_Allowed(t *testing.T) {
 	e := echo.New()
 	mw := handler.RequireRole(testDB, user.RoleDev)
@@ -288,6 +288,7 @@ func TestRequireRole_AppPrincipal_DevMinRole_Allowed(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.Set("user_id", 0)
+	auth.MarkAppPrincipal(c)
 	c.Set("user_name", auth.AppPrincipalPrefix+"5fc832f6-843e-4207-93dd-b3c3a77c06f2")
 
 	if err := h(c); err != nil {
@@ -318,6 +319,7 @@ func TestRequireRole_AppPrincipal_AdminMinRole_Forbidden(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.Set("user_id", 0)
+	auth.MarkAppPrincipal(c)
 	c.Set("user_name", auth.AppPrincipalPrefix+"5fc832f6-843e-4207-93dd-b3c3a77c06f2")
 
 	err := h(c)
@@ -349,6 +351,7 @@ func TestRequireRole_AppPrincipal_GetPassesThrough(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.Set("user_id", 0)
+	auth.MarkAppPrincipal(c)
 	c.Set("user_name", auth.AppPrincipalPrefix+"5fc832f6-843e-4207-93dd-b3c3a77c06f2")
 
 	if err := h(c); err != nil {
@@ -378,6 +381,7 @@ func TestResolveUser_AppPrincipal_NoDBLookup(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.Set("user_id", 0)
+	auth.MarkAppPrincipal(c)
 	c.Set("user_name", auth.AppPrincipalPrefix+appID)
 	c.Set("user_email", "")
 
@@ -560,5 +564,42 @@ func TestOIDCCallback_RegularEmail_SetsReadonlyRole(t *testing.T) {
 	}
 	if u.Role != user.RoleReadonly {
 		t.Errorf("expected readonly role for %q, got %q", testEmail, u.Role)
+	}
+}
+
+// The escalation this replaced: a caller whose user_name merely LOOKS like an
+// app principal, with no marker from the verifier, must not be granted
+// dev-equivalent access. user_name is the token's `name` claim, which an
+// end-user can often edit, so when RequireRole prefix-matched it a readonly
+// human could write. Runs at RequireRole because that is where the grant
+// happens — a nil-db unit test short-circuits before reaching it.
+func TestRequireRole_ForgedAppNameIsNotAnAppPrincipal(t *testing.T) {
+	e := echo.New()
+	mw := handler.RequireRole(testDB, user.RoleDev)
+	called := false
+	h := mw(func(c echo.Context) error {
+		called = true
+		return c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/export", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	// No MarkAppPrincipal: exactly what a human token produces when its `name`
+	// claim carries the label.
+	c.Set("user_id", 0)
+	c.Set("user_name", auth.AppPrincipalPrefix+"impersonated-service")
+	c.Set("user_email", "employee@example.com")
+
+	err := h(c)
+	if err == nil {
+		t.Fatal("expected a denial, got nil — the name prefix granted access")
+	}
+	httpErr, ok := err.(*echo.HTTPError)
+	if !ok || httpErr.Code != http.StatusForbidden {
+		t.Errorf("expected 403 HTTPError, got: %v", err)
+	}
+	if called {
+		t.Error("handler must not be called for a forged app name")
 	}
 }

@@ -22,6 +22,118 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING — `trustedService` is now `delegatedAuthorization`, `claimValidationRules`
+  is removed, and unrecognised fields fail startup.** Three changes to
+  `ORBITAL_AUTH_PROVIDERS`, which shipped in v0.0.44; each needs a config edit.
+
+  `"trustedService": { "assignedRole": "admin" }` becomes
+  `"delegatedAuthorization": { "role": "admin" }`, with behaviour unchanged. The old
+  name described what the caller *is* while its two siblings describe what orbital
+  *does*, and "trusted" named nothing — every provider in the list is trusted. The
+  new name is RFC 8693 §1.1's: this is delegation rather than impersonation, since
+  both identities survive (the human in the audit actor, the client in
+  `acting_client`), and only *authorization* is delegated — orbital still
+  authenticates the token itself against the issuer's JWKS. The inner key is `role`
+  because the parent already supplies the qualifier, the same reason Kubernetes
+  writes `issuer.url` and RFC 8693 puts `sub` inside `act`.
+
+  **`claimValidationRules` is removed.** It existed to anchor `azp`; `clientID`
+  superseded that job and nothing else ever used it — both its tests still asserted
+  the `azp` case. Use `clientID` for `azp` and `issuer.audiences` for `aud`; a rule
+  on either was redundant at best, and `{"claim": "aud", …}` in particular rejected
+  every Keycloak token, because the comparison is string-only while Keycloak issues
+  `aud` as an array.
+
+  **Unrecognised fields now fail startup.** `encoding/json` drops what it does not
+  know, so without this both changes above would silently disarm a working config
+  instead of refusing it — and `client_id`, the OAuth spelling of `clientID`, would
+  leave an entry matching every client of its issuer. Kubernetes decodes
+  `AuthenticationConfiguration` strictly for the same reason.
+
+  **Roll the config and the image together.** A v0.0.44 orbital reading a
+  `delegatedAuthorization` config ignores the field and then refuses to start
+  (*"set defaultRole, roleMapping or trustedService"*), and this build refuses a
+  `trustedService` config by name.
+
+### Removed
+- **BREAKING — the single-issuer bearer path is gone, and with it
+  `ORBITAL_APP_TOKEN_ALLOWED_APPIDS`.** Bearer verification now exists only
+  through `ORBITAL_AUTH_PROVIDERS`: **a deployment with API auth enabled and no
+  provider list refuses to start** rather than falling back to a second path.
+  `ORBITAL_OIDC_*` is unchanged and still drives the browser login flow — orbital
+  is an OAuth *client* there and a resource server here, and only the second one
+  moved.
+
+  The allowlist existed because the old path trusted exactly one
+  `(issuer, client)` pair, so "which application minted this token" needed a
+  separate global list. A provider list is keyed on `(iss, azp)`, so the entry
+  **is** the allowlist: a client-credentials caller authenticates iff some entry's
+  `clientID` matches its `azp`, and is refused before any role logic otherwise.
+  Its one lasting rule survives in `AUTH.md` — an unset allowlist must never mean
+  "allow everything" — and under the provider list an empty config cannot be
+  permissive, since there is no entry to match. Pinned by
+  `TestProviderSet_AppTokenIsGatedByClientID`, which asserts both the listed and
+  the unlisted case.
+
+  **`deploy/base` no longer names an identity provider at all.** The issuer,
+  client id, token URL and provider list moved to the overlays, because base must
+  not point an adopter's deployment at someone else's IdP. `dev-netbox` carries
+  them for both the orbital container and the in-pod cb-bundler; an overlay
+  without a provider list will not start.
+
+- **BREAKING — `ORBITAL_AUTH_MODE=external-jwt` is gone**, along with
+  `ORBITAL_JWT_ISSUER`, `ORBITAL_JWT_AUDIENCE`, `ORBITAL_JWT_CLIENT_ID` and
+  `ORBITAL_JWT_DEFAULT_ROLE`. `ORBITAL_AUTH_PROVIDERS` supersedes it: a
+  `delegatedAuthorization` entry is the same behaviour (every valid token gets one
+  role, no user row) keyed on `(iss, azp)` rather than globally, so the
+  dual-issuer fallback the mode carried for AAD service and orbctl tokens becomes
+  one more entry in the list. **A deployment still setting these vars will not
+  start** — envconfig ignores a variable with no matching field, so they
+  contribute nothing, and with no provider list the fail-closed guard refuses
+  startup rather than serving unauthenticated. Migration is one provider entry;
+  the shape is in `docs/reference/AUTH.md` § `delegatedAuthorization`.
+
+  One convention the mode owned is recorded in AUTH.md rather than lost: an
+  auth failure never logs an identity decoded from an unverified token.
+  `ProviderSet` logs the issuer, reason and `request.id` only.
+
+  `make run-orbital-aep` is removed with it — it hardcoded an internal Keycloak
+  host and client into a build file. `make run-orbital` sources
+  `deploy/local/orbital.env` (gitignored) when present, and
+  `deploy/local/orbital.env.example` now carries provider-agnostic placeholders
+  plus a commented `ORBITAL_AUTH_PROVIDERS` example of both shapes. It also sets
+  `ORBITAL_API_AUTH_ENABLED=true`, without which `ORBITAL_DEV=true` bypasses
+  bearer verification and a provider list looks broken when it is simply not
+  being consulted.
+
+### Fixed
+- **A human bearer token could impersonate a service account and gain write
+  access.** Orbital labels machine callers `app:<azp>` in `user_name`, and both
+  `ResolveUser` and `RequireRole` classified callers by prefix-matching that
+  string. For a human, `user_name` is the token's `name` claim — which Keycloak
+  lets the end-user edit in their own account console — so a token whose name
+  began `app:` took the app-principal branch: provisioning skipped, the
+  provider's role never applied, and `RequireRole` granting dev-equivalent
+  access. A readonly user could write.
+
+  The verifier now records the principal kind on the request context
+  (`auth.MarkAppPrincipal` / `auth.IsAppPrincipal`), where no token claim can
+  reach it, and both branches read that. `AppPrincipalPrefix` remains as the
+  display label for audit records, which is all it was ever for. Kubernetes
+  solves this by RESERVING its `system:` prefix, which it must because it is
+  stateless and the username string is the identity; orbital has a context and
+  can carry the fact instead — the same reasoning that rejected `usernamePrefix`
+  for identities.
+
+  Pinned by `TestRequireRole_ForgedAppNameIsNotAnAppPrincipal` (integration —
+  the grant happens at `RequireRole`, which a nil-db unit test short-circuits
+  before reaching) and `TestProviderSet_HumanTokenCannotForgeAnAppPrincipal`,
+  with the real client-credentials path kept as the positive control. Both were
+  run against the previous implementation and fail there.
+
+## [v0.0.44] - 2026-09-20
+
 ### Added
 - **Orbital accepts bearer tokens from multiple identity providers.**
   `ORBITAL_AUTH_PROVIDERS` takes a JSON array of providers, each with its own
@@ -35,12 +147,14 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   orbital warns rather than leaving it silently inoperative. Unset, everything
   behaves as before; setting it alongside `ORBITAL_AUTH_MODE` is a startup error.
 
-  Each provider sets exactly ONE of `defaultRole` (orbital's users table owns
-  roles; a new user is created with it and existing users keep theirs),
-  `roleMapping` (the provider's group claim owns roles, re-derived at every login;
-  no matching group is denied rather than dropped to readonly), or `trustedService`
-  (a caller whose authorization happens upstream: every valid token gets the
-  assigned role and no user row is provisioned). Two or zero is a startup error.
+  Each provider says where its callers' roles come from: `defaultRole` (orbital's
+  users table owns roles; a new user is created with it and existing users keep
+  theirs), `roleMapping` (the provider's group claim owns roles, re-derived at
+  every login; no matching group is denied rather than dropped to readonly), or
+  `trustedService` (a caller whose authorization happens upstream: every valid
+  token gets the assigned role and no user row is provisioned). `trustedService`
+  combines with neither of the others and setting none of the three is a startup
+  error; `defaultRole` alongside `roleMapping` is legal and is described below.
   `trustedService` replaces `ORBITAL_AUTH_MODE=external-jwt` and its
   `ORBITAL_JWT_DEFAULT_ROLE` — same behaviour, named as the deliberate trust
   delegation it is rather than a default nobody overrode.
@@ -94,6 +208,30 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   first provider to resolve it claims, so users predating the column are not
   locked out of SSO.
 
+- **`ORBITAL_API_AUTH_ENABLED` splits API authentication out of `ORBITAL_DEV`.** `ORBITAL_DEV` bundled
+  three unrelated switches — template hot-reload, the API bearer-auth bypass, and permission to use
+  the placeholder session key — so you could not verify bearers locally without also giving up
+  hot-reload, and the startup log blamed `dev:true` for auth being off. The new variable is
+  hierarchical, not independent: **unset it follows `!ORBITAL_DEV`**, so no existing deployment
+  changes. Set explicitly it wins, making `ORBITAL_DEV=true` + `ORBITAL_API_AUTH_ENABLED=true` a
+  valid combination for the first time. An explicit `false` disables auth in every auth mode;
+  an inherited `false` does not, because `external-jwt` never consulted `ORBITAL_DEV` and quietly
+  dropping auth there would be a regression. Auth resolving to enabled with no usable verifier now
+  **refuses startup** — the fail-closed guard keys on intent rather than on `ORBITAL_DEV`. Both auth
+  log lines carry `decided_by`, so the deciding setting is stated rather than inferred.
+  `ORBITAL_DEV` keeps only what its name implies.
+
+### Changed
+- **BREAKING (deployment) — orbital trusts Keycloak only; Entra is gone from
+  `deploy/base`.** The UI's OIDC client, the bearer providers and cb-bundler's
+  client-credentials grant all point at one Keycloak realm. cb-bundler needed no
+  code change — it already took `ORBITAL_TOKEN_URL` and `ORBITAL_TOKEN_SCOPE`
+  overrides for non-Entra providers; both are now set, and the scope matters
+  because Keycloak rejects Entra's `api://{clientID}/.default` form.
+  **`orbctl login` is broken by this** and is tracked in
+  `docs/planning/backlog.md` — it builds Entra URLs by string concatenation
+  instead of using OIDC discovery.
+
 ### Removed
 - **BREAKING — device-code browser SSO is gone.** `ORBITAL_OAUTH2_DEVICE_CODE` (which defaulted to
   `true`), `GET /auth/device`, `POST /auth/device/poll` and `pages/device-code.gohtml` are all
@@ -110,25 +248,19 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   always had the standard flow available. **orbctl is unaffected** — it uses Authorization Code +
   PKCE with a loopback listener (RFC 8252) and never called these endpoints.
 
-- **`orb scan` is gone from the orb CLI.** It never scanned anything — it slept, printed a
-  hardcoded "Found 3 BMC interfaces" and a fake progress bar, then reported "Scan complete".
-  An operator running it against real hardware would have believed a discovery had happened.
-  The feature remains post-MVP (`docs/reference/ORB.md` § orb scan); only the placeholder
-  command is removed.
+## [v0.0.42] - 2026-09-17
 
 ### Added
-- **`ORBITAL_API_AUTH_ENABLED` splits API authentication out of `ORBITAL_DEV`.** `ORBITAL_DEV` bundled
-  three unrelated switches — template hot-reload, the API bearer-auth bypass, and permission to use
-  the placeholder session key — so you could not verify bearers locally without also giving up
-  hot-reload, and the startup log blamed `dev:true` for auth being off. The new variable is
-  hierarchical, not independent: **unset it follows `!ORBITAL_DEV`**, so no existing deployment
-  changes. Set explicitly it wins, making `ORBITAL_DEV=true` + `ORBITAL_API_AUTH_ENABLED=true` a
-  valid combination for the first time. An explicit `false` disables auth in every auth mode;
-  an inherited `false` does not, because `external-jwt` never consulted `ORBITAL_DEV` and quietly
-  dropping auth there would be a regression. Auth resolving to enabled with no usable verifier now
-  **refuses startup** — the fail-closed guard keys on intent rather than on `ORBITAL_DEV`. Both auth
-  log lines carry `decided_by`, so the deciding setting is stated rather than inferred.
-  `ORBITAL_DEV` keeps only what its name implies.
+- **`DataCenter` gained a `model` field, typed as the `DataCenterModel` enum**
+  (`Beacon`, `Cruiser`, `Triton`, `Leviathan`; `schema/VERSION` → `v9`). An enum
+  rather than a free string, so the set of Galleon models is declared in the schema
+  and reachable by introspection — a client renders a dropdown without orbital
+  publishing a separate list. The field is optional; existing data centers read back
+  `null` until it is set. DGraph enforces the enum at the GraphQL layer only, so a
+  `dgraph live` bulk load can still store an off-list value, which then reads back
+  as `null` **alongside an `errors` entry** rather than failing the query — a client
+  that reads `data` and ignores `errors` cannot tell unset from corrupt. Query,
+  introspection and update examples are in `docs/api-cheatsheet.md`.
 
 - **Orbital now reports when DGraph is running an older schema than the build ships.** It logs a
   `WARN` at startup naming every missing declaration, and the Schema page states whether the applied
@@ -139,25 +271,15 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   DGraph's real SDL, so it could caption a v8 graph "v9".
 
 ### Changed
-- **BREAKING (deployment) — orbital trusts Keycloak only; Entra is gone from
-  `deploy/base`.** The UI's OIDC client, the bearer providers and cb-bundler's
-  client-credentials grant all point at one Keycloak realm. cb-bundler needed no
-  code change — it already took `ORBITAL_TOKEN_URL` and `ORBITAL_TOKEN_SCOPE`
-  overrides for non-Entra providers; both are now set, and the scope matters
-  because Keycloak rejects Entra's `api://{clientID}/.default` form.
-  **`orbctl login` is broken by this** and is tracked in
-  `docs/planning/backlog.md` — it builds Entra URLs by string concatenation
-  instead of using OIDC discovery.
-
-
 - **BREAKING — `ORBITAL_APP_TOKEN_ALLOWED_APPIDS` empty now DENIES every app-only bearer token.**
   It previously skipped the allowlist check when empty, so any AAD app token bound to orbital's
   audience was accepted regardless of which application minted it — the same shape AWS eliminated
   from IAM/GitHub-Actions OIDC trust policies after it was found exploitable. The wildcard is now
   explicit: set `*` for the old permissive behaviour. The default is no longer orbital's own app id
   and is now empty, so **a deployment that authenticates any service with client credentials must
-  list its application ids or publish will 401** — `deploy/base/deploy.yaml` sets it for the in-pod
-  cb-bundler. User (non-app) tokens are unaffected.
+  list its application ids or publish will 401** on the legacy single-issuer path. It is inert where
+  `ORBITAL_AUTH_PROVIDERS` is set (each entry's `clientID` is the gate), which is why
+  `deploy/base/deploy.yaml` no longer sets it. User (non-app) tokens are unaffected.
 - **Job tables gained a `status` index** (`export_jobs`, `backups`, `restore_jobs`). Every job
   trigger runs a conflict check filtering `status IN (pending, running)`, which previously scanned
   the whole table. Applied by the boot migration; additive, no data change.
@@ -181,6 +303,13 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   without scanning or rejecting them. Audit an existing graph before applying it and after any bulk
   import; the query is in `docs/reference/DGRAPH.md` § orbId convention. Orbital does not apply the
   DGraph schema at startup, so this reaches a running cluster only when the schema is applied.
+
+### Removed
+- **`orb scan` is gone from the orb CLI.** It never scanned anything — it slept, printed a
+  hardcoded "Found 3 BMC interfaces" and a fake progress bar, then reported "Scan complete".
+  An operator running it against real hardware would have believed a discovery had happened.
+  The feature remains post-MVP (`docs/reference/ORB.md` § orb scan); only the placeholder
+  command is removed.
 
 ## [v0.0.41] - 2026-09-16
 
