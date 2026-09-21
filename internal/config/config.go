@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,13 +30,18 @@ type Config struct {
 	// a tighter bucket on POST /user/login to slow credential brute-force.
 	// Burst = 2×RPS. Behind a proxy, per-IP fairness needs c.RealIP() to
 	// resolve the true client via X-Forwarded-For (Istio sets it).
-	RateLimitEnabled      bool   `envconfig:"ORBITAL_RATE_LIMIT_ENABLED"   default:"false"`
-	RateLimitRPS          int    `envconfig:"ORBITAL_RATE_LIMIT_RPS"       default:"40"`
-	LoginRateLimitRPS     int    `envconfig:"ORBITAL_LOGIN_RATE_LIMIT_RPS" default:"5"`
-	DGraphURL             string `envconfig:"DGRAPH_URL"                      default:"http://localhost:8080/graphql"`
-	DGraphAdminURL        string `envconfig:"DGRAPH_ADMIN_URL"                default:"http://localhost:8080/admin"`
-	RatelURL              string `envconfig:"RATEL_URL"                       default:"http://localhost:8000"`
-	IssueTrackerURL       string `envconfig:"ORBITAL_ISSUE_TRACKER_URL"       default:"https://dev.azure.com/armadasystems/Commander/_workitems/create/Bug?[System.AreaPath]=Commander\\Edge\\Edge Platform"`
+	RateLimitEnabled  bool   `envconfig:"ORBITAL_RATE_LIMIT_ENABLED"   default:"false"`
+	RateLimitRPS      int    `envconfig:"ORBITAL_RATE_LIMIT_RPS"       default:"40"`
+	LoginRateLimitRPS int    `envconfig:"ORBITAL_LOGIN_RATE_LIMIT_RPS" default:"5"`
+	DGraphURL         string `envconfig:"DGRAPH_URL"                      default:"http://localhost:8080/graphql"`
+	DGraphAdminURL    string `envconfig:"DGRAPH_ADMIN_URL"                default:"http://localhost:8080/admin"`
+	RatelURL          string `envconfig:"RATEL_URL"                       default:"http://localhost:8000"`
+	IssueTrackerURL   string `envconfig:"ORBITAL_ISSUE_TRACKER_URL"       default:"https://dev.azure.com/armadasystems/Commander/_workitems/create/Bug?[System.AreaPath]=Commander\\Edge\\Edge Platform"`
+	// Dev means "a developer is running this", not "auth is off". It enables
+	// template hot-reload (handlers re-parse .gohtml per request) and permits
+	// the placeholder session HMAC key. API auth is NOT its business — see
+	// APIAuthEnabled, which defaults to !Dev only to preserve the historical
+	// coupling.
 	Dev                   bool   `envconfig:"ORBITAL_DEV"                     default:"true"`
 	LogLevel              string `envconfig:"ORBITAL_LOG_LEVEL"               default:"info"`
 	DGraphScratchURL      string `envconfig:"DGRAPH_SCRATCH_URL"              default:"http://localhost:8081/graphql"`
@@ -124,7 +130,6 @@ type Config struct {
 	OIDCClientID     string `envconfig:"ORBITAL_OIDC_CLIENT_ID"          default:""`
 	OIDCClientSecret string `envconfig:"ORBITAL_OIDC_CLIENT_SECRET"      default:""`
 	OIDCRedirectURL  string `envconfig:"ORBITAL_OIDC_REDIRECT_URL"       default:"http://localhost:8001/auth/callback"`
-	OAuth2DeviceCode bool   `envconfig:"ORBITAL_OAUTH2_DEVICE_CODE"      default:"true"` // enables device code flow for browser SSO; set false to use Authorization Code + PKCE (requires publicly resolvable redirect URI). RFC 8628 — OAuth 2.0, not OIDC despite living next to ORBITAL_OIDC_* settings.
 	// AppTokenAllowedAppIDs gates which app-only (client-credentials) bearer
 	// tokens orbital accepts on /api/v1 and /graphql. EMPTY DENIES every app
 	// token: a deployment that uses them must list the application ids, or "*"
@@ -207,6 +212,27 @@ type Config struct {
 	DGraphZeroGRPC  string `envconfig:"ORBITAL_DGRAPH_ZERO_GRPC"        default:"localhost:5080"`
 
 	sessionKeys auth.SessionKeys // built once in New(); returned by SessionKeys()
+
+	// APIAuthEnabledRaw is the unparsed ORBITAL_API_AUTH_ENABLED. Declared as a
+	// struct tag (not read via os.LookupEnv) so the generated settings table in
+	// docs/reference/CONFIG.md still sees it; empty means unset, which is the
+	// third state the hierarchy below needs. Read APIAuthEnabled, never this.
+	APIAuthEnabledRaw string `envconfig:"ORBITAL_API_AUTH_ENABLED"`
+
+	// APIAuthEnabled decides whether bearer verification is installed on
+	// /api/v1 and /graphql. Hierarchical, never an independent boolean
+	// (docs/reference/CONFIG.md): unset it follows !Dev, which is exactly the
+	// historical behaviour; ORBITAL_API_AUTH_ENABLED set explicitly wins.
+	// Resolved once in New() so no read site re-derives it from Dev — that is
+	// how one site ends up disagreeing with another.
+	APIAuthEnabled bool
+	// apiAuthExplicit records whether ORBITAL_API_AUTH_ENABLED was set at all.
+	// An explicit false must switch auth off in every auth mode; an unset
+	// value must not change any mode's existing behaviour.
+	apiAuthExplicit bool
+	// apiAuthSource names the setting that decided APIAuthEnabled, so the
+	// startup log states it rather than leaving an operator to infer it.
+	apiAuthSource string
 }
 
 func New() (*Config, error) {
@@ -237,12 +263,34 @@ func New() (*Config, error) {
 			return nil, fmt.Errorf("ORBITAL_DB_USE_AZ_MI=true requires ORBITAL_DB_HOST, ORBITAL_DB_USER, ORBITAL_DB_NAME")
 		}
 	}
+	cfg.APIAuthEnabled = !cfg.Dev
+	cfg.apiAuthSource = "ORBITAL_DEV"
+	if raw := cfg.APIAuthEnabledRaw; raw != "" {
+		enabled, err := strconv.ParseBool(raw)
+		if err != nil {
+			return nil, fmt.Errorf("ORBITAL_API_AUTH_ENABLED must be a boolean, got %q", raw)
+		}
+		cfg.APIAuthEnabled = enabled
+		cfg.apiAuthExplicit = true
+		cfg.apiAuthSource = "ORBITAL_API_AUTH_ENABLED"
+	}
 	cfg.sessionKeys = auth.NewSessionKeys(cfg.SessionHMACKey, cfg.SessionEncryptionKey, cfg.Dev, cfg.CookieSecure)
 	return &cfg, nil
 }
 
 func (c *Config) SessionKeys() auth.SessionKeys {
 	return c.sessionKeys
+}
+
+// APIAuthSource names the env var that decided APIAuthEnabled.
+func (c *Config) APIAuthSource() string { return c.apiAuthSource }
+
+// APIAuthExplicitlyDisabled reports an operator deliberately setting
+// ORBITAL_API_AUTH_ENABLED=false. Distinct from APIAuthEnabled being false by
+// inheritance from Dev: an explicit false switches auth off in every auth mode,
+// an inherited one only preserves the historical OIDC-mode bypass.
+func (c *Config) APIAuthExplicitlyDisabled() bool {
+	return c.apiAuthExplicit && !c.APIAuthEnabled
 }
 
 // AdminEmailSet parses ORBITAL_ADMIN_EMAILS into a lowercase set for O(1) lookup.

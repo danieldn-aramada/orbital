@@ -29,47 +29,45 @@ import (
 )
 
 type UI struct {
-	dev               bool
-	ratelURL          string
-	issueTrackerURL   string
-	oidcEnabled       bool
-	deviceCodeEnabled bool
-	backupEnabled     bool
-	backupCronSpec    string
-	s3Endpoint        string
-	s3Bucket          string
-	ociConfigured     bool
-	ociRegistry       string
-	ociRepo           string
-	exportDir         string
-	schemaPath        string
-	dgraphURL         string
-	dgraphAdminURL    string
-	version           string
-	basePath          string
-	db                *ent.Client
-	logger            *slog.Logger
-	templates         map[string]*template.Template
+	dev             bool
+	ratelURL        string
+	issueTrackerURL string
+	oidcEnabled     bool
+	backupEnabled   bool
+	backupCronSpec  string
+	s3Endpoint      string
+	s3Bucket        string
+	ociConfigured   bool
+	ociRegistry     string
+	ociRepo         string
+	exportDir       string
+	schemaPath      string
+	dgraphURL       string
+	dgraphAdminURL  string
+	version         string
+	basePath        string
+	db              *ent.Client
+	logger          *slog.Logger
+	templates       map[string]*template.Template
 }
 
-func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, deviceCodeEnabled, backupEnabled bool, s3Endpoint, s3Bucket string, basePath string, db *ent.Client, logger *slog.Logger) *UI {
+func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, backupEnabled bool, s3Endpoint, s3Bucket string, basePath string, db *ent.Client, logger *slog.Logger) *UI {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &UI{
-		dev:               dev,
-		ratelURL:          ratelURL,
-		issueTrackerURL:   issueTrackerURL,
-		oidcEnabled:       oidcEnabled,
-		deviceCodeEnabled: deviceCodeEnabled,
-		backupEnabled:     backupEnabled,
-		s3Endpoint:        s3Endpoint,
-		s3Bucket:          s3Bucket,
-		basePath:          basePath,
-		db:                db,
-		logger:            logger,
-		version:           fmt.Sprintf("%d", time.Now().Unix()),
-		templates:         webtemplates.Map(),
+		dev:             dev,
+		ratelURL:        ratelURL,
+		issueTrackerURL: issueTrackerURL,
+		oidcEnabled:     oidcEnabled,
+		backupEnabled:   backupEnabled,
+		s3Endpoint:      s3Endpoint,
+		s3Bucket:        s3Bucket,
+		basePath:        basePath,
+		db:              db,
+		logger:          logger,
+		version:         fmt.Sprintf("%d", time.Now().Unix()),
+		templates:       webtemplates.Map(),
 	}
 }
 
@@ -199,7 +197,6 @@ func (h *UI) base(c echo.Context) layout.Base {
 		NavBar:             layout.NavBar{RatelURL: h.ratelURL, IssueTrackerURL: h.issueTrackerURL},
 		IsAuthn:            isAuthn,
 		OIDCEnabled:        h.oidcEnabled,
-		DeviceCodeEnabled:  h.deviceCodeEnabled,
 		User:               layout.User{Id: userID, Name: userName, Email: userEmail, Role: userRole},
 		CanMutate:          canMutate,
 		AdminEmails:        adminEmails,

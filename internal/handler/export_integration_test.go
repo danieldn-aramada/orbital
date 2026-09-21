@@ -343,7 +343,7 @@ func TestExportPage_RendersExpectedElements(t *testing.T) {
 
 	ui := handler.NewUI(
 		false, "", "",
-		false, false,
+		false,
 		false,
 		"", "",
 		"",

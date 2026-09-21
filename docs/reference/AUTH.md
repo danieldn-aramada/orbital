@@ -22,13 +22,11 @@ User identity and per-user audit are hard requirements for orbital. That require
 
 - **Approval bypass is NOT a role or a user capability.** `readonly < dev < admin` is unchanged and stays that way. Which roles may write a protected class directly is `approval_policy.bypass_roles` — a property of the policy, answered per protected class by an admin. If orbital ever needs real per-user permissions, that is Casbin, not more role tiers. See [`CHANGE-CONTROL.md`](./CHANGE-CONTROL.md).
 - **DGraph `@auth` directives are out of scope** — all queries go through the Go server; clients never reach DGraph directly. Authorization is enforced entirely at the Go middleware layer. DGraph `@auth` adds no security value given the network topology. Do not re-add it.
-- **Authorization model: three-role local table (`readonly < dev < admin`)** — `role` enum on `users` ent schema: `readonly` (default), `dev`, `admin`. `ORBITAL_ADMIN_EMAILS` (comma-separated): on first OIDC/device-code login, matching emails get promoted to `admin`. `RoleAtLeast(actual, minimum user.Role) bool` in `authz.go` is the canonical comparison helper. `RequireRole(db, minRole)` checks mutating methods (POST/PUT/PATCH/DELETE), passes GET through; `RequireAdmin` is a wrapper. GraphQL mutations require `dev` minimum (not admin). Azure AD App Roles deferred — requires Application Administrator permissions. If available later, extract `roles` claim at login and override local role; local table stays as source of truth. **If that day comes, use App Roles, not AD groups:** App Roles are explicit, auditable, and land directly in the JWT `roles` claim, whereas group GUIDs require a Microsoft Graph call to resolve — adding per-request latency and breaking in air-gapped/offline deployments. (Rationale carried over from the Spike 11 design before it was folded here; the rest of that spike's design — two flat roles `orbital-admin`/`orbital-viewer`, `RequireAnyRole`, and a DGraph `@auth` service token — was **superseded** by what actually shipped and is recoverable via `git log docs/spike-11-auth-design.md`.)
+- **Authorization model: three-role local table (`readonly < dev < admin`)** — `role` enum on `users` ent schema: `readonly` (default), `dev`, `admin`. `ORBITAL_ADMIN_EMAILS` (comma-separated): on first OIDC login, matching emails get promoted to `admin`. `RoleAtLeast(actual, minimum user.Role) bool` in `authz.go` is the canonical comparison helper. `RequireRole(db, minRole)` checks mutating methods (POST/PUT/PATCH/DELETE), passes GET through; `RequireAdmin` is a wrapper. GraphQL mutations require `dev` minimum (not admin). Azure AD App Roles deferred — requires Application Administrator permissions. If available later, extract `roles` claim at login and override local role; local table stays as source of truth. **If that day comes, use App Roles, not AD groups:** App Roles are explicit, auditable, and land directly in the JWT `roles` claim, whereas group GUIDs require a Microsoft Graph call to resolve — adding per-request latency and breaking in air-gapped/offline deployments. (Rationale carried over from the Spike 11 design before it was folded here; the rest of that spike's design — two flat roles `orbital-admin`/`orbital-viewer`, `RequireAnyRole`, and a DGraph `@auth` service token — was **superseded** by what actually shipped and is recoverable via `git log docs/spike-11-auth-design.md`.)
 - **Admin role management UI at `/users`** — server-side rendered Go template (not DataTables). Button group per row (R/D/A), active role highlighted+disabled. Self-row fully disabled. Last-admin guard: `PUT /api/v1/users/:id/role` returns 409. Operation is idempotent (same role → 200 with no DB write).
 - **Readonly UI gating: `CanMutate bool` on `layout.Base`** — `true` for dev and admin. Pages gate action forms behind `{{if .CanMutate}}...{{else}}{{template "access-required" .}}{{end}}`. Pure-action pages (Restore): entire content gated. Mixed pages (Export, Backup, Signed Artifacts): list/table always visible, action form gated.
 - **`can_mutate` is derived from the session cookie, not a DB lookup** — computed in the global session middleware in `server.go` via `RoleAtLeast`. No DB call on GET requests. `RequireRole` is DB-backed on mutating methods (security enforcement boundary). `can_mutate` is a UI display hint only. Role changes take effect on next login. Do not re-add a separate `SetCanMutate` middleware or per-route `can_mutate` wiring.
-- **`ORBITAL_OAUTH2_DEVICE_CODE` defaults to `true`** — device code is the only viable browser SSO for this deployment (private DNS/ILB, no publicly resolvable redirect URI). Set `false` only if deploying on a public URL with a registered redirect URI. No auto-open: Azure AD's v1 `deviceauth` endpoint doesn't support `?otc=` pre-fill. (Renamed from `ORBITAL_OIDC_DEVICE_CODE` — device code is OAuth 2.0 RFC 8628, not OIDC.)
-- **`ORBITAL_OIDC_*` env var naming is vendor namespace, not protocol claim.** The runtime flows orbital uses today are OAuth 2.0 — device code (RFC 8628) for browser SSO, Authorization Code + PKCE (RFC 8252) for orbctl. Neither requests `openid` scope; no `id_token` is ever issued. The `OIDC_*` prefix on env vars reflects (a) Azure AD's "OpenID Connect" app-registration vocabulary, and (b) that bearer-token validation uses OIDC infrastructure (discovery → JWKS → signature/issuer/audience checks via go-oidc). Issuance is OAuth 2.0; validation is OIDC-flavored. Don't read `OIDC_` in a variable name as "we use id_tokens" — we don't.
-- **`POST /auth/device/poll` sends `device_code` in the JSON body** — not as a query parameter. Query params appear in application logs, proxy logs, and browser history. `device_code` is a short-lived credential. Handler uses `c.Bind()`. Route is `POST`, not `GET`.
+- **`ORBITAL_OIDC_*` env var naming is vendor namespace, not protocol claim.** The runtime flows orbital uses today are OAuth 2.0 — Authorization Code for browser SSO, Authorization Code + PKCE (RFC 8252) for orbctl. Neither requests `openid` scope; no `id_token` is ever issued. The `OIDC_*` prefix on env vars reflects (a) Azure AD's "OpenID Connect" app-registration vocabulary, and (b) that bearer-token validation uses OIDC infrastructure (discovery → JWKS → signature/issuer/audience checks via go-oidc). Issuance is OAuth 2.0; validation is OIDC-flavored. Don't read `OIDC_` in a variable name as "we use id_tokens" — we don't.
 - **Orbital does not model PIM (Privileged Identity Management) or any other elevation scheme** — it enforces `readonly < dev < admin` on whatever identity the token carries, full stop. PIM elevation is an IdP concern: the IdP grants a write-role token, orbital checks the role via `RequireRole`. Do NOT add PIM sessions, elevation windows, or approval state to orbital; a multi-writer client (AEP) layers that on top. Corollary: a client's "approval workflow" is satisfied by orbital's existing gates (role on write + `expectedContentHash` on publish) — see `OCI.md` § "Guarded Apply".
 - **`ResolveUser` middleware bridges bearer token auth to the user table** — wired after `RequireAuth()` and before `RequireRole()` in `server.go`. When `user_id` is 0 (bearer path: JWT validated but no session), finds or provisions the user by email from JWT claims. Without this, all bearer token requests were always-403. Do not remove or reorder it.
 
@@ -39,24 +37,31 @@ User identity and per-user audit are hard requirements for orbital. That require
 - Local login: email/password against PostgreSQL `users` table, bcrypt cost 12. Always available for dev.
 - OIDC/SSO: Azure AD via OpenID Connect. Enabled when `ORBITAL_OIDC_ISSUER_URL` and `ORBITAL_OIDC_CLIENT_SECRET` are both set. Disabled with a startup warning if the secret is missing. **`ORBITAL_OIDC_ISSUER_URL` and `ORBITAL_OIDC_CLIENT_ID` have NO code defaults** — a baked-in tenant or client id silently points someone else's deployment at our IdP. A deployment must set them (`deploy/base/deploy.yaml` does); for local SSO copy `deploy/local/orbital.env.example` to `orbital.env`, which `make run-orbital` sources when present.
 
-## Device code browser SSO
+## Browser SSO: Authorization Code
 
-Activated by `ORBITAL_OAUTH2_DEVICE_CODE=true`. The login modal shows a "Sign in with Microsoft" button that uses the device code flow instead of the standard Authorization Code redirect.
+The login modal's "Sign in with Microsoft" button goes to `GET /auth/login`, which is
+Authorization Code against `ORBITAL_OIDC_ISSUER_URL`, returning to `ORBITAL_OIDC_REDIRECT_URL`.
+That redirect URI must be registered with the IdP **byte-for-byte** — OAuth compares it exactly,
+and it is sent twice (authorize, then again at token exchange, RFC 6749 §4.1.3).
 
-**Why device code for browser SSO** (not Authorization Code + PKCE):
+**Device code (RFC 8628) was removed** — `ORBITAL_OAUTH2_DEVICE_CODE`, `GET /auth/device`,
+`POST /auth/device/poll` and `pages/device-code.gohtml` are all gone. It existed as a workaround
+for one Azure AD constraint: orbital sits behind an Internal Load Balancer on private DNS, and
+Entra would not accept a redirect URI it could not resolve. Device code needs no redirect URI,
+so it sidestepped the problem.
 
-- **Azure AD private DNS limitation** — Orbital runs behind an Internal Load Balancer in AKS and uses private DNS names (e.g. `orbital.devnew.armada.internal`) that only resolve on the VPN. Azure AD's Authorization Code flow requires a redirect URI that Azure AD can validate — a private DNS name either fails registration or silently misdirects. Device code has no redirect URI at all.
-- **No HTTPS requirement** — Authorization Code + PKCE requires the redirect URI to be an HTTPS endpoint registered with Azure AD. Orbital's Go server receives plain HTTP (TLS is terminated at the Istio ingress layer). Device code needs no redirect URI, so TLS on the server process is irrelevant to the OAuth handshake.
-- **No App Roles available** — We don't have Application Administrator permissions on the Azure AD tenant, so we can't create custom App Roles. This ruled out JWT claim-based authz regardless of flow. Authorization is enforced via the local `role` column on the `users` table (see Authorization section below).
+Three things ended it. The constraint was **vendor-specific** — Keycloak registers `http://` and
+private-hostname redirect URIs without complaint, so the problem does not exist there. The
+implementation was **vendor-locked**: the endpoint was built by string surgery on the Azure URL
+shape (`TrimSuffix(issuer,"/v2.0") + "/oauth2/v2.0/devicecode"`), which 404s against any other
+IdP, and it defaulted to `true`. And it had **one consumer** — orbital's own login modal, which
+is a browser and therefore has the standard flow available to it. No comparable web UI
+(Grafana, NetBox, Harbor, Rancher, Argo CD, Vault) uses device code for browser login; it is for
+input-constrained devices and headless CLIs.
 
-**Endpoints:**
-- `GET /auth/device` — initiates the flow, returns `device_code`, `user_code`, `verification_uri`, `verification_uri_complete`
-- `GET /auth/device/poll` — polls the token endpoint; returns 202 (pending), 200 (complete, sets session), or 4xx (error)
-- Standalone page rendered at `/auth/device`; includes JS poller
-
-**Auto-open variant** — On page load the JS poller immediately opens `verification_uri_complete` (which embeds the user_code) in a new tab. This eliminates the manual copy-paste UX of classic IoT device code flows. The original tab continues polling and redirects when the token arrives. A fallback manual link is shown if the popup is blocked.
-
-**orbctl uses Authorization Code + PKCE (not device code)** — the CLI runs on the user's local machine, can open a browser directly, and can bind a local redirect server on a random port. It doesn't have the private DNS / redirect URI problem. Conditional Access policies that block device code flows apply to orbctl, not to the orbital web server.
+**orbctl is unaffected** — it uses Authorization Code + PKCE with a loopback listener
+(`orbauth/auth.go`: `net.Listen("tcp","127.0.0.1:0")`, `code_challenge_method: S256`), which is
+RFC 8252, the correct native-app pattern. It never called orbital's device endpoints.
 
 ## Bearer token validation
 
@@ -120,7 +125,7 @@ An alternative auth stack that trusts bearer tokens issued by an external OIDC p
 
 ## Third-party API clients
 
-Orbital is an OAuth **resource server**, not an identity provider. Client applications authenticate with Azure AD directly and present the resulting JWT to orbital. Orbital does not issue tokens, proxy auth, or expose a device-code endpoint for external clients — `/auth/device` is for orbital's own browser UI.
+Orbital is an OAuth **resource server**, not an identity provider. Client applications authenticate with Azure AD directly and present the resulting JWT to orbital. Orbital does not issue tokens or proxy auth.
 
 **Integrator quickstart (give this to client teams):**
 
@@ -137,7 +142,7 @@ Token version:     v2 (issuer https://login.microsoftonline.com/<tenant>/v2.0)
 **OAuth flow** — orbital doesn't care which flow produces the token, only that the resulting JWT has the right issuer + audience. Common topologies:
 
 - **Frontend → client backend → orbital** — backend uses **On-Behalf-Of (OBO)** to mint an `aud=orbital` token from the inbound `aud=client-api` token. Preserves user identity (`preferred_username` flows through), so `ResolveUser` maps to the right row and audit logs show the real user. Requires the backend be a confidential client (secret or cert), and admin consent granted on its App Registration's API permission to orbital's `user_impersonation` scope. The OBO exchange itself is between the client and Azure AD — orbital sees only the final token. See Microsoft's [OBO docs](https://learn.microsoft.com/azure/active-directory/develop/v2-oauth2-on-behalf-of-flow). The frontend can be a SPA, native app, or server-rendered UI — only the backend's role matters here.
-- **Public client → orbital direct** — Authorization Code + PKCE if the client has a registerable HTTPS redirect URI; device code if it's behind private DNS / VPN-only (same constraint that pushed orbital's own UI to device code). No exchange, client requests `aud=orbital` upfront. "Public client" covers SPAs, native desktop, and mobile apps — anything that cannot keep a secret.
+- **Public client → orbital direct** — Authorization Code + PKCE, with a redirect URI registered with the IdP. No exchange, client requests `aud=orbital` upfront. "Public client" covers SPAs, native desktop, and mobile apps — anything that cannot keep a secret.
 - **Headless service / scheduled job (no user identity)** — `grant_type=client_credentials` with `scope=api://<orbctlent-id>/.default`. Resulting token has no `preferred_username`, so `ResolveUser` cannot map it. Avoid until we add explicit service-account provisioning. Use OBO for any human-driven action, even from a backend.
 
 **Scope policy** — orbital's App Registration exposes `user_impersonation` (Azure AD's default scope name when adding a delegated scope via "Expose an API"). Orbital does not validate `scp` — the scope name is consent-clarity only, not an authz boundary. `.default` works as a fallback but is discouraged because it requires admin consent and bundles all consented permissions opaquely.
@@ -154,7 +159,7 @@ Role enforcement is done entirely at the Go middleware layer. DGraph `@auth` dir
 
 **Role model:**
 - `role` column on `users` ent schema: enum `admin` / `dev` / `readonly`, default `readonly`
-- `ORBITAL_ADMIN_EMAILS` (comma-separated env var): on first OIDC or device-code login, matching emails are promoted to `admin`; all other users get `readonly`
+- `ORBITAL_ADMIN_EMAILS` (comma-separated env var): on first OIDC login, matching emails are promoted to `admin`; all other users get `readonly`
 
 **Middleware:**
 - `RequireRole(db, minRole)` — Echo middleware; checks mutating HTTP methods (POST/PUT/PATCH/DELETE), passes GET through; 403 for insufficient role. DB-backed because it is a security enforcement boundary.

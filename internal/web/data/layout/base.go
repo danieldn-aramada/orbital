@@ -9,17 +9,16 @@ type Base struct {
 
 	UI UIConfig
 
-	Domain            string // default localhost:8080, production console.com
-	Links             []string
-	IsAuthn           bool
-	OIDCEnabled       bool
-	DeviceCodeEnabled bool
-	CsrfToken         string
-	AppVersion        string
-	BasePath          string
-	CurrentPath       string
-	CanMutate         bool
-	AdminEmails       []string
+	Domain      string // default localhost:8080, production console.com
+	Links       []string
+	IsAuthn     bool
+	OIDCEnabled bool
+	CsrfToken   string
+	AppVersion  string
+	BasePath    string
+	CurrentPath string
+	CanMutate   bool
+	AdminEmails []string
 	// PendingDivergences is the count of divergence entries with no operator
 	// resolution yet. Rendered as a badge on the menu so edge drift is visible
 	// without navigating to /divergence-reports — divergence is a notification,

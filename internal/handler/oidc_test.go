@@ -28,13 +28,11 @@ var oidcSessionKeys = auth.SessionKeys{HMACKey: "oidc-test-hmac-key"}
 
 // oidcProvider is a minimal OIDC/OAuth2 provider for handler tests.
 // TokenClaims is mutable — tests configure it before calling Callback.
-// DeviceTokenError controls the error returned by /oauth2/v2.0/devicecode polling.
 // When empty, the token endpoint returns a signed id_token using TokenClaims.
 type oidcProvider struct {
-	Server           *httptest.Server
-	TokenClaims      map[string]any
-	DeviceTokenError string // e.g. "authorization_pending", "expired_token"; empty = success
-	sign             func(claims map[string]any) string
+	Server      *httptest.Server
+	TokenClaims map[string]any
+	sign        func(claims map[string]any) string
 }
 
 func newOIDCProvider(t *testing.T) *oidcProvider {
@@ -108,32 +106,12 @@ func newOIDCProvider(t *testing.T) *oidcProvider {
 		r.ParseForm() //nolint:errcheck
 		w.Header().Set("Content-Type", "application/json")
 
-		// Device code grant type — return error or success based on DeviceTokenError.
-		if r.FormValue("grant_type") == "urn:ietf:params:oauth:grant-type:device_code" {
-			if p.DeviceTokenError != "" {
-				json.NewEncoder(w).Encode(map[string]any{"error": p.DeviceTokenError}) //nolint:errcheck
-				return
-			}
-		}
-
 		idToken := p.sign(p.TokenClaims)
 		json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
 			"access_token": "fake-access-token",
 			"token_type":   "Bearer",
 			"expires_in":   3600,
 			"id_token":     idToken,
-		})
-	})
-
-	// Device code initiation endpoint (path matches what NewOIDC derives from issuer URL).
-	mux.HandleFunc("/oauth2/v2.0/devicecode", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
-			"device_code":      "test-device-code",
-			"user_code":        "ABCD-1234",
-			"verification_uri": "https://microsoft.com/devicelogin",
-			"expires_in":       900,
-			"interval":         5,
 		})
 	})
 
@@ -152,8 +130,7 @@ func newOIDCHandler(t *testing.T, p *oidcProvider) *handler.OIDC {
 		p.Server.URL+"/callback",
 		"",
 		slog.Default(),
-		nil,   // adminEmails
-		false, // deviceCodeEnabled
+		nil, // adminEmails
 	)
 	if err != nil {
 		t.Fatalf("NewOIDC: %v", err)

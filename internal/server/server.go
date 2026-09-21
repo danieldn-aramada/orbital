@@ -156,7 +156,6 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		Logger:         logger,
 		SkipPrefixes:   []string{"/static/"},
 		SkipExactPaths: []string{"/favicon.ico", "/healthz"},
-		SkipSuffixes:   []string{"/auth/device/poll"},
 		ActorFromContext: func(c echo.Context) string {
 			actor, _ := c.Get("user_email").(string)
 			return actor
@@ -231,8 +230,9 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		bv, err := auth.NewBearerVerifier(context.Background(), cfg.OIDCIssuerURL, cfg.OIDCClientID, cfg.AppTokenAllowedAppIDs)
 		if err != nil {
 			logger.Warn("bearer verifier init failed — API auth disabled", "err", err)
-		} else if cfg.Dev {
-			logger.Warn("ORBITAL_DEV=true — bearer verification on /api/v1 and /graphql is BYPASSED; session-cookie auth remains. Production must set ORBITAL_DEV=false.")
+		} else if !cfg.APIAuthEnabled {
+			logger.Warn("API auth disabled by "+cfg.APIAuthSource()+" — bearer verification on /api/v1 and /graphql is BYPASSED; session-cookie auth remains. Set ORBITAL_API_AUTH_ENABLED=true to verify bearers without giving up template hot-reload.",
+				"decided_by", cfg.APIAuthSource(), "dev", cfg.Dev)
 			// apiAuth stays nil — session middleware sets user info for UI;
 			// unauthenticated callers (cb-bundler) pass through to handlers
 			// which decide based on operation type (mutations require user_id).
@@ -241,6 +241,15 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		}
 	default:
 		logger.Warn("ORBITAL_OIDC_ISSUER_URL is not set — API auth disabled")
+	}
+
+	// An operator who explicitly set ORBITAL_API_AUTH_ENABLED=false means it in
+	// every auth mode. Applied here rather than inside the switch so no mode can
+	// be forgotten. Inherited-false is deliberately NOT applied: external-jwt
+	// never consulted Dev, and making it do so now would silently turn auth off
+	// for anyone running that mode locally.
+	if cfg.APIAuthExplicitlyDisabled() {
+		apiAuth = nil
 	}
 
 	// Single authoritative summary of the effective auth posture, logged
@@ -257,9 +266,10 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	}
 	if len(apiAuth) == 0 {
 		logger.Warn("auth: API AUTHENTICATION DISABLED — /graphql and /api/v1 accept unauthenticated requests; only session-identity mutations are gated",
-			"mode", authMode, "enabled", false, "dev", cfg.Dev)
+			"mode", authMode, "enabled", false, "decided_by", cfg.APIAuthSource(), "dev", cfg.Dev)
 	} else {
-		logger.Info("auth: API authentication enabled", "mode", authMode, "enabled", true)
+		logger.Info("auth: API authentication enabled",
+			"mode", authMode, "enabled", true, "decided_by", cfg.APIAuthSource(), "dev", cfg.Dev)
 	}
 
 	// Fail-closed in production. An empty apiAuth means /graphql and /api/v1
@@ -269,8 +279,8 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	// no-auth, whatever the cause: OIDC discovery unreachable at boot, a
 	// verifier-init error, or an unset issuer. The preceding WARN carries the
 	// specific reason. (audit S.16)
-	if !cfg.Dev && len(apiAuth) == 0 {
-		return nil, fmt.Errorf("refusing to start: API authentication is disabled in production (ORBITAL_DEV=false) — ensure ORBITAL_OIDC_ISSUER_URL is set and OIDC discovery is reachable at startup")
+	if cfg.APIAuthEnabled && len(apiAuth) == 0 {
+		return nil, fmt.Errorf("refusing to start: API authentication is required (per %s) but could not be enabled — ensure ORBITAL_OIDC_ISSUER_URL is set and OIDC discovery is reachable at startup", cfg.APIAuthSource())
 	}
 
 	// Default API group — dev+ required for mutating methods (POST/PUT/PATCH/DELETE).
@@ -313,7 +323,7 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		logger.Warn("OCI publishing not configured (ORBITAL_OCI_REGISTRY and ORBITAL_OCI_SIGNING_KEY_PATH) — publish disabled")
 	}
 
-	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, cfg.OAuth2DeviceCode, s3Configured, cfg.S3Endpoint, cfg.S3Bucket, cfg.BasePath, db, logger)
+	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, s3Configured, cfg.S3Endpoint, cfg.S3Bucket, cfg.BasePath, db, logger)
 	ui.SetOCIConfig(ociConfigured, cfg.OCIRegistry, cfg.OCIRepo)
 	ui.SetExportDir(cfg.ExportDir)
 	ui.SetSchemaPath(cfg.SchemaPath)
@@ -383,17 +393,12 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 				cfg.BasePath,
 				logger,
 				cfg.AdminEmailSet(),
-				cfg.OAuth2DeviceCode,
 			)
 			if err != nil {
 				logger.Error("oidc provider init failed", "err", err)
 			} else {
 				root.GET("/auth/login", oidc.Login)
 				root.GET("/auth/callback", oidc.Callback)
-				if cfg.OAuth2DeviceCode {
-					root.GET("/auth/device", oidc.DeviceCodeStart)
-					root.POST("/auth/device/poll", oidc.DeviceCodePoll)
-				}
 			}
 		}
 	}
