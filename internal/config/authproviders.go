@@ -32,30 +32,42 @@ type AuthProvider struct {
 	// caller share an issuer but not a policy. Empty matches any client of that
 	// issuer, as an issuer-wide default; a specific entry always wins over it,
 	// so selection stays an exact lookup rather than an ordered scan.
-	ClientID             string                `json:"clientID,omitempty"`
-	ClaimValidationRules []ClaimValidationRule `json:"claimValidationRules,omitempty"`
-	ClaimMappings        ClaimMappings         `json:"claimMappings"`
+	ClientID      string        `json:"clientID,omitempty"`
+	ClaimMappings ClaimMappings `json:"claimMappings"`
 
-	// Exactly one of DefaultRole or RoleMapping. DefaultRole means orbital's
-	// users table owns the role and this is what a NEW user is created with.
-	// RoleMapping means the provider's groups own the role, re-derived at every
-	// login. Both or neither is a startup error — a setting that is present and
-	// inoperative is how someone comes to believe it is doing something it is not.
-	DefaultRole    string          `json:"defaultRole,omitempty"`
-	RoleMapping    []RoleRule      `json:"roleMapping,omitempty"`
-	TrustedService *TrustedService `json:"trustedService,omitempty"`
+	// Where this caller's role comes from. DefaultRole alone means orbital's
+	// users table owns it and this is what a NEW user is created with.
+	// RoleMapping alone means the provider's groups own it, re-derived at every
+	// login, and a token matching no group is denied. BOTH TOGETHER IS LEGAL and
+	// is the floor: the mapping decides, DefaultRole catches what it does not
+	// match, applied authoritatively rather than as a seed (Grafana's
+	// role_attribute_path plus role_attribute_strict = false).
+	//
+	// DelegatedAuthorization is the one that is exclusive — it owns the role
+	// wholesale and stores nothing, so combining it with a setting that writes to
+	// the users table would be two answers to one question. None of the three is
+	// also a startup error: that provider would accept tokens it could do nothing
+	// with.
+	DefaultRole            string                  `json:"defaultRole,omitempty"`
+	RoleMapping            []RoleRule              `json:"roleMapping,omitempty"`
+	DelegatedAuthorization *DelegatedAuthorization `json:"delegatedAuthorization,omitempty"`
 }
 
-// TrustedService marks a caller whose authorization happens upstream. Every
-// valid token from it receives AssignedRole, and NO user row is provisioned —
-// the caller is a service acting for its own users, not an orbital user.
+// DelegatedAuthorization marks a caller whose authorization happens upstream.
+// Every valid token from it receives Role, and NO user row is provisioned — the
+// caller is a service acting for its own users, not an orbital user.
 //
-// This is a deliberate trust delegation, not a default that happens to apply to
-// everyone: the upstream service authenticates and authorizes, and orbital
-// accepts its judgement. Named explicitly so that is visible in config rather
-// than inferred from a role that was never overridden.
-type TrustedService struct {
-	AssignedRole string `json:"assignedRole"`
+// Named for the RFC 8693 §1.1 distinction: this is DELEGATION, not
+// impersonation. Both identities survive — the human in `user_email`, the client
+// in `acting_client` — so the audit log can say "AEP did X as daniel" rather than
+// losing one of them. The adjective is load-bearing: orbital still AUTHENTICATES
+// the token itself against the issuer's keys, and only the authorization decision
+// is delegated.
+//
+// Named explicitly so the delegation is visible in config rather than inferred
+// from a role that was never overridden.
+type DelegatedAuthorization struct {
+	Role string `json:"role"`
 }
 
 // Issuer identifies the provider and what it is allowed to mint tokens for.
@@ -65,15 +77,6 @@ type Issuer struct {
 	// CertificateAuthority is a PEM file path, for a provider behind a private
 	// CA. Empty uses the system trust store.
 	CertificateAuthority string `json:"certificateAuthority,omitempty"`
-}
-
-// ClaimValidationRule requires a claim to hold an exact value. This is how azp
-// anchoring is expressed: Keycloak defaults to `aud: account` for every client
-// in a realm, so an audience check there proves only "some client in this realm"
-// and `azp` is the claim that actually identifies the caller.
-type ClaimValidationRule struct {
-	Claim         string `json:"claim"`
-	RequiredValue string `json:"requiredValue"`
 }
 
 // ClaimMappings names which claims carry identity and membership. Configurable
@@ -95,6 +98,17 @@ type RoleRule struct {
 
 // Decode implements envconfig.Decoder for ORBITAL_AUTH_PROVIDERS, matching how
 // ORB_CONSUMERS is decoded in orbconfig.
+//
+// STRICT: an unrecognised field fails startup rather than being ignored.
+// encoding/json drops what it does not know, which in an auth config means a
+// constraint the operator wrote silently not applying — a field that was renamed
+// keeps its old spelling in a manifest and quietly stops doing anything, and
+// `client_id` — the OAuth spelling, so the natural way to get `clientID` wrong —
+// would leave the entry matching EVERY client of its issuer rather than one.
+// (`clientId` is safe: encoding/json matches field names case-insensitively.)
+// Kubernetes decodes AuthenticationConfiguration strictly
+// for the same reason. Two passes so the message distinguishes malformed JSON
+// from a field orbital does not recognise; this runs once, at boot.
 func (a *AuthProviders) Decode(value string) error {
 	if strings.TrimSpace(value) == "" {
 		*a = nil
@@ -104,7 +118,16 @@ func (a *AuthProviders) Decode(value string) error {
 	if err := json.Unmarshal([]byte(value), &parsed); err != nil {
 		return fmt.Errorf("ORBITAL_AUTH_PROVIDERS is not valid JSON: %w", err)
 	}
-	*a = parsed
+	dec := json.NewDecoder(strings.NewReader(value))
+	dec.DisallowUnknownFields()
+	var strict AuthProviders
+	if err := dec.Decode(&strict); err != nil {
+		return fmt.Errorf("ORBITAL_AUTH_PROVIDERS: %w — `trustedService` is now "+
+			"`delegatedAuthorization` (with `role` in place of `assignedRole`), and "+
+			"`claimValidationRules` was removed: `clientID` pins azp and "+
+			"`issuer.audiences` pins aud", err)
+	}
+	*a = strict
 	return nil
 }
 
@@ -154,28 +177,23 @@ func (a AuthProviders) Validate() error {
 				return fmt.Errorf("%s: issuer.audiences contains an empty value", where)
 			}
 		}
-		for j, r := range p.ClaimValidationRules {
-			if r.Claim == "" || r.RequiredValue == "" {
-				return fmt.Errorf("%s: claimValidationRules[%d] needs both claim and requiredValue", where, j)
-			}
-		}
 		if p.ClaimMappings.Username.Claim == "" {
 			return fmt.Errorf("%s: claimMappings.username.claim is required", where)
 		}
 
 		hasDefault, hasMapping := p.DefaultRole != "", len(p.RoleMapping) > 0
-		hasTrusted := p.TrustedService != nil
+		hasDelegated := p.DelegatedAuthorization != nil
 		switch {
-		case hasTrusted && (hasDefault || hasMapping):
-			return fmt.Errorf("%s: trustedService cannot be combined with defaultRole or roleMapping — "+
+		case hasDelegated && (hasDefault || hasMapping):
+			return fmt.Errorf("%s: delegatedAuthorization cannot be combined with defaultRole or roleMapping — "+
 				"it owns the role wholesale and stores nothing", where)
-		case !hasDefault && !hasMapping && !hasTrusted:
-			return fmt.Errorf("%s: set defaultRole, roleMapping or trustedService — "+
+		case !hasDefault && !hasMapping && !hasDelegated:
+			return fmt.Errorf("%s: set defaultRole, roleMapping or delegatedAuthorization — "+
 				"a provider that cannot assign any role would accept tokens it could do nothing with", where)
-		case hasTrusted:
-			if _, ok := validRoles[p.TrustedService.AssignedRole]; !ok {
-				return fmt.Errorf("%s: trustedService.assignedRole must be readonly, dev or admin, got %q",
-					where, p.TrustedService.AssignedRole)
+		case hasDelegated:
+			if _, ok := validRoles[p.DelegatedAuthorization.Role]; !ok {
+				return fmt.Errorf("%s: delegatedAuthorization.role must be readonly, dev or admin, got %q",
+					where, p.DelegatedAuthorization.Role)
 			}
 		default:
 			// defaultRole and roleMapping may coexist: the mapping decides, and

@@ -74,22 +74,6 @@ run-orbital: fmt ## Run orbital server (go run; fast dev iteration). Restore req
 	if [ -f deploy/local/orbital.env ]; then set -a; . ./deploy/local/orbital.env; set +a; fi; \
 	DOCKER_CONFIG=$$(mktemp -d) go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orbital
 
-run-orbital-aep: fmt ## Run orbital in external-jwt mode (accepts AEP/Keycloak bearers as admin) on :8001
-	@# Vars are set IN the recipe so they always reach the process — no
-	@# fragile shell-prefix env that breaks when pasted across lines.
-	@# SSO login + bundler publish need env you export YOURSELF first (both talk
-	@# to external processes, so you decide when they're on):
-	@#   export ORBITAL_OIDC_CLIENT_SECRET=...    # Keycloak client secret
-	@#   export ORBITAL_BUNDLER_URLS=configbundle-bundler=http://localhost:8020/bundle
-	@# The recipe inherits exported vars; omit them and orbital still runs.
-	DOCKER_CONFIG=$$(mktemp -d) \
-	ORBITAL_AUTH_MODE=external-jwt \
-	ORBITAL_JWT_ISSUER=https://keycloak.devnew.armada.ai/realms/armada \
-	ORBITAL_JWT_AUDIENCE=account \
-	ORBITAL_JWT_CLIENT_ID=aep-fleet-commander \
-	ORBITAL_JWT_DEFAULT_ROLE=admin \
-	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orbital
-
 run-orb: fmt ## Run orb edge service (go run; fast dev iteration). Import requires dgraph in PATH
 	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orb start
 

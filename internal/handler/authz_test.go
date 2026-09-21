@@ -122,7 +122,7 @@ func TestRequireAdmin_NilDB_PassesThrough(t *testing.T) {
 }
 
 // TestResolveUser_AppPrincipal_PassesThroughWithoutDB verifies the ADR 010
-// MVP policy: an app-only caller (set by BearerVerifier with
+// MVP policy: an app-only caller (set by the provider set with
 // user_name="app:<appid>", user_email="") skips the users-table lookup. The
 // app-principal branch must execute before any DB use, so a nil db is safe.
 func TestResolveUser_AppPrincipal_PassesThroughWithoutDB(t *testing.T) {
@@ -137,8 +137,9 @@ func TestResolveUser_AppPrincipal_PassesThroughWithoutDB(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/graphql", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	// Mirror what BearerVerifier sets for an app-only token.
+	// Mirror what the provider set sets for an app-only token.
 	c.Set("user_id", 0)
+	auth.MarkAppPrincipal(c)
 	c.Set("user_name", auth.AppPrincipalPrefix+"5fc832f6-843e-4207-93dd-b3c3a77c06f2")
 	c.Set("user_email", "")
 

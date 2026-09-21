@@ -1,6 +1,6 @@
 # Orbital API Cheatsheet
 
-Copy-paste GraphQL + REST for backend services talking to Orbital on **AKS dev** (external-jwt mode). Deeper context lives in `docs/reference/`.
+Copy-paste GraphQL + REST for backend services talking to Orbital on **AKS dev** (Keycloak bearer tokens, `ORBITAL_AUTH_PROVIDERS`). Deeper context lives in `docs/reference/`.
 
 Change requests and approval policies have their own sheet: `docs/api-cheatsheet-change-control.md`.
 

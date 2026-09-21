@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -41,20 +43,17 @@ type ProviderSet struct {
 func providerKey(issuer, clientID string) string { return issuer + "\x00" + clientID }
 
 type provider struct {
-	issuer          string
-	clientID        string
-	assignedRole    string
-	verifier        *gooidc.IDTokenVerifier
-	audiences       []string
-	validationRules []claimRule
-	selfClientID    string
-	usernameClaim   string
-	groupsClaim     string
-	defaultRole     string
-	mapper          *RoleMapper
+	issuer        string
+	clientID      string
+	delegatedRole string
+	verifier      *gooidc.IDTokenVerifier
+	audiences     []string
+	selfClientID  string
+	usernameClaim string
+	groupsClaim   string
+	defaultRole   string
+	mapper        *RoleMapper
 }
-
-type claimRule struct{ claim, requiredValue string }
 
 // roleGroupDefaulted marks an audit event whose role came from the provider's
 // defaultRole floor rather than a matched group, so the record says which.
@@ -68,12 +67,11 @@ type ProviderSpec struct {
 	IssuerURL string
 	// ClientID is the azp this entry matches; empty means any client of the issuer.
 	ClientID string
-	// AssignedRole is set for a trusted-service provider: every valid token gets
-	// this role and no user row is provisioned.
-	AssignedRole         string
+	// DelegatedRole is set for a provider with delegatedAuthorization: every
+	// valid token gets this role and no user row is provisioned.
+	DelegatedRole        string
 	Audiences            []string
 	CertificateAuthority string
-	ValidationRules      []struct{ Claim, RequiredValue string }
 	// SelfClientID is the client orbital's own UI and CLI authenticate as. A
 	// token from it has no separate actor.
 	SelfClientID  string
@@ -110,7 +108,7 @@ func NewProviderSet(ctx context.Context, specs []ProviderSpec, logger *slog.Logg
 		p := &provider{
 			issuer:        s.IssuerURL,
 			clientID:      s.ClientID,
-			assignedRole:  s.AssignedRole,
+			delegatedRole: s.DelegatedRole,
 			selfClientID:  s.SelfClientID,
 			usernameClaim: s.UsernameClaim,
 			groupsClaim:   s.GroupsClaim,
@@ -122,9 +120,6 @@ func NewProviderSet(ctx context.Context, specs []ProviderSpec, logger *slog.Logg
 		// than two that could diverge.
 		p.verifier = disc.Verifier(&gooidc.Config{SkipClientIDCheck: true})
 		p.audiences = append(p.audiences, s.Audiences...)
-		for _, r := range s.ValidationRules {
-			p.validationRules = append(p.validationRules, claimRule{claim: r.Claim, requiredValue: r.RequiredValue})
-		}
 		p.mapper = NewRoleMapper(s.GroupsClaim, s.RoleMapping)
 		ps.byKey[providerKey(s.IssuerURL, s.ClientID)] = p
 	}
@@ -219,22 +214,14 @@ func (ps *ProviderSet) verify(c echo.Context, next echo.HandlerFunc, raw string)
 			"issuer", p.issuer, "want", p.audiences, "request.id", requestID(c))
 		return denyBearer(c, oauthErrInvalidToken, "token audience is not accepted by this server")
 	}
-	for _, r := range p.validationRules {
-		if claimString(claims[r.claim]) != r.requiredValue {
-			ps.logger.Warn("bearer token rejected — claim validation rule not satisfied",
-				"issuer", p.issuer, "claim", r.claim, "request.id", requestID(c))
-			return denyBearer(c, oauthErrInvalidToken, "token does not satisfy this server's claim requirements")
-		}
-	}
-
 	c.Set("auth_issuer", p.issuer)
 	c.Set("is_authn", true)
 
 	// App principal: a client-credentials caller with no human behind it — the
 	// in-pod cb-bundler is the worked example. Valid, but not a user: it must
 	// not land in the users table with a role. Detected as "carries a client
-	// identity and no email", which is the same test BearerVerifier already
-	// applies (email == "" && appID != "") generalised across providers.
+	// identity and no email" (email == "" && appID != ""), the test the removed
+	// single-issuer verifier applied, generalised across providers.
 	//
 	// This is not hypothetical. Keycloak creates a real user object for a
 	// service-enabled client, so `preferred_username` is populated while `email`
@@ -246,6 +233,7 @@ func (ps *ProviderSet) verify(c echo.Context, next echo.HandlerFunc, raw string)
 		appID = claimString(claims["appid"])
 	}
 	if claimString(claims["email"]) == "" && appID != "" {
+		MarkAppPrincipal(c)
 		c.Set("user_name", AppPrincipalPrefix+appID)
 		c.Set("user_email", "")
 		return next(c)
@@ -270,12 +258,12 @@ func (ps *ProviderSet) verify(c echo.Context, next echo.HandlerFunc, raw string)
 		c.Set("acting_client", appID)
 	}
 
-	// Trusted service: authorization happened upstream, so every valid token gets
-	// the configured role and NO user row is provisioned. The caller is a service
-	// acting for its own users, not an orbital user — same treatment as an app
-	// principal, and the same reason.
-	if p.assignedRole != "" {
-		c.Set("role", p.assignedRole)
+	// Delegated authorization: the decision happened upstream, so every valid
+	// token gets the configured role and NO user row is provisioned. The caller is
+	// a service acting for its own users, not an orbital user — same treatment as
+	// an app principal, and the same reason.
+	if p.delegatedRole != "" {
+		c.Set("role", p.delegatedRole)
 		return next(c)
 	}
 
@@ -395,8 +383,8 @@ func claimString(v any) string {
 	return s
 }
 
-// denyBearer writes the RFC 6750 §3.1 error response, matching the shape the
-// external-jwt verifier already returns so clients see one contract.
+// denyBearer writes the RFC 6750 §3.1 error response: a WWW-Authenticate header
+// for HTTP intermediaries and a JSON body carrying the code and description.
 func denyBearer(c echo.Context, code, description string) error {
 	c.Response().Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer error=%q, error_description=%q`, code, description))
 	return c.JSON(http.StatusUnauthorized, map[string]string{
@@ -404,3 +392,41 @@ func denyBearer(c echo.Context, code, description string) error {
 		"error_description": description,
 	})
 }
+
+// unverifiedClaims is the minimum needed to CHOOSE a provider: the issuer and
+// the authorized party. Decoded without signature verification, so it is only
+// ever used for selection — the chosen provider validates the token against its
+// own keys before any claim here is trusted.
+type unverifiedClaims struct {
+	Iss string `json:"iss"`
+	AZP string `json:"azp"`
+}
+
+// parseUnverifiedClaims decodes a JWT payload WITHOUT verifying the signature.
+func parseUnverifiedClaims(rawToken string) (unverifiedClaims, error) {
+	var claims unverifiedClaims
+	parts := strings.Split(rawToken, ".")
+	if len(parts) != 3 {
+		return claims, fmt.Errorf("malformed jwt: got %d segments, want 3", len(parts))
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return claims, fmt.Errorf("decode jwt payload: %w", err)
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return claims, fmt.Errorf("unmarshal jwt claims: %w", err)
+	}
+	return claims, nil
+}
+
+// requestID returns the Echo request ID set by the RequestID middleware, for
+// correlating an auth-failure log with the access-log line for the same request.
+func requestID(c echo.Context) string {
+	return c.Response().Header().Get(echo.HeaderXRequestID)
+}
+
+// OAuth 2.0 error codes for Bearer token failures (RFC 6750 §3.1).
+const (
+	oauthErrInvalidRequest = "invalid_request"
+	oauthErrInvalidToken   = "invalid_token"
+)

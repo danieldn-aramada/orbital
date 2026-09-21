@@ -130,44 +130,14 @@ type Config struct {
 	OIDCClientID     string `envconfig:"ORBITAL_OIDC_CLIENT_ID"          default:""`
 	OIDCClientSecret string `envconfig:"ORBITAL_OIDC_CLIENT_SECRET"      default:""`
 	OIDCRedirectURL  string `envconfig:"ORBITAL_OIDC_REDIRECT_URL"       default:"http://localhost:8001/auth/callback"`
-	// AppTokenAllowedAppIDs gates which app-only (client-credentials) bearer
-	// tokens orbital accepts on /api/v1 and /graphql. EMPTY DENIES every app
-	// token: a deployment that uses them must list the application ids, or "*"
-	// to accept any app token already bound to the orbital audience. There is
-	// deliberately no default app id — "unconfigured" and "allow everything"
-	// must not be the same input, and a baked-in id belongs to a deployment,
-	// not to the code. deploy/base/deploy.yaml sets it for the in-pod
-	// cb-bundler. See docs/reference/AUTH.md § App Caller Authorization.
-	AppTokenAllowedAppIDs []string `envconfig:"ORBITAL_APP_TOKEN_ALLOWED_APPIDS" default:""`
-	AdminEmails           string   `envconfig:"ORBITAL_ADMIN_EMAILS"            default:"admin@armada.ai"` // comma-separated emails promoted to admin on first OIDC login
-	// AuthMode selects the authentication stack. Empty (default) keeps today's
-	// behavior — session cookie + optional OIDC bearer per OIDCIssuerURL. Set to
-	// "external-jwt" to trust bearer tokens issued by an external OIDC provider
-	// (e.g. AEP's Keycloak client) instead of orbital's own login flow. See
-	// docs/reference/AUTH.md § External JWT Mode.
-	// AuthProviders is the multi-provider bearer config (Spike 26). When set it
-	// is the SOLE source of bearer verification, replacing ORBITAL_AUTH_MODE and
-	// the single-issuer bearer path. ORBITAL_OIDC_* keeps driving the browser
-	// login flow, where orbital is an OAuth client rather than a resource
-	// server — those are different jobs and only the second one moves here.
+	AdminEmails      string `envconfig:"ORBITAL_ADMIN_EMAILS"            default:"admin@armada.ai"` // comma-separated emails promoted to admin on first OIDC login
+	// AuthProviders is the multi-provider bearer config. When set it is the SOLE
+	// source of bearer verification, superseding the single-issuer bearer path.
+	// ORBITAL_OIDC_* keeps driving the browser login flow, where orbital is an
+	// OAuth client rather than a resource server — those are different jobs and
+	// only the second one moves here.
 	AuthProviders AuthProviders `envconfig:"ORBITAL_AUTH_PROVIDERS"`
 
-	AuthMode    string `envconfig:"ORBITAL_AUTH_MODE"               default:""`
-	JWTIssuer   string `envconfig:"ORBITAL_JWT_ISSUER"              default:""` // e.g. https://keycloak.example.com/realms/foo
-	JWTAudience string `envconfig:"ORBITAL_JWT_AUDIENCE"            default:""` // expected `aud` claim
-	JWTClientID string `envconfig:"ORBITAL_JWT_CLIENT_ID"           default:""` // required `azp` claim — the trust anchor when aud is a generic default like "account"
-	// JWTDefaultRole is the role every valid bearer token receives in
-	// external-jwt mode (that mode assigns one tier to all callers rather than
-	// reading a per-user role), and is read nowhere else.
-	//
-	// Defaults to the LEAST-privileged tier deliberately. A default that grants
-	// write access is an authorization decision nobody made; least privilege
-	// fails in the safe direction, and an operator who wants a broader tier can
-	// say so. Not made a required field: refusing to boot is the right tool only
-	// where no safe fallback exists (see the apiAuth-empty guard in server.go),
-	// and here one does. server.go warns when this was left unset so the
-	// fallback is visible rather than silent.
-	JWTDefaultRole          string        `envconfig:"ORBITAL_JWT_DEFAULT_ROLE"        default:"readonly"`
 	OCIRegistry             string        `envconfig:"ORBITAL_OCI_REGISTRY"            default:"localhost:5001"`
 	OCIRepo                 string        `envconfig:"ORBITAL_OCI_REPO"                default:"orbital"`
 	OCIUsername             string        `envconfig:"ORBITAL_OCI_USERNAME"            default:""`
@@ -255,26 +225,6 @@ func New() (*Config, error) {
 	}
 	if err := cfg.AuthProviders.Validate(); err != nil {
 		return nil, err
-	}
-	// ORBITAL_AUTH_PROVIDERS replaces external-jwt rather than composing with
-	// it. Merging two sources of truth for who may authenticate is how they
-	// drift, so this refuses rather than picking a winner.
-	if len(cfg.AuthProviders) > 0 && cfg.AuthMode != "" {
-		return nil, fmt.Errorf("ORBITAL_AUTH_PROVIDERS and ORBITAL_AUTH_MODE=%s are mutually exclusive: "+
-			"the provider list supersedes the single-issuer mode. Move the issuer into ORBITAL_AUTH_PROVIDERS "+
-			"and unset ORBITAL_AUTH_MODE", cfg.AuthMode)
-	}
-	if cfg.AuthMode == "external-jwt" {
-		if cfg.JWTIssuer == "" || cfg.JWTAudience == "" || cfg.JWTClientID == "" {
-			return nil, fmt.Errorf("ORBITAL_AUTH_MODE=external-jwt requires ORBITAL_JWT_ISSUER, ORBITAL_JWT_AUDIENCE, ORBITAL_JWT_CLIENT_ID")
-		}
-		switch cfg.JWTDefaultRole {
-		case "readonly", "dev", "admin":
-		default:
-			return nil, fmt.Errorf("ORBITAL_JWT_DEFAULT_ROLE must be one of readonly|dev|admin, got %q", cfg.JWTDefaultRole)
-		}
-	} else if cfg.AuthMode != "" {
-		return nil, fmt.Errorf("ORBITAL_AUTH_MODE must be empty or \"external-jwt\", got %q", cfg.AuthMode)
 	}
 	if cfg.DBUseAzMI {
 		if cfg.DBHost == "" || cfg.DBUser == "" || cfg.DBName == "" {

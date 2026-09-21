@@ -38,27 +38,20 @@ spec:
               value: "0 8 * * *"  # daily at 08:00 UTC (midnight PT)
             - name: ORBITAL_DIVERGENCE_POLL_INTERVAL
               value: "5s"
-            # Bearer auth: one Keycloak realm, two clients treated differently.
-            # A token selects its provider by (iss, azp), so AEP and orbital's
-            # own client share an issuer without sharing a policy.
+            - name: ORBITAL_OIDC_ISSUER_URL
+              value: https://keycloak.devnew.armada.ai/realms/armada
+            - name: ORBITAL_OIDC_CLIENT_ID
+              value: armada-orbital
+            # Bearer auth: one Keycloak realm, two clients, different policies.
+            # A token selects its provider by (iss, azp).
             #
-            #  - aep-fleet-commander is a TRUSTED SERVICE: AEP authenticates and
-            #    authorizes its own users upstream (organization-svc) and calls
-            #    orbital on their behalf, so every valid token gets admin and no
-            #    user row is created. The acting client is recorded on audit
-            #    events as `acting_client`, so the log distinguishes "AEP acting
-            #    as someone" from that person acting directly.
-            #  - armada-orbital covers direct callers: the in-pod cb-bundler
-            #    (client credentials, no email, so an app principal) and any
-            #    human, whose role comes from the orbital_roles claim.
-            #    defaultRole alongside roleMapping is the FLOOR: a token matching
-            #    no mapped group gets readonly instead of being refused. Applied
-            #    authoritatively, so losing a group demotes to the floor rather
-            #    than keeping the role the mapping gave. Drop defaultRole to make
-            #    an unmatched login a refusal instead.
+            #  - aep-fleet-commander: authorization delegated upstream. Every valid
+            #    token gets admin, no user row; audit records `acting_client`.
             #
-            # Replaces ORBITAL_AUTH_MODE=external-jwt. The two are mutually
-            # exclusive and setting both is a startup error.
+            #  - armada-orbital: direct callers (cb-bundler, humans). Role comes from
+            #    the orbital_roles claim; defaultRole is the floor for a token that
+            #    matches no mapped group — drop it to refuse those instead.
+            #
             # See docs/reference/AUTH.md § Multiple identity providers.
             - name: ORBITAL_AUTH_PROVIDERS
               value: |
@@ -70,12 +63,12 @@ spec:
                     },
                     "clientID": "aep-fleet-commander",
                     "claimMappings": { "username": { "claim": "email" } },
-                    "trustedService": { "assignedRole": "admin" }
+                    "delegatedAuthorization": { "role": "admin" }
                   },
                   {
                     "issuer": {
                       "url": "https://keycloak.devnew.armada.ai/realms/armada",
-                      "audiences": ["account", "armada-orbital"]
+                      "audiences": ["armada-orbital"]
                     },
                     "clientID": "armada-orbital",
                     "claimMappings": {
@@ -88,3 +81,13 @@ spec:
                     "defaultRole": "readonly"
                   }
                 ]
+        # cb-bundler mints its own token against the same realm to call orbital's
+        # /graphql during publish
+        - name: configbundle-bundler
+          env:
+            - name: ORBITAL_OIDC_ISSUER_URL
+              value: https://keycloak.devnew.armada.ai/realms/armada
+            - name: ORBITAL_OIDC_CLIENT_ID
+              value: armada-orbital
+            - name: ORBITAL_TOKEN_URL
+              value: https://keycloak.devnew.armada.ai/realms/armada/protocol/openid-connect/token

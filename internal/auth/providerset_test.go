@@ -115,22 +115,14 @@ func TestProviderSet_TokenSignedByAnotherProviderIsRejected(t *testing.T) {
 	}
 }
 
-func TestProviderSet_AudienceAndClaimRulesAreEnforcedPerProvider(t *testing.T) {
+func TestProviderSet_AudienceIsEnforcedPerProvider(t *testing.T) {
 	iss, sign := newTestOIDCServer(t)
-	spec := specFor(iss, "account")
-	spec.ValidationRules = []struct{ Claim, RequiredValue string }{{Claim: "azp", RequiredValue: "armada-orbital"}}
-	ps := newSet(t, spec)
+	ps := newSet(t, specFor(iss, "account"))
 
 	ok := claimsFor(iss, "account", "u@example.com")
 	ok["azp"] = "armada-orbital"
 	if code, _ := callWith(t, ps, sign(ok)); code != http.StatusOK {
-		t.Fatalf("matching azp got %d, want 200", code)
-	}
-
-	wrongAZP := claimsFor(iss, "account", "u@example.com")
-	wrongAZP["azp"] = "some-other-client"
-	if code, _ := callWith(t, ps, sign(wrongAZP)); code != http.StatusUnauthorized {
-		t.Errorf("mismatched azp got %d, want 401 — the rule is what anchors trust when aud is generic", code)
+		t.Fatalf("matching audience got %d, want 200", code)
 	}
 
 	wrongAud := claimsFor(iss, "not-account", "u@example.com")
@@ -279,11 +271,11 @@ func TestProviderSet_ActingClientRecordedOnlyWhenItDiffersFromTheSubject(t *test
 	}
 }
 
-func TestProviderSet_TrustedServiceAssignsARoleAndProvisionsNoUser(t *testing.T) {
+func TestProviderSet_DelegatedAuthorizationAssignsARoleAndProvisionsNoUser(t *testing.T) {
 	iss, sign := newTestOIDCServer(t)
-	trusted := specFor(iss, "aud")
-	trusted.ClientID, trusted.DefaultRole, trusted.AssignedRole = "aep-fleet-commander", "", "admin"
-	ps := newSet(t, trusted)
+	delegated := specFor(iss, "aud")
+	delegated.ClientID, delegated.DefaultRole, delegated.DelegatedRole = "aep-fleet-commander", "", "admin"
+	ps := newSet(t, delegated)
 
 	cl := claimsFor(iss, "aud", "someone@example.com")
 	cl["azp"] = "aep-fleet-commander"
@@ -292,24 +284,24 @@ func TestProviderSet_TrustedServiceAssignsARoleAndProvisionsNoUser(t *testing.T)
 		t.Fatalf("got %d, want 200", code)
 	}
 	if got := c.Get("role"); got != "admin" {
-		t.Errorf("role = %v, want admin — a trusted service assigns its role directly", got)
+		t.Errorf("role = %v, want admin — delegated authorization assigns its role directly", got)
 	}
 	// No provisioning signals: ResolveUser short-circuits on a preset role, so
 	// these must stay unset or a user row would be created for an AEP caller.
 	for _, k := range []string{"provider_role", "provider_default_role"} {
 		if got := c.Get(k); got != nil {
-			t.Errorf("%s = %v, want unset — a trusted-service caller is not an orbital user", k, got)
+			t.Errorf("%s = %v, want unset — a delegated caller is not an orbital user", k, got)
 		}
 	}
 }
 
 func TestProviderSet_TwoClientsOfOneIssuerAreSelectedIndependently(t *testing.T) {
 	iss, sign := newTestOIDCServer(t)
-	trusted := specFor(iss, "aud")
-	trusted.ClientID, trusted.DefaultRole, trusted.AssignedRole = "aep-fleet-commander", "", "admin"
+	delegated := specFor(iss, "aud")
+	delegated.ClientID, delegated.DefaultRole, delegated.DelegatedRole = "aep-fleet-commander", "", "admin"
 	direct := modeBSpec(iss)
 	direct.ClientID = "armada-orbital"
-	ps := newSet(t, trusted, direct)
+	ps := newSet(t, delegated, direct)
 
 	viaAEP := claimsFor(iss, "aud", "p@example.com")
 	viaAEP["azp"] = "aep-fleet-commander"
@@ -327,5 +319,79 @@ func TestProviderSet_TwoClientsOfOneIssuerAreSelectedIndependently(t *testing.T)
 	}
 	if got := c2.Get("role"); got != nil {
 		t.Errorf("direct caller must not get an assigned role: %v", got)
+	}
+}
+
+// The gate that ORBITAL_APP_TOKEN_ALLOWED_APPIDS used to hold: an app token is
+// admitted by the provider entry whose clientID matches its azp, and nothing
+// else. Both halves matter — a listed client is accepted as an app principal
+// with no user row, and an unlisted one is refused before any role logic runs.
+// Without the negative, an implementation that admits every app token passes.
+func TestProviderSet_AppTokenIsGatedByClientID(t *testing.T) {
+	iss, sign := newTestOIDCServer(t)
+	listed := specFor(iss, "aud")
+	listed.ClientID = "listed-service"
+	ps := newSet(t, listed)
+
+	// A client-credentials token: a client identity and no email.
+	appToken := func(azp string) string {
+		claims := claimsFor(iss, "aud", "")
+		delete(claims, "email")
+		claims["azp"] = azp
+		return sign(claims)
+	}
+
+	t.Run("listed client is an app principal", func(t *testing.T) {
+		code, c := callWith(t, ps, appToken("listed-service"))
+		if code != http.StatusOK {
+			t.Fatalf("got %d, want 200", code)
+		}
+		if got, _ := c.Get("user_name").(string); got != AppPrincipalPrefix+"listed-service" {
+			t.Errorf("user_name = %q, want %q", got, AppPrincipalPrefix+"listed-service")
+		}
+		if got := c.Get("user_email"); got != "" {
+			t.Errorf("app principal carries an email: %v", got)
+		}
+		if !IsAppPrincipal(c) {
+			t.Error("a client-credentials caller must be marked an app principal")
+		}
+	})
+
+	t.Run("unlisted client is refused", func(t *testing.T) {
+		code, c := callWith(t, ps, appToken("some-other-service"))
+		if code != http.StatusUnauthorized {
+			t.Fatalf("got %d, want 401 — a client that is not listed must not authenticate", code)
+		}
+		if got := c.Get("user_name"); got != nil {
+			t.Errorf("refused caller was given an identity: %v", got)
+		}
+	})
+}
+
+// A human token must not be able to classify itself as a machine. user_name is
+// the token's `name` claim, which the end-user often controls (Keycloak exposes
+// it in the account console), so when that claim carried the "app:" label a
+// prefix check downstream skipped provisioning AND the provider's role, and
+// RequireRole then granted dev-equivalent access. The marker the verifier sets
+// is the answer instead, and nothing a token says can reach it.
+func TestProviderSet_HumanTokenCannotForgeAnAppPrincipal(t *testing.T) {
+	iss, sign := newTestOIDCServer(t)
+	spec := specFor(iss, "aud")
+	spec.ClientID = "armada-orbital"
+	ps := newSet(t, spec)
+
+	claims := claimsFor(iss, "aud", "employee@example.com")
+	claims["azp"] = "armada-orbital"
+	claims["name"] = AppPrincipalPrefix + "impersonated-service"
+	code, c := callWith(t, ps, sign(claims))
+
+	if code != http.StatusOK {
+		t.Fatalf("got %d, want 200 — the token itself is valid", code)
+	}
+	if IsAppPrincipal(c) {
+		t.Fatal("a human token forged an app principal via its name claim")
+	}
+	if got := c.Get("user_email"); got != "employee@example.com" {
+		t.Errorf("user_email = %v, want the human identity", got)
 	}
 }
