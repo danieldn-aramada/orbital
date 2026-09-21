@@ -27,6 +27,8 @@ const (
 	FieldEventCategory = "event_category"
 	// FieldEventSource holds the string denoting the event_source field in the database.
 	FieldEventSource = "event_source"
+	// FieldActingClient holds the string denoting the acting_client field in the database.
+	FieldActingClient = "acting_client"
 	// FieldSourceIPAddress holds the string denoting the source_ip_address field in the database.
 	FieldSourceIPAddress = "source_ip_address"
 	// FieldRequestID holds the string denoting the request_id field in the database.
@@ -62,6 +64,7 @@ var Columns = []string{
 	FieldDetails,
 	FieldEventCategory,
 	FieldEventSource,
+	FieldActingClient,
 	FieldSourceIPAddress,
 	FieldRequestID,
 }
@@ -111,6 +114,11 @@ func ByEventCategory(opts ...sql.OrderTermOption) OrderOption {
 // ByEventSource orders the results by the event_source field.
 func ByEventSource(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEventSource, opts...).ToFunc()
+}
+
+// ByActingClient orders the results by the acting_client field.
+func ByActingClient(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldActingClient, opts...).ToFunc()
 }
 
 // BySourceIPAddress orders the results by the source_ip_address field.

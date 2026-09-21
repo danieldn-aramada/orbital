@@ -91,6 +91,27 @@ That last row is why both surfaces can be correct while disagreeing — so **nev
 
 This is the split AWS makes between Config (*"what did my resource look like?"*) and CloudTrail (*"who made an API call to modify this resource?"*). CloudTrail has no before-state field at all; orbital's `details.before` is a deliberate improvement on it, and is why orbital needs no second store to render a diff.
 
+## `acting_client` — who acted, when that is not who it is attributed to
+
+A trusted upstream service (AEP's BFF) authenticates its own users and calls
+orbital on their behalf. The token names a human, so `actor` is that human — but
+the request was made by a service, and without recording that, the row says only
+"daniel did X" and cannot distinguish a direct action from one taken through the
+service. If that service's authorization has a bug, the audit log is the thing
+that should be able to tell the difference, and it could not.
+
+`acting_client` holds the OAuth client from the token's verified `azp`, and is
+**set only when it differs from the subject**. A user signing in directly is their
+own actor; stamping that on every row would make the column noise and train
+readers to ignore it — the same reasoning as the `privileged` flag.
+
+RFC 8693 calls this the actor and carries it in the `act` claim, which the IdP
+signs. Orbital infers it from `azp` because it does not yet consume exchanged
+tokens. **The inferred version is weaker in one specific way** — `azp` names the
+client that requested the token, so under a chain of services it reflects the
+last one rather than the whole path, and `act` nests where `azp` does not. Worth
+replacing when token exchange lands, not worth waiting for.
+
 ## Naming — `audit_events` (storage) / `audit-log` (API)
 
 **Settled 2026-08-26.** Both layers share the root noun `audit`:

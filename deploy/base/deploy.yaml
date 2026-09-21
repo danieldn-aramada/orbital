@@ -71,16 +71,14 @@ spec:
                   key: ORBITAL_SESSION_ENCRYPTION_KEY
             # OIDC
             - name: ORBITAL_OIDC_ISSUER_URL
-              value: https://login.microsoftonline.com/8f231c2a-9551-4b40-be17-5b24afe5e890/v2.0
+              value: https://keycloak.devnew.armada.ai/realms/armada
             - name: ORBITAL_OIDC_CLIENT_ID
-              value: 5fc832f6-843e-4207-93dd-b3c3a77c06f2
+              value: armada-orbital
             # App-only bearer callers. EMPTY DENIES ALL app tokens, so this must
             # list every service that calls orbital with client credentials — today
             # that is the in-pod cb-bundler below, which mints a token AS THE ORBITAL
             # APP (same client id). "*" would accept any app token bound to the
             # audience. See docs/reference/AUTH.md § App Caller Authorization.
-            - name: ORBITAL_APP_TOKEN_ALLOWED_APPIDS
-              value: 5fc832f6-843e-4207-93dd-b3c3a77c06f2
             - name: ORBITAL_OIDC_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -175,20 +173,33 @@ spec:
             - name: ORBITAL_BASE_URL
               value: http://localhost:8001$(ORBITAL_BASE_PATH)
             # OAuth2 client credentials grant — cb-bundler mints its own bearer
-            # token from Entra to call orbital's /graphql. See orbital ADR 010.
+            # token to call orbital's /graphql, as the armada-orbital service
+            # account. Keycloak, not Entra: orbital trusts one issuer now.
             # Same secret as the orbital container (single K8s Secret on both).
             # Env var names must match what cb-bundler reads (ORBITAL_OIDC_*).
-            - name: ORBITAL_OIDC_TENANT_ID
-              value: 8f231c2a-9551-4b40-be17-5b24afe5e890
+            #
+            # The token carries no email, so orbital treats it as an app
+            # principal: no user row. The gate is the provider entry's clientID
+            # in ORBITAL_AUTH_PROVIDERS — a token whose azp matches no entry is
+            # refused, so this client must appear there.
+            - name: ORBITAL_OIDC_ISSUER_URL
+              value: https://keycloak.devnew.armada.ai/realms/armada
             - name: ORBITAL_OIDC_CLIENT_ID
-              value: 5fc832f6-843e-4207-93dd-b3c3a77c06f2
+              value: armada-orbital
             - name: ORBITAL_OIDC_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: orbital-secrets
                   key: ORBITAL_OIDC_CLIENT_SECRET
-            - name: ORBITAL_OAUTH_SCOPE
-              value: api://5fc832f6-843e-4207-93dd-b3c3a77c06f2/.default
+            # Keycloak's token endpoint is not derivable from the issuer the way
+            # Entra's was, and its default scope is not Entra's
+            # api://{clientID}/.default. cb-bundler takes both explicitly —
+            # leaving TOKEN_SCOPE unset would send Keycloak a scope it does not
+            # recognise. Both vars exist in cb-bundler for exactly this case.
+            - name: ORBITAL_TOKEN_URL
+              value: https://keycloak.devnew.armada.ai/realms/armada/protocol/openid-connect/token
+            - name: ORBITAL_TOKEN_SCOPE
+              value: openid
       volumes:
         - name: cosign-key
           secret:

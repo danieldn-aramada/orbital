@@ -57,12 +57,17 @@ Choose a hostname (e.g. `orbital-dev.<external-ip>.nip.io` for a quick
 no-DNS option, or a real DNS name). The VirtualService in `deploy/base/`
 references this hostname.
 
-### 2. Update Azure AD redirect URI
+### 2. Register the redirect URI in Keycloak
 
-In the Azure AD app registration for orbital (client ID
-`5fc832f6-843e-4207-93dd-b3c3a77c06f2`):
-- Go to **Authentication → Redirect URIs**
-- Add: `https://<hostname>/auth/callback`
+Orbital authenticates against Keycloak, not Entra directly (Keycloak brokers to
+Entra upstream). In the `armada` realm, client **armada-orbital**:
+- **Settings → Valid redirect URIs** → add `https://<hostname>/auth/callback`
+- The URI is compared byte-for-byte, so it must match `ORBITAL_OIDC_REDIRECT_URL`
+  exactly — scheme, host, port and path.
+
+Keycloak accepts `http://` and private hostnames, unlike Entra. That is why
+orbital could drop the device-code flow: it existed only to work around Entra
+refusing a redirect URI it could not resolve.
 
 ### 3. Create the secrets file
 
@@ -203,6 +208,29 @@ a confusingly similar name. It tells you nothing about DGraph's.
 
 Step 10 also applies the schema (it is the first thing `seed-aks.sh` does), so if you are running
 that anyway, it covers this step.
+
+### 8b. Break-glass access — know this before you need it
+
+Orbital's local password login always works, and is **not** gated on SSO. If your
+identity provider breaks — a bad group mapping, a dropped claim, an expired
+client secret — an admin with local credentials can still sign in and repair it.
+
+This is the recovery path. There is deliberately no special-casing inside the
+authorization logic to rescue you, because every comparable product answers this
+the same way: ArgoCD keeps a local `admin` account as documented break-glass,
+Grafana keeps local admin login alongside SSO, Kubernetes keeps x509 client certs
+and the admin kubeconfig, Vault has the root token.
+
+What that means operationally:
+
+- Keep at least one local admin account with a known password, and keep that
+  password somewhere your team can reach during an incident.
+- `ORBITAL_ADMIN_EMAILS` is **not** this. It promotes named emails to admin at
+  first login — that is bootstrapping, how the first admin gets in. Break-glass is
+  getting back in afterwards.
+- A provider misconfiguration in `roleMapping` mode denies everyone whose groups
+  stop matching, including admins, at their next login. The local account is how
+  you fix the config.
 
 ### 9. Seed PostgreSQL admin user
 

@@ -189,6 +189,32 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	//     verification + user resolution against PostgreSQL.
 	var apiAuth []echo.MiddlewareFunc
 	switch {
+	case len(cfg.AuthProviders) > 0:
+		// Multi-provider bearer auth (Spike 26). When configured this is the
+		// SOLE source of bearer verification — config.New refuses it alongside
+		// ORBITAL_AUTH_MODE, so there is no second path to disagree with.
+		// ORBITAL_OIDC_* still drives the browser login flow, which is a
+		// different job: there orbital is an OAuth client, here a resource
+		// server.
+		ps, err := auth.NewProviderSet(context.Background(), authProviderSpecs(cfg), logger)
+		if err != nil {
+			logger.Error("auth provider set init failed — API auth disabled", "err", err)
+		} else if !cfg.APIAuthEnabled {
+			logger.Warn("API auth disabled by "+cfg.APIAuthSource()+" — bearer verification on /api/v1 and /graphql is BYPASSED",
+				"decided_by", cfg.APIAuthSource())
+		} else {
+			// The provider list's clientID is the gate here: a token whose azp
+			// matches no entry is refused. ORBITAL_APP_TOKEN_ALLOWED_APPIDS is
+			// the legacy single-issuer equivalent and does nothing on this path.
+			// Say so rather than leave it present and inoperative.
+			if len(cfg.AppTokenAllowedAppIDs) > 0 {
+				logger.Warn("ORBITAL_APP_TOKEN_ALLOWED_APPIDS is IGNORED when ORBITAL_AUTH_PROVIDERS is set — "+
+					"each provider's clientID is the gate. Remove it to avoid implying a control that is not running.",
+					"ignored_value", cfg.AppTokenAllowedAppIDs)
+			}
+			logger.Info("multi-provider bearer auth enabled", "issuers", ps.Issuers())
+			apiAuth = []echo.MiddlewareFunc{ps.RequireAuth(), handler.ResolveUser(db, cfg.AdminEmailSet())}
+		}
 	case externalJWTMode:
 		// Build the AAD bearer verifier as a fallback so internal service
 		// callers (in-pod cb-bundler, AAD client-credentials) keep working.
@@ -327,6 +353,14 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	ui.SetOCIConfig(ociConfigured, cfg.OCIRegistry, cfg.OCIRepo)
 	ui.SetExportDir(cfg.ExportDir)
 	ui.SetSchemaPath(cfg.SchemaPath)
+	// Users whose role comes from a provider's groups render read-only.
+	roleOwning := map[string]struct{}{}
+	for _, p := range cfg.AuthProviders {
+		if len(p.RoleMapping) > 0 {
+			roleOwning[p.Issuer.URL] = struct{}{}
+		}
+	}
+	ui.SetRoleOwningIssuers(roleOwning)
 	ui.SetDGraphURL(cfg.DGraphURL)
 	ui.SetDGraphAdminURL(cfg.DGraphAdminURL)
 	ui.SetBackupCronSpec(cfg.BackupSchedule)
@@ -397,6 +431,26 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 			if err != nil {
 				logger.Error("oidc provider init failed", "err", err)
 			} else {
+				// If the browser login provider is ALSO in ORBITAL_AUTH_PROVIDERS
+				// with a roleMapping, that provider owns roles — so a session
+				// gets the same role a bearer token from the same identity would.
+				// Without this, one person from one provider ends up with two
+				// different roles depending on how they arrived.
+				for _, p := range cfg.AuthProviders {
+					if p.Issuer.URL != cfg.OIDCIssuerURL || len(p.RoleMapping) == 0 {
+						continue
+					}
+					rules := make([]struct{ Group, Role string }, 0, len(p.RoleMapping))
+					for _, r := range p.RoleMapping {
+						rules = append(rules, struct{ Group, Role string }{r.Group, r.Role})
+					}
+					if m := auth.NewRoleMapper(p.ClaimMappings.Groups.Claim, rules); m != nil {
+						oidc.SetRoleMapper(m)
+						logger.Info("browser login roles come from the provider's group claim",
+							"issuer", p.Issuer.URL, "claim", p.ClaimMappings.Groups.Claim)
+					}
+					break
+				}
 				root.GET("/auth/login", oidc.Login)
 				root.GET("/auth/callback", oidc.Callback)
 			}
@@ -716,4 +770,33 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// authProviderSpecs maps the decoded config into the auth package's runtime
+// shape, so internal/auth does not import internal/config.
+func authProviderSpecs(cfg *config.Config) []auth.ProviderSpec {
+	specs := make([]auth.ProviderSpec, 0, len(cfg.AuthProviders))
+	for _, p := range cfg.AuthProviders {
+		s := auth.ProviderSpec{
+			IssuerURL:            p.Issuer.URL,
+			ClientID:             p.ClientID,
+			Audiences:            p.Issuer.Audiences,
+			CertificateAuthority: p.Issuer.CertificateAuthority,
+			SelfClientID:         cfg.OIDCClientID,
+			UsernameClaim:        p.ClaimMappings.Username.Claim,
+			GroupsClaim:          p.ClaimMappings.Groups.Claim,
+			DefaultRole:          p.DefaultRole,
+		}
+		if p.TrustedService != nil {
+			s.AssignedRole = p.TrustedService.AssignedRole
+		}
+		for _, r := range p.ClaimValidationRules {
+			s.ValidationRules = append(s.ValidationRules, struct{ Claim, RequiredValue string }{r.Claim, r.RequiredValue})
+		}
+		for _, r := range p.RoleMapping {
+			s.RoleMapping = append(s.RoleMapping, struct{ Group, Role string }{r.Group, r.Role})
+		}
+		specs = append(specs, s)
+	}
+	return specs
 }

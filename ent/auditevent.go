@@ -31,6 +31,8 @@ type AuditEvent struct {
 	EventCategory string `json:"event_category,omitempty"`
 	// EventSource holds the value of the "event_source" field.
 	EventSource string `json:"event_source,omitempty"`
+	// ActingClient holds the value of the "acting_client" field.
+	ActingClient string `json:"acting_client,omitempty"`
 	// SourceIPAddress holds the value of the "source_ip_address" field.
 	SourceIPAddress string `json:"source_ip_address,omitempty"`
 	// RequestID holds the value of the "request_id" field.
@@ -77,7 +79,7 @@ func (*AuditEvent) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case auditevent.FieldOperations, auditevent.FieldDetails:
 			values[i] = new([]byte)
-		case auditevent.FieldActor, auditevent.FieldEventCategory, auditevent.FieldEventSource, auditevent.FieldSourceIPAddress, auditevent.FieldRequestID:
+		case auditevent.FieldActor, auditevent.FieldEventCategory, auditevent.FieldEventSource, auditevent.FieldActingClient, auditevent.FieldSourceIPAddress, auditevent.FieldRequestID:
 			values[i] = new(sql.NullString)
 		case auditevent.FieldTimestamp:
 			values[i] = new(sql.NullTime)
@@ -143,6 +145,12 @@ func (_m *AuditEvent) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field event_source", values[i])
 			} else if value.Valid {
 				_m.EventSource = value.String
+			}
+		case auditevent.FieldActingClient:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field acting_client", values[i])
+			} else if value.Valid {
+				_m.ActingClient = value.String
 			}
 		case auditevent.FieldSourceIPAddress:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -219,6 +227,9 @@ func (_m *AuditEvent) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("event_source=")
 	builder.WriteString(_m.EventSource)
+	builder.WriteString(", ")
+	builder.WriteString("acting_client=")
+	builder.WriteString(_m.ActingClient)
 	builder.WriteString(", ")
 	builder.WriteString("source_ip_address=")
 	builder.WriteString(_m.SourceIPAddress)

@@ -29,26 +29,27 @@ import (
 )
 
 type UI struct {
-	dev             bool
-	ratelURL        string
-	issueTrackerURL string
-	oidcEnabled     bool
-	backupEnabled   bool
-	backupCronSpec  string
-	s3Endpoint      string
-	s3Bucket        string
-	ociConfigured   bool
-	ociRegistry     string
-	ociRepo         string
-	exportDir       string
-	schemaPath      string
-	dgraphURL       string
-	dgraphAdminURL  string
-	version         string
-	basePath        string
-	db              *ent.Client
-	logger          *slog.Logger
-	templates       map[string]*template.Template
+	dev               bool
+	ratelURL          string
+	issueTrackerURL   string
+	oidcEnabled       bool
+	backupEnabled     bool
+	backupCronSpec    string
+	s3Endpoint        string
+	s3Bucket          string
+	ociConfigured     bool
+	ociRegistry       string
+	ociRepo           string
+	exportDir         string
+	schemaPath        string
+	roleOwningIssuers map[string]struct{}
+	dgraphURL         string
+	dgraphAdminURL    string
+	version           string
+	basePath          string
+	db                *ent.Client
+	logger            *slog.Logger
+	templates         map[string]*template.Template
 }
 
 func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, backupEnabled bool, s3Endpoint, s3Bucket string, basePath string, db *ent.Client, logger *slog.Logger) *UI {
@@ -84,6 +85,19 @@ func (h *UI) SetExportDir(dir string) {
 
 func (h *UI) SetSchemaPath(path string) {
 	h.schemaPath = path
+}
+
+// SetRoleOwningIssuers records the issuer URL of every provider whose roles come
+// from group claims (mode B). A user last resolved by one of these has a
+// provider-owned role, so the users page shows it read-only rather than offering
+// an edit the next login would discard.
+//
+// Keyed on the stored issuer, which is the recorded fact. An earlier version
+// inferred this from the email's prefix and broke immediately: a deployment with
+// one provider has no prefix, so a provider-owned user rendered editable and the
+// next login would have silently discarded the edit.
+func (h *UI) SetRoleOwningIssuers(issuers map[string]struct{}) {
+	h.roleOwningIssuers = issuers
 }
 
 func (h *UI) SetDGraphURL(url string) {
@@ -173,6 +187,23 @@ func (h *UI) base(c echo.Context) layout.Base {
 		version = fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 
+	// Surface a refused sign-in. The redirect carries a registry code, never
+	// prose, so nothing from the provider is echoed into the page. Rendered as
+	// "error — hint", the same shape apiErrorFromBody produces for API errors
+	// (ERROR-RESPONSES.md; UI.md § the client half of the contract).
+	var loginError, loginErrorCode string
+	switch code := c.QueryParam("error"); code {
+	case CodeNoRoleMapped:
+		loginErrorCode = code
+		loginError = "No group in your token maps to a role in orbital. Ask an administrator to assign you a mapped group in your identity provider."
+	case CodeIdentityConflict:
+		loginErrorCode = code
+		loginError = "Sign-in refused: that email already belongs to a different account in orbital. — A local account or another identity provider owns it. Orbital identifies users by email today, so one address cannot be shared across providers."
+	case CodeIdentityIncomplete:
+		loginErrorCode = code
+		loginError = "Identity provider did not supply an email address. Orbital identifies users by email Ask an administrator to add one to your account."
+	}
+
 	var userRole string
 	var canMutate bool
 	var adminEmails []string
@@ -197,6 +228,8 @@ func (h *UI) base(c echo.Context) layout.Base {
 		NavBar:             layout.NavBar{RatelURL: h.ratelURL, IssueTrackerURL: h.issueTrackerURL},
 		IsAuthn:            isAuthn,
 		OIDCEnabled:        h.oidcEnabled,
+		LoginError:         loginError,
+		LoginErrorCode:     loginErrorCode,
 		User:               layout.User{Id: userID, Name: userName, Email: userEmail, Role: userRole},
 		CanMutate:          canMutate,
 		AdminEmails:        adminEmails,
@@ -695,13 +728,20 @@ func (h *UI) Users(c echo.Context) error {
 		}
 		rows = make([]page.UserRow, len(users))
 		for i, u := range users {
-			rows[i] = page.UserRow{
+			row := page.UserRow{
 				ID:        u.ID,
 				Email:     u.Email,
 				Name:      u.Name,
 				Role:      string(u.Role),
 				CreatedAt: u.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 			}
+			if u.Issuer != nil {
+				if _, owns := h.roleOwningIssuers[*u.Issuer]; owns {
+					row.ProviderOwned = true
+					row.RoleSource = *u.Issuer
+				}
+			}
+			rows[i] = row
 		}
 	}
 	return h.render(c, "users", page.Users{

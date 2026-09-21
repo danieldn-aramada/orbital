@@ -152,6 +152,7 @@ var (
 		{Name: "details", Type: field.TypeJSON, Nullable: true},
 		{Name: "event_category", Type: field.TypeString, Default: "data"},
 		{Name: "event_source", Type: field.TypeString, Nullable: true},
+		{Name: "acting_client", Type: field.TypeString, Nullable: true},
 		{Name: "source_ip_address", Type: field.TypeString, Nullable: true},
 		{Name: "request_id", Type: field.TypeString, Nullable: true},
 	}
@@ -169,12 +170,12 @@ var (
 			{
 				Name:    "auditevent_request_id",
 				Unique:  false,
-				Columns: []*schema.Column{AuditEventsColumns[8]},
+				Columns: []*schema.Column{AuditEventsColumns[9]},
 			},
 			{
 				Name:    "auditevent_source_ip_address",
 				Unique:  false,
-				Columns: []*schema.Column{AuditEventsColumns[7]},
+				Columns: []*schema.Column{AuditEventsColumns[8]},
 			},
 		},
 	}
@@ -511,6 +512,7 @@ var (
 		{Name: "password_hash", Type: field.TypeString, Nullable: true},
 		{Name: "verified", Type: field.TypeBool, Default: false},
 		{Name: "role", Type: field.TypeEnum, Enums: []string{"readonly", "dev", "admin"}, Default: "readonly"},
+		{Name: "issuer", Type: field.TypeString, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 	}
 	// UsersTable holds the schema information for the "users" table.

@@ -288,18 +288,22 @@ func TestOIDCCallback_ExistingUser_SessionSet(t *testing.T) {
 	const testEmail = "existing-oidc@example.com"
 	ctx := context.Background()
 
-	// Pre-create the user (simulates a previously provisioned account).
+	p := newOIDCProvider(t)
+	p.TokenClaims["email"] = testEmail
+	p.TokenClaims["preferred_username"] = testEmail
+
+	// Pre-create the user as THIS provider's, which is what a previously
+	// provisioned account looks like now. A row with no issuer is a local
+	// account and a provider is refused it — see AUTH.md § A provider may only
+	// resolve rows it owns.
 	existing := testDB.User.Create().
 		SetEmail(testEmail).
 		SetName("Existing OIDC").
 		SetPreferredUsername(testEmail).
 		SetVerified(true).
+		SetIssuer(p.Server.URL).
 		SaveX(ctx)
 	t.Cleanup(func() { testDB.User.DeleteOne(existing).ExecX(ctx) })
-
-	p := newOIDCProvider(t)
-	p.TokenClaims["email"] = testEmail
-	p.TokenClaims["preferred_username"] = testEmail
 
 	h := newOIDCHandler(t, p)
 
@@ -322,7 +326,7 @@ func TestOIDCCallback_ExistingUser_SessionSet(t *testing.T) {
 
 func TestOIDCCallback_EmptyEmail_RedirectsError(t *testing.T) {
 	p := newOIDCProvider(t)
-	p.TokenClaims["email"] = "" // empty — should trigger the no_email redirect
+	p.TokenClaims["email"] = "" // empty — should trigger the IDENTITY_INCOMPLETE redirect
 
 	h := newOIDCHandler(t, p)
 
@@ -332,7 +336,7 @@ func TestOIDCCallback_EmptyEmail_RedirectsError(t *testing.T) {
 	if err := h.Callback(c); err != nil {
 		t.Fatalf("Callback: %v", err)
 	}
-	if !strings.Contains(rec.Header().Get("Location"), "error=no_email") {
-		t.Errorf("expected error=no_email, got %q", rec.Header().Get("Location"))
+	if !strings.Contains(rec.Header().Get("Location"), "error=IDENTITY_INCOMPLETE") {
+		t.Errorf("expected error=IDENTITY_INCOMPLETE, got %q", rec.Header().Get("Location"))
 	}
 }

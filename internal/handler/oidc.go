@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/armada/orbital/ent"
@@ -25,7 +27,20 @@ type OIDC struct {
 	logger      *slog.Logger
 	basePath    string
 	adminEmails map[string]struct{}
+	issuerURL   string
+
+	// roleMapper is set when the browser login provider is ALSO configured in
+	// ORBITAL_AUTH_PROVIDERS with a roleMapping — i.e. that provider owns roles.
+	// Then a browser session gets the same role the same identity would get with
+	// a bearer token. Without this the two disagree: one person, one provider,
+	// two roles depending on whether they arrived with a cookie or a token.
+	// nil means mode A, where orbital's users table owns the role.
+	roleMapper *auth.RoleMapper
 }
+
+// SetRoleMapper wires group-to-role mapping into the browser login flow. Called
+// from server.New when the UI's issuer matches a configured provider.
+func (h *OIDC) SetRoleMapper(m *auth.RoleMapper) { h.roleMapper = m }
 
 func NewOIDC(ctx context.Context, db *ent.Client, sessionKeys auth.SessionKeys, issuerURL, clientID, clientSecret, redirectURL, basePath string, logger *slog.Logger, adminEmails map[string]struct{}) (*OIDC, error) {
 	provider, err := gooidc.NewProvider(ctx, issuerURL)
@@ -49,6 +64,7 @@ func NewOIDC(ctx context.Context, db *ent.Client, sessionKeys auth.SessionKeys, 
 		verifier:    provider.Verifier(&gooidc.Config{ClientID: clientID}),
 		logger:      logger,
 		basePath:    basePath,
+		issuerURL:   issuerURL,
 		adminEmails: adminEmails,
 	}
 	return h, nil
@@ -103,7 +119,7 @@ func (h *OIDC) Callback(c echo.Context) error {
 
 	email := strings.ToLower(claims.Email)
 	if email == "" {
-		return c.Redirect(http.StatusSeeOther, "/?error=no_email")
+		return c.Redirect(http.StatusSeeOther, h.basePath+"/?error="+CodeIdentityIncomplete)
 	}
 
 	displayName := claims.Name
@@ -115,20 +131,109 @@ func (h *OIDC) Callback(c echo.Context) error {
 		preferredUsername = email
 	}
 
-	u, err := h.db.User.Query().Where(user.Email(email)).Only(c.Request().Context())
+	// Provider-owned roles (mode B): resolve before touching the users table, so
+	// a caller whose groups match nothing is refused rather than provisioned.
+	// Same rule as the bearer path — a mapping enumerates who may use orbital.
+	mappedRole, mappedGroup := "", ""
+	if h.roleMapper != nil {
+		var raw map[string]any
+		if err := idToken.Claims(&raw); err != nil {
+			return fmt.Errorf("extract claims for role mapping: %w", err)
+		}
+		// The ID token arrives back-channel, so an operator debugging a role
+		// mapping cannot see it in the browser — which makes "no group matched"
+		// undiagnosable without this. Logged at DEBUG (ORBITAL_LOG_LEVEL=debug),
+		// off by default.
+		//
+		// CLAIMS ONLY, never the raw token. A raw token is a bearer credential:
+		// anyone with the log could replay it. Decoded claims cannot be replayed.
+		// GitLab reached the same split for the same reason (gitlab#345435), and
+		// Grafana exposes the equivalent via oauth.generic_oauth:debug.
+		if h.logger.Enabled(c.Request().Context(), slog.LevelDebug) {
+			b, _ := json.Marshal(raw)
+			h.logger.Debug("oidc id token claims", "email", email, "claims", string(b))
+		}
+		role, group, ok := h.roleMapper.RoleFor(raw)
+		if !ok {
+			// Name what the token DID carry. "No group matched" is
+			// indistinguishable between a missing mapper, an unassigned role and
+			// a claim of the wrong shape, and an operator cannot see the token.
+			// Claim NAMES only, plus the groups claim's own value — those are
+			// role names, not secrets.
+			names := make([]string, 0, len(raw))
+			for k := range raw {
+				names = append(names, k)
+			}
+			sort.Strings(names)
+			h.logger.Warn("oidc login refused — no group matched the provider's role mapping",
+				"email", email,
+				"groups_claim", h.roleMapper.GroupsClaim(),
+				"groups_claim_present", raw[h.roleMapper.GroupsClaim()] != nil,
+				"groups_claim_value", fmt.Sprintf("%v", raw[h.roleMapper.GroupsClaim()]),
+				"id_token_claims", strings.Join(names, ","))
+			return c.Redirect(http.StatusSeeOther, h.basePath+"/?error="+CodeNoRoleMapped)
+		}
+		mappedRole, mappedGroup = role, group
+	}
+
+	ctx := c.Request().Context()
+	u, err := h.db.User.Query().Where(user.Email(email)).Only(ctx)
 	if err != nil {
 		// Provision the user on first login.
-		u, err = h.db.User.Create().
+		newRole := RoleForEmail(email, h.adminEmails)
+		if mappedRole != "" {
+			// Groups own the role here, so ORBITAL_ADMIN_EMAILS does not apply —
+			// a second way to grant admin outside the mapping defeats the mapping.
+			newRole = user.Role(mappedRole)
+		}
+		create := h.db.User.Create().
 			SetEmail(email).
 			SetName(displayName).
 			SetPreferredUsername(preferredUsername).
 			SetVerified(true).
-			SetRole(RoleForEmail(email, h.adminEmails)).
-			Save(c.Request().Context())
+			SetRole(newRole).
+			SetIssuer(h.issuerURL)
+		u, err = create.Save(ctx)
 		if err != nil {
 			h.logger.Error("provision oidc user", "err", err)
 			return fmt.Errorf("provision oidc user: %w", err)
 		}
+	} else if u.Issuer == nil && u.PasswordHash == nil {
+		// Unowned and never a local account — claim it. See authz.go for why
+		// both conditions matter.
+		if updated, uerr := u.Update().SetIssuer(h.issuerURL).Save(ctx); uerr == nil {
+			u = updated
+		} else {
+			h.logger.Error("could not claim unowned user for provider", "email", email, "err", uerr)
+			return fmt.Errorf("claim user: %w", uerr)
+		}
+	} else if u.Issuer == nil || *u.Issuer != h.issuerURL {
+		// A provider may only resolve rows it owns — see authz.go for the
+		// reasoning. Refusing here is what keeps a local break-glass account
+		// from being claimed by whichever provider asserts its email.
+		owner := "a local account"
+		if u.Issuer != nil {
+			owner = *u.Issuer
+		}
+		h.logger.Warn("oidc login refused — identity already belongs to another principal",
+			"email", email, "token_issuer", h.issuerURL, "row_owner", owner)
+		return c.Redirect(http.StatusSeeOther, h.basePath+"/?error="+CodeIdentityConflict)
+	} else if mappedRole != "" && string(u.Role) != mappedRole {
+		before := string(u.Role)
+		updated, uerr := u.Update().SetRole(user.Role(mappedRole)).Save(ctx)
+		if uerr != nil {
+			h.logger.Error("apply provider role on oidc login", "email", email, "err", uerr)
+			return fmt.Errorf("apply provider role: %w", uerr)
+		}
+		u = updated
+		writeAuditEvent(h.db, h.logger, "management", email, "providerRoleChange",
+			[]string{"providerRoleChange"}, []string{"User"}, []string{email},
+			map[string]any{
+				"before": before, "after": mappedRole,
+				"provider": h.issuerURL, "group": mappedGroup,
+			},
+			originFromContext(c, "oidc"),
+		)
 	}
 	if err := auth.SetUserSession(h.sessionKeys, c.Request(), c.Response(), u.ID, u.Name, u.Email, string(u.Role)); err != nil {
 		return fmt.Errorf("set session: %w", err)

@@ -145,6 +145,13 @@ type Config struct {
 	// "external-jwt" to trust bearer tokens issued by an external OIDC provider
 	// (e.g. AEP's Keycloak client) instead of orbital's own login flow. See
 	// docs/reference/AUTH.md § External JWT Mode.
+	// AuthProviders is the multi-provider bearer config (Spike 26). When set it
+	// is the SOLE source of bearer verification, replacing ORBITAL_AUTH_MODE and
+	// the single-issuer bearer path. ORBITAL_OIDC_* keeps driving the browser
+	// login flow, where orbital is an OAuth client rather than a resource
+	// server — those are different jobs and only the second one moves here.
+	AuthProviders AuthProviders `envconfig:"ORBITAL_AUTH_PROVIDERS"`
+
 	AuthMode    string `envconfig:"ORBITAL_AUTH_MODE"               default:""`
 	JWTIssuer   string `envconfig:"ORBITAL_JWT_ISSUER"              default:""` // e.g. https://keycloak.example.com/realms/foo
 	JWTAudience string `envconfig:"ORBITAL_JWT_AUDIENCE"            default:""` // expected `aud` claim
@@ -245,6 +252,17 @@ func New() (*Config, error) {
 	}
 	if !cfg.Dev && cfg.SessionHMACKey == "local-dev-hmac-key-change-in-prod" {
 		return nil, fmt.Errorf("ORBITAL_SESSION_HMAC_KEY must be set to a secret value in production (ORBITAL_DEV=false)")
+	}
+	if err := cfg.AuthProviders.Validate(); err != nil {
+		return nil, err
+	}
+	// ORBITAL_AUTH_PROVIDERS replaces external-jwt rather than composing with
+	// it. Merging two sources of truth for who may authenticate is how they
+	// drift, so this refuses rather than picking a winner.
+	if len(cfg.AuthProviders) > 0 && cfg.AuthMode != "" {
+		return nil, fmt.Errorf("ORBITAL_AUTH_PROVIDERS and ORBITAL_AUTH_MODE=%s are mutually exclusive: "+
+			"the provider list supersedes the single-issuer mode. Move the issuer into ORBITAL_AUTH_PROVIDERS "+
+			"and unset ORBITAL_AUTH_MODE", cfg.AuthMode)
 	}
 	if cfg.AuthMode == "external-jwt" {
 		if cfg.JWTIssuer == "" || cfg.JWTAudience == "" || cfg.JWTClientID == "" {

@@ -1,4 +1,4 @@
-<div id="login-modal" class="modal modal-fx-3dRotateFromBottom">
+<div id="login-modal" class="modal modal-fx-3dRotateFromBottom{{if .LoginError}} is-active{{end}}">
   <div class="modal-background"></div>
   <div class="modal-content">
     <div class="box">
@@ -8,6 +8,12 @@
           <span>Orbital Login</span>
         </span>
       </p>
+
+    {{if .LoginError}}
+    <div class="notification is-danger is-light py-3 px-4 mb-4 is-size-7">
+      {{if .LoginErrorCode}}<code class="has-text-danger mr-1">{{.LoginErrorCode}}</code>{{end}}{{.LoginError}}
+    </div>
+    {{end}}
 
     {{if .OIDCEnabled}}
     <a href="{{.BasePath}}/auth/login" class="button is-fullwidth mb-4" style="gap: 0.5rem;">

@@ -4013,6 +4013,7 @@ type AuditEventMutation struct {
 	appenddetails         json.RawMessage
 	event_category        *string
 	event_source          *string
+	acting_client         *string
 	source_ip_address     *string
 	request_id            *string
 	clearedFields         map[string]struct{}
@@ -4418,6 +4419,55 @@ func (m *AuditEventMutation) ResetEventSource() {
 	delete(m.clearedFields, auditevent.FieldEventSource)
 }
 
+// SetActingClient sets the "acting_client" field.
+func (m *AuditEventMutation) SetActingClient(s string) {
+	m.acting_client = &s
+}
+
+// ActingClient returns the value of the "acting_client" field in the mutation.
+func (m *AuditEventMutation) ActingClient() (r string, exists bool) {
+	v := m.acting_client
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActingClient returns the old "acting_client" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldActingClient(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActingClient is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActingClient requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActingClient: %w", err)
+	}
+	return oldValue.ActingClient, nil
+}
+
+// ClearActingClient clears the value of the "acting_client" field.
+func (m *AuditEventMutation) ClearActingClient() {
+	m.acting_client = nil
+	m.clearedFields[auditevent.FieldActingClient] = struct{}{}
+}
+
+// ActingClientCleared returns if the "acting_client" field was cleared in this mutation.
+func (m *AuditEventMutation) ActingClientCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldActingClient]
+	return ok
+}
+
+// ResetActingClient resets all changes to the "acting_client" field.
+func (m *AuditEventMutation) ResetActingClient() {
+	m.acting_client = nil
+	delete(m.clearedFields, auditevent.FieldActingClient)
+}
+
 // SetSourceIPAddress sets the "source_ip_address" field.
 func (m *AuditEventMutation) SetSourceIPAddress(s string) {
 	m.source_ip_address = &s
@@ -4658,7 +4708,7 @@ func (m *AuditEventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AuditEventMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 9)
 	if m.operations != nil {
 		fields = append(fields, auditevent.FieldOperations)
 	}
@@ -4676,6 +4726,9 @@ func (m *AuditEventMutation) Fields() []string {
 	}
 	if m.event_source != nil {
 		fields = append(fields, auditevent.FieldEventSource)
+	}
+	if m.acting_client != nil {
+		fields = append(fields, auditevent.FieldActingClient)
 	}
 	if m.source_ip_address != nil {
 		fields = append(fields, auditevent.FieldSourceIPAddress)
@@ -4703,6 +4756,8 @@ func (m *AuditEventMutation) Field(name string) (ent.Value, bool) {
 		return m.EventCategory()
 	case auditevent.FieldEventSource:
 		return m.EventSource()
+	case auditevent.FieldActingClient:
+		return m.ActingClient()
 	case auditevent.FieldSourceIPAddress:
 		return m.SourceIPAddress()
 	case auditevent.FieldRequestID:
@@ -4728,6 +4783,8 @@ func (m *AuditEventMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldEventCategory(ctx)
 	case auditevent.FieldEventSource:
 		return m.OldEventSource(ctx)
+	case auditevent.FieldActingClient:
+		return m.OldActingClient(ctx)
 	case auditevent.FieldSourceIPAddress:
 		return m.OldSourceIPAddress(ctx)
 	case auditevent.FieldRequestID:
@@ -4783,6 +4840,13 @@ func (m *AuditEventMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetEventSource(v)
 		return nil
+	case auditevent.FieldActingClient:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActingClient(v)
+		return nil
 	case auditevent.FieldSourceIPAddress:
 		v, ok := value.(string)
 		if !ok {
@@ -4836,6 +4900,9 @@ func (m *AuditEventMutation) ClearedFields() []string {
 	if m.FieldCleared(auditevent.FieldEventSource) {
 		fields = append(fields, auditevent.FieldEventSource)
 	}
+	if m.FieldCleared(auditevent.FieldActingClient) {
+		fields = append(fields, auditevent.FieldActingClient)
+	}
 	if m.FieldCleared(auditevent.FieldSourceIPAddress) {
 		fields = append(fields, auditevent.FieldSourceIPAddress)
 	}
@@ -4864,6 +4931,9 @@ func (m *AuditEventMutation) ClearField(name string) error {
 		return nil
 	case auditevent.FieldEventSource:
 		m.ClearEventSource()
+		return nil
+	case auditevent.FieldActingClient:
+		m.ClearActingClient()
 		return nil
 	case auditevent.FieldSourceIPAddress:
 		m.ClearSourceIPAddress()
@@ -4896,6 +4966,9 @@ func (m *AuditEventMutation) ResetField(name string) error {
 		return nil
 	case auditevent.FieldEventSource:
 		m.ResetEventSource()
+		return nil
+	case auditevent.FieldActingClient:
+		m.ResetActingClient()
 		return nil
 	case auditevent.FieldSourceIPAddress:
 		m.ResetSourceIPAddress()
@@ -15767,6 +15840,7 @@ type UserMutation struct {
 	password_hash      *string
 	verified           *bool
 	role               *user.Role
+	issuer             *string
 	created_at         *time.Time
 	clearedFields      map[string]struct{}
 	done               bool
@@ -16101,6 +16175,55 @@ func (m *UserMutation) ResetRole() {
 	m.role = nil
 }
 
+// SetIssuer sets the "issuer" field.
+func (m *UserMutation) SetIssuer(s string) {
+	m.issuer = &s
+}
+
+// Issuer returns the value of the "issuer" field in the mutation.
+func (m *UserMutation) Issuer() (r string, exists bool) {
+	v := m.issuer
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIssuer returns the old "issuer" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldIssuer(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIssuer is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIssuer requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIssuer: %w", err)
+	}
+	return oldValue.Issuer, nil
+}
+
+// ClearIssuer clears the value of the "issuer" field.
+func (m *UserMutation) ClearIssuer() {
+	m.issuer = nil
+	m.clearedFields[user.FieldIssuer] = struct{}{}
+}
+
+// IssuerCleared returns if the "issuer" field was cleared in this mutation.
+func (m *UserMutation) IssuerCleared() bool {
+	_, ok := m.clearedFields[user.FieldIssuer]
+	return ok
+}
+
+// ResetIssuer resets all changes to the "issuer" field.
+func (m *UserMutation) ResetIssuer() {
+	m.issuer = nil
+	delete(m.clearedFields, user.FieldIssuer)
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *UserMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -16171,7 +16294,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.email != nil {
 		fields = append(fields, user.FieldEmail)
 	}
@@ -16189,6 +16312,9 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.role != nil {
 		fields = append(fields, user.FieldRole)
+	}
+	if m.issuer != nil {
+		fields = append(fields, user.FieldIssuer)
 	}
 	if m.created_at != nil {
 		fields = append(fields, user.FieldCreatedAt)
@@ -16213,6 +16339,8 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.Verified()
 	case user.FieldRole:
 		return m.Role()
+	case user.FieldIssuer:
+		return m.Issuer()
 	case user.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -16236,6 +16364,8 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldVerified(ctx)
 	case user.FieldRole:
 		return m.OldRole(ctx)
+	case user.FieldIssuer:
+		return m.OldIssuer(ctx)
 	case user.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	}
@@ -16289,6 +16419,13 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetRole(v)
 		return nil
+	case user.FieldIssuer:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIssuer(v)
+		return nil
 	case user.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -16329,6 +16466,9 @@ func (m *UserMutation) ClearedFields() []string {
 	if m.FieldCleared(user.FieldPasswordHash) {
 		fields = append(fields, user.FieldPasswordHash)
 	}
+	if m.FieldCleared(user.FieldIssuer) {
+		fields = append(fields, user.FieldIssuer)
+	}
 	return fields
 }
 
@@ -16345,6 +16485,9 @@ func (m *UserMutation) ClearField(name string) error {
 	switch name {
 	case user.FieldPasswordHash:
 		m.ClearPasswordHash()
+		return nil
+	case user.FieldIssuer:
+		m.ClearIssuer()
 		return nil
 	}
 	return fmt.Errorf("unknown User nullable field %s", name)
@@ -16371,6 +16514,9 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldRole:
 		m.ResetRole()
+		return nil
+	case user.FieldIssuer:
+		m.ResetIssuer()
 		return nil
 	case user.FieldCreatedAt:
 		m.ResetCreatedAt()

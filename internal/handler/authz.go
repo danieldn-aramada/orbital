@@ -181,20 +181,101 @@ func ResolveUser(db *ent.Client, adminEmails map[string]struct{}) echo.Middlewar
 				return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 			}
 			ctx := c.Request().Context()
+			// Multi-provider role handling (Spike 26). Mode B sets provider_role
+			// and is authoritative at every login; mode A sets
+			// provider_default_role, which only seeds a NEW user and never
+			// overwrites what the table already holds.
+			providerRole, _ := c.Get("provider_role").(string)
+			providerGroup, _ := c.Get("provider_role_group").(string)
+			providerDefault, _ := c.Get("provider_default_role").(string)
+
 			u, err := db.User.Query().Where(user.Email(email)).Only(ctx)
 			if err != nil {
-				// Provision on first bearer login, same as OIDC flow.
-				u, err = db.User.Create().
+				newRole := RoleForEmail(email, adminEmails)
+				switch {
+				case providerRole != "":
+					// Groups own the role for this provider. ORBITAL_ADMIN_EMAILS
+					// deliberately does not apply — a second mechanism that can
+					// grant admin outside the mapping would defeat the mapping.
+					newRole = user.Role(providerRole)
+				case providerDefault != "":
+					if _, isAdmin := adminEmails[email]; !isAdmin {
+						newRole = user.Role(providerDefault)
+					}
+				}
+				create := db.User.Create().
 					SetEmail(email).
 					SetName(email).
 					SetPreferredUsername(email).
 					SetVerified(true).
-					SetRole(RoleForEmail(email, adminEmails)).
-					Save(ctx)
+					SetRole(newRole)
+				if iss, _ := c.Get("auth_issuer").(string); iss != "" {
+					create = create.SetIssuer(iss)
+				}
+				u, err = create.Save(ctx)
 				if err != nil {
 					slog.Default().Warn("ResolveUser: failed to provision user", "email", email, "err", err)
 					return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 				}
+			} else if iss, _ := c.Get("auth_issuer").(string); iss != "" && u.Issuer == nil && u.PasswordHash == nil {
+				// Unowned and never a local account — claim it for this provider.
+				// This is the migration path for rows predating the issuer
+				// column: without it every existing user is locked out of SSO
+				// until an admin backfills.
+				//
+				// BOTH conditions are load-bearing. A row with a password is a
+				// local account and stays unclaimable however old it is, which
+				// is what keeps the break-glass admin out of a provider's reach.
+				// The branch stops firing permanently once a row has an issuer.
+				if updated, uerr := u.Update().SetIssuer(iss).Save(ctx); uerr == nil {
+					u = updated
+				} else {
+					slog.Default().Warn("could not claim unowned user for provider", "email", email, "err", uerr)
+					return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
+				}
+			} else if iss, _ := c.Get("auth_issuer").(string); iss != "" && (u.Issuer == nil || *u.Issuer != iss) {
+				// A provider may only resolve rows it owns. It never CLAIMS an
+				// existing row — otherwise any configured provider could mint a
+				// token for an existing address and inherit that user's role,
+				// including a local break-glass admin. Refuse instead.
+				//
+				// This refusal exists because orbital keys users by EMAIL, which
+				// OIDC explicitly says is mutable, reusable and falsifiable. The
+				// correct key is (iss, sub) via an identity-link table — how
+				// Keycloak, Auth0 and django-social-auth all do it — at which
+				// point one person can hold links to several providers and this
+				// conflict stops existing. Tracked in docs/planning/backlog.md.
+				owner := "a local account"
+				if u.Issuer != nil {
+					owner = *u.Issuer
+				}
+				slog.Default().Warn("bearer token rejected — identity already belongs to another principal",
+					"email", email, "token_issuer", iss, "row_owner", owner)
+				return echo.NewHTTPError(http.StatusUnauthorized, "identity conflict")
+			} else if providerRole != "" && string(u.Role) != providerRole {
+				// The provider owns the role and it moved. Record the transition,
+				// not the evaluation: most logins change nothing, and an event
+				// per login is noise that trains people to ignore the record.
+				before := string(u.Role)
+				upd := u.Update().SetRole(user.Role(providerRole))
+				if iss, _ := c.Get("auth_issuer").(string); iss != "" {
+					upd = upd.SetIssuer(iss)
+				}
+				updated, uerr := upd.Save(ctx)
+				if uerr != nil {
+					slog.Default().Warn("ResolveUser: failed to apply provider role", "email", email, "err", uerr)
+					return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
+				}
+				u = updated
+				issuer, _ := c.Get("auth_issuer").(string)
+				writeAuditEvent(db, slog.Default(), "management", email, "providerRoleChange",
+					[]string{"providerRoleChange"}, []string{"User"}, []string{email},
+					map[string]any{
+						"before": before, "after": providerRole,
+						"provider": issuer, "group": providerGroup,
+					},
+					originFromContext(c, "bearer"),
+				)
 			}
 			c.Set("user_id", u.ID)
 			// This is the bearer path — the production one. RequireRole and the
