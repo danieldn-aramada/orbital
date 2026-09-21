@@ -32,6 +32,16 @@ func (User) Fields() []ent.Field {
 		//
 		// Nillable: rows predating this, and local password accounts, have none.
 		field.String("issuer").Optional().Nillable(),
+		// role_source records WHO last set this user's role, which is the only
+		// way to tell two look-alike cases apart when a provider's roleMapping
+		// matches nothing: a user whose group was removed (the mapping set the
+		// role, so revoke to the floor) versus one an admin promoted (a human
+		// set it, so leave it). Without it, either revocation silently fails or
+		// admin promotions silently revert.
+		//
+		// Nillable, and NULL is treated as "local": a role that predates this
+		// column was set deliberately by someone, so it should stick.
+		field.Enum("role_source").Values("provider", "local").Optional().Nillable(),
 		field.Time("created_at").Default(time.Now).Immutable(),
 	}
 }

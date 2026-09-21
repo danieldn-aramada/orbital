@@ -28,6 +28,8 @@ const (
 	FieldRole = "role"
 	// FieldIssuer holds the string denoting the issuer field in the database.
 	FieldIssuer = "issuer"
+	// FieldRoleSource holds the string denoting the role_source field in the database.
+	FieldRoleSource = "role_source"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// Table holds the table name of the user in the database.
@@ -44,6 +46,7 @@ var Columns = []string{
 	FieldVerified,
 	FieldRole,
 	FieldIssuer,
+	FieldRoleSource,
 	FieldCreatedAt,
 }
 
@@ -97,6 +100,29 @@ func RoleValidator(r Role) error {
 	}
 }
 
+// RoleSource defines the type for the "role_source" enum field.
+type RoleSource string
+
+// RoleSource values.
+const (
+	RoleSourceProvider RoleSource = "provider"
+	RoleSourceLocal    RoleSource = "local"
+)
+
+func (rs RoleSource) String() string {
+	return string(rs)
+}
+
+// RoleSourceValidator is a validator for the "role_source" field enum values. It is called by the builders before save.
+func RoleSourceValidator(rs RoleSource) error {
+	switch rs {
+	case RoleSourceProvider, RoleSourceLocal:
+		return nil
+	default:
+		return fmt.Errorf("user: invalid enum value for role_source field: %q", rs)
+	}
+}
+
 // OrderOption defines the ordering options for the User queries.
 type OrderOption func(*sql.Selector)
 
@@ -138,6 +164,11 @@ func ByRole(opts ...sql.OrderTermOption) OrderOption {
 // ByIssuer orders the results by the issuer field.
 func ByIssuer(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIssuer, opts...).ToFunc()
+}
+
+// ByRoleSource orders the results by the role_source field.
+func ByRoleSource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRoleSource, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

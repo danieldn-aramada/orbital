@@ -24,9 +24,9 @@ secretGenerator:
 
 images:
   - name: armadaeksatest.azurecr.io/orbital
-    newTag: v0.0.42
+    newTag: v0.0.44
   - name: armadaeksatest.azurecr.io/configbundle-bundler
-    newTag: v0.0.7
+    newTag: v0.0.10
 
 patches:
   - path: deployment-patch.yaml

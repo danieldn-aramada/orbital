@@ -165,30 +165,31 @@ func (a AuthProviders) Validate() error {
 
 		hasDefault, hasMapping := p.DefaultRole != "", len(p.RoleMapping) > 0
 		hasTrusted := p.TrustedService != nil
-		n := 0
-		for _, set := range []bool{hasDefault, hasMapping, hasTrusted} {
-			if set {
-				n++
-			}
-		}
 		switch {
-		case n > 1:
-			return fmt.Errorf("%s: set exactly ONE of defaultRole, roleMapping or trustedService — "+
-				"they are three different answers to who owns this caller's role, and a provider "+
-				"carrying more than one would have to pick, silently", where)
-		case n == 0:
-			return fmt.Errorf("%s: set exactly one of defaultRole, roleMapping or trustedService — "+
+		case hasTrusted && (hasDefault || hasMapping):
+			return fmt.Errorf("%s: trustedService cannot be combined with defaultRole or roleMapping — "+
+				"it owns the role wholesale and stores nothing", where)
+		case !hasDefault && !hasMapping && !hasTrusted:
+			return fmt.Errorf("%s: set defaultRole, roleMapping or trustedService — "+
 				"a provider that cannot assign any role would accept tokens it could do nothing with", where)
 		case hasTrusted:
 			if _, ok := validRoles[p.TrustedService.AssignedRole]; !ok {
 				return fmt.Errorf("%s: trustedService.assignedRole must be readonly, dev or admin, got %q",
 					where, p.TrustedService.AssignedRole)
 			}
-		case hasDefault:
-			if _, ok := validRoles[p.DefaultRole]; !ok {
-				return fmt.Errorf("%s: defaultRole must be readonly, dev or admin, got %q", where, p.DefaultRole)
+		default:
+			// defaultRole and roleMapping may coexist: the mapping decides, and
+			// defaultRole is the floor for a token whose groups match nothing.
+			// Mapping alone denies instead — the same pair Grafana exposes as
+			// role_attribute_path plus role_attribute_strict.
+			if hasDefault {
+				if _, ok := validRoles[p.DefaultRole]; !ok {
+					return fmt.Errorf("%s: defaultRole must be readonly, dev or admin, got %q", where, p.DefaultRole)
+				}
 			}
-		case hasMapping:
+			if !hasMapping {
+				break
+			}
 			// Groups decide the role here, so orbital has to know which claim
 			// carries them.
 			if p.ClaimMappings.Groups.Claim == "" {

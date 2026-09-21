@@ -209,6 +209,9 @@ func ResolveUser(db *ent.Client, adminEmails map[string]struct{}) echo.Middlewar
 					SetPreferredUsername(email).
 					SetVerified(true).
 					SetRole(newRole)
+				if providerRole != "" {
+					create = create.SetRoleSource(user.RoleSourceProvider)
+				}
 				if iss, _ := c.Get("auth_issuer").(string); iss != "" {
 					create = create.SetIssuer(iss)
 				}
@@ -252,12 +255,12 @@ func ResolveUser(db *ent.Client, adminEmails map[string]struct{}) echo.Middlewar
 				slog.Default().Warn("bearer token rejected — identity already belongs to another principal",
 					"email", email, "token_issuer", iss, "row_owner", owner)
 				return echo.NewHTTPError(http.StatusUnauthorized, "identity conflict")
-			} else if providerRole != "" && string(u.Role) != providerRole {
+			} else if providerRole != "" && string(u.Role) != providerRole && providerRoleApplies(c, u) {
 				// The provider owns the role and it moved. Record the transition,
 				// not the evaluation: most logins change nothing, and an event
 				// per login is noise that trains people to ignore the record.
 				before := string(u.Role)
-				upd := u.Update().SetRole(user.Role(providerRole))
+				upd := u.Update().SetRole(user.Role(providerRole)).SetRoleSource(user.RoleSourceProvider)
 				if iss, _ := c.Get("auth_issuer").(string); iss != "" {
 					upd = upd.SetIssuer(iss)
 				}
@@ -393,4 +396,21 @@ func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 // Kept for backwards compatibility with existing tests and call sites.
 func RequireAdmin(db *ent.Client) echo.MiddlewareFunc {
 	return RequireRole(db, user.RoleAdmin)
+}
+
+// providerRoleApplies reports whether a provider-derived role should overwrite
+// what the users table holds.
+//
+// A MATCHED group is explicit and always wins — being added to orbital-admin
+// says so regardless of what an admin set before. The FLOOR (defaultRole when
+// nothing matched) only applies when the provider already owned this role;
+// otherwise it would revert a role an admin deliberately set on someone the
+// mapping never covered, which is the case that made "authoritative fallback"
+// wrong on its own.
+func providerRoleApplies(c echo.Context, u *ent.User) bool {
+	floored, _ := c.Get("provider_role_floored").(bool)
+	if !floored {
+		return true
+	}
+	return u.RoleSource != nil && *u.RoleSource == user.RoleSourceProvider
 }

@@ -735,7 +735,11 @@ func (h *UI) Users(c echo.Context) error {
 				Role:      string(u.Role),
 				CreatedAt: u.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 			}
-			if u.Issuer != nil {
+			// Provider-owned only when the PROVIDER set this role. A user the
+			// admin promoted (role_source=local) stays editable, because their
+			// edit will survive the next login — rendering it read-only would
+			// state the opposite of what happens.
+			if u.Issuer != nil && u.RoleSource != nil && *u.RoleSource == user.RoleSourceProvider {
 				if _, owns := h.roleOwningIssuers[*u.Issuer]; owns {
 					row.ProviderOwned = true
 					row.RoleSource = *u.Issuer

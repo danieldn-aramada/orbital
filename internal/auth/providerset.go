@@ -55,6 +55,11 @@ type provider struct {
 }
 
 type claimRule struct{ claim, requiredValue string }
+
+// roleGroupDefaulted marks an audit event whose role came from the provider's
+// defaultRole floor rather than a matched group, so the record says which.
+const roleGroupDefaulted = "(no group matched — defaultRole)"
+
 type roleRule struct{ group, role string }
 
 // ProviderSpec is the runtime shape of one configured provider, mapped from
@@ -280,12 +285,20 @@ func (ps *ProviderSet) verify(c echo.Context, next echo.HandlerFunc, raw string)
 	if p.mapper != nil {
 		role, group, ok := p.mapper.RoleFor(claims)
 		if !ok {
-			// A mapping enumerates who may use orbital. Someone in no mapped
-			// group was not enumerated, so they are denied rather than dropped
-			// to a readonly floor that would hand the whole graph to everyone.
-			ps.logger.Warn("bearer token rejected — no group matched this provider's role mapping",
-				"issuer", p.issuer, "groups_claim", p.groupsClaim, "request.id", requestID(c))
-			return denyBearer(c, oauthErrInvalidToken, "no group in this token maps to a role on this server")
+			if p.defaultRole == "" {
+				// Strict: a mapping enumerates who may use orbital, and someone
+				// in no mapped group was not enumerated. Grafana's
+				// role_attribute_strict = true.
+				ps.logger.Warn("bearer token rejected — no group matched this provider's role mapping",
+					"issuer", p.issuer, "groups_claim", p.groupsClaim, "request.id", requestID(c))
+				return denyBearer(c, oauthErrInvalidToken, "no group in this token maps to a role on this server")
+			}
+			// Floor: defaultRole alongside a mapping means "map, else this".
+			// Applied AUTHORITATIVELY, not as a seed — otherwise a user removed
+			// from their group would keep the role the mapping gave them, and
+			// revocation would silently fail.
+			role, group = p.defaultRole, roleGroupDefaulted
+			c.Set("provider_role_floored", true)
 		}
 		c.Set("provider_role", role)
 		c.Set("provider_role_group", group)

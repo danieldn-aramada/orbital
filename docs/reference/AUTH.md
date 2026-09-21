@@ -229,6 +229,35 @@ something it is not.
   would defeat the mapping. Mode B needs no bootstrap — whoever is in the admin
   group is admin from their first login.
 
+### Who owns a role is tracked per user, and the UI must say so
+
+`users.role_source` records whether the provider or an admin last set a role.
+`NULL` counts as local, so a role predating the column sticks.
+
+- A **matched group always wins**. Being added to `orbital-admin` is explicit and
+  overrides an earlier local edit.
+- The **`defaultRole` floor applies only to users the provider already owned**, so
+  an admin promoting someone the mapping never covered is not reverted at their
+  next login.
+- An admin setting a role through the users API marks it `local`.
+
+**This is NOT conventional and must not be defended as such.** Grafana's own docs
+say manual role changes *"will be overwritten on next user login"*, with
+`skip_org_role_sync` as a global all-or-nothing escape; NetBox's
+`REMOTE_AUTH_GROUP_SYNC_ENABLED` is the same shape. Neither tracks provenance per
+user. Orbital does because the two cases are otherwise indistinguishable —
+"removed from a group" and "never in a group, promoted locally" produce identical
+inputs — and each alternative breaks one of them.
+
+**The column earns its place only while the users page distinguishes the two.**
+A provider-set role renders read-only with provenance; a locally-set one stays
+editable. A hidden per-user rule is worse than either blanket rule, because nobody
+can predict what their next login does. **If that UI distinction is ever removed,
+delete the column and follow Grafana** — the silent revert those products are
+criticised for is what an invisible version of this would be.
+
+Survey and reasoning: `docs/spikes/spike-26-auth-providers.md` § Upstream survey.
+
 ### A role change takes effect at the NEXT login, not immediately
 
 `SetUserSession` captures the role into the session cookie at sign-in, so a
