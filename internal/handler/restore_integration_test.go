@@ -339,7 +339,7 @@ func TestRestorePage_RendersExpectedElements(t *testing.T) {
 
 	ui := handler.NewUI(
 		false, "", "",
-		false, false,
+		false,
 		true,
 		testutil.MinIOEndpoint(), testutil.TestS3Bucket,
 		"",

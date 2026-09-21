@@ -23,6 +23,21 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 ## [Unreleased]
 
 ### Removed
+- **BREAKING — device-code browser SSO is gone.** `ORBITAL_OAUTH2_DEVICE_CODE` (which defaulted to
+  `true`), `GET /auth/device`, `POST /auth/device/poll` and `pages/device-code.gohtml` are all
+  removed; the login modal now always uses Authorization Code via `GET /auth/login`. **A deployment
+  relying on device code must register a redirect URI with its IdP and set
+  `ORBITAL_OIDC_REDIRECT_URL` to match** — byte-for-byte, since OAuth compares it exactly.
+  Device code existed to work around one Azure AD constraint (orbital sits behind an Internal Load
+  Balancer on private DNS, and Entra would not accept a redirect URI it could not resolve). It was
+  vendor-locked in the worst way: the endpoint was built by string surgery on the Azure URL shape,
+  `TrimSuffix(issuer, "/v2.0") + "/oauth2/v2.0/devicecode"`, which 404s against any other provider —
+  so the `true` default silently broke browser SSO for anyone pointing orbital at a non-Entra IdP.
+  Keycloak accepts `http://` and private-hostname redirect URIs, so the original constraint does not
+  exist there. It had a single consumer, orbital's own login modal, which is a browser and therefore
+  always had the standard flow available. **orbctl is unaffected** — it uses Authorization Code +
+  PKCE with a loopback listener (RFC 8252) and never called these endpoints.
+
 - **`orb scan` is gone from the orb CLI.** It never scanned anything — it slept, printed a
   hardcoded "Found 3 BMC interfaces" and a fake progress bar, then reported "Scan complete".
   An operator running it against real hardware would have believed a discovery had happened.
@@ -30,6 +45,19 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   command is removed.
 
 ### Added
+- **`ORBITAL_API_AUTH_ENABLED` splits API authentication out of `ORBITAL_DEV`.** `ORBITAL_DEV` bundled
+  three unrelated switches — template hot-reload, the API bearer-auth bypass, and permission to use
+  the placeholder session key — so you could not verify bearers locally without also giving up
+  hot-reload, and the startup log blamed `dev:true` for auth being off. The new variable is
+  hierarchical, not independent: **unset it follows `!ORBITAL_DEV`**, so no existing deployment
+  changes. Set explicitly it wins, making `ORBITAL_DEV=true` + `ORBITAL_API_AUTH_ENABLED=true` a
+  valid combination for the first time. An explicit `false` disables auth in every auth mode;
+  an inherited `false` does not, because `external-jwt` never consulted `ORBITAL_DEV` and quietly
+  dropping auth there would be a regression. Auth resolving to enabled with no usable verifier now
+  **refuses startup** — the fail-closed guard keys on intent rather than on `ORBITAL_DEV`. Both auth
+  log lines carry `decided_by`, so the deciding setting is stated rather than inferred.
+  `ORBITAL_DEV` keeps only what its name implies.
+
 - **Orbital now reports when DGraph is running an older schema than the build ships.** It logs a
   `WARN` at startup naming every missing declaration, and the Schema page states whether the applied
   schema matches. Orbital still does not *apply* the schema — that remains a manual deploy step —

@@ -37,6 +37,7 @@ Borrowed from Kubernetes' feature-gate policy — Alpha off by default, Beta on,
 | `ORBITAL_CHANGE_CONTROL_ENABLED` | **Ops** | `true` | Removes the change-control feature entirely: the Change Requests queue, the Approval Policies page, their REST endpoints (**404**, not 403 — the routes are never registered) and the nav section. No mutation is gated. With it off the approval gate never runs either, whatever policies remain in the database. **Deletes nothing**: change requests, approvals and policies stay in PostgreSQL and reappear if it is switched back on. Earns a toggle because the feature is *actively harmful* to an adopter running their own change management — two systems answering "was this approved", with orbital's flow invisible to their org's audit. |
 | `ORBITAL_INLINE_SELECTOR_REJECT` | **Ops** | `true` | Stops rejecting single-entity `update{Kind}` mutations that inline their `orbId`/`set` instead of passing variables. Those writes then proceed **unstamped** — no `version` bump, no `updatedAt`/`updatedBy`. See [`ERROR-RESPONSES.md`](./ERROR-RESPONSES.md). |
 | `ORBITAL_DIVERGENCE_INGEST_ENABLED` | **Ops** | `true` | Stops the S3 poller ingesting divergence reports. Existing entries stay; nothing new arrives. |
+| `ORBITAL_API_AUTH_ENABLED` | **Ops** | *(unset)* | Decides whether bearer verification is installed on `/api/v1` and `/graphql`. **Unset it follows `!ORBITAL_DEV`** — the historical coupling, so nothing changes for an existing deployment. Set explicitly, it wins in every auth mode, which is the point: `ORBITAL_DEV=true` + this `=true` gives API auth **and** template hot-reload, a combination `ORBITAL_DEV` alone cannot express. Explicit `false` switches auth off even in `external-jwt` mode; inherited false does not, because that mode never consulted `ORBITAL_DEV` and silently dropping auth there would be a regression. If auth resolves to enabled but no verifier can be built, orbital **refuses to start**. |
 
 There are currently **no maturity toggles**. Adding one requires naming its removal trigger in this table.
 
@@ -49,6 +50,7 @@ Generated from `internal/config/config.go` — the struct tags are the source of
 | Variable | Default |
 |---|---|
 | `ORBITAL_ADMIN_EMAILS` | `admin@armada.ai` |
+| `ORBITAL_API_AUTH_ENABLED` | — |
 | `ORBITAL_APP_TOKEN_ALLOWED_APPIDS` | `5fc832f6-843e-4207-93dd-b3c3a77c06f2` |
 | `ORBITAL_AUTH_MODE` | — |
 | `ORBITAL_BACKUP_RETENTION_DAYS` | `14` |
