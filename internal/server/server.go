@@ -202,7 +202,7 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 			// Each provider entry's clientID is the gate: a token whose azp
 			// matches no entry is refused before any role logic runs.
 			logger.Info("multi-provider bearer auth enabled", "issuers", ps.Issuers())
-			apiAuth = []echo.MiddlewareFunc{ps.RequireAuth(), auth.RequireCSRFOnCookieAuth(cfg.SessionKeys()), handler.ResolveUser(db, cfg.AdminEmailSet())}
+			apiAuth = []echo.MiddlewareFunc{ps.RequireAuth(), auth.RequireCSRFOnCookieAuth(), handler.ResolveUser(db, cfg.AdminEmailSet())}
 		}
 	default:
 		logger.Warn("ORBITAL_AUTH_PROVIDERS is not set — API auth disabled. Bearer verification exists only through the provider list; ORBITAL_OIDC_* configures the browser login flow, which is a different job.")
