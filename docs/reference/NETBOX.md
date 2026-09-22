@@ -15,7 +15,7 @@ Read this before: querying NetBox, building/validating a `*-network.graphql` see
 
 | orbital node | orbId | NetBox source field | ⚠ |
 |---|---|---|---|
-| `Server` | `colo:server-<serial>` | device **`asset_tag`** (Dell) | serial = **Redfish System SerialNumber**. Dell: that equals the Service Tag, which NetBox stores in **`asset_tag`** (device `serial` is BLANK) — join there. Non-Dell (Supermicro A100): NetBox has neither → **join by interface MAC**. |
+| `Server` | `colo:server-<serviceTag>` | device **`asset_tag`** (Dell) | orbId key is the **Dell Service Tag** = Redfish `ComputerSystem.SKU`, **not** Redfish `SerialNumber` (a different value on 15G+ — see `DGRAPH.md` orbId convention). NetBox stores the Service Tag in **`asset_tag`** — its own column, unrelated to Redfish `AssetTag` — while device `serial` is BLANK, so join there. Non-Dell (Supermicro A100): NetBox has neither → **join by interface MAC**. |
 | `NetworkDevice` | `colo:network-device-<serial>` | device **`serial`** | switches/firewalls *do* have `serial` populated (`JX3623130496`). |
 | `NetworkInterface` | owner + FQDD/port | interface **`mac_address`** | **MAC is the cross-source join** — server serials are blank *and* `connected_endpoints.device` carries no serial. Case-insensitive; NetBox uppercases. |
 
