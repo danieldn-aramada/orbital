@@ -58,6 +58,10 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   removed. See `docs/reference/AUTH.md` § CSRF on cookie-authenticated API calls.
 
 ### Added
+- **`version` is shown in the Metadata panel** on the Server, Data Center, Cluster
+  and Network Device tabs. It is the value a caller needs to guard a write
+  (`"version": <n>` in the mutation's variables → `409 MVCC_CONFLICT` on a
+  concurrent edit), and it was the one ConfigItem field the UI never surfaced.
 - **`Server.serialNumber`** is editable in the config editor, shown on the server
   detail tab, and carried in audit diffs — added to `FormFields` and
   `BeforeFields` in `internal/configitems/registry.go` and to the `GetServer`
