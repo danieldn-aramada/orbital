@@ -13,6 +13,12 @@ type Base struct {
 	Links       []string
 	IsAuthn     bool
 	OIDCEnabled bool
+	// OIDCDisplayName names the provider on the sign-in button ("Sign in with
+	// <name>"). Never a hardcoded vendor — see config.OIDCDisplayName.
+	OIDCDisplayName string
+	// OIDCIconURL is an operator-supplied image for that button. Empty renders a
+	// neutral glyph; orbital ships no vendor marks of its own.
+	OIDCIconURL string
 	// LoginError carries a human-readable reason when a sign-in was refused and
 	// the user was redirected back. Without it a refusal is a silent bounce to
 	// the home page, which reads as "the button does nothing" — the failure mode

@@ -72,6 +72,7 @@ func newOIDCProvider(t *testing.T) *oidcProvider {
 		"email":              "oidc@example.com",
 		"name":               "OIDC User",
 		"preferred_username": "oidc@example.com",
+		"nonce":              oidcTestNonce,
 	}
 
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
@@ -138,13 +139,18 @@ func newOIDCHandler(t *testing.T, p *oidcProvider) *handler.OIDC {
 	return h
 }
 
-// oidcStateSession stores an OIDC state value in a session and returns the cookies.
+// oidcTestNonce is the nonce the fake provider stamps into its id_token, and
+// the one a stored login attempt carries — they must agree or Callback refuses.
+const oidcTestNonce = "test-nonce"
+
+// oidcStateSession stores a login attempt in a session and returns the cookies.
 func oidcStateSession(t *testing.T, state string) []*http.Cookie {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
-	if err := auth.SetOIDCState(oidcSessionKeys, req, rec, state); err != nil {
-		t.Fatalf("SetOIDCState: %v", err)
+	login := auth.OIDCLogin{State: state, Verifier: "test-verifier", Nonce: oidcTestNonce}
+	if err := auth.SetOIDCLogin(oidcSessionKeys, req, rec, login); err != nil {
+		t.Fatalf("SetOIDCLogin: %v", err)
 	}
 	return rec.Result().Cookies()
 }
@@ -193,6 +199,27 @@ func TestOIDCLogin_RedirectsToProvider(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected orbital_session cookie to be set after Login")
+	}
+}
+
+func TestOIDCLogin_SendsPKCEChallengeAndNonce(t *testing.T) {
+	p := newOIDCProvider(t)
+	h := newOIDCHandler(t, p)
+
+	e := echo.New()
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httptest.NewRequest(http.MethodGet, "/auth/login", nil), rec)
+	if err := h.Login(c); err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+
+	loc := rec.Header().Get("Location")
+	// OAuth 2.1 requires PKCE for confidential clients too, and plain S256 is
+	// the only method worth sending — "plain" would make the challenge useless.
+	for _, want := range []string{"code_challenge=", "code_challenge_method=S256", "nonce="} {
+		if !strings.Contains(loc, want) {
+			t.Errorf("authorize URL missing %s: %q", want, loc)
+		}
 	}
 }
 
@@ -338,5 +365,42 @@ func TestOIDCCallback_EmptyEmail_RedirectsError(t *testing.T) {
 	}
 	if !strings.Contains(rec.Header().Get("Location"), "error=IDENTITY_INCOMPLETE") {
 		t.Errorf("expected error=IDENTITY_INCOMPLETE, got %q", rec.Header().Get("Location"))
+	}
+}
+
+// A token whose nonce does not match this login attempt must be refused even
+// though it verifies perfectly — correct signature, issuer, audience and expiry.
+// That is exactly the shape of a replayed token, and the nonce is the only check
+// that sees it.
+func TestOIDCCallback_NonceMismatchIsRefused(t *testing.T) {
+	p := newOIDCProvider(t)
+	h := newOIDCHandler(t, p)
+	p.TokenClaims["nonce"] = "a-nonce-from-some-other-login"
+
+	cookies := oidcStateSession(t, "state-1")
+	c, rec := oidcCallbackCtx(cookies, "state-1", "code-1")
+	if err := h.Callback(c); err != nil {
+		t.Fatalf("Callback: %v", err)
+	}
+	if loc := rec.Header().Get("Location"); !strings.Contains(loc, "error=invalid_nonce") {
+		t.Errorf("expected redirect to error=invalid_nonce, got %q", loc)
+	}
+}
+
+// The negative control for the rule above: an id_token with NO nonce at all is
+// refused too. Without this, an implementation that skips the check when the
+// claim is absent would pass the mismatch test.
+func TestOIDCCallback_MissingNonceIsRefused(t *testing.T) {
+	p := newOIDCProvider(t)
+	h := newOIDCHandler(t, p)
+	delete(p.TokenClaims, "nonce")
+
+	cookies := oidcStateSession(t, "state-1")
+	c, rec := oidcCallbackCtx(cookies, "state-1", "code-1")
+	if err := h.Callback(c); err != nil {
+		t.Fatalf("Callback: %v", err)
+	}
+	if loc := rec.Header().Get("Location"); !strings.Contains(loc, "error=invalid_nonce") {
+		t.Errorf("expected redirect to error=invalid_nonce, got %q", loc)
 	}
 }

@@ -86,6 +86,8 @@ Generated from `internal/config/config.go` — the struct tags are the source of
 | `ORBITAL_OCI_REPO` | `orbital` |
 | `ORBITAL_OCI_SIGNING_KEY_PATH` | `deploy/local/cosign.key` |
 | `ORBITAL_OCI_USERNAME` | — |
+| `ORBITAL_OIDC_DISPLAY_NAME` | `SSO` |
+| `ORBITAL_OIDC_ICON_URL` | — |
 | `ORBITAL_OIDC_CLIENT_ID` | — |
 | `ORBITAL_OIDC_CLIENT_SECRET` | — |
 | `ORBITAL_OIDC_ISSUER_URL` | — |

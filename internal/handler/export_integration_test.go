@@ -31,13 +31,13 @@ import (
 
 // scratchExportDir is the host-side path mounted to /dgraph/export inside the
 // test scratch DGraph container. Must match the volume mount in deploy/test/docker-compose.yml.
-const scratchExportDir = "/tmp/orbital-test-scratch"
+const scratchExportDir = "./.local/exports/scratch"
 
-// blueExportDir is the host-side path mounted to /dgraph/export inside the
+// testAlphaExportDir is the host-side path mounted to /dgraph/export inside the
 // suite's LIVE DGraph container — dgraph-alpha-test (:8083), not blue (:8080).
 // "blue" here is the blue-green role (the live side that scratch stages from),
 // which is still what this graph is to the suite. Used by backup tests.
-const blueExportDir = "/tmp/orbital-test-main"
+const testAlphaExportDir = "./.local/exports/test"
 
 var (
 	testDB   *ent.Client
@@ -93,7 +93,7 @@ func setupExportSuite() error {
 	if err := os.MkdirAll(scratchExportDir, 0o755); err != nil {
 		return fmt.Errorf("create scratch export dir: %w", err)
 	}
-	if err := os.MkdirAll(blueExportDir, 0o755); err != nil {
+	if err := os.MkdirAll(testAlphaExportDir, 0o755); err != nil {
 		return fmt.Errorf("create blue export dir: %w", err)
 	}
 
@@ -351,7 +351,7 @@ func TestExportPage_RendersExpectedElements(t *testing.T) {
 		slog.Default(),
 	)
 	ui.SetDGraphURL(testutil.DGraphURL())
-	ui.SetExportDir(blueExportDir)
+	ui.SetExportDir(testAlphaExportDir)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/export", nil)

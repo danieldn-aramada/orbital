@@ -31,7 +31,7 @@ func newBackupHandler(t *testing.T) *handler.BackupHandler {
 	t.Helper()
 	h, err := handler.NewBackupHandler(context.Background(), testDB, handler.BackupConfig{
 		DGraphAdminURL:    testutil.DGraphAdminURL(),
-		DGraphExportDir:   blueExportDir,
+		DGraphExportDir:   testAlphaExportDir,
 		SchemaPath:        schemaPath(),
 		S3Endpoint:        testutil.MinIOEndpoint(),
 		S3Region:          testutil.TestS3Region,

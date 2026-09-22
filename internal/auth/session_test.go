@@ -145,46 +145,50 @@ func TestGetOrCreateCSRF_Idempotent(t *testing.T) {
 	}
 }
 
-func TestOIDCState_SetAndGet(t *testing.T) {
+func TestOIDCLogin_StateVerifierAndNonceRoundTripTogether(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
-	if err := SetOIDCState(testKeys, req, rec, "state-xyz"); err != nil {
-		t.Fatalf("SetOIDCState: %v", err)
+	want := OIDCLogin{State: "state-xyz", Verifier: "verifier-xyz", Nonce: "nonce-xyz"}
+	if err := SetOIDCLogin(testKeys, req, rec, want); err != nil {
+		t.Fatalf("SetOIDCLogin: %v", err)
 	}
 
 	rec2 := httptest.NewRecorder()
-	state, err := GetAndClearOIDCState(testKeys, copyCookies(t, rec), rec2)
+	got, err := GetAndClearOIDCLogin(testKeys, copyCookies(t, rec), rec2)
 	if err != nil {
-		t.Fatalf("GetAndClearOIDCState: %v", err)
+		t.Fatalf("GetAndClearOIDCLogin: %v", err)
 	}
-	if state != "state-xyz" {
-		t.Errorf("got state %q, want %q", state, "state-xyz")
+	// All three, not just the state: a verifier that failed to survive the
+	// round trip turns the PKCE exchange into an unexplained 400 at the IdP,
+	// and a lost nonce silently disables the replay check.
+	if got != want {
+		t.Errorf("round trip = %+v, want %+v", got, want)
 	}
 }
 
-func TestOIDCState_NoSession(t *testing.T) {
+func TestOIDCLogin_NoSession(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
-	_, err := GetAndClearOIDCState(testKeys, req, rec)
+	_, err := GetAndClearOIDCLogin(testKeys, req, rec)
 	if err == nil {
-		t.Error("expected error when no OIDC state in session")
+		t.Error("expected error when no OIDC login in session")
 	}
 }
 
-func TestOIDCState_ClearedAfterGet(t *testing.T) {
+func TestOIDCLogin_ClearedAfterGet(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
-	if err := SetOIDCState(testKeys, req, rec, "state-abc"); err != nil {
-		t.Fatalf("SetOIDCState: %v", err)
+	if err := SetOIDCLogin(testKeys, req, rec, OIDCLogin{State: "state-abc", Verifier: "v", Nonce: "n"}); err != nil {
+		t.Fatalf("SetOIDCLogin: %v", err)
 	}
 
 	rec2 := httptest.NewRecorder()
-	_, _ = GetAndClearOIDCState(testKeys, copyCookies(t, rec), rec2)
+	_, _ = GetAndClearOIDCLogin(testKeys, copyCookies(t, rec), rec2)
 
 	rec3 := httptest.NewRecorder()
-	_, err := GetAndClearOIDCState(testKeys, copyCookies(t, rec2), rec3)
+	_, err := GetAndClearOIDCLogin(testKeys, copyCookies(t, rec2), rec3)
 	if err == nil {
-		t.Error("expected error on second get — state should have been cleared")
+		t.Error("expected error on second get — the attempt should have been cleared")
 	}
 }
 

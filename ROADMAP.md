@@ -63,7 +63,7 @@ selection, and the architecture design that became the SDD.*
 | **High availability** — multi-replica safe; deploy path pending | 🟡 **In progress** | Q4 2026 |
 | Postgres migrations (Atlas) | 📋 Design complete | Q4 2026 |
 | Test-suite audit | 📋 Not started | Q4 2026 |
-| Provider-portable identity (OIDC `id_token`) | 📋 Not started | Q4 2026 |
+| **Provider-portable identity** — multi-IdP trust, browser-login hardening | ✅ Shipped | Q3 2026 |
 | **GA hardening** | — | Q4 2026 |
 
 *Targets are quarters, not commitments. Detailed definitions: [`docs/planning/backlog.md`](docs/planning/backlog.md).*
@@ -76,6 +76,6 @@ selection, and the architecture design that became the SDD.*
 |---|---|
 | **Spike 27 — Atlas Postgres migrations** | Versioned migrations; ends the crashloop-on-deploy class. → [`spike-27-atlas-migrations.md`](docs/spikes/spike-27-atlas-migrations.md) |
 | **Spike 23 — Audit existing tests** | Which tests guard real regressions vs which are theatre. |
-| **Spike 26 — Provider-portable identity** | Move orbctl + orbital off AAD-specific claims to standard OIDC. |
+| **CLI authentication, redesigned** | `orbctl` login is Entra-locked and unused; decide between a public IdP client, orbital issuing its own credential, or personal access tokens. |
 
 ---
