@@ -29,15 +29,15 @@ Read this before: DGraph schema changes, query/mutation work, export/import, see
 
 | Type | `orbId` | Natural key |
 |---|---|---|
-| `Server` | `<ns>:server-<serial>` | **Redfish System SerialNumber** — Dell Service Tag (`BFRHDX3`) and Supermicro (`S447008X3823034`) are both just this; it's also the `<serverTag>` in the network-* ids below. **Never `asset_tag`** — that's org-assigned and can be null (was null for the A100), which breaks scan-idempotency. |
-| `ServerMaintenance` | `<ns>:server-maintenance-<serial>` | owner server serial — 1:1 with `Server`, so the natural key is just the owner serial (same value as `server-<serial>`). No discriminator: one maintenance node per server (intent, not history — history lives in the audit log + edge Events). |
+| `Server` | `<ns>:server-<serviceTag>` | **The vendor's stable chassis identifier**, stored on `Server.serviceTag`. **Dell:** Redfish `ComputerSystem.SKU` — the Service Tag (`CFRHDX3`). **Supermicro:** Redfish `ComputerSystem.SerialNumber` (`S447008X3823034`), because Supermicro leaves SKU unset *(vendor behaviour — not verified against a live BMC; the Dell half was)*. **NOT Dell's `SerialNumber`** — on 15G that is a different value (R650: SKU `CFRHDX3` vs SerialNumber `MXFC400359006Z`, verified on iDRAC 7.20.10.05); on earlier generations the two coincide (R450: `DLP6K74` for both), which is what made the old "SerialNumber" wording look correct. `Server.serialNumber` holds the raw SerialNumber and is **never** an identity key. This same value is the `<serviceTag>` in the network-* ids below. **Never Redfish `AssetTag`** — org-assigned and often empty (`""` on the R650, null for the A100), which breaks scan-idempotency. |
+| `ServerMaintenance` | `<ns>:server-maintenance-<serviceTag>` | owner server `serviceTag` — 1:1 with `Server`, so the natural key is just the owner's serviceTag (same value as `server-<serviceTag>`). No discriminator: one maintenance node per server (intent, not history — history lives in the audit log + edge Events). |
 | `NetworkDevice` | `<ns>:network-device-<serial>` | switch/firewall serial |
-| `NetworkAdapter` | `<ns>:network-adapter-<serverTag>-<FQDD>` | owner serial + Redfish adapter FQDD |
-| `NetworkInterface` (server NIC) | `<ns>:network-interface-<serverTag>-<FQDD>` | owner serial + Redfish interface FQDD |
-| `NetworkInterface` (BMC) | `<ns>:network-interface-<serverTag>-<mgmt>` | owner serial + Redfish Manager name: `iDRAC` (Dell) / `IPMI` (Supermicro) |
+| `NetworkAdapter` | `<ns>:network-adapter-<serviceTag>-<FQDD>` | owner serviceTag + Redfish adapter FQDD |
+| `NetworkInterface` (server NIC) | `<ns>:network-interface-<serviceTag>-<FQDD>` | owner serviceTag + Redfish interface FQDD |
+| `NetworkInterface` (BMC) | `<ns>:network-interface-<serviceTag>-<mgmt>` | owner serviceTag + Redfish Manager name: `iDRAC` (Dell) / `IPMI` (Supermicro) |
 | `NetworkInterface` (device port) | `<ns>:network-interface-<deviceSerial>-<port>` | device serial + port (`ge-0/0/0`) |
 
-**Legacy (pre-convention — migrate when next touched, don't treat network types as the special case):** `IPAddress` = `<ns>:<address>`, `Rack` = `<ns>:<rackName>`, `IdracSettings` = `<ns>:<serviceTag>-idrac`, cluster children = `<ns>:<clusterName>-<kind>`. (`Server` migrated to `server-<serial>` 2026-08-12.)
+**Legacy (pre-convention — migrate when next touched, don't treat network types as the special case):** `IPAddress` = `<ns>:<address>`, `Rack` = `<ns>:<rackName>`, `IdracSettings` = `<ns>:<serviceTag>-idrac`, cluster children = `<ns>:<clusterName>-<kind>`. (`Server` migrated to `server-<serviceTag>` 2026-08-12.)
 
 **The audit — run it before applying the constraint to any graph, and after a bulk import:**
 

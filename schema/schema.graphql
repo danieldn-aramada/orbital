@@ -85,6 +85,7 @@ type Server implements ConfigItem {
     model: String @search(by: [term])
     manufacturer: String @search(by: [hash]) 
     serviceTag: String @search(by: [hash])
+    serialNumber: String @search(by: [hash])
     rackPosition: Int
     oobMAC: String
 

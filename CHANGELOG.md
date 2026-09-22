@@ -22,6 +22,19 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ## [Unreleased]
 
+### Added
+- **`Server.serialNumber`** (`schema/VERSION` → `v10`). Holds Redfish
+  `ComputerSystem.SerialNumber` verbatim, alongside the existing `serviceTag`.
+  The two are **not** interchangeable: an R450 reports `DLP6K74` for both, while
+  an R650 reports `SKU=CFRHDX3` and `SerialNumber=MXFC400359006Z` — confirmed
+  against live iDRAC 7.20.10.05. Added so consumers can compute serial-number
+  drift per server, which was impossible while orbital stored only the service tag.
+
+  `serviceTag` remains the `orbId` natural key and is unchanged; `serialNumber`
+  is a plain attribute and must never be used for identity. **Requires a DGraph
+  schema alter on deploy** (`deploy/README.md` § 8) — the field is
+  indexed `@search(by: [hash])`, so servers can be looked up by serial.
+
 ### Changed
 - **Local DGraph export directories moved from `/tmp/orbital-test-*` to
   `.local/exports/{blue,scratch,test}`.** **Every developer must recreate their
