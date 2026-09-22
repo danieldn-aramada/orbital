@@ -112,6 +112,16 @@ identity.
 **A deployment whose services authenticate with client credentials MUST list
 those clients**, or publish 401s. There is no wildcard and no default.
 
+**An app caller is `dev`-equivalent, and that is the whole of its authorization.**
+`RequireRole` grants dev to any app principal, so **listing a client in
+`ORBITAL_AUTH_PROVIDERS` grants it write access to everything a dev can write** —
+there is no per-client scoping. cb-bundler needs far less than that. Decided
+2026-09-22 to keep it and say so rather than build scoping nobody has asked for:
+the alternative is a role on the provider entry for app callers (the shape
+`delegatedAuthorization.role` already uses for user-bearing tokens), which is
+cheap to add when a second machine caller needs something narrower. **Treat the
+client list as a privilege grant, not an identity list.**
+
 *This replaced `ORBITAL_APP_TOKEN_ALLOWED_APPIDS`, a global list of application
 ids on the removed single-issuer path. Its one lasting rule is kept here: "I have
 not configured this" and "I intend to allow everything" must never be the same

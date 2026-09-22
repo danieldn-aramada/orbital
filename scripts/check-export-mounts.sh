@@ -38,9 +38,9 @@ check() {
 }
 
 echo "Checking DGraph export mounts..."
-check local-dgraph-alpha-1         /tmp/orbital-test-blue
-check local-dgraph-alpha-scratch-1 /tmp/orbital-test-scratch
-check local-dgraph-alpha-test-1    /tmp/orbital-test-main
+check local-dgraph-alpha-1         .local/exports/blue
+check local-dgraph-alpha-scratch-1 .local/exports/scratch
+check local-dgraph-alpha-test-1    .local/exports/test
 
 if [ "$FAILED" -ne 0 ]; then
   echo

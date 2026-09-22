@@ -17,7 +17,12 @@ type UserRow struct {
 	// their next login — which is the complaint Grafana's skip_org_role_sync
 	// exists to answer. RoleSource names the provider for the tooltip.
 	ProviderOwned bool
-	RoleSource    string
+	// RoleSource is the full issuer URL, shown in the tooltip.
+	RoleSource string
+	// RoleSourceLabel is the issuer's host, shown inline. "from identity
+	// provider" is true but useless when an operator is asking WHICH one —
+	// orbital names the provider rather than making them hover.
+	RoleSourceLabel string
 }
 
 type Users struct {

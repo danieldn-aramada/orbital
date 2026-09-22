@@ -17,10 +17,12 @@
 
     {{if .OIDCEnabled}}
     <a href="{{.BasePath}}/auth/login" class="button is-fullwidth mb-4" style="gap: 0.5rem;">
-      <span class="icon">
-        <img src="{{.BasePath}}/static/logo/microsoft.svg" alt="Microsoft" style="width:18px;height:18px;">
-      </span>
-      <span>Sign in with Microsoft</span>
+      {{if .OIDCIconURL}}
+      <span class="icon"><img src="{{.OIDCIconURL}}" alt="" style="width:18px;height:18px;"></span>
+      {{else}}
+      <span class="icon"><i class="fa-solid fa-right-to-bracket"></i></span>
+      {{end}}
+      <span>Sign in with {{.OIDCDisplayName}}</span>
     </a>
     <div class="is-divider" data-content="OR"></div>
     {{end}}

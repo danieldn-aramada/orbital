@@ -41,7 +41,7 @@
             <td>
               {{if .ProviderOwned}}
               <span class="has-text-weight-semibold">{{.Role}}</span>
-              <span class="is-size-7 has-text-grey ml-2" title="Role comes from a group claim issued by {{.RoleSource}}, and is re-derived at every login. Change it in the identity provider.">from identity provider</span>
+              <span class="is-size-7 has-text-grey ml-2" title="Role comes from a group claim issued by {{.RoleSource}}, and is re-derived at every login. Change it in the identity provider.">from {{.RoleSourceLabel}}</span>
               {{else}}
               <div class="buttons has-addons" style="margin-bottom:0; flex-wrap:nowrap;">
                 <button

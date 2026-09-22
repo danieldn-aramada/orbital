@@ -23,6 +23,65 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 ## [Unreleased]
 
 ### Changed
+- **Local DGraph export directories moved from `/tmp/orbital-test-*` to
+  `.local/exports/{blue,scratch,test}`.** **Every developer must recreate their
+  stack once** (`make down && make up`, then `make seed`) — until they do, their
+  containers stay bound to the old paths while orbital reads the new ones, which
+  produces exactly the failure this change removes.
+
+  `/tmp` was the wrong home on two counts. macOS prunes it periodically, and
+  removing an export *directory* under a running container leaves a stale bind
+  mount: the mount was resolved at container start, so the container holds the
+  old inode and the two sides stop agreeing about that path. Re-creating the
+  directory on the host does not repair it — only restarting the container does,
+  which is why `make up`'s `mkdir` could never help. The symptom landed much
+  later as a backup failing with *"no json.gz found after export"*, and it was
+  diagnosed as a product bug more than once. Second, `/tmp` is shared between
+  checkouts: two clones of orbital clobbered each other's exports.
+
+  `.local/` is already gitignored and already the home for local-only files, so
+  ignored artifacts now live in the ignored tree rather than inside tracked
+  `deploy/local/`. Paths are relative in both places but spelled differently —
+  compose resolves against its own directory (`../../.local/exports/blue`), Go
+  against the process working directory (`./.local/exports/blue`).
+
+  Two incidental fixes carried along: the containerized orbital no longer needs a
+  path-identity mount (`/tmp/x:/tmp/x`) now that it sets
+  `DGRAPH_SCRATCH_EXPORT_DIR` explicitly, and the constant `blueExportDir` —
+  which pointed at the *test* alpha's directory, not blue's — is now
+  `testAlphaExportDir`.
+
+- **`docs/auth.md` rewritten for the provider list.** The integrator-facing guide
+  still described Entra: MSAL libraries, tenant GUIDs,
+  `api://<client>/user_impersonation` scopes, an On-Behalf-Of code sample, and
+  `orbctl login` as the primary way to get a token. Every one of those produces a
+  token current orbital rejects, and the CLI's login is broken pending redesign.
+  It now says what an integrator actually needs: that orbital is a resource server
+  which issues nothing, the four things to ask the operator for (issuer, the
+  client id whose `azp` must match, the required audience, the group-to-role
+  mapping), the three caller shapes (client credentials as an app principal,
+  delegated for a backend acting for its own users, PKCE for a human), how a role
+  is derived, and the errors they will actually hit. Provider-neutral throughout —
+  no vendor is named, because the adopter's IdP is theirs. 176 → 120 lines.
+
+- **The sign-in button no longer says "Sign in with Microsoft".** It reads
+  `Sign in with {ORBITAL_OIDC_DISPLAY_NAME}`, default **`SSO`**, with a neutral
+  icon; `static/logo/microsoft.svg` is deleted. The button named a vendor orbital
+  no longer trusts — the deployed IdP is Keycloak — but the fix is not to hardcode
+  the new one: the adopter's IdP is theirs, so an operator sets `Okta`,
+  `Keycloak`, `Entra ID` or whatever their users recognise. Follows ArgoCD's
+  `oidc.config.name` and Grafana's generic-OAuth `name`, both of which default to
+  something provider-neutral. If browser login ever accepts several providers,
+  the same field scales to one button each — the Grafana and GitLab shape.
+
+  An adopter who wants a branded button sets `ORBITAL_OIDC_ICON_URL` to an image
+  **they** host or mount; empty renders a neutral glyph. **Orbital ships no vendor
+  logos on purpose** — "Sign in with Microsoft" and its Google equivalent are
+  specified brand treatments with mandated wording and dimensions, and shipping
+  those marks in an open-source repo hands a trademark obligation to every adopter
+  and fork. The operator has the relationship with their IdP, so they supply the
+  asset and the label. Gitea takes the same approach with its per-source icon.
+
 - **BREAKING — `trustedService` is now `delegatedAuthorization`, `claimValidationRules`
   is removed, and unrecognised fields fail startup.** Three changes to
   `ORBITAL_AUTH_PROVIDERS`, which shipped in v0.0.44; each needs a config edit.
@@ -106,6 +165,78 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   `ORBITAL_API_AUTH_ENABLED=true`, without which `ORBITAL_DEV=true` bypasses
   bearer verification and a provider list looks broken when it is simply not
   being consulted.
+
+### Security
+- **State-changing API calls authenticated by session cookie now require an
+  `X-CSRF-Token` header.** A cookie is an ambient credential — the browser
+  attaches it to any request to this origin, including one a third-party page
+  caused — so authentication alone never proved the user intended the call.
+  Until now the entire defence was `SameSite=Lax` on the session cookie: a real
+  control, but one attribute, and setting `SameSite=None` (to embed orbital's UI
+  in another product's frame, say) would have made every mutation forgeable with
+  nothing in the code to notice. **Bearer callers are exempt and must be** — a
+  token is not ambient, and an API client has no session to fetch a token from.
+  Reads are untouched.
+
+  Client-side the header is added by a single `fetch` wrapper in `shared.js`,
+  which `orbital.js` and `orb.js` import, plus an `htmx:configRequest` listener
+  for htmx's own XHRs — rather than at ~25 call sites, so one added later is
+  covered without anyone remembering. Same-origin requests only; the token is
+  never attached to a third-party URL. Verified live: a cookie-authenticated
+  `POST /api/v1/backup` returns **403** without the header and **202** with it,
+  while `GET` is unaffected. Pinned by `TestRequireCSRFOnCookieAuth`, including
+  the bearer exemption and a wrong-token case.
+
+### Changed
+- **`ORBITAL_AUTH_PROVIDERS` is a privilege grant, not just an identity list** —
+  documented, not changed. Any app (client-credentials) caller whose `azp`
+  matches an entry is `dev`-equivalent on every mutating route, so listing a
+  client grants it write access to everything a dev can write. Reviewed
+  2026-09-22 and kept: per-client scoping is cheap to add later (a role on the
+  entry, the shape `delegatedAuthorization.role` already uses) and no second
+  machine caller needs it yet. `AUTH.md` § App callers now states the blast
+  radius instead of leaving it in a code comment.
+
+- **Browser login now uses PKCE, binds the ID token with a `nonce`, and compares
+  `state` in constant time.** OAuth 2.1 makes PKCE mandatory for **all** clients,
+  confidential included — the client secret proves which application is redeeming
+  the code, the verifier proves it is the same party that started the flow.
+  orbctl had been doing this correctly while orbital's own login did not. The
+  `nonce` is what makes a replayed ID token detectable: a token lifted from
+  another login attempt verifies perfectly on signature, issuer, audience and
+  expiry, and nothing else catches it. **An ID token with a missing or mismatched
+  nonce is refused** (`?error=invalid_nonce`), the absent case explicitly, so an
+  implementation that skipped the check when the claim is absent cannot pass.
+  Pinned by `TestOIDCLogin_SendsPKCEChallengeAndNonce`,
+  `TestOIDCCallback_NonceMismatchIsRefused` and
+  `TestOIDCCallback_MissingNonceIsRefused`.
+
+  The three values are stored and cleared as **one** record (`auth.OIDCLogin`) —
+  clearing the state while leaving a verifier or nonce behind is how a stale
+  value gets reused on a later attempt. Round-tripped by
+  `TestOIDCLogin_StateVerifierAndNonceRoundTripTogether`, which asserts all three
+  rather than just the state: a verifier lost in transit turns the exchange into
+  an unexplained 400 at the IdP, and a lost nonce silently disables the replay
+  check.
+
+- **Rate limiting is enabled in `deploy/base`.** `ORBITAL_RATE_LIMIT_ENABLED`
+  defaults to `false` in code, which is right for local dev and wrong for every
+  real deployment: the mechanism existed, attached a tighter bucket to
+  `POST /user/login`, and was never switched on — so the one credential-guessing
+  surface orbital has ran unguarded. Local password login is the break-glass path
+  and cannot be disabled, which is what makes it worth guarding. Verified: at
+  `ORBITAL_LOGIN_RATE_LIMIT_RPS=1` a burst of six attempts returns
+  `200 200 429 429 429 429` with `Retry-After: 1`.
+
+  Per-pod and in-memory, so the ceiling is `RPS x replicas`. It slows one source;
+  it deliberately does **not** lock accounts — lockout on a break-glass path is a
+  denial-of-service anyone can trigger with an admin's email address.
+
+- **The OIDC callback no longer logs claims at INFO on every login.**
+  `oidc.go` logged email, name and `preferred_username` unconditionally, while
+  `AUTH.md` documented claim logging as debug-only and off by default. The
+  `logger.Debug("oidc id token claims", …)` twenty lines below it — the one the
+  docs describe — is unchanged.
 
 ### Fixed
 - **A human bearer token could impersonate a service account and gain write

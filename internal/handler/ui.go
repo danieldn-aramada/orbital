@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -33,6 +34,8 @@ type UI struct {
 	ratelURL          string
 	issueTrackerURL   string
 	oidcEnabled       bool
+	oidcDisplayName   string
+	oidcIconURL       string
 	backupEnabled     bool
 	backupCronSpec    string
 	s3Endpoint        string
@@ -70,6 +73,18 @@ func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, backupEnable
 		version:         fmt.Sprintf("%d", time.Now().Unix()),
 		templates:       webtemplates.Map(),
 	}
+}
+
+// SetOIDCBranding sets how the sign-in button names and illustrates the
+// configured identity provider. Both are operator-supplied: orbital ships no
+// vendor logos and hardcodes no provider name, because the adopter's IdP is
+// theirs. An empty icon URL renders a neutral glyph.
+//
+// A setter rather than two more constructor arguments — NewUI already takes ten,
+// and this follows the six Set* methods below.
+func (h *UI) SetOIDCBranding(displayName, iconURL string) {
+	h.oidcDisplayName = displayName
+	h.oidcIconURL = iconURL
 }
 
 // SetOCIConfig passes OCI config to the UI handler for rendering state-aware pages.
@@ -228,6 +243,8 @@ func (h *UI) base(c echo.Context) layout.Base {
 		NavBar:             layout.NavBar{RatelURL: h.ratelURL, IssueTrackerURL: h.issueTrackerURL},
 		IsAuthn:            isAuthn,
 		OIDCEnabled:        h.oidcEnabled,
+		OIDCDisplayName:    oidcDisplayName(h.oidcDisplayName),
+		OIDCIconURL:        h.oidcIconURL,
 		LoginError:         loginError,
 		LoginErrorCode:     loginErrorCode,
 		User:               layout.User{Id: userID, Name: userName, Email: userEmail, Role: userRole},
@@ -743,6 +760,7 @@ func (h *UI) Users(c echo.Context) error {
 				if _, owns := h.roleOwningIssuers[*u.Issuer]; owns {
 					row.ProviderOwned = true
 					row.RoleSource = *u.Issuer
+					row.RoleSourceLabel = issuerLabel(*u.Issuer)
 				}
 			}
 			rows[i] = row
@@ -774,4 +792,25 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%dm", minutes)
 	}
 	return d.String()
+}
+
+// oidcDisplayName falls back to a provider-neutral label. Empty is what a
+// caller that never configured one passes, and a blank button is worse than a
+// generic one.
+func oidcDisplayName(name string) string {
+	if name == "" {
+		return "SSO"
+	}
+	return name
+}
+
+// issuerLabel shortens an issuer URL to its host for inline display. The full
+// URL stays in the tooltip: two realms on one host are distinguishable there,
+// while an unparseable value falls back to itself rather than rendering blank.
+func issuerLabel(issuer string) string {
+	u, err := url.Parse(issuer)
+	if err != nil || u.Host == "" {
+		return issuer
+	}
+	return u.Host
 }

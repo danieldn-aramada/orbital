@@ -25,7 +25,7 @@ services:
       - "18080:8080"
       - "19080:9080"
     volumes:
-      - /tmp/orbital-test-blue:/dgraph/export
+      - ../../.local/exports/blue:/dgraph/export
     depends_on:
       dgraph-zero:
         condition: service_healthy
@@ -60,7 +60,7 @@ services:
       - "18081:8080"
       - "19081:9080"
     volumes:
-      - /tmp/orbital-test-scratch:/dgraph/export
+      - ../../.local/exports/scratch:/dgraph/export
     depends_on:
       dgraph-zero-scratch:
         condition: service_healthy

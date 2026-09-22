@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -83,21 +84,36 @@ func (h *OIDC) Login(c echo.Context) error {
 	}
 	state := base64.URLEncoding.EncodeToString(b)
 
-	if err := auth.SetOIDCState(h.sessionKeys, c.Request(), c.Response(), state); err != nil {
-		return fmt.Errorf("set oidc state: %w", err)
+	n := make([]byte, 16)
+	if _, err := rand.Read(n); err != nil {
+		return fmt.Errorf("generate nonce: %w", err)
+	}
+	nonce := base64.RawURLEncoding.EncodeToString(n)
+
+	// PKCE on a CONFIDENTIAL client is deliberate, not belt-and-braces theatre:
+	// OAuth 2.1 requires it for all clients. The secret proves which application
+	// is redeeming the code; the verifier proves it is the same party that
+	// started this flow.
+	verifier := oauth2.GenerateVerifier()
+
+	if err := auth.SetOIDCLogin(h.sessionKeys, c.Request(), c.Response(),
+		auth.OIDCLogin{State: state, Verifier: verifier, Nonce: nonce}); err != nil {
+		return fmt.Errorf("set oidc login: %w", err)
 	}
 
-	return c.Redirect(http.StatusFound, h.oauth2Cfg.AuthCodeURL(state))
+	return c.Redirect(http.StatusFound, h.oauth2Cfg.AuthCodeURL(state,
+		oauth2.S256ChallengeOption(verifier), gooidc.Nonce(nonce)))
 }
 
 // Callback handles GET /auth/callback — exchanges the code, verifies the token, creates a session.
 func (h *OIDC) Callback(c echo.Context) error {
-	storedState, err := auth.GetAndClearOIDCState(h.sessionKeys, c.Request(), c.Response())
-	if err != nil || storedState != c.QueryParam("state") {
+	login, err := auth.GetAndClearOIDCLogin(h.sessionKeys, c.Request(), c.Response())
+	if err != nil || subtle.ConstantTimeCompare([]byte(login.State), []byte(c.QueryParam("state"))) != 1 {
 		return c.Redirect(http.StatusSeeOther, "/?error=invalid_state")
 	}
 
-	token, err := h.oauth2Cfg.Exchange(c.Request().Context(), c.QueryParam("code"))
+	token, err := h.oauth2Cfg.Exchange(c.Request().Context(), c.QueryParam("code"),
+		oauth2.VerifierOption(login.Verifier))
 	if err != nil {
 		return fmt.Errorf("token exchange: %w", err)
 	}
@@ -112,6 +128,15 @@ func (h *OIDC) Callback(c echo.Context) error {
 		return fmt.Errorf("verify id token: %w", err)
 	}
 
+	// The nonce binds this ID token to the login attempt that asked for it. A
+	// token replayed from another attempt verifies fine — signature, issuer,
+	// audience and expiry are all genuine — and only this check catches it.
+	if subtle.ConstantTimeCompare([]byte(idToken.Nonce), []byte(login.Nonce)) != 1 {
+		h.logger.Warn("oidc callback refused — id token nonce does not match this login attempt",
+			"request.id", c.Response().Header().Get(echo.HeaderXRequestID))
+		return c.Redirect(http.StatusSeeOther, "/?error=invalid_nonce")
+	}
+
 	var claims struct {
 		Email             string `json:"email"`
 		Name              string `json:"name"`
@@ -120,8 +145,6 @@ func (h *OIDC) Callback(c echo.Context) error {
 	if err := idToken.Claims(&claims); err != nil {
 		return fmt.Errorf("extract claims: %w", err)
 	}
-	h.logger.Info("oidc callback claims", "email", claims.Email, "name", claims.Name, "preferred_username", claims.PreferredUsername)
-
 	email := strings.ToLower(claims.Email)
 	if email == "" {
 		return c.Redirect(http.StatusSeeOther, h.basePath+"/?error="+CodeIdentityIncomplete)

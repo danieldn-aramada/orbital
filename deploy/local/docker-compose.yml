@@ -25,7 +25,7 @@ services:
       - "8080:8080"
       - "9080:9080"
     volumes:
-      - /tmp/orbital-test-blue:/dgraph/export
+      - ../../.local/exports/blue:/dgraph/export
     depends_on:
       dgraph-zero:
         condition: service_healthy
@@ -70,7 +70,7 @@ services:
       - "8083:8080"
       - "9083:9080"
     volumes:
-      - /tmp/orbital-test-main:/dgraph/export
+      - ../../.local/exports/test:/dgraph/export
     depends_on:
       dgraph-zero-test:
         condition: service_healthy
@@ -105,7 +105,7 @@ services:
       - "8081:8080"
       - "9081:9080"
     volumes:
-      - /tmp/orbital-test-scratch:/dgraph/export
+      - ../../.local/exports/scratch:/dgraph/export
     depends_on:
       dgraph-zero-scratch:
         condition: service_healthy
@@ -190,6 +190,7 @@ services:
       DGRAPH_SCRATCH_ADMIN_URL: http://dgraph-alpha-scratch:8080/admin
       DGRAPH_SCRATCH_ZERO_URL: http://dgraph-zero-scratch:6080
       DGRAPH_EXPORT_DIR: /dgraph/export
+      DGRAPH_SCRATCH_EXPORT_DIR: /dgraph/scratch-export
       DATABASE_URL: postgres://orbital:orbital-local-dev-secret@postgres:5432/orbital?sslmode=disable
       ORBITAL_S3_ENDPOINT: http://minio:9000
       ORBITAL_S3_BUCKET: orbital
@@ -207,8 +208,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - /tmp/orbital-test-blue:/dgraph/export
-      - /tmp/orbital-test-scratch:/tmp/orbital-test-scratch
+      - ../../.local/exports/blue:/dgraph/export
+      - ../../.local/exports/scratch:/dgraph/scratch-export
       - ./cosign.key:/app/deploy/local/cosign.key:ro
     depends_on:
       postgres:

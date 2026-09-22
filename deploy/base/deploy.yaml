@@ -38,6 +38,18 @@ spec:
               value: "/orbital"
             - name: ORBITAL_DEV
               value: "false"
+            # Rate limiting. The code default is OFF so local dev is unthrottled;
+            # every real deployment wants it on, and base is where that belongs
+            # rather than each overlay remembering. The tighter bucket it attaches
+            # to POST /user/login is the only brake on credential guessing —
+            # local password login is the break-glass path and cannot be disabled.
+            #
+            # Per-pod and in-memory, so the effective ceiling is RPS x replicas
+            # (deploy/README.md § Known limits). It slows one source; it does not
+            # lock accounts, which is deliberate — lockout on a break-glass path
+            # is a denial-of-service anyone can trigger with an admin's email.
+            - name: ORBITAL_RATE_LIMIT_ENABLED
+              value: "true"
             # AKS dev is HTTP-only (no Istio TLS yet). Secure cookies would
             # be silently dropped by the browser over HTTP. Remove this
             # override once HTTPS is configured on the ingress.

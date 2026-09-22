@@ -7,6 +7,45 @@ export const BASE = window.ORBITAL_BASE || ''
 // base.gohtml; the fallback covers the no-template case (e.g. unit tests).
 const AUDIT_PANEL_LIMIT = (window.ORBITAL_CONFIG && window.ORBITAL_CONFIG.auditPanelLimit) || 200
 
+// ── CSRF on state-changing API calls ─────────────────────────────────────────
+// The session cookie is an ambient credential: the browser attaches it to any
+// request to this origin, including one a third-party page caused. The server
+// requires this header on cookie-authenticated mutations (auth.CSRFHeader), and
+// a cross-site form cannot set a custom header at all.
+//
+// Wrapped ONCE here rather than added to ~25 call sites: orbital.js and orb.js
+// import this module, so the wrapper is installed before their bodies run, and
+// a call site added later is covered without anyone remembering. Same-origin
+// only — never leak the token to a third party.
+const CSRF_TOKEN = (window.ORBITAL_CONFIG && window.ORBITAL_CONFIG.csrfToken) || ''
+const CSRF_HEADER = 'X-CSRF-Token'
+const MUTATING_METHOD = /^(POST|PUT|PATCH|DELETE)$/i
+
+if (CSRF_TOKEN && !window.__orbitalCsrfInstalled) {
+  window.__orbitalCsrfInstalled = true
+
+  const nativeFetch = window.fetch.bind(window)
+  window.fetch = (input, init) => {
+    const opts = init ? { ...init } : {}
+    const method = opts.method || (input instanceof Request ? input.method : 'GET')
+    const url = typeof input === 'string' ? input : (input instanceof Request ? input.url : String(input))
+    const sameOrigin = !/^[a-z]+:\/\//i.test(url) || url.startsWith(window.location.origin)
+    if (MUTATING_METHOD.test(method) && sameOrigin) {
+      const headers = new Headers(opts.headers || (input instanceof Request ? input.headers : undefined))
+      if (!headers.has(CSRF_HEADER)) headers.set(CSRF_HEADER, CSRF_TOKEN)
+      opts.headers = headers
+    }
+    return nativeFetch(input, opts)
+  }
+
+  // htmx issues its own XHRs, so the wrapper above never sees them.
+  // htmx:configRequest bubbles to document, which exists at module-eval time
+  // while document.body may not.
+  document.addEventListener('htmx:configRequest', (e) => {
+    if (MUTATING_METHOD.test(e.detail.verb || '')) e.detail.headers[CSRF_HEADER] = CSRF_TOKEN
+  })
+}
+
 // safeDomId converts an orbId into a DOM/CSS-selector-safe identifier.
 // orbIds typically contain ":" (e.g. "2f-uae:5HSC3D4"), which is a pseudo-class
 // operator in CSS selectors and breaks `$('#tab-...')` and querySelector. We

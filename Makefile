@@ -45,7 +45,7 @@ up: ## Start the local stack (DGraph, Postgres, MinIO, Zot, orb DGraph)
 	@# host path is missing at start, Docker binds a directory that only exists
 	@# inside its VM, and DGraph's native export fails with the unhelpful
 	@# "resolving export failed because task failed".
-	@mkdir -p /tmp/orbital-test-blue /tmp/orbital-test-scratch /tmp/orbital-test-main
+	@mkdir -p .local/exports/blue .local/exports/scratch .local/exports/test
 	docker compose -f $(COMPOSE_FILE) up -d
 	@# `make down` runs -v and wipes the Postgres volume, taking orbital_test with
 	@# it. Recreating here means `make up` leaves you ready to run anything,
@@ -60,6 +60,16 @@ down: ## Stop the local stack (all profiles)
 	docker compose -f $(COMPOSE_FILE) --profile '*' down -v
 
 run-orbital: fmt ## Run orbital server (go run; fast dev iteration). Restore requires dgraph in PATH
+	@# macOS prunes /tmp periodically, and when it removes an export DIRECTORY
+	@# underneath a running container the bind mount goes stale: the mount was
+	@# resolved at container start, so it still references the old inode and the
+	@# two sides stop agreeing about that path. Recreating the directory on the
+	@# host does NOT repair it — the fix is restarting the container, which is
+	@# why `make up`'s mkdir only helps at start. The symptom otherwise lands much
+	@# later as a backup failing with "no json.gz found after export", so check it
+	@# when a developer can still act on it. Warn rather than block: only export,
+	@# backup and restore need these mounts.
+	@bash scripts/check-export-mounts.sh || true
 	@# DOCKER_CONFIG isolation: prevents cosign's go-containerregistry keychain
 	@# from spawning docker-credential-* helpers (which on macOS live inside
 	@# /Applications/Docker.app/). Spawning from iTerm's process tree triggers

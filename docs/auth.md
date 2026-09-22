@@ -1,176 +1,120 @@
-# Authentication
+# Authenticating to Orbital
 
-Orbital has two authentication flows depending on the caller:
+Read this before: integrating a service, script or UI with orbital's API.
+The internal design lives in [`reference/AUTH.md`](reference/AUTH.md) — this
+document is what an integrator needs and nothing more.
 
-| Flow | Caller | Mechanism |
-|---|---|---|
-| 1 | Orbital admin UI | Entra ID OIDC — browser-based login, session cookie |
-| 2 | API consumers (services, scripts, third-party UIs) | JWT bearer token — orbital as resource server, any OIDC-compliant IdP |
+**Orbital is an OAuth resource server.** It verifies bearer tokens issued by an
+identity provider its operator configured; it issues none of its own and has no
+API login flow. So you do not get a token *from* orbital — you get one from the
+IdP it trusts, and present it.
 
-Orb does not authenticate to orbital — by design, orb never calls orbital directly. Edge-to-cloud and cloud-to-edge communication flows through OCI registry and object storage, not HTTP APIs on orbital.
+Orb does not authenticate to orbital at all: edge-to-cloud traffic flows through
+an OCI registry and object storage, never HTTP calls into orbital.
 
 ---
 
-## Flow 1: Admin UI — Entra ID OIDC
+## What to ask the orbital operator for
+
+Orbital trusts a **list** of providers, each entry pinned to one
+`(issuer, client)` pair. Before you can call anything, you need to know which
+entry is yours:
+
+| | Why you need it |
+|---|---|
+| **Issuer URL** | whose tokens orbital trusts — everything else is discovered from `<issuer>/.well-known/openid-configuration` |
+| **Client id to authenticate as** | orbital matches your token's `azp` against the entry's `clientID`. **A token from an unlisted client is refused before any role logic runs** — no error will tell you which client is expected |
+| **Required audience** | your token's `aud` must contain it. Keycloak's stock `aud: account` is deliberately not accepted, so the operator usually adds an audience mapper |
+| **Which groups map to which role** | if your entry uses group mapping, a token carrying no mapped group is **denied**, not downgraded |
+
+If you are a service rather than a human, say so — machine callers and
+user-bearing callers are configured differently (see below).
+
+## Getting a token
+
+Standard OIDC against the operator's IdP. Any conformant library works; orbital
+never sees the exchange, only the resulting token.
+
+- **A service with no user behind it** — client credentials. Orbital treats it as
+  an *app principal*: no user row, no group mapping, and **dev-equivalent access
+  on every mutating route**. Your client id must be listed, which is the gate.
+- **Your backend acting for its own users** — the operator can mark your entry as
+  delegated: every valid token receives one configured role and no user row is
+  created. Orbital records your client as `acting_client` on audit events, so the
+  log distinguishes "your service acting as someone" from that person acting
+  directly.
+- **A human calling directly** — authorization code + PKCE. The role comes from
+  the group claim at every sign-in.
 
 ```mermaid
 sequenceDiagram
-    participant B as Browser
-    participant O as Orbital Server
-    participant E as Entra ID
+    participant C as Your service
+    participant I as The operator's IdP
+    participant O as Orbital
 
-    B->>O: GET /admin (no session)
-    O-->>B: 302 redirect to Entra ID /authorize
-    Note over B,E: ?client_id=&redirect_uri=&scope=openid profile email
-    B->>E: Follow redirect — user logs in
-    E-->>B: 302 redirect to /auth/callback?code=xxx
-    B->>O: GET /auth/callback?code=xxx
-    O->>E: POST /token (code + client_secret)
-    E-->>O: id_token + access_token
-    O->>O: Validate id_token, extract claims
-    O-->>B: Set session cookie, redirect to /admin
-    B->>O: GET /admin (with session cookie)
-    O-->>B: 200 OK — serve UI
+    Note over O: at startup, per configured provider —<br/>discovery + JWKS, cached
+    C->>I: obtain a token (client credentials, PKCE, or delegation)
+    I-->>C: access_token
+    C->>O: POST /graphql — Authorization: Bearer <token>
+    O->>O: select the provider entry by (iss, azp)
+    O->>O: verify signature, iss, aud, exp against THAT entry's keys
+    O->>O: resolve role — group mapping, floor, or delegated role
+    O-->>C: 200, or 401 with WWW-Authenticate
 ```
 
----
-
-## Flow 2: API Consumer → Orbital API — JWT Bearer
-
-```mermaid
-sequenceDiagram
-    participant A as API Consumer (e.g. Atlas UI)
-    participant O as Orbital Server
-    participant K as OIDC Provider JWKS (e.g. Keycloak)
-
-    Note over O: On startup — fetch + cache JWKS
-    O->>K: GET /realms/armada/.well-known/openid-configuration
-    K-->>O: JWKS public keys (cached, auto-refreshed)
-
-    A->>O: POST /api/topology/query
-    Note over A,O: Authorization: Bearer eyJ...
-    O->>O: Extract bearer token
-    O->>O: Validate signature against cached JWKS
-    O->>O: Check iss, exp, azp claims
-    O->>O: Extract sub, email, armadaOrgId, groups
-    O->>O: Authz — can this user access this data center?
-    O-->>A: 200 OK — topology data
-```
-
----
-
-## Developer quickstart — calling orbital from your own code
-
-Two paths depending on whether you're hacking on a script or building a service.
-
-### Install the orbctl CLI (macOS)
+Then:
 
 ```bash
-brew tap danieldn-aramada/tools
-brew install orbctl
-orbctl --version
-```
-
-Or as a one-liner without the explicit tap step:
-
-```bash
-brew install danieldn-aramada/tools/orbctl
-```
-
-Updates:
-
-```bash
-brew update
-brew upgrade orbctl
-```
-
-### Path A — ad-hoc curl / scripting
-
-Use the CLI to get an access token via PKCE. One interactive login; pass `-v` to print the token as an exportable shell variable.
-
-```bash
-# One-time interactive login (opens browser, redirects to localhost)
-orbctl login -v
-
-# Output ends with:
-#   export ORBITAL_TOKEN=eyJ0eXAiOi...
-# Paste that line into your shell, then:
-
-curl -H "Authorization: Bearer $ORBITAL_TOKEN" \
+curl -H "Authorization: Bearer $TOKEN" \
      -H "Content-Type: application/json" \
      -d '{"query":"{ queryNamespace { name } }"}' \
      https://<orbital-host>/graphql
 ```
 
-Even faster — eval directly so `ORBITAL_TOKEN` is set in your current shell:
+## What you get, and what you can do with it
 
-```bash
-eval "$(orbctl login -v | grep '^  export ')"
-```
+Roles are orbital's, never the provider's — an IdP asserts identity and group
+membership, and the operator's mapping decides what that is worth.
 
-Access tokens last ~1 hour. If you keep working through `orbctl`'s own subcommands (`orbctl get`, `orbctl patch`, …), expiry is invisible — they silently refresh from your cached refresh token. The only case where you re-run `orbctl login -v` is when you've copied the raw token into a shell variable (or another tool) and that copy has gone stale. Refresh tokens last ~90 days idle; until then `orbctl login -v` returns silently without re-opening the browser.
-
-Fine for poking, scripting, demos. Not for long-running services — see Path B for the MSAL-based pattern that handles refresh inside your own service.
-
-### Path B — long-running service
-
-Register your own Entra ID (Azure AD) App Registration, then use MSAL (or any OIDC library — every language has one). MSAL caches and refreshes tokens internally; your code never checks expiry.
-
-| Language | Library |
+| Role | Can |
 |---|---|
-| Go     | `github.com/AzureAD/microsoft-authentication-library-for-go` |
-| Node   | `@azure/msal-node` |
-| Python | `msal` |
-| .NET   | `Microsoft.Identity.Client` |
-| Java   | `com.microsoft.azure:msal4j` |
+| `readonly` | read everything: `GET` endpoints, GraphQL queries |
+| `dev` | the above plus mutations |
+| `admin` | the above plus user and policy administration |
 
-**Configuration values to request from the orbital team:**
+Reads pass for any authenticated caller; mutating methods require `dev` or
+above. How you get a role depends on the entry:
 
-```
-Tenant ID:         <Entra ID tenant GUID>
-Orbital client ID: <orbital app client GUID>
-Scope:             api://<orbital-client-id>/user_impersonation
-                   (fallback: api://<orbital-client-id>/.default)
-API endpoint:      https://<orbital-host>/graphql
-Auth header:       Authorization: Bearer <access_token>
-```
+- **group mapping** — re-derived at every sign-in; most privileged matching group
+  wins; **no match is a refusal** (`NO_ROLE_MAPPED`) unless the operator
+  configured a floor.
+- **a default role** — you are created with it on first call, and an admin can
+  change it afterwards without the next sign-in reverting it.
+- **delegated** — one fixed role for every token from your client.
 
-**Go example (On-Behalf-Of — frontend → your backend → orbital):**
+A role set by a provider is read-only in orbital's UI, so ask the operator to
+change the group rather than the user.
 
-```go
-import (
-    "context"
-    "net/http"
-    "strings"
-    "github.com/AzureAD/microsoft-authentication-library-for-go/apps/confidential"
-)
+## Errors you will actually hit
 
-func NewOrbitalClient(tenantID, clientID, clientSecret, orbitalClientID string) (confidential.Client, string, error) {
-    cred, err := confidential.NewCredFromSecret(clientSecret)
-    if err != nil {
-        return confidential.Client{}, "", err
-    }
-    app, err := confidential.New(
-        "https://login.microsoftonline.com/"+tenantID,
-        clientID,
-        cred,
-    )
-    return app, "api://" + orbitalClientID + "/user_impersonation", err
-}
+| What you see | What it means |
+|---|---|
+| `401` + `WWW-Authenticate: Bearer error="invalid_token"` | signature, issuer, audience or expiry failed — or your `azp` matches no configured entry. Deliberately not specific: the server does not tell an unauthenticated caller what it trusts. Ask the operator to check their logs, which name the reason |
+| `403` | authenticated but below the required role |
+| `NO_ROLE_MAPPED` | valid token, but no group in it maps to a role |
+| `IDENTITY_CONFLICT` | that email already belongs to a local account or another provider. Orbital keys users by email today, so one address cannot be shared across providers |
 
-func CallOrbital(ctx context.Context, app confidential.Client, scope, inboundUserToken, baseURL, query string) (*http.Response, error) {
-    // MSAL caches + refreshes automatically — call this on every request.
-    result, err := app.AcquireTokenOnBehalfOf(ctx, inboundUserToken, []string{scope})
-    if err != nil {
-        return nil, err
-    }
-    req, _ := http.NewRequestWithContext(ctx, "POST", baseURL+"/graphql", strings.NewReader(query))
-    req.Header.Set("Authorization", "Bearer "+result.AccessToken)
-    req.Header.Set("Content-Type", "application/json")
-    return http.DefaultClient.Do(req)
-}
-```
+The full registry is in [`reference/ERROR-RESPONSES.md`](reference/ERROR-RESPONSES.md).
 
-Notice what's not there: no expiry check, no manual refresh, no token storage. `AcquireTokenOnBehalfOf` does all of it. For persistence across restarts, implement `cache.ExportReplace` and pass it as `confidential.WithCache(...)` — one extra option, no other code changes.
+**Bearer callers never need a CSRF token.** Orbital requires one on
+state-changing calls authenticated by *session cookie* — a cookie is attached by
+the browser whether or not the user intended the call. A bearer token is not
+ambient, so the requirement does not apply to you.
 
-**First call provisions you in orbital's user table as `readonly`.** Mutating calls (POST/PUT/PATCH/DELETE) require `dev` or `admin` — ask an orbital admin to promote your account via `/users` after your first sign-in.
+## The CLI
+
+`orbctl` is **under redesign and its login flow does not work** against current
+deployments — it builds Entra URLs by string concatenation, which no other
+provider answers. Do not build on it. Use a bearer token as above; if you want a
+CLI in the meantime, a token in a shell variable plus `curl` is the supported
+path.

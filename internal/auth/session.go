@@ -11,13 +11,15 @@ import (
 )
 
 const (
-	cookieName   = "orbital_session"
-	userIDKey    = "user_id"
-	userNameKey  = "user_name"
-	userEmailKey = "user_email"
-	userRoleKey  = "user_role"
-	csrfKey      = "csrf_token"
-	oidcStateKey = "oidc_state"
+	cookieName      = "orbital_session"
+	userIDKey       = "user_id"
+	userNameKey     = "user_name"
+	userEmailKey    = "user_email"
+	userRoleKey     = "user_role"
+	csrfKey         = "csrf_token"
+	oidcStateKey    = "oidc_state"
+	oidcVerifierKey = "oidc_verifier"
+	oidcNonceKey    = "oidc_nonce"
 )
 
 var ErrNotAuthenticated = errors.New("not authenticated")
@@ -159,31 +161,56 @@ func GetOrCreateCSRF(keys SessionKeys, r *http.Request, w http.ResponseWriter) (
 	return token, nil
 }
 
-// SetOIDCState stores a random state value in the session for OIDC callback verification.
-func SetOIDCState(keys SessionKeys, r *http.Request, w http.ResponseWriter, state string) error {
+// OIDCLogin is the per-attempt state a browser login carries across the redirect
+// to the provider:
+//
+//   - State    — CSRF protection on the callback.
+//   - Verifier — the PKCE code_verifier. OAuth 2.1 requires PKCE for ALL clients,
+//     confidential included: it binds the code to this attempt, so an
+//     intercepted code cannot be redeemed by anyone else.
+//   - Nonce    — binds the returned ID token to this attempt, which is what makes
+//     a replayed token detectable.
+//
+// Stored and cleared as ONE record. Clearing the state while leaving the
+// verifier or nonce behind is how a stale value gets reused on a later attempt.
+type OIDCLogin struct {
+	State    string
+	Verifier string
+	Nonce    string
+}
+
+// SetOIDCLogin stores the attempt in the session for the callback to check.
+func SetOIDCLogin(keys SessionKeys, r *http.Request, w http.ResponseWriter, l OIDCLogin) error {
 	store := getStore(keys)
 	session, err := store.Get(r, cookieName)
 	if err != nil {
 		session, _ = store.New(r, cookieName)
 	}
-	session.Values[oidcStateKey] = state
+	session.Values[oidcStateKey] = l.State
+	session.Values[oidcVerifierKey] = l.Verifier
+	session.Values[oidcNonceKey] = l.Nonce
 	return session.Save(r, w)
 }
 
-// GetAndClearOIDCState returns the stored OIDC state and removes it from the session.
-func GetAndClearOIDCState(keys SessionKeys, r *http.Request, w http.ResponseWriter) (string, error) {
+// GetAndClearOIDCLogin returns the stored attempt and removes all of it from the
+// session, so a second callback carrying the same state finds nothing.
+func GetAndClearOIDCLogin(keys SessionKeys, r *http.Request, w http.ResponseWriter) (OIDCLogin, error) {
 	store := getStore(keys)
 	session, err := store.Get(r, cookieName)
 	if err != nil {
-		return "", errors.New("no session")
+		return OIDCLogin{}, errors.New("no session")
 	}
 	state, ok := session.Values[oidcStateKey].(string)
 	if !ok || state == "" {
-		return "", errors.New("no oidc state in session")
+		return OIDCLogin{}, errors.New("no oidc state in session")
 	}
+	verifier, _ := session.Values[oidcVerifierKey].(string)
+	nonce, _ := session.Values[oidcNonceKey].(string)
 	delete(session.Values, oidcStateKey)
+	delete(session.Values, oidcVerifierKey)
+	delete(session.Values, oidcNonceKey)
 	session.Save(r, w) //nolint:errcheck
-	return state, nil
+	return OIDCLogin{State: state, Verifier: verifier, Nonce: nonce}, nil
 }
 
 // ValidateCSRF compares the submitted token against the one stored in the session.

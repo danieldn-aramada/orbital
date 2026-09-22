@@ -59,11 +59,11 @@ type Config struct {
 	DBName                  string `envconfig:"ORBITAL_DB_NAME"                 default:""`
 	DBSSLMode               string `envconfig:"ORBITAL_DB_SSLMODE"              default:"require"`
 	ExportDir               string `envconfig:"ORBITAL_EXPORT_DIR"              default:"./subgraph-exports"`
-	DGraphScratchExportDir  string `envconfig:"DGRAPH_SCRATCH_EXPORT_DIR"       default:"/tmp/orbital-test-scratch"`
+	DGraphScratchExportDir  string `envconfig:"DGRAPH_SCRATCH_EXPORT_DIR"       default:"./.local/exports/scratch"`
 	SchemaPath              string `envconfig:"ORBITAL_SCHEMA_PATH"             default:"schema/schema.graphql"`
 	SessionHMACKey          string `envconfig:"ORBITAL_SESSION_HMAC_KEY"        default:"local-dev-hmac-key-change-in-prod"` // must be changed in prod
 	SessionEncryptionKey    string `envconfig:"ORBITAL_SESSION_ENCRYPTION_KEY"  default:"local-dev-enc-key-32-bytes-pad!!"`  // must be exactly 32 bytes for AES-256; empty disables cookie encryption
-	DGraphExportDir         string `envconfig:"DGRAPH_EXPORT_DIR"               default:"/tmp/orbital-test-blue"`            // host-side mount of /dgraph/export on blue alpha
+	DGraphExportDir         string `envconfig:"DGRAPH_EXPORT_DIR"               default:"./.local/exports/blue"`            // host-side mount of /dgraph/export on blue alpha
 	S3Endpoint              string `envconfig:"ORBITAL_S3_ENDPOINT"             default:"http://localhost:9000"`
 	S3Region                string `envconfig:"ORBITAL_S3_REGION"               default:"us-east-1"`
 	S3Bucket                string `envconfig:"ORBITAL_S3_BUCKET"               default:"orbital"`
@@ -126,8 +126,21 @@ type Config struct {
 	// (see internal/server/server.go), so machine-to-machine callers like
 	// cb-bundler can query without an OAuth2 token. Production (Dev=false)
 	// enforces bearer auth strictly.
-	OIDCIssuerURL    string `envconfig:"ORBITAL_OIDC_ISSUER_URL"         default:""`
-	OIDCClientID     string `envconfig:"ORBITAL_OIDC_CLIENT_ID"          default:""`
+	OIDCIssuerURL string `envconfig:"ORBITAL_OIDC_ISSUER_URL"         default:""`
+	OIDCClientID  string `envconfig:"ORBITAL_OIDC_CLIENT_ID"          default:""`
+	// OIDCDisplayName names the identity provider on the sign-in button. The
+	// adopter's IdP is theirs, so orbital must not hardcode a vendor: the
+	// default is provider-neutral and an operator sets "Okta", "Keycloak",
+	// "Entra ID" or whatever their users recognise. Follows ArgoCD's
+	// `oidc.config.name` and Grafana's generic-OAuth `name`.
+	OIDCDisplayName string `envconfig:"ORBITAL_OIDC_DISPLAY_NAME" default:"SSO"`
+	// OIDCIconURL optionally points at an image for the sign-in button — an
+	// adopter's own asset, mounted or hosted by them. Orbital deliberately
+	// ships NO vendor logos: "Sign in with Microsoft" and its Google equivalent
+	// are specified brand treatments, and redistributing those marks in an
+	// open-source repo hands every adopter a trademark obligation orbital has no
+	// standing to take on. Empty renders a neutral glyph.
+	OIDCIconURL      string `envconfig:"ORBITAL_OIDC_ICON_URL" default:""`
 	OIDCClientSecret string `envconfig:"ORBITAL_OIDC_CLIENT_SECRET"      default:""`
 	OIDCRedirectURL  string `envconfig:"ORBITAL_OIDC_REDIRECT_URL"       default:"http://localhost:8001/auth/callback"`
 	AdminEmails      string `envconfig:"ORBITAL_ADMIN_EMAILS"            default:"admin@armada.ai"` // comma-separated emails promoted to admin on first OIDC login
