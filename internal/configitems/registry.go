@@ -255,8 +255,8 @@ var Types = []Type{
 	{
 		Name:         "Server",
 		IsRoot:       true,
-		BeforeFields: "id orbId name version hostname model manufacturer serviceTag rackPosition oobMAC idracSettings { firmwareVersion sshEnabled ipmiEnabled lockdownModeEnabled osToIdracPassThroughEnabled usbManagementPortEnabled dhcpEnabled racadmEnabled } serverMaintenance { enabled windowStart windowEnd reason }",
-		FormFields:   []string{"hostname", "manufacturer", "model", "oobMAC", "rackPosition", "serviceTag"},
+		BeforeFields: "id orbId name version hostname model manufacturer serviceTag serialNumber rackPosition oobMAC idracSettings { firmwareVersion sshEnabled ipmiEnabled lockdownModeEnabled osToIdracPassThroughEnabled usbManagementPortEnabled dhcpEnabled racadmEnabled } serverMaintenance { enabled windowStart windowEnd reason }",
+		FormFields:   []string{"hostname", "manufacturer", "model", "oobMAC", "rackPosition", "serviceTag", "serialNumber"},
 		PayloadField: "server",
 	},
 	{

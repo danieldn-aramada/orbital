@@ -22,7 +22,48 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ## [Unreleased]
 
+### Fixed
+- **CSRF protection on cookie-authenticated API calls no longer depends on the
+  client attaching a token** (`internal/auth/csrf.go`). The token guard added in
+  the auth refactor required `X-CSRF-Token` on every non-GET request to
+  `/graphql` and `/api/v1`. `shared.js` attached it for `fetch` and for htmx, but
+  not for the jQuery XHR behind DataTables — so **v0.0.46 returned 403 on the
+  Data Centers, Servers, Clusters and Network list pages**. A token has to be
+  wired into every client transport, and this app has three.
+
+  The guard now reads what an honest client already sends. A stated
+  `Origin` (or `Referer`) is authoritative — same host passes, another host is
+  refused. If a request states neither *and* carries a content type only an HTML
+  form can produce (`application/x-www-form-urlencoded`, `multipart/form-data`,
+  `text/plain`), it is refused; that backstop is what makes the first rule's
+  fail-open safe. `application/json` is unreachable from a cross-site form, and a
+  cross-origin `fetch` sending it triggers a CORS preflight that fails because
+  orbital configures no CORS policy — the same approach as Apollo Server's
+  `csrfPrevention`. No client-side code is involved, so a future transport cannot
+  forget it.
+
+  The order is deliberate: **htmx encodes as `application/x-www-form-urlencoded`
+  by default**, and two `hx-post` attributes target `/api/v1`, so testing content
+  type ahead of `Origin` would have 403'd every htmx mutation — the same failure
+  as the token, from the other direction.
+
+  **Bearer callers stay exempt** — orbctl, AEP Fleet Commander and cb-bundler are
+  unaffected, as before. **Login, logout and register are unaffected**: they POST
+  form-encoded to `root` UI routes outside this group and keep their hidden
+  `csrf` field. Requests with neither `Origin` nor `Referer` are allowed
+  deliberately — a browser always sends `Origin` cross-origin, so their absence
+  means the call did not come from a browser form. `SameSite=Lax` is unchanged.
+
+  `ORBITAL_CONFIG.csrfToken` and the `fetch`/htmx wrappers in `shared.js` are
+  removed. See `docs/reference/AUTH.md` § CSRF on cookie-authenticated API calls.
+
 ### Added
+- **`Server.serialNumber`** is editable in the config editor, shown on the server
+  detail tab, and carried in audit diffs — added to `FormFields` and
+  `BeforeFields` in `internal/configitems/registry.go` and to the `GetServer`
+  query. Without the registry entry the editor silently dropped the key: the save
+  reported success and bumped `version`, but nothing was written. See the two new
+  rows in `docs/planning/debt.md`.
 - **`Server.serialNumber`** (`schema/VERSION` → `v10`). Holds Redfish
   `ComputerSystem.SerialNumber` verbatim, alongside the existing `serviceTag`.
   The two are **not** interchangeable: an R450 reports `DLP6K74` for both, while

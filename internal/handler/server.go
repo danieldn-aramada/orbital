@@ -26,6 +26,7 @@ const getServerQuery = `
       model
       manufacturer
       serviceTag
+      serialNumber
       rackPosition
       oobMAC
       createdBy
@@ -128,6 +129,7 @@ type serverQueryResponse struct {
 	Model        string `json:"model"`
 	Manufacturer string `json:"manufacturer"`
 	ServiceTag   string `json:"serviceTag"`
+	SerialNumber string `json:"serialNumber"`
 	RackPosition int    `json:"rackPosition"`
 	OobMAC       string `json:"oobMAC"`
 	CreatedBy    string `json:"createdBy"`
@@ -276,6 +278,7 @@ type serverTabDetailData struct {
 	Model           string
 	Manufacturer    string
 	ServiceTag      string
+	SerialNumber    string
 	RackPosition    int
 	OobIP           string
 	OobMAC          string
@@ -428,6 +431,7 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 		"oobMAC":        raw.OobMAC,
 		"rackPosition":  raw.RackPosition,
 		"serviceTag":    raw.ServiceTag,
+		"serialNumber":  raw.SerialNumber,
 		"idracSettings": idracFields,
 	}
 	// serverMaintenance: null when the node is absent — that's what makes the
@@ -493,6 +497,7 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 		Model:        raw.Model,
 		Manufacturer: raw.Manufacturer,
 		ServiceTag:   raw.ServiceTag,
+		SerialNumber: raw.SerialNumber,
 		RackPosition: raw.RackPosition,
 		OobIP:        raw.OobIP.Address,
 		OobMAC:       raw.OobMAC,

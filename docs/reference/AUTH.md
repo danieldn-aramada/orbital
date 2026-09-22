@@ -601,6 +601,63 @@ Role enforcement is done entirely at the Go middleware layer. DGraph `@auth` dir
 
 Until one of those triggers fires, the recommendation split (MSAL for service authors, `orbauth` for the CLI) is deliberate.
 
+## CSRF on cookie-authenticated API calls
+
+`internal/auth/csrf.go`, wired into `apiAuth` in `internal/server/server.go`, so it covers
+`/graphql` and `/api/v1`. On any non-GET/HEAD/OPTIONS request **not** carrying a bearer token, the
+request must vouch for its own origin:
+
+1. **A stated `Origin` (or, failing that, `Referer`) is authoritative** — same host passes, any
+   other host is refused. Browsers set `Origin` on every non-GET request, so this is the path
+   essentially all browser traffic takes.
+2. **If it states neither, and carries a content type only an HTML form can produce**
+   (`application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain`) — refuse. A browser
+   form post always states an `Origin`, so a request with none is normally a non-browser client;
+   this backstop is what makes step 1's fail-open safe rather than merely convenient. Strip
+   `Origin` and a cross-site form still does not get through.
+
+`application/json` is unreachable from a cross-site form, and a cross-origin `fetch` sending it
+triggers a CORS preflight that fails because orbital configures no CORS policy. Compare Apollo
+Server's `csrfPrevention` and OWASP's non-simple-request defence for API endpoints.
+
+**Order matters, and it is not the obvious one.** Content-type-first was the first cut, and it was
+wrong: **htmx encodes as `application/x-www-form-urlencoded` by default**, and two `hx-post`
+attributes target `/api/v1` (`backup/test-connection`, `divergence/test-connection`). A
+content-type test applied ahead of the Origin check 403s every htmx mutation — the same class of
+breakage as the token it replaced, arrived at from the other direction. Do not reorder these.
+
+**Bearer callers are exempt from both** — orbctl, AEP Fleet Commander and cb-bundler. A bearer is
+not an ambient credential, so CSRF does not apply; gating them on browser headers they never send
+would break every API client. The check is `strings.CutPrefix(Authorization, "Bearer ")`.
+
+**Absent `Origin` *and* `Referer` is allowed for a non-form content type, deliberately.** A
+cross-origin POST from a browser always carries `Origin`, so a request with neither did not come
+from a browser form and is not the threat. This keeps cookie-authenticated scripts working
+(`scripts/e2e-divergence.sh` logs in with a cookie jar, then POSTs JSON to `/api/v1/export` with
+no `Origin`). A header that *is* present but opaque (`null`) or unparseable is refused, not waved
+through — present-but-unusable is not the same as absent.
+
+**HTML form routes are outside this group and unchanged.** `POST /user/login` and
+`POST /user/logout` are `root.POST` routes that keep the synchronizer-token pattern — a hidden
+`csrf` field validated by `auth.ValidateCSRF`. Check 1 would refuse them, and must never reach
+them. `GetOrCreateCSRF`/`ValidateCSRF` exist for that path only.
+
+### Why not a CSRF token on the API
+
+**It was a token, from the auth refactor until v0.0.46, and the token is what broke.** A token has
+to be attached by every client transport. Orbital has three — `fetch`, htmx's XHR, and the jQuery
+XHR behind DataTables. `shared.js` wrapped the first two; nobody wrapped the third, so every
+DataTable POST arrived without the header and v0.0.46 took out the Data Centers, Servers, Clusters
+and Network pages at once. Nothing failed at build time; it surfaced as a 403 in production.
+
+Checking a property the honest client **already needs** — a JSON content type to call a JSON API,
+a same-origin `Origin` the browser sets itself — leaves nothing for the next transport to forget.
+That is the whole reason for the shape. Do not reintroduce a header the client has to be taught to
+send.
+
+**`SameSite=Lax` remains** and remains a real control. This is defence in depth: set
+`SameSite=None` to embed orbital's UI in another product's frame and check 2 is what still stands.
+
 ## Session cookie Secure flag
 
 - **`ORBITAL_COOKIE_SECURE` (default `true`) is the only source of truth for the cookie's `Secure` attribute** — decoupled from `ORBITAL_DEV` because that flag bundles unrelated dev behavior. Do NOT revert to `Secure: !cfg.Dev` — pinned by `auth.TestCookieSecure_FollowsConfig`.
