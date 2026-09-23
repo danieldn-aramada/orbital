@@ -121,7 +121,7 @@ func TestRequireAdmin_NilDB_PassesThrough(t *testing.T) {
 	}
 }
 
-// TestResolveUser_AppPrincipal_PassesThroughWithoutDB verifies the ADR 010
+// TestResolveUser_AppPrincipal_PassesThroughWithoutDB verifies the
 // MVP policy: an app-only caller (set by the provider set with
 // user_name="app:<appid>", user_email="") skips the users-table lookup. The
 // app-principal branch must execute before any DB use, so a nil db is safe.
@@ -158,7 +158,7 @@ func TestResolveUser_AppPrincipal_PassesThroughWithoutDB(t *testing.T) {
 }
 
 // TestResolveUser_EmptyEmail_NoAppPrincipal_Unauthorized verifies that a non-app
-// caller with no email and no session is rejected — the bug that motivated ADR 010
+// caller with no email and no session is rejected — the bug that motivated the app-principal rule
 // only applies to the app-principal path.
 func TestResolveUser_EmptyEmail_NoAppPrincipal_Unauthorized(t *testing.T) {
 	e := echo.New()

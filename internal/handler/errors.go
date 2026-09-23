@@ -37,6 +37,9 @@ const (
 	CodeNoRoleMapped         = "NO_ROLE_MAPPED"
 	CodeIdentityIncomplete   = "IDENTITY_INCOMPLETE"
 	CodeIdentityConflict     = "IDENTITY_CONFLICT"
+	CodeInvalidState         = "INVALID_STATE"
+	CodeInvalidNonce         = "INVALID_NONCE"
+	CodeNoIDToken            = "NO_ID_TOKEN"
 	CodeUnavailable          = "UNAVAILABLE"
 	CodeInternal             = "INTERNAL"
 )

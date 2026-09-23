@@ -15,7 +15,7 @@ import (
 // belong to the lifetime of a specific report ingest. When orbital ingests a
 // content-differing report from orb, all DC entries AND their resolutions are
 // dropped together. Audit history of every decision lives in the Event log —
-// not this table. See ADR 012 for the supersede semantics.
+// not this table. See `docs/reference/DIVERGENCE.md` § supersede semantics.
 //
 //   - Accept: cloud agrees with the edge override. Orbital intent is updated to
 //     match. The deployment layer re-takes ownership of the field with the new

@@ -23,7 +23,6 @@ Every entry is **open**. Closed items are **deleted, not struck through** — `C
 | Export/restore job-creation TOCTOU | Med | Concurrent triggers corrupt scratch DGraph; serialize with a mutex or unique partial index. `export.go` |
 | Async jobs orphaned on shutdown | Med | SIGTERM mid-restore can leave DGraph wiped. The reaper now marks the row failed, but the work itself is still not drained — needs WaitGroup + cancellable ctx. `restore.go` |
 | `deploy/base` still deploys with downtime — `Recreate`, `replicas: 1`, no PDB | Med | Fixed in the `dev-netbox` overlay 2026-09-16, not in base — so an adopter copying `deploy/base` gets downtime on every deploy and drain while [deploy/README.md](../../deploy/README.md) § High availability tells them multi-replica is safe. |
-| OIDC nonce + constant-time state | Med | Add `nonce` binding; `subtle.ConstantTimeCompare` for state. `oidc.go:95` |
 | No test asserts a destructive delete writes its audit event | Med | `delete.go` DC/Server/Cluster paths plus `backup.go:527`, `oci.go:206`. |
 | No e2e covers two concurrent edits | Med | The MVCC regression that motivated the spec has no browser-level test. |
 | Consolidate the 4 per-type edit-modal templates | Med | ~95% identical; a new ConfigItem family costs a 5-file copy across templates, handlers and `orbital.js`. → [UI.md](../reference/UI.md) |

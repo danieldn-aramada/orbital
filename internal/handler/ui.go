@@ -217,6 +217,15 @@ func (h *UI) base(c echo.Context) layout.Base {
 	case CodeIdentityIncomplete:
 		loginErrorCode = code
 		loginError = "Identity provider did not supply an email address. Orbital identifies users by email Ask an administrator to add one to your account."
+	case CodeInvalidState:
+		loginErrorCode = code
+		loginError = "Sign-in could not be completed. — The login attempt did not match the one this browser started, which usually means it was resumed from a stale tab or took too long. Try again."
+	case CodeInvalidNonce:
+		loginErrorCode = code
+		loginError = "Sign-in refused: the identity provider's response did not match this login attempt. — Try again; if it persists, the provider may not be returning the `nonce` orbital sent."
+	case CodeNoIDToken:
+		loginErrorCode = code
+		loginError = "Identity provider returned no ID token. — Orbital reads identity from the ID token, so the provider must include `openid` in the granted scopes."
 	}
 
 	var userRole string
@@ -476,7 +485,7 @@ func (h *UI) DivergenceReports(c echo.Context) error {
 				FirstSeenAt:   e.FirstSeenAt.UTC().Format("2006-01-02 15:04 UTC"),
 				LastSeenAt:    e.LastSeenAt.UTC().Format("2006-01-02 15:04 UTC"),
 			}
-			// Per ADR 012: resolutions in the table are the operator's current
+			// Per DIVERGENCE.md: resolutions in the table are the operator's current
 			// decision by construction. The ingester wipes them when orb
 			// publishes a content-differing report, so anything still here
 			// applies to the current snapshot.
@@ -704,7 +713,7 @@ func (h *UI) Restore(c echo.Context) error {
 // Schema renders the GraphQL schema currently active in DGraph — the honest
 // source of truth, not the on-disk file. Version is still read from the
 // sibling schema/VERSION file because that label is human-set (bumped manually
-// per ADR 007) and isn't stored in DGraph; the file is the right home for it.
+// per DGRAPH.md § schema version) and isn't stored in DGraph; the file is the right home for it.
 // SDL comes from DGraph's `getGQLSchema` admin query, so a fresh / wiped
 // DGraph renders an "Awaiting import" state instead of lying about a schema
 // the file claims is loaded.

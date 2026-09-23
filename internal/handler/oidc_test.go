@@ -237,8 +237,8 @@ func TestOIDCCallback_NoState_RedirectsInvalidState(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Errorf("expected 303, got %d", rec.Code)
 	}
-	if !strings.Contains(rec.Header().Get("Location"), "error=invalid_state") {
-		t.Errorf("expected error=invalid_state, got %q", rec.Header().Get("Location"))
+	if !strings.Contains(rec.Header().Get("Location"), "error="+handler.CodeInvalidState) {
+		t.Errorf("expected error=%s, got %q", handler.CodeInvalidState, rec.Header().Get("Location"))
 	}
 }
 
@@ -252,8 +252,8 @@ func TestOIDCCallback_WrongState_RedirectsInvalidState(t *testing.T) {
 	if err := h.Callback(c); err != nil {
 		t.Fatalf("Callback: %v", err)
 	}
-	if !strings.Contains(rec.Header().Get("Location"), "error=invalid_state") {
-		t.Errorf("expected error=invalid_state, got %q", rec.Header().Get("Location"))
+	if !strings.Contains(rec.Header().Get("Location"), "error="+handler.CodeInvalidState) {
+		t.Errorf("expected error=%s, got %q", handler.CodeInvalidState, rec.Header().Get("Location"))
 	}
 }
 
@@ -382,8 +382,8 @@ func TestOIDCCallback_NonceMismatchIsRefused(t *testing.T) {
 	if err := h.Callback(c); err != nil {
 		t.Fatalf("Callback: %v", err)
 	}
-	if loc := rec.Header().Get("Location"); !strings.Contains(loc, "error=invalid_nonce") {
-		t.Errorf("expected redirect to error=invalid_nonce, got %q", loc)
+	if loc := rec.Header().Get("Location"); !strings.Contains(loc, "error="+handler.CodeInvalidNonce) {
+		t.Errorf("expected redirect to error=INVALID_NONCE, got %q", loc)
 	}
 }
 
@@ -400,7 +400,7 @@ func TestOIDCCallback_MissingNonceIsRefused(t *testing.T) {
 	if err := h.Callback(c); err != nil {
 		t.Fatalf("Callback: %v", err)
 	}
-	if loc := rec.Header().Get("Location"); !strings.Contains(loc, "error=invalid_nonce") {
-		t.Errorf("expected redirect to error=invalid_nonce, got %q", loc)
+	if loc := rec.Header().Get("Location"); !strings.Contains(loc, "error="+handler.CodeInvalidNonce) {
+		t.Errorf("expected redirect to error=INVALID_NONCE, got %q", loc)
 	}
 }

@@ -109,7 +109,7 @@ func (h *OIDC) Login(c echo.Context) error {
 func (h *OIDC) Callback(c echo.Context) error {
 	login, err := auth.GetAndClearOIDCLogin(h.sessionKeys, c.Request(), c.Response())
 	if err != nil || subtle.ConstantTimeCompare([]byte(login.State), []byte(c.QueryParam("state"))) != 1 {
-		return c.Redirect(http.StatusSeeOther, "/?error=invalid_state")
+		return c.Redirect(http.StatusSeeOther, h.basePath+"/?error="+CodeInvalidState)
 	}
 
 	token, err := h.oauth2Cfg.Exchange(c.Request().Context(), c.QueryParam("code"),
@@ -120,7 +120,7 @@ func (h *OIDC) Callback(c echo.Context) error {
 
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok {
-		return c.Redirect(http.StatusSeeOther, "/?error=no_id_token")
+		return c.Redirect(http.StatusSeeOther, h.basePath+"/?error="+CodeNoIDToken)
 	}
 
 	idToken, err := h.verifier.Verify(c.Request().Context(), rawIDToken)
@@ -134,7 +134,7 @@ func (h *OIDC) Callback(c echo.Context) error {
 	if subtle.ConstantTimeCompare([]byte(idToken.Nonce), []byte(login.Nonce)) != 1 {
 		h.logger.Warn("oidc callback refused — id token nonce does not match this login attempt",
 			"request.id", c.Response().Header().Get(echo.HeaderXRequestID))
-		return c.Redirect(http.StatusSeeOther, "/?error=invalid_nonce")
+		return c.Redirect(http.StatusSeeOther, h.basePath+"/?error="+CodeInvalidNonce)
 	}
 
 	var claims struct {

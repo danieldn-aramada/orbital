@@ -159,7 +159,7 @@ func (h *DivergenceHandler) List(c echo.Context) error {
 		wantAction[parsed] = true
 	}
 
-	// Per ADR 012: a resolution row IS the operator's decision. No version pin,
+	// Per DIVERGENCE.md: a resolution row IS the operator's decision. No version pin,
 	// no value-based staleness check — those concepts are gone. Resolutions
 	// are wiped at ingest time when orb publishes a content-differing report,
 	// so anything still in the table is by definition current.
@@ -439,7 +439,7 @@ func (h *DivergenceHandler) dispatchAcceptMutation(ctx context.Context, entry *e
 		return nil, echo.NewHTTPError(http.StatusUnprocessableEntity, fmt.Sprintf("invalid override value: %v", err))
 	}
 
-	// Per ADR 012: Accept is last-writer-wins against orbital DGraph. We do
+	// Per DIVERGENCE.md: Accept is last-writer-wins against orbital DGraph. We do
 	// not pre-check that intent hasn't moved since the report — if it has,
 	// the post-Accept divergence-ingest cycle catches it via the supersede
 	// path. Audit log records the dispatched mutation; any racing edit shows
@@ -600,7 +600,7 @@ func (h *DivergenceHandler) Dismiss(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "actor required")
 	}
 
-	// Per ADR 012: Dismiss is a straight delete — no staleness gate. Operator
+	// Per DIVERGENCE.md: Dismiss is a straight delete — no staleness gate. Operator
 	// owns the call. The next supersede cycle would re-create this entry if
 	// orb keeps reporting it, so Dismiss is more "I want this gone now" than
 	// a permanent purge.

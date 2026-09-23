@@ -333,7 +333,7 @@ func TestPoll_PreservesFirstSeenOnRepeatedEntry(t *testing.T) {
 	}
 }
 
-// TestPoll_SupersedesPriorResolutionsOnContentChange pins ADR 012: when a new
+// TestPoll_SupersedesPriorResolutionsOnContentChange pins the supersede rule in DIVERGENCE.md: when a new
 // report's content (set of orbId/field/override tuples) differs from what
 // orbital has stored for the DC, all prior entries AND their resolutions are
 // dropped. The operator must re-decide every row in the new report.
@@ -374,7 +374,7 @@ func TestPoll_SupersedesPriorResolutionsOnContentChange(t *testing.T) {
 	}
 
 	// Second report has content-different shape (one entry has changed override).
-	// Under ADR 012 supersede: BOTH resolutions are dropped — operator must re-decide.
+	// Under supersede: BOTH resolutions are dropped — operator must re-decide.
 	second := divergence.Report{
 		PublishedAt: "2026-06-02T00:00:00Z",
 		Overrides: []divergence.OverrideEntry{
@@ -412,7 +412,7 @@ func TestPoll_SupersedesPriorResolutionsOnContentChange(t *testing.T) {
 }
 
 // TestPoll_PreservesEntriesWhenNoResolutionsYet pins the no-op path of
-// ADR 012 (post Option-B amendment): when a new report's content matches
+// Supersede, post Option-B amendment: when a new report's content matches
 // what orbital has stored AND no resolution has been submitted yet, the
 // ingester touches timestamps and leaves entries intact so the operator's
 // in-flight (client-side staged) decisions don't get disrupted by
@@ -461,7 +461,7 @@ func TestPoll_PreservesEntriesWhenNoResolutionsYet(t *testing.T) {
 }
 
 // TestPoll_SupersedesIdenticalContentWhenResolutionExists pins the recurrence
-// case (ADR 012, Option B): a resolution row marks "Submit dispatched." Any
+// case (supersede, Option B): a resolution row marks "Submit dispatched." Any
 // subsequent ingest — even with identical content — is a new divergence
 // occurrence and must drop the prior resolution + re-pending the entries.
 // Without this, cloud-admin and local-admin reproducing the same drift

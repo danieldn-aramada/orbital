@@ -14,7 +14,7 @@ import "github.com/labstack/echo/v4"
 //   - Local dev sessions that omit email
 //   - App-only (client-credentials) bearer tokens — the bearer verifier sets
 //     user_email="" and user_name="app:<appid>" so service callers are
-//     attributable in audit logs (see auth.AppPrincipalPrefix + ADR 010)
+//     attributable in audit logs (see auth.AppPrincipalPrefix and AUTH.md § App callers)
 //   - Test contexts that only populate user_name
 //
 // Returns empty string when neither is set (unauthenticated or unmiddlewared).

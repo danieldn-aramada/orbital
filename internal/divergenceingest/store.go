@@ -22,7 +22,7 @@ type incomingEntry struct {
 	when     time.Time
 }
 
-// applyReport is the supersede-semantics ingest path (ADR 012).
+// applyReport is the supersede-semantics ingest path (see `docs/reference/DIVERGENCE.md`).
 //
 // A divergence report's content is the set of (entry_orb_id, field,
 // override_value) tuples it carries. Three cases:

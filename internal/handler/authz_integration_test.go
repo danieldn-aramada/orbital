@@ -269,7 +269,7 @@ func TestResolveUser_NoEmail_Returns401(t *testing.T) {
 	}
 }
 
-// ── App-principal authorization (ADR 010 §App Caller Authorization) ──────────
+// ── App-principal authorization (AUTH.md § App callers) ─────────────────────
 
 // TestRequireRole_AppPrincipal_DevMinRole_Allowed verifies the MVP policy: an
 // app-only caller (the provider set sets user_name="app:<appid>", user_id=0) passes
