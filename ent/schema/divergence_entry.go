@@ -13,7 +13,7 @@ import (
 // published report in S3. Rows for a DC are scoped to the lifetime of a single
 // report ingest: when orbital ingests a content-differing report, all prior
 // entries for that DC (and their resolutions) are dropped and replaced with
-// the incoming set. See ADR 012.
+// the incoming set. See `docs/reference/DIVERGENCE.md`.
 type DivergenceEntry struct {
 	ent.Schema
 }

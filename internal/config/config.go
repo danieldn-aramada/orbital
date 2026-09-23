@@ -63,7 +63,7 @@ type Config struct {
 	SchemaPath              string `envconfig:"ORBITAL_SCHEMA_PATH"             default:"schema/schema.graphql"`
 	SessionHMACKey          string `envconfig:"ORBITAL_SESSION_HMAC_KEY"        default:"local-dev-hmac-key-change-in-prod"` // must be changed in prod
 	SessionEncryptionKey    string `envconfig:"ORBITAL_SESSION_ENCRYPTION_KEY"  default:"local-dev-enc-key-32-bytes-pad!!"`  // must be exactly 32 bytes for AES-256; empty disables cookie encryption
-	DGraphExportDir         string `envconfig:"DGRAPH_EXPORT_DIR"               default:"./.local/exports/blue"`            // host-side mount of /dgraph/export on blue alpha
+	DGraphExportDir         string `envconfig:"DGRAPH_EXPORT_DIR"               default:"./.local/exports/blue"`             // host-side mount of /dgraph/export on blue alpha
 	S3Endpoint              string `envconfig:"ORBITAL_S3_ENDPOINT"             default:"http://localhost:9000"`
 	S3Region                string `envconfig:"ORBITAL_S3_REGION"               default:"us-east-1"`
 	S3Bucket                string `envconfig:"ORBITAL_S3_BUCKET"               default:"orbital"`

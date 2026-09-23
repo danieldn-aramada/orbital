@@ -332,7 +332,7 @@ func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 			// such app caller is treated as `dev`-equivalent — sufficient for
 			// all mutating API routes today. Future best practice: check a
 			// roles claim against the required role, once the provider can
-			// allow defining them. See ADR 010 §App Caller Authorization.
+			// allow defining them. See AUTH.md § App callers.
 			if auth.IsAppPrincipal(c) {
 				if RoleAtLeast(user.RoleDev, minRole) {
 					return next(c)

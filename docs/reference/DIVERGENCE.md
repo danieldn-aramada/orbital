@@ -147,7 +147,7 @@ Orbital's GraphQL topology API (`getServer`, `getIdracSettings`, etc.) returns *
 
 ## Re-ingesting an already-resolved entry
 
-Three branches at the ingester (`internal/divergenceingest/store.go applyReport`, ADR 012):
+Three branches at the ingester (`internal/divergenceingest/store.go applyReport`):
 
 - **Content matches AND no resolutions for this DC's entries** → no-op. Orb is still echoing the same divergence because the operator hasn't decided yet (staged decisions live client-side until Submit). Touch `last_seen_at` and `last_report_published_at` so the UI shows freshness; leave entries otherwise intact.
 - **Content matches BUT one or more resolutions exist for this DC's entries** → **atomic supersede**. Resolutions are bound to the report that triggered them; once Submit has dispatched a decision, the next identical-content report is treated as a *new* divergence occurrence (cloud-admin and local-admin reproduced the same drift). Drop entries + resolutions in one transaction and reinsert the incoming set as fresh pending. Ingest-time supersede assumes the identical-content report arrived AFTER propagation of the prior decision — respecting that invariant is the scheduler-cadence constraint (see Settled Decisions).
@@ -168,7 +168,7 @@ See also: [AUDIT.md "Resolved divergence freeze-vs-supersede behavior on re-inge
 
 ## Version handling — Accept, Dismiss, staleness
 
-Orbital's general MVCC (auto-increment `version: Int!` on every ConfigItem, opt-in `version` for user-driven UI edits) applies to the DGraph mutation orbital dispatches inside Accept. But **the divergence path itself carries no version anchor** — no `intended_at_version` column on `divergence_entries` or `divergence_resolutions`, no version-based staleness gate on Accept or Dismiss. Per ADR 012, staleness on the ingest side is handled by supersede, and staleness on the bundler-filter side is handled by per-field value comparison. Both are described below.
+Orbital's general MVCC (auto-increment `version: Int!` on every ConfigItem, opt-in `version` for user-driven UI edits) applies to the DGraph mutation orbital dispatches inside Accept. But **the divergence path itself carries no version anchor** — no `intended_at_version` column on `divergence_entries` or `divergence_resolutions`, no version-based staleness gate on Accept or Dismiss. Per this document's supersede rule, staleness on the ingest side is handled by supersede, and staleness on the bundler-filter side is handled by per-field value comparison. Both are described below.
 
 ### Auto-increment (general MVCC, still true)
 
@@ -180,13 +180,13 @@ Orbital's single write path (`internal/handler/graphql.go writeToDGraph`) inject
 
 When a UI Edit modal wants strict optimistic-concurrency semantics, it includes `version: <currentVersion>` in the mutation variables. The proxy compares to the actual current version and returns 409 on mismatch. A **malformed** `version` (non-numeric) is rejected as `400 BAD_USER_INPUT`, not silently coerced to 0 — previously a bad token parsed to 0 and could pass the check (audit A.3; `toFloat64` now returns `(float64, ok)`). Raw GraphQL / Ratel users may omit and get last-writer-wins. This is deliberate: `version`-required-everywhere is K8s-strict (fine for K8s, friction-heavy for our usage pattern); opt-in matches HTTP ETags / DynamoDB conditional-update conventions and is enough for the actual race classes orbital faces.
 
-### Accept is last-writer-wins (per ADR 012)
+### Accept is last-writer-wins
 
 `dispatchAcceptMutation` (`internal/handler/divergence.go`) does NOT pre-check that intent has moved since the divergence was reported. It dispatches the `update{Type}` mutation unconditionally. If another cloud admin edited the same field between report and Accept, the Accept's mutation still fires and overwrites. Rationale: whatever the admin just wrote is authoritative, and the ingester's supersede path catches any content-diverging state on the next report.
 
 The Accept mutation, like any other, bumps the target ConfigItem's DGraph version by one. That version bump lands in the audit log alongside the resolution decision — anyone auditing "what changed on this ConfigItem" can see the Accept-dispatched update and any concurrent admin edit ordered by version.
 
-### Dismiss is a straight delete (per ADR 012)
+### Dismiss is a straight delete
 
 `Dismiss` (`internal/handler/divergence.go:440`) is `DELETE /api/v1/divergences/:id` — hard-deletes the entry and its resolution row. No staleness gate, no "stale badge" precondition, no re-validation query. Operator owns the call. If orb keeps reporting the same divergence, the next ingest cycle re-creates the entry (fresh UUID) via supersede. Dismiss is "I want this gone now," not "purge permanently." Audit-logged as `dismissDivergence`.
 

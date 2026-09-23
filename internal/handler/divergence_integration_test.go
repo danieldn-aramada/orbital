@@ -306,7 +306,7 @@ func TestList_ActionFilter_PartitionsIgnoreFromAcceptReject(t *testing.T) {
 
 // TestList_ActionFilter_BatchAcceptAndRejectOnSameConfigItem pins that the
 // List handler returns batched decisions on sibling fields of the same
-// ConfigItem correctly. Under ADR 012, resolutions are not subject to any
+// ConfigItem correctly. Per DIVERGENCE.md, resolutions are not subject to any
 // post-decision staleness check — anything in the divergence_resolutions table
 // is by construction current (the ingester wipes resolutions on supersede).
 // The test exists to lock the action-filter contract: each row appears with

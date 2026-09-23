@@ -113,7 +113,7 @@ func (h *DeleteHandler) Preview(c echo.Context) error {
 //
 // Single-entity, non-cascading mutations (CRUD on individual ConfigItems) go
 // through GraphQL at `/graphql`. This endpoint is not a general-purpose REST
-// CRUD surface — see ADR 002.
+// CRUD surface — see CLAUDE.md § Settled Decisions, REST API convention.
 //
 // @Summary     Cascade-delete a config item (UI flow)
 // @Description Deletes a DataCenter or Server together with its dependent

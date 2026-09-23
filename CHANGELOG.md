@@ -23,6 +23,28 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 ## [Unreleased]
 
 ### Fixed
+- **Three browser-login failures redirected to the wrong page under a base path.**
+  `invalid_state`, `no_id_token` and the new nonce refusal redirected to
+  `/?error=…` while every other login error used `basePath + "/?error=…"`. On a
+  deployment served under `/orbital` those three bounced to the cluster root, so
+  the user saw someone else's 404 rather than orbital's sign-in message.
+
+### Changed
+- **Browser-login error codes joined the registry.** `invalid_state`,
+  `no_id_token` and `invalid_nonce` were raw strings while every neighbouring
+  refusal used a registry code, so the login modal rendered them bare instead of
+  as `error — hint`. Now `INVALID_STATE`, `NO_ID_TOKEN` and `INVALID_NONCE`, each
+  with an operator-readable explanation and a row in `ERROR-RESPONSES.md`.
+- **~22 comments citing `ADR 0NN` now cite the domain docs.** `docs/decisions/`
+  was removed on 2026-07-07 and the pointers went with it, leaving code that
+  referred readers to files that had not existed for months — ADR 012 in the
+  divergence paths, ADR 010 in the app-principal paths, 007 in the schema-version
+  note, 002 in the delete handler. Two citations were *removed* rather than
+  repointed: `DIVERGENCE.md` cited the ADR it had absorbed, and a `UI.md` bullet
+  about shared JS navigation cited an ADR about shared ConfigItem handlers in Go —
+  a wrong pointer is worse than a dangling one. The runbook mention stays, since
+  it explains the removal and how to recover the file from git.
+
 - **CSRF protection on cookie-authenticated API calls no longer depends on the
   client attaching a token** (`internal/auth/csrf.go`). The token guard added in
   the auth refactor required `X-CSRF-Token` on every non-GET request to
