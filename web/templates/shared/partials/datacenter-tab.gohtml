@@ -121,11 +121,13 @@
             <colgroup>
               <col style="width:10%">
               <col style="width:10%">
-              <col style="width:90%">
+              <col style="width:10%">
+              <col style="width:80%">
             </colgroup>
             <thead>
               <tr>
                 <th style="text-align:left">Name</th>
+                <th style="text-align:left">Height (U)</th>
                 <th style="text-align:left">Servers</th>
                 <th style="text-align:left">Orb ID</th>
               </tr>
@@ -134,6 +136,7 @@
               {{range .Racks}}
               <tr>
                 <td>{{.Name}}</td>
+                <td>{{if .UHeight}}{{.UHeight}}{{else}}—{{end}}</td>
                 <td>{{.ServerCount}}</td>
                 <td>{{if .OrbID}}{{.OrbID}}{{else}}—{{end}}</td>
               </tr>

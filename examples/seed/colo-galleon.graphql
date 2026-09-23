@@ -19,6 +19,7 @@ mutation UpsertAll {
     {
       name: "A.OF.C.09"
       orbId: "colo:A.OF.C.09"
+      uHeight: 42
       version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
@@ -28,6 +29,7 @@ mutation UpsertAll {
     {
       name: "A.OF.C.10"
       orbId: "colo:A.OF.C.10"
+      uHeight: 42
       version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
@@ -37,6 +39,7 @@ mutation UpsertAll {
     {
       name: "A.OF.C.11"
       orbId: "colo:A.OF.C.11"
+      uHeight: 42
       version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"
@@ -46,6 +49,7 @@ mutation UpsertAll {
     {
       name: "A.OF.C.12"
       orbId: "colo:A.OF.C.12"
+      uHeight: 42
       version: 1
       createdBy: "admin@armada.ai"
       createdAt: "2026-05-11T00:00:00Z"

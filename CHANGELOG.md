@@ -80,6 +80,27 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   removed. See `docs/reference/AUTH.md` § CSRF on cookie-authenticated API calls.
 
 ### Added
+- **`Rack.uHeight` — rack height in U, editable from the DataCenter page**
+  (`schema/VERSION` → **v11**, apply per cluster). Orbital already recorded
+  `Server.rackPosition` while knowing nothing about the rack it indexes into, so
+  "server at U38" could not be checked, displayed in context, or rendered as an
+  elevation. Sourced from NetBox `u_height`, labelled **Height (U)** to match what
+  NetBox shows. Unset renders as an em dash, never `0`.
+
+  **42U is not a safe default** — of 42 racks in the dev NetBox, two are 4U (the
+  Alaska Menace-T transportable boxes, which are precisely the hardware orbital
+  targets), so the field is nullable data rather than an assumed constant.
+
+  `startingUnit` and `desc_units` are deliberately NOT modelled: nothing consumes
+  rack geometry yet. They are real and non-uniform though — two racks number
+  top-to-bottom and one starts at U3 — so **a valid unit range is not `1..uHeight`**
+  and any future position validation needs both fields first. Recorded in
+  `DGRAPH.md` § Schema rules.
+
+  `examples/seed/colo-galleon.graphql` carries `uHeight: 42` for the four colo
+  racks, transcribed from NetBox — all four are 42U/19"/start-1 there. Other
+  namespaces are left unset rather than assumed: two racks in that NetBox are 4U.
+
 - **`version` is shown in the Metadata panel** on the Server, Data Center, Cluster
   and Network Device tabs. It is the value a caller needs to guard a write
   (`"version": <n>` in the mutation's variables → `409 MVCC_CONFLICT` on a

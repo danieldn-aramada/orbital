@@ -16,6 +16,15 @@ Read this before: DGraph schema changes, query/mutation work, export/import, see
   - **⚠️ `v7` adds `@search` to `ConfigItem.version` — an index apply BLOCKS.** DGraph reindexes the predicate across every ConfigItem before `/admin/schema` returns, and mutations wait behind it. Additive and non-destructive, but schedule it like a migration. **Schema before code**; the wrong order fails visibly and harmlessly — a DGraph on `v6` answers `Field "version" is not defined by type ServerFilter` and the mutation is refused unwritten.
   - **⚠️ `v9` adds `DataCenter.model` (`enum DataCenterModel`).** Additive and non-blocking. Chosen over `String` so consumers (AEP) read the valid set by introspection instead of hardcoding it — the first enum in this schema; `NetworkDevice.role` remains a String with a comment. **Adding a model is a schema change + `VERSION` bump + an apply to every DGraph**, unlike a String where a new value is just data.
 
+**`Rack.uHeight` is display-only (added v11).** Sourced from NetBox `u_height`
+("Height (U)"). **Do NOT compute a rack's valid unit range as `1..uHeight`** —
+NetBox also carries `starting_unit` and `desc_units`, which orbital deliberately
+does not model yet because nothing consumes rack geometry. They are not
+hypothetical: of 42 racks in the dev NetBox, two are numbered top-to-bottom
+(`desc_units`, the 4U Menace-T boxes) and one starts at U3 (Tampnet "Rack 3"),
+all three holding devices. Add both fields before building any position
+validation or elevation rendering on top of `uHeight`.
+
 ## ConfigItem interface
 
 - `Namespace` is a pure tenancy boundary — no config fields, never implements `ConfigItem`. Exists solely as an isolation scope for graph partitioning and orphan detection.
