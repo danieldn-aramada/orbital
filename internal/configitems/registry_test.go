@@ -198,9 +198,12 @@ func TestParity_WithLegacyHandMaintainedValues(t *testing.T) {
 	_ = legacyRegex // referenced in the comment above for traceability
 
 	// Every BeforeFields value from the legacy map must still be returned verbatim.
+	// Deliberate departures from the legacy value, each added with the field it
+	// serves so the audit diff can render before/after:
+	//   Server.uHeight (2026-09-23, schema v12)
 	legacyBeforeFields := map[string]string{
 		"DataCenter":            "id orbId name version assetDataV2 model",
-		"Server":                "id orbId name version hostname model manufacturer serviceTag serialNumber rackPosition oobMAC idracSettings { firmwareVersion sshEnabled ipmiEnabled lockdownModeEnabled osToIdracPassThroughEnabled usbManagementPortEnabled dhcpEnabled racadmEnabled } serverMaintenance { enabled windowStart windowEnd reason }",
+		"Server":                "id orbId name version hostname model manufacturer serviceTag serialNumber rackPosition uHeight oobMAC idracSettings { firmwareVersion sshEnabled ipmiEnabled lockdownModeEnabled osToIdracPassThroughEnabled usbManagementPortEnabled dhcpEnabled racadmEnabled } serverMaintenance { enabled windowStart windowEnd reason }",
 		"KubernetesCluster":     "id orbId name version kubernetesVersion cni environment",
 		"EksaKubernetesCluster": "id orbId name version kubernetesVersion cni environment clusterType",
 		"KubernetesNode":        "id orbId name version role",
