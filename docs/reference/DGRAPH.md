@@ -16,6 +16,20 @@ Read this before: DGraph schema changes, query/mutation work, export/import, see
   - **⚠️ `v7` adds `@search` to `ConfigItem.version` — an index apply BLOCKS.** DGraph reindexes the predicate across every ConfigItem before `/admin/schema` returns, and mutations wait behind it. Additive and non-destructive, but schedule it like a migration. **Schema before code**; the wrong order fails visibly and harmlessly — a DGraph on `v6` answers `Field "version" is not defined by type ServerFilter` and the mutation is refused unwritten.
   - **⚠️ `v9` adds `DataCenter.model` (`enum DataCenterModel`).** Additive and non-blocking. Chosen over `String` so consumers (AEP) read the valid set by introspection instead of hardcoding it — the first enum in this schema; `NetworkDevice.role` remains a String with a comment. **Adding a model is a schema change + `VERSION` bump + an apply to every DGraph**, unlike a String where a new value is just data.
 
+**`Server.uHeight` is how many units a server OCCUPIES (added v12, `Float`).**
+Distinct from `Rack.uHeight`, which is how many the rack HAS. Float because the
+source type is decimal (NetBox `DeviceType.u_height`) and `0` is meaningful —
+a zero-U device is rack-mounted but consumes no unit, which is not the same as
+unset. **It is a MODEL-level fact stored per instance**: 99 R450s each carry
+`1`. Accepted deliberately — one field does not justify a model catalogue, and
+NetBox (which had one) is being retired. Promote it to a `ServerModel` entity
+when a SECOND model-level fact appears (depth, power draw, weight) or when a
+fleet-wide correction is first needed, not on a schedule.
+
+Values were harvested from NetBox before its decommission; two of thirteen
+models resolved only by joining on serviceTag or interface MAC, not by model
+string, so the mapping is not reconstructible from orbital alone.
+
 **`Rack.uHeight` is display-only (added v11).** Sourced from NetBox `u_height`
 ("Height (U)"). **Do NOT compute a rack's valid unit range as `1..uHeight`** —
 NetBox also carries `starting_unit` and `desc_units`, which orbital deliberately

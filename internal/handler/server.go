@@ -28,6 +28,7 @@ const getServerQuery = `
       serviceTag
       serialNumber
       rackPosition
+      uHeight
       oobMAC
       createdBy
       createdAt
@@ -122,22 +123,23 @@ func parseServerFragment() *template.Template {
 }
 
 type serverQueryResponse struct {
-	ID           string `json:"id"`
-	OrbID        string `json:"orbId"`
-	Name         string `json:"name"`
-	Hostname     string `json:"hostname"`
-	Model        string `json:"model"`
-	Manufacturer string `json:"manufacturer"`
-	ServiceTag   string `json:"serviceTag"`
-	SerialNumber string `json:"serialNumber"`
-	RackPosition int    `json:"rackPosition"`
-	OobMAC       string `json:"oobMAC"`
-	CreatedBy    string `json:"createdBy"`
-	CreatedAt    string `json:"createdAt"`
-	UpdatedBy    string `json:"updatedBy"`
-	UpdatedAt    string `json:"updatedAt"`
-	Version      int    `json:"version"`
-	Namespace    string `json:"namespace"`
+	ID           string   `json:"id"`
+	OrbID        string   `json:"orbId"`
+	Name         string   `json:"name"`
+	Hostname     string   `json:"hostname"`
+	Model        string   `json:"model"`
+	Manufacturer string   `json:"manufacturer"`
+	ServiceTag   string   `json:"serviceTag"`
+	SerialNumber string   `json:"serialNumber"`
+	RackPosition int      `json:"rackPosition"`
+	UHeight      *float64 `json:"uHeight"`
+	OobMAC       string   `json:"oobMAC"`
+	CreatedBy    string   `json:"createdBy"`
+	CreatedAt    string   `json:"createdAt"`
+	UpdatedBy    string   `json:"updatedBy"`
+	UpdatedAt    string   `json:"updatedAt"`
+	Version      int      `json:"version"`
+	Namespace    string   `json:"namespace"`
 	Rack         struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
@@ -280,6 +282,7 @@ type serverTabDetailData struct {
 	ServiceTag      string
 	SerialNumber    string
 	RackPosition    int
+	UHeight         *float64 // nil renders as em dash — unset is not 0U
 	OobIP           string
 	OobMAC          string
 	CreatedBy       string
@@ -430,6 +433,7 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 		"model":         raw.Model,
 		"oobMAC":        raw.OobMAC,
 		"rackPosition":  raw.RackPosition,
+		"uHeight":       raw.UHeight,
 		"serviceTag":    raw.ServiceTag,
 		"serialNumber":  raw.SerialNumber,
 		"idracSettings": idracFields,
@@ -499,6 +503,7 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 		ServiceTag:   raw.ServiceTag,
 		SerialNumber: raw.SerialNumber,
 		RackPosition: raw.RackPosition,
+		UHeight:      raw.UHeight,
 		OobIP:        raw.OobIP.Address,
 		OobMAC:       raw.OobMAC,
 		SummaryValuesJSON: rawFieldValues(map[string]any{
@@ -510,6 +515,7 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 			"model":        raw.Model,
 			"oobMAC":       raw.OobMAC,
 			"rackPosition": raw.RackPosition,
+			"uHeight":      raw.UHeight,
 			"serviceTag":   raw.ServiceTag,
 		}),
 		CreatedBy:       raw.CreatedBy,
