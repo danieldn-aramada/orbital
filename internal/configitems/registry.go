@@ -248,8 +248,8 @@ var Types = []Type{
 		Name:         "Rack",
 		OwnerType:    "DataCenter",
 		ChildField:   "racks",
-		BeforeFields: "id orbId name version",
-		FormFields:   []string{"name"},
+		BeforeFields: "id orbId name version uHeight",
+		FormFields:   []string{"name", "uHeight"},
 		PayloadField: "rack",
 	},
 	{

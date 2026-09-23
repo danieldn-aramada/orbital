@@ -33,6 +33,7 @@ const getDataCenterQuery = `
         id
         orbId
         name
+        uHeight
       }
       serversAggregate {
         count
@@ -96,9 +97,10 @@ type dcQueryResponse struct {
 	Model       string `json:"model"`
 	Namespace   string `json:"namespace"`
 	Racks       []struct {
-		ID    string `json:"id"`
-		OrbID string `json:"orbId"`
-		Name  string `json:"name"`
+		ID      string `json:"id"`
+		OrbID   string `json:"orbId"`
+		Name    string `json:"name"`
+		UHeight *int   `json:"uHeight"`
 	} `json:"racks"`
 	ServersAggregate struct {
 		Count int `json:"count"`
@@ -139,6 +141,7 @@ type rackTabData struct {
 	ID          string
 	OrbID       string
 	Name        string
+	UHeight     *int // nil renders as em dash — unset is not 0U
 	ServerCount int
 }
 
@@ -278,6 +281,7 @@ func (h *DataCenter) Tab(c echo.Context) error {
 			ID:          r.ID,
 			OrbID:       r.OrbID,
 			Name:        r.Name,
+			UHeight:     r.UHeight,
 			ServerCount: serversByRack[r.Name],
 		})
 	}

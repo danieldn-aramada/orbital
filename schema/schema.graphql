@@ -75,6 +75,7 @@ type DataCenter implements ConfigItem {
 }
 
 type Rack implements ConfigItem {
+    uHeight: Int
     dataCenter: DataCenter!
     servers: [Server] @hasInverse(field: rack)
     networkDevices: [NetworkDevice] @hasInverse(field: rack)
