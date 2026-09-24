@@ -3,23 +3,10 @@
 import {
   BASE,
   INVENTORY_CACHE_KEY,
-  initInventoryTable,
-  initDatacenterTable,
-  initServerListTable,
-  initClusterTable,
-  loadDataCenterTab,
-  loadServerListTab,
-  loadClusterTab,
-  saveTab,
-  saveServerTab,
-  saveClusterTab,
-  initDatacenterTabRestoration,
-  initServerListTabRestoration,
-  initClusterTabRestoration,
-  safeDomId,
   initRowNavigation,
   initLinkNavigation,
   initReloadButtons,
+  initListPages,
 } from './shared.js'
 
 // ─── Stale-state cleanup ──────────────────────────────────────────────────────
@@ -192,7 +179,7 @@ function loadOrbTags(refresh = false) {
   if (btn) btn.classList.add('is-loading')
   const s = () => `<span class="is-skeleton" style="display:block">&nbsp;</span>`
   container.innerHTML = `
-    <div style="overflow-x: auto">
+    <div class="table-container">
       <table class="table is-striped is-hoverable is-fullwidth is-size-7">
         <thead><tr><th>Tag</th><th>Signature</th><th>Digest</th><th>Size</th><th></th></tr></thead>
         <tbody>${[1, 2, 3].map(() =>
@@ -246,70 +233,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 })
 
-// ─── Inventory / Data Centers / Servers list tables ──────────────────────────
+// ─── List pages (inventory, DCs, servers, clusters, network devices) ─────────
 //
-// DataTable construction + tab loading are shared with orbital (see shared.js).
-// Per docs/reference/ORB.md, orb's UI mirrors orbital's tab-swap interaction model.
-
-document.addEventListener('DOMContentLoaded', () => { initInventoryTable() })
-
-document.addEventListener('DOMContentLoaded', () => {
-  initDatacenterTable({
-    onRowOpen: (data) => {
-      const displayName = data.name
-      const orbId = data.orbId
-      const domId = safeDomId(orbId)
-      const tab = document.getElementById(`tab-${domId}`)
-      if (tab) {
-        tab.click()
-      } else {
-        loadDataCenterTab(displayName, orbId)
-        saveTab(displayName, orbId)
-        document.getElementById(`tab-${domId}`).click()
-      }
-    },
-  })
-})
-
-document.addEventListener('DOMContentLoaded', () => {
-  initServerListTable({
-    onRowOpen: (data) => {
-      const orbId = data.orbId
-      const domId = safeDomId(orbId)
-      const displayName = data.hostname !== '—' ? data.hostname : data.serviceTag
-      const tab = document.getElementById(`tab-srv-${domId}`)
-      if (tab) {
-        tab.click()
-      } else {
-        loadServerListTab(displayName, orbId)
-        saveServerTab(displayName, orbId)
-        document.getElementById(`tab-srv-${domId}`).click()
-      }
-    },
-  })
-})
-
-document.addEventListener('DOMContentLoaded', () => {
-  initClusterTable({
-    onRowOpen: (data) => {
-      const orbId = data.orbId
-      const domId = safeDomId(orbId)
-      const displayName = data.name
-      const tab = document.getElementById(`tab-cluster-${domId}`)
-      if (tab) {
-        tab.click()
-      } else {
-        loadClusterTab(displayName, orbId)
-        saveClusterTab(displayName, orbId)
-        document.getElementById(`tab-cluster-${domId}`).click()
-      }
-    },
-  })
-})
-
-window.addEventListener('load', initDatacenterTabRestoration)
-window.addEventListener('load', initServerListTabRestoration)
-window.addEventListener('load', initClusterTabRestoration)
+// One shared wiring for both apps — see initListPages in shared.js. Orb serves
+// network devices too, so it gets that page from the same descriptor list.
+initListPages()
 
 // ─── Cross-app navigation and reload buttons ──────────────────────────────────
 

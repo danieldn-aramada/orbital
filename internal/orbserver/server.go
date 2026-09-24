@@ -200,6 +200,12 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	cluster := handler.NewClusterHandler(cfg.DGraphURL, cfg.Dev, logger, "",
 		func(echo.Context) layout.PageActions { return layout.OrbActions })
 	e.GET("/clusters/:orbId", cluster.Tab)
+	e.GET("/network", s.networkPage)
+	// Same handler orbital uses, with orb's read-only PageActions injected —
+	// matching how DC, Server and Cluster detail tabs are already served.
+	networkDevice := handler.NewNetworkDeviceHandler(cfg.DGraphURL, cfg.Dev, logger, "",
+		func(echo.Context) layout.PageActions { return layout.OrbActions })
+	e.GET("/network/:orbId", networkDevice.Tab)
 	e.GET("/divergence", s.divergencePage)
 	e.GET("/publish-history", s.publishHistoryPage)
 	e.GET("/import-history", s.importHistoryPage)

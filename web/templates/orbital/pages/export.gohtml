@@ -164,15 +164,15 @@
       <div class="mt-6">
         <div class="is-flex is-align-items-center mb-3" style="gap: 0.75rem;">
           <p class="is-size-5">Retained Downloads</p>
-          <button class="button is-small is-link js-retained-reload" title="Reload">
+          <button class="button is-small is-link js-retained-reload tooltip" data-text="Reload">
             <span class="icon"><i class="fa-solid fa-rotate-right"></i></span>
             <span>Reload</span>
           </button>
         </div>
-        <p class="has-text-grey mb-3" style="font-size: 0.8125rem;">
+        <p class="has-text-grey page-description">
           Zips retained from Export &amp; Download. Each takes disk space until you download or delete it.
         </p>
-        <div style="overflow-x: auto">
+        <div class="table-container">
           <table
             id="export-jobs-table"
             class="table is-striped is-hoverable is-fullwidth is-size-7"

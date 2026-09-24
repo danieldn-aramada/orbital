@@ -21629,6 +21629,25 @@ has-background-danger.is-hoverable:active {
   max-width: 800px;
 }
 
+/* The one-line description under a page heading.
+   UI.md prescribed `has-text-grey mb-4` plus an INLINE `font-size: 0.875rem`,
+   because 14px is not a Bulma size step. Every author then re-guessed the
+   number: 0.875rem, 0.8rem and 0.8125rem all shipped, with mb-3/mb-4/mb-5
+   spacing. A class is the thing the rule should have been. */
+/* Surface for a detail table nested inside a parent row. Bulma's
+   `has-background-white-bis` is an ABSOLUTE near-white by definition — it does
+   not flip with the colour scheme, so the nested table stayed pale in dark
+   mode while its text went light. Derived from the scheme instead, the same way
+   the cluster child-row does. */
+.table-nested {
+  background-color: hsl(var(--bulma-scheme-h), var(--bulma-scheme-s), calc(var(--bulma-scheme-main-l) - 3%));
+}
+
+.page-description {
+  font-size: 0.875rem;
+  margin-bottom: 1rem; /* Bulma mb-4 */
+}
+
 .tooltip {
   position: relative; /* making the .tooltip span a container for the tooltip text */
 }
@@ -21655,6 +21674,17 @@ has-background-danger.is-hoverable:active {
 
 .tooltip:hover::after {
   display: block;
+}
+
+/* Wrapping variant. The base tooltip is `white-space: nowrap`, which is right
+   for a short label ("Copy digest") and wrong for the explanatory ones — a
+   sentence like the break-glass warning on /divergence-reports rendered as a
+   single strip wider than the viewport. Opt in with `tooltip is-wide`. */
+.tooltip.is-wide::after {
+  white-space: normal;
+  width: 22rem;
+  text-align: left;
+  line-height: 1.4;
 }
 
 .app-main-grid {

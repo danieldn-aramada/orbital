@@ -1,9 +1,19 @@
+{{/*
+servers.gohtml — the Servers list, shared by orbital and orb.
+
+Until 2026-09-23 this existed twice: orbital's copy and orb's copy differed by
+exactly the auth gate (39 of orb's 39 lines were identical to orbital's). The
+gate is now conditional on .UI.ShowAuth, so both apps render this file.
+*/}}
 {{define "page"}}
   <main class="app-main-grid">
     <div class="app-menu">
       {{template "menu.gohtml" .}}
     </div>
-    <div class="app-main pr-5 pl-5 pt-5 pb-1">
+    <div class="app-main p-5">
+      {{if and .UI.ShowAuth (not .IsAuthn)}}
+        {{template "login-gate.gohtml" .}}
+      {{else}}
 
       {{template "hint-banner.gohtml" .}}
 
@@ -34,6 +44,7 @@
         </table>
       </div>
 
+      {{end}}
     </div>
   </main>
 {{end}}

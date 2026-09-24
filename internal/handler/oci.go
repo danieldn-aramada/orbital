@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"github.com/armada/orbital/internal/web/data/component"
 	"html/template"
 	"log/slog"
 	"net/http"
@@ -502,12 +503,26 @@ func (h *OCI) ArtifactLayers(c echo.Context) error {
 		return fmt.Errorf("get artifact: %w", err)
 	}
 	row := toArtifactFragRow(a, h.basePath)
-	tmpl, err := template.ParseFiles("web/templates/orbital/partials/layers-modal.gohtml")
+	tmpl, err := template.ParseFiles("web/templates/shared/partials/layers-modal.gohtml")
 	if err != nil {
 		return fmt.Errorf("parse layers-modal: %w", err)
 	}
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return renderHTML(c, tmpl, "layers-modal", row)
+	// orbital never dispatches layers to consumers, so it renders no Dispatch
+	// column — the one genuine difference between the two apps' layer tables.
+	vm := component.LayersModal{
+		Tag:          row.Tag,
+		ShowDispatch: false,
+		EmptyMessage: "No layer metadata stored for this artifact.",
+	}
+	for _, l := range row.LayerRows {
+		vm.Rows = append(vm.Rows, component.LayerRow{
+			Position: l.Position, Producer: l.Producer, MediaType: l.MediaType,
+			SizeDisplay: l.SizeDisplay, Digest: l.Digest,
+			IsOrbitalNative: l.IsOrbitalNative,
+		})
+	}
+	return renderHTML(c, tmpl, "layers-modal", vm)
 }
 
 // ── Fragment renderer ─────────────────────────────────────────────────────────

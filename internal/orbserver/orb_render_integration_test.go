@@ -76,6 +76,7 @@ func TestOrbPages_AllPathsReturn200(t *testing.T) {
 		{"/datacenter", srv.dcPage, `id="datacenter-table"`},
 		{"/servers", srv.serversPage, `id="server-list-table"`},
 		{"/clusters", srv.clustersPage, `id="cluster-table"`},
+		{"/network", srv.networkPage, `id="network-device-table"`},
 		{"/import", srv.importPage, `data-testid="page-heading"`},
 		{"/import-history", srv.importHistoryPage, `Import History`},
 		{"/divergence", srv.divergencePage, `Publish Report`},
@@ -88,8 +89,17 @@ func TestOrbPages_AllPathsReturn200(t *testing.T) {
 			if rec.Code != http.StatusOK {
 				t.Errorf("expected 200, got %d", rec.Code)
 			}
-			if !strings.Contains(rec.Body.String(), p.wantIn) {
+			body := rec.Body.String()
+			if !strings.Contains(body, p.wantIn) {
 				t.Errorf("expected HTML to contain %q", p.wantIn)
+			}
+			// Anti-truncation. Until 2026-09-23 these pages rendered straight
+			// into c.Response(), so a mid-render failure committed a 200 with a
+			// partial body and no error. They now go through
+			// webrender.RenderHTML, which writes nothing on failure — this
+			// pins that a success still writes the whole document.
+			if !strings.Contains(body, "</html>") {
+				t.Errorf("body has no closing </html> — the render truncated (%d bytes)", len(body))
 			}
 		})
 	}
@@ -130,6 +140,26 @@ func TestOrbNavbar_ShowsOrbBrand(t *testing.T) {
 	// AppName for orb pages is "Orb" (set in orbBase)
 	if !strings.Contains(rec.Body.String(), "Orb") {
 		t.Error("expected navbar to contain 'Orb'")
+	}
+}
+
+// TestOrbNetworkPage_IsReadOnly pins that orb's network-device surface carries
+// no write controls. Orb gained /network on 2026-09-23; it reuses orbital's
+// NetworkDeviceHandler with layout.OrbActions, so a regression here would most
+// likely come from someone passing orbital's actions by mistake.
+func TestOrbNetworkPage_IsReadOnly(t *testing.T) {
+	srv := newOrbServer(t, false)
+	e := echo.New()
+	rec := callHandler(t, e, http.MethodGet, "/network", srv.networkPage)
+
+	body := rec.Body.String()
+	for _, forbidden := range []string{"data-network-device-edit-id", "data-cfg-delete-id"} {
+		if strings.Contains(body, forbidden) {
+			t.Errorf("orb network page must not render %q — orb is read-only", forbidden)
+		}
+	}
+	if !strings.Contains(body, `id="network-device-table"`) {
+		t.Error("expected the network device table to render")
 	}
 }
 

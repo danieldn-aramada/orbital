@@ -2,6 +2,12 @@
 
 Read this before: DGraph schema changes, query/mutation work, export/import, seeding, blue-green operations.
 
+## Settled Decisions
+
+- **A DQL delete does NOT maintain `@hasInverse` — clear the surviving parent's edge yourself.** *(Added 2026-09-23.)* `@hasInverse` is a GraphQL-layer construct: DGraph keeps the two forward predicates in step only for mutations through its **GraphQL** endpoint. Orbital's cascade delete (`bulkDeleteGuarded`) is a **DQL** upsert — deliberately, because that is the only way to get a version-guarded CAS — so an `S * *` delete clears the child and leaves the parent's list edge pointing at an empty uid.
+  ⚠️ **The consequence is not cosmetic.** Any later GraphQL query that walks that edge and selects a non-nullable field fails **entirely**, because DGraph propagates the error to the root: *"Non-nullable field 'orbId' (type String!) was not present in result from Dgraph."* The export subgraph query is exactly that shape, so **one cluster delete permanently broke export for its whole data centre** — while the delete returned `200` with a correct audit event, and the damage surfaced later, in a different subsystem, in an error naming neither the delete nor the node. Eight such corpses accumulated on `colo-galleon`, one per e2e run, unnoticed until someone tried to export.
+  **Rule:** any DQL write that removes a node must also remove the edges held by nodes that **SURVIVE** it, in the same transaction. Only survivors matter — when both ends are deleted the stale edge sits on a tombstone and is unreachable, which is what keeps this to a handful of cases rather than all 28 `@hasInverse` pairs. Today: `DataCenter.kubernetesClusters` (cluster delete); `DataCenter.servers`, `Rack.servers`, `KubernetesNode.server` (server delete); none for a data centre, which is the top of its own subtree. `TestDelete_LeavesNoDanglingParentEdge` reproduces the failure and is verified to fail without the fix. The same obligation applies to **any** new DQL write path, not just deletes.
+
 ## Schema rules
 
 - Schema changes must be **backwards compatible** — orbs may lag orbital by versions. Safe: new types, new nullable fields. Breaking: removing/renaming types or fields, adding non-null fields to existing types.
@@ -16,28 +22,15 @@ Read this before: DGraph schema changes, query/mutation work, export/import, see
   - **⚠️ `v7` adds `@search` to `ConfigItem.version` — an index apply BLOCKS.** DGraph reindexes the predicate across every ConfigItem before `/admin/schema` returns, and mutations wait behind it. Additive and non-destructive, but schedule it like a migration. **Schema before code**; the wrong order fails visibly and harmlessly — a DGraph on `v6` answers `Field "version" is not defined by type ServerFilter` and the mutation is refused unwritten.
   - **⚠️ `v9` adds `DataCenter.model` (`enum DataCenterModel`).** Additive and non-blocking. Chosen over `String` so consumers (AEP) read the valid set by introspection instead of hardcoding it — the first enum in this schema; `NetworkDevice.role` remains a String with a comment. **Adding a model is a schema change + `VERSION` bump + an apply to every DGraph**, unlike a String where a new value is just data.
 
-**`Server.uHeight` is how many units a server OCCUPIES (added v12, `Float`).**
-Distinct from `Rack.uHeight`, which is how many the rack HAS. Float because the
-source type is decimal (NetBox `DeviceType.u_height`) and `0` is meaningful —
-a zero-U device is rack-mounted but consumes no unit, which is not the same as
-unset. **It is a MODEL-level fact stored per instance**: 99 R450s each carry
-`1`. Accepted deliberately — one field does not justify a model catalogue, and
-NetBox (which had one) is being retired. Promote it to a `ServerModel` entity
-when a SECOND model-level fact appears (depth, power draw, weight) or when a
-fleet-wide correction is first needed, not on a schedule.
+**`Server.uHeight` is how many units a server OCCUPIES; `Rack.uHeight` is how
+many the rack HAS.** Both nullable — `0` means a rack-mounted device consuming no
+unit, which is not "unset". Server height is a MODEL-level fact stored per
+instance; promote it to a model entity when a SECOND such fact appears (depth,
+power draw, weight), not before.
 
 Values were harvested from NetBox before its decommission; two of thirteen
 models resolved only by joining on serviceTag or interface MAC, not by model
 string, so the mapping is not reconstructible from orbital alone.
-
-**`Rack.uHeight` is display-only (added v11).** Sourced from NetBox `u_height`
-("Height (U)"). **Do NOT compute a rack's valid unit range as `1..uHeight`** —
-NetBox also carries `starting_unit` and `desc_units`, which orbital deliberately
-does not model yet because nothing consumes rack geometry. They are not
-hypothetical: of 42 racks in the dev NetBox, two are numbered top-to-bottom
-(`desc_units`, the 4U Menace-T boxes) and one starts at U3 (Tampnet "Rack 3"),
-all three holding devices. Add both fields before building any position
-validation or elevation rendering on top of `uHeight`.
 
 ## ConfigItem interface
 

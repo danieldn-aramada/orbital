@@ -13,7 +13,7 @@
       {{else}}
 
       <p class="is-size-4 mb-2" data-testid="page-heading">Restore Graph</p>
-      <p class="has-text-grey mb-4" style="font-size: 0.875rem;">
+      <p class="has-text-grey page-description">
         Restore DGraph blue from a backup. Two paths depending on where the backup lives.
       </p>
 
@@ -28,7 +28,7 @@
 
         <article class="box mb-5">
           <p class="is-size-6 mb-3"><strong>From a stored backup</strong></p>
-          <p class="has-text-grey mb-4" style="font-size: 0.875rem;">
+          <p class="has-text-grey page-description">
             Orbital fetches the backup directly from storage, loads it into DGraph blue, and tracks the restore status here.
           </p>
 
@@ -73,7 +73,7 @@
           {{end}}
 
           <p class="is-size-7 has-text-weight-semibold mb-2 mt-5">Restore history</p>
-          <table class="table is-striped is-hoverable is-fullwidth" style="font-size: 12px;">
+          <table class="table is-striped is-hoverable is-fullwidth is-size-7" style="font-size: 12px;">
             <thead>
               <tr>
                 <th>Started At</th>
@@ -94,7 +94,7 @@
 
         <div class="mt-5">
           <p class="is-size-6 mb-2"><strong>From a local file</strong></p>
-          <p class="has-text-grey mb-4" style="font-size: 0.875rem;">
+          <p class="has-text-grey page-description">
             Use this path when you have a backup zip on your machine and direct <code>kubectl</code> access to the deployment environment.
           </p>
 
@@ -106,7 +106,7 @@
           </ul>
 
           <p class="is-size-7 has-text-weight-semibold mb-2">Runbook</p>
-          <p class="has-text-grey mb-3" style="font-size: 0.875rem;">Replace <code>&lt;namespace&gt;</code>, <code>&lt;alpha-pod&gt;</code>, and <code>&lt;backup-file&gt;.zip</code> with your values.</p>
+          <p class="has-text-grey page-description">Replace <code>&lt;namespace&gt;</code>, <code>&lt;alpha-pod&gt;</code>, and <code>&lt;backup-file&gt;.zip</code> with your values.</p>
 
           <pre style="font-size: 0.8rem; line-height: 1.8;"># 1. Extract the backup zip (contains data.json.gz, schema.gz, gql_schema.gz)
 unzip &lt;backup-file&gt;.zip

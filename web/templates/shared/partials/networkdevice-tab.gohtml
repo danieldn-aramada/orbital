@@ -31,7 +31,7 @@
     <div class="cell is-col-span-2 is-row-span-1">
       <article class="box">
         <p class="is-size-4 pb-4">Network Device Summary</p>
-        <div style="overflow-x: auto">
+        <div class="table-container">
         <table class="table is-fullwidth">
           <tbody>
             <tr><td style="white-space:nowrap;width:1%">Data Center</td><td>{{if .DataCenterName}}{{.DataCenterName}}{{else}}—{{end}}</td></tr>
@@ -58,20 +58,7 @@
 
     <div class="cell is-row-span-1">
       <article class="box" style="height:100%">
-        <p class="is-size-4 mb-4">Metadata</p>
-        <div style="overflow-x: auto">
-        <table class="table mb-0">
-          <tbody>
-            <tr><td style="white-space:nowrap;width:1%">Namespace</td><td>{{if .Namespace}}{{.Namespace}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Orb ID</td><td>{{if .OrbID}}{{.OrbID}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Version</td><td>{{if .Version}}{{.Version}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Created By</td><td>{{if .CreatedBy}}{{.CreatedBy}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Created At</td><td>{{if .CreatedAt}}<span data-timestamp="{{.CreatedAt}}">{{.CreatedAt}}</span>{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Last Updated</td><td>{{if .UpdatedAt}}<span data-timestamp="{{.UpdatedAt}}">{{.UpdatedAt}}</span>{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Last Updated By</td><td>{{if .UpdatedBy}}{{.UpdatedBy}}{{else}}—{{end}}</td></tr>
-          </tbody>
-        </table>
-        </div>
+        {{template "metadata-box.gohtml" .}}
       </article>
     </div>
 
@@ -94,8 +81,8 @@
         {{/* Connections — the interface-level wiring: every cabled port, server or device on the remote end */}}
         <div id="network-device-panel-connections-{{.DomID}}">
           {{if .Connections}}
-          <div style="overflow-x:auto">
-          <table class="table is-striped is-hoverable is-size-7 mt-2">
+          <div class="table-container">
+          <table class="table is-striped is-hoverable is-fullwidth is-size-7 mt-2">
             <colgroup>
               <col style="width:36%"><col style="width:20%"><col style="width:22%"><col style="width:22%">
             </colgroup>
@@ -105,7 +92,7 @@
             <tbody>
               {{range .Connections}}
               {{if eq .RemoteType "server"}}
-              <tr data-server-orb-id="{{.RemoteOrbID}}" data-display-name="{{.RemoteName}}" style="cursor:pointer" title="Double-click to open server">
+              <tr class="tooltip" data-server-orb-id="{{.RemoteOrbID}}" data-display-name="{{.RemoteName}}" style="cursor:pointer" data-text="Double-click to open server">
                 <td>{{.RemoteName}}</td>
                 <td><span class="tag is-light">Server</span></td>
                 <td>{{if .LocalPort}}{{.LocalPort}}{{else}}—{{end}}</td>
@@ -131,8 +118,8 @@
         {{/* Servers — the blast-radius rollup: distinct servers with cluster/role */}}
         <div id="network-device-panel-servers-{{.DomID}}" style="display:none">
           {{if .ConnectedServers}}
-          <div style="overflow-x:auto">
-          <table class="table is-striped is-hoverable is-size-7 mt-2">
+          <div class="table-container">
+          <table class="table is-striped is-hoverable is-fullwidth is-size-7 mt-2">
             <colgroup>
               <col style="width:26%"><col style="width:22%"><col style="width:20%"><col style="width:16%"><col style="width:16%">
             </colgroup>
@@ -141,7 +128,7 @@
             </thead>
             <tbody>
               {{range .ConnectedServers}}
-              <tr data-server-orb-id="{{.ServerOrbID}}" data-display-name="{{.ServerName}}" style="cursor:pointer" title="Double-click to open server">
+              <tr class="tooltip" data-server-orb-id="{{.ServerOrbID}}" data-display-name="{{.ServerName}}" style="cursor:pointer" data-text="Double-click to open server">
                 <td>{{if .ServerName}}{{.ServerName}}{{else}}—{{end}}</td>
                 <td>{{if .ClusterName}}{{.ClusterName}}{{else}}—{{end}}</td>
                 <td>{{if .NodeRole}}{{.NodeRole}}{{if .Gpu}} · GPU{{end}}{{else if .Gpu}}GPU{{else}}—{{end}}</td>
@@ -166,4 +153,4 @@
 
 </div>
 
-{{if .Actions.Edit}}{{template "edit-modal-networkdevice.gohtml" .}}{{end}}
+{{if .Actions.Edit}}{{template "edit-modal.gohtml" .EditModal}}{{end}}

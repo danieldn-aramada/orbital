@@ -13,7 +13,7 @@
       {{if not .CanMutate}}{{template "access-required" .}}{{end}}
 
       <p class="is-size-4 mb-2" data-testid="page-heading">Publish History</p>
-      <p class="has-text-grey mb-4" style="font-size: 0.875rem;">
+      <p class="has-text-grey page-description">
         The registry is the source of truth for what currently exists; this page records orbital's publish events.
       </p>
 
@@ -58,7 +58,7 @@
               <p class="is-size-7 has-text-grey mb-1">Verify an artifact signature:</p>
               <div class="is-flex is-align-items-center" style="gap:0.5rem;">
                 <pre id="pubkey-verify-cmd-text" class="is-family-monospace is-size-7" style="background:var(--bulma-background);padding:0.5rem 0.75rem;margin:0;flex:1;white-space:pre-wrap;word-break:break-all;"></pre>
-                <button class="button is-small is-white js-pubkey-verify-cmd-copy" title="Copy command">
+                <button class="button is-small is-white js-pubkey-verify-cmd-copy tooltip" data-text="Copy command">
                   <span class="icon"><i class="fas fa-copy"></i></span>
                 </button>
               </div>
@@ -73,7 +73,7 @@
       <div class="mt-4">
         <div class="is-flex is-align-items-center mb-3" style="gap: 0.75rem;">
           <p class="is-size-5">Published Artifacts</p>
-          <button class="button is-small is-link js-artifacts-reload" title="Reload">
+          <button class="button is-small is-link js-artifacts-reload tooltip" data-text="Reload">
             <span class="icon"><i class="fa-solid fa-rotate-right"></i></span>
             <span>Reload</span>
           </button>
@@ -128,7 +128,7 @@
   </main>
 
   <div id="layers-modal" class="modal">
-    <div class="modal-background" onclick="document.getElementById('layers-modal').classList.remove('is-active')"></div>
+    <div class="modal-background" data-modal-close></div>
     <div id="layers-modal-body"></div>
   </div>
 {{end}}

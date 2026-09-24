@@ -56,7 +56,6 @@ export function gqlErrorMessage(json) {
     return path ? `${msg} (${path})` : msg
   }).join('; ')
 }
-window.gqlErrorMessage = gqlErrorMessage
 
 // gqlSurfaceErrors is the read-only-query counterpart: logs to console and
 // returns false so callers can bail. No UI banner — read queries that fail
@@ -70,7 +69,6 @@ export function gqlSurfaceErrors(json, label) {
   console.error(`[graphql] ${label} failed:`, msg, json.errors)
   return false
 }
-window.gqlSurfaceErrors = gqlSurfaceErrors
 
 // ─── Tab management ───────────────────────────────────────────────────────────
 
@@ -361,13 +359,13 @@ export function showDatacenterSkeleton(orbId) {
         <div class="cell is-col-span-2 is-row-span-1">
           <article class="box">
             <p class="is-size-4 pb-4">Data Center Summary</p>
-            <div style="overflow-x:auto"><table class="table is-fullwidth"><tbody>${summary}</tbody></table></div>
+            <div class="table-container"><table class="table is-fullwidth"><tbody>${summary}</tbody></table></div>
           </article>
         </div>
         <div class="cell is-row-span-1">
           <article class="box" style="height:100%">
             <p class="is-size-4 mb-4">Metadata</p>
-            <div style="overflow-x:auto"><table class="table mb-0"><tbody>${meta}</tbody></table></div>
+            <div class="table-container"><table class="table mb-0"><tbody>${meta}</tbody></table></div>
           </article>
         </div>
         <div class="cell is-col-span-3">
@@ -424,13 +422,13 @@ export function showClusterSkeleton(orbId) {
         <div class="cell is-col-span-2 is-row-span-1">
           <article class="box">
             <p class="is-size-4 pb-4">Cluster Summary</p>
-            <div style="overflow-x:auto"><table class="table is-fullwidth"><tbody>${summary}</tbody></table></div>
+            <div class="table-container"><table class="table is-fullwidth"><tbody>${summary}</tbody></table></div>
           </article>
         </div>
         <div class="cell is-row-span-1">
           <article class="box" style="height:100%">
             <p class="is-size-4 mb-4">Metadata</p>
-            <div style="overflow-x:auto"><table class="table mb-0"><tbody>${meta}</tbody></table></div>
+            <div class="table-container"><table class="table mb-0"><tbody>${meta}</tbody></table></div>
           </article>
         </div>
         <div class="cell is-col-span-3">
@@ -496,13 +494,13 @@ export function showServerSkeleton(targetId, variant) {
         <div class="cell is-col-span-2 is-row-span-1">
           <article class="box">
             <p class="is-size-4 pb-4">Server Summary</p>
-            <div style="overflow-x:auto"><table class="table is-fullwidth"><tbody>${rows}</tbody></table></div>
+            <div class="table-container"><table class="table is-fullwidth"><tbody>${rows}</tbody></table></div>
           </article>
         </div>
         <div class="cell is-row-span-1">
           <article class="box" style="height:100%">
             <p class="is-size-4 mb-4">Metadata</p>
-            <div style="overflow-x:auto"><table class="table mb-0"><tbody>${meta}</tbody></table></div>
+            <div class="table-container"><table class="table mb-0"><tbody>${meta}</tbody></table></div>
           </article>
         </div>
         <div class="cell is-col-span-3">
@@ -741,6 +739,27 @@ document.addEventListener('htmx:afterSettle', (evt) => {
 })
 
 // ─── Todo toast ───────────────────────────────────────────────────────────────
+
+// displayTodoToast is the placeholder for a feature that is deliberately not
+// built yet (see the Ratel decision in CLAUDE.md — a sub-path proxy cannot work,
+// so the link shows this instead of 404ing).
+//
+// It lived in an inline <script> in todo-toast.gohtml and was called from here
+// as a BARE GLOBAL — a module reaching out to a function a template happened to
+// define. It worked, and nothing said it had to keep working.
+function displayTodoToast() {
+  window.bulmaToast.toast({
+    message: "🚧 Hang tight! We are currently building this feature.",
+    closeOnClick: true,
+    type: "is-warning is-light",
+    position: "top-right",
+    dismissible: false,
+    duration: 4000,
+    offsetTop: "4em",
+    pauseOnHover: true,
+    animate: { in: 'fadeInRight', out: 'fadeOutRight' },
+  })
+}
 
 document.addEventListener('click', (e) => {
   if (e.target.closest('.todo')) displayTodoToast()
@@ -1441,7 +1460,7 @@ export function initClusterTable(opts = {}) {
   // blank child rows. Trim removes the surrounding whitespace; .join('') with
   // no separator keeps the TRs adjacent so the parser sees only elements.
   const buildClusterChildTrs = (children) => children.map(c => `
-    <tr class="cluster-child-row" data-cluster-orb-id="${escapeHtml(c.orbId)}" data-display-name="${escapeHtml(c.name)}" style="cursor:pointer; background:var(--bulma-background)" title="Double-click to open">
+    <tr class="cluster-child-row tooltip" data-cluster-orb-id="${escapeHtml(c.orbId)}" data-display-name="${escapeHtml(c.name)}" style="cursor:pointer; background:var(--bulma-background)" data-text="Double-click to open">
       <td></td>
       <td><span class="has-text-grey mr-1">└</span>${escapeHtml(c.name)}</td>
       <td>${escapeHtml(c.dataCenter)}</td>
@@ -2023,6 +2042,107 @@ export function initNetworkDeviceTabRestoration() {
 
 // initRowNavigation wires dblclick navigation for server and cluster rows that
 // appear in shared templates (cluster-tab.gohtml, datacenter-tab.gohtml).
+
+// ─── List-page wiring (shared by orbital and orb) ─────────────────────────────
+//
+// Every entity list page opens a detail tab the same way: look for an already
+// open tab, focus it if present, otherwise load + persist + focus. That logic
+// was copy-pasted once per entity in BOTH orbital.js and orb.js — three
+// identical 17-line DOMContentLoaded blocks in each, ~60 duplicated lines, while
+// shared.js already exported every function they called. A change to the
+// open-tab sequence landed in one file and silently missed the other, which is
+// the failure mode UI.md's "any new navigation pattern belongs in these
+// functions so both apps get it automatically" rule exists to prevent.
+//
+// Each init*Table returns early when its table is absent, so wiring all of them
+// in both apps is safe: a page only activates the descriptor that matches it.
+const LIST_PAGES = [
+  {
+    init: initDatacenterTable,
+    tabId: (domId) => `tab-${domId}`,
+    load: loadDataCenterTab,
+    save: saveTab,
+    restore: initDatacenterTabRestoration,
+    label: (d) => d.name,
+  },
+  {
+    init: initServerListTable,
+    tabId: (domId) => `tab-srv-${domId}`,
+    load: loadServerListTab,
+    save: saveServerTab,
+    restore: initServerListTabRestoration,
+    // Servers fall back to the service tag: hostname is '—' for a machine
+    // discovered by BMC scan before its OS has reported one.
+    label: (d) => (d.hostname !== '—' ? d.hostname : d.serviceTag),
+  },
+  {
+    init: initClusterTable,
+    tabId: (domId) => `tab-cluster-${domId}`,
+    load: loadClusterTab,
+    save: saveClusterTab,
+    restore: initClusterTabRestoration,
+    label: (d) => d.name,
+  },
+  {
+    init: initNetworkDeviceTable,
+    tabId: (domId) => `tab-network-device-${domId}`,
+    load: loadNetworkDeviceTab,
+    save: saveNetworkDeviceTab,
+    restore: initNetworkDeviceTabRestoration,
+    label: (d) => d.name,
+  },
+]
+
+// openOrFocusTab is the shared row-open behaviour: focus an open tab, or load,
+// persist and focus a new one.
+function openOrFocusTab(pageDef, data) {
+  const orbId = data.orbId
+  const domId = safeDomId(orbId)
+  const id = pageDef.tabId(domId)
+  const existing = document.getElementById(id)
+  if (existing) {
+    existing.click()
+    return
+  }
+  const displayName = pageDef.label(data)
+  pageDef.load(displayName, orbId)
+  pageDef.save(displayName, orbId)
+  document.getElementById(id)?.click()
+}
+
+// initListPages wires the inventory table and every entity list page. Called
+// once by orbital.js and once by orb.js; nothing else should duplicate it.
+// ─── Modal close (all modals, both apps) ────────────────────────────────────
+//
+// One handler for every modal that opts in with data-modal-close — the edit
+// modals in orbital and the OCI layers modal in both apps. There were four byte-identical copies, one
+// per ConfigItem family, each reconstructing the modal's id from a per-type
+// data attribute — `data-srv-modal-close`, `data-dc-modal-close` and so on.
+//
+// None of that was needed: the close button is INSIDE the modal it closes, so
+// `closest('.modal')` finds it without an id. The per-type attribute names also
+// could not survive template consolidation — html/template refuses to
+// interpolate into an attribute NAME, so `data-{{.Prefix}}-modal-close` renders
+// nothing at all (caught by TestEditModalPrefixIsConsistent).
+document.addEventListener('click', (e) => {
+  const closeBtn = e.target.closest('[data-modal-close]')
+  if (!closeBtn) return
+  const modal = closeBtn.closest('.modal')
+  if (!modal) return
+  modal.classList.remove('is-active')
+  document.documentElement.style.overflow = ''
+})
+
+export function initListPages() {
+  document.addEventListener('DOMContentLoaded', () => { initInventoryTable() })
+  for (const pageDef of LIST_PAGES) {
+    document.addEventListener('DOMContentLoaded', () => {
+      pageDef.init({ onRowOpen: (data) => openOrFocusTab(pageDef, data) })
+    })
+    window.addEventListener('load', pageDef.restore)
+  }
+}
+
 export function initRowNavigation() {
   // Node row in a cluster tab → open that server's tab on the Servers page.
   document.addEventListener('dblclick', (e) => {
@@ -2073,7 +2193,39 @@ export function initLinkNavigation() {
 //
 // opts.onDcReloaded(domId) — called after a successful DC tab reload.
 // opts.onSrvReloaded(target) — called after a successful server tab reload.
+// reloadNetworkDeviceFragment re-renders a network-device detail tab in place.
+//
+// Lives here rather than in orbital.js because orb serves network devices too,
+// so both apps need it. The optional onReloaded callback is how orbital drops
+// the stale JSONEditor instance for the tab it just replaced; orb passes
+// nothing, exactly as it does for the other reload buttons.
+export function reloadNetworkDeviceFragment(orbId, onReloaded) {
+  const domId = safeDomId(orbId)
+  const target = document.getElementById('tab-content-network-device-' + domId)
+  if (!target) return Promise.resolve()
+  return fetchWithMinDelay('/network/' + encodeURIComponent(orbId))
+    .then(html => {
+      target.innerHTML = html
+      htmx.process(target)
+      renderTimestamps(target)
+      const detailTabs = target.querySelector('[id^="network-device-detail-tabs-"]')
+      if (detailTabs) initDetailTabs(detailTabs)
+      onReloaded?.(domId)
+    })
+    .catch(() => {
+      target.innerHTML = '<div class="notification is-danger is-light is-size-7 m-4"><strong>Reload failed.</strong> Check your connection and try again.</div>'
+    })
+}
+
 export function initReloadButtons(opts = {}) {
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('.js-network-device-reload')
+    if (!btn) return
+    btn.classList.add('is-loading')
+    reloadNetworkDeviceFragment(btn.dataset.networkDeviceId, opts.onNetworkDeviceReloaded)
+      .finally(() => btn.classList.remove('is-loading'))
+  })
+
   document.addEventListener('click', function (e) {
     const btn = e.target.closest('.js-cluster-reload')
     if (!btn) return
@@ -2095,7 +2247,7 @@ export function initReloadButtons(opts = {}) {
     const target = document.getElementById('tab-content-' + domId)
     if (!target) return
     showDatacenterSkeleton(orbId)
-    fetchWithMinDelay(BASE + '/datacenters/' + encodeURIComponent(orbId))
+    fetchWithMinDelay('/datacenters/' + encodeURIComponent(orbId))
       .then(html => {
         target.innerHTML = html
         htmx.process(target)

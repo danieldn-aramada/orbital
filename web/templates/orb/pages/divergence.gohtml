@@ -5,8 +5,8 @@
   </div>
   <div class="app-main p-5">
 
-    <p class="is-size-4 mb-2">Publish Report</p>
-    <p class="has-text-grey mb-4" style="font-size: 0.875rem;">
+    <p class="is-size-4 mb-2" data-testid="page-heading">Publish Report</p>
+    <p class="has-text-grey page-description">
       Reports arrive from configbundle-controller on its reporter tick (configurable interval). Click <strong>Refresh</strong> to pull the latest snapshot, then <strong>Publish Report</strong> to send it to object storage. See <a href="{{.BasePath}}/publish-history">Publish History</a> for past publishes.
     </p>
 
@@ -80,7 +80,7 @@
   {{else}}
   <p class="has-text-grey is-size-7 mb-3">{{len .Entries}} override{{if gt (len .Entries) 1}}s{{end}} pending</p>
   <div class="table-container">
-    <table class="table is-fullwidth is-hoverable is-size-7" id="divergence-table">
+    <table class="table is-striped is-hoverable is-fullwidth is-size-7" id="divergence-table">
       <thead>
         <tr>
           <th>Orb ID</th>

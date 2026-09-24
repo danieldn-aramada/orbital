@@ -11,16 +11,16 @@
   <td><span class="tag is-light">{{.Tag}}</span></td>
   <td><span class="tag {{.StatusClass}}">{{.Status}}</span></td>
   <td class="is-nowrap">{{.InitiatedAt}}</td>
-  <td class="is-size-7" style="overflow-wrap:anywhere;">{{if .PublishedBy}}{{.PublishedBy}}{{else}}<span class="has-text-grey">—</span>{{end}}</td>
+  <td style="overflow-wrap:anywhere;">{{if .PublishedBy}}{{.PublishedBy}}{{else}}<span class="has-text-grey">—</span>{{end}}</td>
   <td class="is-nowrap">
     {{if .HasLayers}}
       <div class="is-flex is-align-items-center" style="gap:0.25rem;">
         <span class="tag is-light is-small">{{len .LayerRows}}</span>
-        <button class="button is-small is-white" title="View layers"
+        <button class="button is-small is-white tooltip"
           hx-get="{{.BasePath}}/api/v1/oci/artifacts/{{.ID}}/layers"
           hx-target="#layers-modal-body"
           hx-swap="innerHTML"
-          onclick="document.getElementById('layers-modal').classList.add('is-active')">
+          onclick="document.getElementById('layers-modal').classList.add('is-active')" data-text="View layers">
           <span class="icon"><i class="fas fa-up-right-from-square"></i></span>
         </button>
       </div>
@@ -28,10 +28,10 @@
     {{else}}—{{end}}
   </td>
   <td>{{if .Signed}}<span class="tag is-success is-light">signed</span>{{else}}<span class="tag is-light">unsigned</span>{{end}}</td>
-  <td class="is-family-monospace is-size-7" style="word-break: break-all;">{{.Repository}}</td>
+  <td class="is-family-monospace" style="word-break: break-all;">{{.Repository}}</td>
   {{/* Full failure reason lives in its own end column (not conflated into the
        Status badge). Both error fields render here; empty for successful rows. */}}
-  <td class="has-text-danger is-size-7" style="overflow-wrap:anywhere;">
+  <td class="has-text-danger" style="overflow-wrap:anywhere;">
     {{if .Error}}<div>{{.Error}}</div>{{end}}
     {{if .BundlerError}}<div>{{.BundlerError}}</div>{{end}}
   </td>
@@ -47,7 +47,7 @@
       <span class="has-text-grey is-size-7">Digest:</span>
       {{if .HasDigest}}
       <span class="is-family-monospace is-size-7">{{.Digest}}</span>
-      <button class="button is-small is-white" title="Copy digest" data-copy-value="{{.Digest}}"><span class="icon"><i class="fas fa-copy"></i></span></button>
+      <button class="button is-small is-white tooltip" data-copy-value="{{.Digest}}" data-text="Copy digest"><span class="icon"><i class="fas fa-copy"></i></span></button>
       {{else}}<span class="is-size-7">—</span>{{end}}
     </div>
     {{if eq .Status "completed"}}

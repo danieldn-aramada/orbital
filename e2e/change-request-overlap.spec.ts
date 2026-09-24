@@ -16,6 +16,7 @@
 // the error path has no visible trigger at all.
 
 import { test, expect, Page } from '@playwright/test'
+import { savePolicies, clearPolicies, restorePolicies } from './policy-snapshot'
 
 // A maintenance node this spec owns. Tests here assert "no competitor", which
 // only holds while nothing else proposes against the entity — so it must not be
@@ -59,6 +60,36 @@ async function openReview(page: Page, id: string) {
 }
 
 const notice = (page: Page) => page.locator('[data-testid="cr-overlap-notice"]')
+
+
+// An approval policy is this spec's PRECONDITION, not incidental setup.
+//
+// With no policy matching, a change request is created already approved: there
+// is nothing to approve, so it never enters StatusOpen and `availableActions`
+// returns merge/close instead of approve/edit. `make seed` creates no policies,
+// so on a fresh stack these tests asserted against a state the app can never be
+// in — and passed only where a developer happened to have a `colo` policy
+// lying around. The bypass_roles default (["admin"]) is what additionally lets
+// the e2e admin, who is also the author, see `approve`: an author never
+// approves their own request without bypass.
+test.beforeAll(async ({ browser }) => {
+  const page = await browser.newPage()
+  await savePolicies(page.request)
+  await clearPolicies(page.request)
+  const res = await page.request.fetch('/api/v1/approval-policies', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: JSON.stringify({ namespace: 'colo', requiredApprovals: 1 }),
+  })
+  if (!res.ok()) throw new Error(`seed approval policy: ${res.status()} ${await res.text()}`)
+  await page.close()
+})
+
+test.afterAll(async ({ browser }) => {
+  const page = await browser.newPage()
+  await restorePolicies(page.request)
+  await page.close()
+})
 
 test('a request with no competitor is never marked against itself', async ({ page }) => {
   const only = await propose(page, 'OVERLAP solo', 'OVERLAP solo')

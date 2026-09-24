@@ -1,13 +1,18 @@
+{{/*
+network.gohtml — the Network Devices list, shared by orbital and orb.
+
+Orb serves network devices too (decision 2026-09-23), so this page lives in
+shared/pages alongside servers and clusters. See servers.gohtml for why the
+auth gate is conditional on .UI.ShowAuth rather than duplicated per app.
+*/}}
 {{define "page"}}
   <main class="app-main-grid">
     <div class="app-menu">
       {{template "menu.gohtml" .}}
     </div>
-    <div class="app-main pr-5 pl-5 pt-5 pb-1">
-      {{if not .IsAuthn}}
-        <div class="notification is-warning is-light">
-          <a class="js-modal-trigger" data-target="login-modal">Login</a> to view this page.
-        </div>
+    <div class="app-main p-5">
+      {{if and .UI.ShowAuth (not .IsAuthn)}}
+        {{template "login-gate.gohtml" .}}
       {{else}}
 
       {{template "hint-banner.gohtml" .}}

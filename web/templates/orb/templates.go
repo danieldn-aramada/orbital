@@ -35,7 +35,7 @@ var base = []string{
 	"templates/shared/layouts/footer.gohtml",
 	"templates/shared/components/navbar.gohtml",
 	"templates/shared/components/menu.gohtml",
-	"templates/shared/components/todo-toast.gohtml",
+	"templates/shared/components/login-gate.gohtml",
 	"templates/shared/components/hint-banner.gohtml",
 	// Stub definitions required by navbar.gohtml references; orb has no auth UI.
 	"templates/orb/components/login-modal.gohtml",
@@ -63,8 +63,9 @@ func Map(fsys fs.FS) map[string]*template.Template {
 		"inventory":       parsePage(fsys, "inventory", page("templates/orb/pages/inventory.gohtml")),
 		"schema":          parsePage(fsys, "schema", page("templates/orb/pages/schema.gohtml")),
 		"datacenter":      parsePage(fsys, "datacenter", page("templates/orb/pages/datacenter.gohtml")),
-		"servers":         parsePage(fsys, "servers", page("templates/orb/pages/servers.gohtml")),
-		"clusters":        parsePage(fsys, "clusters", page("templates/orb/pages/clusters.gohtml")),
+		"servers":         parsePage(fsys, "servers", page("templates/shared/pages/servers.gohtml")),
+		"clusters":        parsePage(fsys, "clusters", page("templates/shared/pages/clusters.gohtml")),
+		"network":         parsePage(fsys, "network", page("templates/shared/pages/network.gohtml")),
 		"divergence":      parsePage(fsys, "divergence", page("templates/orb/pages/divergence.gohtml")),
 		"import-history":  parsePage(fsys, "import-history", page("templates/orb/pages/import-history.gohtml")),
 		"publish-history": parsePage(fsys, "publish-history", page("templates/orb/pages/publish-history.gohtml")),
@@ -74,11 +75,11 @@ func Map(fsys fs.FS) map[string]*template.Template {
 		// parsed file content (see ParseFragment comment below).
 		"datacenter-tab": template.Must(template.New("datacenter-tab.gohtml").Funcs(funcMap).ParseFS(fsys,
 			"templates/shared/partials/datacenter-tab.gohtml",
-			"templates/shared/components/edit-modal-datacenter.gohtml",
+			"templates/shared/components/edit-modal.gohtml",
 		)),
 		"server-tab": template.Must(template.New("server-tab.gohtml").Funcs(funcMap).ParseFS(fsys,
 			"templates/shared/partials/server-tab.gohtml",
-			"templates/shared/components/edit-modal-server.gohtml",
+			"templates/shared/components/edit-modal.gohtml",
 		)),
 		// No "cluster-tab" entry — handler.ClusterHandler manages its own template
 		// parse cycle (parseClusterFragment) and is reused directly by orb's routes.

@@ -52,7 +52,7 @@
     <div class="cell is-col-span-2 is-row-span-1">
       <article class="box">
         <p class="is-size-4 pb-4">Server Summary</p>
-        <div style="overflow-x: auto">
+        <div class="table-container">
         {{/* data-field-orbid / data-field-values drive the proposed-change field
              marks, same wiring as the maintenance panel below. Rows carrying a
              data-field name get a mark when a change request proposes that
@@ -100,20 +100,7 @@
 
     <div class="cell is-row-span-1">
       <article class="box" style="height:100%">
-        <p class="is-size-4 mb-4">Metadata</p>
-        <div style="overflow-x: auto">
-        <table class="table mb-0">
-          <tbody>
-            <tr><td style="white-space:nowrap;width:1%">Namespace</td><td>{{if .Namespace}}{{.Namespace}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Orb ID</td><td>{{if .OrbID}}{{.OrbID}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Version</td><td>{{if .Version}}{{.Version}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Created By</td><td>{{if .CreatedBy}}{{.CreatedBy}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Created At</td><td>{{if .CreatedAt}}<span data-timestamp="{{.CreatedAt}}">{{.CreatedAt}}</span>{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Last Updated</td><td>{{if .UpdatedAt}}<span data-timestamp="{{.UpdatedAt}}">{{.UpdatedAt}}</span>{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Last Updated By</td><td>{{if .UpdatedBy}}{{.UpdatedBy}}{{else}}—{{end}}</td></tr>
-          </tbody>
-        </table>
-        </div>
+        {{template "metadata-box.gohtml" .}}
       </article>
     </div>
 
@@ -178,8 +165,8 @@
 
         <div id="srv-panel-storage-{{.DomID}}" style="display:none">
           {{if .StorageControllers}}
-          <div style="overflow-x:auto">
-          <table class="table is-striped is-hoverable is-fullwidth">
+          <div class="table-container">
+          <table class="table is-striped is-hoverable is-fullwidth is-size-7">
             <thead>
               <tr>
                 <th>Controller</th>
@@ -214,8 +201,8 @@
 
         <div id="srv-panel-network-{{.DomID}}" style="display:none">
           {{if or .NetworkAdapters .MgmtInterfaces}}
-          <div style="overflow-x:auto">
-          <table class="table is-striped is-hoverable is-fullwidth">
+          <div class="table-container">
+          <table class="table is-striped is-hoverable is-fullwidth is-size-7">
             <thead>
               <tr>
                 <th>Adapter</th>
@@ -296,4 +283,4 @@
 
 </div>
 
-{{if .Actions.Edit}}{{template "edit-modal-server.gohtml" .}}{{end}}
+{{if .Actions.Edit}}{{template "edit-modal.gohtml" .EditModal}}{{end}}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/armada/orbital/internal/configitems"
+	"github.com/armada/orbital/internal/web/data/component"
 	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/labstack/echo/v4"
 )
@@ -68,7 +69,8 @@ func parseNetworkDeviceFragment() *template.Template {
 	return template.Must(template.ParseFiles(
 		"web/templates/shared/partials/networkdevice-tab.gohtml",
 		"web/templates/shared/partials/audit-tab.gohtml",
-		"web/templates/shared/components/edit-modal-networkdevice.gohtml",
+		"web/templates/shared/components/metadata-box.gohtml",
+		"web/templates/shared/components/edit-modal.gohtml",
 	))
 }
 
@@ -198,6 +200,10 @@ type networkDeviceTabData struct {
 
 	RelatedOrbIDsCSV string
 	AuditPanelID     string
+
+	// EditModal is the shared edit-modal render context (one template for
+	// every parent family) — see component.EditModal.
+	EditModal component.EditModal
 }
 
 func (h *NetworkDeviceHandler) Tab(c echo.Context) error {
@@ -356,5 +362,11 @@ func (h *NetworkDeviceHandler) Tab(c echo.Context) error {
 		}
 	}
 
+	tab.EditModal = component.EditModal{
+		Prefix: "network-device", Title: "Edit Network Device: " + tab.Name,
+		DomID: tab.DomID, OrbID: tab.OrbID, Version: tab.Version,
+		CurrentUser: tab.CurrentUser, Typename: tab.Typename,
+		EditDataJSON: tab.EditDataJSON, EditTargetsJSON: tab.EditTargetsJSON,
+	}
 	return renderHTML(c, h.fragment, "", tab)
 }

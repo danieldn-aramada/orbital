@@ -1,0 +1,28 @@
+{{/*
+metadata-box.gohtml — the provenance panel shown on every ConfigItem detail tab.
+
+These seven rows were byte-identical in datacenter-tab, server-tab, cluster-tab
+and networkdevice-tab: ~60 duplicated lines kept in step by hand. Every one of
+those structs already exposes the same field names, so the block needed no
+per-type shape — only extracting. audit-tab.gohtml had already proved the
+pattern; this finishes the job it started.
+
+Caller passes its full tab context: {{template "metadata-box.gohtml" .}}
+Required fields: .Namespace .OrbID .Version .CreatedBy .CreatedAt .UpdatedAt .UpdatedBy
+*/}}
+{{define "metadata-box.gohtml"}}
+<p class="is-size-4 mb-4">Metadata</p>
+<div class="table-container">
+  <table class="table mb-0">
+    <tbody>
+      <tr><td style="white-space:nowrap;width:1%">Namespace</td><td>{{if .Namespace}}{{.Namespace}}{{else}}—{{end}}</td></tr>
+      <tr><td style="white-space:nowrap">Orb ID</td><td>{{if .OrbID}}{{.OrbID}}{{else}}—{{end}}</td></tr>
+      <tr><td style="white-space:nowrap">Version</td><td>{{if .Version}}{{.Version}}{{else}}—{{end}}</td></tr>
+      <tr><td style="white-space:nowrap">Created By</td><td>{{if .CreatedBy}}{{.CreatedBy}}{{else}}—{{end}}</td></tr>
+      <tr><td style="white-space:nowrap">Created At</td><td>{{if .CreatedAt}}<span data-timestamp="{{.CreatedAt}}">{{.CreatedAt}}</span>{{else}}—{{end}}</td></tr>
+      <tr><td style="white-space:nowrap">Last Updated</td><td>{{if .UpdatedAt}}<span data-timestamp="{{.UpdatedAt}}">{{.UpdatedAt}}</span>{{else}}—{{end}}</td></tr>
+      <tr><td style="white-space:nowrap">Last Updated By</td><td>{{if .UpdatedBy}}{{.UpdatedBy}}{{else}}—{{end}}</td></tr>
+    </tbody>
+  </table>
+</div>
+{{end}}

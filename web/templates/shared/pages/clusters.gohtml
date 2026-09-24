@@ -1,9 +1,19 @@
+{{/*
+clusters.gohtml — the Clusters list, shared by orbital and orb.
+
+See servers.gohtml for why the auth gate is conditional rather than duplicated.
+The two former copies also disagreed on page padding (orbital pr-5 pl-5 pt-5
+pb-1, orb p-5); p-5 wins because it is what 23 of the 27 page templates use.
+*/}}
 {{define "page"}}
   <main class="app-main-grid">
     <div class="app-menu">
       {{template "menu.gohtml" .}}
     </div>
     <div class="app-main p-5">
+      {{if and .UI.ShowAuth (not .IsAuthn)}}
+        {{template "login-gate.gohtml" .}}
+      {{else}}
 
       {{template "hint-banner.gohtml" .}}
 
@@ -37,6 +47,7 @@
         </table>
       </div>
 
+      {{end}}
     </div>
   </main>
 {{end}}

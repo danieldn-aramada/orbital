@@ -296,7 +296,7 @@ func TestDeleteGuard_ChildEditedAfterPlanningRefusesAndDeletesNothing(t *testing
 			"version":         99,
 		}})
 
-	err = h.bulkDeleteGuarded(ctx, plan.uids, plan.versions)
+	err = h.bulkDeleteGuarded(ctx, plan.uids, plan.versions, plan.dangling)
 	if err == nil {
 		t.Fatal("the cascade deleted a child that had been edited since planning — with no conflict")
 	}
@@ -329,7 +329,7 @@ func TestDeleteGuard_UntouchedPlanDeletesTheWholeSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("plan: %v", err)
 	}
-	if err := h.bulkDeleteGuarded(ctx, plan.uids, plan.versions); err != nil {
+	if err := h.bulkDeleteGuarded(ctx, plan.uids, plan.versions, plan.dangling); err != nil {
 		t.Fatalf("an unchanged plan was refused: %v", err)
 	}
 	if exists(t, "Server", crServerA) {
@@ -359,7 +359,7 @@ func TestDeleteGuard_NodeWithNoVersionFailsClosed(t *testing.T) {
 	}
 	delete(stripped, plan.uids[0])
 
-	err = h.bulkDeleteGuarded(ctx, plan.uids, stripped)
+	err = h.bulkDeleteGuarded(ctx, plan.uids, stripped, plan.dangling)
 	if err == nil {
 		t.Fatal("a node with no version was deleted unguarded")
 	}

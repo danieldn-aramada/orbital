@@ -121,11 +121,15 @@ type Config struct {
 	// OIDCIssuerURL and OIDCClientSecret both being set) and the password login
 	// still works, so `make run-orbital` needs no setup. For local SSO, copy
 	// deploy/local/orbital.env.example to deploy/local/orbital.env — the
-	// Makefile sources it when present. In dev mode (ORBITAL_DEV=true),
-	// bearer auth on /api/v1 + /graphql is bypassed at the middleware layer
-	// (see internal/server/server.go), so machine-to-machine callers like
-	// cb-bundler can query without an OAuth2 token. Production (Dev=false)
-	// enforces bearer auth strictly.
+	// Makefile sources it when present.
+	//
+	// ⚠️ ORBITAL_DEV=true does NOT bypass bearer auth once ORBITAL_AUTH_PROVIDERS
+	// is set — providers are the SOLE source of bearer verification (auth v2,
+	// 2026-09-22), so /api/v1 and /graphql return 401 to an unauthenticated
+	// caller even with dev=true. This comment claimed the opposite until
+	// 2026-09-23, and cb-bundler was configured against that claim: locally it
+	// needs real Keycloak client credentials, not a dev-mode bypass. The Dev
+	// bypass survives only when NO providers are configured.
 	OIDCIssuerURL string `envconfig:"ORBITAL_OIDC_ISSUER_URL"         default:""`
 	OIDCClientID  string `envconfig:"ORBITAL_OIDC_CLIENT_ID"          default:""`
 	// OIDCDisplayName names the identity provider on the sign-in button. The

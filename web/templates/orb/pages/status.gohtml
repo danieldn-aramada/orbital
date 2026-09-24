@@ -9,7 +9,7 @@
 
       {{if .HasData}}
 
-      <p class="has-text-grey mb-3" style="font-size: 0.875rem;">
+      <p class="has-text-grey page-description">
         Edge service status for data center <strong>{{.DCName}}</strong>.
       </p>
 
@@ -84,7 +84,7 @@
             <p class="heading">
               Current Version
               {{if .AutoImportEnabled}}
-              <span class="tag is-info is-light is-small ml-2" title="ORB_AUTO_IMPORT_ENABLED=true — orb applies newer signed versions automatically">Auto-import: ON</span>
+              <span class="tag is-info is-light is-small ml-2 tooltip is-wide" data-text="ORB_AUTO_IMPORT_ENABLED=true — orb applies newer signed versions automatically">Auto-import: ON</span>
               {{end}}
             </p>
             <p class="title is-5" id="status-current-version">
@@ -129,7 +129,7 @@
           No subgraph has been imported yet.
           Configured for <code>{{.OCIRepo}}</code>.
         </p>
-        <a class="button is-primary is-small" href="/import">
+        <a class="button is-primary is-small" href="{{.BasePath}}/import">
           <span class="icon"><i class="fa-solid fa-upload"></i></span>
           <span>Import Subgraph</span>
         </a>
