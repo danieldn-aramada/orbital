@@ -83,7 +83,7 @@ services:
       ORB_OCI_PUBLIC_KEY_PATH: /app/deploy/local/cosign.pub
       ORB_ENABLE_OCI_REGISTRY: "true"
       ORB_DATA_DIR: /var/lib/orb
-      ORB_DEV: "true"
+      ORB_TEMPLATE_HOT_RELOAD_ENABLED: "false"  # container serves embedded templates
     volumes:
       - ./cosign.pub:/app/deploy/local/cosign.pub:ro
     extra_hosts:

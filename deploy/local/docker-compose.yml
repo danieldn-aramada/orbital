@@ -200,7 +200,14 @@ services:
       ORBITAL_OCI_ALLOW_HTTP: "true"
       ORBITAL_DGRAPH_ALPHA_GRPC: dgraph-alpha:9080
       ORBITAL_DGRAPH_ZERO_GRPC: dgraph-zero:5080
-      ORBITAL_DEV: "true"
+      # Was ORBITAL_DEV: "true", which meant hot-reload ON and API auth OFF.
+      # Split 2026-09-23; both halves stated explicitly so the behaviour is the
+      # same and visible. The container runs the EMBEDDED templates, so
+      # hot-reload is pointless here — this image has no repo to reload from.
+      ORBITAL_API_AUTH_ENABLED: "false"
+      # The placeholder key is refused unconditionally (it is published in the
+      # repo). A fixed throwaway is fine for a disposable local container.
+      ORBITAL_SESSION_HMAC_KEY: "local-compose-only-not-a-real-secret-0123456789abcdef"
       # Route the containerized orbital's bundler calls to cb-bundler running on the host.
       # `localhost` inside the container refers to the container itself; `host.docker.internal`
       # resolves to the host's loopback interface on Docker Desktop.
@@ -241,7 +248,16 @@ services:
       ORB_OCI_PUBLIC_KEY_PATH: /app/deploy/local/cosign.pub
       ORB_ENABLE_OCI_REGISTRY: "true"
       ORB_DATA_DIR: /var/lib/orb
-      ORB_DEV: "true"
+      ORB_TEMPLATE_HOT_RELOAD_ENABLED: "false"  # container serves embedded templates
+      # No layer consumers in this environment. ORB_CONSUMERS defaults to
+      # cb-controller on localhost:8095 — which, inside this container, is the
+      # container itself, where nothing is listening. Every dispatch therefore
+      # failed with connection-refused and every import finished "partial",
+      # permanently, which trained the release-check gate to accept "partial" as
+      # normal. Stating the truth here makes a future "partial" mean a REAL
+      # dispatch failure. Exercising dispatch needs a stub consumer, which is a
+      # separate test, not a default pointing at a process that is not here.
+      ORB_CONSUMERS: "[]"
       # S3 for divergence report publishing — points at the compose network's
       # minio service (localhost inside the container is the container itself).
       ORB_S3_ENDPOINT: http://minio:9000

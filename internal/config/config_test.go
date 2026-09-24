@@ -96,58 +96,49 @@ func TestSlogLevel(t *testing.T) {
 	}
 }
 
-// TestAPIAuthResolution pins the acceptance list for splitting API auth out of
-// ORBITAL_DEV. One case per item: the hierarchy is resolved once here, and the
-// regression it guards is someone re-coupling API auth to Dev (or flipping the
-// unset default, which would silently change every existing deployment).
+// TestAPIAuthResolution pins the acceptance list for ORBITAL_API_AUTH_ENABLED
+// after ORBITAL_DEV was removed (2026-09-23).
+//
+// The regression this guards is someone re-coupling API auth to a mode flag, or
+// flipping the unset default back to OFF. The old default was fail-OPEN: because
+// auth followed !ORBITAL_DEV and that defaulted to true, an operator who
+// configured nothing got NO API auth, and server.go's fail-closed guard could
+// not catch it — that guard only fires when auth is required, and it wasn't.
 func TestAPIAuthResolution(t *testing.T) {
 	tests := []struct {
 		name        string
-		dev         string
 		apiAuth     string // "" = leave ORBITAL_API_AUTH_ENABLED unset
 		wantEnabled bool
 		wantSource  string
 		wantExplOff bool
 	}{
 		{
-			name:        "item 1: dev=true, unset — disabled, matching historical default",
-			dev:         "true",
-			wantEnabled: false,
-			wantSource:  "ORBITAL_DEV",
-		},
-		{
-			name:        "item 2: dev=false, unset — enabled, matching historical default",
-			dev:         "false",
+			name:        "unset — ENABLED, fail-safe (this is the behaviour change)",
 			wantEnabled: true,
-			wantSource:  "ORBITAL_DEV",
+			wantSource:  "default (fail-safe)",
 		},
 		{
-			name:        "item 3: dev=true + explicit true — enabled, hot-reload retained",
-			dev:         "true",
+			name:        "explicit true — enabled",
 			apiAuth:     "true",
 			wantEnabled: true,
 			wantSource:  "ORBITAL_API_AUTH_ENABLED",
 		},
 		{
-			name:        "item 4: dev=false + explicit false — disabled, and explicitly so",
-			dev:         "false",
+			name:        "explicit false — disabled, and explicitly so",
 			apiAuth:     "false",
 			wantEnabled: false,
 			wantSource:  "ORBITAL_API_AUTH_ENABLED",
 			wantExplOff: true,
 		},
 		{
-			name:        "inherited false is not an explicit disable",
-			dev:         "true",
-			wantEnabled: false,
-			wantSource:  "ORBITAL_DEV",
+			name:        "unset is never an explicit disable",
+			wantEnabled: true,
+			wantSource:  "default (fail-safe)",
 			wantExplOff: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("ORBITAL_DEV", tt.dev)
-			// Dev=false refuses the placeholder HMAC key; unrelated to this test.
 			t.Setenv("ORBITAL_SESSION_HMAC_KEY", "test-hmac-key-not-the-placeholder")
 			if tt.apiAuth != "" {
 				t.Setenv("ORBITAL_API_AUTH_ENABLED", tt.apiAuth)
@@ -171,8 +162,40 @@ func TestAPIAuthResolution(t *testing.T) {
 	}
 }
 
+// TestTemplateHotReload_DefaultsOff pins the other half of the split: the
+// convenience flag must not default on. ORBITAL_DEV defaulted to TRUE, so a
+// deployment that set nothing got disk-reading handlers as well as no auth.
+func TestTemplateHotReload_DefaultsOff(t *testing.T) {
+	t.Setenv("ORBITAL_SESSION_HMAC_KEY", "test-hmac-key-not-the-placeholder")
+	os.Unsetenv("ORBITAL_TEMPLATE_HOT_RELOAD_ENABLED")
+	cfg, err := New()
+	if err != nil {
+		t.Fatalf("New(): %v", err)
+	}
+	if cfg.TemplateHotReload {
+		t.Error("TemplateHotReload defaults ON — a convenience flag must be opt-in")
+	}
+}
+
+// TestPlaceholderSessionKeyIsRefusedUnconditionally pins the third half. The
+// literal below is published in this repository, so it is a secret nobody has.
+// It used to be accepted whenever ORBITAL_DEV was true — the default — so the
+// check protected only deployments that had already thought about it.
+func TestPlaceholderSessionKeyIsRefusedUnconditionally(t *testing.T) {
+	t.Setenv("ORBITAL_SESSION_HMAC_KEY", "local-dev-hmac-key-change-in-prod")
+	os.Unsetenv("ORBITAL_TEMPLATE_HOT_RELOAD_ENABLED")
+	if _, err := New(); err == nil {
+		t.Fatal("the published placeholder HMAC key was accepted")
+	}
+	// And the negative: a real key is fine.
+	t.Setenv("ORBITAL_SESSION_HMAC_KEY", "a-real-enough-local-key")
+	if _, err := New(); err != nil {
+		t.Fatalf("a non-placeholder key was refused: %v", err)
+	}
+}
+
 func TestAPIAuthResolution_NonBooleanIsRefused(t *testing.T) {
-	t.Setenv("ORBITAL_DEV", "true")
+	t.Setenv("ORBITAL_SESSION_HMAC_KEY", "test-hmac-key-not-the-placeholder")
 	t.Setenv("ORBITAL_API_AUTH_ENABLED", "yes-please")
 	if _, err := New(); err == nil {
 		t.Fatal("expected an error for a non-boolean ORBITAL_API_AUTH_ENABLED, got nil")

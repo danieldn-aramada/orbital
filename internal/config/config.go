@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -37,12 +39,18 @@ type Config struct {
 	DGraphAdminURL    string `envconfig:"DGRAPH_ADMIN_URL"                default:"http://localhost:8080/admin"`
 	RatelURL          string `envconfig:"RATEL_URL"                       default:"http://localhost:8000"`
 	IssueTrackerURL   string `envconfig:"ORBITAL_ISSUE_TRACKER_URL"       default:"https://dev.azure.com/armadasystems/Commander/_workitems/create/Bug?[System.AreaPath]=Commander\\Edge\\Edge Platform"`
-	// Dev means "a developer is running this", not "auth is off". It enables
-	// template hot-reload (handlers re-parse .gohtml per request) and permits
-	// the placeholder session HMAC key. API auth is NOT its business — see
-	// APIAuthEnabled, which defaults to !Dev only to preserve the historical
-	// coupling.
-	Dev                   bool   `envconfig:"ORBITAL_DEV"                     default:"true"`
+	// TemplateHotReload makes handlers re-parse .gohtml from disk per request
+	// instead of using the map built at startup. Pure developer convenience:
+	// it changes nothing about auth, cookies or secrets.
+	//
+	// It replaced ORBITAL_DEV on 2026-09-23. That flag was named after an
+	// AUDIENCE and silently moved SECURITY POSTURE: one boolean decided
+	// hot-reload, whether bearer auth was installed, and whether the
+	// placeholder session key was accepted — so a developer who wanted
+	// hot-reload also got auth off, and nothing in the name said so. Worse, it
+	// defaulted to true, so an operator who set nothing got no API auth. Each
+	// concern now has its own flag and its own safe default.
+	TemplateHotReload     bool   `envconfig:"ORBITAL_TEMPLATE_HOT_RELOAD_ENABLED" default:"false"`
 	LogLevel              string `envconfig:"ORBITAL_LOG_LEVEL"               default:"info"`
 	DGraphScratchURL      string `envconfig:"DGRAPH_SCRATCH_URL"              default:"http://localhost:8081/graphql"`
 	DGraphScratchAdminURL string `envconfig:"DGRAPH_SCRATCH_ADMIN_URL"        default:"http://localhost:8081/admin"`
@@ -61,9 +69,9 @@ type Config struct {
 	ExportDir               string `envconfig:"ORBITAL_EXPORT_DIR"              default:"./subgraph-exports"`
 	DGraphScratchExportDir  string `envconfig:"DGRAPH_SCRATCH_EXPORT_DIR"       default:"./.local/exports/scratch"`
 	SchemaPath              string `envconfig:"ORBITAL_SCHEMA_PATH"             default:"schema/schema.graphql"`
-	SessionHMACKey          string `envconfig:"ORBITAL_SESSION_HMAC_KEY"        default:"local-dev-hmac-key-change-in-prod"` // must be changed in prod
-	SessionEncryptionKey    string `envconfig:"ORBITAL_SESSION_ENCRYPTION_KEY"  default:"local-dev-enc-key-32-bytes-pad!!"`  // must be exactly 32 bytes for AES-256; empty disables cookie encryption
-	DGraphExportDir         string `envconfig:"DGRAPH_EXPORT_DIR"               default:"./.local/exports/blue"`             // host-side mount of /dgraph/export on blue alpha
+	SessionHMACKey          string `envconfig:"ORBITAL_SESSION_HMAC_KEY"        default:""`                                 // unset ⇒ ephemeral key per process; sessions end at restart
+	SessionEncryptionKey    string `envconfig:"ORBITAL_SESSION_ENCRYPTION_KEY"  default:"local-dev-enc-key-32-bytes-pad!!"` // must be exactly 32 bytes for AES-256; empty disables cookie encryption
+	DGraphExportDir         string `envconfig:"DGRAPH_EXPORT_DIR"               default:"./.local/exports/blue"`            // host-side mount of /dgraph/export on blue alpha
 	S3Endpoint              string `envconfig:"ORBITAL_S3_ENDPOINT"             default:"http://localhost:9000"`
 	S3Region                string `envconfig:"ORBITAL_S3_REGION"               default:"us-east-1"`
 	S3Bucket                string `envconfig:"ORBITAL_S3_BUCKET"               default:"orbital"`
@@ -123,13 +131,13 @@ type Config struct {
 	// deploy/local/orbital.env.example to deploy/local/orbital.env — the
 	// Makefile sources it when present.
 	//
-	// ⚠️ ORBITAL_DEV=true does NOT bypass bearer auth once ORBITAL_AUTH_PROVIDERS
-	// is set — providers are the SOLE source of bearer verification (auth v2,
-	// 2026-09-22), so /api/v1 and /graphql return 401 to an unauthenticated
-	// caller even with dev=true. This comment claimed the opposite until
-	// 2026-09-23, and cb-bundler was configured against that claim: locally it
-	// needs real Keycloak client credentials, not a dev-mode bypass. The Dev
-	// bypass survives only when NO providers are configured.
+	// ⚠️ Nothing bypasses bearer auth implicitly. ORBITAL_AUTH_PROVIDERS is the
+	// SOLE source of verification (auth v2, 2026-09-22) and API auth defaults
+	// ON, so /api/v1 and /graphql return 401 to an unauthenticated caller
+	// unless ORBITAL_API_AUTH_ENABLED=false is set deliberately. Until
+	// 2026-09-23 this comment promised a dev-mode bypass that had stopped
+	// existing, and cb-bundler was configured against that promise — locally it
+	// needs real Keycloak client credentials.
 	OIDCIssuerURL string `envconfig:"ORBITAL_OIDC_ISSUER_URL"         default:""`
 	OIDCClientID  string `envconfig:"ORBITAL_OIDC_CLIENT_ID"          default:""`
 	// OIDCDisplayName names the identity provider on the sign-in button. The
@@ -214,16 +222,20 @@ type Config struct {
 	APIAuthEnabledRaw string `envconfig:"ORBITAL_API_AUTH_ENABLED"`
 
 	// APIAuthEnabled decides whether bearer verification is installed on
-	// /api/v1 and /graphql. Hierarchical, never an independent boolean
-	// (docs/reference/CONFIG.md): unset it follows !Dev, which is exactly the
-	// historical behaviour; ORBITAL_API_AUTH_ENABLED set explicitly wins.
-	// Resolved once in New() so no read site re-derives it from Dev — that is
-	// how one site ends up disagreeing with another.
+	// /api/v1 and /graphql. It now DEFAULTS TO TRUE and is decided by
+	// ORBITAL_API_AUTH_ENABLED alone — it no longer inherits from a dev flag.
+	// Fail-safe: an operator who configures nothing gets auth ON, and if auth
+	// is required but no verifier can be built, startup refuses (server.go).
+	// Local development turns it off explicitly in the Makefile, where the
+	// choice is visible, rather than by inheriting it from a mode flag.
 	APIAuthEnabled bool
 	// apiAuthExplicit records whether ORBITAL_API_AUTH_ENABLED was set at all.
-	// An explicit false must switch auth off in every auth mode; an unset
-	// value must not change any mode's existing behaviour.
+	// An explicit false must switch auth off in every auth mode; unset means
+	// the fail-safe default (on).
 	apiAuthExplicit bool
+	// sessionKeyEphemeral reports that no ORBITAL_SESSION_HMAC_KEY was supplied
+	// and one was generated for this process — sessions end at restart.
+	sessionKeyEphemeral bool
 	// apiAuthSource names the setting that decided APIAuthEnabled, so the
 	// startup log states it rather than leaving an operator to infer it.
 	apiAuthSource string
@@ -237,8 +249,25 @@ func New() (*Config, error) {
 	if cfg.SessionEncryptionKey != "" && len(cfg.SessionEncryptionKey) != 32 {
 		return nil, fmt.Errorf("ORBITAL_SESSION_ENCRYPTION_KEY must be exactly 32 bytes for AES-256, got %d", len(cfg.SessionEncryptionKey))
 	}
-	if !cfg.Dev && cfg.SessionHMACKey == "local-dev-hmac-key-change-in-prod" {
-		return nil, fmt.Errorf("ORBITAL_SESSION_HMAC_KEY must be set to a secret value in production (ORBITAL_DEV=false)")
+	// The literal below used to be the DEFAULT, accepted whenever ORBITAL_DEV
+	// was true — which was itself the default. It is published in this
+	// repository, so it is a secret nobody has, and the check protected only
+	// deployments that had already thought about it. Refused unconditionally now.
+	if cfg.SessionHMACKey == "local-dev-hmac-key-change-in-prod" {
+		return nil, fmt.Errorf("ORBITAL_SESSION_HMAC_KEY is the placeholder published in this repo — set it to a real secret (or leave it unset for an ephemeral one)")
+	}
+	// Unset generates an ephemeral key so a fresh clone still runs with no
+	// setup — the dev invariant — while never accepting a published secret.
+	// Sessions do not survive a restart, which is the honest consequence and is
+	// said out loud rather than papered over with a shared constant.
+	// `make run-orbital` supplies a persistent local key so this stays quiet.
+	if cfg.SessionHMACKey == "" {
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			return nil, fmt.Errorf("generate ephemeral session key: %w", err)
+		}
+		cfg.SessionHMACKey = hex.EncodeToString(b)
+		cfg.sessionKeyEphemeral = true
 	}
 	if err := cfg.AuthProviders.Validate(); err != nil {
 		return nil, err
@@ -248,8 +277,8 @@ func New() (*Config, error) {
 			return nil, fmt.Errorf("ORBITAL_DB_USE_AZ_MI=true requires ORBITAL_DB_HOST, ORBITAL_DB_USER, ORBITAL_DB_NAME")
 		}
 	}
-	cfg.APIAuthEnabled = !cfg.Dev
-	cfg.apiAuthSource = "ORBITAL_DEV"
+	cfg.APIAuthEnabled = true
+	cfg.apiAuthSource = "default (fail-safe)"
 	if raw := cfg.APIAuthEnabledRaw; raw != "" {
 		enabled, err := strconv.ParseBool(raw)
 		if err != nil {
@@ -259,7 +288,7 @@ func New() (*Config, error) {
 		cfg.apiAuthExplicit = true
 		cfg.apiAuthSource = "ORBITAL_API_AUTH_ENABLED"
 	}
-	cfg.sessionKeys = auth.NewSessionKeys(cfg.SessionHMACKey, cfg.SessionEncryptionKey, cfg.Dev, cfg.CookieSecure)
+	cfg.sessionKeys = auth.NewSessionKeys(cfg.SessionHMACKey, cfg.SessionEncryptionKey, cfg.CookieSecure)
 	return &cfg, nil
 }
 
@@ -269,6 +298,9 @@ func (c *Config) SessionKeys() auth.SessionKeys {
 
 // APIAuthSource names the env var that decided APIAuthEnabled.
 func (c *Config) APIAuthSource() string { return c.apiAuthSource }
+
+// SessionKeyEphemeral reports that the session key was generated at startup.
+func (c *Config) SessionKeyEphemeral() bool { return c.sessionKeyEphemeral }
 
 // APIAuthExplicitlyDisabled reports an operator deliberately setting
 // ORBITAL_API_AUTH_ENABLED=false. Distinct from APIAuthEnabled being false by

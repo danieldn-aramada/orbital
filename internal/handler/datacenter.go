@@ -55,7 +55,7 @@ const getDataCenterQuery = `
   }`
 
 type DataCenter struct {
-	dev       bool
+	hotReload bool
 	dgraphURL string
 	fragment  *template.Template
 	logger    *slog.Logger
@@ -65,10 +65,10 @@ type DataCenter struct {
 	actions func(echo.Context) layout.PageActions
 }
 
-func NewDataCenter(dgraphURL string, dev bool, logger *slog.Logger, basePath string, actions func(echo.Context) layout.PageActions) *DataCenter {
+func NewDataCenter(dgraphURL string, hotReload bool, logger *slog.Logger, basePath string, actions func(echo.Context) layout.PageActions) *DataCenter {
 	return &DataCenter{
 		dgraphURL: dgraphURL,
-		dev:       dev,
+		hotReload: hotReload,
 		fragment:  parseDataCenterFragment(),
 		logger:    logger,
 		basePath:  basePath,
@@ -308,7 +308,7 @@ func (h *DataCenter) Tab(c echo.Context) error {
 	}
 
 	tmpl := h.fragment
-	if h.dev {
+	if h.hotReload {
 		tmpl = parseDataCenterFragment()
 	}
 

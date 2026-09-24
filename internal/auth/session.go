@@ -39,18 +39,16 @@ var ErrNotAuthenticated = errors.New("not authenticated")
 type SessionKeys struct {
 	HMACKey       string
 	EncryptionKey string // 32 bytes for AES-256; empty = no encryption
-	Dev           bool   // true in local dev; relaxes other dev-only behavior unrelated to cookies
 	Secure        bool   // true = Secure cookie attribute set (HTTPS-only)
 	store         *sessions.CookieStore
 }
 
 // NewSessionKeys constructs a SessionKeys with a pre-built cookie store so the
 // store is created once at startup and shared across all requests.
-func NewSessionKeys(hmacKey, encryptionKey string, dev, secure bool) SessionKeys {
+func NewSessionKeys(hmacKey, encryptionKey string, secure bool) SessionKeys {
 	keys := SessionKeys{
 		HMACKey:       hmacKey,
 		EncryptionKey: encryptionKey,
-		Dev:           dev,
 		Secure:        secure,
 	}
 	keys.store = newStore(keys)

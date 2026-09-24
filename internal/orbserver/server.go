@@ -40,8 +40,8 @@ type Server struct {
 	divStore     *divergence.Store
 	divPublisher *divergence.Publisher // nil if S3 not configured
 	templates    map[string]*template.Template
-	webFS        fs.FS // embedded in production; os.DirFS("web") in dev for hot-reload
-	devMode      bool
+	webFS        fs.FS  // embedded in production; os.DirFS("web") in dev for hot-reload
+	hotReload    bool   // serve templates from disk (ORB_TEMPLATE_HOT_RELOAD_ENABLED)
 	version      string // stable per-restart; exposed to JS so the client can wipe stale tab state on orb restart
 
 	// verifyCache memoizes oci.Verify results by digest for the Import Subgraph
@@ -61,10 +61,10 @@ func (s *Server) templateMap() map[string]*template.Template {
 func New(cfg *orbconfig.Config) (*Server, error) {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.SlogLevel()}))
 
-	// Dev mode reads templates from disk on each request for hot-reload.
-	// Production uses the embedded FS baked into the binary.
+	// Hot-reload reads templates from disk on each request; otherwise the
+	// embedded FS baked into the binary is used.
 	var webFS fs.FS
-	if cfg.Dev {
+	if cfg.TemplateHotReload {
 		webFS = os.DirFS("web")
 	} else {
 		webFS = orbweb.FS
@@ -155,7 +155,7 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 		divPublisher: divPublisher,
 		templates:    orbtemplates.Map(webFS),
 		webFS:        webFS,
-		devMode:      cfg.Dev,
+		hotReload:    cfg.TemplateHotReload,
 		version:      fmt.Sprintf("%d", time.Now().Unix()),
 	}
 
@@ -186,24 +186,24 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	e.GET("/inventory", s.inventoryPage)
 	e.GET("/schema", s.schemaPage)
 	e.GET("/datacenter", s.dcPage)
-	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.Dev, logger, "",
+	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.TemplateHotReload, logger, "",
 		func(echo.Context) layout.PageActions { return layout.OrbActions })
 	e.GET("/datacenters/:orbId", dc.Tab)
 	e.GET("/servers", s.serversPage)
-	srv := handler.NewServerHandler(cfg.DGraphURL, cfg.Dev, logger, "",
+	srv := handler.NewServerHandler(cfg.DGraphURL, cfg.TemplateHotReload, logger, "",
 		func(echo.Context) layout.PageActions { return layout.OrbActions })
 	e.GET("/servers/:orbId", srv.Tab)
 	e.GET("/clusters", s.clustersPage)
 	// Reuse orbital's ClusterHandler — the same DGraph query + render path,
 	// with orb-specific PageActions injected (read-only, no audit tab). This
 	// is the model for collapsing the rest of the DC/Server parallel impls.
-	cluster := handler.NewClusterHandler(cfg.DGraphURL, cfg.Dev, logger, "",
+	cluster := handler.NewClusterHandler(cfg.DGraphURL, cfg.TemplateHotReload, logger, "",
 		func(echo.Context) layout.PageActions { return layout.OrbActions })
 	e.GET("/clusters/:orbId", cluster.Tab)
 	e.GET("/network", s.networkPage)
 	// Same handler orbital uses, with orb's read-only PageActions injected —
 	// matching how DC, Server and Cluster detail tabs are already served.
-	networkDevice := handler.NewNetworkDeviceHandler(cfg.DGraphURL, cfg.Dev, logger, "",
+	networkDevice := handler.NewNetworkDeviceHandler(cfg.DGraphURL, cfg.TemplateHotReload, logger, "",
 		func(echo.Context) layout.PageActions { return layout.OrbActions })
 	e.GET("/network/:orbId", networkDevice.Tab)
 	e.GET("/divergence", s.divergencePage)

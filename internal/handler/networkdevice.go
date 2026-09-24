@@ -44,7 +44,7 @@ const getNetworkDeviceQuery = `
   }`
 
 type NetworkDeviceHandler struct {
-	dev       bool
+	hotReload bool
 	dgraphURL string
 	fragment  *template.Template
 	logger    *slog.Logger
@@ -54,10 +54,10 @@ type NetworkDeviceHandler struct {
 	actions func(echo.Context) layout.PageActions
 }
 
-func NewNetworkDeviceHandler(dgraphURL string, dev bool, logger *slog.Logger, basePath string, actions func(echo.Context) layout.PageActions) *NetworkDeviceHandler {
+func NewNetworkDeviceHandler(dgraphURL string, hotReload bool, logger *slog.Logger, basePath string, actions func(echo.Context) layout.PageActions) *NetworkDeviceHandler {
 	return &NetworkDeviceHandler{
 		dgraphURL: dgraphURL,
-		dev:       dev,
+		hotReload: hotReload,
 		fragment:  parseNetworkDeviceFragment(),
 		logger:    logger,
 		basePath:  basePath,
@@ -211,7 +211,7 @@ func (h *NetworkDeviceHandler) Tab(c echo.Context) error {
 		return c.Redirect(http.StatusFound, h.basePath+"/")
 	}
 
-	if h.dev {
+	if h.hotReload {
 		time.Sleep(150 * time.Millisecond)
 	}
 
