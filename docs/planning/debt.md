@@ -26,12 +26,10 @@ Every entry is **open**. Closed items are **deleted, not struck through** — `C
 | `deploy/base` still deploys with downtime — `Recreate`, `replicas: 1`, no PDB | Med | Fixed in the `dev-netbox` overlay 2026-09-16, not in base — so an adopter copying `deploy/base` gets downtime on every deploy and drain while [deploy/README.md](../../deploy/README.md) § High availability tells them multi-replica is safe. |
 | No test asserts a destructive delete writes its audit event | Med | `delete.go` DC/Server/Cluster paths plus `backup.go:527`, `oci.go:206`. |
 | No e2e covers two concurrent edits | Med | The MVCC regression that motivated the spec has no browser-level test. |
-| Consolidate the 4 per-type edit-modal templates | Med | ~95% identical; a new ConfigItem family costs a 5-file copy across templates, handlers and `orbital.js`. → [UI.md](../reference/UI.md) |
 | Replace hand-rolled GraphQL parsing with an AST parse | Med | Now **Spike 37** — the six selector lookups funnel through `resolveWriteSelector`/`resolveSetMap`, so the swap is two function bodies. → [backlog.md](backlog.md) |
 | Audit retention: env var + in-process pruner | Med | `ORBITAL_AUDIT_RETENTION_DAYS`, default `0` = indefinite. → [AUDIT.md](../reference/AUDIT.md) |
 | `changes[]` absent for creates, bulk adds, multi-op events | Med | The cheap half of the per-entity audit spike. → [backlog.md](backlog.md) |
 | Non-orbId-filtered mutations record empty `resource_ids` | Med | A mutation filtered on another field selecting only `{numUids}` names nothing. |
-| Replace `title=""` tooltips with Tippy.js | Low | 34 usages across 10 templates. |
 | A re-decided approval erases the prior decision and its comment | Low | `decide` is delete-then-create (`changerequest.go:696`), so a rejection vanishes when that approver later approves. The obvious fix (`superseded_at` + a partial unique index) must be taught to 3 load sites and 5 iteration sites of `st.Approvals` — miss one and the approval count that gates merges inflates. → [CHANGE-CONTROL.md](../reference/CHANGE-CONTROL.md) |
 | Refactor the bundler URL config DSL | Low | `ORBITAL_BUNDLER_URLS=name=url` is a micro-DSL in one env var; already caused one bug. → [CONFIG.md](../reference/CONFIG.md) |
 | Collapse duplicate cluster backup structs | Low | `backupKindResponse` and `backupKindTab` are hand-synced. `internal/handler/cluster.go` |
@@ -44,6 +42,10 @@ Every entry is **open**. Closed items are **deleted, not struck through** — `C
 | Export scratch-dir leak | Low | Per-job dirs never removed. `export.go:948` → [OCI.md](../reference/OCI.md) for why the obvious fix is wrong |
 | GET `/export/jobs` writes to the DB | Low | `StatusStale` marking inside a List handler. `export.go:285` |
 | OCI push/sign dual credential stacks | Low | Unify ORAS + go-containerregistry creds, or document the coupling. `publisher.go:316` |
+| Six list pages use a one-tab `tabs is-boxed` bar instead of a page heading | Med | `shared/pages/{servers,clusters,network}`, `orbital/{datacenters,backups}`, `orb/datacenter` render a tab strip containing a single "Summary" tab and no `<p class="is-size-4">` heading — so they also carry no `data-testid="page-heading"` for e2e to select on. [UI.md](../reference/UI.md) says single-tab pages use a heading, not a tabs nav. Left alone in the 2026-09-23 UI pass because removing a tab bar from six core list pages is a visible redesign, not a sweep — it needs a look, not a regex. |
+| The login gate is inlined in ~15 orbital pages | Low | `shared/components/login-gate.gohtml` exists and is used by the three `shared/pages/`; the rest still paste the same four-line notification. Convert when touched. |
+| orb's detail-tab e2e skip unless orb has imported a bundle | Low | `orb.spec.ts` datacenter/cluster/server tab tests `test.skip` when orb's graph is empty, which `make up` + `make seed` leaves it. Three of the suite's 20 skips, and it means a regression in orb's tab rendering passes locally — the 2026-09-23 shared-JS fault was caught by orbital's suite only. Needs a seeded orb fixture or an export→publish→import in the e2e setup. |
+| `internal/page/loader.go` is dead | Low | `page.LoadTemplates` walks a whole FS and is called nowhere; both apps build explicit parse sets instead. Found 2026-09-23 while adding `TestAllTemplatesReachable`, which covers `.gohtml` files but not unused Go. |
 | Orbital templates not embedded | Low | orbital `ParseFiles` from disk; orb already embeds. `web/embed.go` |
 | `after` is the mutation input, never a post-mutation re-read | Low | A field the server rewrote reads as the caller sent it. |
 | Out-of-band writes are invisible to API consumers | Low | restore `dropAll`, direct DQL and seeding bypass the proxy. |
@@ -61,7 +63,7 @@ A 15–20 min design session before implementation — these have a choice in th
 | `internal/handler/` god package | Med | 16,604 lines across 33 files. |
 | Registry-driven orbId derivation | Med | Kill the `leafSuffix` escape hatch. `registry.go:633` → [DGRAPH.md](../reference/DGRAPH.md) |
 | A changeset cannot distinguish ASSERTED from INCIDENTAL fields | Med | `set` is target end-state, so an untouched field is indistinguishable from one deliberately set. → [CHANGE-CONTROL.md](../reference/CHANGE-CONTROL.md) |
-| graphdiff surfaces build HTML in JavaScript | Med | Against the house pattern; convert whole surfaces only. → [UI.md](../reference/UI.md) |
+| graphdiff surfaces build HTML in JavaScript | Med | Against the house pattern; convert whole surfaces only. Unchanged by the 2026-09-23 UI pass, which normalised the markup those renderers emit (house table class, `.table-container`, no per-cell `is-size-7`) but left them in JS. → [UI.md](../reference/UI.md) |
 | Storage and Network panels cannot surface a proposed change | Med | The field-mark renderer assumes a field table. → [UI.md](../reference/UI.md) |
 | Auto-apply the DGraph GraphQL schema on startup | Med | **Drift is now detected and reported** (boot log + `/schema` page, 2026-09-17); applying it is still manual. Before automating, settle which SDL diffs are safe unattended — `@search` on an existing predicate reads as additive and reindexes the whole graph. → [DGRAPH.md](../reference/DGRAPH.md) |
 

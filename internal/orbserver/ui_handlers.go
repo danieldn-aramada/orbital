@@ -8,6 +8,7 @@ import (
 	"github.com/armada/orbital/internal/orb"
 	appversion "github.com/armada/orbital/internal/version"
 	"github.com/armada/orbital/internal/web/data/layout"
+	"github.com/armada/orbital/internal/webrender"
 	"github.com/labstack/echo/v4"
 )
 
@@ -86,6 +87,7 @@ func (s *Server) buildOrbMenuSections(path string) []layout.MenuSection {
 				{Label: "Data Center", Href: "/datacenter", Active: path == "/datacenter"},
 				{Label: "Servers", Href: "/servers", Active: path == "/servers"},
 				{Label: "Clusters", Href: "/clusters", Active: path == "/clusters"},
+				{Label: "Network Devices", Href: "/network", Active: path == "/network"},
 				{Label: "Schema Version", Href: "/schema", Active: path == "/schema"},
 			},
 		},
@@ -120,8 +122,7 @@ func (s *Server) render(c echo.Context, name string, data any) error {
 	if tmpl == nil {
 		return echo.ErrNotFound
 	}
-	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.ExecuteTemplate(c.Response(), "base.gohtml", data); err != nil {
+	if err := webrender.RenderHTML(c, tmpl, "base.gohtml", data); err != nil {
 		s.logger.Error("template render failed", "name", name, "err", err)
 		return err
 	}
@@ -141,8 +142,7 @@ func (s *Server) renderFragment(c echo.Context, page, fragment string, data any)
 	if tmpl == nil {
 		return echo.ErrNotFound
 	}
-	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return tmpl.ExecuteTemplate(c.Response(), fragment, data)
+	return webrender.RenderHTML(c, tmpl, fragment, data)
 }
 
 func (s *Server) statusPage(c echo.Context) error {
@@ -217,6 +217,22 @@ func (s *Server) clustersPage(c echo.Context) error {
 // schemaPage queries orb's local DGraph for the active GraphQL schema and
 // renders it. Single source of truth — if DGraph was wiped, the page
 // correctly shows "no schema" instead of a stale sidecar copy.
+type networkPageData struct {
+	layout.Base
+	PageTitle string
+}
+
+// networkPage renders the Network Devices list. Orb serves network devices for
+// the same reason it serves servers and clusters: the imported graph contains
+// them, and orb's job is to show what orbital published. Read-only, like every
+// other orb page — layout.OrbActions gates the Edit/Delete controls off.
+func (s *Server) networkPage(c echo.Context) error {
+	return s.render(c, "network", networkPageData{
+		Base:      s.orbBase(c),
+		PageTitle: "Network Devices",
+	})
+}
+
 func (s *Server) schemaPage(c echo.Context) error {
 	sdl, _ := dgraphschema.Active(c.Request().Context(), s.cfg.DGraphAdminURL)
 	// Errors are non-fatal — empty SDL renders as the "Awaiting import" state,

@@ -32,7 +32,7 @@
     <div class="cell is-col-span-2 is-row-span-1">
       <article class="box">
         <p class="is-size-4 pb-4">Cluster Summary</p>
-        <div style="overflow-x: auto">
+        <div class="table-container">
         <table class="table is-fullwidth">
           <tbody>
             <tr><td style="white-space:nowrap;width:1%">Name</td><td>{{.Name}}</td></tr>
@@ -63,20 +63,7 @@
 
     <div class="cell is-row-span-1">
       <article class="box" style="height:100%">
-        <p class="is-size-4 mb-4">Metadata</p>
-        <div style="overflow-x: auto">
-        <table class="table mb-0">
-          <tbody>
-            <tr><td style="white-space:nowrap;width:1%">Namespace</td><td>{{if .Namespace}}{{.Namespace}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Orb ID</td><td>{{if .OrbID}}{{.OrbID}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Version</td><td>{{if .Version}}{{.Version}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Created By</td><td>{{if .CreatedBy}}{{.CreatedBy}}{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Created At</td><td>{{if .CreatedAt}}<span data-timestamp="{{.CreatedAt}}">{{.CreatedAt}}</span>{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Last Updated</td><td>{{if .UpdatedAt}}<span data-timestamp="{{.UpdatedAt}}">{{.UpdatedAt}}</span>{{else}}—{{end}}</td></tr>
-            <tr><td style="white-space:nowrap">Last Updated By</td><td>{{if .UpdatedBy}}{{.UpdatedBy}}{{else}}—{{end}}</td></tr>
-          </tbody>
-        </table>
-        </div>
+        {{template "metadata-box.gohtml" .}}
       </article>
     </div>
 
@@ -103,8 +90,8 @@
         <div style="min-height: 300px">
         <div id="cluster-panel-nodes-{{.DomID}}">
           {{if .Nodes}}
-          <div style="overflow-x:auto">
-          <table class="table is-striped is-hoverable is-size-7 mt-2">
+          <div class="table-container">
+          <table class="table is-striped is-hoverable is-fullwidth is-size-7 mt-2">
             <colgroup>
               <col style="width:40%">
               <col style="width:20%">
@@ -119,7 +106,7 @@
             </thead>
             <tbody>
               {{range .Nodes}}
-              <tr data-server-orb-id="{{.ServerOrbID}}" data-display-name="{{.ServerName}}" style="cursor:pointer" title="Double-click to open server">
+              <tr class="tooltip" data-server-orb-id="{{.ServerOrbID}}" data-display-name="{{.ServerName}}" style="cursor:pointer" data-text="Double-click to open server">
                 <td>{{if .Name}}{{.Name}}{{else}}—{{end}}</td>
                 <td>{{if .Role}}{{.Role}}{{else}}—{{end}}</td>
                 <td>{{if .ServerName}}{{.ServerName}}{{else}}—{{end}}</td>
@@ -141,8 +128,8 @@
             includes the backup tree as a nested object. Mirrors Server →
             IdracSettings. See docs/reference/UI.md "Edit pattern".
           */}}
-          <div style="overflow-x:auto">
-          <table class="table is-striped is-hoverable is-size-7 mt-2">
+          <div class="table-container">
+          <table class="table is-striped is-hoverable is-fullwidth is-size-7 mt-2">
             <colgroup>
               <col style="width:16%">
               <col style="width:10%">
@@ -199,8 +186,8 @@
         {{if not .ManagementCluster}}
         <div id="cluster-panel-workloads-{{.DomID}}" style="display:none">
           {{if .WorkloadClusters}}
-          <div style="overflow-x:auto">
-          <table class="table is-striped is-hoverable is-size-7 mt-2">
+          <div class="table-container">
+          <table class="table is-striped is-hoverable is-fullwidth is-size-7 mt-2">
             <colgroup>
               <col style="width:30%">
               <col style="width:20%">
@@ -217,7 +204,7 @@
             </thead>
             <tbody>
               {{range .WorkloadClusters}}
-              <tr data-cluster-orb-id="{{.OrbID}}" data-display-name="{{.Name}}" style="cursor:pointer" title="Double-click to open cluster">
+              <tr class="tooltip" data-cluster-orb-id="{{.OrbID}}" data-display-name="{{.Name}}" style="cursor:pointer" data-text="Double-click to open cluster">
                 <td>{{.Name}}</td>
                 <td>{{if .Environment}}{{.Environment}}{{else}}—{{end}}</td>
                 <td>{{if .KubernetesVersion}}{{.KubernetesVersion}}{{else}}—{{end}}</td>
@@ -242,4 +229,4 @@
 
 </div>
 
-{{if .Actions.Edit}}{{template "edit-modal-cluster.gohtml" .}}{{end}}
+{{if .Actions.Edit}}{{template "edit-modal.gohtml" .EditModal}}{{end}}

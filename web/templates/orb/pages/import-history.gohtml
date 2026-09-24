@@ -5,10 +5,10 @@
   </div>
   <div class="app-main p-5">
 
-    <p class="is-size-4 mb-4">Import History</p>
+    <p class="is-size-4 mb-2" data-testid="page-heading">Import History</p>
 
     {{if .History}}
-    <table id="import-history-table" class="table is-striped is-hoverable" style="table-layout:auto;width:100%;--bulma-table-cell-padding:0.5em 1.5em">
+    <table id="import-history-table" class="table is-striped is-hoverable is-fullwidth is-size-7" style="table-layout:auto;width:100%;--bulma-table-cell-padding:0.5em 1.5em">
       <thead>
         <tr>
           <th style="white-space:nowrap;padding-left:0">Tag</th>
@@ -28,7 +28,7 @@
             {{if eq .Status "done"}}
             <span class="tag is-success is-light">done</span>
             {{else if eq .Status "partial"}}
-            <span class="tag is-warning is-light" title="Graph imported, but one or more extra-layer dispatches failed">partial</span>
+            <span class="tag is-warning is-light tooltip is-wide" data-text="Graph imported, but one or more extra-layer dispatches failed">partial</span>
             {{else if eq .Status "failed"}}
             <span class="tag is-danger is-light">failed</span>
             {{else if eq .Status "running"}}
@@ -50,11 +50,11 @@
             {{if .Layers}}
               <div class="is-flex is-align-items-center" style="gap:0.25rem;">
                 <span class="tag is-light is-small">{{len .Layers}}</span>
-                <button class="button is-small is-white" title="View layers"
-                  hx-get="/api/v1/import/history/{{.Tag}}/layers"
+                <button class="button is-small is-white tooltip"
+                  hx-get="{{$.BasePath}}/api/v1/import/history/{{.Tag}}/layers"
                   hx-target="#layers-modal-body"
                   hx-swap="innerHTML"
-                  onclick="document.getElementById('layers-modal').classList.add('is-active')">
+                  onclick="document.getElementById('layers-modal').classList.add('is-active')" data-text="View layers">
                   <span class="icon"><i class="fas fa-up-right-from-square"></i></span>
                 </button>
               </div>
@@ -84,7 +84,7 @@
 </main>
 
 <div id="layers-modal" class="modal">
-  <div class="modal-background" onclick="document.getElementById('layers-modal').classList.remove('is-active')"></div>
+  <div class="modal-background" data-modal-close></div>
   <div id="layers-modal-body"></div>
 </div>
 {{end}}

@@ -29,16 +29,15 @@
 // stay inside their feature section as delegated listeners — see UI.md.)
 
 // configitem-editor.js: generic edit-modal submit handler. Also imported for
-// side effect (registers window.initConfigItemEditor) so any page's modal shim
+// module so any page's modal shim
 // can call it without re-importing.
-import { activeChangeRequestsFor } from './configitem-editor.js'
+import { activeChangeRequestsFor, initConfigItemEditor } from './configitem-editor.js'
 
 import {
   BASE,
   TabItem,
   unloadTab,
   deleteTab,
-  saveTab,
   replaceCurrentTab,
   getCurrentTab,
   activateTab,
@@ -56,29 +55,48 @@ import {
   initServerEventsTable,
   renderTimestamps,
   formatTimestamp,
-  initInventoryTable,
-  initDatacenterTable,
-  initServerListTable,
-  initClusterTable,
   dtIPv4Render,
-  loadDataCenterTab,
-  loadServerListTab,
-  loadClusterTab,
-  saveServerTab,
-  saveClusterTab,
-  initDatacenterTabRestoration,
-  initServerListTabRestoration,
-  initClusterTabRestoration,
-  initNetworkDeviceTable,
-  loadNetworkDeviceTab,
-  saveNetworkDeviceTab,
-  initNetworkDeviceTabRestoration,
   safeDomId,
   subtreeOrbIds,
   initRowNavigation,
   initLinkNavigation,
   initReloadButtons,
+  initListPages,
+  reloadNetworkDeviceFragment,
 } from './shared.js'
+
+// ─── Login modal ─────────────────────────────────────────────────────────────
+//
+// Moved out of an inline <script> in login-modal.gohtml (2026-09-23), where it
+// defined openModal/closeModal/closeAllModals as GLOBALS and bound them at
+// DOMContentLoaded.
+//
+// The old close binding selected `.modal-card-foot .button` — every footer
+// button of every modal. It only ever bound the login modal because the bind
+// ran once at load, before any edit modal had been swapped in; written as
+// delegation, that same selector would close an edit modal when its SAVE
+// button was clicked. The close action now goes through the shared
+// [data-modal-close] handler, which is opt-in per element.
+document.addEventListener('click', (e) => {
+  const trigger = e.target.closest('.js-modal-trigger')
+  if (!trigger) return
+  const target = document.getElementById(trigger.dataset.target)
+  if (target) target.classList.add('is-active')
+})
+
+// Clear the login form when its modal closes, so a failed attempt's values do
+// not sit behind a reopened dialog.
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#login-modal [data-modal-close]')) return
+  document.getElementById('form-login')?.reset()
+})
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return
+  document.querySelectorAll('.modal.is-active').forEach(m => m.classList.remove('is-active'))
+  document.documentElement.style.overflow = ''
+  document.getElementById('form-login')?.reset()
+})
 
 // ─── Server drill-down in DC tab (dblclick → HTMX load into tab) ─────────────
 
@@ -93,134 +111,21 @@ document.addEventListener('dblclick', function (e) {
   htmx.ajax('GET', BASE + '/servers/' + encodeURIComponent(serverOrbId) + '?dcCtx=1', { target: tabContent, swap: 'innerHTML' })
 })
 
-// ─── Inventory page ───────────────────────────────────────────────────────────
-
-document.addEventListener('DOMContentLoaded', () => { initInventoryTable() })
-
-// ─── Data Centers page ────────────────────────────────────────────────────────
-
-document.addEventListener('DOMContentLoaded', () => {
-  initDatacenterTable({
-    onRowOpen: (data) => {
-      const displayName = data.name
-      const orbId = data.orbId
-      const domId = safeDomId(orbId)
-      const tab = document.getElementById(`tab-${domId}`)
-      if (tab) {
-        tab.click()
-      } else {
-        loadDataCenterTab(displayName, orbId)
-        saveTab(displayName, orbId)
-        document.getElementById(`tab-${domId}`).click()
-      }
-    },
-  })
-})
-
-window.addEventListener('load', initDatacenterTabRestoration)
-
-// ─── Servers page ─────────────────────────────────────────────────────────────
-
-document.addEventListener('DOMContentLoaded', () => {
-  initServerListTable({
-    onRowOpen: (data) => {
-      const orbId = data.orbId
-      const domId = safeDomId(orbId)
-      const displayName = data.hostname !== '—' ? data.hostname : data.serviceTag
-      const tab = document.getElementById(`tab-srv-${domId}`)
-      if (tab) {
-        tab.click()
-      } else {
-        loadServerListTab(displayName, orbId)
-        saveServerTab(displayName, orbId)
-        document.getElementById(`tab-srv-${domId}`).click()
-      }
-    },
-  })
-})
-
-window.addEventListener('load', initServerListTabRestoration)
-
-// ─── Clusters page ────────────────────────────────────────────────────────────
-
-document.addEventListener('DOMContentLoaded', () => {
-  initClusterTable({
-    onRowOpen: (data) => {
-      const orbId = data.orbId
-      const domId = safeDomId(orbId)
-      const displayName = data.name
-      const tab = document.getElementById(`tab-cluster-${domId}`)
-      if (tab) {
-        tab.click()
-      } else {
-        loadClusterTab(displayName, orbId)
-        saveClusterTab(displayName, orbId)
-        document.getElementById(`tab-cluster-${domId}`).click()
-      }
-    },
-  })
-})
-
-window.addEventListener('load', initClusterTabRestoration)
-
-// ─── Network devices page ─────────────────────────────────────────────────────
-
-document.addEventListener('DOMContentLoaded', () => {
-  initNetworkDeviceTable({
-    onRowOpen: (data) => {
-      const orbId = data.orbId
-      const domId = safeDomId(orbId)
-      const displayName = data.name
-      const tab = document.getElementById(`tab-network-device-${domId}`)
-      if (tab) {
-        tab.click()
-      } else {
-        loadNetworkDeviceTab(displayName, orbId)
-        saveNetworkDeviceTab(displayName, orbId)
-        document.getElementById(`tab-network-device-${domId}`).click()
-      }
-    },
-  })
-})
-
-window.addEventListener('load', initNetworkDeviceTabRestoration)
+// ─── List pages (inventory, DCs, servers, clusters, network devices) ─────────
+//
+// One shared wiring for both apps — see initListPages in shared.js.
+initListPages()
 
 // ─── Network device edit modal ────────────────────────────────────────────────
 
 const networkDeviceEditors = new Map()
-window.networkDeviceEditors = networkDeviceEditors
-
-function reloadNetworkDeviceFragment(orbId) {
-  const domId = safeDomId(orbId)
-  const target = document.getElementById('tab-content-network-device-' + domId)
-  if (!target) return Promise.resolve()
-  return fetchWithMinDelay('/network/' + encodeURIComponent(orbId))
-    .then(html => {
-      target.innerHTML = html
-      htmx.process(target)
-      renderTimestamps(target)
-      const detailTabs = target.querySelector('[id^="network-device-detail-tabs-"]')
-      if (detailTabs) initDetailTabs(detailTabs)
-      networkDeviceEditors.delete(domId)
-    })
-    .catch(() => {
-      target.innerHTML = '<div class="notification is-danger is-light is-size-7 m-4"><strong>Reload failed.</strong> Check your connection and try again.</div>'
-    })
-}
-
-// Reload button on the device detail page.
-document.addEventListener('click', (e) => {
-  const btn = e.target.closest('.js-network-device-reload')
-  if (!btn) return
-  btn.classList.add('is-loading')
-  reloadNetworkDeviceFragment(btn.dataset.networkDeviceId).finally(() => btn.classList.remove('is-loading'))
-})
+window.networkDeviceEditors = networkDeviceEditors // exposed for e2e, matching dc/cluster/srv
 
 document.addEventListener('click', function (e) {
   const editBtn = e.target.closest('[data-network-device-edit-id]')
   if (editBtn) {
     const id = editBtn.dataset.networkDeviceEditId
-    const modal = document.getElementById('edit-modal-networkdevice-' + id)
+    const modal = document.getElementById('edit-modal-network-device-' + id)
     if (!modal) return
 
     if (!networkDeviceEditors.has(id)) {
@@ -240,13 +145,13 @@ document.addEventListener('click', function (e) {
       const showError = (msg) => { errorEl.textContent = msg; errorEl.style.display = '' }
       const clearError = () => { errorEl.textContent = ''; errorEl.style.display = 'none' }
 
-      const onSubmit = window.initConfigItemEditor({
+      const onSubmit = initConfigItemEditor({
         modal,
         editor,
         initialState,
         targets,
         reloadOrbId: modal.dataset.orbId,
-        reloadFn: reloadNetworkDeviceFragment,
+        reloadFn: (orbId) => reloadNetworkDeviceFragment(orbId, (domId) => networkDeviceEditors.delete(domId)),
         showError,
         clearError,
         submitBtnId: 'network-device-edit-submit-' + id,
@@ -276,15 +181,6 @@ document.addEventListener('click', function (e) {
     return
   }
 
-  const closeBtn = e.target.closest('[data-network-device-modal-close]')
-  if (closeBtn) {
-    const id = closeBtn.dataset.networkDeviceModalClose
-    const modal = document.getElementById('edit-modal-networkdevice-' + id)
-    if (modal) {
-      modal.classList.remove('is-active')
-      document.documentElement.style.overflow = ''
-    }
-  }
 })
 
 // ─── Cross-app navigation and reload buttons ──────────────────────────────────
@@ -296,6 +192,7 @@ initRowNavigation()
 initLinkNavigation()
 initReloadButtons({
   onDcReloaded: (domId) => dcEditors.delete(domId),
+  onNetworkDeviceReloaded: (domId) => networkDeviceEditors.delete(domId),
   onSrvReloaded: (target) => {
     loadPendingChangeBanners(target)
     loadFieldMarks(target)
@@ -670,19 +567,19 @@ function renderExportPreviewTable(changes, esc, fmt) {
     let trs = ''
     for (const r of inSec) {
       trs += '<tr>'
-        + '<td class="is-family-monospace is-size-7" title="' + esc(r.orbId) + '">' + esc(short(r.orbId)) + '</td>'
-        + '<td class="is-size-7">' + esc(r.type) + '</td>'
-        + '<td class="is-size-7">' + renderExportPreviewFields(r, esc, fmt) + '</td>'
+        + '<td class="is-family-monospace tooltip" data-text="' + esc(r.orbId) + '">' + esc(short(r.orbId)) + '</td>'
+        + '<td>' + esc(r.type) + '</td>'
+        + '<td>' + renderExportPreviewFields(r, esc, fmt) + '</td>'
         + '</tr>'
     }
 
     out += '<p class="mt-1 mb-1"><span class="tag is-small ' + sec.cls + '">' + sec.label + '</span> '
       + '<span class="is-size-7">' + inSec.length + '</span></p>'
-      + '<div style="overflow-x:auto"><table class="table is-striped is-hoverable is-fullwidth is-size-7">'
+      + '<div class="table-container"><table class="table is-striped is-hoverable is-fullwidth is-size-7">'
       + '<thead><tr>'
-      + '<th class="is-size-7">orbId</th>'
-      + '<th class="is-size-7">Type</th>'
-      + '<th class="is-size-7">Change</th>'
+      + '<th>orbId</th>'
+      + '<th>Type</th>'
+      + '<th>Change</th>'
       + '</tr></thead>'
       + '<tbody>' + trs + '</tbody></table></div>'
   }
@@ -1033,7 +930,7 @@ document.addEventListener('click', function (e) {
       // module keeps the pattern uniform across pages.
       const targetsEl = document.getElementById('dc-edit-targets-' + id)
       const targets = JSON.parse(targetsEl ? targetsEl.textContent.trim() : '[]')
-      const onSubmit = window.initConfigItemEditor({
+      const onSubmit = initConfigItemEditor({
         modal,
         editor,
         initialState: JSON.parse(initialJSON),
@@ -1079,15 +976,6 @@ document.addEventListener('click', function (e) {
     return
   }
 
-  const closeBtn = e.target.closest('[data-dc-modal-close]')
-  if (closeBtn) {
-    const id = closeBtn.dataset.dcModalClose
-    const modal = document.getElementById('edit-modal-dc-' + id)
-    if (modal) {
-      modal.classList.remove('is-active')
-      document.documentElement.style.overflow = ''
-    }
-  }
 })
 
 // ─── Cluster edit modal ───────────────────────────────────────────────────────
@@ -1161,7 +1049,7 @@ document.addEventListener('click', function (e) {
       // The configitem-editor module owns snapshot/diff/dispatch. It returns
       // a submit handler closed over (modal, editor, targets) — the page
       // wires it to the Save button. Server/DC edit will migrate next.
-      const onSubmit = window.initConfigItemEditor({
+      const onSubmit = initConfigItemEditor({
         modal,
         editor,
         initialState,
@@ -1198,15 +1086,6 @@ document.addEventListener('click', function (e) {
     return
   }
 
-  const closeBtn = e.target.closest('[data-cluster-modal-close]')
-  if (closeBtn) {
-    const id = closeBtn.dataset.clusterModalClose
-    const modal = document.getElementById('edit-modal-cluster-' + id)
-    if (modal) {
-      modal.classList.remove('is-active')
-      document.documentElement.style.overflow = ''
-    }
-  }
 })
 
 
@@ -1257,7 +1136,7 @@ document.addEventListener('click', function (e) {
       // snapshot/diff/parallel-dispatch — same path as cluster edit.
       const targetsEl = document.getElementById('srv-edit-targets-' + id)
       const targets = JSON.parse(targetsEl ? targetsEl.textContent.trim() : '[]')
-      const onSubmit = window.initConfigItemEditor({
+      const onSubmit = initConfigItemEditor({
         modal,
         editor,
         initialState: parsedInitial,
@@ -1305,15 +1184,6 @@ document.addEventListener('click', function (e) {
     return
   }
 
-  const closeBtn = e.target.closest('[data-srv-modal-close]')
-  if (closeBtn) {
-    const id = closeBtn.dataset.srvModalClose
-    const modal = document.getElementById('edit-modal-srv-' + id)
-    if (modal) {
-      modal.classList.remove('is-active')
-      document.documentElement.style.overflow = ''
-    }
-  }
 })
 
 // ─── Pending change requests banner (detail pages) ────────────────────────────
@@ -1787,7 +1657,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const d = auditDetails(row)
           if (!d || !d.privileged) return ops
           const policy = d.bypassedPolicy ? ` (${esc(String(d.bypassedPolicy))})` : ''
-          return ops + ` <span class="tag is-warning is-small" title="Written directly, skipping the approval policy for ${esc(String(d.bypassedPolicy || 'this class'))}">bypassed review${policy}</span>`
+          return ops + ` <span class="tag is-warning is-small tooltip is-wide" data-text="Written directly, skipping the approval policy for ${esc(String(d.bypassedPolicy || 'this class'))}">bypassed review${policy}</span>`
         },
       },
       { data: 'resourceTypes', render: (v) => (v && v.length) ? v.join(', ') : '—' },
@@ -2245,7 +2115,7 @@ function confirmDivergenceBatch() {
       if (!row) return
       const decisionCell = row.querySelector('td:last-child')
       if (decisionCell) {
-        decisionCell.innerHTML = `<span class="has-text-danger has-text-weight-medium" title="${f.error.replace(/"/g, '&quot;')}">failed</span>`
+        decisionCell.innerHTML = `<span class="has-text-danger has-text-weight-medium tooltip is-wide" data-text="${f.error.replace(/"/g, '&quot;')}">failed</span>`
       }
     })
     const msg = okCount > 0
@@ -2751,7 +2621,7 @@ document.addEventListener('DOMContentLoaded', () => {
         data: 'title',
         className: 'cr-title',
         // Free text, so the cell truncates — see `#cr-table td.cr-title` in main.scss.
-        render: (v, type, row) => type === 'display' ? '<a href="' + href(row.id) + '" title="' + esc(v) + '">' + esc(v) + '</a>' : v,
+        render: (v, type, row) => type === 'display' ? '<a class="tooltip" href="' + href(row.id) + '" data-text="' + esc(v) + '">' + esc(v) + '</a>' : v,
       },
       { data: 'effect', render: (v, type) => type === 'display' ? fieldCountCell(v) : (v && v.fields) || 0 },
       { data: 'namespace' },
@@ -2765,7 +2635,7 @@ document.addEventListener('DOMContentLoaded', () => {
         data: 'createdAt',
         // display renders the age; every other type gets the raw timestamp, so
         // sorting is chronological rather than lexicographic on "3d"/"10h".
-        render: (v, type) => type === 'display' ? '<span title="' + esc(fmtDate(v)) + '">' + esc(fmtAge(v)) + '</span>' : v,
+        render: (v, type) => type === 'display' ? '<span class="tooltip" data-text="' + esc(fmtDate(v)) + '">' + esc(fmtAge(v)) + '</span>' : v,
       },
     ],
     createdRow: (row, data) => { row.dataset.crRow = data.id },
@@ -3105,7 +2975,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!e) return ''
     const to = (e.currentVersion === undefined || e.currentVersion === null)
       ? 'deleted' : 'version ' + e.currentVersion
-    return '<span title="' + esc('version ' + e.reviewedVersion + ' when proposed, now ' + to) + '">Stale</span>'
+    return '<span class="tooltip is-wide" data-text="' + esc('version ' + e.reviewedVersion + ' when proposed, now ' + to) + '">Stale</span>'
   }
 
   function reviewFieldsTable(rows, fmt, canEdit, staleEntities) {
@@ -3178,7 +3048,7 @@ document.addEventListener('DOMContentLoaded', () => {
         : '<td></td>'
       const strike = marked ? ' style="text-decoration: line-through; opacity: .55"' : ''
       return '<tr' + rowCls + strike + '>'
-        + '<td class="is-family-monospace" title="' + esc(r.orbId) + '">' + esc(shortOrbId(r.orbId) || r.orbId) + '</td>'
+        + '<td class="is-family-monospace tooltip" data-text="' + esc(r.orbId) + '">' + esc(shortOrbId(r.orbId) || r.orbId) + '</td>'
         + '<td class="is-family-monospace">' + esc(r.type || '') + '</td>'
         + '<td class="is-family-monospace">' + esc(r.field || '') + '</td>'
         + '<td>' + fmt(r.current) + '</td>'
@@ -3235,7 +3105,7 @@ document.addEventListener('DOMContentLoaded', () => {
       + (showApplied ? '<th>Applied</th>' : '') + '</tr></thead><tbody>'
     for (const r of rows) {
       html += '<tr>'
-        + '<td class="is-family-monospace" title="' + esc(r.orbId || '') + '">'
+        + '<td class="is-family-monospace tooltip" data-text="' + esc(r.orbId || '') + '">'
         + esc(shortOrbId(r.orbId) || r.orbId || '') + '</td>'
         + '<td>' + esc(r.type || '') + '</td>'
         + '<td>' + recordChangeText(r) + '</td>'
@@ -3561,7 +3431,7 @@ document.addEventListener('DOMContentLoaded', () => {
           ? '<span class="has-text-weight-medium">All namespaces</span>'
           : esc(p.namespace)
             + (overrides
-              ? ' <span class="has-text-grey is-size-7" title="Fallback resolution: a namespace with its own policy uses it instead of the all-namespaces policy, even when it is weaker.">overrides all-namespaces</span>'
+              ? ' <span class="has-text-grey is-size-7 tooltip is-wide" data-text="Fallback resolution: a namespace with its own policy uses it instead of the all-namespaces policy, even when it is weaker.">overrides all-namespaces</span>'
               : '')) + '</td>'
         + '<td>' + (p.allTypes ? 'All types' : esc((p.types || []).join(', '))) + '</td>'
         + '<td>' + esc(p.requiredApprovals) + '</td>'
@@ -3569,10 +3439,10 @@ document.addEventListener('DOMContentLoaded', () => {
         + '<td>'
         + (canAdmin
             ? '<div class="buttons has-addons" style="margin-bottom:0; flex-wrap:nowrap;">'
-              + '<button class="button is-small js-ap-enable' + (p.enabled ? ' is-success is-selected' : '') + '"'
-              + (p.enabled ? ' disabled' : '') + ' title="Changes to this class need approval" style="width:5.5rem;">Active</button>'
-              + '<button class="button is-small js-ap-disable' + (p.enabled ? '' : ' is-danger is-selected') + '"'
-              + (p.enabled ? '' : ' disabled') + ' title="Off — changes to this class write directly" style="width:5.5rem;">Disabled</button>'
+              + '<button class="button is-small tooltip js-ap-enable' + (p.enabled ? ' is-success is-selected' : '') + '"'
+              + (p.enabled ? ' disabled' : '') + ' data-text="Changes to this class need approval" style="width:5.5rem;">Active</button>'
+              + '<button class="button is-small tooltip is-wide js-ap-disable' + (p.enabled ? '' : ' is-danger is-selected') + '"'
+              + (p.enabled ? '' : ' disabled') + ' data-text="Off — changes to this class write directly" style="width:5.5rem;">Disabled</button>'
               + '</div>'
             // Read-only: the same fact as plain coloured text, no affordance.
             : '<span class="' + (p.enabled ? 'has-text-success' : 'has-text-danger') + '">'

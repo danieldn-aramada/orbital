@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/armada/orbital/internal/configitems"
+	"github.com/armada/orbital/internal/web/data/component"
 	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/labstack/echo/v4"
 )
@@ -102,7 +103,8 @@ func parseClusterFragment() *template.Template {
 	return template.Must(template.ParseFiles(
 		"web/templates/shared/partials/cluster-tab.gohtml",
 		"web/templates/shared/partials/audit-tab.gohtml",
-		"web/templates/shared/components/edit-modal-cluster.gohtml",
+		"web/templates/shared/components/metadata-box.gohtml",
+		"web/templates/shared/components/edit-modal.gohtml",
 	))
 }
 
@@ -313,6 +315,10 @@ type clusterTabData struct {
 	// AuditPanelID matches data-panel on the audit <li> and the id of the
 	// placeholder <div>. Consumed by the shared audit-tab partial.
 	AuditPanelID string
+
+	// EditModal is the shared edit-modal render context (one template for
+	// every parent family) — see component.EditModal.
+	EditModal component.EditModal
 }
 
 func (h *ClusterHandler) Tab(c echo.Context) error {
@@ -564,5 +570,11 @@ func (h *ClusterHandler) Tab(c echo.Context) error {
 	}
 
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+	tab.EditModal = component.EditModal{
+		Prefix: "cluster", Title: "Edit " + tab.Provider + ": " + tab.Name,
+		DomID: tab.DomID, OrbID: tab.OrbID, Version: tab.Version,
+		CurrentUser: tab.CurrentUser, Typename: tab.Typename,
+		EditDataJSON: tab.EditDataJSON, EditTargetsJSON: tab.EditTargetsJSON,
+	}
 	return renderHTML(c, tmpl, "", tab)
 }

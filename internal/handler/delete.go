@@ -153,7 +153,9 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 		if err := h.guardDelete(ctx, caller, actor, plan.orbID, plan.uids); err != nil {
 			return h.refuse(c, err)
 		}
-		if err := h.bulkDeleteGuarded(ctx, plan.uids, plan.versions); err != nil {
+		// A DataCenter is the top of its own subtree: nothing that survives this
+		// delete holds an edge into it, so there are no dangling edges to clear.
+		if err := h.bulkDeleteGuarded(ctx, plan.uids, plan.versions, nil); err != nil {
 			var perr *preflightError
 			if errors.As(err, &perr) {
 				return h.refuse(c, err) // concurrent edit — a decision, not a failure
@@ -180,7 +182,7 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 		if err := h.guardDelete(ctx, caller, actor, plan.orbID, plan.uids); err != nil {
 			return h.refuse(c, err)
 		}
-		if err := h.bulkDeleteGuarded(ctx, plan.uids, plan.versions); err != nil {
+		if err := h.bulkDeleteGuarded(ctx, plan.uids, plan.versions, plan.dangling); err != nil {
 			var perr *preflightError
 			if errors.As(err, &perr) {
 				return h.refuse(c, err) // concurrent edit — a decision, not a failure
@@ -207,7 +209,7 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 		if err := h.guardDelete(ctx, caller, actor, plan.orbID, plan.uids); err != nil {
 			return h.refuse(c, err)
 		}
-		if err := h.bulkDeleteGuarded(ctx, plan.uids, plan.versions); err != nil {
+		if err := h.bulkDeleteGuarded(ctx, plan.uids, plan.versions, plan.dangling); err != nil {
 			var perr *preflightError
 			if errors.As(err, &perr) {
 				return h.refuse(c, err) // concurrent edit — a decision, not a failure
@@ -249,9 +251,11 @@ type dcDeletePlan struct {
 type serverDeletePlan struct {
 	preview DeletePreview
 	uids    []string
-	orbID   string
-	name    string
-	before  map[string]any
+	// dangling are edges from survivors into this delete — see danglingEdge.
+	dangling []danglingEdge
+	orbID    string
+	name     string
+	before   map[string]any
 	// versions is the version of every uid above AS OF PLANNING — the baseline
 	// bulkDeleteGuarded compares against. Captured here so the window it closes
 	// spans everything between planning and the delete, including the approval
@@ -479,6 +483,9 @@ const srvDeleteGQL = `
   query GetServerForDelete($orbId: String!) {
     getServer(orbId: $orbId) {
       id name orbId hostname version
+      dataCenter { id }
+      rack { id }
+      kubernetesNode { id cluster { ... on ConfigItem { id } } }
       idracSettings { id }
       serverConfigurationProfile { id }
       storageControllers {
@@ -493,7 +500,19 @@ const srvDeleteGQL = `
   }`
 
 type srvDeleteRaw struct {
-	ID            string `json:"id"`
+	ID         string `json:"id"`
+	DataCenter *struct {
+		ID string `json:"id"`
+	} `json:"dataCenter"`
+	Rack *struct {
+		ID string `json:"id"`
+	} `json:"rack"`
+	KubernetesNode *struct {
+		ID      string `json:"id"`
+		Cluster *struct {
+			ID string `json:"id"`
+		} `json:"cluster"`
+	} `json:"kubernetesNode"`
 	Name          string `json:"name"`
 	OrbID         string `json:"orbId"`
 	Hostname      string `json:"hostname"`
@@ -597,6 +616,20 @@ func (h *DeleteHandler) planServerDelete(ctx context.Context, orbID string) (*se
 		return nil, err
 	}
 
+	// Everything that outlives this server but holds an edge into it. A Rack and
+	// a KubernetesNode both survive a server delete, so both would otherwise be
+	// left pointing at a tombstone — see danglingEdge.
+	var dangling []danglingEdge
+	if s.DataCenter != nil && s.DataCenter.ID != "" {
+		dangling = append(dangling, danglingEdge{s.DataCenter.ID, "DataCenter.servers", s.ID})
+	}
+	if s.Rack != nil && s.Rack.ID != "" {
+		dangling = append(dangling, danglingEdge{s.Rack.ID, "Rack.servers", s.ID})
+	}
+	if s.KubernetesNode != nil && s.KubernetesNode.ID != "" {
+		dangling = append(dangling, danglingEdge{s.KubernetesNode.ID, "KubernetesNode.server", s.ID})
+	}
+
 	return &serverDeletePlan{
 		preview: DeletePreview{
 			Name:       serverDisplayName(s.Hostname, s.Name),
@@ -628,6 +661,7 @@ const clusterDeleteGQL = `
         id orbId name namespace version
       }
       ... on KubernetesCluster {
+        dataCenter { id }
         controlPlaneEndpoint { id address }
         nodes {
           orbId role
@@ -646,13 +680,34 @@ const clusterDeleteGQL = `
     }
   }`
 
+// danglingEdge is a link FROM a node that survives this delete TO one that does
+// not. DGraph maintains @hasInverse only for mutations through its GraphQL
+// endpoint; orbital deletes through a DQL upsert (bulkDeleteGuarded) because
+// that is the only way to get a version-guarded CAS. A DQL `S * *` delete
+// therefore clears the child and leaves the parent's list edge pointing at an
+// empty uid — and any later GraphQL query walking that edge and selecting a
+// non-nullable field fails ENTIRELY, because DGraph propagates the error to the
+// root. That is how one cluster delete silently broke export for its whole data
+// centre (2026-09-23).
+//
+// Only edges whose PARENT SURVIVES need listing: when both ends are deleted the
+// stale edge lives on a tombstoned node and is unreachable.
+type danglingEdge struct {
+	ParentUID string // the surviving node holding the edge
+	Predicate string // DGraph predicate, e.g. "DataCenter.kubernetesClusters"
+	ChildUID  string // the node being deleted
+}
+
 type clusterDeleteRaw struct {
-	Typename             string `json:"__typename"`
-	ID                   string `json:"id"`
-	Name                 string `json:"name"`
-	OrbID                string `json:"orbId"`
-	Namespace            string `json:"namespace"`
-	Version              int    `json:"version"`
+	Typename   string `json:"__typename"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	OrbID      string `json:"orbId"`
+	Namespace  string `json:"namespace"`
+	Version    int    `json:"version"`
+	DataCenter *struct {
+		ID string `json:"id"`
+	} `json:"dataCenter"`
 	ControlPlaneEndpoint *struct {
 		ID      string `json:"id"`
 		Address string `json:"address"`
@@ -688,9 +743,11 @@ type clusterDeleteRaw struct {
 type clusterDeletePlan struct {
 	preview DeletePreview
 	uids    []string
-	orbID   string
-	name    string
-	before  map[string]any
+	// dangling are edges from survivors into this delete — see danglingEdge.
+	dangling []danglingEdge
+	orbID    string
+	name     string
+	before   map[string]any
 	// versions is the version of every uid above AS OF PLANNING — the baseline
 	// bulkDeleteGuarded compares against. Captured here so the window it closes
 	// spans everything between planning and the delete, including the approval
@@ -745,8 +802,20 @@ func (h *DeleteHandler) planClusterDelete(ctx context.Context, orbID string) (*c
 	var uids []string
 	var groups []DeleteGroup
 	var preserved []DeleteGroup
+	var dangling []danglingEdge
 
 	uids = append(uids, c.ID)
+
+	// The data centre outlives its cluster, so its list edge must be cleared in
+	// the same transaction — otherwise it points at a tombstone and every later
+	// export of this DC fails. See danglingEdge.
+	if c.DataCenter != nil && c.DataCenter.ID != "" {
+		dangling = append(dangling, danglingEdge{
+			ParentUID: c.DataCenter.ID,
+			Predicate: "DataCenter.kubernetesClusters",
+			ChildUID:  c.ID,
+		})
+	}
 
 	// Nodes — owned by cluster, deleted. Each node has @id orbId; resolve to
 	// DGraph UIDs in one round-trip per node (small N).
@@ -838,6 +907,7 @@ func (h *DeleteHandler) planClusterDelete(ctx context.Context, orbID string) (*c
 			Preserved:  preserved,
 		},
 		uids:     uids,
+		dangling: dangling,
 		versions: versions,
 		orbID:    c.OrbID,
 		name:     c.Name,
@@ -930,7 +1000,7 @@ func (h *DeleteHandler) planVersions(ctx context.Context, uids []string) (map[st
 //
 // All-or-nothing: one conditional mutation, so a refusal can never leave a
 // half-collapsed tree.
-func (h *DeleteHandler) bulkDeleteGuarded(ctx context.Context, uids []string, versions map[string]int) error {
+func (h *DeleteHandler) bulkDeleteGuarded(ctx context.Context, uids []string, versions map[string]int, dangling []danglingEdge) error {
 	if len(uids) == 0 {
 		return nil
 	}
@@ -974,9 +1044,18 @@ func (h *DeleteHandler) bulkDeleteGuarded(ctx context.Context, uids []string, ve
 	sort.Strings(blocks)
 	sort.Strings(conds)
 
-	delNodes := make([]map[string]string, len(uids))
-	for i, uid := range uids {
-		delNodes[i] = map[string]string{"uid": uid}
+	delNodes := make([]map[string]any, 0, len(uids)+len(dangling))
+	for _, uid := range uids {
+		delNodes = append(delNodes, map[string]any{"uid": uid})
+	}
+	// Clear the surviving parents' edges in the SAME guarded transaction. Doing
+	// it afterwards would leave a window where the node is gone and the edge is
+	// not, which is the broken state this prevents.
+	for _, e := range dangling {
+		delNodes = append(delNodes, map[string]any{
+			"uid":       e.ParentUID,
+			e.Predicate: map[string]string{"uid": e.ChildUID},
+		})
 	}
 	body, _ := json.Marshal(map[string]any{
 		"query": "{ " + strings.Join(blocks, " ") + " }",

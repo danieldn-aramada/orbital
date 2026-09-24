@@ -14,7 +14,7 @@
   <td style="white-space:nowrap;">
     <div style="display:flex;gap:0.25rem;align-items:center;">
       {{if .CanDownload}}<a data-testid="export-download-btn" class="button is-small is-link is-outlined js-export-download" data-export-job-id="{{.JobID}}"><span class="icon"><i class="fa-solid fa-download"></i></span><span>Download</span></a>{{end}}
-      <button class="button is-small is-danger is-outlined js-export-artifact-delete" data-export-job-id="{{.JobID}}" title="Delete retained zip (keeps audit row)"><span class="icon"><i class="fa-solid fa-trash"></i></span></button>
+      <button class="button is-small is-danger is-outlined js-export-artifact-delete tooltip" data-export-job-id="{{.JobID}}" data-text="Delete retained zip (keeps audit row)"><span class="icon"><i class="fa-solid fa-trash"></i></span></button>
     </div>
   </td>
 </tr>

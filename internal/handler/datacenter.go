@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/armada/orbital/internal/configitems"
+	"github.com/armada/orbital/internal/web/data/component"
 	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/labstack/echo/v4"
 )
@@ -79,7 +80,8 @@ func parseDataCenterFragment() *template.Template {
 	return template.Must(template.ParseFiles(
 		"web/templates/shared/partials/datacenter-tab.gohtml",
 		"web/templates/shared/partials/audit-tab.gohtml",
-		"web/templates/shared/components/edit-modal-datacenter.gohtml",
+		"web/templates/shared/components/metadata-box.gohtml",
+		"web/templates/shared/components/edit-modal.gohtml",
 	))
 }
 
@@ -172,6 +174,10 @@ type dataCenterTabData struct {
 	// collector (Spike 33), so the panel aggregates their events too.
 	AuditPanelID     string
 	RelatedOrbIDsCSV string
+
+	// EditModal is the shared edit-modal render context (one template for
+	// every parent family) — see component.EditModal.
+	EditModal component.EditModal
 }
 
 func (h *DataCenter) Tab(c echo.Context) error {
@@ -307,5 +313,11 @@ func (h *DataCenter) Tab(c echo.Context) error {
 	}
 
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+	dc.EditModal = component.EditModal{
+		Prefix: "dc", Title: "Edit Data Center",
+		DomID: dc.DomID, OrbID: dc.OrbID, Version: dc.Version,
+		CurrentUser:  dc.CurrentUser,
+		EditDataJSON: dc.EditDataJSON, EditTargetsJSON: dc.EditTargetsJSON,
+	}
 	return renderHTML(c, tmpl, "", dc)
 }

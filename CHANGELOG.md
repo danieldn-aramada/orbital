@@ -23,6 +23,146 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 ## [Unreleased]
 
 ### Fixed
+- **A cascade delete left the surviving parent pointing at the node it removed,
+  which permanently broke export for that data centre.** orbital deletes through
+  a DQL upsert (`bulkDeleteGuarded`) because that is the only way to get a
+  version-guarded CAS — but `@hasInverse` is a GraphQL-layer construct that
+  DGraph maintains only for mutations through its GraphQL endpoint. A DQL
+  `S * *` delete cleared the child and left `DataCenter.kubernetesClusters`
+  pointing at an empty uid. Any later query walking that edge and selecting a
+  non-nullable field then failed **entirely**, because DGraph propagates the
+  error to the root:
+
+      Non-nullable field 'orbId' (type String!) was not present in result from Dgraph.
+
+  The export subgraph query is exactly that shape, so one cluster delete broke
+  export for its whole DC — while the delete returned `200` with a correct audit
+  event, and the damage surfaced later, in another subsystem, as an error naming
+  neither the delete nor the node. Each delete path now clears the edges held by
+  nodes that SURVIVE it, in the same guarded transaction: `DataCenter.servers`,
+  `Rack.servers` and `KubernetesNode.server` for a server;
+  `DataCenter.kubernetesClusters` for a cluster. (A data centre is the top of its
+  own subtree, so nothing above it holds an edge.)
+  `TestDelete_LeavesNoDanglingParentEdge` reproduces the original failure and is
+  verified to fail without the fix.
+- **Orb's import page showed a blank area instead of "No versions available."**
+  when the OCI registry was empty or unreachable. `import_handlers.go` wrote a
+  bare `<tr>` on that path, and `orb.js` assigns the response into a `<div>`'s
+  `innerHTML` — where the HTML parser discards a `<tr>` that is not inside a
+  table, so the empty state rendered as nothing at all. Both paths now render
+  the same fragment, whose template already carries the message inside `<tbody>`.
+  The e2e suite had been reporting this the whole time; it was read as a known
+  failure.
+- **The Data Center reload button fetched the wrong URL under a base path.**
+  `shared.js` called `fetchWithMinDelay(BASE + '/datacenters/…')`, but that
+  helper already prepends `BASE` — so on a deployment served under `/orbital`
+  the reload requested `/orbital/orbital/datacenters/…` and 404'd. Invisible
+  locally, where `basePath` is empty. The network-device and cluster reloads
+  were already correct; only this one double-prefixed. Found while moving the
+  network-device reload into `shared.js`.
+
+### Fixed
+- **A proposal on `Server.serialNumber` marked the wrong field state.** The
+  `SummaryValuesJSON` map in `server.go` — which supplies the CURRENT value each
+  proposed-change mark compares against — omitted `serialNumber`, directly under
+  a comment reading "Exactly the Server FormFields in configitems/registry.go".
+  A redundant proposal therefore rendered a mark it should not, and a proposal
+  clearing the field rendered none at all. It is the third hand-maintained copy
+  of one field list; `TestServerSummaryValuesMatchRegistry` now compares it to
+  the registry, as `TestServerTabFieldSlotsMatchRegistry` already did for the
+  template.
+- **Nested detail tables stayed pale in dark mode.** orb's publish-history
+  expansion used Bulma's `has-background-white-bis`, an absolute near-white that
+  does not flip with the colour scheme, so light text landed on a light box.
+  Replaced with a scheme-derived `.table-nested`.
+
+### Added
+- **Orb serves network devices.** `/network` and `/network/:orbId` reuse
+  orbital's `NetworkDeviceHandler` with `layout.OrbActions`, matching how orb
+  already serves Data Center, Server and Cluster detail tabs — read-only, no
+  Edit or Delete controls. The Config Items menu gains a Network Devices entry.
+- **`internal/webrender`** — the buffer-then-write HTML render helper, lifted out
+  of `internal/handler` so both server packages can reach it. It was unexported
+  there, so `internal/orbserver` structurally could not call it and every
+  orb-owned page rendered straight into the response: a template referencing a
+  field its render struct lacks committed a `200` with a truncated body, no
+  `500`, nothing logged. Orb's ten pages and its HTMX fragments now buffer like
+  orbital's. (Orb's DC/Server/Cluster detail tabs were already safe — they run
+  through orbital's handlers.)
+- **Regression guards for template drift**, each verified to fail on an injected
+  fault rather than merely passing:
+  `TestAllTemplatesReachable` (a `.gohtml` no parse set references fails the
+  build — seven such files had accumulated), `TestNoDirectTemplateExecuteIntoResponse`
+  (the render rule is enforced in source, not prose), `TestOrbitalPages_AllPathsReturn200`
+  (orbital's counterpart to orb's, which had no equivalent; renders **authenticated**,
+  since an unauthenticated render exercises only the login gate) and
+  `TestOrbitalPages_LoginGateWhenUnauthenticated` for the other branch.
+
+### Changed
+- **One edit-modal template replaces four.** `shared/components/edit-modal.gohtml`
+  renders from `component.EditModal`. The four per-family copies had already
+  drifted into two defects: the network-device modal used `networkdevice` for
+  the modal id and `network-device` for every inner id — the opener keys on one,
+  the editor on the other — and `data-reload-url`/`-target` were carried by
+  cluster and network-device where nothing reads them (only the server opener
+  does). Adding a ConfigItem family is now a handler struct plus one opener,
+  not a five-file copy. Two tests pin it.
+- **One modal-close handler replaces four**, via a prefix-free
+  `data-modal-close` in `shared.js`. The inline `<script>` in `login-modal.gohtml`
+  that previously owned this closed on `.modal-card-foot .button` — harmless as
+  a load-time bind, but as delegation that selector closes an edit modal when
+  **Save** is clicked.
+- **The metadata box is one partial**, not four byte-identical copies across the
+  detail tabs.
+- **`title=""` tooltips are gone** — all 47, across 15 templates and two JS
+  modules, replaced by the house `tooltip` + `data-text` (with a new `is-wide`
+  variant, since the base is `nowrap` and several were full sentences).
+- **Page descriptions use a `.page-description` class** instead of an inline
+  `font-size`, which had produced three different values across three spacings.
+- **Record-list tables all carry the house class** (16 distinct class strings → 9,
+  the remainder being key/value summary tables, which are a different shape).
+- **Inline `style="overflow-x:auto"` replaced by `.table-container`** at all 25 sites.
+- **The Servers, Clusters and Network Devices pages are now one template each,
+  shared by orbital and orb**, in `web/templates/shared/pages/`. The former
+  copies differed only by orbital's login gate — 39 of orb's 39 `servers.gohtml`
+  lines were identical to orbital's — so the gate became conditional on
+  `.UI.ShowAuth` (orb sets it false) via a new `login-gate.gohtml` partial.
+  Template duplication fell from 163 duplicated 8-line blocks to 96.
+- **List-page wiring moved into `shared.js` as `initListPages()`.** `orbital.js`
+  and `orb.js` each carried their own near-identical `DOMContentLoaded` blocks
+  wiring the datacenter, server and cluster tables — ~60 duplicated lines across
+  two files, while `shared.js` already exported every function they called.
+  Cross-file JS duplication between the two app modules is now zero (was 26
+  blocks). Network devices join the same descriptor list, so orb gets that page
+  automatically.
+
+### Changed
+- **The Playwright suite is green again — 106 passing, 0 failing.** Four tests
+  had been failing continuously; each is now fixed at its cause rather than
+  muted. One was a real product bug (orb's empty state, above). One pinned
+  `expect(slots).toBe(6)` on the Server summary table and broke when
+  `serialNumber` and `uHeight` were added *correctly* — a magic number cannot
+  distinguish a properly-added field from a dead mark slot, so the invariant
+  moved to `TestServerTabFieldSlotsMatchRegistry`, which compares the template's
+  `data-field` rows against `configitems.Types` FormFields and names the
+  offending field in either direction. The remaining two asserted against a
+  state the app cannot reach on a freshly-seeded stack: with no approval policy
+  matching, a change request is created already approved, never enters
+  `StatusOpen`, and offers merge/close rather than approve/edit. Both now create
+  the policy they depend on via the existing `policy-snapshot` helpers, so the
+  precondition is stated instead of inherited from whatever a developer had
+  lying around.
+
+### Removed
+- **Seven dead templates.** `form-{cluster,server,user}-create.gohtml`,
+  `delete-modal.gohtml`, `delete-modal-user.gohtml`, `register-modal.gohtml` and
+  orb's `navbar.gohtml` stub — none referenced by any parse set. Two of them
+  both declared `id="delete-modal"`, the id `orbital.js` uses for the live
+  backups delete flow, so adding either to a parse set would have silently bound
+  that flow to the wrong modal. `register-modal.gohtml` also implied a local
+  registration path that `AUTH.md` forbids.
+
+### Fixed
 - **Three browser-login failures redirected to the wrong page under a base path.**
   `invalid_state`, `no_id_token` and the new nonce refusal redirected to
   `/?error=…` while every other login error used `basePath + "/?error=…"`. On a

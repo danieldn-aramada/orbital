@@ -1,4 +1,4 @@
-<div style="overflow-x: auto">
+<div class="table-container">
   <table id="orb-tags-table" class="table is-striped is-hoverable is-fullwidth is-size-7">
     <thead>
       <tr>
@@ -16,10 +16,10 @@
         <td>
           {{if .HasDigest}}<div style="display:flex;align-items:center;gap:0.25rem;">
             <span class="is-family-monospace is-size-7">{{.Digest}}</span>
-            <button class="button is-small is-white" title="Copy digest" data-copy-value="{{.Digest}}"><span class="icon"><i class="fas fa-copy"></i></span></button>
+            <button class="button is-small is-white tooltip" data-copy-value="{{.Digest}}" data-text="Copy digest"><span class="icon"><i class="fas fa-copy"></i></span></button>
           </div>{{else}}—{{end}}
         </td>
-        <td class="has-text-grey is-size-7">{{.Size}}</td>
+        <td class="has-text-grey">{{.Size}}</td>
         <td><button class="button is-info is-small js-orb-import" data-tag="{{.Name}}"><span class="icon"><i class="fa-solid fa-download"></i></span><span>Import</span></button></td>
       </tr>
       {{else}}<tr><td colspan="5" class="has-text-grey">No versions available.</td></tr>

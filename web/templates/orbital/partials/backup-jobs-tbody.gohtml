@@ -8,14 +8,14 @@
   <td>{{.InitiatedBy}}</td>
   <td>{{.SizeBytes}}</td>
   <td>
-    {{if .Checksum}}<span class="is-family-monospace" title="{{.Checksum}}">{{.ChecksumShort}}…</span>
-    <button class="button is-small is-white" title="Copy checksum" data-copy-value="{{.Checksum}}"><span class="icon"><i class="fas fa-copy"></i></span></button>
+    {{if .Checksum}}<span class="is-family-monospace tooltip" data-text="{{.Checksum}}">{{.ChecksumShort}}…</span>
+    <button class="button is-small is-white tooltip" data-copy-value="{{.Checksum}}" data-text="Copy checksum"><span class="icon"><i class="fas fa-copy"></i></span></button>
     {{else}}—{{end}}
   </td>
   <td>
     <div class="buttons is-right" style="gap: 0.25rem; flex-wrap: nowrap;">
-      {{if .CanDownload}}<a data-testid="backup-download-btn" class="button is-small is-light js-backup-download" data-backup-id="{{.ID}}" title="Download"><span class="icon"><i class="fas fa-download"></i></span></a>{{end}}
-      {{if .CanDelete}}<a class="button is-small is-light has-text-danger js-backup-delete" data-backup-id="{{.ID}}" data-backup-label="{{.InitiatedAt}}" title="Delete"><span class="icon"><i class="fas fa-trash"></i></span></a>{{end}}
+      {{if .CanDownload}}<a data-testid="backup-download-btn" class="button is-small is-light js-backup-download tooltip" data-backup-id="{{.ID}}" data-text="Download"><span class="icon"><i class="fas fa-download"></i></span></a>{{end}}
+      {{if .CanDelete}}<a class="button is-small is-light has-text-danger js-backup-delete tooltip" data-backup-id="{{.ID}}" data-backup-label="{{.InitiatedAt}}" data-text="Delete"><span class="icon"><i class="fas fa-trash"></i></span></a>{{end}}
     </div>
   </td>
 </tr>

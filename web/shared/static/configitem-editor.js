@@ -6,9 +6,14 @@
 //
 //   1. Snapshots each target's subtree at modal open.
 //   2. On submit, diffs each target against its snapshot.
-//   3. Dispatches one canonical update{Kind} mutation per changed target
-//      (or add{Kind} for first-time creates), in PARALLEL.
+//   3. Pre-flights every target's current version, then dispatches one
+//      canonical update{Kind} mutation per changed target (or add{Kind} for
+//      first-time creates), SEQUENTIALLY and fail-fast.
 //   4. Reloads the parent fragment via the shared helper.
+//
+// This comment said PARALLEL until 2026-09-23, five sessions after the dispatch
+// was made sequential (2026-09-16) precisely so a mid-sequence failure stops
+// rather than committing the rest. See docs/reference/UI.md.
 //
 // Why generic
 //
@@ -47,7 +52,7 @@
 // The page handler builds this list from the Go-side registry — see
 // internal/handler/cluster.go for the reference implementation.
 
-import { BASE, safeDomId, subtreeOrbIds } from './shared.js'
+import { BASE, safeDomId, subtreeOrbIds, apiErrorFromBody, apiErrorText, gqlErrorMessage } from './shared.js'
 
 // getByPath walks `obj` following `path` (an array of keys) and returns the
 // value at that location, or undefined if any intermediate key is missing.
@@ -281,7 +286,7 @@ async function staleTargets(changes, rootChange, rootTarget, rootOrbId) {
   }
   // A GraphQL-level error means the check did not run. Refusing to save is the
   // safe answer: proceeding would be exactly the unchecked write this prevents.
-  if (window.gqlErrorMessage && window.gqlErrorMessage(body)) return null
+  if (gqlErrorMessage(body)) return null
   const data = (body && body.data) || {}
 
   const moved = []
@@ -764,7 +769,7 @@ async function proposeChange({
     if (body.problems && body.problems.length) {
       showError(body.problems.map(p => (p.field ? p.field + ': ' : '') + p.message).join(' · '))
     } else {
-      showError(body.error || `Could not open a change request (${resp.status}).`)
+      showError(apiErrorFromBody(body, 'Could not open a change request'))
     }
     return false
   }
@@ -1083,7 +1088,7 @@ export function initConfigItemEditor({
       responses.push(r)
       if (!r.ok) break
       const peek = await r.clone().json().catch(() => null)
-      if (peek && window.gqlErrorMessage && window.gqlErrorMessage(peek)) break
+      if (peek && gqlErrorMessage(peek)) break
       // A mutation that MATCHED NOTHING is a 200 with no errors array — "not an
       // error" is a documented DGraph property (docs/reference/DGRAPH.md), and
       // orbital only converts it to a 409 when the write was version-guarded.
@@ -1101,7 +1106,7 @@ export function initConfigItemEditor({
       if (!r.ok) {
         if (r.status === 409) {
           const body = await r.json().catch(() => ({}))
-          showError(partialMsg(applied, body.error || 'Someone else changed this while the dialog was open'))
+          showError(partialMsg(applied, apiErrorFromBody(body, 'Someone else changed this while the dialog was open')))
         } else if (r.status === 403) {
           const body = await r.json().catch(() => ({}))
           if (body.code === 'APPROVAL_REQUIRED') {
@@ -1109,6 +1114,10 @@ export function initConfigItemEditor({
             // resolved mode was stale. A refusal must never dead-end when the
             // remedy is one click away and we are holding the exact edit it
             // needs — so offer it rather than reporting a 403.
+            // `error` only, not the hint: the hint on an APPROVAL_REQUIRED
+            // refusal tells the caller to open a change request, and this
+            // prompt is that change request one click away. Rendering both
+            // would state the remedy twice.
             if (confirm((body.error || 'This change needs approval.') + '\n\nOpen a change request with this edit?')) {
               return await proposeChange({
                 namespace: namespaceOf(reloadOrbId),
@@ -1119,17 +1128,17 @@ export function initConfigItemEditor({
                 showError, reloadFn,
               })
             }
-            showError(partialMsg(applied, body.error || 'This change needs approval'))
+            showError(partialMsg(applied, apiErrorFromBody(body, 'This change needs approval')))
           } else {
-            showError(partialMsg(applied, body.error || 'You do not have permission to make this change'))
+            showError(partialMsg(applied, apiErrorFromBody(body, 'You do not have permission to make this change')))
           }
         } else {
-          showError(partialMsg(applied, `The server returned ${r.status}`))
+          showError(partialMsg(applied, await apiErrorText(r, 'The save failed')))
         }
         return false
       }
       const body = await r.json()
-      const errMsg = window.gqlErrorMessage ? window.gqlErrorMessage(body) : null
+      const errMsg = gqlErrorMessage(body)
       if (errMsg) { showError(errMsg); return false }
     }
 
@@ -1154,7 +1163,6 @@ function deriveName(target) {
 }
 
 // Expose for non-ES-module callers (orbital.js, orb.js) that use the window bridge.
-window.initConfigItemEditor = initConfigItemEditor
 
 // safeDomId re-export for any consumer that needs to look up DOM ids.
 export { safeDomId }

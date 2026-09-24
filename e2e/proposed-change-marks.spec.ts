@@ -148,12 +148,11 @@ test('a proposal on a server field is marked on the Server Summary table', async
     await expect(page.locator(`#tab-content-srv-${domId} [data-field="${field}"] .js-field-mark`)).toBeEmpty()
   }
 
-  // Exactly the six Server FormFields in configitems/registry.go carry a slot.
-  // Data Center, OOB IP and Rack are edge references the editor cannot write,
-  // so a mark on them could never fire — and a count is how that stays true
-  // when someone adds a row to this table.
-  // Scoped by orbId, not position: the maintenance panel on this same tab is
-  // also a data-field-orbid table, keyed to the CHILD's orbId.
-  const slots = await page.locator(`#tab-content-srv-${domId} table[data-field-orbid="${SERVER}"] tr[data-field]`).count()
-  expect(slots).toBe(6)
+  // The slot-count invariant that used to live here — "every data-field row
+  // corresponds to an editable field, and every editable field has a row" —
+  // moved to TestServerTabFieldSlotsMatchRegistry (internal/handler). It was a
+  // hardcoded `toBe(6)` and broke when `serialNumber` and `uHeight` were added
+  // correctly, because a magic number cannot tell a properly-added field from a
+  // dead slot. The Go test compares the two sets directly, names the offending
+  // field in either direction, and needs no browser.
 })

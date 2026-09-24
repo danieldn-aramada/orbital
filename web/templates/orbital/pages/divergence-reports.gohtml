@@ -11,7 +11,7 @@
       {{else}}
 
       <p class="is-size-4 mb-2" data-testid="page-heading">Divergence Reports</p>
-      <p class="has-text-grey mb-5" style="font-size: 0.875rem;">
+      <p class="has-text-grey page-description">
         One row per data center, latest snapshot orb published.
       </p>
 
@@ -151,9 +151,9 @@
                    State (2) enforces one-shot publish semantics across all
                    operators / sessions. */}}
               {{if .AlreadyPublished}}
-              <a class="button is-success is-light is-small"
+              <a class="button is-success is-light is-small tooltip"
                  href="{{$.BasePath}}/publish-history"
-                 title="View publish history">
+                 data-text="View publish history">
                 <span class="icon"><i class="fa-solid fa-check"></i></span>
                 <span>Published{{if .PublishedTag}} {{.PublishedTag}}{{end}}</span>
                 <span class="icon"><i class="fa-solid fa-arrow-up-right-from-square"></i></span>
@@ -166,9 +166,13 @@
                    QueryOmissions call. Publish is eventual, not urgent. */}}
               <span class="has-text-grey is-size-7">Ignored - Immediate publish not necessary</span>
               {{else}}
-              <button class="button is-link is-outlined is-small divergence-publish-btn"
+              {{/* The hint explains why the button is disabled, so it is
+                   conditional on the same test — an enabled Publish button
+                   telling you to "resolve pending decisions first" would be
+                   describing a state it is not in. */}}
+              <button class="button is-link is-outlined is-small divergence-publish-btn{{if gt .Pending 0}} tooltip{{end}}"
                       data-dc-orbid="{{$dcId}}"
-                      {{if gt .Pending 0}}disabled title="Resolve pending decisions first"{{end}}>
+                      {{if gt .Pending 0}}disabled data-text="Resolve pending decisions first"{{end}}>
                 <span class="icon"><i class="fa-solid fa-upload"></i></span>
                 <span>Publish</span>
               </button>
@@ -177,10 +181,10 @@
                    Operator confirms in a modal. The next orb publish (or the
                    next poll, since the ingester's idempotency tracker is also
                    reset) will repopulate from scratch as fresh pending rows. */}}
-              <button class="button is-danger is-outlined is-small ml-2 divergence-delete-btn"
+              <button class="button is-danger is-outlined is-small ml-2 divergence-delete-btn tooltip is-wide"
                       data-dc-orbid="{{$dcId}}"
                       data-entry-count="{{.Total}}"
-                      title="Break-glass — orbital normally re-ingests on every orb publish. Only use when state is stuck.">
+                      data-text="Break-glass — orbital normally re-ingests on every orb publish. Only use when state is stuck.">
                 <span class="icon"><i class="fa-solid fa-trash"></i></span>
                 <span>Delete report</span>
               </button>
@@ -224,34 +228,31 @@
                     <td>{{.FirstSeenAt}}</td>
                     <td style="white-space:nowrap;">
                       {{if eq .ResolutionAction "accept"}}
-                        <span class="has-text-success has-text-weight-medium" title="Decided by {{.ResolutionActor}} on {{.DecidedAt}}">accepted</span>
+                        <span class="has-text-success has-text-weight-medium tooltip is-wide" data-text="Decided by {{.ResolutionActor}} on {{.DecidedAt}}">accepted</span>
                       {{else if eq .ResolutionAction "reject"}}
-                        <span class="has-text-danger has-text-weight-medium" title="Decided by {{.ResolutionActor}} on {{.DecidedAt}}">rejected</span>
+                        <span class="has-text-danger has-text-weight-medium tooltip is-wide" data-text="Decided by {{.ResolutionActor}} on {{.DecidedAt}}">rejected</span>
                       {{else if eq .ResolutionAction "ignore"}}
-                        <span class="has-text-warning-dark has-text-weight-medium" title="Decided by {{.ResolutionActor}} on {{.DecidedAt}}">ignored</span>
+                        <span class="has-text-warning-dark has-text-weight-medium tooltip is-wide" data-text="Decided by {{.ResolutionActor}} on {{.DecidedAt}}">ignored</span>
                       {{else if $.CanResolve}}
                       <div class="buttons has-addons divergence-action-group" data-entry-id="{{.ID}}" data-entry-orbid="{{.EntryOrbID}}" data-entry-field="{{.Field}}" style="margin-bottom:0; flex-wrap:nowrap;">
                         <button
                           type="button"
-                          class="button is-small is-success is-outlined divergence-action-btn"
+                          class="button is-small is-success is-outlined divergence-action-btn tooltip is-wide"
                           data-action="accept"
-title="Update orbital intent to match the override"
                           style="width:5rem;"
-                        >Accept</button>
+                         data-text="Update orbital intent to match the override">Accept</button>
                         <button
                           type="button"
-                          class="button is-small is-warning is-outlined divergence-action-btn"
+                          class="button is-small is-warning is-outlined divergence-action-btn tooltip"
                           data-action="ignore"
-title="Acknowledge without effect"
                           style="width:5rem;"
-                        >Ignore</button>
+                         data-text="Acknowledge without effect">Ignore</button>
                         <button
                           type="button"
-                          class="button is-small is-danger is-outlined divergence-action-btn"
+                          class="button is-small is-danger is-outlined divergence-action-btn tooltip is-wide"
                           data-action="reject"
-title="Reject the override: cloud intent wins, edge resets, cb-controller takes ownership"
                           style="width:5rem;"
-                        >Reject</button>
+                         data-text="Reject the override: cloud intent wins, edge resets, cb-controller takes ownership">Reject</button>
                       </div>
                       {{else}}
                       <span class="has-text-grey">pending</span>

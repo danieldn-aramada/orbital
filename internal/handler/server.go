@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/armada/orbital/internal/web/data/component"
 	"html/template"
 	"io"
 	"log/slog"
@@ -118,7 +119,8 @@ func parseServerFragment() *template.Template {
 	return template.Must(template.ParseFiles(
 		"web/templates/shared/partials/server-tab.gohtml",
 		"web/templates/shared/partials/audit-tab.gohtml",
-		"web/templates/shared/components/edit-modal-server.gohtml",
+		"web/templates/shared/components/metadata-box.gohtml",
+		"web/templates/shared/components/edit-modal.gohtml",
 	))
 }
 
@@ -347,6 +349,10 @@ type serverTabDetailData struct {
 	// AuditPanelID matches data-panel on the audit <li> and the id of the
 	// placeholder <div>. Consumed by the shared audit-tab partial.
 	AuditPanelID string
+
+	// EditModal is the shared edit-modal render context (one template for
+	// every parent family) — see component.EditModal.
+	EditModal component.EditModal
 }
 
 // fmtMaintTime renders an ISO-8601 timestamp as a readable UTC string for the
@@ -517,6 +523,7 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 			"rackPosition": raw.RackPosition,
 			"uHeight":      raw.UHeight,
 			"serviceTag":   raw.ServiceTag,
+			"serialNumber": raw.SerialNumber,
 		}),
 		CreatedBy:       raw.CreatedBy,
 		CreatedAt:       raw.CreatedAt,
@@ -663,6 +670,25 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 	}
 
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Server is the only family whose opener reads data-reload-url/-target off
+	// the modal (orbital.js); the others pass a reloadFn instead, so emitting
+	// those attributes for them would be dead markup.
+	reloadURL := "/servers/" + srv.OrbID
+	reloadTarget := "tab-content-srv-" + srv.DomID
+	if srv.ShowDCBack {
+		reloadURL += "?dcCtx=1"
+		reloadTarget = "tab-content-" + srv.DataCenterDomID
+	}
+	srv.EditModal = component.EditModal{
+		Prefix: "srv", Title: "Edit Server",
+		DomID: srv.DomID, OrbID: srv.OrbID, Version: srv.Version,
+		CurrentUser:  srv.CurrentUser,
+		ReloadURL:    reloadURL,
+		ReloadTarget: reloadTarget,
+		IdracOrbID:   srv.IdracOrbID,
+		IdracVersion: srv.IdracVersion,
+		EditDataJSON: srv.EditDataJSON, EditTargetsJSON: srv.EditTargetsJSON,
+	}
 	return renderHTML(c, tmpl, "", srv)
 }
 

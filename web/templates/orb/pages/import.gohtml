@@ -6,7 +6,7 @@
     <div class="app-main p-5">
 
       <p class="is-size-4 mb-2" data-testid="page-heading">Import Subgraph</p>
-      <p class="has-text-grey mb-5" style="font-size: 0.875rem;">
+      <p class="has-text-grey page-description">
         Pull a config artifact from the registry, or upload one directly from your machine.
       </p>
 
@@ -20,7 +20,7 @@
       </div>
 
       <p class="is-size-5 mb-3">Upload from File <span class="tag is-warning is-light ml-2">Courier</span></p>
-      <p class="has-text-grey mb-4" style="font-size: 0.875rem;">
+      <p class="has-text-grey page-description">
         Upload a subgraph zip exported from orbital. Use this when delivering via USB or manual transfer.
         The zip must contain <code>data.json.gz</code> and <code>schema.gz</code>.
       </p>
@@ -50,7 +50,7 @@
       <hr class="mb-5">
 
       <p class="is-size-5 mb-1">Pull from Registry</p>
-      <p class="has-text-grey mb-3" style="font-size: 0.8rem;">
+      <p class="has-text-grey page-description">
         Source: <code>{{.OCIRegistry}}/{{.OCIRepo}}</code>
       </p>
 
@@ -74,7 +74,7 @@
            + nav fragment lives at web/templates/orb/partials/orb-tags-content.gohtml
            and gets swapped wholesale — no inner-tbody surgery. */}}
       <div id="orb-tags-content">
-        <div style="overflow-x: auto">
+        <div class="table-container">
           <table class="table is-striped is-hoverable is-fullwidth is-size-7">
             <thead>
               <tr>

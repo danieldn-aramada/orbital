@@ -1,0 +1,48 @@
+{{/*
+edit-modal.gohtml — the ONE edit modal, for every parent ConfigItem family.
+
+Render context is component.EditModal, built by the page handler. Callers pass
+it explicitly: {{template "edit-modal.gohtml" .EditModal}}.
+
+Adding a new parent family does NOT mean copying this file. It means building an
+EditModal in the handler and adding one opener in orbital.js keyed on the same
+Prefix. See docs/playbooks/add-configitem.md.
+*/}}
+{{define "edit-modal.gohtml"}}
+<div id="edit-modal-{{.Prefix}}-{{.DomID}}"
+  class="modal modal-fx-3dRotateFromBottom"
+  data-current-user="{{.CurrentUser}}"
+  data-version="{{.Version}}"
+  data-orb-id="{{.OrbID}}"
+  {{- if .Typename}}
+  data-typename="{{.Typename}}"
+  {{- end}}
+  {{- if .IdracOrbID}}
+  data-idrac-orb-id="{{.IdracOrbID}}"
+  data-idrac-version="{{.IdracVersion}}"
+  {{- end}}
+  {{- if .ReloadURL}}
+  data-reload-url="{{.ReloadURL}}"
+  data-reload-target="{{.ReloadTarget}}"
+  {{- end}}>
+  <div class="modal-background"></div>
+  <div class="modal-content modal-card is-large">
+    <header class="modal-card-head">
+      <p class="modal-card-title">{{.Title}}</p>
+      <button class="delete" aria-label="close" data-modal-close></button>
+    </header>
+    <section class="modal-card-body">
+      <div id="{{.Prefix}}-json-editor-{{.DomID}}" style="min-height:200px"></div>
+    </section>
+    <footer class="modal-card-foot is-flex is-align-items-center" style="gap:0.75rem;">
+      <div class="buttons" style="margin-bottom:0;">
+        <button class="button is-success" id="{{.Prefix}}-edit-submit-{{.DomID}}">Save</button>
+        <button class="button" data-modal-close>Cancel</button>
+      </div>
+      <span id="{{.Prefix}}-edit-error-{{.DomID}}" class="has-text-danger is-size-7" style="display:none; flex:1;"></span>
+    </footer>
+  </div>
+</div>
+<script type="application/json" id="{{.Prefix}}-edit-data-{{.DomID}}">{{.EditDataJSON}}</script>
+<script type="application/json" id="{{.Prefix}}-edit-targets-{{.DomID}}">{{.EditTargetsJSON}}</script>
+{{end}}

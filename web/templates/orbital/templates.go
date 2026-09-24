@@ -11,7 +11,7 @@ var base = []string{
 	"web/templates/shared/layouts/footer.gohtml",
 	"web/templates/shared/components/navbar.gohtml",
 	"web/templates/shared/components/menu.gohtml",
-	"web/templates/shared/components/todo-toast.gohtml",
+	"web/templates/shared/components/login-gate.gohtml",
 	"web/templates/orbital/components/report-issue-modal.gohtml",
 	"web/templates/orbital/components/login-modal.gohtml",
 	"web/templates/shared/components/hint-banner.gohtml",
@@ -54,9 +54,9 @@ func Map() map[string]*template.Template {
 		"publish-history-compare": template.Must(template.ParseFiles(page(
 			"web/templates/orbital/pages/publish-history-compare.gohtml",
 			"web/templates/orbital/partials/publish-history-tabs.gohtml")...)),
-		"servers":  template.Must(template.ParseFiles(page("web/templates/orbital/pages/servers.gohtml")...)),
-		"clusters": template.Must(template.ParseFiles(page("web/templates/orbital/pages/clusters.gohtml")...)),
-		"network":  template.Must(template.ParseFiles(page("web/templates/orbital/pages/network.gohtml")...)),
+		"servers":  template.Must(template.ParseFiles(page("web/templates/shared/pages/servers.gohtml")...)),
+		"clusters": template.Must(template.ParseFiles(page("web/templates/shared/pages/clusters.gohtml")...)),
+		"network":  template.Must(template.ParseFiles(page("web/templates/shared/pages/network.gohtml")...)),
 		"restore":  template.Must(template.ParseFiles(page("web/templates/orbital/pages/restore.gohtml")...)),
 		"users":    template.Must(template.ParseFiles(page("web/templates/orbital/pages/users.gohtml")...)),
 

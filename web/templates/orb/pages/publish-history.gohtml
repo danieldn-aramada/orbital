@@ -5,8 +5,8 @@
   </div>
   <div class="app-main p-5">
 
-    <p class="is-size-4 mb-2">Publish History</p>
-    <p class="has-text-grey mb-4" style="font-size: 0.875rem;">
+    <p class="is-size-4 mb-2" data-testid="page-heading">Publish History</p>
+    <p class="has-text-grey page-description">
       Successful divergence report publishes to object storage. Newest first. Trigger a new publish from <a href="{{.BasePath}}/divergence">Publish Report</a>.
     </p>
 
@@ -26,7 +26,7 @@
     </article>
     {{else}}
     <div class="table-container">
-      <table id="publish-history-table" class="table is-fullwidth is-hoverable is-striped is-size-7">
+      <table id="publish-history-table" class="table is-striped is-hoverable is-fullwidth is-size-7">
         <thead>
           <tr>
             <th style="width: 2rem"></th>
@@ -61,7 +61,7 @@
             <td></td>
             <td colspan="4">
               {{if .Entries}}
-              <table class="table is-narrow is-size-7 has-background-white-bis" style="margin: 0 0 0.5rem 0; width: 100%;">
+              <table class="table is-narrow is-size-7 table-nested" style="margin: 0 0 0.5rem 0; width: 100%;">
                 <thead>
                   <tr>
                     <th>Orb ID</th>

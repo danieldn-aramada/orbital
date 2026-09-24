@@ -1,0 +1,15 @@
+{{/*
+login-gate.gohtml — the "you must sign in" notice rendered in place of a page
+body.
+
+Shown only when the app HAS an auth system (.UI.ShowAuth) AND the caller is not
+signed in. Orb sets ShowAuth:false (internal/orbserver/ui_handlers.go), so orb
+never gates and one page template can serve both apps — which is what lets
+shared/pages/*.gohtml exist at all. Gating on .IsAuthn alone would make every
+orb page render the gate, since orb has no session to set it.
+*/}}
+{{define "login-gate.gohtml"}}
+<div class="notification is-warning is-light">
+  <a class="js-modal-trigger" data-target="login-modal">Login</a> to view this page.
+</div>
+{{end}}

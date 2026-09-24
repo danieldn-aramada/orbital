@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"github.com/armada/orbital/internal/web/data/component"
 	"html/template"
 	"io"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 	"github.com/armada/orbital/internal/ocitype"
 	"github.com/armada/orbital/internal/orb"
 	"github.com/armada/orbital/internal/orbmetrics"
+	"github.com/armada/orbital/internal/webrender"
 	"github.com/labstack/echo/v4"
 )
 
@@ -229,6 +231,17 @@ type tagInfo struct {
 // @Produce     json
 // @Success     200 {object} map[string][]tagInfo
 // @Router      /api/v1/import/tags [get]
+// renderOrbTagsFragment renders the import-page tags table fragment. Both the
+// success and the list-failed paths go through it so the empty state can only
+// ever be the template's own row, inside a real <tbody>.
+func (s *Server) renderOrbTagsFragment(c echo.Context, data orbTagsContentData) error {
+	tmpl, err := template.ParseFiles("web/templates/orb/partials/orb-tags-content.gohtml")
+	if err != nil {
+		return fmt.Errorf("parse orb tags fragment: %w", err)
+	}
+	return webrender.RenderHTML(c, tmpl, "", data)
+}
+
 func (s *Server) importTags(c echo.Context) error {
 	ctx := c.Request().Context()
 	reqStart := time.Now()
@@ -256,9 +269,14 @@ func (s *Server) importTags(c echo.Context) error {
 	if err != nil {
 		s.logger.Warn("list tags failed", "err", err)
 		if c.Request().Header.Get("HX-Request") == "true" {
-			c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-			_, err = c.Response().Write([]byte(`<tr><td colspan="5" class="has-text-grey">No versions available.</td></tr>`))
-			return err
+			// Render the SAME fragment the success path does, with no rows —
+			// the template already carries the "No versions available." row
+			// inside <tbody>. Writing a bare <tr> here (as this did until
+			// 2026-09-23) produced nothing at all on screen: orb.js assigns the
+			// response to a <div>'s innerHTML, and the HTML parser discards a
+			// <tr> that is not inside a table. The empty state was invisible
+			// whenever the registry was unreachable or held no tags.
+			return s.renderOrbTagsFragment(c, orbTagsContentData{Rows: []orbTagFragRow{}})
 		}
 		return c.JSON(http.StatusOK, map[string][]tagInfo{"tags": {}})
 	}
@@ -326,12 +344,7 @@ func (s *Server) importTags(c echo.Context) error {
 		if len(rows) == 0 {
 			data.FirstRow = 0
 		}
-		tmpl, err := template.ParseFiles("web/templates/orb/partials/orb-tags-content.gohtml")
-		if err != nil {
-			return fmt.Errorf("parse orb tags fragment: %w", err)
-		}
-		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-		return tmpl.Execute(c.Response(), data)
+		return s.renderOrbTagsFragment(c, data)
 	}
 
 	// JSON path uses the same descending-version order as the HTMX rows so
@@ -513,7 +526,7 @@ func (s *Server) importHistoryLayers(c echo.Context) error {
 	if match == nil {
 		return echo.ErrNotFound
 	}
-	tmpl, err := template.ParseFiles("web/templates/orb/partials/layers-modal.gohtml")
+	tmpl, err := template.ParseFiles("web/templates/shared/partials/layers-modal.gohtml")
 	if err != nil {
 		return fmt.Errorf("parse layers-modal: %w", err)
 	}
@@ -530,15 +543,25 @@ func (s *Server) importHistoryLayers(c echo.Context) error {
 	for i, l := range match.Layers {
 		rows[len(match.Layers)-1-i] = layerRow{LayerRecord: l, Position: i}
 	}
-	viewModel := struct {
-		Tag    string
-		Layers []layerRow
-	}{
-		Tag:    match.Tag,
-		Layers: rows,
+	vm := component.LayersModal{
+		Tag:          match.Tag,
+		ShowDispatch: true,
+		EmptyMessage: "No layer records for this import.",
 	}
-	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return tmpl.ExecuteTemplate(c.Response(), "layers-modal", viewModel)
+	for _, r := range rows {
+		lr := component.LayerRow{
+			Position: r.Position, Producer: r.Producer, MediaType: r.MediaType,
+			SizeDisplay: r.SizeDisplay(), Digest: r.Digest, Role: r.Role,
+		}
+		if r.Dispatch != nil {
+			lr.Dispatch = &component.LayerDispatch{
+				ConsumerName: r.Dispatch.ConsumerName, URL: r.Dispatch.URL,
+				StatusCode: r.Dispatch.StatusCode, Error: r.Dispatch.Error,
+			}
+		}
+		vm.Rows = append(vm.Rows, lr)
+	}
+	return webrender.RenderHTML(c, tmpl, "layers-modal", vm)
 }
 
 // newImportID generates a random UUID-format string for import correlation.
