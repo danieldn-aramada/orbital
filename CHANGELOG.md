@@ -76,6 +76,60 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   does not flip with the colour scheme, so light text landed on a light box.
   Replaced with a scheme-derived `.table-nested`.
 
+### Changed
+- **`make release-check` had been failing since 2026-07-28 and nobody knew.** Its
+  step-7 mutation passed `set` as an inline literal, which orbital's proxy
+  correctly refuses (`VARIABLE_FORM_REQUIRED`) because it cannot stamp
+  `updatedAt`/`updatedBy` or bump `version` into inline values. The reject
+  shipped three weeks after that spec was last touched. Rewritten to the
+  variable form the error's own hint prescribes.
+- **The release-check gate no longer accepts a consumer dispatch failure as
+  success.** `partial` means `dispatchErrors > 0` — a consumer returned non-2xx —
+  but the spec's comment claimed it meant "no consumer registered" (a layer with
+  no consumer is skipped and never counted), and asserted only
+  `.not.toBe('failed')`. Every run *was* partial: `ORB_CONSUMERS` defaults to
+  cb-controller on `localhost:8095`, which inside the orb container is the
+  container itself. The compose file now states `ORB_CONSUMERS="[]"` for an
+  environment that genuinely has no consumers, and the assertion requires
+  `done`, printing per-consumer status codes on failure.
+- **`make release-check` fails in one second when the bundler is not running**,
+  instead of ~20 minutes in with `connection refused`. The bundler lives in the
+  sibling configbundle repo and the target cannot start it; the spec's
+  prerequisites block never mentioned it and still described host processes from
+  before this ran against containers.
+
+### Added
+- **`e2e/release-check/y-delete-then-export.spec.ts`** — deletes a cluster, then
+  exports its data centre. This is the seam neither gate covered: the fast e2e
+  suite deletes clusters but never exports, and release-check exported but never
+  deleted, which is how a delete that silently broke export shipped. Verified to
+  fail against a rebuilt image with the fix reverted.
+
+### Changed
+- **`ORBITAL_DEV` is gone, split into per-capability flags.** One boolean named
+  after an audience decided three unrelated things — template hot-reload,
+  whether bearer auth was installed, and whether the placeholder session HMAC
+  key was accepted. A developer who wanted hot-reload also got auth off, and
+  nothing in the name said so. It defaulted to `true`, so the coupling was
+  **fail-open**: configure nothing and you got no API auth, and the fail-closed
+  guard in `server.go` could not catch it because that guard only fires when
+  auth is *required*.
+
+  Replaced by `ORBITAL_TEMPLATE_HOT_RELOAD_ENABLED` (default `false`),
+  `ORBITAL_API_AUTH_ENABLED` (**default `true`**, inheriting from nothing), and
+  an unconditional refusal of the placeholder session key — which is published
+  in this repo and so is a secret nobody has. With `ORBITAL_SESSION_HMAC_KEY`
+  unset, an ephemeral key is generated and said out loud at startup, so a fresh
+  clone still runs with no setup. `ORBITAL_COOKIE_SECURE` was already independent.
+
+  **Developer posture moved into the Makefile**, where it is visible, instead of
+  living in the binary's defaults: `make run-orbital` opts into hot-reload, opts
+  out of API auth, and writes a persistent `deploy/local/session-hmac.key`
+  (gitignored) so sessions survive restarts. Local, containerised and Kubernetes
+  runtimes are unchanged — each now states both halves explicitly.
+  orb's `ORB_DEV` became `ORB_TEMPLATE_HOT_RELOAD_ENABLED` in the same pass; it
+  only ever controlled hot-reload.
+
 ### Added
 - **Orb serves network devices.** `/network` and `/network/:orbId` reuse
   orbital's `NetworkDeviceHandler` with `layout.OrbActions`, matching how orb

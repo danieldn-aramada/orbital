@@ -179,7 +179,7 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	//     (iss, azp). A session cookie still serves orbital's own UI, since a
 	//     browser cannot attach a bearer to a plain page navigation.
 	//     See AUTH.md § Multiple identity providers.
-	//   - Dev (cfg.Dev=true): apiAuth stays empty so machine-to-machine
+	//   - Dev (cfg.TemplateHotReload=true): apiAuth stays empty so machine-to-machine
 	//     callers like cb-bundler can query /graphql plain-HTTP. Session
 	//     middleware still populates user info for the UI.
 	//   - Production OIDC (Dev=false, OIDCIssuerURL set): strict bearer
@@ -227,19 +227,26 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	}
 	if len(apiAuth) == 0 {
 		logger.Warn("auth: API AUTHENTICATION DISABLED — /graphql and /api/v1 accept unauthenticated requests; only session-identity mutations are gated",
-			"mode", authMode, "enabled", false, "decided_by", cfg.APIAuthSource(), "dev", cfg.Dev)
+			"mode", authMode, "enabled", false, "decided_by", cfg.APIAuthSource())
 	} else {
 		logger.Info("auth: API authentication enabled",
-			"mode", authMode, "enabled", true, "decided_by", cfg.APIAuthSource(), "dev", cfg.Dev)
+			"mode", authMode, "enabled", true, "decided_by", cfg.APIAuthSource())
 	}
 
 	// Fail-closed in production. An empty apiAuth means /graphql and /api/v1
-	// accept unauthenticated requests — acceptable only in dev (cfg.Dev), where
+	// accept unauthenticated requests — acceptable only in dev (cfg.TemplateHotReload), where
 	// bearer auth is intentionally bypassed (see the switch above). In
 	// production this state must abort startup rather than silently degrade to
 	// no-auth, whatever the cause: OIDC discovery unreachable at boot, a
 	// verifier-init error, or an unset issuer. The preceding WARN carries the
 	// specific reason. (audit S.16)
+	// Say it out loud: an ephemeral key means every restart logs everyone out,
+	// which otherwise reads as a session bug.
+	if cfg.SessionKeyEphemeral() {
+		logger.Warn("ORBITAL_SESSION_HMAC_KEY is not set — generated an ephemeral key; sessions will not survive a restart",
+			"fix", "set ORBITAL_SESSION_HMAC_KEY (make run-orbital writes deploy/local/session-hmac.key)")
+	}
+
 	if cfg.APIAuthEnabled && len(apiAuth) == 0 {
 		return nil, fmt.Errorf("refusing to start: API authentication is required (per %s) but could not be enabled — set ORBITAL_AUTH_PROVIDERS and ensure each provider's OIDC discovery is reachable at startup", cfg.APIAuthSource())
 	}
@@ -284,7 +291,7 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		logger.Warn("OCI publishing not configured (ORBITAL_OCI_REGISTRY and ORBITAL_OCI_SIGNING_KEY_PATH) — publish disabled")
 	}
 
-	ui := handler.NewUI(cfg.Dev, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, s3Configured, cfg.S3Endpoint, cfg.S3Bucket, cfg.BasePath, db, logger)
+	ui := handler.NewUI(cfg.TemplateHotReload, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, s3Configured, cfg.S3Endpoint, cfg.S3Bucket, cfg.BasePath, db, logger)
 	ui.SetOIDCBranding(cfg.OIDCDisplayName, cfg.OIDCIconURL)
 	ui.SetOCIConfig(ociConfigured, cfg.OCIRegistry, cfg.OCIRepo)
 	ui.SetExportDir(cfg.ExportDir)
@@ -394,28 +401,28 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		}
 	}
 
-	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath,
+	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.TemplateHotReload, logger, cfg.BasePath,
 		func(c echo.Context) layout.PageActions {
 			canMutate, _ := c.Get("can_mutate").(bool)
 			return layout.OrbitalActions(canMutate)
 		})
 	root.GET("/datacenters/:orbId", dc.Tab)
 
-	srv := handler.NewServerHandler(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath,
+	srv := handler.NewServerHandler(cfg.DGraphURL, cfg.TemplateHotReload, logger, cfg.BasePath,
 		func(c echo.Context) layout.PageActions {
 			canMutate, _ := c.Get("can_mutate").(bool)
 			return layout.OrbitalActions(canMutate)
 		})
 	root.GET("/servers/:orbId", srv.Tab)
 
-	cluster := handler.NewClusterHandler(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath,
+	cluster := handler.NewClusterHandler(cfg.DGraphURL, cfg.TemplateHotReload, logger, cfg.BasePath,
 		func(c echo.Context) layout.PageActions {
 			canMutate, _ := c.Get("can_mutate").(bool)
 			return layout.OrbitalActions(canMutate)
 		})
 	root.GET("/clusters/:orbId", cluster.Tab)
 
-	networkDevice := handler.NewNetworkDeviceHandler(cfg.DGraphURL, cfg.Dev, logger, cfg.BasePath,
+	networkDevice := handler.NewNetworkDeviceHandler(cfg.DGraphURL, cfg.TemplateHotReload, logger, cfg.BasePath,
 		func(c echo.Context) layout.PageActions {
 			canMutate, _ := c.Get("can_mutate").(bool)
 			return layout.OrbitalActions(canMutate)

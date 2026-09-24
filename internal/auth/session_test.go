@@ -204,8 +204,8 @@ func TestCookieSecure_FollowsConfig(t *testing.T) {
 	}{
 		{"secure true", SessionKeys{HMACKey: "k", Secure: true}, true},
 		{"secure false", SessionKeys{HMACKey: "k", Secure: false}, false},
-		{"secure false with dev true", SessionKeys{HMACKey: "k", Dev: true, Secure: false}, false},
-		{"secure true with dev true", SessionKeys{HMACKey: "k", Dev: true, Secure: true}, true},
+		{"secure false", SessionKeys{HMACKey: "k", Secure: false}, false},
+		{"secure true", SessionKeys{HMACKey: "k", Secure: true}, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

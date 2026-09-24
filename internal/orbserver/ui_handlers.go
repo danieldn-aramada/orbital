@@ -114,7 +114,7 @@ func (s *Server) buildOrbMenuSections(path string) []layout.MenuSection {
 
 func (s *Server) render(c echo.Context, name string, data any) error {
 	var tmpl *template.Template
-	if s.devMode {
+	if s.hotReload {
 		tmpl = s.templateMap()[name]
 	} else {
 		tmpl = s.templates[name]
@@ -134,7 +134,7 @@ func (s *Server) render(c echo.Context, name string, data any) error {
 // the page back, not the full layout. Mirrors handler.UI.renderFragment.
 func (s *Server) renderFragment(c echo.Context, page, fragment string, data any) error {
 	var tmpl *template.Template
-	if s.devMode {
+	if s.hotReload {
 		tmpl = s.templateMap()[page]
 	} else {
 		tmpl = s.templates[page]

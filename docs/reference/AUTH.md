@@ -660,7 +660,7 @@ send.
 
 ## Session cookie Secure flag
 
-- **`ORBITAL_COOKIE_SECURE` (default `true`) is the only source of truth for the cookie's `Secure` attribute** — decoupled from `ORBITAL_DEV` because that flag bundles unrelated dev behavior. Do NOT revert to `Secure: !cfg.Dev` — pinned by `auth.TestCookieSecure_FollowsConfig`.
+- **`ORBITAL_COOKIE_SECURE` (default `true`) is the only source of truth for the cookie's `Secure` attribute** — decoupled from the old `ORBITAL_DEV` because that flag bundled unrelated dev behaviour. `ORBITAL_DEV` was itself split and removed on 2026-09-23 for the same reason ([CONFIG.md](./CONFIG.md)); this setting was simply first. Do NOT re-derive `Secure` from any mode flag — pinned by `auth.TestCookieSecure_FollowsConfig`.
 - **AKS dev sets `ORBITAL_COOKIE_SECURE=false`** because Istio is HTTP-only there; otherwise the browser silently drops the cookie and every login appears to fail. Remove the override once TLS lands.
 
 ## orbauth shared package

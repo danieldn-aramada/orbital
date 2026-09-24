@@ -30,7 +30,7 @@ import (
 )
 
 type UI struct {
-	dev               bool
+	hotReload         bool
 	ratelURL          string
 	issueTrackerURL   string
 	oidcEnabled       bool
@@ -55,12 +55,12 @@ type UI struct {
 	templates         map[string]*template.Template
 }
 
-func NewUI(dev bool, ratelURL, issueTrackerURL string, oidcEnabled, backupEnabled bool, s3Endpoint, s3Bucket string, basePath string, db *ent.Client, logger *slog.Logger) *UI {
+func NewUI(hotReload bool, ratelURL, issueTrackerURL string, oidcEnabled, backupEnabled bool, s3Endpoint, s3Bucket string, basePath string, db *ent.Client, logger *slog.Logger) *UI {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &UI{
-		dev:             dev,
+		hotReload:       hotReload,
 		ratelURL:        ratelURL,
 		issueTrackerURL: issueTrackerURL,
 		oidcEnabled:     oidcEnabled,
@@ -129,7 +129,7 @@ func (h *UI) SetBackupCronSpec(spec string) {
 
 func (h *UI) render(c echo.Context, name string, data any) error {
 	tmpl, ok := h.templates[name]
-	if h.dev {
+	if h.hotReload {
 		tmpl, ok = webtemplates.Map()[name]
 	}
 	if !ok {
@@ -144,7 +144,7 @@ func (h *UI) render(c echo.Context, name string, data any) error {
 // of the page back, not the full layout.
 func (h *UI) renderFragment(c echo.Context, page, fragment string, data any) error {
 	tmpl, ok := h.templates[page]
-	if h.dev {
+	if h.hotReload {
 		tmpl, ok = webtemplates.Map()[page]
 	}
 	if !ok {
@@ -198,7 +198,7 @@ func (h *UI) base(c echo.Context) layout.Base {
 	userEmail, _ := c.Get("user_email").(string)
 	csrfToken, _ := c.Get("csrf_token").(string)
 	version := h.version
-	if h.dev {
+	if h.hotReload {
 		version = fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 

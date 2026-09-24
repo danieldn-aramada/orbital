@@ -38,7 +38,11 @@ func (c *ConsumersConfig) Decode(value string) error {
 type Config struct {
 	// Web server
 	Port string `envconfig:"ORB_PORT" default:"8010"`
-	Dev  bool   `envconfig:"ORB_DEV"  default:"true"`
+	// TemplateHotReload serves templates from disk instead of the embedded FS.
+	// Developer convenience only — orb has no auth posture riding on it. Renamed
+	// from ORB_DEV on 2026-09-23 alongside orbital's ORBITAL_DEV split, so the
+	// two apps name the same behaviour the same way.
+	TemplateHotReload bool `envconfig:"ORB_TEMPLATE_HOT_RELOAD_ENABLED" default:"false"`
 
 	// Local DGraph (orb's own instance, separate from orbital)
 	DGraphURL       string `envconfig:"ORB_DGRAPH_URL"        default:"http://localhost:8082/graphql"`

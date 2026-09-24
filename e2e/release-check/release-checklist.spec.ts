@@ -12,14 +12,27 @@
  *   8.  Restore from the backup taken in step 1
  *   9.  Assert assetDataV2 was reverted to pre-mutation value
  *
- * Prerequisites (run in separate terminals before this test):
- *   make up
- *   make run-orbital   (http://localhost:8001)
- *   make run-orb       (http://localhost:8010, with ORB_ENABLE_OCI_REGISTRY=true)
- *   make seed
+ * Prerequisites:
+ *   make up                              — dependency stack
+ *   cd ../configbundle && make run-bundler   — MUST be running on :8020
+ *
+ * `make release-check` builds the orbital + orb IMAGES and runs them as
+ * containers, then seeds — so it does NOT need `make run-orbital` /
+ * `make run-orb` (this block used to say it did, which was left over from when
+ * this ran against host processes).
+ *
+ * The bundler is the one prerequisite the target cannot start for you: it lives
+ * in a sibling repository. The containerised orbital routes publish calls to
+ * `host.docker.internal:8020` (ORBITAL_BUNDLER_URLS in the compose file), so
+ * without it step 3 fails with `connection refused` ~20 minutes in. The Makefile
+ * now checks for it up front rather than letting you find out late.
+ *
+ * That container sets ORBITAL_API_AUTH_ENABLED=false and configures no auth
+ * providers, so the bundler needs NO credentials for this flow — a plain
+ * `make run-bundler` with an empty hack/local/bundler.env is enough.
  *
  * Run with:
- *   make test-smoke
+ *   make release-check
  */
 
 import { test, expect } from '@playwright/test';
@@ -195,20 +208,30 @@ test('pre-release checklist: backup → export → publish → orb import → mu
   console.log(`[smoke] Orb import started (tag=${tag})...`);
 
   // Orb's import status is terminal at "done", "partial", or "failed".
-  // "partial" = graph applied successfully but one or more non-orbital-native
-  // layers were passed through without a consumer registered — this is the
-  // expected outcome in the atomic-refactor world where orb no longer applies
-  // configbundle-produced (non-orbital) layers directly.
+  //
+  // "partial" means dispatchErrors > 0 — at least one consumer returned non-2xx
+  // (internal/orbserver/import_handlers.go:154). It does NOT mean "no consumer
+  // registered": a layer with no consumer is skipped entirely and never counted.
+  // This block used to claim otherwise and assert only `.not.toBe('failed')`,
+  // so the gate passed on every dispatch failure. It always was one — ORB_CONSUMERS
+  // defaults to cb-controller on localhost:8095, which inside the orb container
+  // is the container itself. The compose file now sets ORB_CONSUMERS="[]", so
+  // this environment has no consumers, dispatch is skipped, and "done" is the
+  // only correct outcome. A "partial" here is now a real failure worth reading.
   const orbImportState = await pollUntil(
     async () => (await page.request.get(`${ORB_BASE}/api/v1/import/status`)).json(),
     s => ['done', 'partial', 'failed'].includes(s.status),
     300_000, // 5 min — dgraph live loader is slow
     5000,
   );
+  const dispatches = (orbImportState.lastImport?.layers ?? [])
+    .filter((l: any) => l.dispatch)
+    .map((l: any) => `${l.dispatch.consumerName || l.mediaType}: ${l.dispatch.statusCode || 'error'} ${l.dispatch.error || ''}`);
   expect(
     orbImportState.status,
-    `orb import must reach "done" or "partial" (got "${orbImportState.status}"${orbImportState.error ? ': ' + orbImportState.error : ''})`,
-  ).not.toBe('failed');
+    `orb import must reach "done" (got "${orbImportState.status}"${orbImportState.error ? ': ' + orbImportState.error : ''})`
+      + (dispatches.length ? `\n  consumer dispatches: ${dispatches.join('; ')}` : ''),
+  ).toBe('done');
   // Verification must succeed regardless of partial vs done.
   expect(
     orbImportState.lastImport?.verification,
@@ -233,17 +256,24 @@ test('pre-release checklist: backup → export → publish → orb import → mu
   console.log(`[smoke] Original assetDataV2 length: ${originalAssetData?.length ?? 0} chars`);
 
   // Apply the mutation through orbital's GraphQL proxy (auth via session cookie).
+  //
+  // `set` MUST be a variable, not an inline object literal. The proxy resolves
+  // the row via orbId to bump `version` and stamps updatedAt/updatedBy into
+  // `set`, and it can do neither against inline values — so it refuses the
+  // inline form with 400 VARIABLE_FORM_REQUIRED (ORBITAL_INLINE_SELECTOR_REJECT,
+  // default true, shipped 2026-07-28). This spec still used the inline shape,
+  // three weeks older than that change, so this step had been failing since.
   const mutResp = await page.request.post('/graphql', {
     data: {
-      query: `mutation UpdateDC($orbId: String!, $val: String!) {
+      query: `mutation UpdateDC($orbId: String!, $set: DataCenterPatch!) {
         updateDataCenter(input: {
           filter: { orbId: { eq: $orbId } }
-          set: { assetDataV2: $val }
+          set: $set
         }) {
           dataCenter { orbId }
         }
       }`,
-      variables: { orbId: DC_ORB_ID, val: SENTINEL },
+      variables: { orbId: DC_ORB_ID, set: { assetDataV2: SENTINEL } },
     },
   });
   expect(mutResp.status(), 'mutation: expect 200').toBe(200);

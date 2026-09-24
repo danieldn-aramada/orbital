@@ -94,7 +94,7 @@ const getServerQuery = `
   }`
 
 type ServerHandler struct {
-	dev       bool
+	hotReload bool
 	dgraphURL string
 	fragment  *template.Template
 	logger    *slog.Logger
@@ -104,10 +104,10 @@ type ServerHandler struct {
 	actions func(echo.Context) layout.PageActions
 }
 
-func NewServerHandler(dgraphURL string, dev bool, logger *slog.Logger, basePath string, actions func(echo.Context) layout.PageActions) *ServerHandler {
+func NewServerHandler(dgraphURL string, hotReload bool, logger *slog.Logger, basePath string, actions func(echo.Context) layout.PageActions) *ServerHandler {
 	return &ServerHandler{
 		dgraphURL: dgraphURL,
-		dev:       dev,
+		hotReload: hotReload,
 		fragment:  parseServerFragment(),
 		logger:    logger,
 		basePath:  basePath,
@@ -665,7 +665,7 @@ func (h *ServerHandler) Tab(c echo.Context) error {
 	srv.AuditPanelID = "srv-panel-audit-" + srv.DomID
 
 	tmpl := h.fragment
-	if h.dev {
+	if h.hotReload {
 		tmpl = parseServerFragment()
 	}
 

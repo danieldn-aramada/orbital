@@ -40,6 +40,7 @@ subgraph-exports/
 dgraph-exports/
 
 # Cosign keys — private key must never be committed
+deploy/local/*.key
 deploy/local/cosign.key
 deploy/local/cosign.pub
 

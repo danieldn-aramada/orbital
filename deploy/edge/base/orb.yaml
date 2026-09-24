@@ -45,7 +45,7 @@ spec:
           env:
             - name: ORB_PORT
               value: "8010"
-            - name: ORB_DEV
+            - name: ORB_TEMPLATE_HOT_RELOAD_ENABLED
               value: "false"
             - name: ORB_DGRAPH_URL
               value: http://dgraph-alpha:8080/graphql

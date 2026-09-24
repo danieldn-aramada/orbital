@@ -16,7 +16,7 @@ import (
 func TestDivergenceReports_HX_ReturnsFragment(t *testing.T) {
 	t.Chdir("../..")
 
-	h := &UI{dev: true, basePath: ""}
+	h := &UI{hotReload: true, basePath: ""}
 	c, rec := newUIEchoCtx(http.MethodGet, "/divergence-reports")
 	c.Request().Header.Set("HX-Request", "true")
 
@@ -40,7 +40,7 @@ func TestDivergenceReports_HX_ReturnsFragment(t *testing.T) {
 func TestDivergenceReports_FullPage_ReturnsLayout(t *testing.T) {
 	t.Chdir("../..")
 
-	h := &UI{dev: true, basePath: ""}
+	h := &UI{hotReload: true, basePath: ""}
 	c, rec := newUIEchoCtx(http.MethodGet, "/divergence-reports")
 	// The page hides everything behind {{if not .IsAuthn}}; mark the context
 	// authenticated so the table block renders.
