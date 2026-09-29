@@ -7,8 +7,6 @@ import (
 	"regexp"
 	"testing"
 
-	"log/slog"
-
 	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/labstack/echo/v4"
 )
@@ -107,45 +105,12 @@ func assertTargetInvariant(t *testing.T, page, html string) {
 	}
 }
 
-func TestEditTargets_EveryEditableEntityCarriesAVersion(t *testing.T) {
-	t.Chdir("../..")
-
-	body, _ := json.Marshal(map[string]any{
-		"data": map[string]any{
-			"getServer": map[string]any{
-				"id": "0x2", "name": "srv-01", "orbId": "test-ns:server-ABC123",
-				"hostname": "srv-01.example.com", "namespace": "test-ns",
-				"serviceTag": "ABC123", "version": 4,
-				"rack":       map[string]any{"id": "0x3", "name": "rack-a"},
-				"dataCenter": map[string]any{"id": "0x1", "name": "Test DC"},
-				"idracSettings": map[string]any{
-					"orbId": "test-ns:idrac-ABC123", "firmwareVersion": "7.0.0", "version": 2,
-				},
-				"serverMaintenance": map[string]any{
-					"orbId": "test-ns:server-maintenance-ABC123", "enabled": true, "version": 7,
-				},
-				"storageControllers": []any{
-					map[string]any{"orbId": "test:srv-01-ctrl-0", "name": "PERC H755"},
-				},
-			},
-		},
-	})
-	dgraph := newDGraphStub(t, string(body))
-	h := NewServerHandler(dgraph.URL, false, slog.Default(), "/app",
-		func(echo.Context) layout.PageActions { return layout.OrbitalActions(true) })
-
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("HX-Request", "true")
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("0x2")
-	if err := h.Tab(c); err != nil {
-		t.Fatalf("Tab: %v", err)
-	}
-	assertTargetInvariant(t, "Server", rec.Body.String())
-}
+// TestEditTargets_EveryEditableEntityCarriesAVersion was DELETED 2026-09-26
+// with handler.NewServerHandler. The invariant it held — every reachable edit
+// target carries an OCC version, so a concurrent edit is refused rather than
+// silently overwritten — now belongs to the generic renderer and is asserted in
+// e2e/generic-editor.spec.ts ("every reachable edit target on a generic page
+// carries an OCC version"), against the real page rather than a stub.
 
 // renderTab is the shared harness: stub DGraph, render one tab fragment with
 // edit actions enabled (the modal — and therefore the targets blob — is gated
@@ -168,45 +133,35 @@ func renderTab(t *testing.T, dgraphResp string, mk func(url string) func(echo.Co
 
 func editActions(echo.Context) layout.PageActions { return layout.OrbitalActions(true) }
 
-func TestEditTargets_DataCenterEveryEditableEntityCarriesAVersion(t *testing.T) {
-	t.Chdir("../..")
-	body, _ := json.Marshal(map[string]any{"data": map[string]any{"getDataCenter": map[string]any{
-		"id": "0x1", "orbId": "test-ns:dc-1", "name": "dc-1", "namespace": "test-ns", "version": 3,
-		"racks": []any{map[string]any{"orbId": "test-ns:rack-a", "name": "rack-a"}},
-	}}})
-	html := renderTab(t, string(body), func(u string) func(echo.Context) error {
-		return NewDataCenter(u, false, slog.Default(), "/app", editActions).Tab
-	}, "test-ns:dc-1")
-	assertTargetInvariant(t, "DataCenter", html)
-}
+// The DataCenter case is GONE: that page moved to the generic renderer, and the
+// same invariant is asserted there by
+// e2e/generic-editor.spec.ts "every reachable edit target ... carries an OCC
+// version", which additionally proves an owned child is reachable so the check
+// cannot pass on an empty tree.
 
-func TestEditTargets_ClusterEveryEditableEntityCarriesAVersion(t *testing.T) {
-	t.Chdir("../..")
-	body, _ := json.Marshal(map[string]any{"data": map[string]any{"queryConfigItem": []any{map[string]any{
-		"__typename": "EksaKubernetesCluster",
-		"id":         "0x9", "orbId": "test-ns:cluster-1", "name": "cluster-1",
-		"namespace": "test-ns", "version": 5,
-		"backup": map[string]any{
-			"id": "0xa", "orbId": "test-ns:cluster-1-backup", "name": "b", "namespace": "test-ns", "version": 2,
-			"etcd":   map[string]any{"id": "0xb", "orbId": "test-ns:cluster-1-etcdbackup", "name": "e", "namespace": "test-ns", "version": 2},
-			"velero": map[string]any{"id": "0xc", "orbId": "test-ns:cluster-1-velerobackup", "name": "v", "namespace": "test-ns", "version": 2},
-			"s3Sync": map[string]any{"id": "0xd", "orbId": "test-ns:cluster-1-s3sync", "name": "s", "namespace": "test-ns", "version": 2},
-		},
-	}}}})
-	html := renderTab(t, string(body), func(u string) func(echo.Context) error {
-		return NewClusterHandler(u, false, slog.Default(), "/app", editActions).Tab
-	}, "test-ns:cluster-1")
-	assertTargetInvariant(t, "KubernetesCluster", html)
-}
+// TestEditTargets_NetworkDeviceEveryEditableEntityCarriesAVersion was DELETED
+// 2026-09-26 with handler.NewNetworkDeviceHandler — the last bespoke page. The
+// invariant lives on in e2e/generic-editor.spec.ts, asserted against the real
+// page for every type rather than per type against a stub.
 
-func TestEditTargets_NetworkDeviceEveryEditableEntityCarriesAVersion(t *testing.T) {
-	t.Chdir("../..")
-	body, _ := json.Marshal(map[string]any{"data": map[string]any{"getNetworkDevice": map[string]any{
-		"id": "0x5", "orbId": "test-ns:network-device-SW1", "name": "SW1",
-		"namespace": "test-ns", "version": 6,
-	}}})
-	html := renderTab(t, string(body), func(u string) func(echo.Context) error {
-		return NewNetworkDeviceHandler(u, false, slog.Default(), "/app", editActions).Tab
-	}, "test-ns:network-device-SW1")
-	assertTargetInvariant(t, "NetworkDevice", html)
+// testFields stands in for the deployed schema. Without it these handlers get
+// no field source, BuildEditTargets skips every direct child with no editable
+// fields, and IdracSettings / ServerMaintenance — the entities whose missing
+// OCC version this test exists to catch — never appear as targets at all. The
+// test would still pass, on a smaller tree, which is the quiet way a guard
+// stops guarding.
+func testFields(typeName string) []string {
+	m := map[string][]string{
+		"DataCenter":            {"name", "assetDataV2", "model"},
+		"EksaKubernetesCluster": {"kubernetesVersion", "cni", "environment", "clusterType"},
+		"EtcdBackup":            {"enabled", "schedule", "location", "retentionDays"},
+		"IdracSettings":         {"firmwareVersion", "sshEnabled"},
+		"NetworkDevice":         {"manufacturer", "model", "serial", "role"},
+		"Rack":                  {"name", "uHeight"},
+		"S3Sync":                {"enabled"},
+		"Server":                {"hostname", "manufacturer", "model", "serviceTag"},
+		"ServerMaintenance":     {"enabled", "windowStart", "windowEnd", "reason"},
+		"VeleroBackup":          {"enabled", "schedule", "location", "retentionDays"},
+	}
+	return m[typeName]
 }

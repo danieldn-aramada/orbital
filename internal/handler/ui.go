@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -30,6 +31,9 @@ import (
 )
 
 type UI struct {
+	generic           *GenericRenderer
+	fields            *SharedFields
+	dgraphURL         string
 	hotReload         bool
 	ratelURL          string
 	issueTrackerURL   string
@@ -46,7 +50,6 @@ type UI struct {
 	exportDir         string
 	schemaPath        string
 	roleOwningIssuers map[string]struct{}
-	dgraphURL         string
 	dgraphAdminURL    string
 	version           string
 	basePath          string
@@ -55,11 +58,24 @@ type UI struct {
 	templates         map[string]*template.Template
 }
 
-func NewUI(hotReload bool, ratelURL, issueTrackerURL string, oidcEnabled, backupEnabled bool, s3Endpoint, s3Bucket string, basePath string, db *ent.Client, logger *slog.Logger) *UI {
+// UIOption configures optional UI dependencies. Variadic because the generic
+// renderer needs a field source and a DGraph URL that the other twenty-odd
+// pages do not, and a required parameter would churn every call site for a
+// dependency most of them never touch.
+type UIOption func(*UI)
+
+// WithGenericRenderer supplies the field source that /{slug} and /{slug}/{id}
+// resolve views from. The DGraph URL comes from SetDGraphURL, which the server
+// already calls.
+func WithGenericRenderer(fields *SharedFields) UIOption {
+	return func(u *UI) { u.fields = fields }
+}
+
+func NewUI(hotReload bool, ratelURL, issueTrackerURL string, oidcEnabled, backupEnabled bool, s3Endpoint, s3Bucket string, basePath string, db *ent.Client, logger *slog.Logger, opts ...UIOption) *UI {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &UI{
+	u := &UI{
 		hotReload:       hotReload,
 		ratelURL:        ratelURL,
 		issueTrackerURL: issueTrackerURL,
@@ -73,6 +89,10 @@ func NewUI(hotReload bool, ratelURL, issueTrackerURL string, oidcEnabled, backup
 		version:         fmt.Sprintf("%d", time.Now().Unix()),
 		templates:       webtemplates.Map(),
 	}
+	for _, opt := range opts {
+		opt(u)
+	}
+	return u
 }
 
 // SetOIDCBranding sets how the sign-in button names and illustrates the
@@ -303,12 +323,13 @@ func (h *UI) buildMenuSections(path, userRole string, pendingDivergences int) []
 			Icon:  "fa-solid fa-diagram-project",
 			Color: "has-text-primary",
 			Items: []layout.MenuItem{
+				// Inventory is not a ConfigItem view — it lists every type at
+				// once — so it stays declared here. Servers and Clusters do
+				// NOT: they are derived entries now, and leaving them here put
+				// "Servers" in the menu twice and gave /clusters two labels
+				// ("Clusters" and "Kubernetes Clusters"). Network Devices stays
+				// until NetworkDevice migrates; it is listed in `covered`.
 				{Label: "Inventory", Href: bp + "/", Active: path == bp+"/" || path == bp+"/inventory"},
-				{Label: "Data Centers", Href: bp + "/datacenters", Active: path == bp+"/datacenters"},
-				{Label: "Servers", Href: bp + "/servers", Active: path == bp+"/servers"},
-				{Label: "Clusters", Href: bp + "/clusters", Active: path == bp+"/clusters"},
-				{Label: "Network Devices", Href: bp + "/network", Active: path == bp+"/network"},
-				{Label: "Schema Version", Href: bp + "/schema", Active: path == bp+"/schema"},
 			},
 		},
 		{
@@ -384,6 +405,31 @@ func (h *UI) buildMenuSections(path, userRole string, pendingDivergences int) []
 		Items: opsItems,
 	})
 
+	// Append the derived root types to Config Items, then Schema Version.
+	//
+	// The hand-written entries above stay for now because they point at bespoke
+	// pages with their own URLs; they disappear in the migration (items 10-16),
+	// at which point this loop renders the whole section. Until then a type is
+	// listed once: derived entries skip any slug a static entry already covers.
+	//
+	// Failure here is NOT fatal to the nav. A menu that vanishes because DGraph
+	// blinked is worse than one missing its derived entries, so a resolution
+	// error leaves the static menu intact and is logged.
+	derived := h.derivedMenuItems(path)
+	for i := range sections {
+		if sections[i].Title != "Config Items" {
+			continue
+		}
+		sections[i].Items = append(sections[i].Items, derived...)
+		sections[i].Items = append(sections[i].Items,
+			layout.MenuItem{Label: "Schema Version", Href: bp + "/schema", Active: path == bp+"/schema"},
+			// Views sits next to Schema Version because they answer consecutive
+			// questions: what schema is deployed, and what pages it produces.
+			// Visible to everyone; editing (P1) will be admin-gated INSIDE the
+			// page, as approval-policies does, rather than by hiding the menu
+			// item — a reader benefits from seeing what exists either way.
+			layout.MenuItem{Label: "Views", Href: bp + "/views", Active: path == bp+"/views"})
+	}
 	return sections
 }
 
@@ -424,17 +470,38 @@ func (h *UI) ApprovalPolicies(c echo.Context) error {
 }
 
 func (h *UI) Index(c echo.Context) error {
+	shown, more := h.orphanRows(c)
 	return h.render(c, "home", page.Home{
-		Base:      h.base(c),
-		PageTitle: "Orbital",
+		Base:        h.base(c),
+		PageTitle:   "Orbital",
+		Orphans:     shown,
+		OrphansMore: more,
 	})
 }
 
-func (h *UI) DataCenters(c echo.Context) error {
-	return h.render(c, "datacenters", page.Home{
-		Base:      h.base(c),
-		PageTitle: "Data Centers",
-	})
+// orphanRows reports types whose nodes the inventory table cannot render.
+//
+// Best-effort and never fatal: the inventory page is the busiest in the app and
+// is worth more than this notice. On any failure it returns nothing, and the
+// boot log still carries the same report.
+func (h *UI) orphanRows(c echo.Context) (shown []page.OrphanRow, more int) {
+	sdl, err := dgraphschema.Active(c.Request().Context(), h.dgraphAdminURL)
+	if err != nil {
+		return nil, 0
+	}
+	found, err := dgraphschema.Orphans(c.Request().Context(), h.dgraphAdminURL, sdl)
+	if err != nil {
+		h.logger.Warn("inventory: orphaned-type check failed", "err", err)
+		return nil, 0
+	}
+	const cap = 3
+	for i, o := range found {
+		if i == cap {
+			return shown, len(found) - cap
+		}
+		shown = append(shown, page.OrphanRow{Type: o.Type, Count: o.Count})
+	}
+	return shown, 0
 }
 
 func (h *UI) Backups(c echo.Context) error {
@@ -657,24 +724,13 @@ func (h *UI) PublishHistoryCompare(c echo.Context) error {
 	})
 }
 
-func (h *UI) Servers(c echo.Context) error {
-	return h.render(c, "servers", page.Servers{
+// ViewsPage renders the view list. Read-only: rows come from
+// GET /api/v1/views via JS, so the page consumes the same public endpoint an
+// integrator would rather than a private server-side path.
+func (h *UI) ViewsPage(c echo.Context) error {
+	return h.render(c, "views", page.Views{
 		Base:      h.base(c),
-		PageTitle: "Servers",
-	})
-}
-
-func (h *UI) Clusters(c echo.Context) error {
-	return h.render(c, "clusters", page.Clusters{
-		Base:      h.base(c),
-		PageTitle: "Clusters",
-	})
-}
-
-func (h *UI) NetworkDevices(c echo.Context) error {
-	return h.render(c, "network", page.NetworkDevices{
-		Base:      h.base(c),
-		PageTitle: "Network Devices",
+		PageTitle: "Views",
 	})
 }
 
@@ -731,8 +787,19 @@ func (h *UI) Schema(c echo.Context) error {
 	// SHIPS. Orbital never applies the schema, so showing the two side by side
 	// without saying whether they agree is how a v8 graph gets captioned "v9".
 	var drift []string
+	var orphans []page.OrphanRow
 	if shipped, err := os.ReadFile(h.schemaPath); err == nil {
 		drift = dgraphschema.Drift(string(shipped), sdl)
+		// Nodes of a type the schema no longer declares. Best-effort: the page
+		// is still worth rendering if the count query fails, and the boot check
+		// logs the same thing.
+		found, oerr := dgraphschema.Orphans(c.Request().Context(), h.dgraphAdminURL, sdl)
+		if oerr != nil {
+			h.logger.Warn("schema page: orphaned-type check failed", "err", oerr)
+		}
+		for _, o := range found {
+			orphans = append(orphans, page.OrphanRow{Type: o.Type, Count: o.Count})
+		}
 	}
 	return h.render(c, "schema", page.Schema{
 		Base:      h.base(c),
@@ -741,6 +808,7 @@ func (h *UI) Schema(c echo.Context) error {
 		Checksum:  fmt.Sprintf("%x", sum[:6]),
 		SDL:       sdl,
 		Drift:     drift,
+		Orphans:   orphans,
 	})
 }
 
@@ -822,4 +890,55 @@ func issuerLabel(issuer string) string {
 		return issuer
 	}
 	return u.Host
+}
+
+// derivedMenuItems lists the root types the deployed schema declares, minus any
+// already covered by a hand-written entry.
+//
+// This is what makes "define a type, get a page" complete: without it a new type
+// is reachable only by typing its URL, which is half a feature.
+func (h *UI) derivedMenuItems(path string) []layout.MenuItem {
+	if h.fields == nil {
+		return nil
+	}
+	views, err := h.fields.Views(context.Background())
+	if err != nil {
+		h.logger.Warn("nav: could not resolve views; showing the static menu only", "err", err)
+		return nil
+	}
+	bp := h.basePath
+	// Slugs a bespoke page still owns, under its own URL. DataCenter, cluster
+	// and Server have all migrated and are gone from here; the list empties as
+	// migration finishes. EksaKubernetesCluster never needed an entry — it is
+	// covered by the KubernetesCluster INTERFACE view and is not a root.
+	// EMPTY. Every ConfigItem page is derived now — DataCenter, cluster, Server
+	// and NetworkDevice have all migrated — so there is nothing left for a
+	// bespoke page to shadow. A future entry here means a page went BACK to
+	// being hand-written, which should need an argument.
+	covered := map[string]bool{}
+	var items []layout.MenuItem
+	for _, v := range views {
+		if !v.IsRoot || covered[v.Slug] {
+			continue
+		}
+		href := bp + "/" + v.Slug
+		items = append(items, layout.MenuItem{Label: v.Label, Href: href, Active: path == href})
+	}
+	return items
+}
+
+// Generic returns the shared /{slug} renderer, building it on first use.
+//
+// Lazy because the field source can be set AFTER construction (tests do), and
+// building it eagerly in NewUI left those callers with a nil renderer — which
+// surfaced as "the page has no table" rather than as a nil pointer.
+func (h *UI) Generic() *GenericRenderer {
+	if h.generic == nil && h.fields != nil {
+		h.generic = NewGenericRenderer(h.fields, h.dgraphURL, h.basePath, h.logger, h.base,
+			func(c echo.Context) layout.PageActions {
+				canMutate, _ := c.Get("can_mutate").(bool)
+				return layout.OrbitalActions(canMutate)
+			}, h.render, h.renderFragment)
+	}
+	return h.generic
 }

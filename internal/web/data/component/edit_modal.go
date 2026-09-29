@@ -26,7 +26,17 @@ type EditModal struct {
 	// Title is the modal-card heading, e.g. "Edit Server".
 	Title string
 
-	DomID       string
+	DomID string
+	// EditorUnavailable, when non-empty, replaces the JSON editor with a stated
+	// reason and hides Save.
+	//
+	// The field list is derived from the DEPLOYED schema, so when DGraph cannot
+	// be reached orbital does not know what is editable. Rendering the editor
+	// anyway would show an EMPTY tree, which reads as "this entity has no
+	// editable fields" — a different and misleading claim from "orbital cannot
+	// see the schema", and one a user would act on by assuming the data is gone.
+	EditorUnavailable string
+
 	OrbID       string
 	Version     int
 	CurrentUser string

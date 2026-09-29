@@ -95,13 +95,15 @@ test('Cluster delete cascades nodes but preserves servers', async ({ page }) => 
   }
 
   try {
+    // /clusters is the interface-backed generic page now; the delete machinery
+    // (button attributes, global handler, modal, endpoint) never was per-page,
+    // so only the way the page is reached changed.
     await page.goto('http://localhost:8001/clusters')
-    const row = page.locator('#cluster-table tbody tr', { hasText: 'e2e-cluster' })
+    const row = page.locator('#generic-table tbody tr', { hasText: 'e2e-cluster' })
     await expect(row).toBeVisible()
     await row.dblclick()
 
-    // Wait for the cluster tab content to settle.
-    await expect(page.locator('text=Cluster Summary')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByTestId('generic-fields').last()).toBeVisible({ timeout: 10000 })
 
     // Open the delete modal.
     await page.locator(`[data-cfg-delete-id="${clusterOrbId}"]`).click()
@@ -118,8 +120,13 @@ test('Cluster delete cascades nodes but preserves servers', async ({ page }) => 
     // Confirm. Wait for the DELETE response explicitly — modal close transition
     // races with the verify-query otherwise.
     await expect(page.locator('#cfg-delete-confirm-btn')).toBeEnabled()
+    // The URL carries the CONCRETE type (EksaKubernetesCluster) now, because
+    // that is what the page resolved the item to be. The endpoint normalises it
+    // onto the cluster cascade plan, so both spellings work — asserting one
+    // exact name here would make the test a statement about naming rather than
+    // about deletion.
     const deleteDone = page.waitForResponse(r =>
-      r.url().includes('/api/v1/config-items/KubernetesCluster/') && r.request().method() === 'DELETE',
+      /\/api\/v1\/config-items\/\w*KubernetesCluster\//.test(r.url()) && r.request().method() === 'DELETE',
     )
     await page.locator('#cfg-delete-confirm-btn').click()
     const resp = await deleteDone

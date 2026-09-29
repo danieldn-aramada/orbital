@@ -42,7 +42,6 @@ func LoginForm() *template.Template {
 func Map() map[string]*template.Template {
 	return map[string]*template.Template{
 		"home":               template.Must(template.ParseFiles(page("web/templates/orbital/pages/home.gohtml")...)),
-		"datacenters":        template.Must(template.ParseFiles(page("web/templates/orbital/pages/datacenters.gohtml")...)),
 		"backups":            template.Must(template.ParseFiles(page("web/templates/orbital/pages/backups.gohtml")...)),
 		"divergence-reports": template.Must(template.ParseFiles(page("web/templates/orbital/pages/divergence-reports.gohtml")...)),
 		"audit-log":          template.Must(template.ParseFiles(page("web/templates/orbital/pages/audit-log.gohtml")...)),
@@ -54,11 +53,17 @@ func Map() map[string]*template.Template {
 		"publish-history-compare": template.Must(template.ParseFiles(page(
 			"web/templates/orbital/pages/publish-history-compare.gohtml",
 			"web/templates/orbital/partials/publish-history-tabs.gohtml")...)),
-		"servers":  template.Must(template.ParseFiles(page("web/templates/shared/pages/servers.gohtml")...)),
-		"clusters": template.Must(template.ParseFiles(page("web/templates/shared/pages/clusters.gohtml")...)),
-		"network":  template.Must(template.ParseFiles(page("web/templates/shared/pages/network.gohtml")...)),
-		"restore":  template.Must(template.ParseFiles(page("web/templates/orbital/pages/restore.gohtml")...)),
-		"users":    template.Must(template.ParseFiles(page("web/templates/orbital/pages/users.gohtml")...)),
+		// One template serves EVERY ConfigItem type, so a new type needs no entry
+		// here. These two are the whole generic renderer.
+		"generic-list": template.Must(template.ParseFiles(page("web/templates/shared/pages/generic-list.gohtml")...)),
+		"generic-detail": template.Must(template.ParseFiles(page(
+			"web/templates/shared/pages/generic-detail.gohtml",
+			// The SAME edit modal the bespoke pages parse — one template, not a
+			// generic copy of one.
+			"web/templates/shared/components/edit-modal.gohtml")...)),
+		"views":   template.Must(template.ParseFiles(page("web/templates/orbital/pages/views.gohtml")...)),
+		"restore": template.Must(template.ParseFiles(page("web/templates/orbital/pages/restore.gohtml")...)),
+		"users":   template.Must(template.ParseFiles(page("web/templates/orbital/pages/users.gohtml")...)),
 
 		"change-requests":       template.Must(template.ParseFiles(page("web/templates/orbital/pages/change-requests.gohtml")...)),
 		"change-request-detail": template.Must(template.ParseFiles(page("web/templates/orbital/pages/change-request-detail.gohtml")...)),

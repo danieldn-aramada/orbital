@@ -43,49 +43,12 @@ func TestKnownMutationsRegex_RejectsUnknownTypes(t *testing.T) {
 	}
 }
 
-// TestBeforeFields_ReturnsForEveryRegisteredType asserts every entry has
-// BeforeFields set (it's required for any type orbital writes audit events
-// for). The audit pipeline silently skips diff rendering if BeforeFields is
-// empty, so an omission here = no diff in the audit panel = the exact
-// bug-class we just spent a session debugging.
-func TestBeforeFields_ReturnsForEveryRegisteredType(t *testing.T) {
-	for _, typ := range Types {
-		got := BeforeFields(typ.Name)
-		if got == "" {
-			t.Errorf("BeforeFields(%q) is empty; audit diff will not render for this type", typ.Name)
-			continue
-		}
-		// Every BeforeFields selection must include orbId+version — orbId for
-		// entity identity, version for MVCC + auto-increment. `id` (the DGraph
-		// UID) is intentionally NOT required: it's stripped from the persisted
-		// before-state (stripDGraphIDs) so it never leaks to the audit API, and
-		// nothing downstream reads it. Sanity check: skip if BeforeFields is empty
-		// (covered above).
-		for _, required := range []string{"orbId", "version"} {
-			if !strings.Contains(got, required) {
-				t.Errorf("BeforeFields(%q) missing required field %q (full selection: %q)",
-					typ.Name, required, got)
-			}
-		}
-	}
-}
-
-// TestBeforeFields_UnknownTypeReturnsEmpty asserts the function returns ""
-// rather than panicking on an unknown type. Required because the audit
-// pipeline calls BeforeFields with whatever resource type comes out of
-// extractOperations — could be a typo, could be an interface name.
-func TestBeforeFields_UnknownTypeReturnsEmpty(t *testing.T) {
-	if got := BeforeFields("DefinitelyNotAType"); got != "" {
-		t.Errorf("BeforeFields for unknown type returned %q, want \"\"", got)
-	}
-}
-
 // TestBuildEditTargets_Cluster asserts the cluster's edit targets list
 // matches the four-entry shape the JS module consumes: root + etcd + velero +
 // s3sync. Pins behavior so future registry edits can't accidentally drop a
 // target or break path/orbId derivation.
 func TestBuildEditTargets_Cluster(t *testing.T) {
-	got := BuildEditTargets("EksaKubernetesCluster", "colo:dev-main", "colo", "dev-main")
+	got := BuildEditTargets(fixtureFields, fixtureMeta, "EksaKubernetesCluster", "colo:dev-main", "colo", "dev-main")
 	if len(got) != 4 {
 		t.Fatalf("BuildEditTargets returned %d targets, want 4 (root + 3 backup kinds)", len(got))
 	}
@@ -126,7 +89,7 @@ func TestBuildEditTargets_Cluster(t *testing.T) {
 // direct (non-wrapper) child. The path is a single segment ["idracSettings"]
 // and the orbId follows the `<ns>:<name>-idrac` convention.
 func TestBuildEditTargets_Server(t *testing.T) {
-	got := BuildEditTargets("Server", "colo:5L4P7Y3", "colo", "5L4P7Y3")
+	got := BuildEditTargets(fixtureFields, fixtureMeta, "Server", "colo:5L4P7Y3", "colo", "5L4P7Y3")
 	// Server has multiple children registered (IdracSettings,
 	// ServerConfigurationProfile, StorageController). All show up; the
 	// FormFields-empty ones still produce targets but with no editable fields.
@@ -197,25 +160,79 @@ func TestParity_WithLegacyHandMaintainedValues(t *testing.T) {
 	}
 	_ = legacyRegex // referenced in the comment above for traceability
 
-	// Every BeforeFields value from the legacy map must still be returned verbatim.
-	// Deliberate departures from the legacy value, each added with the field it
-	// serves so the audit diff can render before/after:
-	//   Server.uHeight (2026-09-23, schema v12)
-	legacyBeforeFields := map[string]string{
-		"DataCenter":            "id orbId name version assetDataV2 model",
-		"Server":                "id orbId name version hostname model manufacturer serviceTag serialNumber rackPosition uHeight oobMAC idracSettings { firmwareVersion sshEnabled ipmiEnabled lockdownModeEnabled osToIdracPassThroughEnabled usbManagementPortEnabled dhcpEnabled racadmEnabled } serverMaintenance { enabled windowStart windowEnd reason }",
-		"KubernetesCluster":     "id orbId name version kubernetesVersion cni environment",
-		"EksaKubernetesCluster": "id orbId name version kubernetesVersion cni environment clusterType",
-		"KubernetesNode":        "id orbId name version role",
-		"ClusterBackup":         "id orbId name version",
-		"EtcdBackup":            "id orbId name version enabled schedule location retentionDays",
-		"VeleroBackup":          "id orbId name version enabled schedule location retentionDays",
-		"S3Sync":                "id orbId name version enabled",
+	// The BeforeFields half of this parity check is GONE, deliberately. That
+	// selection is now GENERATED from the derived field set (BeforeSelection), so
+	// there is no hand-maintained string left to drift from a legacy snapshot —
+	// the drift it guarded against is structurally impossible. The regex half
+	// above still guards a real hand-maintained value.
+}
+
+// fixtureFields stands in for the DEPLOYED schema in tests that assert edit-tree
+// STRUCTURE rather than field content.
+//
+// It is a snapshot of what was editable on 2026-09-24, taken before the
+// hand-maintained FormFields were deleted from registry.go. It is a test
+// fixture, not a second source of truth: production derives this set from the
+// running DGraph, and TestDerivedFieldsVsRegistry_ExactlyMatchesToday is what
+// proves the derivation reproduces it.
+//
+// A nil entry means "no editable fields", which is how BuildEditTargets decides
+// a direct child is not an edit target at all.
+func fixtureFields(typeName string) []string {
+	m := map[string][]string{
+		"ClusterBackup":              nil,
+		"DataCenter":                 {"name", "assetDataV2", "model"},
+		"EksaKubernetesCluster":      {"kubernetesVersion", "cni", "environment", "clusterType"},
+		"EtcdBackup":                 {"enabled", "schedule", "location", "retentionDays"},
+		"IPAddress":                  nil,
+		"IdracSettings":              {"firmwareVersion", "sshEnabled", "ipmiEnabled", "lockdownModeEnabled", "osToIdracPassThroughEnabled", "usbManagementPortEnabled", "dhcpEnabled", "racadmEnabled"},
+		"KubernetesNode":             nil,
+		"NetworkAdapter":             nil,
+		"NetworkDevice":              {"manufacturer", "model", "serial", "role", "macAddress", "rackPosition", "platform", "face", "vcPosition", "vcPriority"},
+		"NetworkInterface":           nil,
+		"Rack":                       {"name", "uHeight"},
+		"S3Sync":                     {"enabled"},
+		"Server":                     {"hostname", "manufacturer", "model", "oobMAC", "rackPosition", "uHeight", "serviceTag", "serialNumber"},
+		"ServerConfigurationProfile": nil,
+		"ServerMaintenance":          {"enabled", "windowStart", "windowEnd", "reason"},
+		"StorageController":          nil,
+		"StorageDevice":              nil,
+		"StorageVolume":              nil,
+		"VeleroBackup":               {"enabled", "schedule", "location", "retentionDays"},
 	}
-	for name, want := range legacyBeforeFields {
-		got := BeforeFields(name)
-		if got != want {
-			t.Errorf("BeforeFields(%q) drifted:\n got:  %q\n want: %q", name, got, want)
-		}
+	return m[typeName]
+}
+
+// fixtureTypeNames lists the types the snapshot covers, so callers can iterate
+// it without reaching into the registry.
+func fixtureTypeNames() []string {
+	return []string{
+		"ClusterBackup", "DataCenter", "EksaKubernetesCluster", "EtcdBackup", "IPAddress",
+		"IdracSettings", "KubernetesNode", "NetworkAdapter", "NetworkDevice", "NetworkInterface",
+		"Rack", "S3Sync", "Server", "ServerConfigurationProfile", "ServerMaintenance",
+		"StorageController", "StorageDevice", "StorageVolume", "VeleroBackup",
 	}
+}
+
+// fixtureMeta stands in for the schema-derived per-type metadata. The orbId
+// suffixes are the irregular ones that used to be a switch statement: an owned
+// child's orbId is built from them, so a wrong value addresses an entity that
+// does not exist rather than failing.
+func fixtureMeta(typeName string) TypeInfo {
+	suffix := map[string]string{
+		"IdracSettings":              "idrac",
+		"ServerConfigurationProfile": "scp",
+		"EtcdBackup":                 "etcd-backup",
+		"VeleroBackup":               "velero-backup",
+		"S3Sync":                     "s3sync",
+		"ClusterBackup":              "backup",
+	}[typeName]
+	if suffix == "" {
+		suffix = strings.ToLower(typeName)
+	}
+	info := TypeInfo{OrbIDSuffix: suffix}
+	if typeName == "DataCenter" {
+		info.Fields = []DerivedField{{Name: "assetDataV2", Editable: true, Doc: "jsonString"}}
+	}
+	return info
 }

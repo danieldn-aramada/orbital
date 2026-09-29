@@ -264,6 +264,24 @@ func (_u *ApprovalRequestUpdate) ClearBaseValues() *ApprovalRequestUpdate {
 	return _u
 }
 
+// SetBaseScope sets the "base_scope" field.
+func (_u *ApprovalRequestUpdate) SetBaseScope(v []string) *ApprovalRequestUpdate {
+	_u.mutation.SetBaseScope(v)
+	return _u
+}
+
+// AppendBaseScope appends value to the "base_scope" field.
+func (_u *ApprovalRequestUpdate) AppendBaseScope(v []string) *ApprovalRequestUpdate {
+	_u.mutation.AppendBaseScope(v)
+	return _u
+}
+
+// ClearBaseScope clears the value of the "base_scope" field.
+func (_u *ApprovalRequestUpdate) ClearBaseScope() *ApprovalRequestUpdate {
+	_u.mutation.ClearBaseScope()
+	return _u
+}
+
 // SetPayload sets the "payload" field.
 func (_u *ApprovalRequestUpdate) SetPayload(v json.RawMessage) *ApprovalRequestUpdate {
 	_u.mutation.SetPayload(v)
@@ -540,6 +558,17 @@ func (_u *ApprovalRequestUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if _u.mutation.BaseValuesCleared() {
 		_spec.ClearField(approvalrequest.FieldBaseValues, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.BaseScope(); ok {
+		_spec.SetField(approvalrequest.FieldBaseScope, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedBaseScope(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, approvalrequest.FieldBaseScope, value)
+		})
+	}
+	if _u.mutation.BaseScopeCleared() {
+		_spec.ClearField(approvalrequest.FieldBaseScope, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Payload(); ok {
 		_spec.SetField(approvalrequest.FieldPayload, field.TypeJSON, value)
@@ -902,6 +931,24 @@ func (_u *ApprovalRequestUpdateOne) ClearBaseValues() *ApprovalRequestUpdateOne 
 	return _u
 }
 
+// SetBaseScope sets the "base_scope" field.
+func (_u *ApprovalRequestUpdateOne) SetBaseScope(v []string) *ApprovalRequestUpdateOne {
+	_u.mutation.SetBaseScope(v)
+	return _u
+}
+
+// AppendBaseScope appends value to the "base_scope" field.
+func (_u *ApprovalRequestUpdateOne) AppendBaseScope(v []string) *ApprovalRequestUpdateOne {
+	_u.mutation.AppendBaseScope(v)
+	return _u
+}
+
+// ClearBaseScope clears the value of the "base_scope" field.
+func (_u *ApprovalRequestUpdateOne) ClearBaseScope() *ApprovalRequestUpdateOne {
+	_u.mutation.ClearBaseScope()
+	return _u
+}
+
 // SetPayload sets the "payload" field.
 func (_u *ApprovalRequestUpdateOne) SetPayload(v json.RawMessage) *ApprovalRequestUpdateOne {
 	_u.mutation.SetPayload(v)
@@ -1208,6 +1255,17 @@ func (_u *ApprovalRequestUpdateOne) sqlSave(ctx context.Context) (_node *Approva
 	}
 	if _u.mutation.BaseValuesCleared() {
 		_spec.ClearField(approvalrequest.FieldBaseValues, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.BaseScope(); ok {
+		_spec.SetField(approvalrequest.FieldBaseScope, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedBaseScope(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, approvalrequest.FieldBaseScope, value)
+		})
+	}
+	if _u.mutation.BaseScopeCleared() {
+		_spec.ClearField(approvalrequest.FieldBaseScope, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Payload(); ok {
 		_spec.SetField(approvalrequest.FieldPayload, field.TypeJSON, value)

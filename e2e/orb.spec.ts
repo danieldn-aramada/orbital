@@ -49,59 +49,72 @@ test('datacenter tab fragment renders populated data', async ({ page }) => {
 
 test('cluster tab fragment renders populated data', async ({ page }) => {
   // Requires orb to have imported a bundle — skips on fresh make seed with no import.
+  // Orb derives its views from the schema it IMPORTED, so with nothing imported
+  // there is no /clusters at all — a different state from "no clusters", and
+  // one a fresh `make up` is always in.
   await page.goto('/clusters');
-  await expect(page.locator('input[aria-controls="cluster-table"]')).toBeVisible({ timeout: 10_000 })
-  const dataRows = page.locator('#cluster-table tbody tr').filter({ hasNot: page.locator('td.dt-empty') })
+  const table = page.locator('#generic-table')
+  if (await table.count() === 0) {
+    test.skip(true, 'orb has no imported schema — run orbital export+publish+orb import first')
+    return
+  }
+  const dataRows = table.locator('tbody tr').filter({ hasNot: page.locator('td.dt-empty') })
   if (await dataRows.count() === 0) {
     test.skip(true, 'orb has no imported data — run orbital export+publish+orb import first')
     return
   }
   const row = dataRows.first()
   await row.dblclick();
-  await expect(
-    page.locator('[id^="tab-content-cluster-"] .button.is-loading')
-  ).not.toBeVisible({ timeout: 10000 });
-
-  const summary = page.locator('article', { hasText: 'Cluster Summary' });
-  await expect(summary).toBeVisible();
-  await expect(summary.locator('tr', { hasText: 'Provider' }).locator('td').nth(1)).not.toBeEmpty();
+  const tab = page.locator('[id^="tab-content-generic-"]').last();
+  await expect(tab.getByTestId('generic-fields')).toBeVisible({ timeout: 10_000 });
+  await expect(tab.getByTestId('generic-fields')).toContainText('provider');
 });
 
-test('orb cluster tab has no Edit / Delete controls', async ({ page }) => {
+test('orb generic detail pages carry no mutation controls', async ({ page }) => {
+  // Replaces TestOrbClusterTab_NoEditDeleteControls, deleted with
+  // handler.NewClusterHandler. The property moved to the SHARED renderer, which
+  // gates Edit and Delete on CanMutate — and orb never sets it. Asserted here
+  // rather than in a handler test because it depends on orb's middleware and
+  // the shared template together, and a handler test exercises neither.
   await page.goto('/clusters');
-  const row = page.locator('#cluster-table tbody tr').first();
-  await expect(row).toBeVisible();
-  await row.dblclick();
-  await expect(
-    page.locator('[id^="tab-content-cluster-"] .button.is-loading')
-  ).not.toBeVisible({ timeout: 10000 });
+  const table = page.locator('#generic-table');
+  if (await table.count() === 0) {
+    test.skip(true, 'orb has no imported schema — run orbital export+publish+orb import first');
+    return;
+  }
+  const dataRows = table.locator('tbody tr').filter({ hasNot: page.locator('td.dt-empty') });
+  if (await dataRows.count() === 0) {
+    test.skip(true, 'orb has no imported data — run orbital export+publish+orb import first');
+    return;
+  }
+  await dataRows.first().dblclick();
+  const tab = page.locator('[id^="tab-content-generic-"]').last();
+  await expect(tab.getByTestId('generic-fields')).toBeVisible({ timeout: 10_000 });
 
-  // Verifies the actions-injection: orb passes layout.OrbActions (Edit/Delete=false),
-  // so the shared cluster-tab template renders no edit/delete buttons inside the
-  // opened tab. Guards the seam at internal/handler/cluster.go::actions(c).
-  const tab = page.locator('[id^="tab-content-cluster-"]').last();
-  await expect(tab.locator('[data-cluster-edit-id]')).toHaveCount(0);
+  await expect(tab.locator('[data-generic-edit-id]')).toHaveCount(0);
   await expect(tab.locator('[data-cfg-delete-id]')).toHaveCount(0);
+  // Orb has no audit log at all — the box must not merely be empty, it must be absent.
+  await expect(tab.getByTestId('generic-audit')).toHaveCount(0);
 });
 
 test('server tab fragment renders populated data', async ({ page }) => {
-  // Requires orb to have imported a bundle — skips on fresh make seed with no import.
+  // Orb derives its views from the schema it IMPORTED, so with nothing imported
+  // there is no /servers at all — a different state from "no servers".
   await page.goto('/servers');
-  await expect(page.locator('input[aria-controls="server-list-table"]')).toBeVisible({ timeout: 10_000 })
-  const dataRows = page.locator('#server-list-table tbody tr').filter({ hasNot: page.locator('td.dt-empty') })
-  if (await dataRows.count() === 0) {
-    test.skip(true, 'orb has no imported data — run orbital export+publish+orb import first')
-    return
+  const table = page.locator('#generic-table');
+  if (await table.count() === 0) {
+    test.skip(true, 'orb has no imported schema — run orbital export+publish+orb import first');
+    return;
   }
-  const row = dataRows.first()
-  await row.dblclick();
-  await expect(
-    page.locator('[id^="tab-content-srv-"] .button.is-loading')
-  ).not.toBeVisible({ timeout: 10000 });
-
-  const summary = page.locator('article', { hasText: 'Server Summary' });
-  await expect(summary).toBeVisible();
-  await expect(summary.locator('tr', { hasText: 'Hostname' }).locator('td').nth(1)).not.toBeEmpty();
+  const dataRows = table.locator('tbody tr').filter({ hasNot: page.locator('td.dt-empty') });
+  if (await dataRows.count() === 0) {
+    test.skip(true, 'orb has no imported data — run orbital export+publish+orb import first');
+    return;
+  }
+  await dataRows.first().dblclick();
+  const tab = page.locator('[id^="tab-content-generic-"]').last();
+  await expect(tab.getByTestId('generic-fields')).toBeVisible({ timeout: 10_000 });
+  await expect(tab.getByTestId('generic-fields')).toContainText('Hostname');
 });
 
 // --- Import page ---

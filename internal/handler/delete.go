@@ -16,6 +16,8 @@ import (
 
 	"github.com/armada/orbital/ent"
 	"github.com/labstack/echo/v4"
+
+	"github.com/armada/orbital/internal/configitems"
 )
 
 const maxDeleteListItems = 5
@@ -75,7 +77,7 @@ func (h *DeleteHandler) Preview(c echo.Context) error {
 	}
 	ctx := c.Request().Context()
 	var preview DeletePreview
-	switch c.QueryParam("type") {
+	switch deletableType(c.QueryParam("type")) {
 	case "DataCenter":
 		plan, err := h.planDCDelete(ctx, id)
 		if err != nil {
@@ -135,7 +137,7 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 	}
 	ctx := c.Request().Context()
 	actor := actorFromContext(c)
-	typeName := c.Param("type")
+	typeName := deletableType(c.Param("type"))
 	caller := resolveCallerRole(c, h.db)
 
 	// Before planning: a caller holding a stale view should be told to reload,
@@ -825,8 +827,31 @@ func (h *DeleteHandler) planClusterDelete(ctx context.Context, orbID string) (*c
 		if err != nil {
 			return nil, fmt.Errorf("resolve node uid: %w", err)
 		}
-		if uid != "" {
-			nodeUIDs = append(nodeUIDs, uid)
+		if uid == "" {
+			continue
+		}
+		nodeUIDs = append(nodeUIDs, uid)
+
+		// The node's SERVER survives this delete and points back at the node, so
+		// that edge is cleared with everything else — otherwise the server is
+		// left pointing at a node that no longer exists.
+		//
+		// Not cosmetic. DGraph propagates a missing non-nullable field to the
+		// ROOT of a query, so any later read walking Server.kubernetesNode and
+		// selecting orbId fails ENTIRELY, naming neither the delete nor the node:
+		//
+		//	Non-nullable field 'orbId' (type String!) was not present in result from Dgraph.
+		//
+		// Found 2026-09-25 in local data: one server left this way made a whole
+		// DataCenter page unrenderable. The SERVER delete path already clears the
+		// mirror edge (KubernetesNode.server); this is the same edge from the
+		// other end, and it was missed.
+		if n.Server.ID != "" {
+			dangling = append(dangling, danglingEdge{
+				ParentUID: n.Server.ID,
+				Predicate: "Server.kubernetesNode",
+				ChildUID:  uid,
+			})
 		}
 	}
 	if len(nodeUIDs) > 0 {
@@ -1352,4 +1377,24 @@ func serverDisplayName(hostname, name string) string {
 		return hostname
 	}
 	return name
+}
+
+// deletableType maps a concrete type onto the type whose cascade plan covers
+// it, leaving anything else untouched.
+//
+// The plans are written against the INTERFACE — planClusterDelete handles any
+// KubernetesCluster, because what cascades (nodes, backup) is declared there
+// and not by any one provider. Pages used to hardcode "KubernetesCluster" as
+// the delete type; the generic renderer sends the type it actually resolved,
+// which for a cluster is EksaKubernetesCluster. Without this, Delete on a
+// cluster page 400s with "unsupported type" — and it does so in the preview,
+// so the modal opens EMPTY rather than saying anything.
+func deletableType(typeName string) string {
+	for _, iface := range configitems.ImplementsFor(typeName) {
+		switch iface {
+		case "DataCenter", "Server", "KubernetesCluster":
+			return iface
+		}
+	}
+	return typeName
 }

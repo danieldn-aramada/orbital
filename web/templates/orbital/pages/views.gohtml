@@ -1,0 +1,51 @@
+{{/*
+views.gohtml — the view list: every page orbital derives from the deployed schema.
+
+A SETTINGS page, so it follows approval-policies.gohtml (heading + description +
+table) rather than servers.gohtml (tabs bar, no heading). Those are the house's
+two list patterns and they are not interchangeable: a record list identifies
+itself by the active nav item, a settings page states what it is.
+
+Rows come from GET /api/v1/views via JS, not from the handler. Orbital's UI is a
+first-class consumer of its own public API (CLAUDE.md), so this page reads the
+same endpoint orbctl and AEP would — a private server-side path would let the
+two drift.
+
+READ-ONLY today. Editing a view is the P1 override layer (Postgres deltas,
+admin-only, audited); the Source column exists now and gains the value
+"overridden" then, rather than appearing later.
+*/}}
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div>
+    <div class="app-main p-5">
+      {{if not .IsAuthn}}
+        {{template "login-gate.gohtml" .}}
+      {{else}}
+
+      <p class="is-size-4 mb-2" data-testid="page-heading">Views</p>
+      <p class="has-text-grey page-description">Every page orbital derives from the deployed schema.</p>
+
+      <div id="views-error" class="notification is-danger is-light" style="display:none;"></div>
+
+      <table class="table is-striped is-hoverable is-fullwidth is-size-7" id="views-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Slug</th>
+            <th>Type</th>
+            <th>Label</th>
+            <th>In nav</th>
+            <th>Fields</th>
+            <th>Tabs</th>
+            <th>Source</th>
+          </tr>
+        </thead>
+      </table>
+
+      {{end}}
+    </div>
+  </main>
+{{end}}

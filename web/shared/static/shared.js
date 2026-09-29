@@ -683,6 +683,7 @@ document.addEventListener('htmx:afterSettle', (evt) => {
   const target = evt.detail && evt.detail.target
   if (!target) return
   renderTimestamps(target)
+  initGenericAudit(target)
 
   const dcDetailTabs = target.querySelector('[id^="dc-detail-tabs-"]')
   if (dcDetailTabs) {
@@ -920,8 +921,17 @@ function clearTabStateOnFresh() {
   if (new URLSearchParams(window.location.search).get('fresh') !== '1') return
   localStorage.removeItem('datacenterTabs')
   localStorage.removeItem('serverTabs')
+  localStorage.removeItem('clusterTabs')    // was MISSING — see below
+  localStorage.removeItem('networkTabs')    // was MISSING — see below
+  localStorage.removeItem('genericTabs')    // every /{slug} page shares this one
   localStorage.removeItem('tabCurrent')
   localStorage.removeItem('crTabCurrent')   // change-request queue's active tab
+
+  // clusterTabs and networkTabs were absent until 2026-09-25, so a cluster or
+  // network-device tab opened by one user survived login on a shared machine
+  // and reappeared for the next — the exact thing this function exists to
+  // prevent, missed for two of the four tab-bearing pages because each page
+  // added its own key and nothing enumerated them.
   history.replaceState(null, '', window.location.pathname)
 }
 
@@ -991,6 +1001,35 @@ export function initServerListTabRestoration() {
 
 export const INVENTORY_CACHE_KEY = 'inventoryCache'
 
+// usableInventoryRows splits inventory rows into the ones a table can render
+// and a count of the ones it cannot.
+//
+// A node keeps its `dgraph.type` when its type is removed from the GraphQL
+// schema, so `queryConfigItem` still matches it through the ConfigItem
+// interface — but every field on it now resolves to nothing, including
+// `__typename`. DataTables reads a missing column as a FATAL error and blocks
+// the whole page with an alert() naming only its own documentation, so one
+// leftover node makes the entire inventory unreachable.
+//
+// Dropped, never silently: the caller renders the count and the reason. Same
+// rule as the capped-fetch notice — a list that quietly omits rows looks
+// exactly like a complete one.
+export function usableInventoryRows(items) {
+  const rows = [], unrenderable = []
+  for (const it of items || []) {
+    if (it && typeof it.type === 'string' && it.type !== '') rows.push(it)
+    else unrenderable.push(it)
+  }
+  return { rows, unrenderable }
+}
+
+// The notice naming which types are hidden is rendered SERVER-SIDE (see
+// page.Home.Orphans). It cannot be built here: for these rows every field
+// resolves to nothing, `__typename` included, so the client has a count and no
+// names — which is what made the first version of this banner useless. The JS
+// keeps only the half it can do, which is not feeding DataTables a row it
+// treats as fatal.
+
 export function inventoryFetch(onData) {
   const query = `query LoadInventory { queryConfigItem { id __typename orbId name createdBy createdAt } }`
   fetch(BASE + '/graphql', {
@@ -1009,8 +1048,12 @@ export function inventoryFetch(onData) {
         createdBy: it.createdBy ?? '',
         createdAt: it.createdAt ?? '',
       }))
-      sessionStorage.setItem(INVENTORY_CACHE_KEY, JSON.stringify(items))
-      onData(items)
+      const { rows } = usableInventoryRows(items)
+      // The CACHE stores the usable rows only. Caching the raw response would
+      // re-poison every later page load from sessionStorage, where no fetch
+      // runs to filter it again.
+      sessionStorage.setItem(INVENTORY_CACHE_KEY, JSON.stringify(rows))
+      onData(rows)
     })
 }
 
@@ -1022,7 +1065,17 @@ export function initInventoryTable() {
   const savedType = localStorage.getItem('inventoryTypeFilter') || ''
   const savedNamespace = localStorage.getItem('inventoryNamespaceFilter') || ''
   const cachedRaw = sessionStorage.getItem(INVENTORY_CACHE_KEY)
-  const initialData = cachedRaw ? JSON.parse(cachedRaw) : []
+  // Filtered on the way OUT of the cache as well as in. A cache written before
+  // this guard existed still holds the bad row, and it survives a reload —
+  // which is exactly the state someone hitting this bug is already in.
+  const cachedSplit = usableInventoryRows(cachedRaw ? JSON.parse(cachedRaw) : [])
+  const initialData = cachedSplit.rows
+  // Written back, not just filtered in memory. A cache poisoned before this
+  // guard existed would otherwise stay poisoned for the life of the session —
+  // and the cached path performs no fetch, so nothing else would ever clean it.
+  if (cachedSplit.unrenderable.length) {
+    sessionStorage.setItem(INVENTORY_CACHE_KEY, JSON.stringify(cachedSplit.rows))
+  }
   // An EMPTY cached array is not a cache hit. "[]" is a truthy string, so a page
   // loaded while the graph was empty — between `make up` and `make seed`, or
   // before a restore finishes — used to cache [], skip the fetch on every
@@ -2132,6 +2185,249 @@ document.addEventListener('click', (e) => {
   modal.classList.remove('is-active')
   document.documentElement.style.overflow = ''
 })
+
+// initGenericTable wires the DataTable on the generic list page (/{slug}).
+//
+// The bespoke list pages each fetch their own rows and register per-type
+// behaviour in LIST_PAGES. This page cannot: it serves every ConfigItem type
+// from one template, and there is nothing per-type for JS to know. Rows are
+// rendered server-side from the view's derived field list, and DataTables is
+// initialised over the existing DOM purely for sort/search/colvis/export — the
+// same toolbar the hand-written pages get, so a derived page does not read as a
+// lesser one.
+// ─── Generic tabs ─────────────────────────────────────────────────────────────
+//
+// ONE implementation for every ConfigItem type, replacing four per-type sets of
+// loadXTab / saveXTab / deleteXTab / initXTabRestoration that differ only by a
+// prefix and a localStorage key.
+//
+// The detail route serves the tab body itself, as a fragment, on HX-Request —
+// the same URL you would navigate to. There is no separate fragment endpoint to
+// keep in step.
+
+// genericTabKey identifies an open tab. Slug-qualified because two types can
+// hold entities with the same orbId shape, and a tab restored onto the wrong
+// page would fetch a 404.
+function genericTabKey(slug, orbId) {
+  return `${slug}|${orbId}`
+}
+
+function genericTabDomId(slug, orbId) {
+  return `${slug}-${safeDomId(orbId)}`
+}
+
+function readGenericTabs() {
+  try {
+    return JSON.parse(localStorage.genericTabs || '[]')
+  } catch (_) {
+    return []
+  }
+}
+
+export function saveGenericTab(label, slug, orbId) {
+  const tabs = readGenericTabs().filter(t => genericTabKey(t.slug, t.orbId) !== genericTabKey(slug, orbId))
+  tabs.push({ label, slug, orbId })
+  localStorage.genericTabs = JSON.stringify(tabs)
+}
+
+export function deleteGenericTab(slug, orbId) {
+  const tabs = readGenericTabs().filter(t => genericTabKey(t.slug, t.orbId) !== genericTabKey(slug, orbId))
+  localStorage.genericTabs = JSON.stringify(tabs)
+}
+
+// loadGenericTab opens (or focuses) a detail tab below the list.
+export function loadGenericTab(label, slug, orbId) {
+  const domId = genericTabDomId(slug, orbId)
+  const tabId = `tab-generic-${domId}`
+  const contentId = `tab-content-generic-${domId}`
+
+  const existing = document.getElementById(tabId)
+  if (existing) {
+    existing.click()
+    return
+  }
+
+  $('#tablist').append(`<li class="tab">
+    <a id="${tabId}" data-target="${contentId}" role="tab" aria-selected="false" tabindex="-1">
+      ${label}
+      <span class="pl-2">
+        <button id="tab-close-generic-${domId}">
+          <i class="fa-solid fa-xmark" style="font-size: 0.8em;"></i>
+        </button>
+      </span>
+    </a>
+  </li>`)
+  $('.app-main').append(`<div class="tab-content" id="${contentId}" role="tabpanel" style="display:none"></div>`)
+
+  const tabLink = document.getElementById(tabId)
+  const tabContent = document.getElementById(contentId)
+
+  tabLink.addEventListener('click', () => {
+    activateTab(tabLink.parentElement)
+    displayTabContent(contentId)
+    setCurrentTab(tabId)
+    if (!tabContent.dataset.loaded) {
+      // The SAME url the row links to. HX-Request makes the handler return the
+      // body alone; there is no second endpoint that could drift from the page.
+      htmx.ajax('GET', `${BASE}/${slug}/${encodeURIComponent(orbId)}`, { target: tabContent, swap: 'innerHTML' })
+      tabContent.dataset.loaded = '1'
+    }
+  })
+
+  document.getElementById(`tab-close-generic-${domId}`).addEventListener('click', (event) => {
+    event.stopPropagation()
+    deleteGenericTab(slug, orbId)
+    replaceCurrentTab(tabId, 'tab-summary')
+    tabLink.parentElement.remove()
+    tabContent.remove()
+    document.getElementById('tab-summary').click()
+  })
+
+  saveGenericTab(label, slug, orbId)
+  tabLink.click()
+}
+
+// initGenericTabRestoration reopens the tabs that were left open, but only the
+// ones belonging to THIS page's slug — a rack tab restored onto /storage-devices
+// would fetch a 404 and render an error where a tab should be.
+export function initGenericTabRestoration() {
+  const table = document.getElementById('generic-table')
+  if (!table) return
+  clearTabStateOnFresh()
+  const slug = table.dataset.slug
+  for (const t of readGenericTabs()) {
+    if (t.slug === slug) loadGenericTab(t.label, t.slug, t.orbId)
+  }
+
+  // ?open=<orbId>&label=<name> deep-links, the same form every hand-written
+  // list page accepts. It is how another page hands you one of these — a
+  // cluster's node row opening that server — and how a bookmark reopens a tab.
+  // Takes precedence over the restored tab: an explicit request beats what
+  // happened to be open last time.
+  const params = new URLSearchParams(window.location.search)
+  const openId = params.get('open')
+  if (openId) {
+    const label = params.get('label') || openId
+    loadGenericTab(label, slug, openId)
+    saveGenericTab(label, slug, openId)
+    document.getElementById(`tab-generic-${genericTabDomId(slug, openId)}`)?.click()
+    // Dropped from the URL once honoured, so a reload does not force the tab
+    // back open after it has been closed.
+    history.replaceState(null, '', BASE + '/' + slug)
+    return
+  }
+
+  const current = localStorage.tabCurrent
+  if (current && document.getElementById(current)) document.getElementById(current).click()
+}
+
+// initGenericAudit fills the audit box on a generic detail page.
+//
+// The hand-written pages load audit lazily, on tab click. A generic detail page
+// stacks boxes instead of tabbing them, so there is no click to hang it on and
+// it loads with the page — one request, the same endpoint and the same rendered
+// fragment.
+//
+// `scope` lets a detail fragment opened as a TAB fill its own panel without
+// touching one already on the page; two of these can be open at once.
+export function initGenericAudit(scope = document) {
+  scope.querySelectorAll('[data-generic-audit]').forEach((box) => {
+    const panel = document.getElementById(box.dataset.genericAudit)
+    if (!panel || panel.dataset.loaded === 'true') return
+    panel.dataset.loaded = 'true'
+    loadAuditPanelForTab(box, panel)
+  })
+}
+
+export function initGenericTable() {
+  document.addEventListener('DOMContentLoaded', () => {
+    const el = document.getElementById('generic-table')
+    if (!el || typeof DataTable === 'undefined') return
+    if ($.fn.dataTable.isDataTable(el)) return
+
+    // Wire the tabs already in the markup — i.e. Summary. Dynamically opened
+    // tabs get their own handler in loadGenericTab. Without this, opening a
+    // detail tab switched away from Summary and nothing could switch back:
+    // the list was still in the DOM, just permanently hidden.
+    document.querySelectorAll('li.tab a[data-target]').forEach((a) => {
+      a.addEventListener('click', () => {
+        activateTab(a.parentElement)
+        displayTabContent(a.dataset.target)
+        setCurrentTab(a.id)
+      })
+    })
+
+    const label = el.dataset.label || 'items'
+    const file = el.dataset.slug || 'config-items'
+    const btn = (icon, text, extra) => Object.assign({
+      text: `<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="${icon}"></i><span>${text}</span></span>`,
+      className: 'is-link is-outlined is-small', titleAttr: text,
+    }, extra)
+
+    new DataTable(el, {
+      layout: {
+        topStart: [
+          { buttons: [
+            btn('fa-regular fa-file-excel', 'Excel', { extend: 'excel', title: '', filename: file }),
+            btn('fa-regular fa-file-text', 'CSV', { extend: 'csv', title: '', filename: file }),
+            btn('fa-regular fa-copy', 'Copy', { extend: 'copy' }),
+            btn('fa fa-columns', 'Select', { extend: 'colvis', titleAttr: 'Select Columns' }),
+          ] },
+          { pageLength: { menu: [100, 250, 500] } },
+        ],
+        topEnd: { search: { placeholder: `Search ${label}` } },
+      },
+      autoWidth: true,
+      scrollX: true,
+      scrollY: 400,
+      scrollCollapse: true,
+      pageLength: 250,
+      // IPv4 sorts numerically, in EVERY column.
+      //
+      // "10.20.21.100" sorts before "10.20.21.41" as a string, because "1" <
+      // "4" — wrong in a way that looks plausible, which is why it survived on
+      // the hand-written pages until someone declared the column. Declaring it
+      // is what a generic page cannot do: it does not know which field holds an
+      // address. So the test is on the VALUE, and a cell that is not an address
+      // passes through untouched. Link cells are unwrapped first — a reference
+      // column renders an <a>, and sorting its markup orders by href.
+      columnDefs: [{
+        targets: '_all',
+        render: (data, type) => {
+          if (type !== 'sort' && type !== 'type') return data == null ? '' : data
+          const text = String(data == null ? '' : data).replace(/<[^>]*>/g, '').trim()
+          return ipv4SortKey(text)
+        },
+      }],
+      // stateSave is keyed per table id, and every generic page shares the id
+      // `generic-table` — so a saved sort from /racks would be restored on
+      // /storage-devices, against different columns. Off deliberately.
+      stateSave: false,
+      language: {
+        infoEmpty: `No ${label} to show`,
+        info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
+        entries: { _: 'rows', 1: 'row' },
+        emptyTable: `No ${label} yet.`,
+      },
+    })
+
+    // Double-click opens the row as a tab below, matching every hand-written
+    // list page. The row's own link still navigates on a single click, so both
+    // ways of getting to a detail view keep working.
+    const slug = el.dataset.slug
+    el.addEventListener('dblclick', (e) => {
+      const row = e.target.closest('tbody tr')
+      if (!row) return
+      const link = row.querySelector('td:first-child a')
+      if (!link) return
+      e.preventDefault()
+      const orbId = decodeURIComponent(link.getAttribute('href').split('/').pop())
+      loadGenericTab(link.textContent.trim() || orbId, slug, orbId)
+    })
+
+    initGenericTabRestoration()
+  })
+}
 
 export function initListPages() {
   document.addEventListener('DOMContentLoaded', () => { initInventoryTable() })

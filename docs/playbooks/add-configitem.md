@@ -33,6 +33,35 @@ Bump `schema/VERSION` if this is a v→v+1 deployment-time schema change.
 
 **Define this type's `orbId` convention** — `<namespace>:<kind>-<natural-key>` (kebab-case type name + a stable natural key; never random/UUID). Add a row to the per-type table in `docs/reference/DGRAPH.md`. See CLAUDE.md Settled Decisions for the rule.
 
+**Then annotate it.** The UI derives every page from the deployed schema, so
+docstring annotations are the ONLY way to influence what renders — there is no
+per-type Go to edit any more. Full table: `docs/reference/DGRAPH.md` § Schema
+annotations. The ones a new type usually wants:
+
+```graphql
+"""
+slug: my-new-kinds
+order: name, enabled
+orbIdSuffix: mynew
+"""
+type MyNewKind implements ConfigItem {
+    enabled: Boolean
+
+    """editorIgnored"""
+    scannedAt: String        # read-only hardware fact
+
+    """
+    jsonString
+    detailOnly
+    """
+    rawPayload: String       # a document: pretty-printed on detail, never a column
+}
+```
+
+⚠️ **One description block per declaration** — two `"""…"""` in a row is a
+GraphQL syntax error DGraph refuses. ⚠️ **A misspelled annotation is silent**;
+orbital reports unrecognised ones at boot, so read that line after applying.
+
 ---
 
 ## Step 2 — Register in the registry

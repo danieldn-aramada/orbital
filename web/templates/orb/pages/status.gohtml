@@ -66,58 +66,60 @@
       </div>
       {{end}}
 
-      <div class="columns is-multiline" style="max-width: 620px;" id="status-panel">
-        <div class="column is-half">
-          <div class="box" style="height: 100%;">
-            <p class="heading">Data Center</p>
-            <p class="title is-5">{{.DCName}}</p>
+      <div class="tab-content">
+        <div class="columns is-multiline" style="max-width: 620px;" id="status-panel">
+          <div class="column is-half">
+            <div class="box" style="height: 100%;">
+              <p class="heading">Data Center</p>
+              <p class="title is-5">{{.DCName}}</p>
+            </div>
           </div>
-        </div>
-        <div class="column is-half">
-          <div class="box" style="height: 100%;">
-            <p class="heading">Registry</p>
-            <p class="title is-6 has-text-weight-semibold">{{.OCIRegistry}}/{{.OCIRepo}}</p>
+          <div class="column is-half">
+            <div class="box" style="height: 100%;">
+              <p class="heading">Registry</p>
+              <p class="title is-6 has-text-weight-semibold">{{.OCIRegistry}}/{{.OCIRepo}}</p>
+            </div>
           </div>
-        </div>
-        <div class="column is-half">
-          <div class="box" style="height: 100%;">
-            <p class="heading">
-              Current Version
-              {{if .AutoImportEnabled}}
-              <span class="tag is-info is-light is-small ml-2 tooltip is-wide" data-text="ORB_AUTO_IMPORT_ENABLED=true — orb applies newer signed versions automatically">Auto-import: ON</span>
+          <div class="column is-half">
+            <div class="box" style="height: 100%;">
+              <p class="heading">
+                Current Version
+                {{if .AutoImportEnabled}}
+                <span class="tag is-info is-light is-small ml-2 tooltip is-wide" data-text="ORB_AUTO_IMPORT_ENABLED=true — orb applies newer signed versions automatically">Auto-import: ON</span>
+                {{end}}
+              </p>
+              <p class="title is-5" id="status-current-version">
+                {{if .CurrentVersion}}{{.CurrentVersion}}{{else}}<span class="has-text-grey">—</span>{{end}}
+              </p>
+              {{/* Sub-line: shows who triggered the last import and how long ago.
+                   Absent when no import has ever happened OR the last-import tag
+                   doesn't match current (rare mid-flight state). Relative time is
+                   rendered client-side by renderTimestamps() in shared.js — the
+                   title attribute keeps the exact UTC on hover. */}}
+              {{if and .LastImport (eq .LastImport.Tag .CurrentVersion)}}
+              <p class="is-size-7 has-text-grey mt-1">
+                imported
+                {{if eq .LastImport.InitiatedBy "auto"}}
+                <span class="has-text-info">(auto)</span>
+                {{else}}
+                (manual)
+                {{end}}
+                · <span data-timestamp="{{.LastImport.ImportedAt.UTC.Format "2006-01-02T15:04:05Z07:00"}}"></span>
+              </p>
               {{end}}
-            </p>
-            <p class="title is-5" id="status-current-version">
-              {{if .CurrentVersion}}{{.CurrentVersion}}{{else}}<span class="has-text-grey">—</span>{{end}}
-            </p>
-            {{/* Sub-line: shows who triggered the last import and how long ago.
-                 Absent when no import has ever happened OR the last-import tag
-                 doesn't match current (rare mid-flight state). Relative time is
-                 rendered client-side by renderTimestamps() in shared.js — the
-                 title attribute keeps the exact UTC on hover. */}}
-            {{if and .LastImport (eq .LastImport.Tag .CurrentVersion)}}
-            <p class="is-size-7 has-text-grey mt-1">
-              imported
-              {{if eq .LastImport.InitiatedBy "auto"}}
-              <span class="has-text-info">(auto)</span>
-              {{else}}
-              (manual)
-              {{end}}
-              · <span data-timestamp="{{.LastImport.ImportedAt.UTC.Format "2006-01-02T15:04:05Z07:00"}}"></span>
-            </p>
-            {{end}}
+            </div>
           </div>
-        </div>
-        <div class="column is-half">
-          <div class="box" style="height: 100%;">
-            <p class="heading">Last Import</p>
-            <p class="title is-5">
-              {{if .LastImport}}
-                <span class="is-size-6">{{.LastImport.ImportedAt.UTC.Format "2006-01-02 15:04 UTC"}}</span>
-              {{else}}
-                <span class="has-text-grey">—</span>
-              {{end}}
-            </p>
+          <div class="column is-half">
+            <div class="box" style="height: 100%;">
+              <p class="heading">Last Import</p>
+              <p class="title is-5">
+                {{if .LastImport}}
+                  <span class="is-size-6">{{.LastImport.ImportedAt.UTC.Format "2006-01-02 15:04 UTC"}}</span>
+                {{else}}
+                  <span class="has-text-grey">—</span>
+                {{end}}
+              </p>
+            </div>
           </div>
         </div>
       </div>

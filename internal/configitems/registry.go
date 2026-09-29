@@ -23,8 +23,11 @@
 // This registry describes only ConfigItem-shaped types — entities with an
 // orbId and a place in the parent/child relationship graph. It does NOT
 // describe arbitrary GraphQL types, scalar enums, or query-only interfaces.
-// `IsRoot` distinguishes parent-page types (DataCenter, Server,
-// EksaKubernetesCluster) from owned-only sub-resources (IdracSettings, etc.).
+// The per-type EDITABLE FIELD lists that used to live here are gone: they are
+// derived from the deployed schema at runtime (see derive.go). What remains is
+// the containment/ownership policy, which introspection cannot supply because
+// `@hasInverse` is declared on both ends of an edge and says nothing about
+// which end is the parent.
 package configitems
 
 import (
@@ -40,11 +43,6 @@ type Type struct {
 	// Used as the cross-layer key (audit operation suffix, response payload
 	// field name prefix, etc.).
 	Name string
-
-	// IsRoot indicates a type that has its own page in the UI (DataCenter,
-	// Server, EksaKubernetesCluster). Non-root types are owned-only
-	// sub-resources rendered inside their parent's edit modal.
-	IsRoot bool
 
 	// OwnerType is the GraphQL type that owns this one — the parent in the
 	// composition hierarchy. Empty for top-level standalone types.
@@ -77,39 +75,6 @@ type Type struct {
 	// whose required storageController edge is its rollup parent even though it
 	// is reached downward via StorageDevice.storageVolumes).
 	OwnerEdges []OwnerEdge
-
-	// BeforeFields is the GraphQL selection used to fetch the before-state for
-	// audit diff rendering. Must include `id orbId name version` at minimum
-	// plus every editable scalar so buildDiffHTML has both sides to compare.
-	BeforeFields string
-
-	// FormFields are the scalar/Boolean fields the JS editor exposes for
-	// user editing. The editor reads these on snapshot-build, on diff at
-	// submit, and on building the `set` map. Excludes audit/metadata fields
-	// (id, orbId, version, namespace, createdBy/At, updatedBy/At).
-	FormFields []string
-
-	// PayloadField is the response selection field on Add{Type}Payload that
-	// returns the affected row (so the audit extractor can find the orbId in
-	// the response body). DGraph's convention is the lowercase type name
-	// pluralized as a list — but it doesn't always pluralize cleanly
-	// (S3Sync's payload is "s3Sync"), so we declare it explicitly.
-	PayloadField string
-
-	// Implements lists GraphQL interface names this type implements. Used by
-	// Children() to walk interface-typed ownership: backup sub-kinds declare
-	// OwnerType: "KubernetesCluster" (the interface), and Children() returns
-	// them when asked about EksaKubernetesCluster because EksaKubernetesCluster
-	// implements KubernetesCluster. Schema source of truth.
-	Implements []string
-
-	// JSONStringFields lists FormFields whose schema type is `String` but
-	// whose VALUE is JSON. The page handler parses these before injecting
-	// into the JSON editor (so they display as nested structure); on submit,
-	// configitem-editor.js MUST stringify them again before they go into the
-	// mutation's `set`, or DGraph rejects with "cannot use as String".
-	// E.g. DataCenter.assetDataV2 — declared `String # json` in the schema.
-	JSONStringFields []string
 }
 
 // OwnerEdge is one candidate owner of a ConfigItem type — the type-policy the
@@ -182,10 +147,36 @@ func downwardEdges(t Type) []OwnerEdge {
 // implements, e.g. EksaKubernetesCluster gets KubernetesNode/ClusterBackup).
 // Deduplicated per (ChildType, ChildField).
 func OwnedChildren(parentType string) []OwnedChild {
+	return OwnedChildrenWith(parentType, nil)
+}
+
+// OwnedChildrenWith is OwnedChildren with an explicit interface lookup.
+//
+// It exists to break a RE-ENTRANCY loop. The package-level lookup reads through
+// the schema resolver, and the resolver builds its view list inside its own
+// resolve step — so anything calling OwnedChildren from there re-entered the
+// resolver, which re-resolved, which called OwnedChildren again. Every generic
+// page hung, with no error and nothing in the access log, because the request
+// never finished.
+//
+// A caller that already HOLDS the snapshot passes its own lookup and never
+// re-enters. Pass nil to use the package-level one.
+func OwnedChildrenWith(parentType string, implements func(string) []string) []OwnedChild {
 	parentT, parentKnown := nameSet[parentType]
+	implementsFn := func(typeName, iface string) bool {
+		if implements == nil {
+			return implementsInterface(typeName, iface)
+		}
+		for _, i := range implements(typeName) {
+			if i == iface {
+				return true
+			}
+		}
+		return false
+	}
 	owns := func(ownerType string) bool {
 		return ownerType == parentType ||
-			(parentKnown && slices.Contains(parentT.Implements, ownerType))
+			(parentKnown && implementsFn(parentT.Name, ownerType))
 	}
 	seen := make(map[OwnedChild]bool)
 	var out []OwnedChild
@@ -237,78 +228,50 @@ func OwnedOrbIDSelection(rootType string) string {
 var Types = []Type{
 	// ── Inventory hierarchy ──────────────────────────────────────────────────
 	{
-		Name:             "DataCenter",
-		IsRoot:           true,
-		BeforeFields:     "id orbId name version assetDataV2 model",
-		FormFields:       []string{"name", "assetDataV2", "model"},
-		JSONStringFields: []string{"assetDataV2"},
-		PayloadField:     "dataCenter",
+		Name: "DataCenter",
 	},
 	{
-		Name:         "Rack",
-		OwnerType:    "DataCenter",
-		ChildField:   "racks",
-		BeforeFields: "id orbId name version uHeight",
-		FormFields:   []string{"name", "uHeight"},
-		PayloadField: "rack",
+		Name:       "Rack",
+		OwnerType:  "DataCenter",
+		ChildField: "racks",
 	},
 	{
-		Name:         "Server",
-		IsRoot:       true,
-		BeforeFields: "id orbId name version hostname model manufacturer serviceTag serialNumber rackPosition uHeight oobMAC idracSettings { firmwareVersion sshEnabled ipmiEnabled lockdownModeEnabled osToIdracPassThroughEnabled usbManagementPortEnabled dhcpEnabled racadmEnabled } serverMaintenance { enabled windowStart windowEnd reason }",
-		FormFields:   []string{"hostname", "manufacturer", "model", "oobMAC", "rackPosition", "uHeight", "serviceTag", "serialNumber"},
-		PayloadField: "server",
+		Name: "Server",
 	},
 	{
-		Name:         "IdracSettings",
-		OwnerType:    "Server",
-		OwnerField:   "server",
-		ChildField:   "idracSettings",
-		BeforeFields: "id orbId name version firmwareVersion sshEnabled ipmiEnabled lockdownModeEnabled osToIdracPassThroughEnabled usbManagementPortEnabled dhcpEnabled racadmEnabled",
-		FormFields:   []string{"firmwareVersion", "sshEnabled", "ipmiEnabled", "lockdownModeEnabled", "osToIdracPassThroughEnabled", "usbManagementPortEnabled", "dhcpEnabled", "racadmEnabled"},
-		PayloadField: "idracSettings",
+		Name:       "IdracSettings",
+		OwnerType:  "Server",
+		OwnerField: "server",
+		ChildField: "idracSettings",
 	},
 	{
-		Name:         "ServerMaintenance",
-		OwnerType:    "Server",
-		OwnerField:   "server",
-		ChildField:   "serverMaintenance",
-		BeforeFields: "id orbId name version enabled windowStart windowEnd reason",
-		FormFields:   []string{"enabled", "windowStart", "windowEnd", "reason"},
-		PayloadField: "serverMaintenance",
+		Name:       "ServerMaintenance",
+		OwnerType:  "Server",
+		OwnerField: "server",
+		ChildField: "serverMaintenance",
 	},
 	{
-		Name:         "ServerConfigurationProfile",
-		OwnerType:    "Server",
-		OwnerField:   "server",
-		ChildField:   "serverConfigurationProfile",
-		BeforeFields: "id orbId name version",
-		PayloadField: "serverConfigurationProfile",
+		Name:       "ServerConfigurationProfile",
+		OwnerType:  "Server",
+		OwnerField: "server",
+		ChildField: "serverConfigurationProfile",
 	},
 	{
-		Name:         "StorageController",
-		OwnerType:    "Server",
-		OwnerField:   "server",
-		ChildField:   "storageControllers",
-		BeforeFields: "id orbId name version",
-		PayloadField: "storageController",
+		Name:       "StorageController",
+		OwnerType:  "Server",
+		OwnerField: "server",
+		ChildField: "storageControllers",
 	},
 	{
-		Name:         "StorageDevice",
-		OwnerType:    "StorageController",
-		OwnerField:   "storageController",
-		ChildField:   "storageDevices",
-		BeforeFields: "id orbId name version",
-		PayloadField: "storageDevice",
+		Name:       "StorageDevice",
+		OwnerType:  "StorageController",
+		OwnerField: "storageController",
+		ChildField: "storageDevices",
 	},
 	{
-		Name:         "StorageVolume",
-		OwnerType:    "StorageDevice",
-		ChildField:   "storageVolumes",
-		BeforeFields: "id orbId name version",
-		PayloadField: "storageVolume",
-		// Rollup parent is the required StorageController edge (no down field —
-		// reached downward via StorageDevice.storageVolumes, its ChildField).
+		Name:       "StorageVolume",
+		OwnerType:  "StorageDevice",
+		ChildField: "storageVolumes",
 		OwnerEdges: []OwnerEdge{
 			{OwnerType: "StorageController", Field: "storageController"},
 		},
@@ -316,11 +279,7 @@ var Types = []Type{
 
 	// ── IP addresses (referenced by many types via @hasInverse) ──────────────
 	{
-		Name:         "IPAddress",
-		BeforeFields: "id orbId name version address type role",
-		PayloadField: "ipAddress",
-		// Multi-parent: an IP is owned by whichever resource references it —
-		// server OOB, k8s node, cluster control-plane, or EKS-A Tinkerbell.
+		Name: "IPAddress",
 		OwnerEdges: []OwnerEdge{
 			{OwnerType: "Server", Field: "serverOobIP", DownField: "oobIP"},
 			{OwnerType: "KubernetesNode", Field: "kubernetesNodeIpv4", DownField: "ipv4"},
@@ -331,32 +290,21 @@ var Types = []Type{
 
 	// ── Network devices (switch / router / firewall / sd-wan) ────────────────
 	{
-		Name:         "NetworkDevice",
-		IsRoot:       true,
-		BeforeFields: "id orbId name version manufacturer model serial role macAddress rackPosition platform face vcPosition vcPriority",
-		FormFields:   []string{"manufacturer", "model", "serial", "role", "macAddress", "rackPosition", "platform", "face", "vcPosition", "vcPriority"},
-		PayloadField: "networkDevice",
+		Name: "NetworkDevice",
 	},
 
 	// ── Server NICs (read-only, like storage — owned children for cascade) ───
 	{
-		Name:         "NetworkAdapter",
-		OwnerType:    "Server",
-		OwnerField:   "server",
-		ChildField:   "networkAdapters",
-		BeforeFields: "id orbId name version",
-		PayloadField: "networkAdapter",
+		Name:       "NetworkAdapter",
+		OwnerType:  "Server",
+		OwnerField: "server",
+		ChildField: "networkAdapters",
 	},
 	{
-		Name:         "NetworkInterface",
-		OwnerType:    "NetworkAdapter",
-		OwnerField:   "networkAdapter",
-		ChildField:   "networkInterfaces",
-		BeforeFields: "id orbId name version",
-		PayloadField: "networkInterface",
-		// Multi-parent (XOR at the instance level): a server NIC nests under its
-		// adapter (server-side), a switch/LAG port under its NetworkDevice.
-		// Most-specific first: adapter before the server it belongs to.
+		Name:       "NetworkInterface",
+		OwnerType:  "NetworkAdapter",
+		OwnerField: "networkAdapter",
+		ChildField: "networkInterfaces",
 		OwnerEdges: []OwnerEdge{
 			{OwnerType: "NetworkAdapter", Field: "networkAdapter", DownField: "networkInterfaces"},
 			{OwnerType: "Server", Field: "server", DownField: "networkInterfaces"},
@@ -366,8 +314,8 @@ var Types = []Type{
 
 	// ── Kubernetes cluster hierarchy ─────────────────────────────────────────
 	{
-		// KubernetesCluster is an INTERFACE, and this entry is for BeforeFields
-		// and the audit allowlist — NOT for mutations.
+		// KubernetesCluster is an INTERFACE, and this entry exists for the audit
+		// allowlist — NOT for mutations.
 		//
 		// Corrected 2026-09-03: it used to claim it covered interface-level
 		// update/delete. It cannot. `KubernetesClusterFilter` has no `orbId` (an
@@ -375,59 +323,40 @@ var Types = []Type{
 		// declared on ConfigItem), so orbital's `filter: { orbId: { eq: $orbId } }`
 		// form cannot target it — verified by introspection. Writes go through the
 		// concrete types, which do carry orbId and version.
-		Name:         "KubernetesCluster",
-		BeforeFields: "id orbId name version kubernetesVersion cni environment",
+		Name: "KubernetesCluster",
 	},
 	{
-		Name:         "EksaKubernetesCluster",
-		IsRoot:       true,
-		BeforeFields: "id orbId name version kubernetesVersion cni environment clusterType",
-		FormFields:   []string{"kubernetesVersion", "cni", "environment", "clusterType"},
-		PayloadField: "eksaKubernetesCluster",
-		Implements:   []string{"KubernetesCluster"},
+		Name: "EksaKubernetesCluster",
 	},
 	{
-		Name:         "KubernetesNode",
-		OwnerType:    "KubernetesCluster",
-		OwnerField:   "cluster",
-		ChildField:   "nodes",
-		BeforeFields: "id orbId name version role",
-		PayloadField: "kubernetesNode",
+		Name:       "KubernetesNode",
+		OwnerType:  "KubernetesCluster",
+		OwnerField: "cluster",
+		ChildField: "nodes",
 	},
 	{
-		Name:         "ClusterBackup",
-		OwnerType:    "KubernetesCluster",
-		OwnerField:   "cluster",
-		ChildField:   "backup",
-		BeforeFields: "id orbId name version",
-		PayloadField: "clusterBackup",
+		Name:       "ClusterBackup",
+		OwnerType:  "KubernetesCluster",
+		OwnerField: "cluster",
+		ChildField: "backup",
 	},
 	{
-		Name:         "EtcdBackup",
-		OwnerType:    "ClusterBackup",
-		OwnerField:   "clusterBackupEtcd",
-		ChildField:   "etcd",
-		BeforeFields: "id orbId name version enabled schedule location retentionDays",
-		FormFields:   []string{"enabled", "schedule", "location", "retentionDays"},
-		PayloadField: "etcdBackup",
+		Name:       "EtcdBackup",
+		OwnerType:  "ClusterBackup",
+		OwnerField: "clusterBackupEtcd",
+		ChildField: "etcd",
 	},
 	{
-		Name:         "VeleroBackup",
-		OwnerType:    "ClusterBackup",
-		OwnerField:   "clusterBackupVelero",
-		ChildField:   "velero",
-		BeforeFields: "id orbId name version enabled schedule location retentionDays",
-		FormFields:   []string{"enabled", "schedule", "location", "retentionDays"},
-		PayloadField: "veleroBackup",
+		Name:       "VeleroBackup",
+		OwnerType:  "ClusterBackup",
+		OwnerField: "clusterBackupVelero",
+		ChildField: "velero",
 	},
 	{
-		Name:         "S3Sync",
-		OwnerType:    "ClusterBackup",
-		OwnerField:   "clusterBackupS3Sync",
-		ChildField:   "s3Sync",
-		BeforeFields: "id orbId name version enabled",
-		FormFields:   []string{"enabled"},
-		PayloadField: "s3Sync",
+		Name:       "S3Sync",
+		OwnerType:  "ClusterBackup",
+		OwnerField: "clusterBackupS3Sync",
+		ChildField: "s3Sync",
 	},
 }
 
@@ -487,7 +416,7 @@ func Children(parent string) []Type {
 		}
 		// Interface-typed ownership: if `parent` is concrete and implements
 		// an interface `t` names as OwnerType, include `t`.
-		if parentKnown && t.OwnerType != "" && slices.Contains(parentT.Implements, t.OwnerType) {
+		if parentKnown && t.OwnerType != "" && implementsInterface(parentT.Name, t.OwnerType) {
 			out = append(out, t)
 		}
 	}
@@ -512,20 +441,6 @@ var knownMutationsRegex = func() *regexp.Regexp {
 	pattern := `(?i)\b(add|update|delete)(` + strings.Join(names, "|") + `)\b`
 	return regexp.MustCompile(pattern)
 }()
-
-// BeforeFields returns the GraphQL selection string the audit before-fetcher
-// should use when querying the before-state of `typeName`. Returns "" if the
-// type isn't registered or has no BeforeFields declared.
-//
-// Drop-in replacement for the previously hand-maintained `typeBeforeFields`
-// map in `internal/handler/graphql.go`.
-func BeforeFields(typeName string) string {
-	t, ok := nameSet[typeName]
-	if !ok {
-		return ""
-	}
-	return t.BeforeFields
-}
 
 // EditTarget mirrors the shape consumed by web/shared/static/configitem-editor.js.
 // One entry per editable entity in the JSON tree shown by a parent's edit
@@ -595,7 +510,18 @@ type EditWrapper struct {
 // (ClusterBackup) are NOT direct edit targets — they're surfaced via
 // ParentWrapper on each leaf child so the JS module can emit a wrapper-link
 // mutation on first-time configure.
-func BuildEditTargets(rootType, rootOrbID, namespace, name string) []EditTarget {
+// FieldsFor returns a type's editable scalar fields. It is supplied by the
+// caller rather than read from this file so the field list can come from the
+// DEPLOYED schema — see internal/configitems/derive.go. A type with no editable
+// fields returns empty, which is how a child is excluded from the edit tree.
+type FieldsFor func(typeName string) []string
+
+// MetaFor returns a type's schema-derived metadata: its JSON-in-a-String
+// fields and its orbId suffix. Supplied by the caller for the same reason
+// FieldsFor is — both used to be hand-maintained in this file.
+type MetaFor func(typeName string) TypeInfo
+
+func BuildEditTargets(fields FieldsFor, meta MetaFor, rootType, rootOrbID, namespace, name string) []EditTarget {
 	rootT, ok := nameSet[rootType]
 	if !ok {
 		return nil
@@ -605,9 +531,9 @@ func BuildEditTargets(rootType, rootOrbID, namespace, name string) []EditTarget 
 		Path:             []string{},
 		Kind:             rootT.Name,
 		OrbID:            rootOrbID,
-		Fields:           rootT.FormFields,
-		JSONStringFields: rootT.JSONStringFields,
-		PayloadField:     rootT.PayloadField,
+		Fields:           fields(rootT.Name),
+		JSONStringFields: JSONStringFieldsFor(meta(rootT.Name)),
+		PayloadField:     meta(rootT.Name).PayloadField,
 		Namespace:        namespace,
 	}}
 
@@ -615,14 +541,14 @@ func BuildEditTargets(rootType, rootOrbID, namespace, name string) []EditTarget 
 	// wrapper types whose grandchildren are the actual edit targets — recurse
 	// in that case (wrapper signaled by IsWrapper).
 	for _, child := range Children(rootType) {
-		if isWrapper(child) {
+		if isWrapper(fields, child) {
 			// Wrapper: surface its grandchildren as leaves, prefix the path
 			// with the wrapper's ChildField on the root.
-			wrapperOrbID := fmt.Sprintf("%s:%s-%s", namespace, name, wrapperSuffix(child.Name))
+			wrapperOrbID := fmt.Sprintf("%s:%s-%s", namespace, name, orbIDSuffix(meta, child.Name))
 			wrapper := &EditWrapper{
 				Kind:        child.Name,
 				OrbID:       wrapperOrbID,
-				Name:        name + "-" + wrapperSuffix(child.Name),
+				Name:        name + "-" + orbIDSuffix(meta, child.Name),
 				Namespace:   namespace,
 				ParentField: child.ChildField, // field on the root that points at the wrapper
 			}
@@ -630,10 +556,10 @@ func BuildEditTargets(rootType, rootOrbID, namespace, name string) []EditTarget 
 				out = append(out, EditTarget{
 					Path:               []string{child.ChildField, leaf.ChildField},
 					Kind:               leaf.Name,
-					OrbID:              fmt.Sprintf("%s:%s-%s", namespace, name, leafSuffix(leaf.Name)),
-					Fields:             leaf.FormFields,
-					JSONStringFields:   leaf.JSONStringFields,
-					PayloadField:       leaf.PayloadField,
+					OrbID:              fmt.Sprintf("%s:%s-%s", namespace, name, orbIDSuffix(meta, leaf.Name)),
+					Fields:             fields(leaf.Name),
+					JSONStringFields:   JSONStringFieldsFor(meta(leaf.Name)),
+					PayloadField:       meta(leaf.Name).PayloadField,
 					Namespace:          namespace,
 					ParentInverseField: leaf.OwnerField,
 					ParentOrbID:        wrapperOrbID,
@@ -646,7 +572,7 @@ func BuildEditTargets(rootType, rootOrbID, namespace, name string) []EditTarget 
 		// Skip children with no editable fields — they're owned but
 		// non-editable (KubernetesNode is data-imported via seed/kubectl, not
 		// user-edited from the cluster page).
-		if len(child.FormFields) == 0 {
+		if len(fields(child.Name)) == 0 {
 			continue
 		}
 		// Owned-child orbIds follow the deterministic convention
@@ -654,10 +580,10 @@ func BuildEditTargets(rootType, rootOrbID, namespace, name string) []EditTarget 
 		out = append(out, EditTarget{
 			Path:               []string{child.ChildField},
 			Kind:               child.Name,
-			OrbID:              fmt.Sprintf("%s:%s-%s", namespace, name, leafSuffix(child.Name)),
-			Fields:             child.FormFields,
-			JSONStringFields:   child.JSONStringFields,
-			PayloadField:       child.PayloadField,
+			OrbID:              fmt.Sprintf("%s:%s-%s", namespace, name, orbIDSuffix(meta, child.Name)),
+			Fields:             fields(child.Name),
+			JSONStringFields:   JSONStringFieldsFor(meta(child.Name)),
+			PayloadField:       meta(child.Name).PayloadField,
 			Namespace:          namespace,
 			ParentInverseField: child.OwnerField,
 			ParentOrbID:        rootOrbID,
@@ -707,35 +633,77 @@ func StampEditTargetVersion(targets []EditTarget, orbID string, version int) []E
 // only ClusterBackup qualifies: it wraps etcd/velero/s3Sync but has no
 // editable fields of its own. Wrappers don't appear as edit targets; they
 // surface via EditWrapper attached to their children's targets.
-func isWrapper(t Type) bool {
-	return len(t.FormFields) == 0 && len(Children(t.Name)) > 0
+func isWrapper(fields FieldsFor, t Type) bool {
+	return len(fields(t.Name)) == 0 && len(Children(t.Name)) > 0
 }
 
-// wrapperSuffix returns the URL slug used in derived wrapper orbIds.
-// e.g. ClusterBackup → "backup" so the wrapper orbId is `<ns>:<name>-backup`.
-// Convention is established by the existing seed data — keep aligned.
-func wrapperSuffix(kind string) string {
-	switch kind {
-	case "ClusterBackup":
-		return "backup"
+// orbIDSuffix returns the token an owned child's derived orbId ends with.
+//
+// This was two switch statements naming six irregular types (IdracSettings is
+// "idrac", not "idracsettings"). The convention now travels with the type, as a
+// `"""orbIdSuffix: ..."""` annotation, and everything else falls back to the
+// lower-cased type name. A wrong value here does not error — it builds an orbId
+// for an entity that does not exist, and upserts a phantom instead of editing
+// the real one.
+func orbIDSuffix(meta MetaFor, typeName string) string {
+	if meta != nil {
+		if s := meta(typeName).OrbIDSuffix; s != "" {
+			return s
+		}
 	}
-	return strings.ToLower(kind)
+	return strings.ToLower(typeName)
 }
 
-// leafSuffix returns the URL slug used in derived owned-child orbIds.
-// Convention is established by the existing seed data — keep aligned.
-func leafSuffix(kind string) string {
-	switch kind {
-	case "IdracSettings":
-		return "idrac"
-	case "ServerConfigurationProfile":
-		return "scp"
-	case "EtcdBackup":
-		return "etcd-backup"
-	case "VeleroBackup":
-		return "velero-backup"
-	case "S3Sync":
-		return "s3sync"
+// implementsInterface reports whether a concrete type implements an interface.
+//
+// Used to resolve interface-typed ownership: the backup sub-kinds declare an
+// owner of `KubernetesCluster`, and a concrete EksaKubernetesCluster owns them
+// because it implements that interface.
+//
+// Reads the DEPLOYED schema through a package-level hook rather than a
+// hand-maintained `Implements` list. The hook is a package var because Children
+// and downwardEdges are package functions called from several places that have
+// no resolver to thread; when it is unset (unit tests with no schema) the answer
+// is false, which is the same as the empty list those tests used to see.
+var implementsLookup func(typeName string) []string
+
+// SetImplementsLookup wires the schema-backed interface lookup at startup.
+func SetImplementsLookup(fn func(typeName string) []string) { implementsLookup = fn }
+
+// ImplementsFor returns the interfaces a type declares in the deployed schema,
+// or nil when no schema has been read.
+func ImplementsFor(typeName string) []string {
+	if implementsLookup == nil {
+		return nil
 	}
-	return strings.ToLower(kind)
+	return implementsLookup(typeName)
+}
+
+func implementsInterface(typeName, iface string) bool {
+	if implementsLookup == nil {
+		return false
+	}
+	for _, i := range implementsLookup(typeName) {
+		if i == iface {
+			return true
+		}
+	}
+	return false
+}
+
+// ExclusivelyOwned reports whether exactly one kind of parent can own this
+// type.
+//
+// This is what separates a child that belongs to its parent from one that
+// merely hangs off it. ClusterBackup is only ever a cluster's, so a cluster
+// page shows it inline and edits it through the parent's JSON tree. IPAddress
+// is reachable from a server, a node and two cluster fields — it is a thing in
+// its own right, and a page that inlined it would be claiming an ownership
+// nobody has.
+func ExclusivelyOwned(typeName string) bool {
+	t, known := nameSet[typeName]
+	if !known {
+		return false
+	}
+	return len(t.OwnerEdgesOf()) == 1
 }

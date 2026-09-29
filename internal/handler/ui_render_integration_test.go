@@ -42,6 +42,10 @@ func newRenderUI(t *testing.T) (*UI, *ent.Client) {
 	ui.SetSchemaPath("schema/schema.graphql")
 	ui.SetDGraphURL(testutil.DGraphURL())
 	ui.SetDGraphAdminURL(testutil.DGraphAdminURL())
+	// The field source server.go wires. Without it ui.Generic() returns nil,
+	// and a test calling a generic handler panics on a nil method value rather
+	// than failing with something readable.
+	ui.fields = NewSharedFieldSource(testutil.DGraphURL(), slog.Default())
 	return ui, db
 }
 
@@ -113,10 +117,6 @@ func TestOrbitalPages_AllPathsReturn200(t *testing.T) {
 	}{
 		{"/", ui.Index, nil, "<title>Orbital</title>"},
 		{"/inventory", ui.Index, nil, "<title>Orbital</title>"},
-		{"/datacenters", ui.DataCenters, nil, "Data Centers"},
-		{"/servers", ui.Servers, nil, "Servers"},
-		{"/clusters", ui.Clusters, nil, "Clusters"},
-		{"/network", ui.NetworkDevices, nil, "Network Devices"},
 		{"/backups", ui.Backups, nil, "Backups"},
 		{"/divergence-reports", ui.DivergenceReports, nil, "Divergence Reports"},
 		{"/audit-log", ui.AuditLog, nil, "Audit Log"},
@@ -156,18 +156,22 @@ func TestOrbitalPages_LoginGateWhenUnauthenticated(t *testing.T) {
 	ui, _ := newRenderUI(t)
 	e := echo.New()
 
+	// Every page this used to list has migrated to the generic renderer, so
+	// the gate is asserted against THAT — which is now the one path a
+	// ConfigItem page can take. An empty list here would still pass: a loop
+	// over nothing is green and proves nothing.
 	gated := []struct {
-		path string
-		fn   func(echo.Context) error
+		path   string
+		fn     func(echo.Context) error
+		params map[string]string
 	}{
-		{"/servers", ui.Servers},
-		{"/clusters", ui.Clusters},
-		{"/datacenters", ui.DataCenters},
+		{"/servers", ui.Generic().List, map[string]string{"slug": "servers"}},
+		{"/clusters", ui.Generic().List, map[string]string{"slug": "clusters"}},
 	}
 
 	for _, p := range gated {
 		t.Run(p.path, func(t *testing.T) {
-			rec := renderAs(t, e, p.path, p.fn, 0, nil)
+			rec := renderAs(t, e, p.path, p.fn, 0, p.params)
 			if rec.Code != http.StatusOK {
 				t.Errorf("expected 200, got %d", rec.Code)
 			}

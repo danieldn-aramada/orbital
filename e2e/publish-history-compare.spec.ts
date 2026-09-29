@@ -20,17 +20,52 @@ async function comparableArtifacts(request: any): Promise<any[]> {
   return (all || []).filter((a: any) => a.status === 'completed' && a.digest)
 }
 
-test('compare tab: pickers render and diff loads from a deep link', async ({ page, request }) => {
-  const usable = await comparableArtifacts(request)
-  test.skip(usable.length < 2, 'needs two published artifacts')
+// pickComparablePair returns the oldest/newest pair in one data center that
+// orbital can ACTUALLY retrieve, or null.
+//
+// `status === 'completed' && digest` only means orbital RECORDED a publish. The
+// blob lives in the registry, whose lifetime is not Postgres's: recreate the
+// registry container, or let it garbage-collect, and the row survives while the
+// artifact does not. Comparing then fails with a 502 from ORAS — an accurate
+// report about the environment, and nothing at all about the Compare tab these
+// tests exist to cover. It failed that way for weeks, on an artifact published
+// 2026-09-23, and every run blamed the code.
+//
+// So the precondition is checked the way the page checks it: ask orbital to do
+// the compare. Older pairs are tried first and skipped when unretrievable, so a
+// partially garbage-collected registry still exercises the UI instead of
+// reporting a false failure.
+// pickRetrievableArtifact returns one artifact orbital can still pull, or null.
+// Same reason as the pair picker: a recorded publish is not a surviving blob.
+async function pickRetrievableArtifact(request: any): Promise<any | null> {
+  for (const a of await comparableArtifacts(request)) {
+    const probe = await request.get(`/api/v1/export/compare?from=${a.id}&to=${a.id}`)
+    if (probe.ok()) return a
+  }
+  return null
+}
 
-  // Same data center, oldest and newest.
-  const dc = usable[0].datacenterName
-  const inDC = usable
-    .filter(a => a.datacenterName === dc)
-    .sort((a, b) => String(a.completedAt).localeCompare(String(b.completedAt)))
-  test.skip(inDC.length < 2, 'needs two artifacts in one data center')
-  const from = inDC[0], to = inDC[inDC.length - 1]
+async function pickComparablePair(request: any): Promise<{ from: any, to: any } | null> {
+  const usable = await comparableArtifacts(request)
+  const byDC: Record<string, any[]> = {}
+  for (const a of usable) (byDC[a.datacenterName] ||= []).push(a)
+
+  for (const rows of Object.values(byDC)) {
+    if (rows.length < 2) continue
+    const sorted = [...rows].sort((a, b) => String(a.completedAt).localeCompare(String(b.completedAt)))
+    const to = sorted[sorted.length - 1]
+    for (const from of sorted.slice(0, -1)) {
+      const probe = await request.get(`/api/v1/export/compare?from=${from.id}&to=${to.id}`)
+      if (probe.ok()) return { from, to }
+    }
+  }
+  return null
+}
+
+test('compare tab: pickers render and diff loads from a deep link', async ({ page, request }) => {
+  const pair = await pickComparablePair(request)
+  test.skip(!pair, 'no retrievable artifact pair — publish two, or the registry lost the blobs')
+  const { from, to } = pair!
 
   await page.goto(`/publish-history/compare?from=${from.id}&to=${to.id}`)
 
@@ -55,11 +90,10 @@ test('compare tab: pickers render and diff loads from a deep link', async ({ pag
 // the net diff is empty, which reads as "compare is broken". Comparing an
 // artifact against itself is a guaranteed way to reach that state.
 test('zero-difference compare explains why it can differ from the Audit Log', async ({ page, request }) => {
-  const usable = await comparableArtifacts(request)
-  test.skip(usable.length < 1, 'needs a published artifact')
-  const a = usable[0]
+  const a = await pickRetrievableArtifact(request)
+  test.skip(!a, 'no retrievable artifact — the registry lost the blob for every recorded publish')
 
-  await page.goto(`/publish-history/compare?from=${a.id}&to=${a.id}`)
+  await page.goto(`/publish-history/compare?from=${a!.id}&to=${a!.id}`)
   const result = page.locator('#compare-result')
   await expect(result).toContainText('No differences between these versions', { timeout: 20_000 })
   await expect(result).toContainText('later undone')
@@ -69,15 +103,9 @@ test('zero-difference compare explains why it can differ from the Audit Log', as
 // panels), so without session persistence every Artifacts → Compare round trip
 // silently discards the selection the user just made. Reported from real use.
 test('compare selection survives a round trip through the Artifacts tab', async ({ page, request }) => {
-  const usable = await comparableArtifacts(request)
-  test.skip(usable.length < 2, 'needs two published artifacts')
-
-  const dc = usable[0].datacenterName
-  const inDC = usable
-    .filter(a => a.datacenterName === dc)
-    .sort((a, b) => String(a.completedAt).localeCompare(String(b.completedAt)))
-  test.skip(inDC.length < 2, 'needs two artifacts in one data center')
-  const from = inDC[0], to = inDC[inDC.length - 1]
+  const pair = await pickComparablePair(request)
+  test.skip(!pair, 'no retrievable artifact pair — publish two, or the registry lost the blobs')
+  const { from, to } = pair!
 
   await page.goto(`/publish-history/compare?from=${from.id}&to=${to.id}`)
   await expect(page.locator('#compare-result')).toContainText(`${from.tag} → ${to.tag}`, { timeout: 20_000 })
@@ -98,8 +126,8 @@ test('compare selection survives a round trip through the Artifacts tab', async 
 // that actually has artifacts. Defaulting to the alphabetically-first DC means
 // the first thing most users see is "Nothing published for this data center yet".
 test('compare tab cold start opens on a data center with artifacts', async ({ page, request }) => {
-  const usable = await comparableArtifacts(request)
-  test.skip(usable.length < 2, 'needs two published artifacts')
+  const pair = await pickComparablePair(request)
+  test.skip(!pair, 'no retrievable artifact pair — publish two, or the registry lost the blobs')
 
   await page.context().clearCookies({ name: 'nothing' }) // no-op; keeps auth state
   await page.goto('/publish-history/compare')

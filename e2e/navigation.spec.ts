@@ -4,9 +4,9 @@ import { test, expect } from '@playwright/test';
 // Datacenters/servers use tab layout with no heading — check for their table instead.
 // Backups uses <h1 class="title">.
 const pages: Array<{ path: string; heading?: string; testid?: boolean; tableId?: string }> = [
-  { path: '/datacenters',        tableId: 'datacenter-table' },
-  { path: '/servers',            tableId: 'server-list-table' },
-  { path: '/clusters',           tableId: 'cluster-table' },
+  { path: '/data-centers',       tableId: 'generic-table' },   // migrated to the generic renderer
+  { path: '/servers',            tableId: 'generic-table' },
+  { path: '/clusters',           tableId: 'generic-table' },
   { path: '/inventory',          tableId: 'inventory-table' },
   { path: '/schema',             heading: 'Schema',             testid: true  },
   { path: '/export',             heading: 'Export Subgraph',    testid: true  },
@@ -36,7 +36,7 @@ test('nav menu links navigate to correct pages', async ({ page }) => {
   await page.goto('/');
 
   await page.click('a.app-menu-link:has-text("Data Centers")');
-  await expect(page).toHaveURL(/\/datacenters/);
+  await expect(page).toHaveURL(/\/data-centers/);
 
   await page.click('a.app-menu-link:has-text("Audit Log")');
   await expect(page).toHaveURL(/\/audit-log/);

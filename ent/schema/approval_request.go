@@ -178,6 +178,32 @@ func (ApprovalRequest) Fields() []ent.Field {
 		// field has.
 		field.JSON("base_values", map[string]map[string]any{}).Optional(),
 
+		// base_scope is the set of orbIds this request was opened against: the
+		// entities its changeset declares, PLUS everything containment pulled in
+		// at capture time.
+		//
+		// It is PINNED rather than re-derived because containment is view
+		// configuration, not model semantics — it is editable, and once it is,
+		// re-deriving would let a view change retroactively alter what a past
+		// review is deemed to have covered. "Which entities did this reviewer
+		// look at" is a fact about the moment of review; recomputing it answers
+		// a different question and quietly overwrites the answer to the first.
+		//
+		// Pinned wherever base_values is captured — Create and Amend — for the
+		// same reason and on the same terms: Amend replaces the changeset, so
+		// the scope it was opened against genuinely changes and must be
+		// re-pinned, not carried forward.
+		//
+		// Scope drives STALENESS ONLY, never merge correctness. Merge rests on
+		// base_values (per-field ancestor) plus the version pre-flight, and
+		// neither consults containment.
+		//
+		// Optional: absent means "not pinned", and the caller falls back to
+		// deriving it, which is what every row predating this field did on every
+		// read. No backfill — pinning an old row with today's containment would
+		// assert a review covered something nobody can show it covered.
+		field.JSON("base_scope", []string{}).Optional(),
+
 		// payload is the action-type-specific body, opaque to the engine. For
 		// config.mutation: {"namespace": ..., "changes": [{orbId, type, op, set,
 		// clear}, ...]}. Filters like ?orbId= and ?namespace= are served from

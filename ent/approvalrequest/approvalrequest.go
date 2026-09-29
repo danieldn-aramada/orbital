@@ -49,6 +49,8 @@ const (
 	FieldBaseEffect = "base_effect"
 	// FieldBaseValues holds the string denoting the base_values field in the database.
 	FieldBaseValues = "base_values"
+	// FieldBaseScope holds the string denoting the base_scope field in the database.
+	FieldBaseScope = "base_scope"
 	// FieldPayload holds the string denoting the payload field in the database.
 	FieldPayload = "payload"
 	// FieldExecutedAt holds the string denoting the executed_at field in the database.
@@ -97,6 +99,7 @@ var Columns = []string{
 	FieldBasePresent,
 	FieldBaseEffect,
 	FieldBaseValues,
+	FieldBaseScope,
 	FieldPayload,
 	FieldExecutedAt,
 	FieldExecutedBy,

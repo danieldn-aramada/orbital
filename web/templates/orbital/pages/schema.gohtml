@@ -14,6 +14,39 @@
       <p class="has-text-grey page-description">Active DGraph GraphQL schema version and definition.</p>
 
       <div class="tab-content">
+
+      {{/*
+        Orphaned types sit ABOVE the columns, full width.
+        
+        They were inside the narrow "Applied Schema" box, and `is-narrow` sizes
+        to its content: the explanatory paragraph forced the column wide enough
+        to push the SDL panel clean off a 1440px viewport. It is also the wrong
+        home for it — this is a statement about the DATA, not about the applied
+        schema, and it is the most important thing on the page when it fires.
+      */}}
+      {{if .Orphans}}
+      <article class="box" data-testid="schema-orphans">
+        <p class="is-size-6 has-text-weight-semibold has-text-danger mb-2">Orphaned nodes in the graph</p>
+        <p class="is-size-7 mb-3">
+          These types were removed from <code>schema.graphql</code> but their nodes were not
+          deleted — the equivalent of dropping a table and leaving its rows. They stay reachable
+          through the <code>ConfigItem</code> interface with nothing left to render, so they are
+          hidden from list pages. Delete them, or restore the type to the schema.
+          <strong>Orbital will not delete them for you.</strong>
+        </p>
+        <div class="table-container">
+          <table class="table is-fullwidth is-size-7 mb-0">
+            <thead><tr><th style="width:1%;white-space:nowrap">Removed type</th><th>Nodes</th></tr></thead>
+            <tbody>
+              {{range .Orphans}}
+              <tr><td style="white-space:nowrap">{{.Type}}</td><td>{{.Count}}</td></tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+      </article>
+      {{end}}
+
       <div class="columns mt-2">
 
         <div class="column is-narrow">
@@ -21,10 +54,18 @@
             <p class="is-size-6 has-text-weight-semibold mb-3">Applied Schema</p>
             <table class="table is-fullwidth is-size-7">
               <tbody>
-                <tr><td style="width:45%">Checksum</td><td><code>{{.Checksum}}</code></td></tr>
-                <tr><td>Build ships</td><td><span class="tag is-info is-light">{{.Version}}</span></td></tr>
+                {{/*
+                  Plain text in every value cell. This table had a monospace
+                  <code> checksum, a blue tag pill for the version and coloured
+                  text for the state — three rows in three typefaces, which
+                  reads as three unrelated things rather than one record.
+                  UI.md: value cells are plain; only a genuine STATUS column
+                  carries colour, which here is exactly one row.
+                */}}
+                <tr><td style="width:45%">Checksum</td><td>{{.Checksum}}</td></tr>
+                <tr><td>Build ships</td><td>{{.Version}}</td></tr>
                 <tr><td>Matches build</td><td>
-                  {{if .Drift}}<span class="has-text-danger has-text-weight-semibold">no — {{len .Drift}} missing</span>
+                  {{if .Drift}}<span class="has-text-danger">no — {{len .Drift}} missing</span>
                   {{else}}<span class="has-text-success">yes</span>{{end}}
                 </td></tr>
               </tbody>
@@ -37,6 +78,7 @@
 {{end}}</pre>
             <p class="is-size-7 mt-2">Orbital does not apply the schema — apply it to DGraph (deploy/README.md step 8).</p>
             {{end}}
+
           </article>
         </div>
 

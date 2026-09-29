@@ -115,7 +115,38 @@ func (h *Export) SetPublishFn(fn PublishExportedFunc) {
 	h.publishFn = fn
 }
 
+// absOrWarn makes a configured directory absolute against the current working
+// directory. A path that cannot be resolved is returned unchanged rather than
+// failing startup — an export directory is not needed to serve the UI, and
+// refusing to boot over it would be a worse failure than the one it prevents.
+func absOrWarn(dir, name string, logger *slog.Logger) string {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		logger.Warn("could not resolve directory to an absolute path; leaving it relative",
+			"setting", name, "dir", dir, "err", err)
+		return dir
+	}
+	return abs
+}
+
 func NewExport(db *ent.Client, dgraphURL, dgraphScratchURL, dgraphScratchAdminURL, dgraphScratchZeroURL, exportDir, scratchExportDir, schemaPath string, logger *slog.Logger) *Export {
+	// Resolve to absolute ONCE, here. Both default to repo-relative paths
+	// (".local/exports/…"), and scratchExportDir is the host side of a bind
+	// mount the dgraph container writes into — so it only ever meant one
+	// directory, the one the mount points at. Left relative, it silently means
+	// "wherever this process happens to be", and the two ends stop agreeing:
+	// dgraph writes through the mount while orbital creates and then polls an
+	// empty lookalike under its own working directory, reporting
+	// "no json.gz found after export" for a file that exists.
+	//
+	// Pinning it here means a later chdir cannot move it out from under a
+	// running handler. It does NOT fix a wrong base — `Abs` resolves against
+	// the working directory, so a caller that passes a repo-relative path from
+	// the wrong directory still gets the wrong directory, just earlier. That
+	// caller-side bug is what actually broke six integration tests on
+	// 2026-09-24; see export_integration_test.go's repoRoot().
+	exportDir = absOrWarn(exportDir, "ORBITAL_EXPORT_DIR", logger)
+	scratchExportDir = absOrWarn(scratchExportDir, "ORBITAL_SCRATCH_EXPORT_DIR", logger)
 	if err := os.MkdirAll(exportDir, 0o755); err != nil {
 		logger.Warn("could not create export dir", "dir", exportDir, "err", err)
 	}

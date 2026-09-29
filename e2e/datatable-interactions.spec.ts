@@ -3,7 +3,7 @@
 // after JS refactors (init-order changes, module renames, column-index drift).
 //
 // Five tables covered:
-//   • #server-list-table (/servers) — sort, filter, IPv4 numeric sort
+//   • #generic-table (/servers) — sort, filter, IPv4 numeric sort
 //   • #cluster-table (/clusters)    — sort, filter, workload child expand/collapse
 //   • #audit-log-table (/audit-log) — sort, row detail expand
 //   • #inventory-table (/inventory) — sort, filter
@@ -59,14 +59,14 @@ async function waitForDataRows(page: Page, tableId: string) {
 
 test.describe('DataTable interactions', () => {
 
-  // ── Server list (#server-list-table at /servers) ─────────────────────────
+  // ── Server list (#generic-table at /servers) ─────────────────────────
 
   test('servers table: sorts by Service Tag column', async ({ page }) => {
     // Guards: clicking a column header in a scrollX DataTable updates aria-sort
     // and reorders rows. Regression: JS refactor breaks initServerListTable().
     await page.goto('/servers')
-    await expect(page.locator('input[aria-controls="server-list-table"]')).toBeVisible({ timeout: 10_000 })
-    await waitForDataRows(page, 'server-list-table')
+    await expect(page.locator('input[aria-controls="generic-table"]')).toBeVisible({ timeout: 10_000 })
+    await waitForDataRows(page, 'generic-table')
 
     const header = visibleHeader(page, 'Service Tag')
     await expect(header).toBeVisible({ timeout: 5_000 })
@@ -76,15 +76,15 @@ test.describe('DataTable interactions', () => {
 
   test('servers table: filter narrows results to matching rows', async ({ page }) => {
     await page.goto('/servers')
-    const searchInput = page.locator('input[aria-controls="server-list-table"]')
+    const searchInput = page.locator('input[aria-controls="generic-table"]')
     await expect(searchInput).toBeVisible({ timeout: 10_000 })
-    await waitForDataRows(page, 'server-list-table')
-    const initialCount = await page.locator('#server-list-table tbody tr').filter({ hasNot: page.locator('td.dt-empty') }).count()
+    await waitForDataRows(page, 'generic-table')
+    const initialCount = await page.locator('#generic-table tbody tr').filter({ hasNot: page.locator('td.dt-empty') }).count()
 
     // 5HSC3D4 is a seeded server in 2f-uae (configitem-editor fixture).
     await searchInput.fill('5HSC3D4')
-    await expect(page.locator('#server-list-table tbody td.dt-empty')).not.toBeVisible({ timeout: 5_000 })
-    const filteredCount = await page.locator('#server-list-table tbody tr').filter({ hasNot: page.locator('td.dt-empty') }).count()
+    await expect(page.locator('#generic-table tbody td.dt-empty')).not.toBeVisible({ timeout: 5_000 })
+    const filteredCount = await page.locator('#generic-table tbody tr').filter({ hasNot: page.locator('td.dt-empty') }).count()
     expect(filteredCount).toBeGreaterThan(0)
     expect(filteredCount).toBeLessThan(initialCount)
   })
@@ -95,8 +95,8 @@ test.describe('DataTable interactions', () => {
     // colo-galleon seed has servers at both .41–.55 AND .100 — a concrete pair
     // where lex and numeric order differ. If dtIPv4Render is broken, the test fails.
     await page.goto('/servers')
-    await expect(page.locator('input[aria-controls="server-list-table"]')).toBeVisible({ timeout: 10_000 })
-    await waitForDataRows(page, 'server-list-table')
+    await expect(page.locator('input[aria-controls="generic-table"]')).toBeVisible({ timeout: 10_000 })
+    await waitForDataRows(page, 'generic-table')
 
     // Sort by OOB IP ascending (default is by Data Center; this is first OOB IP click).
     const oobIPHeader = visibleHeader(page, 'OOB IP')
@@ -104,9 +104,14 @@ test.describe('DataTable interactions', () => {
     await oobIPHeader.click()
     await expect(oobIPHeader).toHaveAttribute('aria-sort', 'ascending', { timeout: 5_000 })
 
-    // Read visible cell text in column 2 (OOB IP, 1-based) from the scroll body.
-    // With scrollX, tbody is in the original table (dt-scroll-body).
-    const oobIPs = await domCells(page, '#server-list-table', 2)
+    // Read the OOB IP column by finding its position rather than hardcoding it:
+    // generic pages derive their columns from the schema, so an index pinned
+    // here would silently start reading a different column the next time a
+    // field is added.
+    const headers = await page.locator('#generic-table thead th').allInnerTexts()
+    const oobIPCol = headers.findIndex((h) => h.trim() === 'OOB IP') + 1
+    expect(oobIPCol, 'no OOB IP column').toBeGreaterThan(0)
+    const oobIPs = await domCells(page, '#generic-table', oobIPCol)
     const validIPs = oobIPs.filter(v => /^\d+\.\d+\.\d+\.\d+$/.test(v))
     expect(validIPs.length).toBeGreaterThan(1)
 
@@ -115,12 +120,12 @@ test.describe('DataTable interactions', () => {
     }
   })
 
-  // ── Cluster list (#cluster-table at /clusters) ───────────────────────────
+  // ── Cluster list (#generic-table at /clusters) ───────────────────────────
 
   test('clusters table: sorts by Name column', async ({ page }) => {
     await page.goto('/clusters')
-    await expect(page.locator('input[aria-controls="cluster-table"]')).toBeVisible({ timeout: 10_000 })
-    await waitForDataRows(page, 'cluster-table')
+    await expect(page.locator('input[aria-controls="generic-table"]')).toBeVisible({ timeout: 10_000 })
+    await waitForDataRows(page, 'generic-table')
 
     const header = visibleHeader(page, 'Name')
     await expect(header).toBeVisible({ timeout: 5_000 })
@@ -130,45 +135,28 @@ test.describe('DataTable interactions', () => {
 
   test('clusters table: filter narrows results to matching rows', async ({ page }) => {
     await page.goto('/clusters')
-    const searchInput = page.locator('input[aria-controls="cluster-table"]')
+    const searchInput = page.locator('input[aria-controls="generic-table"]')
     await expect(searchInput).toBeVisible({ timeout: 10_000 })
-    await waitForDataRows(page, 'cluster-table')
-    const initialCount = await page.locator('#cluster-table tbody tr').filter({ hasNot: page.locator('td.dt-empty') }).count()
+    await waitForDataRows(page, 'generic-table')
+    const initialCount = await page.locator('#generic-table tbody tr').filter({ hasNot: page.locator('td.dt-empty') }).count()
 
     // g2-m is the seeded houston management cluster.
     await searchInput.fill('g2-m')
-    await expect(page.locator('#cluster-table tbody td.dt-empty')).not.toBeVisible({ timeout: 5_000 })
-    const filteredCount = await page.locator('#cluster-table tbody tr').count()
+    await expect(page.locator('#generic-table tbody td.dt-empty')).not.toBeVisible({ timeout: 5_000 })
+    const filteredCount = await page.locator('#generic-table tbody tr').count()
     expect(filteredCount).toBeGreaterThan(0)
     expect(filteredCount).toBeLessThan(initialCount)
   })
 
-  test('clusters table: workload child rows expand and collapse on toggle click', async ({ page }) => {
-    // Regression class: cluster expand breaks after JS refactor. Management
-    // cluster houston:g2-m has one workload child houston:g2-w1. initComplete
-    // auto-expands all management rows with workloads.
-    await page.goto('/clusters')
-    const searchInput = page.locator('input[aria-controls="cluster-table"]')
-    await expect(searchInput).toBeVisible({ timeout: 10_000 })
+  // 'clusters table: workload child rows expand and collapse on toggle click'
+  // was DELETED 2026-09-25 with the bespoke cluster table.
+  //
+  // The capability did not disappear, it MOVED: a management cluster's workload
+  // clusters are a relationship table on its detail page, asserted by
+  // e2e/clusters-generic.spec.ts. Nested rows in a LIST were a per-page feature
+  // of that table; the generic list expands owned children only, and a workload
+  // cluster is a peer, not a child.
 
-    // Filter to the management cluster so only g2-m and its child g2-w1 are visible.
-    await searchInput.fill('g2-m')
-    const parentRow = page.locator('#cluster-table tbody tr:not(.cluster-child-row)', { hasText: 'g2-m' })
-    await expect(parentRow).toBeVisible({ timeout: 10_000 })
-
-    // initComplete's expandAllClusterChildren auto-expands g2-m on page load.
-    const childRow = page.locator('#cluster-table tbody tr.cluster-child-row')
-    await expect(childRow.first()).toBeVisible({ timeout: 5_000 })
-
-    // Click toggle cell to collapse — child becomes hidden.
-    const toggleCell = parentRow.locator('td.cluster-toggle-cell')
-    await toggleCell.click()
-    await expect(childRow.first()).not.toBeVisible({ timeout: 5_000 })
-
-    // Click again to re-expand — child reappears.
-    await toggleCell.click()
-    await expect(childRow.first()).toBeVisible({ timeout: 5_000 })
-  })
 
   // ── Audit log table (#audit-log-table at /audit-log) ─────────────────────
 
@@ -236,44 +224,82 @@ test.describe('DataTable interactions', () => {
 
   // ── DC detail servers table (dc-servers-table-{domId}) ───────────────────
 
-  test('DC detail servers table: OOB IP column sorts numerically (default init sort)', async ({ page }) => {
-    // Regression class: dtIPv4Render on dc-servers-table (initialized in the
-    // htmx:afterSettle handler) breaks, reverting to lexicographic sort.
-    // colo-galleon has servers at 10.20.21.100 AND 10.20.21.41–.55. Lex sort
-    // puts "10.20.21.100" before "10.20.21.41" (because "1" < "4" as strings);
-    // numeric sort (dtIPv4Render) correctly places it after. The DataTables
-    // default order [[0,'asc']] is applied on init — check it without clicking.
-    await page.goto('/datacenters')
-    const summaryTab = page.locator('#tab-summary')
-    if (await summaryTab.count() > 0) await summaryTab.click()
-    const dcSearchInput = page.locator('input[aria-controls="datacenter-table"]')
-    await expect(dcSearchInput).toBeVisible({ timeout: 10_000 })
-    await dcSearchInput.fill('colo-galleon')
-    const row = page.locator('#datacenter-table tbody tr', { hasText: 'colo-galleon' })
-    await expect(row).toBeVisible({ timeout: 10_000 })
-    await row.dblclick()
-
-    // safeDomId('colo:colo-galleon') → 'colo_colo-galleon'
-    const domId = 'colo_colo-galleon'
-    await page.waitForSelector(`#tab-content-${domId}[data-loaded="true"]`, { timeout: 15_000 })
-
-    const serversTable = page.locator(`#dc-servers-table-${domId}`)
-    await expect(serversTable).toBeVisible({ timeout: 5_000 })
-
-    // The dc-servers-table uses no scrollX; thead is directly inside the table.
-    // Default sort is [[0,'asc']] with dtIPv4Render → numeric ascending on init.
-    // Verify by reading visible OOB IP cells (column 1, 1-based nth-child).
-    const oobIPCells = await domCells(page, `#dc-servers-table-${domId}`, 1)
-    const validIPs = oobIPCells.filter(v => /^\d+\.\d+\.\d+\.\d+$/.test(v))
-
-    if (validIPs.length < 2) {
-      test.skip(true, 'Not enough IP addresses in colo-galleon to verify numeric sort')
-      return
-    }
-
-    for (let i = 1; i < validIPs.length; i++) {
-      expect(compareIPv4(validIPs[i - 1], validIPs[i])).toBeLessThanOrEqual(0)
-    }
-  })
-
+  // The "DC detail servers table" case was DELETED 2026-09-25. That page moved
+  // to the generic renderer, where a relationship tab renders a PLAIN table —
+  // DataTables is initialised on the list page only, so sorting inside a detail
+  // tab is a capability the generic renderer does not yet have.
 })
+
+// The toolbar-sizing rule in main.scss is a hand-maintained list of table ids
+// (`div.dt-container:has(#inventory-table), …`). A table whose id is not on it
+// renders its info line and paging buttons at DataTables' default size, which
+// is visibly larger than the 12px table content beside it — and nothing fails.
+// Exactly how /clusters and /data-centers ended up oversized.
+//
+// Asserted COMPARATIVELY against the inventory page rather than against fixed
+// pixel values: the requirement is "the same as the other tables", and a test
+// pinning 12px would need editing every time the house size changed.
+test('generic list pages size their table chrome like the inventory page', async ({ page }) => {
+  const chrome = async (url: string, tableId: string) => {
+    await page.goto(url);
+    // The inventory table has stateSave:true, so a filter left by an earlier
+    // test in this file persists in localStorage — the page then loads showing
+    // one row, the paging control is not rendered at all, and this test fails
+    // on a null reference rather than on a size. Cleared so the comparison is
+    // against an unfiltered table whichever order the file runs in.
+    await page.evaluate(() => {
+      for (const k of Object.keys(localStorage)) {
+        if (k.startsWith('DataTables_')) localStorage.removeItem(k);
+      }
+    });
+    await page.reload();
+    // Wait for the TOOLBAR, not the table.
+    //
+    // The <table> is server-rendered, so waiting on its id returns before
+    // DataTables has built the info line and paging control — measuring then
+    // reads a half-constructed node and getComputedStyle returns "". The info
+    // line showing a row count is the signal that the draw finished.
+    await page.locator(`#${tableId}`).waitFor();
+    await expect(page.locator('.dt-info').first()).toHaveText(/\d/, { timeout: 15_000 });
+    await page.locator('.dt-paging .pagination-link').first().waitFor({ state: 'visible' });
+    const read = async (sel: string) => {
+      const el = page.locator(sel).first();
+      if (await el.count() === 0) return null;
+      return await el.evaluate((e: HTMLElement) => {
+        const s = getComputedStyle(e);
+        return { fontSize: s.fontSize, height: Math.round(e.getBoundingClientRect().height) };
+      });
+    };
+    return {
+      info: await read('.dt-info'),
+      page: await read('.dt-paging .pagination-link'),
+      search: await read('.dt-search .input'),
+    };
+  };
+
+  const reference = await chrome('/inventory', 'inventory-table');
+  // Named explicitly: if the reference page stops rendering one of these the
+  // test would silently compare nothing and pass.
+  expect(reference.info, 'no info line on the reference page').not.toBeNull();
+  expect(reference.page, 'no paging control on the reference page').not.toBeNull();
+  expect(reference.search, 'no search box on the reference page').not.toBeNull();
+
+  // Every page with a DataTable, not a sample: the sizing rule is global now,
+  // and the failure mode it replaced was always a table nobody remembered to
+  // add to a hand-maintained list.
+  for (const [path, tableId] of [
+    ['/clusters', 'generic-table'],
+    ['/data-centers', 'generic-table'],
+    ['/servers', 'generic-table'],
+    ['/network-devices', 'generic-table'],
+    ['/views', 'views-table'],
+  ]) {
+    const got = await chrome(path, tableId);
+    expect(got.info!.fontSize, `${path} info line font`).toBe(reference.info!.fontSize);
+    expect(got.info!.height, `${path} info line height`).toBe(reference.info!.height);
+    expect(got.page!.fontSize, `${path} paging button font`).toBe(reference.page!.fontSize);
+    expect(got.page!.height, `${path} paging button height`).toBe(reference.page!.height);
+    expect(got.search!.fontSize, `${path} search box font`).toBe(reference.search!.fontSize);
+    expect(got.search!.height, `${path} search box height`).toBe(reference.search!.height);
+  }
+});
