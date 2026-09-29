@@ -20,6 +20,25 @@
         </div>
       </div>
 
+      {{/*
+        Rendered SERVER-SIDE, because naming the types is the one thing the
+        client cannot do: for these nodes every field resolves to nothing,
+        `__typename` included, which is exactly what the removed type took with
+        it. The JS only hides the rows.
+
+        Names the types and counts rather than a bare number, and caps the list
+        — a schema that dropped nine types should not print nine lines here when
+        the Schema page carries the full table.
+      */}}
+      {{if .Orphans}}
+      <div id="inventory-unrenderable" class="notification is-warning is-light is-size-7">
+        Hidden from this list:
+        {{range $i, $o := .Orphans}}{{if $i}}, {{end}}<strong>{{$o.Type}}</strong> ({{$o.Count}}){{end}}{{if .OrphansMore}} and {{.OrphansMore}} more{{end}}.
+        The deployed schema has no type for {{if eq (len .Orphans) 1}}it{{else}}them{{end}} —
+        see <a href="{{.BasePath}}/schema">Schema</a>.
+      </div>
+      {{end}}
+
       <table id="inventory-table" class="table is-striped is-hoverable is-fullwidth is-size-7">
         <thead>
           <tr>

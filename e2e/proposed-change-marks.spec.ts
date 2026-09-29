@@ -7,6 +7,7 @@
 // row stop meaning anything the moment there are two.
 
 import { test, expect, Page } from '@playwright/test'
+import { openDetail } from './helpers/generic';
 
 // A server this spec owns. It asserts "no field is marked", which can only hold
 // if nothing else is proposing against the entity — so it must not share one
@@ -42,10 +43,12 @@ test.afterEach(async ({ page }) => {
   }
 })
 
+// Maintenance is a BOX on the server page now, not a tab behind a click — the
+// generic renderer stacks owned children rather than tabbing them. Opening the
+// page is all that is needed, which also means a mark is visible without
+// hunting for the panel holding it.
 async function openMaintenanceTab(page: Page) {
-  await page.goto(`/servers?open=${encodeURIComponent(SERVER)}&label=${encodeURIComponent(SERVER)}`)
-  await page.waitForSelector(`#tab-content-srv-${domId}[data-loaded="true"]`, { timeout: 15_000 })
-  await page.locator(`#srv-detail-tabs-${domId} li[data-panel="srv-panel-maintenance-${domId}"]`).click()
+  await openDetail(page, 'servers', SERVER)
 }
 
 function markFor(page: Page, field: string) {
@@ -85,7 +88,8 @@ test('a proposal whose value already matches current state is NOT marked', async
 
   // Give the overlay the same time the positive test allows, so this cannot
   // pass merely by asserting before the fetch resolved.
-  await expect(page.locator(`#srv-panel-maintenance-${domId} table`)).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('generic-owned').filter({ hasText: 'Server Maintenance' })
+    .locator('table')).toBeVisible()
   await page.waitForTimeout(2_000)
   await expect(markFor(page, 'enabled')).toBeEmpty()
 
@@ -114,7 +118,8 @@ test('two proposals that disagree show a count and are called out as conflicting
 
 test('with nothing proposed, no field is marked', async ({ page }) => {
   await openMaintenanceTab(page)
-  await expect(page.locator(`#srv-panel-maintenance-${domId} table`)).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('generic-owned').filter({ hasText: 'Server Maintenance' })
+    .locator('table')).toBeVisible()
   await page.waitForTimeout(2_000)
   for (const field of ['enabled', 'windowStart', 'windowEnd', 'reason']) {
     await expect(markFor(page, field)).toBeEmpty()
@@ -136,21 +141,20 @@ test('a proposal on a server field is marked on the Server Summary table', async
   expect(res.ok(), 'propose manufacturer').toBeTruthy()
   opened.push((await res.json()).id)
 
-  await page.goto(`/servers?open=${encodeURIComponent(SERVER)}&label=${encodeURIComponent(SERVER)}`)
-  await page.waitForSelector(`#tab-content-srv-${domId}[data-loaded="true"]`, { timeout: 15_000 })
+  await openDetail(page, 'servers', SERVER)
 
-  const mark = page.locator(`#tab-content-srv-${domId} [data-field="manufacturer"] .js-field-mark`)
+  const mark = page.getByTestId('generic-fields').locator('[data-field="manufacturer"] .js-field-mark')
   await expect(mark).toContainText('Dell-proposed', { timeout: 10_000 })
 
   // Only the proposed field. A mark on every row would be noise indistinguish-
   // able from a mark that means something.
   for (const field of ['hostname', 'model', 'oobMAC', 'serviceTag']) {
-    await expect(page.locator(`#tab-content-srv-${domId} [data-field="${field}"] .js-field-mark`)).toBeEmpty()
+    await expect(page.getByTestId('generic-fields').locator(`[data-field="${field}"] .js-field-mark`)).toBeEmpty()
   }
 
   // The slot-count invariant that used to live here — "every data-field row
   // corresponds to an editable field, and every editable field has a row" —
-  // moved to TestServerTabFieldSlotsMatchRegistry (internal/handler). It was a
+  // moved to TestFieldMarkSlotsMatchRegistry_AllTypes (internal/handler). It was a
   // hardcoded `toBe(6)` and broke when `serialNumber` and `uHeight` were added
   // correctly, because a magic number cannot tell a properly-added field from a
   // dead slot. The Go test compares the two sets directly, names the offending

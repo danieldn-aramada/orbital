@@ -29,15 +29,31 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// scratchExportDir is the host-side path mounted to /dgraph/export inside the
-// test scratch DGraph container. Must match the volume mount in deploy/test/docker-compose.yml.
-const scratchExportDir = "./.local/exports/scratch"
+// scratchExportDir and testAlphaExportDir are host-side paths mounted into the
+// test DGraph containers. They MUST resolve to the repo root, because that is
+// where the compose file's bind mount points — `go test` sets the working
+// directory to the package directory, so a repo-relative literal silently
+// becomes internal/handler/.local/exports/… and the two ends stop agreeing:
+// dgraph writes through the mount while orbital creates and polls an empty
+// lookalike, reporting "no json.gz found after export" for a file that exists.
+// Six tests failed that way until 2026-09-24. repoRoot() is the same
+// runtime.Caller trick schemaPath() below already uses.
+var (
+	// mounted at /dgraph/export in the scratch container (deploy/local/docker-compose.yml)
+	scratchExportDir = filepath.Join(repoRoot(), ".local", "exports", "scratch")
 
-// testAlphaExportDir is the host-side path mounted to /dgraph/export inside the
-// suite's LIVE DGraph container — dgraph-alpha-test (:8083), not blue (:8080).
-// "blue" here is the blue-green role (the live side that scratch stages from),
-// which is still what this graph is to the suite. Used by backup tests.
-const testAlphaExportDir = "./.local/exports/test"
+	// mounted at /dgraph/export in the suite's LIVE container — dgraph-alpha-test
+	// (:8083), not blue (:8080). "blue" here is the blue-green role (the live side
+	// that scratch stages from), which is what this graph is to the suite.
+	testAlphaExportDir = filepath.Join(repoRoot(), ".local", "exports", "test")
+)
+
+// repoRoot locates the repository root from this source file's own path, so it
+// is independent of the process working directory.
+func repoRoot() string {
+	_, file, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(file), "..", "..")
+}
 
 var (
 	testDB   *ent.Client
@@ -111,9 +127,7 @@ func schemaPath() string {
 	if v := os.Getenv("TEST_SCHEMA_PATH"); v != "" {
 		return v
 	}
-	_, file, _, _ := runtime.Caller(0)
-	root := filepath.Join(filepath.Dir(file), "..", "..")
-	return filepath.Join(root, "schema", "schema.graphql")
+	return filepath.Join(repoRoot(), "schema", "schema.graphql")
 }
 
 // newExportHandler creates an Export handler wired to the test services.

@@ -15,6 +15,13 @@
         </div>
       </div>
 
+      {{/*
+        Filled by initInventoryTable when the graph holds items the deployed
+        schema can no longer describe — a type removed from schema.graphql
+        without its nodes being deleted. Hidden otherwise.
+      */}}
+      <div id="inventory-unrenderable" class="notification is-warning is-light is-size-7" style="display:none"></div>
+
       <table id="inventory-table" class="table is-striped is-hoverable is-fullwidth is-size-7">
         <thead>
           <tr>

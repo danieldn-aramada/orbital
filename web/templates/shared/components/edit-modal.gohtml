@@ -32,12 +32,21 @@ Prefix. See docs/playbooks/add-configitem.md.
       <button class="delete" aria-label="close" data-modal-close></button>
     </header>
     <section class="modal-card-body">
+      {{- if .EditorUnavailable}}
+      <div class="notification is-warning is-light" data-testid="editor-unavailable">
+        <p class="has-text-weight-semibold mb-2">The editor is unavailable.</p>
+        <p class="is-size-7">{{.EditorUnavailable}}</p>
+      </div>
+      {{- else}}
       <div id="{{.Prefix}}-json-editor-{{.DomID}}" style="min-height:200px"></div>
+      {{- end}}
     </section>
     <footer class="modal-card-foot is-flex is-align-items-center" style="gap:0.75rem;">
       <div class="buttons" style="margin-bottom:0;">
+        {{- if not .EditorUnavailable}}
         <button class="button is-success" id="{{.Prefix}}-edit-submit-{{.DomID}}">Save</button>
-        <button class="button" data-modal-close>Cancel</button>
+        {{- end}}
+        <button class="button" data-modal-close>{{if .EditorUnavailable}}Close{{else}}Cancel{{end}}</button>
       </div>
       <span id="{{.Prefix}}-edit-error-{{.DomID}}" class="has-text-danger is-size-7" style="display:none; flex:1;"></span>
     </footer>

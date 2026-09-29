@@ -14,23 +14,18 @@
 // honours `version` when supplied; nothing proved anyone supplied it.
 
 import { test, expect, Page } from '@playwright/test'
+import { openEditor as openGenericEditor, editorTargets } from './helpers/generic';
 
 const SERVER = 'colo:server-6CVD664'
-const domId = SERVER.replace(/[^a-zA-Z0-9_-]/g, '_')
+let domId = ''
 
 async function openEditor(page: Page) {
-  await page.goto(`/servers?open=${encodeURIComponent(SERVER)}&label=${encodeURIComponent(SERVER)}`)
-  await page.waitForSelector(`#tab-content-srv-${domId}[data-loaded="true"]`, { timeout: 15_000 })
-  await page.locator(`[data-srv-edit-id="${domId}"]`).click()
-  await expect(page.locator(`#edit-modal-srv-${domId}`)).toHaveClass(/is-active/, { timeout: 10_000 })
+  domId = await openGenericEditor(page, 'servers', SERVER)
 }
 
 test('the page hands the editor an OCC version for every entity it can edit', async ({ page }) => {
-  await page.goto(`/servers?open=${encodeURIComponent(SERVER)}&label=${encodeURIComponent(SERVER)}`)
-  await page.waitForSelector(`#tab-content-srv-${domId}[data-loaded="true"]`, { timeout: 15_000 })
-
-  const targets = await page.locator(`#srv-edit-targets-${domId}`).textContent()
-  const parsed = JSON.parse(targets || '[]')
+  await openEditor(page)
+  const parsed = await editorTargets(page, domId)
 
   // The root and its owned children exist, so each must carry a version. A
   // target whose entity does not exist yet legitimately has none — a create has
@@ -55,13 +50,13 @@ test('a save sends version as a top-level variable, and never inside set', async
   // Drive the JSONEditor through its instance, the way configitem-editor.spec
   // does — clicking into the tree is brittle and tests the widget, not us.
   const initial = JSON.parse(
-    (await page.locator(`#srv-edit-data-${domId}`).textContent()) || '{}')
+    (await page.locator(`#generic-edit-data-${domId}`).textContent()) || '{}')
   await page.evaluate(({ id, next }) => {
-    const editor = (window as any).srvEditors.get(id)
+    const editor = (window as any).genericEditors.get(id)
     editor.set({ text: JSON.stringify(next, null, 2) })
   }, { id: domId, next: { ...initial, hostname: 'mvcc-e2e-' + Date.now() } })
 
-  await page.locator(`#srv-edit-submit-${domId}`).click()
+  await page.locator(`#generic-edit-submit-${domId}`).click()
 
   // Poll for the MUTATION, not for "any body". A save now sends a pre-flight
   // version query to /graphql first, so `bodies.length > 0` is satisfied before
@@ -109,9 +104,9 @@ test('a proposed changeset carries version per existing entity, and none for a c
   })
 
   const initial = JSON.parse(
-    (await page.locator(`#srv-edit-data-${domId}`).textContent()) || '{}')
+    (await page.locator(`#generic-edit-data-${domId}`).textContent()) || '{}')
   await page.evaluate(({ id, next }) => {
-    const editor = (window as any).srvEditors.get(id)
+    const editor = (window as any).genericEditors.get(id)
     editor.set({ text: JSON.stringify(next, null, 2) })
   }, { id: domId, next: { ...initial, hostname: 'propose-e2e-' + Date.now() } })
 

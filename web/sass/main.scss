@@ -839,12 +839,18 @@ div.dt-container {
   }
 }
 
-// Inventory, server-list, audit-log and change-request tables — match all
-// toolbar controls to is-size-7 table content
-div.dt-container:has(#inventory-table),
-div.dt-container:has(#server-list-table),
-div.dt-container:has(#audit-log-table),
-div.dt-container:has(#cr-table) {
+// EVERY DataTable's toolbar matches its is-size-7 content.
+//
+// This was a hand-maintained list of table ids, and a table whose id was not on
+// it rendered its info line and paging buttons at DataTables' default 14px
+// beside 12px rows — visibly wrong, with nothing failing. That list was wrong
+// three separate times (the generic pages, then /views), always the same way:
+// a NEW table is exactly the one nobody remembers to add.
+//
+// Applying it to every dt-container removes the list and the failure mode with
+// it. A table wanting different chrome opts out by id BELOW this rule, which
+// makes the exception visible instead of the norm.
+div.dt-container {
   font-size: 0.75rem;
 
   .dt-search .input,

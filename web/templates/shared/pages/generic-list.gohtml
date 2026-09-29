@@ -1,0 +1,96 @@
+{{/*
+generic-list.gohtml — the list page for ANY ConfigItem type.
+
+Structure MIRRORS shared/pages/servers.gohtml: a tabs bar
+whose single tab reads "Summary", a .tab-content tabpanel, and a DataTable with
+the house toolbar. No page heading and no description — those pages carry
+neither, and the page is identified by the active nav item and the URL.
+
+That omission is a known house quirk, not an accident: debt.md tracks "six list
+pages use a one-tab tabs bar instead of a page heading". The generic page
+matches the pages it REPLACES rather than fixing the quirk unilaterally; fix it
+there and it fixes here too.
+
+The difference from servers.gohtml is that NOTHING here is per-type: columns
+come from the view's derived field list, so a type added to the schema gets this
+page with no template and no handler.
+
+Rows are rendered server-side rather than fetched by JS. The bespoke pages each
+carry their own GraphQL query and tab-opening behaviour in LIST_PAGES; this page
+has one query built from the view, so there is nothing per-type for JS to know.
+*/}}
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div>
+    <div class="app-main p-5">
+      {{if and .UI.ShowAuth (not .IsAuthn)}}
+        {{template "login-gate.gohtml" .}}
+      {{else}}
+
+      {{template "hint-banner.gohtml" .}}
+
+      <nav class="tabs is-boxed has-text-weight-medium" style="font-size: 14px;">
+        <ul id="tablist" role="tablist">
+          <li class="tab is-active">
+            <a id="tab-summary" data-target="tab-content-generic" role="tab" aria-selected="true" tabindex="0">
+              Summary
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="tab-content" role="tabpanel" id="tab-content-generic">
+        {{if .Unavailable}}
+        <div class="notification is-warning is-light" data-testid="view-unavailable">
+          <p class="has-text-weight-semibold mb-2">This page is unavailable.</p>
+          <p class="is-size-7">{{.Unavailable}}</p>
+        </div>
+        {{else}}
+        {{/* No data-testid here: DataTables CLONES the table for its scroll head
+             and foot, copying data-* attributes but not the id — three elements
+             would then share one test id and every strict selector would break.
+             The id is unique and is what initGenericTable() binds to. */}}
+        <table id="generic-table"
+               class="table is-striped is-hoverable is-fullwidth is-size-7"
+               data-slug="{{.View.Slug}}"
+               data-type="{{.View.Type}}"
+               data-label="{{.View.Label}}">
+          <thead>
+            <tr>
+              <th>Name</th>
+              {{range .Columns}}<th>{{.Label}}</th>{{end}}
+              {{range .RefColumns}}<th style="white-space:nowrap">{{.Label}}</th>{{end}}
+              <th>Orb ID</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{$slug := .View.Slug}}
+            {{$base := .BasePath}}
+            {{$cols := .Columns}}
+            {{range .Rows}}
+            <tr>
+              <td style="white-space:nowrap">
+                <a href="{{$base}}/{{$slug}}/{{index . "orbId"}}">{{index . "name"}}</a>
+              </td>
+              {{$row := .}}
+              {{range $cols}}<td>{{with index $row .Field}}{{.}}{{else}}—{{end}}</td>{{end}}
+              {{range $.RefColumns}}
+              {{$rc := .}}
+              <td style="white-space:nowrap">
+                {{with index $row $rc.Field}}<a href="{{$base}}/{{$rc.Slug}}/{{index . "orbId"}}">{{index . "name"}}</a>{{else}}—{{end}}
+              </td>
+              {{end}}
+              <td style="white-space:nowrap"><code>{{index . "orbId"}}</code></td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+        {{end}}
+      </div>
+
+      {{end}}
+    </div>
+  </main>
+{{end}}

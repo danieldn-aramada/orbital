@@ -1,0 +1,267 @@
+{{/*
+generic-detail.gohtml — the detail page for ANY ConfigItem type.
+
+Fields come from the view's derived list; tabs come from the type's
+relationships in the deployed schema. No per-type markup.
+*/}}
+{{define "page"}}
+  <main class="app-main-grid">
+    <div class="app-menu">
+      {{template "menu.gohtml" .}}
+    </div>
+    <div class="app-main p-5">
+      {{if and .UI.ShowAuth (not .IsAuthn)}}
+        {{template "login-gate.gohtml" .}}
+      {{else}}
+
+      <p class="is-size-4 mb-2" data-testid="page-heading">
+        {{with .Entity}}{{index . "name"}}{{else}}{{$.OrbID}}{{end}}
+      </p>
+      <p class="has-text-grey page-description">
+        <a href="{{.BasePath}}/{{.ListSlug}}">{{.ListLabel}}</a> ·
+        <code>{{.OrbID}}</code>
+      </p>
+
+      {{template "generic-detail-content" .}}
+
+      {{end}}
+    </div>
+  </main>
+
+  {{if and .CanMutate .HasEditable}}
+  {{template "edit-modal.gohtml" .EditModal}}
+  {{end}}
+{{end}}
+
+{{/*
+generic-detail-content — the body, shared by the full page and the tab fragment.
+
+The detail route serves BOTH: a full page when you navigate to it, and just this
+block when the list page opens it as a tab (HX-Request). One block, so the two
+cannot drift — which is the failure mode a sibling /fragment route invites.
+*/}}
+{{define "generic-detail-content"}}
+      <div class="tab-content">
+        {{if .Unavailable}}
+        <div class="notification is-warning is-light" data-testid="view-unavailable">
+          <p class="has-text-weight-semibold mb-2">This page is unavailable.</p>
+          <p class="is-size-7">{{.Unavailable}}</p>
+        </div>
+        {{else}}
+
+        {{/*
+          Filled by loadPendingChangeBanners (orbital.js) when this item, or
+          anything it owns, has a change request in flight. Above the fields
+          because it changes what the Edit button will do — a reader who does
+          not know a change is pending retypes it.
+
+          The subtree lookup reads data-related-orb-ids off the audit box, which
+          is already on the page; only this placeholder was missing.
+        */}}
+        <div data-pending-changes-for="{{.OrbID}}"></div>
+
+        <article class="box">
+          <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
+            <p class="is-size-6 has-text-weight-semibold">Fields</p>
+            <div class="buttons" style="margin-bottom:0">
+              {{if and .CanMutate .HasEditable}}
+              <button class="button is-small is-success" data-generic-edit-id="{{.EditModal.DomID}}">
+                <span class="icon"><i class="fa-solid fa-pen"></i></span>
+                <span>Edit</span>
+              </button>
+              {{end}}
+              {{/* Delete uses the SAME attributes, global handler and modal the
+                   hand-written pages used — only the markup was per-page. */}}
+              {{if .CanDelete}}
+              <button class="button is-small is-danger"
+                data-cfg-delete-id="{{.OrbID}}"
+                data-cfg-delete-type="{{.View.Type}}"
+                data-cfg-delete-name="{{with .Entity}}{{index . "name"}}{{else}}{{$.OrbID}}{{end}}">
+                <span class="icon"><i class="fa-solid fa-trash"></i></span>
+                <span>Delete</span>
+              </button>
+              {{end}}
+            </div>
+          </div>
+          {{/*
+            data-field-orbid / data-field-values drive the proposed-change field
+            marks (loadFieldMarks in orbital.js). Only EDITABLE rows carry
+            data-field and a mark slot — a mark on a field nobody can propose
+            could never fire, and an empty slot on every reference row would
+            just add a column of nothing.
+          */}}
+          <table class="table is-fullwidth is-size-7" data-testid="generic-fields"
+            data-field-orbid="{{.OrbID}}"
+            data-field-values="{{.FieldValuesJSON}}">
+            <colgroup><col style="width:1%"><col style="width:40%"><col></colgroup>
+            <tbody>
+              {{range .FieldRows}}
+              <tr {{if .Editable}}data-field="{{.Field}}"{{end}}>
+                <td style="white-space:nowrap;width:1%">{{.Label}}</td>
+                <td>
+                  {{- if and .Blob .Value -}}
+                  <pre class="is-size-7 mb-0" style="max-height:18rem;overflow:auto">{{.Value}}</pre>
+                  {{- else -}}
+                  {{- with .Value}}{{.}}{{else}}<span class="has-text-grey">—</span>{{end -}}
+                  {{- end -}}
+                </td>
+                <td>{{if .Editable}}<span class="js-field-mark"></span>{{end}}</td>
+              </tr>
+              {{end}}
+              {{/*
+                Single relationships are rows here, not boxes of their own. A
+                cluster relates to a data centre, a management cluster, a
+                control-plane endpoint and a Tinkerbell IP — four one-row boxes
+                would bury the fields they sit beside.
+              */}}
+              {{range .Refs}}
+              <tr>
+                <td style="white-space:nowrap;width:1%">{{.Label}}</td>
+                <td><a href="{{$.BasePath}}/{{.Slug}}/{{.OrbID}}">{{.Name}}</a></td>
+                <td></td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </article>
+
+        {{/*
+          Metadata is its own box for the same reason every hand-written detail
+          page gave it one: identity and provenance are orbital's record OF the
+          item, not fields of it, and mixing them into the field list invites
+          someone to try editing `version`.
+
+          Rows are derived — .View.Meta is the ConfigItem interface, read from
+          the deployed schema — so a field added to the interface appears here
+          without a template change.
+        */}}
+        {{if .Meta}}
+        <article class="box" data-testid="generic-meta">
+          <p class="is-size-6 has-text-weight-semibold mb-3">Metadata</p>
+          <table class="table is-fullwidth is-size-7">
+            <tbody>
+              {{range .Meta}}
+              <tr>
+                <td style="white-space:nowrap;width:1%">{{.Label}}</td>
+                <td>
+                  {{- if not .Value -}}<span class="has-text-grey">—</span>
+                  {{- else if .IsTimestamp -}}<span data-timestamp="{{.Value}}">{{.Value}}</span>
+                  {{- else -}}{{.Value}}{{- end -}}
+                </td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </article>
+        {{end}}
+
+        {{/*
+          Owned children render inline: they are edited through this page's
+          JSON editor, so a link away to them would be a worse answer than
+          their data. Read-only here — the Edit button at the top is the one
+          way to change them, matching Server → iDRAC. See UI.md "Edit pattern".
+        */}}
+        {{range .Owned}}
+        <article class="box" data-testid="generic-owned" data-field="{{.Label}}">
+          <p class="is-size-6 has-text-weight-semibold mb-3">{{.Label}}</p>
+          {{if .Fields}}
+          <table class="table is-fullwidth is-size-7"
+            data-field-orbid="{{.OrbID}}"
+            data-field-values="{{.FieldValuesJSON}}">
+            <colgroup><col style="width:1%"><col style="width:40%"><col></colgroup>
+            <tbody>
+              {{range .Fields}}
+              <tr {{if .Field}}data-field="{{.Field}}"{{end}}>
+                <td style="white-space:nowrap;width:1%">{{.Label}}</td>
+                <td>{{if .Value}}{{.Value}}{{else}}<span class="has-text-grey">—</span>{{end}}</td>
+                <td>{{if .Field}}<span class="js-field-mark"></span>{{end}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+          {{end}}
+          {{range .Children}}
+          <p class="is-size-7 has-text-weight-semibold mt-3 mb-1">{{.Label}}</p>
+          {{if .OrbID}}
+          <table class="table is-fullwidth is-size-7 mb-0"
+            data-field-orbid="{{.OrbID}}"
+            data-field-values="{{.FieldValuesJSON}}">
+            <colgroup><col style="width:1%"><col style="width:40%"><col></colgroup>
+            <tbody>
+              {{range .Fields}}
+              <tr {{if .Field}}data-field="{{.Field}}"{{end}}>
+                <td style="white-space:nowrap;width:1%">{{.Label}}</td>
+                <td>{{if .Value}}{{.Value}}{{else}}<span class="has-text-grey">—</span>{{end}}</td>
+                <td>{{if .Field}}<span class="js-field-mark"></span>{{end}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+          {{else}}
+          <p class="has-text-grey is-size-7">Not configured.</p>
+          {{end}}
+          {{end}}
+        </article>
+        {{end}}
+
+        {{range .Tabs}}
+        <article class="box" data-testid="generic-tab" data-field="{{.Field}}">
+          <p class="is-size-6 has-text-weight-semibold mb-3">{{.Label}}</p>
+          {{if not .Rows}}
+          <p class="has-text-grey is-size-7">None.</p>
+          {{else}}
+          <div class="table-container">
+            <table class="table is-striped is-hoverable is-fullwidth is-size-7">
+              <thead>
+                <tr>
+                  <th style="white-space:nowrap">Name</th>
+                  {{range .Columns}}<th style="white-space:nowrap">{{.Label}}</th>{{end}}
+                  {{range .RefColumns}}<th style="white-space:nowrap">{{.Label}}</th>{{end}}
+                  <th style="white-space:nowrap">Orb ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{$slug := .Slug}}
+                {{$cols := .Columns}}
+                {{$refs := .RefColumns}}
+                {{range .Rows}}
+                <tr>
+                  <td style="white-space:nowrap"><a href="{{$.BasePath}}/{{$slug}}/{{index . "orbId"}}">{{index . "name"}}</a></td>
+                  {{$row := .}}
+                  {{range $cols}}<td>{{with index $row .Field}}{{.}}{{else}}—{{end}}</td>{{end}}
+                  {{range $refs}}
+                  {{$rc := .}}
+                  <td style="white-space:nowrap">
+                    {{with index $row $rc.Field}}<a href="{{$.BasePath}}/{{$rc.Slug}}/{{index . "orbId"}}">{{index . "name"}}</a>{{else}}—{{end}}
+                  </td>
+                  {{end}}
+                  <td class="has-text-grey" style="white-space:nowrap"><code>{{index . "orbId"}}</code></td>
+                </tr>
+                {{end}}
+              </tbody>
+            </table>
+          </div>
+          {{end}}
+        </article>
+        {{end}}
+
+        {{/*
+          Audit Log. The panel is filled by the same shared.js fetch the
+          hand-written pages use, keyed off data-orb-id and
+          data-related-orb-ids — a change to an owned child records the CHILD's
+          orbId, so asking about the parent alone would report nothing while its
+          settings were being rewritten.
+        */}}
+        {{if .Actions.ShowAuditTab}}
+        <article class="box" data-testid="generic-audit"
+          data-generic-audit="{{.AuditPanelID}}"
+          data-orb-id="{{.OrbID}}"
+          data-related-orb-ids="{{.RelatedOrbIDsCSV}}">
+          <p class="is-size-6 has-text-weight-semibold mb-3">Audit Log</p>
+          <div id="{{.AuditPanelID}}"></div>
+        </article>
+        {{end}}
+
+        {{end}}
+      </div>
+{{end}}

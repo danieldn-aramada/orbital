@@ -171,6 +171,35 @@ function removePayload(t, before, sub) {
   return out
 }
 
+// unknownKeys returns scalar keys the user typed that the type does not declare
+// as editable.
+//
+// These used to be DROPPED in silence: scalarPayload iterated t.fields, so a
+// typo'd key produced a success toast, a version bump and an audit row with the
+// value discarded — a typo was indistinguishable from a real edit (debt.md, Hi;
+// hit live 2026-09-22 with serialNumber).
+//
+// Refusing here is only correct BECAUSE t.fields is now derived from the
+// deployed schema. While it was the hand-maintained FormFields list, refusing
+// would have blocked real schema fields that the list simply had not caught up
+// with — which is the same bug pointing the other way, and is why an earlier
+// attempt at this was reverted.
+//
+// Structure is skipped, not reported: nested objects and arrays are owned-child
+// subtrees and edges, which the caller handles separately. Stamped fields are
+// orbital's to write and never the user's.
+function unknownKeys(t, sub) {
+  if (!sub) return []
+  const declared = new Set(t.fields || [])
+  const out = []
+  for (const [k, v] of Object.entries(sub)) {
+    if (declared.has(k) || STAMPED_FIELDS.has(k)) continue
+    if (v !== null && typeof v === 'object') continue
+    out.push(k)
+  }
+  return out
+}
+
 // STAMPED_FIELDS are written by orbital, never proposed by a client. The
 // changeset validator rejects them outright — `version` is the MVCC counter and
 // created*/updated* are provenance, so accepting them from a proposal would let
@@ -860,6 +889,23 @@ export function initConfigItemEditor({
       const changed = JSON.stringify(currentSub ?? null) !== JSON.stringify(before)
       const existed = before != null
       if (changed) changes.push({ target: t, currentSub, existed, before })
+    }
+
+    // Refuse BEFORE any mutation is sent. A partial save that also silently
+    // discarded a typo would be the worst of both: some fields written, one
+    // quietly lost, and a success toast over the top.
+    const unknown = []
+    for (const ch of changes) {
+      for (const k of unknownKeys(ch.target, ch.currentSub)) {
+        if (!unknown.includes(k)) unknown.push(k)
+      }
+    }
+    if (unknown.length > 0) {
+      showError(
+        (unknown.length === 1 ? 'Unknown field ' : 'Unknown fields ') +
+        unknown.map(k => `"${k}"`).join(', ') +
+        ' — not editable on this type. Check the spelling, or remove the key.')
+      return false
     }
 
     if (changes.length === 0) {

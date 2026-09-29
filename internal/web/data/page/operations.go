@@ -81,4 +81,16 @@ type Schema struct {
 	Checksum string
 	SDL      string
 	Drift    []string
+
+	// Orphans are types the graph still holds nodes for but the shipped schema
+	// no longer declares. Separate from Drift because it is a different claim:
+	// Drift says the schema is behind, this says the DATA is behind — rows left
+	// behind by a dropped type, which nothing can render.
+	Orphans []OrphanRow
+}
+
+// OrphanRow is one orphaned type and how many nodes it left behind.
+type OrphanRow struct {
+	Type  string
+	Count int
 }

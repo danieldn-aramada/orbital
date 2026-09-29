@@ -85,9 +85,14 @@ func (s *Server) buildOrbMenuSections(path string) []layout.MenuSection {
 			Items: []layout.MenuItem{
 				{Label: "Inventory", Href: "/inventory", Active: path == "/inventory"},
 				{Label: "Data Center", Href: "/datacenter", Active: path == "/datacenter"},
+				// Servers and Clusters are generic pages now, served from the
+				// schema orb IMPORTED. Kept declared here rather than derived
+				// because orb's menu has no derived section — but they only
+				// resolve once a bundle has been imported, which is also the
+				// only state in which orb has any of these records at all.
 				{Label: "Servers", Href: "/servers", Active: path == "/servers"},
 				{Label: "Clusters", Href: "/clusters", Active: path == "/clusters"},
-				{Label: "Network Devices", Href: "/network", Active: path == "/network"},
+				{Label: "Network Devices", Href: "/network-devices", Active: path == "/network-devices"},
 				{Label: "Schema Version", Href: "/schema", Active: path == "/schema"},
 			},
 		},
@@ -202,37 +207,9 @@ func (s *Server) inventoryPage(c echo.Context) error {
 	})
 }
 
-type clustersPageData struct {
-	layout.Base
-	PageTitle string
-}
-
-func (s *Server) clustersPage(c echo.Context) error {
-	return s.render(c, "clusters", clustersPageData{
-		Base:      s.orbBase(c),
-		PageTitle: "Clusters",
-	})
-}
-
 // schemaPage queries orb's local DGraph for the active GraphQL schema and
 // renders it. Single source of truth — if DGraph was wiped, the page
 // correctly shows "no schema" instead of a stale sidecar copy.
-type networkPageData struct {
-	layout.Base
-	PageTitle string
-}
-
-// networkPage renders the Network Devices list. Orb serves network devices for
-// the same reason it serves servers and clusters: the imported graph contains
-// them, and orb's job is to show what orbital published. Read-only, like every
-// other orb page — layout.OrbActions gates the Edit/Delete controls off.
-func (s *Server) networkPage(c echo.Context) error {
-	return s.render(c, "network", networkPageData{
-		Base:      s.orbBase(c),
-		PageTitle: "Network Devices",
-	})
-}
-
 func (s *Server) schemaPage(c echo.Context) error {
 	sdl, _ := dgraphschema.Active(c.Request().Context(), s.cfg.DGraphAdminURL)
 	// Errors are non-fatal — empty SDL renders as the "Awaiting import" state,

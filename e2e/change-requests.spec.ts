@@ -11,6 +11,7 @@
 // leaked policy would silently gate every later spec in the run.
 
 import { test, expect, Page } from '@playwright/test'
+import { openEditor as openGenericEditor } from './helpers/generic';
 import { savePolicies, clearPolicies, restorePolicies } from './policy-snapshot'
 
 const SERVER_ORB_ID = '2f-uae:server-5HSC3D4'
@@ -80,13 +81,7 @@ async function unprotect(page: Page, id: string) {
 }
 
 async function openServerEditModal(page: Page, orbId: string) {
-  const domId = safeDomId(orbId)
-  await page.goto(`/servers?open=${encodeURIComponent(orbId)}&label=${encodeURIComponent(orbId)}`)
-  await page.waitForSelector(`#tab-content-srv-${domId}[data-loaded="true"]`, { timeout: 15_000 })
-  await page.waitForSelector(`#edit-modal-srv-${domId}`, { state: 'attached', timeout: 5_000 })
-  await page.locator(`[data-srv-edit-id="${domId}"]`).first().click()
-  await expect(page.locator(`#edit-modal-srv-${domId}`)).toHaveClass(/is-active/)
-  return domId
+  return await openGenericEditor(page, 'servers', orbId)
 }
 
 // AC 3
@@ -155,17 +150,17 @@ test('a gated class relabels Save to "Propose change", writes nothing, and lands
     const before = await (await api(page, 'GET', `/api/v1/change-requests?orbId=${encodeURIComponent(SERVER_ORB_ID)}`)).json()
 
     const domId = await openServerEditModal(page, SERVER_ORB_ID)
-    const btn = page.locator(`#srv-edit-submit-${domId}`)
+    const btn = page.locator(`#generic-edit-submit-${domId}`)
 
     // AC 6 — the button says what it will actually do, before the user commits
     // effort to an edit that would be refused.
     await expect(btn).toHaveText('Propose change', { timeout: 10_000 })
-    await expect(page.locator(`#edit-modal-srv-${domId}`)).toContainText('Needs approval')
+    await expect(page.locator(`#edit-modal-generic-${domId}`)).toContainText('Needs approval')
 
     // ONE button, not two. A caller who cannot bypass gets no direct-write
     // control: a second button that always 403s trains people to click through
     // errors, and the extra action here would be a dead one.
-    await expect(page.locator(`#edit-modal-srv-${domId} [data-testid="propose-change"]`)).toHaveCount(0)
+    await expect(page.locator(`#edit-modal-generic-${domId} [data-testid="propose-change"]`)).toHaveCount(0)
 
     // The notice sits in the FOOTER, as a sibling of the button row.
     //
@@ -183,7 +178,7 @@ test('a gated class relabels Save to "Propose change", writes nothing, and lands
     // a measurement here reports a phantom offset. Position is the cause,
     // alignment is the effect, and only the cause is stable to assert.
     const misplaced = await page.evaluate(({ id }) => {
-      const card = document.querySelector(`#edit-modal-srv-${id} .modal-card`)
+      const card = document.querySelector(`#edit-modal-generic-${id} .modal-card`)
       // `.js-gate-notice`, not `.notification`: these are text lines, not
       // tinted panels — colour in this footer belongs to the three buttons.
       const notice = card?.querySelector('.js-gate-notice')
@@ -201,7 +196,7 @@ test('a gated class relabels Save to "Propose change", writes nothing, and lands
     // Change one field through the real editor instance, the same way the
     // existing editor spec drives it.
     await page.evaluate(({ id }) => {
-      const ed = (window as any).srvEditors.get(id)
+      const ed = (window as any).genericEditors.get(id)
       const cur = JSON.parse(ed.get().text)
       cur.hostname = 'proposed-by-e2e'
       ed.set({ text: JSON.stringify(cur, null, 2) })
@@ -215,7 +210,7 @@ test('a gated class relabels Save to "Propose change", writes nothing, and lands
     // user out of the entity mid-flow and made the gated path behave unlike the
     // ordinary one. The banner is what confirms the proposal landed, and it is
     // also the way through to the review.
-    await expect(page.locator(`#edit-modal-srv-${domId}`)).not.toHaveClass(/is-active/, { timeout: 15_000 })
+    await expect(page.locator(`#edit-modal-generic-${domId}`)).not.toHaveClass(/is-active/, { timeout: 15_000 })
     expect(page.url()).not.toMatch(/\/change-requests\//)
     const banner = page.locator(`[data-pending-changes-for="${SERVER_ORB_ID}"]`)
     await expect(banner).toContainText('in review', { timeout: 15_000 })
@@ -355,9 +350,9 @@ test('an admin on a protected class gets both actions, with Propose change as th
   const policyId = await protect(page, NS)
   try {
     const domId = await openServerEditModal(page, SERVER_ORB_ID)
-    const modal = page.locator(`#edit-modal-srv-${domId}`)
+    const modal = page.locator(`#edit-modal-generic-${domId}`)
     const propose = modal.locator('[data-testid="propose-change"]')
-    const save = page.locator(`#srv-edit-submit-${domId}`)
+    const save = page.locator(`#generic-edit-submit-${domId}`)
     // The policy resolve is async, and the second button appearing IS the
     // resolution — the labels are what tell a privileged writer where each
     // click goes, so there is no notice to wait on.
@@ -371,8 +366,8 @@ test('an admin on a protected class gets both actions, with Propose change as th
     // a footer that offered both but made bypassing the default click would
     // satisfy "both exist" and still push every admin past review.
     const order = await page.evaluate(({ id }) => {
-      const p = document.querySelector(`#edit-modal-srv-${id} [data-testid="propose-change"]`)!
-      const b = document.getElementById(`srv-edit-submit-${id}`)!
+      const p = document.querySelector(`#edit-modal-generic-${id} [data-testid="propose-change"]`)!
+      const b = document.getElementById(`generic-edit-submit-${id}`)!
       if (p.parentElement !== b.parentElement) return 'propose is not in the same button row as save'
       // DOCUMENT_POSITION_FOLLOWING === 4 when save comes after propose.
       return p.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? 'propose-first' : 'save-first'
@@ -410,11 +405,11 @@ test("an admin's Propose change opens a request and writes nothing", async ({ pa
   const newIds: string[] = []
   try {
     const domId = await openServerEditModal(page, SERVER_ORB_ID)
-    const modal = page.locator(`#edit-modal-srv-${domId}`)
+    const modal = page.locator(`#edit-modal-generic-${domId}`)
     await expect(modal.locator('[data-testid="propose-change"]')).toBeVisible({ timeout: 10_000 })
 
     await page.evaluate(({ id }) => {
-      const ed = (window as any).srvEditors.get(id)
+      const ed = (window as any).genericEditors.get(id)
       const cur = JSON.parse(ed.get().text)
       cur.hostname = 'proposed-by-admin-e2e'
       ed.set({ text: JSON.stringify(cur, null, 2) })
@@ -464,13 +459,13 @@ test('a proposal from the editor carries only the edited field', async ({ page }
   const created: string[] = []
   try {
     const domId = await openServerEditModal(page, SERVER_ORB_ID)
-    const modal = page.locator(`#edit-modal-srv-${domId}`)
+    const modal = page.locator(`#edit-modal-generic-${domId}`)
     await expect(modal.locator('[data-testid="propose-change"]')).toBeVisible({ timeout: 10_000 })
 
     // One of the six editable scalars. The other five go untouched and must not
     // appear in the payload.
     await page.evaluate(({ id }) => {
-      const ed = (window as any).srvEditors.get(id)
+      const ed = (window as any).genericEditors.get(id)
       const cur = JSON.parse(ed.get().text)
       cur.manufacturer = 'Dell-narrowed'
       ed.set({ text: JSON.stringify(cur, null, 2) })
@@ -499,8 +494,8 @@ test('a proposal from the editor carries only the edited field', async ({ page }
 test('with no policy the editor behaves exactly as it does today', async ({ page }) => {
   await clearPolicies(page.request)
   const domId = await openServerEditModal(page, SERVER_ORB_ID)
-  const modal = page.locator(`#edit-modal-srv-${domId}`)
-  await expect(page.locator(`#srv-edit-submit-${domId}`)).toHaveText('Save')
+  const modal = page.locator(`#edit-modal-generic-${domId}`)
+  await expect(page.locator(`#generic-edit-submit-${domId}`)).toHaveText('Save')
   // Give the async policy resolve time to have landed if it were going to.
   await page.waitForTimeout(1000)
   await expect(modal).not.toContainText('Needs approval')
@@ -508,7 +503,7 @@ test('with no policy the editor behaves exactly as it does today', async ({ page
   // and no relabelling, so an installation that never configures change control
   // sees the pre-approval-engine UI exactly.
   await expect(modal.locator('[data-testid="propose-change"]')).toHaveCount(0)
-  await expect(page.locator(`#srv-edit-submit-${domId}`)).toHaveClass(/is-success/)
+  await expect(page.locator(`#generic-edit-submit-${domId}`)).toHaveClass(/is-success/)
 })
 
 // AC 14 (browser half — the notice a person actually sees)
@@ -659,7 +654,7 @@ test('a save refused as APPROVAL_REQUIRED offers to open a change request with t
 
   // Modal opens with NO policy, so the button resolves to plain Save.
   const domId = await openServerEditModal(page, SERVER_ORB_ID)
-  const btn = page.locator(`#srv-edit-submit-${domId}`)
+  const btn = page.locator(`#generic-edit-submit-${domId}`)
   await expect(btn).toHaveText('Save')
   await page.waitForTimeout(500)   // let the (empty) policy resolve settle
 
@@ -668,7 +663,7 @@ test('a save refused as APPROVAL_REQUIRED offers to open a change request with t
 
   try {
     await page.evaluate(({ id }) => {
-      const ed = (window as any).srvEditors.get(id)
+      const ed = (window as any).genericEditors.get(id)
       const cur = JSON.parse(ed.get().text)
       cur.hostname = 'refused-then-proposed'
       ed.set({ text: JSON.stringify(cur, null, 2) })
@@ -680,7 +675,7 @@ test('a save refused as APPROVAL_REQUIRED offers to open a change request with t
 
     // The offer names the reason and what accepting does — a bare "403" would
     // leave the operator to work out both.
-    await expect(page.locator(`#edit-modal-srv-${domId}`)).not.toHaveClass(/is-active/, { timeout: 15_000 })
+    await expect(page.locator(`#edit-modal-generic-${domId}`)).not.toHaveClass(/is-active/, { timeout: 15_000 })
     expect(prompt).toContain('approval')
     expect(prompt).toContain('change request')
 
@@ -714,28 +709,28 @@ test('declining the offer leaves the edit in place and explains the refusal', as
   await closeAllInFlight(page, SERVER_ORB_ID)
 
   const domId = await openServerEditModal(page, SERVER_ORB_ID)
-  await expect(page.locator(`#srv-edit-submit-${domId}`)).toHaveText('Save')
+  await expect(page.locator(`#generic-edit-submit-${domId}`)).toHaveText('Save')
   await page.waitForTimeout(500)
 
   const policyId = await protect(page, NS, NOBODY_BYPASSES)
   try {
     await page.evaluate(({ id }) => {
-      const ed = (window as any).srvEditors.get(id)
+      const ed = (window as any).genericEditors.get(id)
       const cur = JSON.parse(ed.get().text)
       cur.hostname = 'declined-edit'
       ed.set({ text: JSON.stringify(cur, null, 2) })
     }, { id: domId })
 
     page.once('dialog', d => d.dismiss())
-    await page.locator(`#srv-edit-submit-${domId}`).click()
+    await page.locator(`#generic-edit-submit-${domId}`).click()
 
     // Still on the servers page, modal still open, edit still there.
-    await expect(page.locator(`#edit-modal-srv-${domId}`)).toHaveClass(/is-active/)
+    await expect(page.locator(`#edit-modal-generic-${domId}`)).toHaveClass(/is-active/)
     expect(page.url()).not.toMatch(/\/change-requests\//)
-    await expect(page.locator(`#edit-modal-srv-${domId}`)).toContainText('approval')
+    await expect(page.locator(`#edit-modal-generic-${domId}`)).toContainText('approval')
 
     const stillThere = await page.evaluate(({ id }) => {
-      const ed = (window as any).srvEditors.get(id)
+      const ed = (window as any).genericEditors.get(id)
       return JSON.parse(ed.get().text).hostname
     }, { id: domId })
     expect(stillThere).toBe('declined-edit')

@@ -137,7 +137,7 @@ func init() {
 	// approvalrequest.DefaultChangesetRevision holds the default value on creation for the changeset_revision field.
 	approvalrequest.DefaultChangesetRevision = approvalrequestDescChangesetRevision.Default.(int)
 	// approvalrequestDescExecutedBy is the schema descriptor for executed_by field.
-	approvalrequestDescExecutedBy := approvalrequestFields[16].Descriptor()
+	approvalrequestDescExecutedBy := approvalrequestFields[17].Descriptor()
 	// approvalrequest.DefaultExecutedBy holds the default value on creation for the executed_by field.
 	approvalrequest.DefaultExecutedBy = approvalrequestDescExecutedBy.Default.(string)
 	auditeventFields := schema.AuditEvent{}.Fields()

@@ -4,6 +4,12 @@ Read this before: DGraph schema changes, query/mutation work, export/import, see
 
 ## Settled Decisions
 
+- **Removing a type from `schema.graphql` does NOT remove its nodes, and orbital reports the leftovers rather than deleting them.** *(Added 2026-09-25.)* DGraph applies the new schema happily; the nodes keep their `dgraph.type`, stay reachable through `queryConfigItem` (the `ConfigItem` interface still matches them), and every field on them — `__typename` included — resolves to nothing. The relational equivalent is dropping a table and leaving its rows. **A single such node took out the whole inventory page**: DataTables treats a missing column as fatal and blocks with an `alert()` naming only its own documentation.
+  `dgraphschema.Orphans` detects it — at boot as an **ERROR**, and on the Schema page — and **never deletes**. "Make the schema apply succeed by removing data" is a silent loss, and orbital surfaces divergence rather than auto-resolving it.
+  ⚠️ **Detection is driven by the DATA, not by diffing two schema texts.** Comparing shipped against live finds nothing, because the orphaning type is normally absent from *both* — removing it from the file and applying that file is exactly how nodes get stranded. The query asks DGraph for every ConfigItem node that is **none of the declared types**; the residue is precisely the orphans. An empty or unparseable schema must report **nothing**, since the complement of "no declared types" is the entire graph.
+  This corrects `Drift`'s long-standing rationale for checking one direction only — *"predicates present in DGraph but not in the shipped file are harmless"* — which holds for a **field** and fails for a **type**.
+  **Orbital-wide, not orb:** orb's graph is always a subgraph of orbital's, so a clean orbital implies a clean orb. `scripts/seed-dgraph.sh` is deliberately out of scope — it is break-glass, out-of-band tooling.
+
 - **A DQL delete does NOT maintain `@hasInverse` — clear the surviving parent's edge yourself.** *(Added 2026-09-23.)* `@hasInverse` is a GraphQL-layer construct: DGraph keeps the two forward predicates in step only for mutations through its **GraphQL** endpoint. Orbital's cascade delete (`bulkDeleteGuarded`) is a **DQL** upsert — deliberately, because that is the only way to get a version-guarded CAS — so an `S * *` delete clears the child and leaves the parent's list edge pointing at an empty uid.
   ⚠️ **The consequence is not cosmetic.** Any later GraphQL query that walks that edge and selects a non-nullable field fails **entirely**, because DGraph propagates the error to the root: *"Non-nullable field 'orbId' (type String!) was not present in result from Dgraph."* The export subgraph query is exactly that shape, so **one cluster delete permanently broke export for its whole data centre** — while the delete returned `200` with a correct audit event, and the damage surfaced later, in a different subsystem, in an error naming neither the delete nor the node. Eight such corpses accumulated on `colo-galleon`, one per e2e run, unnoticed until someone tried to export.
   **Rule:** any DQL write that removes a node must also remove the edges held by nodes that **SURVIVE** it, in the same transaction. Only survivors matter — when both ends are deleted the stale edge sits on a tombstone and is unreachable, which is what keeps this to a handful of cases rather than all 28 `@hasInverse` pairs. Today: `DataCenter.kubernetesClusters` (cluster delete); `DataCenter.servers`, `Rack.servers`, `KubernetesNode.server` (server delete); none for a data centre, which is the top of its own subtree. `TestDelete_LeavesNoDanglingParentEdge` reproduces the failure and is verified to fail without the fix. The same obligation applies to **any** new DQL write path, not just deletes.
@@ -18,6 +24,7 @@ Read this before: DGraph schema changes, query/mutation work, export/import, see
 - `make seed` applies schema to both DGraph instances — blue (`:8080`) and scratch (`:8081`) via `apply_schema` in `scripts/seed-dgraph.sh`. The integration suite's own cluster (`:8083`) is deliberately NOT seeded here: `TestMain` applies the schema and its own fixtures, and `make seed` must not touch it — nor it, blue.
 - **Orbital does NOT re-apply `schema.graphql` to DGraph on startup — a schema-bumping image deploy does NOT reach the running DGraph by itself.** Schema is applied only by `make seed`, restore, export-to-scratch, and orb import. Deploying an image whose query requests a new field against a DGraph still on the old schema makes the query error → zero rows → 404 / silently-truncated render (real burn 2026-07-27: v0.0.25's cluster query added `retentionDays`, AKS DGraph was still v3 → every cluster 404'd, then the edit modal vanished). **Deploy step for any `schema/VERSION` bump:** after the image rollout, apply the schema to the active (blue) DGraph — `kubectl port-forward svc/<blue>-alpha 8080:8080` then `curl -X POST localhost:8080/admin/schema -H 'Content-Type: application/graphql' --data-binary @schema/schema.graphql`. Additive changes (new nullable fields) are non-destructive; do this before/with the rollout, not after users hit 404s.
 - **The two existing apply paths read DIFFERENT files, and nothing reconciles them.** A **restore** applies the schema baked into the *running image* (`restore.go:502` → `applyBlueSchema`, reading `cfg.SchemaPath` inside the container); **`make seed-aks-dgraph`** applies the one in your *local working tree* (`seed-aks.sh` → `seed-dgraph.sh:40`). Seeding a cluster from a checkout that is ahead of the deployed image silently puts DGraph on a schema the running code does not expect — and the reverse leaves a newer image querying fields DGraph lacks. **Before seeding a cluster you did not just deploy to, check which image is running.** Not hypothetical: the 2026-07-27 outage above is the same mismatch, arrived at by skipping the apply rather than by applying the wrong file.
+- **A direct `/admin/schema` apply does NOT update the schema version orbital records in PostgreSQL.** Orbital tracks the active version in the `schema_versions` table; a raw `curl` to `/admin/schema` — including the deploy step above — moves DGraph without touching that record, so the `/schema` page can report a mismatch against a DGraph that is in fact correct. Reconcile with a backup/restore cycle.
 - **Enums are a GraphQL-layer constraint only — they are NOT enforced on data at rest.** DGraph serializes enum values as strings (`DataCenter.model` is `type: string, tokenizer: [hash]` in the DQL schema); `dgraph live` writes DQL predicates directly and never sees the GraphQL schema. So restore, orb import, and any live-loader path can land a value outside the enum. **Verified 2026-09-17 on local blue, dgraph v25.3.1:** a DQL `set` of `"Galleon"` onto `DataCenter.model` returned `code: Success` with no error, and DQL read it back verbatim. Reading that node through GraphQL then **degrades, it does not fail** — `data` is still returned with `model: null`, and an entry appears in `errors`: `Error coercing value '"Galleon"' for field 'model' to type DataCenterModel`. A `queryDataCenter` list returned all 10 rows with the error scoped to `path: [queryDataCenter, 9, model]`; the other rows were unaffected. ⚠️ **The trap is a client that reads `data` and ignores `errors` — it sees `model: null` and cannot distinguish "unset" from "corrupt".** Treat an enum as a contract for API callers, not a guarantee about what is in the graph. Valid `@search` indexes for enums are `hash`, `exact`, `regexp` — **`term` and `trigram` are string-only and will be rejected.** Enum values must also be valid GraphQL names (`[_A-Za-z][_0-9A-Za-z]*`): no spaces, hyphens, or leading digits, so a product name like `Cruiser-2` cannot be an enum member without a display-name mapping.
   - **⚠️ `v7` adds `@search` to `ConfigItem.version` — an index apply BLOCKS.** DGraph reindexes the predicate across every ConfigItem before `/admin/schema` returns, and mutations wait behind it. Additive and non-destructive, but schedule it like a migration. **Schema before code**; the wrong order fails visibly and harmlessly — a DGraph on `v6` answers `Field "version" is not defined by type ServerFilter` and the mutation is refused unwritten.
   - **⚠️ `v9` adds `DataCenter.model` (`enum DataCenterModel`).** Additive and non-blocking. Chosen over `String` so consumers (AEP) read the valid set by introspection instead of hardcoding it — the first enum in this schema; `NetworkDevice.role` remains a String with a comment. **Adding a model is a schema change + `VERSION` bump + an apply to every DGraph**, unlike a String where a new value is just data.
@@ -31,6 +38,36 @@ power draw, weight), not before.
 Values were harvested from NetBox before its decommission; two of thirteen
 models resolved only by joining on serviceTag or interface MAC, not by model
 string, so the mapping is not reconstructible from orbital alone.
+
+## Schema annotations
+
+Orbital reads **docstring annotations** out of the deployed schema. They are how a
+page is configured: the UI derives every list and detail page from introspection,
+and these are the only way to influence what it renders. There is no other layer —
+per-deployment overrides in Postgres were designed and deferred (`docs/planning/backlog.md`,
+spike 38).
+
+| Annotation | Scope | Effect |
+|---|---|---|
+| `editorIgnored` | field | Keeps the field out of the **editor**. Still displayed — it means "a human may not type this", not "do not show it". |
+| `jsonString` | field | The String holds a JSON document: the editor parses it into a tree, and a detail page pretty-prints it. Says nothing about placement. |
+| `detailOnly` | field | Never a table column, on a list page or a relationship table. Still rendered on the detail page. |
+| `label: MAC Address` | field | Display label, overriding the title-cased field name. Annotate only what title-casing gets wrong (acronyms). |
+| `slug: clusters` | type / interface | The page's URL segment — and its nav label, which is derived from the slug. |
+| `orbIdSuffix: idrac` | type | The token an owned child's orbId ends with. Default is the lower-cased type name. |
+| `order: name, provider` | type | Pins the leading display fields; everything else follows alphabetically. A **prefix**, never a complete list. |
+| `include: a.b` | type | Adds a relationship table whose rows are reached through a two-segment path (`storageControllers.storageDevices`). |
+| `editable: name` | type | Re-admits ConfigItem **interface** fields for editing on this type. Type-level because DGraph forbids redeclaring an interface field on an implementor. |
+
+**Mechanics — the parts that bite:**
+
+- ⚠️ **GraphQL allows ONE description block per declaration.** Two `"""…"""` in a row is a syntax error DGraph refuses (*"Expected Name, found BlockString"*). Put several annotations on separate lines inside one block; the parsers are line-based.
+- **FIELD annotations on an interface are inherited** by implementing types — DGraph forbids redeclaring the field, so the reader inherits instead. **TYPE annotations are not inherited**, with one deliberate exception: `order:` falls back to an implemented interface, so `/clusters` (an interface view) and each concrete detail page cannot order their columns differently.
+- **An annotation naming a field that does not exist is INERT, never an error.** A page must not fail to render because an annotation went stale.
+- **A misspelled annotation is silent** — `"""editorIgnroed"""` is a valid docstring that simply never matches. `UnknownAnnotations` reports anything that looks like an annotation and matches none; it logs at boot, so read that line.
+- **Annotation-only changes do NOT bump `schema/VERSION`** — but they take effect only once the schema is **applied** to DGraph, which orbital never does on startup.
+
+Rationale for each lives in `docs/reference/UI.md` § Settled Decisions; this table is the index, not the argument.
 
 ## ConfigItem interface
 
@@ -96,6 +133,37 @@ Some ConfigItems are **owned children** of another: they model physical/logical 
 **Single source (Spike 33, done 2026-08-24):** the type-policy lives once, in `internal/configitems/registry.go` — each `Type`'s `OwnerType`/`OwnerField`/`ChildField` (single-owner) plus an ordered, most-specific-first `OwnerEdges []OwnerEdge` for multi-parent types (`NetworkInterface`, `IPAddress`, `StorageVolume`). The **audit collector** (`internal/handler/related_orbids.go`) derives from it via `OwnedChildren()` / `OwnedOrbIDSelection()`; the per-type `collectRelatedOrbIDs` / `collectClusterRelatedOrbIDs` walkers are gone, which fixed real drift (storage devices/volumes and switch-side interfaces never rolled up; NetworkDevice and DataCenter aggregated nothing). A schema-consistency test (`configitems/schema_consistency_test.go`, R3) fails the build if the registry drifts from `schema.graphql` or a ConfigItem type goes unregistered. Adding an owned-child type = one registry entry (see `docs/playbooks/add-configitem.md`).
 
 The export **diff preview** was briefly a second consumer (it rolled changes up under an owner). That was removed 2026-08-24 — owner was never a decided requirement for the preview, and the orbId convention already identifies the owning entity. Ownership today serves the audit tab, the JSON editor's subtree paths, and delete-cascade. Do not re-add it to the diff without an explicit decision.
+
+**AMENDED 2026-09-24 — type-policy is VIEW CONFIGURATION, and moves to shipped
+defaults + per-deployment overrides.** The instances/type-policy split above still
+holds. What changed is the classification of the second layer. Three premises of
+the original decision moved:
+
+- `internal/configitems/registry.go`, named above as the single home, is being
+  retired in favour of deriving field metadata from the running schema.
+- The alternative is no longer compile-checked Go. A schema-side annotation is a
+  string that fails silently when mistyped, so "Postgres invites drift" stopped
+  discriminating between the options — both need a startup validator against
+  introspection.
+- Most importantly: **every consumer of type-policy is a view.** It decides what
+  the editor groups into one tree, what audit rolls up onto a tab, and — via
+  `baseScope` — what a reviewer is deemed to have looked at. None of it reaches
+  the data. Orbital is API-first and its UI is an ergonomic tool over that API;
+  an adopter querying the graph directly should be able to configure what they
+  see and edit.
+
+So: **shipped defaults stay in version control; per-deployment overrides live in
+Postgres**, validated against introspection on write, warn-not-refuse at boot,
+with cross-replica invalidation. Divergence between deployments is the point of
+configuration, not drift.
+
+**The structural boundary is unchanged and is not policy-driven:** export is
+everything reachable from the Namespace node (DQL `expand(_all_)`), and there is
+one DataCenter per namespace. Type-policy never participates.
+
+*Naming is unsettled — "containment", "ownership" and "subtree" are all in use
+here. Do not bake the current word into a table name, an exported type or an API
+surface until it is decided.*
 
 > **Why not infer ownership from DGraph automatically?** DGraph encodes *relationships*, not *ownership* — `@hasInverse` is bidirectional, there is no `@owns`. Projecting the graph to a tree must pick one canonical parent per node (a NIC nests under its adapter, not its server *and* device), which is a domain policy, not a derivable fact. Ownership must be **declared**; the goal is to declare it once, explicitly, next to the schema.
 

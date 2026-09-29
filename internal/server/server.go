@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -23,7 +24,6 @@ import (
 	orbmw "github.com/armada/orbital/internal/middleware"
 	"github.com/armada/orbital/internal/oci"
 	appversion "github.com/armada/orbital/internal/version"
-	"github.com/armada/orbital/internal/web/data/layout"
 	webtemplates "github.com/armada/orbital/web/templates/orbital"
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	"github.com/labstack/echo/v4"
@@ -284,14 +284,22 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		logger.Warn("CHANGE CONTROL DISABLED (ORBITAL_CHANGE_CONTROL_ENABLED=false) — change-request and approval-policy pages and endpoints are not registered, and no mutation is gated. Existing rows are retained, not deleted.")
 	}
 
-	gql := handler.NewGraphQL(cfg.DGraphURL, db, logger, cfg.InlineSelectorReject)
+	// ONE field source for the process. Each handler would otherwise build its
+	// own resolver and its own cache, multiplying introspection and letting
+	// handlers briefly disagree about the schema after a change. The GraphQL
+	// proxy needs it too: it generates the audit before-fetch selection from
+	// the same derived set, so the two cannot drift.
+	fieldSource := handler.NewSharedFieldSource(cfg.DGraphURL, logger)
+
+	gql := handler.NewGraphQL(cfg.DGraphURL, db, logger, cfg.InlineSelectorReject, handler.WithFieldSource(fieldSource))
 	s3Configured := cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != ""
 	ociConfigured := cfg.OCIConfigured()
 	if !ociConfigured {
 		logger.Warn("OCI publishing not configured (ORBITAL_OCI_REGISTRY and ORBITAL_OCI_SIGNING_KEY_PATH) — publish disabled")
 	}
 
-	ui := handler.NewUI(cfg.TemplateHotReload, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, s3Configured, cfg.S3Endpoint, cfg.S3Bucket, cfg.BasePath, db, logger)
+	ui := handler.NewUI(cfg.TemplateHotReload, cfg.RatelURL, cfg.IssueTrackerURL, oidcEnabled, s3Configured, cfg.S3Endpoint, cfg.S3Bucket, cfg.BasePath, db, logger,
+		handler.WithGenericRenderer(fieldSource))
 	ui.SetOIDCBranding(cfg.OIDCDisplayName, cfg.OIDCIconURL)
 	ui.SetOCIConfig(ociConfigured, cfg.OCIRegistry, cfg.OCIRepo)
 	ui.SetExportDir(cfg.ExportDir)
@@ -329,10 +337,23 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	}
 	root.GET("/", ui.Index)
 	root.GET("/inventory", ui.Index)
-	root.GET("/datacenters", ui.DataCenters)
-	root.GET("/servers", ui.Servers)
-	root.GET("/clusters", ui.Clusters)
-	root.GET("/network", ui.NetworkDevices)
+	// MIGRATED to the generic renderer. The derived slug is `data-centers`
+	// (kebab of the type name), so the old URL redirects rather than breaking
+	// bookmarks and integrator links — a slug is a contract, and moving one is
+	// a deliberate act with a forwarding address.
+	root.GET("/datacenters", func(c echo.Context) error {
+		return c.Redirect(http.StatusMovedPermanently, cfg.BasePath+"/data-centers")
+	})
+	root.GET("/datacenters/:orbId", func(c echo.Context) error {
+		return c.Redirect(http.StatusMovedPermanently,
+			cfg.BasePath+"/data-centers/"+url.PathEscape(c.Param("orbId")))
+	})
+	// MIGRATED: NetworkDevice is served by the generic renderer at
+	// /network-devices. The old path redirects — an operator's bookmark and any
+	// link in a runbook must keep working.
+	root.GET("/network", func(c echo.Context) error {
+		return c.Redirect(http.StatusMovedPermanently, cfg.BasePath+"/network-devices")
+	})
 	root.GET("/backups", ui.Backups)
 	root.GET("/divergence-reports", ui.DivergenceReports)
 	root.GET("/audit-log", ui.AuditLog)
@@ -400,34 +421,6 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 			}
 		}
 	}
-
-	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.TemplateHotReload, logger, cfg.BasePath,
-		func(c echo.Context) layout.PageActions {
-			canMutate, _ := c.Get("can_mutate").(bool)
-			return layout.OrbitalActions(canMutate)
-		})
-	root.GET("/datacenters/:orbId", dc.Tab)
-
-	srv := handler.NewServerHandler(cfg.DGraphURL, cfg.TemplateHotReload, logger, cfg.BasePath,
-		func(c echo.Context) layout.PageActions {
-			canMutate, _ := c.Get("can_mutate").(bool)
-			return layout.OrbitalActions(canMutate)
-		})
-	root.GET("/servers/:orbId", srv.Tab)
-
-	cluster := handler.NewClusterHandler(cfg.DGraphURL, cfg.TemplateHotReload, logger, cfg.BasePath,
-		func(c echo.Context) layout.PageActions {
-			canMutate, _ := c.Get("can_mutate").(bool)
-			return layout.OrbitalActions(canMutate)
-		})
-	root.GET("/clusters/:orbId", cluster.Tab)
-
-	networkDevice := handler.NewNetworkDeviceHandler(cfg.DGraphURL, cfg.TemplateHotReload, logger, cfg.BasePath,
-		func(c echo.Context) layout.PageActions {
-			canMutate, _ := c.Get("can_mutate").(bool)
-			return layout.OrbitalActions(canMutate)
-		})
-	root.GET("/network/:orbId", networkDevice.Tab)
 
 	// gql is passed for the approval gate only — this endpoint writes via DQL,
 	// so it cannot reach the check through writeToDGraph's chokepoint.
@@ -596,6 +589,10 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 			api.POST("/change-requests/:id/close", crh.CloseChangeRequest)
 
 			adminAPI := root.Group("/api/v1", append(apiAuth, handler.RequireRole(db, user.RoleAdmin))...)
+			// Discovery: what pages exist, derived from the deployed schema.
+			// Readable by anyone authenticated — the UI needs it on every render.
+			// Writing an override is a P1 concern and will sit on adminAPI.
+			apiReadonly.GET("/views", handler.NewViewsHandler(fieldSource, logger).List)
 			apiReadonly.GET("/approval-policies", crh.ListApprovalPolicies)
 			apiReadonly.GET("/approval-policies/resolve", crh.ResolveApprovalPolicy)
 			// The field-level projection of open requests, keyed by orbId so a
@@ -608,7 +605,22 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	}
 
 	gqlGroup.Any("/graphql", gql.Handle)
+	root.GET("/views", ui.ViewsPage)
 	root.GET("/swagger/*", echoswagger.WrapHandler)
+
+	// The generic renderer, registered LAST and deliberately.
+	//
+	// Echo resolves static segments before parameterised ones, so /users and
+	// /audit-log still reach their own handlers rather than being read as slugs.
+	// Registering these last also makes the ordering visible to the next reader
+	// instead of resting on router internals. A slug colliding with a static
+	// route would make that page unreachable, which
+	// TestGenericRoutes_DoNotSwallowStaticPages asserts against the real list.
+	// On the ROOT GROUP, not the Echo instance: the group carries the session
+	// middleware, and registering on `e` bypassed it — every generic page
+	// rendered the login gate to a logged-in user, which curl cannot see
+	// because curl is unauthenticated either way.
+	root.RouteNotFound("/*", ui.Generic().Fallback)
 
 	var divIngester *divergenceingest.Ingester
 	if cfg.DivergenceIngestEnabled && cfg.S3Bucket != "" {

@@ -52,6 +52,8 @@ type ApprovalRequest struct {
 	BaseEffect json.RawMessage `json:"base_effect,omitempty"`
 	// BaseValues holds the value of the "base_values" field.
 	BaseValues map[string]map[string]interface{} `json:"base_values,omitempty"`
+	// BaseScope holds the value of the "base_scope" field.
+	BaseScope []string `json:"base_scope,omitempty"`
 	// Payload holds the value of the "payload" field.
 	Payload json.RawMessage `json:"payload,omitempty"`
 	// ExecutedAt holds the value of the "executed_at" field.
@@ -98,7 +100,7 @@ func (*ApprovalRequest) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case approvalrequest.FieldBaseVersions, approvalrequest.FieldBasePresent, approvalrequest.FieldBaseEffect, approvalrequest.FieldBaseValues, approvalrequest.FieldPayload:
+		case approvalrequest.FieldBaseVersions, approvalrequest.FieldBasePresent, approvalrequest.FieldBaseEffect, approvalrequest.FieldBaseValues, approvalrequest.FieldBaseScope, approvalrequest.FieldPayload:
 			values[i] = new([]byte)
 		case approvalrequest.FieldID, approvalrequest.FieldNumber, approvalrequest.FieldChangesetRevision:
 			values[i] = new(sql.NullInt64)
@@ -238,6 +240,14 @@ func (_m *ApprovalRequest) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field base_values: %w", err)
 				}
 			}
+		case approvalrequest.FieldBaseScope:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field base_scope", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.BaseScope); err != nil {
+					return fmt.Errorf("unmarshal field base_scope: %w", err)
+				}
+			}
 		case approvalrequest.FieldPayload:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field payload", values[i])
@@ -357,6 +367,9 @@ func (_m *ApprovalRequest) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("base_values=")
 	builder.WriteString(fmt.Sprintf("%v", _m.BaseValues))
+	builder.WriteString(", ")
+	builder.WriteString("base_scope=")
+	builder.WriteString(fmt.Sprintf("%v", _m.BaseScope))
 	builder.WriteString(", ")
 	builder.WriteString("payload=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Payload))

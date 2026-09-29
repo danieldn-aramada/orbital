@@ -2180,6 +2180,8 @@ type ApprovalRequestMutation struct {
 	base_effect           *json.RawMessage
 	appendbase_effect     json.RawMessage
 	base_values           *map[string]map[string]interface{}
+	base_scope            *[]string
+	appendbase_scope      []string
 	payload               *json.RawMessage
 	appendpayload         json.RawMessage
 	executed_at           *time.Time
@@ -3088,6 +3090,71 @@ func (m *ApprovalRequestMutation) ResetBaseValues() {
 	delete(m.clearedFields, approvalrequest.FieldBaseValues)
 }
 
+// SetBaseScope sets the "base_scope" field.
+func (m *ApprovalRequestMutation) SetBaseScope(s []string) {
+	m.base_scope = &s
+	m.appendbase_scope = nil
+}
+
+// BaseScope returns the value of the "base_scope" field in the mutation.
+func (m *ApprovalRequestMutation) BaseScope() (r []string, exists bool) {
+	v := m.base_scope
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBaseScope returns the old "base_scope" field's value of the ApprovalRequest entity.
+// If the ApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRequestMutation) OldBaseScope(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBaseScope is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBaseScope requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBaseScope: %w", err)
+	}
+	return oldValue.BaseScope, nil
+}
+
+// AppendBaseScope adds s to the "base_scope" field.
+func (m *ApprovalRequestMutation) AppendBaseScope(s []string) {
+	m.appendbase_scope = append(m.appendbase_scope, s...)
+}
+
+// AppendedBaseScope returns the list of values that were appended to the "base_scope" field in this mutation.
+func (m *ApprovalRequestMutation) AppendedBaseScope() ([]string, bool) {
+	if len(m.appendbase_scope) == 0 {
+		return nil, false
+	}
+	return m.appendbase_scope, true
+}
+
+// ClearBaseScope clears the value of the "base_scope" field.
+func (m *ApprovalRequestMutation) ClearBaseScope() {
+	m.base_scope = nil
+	m.appendbase_scope = nil
+	m.clearedFields[approvalrequest.FieldBaseScope] = struct{}{}
+}
+
+// BaseScopeCleared returns if the "base_scope" field was cleared in this mutation.
+func (m *ApprovalRequestMutation) BaseScopeCleared() bool {
+	_, ok := m.clearedFields[approvalrequest.FieldBaseScope]
+	return ok
+}
+
+// ResetBaseScope resets all changes to the "base_scope" field.
+func (m *ApprovalRequestMutation) ResetBaseScope() {
+	m.base_scope = nil
+	m.appendbase_scope = nil
+	delete(m.clearedFields, approvalrequest.FieldBaseScope)
+}
+
 // SetPayload sets the "payload" field.
 func (m *ApprovalRequestMutation) SetPayload(jm json.RawMessage) {
 	m.payload = &jm
@@ -3379,7 +3446,7 @@ func (m *ApprovalRequestMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ApprovalRequestMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 21)
 	if m.created_at != nil {
 		fields = append(fields, approvalrequest.FieldCreatedAt)
 	}
@@ -3430,6 +3497,9 @@ func (m *ApprovalRequestMutation) Fields() []string {
 	}
 	if m.base_values != nil {
 		fields = append(fields, approvalrequest.FieldBaseValues)
+	}
+	if m.base_scope != nil {
+		fields = append(fields, approvalrequest.FieldBaseScope)
 	}
 	if m.payload != nil {
 		fields = append(fields, approvalrequest.FieldPayload)
@@ -3482,6 +3552,8 @@ func (m *ApprovalRequestMutation) Field(name string) (ent.Value, bool) {
 		return m.BaseEffect()
 	case approvalrequest.FieldBaseValues:
 		return m.BaseValues()
+	case approvalrequest.FieldBaseScope:
+		return m.BaseScope()
 	case approvalrequest.FieldPayload:
 		return m.Payload()
 	case approvalrequest.FieldExecutedAt:
@@ -3531,6 +3603,8 @@ func (m *ApprovalRequestMutation) OldField(ctx context.Context, name string) (en
 		return m.OldBaseEffect(ctx)
 	case approvalrequest.FieldBaseValues:
 		return m.OldBaseValues(ctx)
+	case approvalrequest.FieldBaseScope:
+		return m.OldBaseScope(ctx)
 	case approvalrequest.FieldPayload:
 		return m.OldPayload(ctx)
 	case approvalrequest.FieldExecutedAt:
@@ -3665,6 +3739,13 @@ func (m *ApprovalRequestMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetBaseValues(v)
 		return nil
+	case approvalrequest.FieldBaseScope:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBaseScope(v)
+		return nil
 	case approvalrequest.FieldPayload:
 		v, ok := value.(json.RawMessage)
 		if !ok {
@@ -3767,6 +3848,9 @@ func (m *ApprovalRequestMutation) ClearedFields() []string {
 	if m.FieldCleared(approvalrequest.FieldBaseValues) {
 		fields = append(fields, approvalrequest.FieldBaseValues)
 	}
+	if m.FieldCleared(approvalrequest.FieldBaseScope) {
+		fields = append(fields, approvalrequest.FieldBaseScope)
+	}
 	if m.FieldCleared(approvalrequest.FieldExecutedAt) {
 		fields = append(fields, approvalrequest.FieldExecutedAt)
 	}
@@ -3810,6 +3894,9 @@ func (m *ApprovalRequestMutation) ClearField(name string) error {
 		return nil
 	case approvalrequest.FieldBaseValues:
 		m.ClearBaseValues()
+		return nil
+	case approvalrequest.FieldBaseScope:
+		m.ClearBaseScope()
 		return nil
 	case approvalrequest.FieldExecutedAt:
 		m.ClearExecutedAt()
@@ -3875,6 +3962,9 @@ func (m *ApprovalRequestMutation) ResetField(name string) error {
 		return nil
 	case approvalrequest.FieldBaseValues:
 		m.ResetBaseValues()
+		return nil
+	case approvalrequest.FieldBaseScope:
+		m.ResetBaseScope()
 		return nil
 	case approvalrequest.FieldPayload:
 		m.ResetPayload()

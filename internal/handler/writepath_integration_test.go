@@ -42,7 +42,12 @@ type acceptFixture struct {
 func newAcceptFixture(t *testing.T) *acceptFixture {
 	t.Helper()
 	f := newCRFixture(t)
-	gql := NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), true)
+	// Real field source: this suite runs against the test DGraph, so the audit
+	// before-fetch selection is generated from the deployed schema exactly as it
+	// is in production. Without it the selection degrades to id/orbId/name/version
+	// and every diff assertion below goes quietly empty.
+	gql := NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), true,
+		WithFieldSource(NewSharedFieldSource(testutil.DGraphURL(), slog.Default())))
 	return &acceptFixture{crFixture: f, gql: gql, dh: NewDivergenceHandler(f.db, slog.Default(), gql)}
 }
 

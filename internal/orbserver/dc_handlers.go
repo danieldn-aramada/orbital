@@ -13,21 +13,11 @@ type dcPageData struct {
 	PageTitle string
 }
 
-type serversPageData struct {
-	layout.Base
-	PageTitle string
-}
-
 // --- Page handlers ---
 
 func (s *Server) dcPage(c echo.Context) error {
 	b := s.orbBase(c)
 	return s.render(c, "datacenter", dcPageData{Base: b, PageTitle: "Data Center"})
-}
-
-func (s *Server) serversPage(c echo.Context) error {
-	b := s.orbBase(c)
-	return s.render(c, "servers", serversPageData{Base: b, PageTitle: "Servers"})
 }
 
 // --- Import history page ---

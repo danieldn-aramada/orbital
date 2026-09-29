@@ -58,38 +58,45 @@ func parsePage(fsys fs.FS, name string, files []string) *template.Template {
 // (either the embedded web.FS or os.DirFS("web") for dev hot-reload).
 func Map(fsys fs.FS) map[string]*template.Template {
 	return map[string]*template.Template{
-		"status":          parsePage(fsys, "status", page("templates/orb/pages/status.gohtml")),
-		"import":          parsePage(fsys, "import", page("templates/orb/pages/import.gohtml")),
-		"inventory":       parsePage(fsys, "inventory", page("templates/orb/pages/inventory.gohtml")),
-		"schema":          parsePage(fsys, "schema", page("templates/orb/pages/schema.gohtml")),
-		"datacenter":      parsePage(fsys, "datacenter", page("templates/orb/pages/datacenter.gohtml")),
-		"servers":         parsePage(fsys, "servers", page("templates/shared/pages/servers.gohtml")),
-		"clusters":        parsePage(fsys, "clusters", page("templates/shared/pages/clusters.gohtml")),
-		"network":         parsePage(fsys, "network", page("templates/shared/pages/network.gohtml")),
+		"status":    parsePage(fsys, "status", page("templates/orb/pages/status.gohtml")),
+		"import":    parsePage(fsys, "import", page("templates/orb/pages/import.gohtml")),
+		"inventory": parsePage(fsys, "inventory", page("templates/orb/pages/inventory.gohtml")),
+		"schema":    parsePage(fsys, "schema", page("templates/orb/pages/schema.gohtml")),
+		// Orb's OWN single-data-centre page — distinct from the shared DataCenter
+		// detail, which moved to the generic renderer.
+		"datacenter": parsePage(fsys, "datacenter", page("templates/orb/pages/datacenter.gohtml")),
+		// The SAME two templates orbital uses. Orb renders them read-only —
+		// the editor is gated on CanMutate, which orb never sets.
+		"generic-list": parsePage(fsys, "generic-list", page("templates/shared/pages/generic-list.gohtml")),
+		// edit-modal is parsed even though orb NEVER renders it — orb sets no
+		// can_mutate, so that branch cannot be taken.
+		//
+		// It is still required: html/template runs contextual escape analysis
+		// over the WHOLE template tree at first execution, and that analysis has
+		// to resolve every {{template}} reference whether or not the branch is
+		// reachable. text/template would not care. Verified by removing it:
+		//   html/template:generic-detail.gohtml:32:13: no such template "edit-modal.gohtml"
+		//
+		// The alternative — a second, modal-free copy of generic-detail for orb
+		// — is worse: two templates for one page is how the two apps drift, and
+		// that duplication is what this renderer exists to remove.
+		"generic-detail": parsePage(fsys, "generic-detail", append(
+			page("templates/shared/pages/generic-detail.gohtml"),
+			"templates/shared/components/edit-modal.gohtml")),
 		"divergence":      parsePage(fsys, "divergence", page("templates/orb/pages/divergence.gohtml")),
 		"import-history":  parsePage(fsys, "import-history", page("templates/orb/pages/import-history.gohtml")),
 		"publish-history": parsePage(fsys, "publish-history", page("templates/orb/pages/publish-history.gohtml")),
 
-		// Standalone fragments — rendered directly (no base layout).
-		// Base name must equal the file basename so tmpl.Execute picks up the
-		// parsed file content (see ParseFragment comment below).
-		"datacenter-tab": template.Must(template.New("datacenter-tab.gohtml").Funcs(funcMap).ParseFS(fsys,
-			"templates/shared/partials/datacenter-tab.gohtml",
-			"templates/shared/components/edit-modal.gohtml",
-		)),
-		"server-tab": template.Must(template.New("server-tab.gohtml").Funcs(funcMap).ParseFS(fsys,
-			"templates/shared/partials/server-tab.gohtml",
-			"templates/shared/components/edit-modal.gohtml",
-		)),
-		// No "cluster-tab" entry — handler.ClusterHandler manages its own template
-		// parse cycle (parseClusterFragment) and is reused directly by orb's routes.
+		// No standalone fragment entries remain: DataCenter, cluster and Server
+		// all render through the shared GenericRenderer now, which uses the
+		// ordinary page templates and their HX-Request fragment block.
 	}
 }
 
 // ParseFragment parses a partial template file plus any companion templates it
 // references via {{template "name" .}}. Used in dev mode for hot reload.
 // fsys must be rooted at the web/ directory (use os.DirFS("web") for dev).
-// Paths are relative to fsys (e.g. "templates/shared/partials/datacenter-tab.gohtml").
+// Paths are relative to fsys (e.g. "templates/shared/pages/servers.gohtml").
 //
 // The base template name MUST equal the file basename of `path` — otherwise
 // tmpl.Execute(w, data) runs an empty base template and returns "incomplete

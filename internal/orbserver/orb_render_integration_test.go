@@ -4,15 +4,12 @@ package orbserver
 
 import (
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/orbconfig"
-	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/labstack/echo/v4"
 )
 
@@ -74,9 +71,11 @@ func TestOrbPages_AllPathsReturn200(t *testing.T) {
 		{"/inventory", srv.inventoryPage, `id="inventory-table"`},
 		{"/schema", srv.schemaPage, `data-testid="page-heading"`},
 		{"/datacenter", srv.dcPage, `id="datacenter-table"`},
-		{"/servers", srv.serversPage, `id="server-list-table"`},
-		{"/clusters", srv.clustersPage, `id="cluster-table"`},
-		{"/network", srv.networkPage, `id="network-device-table"`},
+		// No /servers row: it is a generic page now, resolved from the schema
+		// orb imported. With nothing imported there is no view for it, which is
+		// the state this suite runs in.
+		// No /network row: NetworkDevice is a generic page at /network-devices now,
+		// and /network redirects to it.
 		{"/import", srv.importPage, `data-testid="page-heading"`},
 		{"/import-history", srv.importHistoryPage, `Import History`},
 		{"/divergence", srv.divergencePage, `Publish Report`},
@@ -144,24 +143,11 @@ func TestOrbNavbar_ShowsOrbBrand(t *testing.T) {
 }
 
 // TestOrbNetworkPage_IsReadOnly pins that orb's network-device surface carries
-// no write controls. Orb gained /network on 2026-09-23; it reuses orbital's
-// NetworkDeviceHandler with layout.OrbActions, so a regression here would most
-// likely come from someone passing orbital's actions by mistake.
-func TestOrbNetworkPage_IsReadOnly(t *testing.T) {
-	srv := newOrbServer(t, false)
-	e := echo.New()
-	rec := callHandler(t, e, http.MethodGet, "/network", srv.networkPage)
-
-	body := rec.Body.String()
-	for _, forbidden := range []string{"data-network-device-edit-id", "data-cfg-delete-id"} {
-		if strings.Contains(body, forbidden) {
-			t.Errorf("orb network page must not render %q — orb is read-only", forbidden)
-		}
-	}
-	if !strings.Contains(body, `id="network-device-table"`) {
-		t.Error("expected the network device table to render")
-	}
-}
+// TestOrbNetworkPage_IsReadOnly was DELETED 2026-09-26 with
+// handler.NewNetworkDeviceHandler. Orb serves network devices from the shared
+// GenericRenderer at /network-devices, which gates every mutation control on
+// CanMutate that orb never sets — asserted end-to-end in e2e/orb.spec.ts
+// ("orb generic detail pages carry no mutation controls").
 
 func TestOrbPages_NoEditOrDeleteButtons(t *testing.T) {
 	srv := newOrbServer(t, false)
@@ -313,116 +299,28 @@ func newServerFragmentDGraph(t *testing.T) *httptest.Server {
 	return srv
 }
 
-func TestOrbDataCenterTab_FragmentRendersData(t *testing.T) {
-	t.Chdir("../..")
-	dgraph := newDCFragmentDGraph(t)
+// TestOrbDataCenterTab_FragmentRendersData was DELETED 2026-09-25.
+//
+// It exercised handler.NewDataCenter's HX-Request fragment, and that handler is
+// gone: orb serves /data-centers/:orbId from the shared GenericRenderer, whose
+// fragment path is covered by e2e/generic-tabs.spec.ts (which asserts the tab
+// body is the fragment, not a whole page nested in a div).
 
-	h := handler.NewDataCenter(dgraph.URL+"/graphql", false, slog.Default(), "", func(echo.Context) layout.PageActions { return layout.OrbActions })
+// TestOrbClusterTab_FragmentRendersData was DELETED 2026-09-25, with
+// handler.NewClusterHandler. Orb serves /clusters/:orbId from the shared
+// GenericRenderer; its fragment path is covered by e2e/generic-tabs.spec.ts.
 
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/datacenters/test-dc", nil)
-	req.Header.Set("HX-Request", "true")
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("orbId")
-	c.SetParamValues("test-dc")
+// TestOrbClusterTab_NoEditDeleteControls was DELETED 2026-09-25 with
+// handler.NewClusterHandler. The guarantee it held — orb renders NO edit or
+// delete control — now belongs to the shared GenericRenderer, which gates both
+// on CanMutate that orb never sets. Re-asserted end-to-end in e2e/orb.spec.ts
+// ("orb generic detail pages carry no mutation controls"), because the property
+// depends on orb's middleware and the shared template together, and a handler
+// unit test would exercise neither.
 
-	if err := h.Tab(c); err != nil {
-		t.Fatalf("Tab: %v", err)
-	}
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	html := rec.Body.String()
-	for _, want := range []string{"Data Center Summary", "Test DC"} {
-		if !strings.Contains(html, want) {
-			t.Errorf("expected HTML to contain %q", want)
-		}
-	}
-}
-
-func TestOrbClusterTab_FragmentRendersData(t *testing.T) {
-	t.Chdir("../..")
-	dgraph := newClusterFragmentDGraph(t)
-
-	h := handler.NewClusterHandler(dgraph.URL+"/graphql", false, slog.Default(), "", func(echo.Context) layout.PageActions { return layout.OrbActions })
-
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/clusters/test-cluster", nil)
-	req.Header.Set("HX-Request", "true")
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("orbId")
-	c.SetParamValues("test-cluster")
-
-	if err := h.Tab(c); err != nil {
-		t.Fatalf("Tab: %v", err)
-	}
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	html := rec.Body.String()
-	for _, want := range []string{"Cluster Summary", "Test Cluster"} {
-		if !strings.Contains(html, want) {
-			t.Errorf("expected HTML to contain %q", want)
-		}
-	}
-}
-
-func TestOrbClusterTab_NoEditDeleteControls(t *testing.T) {
-	t.Chdir("../..")
-	dgraph := newClusterFragmentDGraph(t)
-
-	h := handler.NewClusterHandler(dgraph.URL+"/graphql", false, slog.Default(), "", func(echo.Context) layout.PageActions { return layout.OrbActions })
-
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/clusters/test-cluster", nil)
-	req.Header.Set("HX-Request", "true")
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("orbId")
-	c.SetParamValues("test-cluster")
-
-	if err := h.Tab(c); err != nil {
-		t.Fatalf("Tab: %v", err)
-	}
-
-	html := rec.Body.String()
-	if strings.Contains(html, "data-cluster-edit-id") {
-		t.Error("orb cluster tab must not contain data-cluster-edit-id (edit control)")
-	}
-	if strings.Contains(html, "data-cfg-delete-id") {
-		t.Error("orb cluster tab must not contain data-cfg-delete-id (delete control)")
-	}
-}
-
-func TestOrbServerTab_FragmentRendersData(t *testing.T) {
-	t.Chdir("../..")
-	dgraph := newServerFragmentDGraph(t)
-
-	h := handler.NewServerHandler(dgraph.URL+"/graphql", false, slog.Default(), "", func(echo.Context) layout.PageActions { return layout.OrbActions })
-
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/servers/test-server", nil)
-	req.Header.Set("HX-Request", "true")
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("orbId")
-	c.SetParamValues("test-server")
-
-	if err := h.Tab(c); err != nil {
-		t.Fatalf("Tab: %v", err)
-	}
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	html := rec.Body.String()
-	for _, want := range []string{"Server Summary", "test-server-01"} {
-		if !strings.Contains(html, want) {
-			t.Errorf("expected HTML to contain %q", want)
-		}
-	}
-}
+// The orb Server-tab tests were DELETED 2026-09-26 with
+// handler.NewServerHandler. Orb serves /servers/:orbId from the shared
+// GenericRenderer; the read-only guarantee is asserted end-to-end in
+// e2e/orb.spec.ts ("orb generic detail pages carry no mutation controls"),
+// which exercises orb's middleware and the shared template together — neither
+// of which a handler unit test reaches.

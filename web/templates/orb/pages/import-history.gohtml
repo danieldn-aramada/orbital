@@ -7,78 +7,80 @@
 
     <p class="is-size-4 mb-2" data-testid="page-heading">Import History</p>
 
-    {{if .History}}
-    <table id="import-history-table" class="table is-striped is-hoverable is-fullwidth is-size-7" style="table-layout:auto;width:100%;--bulma-table-cell-padding:0.5em 1.5em">
-      <thead>
-        <tr>
-          <th style="white-space:nowrap;padding-left:0">Tag</th>
-          <th style="white-space:nowrap">Status</th>
-          <th style="white-space:nowrap">Signature</th>
-          <th style="white-space:nowrap">Layers</th>
-          <th style="white-space:nowrap">Imported At</th>
-          <th style="white-space:nowrap">DC Orb ID</th>
-          <th style="width:100%">Error</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{range .History}}
-        <tr>
-          <td style="white-space:nowrap;padding-left:0"><code>{{.Tag}}</code></td>
-          <td style="white-space:nowrap">
-            {{if eq .Status "done"}}
-            <span class="tag is-success is-light">done</span>
-            {{else if eq .Status "partial"}}
-            <span class="tag is-warning is-light tooltip is-wide" data-text="Graph imported, but one or more extra-layer dispatches failed">partial</span>
-            {{else if eq .Status "failed"}}
-            <span class="tag is-danger is-light">failed</span>
-            {{else if eq .Status "running"}}
-            <span class="tag is-warning is-light">running</span>
-            {{else}}
-            <span class="tag is-light">{{.Status}}</span>
-            {{end}}
-          </td>
-          <td style="white-space:nowrap">
-            {{if eq .Verification "verified"}}
-            <span class="tag is-success is-light"><span class="icon is-small"><i class="fa-solid fa-circle-check"></i></span><span>verified</span></span>
-            {{else if eq .Verification "unverified"}}
-            <span class="tag is-warning is-light"><span class="icon is-small"><i class="fa-solid fa-circle-xmark"></i></span><span>unverified</span></span>
-            {{else}}
-            <span class="tag is-light has-text-grey">—</span>
-            {{end}}
-          </td>
-          <td style="white-space:nowrap">
-            {{if .Layers}}
-              <div class="is-flex is-align-items-center" style="gap:0.25rem;">
-                <span class="tag is-light is-small">{{len .Layers}}</span>
-                <button class="button is-small is-white tooltip"
-                  hx-get="{{$.BasePath}}/api/v1/import/history/{{.Tag}}/layers"
-                  hx-target="#layers-modal-body"
-                  hx-swap="innerHTML"
-                  onclick="document.getElementById('layers-modal').classList.add('is-active')" data-text="View layers">
-                  <span class="icon"><i class="fas fa-up-right-from-square"></i></span>
-                </button>
-              </div>
-            {{else}}
-            —
-            {{end}}
-          </td>
-          <td style="white-space:nowrap"><span class="is-size-7">{{if not .ImportedAt.IsZero}}<span data-timestamp="{{.ImportedAt.Format "2006-01-02T15:04:05Z07:00"}}">{{.ImportedAt.Format "2006-01-02 15:04"}}</span>{{else}}—{{end}}</span></td>
-          <td style="white-space:nowrap"><span class="is-size-7">{{if .DCOrbID}}{{.DCOrbID}}{{else}}—{{end}}</span></td>
-          <td>
-            {{if or .Error .DispatchErrors}}
-              {{if .Error}}<span class="is-size-7 has-text-danger" style="display:block">{{.Error}}</span>{{end}}
-              {{range .DispatchErrors}}<span class="is-size-7 has-text-danger" style="display:block">{{.}}</span>{{end}}
-            {{else}}—{{end}}
-          </td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
-    {{else}}
-    <article class="box">
-      <p class="has-text-grey">No import history yet.</p>
-    </article>
-    {{end}}
+    <div class="tab-content">
+      {{if .History}}
+      <table id="import-history-table" class="table is-striped is-hoverable is-fullwidth is-size-7" style="table-layout:auto;width:100%;--bulma-table-cell-padding:0.5em 1.5em">
+        <thead>
+          <tr>
+            <th style="white-space:nowrap;padding-left:0">Tag</th>
+            <th style="white-space:nowrap">Status</th>
+            <th style="white-space:nowrap">Signature</th>
+            <th style="white-space:nowrap">Layers</th>
+            <th style="white-space:nowrap">Imported At</th>
+            <th style="white-space:nowrap">DC Orb ID</th>
+            <th style="width:100%">Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .History}}
+          <tr>
+            <td style="white-space:nowrap;padding-left:0"><code>{{.Tag}}</code></td>
+            <td style="white-space:nowrap">
+              {{if eq .Status "done"}}
+              <span class="tag is-success is-light">done</span>
+              {{else if eq .Status "partial"}}
+              <span class="tag is-warning is-light tooltip is-wide" data-text="Graph imported, but one or more extra-layer dispatches failed">partial</span>
+              {{else if eq .Status "failed"}}
+              <span class="tag is-danger is-light">failed</span>
+              {{else if eq .Status "running"}}
+              <span class="tag is-warning is-light">running</span>
+              {{else}}
+              <span class="tag is-light">{{.Status}}</span>
+              {{end}}
+            </td>
+            <td style="white-space:nowrap">
+              {{if eq .Verification "verified"}}
+              <span class="tag is-success is-light"><span class="icon is-small"><i class="fa-solid fa-circle-check"></i></span><span>verified</span></span>
+              {{else if eq .Verification "unverified"}}
+              <span class="tag is-warning is-light"><span class="icon is-small"><i class="fa-solid fa-circle-xmark"></i></span><span>unverified</span></span>
+              {{else}}
+              <span class="tag is-light has-text-grey">—</span>
+              {{end}}
+            </td>
+            <td style="white-space:nowrap">
+              {{if .Layers}}
+                <div class="is-flex is-align-items-center" style="gap:0.25rem;">
+                  <span class="tag is-light is-small">{{len .Layers}}</span>
+                  <button class="button is-small is-white tooltip"
+                    hx-get="{{$.BasePath}}/api/v1/import/history/{{.Tag}}/layers"
+                    hx-target="#layers-modal-body"
+                    hx-swap="innerHTML"
+                    onclick="document.getElementById('layers-modal').classList.add('is-active')" data-text="View layers">
+                    <span class="icon"><i class="fas fa-up-right-from-square"></i></span>
+                  </button>
+                </div>
+              {{else}}
+              —
+              {{end}}
+            </td>
+            <td style="white-space:nowrap"><span class="is-size-7">{{if not .ImportedAt.IsZero}}<span data-timestamp="{{.ImportedAt.Format "2006-01-02T15:04:05Z07:00"}}">{{.ImportedAt.Format "2006-01-02 15:04"}}</span>{{else}}—{{end}}</span></td>
+            <td style="white-space:nowrap"><span class="is-size-7">{{if .DCOrbID}}{{.DCOrbID}}{{else}}—{{end}}</span></td>
+            <td>
+              {{if or .Error .DispatchErrors}}
+                {{if .Error}}<span class="is-size-7 has-text-danger" style="display:block">{{.Error}}</span>{{end}}
+                {{range .DispatchErrors}}<span class="is-size-7 has-text-danger" style="display:block">{{.}}</span>{{end}}
+              {{else}}—{{end}}
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <article class="box">
+        <p class="has-text-grey">No import history yet.</p>
+      </article>
+      {{end}}
+    </div>
 
   </div>
 </main>

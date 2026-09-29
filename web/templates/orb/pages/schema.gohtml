@@ -8,16 +8,18 @@
       <p class="is-size-4 mb-2" data-testid="page-heading">Schema</p>
       <p class="has-text-grey page-description">Active DGraph GraphQL schema applied on last import.</p>
 
-      {{if .SDL}}
-      <article class="box">
-        <p class="is-size-6 has-text-weight-semibold mb-3">Schema Definition Language (SDL)</p>
-        <pre style="font-size: 0.78rem; max-height: 600px; overflow-y: auto;">{{.SDL}}</pre>
-      </article>
-      {{else}}
-      <div class="notification is-light mt-4" style="max-width: 560px;">
-        <p>No schema available. Import a subgraph to populate the schema.</p>
+      <div class="tab-content">
+        {{if .SDL}}
+        <article class="box">
+          <p class="is-size-6 has-text-weight-semibold mb-3">Schema Definition Language (SDL)</p>
+          <pre style="font-size: 0.78rem; max-height: 600px; overflow-y: auto;">{{.SDL}}</pre>
+        </article>
+        {{else}}
+        <div class="notification is-light mt-4" style="max-width: 560px;">
+          <p>No schema available. Import a subgraph to populate the schema.</p>
+        </div>
+        {{end}}
       </div>
-      {{end}}
 
     </div>
   </main>

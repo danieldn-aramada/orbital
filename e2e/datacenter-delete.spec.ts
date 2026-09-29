@@ -51,17 +51,15 @@ test('DataCenter delete works for orbId containing ":"', async ({ page }) => {
   }
 
   try {
-    // Navigate to /datacenters and confirm our DC is in the table.
-    await page.goto('http://localhost:8001/datacenters')
-    const row = page.locator('#datacenter-table tbody tr', { hasText: name })
+    // /data-centers is the derived slug — the page is the generic renderer now.
+    await page.goto('http://localhost:8001/data-centers')
+    const row = page.locator('#generic-table tbody tr', { hasText: name })
     await expect(row).toBeVisible()
 
-    // Open the DC tab (double-click is the standard flow).
-    await row.dblclick()
-    // Wait until the skeleton resolves — same pattern as datacenter.spec.ts.
-    await expect(
-      page.locator('[id^="tab-content-"] .button.is-loading'),
-    ).not.toBeVisible({ timeout: 10000 })
+    // Open the detail page. Double-click still opens it as a tab; this test
+    // cares about the delete route, so it navigates directly.
+    await row.locator('td:first-child a').click()
+    await expect(page.getByTestId('generic-fields')).toBeVisible()
 
     // Click Delete in the tab, then Confirm in the modal. The Confirm hits
     // DELETE /api/v1/config-items/DataCenter/<orbId> — the route under test.

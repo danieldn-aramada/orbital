@@ -22,7 +22,701 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ## [Unreleased]
 
+### Added
+- **`/clusters` is derived from the schema, and lists every kind of cluster.**
+  The Clusters page and cluster detail page were ~820 lines of hand-written Go,
+  templates and JS; both are now rendered by the generic renderer from the
+  deployed schema, along with a metadata box and an audit log that every
+  ConfigItem detail page gets for free.
+
+  The page is backed by the **`KubernetesCluster` interface**, not by
+  `EksaKubernetesCluster`. DGraph generates `queryKubernetesCluster` but no
+  `getKubernetesCluster` — an interface has no `@id` field — so the list is
+  interface-backed while each detail page resolves the row's concrete type from
+  the stored data. A second provider (maas, metal3) therefore appears on
+  `/clusters` without anyone editing a query, which is what the interface was
+  put in the schema for. Columns are the union of the interface's fields and
+  each implementation's own, so a provider-specific column is not lost because
+  another provider has no such field.
+
+  This also fixes relationships **typed as an interface**, which the generic
+  renderer had been dropping silently: a Kubernetes node now links to its
+  cluster, and a cluster backup to its parent.
+
+  Known losses, accepted: the per-page Reload button, the inner switchable
+  sub-tabs (the same content is stacked as boxes), and workload clusters as
+  nested rows in the list — they are a table on the management cluster's page.
+
+### Added
+- **Every ConfigItem page is now derived from the schema.** NetworkDevice was
+  the last bespoke one; `/network` redirects to `/network-devices`. Its
+  Connections panel needed no new machinery at all —
+  `networkInterfaceConnectedNetworkDevice` is an ordinary list edge, so it was
+  already a relationship tab and only wanted a readable name. With it go the
+  last two shared partials (`metadata-box.gohtml`, `audit-tab.gohtml`), which
+  existed to stop four hand-written pages drifting apart.
+
+  **Known loss:** the Connected Servers panel showed each connected server's
+  Kubernetes cluster, node role and GPU flag — a three-hop projection. The
+  Connections table shows the server, port, MAC and remote port; the cluster
+  context is one click away on the server. See the note in
+  `docs/spikes/spike-38-configurable-views.md`.
+
+- **The Server page is derived from the schema.** The last bespoke ConfigItem
+  page — 715 lines of Go plus a 286-line template — is gone; `/servers` and
+  `/servers/{orbId}` are served by the generic renderer. iDRAC, maintenance and
+  configuration-profile panels render as owned-child boxes; storage and network
+  as relationship tables; metadata, audit log, editor, MVCC and delete all come
+  from the shared machinery.
+
+  Two capabilities became generic on the way, and both now apply to every page:
+  **proposed-change field marks** (a pending change request annotates the exact
+  field it targets, on the root AND on each owned child, keyed to the child's
+  own orbId) and the **change-in-flight banner**. Neither was ever
+  Server-specific — both are driven by DOM attributes — they had simply never
+  been emitted anywhere else.
+
+- **`include:` adds a relationship reached through a path.** A server's disks
+  hang off its storage controllers, and a controller has no scalars of its own,
+  so the controller table was a list of bare names while the disks — the reason
+  anyone opens the page — appeared nowhere. `"""include:
+  storageControllers.storageDevices"""` renders them as one table, with the
+  controller named in a column.
+
+  Deliberately **not** a new kind of panel: it widens what a tab's *source* may
+  be, from a field to a path. The rows are still a list of one type rendered as
+  a table, by the same code. It also costs no extra query — an owned child's
+  grandchildren are already fetched for the editor.
+
+- **`label:` overrides a field's displayed name.** Labels are derived by
+  title-casing, which handles almost everything and cannot know an acronym:
+  `cni` became "Cni", `oobIP` became "Oob IP". The exception now lives with the
+  field it describes rather than in a Go list of special cases.
+
+- **Column order is pinned in the schema: `"""order: name, provider, clusterType"""`.** Named fields
+  lead; everything else falls in behind them alphabetically. Previously every
+  generic page was strictly alphabetical, which put `cni` second on the Clusters
+  table.
+
+  **Deliberately a partial order, never a complete list.** A complete ordered
+  list is a frozen view — a field added in a later release has no place in it
+  and silently never appears. NetBox carries exactly that cost with its saved
+  column lists. A pinned prefix leaves the tail open, so new fields still
+  arrive. The pin lives in the schema rather than a database because a default
+  belongs in version control: it ships with the build, it diffs, it reverts.
+
+### Added
+- **View placement is declared in the schema, not decided in Go.** Two new
+  annotations complete the vocabulary, and both replace policy that had been
+  compiled in:
+
+  - **`"""detailOnly"""`** keeps a field off table columns while still rendering
+    it on a detail page. This had been inferred from `jsonString` — conflating
+    WHAT a field holds with WHERE it may appear, which left "actually, show this
+    JSON as a column" unexpressible without a code change and a release.
+    `jsonString` now means only that the String holds JSON: editor parsing and
+    pretty-printing, nothing about placement.
+  - **`"""editable: name"""`** re-admits a ConfigItem interface field for
+    editing on one type. It is type-level because DGraph forbids redeclaring an
+    interface field on an implementor. It replaces a hardcoded
+    `map[string][]string{"DataCenter": {"name"}, "Rack": {"name"}}` whose own
+    comment had promised an annotation since the day it was written.
+
+  Also folded in: the metadata box's private Go label map (`{"orbId": "Orb
+  ID"}`) is gone — `ConfigItem.orbId` carries `label: Orb ID`, so there is one
+  label mechanism rather than two.
+
+  **Per-deployment overrides in Postgres (spike 38 P1) are deferred**, not
+  dropped: annotations keep one source of truth, version-controlled, with no
+  RBAC/audit/cross-replica-invalidation machinery. The trigger for revisiting is
+  recorded in `docs/planning/backlog.md` — an adopter needing to change a view
+  *without* applying a schema.
+
 ### Fixed
+- **The Schema page pushed its own SDL panel off the screen.** The orphaned-type
+  block was added inside the narrow "Applied Schema" sidebar box, and
+  `is-narrow` sizes to its content — the explanatory paragraph widened the
+  column until the SDL panel sat past 1440px and was simply not there. It is now
+  full width above the columns, which is also the right home for it: it is a
+  statement about the DATA, not about the applied schema.
+
+- **The Schema page's three metadata rows used three different typefaces** — a
+  monospace checksum, a blue tag pill for the version, plain coloured text for
+  the state — so one record read as three unrelated things. All plain text now,
+  with colour only on the one row that is genuinely a status. (`UI.md`: value
+  cells are plain; only a status column carries colour.)
+
+- **Table toolbars are sized by ONE rule instead of a list of table ids.** The
+  info line and paging buttons were matched to table content via
+  `div.dt-container:has(#some-table)`, and a table whose id was not on the list
+  rendered at DataTables' default 14px beside 12px rows. That list was wrong
+  three times, always the same way — a new table is exactly the one nobody
+  remembers to add. The rule now applies to every `dt-container`; a table
+  wanting different chrome opts out below it, so the exception is visible
+  instead of the norm.
+
+- **The inventory notice named a count but not a type.** "1 item is hidden" told
+  nobody which, and said nothing useful at all if there were fifty. It is
+  rendered server-side now and names the types — "Hidden from this list: Foo
+  (1)" — capped at three with "and N more". The client could never have done
+  this: for those rows every field resolves to nothing, `__typename` included,
+  which is precisely what the removed type took with it.
+
+- **The nav listed "Servers" twice, and `/clusters` under two different names.**
+  The Config Items menu declared Servers and Clusters by hand while the derived
+  entries were also being appended, so the same page appeared as both "Clusters"
+  and "Kubernetes Clusters". A view's label is now derived from its **slug**, so
+  `"""slug: clusters"""` renames the page and its menu entry together.
+
+- **IPv4 columns on generic pages sorted lexicographically**, putting
+  `10.20.21.100` before `10.20.21.41`. The hand-written pages declared which
+  column held an address; a derived page cannot know that, so the test is on the
+  VALUE and any cell that is not an address passes through untouched.
+
+- **Generic list pages rendered their table toolbar oversized.** The info line
+  ("1 to 27 of 27 rows") and paging buttons on `/clusters`, `/data-centers` and
+  every other schema-derived page came out at DataTables' default 14px next to
+  12px table content. The sizing rule in `main.scss` is a hand-maintained list
+  of table ids and `#generic-table` was not on it — a table that misses the list
+  is silently oversized, with nothing failing.
+
+### Changed
+- **Relationship tables no longer repeat the entity whose page they are on.** A
+  cluster's Nodes table carried a `cluster` column reading the same name on
+  every row, and its Workload Clusters table a `managementCluster` column doing
+  the same — you got there by clicking that entity, so the column could only
+  ever name it. It was also part of what pushed the workload table to 13 columns
+  and past its container. Dropped only when the column's target type matches the
+  page AND every row actually points back, so a column carrying anything real is
+  kept. Nodes 9 → 8 columns, Workload Clusters 13 → 12; neither overflows now.
+
+### Added
+- **Orbital detects nodes whose type the schema no longer declares.** Removing a
+  type from `schema.graphql` and applying it does NOT remove its nodes — they
+  keep their `dgraph.type`, stay reachable through the `ConfigItem` interface,
+  and render as nothing. The relational equivalent is dropping a table and
+  leaving its rows. Reported at boot as an **ERROR** naming each type and its
+  node count, and on the **Schema** page beside the existing drift list.
+
+  **It never deletes.** Orbital surfaces divergence and does not auto-resolve
+  it; "make the schema apply succeed by removing data" is the exact shape of a
+  silent loss. The operator deletes the nodes or restores the type.
+
+  Driven by the **data**, not by diffing two schema texts. A first attempt
+  compared the shipped schema against the live one and found nothing — the
+  orphaning type is normally absent from both, since removing it from the file
+  and applying that file is precisely how the nodes get stranded. The live
+  schema says what is *declared*; only the graph says what *exists*.
+
+  This also corrects `dgraphschema.Drift`'s stated rationale for checking one
+  direction only: *"predicates present in DGraph but not in the shipped file are
+  harmless."* True of a field, false of a type — and the assumption is what made
+  this a blind spot.
+
+### Fixed
+- **One leftover node made the whole inventory page unusable.** A node keeps its
+  `dgraph.type` when its type is removed from `schema.graphql`, so
+  `queryConfigItem` still matches it through the `ConfigItem` interface while
+  every field on it — `__typename` included — resolves to nothing. DataTables
+  treats a missing column as fatal and blocks the page with an `alert()` naming
+  only its own documentation: *"Requested unknown parameter 'type' for row
+  2064"*. Nothing about orbital, the schema, or which item was at fault.
+
+  Such rows are now dropped and the drop is **stated** — "1 item is hidden: the
+  deployed schema has no type for it" — following the same rule as the
+  capped-fetch notice, since a list that quietly omits rows looks exactly like a
+  complete one. The session cache is filtered on the way out as well as in, and
+  rewritten when it was carrying bad rows: the cached path performs no fetch, so
+  a cache poisoned once would otherwise stay poisoned for the whole session,
+  surviving reloads even after the offending node was deleted.
+
+- **Deleting a cluster from its page silently did nothing.** The delete
+  endpoint's cascade plans are a switch on three type names, and it expected the
+  INTERFACE name `KubernetesCluster`. A page that sends the type it actually
+  resolved — `EksaKubernetesCluster` — got `unsupported type`, and because the
+  PREVIEW uses the same switch, the confirmation modal opened **empty** rather
+  than saying anything was wrong. The endpoint now accepts either spelling by
+  mapping a concrete type onto the plan that covers it.
+
+
+### Fixed
+- **`IPAddress`'s hand-maintained mutation payload field was wrong.** The
+  registry declared `ipAddress`; DGraph generates **`iPAddress`**, because it
+  lower-cases only the FIRST character and an acronym-initial type therefore
+  keeps its second capital. A query using the declared value does not degrade —
+  it errors outright: *Cannot query field "ipAddress" on type
+  "AddIPAddressPayload". Did you mean "iPAddress"?*
+
+  Latent rather than live: `PayloadField` reaches the editor, and `IPAddress` has
+  no editable fields yet, so nothing queried it. It would have surfaced the
+  moment IPAddress editing was opened up — which is one of the 29 fields
+  currently held back, so this was waiting directly on the next planned change.
+
+  Found by deriving the value from `Add<Type>Payload` and comparing: 19 of 20
+  agreed, and the disagreement was the hand-maintained one being wrong. The
+  registry's own comment had flagged the risk — *"it doesn't always pluralize
+  cleanly (S3Sync's payload is s3Sync)"* — and then got a different irregular
+  case wrong anyway, which is the argument for deriving it rather than listing it.
+
+### Fixed
+- **The config editor silently discarded unknown JSON keys.** Typing a key the
+  type does not declare gave a success toast, a `version` bump and an audit row
+  with the value dropped, so a typo was indistinguishable from a real edit
+  (`debt.md`, Hi; hit live 2026-09-22 with `serialNumber`). The editor now
+  refuses before sending anything, naming the offending key.
+
+  **This only became correct after derivation.** An earlier attempt was reverted
+  because `t.fields` was then the hand-maintained `FormFields`, so refusing would
+  have blocked real schema fields the list had not caught up with — the same bug
+  pointing the other way. Now that the field set comes from the deployed schema,
+  a key outside it is genuinely undeclared.
+
+- **The cluster editor showed two fields it could not save.** `cluster.go`
+  flattened the `controlPlaneEndpoint` and `tinkerbellIP` IPAddress REFERENCES to
+  their `.address` string and put them in the edit tree. Neither was ever in the
+  editable set, so an edit to either was discarded in silence — the same
+  unknown-key bug, on two fields, in the shipped UI. Proven by forwarding them
+  once: DGraph answered `must be a IPAddressRef`, which is only possible if they
+  had never been sent. Both are now absent from the editor and remain read-only
+  in the Cluster Summary, which is the honest place for a value you cannot change
+  here. Editing an IPAddress means editing that entity.
+
+- **The editor now states WHY it is unavailable instead of rendering an empty
+  form.** The field list comes from the deployed schema, so with DGraph
+  unreachable orbital does not know what is editable. Rendering the editor anyway
+  showed an empty tree, which reads as "this entity has no editable fields" — a
+  different and misleading claim that a user would act on by assuming their data
+  had gone. The modal now explains the cause, says it self-heals without a
+  restart, and hides Save; the rest of the page still renders. This is the cost
+  of rendering the instance rather than the build, and it is now visible rather
+  than silent.
+
+### Added
+- **Reference columns**: a single, non-owned relationship renders as an extra
+  column showing WHICH entity it points at — a server's rack and OOB IP, one hop
+  away. Derived, not declared: single means one value fits a cell, non-owned
+  because an owned child is edited inline rather than referenced. It is the
+  difference between a useful table and one you have to click through.
+
+### Fixed
+- **Every generic page hung, with no error and nothing in the access log.**
+  `ResolveViews` called `OwnedChildren`, which reads the interface lookup, which
+  reads through the schema resolver — and `ResolveViews` runs INSIDE that
+  resolver's resolve step. So it re-entered, re-resolved, and called itself
+  again. Requests never finished, which presents as "slow" rather than "broken"
+  and is the worst shape a bug can take. `ResolveViews` now uses the snapshot it
+  already holds; `OwnedChildrenWith` takes an explicit lookup for exactly this,
+  and a test asserts the package lookup is never reached from there.
+
+- **Deleting a cluster left every associated server pointing at a deleted
+  node.** The cluster delete removes its KubernetesNodes, but nothing cleared
+  `Server.kubernetesNode` — and the server SURVIVES the delete. The earlier
+  dangling-edge fix covered `DataCenter.servers`, `Rack.servers`,
+  `KubernetesNode.server` and `DataCenter.kubernetesClusters`; this is the same
+  edge from the other end, and it was missed. It recurred on every cluster
+  delete and was found in local data, where one such server made an entire
+  DataCenter page unrenderable.
+
+  `TestDelete_ClusterLeavesNoDanglingServerEdge` reproduces it and is verified
+  to fail without the fix. Writing it turned up a schema constraint worth
+  knowing: a `KubernetesNode` can ONLY be created nested inside its cluster's
+  mutation, because `KubernetesNode.cluster` is required and typed by the
+  `KubernetesCluster` INTERFACE — DGraph generates no ref input for an
+  interface-typed field, so `AddKubernetesNodeInput` has no `cluster` at all and
+  yet refuses the mutation without one.
+
+- **One dangling edge took out a whole page.** DGraph propagates a missing
+  non-nullable field to the ROOT, so a single server pointing at a deleted
+  KubernetesNode made the entire DataCenter page unrenderable. The generic
+  renderer traverses far more edges than a hand-written page, so it meets such
+  data much more often. The detail page now retries without reference columns
+  and renders without them, logging loudly — the data IS corrupt and someone
+  should fix it, but not by staring at a blank page.
+
+### Changed
+- **A relationship tab now shows the related type's OWN fields**, not just a list
+  of names. A DataCenter's servers table carries hostname, model, service tag
+  and rack position — the child's data, which is what the hand-written pages
+  show and what makes the tab worth opening. Columns come from the target type's
+  derived display set, so nothing is per-type.
+
+### Removed
+- **DataCenter's bespoke page is gone — 815 lines across 7 files.** `/data-centers`
+  and `/data-centers/{id}` are served by the generic renderer in BOTH apps;
+  `/datacenters` and `/datacenters/{id}` 301-redirect to them, because a slug is
+  a contract and moving one needs a forwarding address. `datacenter.go` (331
+  lines), `datacenter-tab.gohtml` (148), `datacenters.gohtml` (43), their tests
+  and the orb fragment test are deleted. The nav entry is now the DERIVED one.
+
+  **Parity kept:** the Servers and Racks tables with the child's own fields,
+  reference columns (rack, OOB IP, dataCenter), editing with MVCC on every
+  reachable target, row→tab opening, and **Delete** — whose machinery
+  (`data-cfg-delete-id`, the global handler, the modal) was already generic, so
+  only the markup was per-page.
+
+  **Parity LOST, deliberately, and each cost a test:**
+  - Servers and Racks were switchable inner TABS; they are stacked panels now.
+  - A relationship table is a plain table — DataTables runs on the list page
+    only, so no sorting or filtering inside a detail tab.
+  - No per-tab reload button.
+  - The rack "Servers" count is gone: it is an aggregation, and per the
+    2026-09-25 decision it goes to the panel registry rather than being
+    generalised.
+
+  Also not carried over: the deleted `configitem-editor` case asserted the
+  `updateDataCenter` AUDIT ROW and its diff. The generic editor has no e2e cover
+  for audit integration yet.
+
+  Orb's OWN `/datacenter` page is untouched — that is orb's single-DC view, a
+  different page that happens to share a table id, and its JS stays with it.
+
+### Added
+- **Orb serves the generic pages too**, read-only, from the SAME renderer. The
+  generic handlers moved off orbital's `UI` into a `GenericRenderer` that takes
+  `base` and `render` as parameters — those were the only orbital-specific
+  things they touched, since each app owns its template map and page chrome. Two
+  apps, one renderer; a second copy is how they drift.
+
+  Orb needs no read-only variant: the editor is already gated on `CanMutate`,
+  which orb never sets.
+
+  This was a PREREQUISITE, not a follow-up: all four bespoke detail handlers are
+  shared with orb, so none could be deleted while orb depended on them.
+
+### Fixed
+- **A param route at the root made unrelated 404s into 405s.** Registering
+  `GET /:slug` meant Echo matched the param node for paths that should not match
+  at all, and answered "method not allowed" instead of "not found" — caught by an
+  orb route test asserting `/api/v1/graphql` does not exist. The generic renderer
+  is now Echo's `RouteNotFound` fallback, so it cannot affect any real route's
+  resolution: "a static page always wins" is structural rather than a
+  consequence of registration order.
+
+  It must be registered on the root GROUP, not the Echo instance — the group
+  carries the session middleware, and registering on the instance bypassed it,
+  so every generic page rendered the login gate to a logged-in user. Curl could
+  not see it (curl is unauthenticated either way); the e2e suite could.
+
+### Added
+- **Generic pages open detail in a tab below the list**, the workflow every
+  hand-written list page has: double-click a row, it opens as a tab; several can
+  be open at once; they survive a reload. One implementation replaces four
+  per-type sets of `loadXTab` / `saveXTab` / `deleteXTab` /
+  `initXTabRestoration` that differ only by a prefix and a localStorage key —
+  roughly 200 generic lines against ~980 per-type ones.
+
+  The tab body is the **same URL the row links to**, returning just the body on
+  `HX-Request`. One handler and one template block serve both, per the house
+  rule against a sibling `/fragment` route, so the page and the tab cannot drift.
+
+  Tabs are **slug-qualified**: a rack tab restored onto `/storage-devices` would
+  fetch a 404 and render an error where a tab should be.
+
+  The hint banner is back, because double-click now does what it advertises.
+
+### Fixed
+- **Closing the browser did not clear cluster or network-device tabs on a shared
+  machine.** `clearTabStateOnFresh` runs at the login boundary and removed
+  `datacenterTabs` and `serverTabs` but not `clusterTabs` or `networkTabs`, so
+  tabs opened by one user reappeared for the next — the exact thing the function
+  exists to prevent, missed on two of the four tab-bearing pages because each
+  page added its own key and nothing enumerated them. All four are cleared now,
+  along with the generic pages' single key.
+
+### Added
+- **The generic detail page can EDIT.** `/{slug}/{id}` now renders the shared
+  edit modal for any ConfigItem type, driven by one opener in `orbital.js`
+  instead of the four near-identical per-type copies the bespoke pages carry.
+  Nothing in the path is per-type: the field list, the edit targets, the orbId
+  suffixes and the payload field all come from the deployed schema. Verified end
+  to end by editing a Rack — a type with no bespoke page — and asserting the
+  change survives the reload.
+
+  `version` is selected explicitly even though it is not an editable field: it
+  is a ConfigItem interface field, and without it a concurrent edit would
+  overwrite silently rather than being refused.
+
+  **Owned children are editable too.** The detail query fetches each owned
+  child's own fields — recursing one level through a wrapper like
+  `ClusterBackup`, whose GRANDchildren are the real edit targets — and the edit
+  tree nests them at the paths `BuildEditTargets` addresses. Non-owned
+  relationships still select only enough to render a link, and each relationship
+  is selected exactly once so the two never collide.
+
+  Two bugs surfaced while wiring it, both the kind that do not announce
+  themselves:
+
+  - **A wrapper offered no Edit button.** The gate was the type's OWN editable
+    fields, and `ClusterBackup` has none — but its etcd/velero/s3Sync children
+    are precisely what you edit there. It now gates on whether the edit tree has
+    anything in it at all.
+  - **Owned-child targets were reachable but carried no OCC version**, which
+    means written UNGUARDED: a concurrent edit overwritten silently rather than
+    refused. `StampEditTargetVersion` only ever stamped the root; every entity
+    the fetch returned is now stamped. The same pass overrides each child's
+    DERIVED orbId with the stored one where it exists — a derived id that
+    differs would upsert a phantom entity instead of editing the real one.
+
+  An e2e test mirrors `edit_targets_invariant_test` for the generic page, and
+  additionally asserts that at least one owned child is reachable — an all-inert
+  tree satisfies "no unguarded targets" while testing nothing.
+
+### Fixed
+- **A type whose fields are all `editorIgnored` rendered an empty page.** The
+  generic pages used the EDITABLE field set for DISPLAY, so `StorageDevice`,
+  `NetworkAdapter` and `NetworkInterface` — whose every field is annotated —
+  showed nothing but a name. `editorIgnored` is editor-scoped, not
+  display-scoped: a scanned hardware fact is precisely what someone opens the
+  page to read, even though nobody should type into it. `View` now carries
+  `Display` (every scalar) alongside `Fields` (the editable subset); pages render
+  the first, the editor writes the second.
+
+  Caught by a test asserting the Edit button is absent for such a type, which
+  failed because the fields table was *hidden* — an empty table has no height.
+  The missing button was correct; the empty table was the bug behind it.
+
+### Added
+- **A Views page** (`/views`, Config Items → after Schema Version) listing every
+  page orbital derives from the deployed schema, so the view list can be checked
+  in the UI instead of by curling the API. Rows come from
+  `GET /api/v1/views` via JS — orbital's UI reads the same public endpoint an
+  integrator would, rather than a private server-side path that could drift from
+  it.
+
+  The expanded panel lays the relationships out as a GRID, not a nested table.
+  Bulma scopes `.is-striped` and `.is-hoverable` with DESCENDANT selectors, so a
+  `<table>` inside a DataTables child row inherits both from the parent table —
+  its rows alternate white/grey and highlight on hover, which reads as the parent
+  table having stray selection. Out-specifying that takes four classes of
+  nesting; not nesting a table avoids the question.
+
+  Expandable rows (`dt-control`, the pattern the audit log established) show the
+  two short lists the summary columns only COUNT: a count says a view has eight
+  fields, and never which. Relationships link through by the target type's slug.
+  An `In nav` column answers "why is this in the menu, and why isn't that" —
+  nav membership is derived from containment, not declared.
+
+  It is a SETTINGS page, so it follows `approval-policies.gohtml` (heading +
+  description + table) rather than `servers.gohtml` (tabs bar, no heading).
+  Those are the house's two list patterns and they are not interchangeable.
+
+  **Read-only.** The `Source` column reads `derived` for every row today and
+  gains the value `overridden` when the P1 override layer lands — the column
+  exists now so it gains meaning rather than appearing later.
+
+### Added
+- **A generic renderer: defining a type in DGraph now yields a working page.**
+  `/{slug}` and `/{slug}/{id}` serve EVERY ConfigItem type from two templates,
+  with columns, fields and relationship tabs all derived from the deployed
+  schema. No per-type handler, no per-type template, no configuration —
+  configuration is the exception, not the mechanism.
+
+  Verified end to end: adding a `Foo` type to the deployed schema with a `rack`
+  edge, then creating one node, produced `/foos`, `/foos/demo:foo-1`, a `rack`
+  relationship tab linking through to `/racks/...`, a `foos` tab on Rack from the
+  inverse side, and a **Foos entry in the nav** — within one cache window, with
+  no restart and no code change.
+
+  **That last part was nearly missed.** Nav membership asked the Go registry
+  whether a type was a root, so a type the registry had never heard of defaulted
+  to NOT a root: `Foo` got pages reachable only by typing the URL, which is half
+  a feature. A type nothing declares ownership of is now treated as a root —
+  containment direction is not derivable from `@hasInverse`, so "no declared
+  owner" is the only honest answer, and erring toward visible beats erring
+  toward hidden.
+
+  **The page uses the house furniture, not a bare table.** It mirrors
+  `shared/pages/servers.gohtml` — hint banner, tabs bar, `.tab-content`
+  tabpanel — and initialises a DataTable with the same toolbar the hand-written
+  pages get: search, page length, colvis, Excel/CSV/Copy. It shipped first as a
+  plain `<table>`, which made a derived page read as a lesser one; the migration
+  replaces the hand-written pages with this, so it has to be their equal.
+  `stateSave` is off deliberately: every generic page shares the id
+  `generic-table`, so a saved sort from `/racks` would be restored on
+  `/storage-devices` against different columns.
+
+  The table carries no `data-testid`. DataTables CLONES it for its scroll head
+  and foot, copying `data-*` attributes but not the `id` — three elements then
+  shared one test id and every strict selector broke. The unique id is the
+  handle.
+
+  Routes are registered last so static pages still win, and a guard test pins
+  that no derived slug collides with one — with an explicit allowlist for
+  `servers`, which a bespoke page owns until the migration. An unknown slug is a
+  404 rather than an empty page, because an empty page says "there are none of
+  these" rather than "there is no such kind". With the schema unreadable, both
+  pages state the reason instead of rendering an empty table.
+
+### Added
+- **`GET /api/v1/views`** — orbital's equivalent of Kubernetes' `APIResourceList`.
+  Every ConfigItem type the deployed schema declares, with the URL slug its pages
+  live under, its editable fields, and its relationships as tabs. A type added to
+  the schema appears here with no code change and no restart. The UI will consume
+  this rather than reaching into the registry, which keeps orbital's own UI a
+  first-class consumer of its public API and hands `orbctl` and AEP the same map.
+  Readable by anyone authenticated; writing overrides is a P1 concern.
+
+  Slugs derive as `kebab(TypeName)` pluralized, from the TYPE NAME and never from
+  stored orbIds — legacy ids like `<ns>:<address>` (IPAddress) and
+  `<ns>:<rackName>` (Rack) carry no kind token, so id-derivation would fail on
+  exactly the types that have not caught up. Three names break a naive
+  implementation: `IPAddress` needs `-es` (`ip-addresses`), `S3Sync` has a digit
+  mid-name (`s3-syncs`), and `IdracSettings` is ALREADY plural, which a blind
+  `+s` turns into `idrac-settingss`. A `"""slug: clusters"""` annotation
+  overrides derivation — in the SCHEMA, because a slug is a contract and a URL
+  that moves from a preferences screen breaks every integrator.
+
+  Nav membership is roots only, derived from containment rather than declared.
+  It reproduces the four types that used to carry `IsRoot: true`, which is what
+  made deleting that field safe. **`IPAddress` is the case that breaks the
+  obvious rule**: it is owned by four types and declares that through
+  `OwnerEdges` ALONE with `OwnerType` empty, so testing `OwnerType` by itself
+  put "IP Addresses" in the nav as a top-level page.
+
+  Two types claiming one slug is refused, naming both — a duplicate silently
+  shadows one type's pages and which one wins would depend on map iteration
+  order. `fields` and `tabs` serialise as `[]` rather than `null`, so clients
+  iterate without a null check.
+
+### Removed
+- **`PayloadField`, `Implements`, `JSONStringFields` and the orbId-suffix switch
+  statements are gone from `registry.go`.** All four were hand-maintained
+  per-type data; all four now come from the deployed schema. `registry.go` holds
+  **only containment and logic** — a root type's entry is now
+  `{ Name: "Server" }` and an owned child's is its name plus which type owns it.
+
+  - `PayloadField` (22 entries) — derived from `Add<Type>Payload`, matching on
+    the field whose unwrapped type IS the type. That is what gets the irregular
+    casings right without anyone listing them, and it found one the list had
+    wrong (see IPAddress above).
+  - `Implements` — derived from `interfaces { name }`. Read through a
+    package-level hook, because `Children()` and `downwardEdges()` are package
+    functions with no resolver to thread; production wires it once from the
+    SHARED source, so no handler can silently decide what every caller sees.
+  - `JSONStringFields` — now a `"""jsonString"""` annotation. Nothing about the
+    field's TYPE says its String holds JSON, so this is declared rather than
+    derived — but it is declared WITH the field instead of in a Go list.
+  - orbId suffixes — two switch statements naming six irregular types
+    (`IdracSettings` is `idrac`, not `idracsettings`) became
+    `"""orbIdSuffix: ..."""` on the type. Everything else falls back to the
+    lower-cased name. A wrong value here does not error: it builds an orbId for
+    an entity that does not exist and upserts a phantom.
+
+  Annotation-only schema change, so `schema/VERSION` stays at v12.
+  `UnknownAnnotations` now knows the whole vocabulary — without that it reported
+  `jsonString` as a typo, which is noisy and, worse, trains whoever reads the
+  startup log to ignore the one report that matters.
+
+  Removing `Implements` from the struct broke two ownership tests, correctly:
+  interface-typed ownership silently stopped resolving once the hook was nil.
+  A package `TestMain` now supplies it, so unit tests see the one interface
+  relationship the registry actually uses.
+
+### Removed
+- **The hand-maintained per-type field lists are gone from Go.** `FormFields`,
+  `BeforeFields` and `IsRoot` are deleted from `internal/configitems/registry.go`
+  — 3,075 bytes of data that had to be edited by hand for every schema change and
+  whose drift was silent. The editor's field list and the audit before-fetch
+  selection are derived from the deployed schema; suppression comes from
+  `"""editorIgnored"""` annotations in that same schema. `editorIgnoredBridge`,
+  the temporary Go stopgap, is deleted too — its own test reported it had stopped
+  suppressing anything once the annotations were deployed, which is exactly what
+  it was written to detect.
+
+  `TestDerivedFieldsVsRegistry_ExactlyMatchesToday` still reports **19/19 types
+  deriving exactly as before**, now with zero Go-side field data on either side
+  of the comparison: its baseline is a dated snapshot fixture rather than the
+  registry it replaced.
+
+  Four tests were deleted rather than migrated, because generation made their
+  regression class structurally impossible: two asserting `BeforeFields` covered
+  `FormFields`, one measuring whether `BeforeFields` was derivable (it was), and
+  one pinning `BeforeFields` against a legacy snapshot. The mark-slot guards moved
+  from unit to integration — their baseline stopped being a constant and became
+  the running schema. What remains in `registry.go` is containment policy, which
+  introspection cannot supply: `@hasInverse` is declared on both ends of an edge
+  and says nothing about which end is the parent.
+
+### Added
+- **`"""editorIgnored"""` annotations in `schema/schema.graphql`** — 29 fields
+  across 8 types that are schema scalars but have never been editable. They ride
+  docstrings because DGraph rejects unknown directives outright, and docstrings
+  both round-trip through `getGQLSchema` and surface in introspection as
+  `description`. `schema/VERSION` does NOT bump: the diff is 29 insertions and no
+  deletions, and no data contract moves.
+
+  **Two of them exposed a silent failure mode.** `description` and `provider` are
+  declared on the `KubernetesCluster` INTERFACE, and an interface annotation does
+  not reach the implementing type through introspection — it reads back as
+  `"editorIgnored"` on the interface and `""` on `EksaKubernetesCluster`. DGraph
+  also forbids redeclaring an interface field on the implementor, so the
+  annotation could not be moved down. The annotations were present, correct and
+  reviewed, and suppressed nothing. `DGraphSchemaClient` now inherits annotations
+  from every interface a type implements, with the type's own annotation winning.
+
+  `editorIgnoredBridge` stays until every deployment runs the annotated schema —
+  an environment on an older schema gets NO suppression from annotations, which
+  is the environment-coupling hazard. `TestEditorIgnoredAnnotationsMatchTheBridge`
+  holds the two in step: it fails if they disagree, and reports plainly when a
+  deployment carries no annotations at all.
+
+### Changed
+- **The config editor's field list now comes from the RUNNING DGraph, not from
+  compiled-in Go.** `internal/configitems/derive.go` derives each ConfigItem
+  type's editable scalars by introspecting the deployed schema — type fields,
+  minus the `ConfigItem` interface's fields, minus anything that is not a plain
+  scalar — and `BeforeSelection` generates the audit before-fetch selection from
+  that same set, so the two can no longer disagree (a Hi-severity debt row: drop
+  a field from one and the mutation still succeeds while the audit event carries
+  no `changes` at all). Verified live: the resolver logs `types=19` from inside
+  the `/servers/:orbId` request that triggers it.
+
+  **It changes nothing an operator can do.** `TestDerivedFieldsVsRegistry_ExactlyMatchesToday`
+  asserts the derived set equals the previous hand-maintained `FormFields`
+  exactly, for all 19 types, and fails on any difference in either direction —
+  so a field added to the schema now forces an explicit editable-or-not decision
+  instead of silently becoming editable. Two cases it pins: `name` is editable
+  on `DataCenter` and `Rack` but lives on the `ConfigItem` interface, so naive
+  derivation would have silently REMOVED it; and 29 fields across 8 types are
+  schema scalars that were never editable, held back by `editorIgnoredBridge`.
+
+  Resolution is continuous, not a boot snapshot: DGraph may come up after
+  orbital. The derived set is cached and re-derived only when a hash of the
+  DEPLOYED SDL moves, so a page load does **zero** network work. With DGraph
+  unreachable and nothing cached the editor refuses with a stated reason rather
+  than an empty field list — empty reads as "this type has no fields", which is
+  a different and misleading claim — and it self-heals with no restart.
+
+  Annotations ride `"""docstrings"""`, which round-trip through `getGQLSchema`
+  AND surface in introspection as `description`; DGraph rejects unknown
+  directives outright, so `@orbital(...)` is not an option. The resolved
+  annotation count is logged on every re-derive, because editability now comes
+  from the deployed schema rather than the binary — an environment on an older
+  schema silently gets MORE editable fields, and the count is what makes
+  zero-when-expecting-29 visible.
+
+### Fixed
+- **A change request's scope was re-derived on every read, so a later grouping
+  change would have retroactively altered what a past review covered.**
+  `baseScope` walks owned-child grouping, and that grouping is view
+  configuration — it is about to become editable. Recomputing it on every
+  Create, Amend, Approve and queue render meant "which entities did this
+  reviewer look at" was answered from present-day configuration rather than
+  recorded at the time of review, and it would have changed under readers with
+  nothing saying it had moved. The scope is now PINNED as `base_scope` on the
+  request, on exactly the terms `base_values` already is: captured at Create
+  **and** at Amend (an amend re-proposes against a newly captured base, so a
+  carried-forward scope would name entities the request no longer targets), and
+  READ by `State`, which every render and decision goes through. Staleness
+  detection is unchanged — the hash is still recomputed, now over the stored
+  scope. Rows predating the field are deliberately **not** backfilled: pinning
+  an old request with today's grouping would assert a review covered something
+  nobody can show it covered. A pinned row also skips one DGraph round-trip per
+  rendered request, on the nav badge's whole-queue path.
+  `TestChangeRequest_ContainmentChangeDoesNotMovePinnedScope` deletes an owned
+  child, proves re-derivation really would drop it, and asserts the stored scope
+  is unmoved; verified to fail when `State` re-derives and when `Create` stops
+  pinning.
 - **A cascade delete left the surviving parent pointing at the node it removed,
   which permanently broke export for that data centre.** orbital deletes through
   a DQL upsert (`bulkDeleteGuarded`) because that is the only way to get a
@@ -68,9 +762,22 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   a comment reading "Exactly the Server FormFields in configitems/registry.go".
   A redundant proposal therefore rendered a mark it should not, and a proposal
   clearing the field rendered none at all. It is the third hand-maintained copy
-  of one field list; `TestServerSummaryValuesMatchRegistry` now compares it to
-  the registry, as `TestServerTabFieldSlotsMatchRegistry` already did for the
+  of one field list; `TestFieldMarkValuesMatchRegistry_AllTypes` now compares it to
+  the registry, as `TestFieldMarkSlotsMatchRegistry_AllTypes` already did for the
   template.
+- **Two mark guards were Server-only and silently unextendable.** The
+  proposed-change mark needs three hand-maintained lists to agree — the
+  template's `data-field` slots, the type's `FormFields`, and the handler's
+  `*ValuesJSON` map. The guards added 2026-09-23 hardcoded `server-tab.gohtml`
+  and `SummaryValuesJSON`, so the sibling maps `IdracValuesJSON` and
+  `MaintenanceValuesJSON` were **never checked at all**, and a mark table added
+  to any other template would have shipped unguarded. Both guards now DISCOVER
+  their subjects — every `data-field-orbid` table under `web/templates`, every
+  `rawFieldValues(...)` site in `internal/handler` — and fail on an undeclared
+  subject, on a declared one that disappears, and on any list disagreement.
+  Coverage went from 1 subject to 6. Verified against four injected faults:
+  a removed slot, a key dropped from the previously-unguarded `IdracValuesJSON`,
+  an undeclared new table, and a deleted table.
 - **Nested detail tables stayed pale in dark mode.** orb's publish-history
   expansion used Bulma's `has-background-white-bis`, an absolute near-white that
   does not flip with the colour scheme, so light text landed on a light box.
@@ -176,6 +883,14 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 - **Record-list tables all carry the house class** (16 distinct class strings → 9,
   the remainder being key/value summary tables, which are a different shape).
 - **Inline `style="overflow-x:auto"` replaced by `.table-container`** at all 25 sites.
+- **Four orb pages now get the house `.box` treatment.** `main.scss` scopes box
+  padding, shadow, border and tint to `.app-main .tab-content .box`, so a page
+  putting a `.box` straight into `.app-main` rendered an unstyled Bulma default.
+  Orb's status, schema, import-history and publish-history pages did exactly
+  that. On publish-history the class goes on `#publish-history-content` — the
+  HTMX swap target — so it survives pagination swaps. Orbital's approval-policies
+  page was on the same list but does NOT qualify: its only `.box` is inside a
+  `.modal-content`, where the treatment would be wrong.
 - **The Servers, Clusters and Network Devices pages are now one template each,
   shared by orbital and orb**, in `web/templates/shared/pages/`. The former
   copies differed only by orbital's login gate — 39 of orb's 39 `servers.gohtml`
@@ -197,7 +912,7 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   `expect(slots).toBe(6)` on the Server summary table and broke when
   `serialNumber` and `uHeight` were added *correctly* — a magic number cannot
   distinguish a properly-added field from a dead mark slot, so the invariant
-  moved to `TestServerTabFieldSlotsMatchRegistry`, which compares the template's
+  moved to `TestFieldMarkSlotsMatchRegistry_AllTypes`, which compares the template's
   `data-field` rows against `configitems.Types` FormFields and names the
   offending field in either direction. The remaining two asserted against a
   state the app cannot reach on a freshly-seeded stack: with no approval policy

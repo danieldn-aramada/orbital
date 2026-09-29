@@ -84,6 +84,7 @@ var queryOpRe = regexp.MustCompile(`(?i)^\s*query\s+(\w+)`)
 var beforeFetchOverrides = map[string]string{}
 
 type GraphQL struct {
+	fields    configitems.FieldsFor
 	dgraphURL string
 	db        *ent.Client
 	logger    *slog.Logger
@@ -93,8 +94,9 @@ type GraphQL struct {
 	rejectInlineSelectors bool
 }
 
-func NewGraphQL(dgraphURL string, db *ent.Client, logger *slog.Logger, rejectInlineSelectors bool) *GraphQL {
-	return &GraphQL{dgraphURL: dgraphURL, db: db, logger: logger, rejectInlineSelectors: rejectInlineSelectors}
+func NewGraphQL(dgraphURL string, db *ent.Client, logger *slog.Logger, rejectInlineSelectors bool, opts ...HandlerOption) *GraphQL {
+	fields, _, _ := fieldsFrom(dgraphURL, logger, opts)
+	return &GraphQL{dgraphURL: dgraphURL, db: db, logger: logger, rejectInlineSelectors: rejectInlineSelectors, fields: fields}
 }
 
 // DGraphURL exposes the configured DGraph endpoint for adjacent handlers that
@@ -970,7 +972,11 @@ func (h *GraphQL) proxyRaw(c echo.Context, body []byte) error {
 }
 
 func (h *GraphQL) fetchBeforeByID(getter, resourceType, id string) (map[string]any, error) {
-	fields := configitems.BeforeFields(resourceType)
+	// Generated from the SAME derived field set the editor uses, so the audit
+	// before-fetch and the editable set cannot disagree. Hand-maintaining them
+	// side by side was a Hi-severity debt row: drop a field from one and the
+	// mutation still succeeds while the audit event carries no `changes` at all.
+	fields := configitems.BeforeSelection(resourceType, h.fields, configitems.Children)
 	if fields == "" {
 		fields = "id orbId name version"
 	}
@@ -983,7 +989,11 @@ func (h *GraphQL) fetchBeforeByID(getter, resourceType, id string) (map[string]a
 }
 
 func (h *GraphQL) fetchBeforeByOrbID(querier, resourceType, orbID string) (map[string]any, error) {
-	fields := configitems.BeforeFields(resourceType)
+	// Generated from the SAME derived field set the editor uses, so the audit
+	// before-fetch and the editable set cannot disagree. Hand-maintaining them
+	// side by side was a Hi-severity debt row: drop a field from one and the
+	// mutation still succeeds while the audit event carries no `changes` at all.
+	fields := configitems.BeforeSelection(resourceType, h.fields, configitems.Children)
 	if fields == "" {
 		fields = "id orbId name version"
 	}

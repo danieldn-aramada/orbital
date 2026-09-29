@@ -48,11 +48,11 @@ test.describe('empty states', () => {
 
   test('clusters table: impossible filter shows empty state', async ({ page }) => {
     await page.goto('/clusters')
-    const searchInput = page.locator('input[aria-controls="cluster-table"]')
+    const searchInput = page.locator('input[aria-controls="generic-table"]')
     await expect(searchInput).toBeVisible({ timeout: 10_000 })
     await searchInput.fill('XXXXX-NO-SUCH-CLUSTER')
     // DataTables 2.x inserts a <td class="dt-empty"> inside the empty row.
-    const emptyRow = page.locator('#cluster-table tbody td.dt-empty')
+    const emptyRow = page.locator('#generic-table tbody td.dt-empty')
     await expect(emptyRow).toBeVisible({ timeout: 5_000 })
   })
 
@@ -106,39 +106,13 @@ test.describe('empty states', () => {
 
 test.describe('fragment reload error states', () => {
 
-  test('DC tab: reload failure shows error notification', async ({ page }) => {
-    const domId = await openDCTab(page, 'colo:colo-galleon')
-
-    // Intercept the DC fragment request and abort it to simulate a network failure.
-    await page.route('**/datacenters/**', route => route.abort())
-    try {
-      await page.locator('.js-dc-reload').first().click()
-      // After abort, the .catch() handler writes the error notification into the tab content.
-      const tabContent = page.locator(`#tab-content-${domId}`)
-      await expect(tabContent.locator('.notification.is-danger')).toBeVisible({ timeout: 5_000 })
-      await expect(tabContent.locator('.notification.is-danger')).toContainText('Reload failed.')
-    } finally {
-      await page.unroute('**/datacenters/**')
-    }
-  })
-
-  test('server tab: reload failure shows error notification', async ({ page }) => {
-    const orbId = '2f-uae:server-5HSC3D4'  // seeded R750 server (same as configitem-editor tests)
-    const domId = safeDomId(orbId)
-    await page.goto(`/servers?open=${encodeURIComponent(orbId)}&label=${encodeURIComponent(orbId)}`)
-    const tabContent = page.locator(`#tab-content-srv-${domId}`)
-    await page.waitForSelector(`#tab-content-srv-${domId}[data-loaded="true"]`, { timeout: 15_000 })
-
-    // Intercept server fragment requests and abort.
-    await page.route('**/servers/**', route => route.abort())
-    try {
-      await page.locator('.js-srv-reload').first().click()
-      await expect(tabContent.locator('.notification.is-danger')).toBeVisible({ timeout: 5_000 })
-      await expect(tabContent.locator('.notification.is-danger')).toContainText('Reload failed.')
-    } finally {
-      await page.unroute('**/servers/**')
-    }
-  })
+  // Both tab-reload failure cases are GONE as of 2026-09-26.
+  //
+  // They asserted the error notification a per-tab Reload button shows when its
+  // fetch fails. The generic renderer has no per-tab reload button — a named,
+  // accepted loss from the migration — so there is no failure path left to
+  // assert. Nothing replaced it: a page that cannot load now says so through
+  // the Unavailable branch, which the generic render tests cover.
 
   // Cluster reload failure is NOT testable: reloadClusterFragment() has an inner
   // `.catch(() => {})` that swallows network errors before the outer click handler's

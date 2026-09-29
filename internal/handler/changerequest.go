@@ -199,6 +199,7 @@ func (h *ChangeRequest) Create(ctx context.Context, actor, title, description st
 			SetBaseHash(versionHash(versions)).
 			SetBaseVersions(versions).
 			SetBasePresent(presentInVersions(versions, scope)).
+			SetBaseScope(scope).
 			SetPayload(payload)
 		if len(effect) > 0 {
 			b = b.SetBaseEffect(effect)
@@ -299,12 +300,29 @@ func (h *ChangeRequest) State(ctx context.Context, cr *ent.ApprovalRequest) (crS
 		return st, fmt.Errorf("decode changeset: %w", err)
 	}
 
-	declared := declaredOrbIDs(&st.Changeset)
-	existing, err := h.schema.ResolveEntities(ctx, declared)
-	if err != nil {
-		return st, fmt.Errorf("resolve entities: %w", err)
+	// Scope is PINNED at capture (Create and Amend). Re-deriving it here would
+	// let a later containment change retroactively alter what this review is
+	// deemed to have covered — and this runs on EVERY queue render, so the
+	// answer would drift under readers with nothing recording that it moved.
+	//
+	// Falling back to derivation keeps rows written before base_scope existed
+	// behaving exactly as they always have. They are not backfilled: pinning an
+	// old row with today's containment would assert a review covered something
+	// nobody can show it covered.
+	//
+	// The fallback also skips a DGraph round-trip per rendered request once a
+	// row is pinned, which matters on the nav badge's whole-queue render.
+	st.Scope = cr.BaseScope
+	if len(st.Scope) == 0 {
+		declared := declaredOrbIDs(&st.Changeset)
+		existing, resolveErr := h.schema.ResolveEntities(ctx, declared)
+		if resolveErr != nil {
+			return st, fmt.Errorf("resolve entities: %w", resolveErr)
+		}
+		st.Scope = baseScope(ctx, h.dgraphURL, declared, existing)
 	}
-	st.Scope = baseScope(ctx, h.dgraphURL, declared, existing)
+
+	var err error
 	// Versions, not content. State answers "has this moved?" and is called once
 	// per request RENDERED — the nav badge renders the whole open queue on every
 	// page load — so it must not fetch and normalize every node in scope. The
@@ -861,7 +879,8 @@ func (h *ChangeRequest) Amend(ctx context.Context, id int64, actor string, role 
 		// the proposal without moving the graph, so hash-matched approvals would
 		// otherwise survive an edit the reviewer never saw.
 		upd = upd.SetPayload(payload).SetChangesetRevision(cr.ChangesetRevision + 1).
-			SetBaseHash(versionHash(versions)).SetBaseVersions(versions).SetBasePresent(presentInVersions(versions, scope))
+			SetBaseHash(versionHash(versions)).SetBaseVersions(versions).SetBasePresent(presentInVersions(versions, scope)).
+			SetBaseScope(scope)
 		// Recomputed with the anchor: an amended request is a new plan against a
 		// newly captured base, so carrying the old delta forward would describe
 		// changes the request no longer proposes. The ancestor moves with it, for

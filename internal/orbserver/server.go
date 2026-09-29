@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -186,26 +187,36 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	e.GET("/inventory", s.inventoryPage)
 	e.GET("/schema", s.schemaPage)
 	e.GET("/datacenter", s.dcPage)
-	dc := handler.NewDataCenter(cfg.DGraphURL, cfg.TemplateHotReload, logger, "",
-		func(echo.Context) layout.PageActions { return layout.OrbActions })
-	e.GET("/datacenters/:orbId", dc.Tab)
-	e.GET("/servers", s.serversPage)
-	srv := handler.NewServerHandler(cfg.DGraphURL, cfg.TemplateHotReload, logger, "",
-		func(echo.Context) layout.PageActions { return layout.OrbActions })
-	e.GET("/servers/:orbId", srv.Tab)
-	e.GET("/clusters", s.clustersPage)
+
+	// ONE field source for the process. Each handler would otherwise build its
+	// own resolver and its own cache, multiplying introspection and letting
+	// handlers briefly disagree about the schema after a change. The GraphQL
+	// proxy needs it too: it generates the audit before-fetch selection from
+	// the same derived set, so the two cannot drift.
+	fieldSource := handler.NewSharedFieldSource(cfg.DGraphURL, logger)
+	// The same generic renderer orbital uses, with orb's own chrome. Orb never
+	// sets CanMutate, so these pages are read-only without needing a separate
+	// read-only implementation.
+	generic := handler.NewGenericRenderer(fieldSource, cfg.DGraphURL, "", logger, s.orbBase,
+		func(echo.Context) layout.PageActions { return layout.OrbActions }, s.render, s.renderFragment)
+
+	// MIGRATED: /data-centers/:orbId is served by the generic renderer via the
+	// RouteNotFound fallback. The old path redirects.
+	e.GET("/datacenters/:orbId", func(c echo.Context) error {
+		return c.Redirect(http.StatusMovedPermanently, "/data-centers/"+url.PathEscape(c.Param("orbId")))
+	})
 	// Reuse orbital's ClusterHandler — the same DGraph query + render path,
 	// with orb-specific PageActions injected (read-only, no audit tab). This
 	// is the model for collapsing the rest of the DC/Server parallel impls.
-	cluster := handler.NewClusterHandler(cfg.DGraphURL, cfg.TemplateHotReload, logger, "",
-		func(echo.Context) layout.PageActions { return layout.OrbActions })
-	e.GET("/clusters/:orbId", cluster.Tab)
-	e.GET("/network", s.networkPage)
+	e.GET("/network", func(c echo.Context) error {
+		return c.Redirect(http.StatusMovedPermanently, "/network-devices")
+	})
 	// Same handler orbital uses, with orb's read-only PageActions injected —
 	// matching how DC, Server and Cluster detail tabs are already served.
-	networkDevice := handler.NewNetworkDeviceHandler(cfg.DGraphURL, cfg.TemplateHotReload, logger, "",
-		func(echo.Context) layout.PageActions { return layout.OrbActions })
-	e.GET("/network/:orbId", networkDevice.Tab)
+
+	// The generic renderer, registered LAST so static segments win. Orb gets the
+	// same /{slug} pages orbital does, read-only.
+	e.RouteNotFound("/*", generic.Fallback)
 	e.GET("/divergence", s.divergencePage)
 	e.GET("/publish-history", s.publishHistoryPage)
 	e.GET("/import-history", s.importHistoryPage)
@@ -213,7 +224,7 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	// GraphQL proxy — browser-side DataTables calls go here.
 	// Registered at /graphql (not /api/v1/graphql) — GraphQL is not URL-versioned,
 	// per convention (GitHub, GitLab, NetBox, Apollo). See CLAUDE.md.
-	gql := handler.NewGraphQL(cfg.DGraphURL, nil, logger, true)
+	gql := handler.NewGraphQL(cfg.DGraphURL, nil, logger, true, handler.WithFieldSource(fieldSource))
 	e.Any("/graphql", gql.Handle)
 
 	// API.

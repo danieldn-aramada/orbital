@@ -9,8 +9,8 @@
 // drifts, this fails.
 
 import { test, expect, Page } from '@playwright/test'
+import { openEditor as openGenericEditor } from './helpers/generic';
 
-const CLUSTER_ORB_ID = 'colo:dev-main'
 const SERVER_ORB_ID  = '2f-uae:server-5HSC3D4'  // seeded R750 with iDRAC in 2f-uae namespace
 const DC_ORB_ID      = 'seattle:seattle-galleon'
 
@@ -19,62 +19,12 @@ function safeDomId(orbId: string): string {
   return orbId.replace(/[^a-zA-Z0-9_-]/g, '_')
 }
 
-async function openClusterEditModal(page: Page, orbId: string) {
-  // orbital's clusters page opens a per-cluster TAB on `?open=<orbId>` deep-link.
-  // The fragment loads via HTMX into #tab-content-cluster-<domId>; the edit
-  // modal is part of that fragment.
-  const domId = safeDomId(orbId)
-  await page.goto(`/clusters?open=${encodeURIComponent(orbId)}&label=${encodeURIComponent(orbId)}`)
-  await page.waitForSelector(`#edit-modal-cluster-${domId}`, { state: 'attached', timeout: 15_000 })
-  await page.locator(`[data-cluster-edit-id="${domId}"]`).first().click()
-  await expect(page.locator(`#edit-modal-cluster-${domId}`)).toHaveClass(/is-active/)
-  return domId
-}
-
 async function openServerEditModal(page: Page, orbId: string) {
-  // Servers page deep-link: JS reads ?open=<orbId>, calls loadServerListTab,
-  // which fetches the server fragment into #tab-content-srv-<domId>. The
-  // fragment carries the edit modal. Wait for the fragment to load (its
-  // `data-loaded="true"` flag is set after the swap completes), then open
-  // the modal.
-  const domId = safeDomId(orbId)
-  await page.goto(`/servers?open=${encodeURIComponent(orbId)}&label=${encodeURIComponent(orbId)}`)
-  await page.waitForSelector(`#tab-content-srv-${domId}[data-loaded="true"]`, { timeout: 15_000 })
-  await page.waitForSelector(`#edit-modal-srv-${domId}`, { state: 'attached', timeout: 5_000 })
-  await page.locator(`[data-srv-edit-id="${domId}"]`).first().click()
-  await expect(page.locator(`#edit-modal-srv-${domId}`)).toHaveClass(/is-active/)
-  return domId
+  return await openGenericEditor(page, 'servers', orbId)
 }
 
 async function openDataCenterEditModal(page: Page, orbId: string) {
-  // DataCenter tabs have no ?open= deep-link. Must navigate to /datacenters,
-  // search for the DC in the DataTable (it may be paginated), dblclick the row
-  // to load the tab, wait for the fragment to settle, then open the edit modal.
-  const domId = safeDomId(orbId)
-  const dcName = orbId.split(':')[1]  // 'seattle:seattle-galleon' → 'seattle-galleon'
-  await page.goto('/datacenters')
-
-  // If initDatacenterTabRestoration restored the DC tab (saves to localStorage on
-  // first open), the summary tab content div is hidden. Click the summary tab to
-  // ensure the DataTable and its search input are visible before interacting.
-  const summaryTab = page.locator('#tab-summary')
-  if (await summaryTab.count() > 0) await summaryTab.click()
-
-  // Filter DataTable to surface the target row (table has pageLength=5, many DCs seeded).
-  const searchInput = page.locator('input[aria-controls="datacenter-table"]')
-  await expect(searchInput).toBeVisible({ timeout: 10_000 })
-  await searchInput.fill(dcName)
-
-  const row = page.locator('#datacenter-table tbody tr', { hasText: dcName })
-  await expect(row).toBeVisible({ timeout: 10_000 })
-  await row.dblclick()
-
-  // Dblclick → tab created → tab link clicked → HTMX load → afterSettle → data-loaded="true"
-  await page.waitForSelector(`#tab-content-${domId}[data-loaded="true"]`, { timeout: 15_000 })
-  await page.waitForSelector(`#edit-modal-dc-${domId}`, { state: 'attached', timeout: 5_000 })
-  await page.locator(`[data-dc-edit-id="${domId}"]`).first().click()
-  await expect(page.locator(`#edit-modal-dc-${domId}`)).toHaveClass(/is-active/)
-  return domId
+  return await openGenericEditor(page, 'data-centers', orbId)
 }
 
 async function readEditorJSON(page: Page, selector: string): Promise<any> {
@@ -84,98 +34,36 @@ async function readEditorJSON(page: Page, selector: string): Promise<any> {
 
 test.describe('configitem-editor module — browser validation', () => {
 
-  test('cluster edit: kubernetesVersion change → updateEksaKubernetesCluster audit row with diff', async ({ page }) => {
-    const domId = await openClusterEditModal(page, CLUSTER_ORB_ID)
-
-    // The JSON editor has populated with the cluster state. Read the embedded
-    // initial JSON to know what the editor sees.
-    const initial = await readEditorJSON(page, `#cluster-edit-data-${domId}`)
-    expect(initial.kubernetesVersion).toBeTruthy()
-    const newVersion = `v1.99.${Date.now() % 1000}`
-
-    // Programmatically update the JSONEditor's content. The vanilla-jsoneditor
-    // exposes `editor.set({text: ...})` on the global window.clusterEditors map.
-    await page.evaluate(({ id, newState }) => {
-      const editor = (window as any).clusterEditors.get(id)
-      editor.set({ text: JSON.stringify(newState, null, 2) })
-    }, { id: domId, newState: { ...initial, kubernetesVersion: newVersion } })
-
-    // Click Save — the configitem-editor module dispatches the canonical
-    // updateEksaKubernetesCluster(orbId, set) mutation.
-    await page.locator(`#cluster-edit-submit-${domId}`).click()
-
-    // Modal closes on success.
-    await expect(page.locator(`#edit-modal-cluster-${domId}`)).not.toHaveClass(/is-active/)
-
-    // Wait for the cluster fragment reload to settle, then check Cluster Summary
-    // reflects the new value.
-    await expect(page.locator('text=' + newVersion).first()).toBeVisible({ timeout: 10_000 })
-
-    // Click the Audit Log tab and verify the latest row is updateEksaKubernetesCluster.
-    await page.locator(`[data-panel="cluster-panel-audit-${domId}"]`).click()
-    const auditPanel = page.locator(`#cluster-panel-audit-${domId}`)
-    await expect(auditPanel).toContainText('updateEksaKubernetesCluster', { timeout: 10_000 })
-    // And the diff renderer kicked in (colored before/after present).
-    await expect(auditPanel.locator('strong:has-text("kubernetesVersion")').first()).toBeVisible()
-  })
-
-  test('cluster edit: backup.etcd.schedule change → updateEtcdBackup audit row (NOT a parent blob)', async ({ page }) => {
-    const domId = await openClusterEditModal(page, CLUSTER_ORB_ID)
-    const initial = await readEditorJSON(page, `#cluster-edit-data-${domId}`)
-
-    // dev-main may or may not have a backup tree depending on prior session state.
-    // If it doesn't, skip this scenario — it covers the edit path, not the create path.
-    test.skip(!initial.backup?.etcd, 'dev-main has no etcd backup configured; skipping edit-only scenario')
-
-    const newSchedule = `0 ${(Date.now() % 12) + 1} * * *`
-    const newState = {
-      ...initial,
-      backup: { ...initial.backup, etcd: { ...initial.backup.etcd, schedule: newSchedule } },
-    }
-    await page.evaluate(({ id, newState }) => {
-      const editor = (window as any).clusterEditors.get(id)
-      editor.set({ text: JSON.stringify(newState, null, 2) })
-    }, { id: domId, newState })
-
-    await page.locator(`#cluster-edit-submit-${domId}`).click()
-    await expect(page.locator(`#edit-modal-cluster-${domId}`)).not.toHaveClass(/is-active/)
-
-    // Backups tab should reflect the new schedule (it's a read-only display table).
-    await page.locator(`[data-panel="cluster-panel-backups-${domId}"]`).click()
-    const backupsPanel = page.locator(`#cluster-panel-backups-${domId}`)
-    await expect(backupsPanel).toContainText(newSchedule, { timeout: 10_000 })
-
-    // Audit tab should show updateEtcdBackup, NOT updateEksaKubernetesCluster.
-    // This is the critical assertion: per-kind audit attribution, not parent-blob.
-    await page.locator(`[data-panel="cluster-panel-audit-${domId}"]`).click()
-    const auditPanel = page.locator(`#cluster-panel-audit-${domId}`)
-    await expect(auditPanel).toContainText('updateEtcdBackup', { timeout: 10_000 })
-    // Diff renderer: green/red lines for the schedule change.
-    await expect(auditPanel.locator('strong:has-text("schedule")').first()).toBeVisible()
-  })
+  // The two cluster cases moved to e2e/clusters-generic.spec.ts on 2026-09-25,
+  // when /clusters became the interface-backed generic page. They assert the
+  // same two guarantees — a per-kind audit row with a rendered diff, and an
+  // owned-child edit attributed to the CHILD rather than blobbed into its
+  // parent — against the generic editor and its audit box.
 
   test('server edit: model change → updateServer audit row with diff', async ({ page }) => {
     const domId = await openServerEditModal(page, SERVER_ORB_ID)
 
-    const initial = await readEditorJSON(page, `#srv-edit-data-${domId}`)
+    const initial = await readEditorJSON(page, `#generic-edit-data-${domId}`)
     const newHostname = initial.hostname  // server identity field — don't churn; just confirm edit path
     const newModel = `PowerEdge R650-${Date.now() % 1000}`
     const newState = { ...initial, model: newModel }
 
     await page.evaluate(({ id, newState }) => {
-      const editor = (window as any).srvEditors.get(id)
+      const editor = (window as any).genericEditors.get(id)
       editor.set({ text: JSON.stringify(newState, null, 2) })
     }, { id: domId, newState })
 
-    await page.locator(`#srv-edit-submit-${domId}`).click()
-    await expect(page.locator(`#edit-modal-srv-${domId}`)).not.toHaveClass(/is-active/)
+    await page.locator(`#generic-edit-submit-${domId}`).click()
+    await expect(page.locator(`#edit-modal-generic-${domId}`)).not.toHaveClass(/is-active/)
 
     // Server tab should reflect the new model after reload.
     await expect(page.locator('text=' + newModel).first()).toBeVisible({ timeout: 10_000 })
 
     // Audit log tab on the server page.
-    await page.locator(`#srv-panel-audit-${domId}-detlink, [data-panel="srv-panel-audit-${domId}"]`).first().click()
-    const auditPanel = page.locator(`#srv-panel-audit-${domId}`)
+    // A box now, not a tab: the generic renderer stacks panels rather than
+    // tabbing them, so there is nothing to click and it loads with the page.
+    await page.reload()
+    const auditPanel = page.getByTestId('generic-audit')
     await expect(auditPanel).toContainText('updateServer', { timeout: 10_000 })
     await expect(auditPanel.locator('strong:has-text("model")').first()).toBeVisible()
   })
@@ -183,7 +71,7 @@ test.describe('configitem-editor module — browser validation', () => {
   test('server edit: iDRAC firmwareVersion change → updateIdracSettings audit row (NOT updateServer)', async ({ page }) => {
     const domId = await openServerEditModal(page, SERVER_ORB_ID)
 
-    const initial = await readEditorJSON(page, `#srv-edit-data-${domId}`)
+    const initial = await readEditorJSON(page, `#generic-edit-data-${domId}`)
     test.skip(!initial.idracSettings, 'server has no idracSettings configured; skipping iDRAC scenario')
 
     const newFirmware = `7.11.${Date.now() % 100}.00`
@@ -192,17 +80,19 @@ test.describe('configitem-editor module — browser validation', () => {
       idracSettings: { ...initial.idracSettings, firmwareVersion: newFirmware },
     }
     await page.evaluate(({ id, newState }) => {
-      const editor = (window as any).srvEditors.get(id)
+      const editor = (window as any).genericEditors.get(id)
       editor.set({ text: JSON.stringify(newState, null, 2) })
     }, { id: domId, newState })
 
-    await page.locator(`#srv-edit-submit-${domId}`).click()
-    await expect(page.locator(`#edit-modal-srv-${domId}`)).not.toHaveClass(/is-active/)
+    await page.locator(`#generic-edit-submit-${domId}`).click()
+    await expect(page.locator(`#edit-modal-generic-${domId}`)).not.toHaveClass(/is-active/)
 
     // Wait for fragment reload, then go to audit tab.
     await page.waitForTimeout(500)
-    await page.locator(`#srv-panel-audit-${domId}-detlink, [data-panel="srv-panel-audit-${domId}"]`).first().click()
-    const auditPanel = page.locator(`#srv-panel-audit-${domId}`)
+    // A box now, not a tab: the generic renderer stacks panels rather than
+    // tabbing them, so there is nothing to click and it loads with the page.
+    await page.reload()
+    const auditPanel = page.getByTestId('generic-audit')
 
     // The critical assertion: changing iDRAC alone produces updateIdracSettings,
     // NOT updateServer. This is the per-subtree-diff behavior — without it the
@@ -211,42 +101,12 @@ test.describe('configitem-editor module — browser validation', () => {
     await expect(auditPanel.locator('strong:has-text("firmwareVersion")').first()).toBeVisible()
   })
 
-  test('datacenter edit: name change → updateDataCenter audit row with diff', async ({ page }) => {
-    const domId = await openDataCenterEditModal(page, DC_ORB_ID)
-
-    const initial = await readEditorJSON(page, `#dc-edit-data-${domId}`)
-    expect(initial.name).toBeTruthy()
-    const origName = initial.name
-    const newName = `seattle-galleon-${Date.now() % 10000}`
-
-    await page.evaluate(({ id, newState }) => {
-      const editor = (window as any).dcEditors.get(id)
-      editor.set({ text: JSON.stringify(newState, null, 2) })
-    }, { id: domId, newState: { ...initial, name: newName } })
-
-    await page.locator(`#dc-edit-submit-${domId}`).click()
-    await expect(page.locator(`#edit-modal-dc-${domId}`)).not.toHaveClass(/is-active/)
-
-    // DC Summary should reflect the new name after fragment reload.
-    await expect(page.locator('text=' + newName).first()).toBeVisible({ timeout: 10_000 })
-
-    // Click the Audit Log tab and verify updateDataCenter with a diff on `name`.
-    await page.locator(`[data-panel="dc-panel-audit-${domId}"]`).click()
-    const auditPanel = page.locator(`#dc-panel-audit-${domId}`)
-    await expect(auditPanel).toContainText('updateDataCenter', { timeout: 10_000 })
-    await expect(auditPanel.locator('strong:has-text("name")').first()).toBeVisible()
-
-    // Cleanup: restore original name.
-    await openDataCenterEditModal(page, DC_ORB_ID)
-    const current = await readEditorJSON(page, `#dc-edit-data-${domId}`)
-    await page.evaluate(({ id, newState }) => {
-      const editor = (window as any).dcEditors.get(id)
-      editor.set({ text: JSON.stringify(newState, null, 2) })
-    }, { id: domId, newState: { ...current, name: origName } })
-    await page.locator(`#dc-edit-submit-${domId}`).click()
-    await expect(page.locator(`#edit-modal-dc-${domId}`)).not.toHaveClass(/is-active/)
-  })
-
+  // The "datacenter edit" case was DELETED 2026-09-25 with the bespoke page.
+  // Editing a DataCenter now goes through the generic renderer, covered by
+  // e2e/generic-editor.spec.ts (edit + persist + MVCC on every reachable
+  // target). NOTE what did NOT carry over: this case also asserted the
+  // resulting updateDataCenter AUDIT ROW and its diff. Audit integration for
+  // the generic editor has no e2e cover yet.
   // ── NOT WIRED — edit modals not yet implemented for these ConfigItem types ──
   //
   // Rack, IPAddress, KubernetesNode, ServerConfigurationProfile have no FormFields
@@ -281,7 +141,7 @@ test.describe('configitem-editor module — browser validation', () => {
   // Regression guard: server / cluster / DC handlers must return 404 when the
   // orbId doesn't exist instead of rendering a tab with empty DomID
   // placeholders. Caught during browser validation 2026-06-20 — `/servers/<bogus>`
-  // silently rendered `id="edit-modal-srv-"` with no domId, which left users
+  // silently rendered `id="edit-modal-generic-"` with no domId, which left users
   // with broken modals if they ever hit that path. The cluster handler had
   // the right check; server + DC didn't.
   test('handlers return 404 for missing orbIds (server, cluster, DC)', async ({ page }) => {
