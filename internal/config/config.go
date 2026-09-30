@@ -77,6 +77,7 @@ type Config struct {
 	S3Bucket                string `envconfig:"ORBITAL_S3_BUCKET"               default:"orbital"`
 	S3AccessKey             string `envconfig:"ORBITAL_S3_ACCESS_KEY"           default:"minioadmin"`
 	S3SecretKey             string `envconfig:"ORBITAL_S3_SECRET_KEY"           default:"minioadmin"`
+	S3UseAzMI               bool   `envconfig:"ORBITAL_S3_USE_AZ_MI"            default:"false"`
 	S3Prefix                string `envconfig:"ORBITAL_S3_PREFIX"                default:"backups/"` // optional path prefix within the bucket
 	S3RetentionCount        int    `envconfig:"ORBITAL_S3_RETENTION_COUNT"       default:"0"`        // deprecated: use ORBITAL_BACKUP_RETENTION_MIN_COUNT
 	BackupRetentionDays     int    `envconfig:"ORBITAL_BACKUP_RETENTION_DAYS"    default:"14"`       // delete backups older than N days; 0 = no time-based pruning
@@ -277,8 +278,19 @@ func New() (*Config, error) {
 			return nil, fmt.Errorf("ORBITAL_DB_USE_AZ_MI=true requires ORBITAL_DB_HOST, ORBITAL_DB_USER, ORBITAL_DB_NAME")
 		}
 	}
+	if cfg.S3UseAzMI {
+		// The Azure backend is chosen by endpoint sniffing, so a non-Azure
+		// endpoint would silently fall back to key auth and ignore this flag.
+		if !strings.Contains(cfg.S3Endpoint, ".blob.core.windows.net") {
+			return nil, fmt.Errorf("ORBITAL_S3_USE_AZ_MI=true requires an Azure Blob ORBITAL_S3_ENDPOINT (.blob.core.windows.net), got %q", cfg.S3Endpoint)
+		}
+		if cfg.S3AccessKey == "" {
+			return nil, fmt.Errorf("ORBITAL_S3_USE_AZ_MI=true requires ORBITAL_S3_ACCESS_KEY (the storage account name)")
+		}
+	}
 	cfg.APIAuthEnabled = true
 	cfg.apiAuthSource = "default (fail-safe)"
+
 	if raw := cfg.APIAuthEnabledRaw; raw != "" {
 		enabled, err := strconv.ParseBool(raw)
 		if err != nil {
