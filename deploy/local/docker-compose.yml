@@ -47,6 +47,9 @@ services:
   # drop_all's the scratch target on every run. Pointing the suite's live graph
   # at scratch would wipe shared suite state mid-run.
   dgraph-zero-test:
+    # `test` profile: NOT started by `make up`. The alpha idles at ~1.4GB and
+    # only `make test-integration` uses it. `make down` passes --profile '*'.
+    profiles: ["test"]
     image: dgraph/dgraph:v25.3.1
     command: dgraph zero --my=dgraph-zero-test:5080
     ports:
@@ -58,6 +61,7 @@ services:
       retries: 10
 
   dgraph-alpha-test:
+    profiles: ["test"]
     image: dgraph/dgraph:v25.3.1
     command: >
       dgraph alpha

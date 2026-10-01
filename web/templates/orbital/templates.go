@@ -14,7 +14,6 @@ var base = []string{
 	"web/templates/shared/components/login-gate.gohtml",
 	"web/templates/orbital/components/report-issue-modal.gohtml",
 	"web/templates/orbital/components/login-modal.gohtml",
-	"web/templates/shared/components/hint-banner.gohtml",
 	"web/templates/orbital/partials/access-required.gohtml",
 	"web/templates/orbital/components/config-item-delete-modal.gohtml",
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -367,6 +368,10 @@ func (r *Resolver) ensure(ctx context.Context) error {
 			r.logger.Warn("facet annotation ignored; the list page has no filter dropdown for it",
 				"where", w)
 		}
+		for _, w := range NavWarnings(types) {
+			r.logger.Warn("nav annotation ignored; the type sorts after every pinned entry",
+				"where", w)
+		}
 	}
 	return nil
 }
@@ -421,6 +426,7 @@ var knownAnnotations = []string{
 	DetailOnlyAnnotation,    // bare word
 	EditableAnnotation,      // "editable:" prefix
 	FacetAnnotation,         // "facet:" prefix
+	NavAnnotation,           // "nav:" prefix
 }
 
 // UnknownAnnotations returns docstring lines that LOOK like an orbital
@@ -653,6 +659,50 @@ func ApplyOrder(fields, pinned []string) []string {
 		}
 	}
 	return out
+}
+
+// NavAnnotation pins a root type's position in the Config Items menu.
+//
+//	"""nav: 20"""
+//	type Server implements ConfigItem {
+//
+// Deriving nav order from type names gives alphabetical, which put Clusters
+// above Servers and reordered a menu people navigate by muscle memory. Menu
+// position is a judgement about the product — physical containment before
+// logical here — and is exactly what an annotation is for.
+//
+// Separate from `order:`, which pins COLUMN order within one type's table. A
+// single docstring commonly needs both (KubernetesCluster does), so sharing a
+// name would make one of them unexpressible.
+//
+// Sparse by convention (10, 20, 30) so a type can be inserted without
+// renumbering its neighbours. Unannotated roots sort AFTER every annotated one,
+// alphabetically among themselves — a new type still reaches the menu on its
+// own, which is the property that makes "define a type, get a page" true.
+const NavAnnotation = "nav:"
+
+// NavUnpinned is the sort position of a root with no `nav:`. Above any
+// plausible hand-assigned value, so unannotated types land at the end rather
+// than silently jumping the queue at position 0.
+const NavUnpinned = 1 << 20
+
+// NavFor returns the menu position a type declares, or NavUnpinned when it
+// declares none or declares something that is not a number.
+//
+// A non-numeric value is treated as unpinned rather than rejected: an
+// annotation must never stop a page rendering. UnknownAnnotations does not
+// catch it — "nav: left" is a known prefix with a bad value — so it is also
+// reported, otherwise a typo'd position is invisible.
+func NavFor(typeDoc string) (pos int, ok bool) {
+	v := annotationValue(typeDoc, NavAnnotation)
+	if v == "" {
+		return NavUnpinned, true
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil {
+		return NavUnpinned, false
+	}
+	return n, true
 }
 
 // FacetAnnotation names ONE column a list page offers as a filter dropdown.
