@@ -98,10 +98,11 @@ mutation SeedClusters {
     },
     { orbId: "colo:cluster-m2", name: "cluster-m2", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, controlPlaneEndpoint: { orbId: "colo:10.20.22.180" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.251" version: 1 } },
     {
-      orbId: "colo:bare-mincluster", name: "bare-mincluster", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, controlPlaneEndpoint: { orbId: "colo:10.20.22.11" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.12" version: 1 }, description: "Aramco Backup and Restore Testing",
+      orbId: "colo:aep", name: "aep", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-09-25T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 },
       nodes: [
-          { orbId: "colo:bare-mincluster-node-4RK3V64", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "bare-mincluster-node-4RK3V64", ipv4: { orbId: "colo:10.20.22.110" version: 1 }, gpu: false, owner: "Arastu", notes: "Aramco Backup and Restore Testing", server: { orbId: "colo:server-4RK3V64" version: 1 } },
-          { orbId: "colo:bare-mincluster-node-7MP6K74", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "bare-mincluster-node-7MP6K74", ipv4: { orbId: "colo:10.20.22.173" version: 1 }, gpu: false, owner: "Arastu", notes: "Aramco Backup and Restore Testing", server: { orbId: "colo:server-7MP6K74" version: 1 } }
+          { orbId: "colo:aep-node-GD206G4", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-09-25T00:00:00Z", name: "aep-cp1", role: "control_plane", server: { orbId: "colo:server-GD206G4" version: 1 } },
+          { orbId: "colo:aep-node-4RK3V64", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-09-25T00:00:00Z", name: "aep-wk1", role: "worker", server: { orbId: "colo:server-4RK3V64" version: 1 } },
+          { orbId: "colo:aep-node-7MP6K74", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-09-25T00:00:00Z", name: "aep-wk2", role: "worker", server: { orbId: "colo:server-7MP6K74" version: 1 } }
         ]
     },
     { orbId: "colo:restore-cluster", name: "restore-cluster", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, controlPlaneEndpoint: { orbId: "colo:10.20.22.230" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.231" version: 1 } },
@@ -163,14 +164,6 @@ mutation SeedClusters {
 
   # 3. EKSA workload clusters — each links back to its management via managementCluster.
   workload: addEksaKubernetesCluster(input: [
-    {
-      orbId: "colo:bare-mincluster-w1", name: "bare-mincluster-w1", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "workload", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, controlPlaneEndpoint: { orbId: "colo:10.20.22.18" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.12" version: 1 }, description: "Aramco Backup and Restore Testing", managementCluster: { orbId: "colo:bare-mincluster" version: 1 },
-      nodes: [
-          { orbId: "colo:bare-mincluster-w1-node-CWJHDX3", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "bare-mincluster-w1-node-CWJHDX3", ipv4: { orbId: "colo:10.20.22.216" version: 1 }, gpu: true, owner: "Arastu", notes: "Aramco Backup and Restore Testing", server: { orbId: "colo:server-CWJHDX3" version: 1 } },
-          { orbId: "colo:bare-mincluster-w1-node-GD206G4", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "bare-mincluster-w1-node-GD206G4", ipv4: { orbId: "colo:10.20.22.105" version: 1 }, gpu: false, owner: "Arastu", notes: "Aramco Backup and Restore Testing", server: { orbId: "colo:server-GD206G4" version: 1 } },
-          { orbId: "colo:bare-mincluster-w1-node-9MP6K74", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", name: "bare-mincluster-w1-node-9MP6K74", ipv4: { orbId: "colo:10.20.22.244" version: 1 }, gpu: false, owner: "Arastu", notes: "Aramco Backup and Restore Testing", server: { orbId: "colo:server-9MP6K74" version: 1 } }
-        ]
-    },
     {
       orbId: "colo:dev-main", name: "dev-main", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "workload", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, kubernetesVersion: "v1.33.7", controlPlaneEndpoint: { orbId: "colo:10.20.22.208" version: 1 }, description: "Dev galleon actively used by multiple teams", managementCluster: { orbId: "colo:elos-m" version: 1 },
       backup: {

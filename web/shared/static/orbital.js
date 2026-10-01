@@ -1,32 +1,33 @@
 // orbital.js — orbital-specific page logic.
 //
 // ─── Sections (Cmd-F any header text below) ──────────────────────────────────
-//   Server drill-down in DC tab (dblclick → HTMX load into tab)
-//   Inventory page
-//   Data Centers page
-//   Servers page
-//   Clusters page
-//   Cross-app navigation and reload buttons
+//   Login modal
+//   List pages (inventory, data centers, and the generic /{slug} table)
 //   Backups
 //   Export page
 //   Edge Delivery page
-//   DC edit modal
-//   Cluster edit modal
-//   HTMX afterSwap — orbital editor cleanup
-//   Server edit modal
 //   Pending change requests banner (detail pages)
+//   Proposed-change field marks
 //   Audit log page
 //   Restore
 //   Users page
-//   Divergence reports page         ← includes break-glass delete
-//   Config-item delete modal (DataCenter / Server)
+//   Divergence reports page
+//   Config-item delete modal (every ConfigItem type)
 //   Report Issue modal
-//   Module exports to window (e2e + cross-module only)   ← last; not a bridge
+//   Change Control: async nav badge
+//   Change Control: request queue
+//   Change Control: review view
+//   Change Control: approval policies (admin)
+//   Publish History: Compare tab
+//   Views page
+//   Generic detail editor
 //
-// Section ordering rule: feature sections come first, then the exports block
-// at the bottom. Do NOT add code after that block — it's the file's closing
-// boundary between module logic and global registration. (Click handlers
-// stay inside their feature section as delegated listeners — see UI.md.)
+// Section ordering rule: one section per feature, in the order above. The
+// old "exports block last" rule is gone with the block — the per-type editor
+// maps it existed to expose died with the bespoke pages, and the one survivor
+// (window.genericEditors) is declared beside the map it exposes. Click
+// handlers stay inside their feature section as delegated listeners — see
+// UI.md.
 
 // configitem-editor.js: generic edit-modal submit handler. Also imported for
 // module so any page's modal shim
@@ -43,7 +44,6 @@ import {
   activateTab,
   displayTabContent,
   setCurrentTab,
-  showDatacenterSkeleton,
   showServerSkeleton,
   showClusterSkeleton,
   fetchWithMinDelay,
@@ -58,13 +58,9 @@ import {
   dtIPv4Render,
   safeDomId,
   subtreeOrbIds,
-  initRowNavigation,
-  initLinkNavigation,
-  initReloadButtons,
   initListPages,
   initGenericTable,
   initGenericAudit,
-  reloadNetworkDeviceFragment,
 } from './shared.js'
 
 // ─── Login modal ─────────────────────────────────────────────────────────────
@@ -100,20 +96,7 @@ document.addEventListener('keydown', (e) => {
   document.getElementById('form-login')?.reset()
 })
 
-// ─── Server drill-down in DC tab (dblclick → HTMX load into tab) ─────────────
-
-document.addEventListener('dblclick', function (e) {
-  const row = e.target.closest('tr[data-server-id]')
-  if (!row) return
-  const serverOrbId = row.dataset.serverId
-  const dcOrbId = row.dataset.dcId
-  const tabContent = document.getElementById('tab-content-' + safeDomId(dcOrbId))
-  if (!tabContent) return
-  tabContent.dataset.loaded = ''
-  htmx.ajax('GET', BASE + '/servers/' + encodeURIComponent(serverOrbId) + '?dcCtx=1', { target: tabContent, swap: 'innerHTML' })
-})
-
-// ─── List pages (inventory, DCs, servers, clusters, network devices) ─────────
+// ─── List pages (inventory, data centers, and the generic /{slug} table) ─────
 //
 // One shared wiring for both apps — see initListPages in shared.js.
 initListPages()
@@ -128,93 +111,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // detail view was reached by double-clicking a row.
   loadPendingChangeBanners(document)
   loadFieldMarks(document)
-})
-
-// ─── Network device edit modal ────────────────────────────────────────────────
-
-const networkDeviceEditors = new Map()
-window.networkDeviceEditors = networkDeviceEditors // exposed for e2e, matching dc/cluster/srv
-
-document.addEventListener('click', function (e) {
-  const editBtn = e.target.closest('[data-network-device-edit-id]')
-  if (editBtn) {
-    const id = editBtn.dataset.networkDeviceEditId
-    const modal = document.getElementById('edit-modal-network-device-' + id)
-    if (!modal) return
-
-    if (!networkDeviceEditors.has(id)) {
-      const dataEl = document.getElementById('network-device-edit-data-' + id)
-      const targetsEl = document.getElementById('network-device-edit-targets-' + id)
-      const initialState = JSON.parse(dataEl ? dataEl.textContent.trim() : '{}')
-      const targets = JSON.parse(targetsEl ? targetsEl.textContent.trim() : '[]')
-      const editorTarget = document.getElementById('network-device-json-editor-' + id)
-      const editor = new window.JSONEditor({
-        target: editorTarget,
-        props: { mode: 'text', mainMenuBar: false },
-      })
-      editor.set({ text: JSON.stringify(initialState, null, 2) })
-      networkDeviceEditors.set(id, editor)
-
-      const errorEl = document.getElementById('network-device-edit-error-' + id)
-      const showError = (msg) => { errorEl.textContent = msg; errorEl.style.display = '' }
-      const clearError = () => { errorEl.textContent = ''; errorEl.style.display = 'none' }
-
-      const onSubmit = initConfigItemEditor({
-        modal,
-        editor,
-        initialState,
-        targets,
-        reloadOrbId: modal.dataset.orbId,
-        reloadFn: (orbId) => reloadNetworkDeviceFragment(orbId, (domId) => networkDeviceEditors.delete(domId)),
-        showError,
-        clearError,
-        submitBtnId: 'network-device-edit-submit-' + id,
-      })
-
-      document.getElementById('network-device-edit-submit-' + id).addEventListener('click', async () => {
-        const btn = document.getElementById('network-device-edit-submit-' + id)
-        btn.classList.add('is-loading')
-        btn.disabled = true
-        try {
-          const ok = await onSubmit()
-          if (ok) {
-            modal.classList.remove('is-active')
-            document.documentElement.style.overflow = ''
-          }
-        } finally {
-          btn.classList.remove('is-loading')
-          btn.disabled = false
-        }
-      })
-    }
-
-    const errorEl = document.getElementById('network-device-edit-error-' + id)
-    if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none' }
-    modal.classList.add('is-active')
-    document.documentElement.style.overflow = 'hidden'
-    return
-  }
-
-})
-
-// ─── Cross-app navigation and reload buttons ──────────────────────────────────
-// Shared handlers extracted from this file so orb.js gets them for free.
-// Edit-modal handlers (data-{dc,srv,cluster}-edit-id) stay below — they
-// only render when Actions.Edit is true, which is orbital-only.
-
-initRowNavigation()
-initLinkNavigation()
-initReloadButtons({
-  onDcReloaded: (domId) => dcEditors.delete(domId),
-  onNetworkDeviceReloaded: (domId) => networkDeviceEditors.delete(domId),
-  onSrvReloaded: (target) => {
-    loadPendingChangeBanners(target)
-    loadFieldMarks(target)
-    const srvDetailTabs = target.querySelector('[id^="srv-detail-tabs-"]')
-    if (srvDetailTabs) srvEditors.delete(srvDetailTabs.id.replace('srv-detail-tabs-', ''))
-    const dcDetailTabs = target.querySelector('[id^="dc-detail-tabs-"]')
-    if (dcDetailTabs) dcEditors.delete(dcDetailTabs.id.replace('dc-detail-tabs-', ''))
-  },
 })
 
 // ─── Backups ──────────────────────────────────────────────────────────────────
@@ -910,294 +806,6 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('.js-pubkey-download')) { downloadPublicKey(); return }
   if (e.target.closest('.js-pubkey-verify-cmd-copy')) { copyVerifyCmd(); return }
   if (e.target.closest('.js-artifacts-reload')) { loadArtifactsTable(true); return }
-})
-
-// ─── DC edit modal ────────────────────────────────────────────────────────────
-
-const dcEditors = new Map()
-window.dcEditors = dcEditors // exposed for e2e smoke tests to assert editor registration
-
-document.addEventListener('click', function (e) {
-  const editBtn = e.target.closest('[data-dc-edit-id]')
-  if (editBtn) {
-    const id = editBtn.dataset.dcEditId
-    const modal = document.getElementById('edit-modal-dc-' + id)
-    if (!modal) return
-
-    if (!dcEditors.has(id)) {
-      const dataEl = document.getElementById('dc-edit-data-' + id)
-      const initialJSON = dataEl ? dataEl.textContent.trim() : '{}'
-      const editorTarget = document.getElementById('dc-json-editor-' + id)
-      const editor = new window.JSONEditor({
-        target: editorTarget,
-        props: { mode: 'text', mainMenuBar: false },
-      })
-      editor.set({ text: JSON.stringify(JSON.parse(initialJSON), null, 2) })
-      dcEditors.set(id, editor)
-
-      const errorEl = document.getElementById('dc-edit-error-' + id)
-      const showError = (msg) => { errorEl.textContent = msg; errorEl.style.display = '' }
-      const clearError = () => { errorEl.textContent = ''; errorEl.style.display = 'none' }
-
-      // configitem-editor module handles snapshot/diff/dispatch. DC is the
-      // simplest case (no owned children today) but routing through the
-      // module keeps the pattern uniform across pages.
-      const targetsEl = document.getElementById('dc-edit-targets-' + id)
-      const targets = JSON.parse(targetsEl ? targetsEl.textContent.trim() : '[]')
-      const onSubmit = initConfigItemEditor({
-        modal,
-        editor,
-        initialState: JSON.parse(initialJSON),
-        targets,
-        reloadOrbId: modal.dataset.orbId,
-        reloadFn: async (orbId) => {
-          const target = document.getElementById('tab-content-' + safeDomId(orbId))
-          if (target && window.htmx) {
-            // htmx.ajax returns a Promise that resolves after the swap
-            // completes. Awaiting it prevents a race where the next
-            // interaction sees stale DOM elements before the fragment
-            // has been swapped in (caught by e2e datacenter-edit spec).
-            await window.htmx.ajax('GET', BASE + '/datacenters/' + encodeURIComponent(orbId), { target, swap: 'innerHTML' })
-            dcEditors.delete(id)
-          }
-        },
-        showError,
-        clearError,
-        submitBtnId: 'dc-edit-submit-' + id,
-      })
-
-      document.getElementById('dc-edit-submit-' + id).addEventListener('click', async () => {
-        const btn = document.getElementById('dc-edit-submit-' + id)
-        btn.classList.add('is-loading')
-        btn.disabled = true
-        try {
-          const ok = await onSubmit()
-          if (ok) {
-            modal.classList.remove('is-active')
-            document.documentElement.style.overflow = ''
-          }
-        } finally {
-          btn.classList.remove('is-loading')
-          btn.disabled = false
-        }
-      })
-    }
-
-    const errorEl = document.getElementById('dc-edit-error-' + id)
-    if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none' }
-    modal.classList.add('is-active')
-    document.documentElement.style.overflow = 'hidden'
-    return
-  }
-
-})
-
-// ─── Cluster edit modal ───────────────────────────────────────────────────────
-
-const clusterEditors = new Map()
-window.clusterEditors = clusterEditors
-
-// reloadClusterFragment is the single entry point for re-rendering a cluster
-// detail tab's content. Every caller that wants the cluster fragment refreshed
-// (Reload button, modal-save success, backup save, backup delete) routes
-// through here so the post-swap setup stays consistent:
-//   1. fetch HX fragment for the cluster orbId
-//   2. swap into tab-content-cluster-<domId>
-//   3. htmx.process so any hx-* attrs on new DOM rebind
-//   4. renderTimestamps for any timestamp spans
-//   5. initDetailTabs to rebind sub-tab click handlers
-//   6. clusterEditors.delete(domId) — the JSONEditor instance was attached to
-//      the now-removed DOM node; the next Edit click must rebuild fresh.
-// Forgetting any of (3-6) silently breaks an interaction (audit tab clicks dead,
-// timestamps frozen, Edit modal opens empty). Centralizing makes the contract
-// uniform across callers.
-export function reloadClusterFragment(orbId) {
-  const domId = safeDomId(orbId)
-  const target = document.getElementById('tab-content-cluster-' + domId)
-  if (!target) return Promise.resolve()
-  // Mirror the server-tab reload contract: paint a skeleton, then hold the
-  // spinner for a minimum render time so the reload doesn't feel like a flash.
-  showClusterSkeleton(orbId)
-  return fetchWithMinDelay('/clusters/' + encodeURIComponent(orbId))
-    .then(html => {
-      target.innerHTML = html
-      htmx.process(target)
-      renderTimestamps(target)
-      const clusterDetailTabs = target.querySelector('[id^="cluster-detail-tabs-"]')
-      if (clusterDetailTabs) initDetailTabs(clusterDetailTabs)
-      clusterEditors.delete(domId)
-    })
-    .catch(() => {
-      target.innerHTML = '<div class="notification is-danger is-light is-size-7 m-4"><strong>Reload failed.</strong> Check your connection and try again.</div>'
-    })
-}
-window.reloadClusterFragment = reloadClusterFragment
-
-document.addEventListener('click', function (e) {
-  const editBtn = e.target.closest('[data-cluster-edit-id]')
-  if (editBtn) {
-    const id = editBtn.dataset.clusterEditId
-    const modal = document.getElementById('edit-modal-cluster-' + id)
-    if (!modal) return
-
-    if (!clusterEditors.has(id)) {
-      // Initialize the JSON editor once per modal open. The configitem-editor.js
-      // module handles snapshot/diff/dispatch — this shim just builds the
-      // editor and wires the Save button to the module's submit handler.
-      const dataEl = document.getElementById('cluster-edit-data-' + id)
-      const targetsEl = document.getElementById('cluster-edit-targets-' + id)
-      const initialState = JSON.parse(dataEl ? dataEl.textContent.trim() : '{}')
-      const targets = JSON.parse(targetsEl ? targetsEl.textContent.trim() : '[]')
-      const editorTarget = document.getElementById('cluster-json-editor-' + id)
-      const editor = new window.JSONEditor({
-        target: editorTarget,
-        props: { mode: 'text', mainMenuBar: false },
-      })
-      editor.set({ text: JSON.stringify(initialState, null, 2) })
-      clusterEditors.set(id, editor)
-
-      const errorEl = document.getElementById('cluster-edit-error-' + id)
-      const showError = (msg) => { errorEl.textContent = msg; errorEl.style.display = '' }
-      const clearError = () => { errorEl.textContent = ''; errorEl.style.display = 'none' }
-
-      // The configitem-editor module owns snapshot/diff/dispatch. It returns
-      // a submit handler closed over (modal, editor, targets) — the page
-      // wires it to the Save button. Server/DC edit will migrate next.
-      const onSubmit = initConfigItemEditor({
-        modal,
-        editor,
-        initialState,
-        targets,
-        reloadOrbId: modal.dataset.orbId,
-        reloadFn: reloadClusterFragment,
-        showError,
-        clearError,
-        submitBtnId: 'cluster-edit-submit-' + id,
-      })
-
-      document.getElementById('cluster-edit-submit-' + id).addEventListener('click', async () => {
-        const btn = document.getElementById('cluster-edit-submit-' + id)
-        btn.classList.add('is-loading')
-        btn.disabled = true
-        try {
-          const ok = await onSubmit()
-          if (ok) {
-            modal.classList.remove('is-active')
-            document.documentElement.style.overflow = ''
-            clusterEditors.delete(id)
-          }
-        } finally {
-          btn.classList.remove('is-loading')
-          btn.disabled = false
-        }
-      })
-    }
-
-    const errorEl = document.getElementById('cluster-edit-error-' + id)
-    if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none' }
-    modal.classList.add('is-active')
-    document.documentElement.style.overflow = 'hidden'
-    return
-  }
-
-})
-
-
-// ─── HTMX afterSwap — orbital editor cleanup ──────────────────────────────────
-// shared.js handles tab init and timestamps; this listener cleans up editor state.
-
-document.addEventListener('htmx:afterSwap', (evt) => {
-  const target = evt.detail && evt.detail.target
-  if (!target) return
-  const dcDetailTabs = target.querySelector('[id^="dc-detail-tabs-"]')
-  if (dcDetailTabs) dcEditors.delete(dcDetailTabs.id.replace('dc-detail-tabs-', ''))
-  const srvDetailTabs = target.querySelector('[id^="srv-detail-tabs-"]')
-  if (srvDetailTabs) srvEditors.delete(srvDetailTabs.id.replace('srv-detail-tabs-', ''))
-})
-
-// ─── Server edit modal ────────────────────────────────────────────────────────
-
-const srvEditors = new Map()
-window.srvEditors = srvEditors // exposed for e2e smoke tests
-
-document.addEventListener('click', function (e) {
-  const editBtn = e.target.closest('[data-srv-edit-id]')
-  if (editBtn) {
-    const id = editBtn.dataset.srvEditId
-    const modal = document.getElementById('edit-modal-srv-' + id)
-    if (!modal) return
-
-    if (!srvEditors.has(id)) {
-      const dataEl = document.getElementById('srv-edit-data-' + id)
-      const initialJSON = dataEl ? dataEl.textContent.trim() : '{}'
-      const editor = new window.JSONEditor({
-        target: document.getElementById('srv-json-editor-' + id),
-        props: { mode: 'text', mainMenuBar: false },
-      })
-      const parsedInitial = JSON.parse(initialJSON)
-      editor.set({ text: JSON.stringify(parsedInitial, null, 2) })
-      const { idracSettings: _initialIdrac, ...initialServer } = parsedInitial
-      modal.dataset.idracSnapshot = JSON.stringify(_initialIdrac ?? {})
-      modal.dataset.serverSnapshot = JSON.stringify(initialServer)
-      srvEditors.set(id, editor)
-
-      const errorEl = document.getElementById('srv-edit-error-' + id)
-      const showError = (msg) => { errorEl.textContent = msg; errorEl.style.display = '' }
-      const clearError = () => { errorEl.textContent = ''; errorEl.style.display = 'none' }
-
-      // Build the targets list once, hand off to configitem-editor module.
-      // initConfigItemEditor returns a submit handler closure that does
-      // snapshot/diff/parallel-dispatch — same path as cluster edit.
-      const targetsEl = document.getElementById('srv-edit-targets-' + id)
-      const targets = JSON.parse(targetsEl ? targetsEl.textContent.trim() : '[]')
-      const onSubmit = initConfigItemEditor({
-        modal,
-        editor,
-        initialState: parsedInitial,
-        targets,
-        reloadOrbId: modal.dataset.orbId,
-        reloadFn: (orbId) => {
-          // Server reload-target is page-specific (dc context vs standalone).
-          // Reuse modal.dataset.reloadUrl + .reloadTarget set by the template.
-          const target = document.getElementById(modal.dataset.reloadTarget)
-          if (target && window.htmx) {
-            return new Promise((resolve) => {
-              window.htmx.ajax('GET', BASE + modal.dataset.reloadUrl, { target, swap: 'innerHTML' })
-              srvEditors.delete(id)
-              // htmx.ajax returns a promise in some versions; resolve immediately for the rest.
-              setTimeout(resolve, 0)
-            })
-          }
-        },
-        showError,
-        clearError,
-        submitBtnId: 'srv-edit-submit-' + id,
-      })
-
-      document.getElementById('srv-edit-submit-' + id).addEventListener('click', async () => {
-        const btn = document.getElementById('srv-edit-submit-' + id)
-        btn.classList.add('is-loading')
-        btn.disabled = true
-        try {
-          const ok = await onSubmit()
-          if (ok) {
-            modal.classList.remove('is-active')
-            document.documentElement.style.overflow = ''
-          }
-        } finally {
-          btn.classList.remove('is-loading')
-          btn.disabled = false
-        }
-      })
-    }
-
-    const errorEl = document.getElementById('srv-edit-error-' + id)
-    if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none' }
-    modal.classList.add('is-active')
-    document.documentElement.style.overflow = 'hidden'
-    return
-  }
-
 })
 
 // ─── Pending change requests banner (detail pages) ────────────────────────────
@@ -2358,7 +1966,7 @@ document.addEventListener('submit', (e) => {
   }
 })
 
-// ─── Config-item delete modal (DataCenter / Server) ───────────────────────────
+// ─── Config-item delete modal (every ConfigItem type) ─────────────────────────
 
 ;(function () {
   let pendingDelete = null
@@ -3688,17 +3296,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   load()
 })
-
-// ─── Module exports to window (e2e + cross-module only) ─────────────────────
-// All click handlers use class-based delegation (see docs/reference/UI.md);
-// the entries below are NOT a bridge for inline onclick. They exist for two
-// reasons only:
-//   1. e2e tests assert on JSONEditor instance maps (dcEditors / clusterEditors
-//      / srvEditors) — exposed so Playwright can read them.
-//   2. Cross-module callables (reloadClusterFragment) — invoked from contexts
-//      that can't import the module symbol directly.
-// Do NOT add new entries here to support a new onclick — use delegation.
-
 
 // ─── Publish History: Compare tab ─────────────────────────────────────────────
 

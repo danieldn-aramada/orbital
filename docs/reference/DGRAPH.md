@@ -58,12 +58,14 @@ spike 38).
 | `order: name, provider` | type | Pins the leading display fields; everything else follows alphabetically. A **prefix**, never a complete list. |
 | `include: a.b` | type | Adds a relationship table whose rows are reached through a two-segment path (`storageControllers.storageDevices`). |
 | `editable: name` | type | Re-admits ConfigItem **interface** fields for editing on this type. Type-level because DGraph forbids redeclaring an interface field on an implementor. |
+| `facet: dataCenter` | type / interface | Offers that column as a filter dropdown on the list page. **One field** — extras are reported and ignored. Must name a rendered column: a `detailOnly` field or a list relationship is refused and logged. |
 
 **Mechanics — the parts that bite:**
 
 - ⚠️ **GraphQL allows ONE description block per declaration.** Two `"""…"""` in a row is a syntax error DGraph refuses (*"Expected Name, found BlockString"*). Put several annotations on separate lines inside one block; the parsers are line-based.
-- **FIELD annotations on an interface are inherited** by implementing types — DGraph forbids redeclaring the field, so the reader inherits instead. **TYPE annotations are not inherited**, with one deliberate exception: `order:` falls back to an implemented interface, so `/clusters` (an interface view) and each concrete detail page cannot order their columns differently.
+- **FIELD annotations on an interface are inherited** by implementing types — DGraph forbids redeclaring the field, so the reader inherits instead. **TYPE annotations are not inherited by default** — inheritance is decided per annotation, because `slug:` must never inherit or every implementation would claim the interface's URL. `order:` and `facet:` both do fall back to an implemented interface, so `/clusters` (an interface view) and each concrete page cannot disagree about column order or about having a filter.
 - **An annotation naming a field that does not exist is INERT, never an error.** A page must not fail to render because an annotation went stale.
+- **Inert is not the same as silent.** A stale annotation must never break a page, but it must say so: `facet:` logs at boot when it named something the page does not render. An annotation that reads as correct and does nothing is worse than one nobody wrote.
 - **A misspelled annotation is silent** — `"""editorIgnroed"""` is a valid docstring that simply never matches. `UnknownAnnotations` reports anything that looks like an annotation and matches none; it logs at boot, so read that line.
 - **Annotation-only changes do NOT bump `schema/VERSION`** — but they take effect only once the schema is **applied** to DGraph, which orbital never does on startup.
 

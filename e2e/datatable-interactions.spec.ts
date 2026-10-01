@@ -63,7 +63,7 @@ test.describe('DataTable interactions', () => {
 
   test('servers table: sorts by Service Tag column', async ({ page }) => {
     // Guards: clicking a column header in a scrollX DataTable updates aria-sort
-    // and reorders rows. Regression: JS refactor breaks initServerListTable().
+    // and reorders rows. Regression: a JS refactor breaks initGenericTable().
     await page.goto('/servers')
     await expect(page.locator('input[aria-controls="generic-table"]')).toBeVisible({ timeout: 10_000 })
     await waitForDataRows(page, 'generic-table')

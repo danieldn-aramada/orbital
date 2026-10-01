@@ -23,6 +23,15 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 ## [Unreleased]
 
 ### Added
+- **List pages can offer a filter dropdown, declared in the schema.** A type
+  annotated `facet: <field>` renders a select in its table toolbar, filtering
+  on that column. `Server` and `KubernetesCluster` carry it, which restores the
+  "All Data Centers" dropdown that `/servers` and `/clusters` each had before
+  those pages became schema-derived. The chosen column and its options are
+  resolved server-side and published on the view, so an API consumer building
+  its own table gets the same control without re-deriving it.
+
+
 - **`/clusters` is derived from the schema, and lists every kind of cluster.**
   The Clusters page and cluster detail page were ~820 lines of hand-written Go,
   templates and JS; both are now rendered by the generic renderer from the
@@ -47,6 +56,27 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   sub-tabs (the same content is stacked as boxes), and workload clusters as
   nested rows in the list — they are a table on the management cluster's page.
 
+### Fixed
+- **`/servers` and `/clusters` had silently lost their data center filter.**
+  Both dropdowns lived in JavaScript that survived the deletion of the pages
+  it drew them on, so the code read as present while the controls were gone.
+- **Generic list tables fill the viewport again** instead of scrolling inside a
+  fixed 400px box, and rows show the pointer cursor and "Double-click to open"
+  tooltip that the bespoke pages had.
+- **Sort, page size, search and column visibility persist per page again.**
+  They had been switched off entirely because DataTables keys saved state on
+  the table id and every generic page shares one; state is now keyed by slug,
+  so `/racks` and `/servers` no longer overwrite each other.
+- **Table search no longer matches on link markup.** A reference cell is a
+  link, and its href was part of what the search box compared against — so
+  searching "datacenters" matched every row that had a data center.
+
+### Removed
+- **~1,650 lines of unreachable UI JavaScript** left behind when the bespoke
+  DataCenter, Server, Cluster and NetworkDevice pages were deleted. Every
+  entry point guarded on a DOM id that no longer exists in any template, so it
+  ran on no page. A stale `release-check` spec driving the same removed markup
+  was retargeted at the generic page.
 ### Added
 - **Every ConfigItem page is now derived from the schema.** NetworkDevice was
   the last bespoke one; `/network` redirects to `/network-devices`. Its

@@ -32,15 +32,13 @@ test('an item the schema can no longer describe hides the row, not the page', as
   await expect(page.locator('#inventory-table tbody tr').first()).toBeVisible({ timeout: 15_000 });
   expect(dialogs, `DataTables blocked the page: ${dialogs[0]}`).toHaveLength(0);
 
-  // And the drop is STATED, naming the TYPE. The notice is rendered
-  // server-side: for these rows every field resolves to nothing, __typename
-  // included, so the client has a count and no names — a banner saying "1 item
-  // is hidden" told nobody which, and said nothing useful at all if there were
-  // fifty.
-  const notice = page.locator('#inventory-unrenderable');
-  await expect(notice).toBeVisible();
-  await expect(notice).toContainText('Hidden from this list');
-  await expect(notice, 'the notice must NAME the type, not just count it').toContainText('Foo');
+  // The notice is NOT asserted here. It renders server-side from the real
+  // graph, so a fixture in sessionStorage cannot produce one — this test only
+  // ever saw a banner because a hand-planted `Foo` node happened to be sitting
+  // in the dev graph, and it broke the moment that node was cleaned up. The
+  // notice, and the rule that it names the TYPE rather than a bare count, are
+  // covered by the next test (against whatever the graph actually holds) and
+  // by TestDescribe in internal/dgraphschema. Do not re-add a named type here.
 
   // The cache must not stay poisoned: the next load would break again.
   const cached = await page.evaluate(() => JSON.parse(sessionStorage.getItem('inventoryCache') || '[]'));

@@ -85,49 +85,6 @@ export function unloadTab(orbId) {
   document.getElementById(`tab-content-${domId}`)?.remove()
 }
 
-export function loadTab(displayName, orbId) {
-  const domId = safeDomId(orbId)
-  const url = `${BASE}/servers/${encodeURIComponent(orbId)}`
-  const html = `<li class="tab">
-    <a id="tab-${domId}" data-target="tab-content-${domId}" role="tab" aria-selected="false" tabindex="-1"
-      hx-get="${url}" hx-trigger="click" hx-target="#tab-content-${domId}" hx-swap="innerHTML">
-      ${displayName}
-      <span class="pl-2">
-        <button id="tab-close-${domId}">
-          <i class="fa-solid fa-xmark" style="font-size: 0.8em;"></i>
-        </button>
-      </span>
-    </a>
-  </li>`
-
-  const content = `<div class="tab-content" id="tab-content-${domId}" role="tabpanel" style="display:none">`
-
-  $('#tablist').append(html)
-  $('.app-main').append(content)
-
-  const tabLink = document.getElementById(`tab-${domId}`)
-  const tabContent = document.getElementById(`tab-content-${domId}`)
-  htmx.process(tabLink)
-  htmx.process(tabContent)
-
-  tabLink.addEventListener('click', () => {
-    activateTab(tabLink.parentElement)
-    displayTabContent(`tab-content-${domId}`)
-    setCurrentTab(`tab-${domId}`)
-  })
-
-  const tabClose = document.getElementById(`tab-close-${domId}`)
-  tabClose.addEventListener('click', (event) => {
-    event.stopPropagation()
-    unloadTab(orbId)
-    deleteTab(displayName, orbId)
-    document.getElementById('tab-summary').click()
-    replaceCurrentTab(`tab-${domId}`, 'tab-summary')
-  })
-}
-
-function getLastTab() {}
-
 export function deleteTab(displayName, itemId) {
   const tabToDelete = new TabItem(displayName, itemId)
   if (localStorage.datacenterTabs) {
@@ -151,12 +108,6 @@ export function saveTab(displayName, itemId) {
   }
 }
 
-export function closeTab(orbId) {
-  const domId = safeDomId(orbId)
-  document.getElementById(`tab-close-${domId}`)?.click()
-  document.getElementById(`btn-reload-servers`)?.click()
-}
-
 export function getTabStorageKey() {
   if (document.getElementById('server-list-table')) return 'srvTabCurrent'
   return 'dcTabCurrent'
@@ -164,11 +115,6 @@ export function getTabStorageKey() {
 
 export function setCurrentTab(id) {
   localStorage[getTabStorageKey()] = id
-}
-
-export function removeCurrentTab(id) {
-  const key = getTabStorageKey()
-  if (localStorage[key] === id) localStorage.removeItem(key)
 }
 
 export function replaceCurrentTab(currentId, targetId) {
@@ -190,15 +136,6 @@ export function displayTabContent(id) {
   ;(document.querySelectorAll('.tab-content') || []).forEach((tabContent) => {
     tabContent.style.display = tabContent.id === id ? 'block' : 'none'
   })
-}
-
-export function changeTabs(e) {
-  const targetTab = e.target
-  const tabList = targetTab.parentNode
-  tabList
-    .querySelectorAll(':scope > [aria-selected="true"]')
-    .forEach((t) => t.setAttribute('aria-selected', false))
-  targetTab.setAttribute('aria-selected', true)
 }
 
 // ─── Timestamps ───────────────────────────────────────────────────────────────
@@ -325,70 +262,6 @@ export function openServerTab(tabId) {
   if (tabId.endsWith('-ev-det')) {
     setTimeout(() => initServerEventsTable(serverId), 100)
   }
-}
-
-// ─── Skeletons + detail tab helpers ──────────────────────────────────────────
-
-export function showDatacenterSkeleton(orbId) {
-  const target = document.getElementById(`tab-content-${safeDomId(orbId)}`)
-  if (!target) return
-  const s = () => `<span class="is-skeleton" style="display:block">&nbsp;</span>`
-  const summary = ['Name', 'Servers', 'Racks', 'Asset Data']
-    .map(l => `<tr><td style="white-space:nowrap;width:1%">${l}</td><td>${s()}</td></tr>`).join('')
-  const meta = ['Namespace', 'Orb ID', 'Created By', 'Created At', 'Last Updated', 'Last Updated By']
-    .map(l => `<tr><td style="white-space:nowrap;width:1%">${l}</td><td>${s()}</td></tr>`).join('')
-  const srvRows = Array.from({ length: 10 }, () =>
-    `<tr>${['', '', '', '', '', ''].map(() => `<td>${s()}</td>`).join('')}</tr>`
-  ).join('')
-  target.innerHTML = `
-    <div class="fixed-grid has-3-cols mb-0">
-      <div class="columns m-0">
-        <div class="column pt-0 pl-0">
-          <button class="button is-rounded is-small is-link mt-1 is-loading" disabled>
-            <span class="icon"><i class="fa-solid fa-refresh"></i></span><span>Reload</span>
-          </button>
-          <button class="button is-rounded is-small is-link mt-1" disabled>
-            <span class="icon"><i class="fa-solid fa-pen-to-square"></i></span><span>Edit</span>
-          </button>
-          <button class="button is-rounded is-small is-danger mt-1" disabled>
-            <span class="icon"><i class="fa-solid fa-trash"></i></span><span>Delete</span>
-          </button>
-        </div>
-      </div>
-      <div class="grid">
-        <div class="cell is-col-span-2 is-row-span-1">
-          <article class="box">
-            <p class="is-size-4 pb-4">Data Center Summary</p>
-            <div class="table-container"><table class="table is-fullwidth"><tbody>${summary}</tbody></table></div>
-          </article>
-        </div>
-        <div class="cell is-row-span-1">
-          <article class="box" style="height:100%">
-            <p class="is-size-4 mb-4">Metadata</p>
-            <div class="table-container"><table class="table mb-0"><tbody>${meta}</tbody></table></div>
-          </article>
-        </div>
-        <div class="cell is-col-span-3">
-          <article class="box pb-2">
-            <p class="is-size-4 pb-4">Details</p>
-            <div class="tabs is-boxed">
-              <ul>
-                <li class="is-active"><a><span class="icon is-small"><i class="fa-solid fa-server"></i></span><span>Servers</span></a></li>
-                <li><a><span class="icon is-small"><i class="fa-solid fa-table-cells"></i></span><span>Racks</span></a></li>
-                <li><a><span class="icon is-small"><i class="fa-solid fa-triangle-exclamation"></i></span><span>Divergence Reports</span></a></li>
-                <li><a><span class="icon is-small"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Audit Log</span></a></li>
-              </ul>
-            </div>
-            <div style="min-height:400px">
-              <table class="table is-striped is-fullwidth is-size-7 mt-2">
-                <thead><tr><th>OOB IP</th><th>Model</th><th>Service Tag</th><th>Hostname</th><th>Rack</th><th>Rack Position</th></tr></thead>
-                <tbody>${srvRows}</tbody>
-              </table>
-            </div>
-          </article>
-        </div>
-      </div>
-    </div>`
 }
 
 export function showClusterSkeleton(orbId) {
@@ -853,57 +726,11 @@ export function loadDataCenterTab(displayName, orbId) {
   })
 }
 
-export function saveServerTab(displayName, id) {
-  const item = JSON.stringify(new TabItem(displayName, id))
-  const s = new Set(localStorage.serverTabs ? JSON.parse(localStorage.serverTabs) : [])
-  s.add(item)
-  localStorage.serverTabs = JSON.stringify([...s])
-}
-
 export function deleteServerTab(displayName, id) {
   const item = JSON.stringify(new TabItem(displayName, id))
   const s = new Set(localStorage.serverTabs ? JSON.parse(localStorage.serverTabs) : [])
   s.delete(item)
   localStorage.serverTabs = JSON.stringify([...s])
-}
-
-export function loadServerListTab(displayName, orbId) {
-  const domId = safeDomId(orbId)
-  const tabHtml = `<li class="tab">
-    <a id="tab-srv-${domId}" data-target="tab-content-srv-${domId}" role="tab" aria-selected="false" tabindex="-1">
-      ${displayName}
-      <span class="pl-2">
-        <button id="tab-close-srv-${domId}">
-          <i class="fa-solid fa-xmark" style="font-size: 0.8em;"></i>
-        </button>
-      </span>
-    </a>
-  </li>`
-  const contentHtml = `<div class="tab-content" id="tab-content-srv-${domId}" role="tabpanel" style="display:none"></div>`
-
-  $('#tablist').append(tabHtml)
-  $('.app-main').append(contentHtml)
-
-  const tabLink = document.getElementById(`tab-srv-${domId}`)
-  const tabContent = document.getElementById(`tab-content-srv-${domId}`)
-
-  tabLink.addEventListener('click', () => {
-    activateTab(tabLink.parentElement)
-    displayTabContent(`tab-content-srv-${domId}`)
-    setCurrentTab(`tab-srv-${domId}`)
-    if (!tabContent.dataset.loaded) {
-      htmx.ajax('GET', BASE + '/servers/' + encodeURIComponent(orbId), { target: tabContent, swap: 'innerHTML' })
-    }
-  })
-
-  document.getElementById(`tab-close-srv-${domId}`).addEventListener('click', (event) => {
-    event.stopPropagation()
-    deleteServerTab(displayName, orbId)
-    replaceCurrentTab(`tab-srv-${domId}`, 'tab-summary')
-    tabLink.parentElement.remove()
-    tabContent.remove()
-    document.getElementById('tab-summary').click()
-  })
 }
 
 // clearTabStateOnFresh wipes all per-user tab/UI state (open DC tabs, open
@@ -952,41 +779,6 @@ export function initDatacenterTabRestoration() {
     const { displayName, id } = JSON.parse(tabData)
     loadDataCenterTab(displayName, id)
   })
-  const currentTabId = getCurrentTab()
-  if (currentTabId) document.getElementById(currentTabId)?.click()
-}
-
-// initServerListTabRestoration restores server tabs from localStorage and
-// handles ?open=<id>&label=<label> deep-links from the DC detail panel.
-// Call on window.load on pages that have #server-list-table.
-export function initServerListTabRestoration() {
-  if (!document.getElementById('server-list-table')) return
-
-  clearTabStateOnFresh()
-
-  if (localStorage.serverTabs) {
-    const tabSet = new Set(JSON.parse(localStorage.serverTabs))
-    tabSet.forEach(tabData => {
-      const { displayName, id } = JSON.parse(tabData)
-      loadServerListTab(displayName, id)
-    })
-  }
-
-  const params = new URLSearchParams(window.location.search)
-  const openId = params.get('open')
-  const openLabel = params.get('label')
-  if (openId) {
-    const displayName = openLabel || openId
-    const openDomId = safeDomId(openId)
-    if (!document.getElementById(`tab-srv-${openDomId}`)) {
-      loadServerListTab(displayName, openId)
-      saveServerTab(displayName, openId)
-    }
-    document.getElementById(`tab-srv-${openDomId}`)?.click()
-    history.replaceState(null, '', BASE + '/servers')
-    return
-  }
-
   const currentTabId = getCurrentTab()
   if (currentTabId) document.getElementById(currentTabId)?.click()
 }
@@ -1330,722 +1122,11 @@ export function initDatacenterTable(opts = {}) {
   return datacenterTable
 }
 
-// initServerListTable initializes #server-list-table. opts.onRowOpen is
-// called on row double-click with the row's data object.
-export function initServerListTable(opts = {}) {
-  if (!document.getElementById('server-list-table')) return
-
-  document.querySelectorAll('li.tab a[data-target]').forEach((a) => {
-    a.addEventListener('click', () => {
-      activateTab(a.parentElement)
-      displayTabContent(a.dataset.target)
-      setCurrentTab(a.id)
-    })
-  })
-
-  const dcFilterEl = $('<div class="select is-small" style="margin-right:0.25rem"><select id="server-dc-select"><option value="">All Data Centers</option></select></div>')
-
-  const serverListTable = new DataTable('#server-list-table', {
-    pageLength: 50,
-    layout: {
-      topStart: [
-        dcFilterEl,
-        { pageLength: { menu: [25, 50, 100, 250] } },
-        { buttons: [
-          { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
-          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
-          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-servers' } },
-        ] },
-      ],
-      topEnd: { search: { placeholder: 'Search servers' } },
-    },
-    select: { style: 'os' },
-    autoWidth: true,
-    scrollX: true,
-    scrollY: 'calc(100vh - 340px)',
-    scrollCollapse: true,
-    stateSave: true,
-    language: {
-      infoEmpty: 'No servers to show',
-      info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
-      entries: { _: 'servers', 1: 'server' },
-    },
-    initComplete: function () {
-      dtWrapLengthSelect(this.api())
-
-      const dcCol = this.api().column(0)
-      dcCol.data().unique().sort().each(function (dc) {
-        document.getElementById('server-dc-select').add(new Option(dc, dc))
-      })
-      const saved = localStorage.getItem('server-dc-filter')
-      if (saved) {
-        const el = document.getElementById('server-dc-select')
-        el.value = saved
-        dcCol.search(saved, { exact: true }).draw()
-      }
-      document.getElementById('server-dc-select').addEventListener('change', function () {
-        if (this.value) {
-          localStorage.setItem('server-dc-filter', this.value)
-        } else {
-          localStorage.removeItem('server-dc-filter')
-        }
-        dcCol.search(this.value, { exact: !!this.value }).draw()
-      })
-    },
-    columns: [
-      { data: 'dataCenter' },
-      { data: 'oobIP', render: dtIPv4Render },
-      { data: 'hostname' },
-      { data: 'serviceTag' },
-      { data: 'model' },
-      { data: 'rack' },
-      { data: 'id' },
-      { data: 'orbId' },
-    ],
-    columnDefs: [{ targets: [6, 7], visible: false, searchable: true }],
-    ajax: {
-      url: BASE + '/graphql',
-      type: 'POST',
-      contentType: 'application/json',
-      data: () => JSON.stringify({
-        query: `query LoadServers { queryServer {
-          id orbId hostname serviceTag model
-          oobIP { address }
-          rack { name }
-          dataCenter { name }
-        } }`,
-      }),
-      dataSrc: (json) => {
-        if (!gqlSurfaceErrors(json, 'Load servers')) return []
-        return (json.data?.queryServer ?? []).map(s => ({
-          id: s.id,
-          orbId: s.orbId ?? '—',
-          hostname: s.hostname ?? '—',
-          serviceTag: s.serviceTag ?? '—',
-          model: s.model ?? '—',
-          oobIP: s.oobIP?.address ?? '—',
-          rack: s.rack?.name ?? '—',
-          dataCenter: s.dataCenter?.name ?? '—',
-        }))
-      },
-    },
-    createdRow: function (row) { row.style.cursor = 'pointer'; row.title = 'Double-click to open' },
-  })
-
-  const reloadButton = serverListTable.button('reload:name').node()
-  serverListTable.button('reload:name').node().on('click', function () {
-    serverListTable.clear().draw()
-    reloadButton.addClass('is-loading')
-    setTimeout(() => {
-      const onError = () => reloadButton.removeClass('is-loading')
-      serverListTable.one('error.dt', onError)
-      serverListTable.ajax.reload(() => {
-        serverListTable.off('error.dt', onError)
-        reloadButton.removeClass('is-loading')
-      })
-    }, 250)
-  })
-
-  if (typeof opts.onRowOpen === 'function') {
-    $('#server-list-table tbody').on('dblclick', 'tr', function () {
-      const data = serverListTable.row(this).data()
-      if (!data) return
-      opts.onRowOpen(data, this)
-    })
-  }
-
-  return serverListTable
-}
-
-// initClusterTable initializes #cluster-table. opts.onRowOpen is called on
-// row double-click with the row's data object. Query uses the polymorphic
-// queryKubernetesCluster interface so future provider types appear without
-// JS changes (add a fragment to fetch the type-specific columns).
-export function initClusterTable(opts = {}) {
-  if (!document.getElementById('cluster-table')) return
-
-  document.querySelectorAll('li.tab a[data-target]').forEach((a) => {
-    a.addEventListener('click', () => {
-      activateTab(a.parentElement)
-      displayTabContent(a.dataset.target)
-      setCurrentTab(a.id)
-    })
-  })
-
-  // Same DC filter pattern as initServerListTable — populated from column 1
-  // (Data Center; column 0 is the expand toggle) on initComplete and persisted
-  // in localStorage.
-  const dcFilterEl = $('<div class="select is-small" style="margin-right:0.25rem"><select id="cluster-dc-select"><option value="">All Data Centers</option></select></div>')
-
-  // Builds the HTML for the workload child rows shown under an expanded
-  // management cluster. Returned as a string of <tr> elements; DataTables
-  // jQuery-parses multiple TRs and inserts each as a child row that aligns
-  // with the parent's columns.
-  const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  }[m]))
-  // Expand every parent row that has workload children. Called from
-  // initComplete (first load) and from the reload-button callback (every
-  // subsequent AJAX refresh — DataTables drops attached child rows when the
-  // underlying data is replaced, but the chevron column re-renders from
-  // row.children, so without re-expansion the chevron stays ▼ while the
-  // children disappear).
-  //
-  // Idempotent: if a child is already shown (e.g. on sort/filter/page-change
-  // where DataTables preserves child state), this no-ops for that row.
-  const expandAllClusterChildren = (api) => {
-    api.rows().every(function () {
-      const data = this.data()
-      if (data.children && data.children.length > 0 && !this.child.isShown()) {
-        this.child($(buildClusterChildTrs(data.children))).show()
-        $(this.node()).addClass('shown')
-      }
-    })
-  }
-
-  // Child rows mirror the parent column layout. Each cell sits under its
-  // corresponding parent column — alignment must match what DataTables applies
-  // to the parent row (see columnDefs above). Nodes is left-aligned per the
-  // dt-left columnDefs entry.
-  //
-  // .trim() on each TR is load-bearing: jQuery parses the joined string, and
-  // whitespace between TRs becomes text nodes that DataTables would render as
-  // blank child rows. Trim removes the surrounding whitespace; .join('') with
-  // no separator keeps the TRs adjacent so the parser sees only elements.
-  const buildClusterChildTrs = (children) => children.map(c => `
-    <tr class="cluster-child-row tooltip" data-cluster-orb-id="${escapeHtml(c.orbId)}" data-display-name="${escapeHtml(c.name)}" style="cursor:pointer; background:var(--bulma-background)" data-text="Double-click to open">
-      <td></td>
-      <td><span class="has-text-grey mr-1">└</span>${escapeHtml(c.name)}</td>
-      <td>${escapeHtml(c.dataCenter)}</td>
-      <td>${escapeHtml(c.provider)}</td>
-      <td>${escapeHtml(c.clusterType)}</td>
-      <td>${escapeHtml(c.kubernetesVersion)}</td>
-      <td>${escapeHtml(c.environment)}</td>
-      <td>${escapeHtml(c.cni)}</td>
-      <td>${escapeHtml(c.nodes)}</td>
-    </tr>
-  `.trim()).join('')
-
-  const clusterTable = new DataTable('#cluster-table', {
-    pageLength: 25,
-    layout: {
-      topStart: [
-        dcFilterEl,
-        { pageLength: { menu: [10, 25, 50] } },
-        { buttons: [
-          { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
-          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
-          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-clusters' } },
-        ] },
-      ],
-      topEnd: { search: { placeholder: 'Search clusters' } },
-    },
-    select: { style: 'os' },
-    autoWidth: true,
-    scrollX: true,
-    scrollY: 'calc(100vh - 340px)',
-    scrollCollapse: true,
-    // stateSave intentionally OFF while the cluster table column layout is
-    // still in flux — leaving it on caused header/body to misalign whenever
-    // the column count changed (e.g. adding the chevron column at index 0).
-    // Re-enable once the columns are stable.
-    stateSave: false,
-    // No initial sort: the data array is already pre-sorted in tree order
-    // (managements first, their workloads as child rows below). Without
-    // `order: []`, DataTables defaults to [[0,'asc']] and stamps a sort
-    // indicator on the (unorderable) chevron column header.
-    order: [],
-    language: {
-      infoEmpty: 'No clusters to show',
-      info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
-      entries: { _: 'clusters', 1: 'cluster' },
-    },
-    initComplete: function () {
-      dtWrapLengthSelect(this.api())
-
-      // DC filter targets column 2 (Name is now at column 1, DC moved to 2
-      // after the column swap).
-      const dcCol = this.api().column(2)
-      dcCol.data().unique().sort().each(function (dc) {
-        document.getElementById('cluster-dc-select').add(new Option(dc, dc))
-      })
-      const saved = localStorage.getItem('cluster-dc-filter')
-      if (saved) {
-        const el = document.getElementById('cluster-dc-select')
-        el.value = saved
-        dcCol.search(saved, { exact: true }).draw()
-      }
-      document.getElementById('cluster-dc-select').addEventListener('change', function () {
-        if (this.value) {
-          localStorage.setItem('cluster-dc-filter', this.value)
-        } else {
-          localStorage.removeItem('cluster-dc-filter')
-        }
-        dcCol.search(this.value, { exact: !!this.value }).draw()
-      })
-
-      expandAllClusterChildren(this.api())
-    },
-    columns: [
-      {
-        // Expand toggle column — only renders the icon for rows that have
-        // workload children (managements with workloads). Empty for workloads
-        // (they're already nested) and childless management/standalone rows.
-        data: null,
-        orderable: false,
-        searchable: false,
-        className: 'cluster-toggle-cell',
-        defaultContent: '',
-        width: '1%',
-        render: (data, type, row) => {
-          if (type !== 'display') return ''
-          if (!row.children || row.children.length === 0) return ''
-          return '<span class="cluster-toggle">▼</span>'
-        },
-      },
-      {
-        data: 'name',
-        // Orthogonal data: include child workload names in the search text so
-        // typing a workload name surfaces its (expanded) parent.
-        render: (data, type, row) => {
-          if (type === 'filter') return data + ' ' + (row.workloadSearchText || '')
-          return data
-        },
-      },
-      { data: 'dataCenter' },
-      { data: 'provider' },
-      { data: 'clusterType' },
-      { data: 'kubernetesVersion' },
-      { data: 'environment' },
-      { data: 'cni' },
-      { data: 'nodes' },
-      { data: 'id' },
-      { data: 'orbId' },
-    ],
-    // Column index map (after the toggle column at 0):
-    //   0 toggle  1 Name  2 Data Center  3 Provider  4 Cluster Type
-    //   5 K8s Version  6 Environment  7 CNI  8 Nodes  9 ID  10 Orb ID
-    // Tweak any column's width by adding/updating an entry below.
-    columnDefs: [
-      { targets: [9, 10], visible: false, searchable: true },
-      { targets: 1, width: '20%' },    // name
-      { targets: 2, width: '12%' },    // data center
-      { targets: 3, width: '8%' },     // provider
-      { targets: 4, width: '10%' },    // cluster type
-      { targets: 5, width: '100px' },
-      { targets: 6, width: '100px' },  // Environment — short values (dev/stage/prod)
-      { targets: 7, width: '8%' },     // CNI 
-      { targets: 8, className: 'dt-left dt-head-left' },  // Nodes — left-align to match other columns
-    ],
-    ajax: {
-      url: BASE + '/graphql',
-      type: 'POST',
-      contentType: 'application/json',
-      data: () => JSON.stringify({
-        query: `query LoadClusters {
-          queryKubernetesCluster {
-            __typename
-            kubernetesVersion
-            cni
-            environment
-            provider
-            dataCenter { name }
-            nodesAggregate { count }
-            ... on ConfigItem { id orbId name }
-            ... on EksaKubernetesCluster {
-              clusterType
-              managementCluster { orbId }
-            }
-          }
-        }`,
-      }),
-      dataSrc: (json) => {
-        if (!gqlSurfaceErrors(json, 'Load clusters')) return []
-        const mapRow = (c) => ({
-          id: c.id,
-          orbId: c.orbId ?? '—',
-          name: c.name ?? '—',
-          provider: c.provider ?? '—',
-          clusterType: c.clusterType ?? '—',
-          kubernetesVersion: c.kubernetesVersion ?? '—',
-          environment: c.environment ?? '—',
-          cni: c.cni ?? '—',
-          dataCenter: c.dataCenter?.name ?? '—',
-          nodes: c.nodesAggregate?.count ?? 0,
-          managementOrbId: c.managementCluster?.orbId || null,
-        })
-
-        const mapped = (json.data?.queryKubernetesCluster ?? []).map(mapRow)
-
-        // Bucket workloads by their parent orbId; everything else (management,
-        // standalone, orphaned workloads with no parent) goes to the top.
-        const byParent = {}
-        const tops = []
-        for (const r of mapped) {
-          if (r.managementOrbId) {
-            byParent[r.managementOrbId] = byParent[r.managementOrbId] || []
-            byParent[r.managementOrbId].push(r)
-          } else {
-            tops.push({ ...r, children: [] })
-          }
-        }
-        // Workloads whose parent isn't in the result set — surface at top level
-        // rather than dropping them silently.
-        for (const r of mapped) {
-          if (r.managementOrbId && !tops.find(t => t.orbId === r.managementOrbId)) {
-            // Orphan: parent not in this query result. Show as top-level row.
-            if (!tops.find(t => t.orbId === r.orbId)) {
-              tops.push({ ...r, children: [] })
-            }
-          }
-        }
-        for (const t of tops) {
-          t.children = byParent[t.orbId] || []
-          t.workloadSearchText = t.children.map(c => c.name).join(' ')
-        }
-        return tops
-      },
-    },
-    createdRow: function (row) { row.style.cursor = 'pointer'; row.title = 'Double-click to open' },
-  })
-
-  const reloadButton = clusterTable.button('reload:name').node()
-  clusterTable.button('reload:name').node().on('click', function () {
-    clusterTable.clear().draw()
-    reloadButton.addClass('is-loading')
-    setTimeout(() => {
-      const onError = () => reloadButton.removeClass('is-loading')
-      clusterTable.one('error.dt', onError)
-      clusterTable.ajax.reload(() => {
-        clusterTable.off('error.dt', onError)
-        reloadButton.removeClass('is-loading')
-        // Re-expand parent rows — AJAX reload drops the child rows that were
-        // attached before the refresh.
-        expandAllClusterChildren(clusterTable)
-      })
-    }, 250)
-  })
-
-  // Toggle expand/collapse of workload children on click of the icon cell.
-  $('#cluster-table tbody').on('click', 'td.cluster-toggle-cell', function (e) {
-    e.stopPropagation()
-    const tr = $(this).closest('tr')
-    const row = clusterTable.row(tr)
-    const data = row.data()
-    if (!data || !data.children || data.children.length === 0) return
-    if (row.child.isShown()) {
-      row.child.hide()
-      tr.removeClass('shown')
-      $(this).find('.cluster-toggle').text('▶')
-    } else {
-      row.child($(buildClusterChildTrs(data.children))).show()
-      tr.addClass('shown')
-      $(this).find('.cluster-toggle').text('▼')
-    }
-  })
-
-  if (typeof opts.onRowOpen === 'function') {
-    // Double-click on a parent row → open via onRowOpen. Skip:
-    //   1. Child rows (cluster-child-row class) — handled by orbital.js's
-    //      data-cluster-orb-id global listener via /clusters?open=.
-    //   2. Toggle-cell targets — fast double-clicks on the chevron would
-    //      otherwise toggle twice AND open the row.
-    $('#cluster-table tbody').on('dblclick', 'tr', function (e) {
-      if (this.classList.contains('cluster-child-row')) return
-      if ($(e.target).closest('td').hasClass('cluster-toggle-cell')) return
-      const data = clusterTable.row(this).data()
-      if (!data) return
-      opts.onRowOpen(data, this)
-    })
-  }
-
-  return clusterTable
-}
-
-// loadClusterTab opens a cluster detail tab via HTMX swap into a new tab content
-// pane. Mirrors loadDataCenterTab / loadServerListTab structure.
-export function loadClusterTab(displayName, orbId) {
-  const domId = safeDomId(orbId)
-  const tabHtml = `<li class="tab">
-    <a id="tab-cluster-${domId}" data-target="tab-content-cluster-${domId}" role="tab" aria-selected="false" tabindex="-1">
-      ${displayName}
-      <span class="pl-2">
-        <button id="tab-close-cluster-${domId}">
-          <i class="fa-solid fa-xmark" style="font-size: 0.8em;"></i>
-        </button>
-      </span>
-    </a>
-  </li>`
-  const contentHtml = `<div class="tab-content" id="tab-content-cluster-${domId}" role="tabpanel" style="display:none"></div>`
-
-  $('#tablist').append(tabHtml)
-  $('.app-main').append(contentHtml)
-
-  const tabLink = document.getElementById(`tab-cluster-${domId}`)
-  const tabContent = document.getElementById(`tab-content-cluster-${domId}`)
-
-  tabLink.addEventListener('click', () => {
-    activateTab(tabLink.parentElement)
-    displayTabContent(`tab-content-cluster-${domId}`)
-    setCurrentTab(`tab-cluster-${domId}`)
-    if (!tabContent.dataset.loaded) {
-      htmx.ajax('GET', BASE + '/clusters/' + encodeURIComponent(orbId), { target: tabContent, swap: 'innerHTML' })
-    }
-  })
-
-  document.getElementById(`tab-close-cluster-${domId}`).addEventListener('click', (event) => {
-    event.stopPropagation()
-    deleteClusterTab(displayName, orbId)
-    replaceCurrentTab(`tab-cluster-${domId}`, 'tab-summary')
-    tabLink.parentElement.remove()
-    tabContent.remove()
-    document.getElementById('tab-summary').click()
-  })
-}
-
-export function saveClusterTab(displayName, orbId) {
-  const item = JSON.stringify(new TabItem(displayName, orbId))
-  const s = new Set(localStorage.clusterTabs ? JSON.parse(localStorage.clusterTabs) : [])
-  s.add(item)
-  localStorage.clusterTabs = JSON.stringify([...s])
-}
-
 export function deleteClusterTab(displayName, orbId) {
   const item = JSON.stringify(new TabItem(displayName, orbId))
   const s = new Set(localStorage.clusterTabs ? JSON.parse(localStorage.clusterTabs) : [])
   s.delete(item)
   localStorage.clusterTabs = JSON.stringify([...s])
-}
-
-// initClusterTabRestoration restores cluster tabs from localStorage on page
-// load AND handles ?open=<orbId>&label=<name> deep-links from cross-cluster
-// navigation (workload's "Management Cluster" link, "Workload Clusters" sub-tab
-// rows). Call on window.load on pages that have #cluster-table.
-export function initClusterTabRestoration() {
-  if (!document.getElementById('cluster-table')) return
-
-  clearTabStateOnFresh()
-
-  if (localStorage.clusterTabs) {
-    const tabSet = new Set(JSON.parse(localStorage.clusterTabs))
-    tabSet.forEach(tabData => {
-      const { displayName, id } = JSON.parse(tabData)
-      loadClusterTab(displayName, id)
-    })
-  }
-
-  const params = new URLSearchParams(window.location.search)
-  const openId = params.get('open')
-  const openLabel = params.get('label')
-  if (openId) {
-    const displayName = openLabel || openId
-    const openDomId = safeDomId(openId)
-    if (!document.getElementById(`tab-cluster-${openDomId}`)) {
-      loadClusterTab(displayName, openId)
-      saveClusterTab(displayName, openId)
-    }
-    document.getElementById(`tab-cluster-${openDomId}`)?.click()
-    history.replaceState(null, '', BASE + '/clusters')
-    return
-  }
-
-  const currentTabId = getCurrentTab()
-  if (currentTabId) document.getElementById(currentTabId)?.click()
-}
-
-// ─── Network devices table (orbital list page) ───────────────────────────────
-// Mirrors initClusterTable but simpler — NetworkDevices have no child-row tree.
-// Data is loaded via GraphQL queryNetworkDevice; "Connected" is the distinct
-// count of servers cabled to the device (the blast-radius teaser).
-export function initNetworkDeviceTable(opts = {}) {
-  if (!document.getElementById('network-device-table')) return
-
-  document.querySelectorAll('li.tab a[data-target]').forEach((a) => {
-    a.addEventListener('click', () => {
-      activateTab(a.parentElement)
-      displayTabContent(a.dataset.target)
-      setCurrentTab(a.id)
-    })
-  })
-
-  const dcFilterEl = $('<div class="select is-small" style="margin-right:0.25rem"><select id="network-device-dc-select"><option value="">All Data Centers</option></select></div>')
-
-  const deviceTable = new DataTable('#network-device-table', {
-    pageLength: 25,
-    layout: {
-      topStart: [
-        dcFilterEl,
-        { pageLength: { menu: [10, 25, 50] } },
-        { buttons: [
-          { extend: 'copy', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-regular fa-copy"></i><span>Copy</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Copy' },
-          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
-          { text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa-solid fa-rotate-right"></i><span>Reload</span></span>', className: 'is-link is-small', titleAttr: 'Reload', name: 'reload', attr: { id: 'btn-reload-network' } },
-        ] },
-      ],
-      topEnd: { search: { placeholder: 'Search devices' } },
-    },
-    autoWidth: true,
-    scrollX: true,
-    scrollY: 'calc(100vh - 340px)',
-    scrollCollapse: true,
-    stateSave: true,
-    order: [[0, 'asc']],
-    language: {
-      infoEmpty: 'No network devices to show',
-      info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
-      entries: { _: 'devices', 1: 'device' },
-    },
-    initComplete: function () {
-      dtWrapLengthSelect(this.api())
-      const dcCol = this.api().column(1)
-      dcCol.data().unique().sort().each(function (dc) {
-        if (dc && dc !== '—') document.getElementById('network-device-dc-select').add(new Option(dc, dc))
-      })
-      const saved = localStorage.getItem('network-device-dc-filter')
-      if (saved) {
-        document.getElementById('network-device-dc-select').value = saved
-        dcCol.search(saved, { exact: true }).draw()
-      }
-      document.getElementById('network-device-dc-select').addEventListener('change', function () {
-        if (this.value) localStorage.setItem('network-device-dc-filter', this.value)
-        else localStorage.removeItem('network-device-dc-filter')
-        dcCol.search(this.value, { exact: !!this.value }).draw()
-      })
-    },
-    columns: [
-      { data: 'name' },
-      { data: 'dataCenter' },
-      { data: 'rack' },
-      { data: 'role' },
-      { data: 'manufacturer' },
-      { data: 'model' },
-      { data: 'serial' },
-      { data: 'macAddress' },
-      { data: 'servers' },
-      { data: 'devices' },
-      { data: 'orbId' },
-    ],
-    columnDefs: [
-      { targets: 10, visible: false, searchable: true }, // Orb ID hidden but searchable
-      { targets: [8, 9], className: 'dt-left dt-head-left' }, // Servers / Devices counts
-    ],
-    ajax: {
-      url: BASE + '/graphql',
-      type: 'POST',
-      contentType: 'application/json',
-      data: () => JSON.stringify({
-        query: `query LoadNetworkDevices {
-          queryNetworkDevice {
-            id orbId name role manufacturer model serial macAddress
-            dataCenter { name }
-            rack { name }
-            networkInterfaceConnectedNetworkDevice {
-              server { orbId }
-              networkDevice { orbId }
-            }
-          }
-        }`,
-      }),
-      dataSrc: (json) => {
-        if (!gqlSurfaceErrors(json, 'Load network devices')) return []
-        return (json.data?.queryNetworkDevice ?? []).map((d) => {
-          const servers = new Set()
-          const devices = new Set()
-          for (const p of d.networkInterfaceConnectedNetworkDevice ?? []) {
-            if (p.server?.orbId) servers.add(p.server.orbId)
-            else if (p.networkDevice?.orbId) devices.add(p.networkDevice.orbId)
-          }
-          return {
-            id: d.id,
-            orbId: d.orbId ?? '—',
-            name: d.name ?? '—',
-            role: d.role ?? '—',
-            manufacturer: d.manufacturer ?? '—',
-            model: d.model ?? '—',
-            serial: d.serial ?? '—',
-            macAddress: d.macAddress ?? '—',
-            dataCenter: d.dataCenter?.name ?? '—',
-            rack: d.rack?.name ?? '—',
-            servers: servers.size,
-            devices: devices.size,
-          }
-        })
-      },
-    },
-    createdRow: function (row) { row.style.cursor = 'pointer'; row.title = 'Double-click to open' },
-  })
-
-  const reloadButton = deviceTable.button('reload:name').node()
-  deviceTable.button('reload:name').node().on('click', function () {
-    deviceTable.clear().draw()
-    reloadButton.addClass('is-loading')
-    setTimeout(() => {
-      const onError = () => reloadButton.removeClass('is-loading')
-      deviceTable.one('error.dt', onError)
-      deviceTable.ajax.reload(() => {
-        deviceTable.off('error.dt', onError)
-        reloadButton.removeClass('is-loading')
-      })
-    }, 250)
-  })
-
-  if (typeof opts.onRowOpen === 'function') {
-    $('#network-device-table tbody').on('dblclick', 'tr', function () {
-      const data = deviceTable.row(this).data()
-      if (!data) return
-      opts.onRowOpen(data, this)
-    })
-  }
-
-  return deviceTable
-}
-
-// loadNetworkDeviceTab opens a device detail tab via HTMX swap. Mirrors
-// loadClusterTab.
-export function loadNetworkDeviceTab(displayName, orbId) {
-  const domId = safeDomId(orbId)
-  const tabHtml = `<li class="tab">
-    <a id="tab-network-device-${domId}" data-target="tab-content-network-device-${domId}" role="tab" aria-selected="false" tabindex="-1">
-      ${displayName}
-      <span class="pl-2">
-        <button id="tab-close-network-device-${domId}">
-          <i class="fa-solid fa-xmark" style="font-size: 0.8em;"></i>
-        </button>
-      </span>
-    </a>
-  </li>`
-  const contentHtml = `<div class="tab-content" id="tab-content-network-device-${domId}" role="tabpanel" style="display:none"></div>`
-
-  $('#tablist').append(tabHtml)
-  $('.app-main').append(contentHtml)
-
-  const tabLink = document.getElementById(`tab-network-device-${domId}`)
-  const tabContent = document.getElementById(`tab-content-network-device-${domId}`)
-
-  tabLink.addEventListener('click', () => {
-    activateTab(tabLink.parentElement)
-    displayTabContent(`tab-content-network-device-${domId}`)
-    setCurrentTab(`tab-network-device-${domId}`)
-    if (!tabContent.dataset.loaded) {
-      htmx.ajax('GET', BASE + '/network/' + encodeURIComponent(orbId), { target: tabContent, swap: 'innerHTML' })
-    }
-  })
-
-  document.getElementById(`tab-close-network-device-${domId}`).addEventListener('click', (event) => {
-    event.stopPropagation()
-    deleteNetworkDeviceTab(displayName, orbId)
-    replaceCurrentTab(`tab-network-device-${domId}`, 'tab-summary')
-    tabLink.parentElement.remove()
-    tabContent.remove()
-    document.getElementById('tab-summary').click()
-  })
-}
-
-export function saveNetworkDeviceTab(displayName, orbId) {
-  const item = JSON.stringify(new TabItem(displayName, orbId))
-  const s = new Set(localStorage.networkTabs ? JSON.parse(localStorage.networkTabs) : [])
-  s.add(item)
-  localStorage.networkTabs = JSON.stringify([...s])
 }
 
 export function deleteNetworkDeviceTab(displayName, orbId) {
@@ -2054,47 +1135,6 @@ export function deleteNetworkDeviceTab(displayName, orbId) {
   s.delete(item)
   localStorage.networkTabs = JSON.stringify([...s])
 }
-
-export function initNetworkDeviceTabRestoration() {
-  if (!document.getElementById('network-device-table')) return
-
-  clearTabStateOnFresh()
-
-  if (localStorage.networkTabs) {
-    const tabSet = new Set(JSON.parse(localStorage.networkTabs))
-    tabSet.forEach(tabData => {
-      const { displayName, id } = JSON.parse(tabData)
-      loadNetworkDeviceTab(displayName, id)
-    })
-  }
-
-  const params = new URLSearchParams(window.location.search)
-  const openId = params.get('open')
-  const openLabel = params.get('label')
-  if (openId) {
-    const displayName = openLabel || openId
-    const openDomId = safeDomId(openId)
-    if (!document.getElementById(`tab-network-device-${openDomId}`)) {
-      loadNetworkDeviceTab(displayName, openId)
-      saveNetworkDeviceTab(displayName, openId)
-    }
-    document.getElementById(`tab-network-device-${openDomId}`)?.click()
-    history.replaceState(null, '', BASE + '/network')
-    return
-  }
-
-  const currentTabId = getCurrentTab()
-  if (currentTabId) document.getElementById(currentTabId)?.click()
-}
-
-// ─── Cross-app navigation handlers ───────────────────────────────────────────
-//
-// These three initializers wire the dblclick / click row-navigation and reload
-// handlers that must work identically in orbital and orb. Both app entry points
-// call all three; orbital-only edit-modal handlers stay in orbital.js.
-
-// initRowNavigation wires dblclick navigation for server and cluster rows that
-// appear in shared templates (cluster-tab.gohtml, datacenter-tab.gohtml).
 
 // ─── List-page wiring (shared by orbital and orb) ─────────────────────────────
 //
@@ -2116,32 +1156,6 @@ const LIST_PAGES = [
     load: loadDataCenterTab,
     save: saveTab,
     restore: initDatacenterTabRestoration,
-    label: (d) => d.name,
-  },
-  {
-    init: initServerListTable,
-    tabId: (domId) => `tab-srv-${domId}`,
-    load: loadServerListTab,
-    save: saveServerTab,
-    restore: initServerListTabRestoration,
-    // Servers fall back to the service tag: hostname is '—' for a machine
-    // discovered by BMC scan before its OS has reported one.
-    label: (d) => (d.hostname !== '—' ? d.hostname : d.serviceTag),
-  },
-  {
-    init: initClusterTable,
-    tabId: (domId) => `tab-cluster-${domId}`,
-    load: loadClusterTab,
-    save: saveClusterTab,
-    restore: initClusterTabRestoration,
-    label: (d) => d.name,
-  },
-  {
-    init: initNetworkDeviceTable,
-    tabId: (domId) => `tab-network-device-${domId}`,
-    load: loadNetworkDeviceTab,
-    save: saveNetworkDeviceTab,
-    restore: initNetworkDeviceTabRestoration,
     label: (d) => d.name,
   },
 ]
@@ -2364,24 +1378,40 @@ export function initGenericTable() {
       className: 'is-link is-outlined is-small', titleAttr: text,
     }, extra)
 
+    // The facet select is rendered by the template and moved into the toolbar,
+    // never built here — page structure belongs in the template (UI.md), and
+    // the server already resolved which column it filters and what is in it.
+    const facetEl = el.parentElement.querySelector('.js-facet')
+    const facetCol = facetEl ? Number(facetEl.dataset.facetColumn) : -1
+    if (facetEl) facetEl.style.display = ''
+
+    const topStart = [
+      { buttons: [
+        btn('fa-regular fa-file-excel', 'Excel', { extend: 'excel', title: '', filename: file }),
+        btn('fa-regular fa-file-text', 'CSV', { extend: 'csv', title: '', filename: file }),
+        btn('fa-regular fa-copy', 'Copy', { extend: 'copy' }),
+        btn('fa fa-columns', 'Select', { extend: 'colvis', titleAttr: 'Select Columns' }),
+      ] },
+      { pageLength: { menu: [100, 250, 500] } },
+    ]
+    if (facetEl) topStart.unshift($(facetEl))
+
     new DataTable(el, {
       layout: {
-        topStart: [
-          { buttons: [
-            btn('fa-regular fa-file-excel', 'Excel', { extend: 'excel', title: '', filename: file }),
-            btn('fa-regular fa-file-text', 'CSV', { extend: 'csv', title: '', filename: file }),
-            btn('fa-regular fa-copy', 'Copy', { extend: 'copy' }),
-            btn('fa fa-columns', 'Select', { extend: 'colvis', titleAttr: 'Select Columns' }),
-          ] },
-          { pageLength: { menu: [100, 250, 500] } },
-        ],
+        topStart,
         topEnd: { search: { placeholder: `Search ${label}` } },
       },
       autoWidth: true,
       scrollX: true,
-      scrollY: 400,
+      // Fill the viewport, as every hand-written list page did. A fixed 400px
+      // strands a short table in an empty page on a tall screen; the constant
+      // is this page's chrome (tabs bar + toolbar + header), not the old one's.
+      scrollY: 'calc(100vh - 300px)',
       scrollCollapse: true,
       pageLength: 250,
+      // Row selection, which the Copy/Excel/CSV buttons pick up: with rows
+      // selected they export the selection, otherwise the whole table.
+      select: { style: 'os' },
       // IPv4 sorts numerically, in EVERY column.
       //
       // "10.20.21.100" sorts before "10.20.21.41" as a string, because "1" <
@@ -2394,22 +1424,62 @@ export function initGenericTable() {
       columnDefs: [{
         targets: '_all',
         render: (data, type) => {
-          if (type !== 'sort' && type !== 'type') return data == null ? '' : data
-          const text = String(data == null ? '' : data).replace(/<[^>]*>/g, '').trim()
-          return ipv4SortKey(text)
+          const raw = data == null ? '' : data
+          if (type === 'display') return raw
+          // Everything that is not display works on the VISIBLE TEXT.
+          //
+          // A reference cell is an <a href="/datacenters/colo:colo-galleon">,
+          // and DataTables searches whatever it is given — so before this,
+          // typing "datacenters" in the search box matched every row that had
+          // any link, and an exact column search for "colo" matched nothing at
+          // all because the cell's value was the whole anchor. The facet is
+          // an exact column search, which is how this surfaced.
+          const text = String(raw).replace(/<[^>]*>/g, '').trim()
+          return (type === 'sort' || type === 'type') ? ipv4SortKey(text) : text
         },
       }],
-      // stateSave is keyed per table id, and every generic page shares the id
-      // `generic-table` — so a saved sort from /racks would be restored on
-      // /storage-devices, against different columns. Off deliberately.
-      stateSave: false,
+      // stateSave keyed by SLUG, not by table id.
+      //
+      // DataTables keys its own storage on the id, and every generic page
+      // shares the id `generic-table` — so a saved sort from /racks was
+      // restored on /storage-devices, against entirely different columns.
+      // Turning it off fixed that by losing the feature: the bespoke Servers
+      // and Network Devices pages both persisted sort, page and search. The
+      // callbacks below restore the behaviour with a key that cannot collide.
+      //
+      // The facet rides along for free — a facet IS a column search, and
+      // column searches are part of the state DataTables saves. That is why
+      // there is no separate facet-persistence code here.
+      stateSave: true,
+      stateSaveCallback: (_settings, data) => {
+        try { localStorage.setItem('dt:' + file, JSON.stringify(data)) } catch { /* quota or private mode */ }
+      },
+      stateLoadCallback: () => {
+        try { return JSON.parse(localStorage.getItem('dt:' + file)) } catch { return null }
+      },
       language: {
         infoEmpty: `No ${label} to show`,
         info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
         entries: { _: 'rows', 1: 'row' },
         emptyTable: `No ${label} yet.`,
       },
+      // The affordance for the dblclick handler below. Without it opening a
+      // row as a tab is undiscoverable — every hand-written list page set
+      // this, and the generic page silently dropped it.
+      createdRow: (row) => { row.style.cursor = 'pointer'; row.title = 'Double-click to open' },
     })
+
+    // Restore the facet's own <select> from whatever state put into the
+    // column search — the select is ours, so DataTables cannot restore it.
+    if (facetEl) {
+      const api = new DataTable.Api(el)
+      const sel = facetEl.querySelector('select')
+      const saved = api.column(facetCol).search()
+      if (saved) sel.value = saved
+      sel.addEventListener('change', () => {
+        api.column(facetCol).search(sel.value, { exact: !!sel.value }).draw()
+      })
+    }
 
     // Double-click opens the row as a tab below, matching every hand-written
     // list page. The row's own link still navigates on a single click, so both
@@ -2437,171 +1507,6 @@ export function initListPages() {
     })
     window.addEventListener('load', pageDef.restore)
   }
-}
-
-export function initRowNavigation() {
-  // Node row in a cluster tab → open that server's tab on the Servers page.
-  document.addEventListener('dblclick', (e) => {
-    const row = e.target.closest('tr[data-server-orb-id]')
-    if (!row) return
-    const orbId = row.dataset.serverOrbId
-    const label = row.dataset.displayName || orbId
-    window.location.href = BASE + '/servers?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label)
-  })
-
-  // Workload cluster row in a cluster tab → open that cluster's tab.
-  document.addEventListener('dblclick', (e) => {
-    const row = e.target.closest('tr[data-cluster-orb-id]')
-    if (!row) return
-    const orbId = row.dataset.clusterOrbId
-    const label = row.dataset.displayName || orbId
-    window.location.href = BASE + '/clusters?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label)
-  })
-
-  // Server row in a DC detail panel → navigate to the Servers page with that
-  // server's tab open. Both apps share datacenter-tab.gohtml which emits
-  // tr[data-server-id].
-  document.addEventListener('dblclick', (e) => {
-    const row = e.target.closest('tr[data-server-id]')
-    if (!row) return
-    const orbId = row.dataset.serverId
-    const label = row.dataset.displayName || orbId
-    window.location.href = BASE + '/servers?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label)
-  })
-}
-
-// initLinkNavigation wires the .js-cluster-link single-click handler that
-// appears inside cluster-tab.gohtml's Management Cluster summary field.
-export function initLinkNavigation() {
-  document.addEventListener('click', (e) => {
-    const link = e.target.closest('.js-cluster-link[data-cluster-orb-id]')
-    if (!link) return
-    e.preventDefault()
-    const orbId = link.dataset.clusterOrbId
-    const label = link.dataset.displayName || orbId
-    window.location.href = BASE + '/clusters?open=' + encodeURIComponent(orbId) + '&label=' + encodeURIComponent(label)
-  })
-}
-
-// initReloadButtons wires the three Reload buttons emitted by the shared
-// partials (datacenter-tab, server-tab, cluster-tab). Both apps call this;
-// orbital passes cleanup hooks for stale editor state, orb calls with no opts.
-//
-// opts.onDcReloaded(domId) — called after a successful DC tab reload.
-// opts.onSrvReloaded(target) — called after a successful server tab reload.
-// reloadNetworkDeviceFragment re-renders a network-device detail tab in place.
-//
-// Lives here rather than in orbital.js because orb serves network devices too,
-// so both apps need it. The optional onReloaded callback is how orbital drops
-// the stale JSONEditor instance for the tab it just replaced; orb passes
-// nothing, exactly as it does for the other reload buttons.
-export function reloadNetworkDeviceFragment(orbId, onReloaded) {
-  const domId = safeDomId(orbId)
-  const target = document.getElementById('tab-content-network-device-' + domId)
-  if (!target) return Promise.resolve()
-  return fetchWithMinDelay('/network/' + encodeURIComponent(orbId))
-    .then(html => {
-      target.innerHTML = html
-      htmx.process(target)
-      renderTimestamps(target)
-      const detailTabs = target.querySelector('[id^="network-device-detail-tabs-"]')
-      if (detailTabs) initDetailTabs(detailTabs)
-      onReloaded?.(domId)
-    })
-    .catch(() => {
-      target.innerHTML = '<div class="notification is-danger is-light is-size-7 m-4"><strong>Reload failed.</strong> Check your connection and try again.</div>'
-    })
-}
-
-export function initReloadButtons(opts = {}) {
-  document.addEventListener('click', function (e) {
-    const btn = e.target.closest('.js-network-device-reload')
-    if (!btn) return
-    btn.classList.add('is-loading')
-    reloadNetworkDeviceFragment(btn.dataset.networkDeviceId, opts.onNetworkDeviceReloaded)
-      .finally(() => btn.classList.remove('is-loading'))
-  })
-
-  document.addEventListener('click', function (e) {
-    const btn = e.target.closest('.js-cluster-reload')
-    if (!btn) return
-    btn.classList.add('is-loading')
-    const clusterId = btn.dataset.clusterId
-    reloadClusterFragment(clusterId)
-      .catch(() => {
-        const target = document.getElementById('tab-content-cluster-' + safeDomId(clusterId))
-        if (target) target.innerHTML = '<div class="notification is-danger is-light is-size-7 m-4"><strong>Reload failed.</strong> Check your connection and try again.</div>'
-      })
-      .finally(() => btn.classList.remove('is-loading'))
-  })
-
-  document.addEventListener('click', function (e) {
-    const btn = e.target.closest('.js-dc-reload')
-    if (!btn) return
-    const orbId = btn.dataset.dcId
-    const domId = safeDomId(orbId)
-    const target = document.getElementById('tab-content-' + domId)
-    if (!target) return
-    showDatacenterSkeleton(orbId)
-    fetchWithMinDelay('/datacenters/' + encodeURIComponent(orbId))
-      .then(html => {
-        target.innerHTML = html
-        htmx.process(target)
-        renderTimestamps(target)
-        const dcDetailTabs = document.getElementById('dc-detail-tabs-' + domId)
-        if (dcDetailTabs) initDetailTabs(dcDetailTabs)
-        const embeddedSrvTabs = target.querySelector('[id^="srv-detail-tabs-"]')
-        if (embeddedSrvTabs) initDetailTabs(embeddedSrvTabs)
-        opts.onDcReloaded?.(domId)
-      })
-      .catch(() => {
-        target.innerHTML = '<div class="notification is-danger is-light is-size-7 m-4"><strong>Reload failed.</strong> Check your connection and try again.</div>'
-      })
-      .finally(() => btn.classList.remove('is-loading'))
-  })
-
-  document.addEventListener('click', function (e) {
-    const btn = e.target.closest('.js-srv-reload')
-    if (!btn) return
-    const url = btn.dataset.srvUrl
-    const targetId = btn.dataset.srvTarget
-    const target = document.getElementById(targetId)
-    if (!target) return
-    showServerSkeleton(targetId, btn.dataset.srvSkeleton)
-    fetchWithMinDelay(url)
-      .then(html => {
-        target.innerHTML = html
-        htmx.process(target)
-        renderTimestamps(target)
-        const srvDetailTabs = target.querySelector('[id^="srv-detail-tabs-"]')
-        if (srvDetailTabs) {
-          target.dataset.loaded = 'true'
-          initDetailTabs(srvDetailTabs)
-        }
-        const dcDetailTabs = target.querySelector('[id^="dc-detail-tabs-"]')
-        if (dcDetailTabs) {
-          target.dataset.loaded = 'true'
-          initDetailTabs(dcDetailTabs)
-          const embeddedSrvTabs = target.querySelector('[id^="srv-detail-tabs-"]')
-          if (embeddedSrvTabs) initDetailTabs(embeddedSrvTabs)
-          const dcServersTable = target.querySelector('table[id^="dc-servers-table-"]')
-          if (dcServersTable && !$.fn.DataTable.isDataTable(dcServersTable)) {
-            new DataTable(dcServersTable, { paging: false, searching: false, info: false, ordering: true, select: { style: 'os' }, autoWidth: true, columnDefs: [{ className: 'dt-left', targets: 5 }, { targets: 0, render: dtIPv4Render }] })
-          }
-        }
-        const defaultTabLink = target.querySelector('.detlinks.is-active')
-        if (defaultTabLink) openServerTab(defaultTabLink.id.replace(/-detlink$/, '-det'))
-        target.querySelectorAll('[id$="-ev"]').forEach(el => {
-          const serverId = el.id.split('-')[0]
-          setTimeout(() => initServerEventsTable(serverId), 100)
-        })
-        opts.onSrvReloaded?.(target)
-      })
-      .catch(() => {
-        target.innerHTML = '<div class="notification is-danger is-light is-size-7 m-4"><strong>Reload failed.</strong> Check your connection and try again.</div>'
-      })
-      .finally(() => btn.classList.remove('is-loading'))
-  })
 }
 
 

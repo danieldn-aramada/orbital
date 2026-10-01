@@ -64,6 +64,17 @@ type View struct {
 	// rendering. A field is commonly both, but they are separate facts.
 	JSONString []string `json:"jsonString,omitempty"`
 
+	// Facet is the single column the list page offers as a filter dropdown,
+	// from the type's `facet:` annotation. Empty when unannotated, and also
+	// when the annotation named something this page does not render as a
+	// column — a facet over an absent column is a dead control, so it is
+	// dropped here and reported by FacetWarnings rather than shipped broken.
+	//
+	// Carried on the view because orbital's UI is a consumer of this API like
+	// any other: a client building its own table should be told which column is
+	// worth a filter, not have to guess from cardinality.
+	Facet string `json:"facet,omitempty"`
+
 	// Order is the pinned field prefix from the type's `order:` annotation.
 	// Exposed because a list page re-applies it after unioning an interface's
 	// implementations, and because a client building its own table should
@@ -201,13 +212,7 @@ func ResolveViews(types map[string]TypeInfo, ifaceFields []string) ([]View, erro
 		// assume — KubernetesCluster carries the pin, and /clusters uses the
 		// interface view while every detail page uses a concrete one, so
 		// without this the two would order their columns differently.
-		pinned := OrderFor(info.Doc)
-		for _, in := range info.Implements {
-			if len(pinned) > 0 {
-				break
-			}
-			pinned = OrderFor(types[in].Doc)
-		}
+		pinned := typeAnnotation(types, info, OrderFor, func(s []string) bool { return len(s) == 0 })
 		display := ApplyOrder(displayScalars(info, ifaceFields), pinned)
 		detailOnly := DetailOnlyFieldsFor(info)
 		jsonFields := JSONStringFieldsFor(info)
@@ -230,7 +235,7 @@ func ResolveViews(types map[string]TypeInfo, ifaceFields []string) ([]View, erro
 			}
 			refCols = append(refCols, ViewRefColumn{Field: t.Field, Type: t.Type, Slug: t.Slug})
 		}
-		views = append(views, View{
+		v := View{
 			IsInterface:     info.IsInterface,
 			Implementations: info.PossibleTypes,
 			Display:         display,
@@ -245,7 +250,15 @@ func ResolveViews(types map[string]TypeInfo, ifaceFields []string) ([]View, erro
 			IsRoot:          isRootType(name),
 			Fields:          fields,
 			Tabs:            tabs,
-		})
+		}
+		// Validated against the view that was just built, not against the raw
+		// field list: a facet over a `detailOnly` field or a list relationship
+		// would render a dropdown that filters a column the table does not
+		// have. Dropped here, reported by FacetWarnings.
+		if f, _ := facetAnnotation(types, info); f != "" && v.HasColumn(f) {
+			v.Facet = f
+		}
+		views = append(views, v)
 	}
 
 	// An implementation of a sub-interface is not a nav root: the interface
@@ -272,6 +285,119 @@ func ResolveViews(types map[string]TypeInfo, ifaceFields []string) ([]View, erro
 // isRootType reports whether nothing owns this type.
 //
 // Derived from containment rather than declared. The registry used to carry an
+// ColumnFields returns the scalar fields a LIST page renders as columns:
+// Display minus DetailOnly.
+//
+// Placement comes from the `detailOnly` annotation, not from what the field
+// holds. One data centre's assetDataV2 is ~600 characters of JSON, and a column
+// of them makes the table unreadable. Applies equally to a list page and to a
+// relationship table, because they are the same problem.
+//
+// One definition, because there were nearly two: the handler had its own copy
+// of this subtraction, and a facet validated against a different notion of
+// "column" than the table renders would accept an annotation that produces a
+// dropdown filtering a column nobody can see.
+func (v View) ColumnFields() []string {
+	if len(v.DetailOnly) == 0 {
+		return v.Display
+	}
+	skip := make(map[string]bool, len(v.DetailOnly))
+	for _, f := range v.DetailOnly {
+		skip[f] = true
+	}
+	out := make([]string, 0, len(v.Display))
+	for _, f := range v.Display {
+		if !skip[f] {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// HasColumn reports whether a field renders as a list-page column, scalar or
+// reference.
+func (v View) HasColumn(field string) bool {
+	for _, f := range v.ColumnFields() {
+		if f == field {
+			return true
+		}
+	}
+	for _, r := range v.RefColumns {
+		if r.Field == field {
+			return true
+		}
+	}
+	return false
+}
+
+// typeAnnotation reads a TYPE-level annotation, falling back to an interface
+// the type implements when the type itself does not carry one.
+//
+// Inheritance is per-annotation and deliberate, not a general rule: `slug:`
+// must NEVER inherit or every implementation would claim the interface's URL.
+// `order:` and `facet:` both should, because the interface view and the
+// concrete detail pages are the same page to a reader, and a control that is
+// present on /clusters and absent on /eksa-kubernetes-clusters is the kind of
+// gap nobody notices for months.
+//
+// Extracted from the `order:` lookup that used to spell this out inline — the
+// second annotation to want it was the moment to stop copying it.
+func typeAnnotation[T any](types map[string]TypeInfo, info TypeInfo, read func(string) T, empty func(T) bool) T {
+	got := read(info.Doc)
+	if !empty(got) {
+		return got
+	}
+	for _, in := range info.Implements {
+		if got = read(types[in].Doc); !empty(got) {
+			return got
+		}
+	}
+	return got
+}
+
+// facetAnnotation reads a type's `facet:` declaration, inheriting from an
+// interface it implements, and returns the field in use plus any extras.
+func facetAnnotation(types map[string]TypeInfo, info TypeInfo) (string, []string) {
+	type decl struct {
+		field string
+		extra []string
+	}
+	d := typeAnnotation(types, info,
+		func(doc string) decl {
+			f, rest := FacetFor(doc)
+			return decl{field: f, extra: rest}
+		},
+		func(d decl) bool { return d.field == "" })
+	return d.field, d.extra
+}
+
+// FacetWarnings reports `facet:` annotations that did not produce a facet.
+//
+// A dropped annotation is otherwise completely silent: the schema says the page
+// has a filter, the page does not, and nothing connects the two. Same reasoning
+// as UnknownAnnotations — an annotation that reads as correct and does nothing
+// is worse than one that was never written.
+func FacetWarnings(types map[string]TypeInfo, views []View) []string {
+	var out []string
+	for _, v := range views {
+		info, ok := types[v.Type]
+		if !ok {
+			continue
+		}
+		want, extra := facetAnnotation(types, info)
+		if want == "" {
+			continue
+		}
+		if v.Facet == "" {
+			out = append(out, v.Type+": facet names "+want+", which /"+v.Slug+" does not render as a column")
+		}
+		if len(extra) > 0 {
+			out = append(out, v.Type+": facet names "+strings.Join(extra, ", ")+" as well; only one facet is supported and "+want+" is the one in use")
+		}
+	}
+	return out
+}
+
 // `IsRoot` bool on four types; it was deleted 2026-09-25 once this was shown to
 // reproduce it exactly — DataCenter, Server, NetworkDevice and
 // EksaKubernetesCluster — which is what made it safe to delete.

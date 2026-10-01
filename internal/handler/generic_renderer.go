@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/armada/orbital/internal/configitems"
@@ -101,7 +102,69 @@ func (g *GenericRenderer) List(c echo.Context) error {
 	for _, r := range rows {
 		data.Rows = append(data.Rows, stringifyRow(r))
 	}
+	data.Facet = buildFacet(v, data.Columns, data.RefColumns, data.Rows)
 	return g.render(c, "generic-list", data)
+}
+
+// buildFacet resolves the view's `facet:` field into the control the template
+// renders: which column index it filters, and the values present in it.
+//
+// Returns nil when the view declares no facet, and also when the column holds
+// fewer than two distinct values — a dropdown whose only option selects
+// everything is a control that cannot do anything, and one per page adds up.
+func buildFacet(v configitems.View, cols []page.ColumnHeader, refs []page.RefHeader, rows []map[string]any) *page.Facet {
+	if v.Facet == "" {
+		return nil
+	}
+	// Column index must match the template's header order exactly: Name, then
+	// scalar columns, then reference columns, then Orb ID.
+	idx, label, isRef := -1, "", false
+	for i, c := range cols {
+		if c.Field == v.Facet {
+			idx, label = i+1, c.Label
+		}
+	}
+	if idx < 0 {
+		for i, r := range refs {
+			if r.Field == v.Facet {
+				idx, label, isRef = len(cols)+1+i, r.Label, true
+			}
+		}
+	}
+	if idx < 0 {
+		return nil
+	}
+
+	seen := map[string]bool{}
+	for _, row := range rows {
+		val := row[v.Facet]
+		if isRef {
+			// A reference cell renders the related entity's name.
+			m, ok := val.(map[string]any)
+			if !ok {
+				continue
+			}
+			val = m["name"]
+		}
+		s, ok := val.(string)
+		if !ok || s == "" {
+			continue
+		}
+		seen[s] = true
+	}
+	if len(seen) < 2 {
+		return nil
+	}
+	opts := make([]string, 0, len(seen))
+	for s := range seen {
+		opts = append(opts, s)
+	}
+	sort.Strings(opts)
+	// "All Data Centers", not "All Data Center". The column heading is
+	// singular because it heads one cell; the empty option names the whole
+	// set. configitems.Pluralize already handles the awkward endings — the
+	// "IdracSettings is already plural" case is exactly why it exists.
+	return &page.Facet{Label: label, All: "All " + configitems.Pluralize(label), Column: idx, Options: opts}
 }
 
 // Detail renders /{slug}/{orbId} for any ConfigItem type.
@@ -306,7 +369,7 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 			Slug:       tab.Slug,
 			Field:      tab.Field,
 			IsList:     tab.IsList,
-			Columns:    columnHeaders(tableColumns(byType[tab.Type]), g.fieldLabeller(tab.Type)),
+			Columns:    columnHeaders(byType[tab.Type].ColumnFields(), g.fieldLabeller(tab.Type)),
 			RefColumns: refHeaders(withoutBackReferences(tabRefColumns(byType[tab.Type], data.RefColumnsDropped), stamped, v.Type, orbID), g.fieldLabeller(tab.Type)),
 			Rows:       stamped,
 		})
@@ -702,7 +765,7 @@ func (g *GenericRenderer) ownedBox(tab configitems.ViewTab, oc configitems.Owned
 // scalars, then any an implementation adds. Implementation order is the
 // schema's, so the columns do not reshuffle between requests.
 func listColumns(v configitems.View, display func(string) []string) []string {
-	cols := tableColumns(v)
+	cols := v.ColumnFields()
 	seen := map[string]bool{}
 	for _, f := range cols {
 		seen[f] = true
@@ -804,29 +867,6 @@ func refHeaders(refs []configitems.ViewRefColumn, label func(string) string) []p
 	out := make([]page.RefHeader, 0, len(refs))
 	for _, rc := range refs {
 		out = append(out, page.RefHeader{Field: rc.Field, Label: label(rc.Field), Slug: rc.Slug})
-	}
-	return out
-}
-
-// tableColumns is a view's display fields minus its blobs.
-//
-// Placement comes from the `detailOnly` annotation, not from what the field
-// holds. One data centre's assetDataV2 is ~600 characters of JSON, and a column
-// of them makes the table unreadable. Applies equally to a list page and to a
-// relationship table, because they are the same problem.
-func tableColumns(v configitems.View) []string {
-	if len(v.DetailOnly) == 0 {
-		return v.Display
-	}
-	blob := make(map[string]bool, len(v.DetailOnly))
-	for _, f := range v.DetailOnly {
-		blob[f] = true
-	}
-	out := make([]string, 0, len(v.Display))
-	for _, f := range v.Display {
-		if !blob[f] {
-			out = append(out, f)
-		}
 	}
 	return out
 }

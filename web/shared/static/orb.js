@@ -3,9 +3,6 @@
 import {
   BASE,
   INVENTORY_CACHE_KEY,
-  initRowNavigation,
-  initLinkNavigation,
-  initReloadButtons,
   initListPages,
 } from './shared.js'
 
@@ -241,9 +238,6 @@ initListPages()
 
 // ─── Cross-app navigation and reload buttons ──────────────────────────────────
 
-initRowNavigation()
-initLinkNavigation()
-initReloadButtons()
 
 // ─── Orb divergence publish ───────────────────────────────────────────────────
 

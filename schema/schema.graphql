@@ -69,7 +69,10 @@ type Rack implements ConfigItem {
     networkDevices: [NetworkDevice] @hasInverse(field: rack)
 }
 
-"""include: storageControllers.storageDevices"""
+"""
+include: storageControllers.storageDevices
+facet: dataCenter
+"""
 type Server implements ConfigItem {
     hostname: String @search(by: [term])
     model: String @search(by: [term])
@@ -251,6 +254,7 @@ type NetworkDevice implements ConfigItem {
 """
 slug: clusters
 order: name, provider, clusterType, environment, kubernetesVersion
+facet: dataCenter
 """
 interface KubernetesCluster {
     kubernetesVersion: String
