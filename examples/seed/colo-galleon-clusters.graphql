@@ -100,9 +100,9 @@ mutation SeedClusters {
     {
       orbId: "colo:aep", name: "aep", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-09-25T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 },
       nodes: [
-          { orbId: "colo:aep-node-GD206G4", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-09-25T00:00:00Z", name: "aep-cp1", role: "control_plane", server: { orbId: "colo:server-GD206G4" version: 1 } },
-          { orbId: "colo:aep-node-4RK3V64", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-09-25T00:00:00Z", name: "aep-wk1", role: "worker", server: { orbId: "colo:server-4RK3V64" version: 1 } },
-          { orbId: "colo:aep-node-7MP6K74", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-09-25T00:00:00Z", name: "aep-wk2", role: "worker", server: { orbId: "colo:server-7MP6K74" version: 1 } }
+          { orbId: "colo:aep-node-GD206G4", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-09-25T00:00:00Z", name: "aep-cp1", role: "control_plane", ipv4: { orbId: "colo:10.20.22.105" version: 1 }, server: { orbId: "colo:server-GD206G4" version: 1 } },
+          { orbId: "colo:aep-node-4RK3V64", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-09-25T00:00:00Z", name: "aep-wk1", role: "worker", ipv4: { orbId: "colo:10.20.22.110" version: 1 }, server: { orbId: "colo:server-4RK3V64" version: 1 } },
+          { orbId: "colo:aep-node-7MP6K74", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-09-25T00:00:00Z", name: "aep-wk2", role: "worker", ipv4: { orbId: "colo:10.20.22.173" version: 1 }, server: { orbId: "colo:server-7MP6K74" version: 1 } }
         ]
     },
     { orbId: "colo:restore-cluster", name: "restore-cluster", namespace: "colo", version: 1, createdBy: "admin@armada.ai", createdAt: "2026-06-18T00:00:00Z", clusterType: "management", provider: "eksa", cni: "cilium", environment: "dev", dataCenter: { orbId: "colo:colo-galleon" version: 1 }, controlPlaneEndpoint: { orbId: "colo:10.20.22.230" version: 1 }, tinkerbellIP: { orbId: "colo:10.20.22.231" version: 1 } },

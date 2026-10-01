@@ -164,6 +164,22 @@ func payloadTouchesOrbID(orbID string) predicate.ApprovalRequest {
 	})
 }
 
+// payloadInAnyNamespace matches change requests scoped to ANY of these
+// namespaces. Repeatable for the same reason status and orbId are: a caller
+// watching several namespaces otherwise has to make one request per namespace,
+// and reading the filter with QueryParam would take the FIRST value and silently
+// answer about that one alone. ORs the single-namespace primitive below.
+func payloadInAnyNamespace(namespaces []string) predicate.ApprovalRequest {
+	ps := make([]predicate.ApprovalRequest, 0, len(namespaces))
+	for _, ns := range namespaces {
+		ps = append(ps, payloadNamespaceEQ(ns))
+	}
+	if len(ps) == 1 {
+		return ps[0]
+	}
+	return approvalrequest.Or(ps...)
+}
+
 // payloadNamespaceEQ matches change requests scoped to a namespace. Same
 // containment mechanism and the same index; a changeset is single-namespace by
 // construction, so this is an equality test expressed as containment.

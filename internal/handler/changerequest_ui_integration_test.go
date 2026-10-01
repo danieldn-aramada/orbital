@@ -1171,3 +1171,59 @@ func TestCRHumanID_UnknownAndMalformedAreRefusedCleanly(t *testing.T) {
 		}
 	}
 }
+
+// Acceptance items 1-3 for multi-namespace list filtering: namespace is
+// repeatable (?namespace=a&namespace=b), OR-ed like status and orbId; a single
+// value still narrows to one; no value returns all. Guards the regression where
+// namespace was read with QueryParam and silently answered about one namespace.
+func TestListFilter_NamespaceMatchesAnyOfMultiple(t *testing.T) {
+	ctx := context.Background()
+	f := newCRFixture(t)
+
+	// A second namespace with its own server, so a request can be scoped there.
+	const ns2 = "cr-engine-2"
+	const ns2DC = "cr-engine-2:datacenter-1"
+	const ns2Server = "cr-engine-2:server-ZZZ"
+	crGQL(t, `mutation($input:[AddDataCenterInput!]!){ addDataCenter(input:$input, upsert:true){ numUids } }`,
+		map[string]any{"input": []any{map[string]any{
+			"namespace": ns2, "orbId": ns2DC, "name": "ns2 fixture", "version": 1,
+		}}})
+	crGQL(t, `mutation($input:[AddServerInput!]!){ addServer(input:$input, upsert:true){ numUids } }`,
+		map[string]any{"input": []any{map[string]any{
+			"namespace": ns2, "orbId": ns2Server, "version": 1, "hostname": "z-original",
+			"dataCenter": map[string]any{"orbId": ns2DC},
+		}}})
+	t.Cleanup(func() {
+		deleteEntity(t, "Server", ns2Server)
+		deleteEntity(t, "DataCenter", ns2DC)
+	})
+
+	crNS1 := f.open(t, approval.ChangeItem{OrbID: crServerA, Op: approval.OpUpdate,
+		Set: map[string]any{"hostname": "in-ns1"}})
+
+	crNS2, problems, err := f.crh.Create(ctx, author, "ns2 change", "",
+		&approval.Changeset{Namespace: ns2, Changes: []approval.ChangeItem{
+			{OrbID: ns2Server, Op: approval.OpUpdate, Set: map[string]any{"hostname": "in-ns2"}},
+		}})
+	if err != nil {
+		t.Fatalf("create ns2 request: %v", err)
+	}
+	if len(problems) > 0 {
+		t.Fatalf("ns2 validation problems: %v", problems)
+	}
+
+	// Item 1 — repeated param returns BOTH namespaces.
+	if both := listIDs(t, f, "?namespace="+crNS+"&namespace="+ns2); !both[crHumanID(crNS1)] || !both[crHumanID(crNS2)] {
+		t.Fatalf("namespace=%s&namespace=%s returned %v, want both requests", crNS, ns2, keysOf(both))
+	}
+
+	// Item 2 — a single namespace still narrows to one.
+	if one := listIDs(t, f, "?namespace="+crNS); !one[crHumanID(crNS1)] || one[crHumanID(crNS2)] {
+		t.Errorf("namespace=%s returned %v, want only the ns1 request", crNS, keysOf(one))
+	}
+
+	// Item 3 — no namespace filter returns all.
+	if all := listIDs(t, f, ""); !all[crHumanID(crNS1)] || !all[crHumanID(crNS2)] {
+		t.Errorf("no namespace filter returned %v, want both requests", keysOf(all))
+	}
+}
