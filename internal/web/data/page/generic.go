@@ -26,10 +26,36 @@ type Generic struct {
 	// RefColumns are the view's single relationships as link columns.
 	RefColumns []RefHeader
 
+	// Facet, when set, is the filter dropdown this page offers.
+	Facet *Facet
+
 	// Unavailable, when set, replaces the table with a stated reason. An empty
 	// table would say "there are none of these", which is a different claim
 	// from "orbital could not look".
 	Unavailable string
+}
+
+// Facet is a list page's filter dropdown, resolved server-side.
+//
+// Both the column position and the option list are computed here rather than in
+// JavaScript. Orbital's UI is a consumer of orbital's API like any other, so
+// anything it needs to draw this control an integrator needs too — and "walk
+// the rendered rows collecting distinct values" is precisely the kind of client
+// re-implementation the export-preview flattening was about.
+type Facet struct {
+	// Label is the column heading, so the control names what it filters.
+	Label string
+	// All is the empty option's text — the column heading pluralised, because
+	// it names the whole set rather than one cell.
+	All string
+	// Column is the 0-based DataTables column index. The table renders Name
+	// first, then scalar columns, then reference columns, then Orb ID.
+	Column int
+	// Options are the distinct values present in that column, sorted. Built
+	// from the rows actually rendered — a value that is not on the page cannot
+	// be filtered to, and offering it would give an empty table with no
+	// explanation.
+	Options []string
 }
 
 // GenericDetail is the detail page for ANY ConfigItem type.

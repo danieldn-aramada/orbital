@@ -576,3 +576,49 @@ func TestDetailOnlyIsSeparateFromJSONString(t *testing.T) {
 		t.Error("detailOnly alone must not imply jsonString")
 	}
 }
+
+// TestFacetFor covers acceptance item 1 (the annotation is read) and the
+// only-one-supported rule: extras are RETURNED so the caller can warn, never
+// silently dropped.
+func TestFacetFor(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		doc   string
+		want  string
+		extra []string
+	}{
+		{"absent", "", "", nil},
+		{"single", "facet: dataCenter", "dataCenter", nil},
+		{"with other annotations", "slug: servers\nfacet: dataCenter\norder: name", "dataCenter", nil},
+		{"extras are reported", "facet: dataCenter, rack, model", "dataCenter", []string{"rack", "model"}},
+		{"whitespace tolerated", "facet:    rack   ", "rack", nil},
+		{"empty value", "facet:", "", nil},
+		// Prose that merely contains the word must not arm a facet — the same
+		// exact-line rule the other annotations use.
+		{"prose mentioning it", "the facet: idea was rejected here", "", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, extra := FacetFor(tc.doc)
+			if got != tc.want {
+				t.Errorf("FacetFor(%q) = %q, want %q", tc.doc, got, tc.want)
+			}
+			if len(extra) != len(tc.extra) {
+				t.Fatalf("extras = %v, want %v", extra, tc.extra)
+			}
+			for i := range extra {
+				if extra[i] != tc.extra[i] {
+					t.Errorf("extras = %v, want %v", extra, tc.extra)
+				}
+			}
+		})
+	}
+}
+
+// TestKnownAnnotations_IncludesFacet is acceptance item 9. Without this entry
+// every `facet:` in the schema is reported at startup as a suspected typo —
+// noise that trains people to ignore the one report that matters.
+func TestKnownAnnotations_IncludesFacet(t *testing.T) {
+	if u := UnknownAnnotations("facet: dataCenter"); len(u) != 0 {
+		t.Errorf("facet must be a known annotation, got %v", u)
+	}
+}

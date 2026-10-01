@@ -48,6 +48,19 @@ has one query built from the view, so there is nothing per-type for JS to know.
           <p class="is-size-7">{{.Unavailable}}</p>
         </div>
         {{else}}
+        {{/* The facet dropdown, rendered HERE rather than built in JS.
+             Structure belongs in the template (UI.md); shared.js only moves it
+             into the DataTables toolbar and wires `change` to a column search.
+             Column index and option list are resolved server-side so an API
+             consumer drawing its own table gets the same control for free. */}}
+        {{with .Facet}}
+        <div class="select is-small js-facet" data-facet-column="{{.Column}}" style="display:none">
+          <select id="generic-facet" data-testid="generic-facet" aria-label="Filter by {{.Label}}">
+            <option value="">{{.All}}</option>
+            {{range .Options}}<option value="{{.}}">{{.}}</option>{{end}}
+          </select>
+        </div>
+        {{end}}
         {{/* No data-testid here: DataTables CLONES the table for its scroll head
              and foot, copying data-* attributes but not the id — three elements
              would then share one test id and every strict selector would break.

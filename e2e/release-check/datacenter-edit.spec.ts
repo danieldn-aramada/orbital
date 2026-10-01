@@ -1,78 +1,65 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+import { openEditor, editorState, setEditorState, saveEditor } from '../helpers/generic';
+
+// The UI smoke half of release-check: prove a mutation written through the
+// containerised orbital reaches DGraph and comes back on the next render.
+//
+// Retargeted at the generic page. It used to drive #datacenter-table,
+// [data-dc-edit-id] and window.dcEditors — all of which died with the bespoke
+// DataCenter page, leaving this spec referencing DOM that no longer exists. It
+// was excluded from the main suite, so nothing caught it; `make release-check`
+// would have.
 
 const DC_NAME = 'colo-galleon';
+const DC_ORB_ID = 'colo:colo-galleon';
 const EDITED_NAME = 'colo-galleon-smoke';
 
-test.describe('Data center edit flow', () => {
-  let dcId: string;
+async function rename(page: Page, from: string, to: string) {
+  const domId = await openEditor(page, 'datacenters', DC_ORB_ID);
+  const state = await editorState(page, domId);
+  expect(state.name, `expected the editor to open on ${from}`).toBe(from);
+  await setEditorState(page, domId, { ...state, name: to });
 
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/datacenters');
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes('/graphql') && r.status() === 200),
+    saveEditor(page, domId),
+  ]);
+  await expect(page.locator(`#edit-modal-generic-${domId}`)).not.toHaveClass(/is-active/, { timeout: 10_000 });
+}
 
-    const row = page.locator('#datacenter-table tbody tr', { hasText: DC_NAME });
-    await expect(row).toBeVisible({ timeout: 10000 });
-    await row.dblclick();
+// Unconditional restore, not a second half of the test.
+//
+// Release-check specs share one orbital and run serially, so a failure BETWEEN
+// the rename and the rename-back leaves every later spec looking at
+// "colo-galleon-smoke" — and the failure they then report is not the one that
+// happened. Learned the hard way: the first version of this rewrite asserted
+// against the wrong element, and the graph stayed renamed.
+test.afterEach(async ({ page }) => {
+  await page.goto(`/datacenters/${encodeURIComponent(DC_ORB_ID)}`);
+  const heading = page.getByTestId('page-heading');
+  if ((await heading.innerText()).trim() === DC_NAME) return;
+  await rename(page, EDITED_NAME, DC_NAME);
+});
 
-    // Wait for tab content to finish loading
-    await expect(
-      page.locator('[id^="tab-content-"] .button.is-loading')
-    ).not.toBeVisible({ timeout: 15000 });
+test('data center name round-trips through the editor and is persisted', async ({ page }) => {
+  // Through the list page, because reaching a detail view from the list is the
+  // path a person takes and the one worth smoking.
+  // Exact match, not hasText: "colo-galleon" is a substring of
+  // "colo-galleon-smoke", so a hasText precondition passes on exactly the
+  // dirty state it is supposed to catch.
+  await page.goto('/datacenters');
+  await expect(page.getByRole('link', { name: DC_NAME, exact: true })).toBeVisible({ timeout: 10_000 });
 
-    // Grab the DC ID from the Edit button
-    const editBtn = page.locator('[data-dc-edit-id]').first();
-    await expect(editBtn).toBeVisible();
-    dcId = await editBtn.getAttribute('data-dc-edit-id') ?? '';
-    expect(dcId).not.toBe('');
-  });
+  await rename(page, DC_NAME, EDITED_NAME);
 
-  test('can edit data center name and change is persisted', async ({ page }) => {
-    // Open the edit modal
-    await page.locator(`[data-dc-edit-id="${dcId}"]`).click();
-    await expect(page.locator(`#edit-modal-dc-${dcId}`)).toBeVisible();
+  // Read back through a FRESH render, not the modal that was just closed — the
+  // claim is that it persisted, and the open editor holds the new value either
+  // way. The name is the page heading; the fields table carries the type's own
+  // fields and never the ConfigItem name.
+  await page.goto(`/datacenters/${encodeURIComponent(DC_ORB_ID)}`);
+  await expect(page.getByTestId('page-heading')).toHaveText(EDITED_NAME);
 
-    // Wait for JSONEditor to initialise (lazily on first open)
-    await page.waitForFunction(
-      (id) => (window as any).dcEditors?.has(id),
-      dcId,
-      { timeout: 10000 }
-    );
-
-    // Set the modified name via the editor API
-    await page.evaluate(([ id, name ]) => {
-      const editor = (window as any).dcEditors.get(id);
-      const current = JSON.parse(editor.get().text);
-      current.name = name;
-      editor.set({ text: JSON.stringify(current, null, 2) });
-    }, [dcId, EDITED_NAME]);
-
-    // Save and wait for modal to close
-    await Promise.all([
-      page.waitForResponse(r => r.url().includes('/graphql') && r.status() === 200),
-      page.locator(`#dc-edit-submit-${dcId}`).click(),
-    ]);
-    await expect(page.locator(`#edit-modal-dc-${dcId}`)).not.toBeVisible({ timeout: 10000 });
-
-    // Reload the tab content and assert the new name appears in the summary
-    await page.waitForSelector(`[id^="tab-content-"] article`, { timeout: 10000 });
-    await expect(
-      page.locator('[id^="tab-content-"]').getByText(EDITED_NAME)
-    ).toBeVisible();
-
-    // ── Restore original name ──────────────────────────────────────────────────
-    await page.locator(`[data-dc-edit-id="${dcId}"]`).click();
-    await expect(page.locator(`#edit-modal-dc-${dcId}`)).toBeVisible();
-
-    await page.evaluate(([ id, name ]) => {
-      const editor = (window as any).dcEditors.get(id);
-      const current = JSON.parse(editor.get().text);
-      current.name = name;
-      editor.set({ text: JSON.stringify(current, null, 2) });
-    }, [dcId, DC_NAME]);
-
-    await Promise.all([
-      page.waitForResponse(r => r.url().includes('/graphql') && r.status() === 200),
-      page.locator(`#dc-edit-submit-${dcId}`).click(),
-    ]);
-    await expect(page.locator(`#edit-modal-dc-${dcId}`)).not.toBeVisible({ timeout: 10000 });
-  });
+  await rename(page, EDITED_NAME, DC_NAME);
+  await page.goto(`/datacenters/${encodeURIComponent(DC_ORB_ID)}`);
+  await expect(page.getByTestId('page-heading')).toHaveText(DC_NAME);
 });

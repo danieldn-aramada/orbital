@@ -303,3 +303,150 @@ func TestResolveViews_InterfaceAndConcreteSlugCollisionIsRefused(t *testing.T) {
 		}
 	}
 }
+
+// viewFor is a reader for the tests below.
+func viewFor(t *testing.T, views []View, typeName string) View {
+	t.Helper()
+	for _, v := range views {
+		if v.Type == typeName {
+			return v
+		}
+	}
+	t.Fatalf("no view for %s", typeName)
+	return View{}
+}
+
+// TestView_CarriesFacet is acceptance item 8: the resolved facet rides on the
+// view, so orbital's own UI and any API consumer read the SAME answer rather
+// than each deciding which column is worth a filter.
+func TestView_CarriesFacet(t *testing.T) {
+	types := map[string]TypeInfo{
+		"Server": {Doc: "facet: dataCenter", Fields: []DerivedField{
+			{Name: "hostname", Editable: true, Kind: "SCALAR"},
+			{Name: "dataCenter", Kind: "OBJECT", TypeName: "DataCenter"},
+		}},
+		"DataCenter": {Fields: []DerivedField{{Name: "region", Editable: true, Kind: "SCALAR"}}},
+	}
+	views, err := ResolveViews(types, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := viewFor(t, views, "Server").Facet; got != "dataCenter" {
+		t.Errorf("Server.Facet = %q, want dataCenter", got)
+	}
+	// The negative: a type that declares nothing gets nothing. A facet that
+	// appears without being asked for is a control nobody can turn off.
+	if got := viewFor(t, views, "DataCenter").Facet; got != "" {
+		t.Errorf("an unannotated type must have no facet, got %q", got)
+	}
+}
+
+// TestFacetFor_InheritsFromInterface is acceptance item 5.
+//
+// A TYPE docstring does NOT reach implementations on its own — that is a
+// per-annotation decision, and `slug:` must never inherit or every
+// implementation would claim the interface's URL. `facet:` does, so /clusters
+// and /eksa-kubernetes-clusters cannot disagree about having a filter.
+func TestFacetFor_InheritsFromInterface(t *testing.T) {
+	types := map[string]TypeInfo{
+		"KubernetesCluster": {
+			Doc:           "slug: clusters\nfacet: dataCenter",
+			IsInterface:   true,
+			PossibleTypes: []string{"EksaKubernetesCluster"},
+			Fields: []DerivedField{
+				{Name: "kubernetesVersion", Editable: true, Kind: "SCALAR"},
+				{Name: "dataCenter", Kind: "OBJECT", TypeName: "DataCenter"},
+			},
+		},
+		"EksaKubernetesCluster": {
+			Implements: []string{"KubernetesCluster"},
+			Fields: []DerivedField{
+				{Name: "clusterType", Editable: true, Kind: "SCALAR"},
+				{Name: "dataCenter", Kind: "OBJECT", TypeName: "DataCenter"},
+			},
+		},
+		"DataCenter": {Fields: []DerivedField{{Name: "region", Editable: true, Kind: "SCALAR"}}},
+	}
+	views, err := ResolveViews(types, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := viewFor(t, views, "KubernetesCluster").Facet; got != "dataCenter" {
+		t.Errorf("the interface view's facet = %q, want dataCenter", got)
+	}
+	if got := viewFor(t, views, "EksaKubernetesCluster").Facet; got != "dataCenter" {
+		t.Errorf("an implementation must inherit the interface's facet, got %q", got)
+	}
+	// Inheritance must not leak the interface's SLUG, which is the reason this
+	// is per-annotation rather than a blanket rule.
+	if got := viewFor(t, views, "EksaKubernetesCluster").Slug; got == "clusters" {
+		t.Error("an implementation must not inherit the interface's slug")
+	}
+}
+
+// TestFacetValidation_RejectsNonColumn is acceptance item 7.
+//
+// A facet over a column the table does not render is a dead control: the
+// dropdown appears and filters column -1. Dropped, and REPORTED — an
+// annotation that reads as correct and does nothing is worse than one nobody
+// wrote, which is the same reasoning UnknownAnnotations exists for.
+func TestFacetValidation_RejectsNonColumn(t *testing.T) {
+	types := map[string]TypeInfo{
+		"Server": {
+			Doc: "facet: assetDataV2",
+			Fields: []DerivedField{
+				{Name: "hostname", Editable: true, Kind: "SCALAR"},
+				{Name: "assetDataV2", Editable: true, Kind: "SCALAR", Doc: "detailOnly"},
+			},
+		},
+		"Rack": {Doc: "facet: nosuchfield", Fields: []DerivedField{
+			{Name: "uHeight", Editable: true, Kind: "SCALAR"},
+		}},
+	}
+	views, err := ResolveViews(types, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := viewFor(t, views, "Server").Facet; got != "" {
+		t.Errorf("a detailOnly field is not a column and must not become a facet, got %q", got)
+	}
+	if got := viewFor(t, views, "Rack").Facet; got != "" {
+		t.Errorf("an unknown field must not become a facet, got %q", got)
+	}
+
+	warnings := FacetWarnings(types, views)
+	if len(warnings) != 2 {
+		t.Fatalf("both dropped facets must be reported, got %v", warnings)
+	}
+	joined := warnings[0] + "|" + warnings[1]
+	for _, want := range []string{"assetDataV2", "nosuchfield", "Server", "Rack"} {
+		if !contains(joined, want) {
+			t.Errorf("warnings must name %q; got %v", want, warnings)
+		}
+	}
+}
+
+// A second facet field is honoured-first-and-reported, never silently dropped:
+// someone who wrote two and got one needs to be told which.
+func TestFacetWarnings_ReportsExtraFields(t *testing.T) {
+	types := map[string]TypeInfo{
+		"Server": {Doc: "facet: dataCenter, rack", Fields: []DerivedField{
+			{Name: "hostname", Editable: true, Kind: "SCALAR"},
+			{Name: "dataCenter", Kind: "OBJECT", TypeName: "DataCenter"},
+			{Name: "rack", Kind: "OBJECT", TypeName: "Rack"},
+		}},
+		"DataCenter": {Fields: []DerivedField{{Name: "region", Editable: true, Kind: "SCALAR"}}},
+		"Rack":       {Fields: []DerivedField{{Name: "uHeight", Editable: true, Kind: "SCALAR"}}},
+	}
+	views, err := ResolveViews(types, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := viewFor(t, views, "Server").Facet; got != "dataCenter" {
+		t.Errorf("the first field must win, got %q", got)
+	}
+	warnings := FacetWarnings(types, views)
+	if len(warnings) != 1 || !contains(warnings[0], "rack") {
+		t.Fatalf("the extra field must be reported by name, got %v", warnings)
+	}
+}

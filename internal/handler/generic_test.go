@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/armada/orbital/internal/configitems"
+	"github.com/armada/orbital/internal/web/data/page"
 )
 
 // TestGenericDetailQuerySelectsMetaFields guards the metadata box's data.
@@ -263,20 +264,20 @@ func TestTableColumns_ExcludesDetailOnly(t *testing.T) {
 		Display:    []string{"assetDataV2", "model", "name"},
 		DetailOnly: []string{"assetDataV2"},
 	}
-	got := tableColumns(v)
+	got := v.ColumnFields()
 	for _, f := range got {
 		if f == "assetDataV2" {
 			t.Fatalf("a detailOnly field must not be a table column: %v", got)
 		}
 	}
 	if len(got) != 2 || got[0] != "model" || got[1] != "name" {
-		t.Fatalf("tableColumns() = %v, want [model name]", got)
+		t.Fatalf("ColumnFields() = %v, want [model name]", got)
 	}
 
 	// A view with nothing detail-only is untouched — and returns the SAME
 	// slice, so this cannot quietly reorder or copy every other view's columns.
 	plain := configitems.View{Display: []string{"a", "b"}}
-	if out := tableColumns(plain); len(out) != 2 || out[0] != "a" {
+	if out := plain.ColumnFields(); len(out) != 2 || out[0] != "a" {
 		t.Fatalf("a view with no blobs must pass through: %v", out)
 	}
 }
@@ -297,4 +298,81 @@ func TestPrettyJSON(t *testing.T) {
 			t.Errorf("prettyJSON(%v) = %v, want it returned untouched", raw, got)
 		}
 	}
+}
+
+// TestFacetOptions_AreDistinctColumnValues is acceptance item 2.
+//
+// Resolved server-side, because orbital's UI is a consumer of orbital's API
+// like any other: "walk the rows collecting distinct values" is exactly the
+// client re-implementation the flattened export-preview response exists to
+// avoid. The column INDEX matters as much as the options — it must match the
+// template's header order (Name, scalars, references, Orb ID) or the dropdown
+// filters the wrong column, which looks like a broken filter rather than a
+// broken index.
+func TestFacetOptions_AreDistinctColumnValues(t *testing.T) {
+	cols := []page.ColumnHeader{{Field: "hostname", Label: "Hostname"}, {Field: "model", Label: "Model"}}
+	refs := []page.RefHeader{{Field: "rack", Label: "Rack"}, {Field: "dataCenter", Label: "Data Center"}}
+	rows := []map[string]any{
+		{"hostname": "a", "model": "R650", "dataCenter": map[string]any{"name": "colo"}},
+		{"hostname": "b", "model": "R650", "dataCenter": map[string]any{"name": "alaska"}},
+		{"hostname": "c", "model": "R750", "dataCenter": map[string]any{"name": "colo"}},
+		// A row with no data center at all must not contribute a blank option.
+		{"hostname": "d", "model": "R750"},
+	}
+
+	t.Run("reference column", func(t *testing.T) {
+		f := buildFacet(configitems.View{Facet: "dataCenter"}, cols, refs, rows)
+		if f == nil {
+			t.Fatal("dataCenter is a reference column and must produce a facet")
+		}
+		// Name(0) hostname(1) model(2) rack(3) dataCenter(4).
+		if f.Column != 4 {
+			t.Errorf("Column = %d, want 4", f.Column)
+		}
+		if f.Label != "Data Center" {
+			t.Errorf("Label = %q, want the column heading", f.Label)
+		}
+		// The empty option names the whole SET, so it is plural — the column
+		// heading is singular because it heads one cell. "All Data Center"
+		// is what reading the heading straight through gives you.
+		if f.All != "All Data Centers" {
+			t.Errorf("All = %q, want \"All Data Centers\"", f.All)
+		}
+		if len(f.Options) != 2 || f.Options[0] != "alaska" || f.Options[1] != "colo" {
+			t.Errorf("Options = %v, want [alaska colo] — distinct, sorted, no blank", f.Options)
+		}
+	})
+
+	t.Run("scalar column", func(t *testing.T) {
+		f := buildFacet(configitems.View{Facet: "model"}, cols, refs, rows)
+		if f == nil {
+			t.Fatal("model is a scalar column and must produce a facet")
+		}
+		if f.Column != 2 {
+			t.Errorf("Column = %d, want 2", f.Column)
+		}
+		if len(f.Options) != 2 {
+			t.Errorf("Options = %v, want the two distinct models", f.Options)
+		}
+	})
+
+	// The negatives. A dropdown whose only choice selects everything is a
+	// control that cannot do anything, and an unannotated view must render no
+	// control at all — acceptance item 1's other half.
+	t.Run("single distinct value yields nothing", func(t *testing.T) {
+		one := []map[string]any{{"model": "R650"}, {"model": "R650"}}
+		if f := buildFacet(configitems.View{Facet: "model"}, cols, refs, one); f != nil {
+			t.Errorf("one distinct value must not produce a facet, got %+v", f)
+		}
+	})
+	t.Run("no annotation yields nothing", func(t *testing.T) {
+		if f := buildFacet(configitems.View{}, cols, refs, rows); f != nil {
+			t.Errorf("an unannotated view must produce no facet, got %+v", f)
+		}
+	})
+	t.Run("field that is not a column yields nothing", func(t *testing.T) {
+		if f := buildFacet(configitems.View{Facet: "serialNumber"}, cols, refs, rows); f != nil {
+			t.Errorf("a non-column must produce no facet, got %+v", f)
+		}
+	})
 }

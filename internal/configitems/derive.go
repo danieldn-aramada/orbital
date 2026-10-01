@@ -360,6 +360,13 @@ func (r *Resolver) ensure(ctx context.Context) error {
 			r.logger.Warn("unrecognised orbital annotation in the deployed schema; the field is NOT suppressed",
 				"where", u)
 		}
+		// A facet that named a field the page does not render is dropped
+		// silently otherwise — the schema claims the list page has a filter
+		// and it simply does not appear.
+		for _, w := range FacetWarnings(types, views) {
+			r.logger.Warn("facet annotation ignored; the list page has no filter dropdown for it",
+				"where", w)
+		}
 	}
 	return nil
 }
@@ -413,6 +420,7 @@ var knownAnnotations = []string{
 	LabelAnnotation,         // "label:" prefix
 	DetailOnlyAnnotation,    // bare word
 	EditableAnnotation,      // "editable:" prefix
+	FacetAnnotation,         // "facet:" prefix
 }
 
 // UnknownAnnotations returns docstring lines that LOOK like an orbital
@@ -645,6 +653,51 @@ func ApplyOrder(fields, pinned []string) []string {
 		}
 	}
 	return out
+}
+
+// FacetAnnotation names ONE column a list page offers as a filter dropdown.
+//
+//	"""facet: dataCenter"""
+//	type Server implements ConfigItem {
+//
+// The bespoke Servers and Clusters pages each carried a hand-built "All Data
+// Centers" select; both died with their templates and nobody noticed, because
+// the JavaScript that built them survived and simply returns early now.
+//
+// Declared rather than derived. Cardinality alone identifies the right columns
+// on today's data — 9 data centers across 190 servers, against 190 distinct
+// service tags — but a threshold makes the CONTROL appear and disappear as the
+// data moves, and a dropdown that vanished because someone seeded thirty more
+// rows is not a UI anyone can explain. IPv4 sorting gets to be derived because
+// its test is per-value and stable; "is this worth filtering by" is a judgement
+// about the page, which is what an annotation is for.
+//
+// ONE field. The two pages that lost a dropdown had exactly one each, and
+// widening to a list is a compatible change if a page ever wants two — where
+// refusing extra fields now would not be.
+const FacetAnnotation = "facet:"
+
+// FacetFor returns the field a type declares as its list-page facet, plus any
+// extra fields the annotation named.
+//
+// Extras are RETURNED rather than ignored so the caller can say so: only one is
+// supported, and silently honouring the first would leave someone convinced
+// their second dropdown was broken.
+func FacetFor(typeDoc string) (string, []string) {
+	v := annotationValue(typeDoc, FacetAnnotation)
+	if v == "" {
+		return "", nil
+	}
+	var fields []string
+	for _, part := range strings.Split(v, ",") {
+		if f := strings.TrimSpace(part); f != "" {
+			fields = append(fields, f)
+		}
+	}
+	if len(fields) == 0 {
+		return "", nil
+	}
+	return fields[0], fields[1:]
 }
 
 // IncludeAnnotation adds a relationship the type does not hold directly, named
