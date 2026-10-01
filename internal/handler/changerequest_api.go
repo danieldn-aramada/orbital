@@ -652,7 +652,15 @@ func (h *ChangeRequest) ListChangeRequests(c echo.Context) error {
 				"Use one or more of: open, approved, active, rejected, merged, closed.")
 		}
 	}
-	wantNamespace := c.QueryParam("namespace")
+	// namespace is repeatable — ?namespace=foo&namespace=bar — and the values are
+	// OR-ed, matching status and orbId above. QueryParam would take the FIRST and
+	// silently answer about one namespace alone.
+	wantNamespaces := make([]string, 0, len(c.QueryParams()["namespace"]))
+	for _, v := range c.QueryParams()["namespace"] {
+		if v = strings.TrimSpace(v); v != "" && !containsStr(wantNamespaces, v) {
+			wantNamespaces = append(wantNamespaces, v)
+		}
+	}
 	awaiting := c.QueryParam("awaiting_review") == "true"
 
 	// orbId is repeatable — ?orbId=server&orbId=idrac&orbId=maintenance — and
@@ -721,8 +729,8 @@ func (h *ChangeRequest) ListChangeRequests(c echo.Context) error {
 			q = q.Where(approvalrequest.AuthorNEQ(actor))
 		}
 	}
-	if wantNamespace != "" {
-		q = q.Where(payloadNamespaceEQ(wantNamespace))
+	if len(wantNamespaces) > 0 {
+		q = q.Where(payloadInAnyNamespace(wantNamespaces))
 	}
 	if len(wantOrbIDs) > 0 {
 		q = q.Where(payloadTouchesAnyOrbID(wantOrbIDs))

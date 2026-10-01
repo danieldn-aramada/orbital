@@ -56,6 +56,12 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   sub-tabs (the same content is stacked as boxes), and workload clusters as
   nested rows in the list — they are a table on the management cluster's page.
 
+### Changed
+- **`GET /api/v1/change-requests?namespace=` is now repeatable** — pass it more
+  than once (`?namespace=foo&namespace=bar`) to list requests in any of several
+  namespaces, OR-ed, matching how `status` and `orbId` already behave. A single
+  value is unchanged.
+
 ### Fixed
 - **`/servers` and `/clusters` had silently lost their data center filter.**
   Both dropdowns lived in JavaScript that survived the deletion of the pages

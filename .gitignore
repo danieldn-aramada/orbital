@@ -57,6 +57,12 @@ orb-data/
 # Secrets — never commit filled-in secret manifests
 deploy/legacy/secrets.yaml
 
+# Real edge site overlays are not product source — only the base and one
+# worked example ship. A new site overlay here will NOT be committed.
+# See deploy/README.md.
+deploy/edge/overlays/*
+!deploy/edge/overlays/example/
+
 # OS
 .DS_Store
 Thumbs.db

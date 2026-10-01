@@ -114,6 +114,25 @@ Only the author (or a `bypassRoles` role) can do this. `availableActions` carrie
 
 `missingTargets` is different: the entity was deleted, and no rebase helps.
 
+## 5. Diff — what would change
+
+```bash
+curl -s $ORBITAL_URL/api/v1/change-requests/colo-21/diff -H "Authorization: Bearer $TOKEN" \
+  | jq '{summary, changes, satisfied}'
+```
+Example response
+```json
+{ "summary": { "added": 0, "removed": 0, "modified": 1, "unchanged": 0 },
+  "changes": [
+    { "orbId": "colo:dev-main-velero-backup", "type": "VeleroBackup", "change": "modified",
+      "fields": [ { "field": "VeleroBackup.retentionDays", "before": 17, "after": 18 } ] } ],
+  "satisfied": [
+    { "orbId": "colo:dev-main-velero-backup", "type": "VeleroBackup", "change": "satisfied",
+      "fields": [ { "field": "VeleroBackup.location", "before": "https://…/all-namespaces-v2", "after": "https://…/all-namespaces-v2" } ] } ] }
+```
+
+Render `changes` — that is the diff. `satisfied` is the part of the proposal that would do nothing (value already equals current); hide or grey it. The flat `fields[]` array carries the same split as `outcome: applies | satisfied` per field.
+
 ---
 
 ### Find requests
@@ -129,7 +148,8 @@ curl -s "$ORBITAL_URL/api/v1/change-requests?awaiting_review=true" -H "Authoriza
 |---|---|
 | `status` | `open` `approved` `active` `rejected` `merged` `closed` — repeatable, OR-ed |
 | `orbId` | repeatable, OR-ed, max 128 |
-| `namespace` · `author` · `mine` · `awaiting_review` | |
+| `namespace` | repeatable, OR-ed |
+| `author` · `mine` · `awaiting_review` | |
 
 Use `status=active`, not `open` — `approved` is derived, so `open` alone misses approved-but-unmerged. An edit to an owned child files under the *child's* orbId.
 
