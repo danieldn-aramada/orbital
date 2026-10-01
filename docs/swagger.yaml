@@ -1,4 +1,160 @@
 definitions:
+  configitems.View:
+    properties:
+      detailOnly:
+        description: |-
+          DetailOnly are Display fields that render on a detail page but never as a
+          table column — the `detailOnly` annotation. Placement is DECLARED, not
+          inferred from what a field holds.
+
+          Reported rather than silently dropped, because a client building its own
+          table needs the same distinction and should not have to re-derive it.
+        items:
+          type: string
+        type: array
+      display:
+        description: |-
+          Display are the scalars a page SHOWS, which is a superset of Fields.
+
+          `editorIgnored` is editor-scoped, not display-scoped: a scanned hardware
+          fact like capacityBytes is not something a human should type, and is
+          exactly what someone opens the page to read. Using Fields for display
+          made a StorageDevice detail page render nothing at all, because every one
+          of its fields is annotated.
+        items:
+          type: string
+        type: array
+      facet:
+        description: |-
+          Facet is the single column the list page offers as a filter dropdown,
+          from the type's `facet:` annotation. Empty when unannotated, and also
+          when the annotation named something this page does not render as a
+          column — a facet over an absent column is a dead control, so it is
+          dropped here and reported by FacetWarnings rather than shipped broken.
+
+          Carried on the view because orbital's UI is a consumer of this API like
+          any other: a client building its own table should be told which column is
+          worth a filter, not have to guess from cardinality.
+        type: string
+      fields:
+        description: Fields are the EDITABLE scalars — what the editor may write.
+        items:
+          type: string
+        type: array
+      implementations:
+        description: |-
+          Implementations are the concrete types an interface view lists. Empty
+          for a concrete view.
+        items:
+          type: string
+        type: array
+      isInterface:
+        description: |-
+          IsInterface marks a view backed by a GraphQL interface. Such a view
+          LISTS rows of several concrete types; its detail route resolves each
+          row's own type, because DGraph generates no get<Interface>.
+        type: boolean
+      isRoot:
+        description: |-
+          IsRoot decides NAV membership, not routability. Every type is routable;
+          only roots appear in the menu, because an owned child like IdracSettings
+          is meaningless outside its parent and a nineteen-item nav helps nobody.
+          Derived from containment: a root is a type nothing else owns.
+        type: boolean
+      jsonString:
+        description: |-
+          JSONString are fields whose String value holds a JSON document. Says
+          nothing about placement: it drives editor parsing and the pretty-printed
+          rendering. A field is commonly both, but they are separate facts.
+        items:
+          type: string
+        type: array
+      label:
+        description: Label is DISPLAY, not contract — free to change without breaking
+          anyone.
+        type: string
+      meta:
+        description: |-
+          Meta are the ConfigItem interface fields — identity and provenance —
+          which displayScalars deliberately strips out of Display. They are shown
+          separately, in their own box, exactly as every hand-written detail page
+          showed them.
+        items:
+          type: string
+        type: array
+      nav:
+        description: |-
+          Nav is the menu position from the type's `nav:` annotation, or
+          NavUnpinned when it declares none. Published so a client building its own
+          navigation gets the same order without re-deriving it — the UI sorts
+          nothing.
+        type: integer
+      order:
+        description: |-
+          Order is the pinned field prefix from the type's `order:` annotation.
+          Exposed because a list page re-applies it after unioning an interface's
+          implementations, and because a client building its own table should
+          order it the way orbital does rather than guess.
+        items:
+          type: string
+        type: array
+      refColumns:
+        description: |-
+          RefColumns are the SINGLE relationships rendered as an extra column when
+          this type appears as a row: a reference to another entity shows WHICH
+          entity.
+
+          That is the difference between a useful table and one you have to click
+          through — a DataCenter's servers table shows each server's rack and OOB
+          IP, and those live one hop away. Derived, not declared: "single" means one
+          value fits in a cell, which is the only question a column can answer.
+        items:
+          $ref: '#/definitions/configitems.ViewRefColumn'
+        type: array
+      slug:
+        description: |-
+          Slug is the URL segment. A CONTRACT: integrators and bookmarks depend on
+          it, so it derives from the schema and changing it is a deliberate
+          breaking act.
+        type: string
+      tabs:
+        description: |-
+          Tabs are the relationships this type has to other ConfigItem types — what
+          a detail page renders as tabs.
+        items:
+          $ref: '#/definitions/configitems.ViewTab'
+        type: array
+      type:
+        description: Type is the GraphQL type name.
+        type: string
+    type: object
+  configitems.ViewRefColumn:
+    properties:
+      field:
+        type: string
+      slug:
+        type: string
+      type:
+        type: string
+    type: object
+  configitems.ViewTab:
+    properties:
+      field:
+        description: Field is the GraphQL field holding the relationship.
+        type: string
+      isList:
+        description: IsList distinguishes a table of children from a single related
+          entity.
+        type: boolean
+      slug:
+        description: |-
+          Slug is that type's own page, so a client can link through without
+          re-deriving anything.
+        type: string
+      type:
+        description: Type is the ConfigItem type at the other end.
+        type: string
+    type: object
   graphdiff.Change:
     properties:
       change:
@@ -578,6 +734,12 @@ definitions:
         description: |-
           Stale means the intent this request was written against has changed since
           it was opened. Derived on every read — never a stored column.
+
+          ABSENT on list responses, which are PostgreSQL-only and do not ask the
+          question (see storedState). Absent is not false: a client must treat a
+          missing `stale` as "open the request to find out", which is what the
+          detail endpoint is for. Same for subtreeChanged, staleEntities and
+          missingTargets.
         example: false
         type: boolean
       staleEntities:
@@ -766,6 +928,12 @@ definitions:
         description: data | management | auth
         example: data
         type: string
+      eventSource:
+        description: |-
+          CloudTrail parity. All three are omitempty: absent means "no HTTP request
+          behind this event" (a background writer), which is different from empty.
+        example: graphql
+        type: string
       id:
         example: 3d6bb15f-8c4c-45f0-8a6c-939b6f9cc512
         type: string
@@ -774,6 +942,10 @@ definitions:
         items:
           type: string
         type: array
+      requestId:
+        description: correlates events from one request
+        example: a1b2c3d4
+        type: string
       resourceIds:
         description: orbIds touched
         items:
@@ -784,6 +956,10 @@ definitions:
         items:
           type: string
         type: array
+      sourceIpAddress:
+        description: caller address
+        example: 10.1.2.3
+        type: string
       timestamp:
         example: "2026-07-29T17:26:55Z"
         type: string
@@ -1106,7 +1282,21 @@ definitions:
         type: string
       error:
         type: string
+      heartbeatAt:
+        description: |-
+          HeartbeatAt is when the runner last proved it was alive. A running job
+          whose heartbeat has stopped advancing is about to be reaped.
+        example: "2026-09-16T10:04:11Z"
+        type: string
       id:
+        type: string
+      lockedBy:
+        description: |-
+          LockedBy names the runner executing this job, as <hostname>_<uuid>.
+          Surfaced so an operator investigating a stuck or reaped job knows which
+          pod to look at — the reason the column holds a readable locator rather
+          than a bare token. Absent for jobs no runner has claimed.
+        example: orbital-7d9f8c6b5-x2kqp_5f1c2e2a-...
         type: string
       phase:
         description: |-
@@ -1164,6 +1354,14 @@ definitions:
       problems:
         items:
           $ref: '#/definitions/handler.changesetProblem'
+        type: array
+    type: object
+  handler.viewsResponse:
+    properties:
+      views:
+        description: Views is every renderable ConfigItem type, sorted by type name.
+        items:
+          $ref: '#/definitions/configitems.View'
         type: array
     type: object
   ocitype.ArtifactLayer:
@@ -1302,10 +1500,13 @@ paths:
         name: namespace
         required: true
         type: string
-      - description: ConfigItem type
+      - collectionFormat: csv
+        description: ConfigItem type(s) — repeatable
         in: query
+        items:
+          type: string
         name: type
-        type: string
+        type: array
       produces:
       - application/json
       responses:
@@ -1521,26 +1722,25 @@ paths:
       - backup
   /api/v1/change-requests:
     get:
-      description: |-
-        Filters compose. `mine` and `awaiting_review` are caller-relative; `orbId` matches any request whose changeset touches that entity, at any position. `status=active` means not-terminal (open plus approved) — the filter to use for "does this entity have a change in flight", since `approved` is derived and `status=open` excludes it.
-
-        `status` is **repeatable** and OR-ed, so "everything that has finished" is `status=merged&status=rejected&status=closed` — there is no aggregate keyword for it, because the three stored values already say it and a coined term would have to be learned. An unrecognised value is refused rather than ignored: a `status=Merged` typo used to match no filter at all and return the ENTIRE queue, which looks exactly like a correct answer.
-
-        `orbId` is **repeatable** and the values are OR-ed (max 32; more is refused, never truncated). A change to an owned child records the CHILD's orbId — a server-maintenance edit lands as `<ns>:server-maintenance-<serial>` — so "is anything in flight for this server" means passing the server's orbId AND the orbIds of everything it owns, exactly as `/api/v1/audit-log` does.
+      description: Filters AND across params; `status`, `namespace` and `orbId` are
+        each repeatable and OR-ed within. Use `status=active` (open+approved) for
+        "in flight" — `open` alone excludes approved.
       parameters:
-      - collectionFormat: csv
-        description: 'open, approved, active (open+approved), rejected, merged or
-          closed. Repeatable and OR-ed: status=merged&status=rejected&status=closed
-          is every terminal state. An unrecognised value is refused (400), never ignored.'
+      - collectionFormat: multi
+        description: 'Lifecycle: open, approved, active (open+approved), rejected,
+          merged, closed. Repeatable, OR-ed; unknown value is a 400.'
         in: query
         items:
           type: string
         name: status
         type: array
-      - description: Namespace
+      - collectionFormat: multi
+        description: Namespace(s). Repeatable, OR-ed.
         in: query
+        items:
+          type: string
         name: namespace
-        type: string
+        type: array
       - description: Author email
         in: query
         name: author
@@ -1553,10 +1753,8 @@ paths:
         in: query
         name: awaiting_review
         type: boolean
-      - collectionFormat: csv
-        description: Only requests touching this entity. Repeatable, max 128 — matches
-          requests touching ANY of them. Over 128 the request is refused (400), not
-          truncated.
+      - collectionFormat: multi
+        description: orbId(s) the changeset touches. Repeatable, OR-ed, max 128.
         in: query
         items:
           type: string
@@ -2494,6 +2692,26 @@ paths:
       summary: Update user role
       tags:
       - users
+  /api/v1/views:
+    get:
+      description: 'Every ConfigItem type the deployed schema declares, with the URL
+        slug its pages live under, the editable field list, and its relationships
+        as tabs. Derived from the running schema: a type added to the schema appears
+        here with no code change and no restart.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.viewsResponse'
+        "503":
+          description: the schema could not be read from DGraph
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+      summary: List renderable views
+      tags:
+      - views
   /graphql:
     post:
       consumes:

@@ -36,7 +36,6 @@ var base = []string{
 	"templates/shared/components/navbar.gohtml",
 	"templates/shared/components/menu.gohtml",
 	"templates/shared/components/login-gate.gohtml",
-	"templates/shared/components/hint-banner.gohtml",
 	// Stub definitions required by navbar.gohtml references; orb has no auth UI.
 	"templates/orb/components/login-modal.gohtml",
 	"templates/orb/components/report-issue-modal.gohtml",

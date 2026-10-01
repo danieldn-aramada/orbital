@@ -46,7 +46,10 @@ enum DataCenterModel {
     Leviathan
 }
 
-"""editable: name"""
+"""
+editable: name
+nav: 10
+"""
 type DataCenter implements ConfigItem {
     """
     jsonString
@@ -72,6 +75,7 @@ type Rack implements ConfigItem {
 """
 include: storageControllers.storageDevices
 facet: dataCenter
+nav: 20
 """
 type Server implements ConfigItem {
     hostname: String @search(by: [term])
@@ -225,6 +229,9 @@ type NetworkInterface implements ConfigItem {
     lagMembers: [NetworkInterface] @hasInverse(field: lag)
 }
 
+"""
+nav: 40
+"""
 type NetworkDevice implements ConfigItem {
     # Network gear (switch / router / firewall / sd-wan), role-differentiated. NetBox-sourced identity anchor.
     manufacturer: String @search(by: [hash])
@@ -255,6 +262,7 @@ type NetworkDevice implements ConfigItem {
 slug: clusters
 order: name, provider, clusterType, environment, kubernetesVersion
 facet: dataCenter
+nav: 30
 """
 interface KubernetesCluster {
     kubernetesVersion: String

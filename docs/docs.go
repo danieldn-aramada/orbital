@@ -100,8 +100,12 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "type": "string",
-                        "description": "ConfigItem type",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "ConfigItem type(s) — repeatable",
                         "name": "type",
                         "in": "query"
                     }
@@ -477,7 +481,7 @@ const docTemplate = `{
         },
         "/api/v1/change-requests": {
             "get": {
-                "description": "Filters compose. ` + "`" + `mine` + "`" + ` and ` + "`" + `awaiting_review` + "`" + ` are caller-relative; ` + "`" + `orbId` + "`" + ` matches any request whose changeset touches that entity, at any position. ` + "`" + `status=active` + "`" + ` means not-terminal (open plus approved) — the filter to use for \"does this entity have a change in flight\", since ` + "`" + `approved` + "`" + ` is derived and ` + "`" + `status=open` + "`" + ` excludes it.\n\n` + "`" + `status` + "`" + ` is **repeatable** and OR-ed, so \"everything that has finished\" is ` + "`" + `status=merged\u0026status=rejected\u0026status=closed` + "`" + ` — there is no aggregate keyword for it, because the three stored values already say it and a coined term would have to be learned. An unrecognised value is refused rather than ignored: a ` + "`" + `status=Merged` + "`" + ` typo used to match no filter at all and return the ENTIRE queue, which looks exactly like a correct answer.\n\n` + "`" + `orbId` + "`" + ` is **repeatable** and the values are OR-ed (max 32; more is refused, never truncated). A change to an owned child records the CHILD's orbId — a server-maintenance edit lands as ` + "`" + `\u003cns\u003e:server-maintenance-\u003cserial\u003e` + "`" + ` — so \"is anything in flight for this server\" means passing the server's orbId AND the orbIds of everything it owns, exactly as ` + "`" + `/api/v1/audit-log` + "`" + ` does.",
+                "description": "Filters AND across params; ` + "`" + `status` + "`" + `, ` + "`" + `namespace` + "`" + ` and ` + "`" + `orbId` + "`" + ` are each repeatable and OR-ed within. Use ` + "`" + `status=active` + "`" + ` (open+approved) for \"in flight\" — ` + "`" + `open` + "`" + ` alone excludes approved.",
                 "produces": [
                     "application/json"
                 ],
@@ -491,14 +495,18 @@ const docTemplate = `{
                         "items": {
                             "type": "string"
                         },
-                        "collectionFormat": "csv",
-                        "description": "open, approved, active (open+approved), rejected, merged or closed. Repeatable and OR-ed: status=merged\u0026status=rejected\u0026status=closed is every terminal state. An unrecognised value is refused (400), never ignored.",
+                        "collectionFormat": "multi",
+                        "description": "Lifecycle: open, approved, active (open+approved), rejected, merged, closed. Repeatable, OR-ed; unknown value is a 400.",
                         "name": "status",
                         "in": "query"
                     },
                     {
-                        "type": "string",
-                        "description": "Namespace",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Namespace(s). Repeatable, OR-ed.",
                         "name": "namespace",
                         "in": "query"
                     },
@@ -525,8 +533,8 @@ const docTemplate = `{
                         "items": {
                             "type": "string"
                         },
-                        "collectionFormat": "csv",
-                        "description": "Only requests touching this entity. Repeatable, max 128 — matches requests touching ANY of them. Over 128 the request is refused (400), not truncated.",
+                        "collectionFormat": "multi",
+                        "description": "orbId(s) the changeset touches. Repeatable, OR-ed, max 128.",
                         "name": "orbId",
                         "in": "query"
                     }
@@ -1844,6 +1852,32 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/views": {
+            "get": {
+                "description": "Every ConfigItem type the deployed schema declares, with the URL slug its pages live under, the editable field list, and its relationships as tabs. Derived from the running schema: a type added to the schema appears here with no code change and no restart.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "views"
+                ],
+                "summary": "List renderable views",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.viewsResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "the schema could not be read from DGraph",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/graphql": {
             "post": {
                 "description": "POST: proxies GraphQL queries and mutations to DGraph. GET: serves the GraphiQL explorer UI.",
@@ -1882,6 +1916,137 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "configitems.View": {
+            "type": "object",
+            "properties": {
+                "detailOnly": {
+                    "description": "DetailOnly are Display fields that render on a detail page but never as a\ntable column — the ` + "`" + `detailOnly` + "`" + ` annotation. Placement is DECLARED, not\ninferred from what a field holds.\n\nReported rather than silently dropped, because a client building its own\ntable needs the same distinction and should not have to re-derive it.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "display": {
+                    "description": "Display are the scalars a page SHOWS, which is a superset of Fields.\n\n` + "`" + `editorIgnored` + "`" + ` is editor-scoped, not display-scoped: a scanned hardware\nfact like capacityBytes is not something a human should type, and is\nexactly what someone opens the page to read. Using Fields for display\nmade a StorageDevice detail page render nothing at all, because every one\nof its fields is annotated.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "facet": {
+                    "description": "Facet is the single column the list page offers as a filter dropdown,\nfrom the type's ` + "`" + `facet:` + "`" + ` annotation. Empty when unannotated, and also\nwhen the annotation named something this page does not render as a\ncolumn — a facet over an absent column is a dead control, so it is\ndropped here and reported by FacetWarnings rather than shipped broken.\n\nCarried on the view because orbital's UI is a consumer of this API like\nany other: a client building its own table should be told which column is\nworth a filter, not have to guess from cardinality.",
+                    "type": "string"
+                },
+                "fields": {
+                    "description": "Fields are the EDITABLE scalars — what the editor may write.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "implementations": {
+                    "description": "Implementations are the concrete types an interface view lists. Empty\nfor a concrete view.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "isInterface": {
+                    "description": "IsInterface marks a view backed by a GraphQL interface. Such a view\nLISTS rows of several concrete types; its detail route resolves each\nrow's own type, because DGraph generates no get\u003cInterface\u003e.",
+                    "type": "boolean"
+                },
+                "isRoot": {
+                    "description": "IsRoot decides NAV membership, not routability. Every type is routable;\nonly roots appear in the menu, because an owned child like IdracSettings\nis meaningless outside its parent and a nineteen-item nav helps nobody.\nDerived from containment: a root is a type nothing else owns.",
+                    "type": "boolean"
+                },
+                "jsonString": {
+                    "description": "JSONString are fields whose String value holds a JSON document. Says\nnothing about placement: it drives editor parsing and the pretty-printed\nrendering. A field is commonly both, but they are separate facts.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "label": {
+                    "description": "Label is DISPLAY, not contract — free to change without breaking anyone.",
+                    "type": "string"
+                },
+                "meta": {
+                    "description": "Meta are the ConfigItem interface fields — identity and provenance —\nwhich displayScalars deliberately strips out of Display. They are shown\nseparately, in their own box, exactly as every hand-written detail page\nshowed them.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "nav": {
+                    "description": "Nav is the menu position from the type's ` + "`" + `nav:` + "`" + ` annotation, or\nNavUnpinned when it declares none. Published so a client building its own\nnavigation gets the same order without re-deriving it — the UI sorts\nnothing.",
+                    "type": "integer"
+                },
+                "order": {
+                    "description": "Order is the pinned field prefix from the type's ` + "`" + `order:` + "`" + ` annotation.\nExposed because a list page re-applies it after unioning an interface's\nimplementations, and because a client building its own table should\norder it the way orbital does rather than guess.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "refColumns": {
+                    "description": "RefColumns are the SINGLE relationships rendered as an extra column when\nthis type appears as a row: a reference to another entity shows WHICH\nentity.\n\nThat is the difference between a useful table and one you have to click\nthrough — a DataCenter's servers table shows each server's rack and OOB\nIP, and those live one hop away. Derived, not declared: \"single\" means one\nvalue fits in a cell, which is the only question a column can answer.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configitems.ViewRefColumn"
+                    }
+                },
+                "slug": {
+                    "description": "Slug is the URL segment. A CONTRACT: integrators and bookmarks depend on\nit, so it derives from the schema and changing it is a deliberate\nbreaking act.",
+                    "type": "string"
+                },
+                "tabs": {
+                    "description": "Tabs are the relationships this type has to other ConfigItem types — what\na detail page renders as tabs.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configitems.ViewTab"
+                    }
+                },
+                "type": {
+                    "description": "Type is the GraphQL type name.",
+                    "type": "string"
+                }
+            }
+        },
+        "configitems.ViewRefColumn": {
+            "type": "object",
+            "properties": {
+                "field": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "configitems.ViewTab": {
+            "type": "object",
+            "properties": {
+                "field": {
+                    "description": "Field is the GraphQL field holding the relationship.",
+                    "type": "string"
+                },
+                "isList": {
+                    "description": "IsList distinguishes a table of children from a single related entity.",
+                    "type": "boolean"
+                },
+                "slug": {
+                    "description": "Slug is that type's own page, so a client can link through without\nre-deriving anything.",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "Type is the ConfigItem type at the other end.",
+                    "type": "string"
+                }
+            }
+        },
         "graphdiff.Change": {
             "type": "object",
             "properties": {
@@ -2530,7 +2695,7 @@ const docTemplate = `{
                     }
                 },
                 "stale": {
-                    "description": "Stale means the intent this request was written against has changed since\nit was opened. Derived on every read — never a stored column.",
+                    "description": "Stale means the intent this request was written against has changed since\nit was opened. Derived on every read — never a stored column.\n\nABSENT on list responses, which are PostgreSQL-only and do not ask the\nquestion (see storedState). Absent is not false: a client must treat a\nmissing ` + "`" + `stale` + "`" + ` as \"open the request to find out\", which is what the\ndetail endpoint is for. Same for subtreeChanged, staleEntities and\nmissingTargets.",
                     "type": "boolean",
                     "example": false
                 },
@@ -2757,6 +2922,11 @@ const docTemplate = `{
                     "type": "string",
                     "example": "data"
                 },
+                "eventSource": {
+                    "description": "CloudTrail parity. All three are omitempty: absent means \"no HTTP request\nbehind this event\" (a background writer), which is different from empty.",
+                    "type": "string",
+                    "example": "graphql"
+                },
                 "id": {
                     "type": "string",
                     "example": "3d6bb15f-8c4c-45f0-8a6c-939b6f9cc512"
@@ -2767,6 +2937,11 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "requestId": {
+                    "description": "correlates events from one request",
+                    "type": "string",
+                    "example": "a1b2c3d4"
                 },
                 "resourceIds": {
                     "description": "orbIds touched",
@@ -2781,6 +2956,11 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "sourceIpAddress": {
+                    "description": "caller address",
+                    "type": "string",
+                    "example": "10.1.2.3"
                 },
                 "timestamp": {
                     "type": "string",
@@ -3175,8 +3355,18 @@ const docTemplate = `{
                 "error": {
                     "type": "string"
                 },
+                "heartbeatAt": {
+                    "description": "HeartbeatAt is when the runner last proved it was alive. A running job\nwhose heartbeat has stopped advancing is about to be reaped.",
+                    "type": "string",
+                    "example": "2026-09-16T10:04:11Z"
+                },
                 "id": {
                     "type": "string"
+                },
+                "lockedBy": {
+                    "description": "LockedBy names the runner executing this job, as \u003chostname\u003e_\u003cuuid\u003e.\nSurfaced so an operator investigating a stuck or reaped job knows which\npod to look at — the reason the column holds a readable locator rather\nthan a bare token. Absent for jobs no runner has claimed.",
+                    "type": "string",
+                    "example": "orbital-7d9f8c6b5-x2kqp_5f1c2e2a-..."
                 },
                 "phase": {
                     "description": "Phase surfaces the fine-grained step the atomic goroutine is on, for\nclients that want to render a per-step progress list. Coarse ` + "`" + `status` + "`" + `\nstays authoritative for terminal-state gating. Values: pending,\nexporting, bundling, pushing, signing, completed, failed. Empty\nonly if derivation raced with the initial insert.",
@@ -3254,6 +3444,18 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/handler.changesetProblem"
+                    }
+                }
+            }
+        },
+        "handler.viewsResponse": {
+            "type": "object",
+            "properties": {
+                "views": {
+                    "description": "Views is every renderable ConfigItem type, sorted by type name.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configitems.View"
                     }
                 }
             }

@@ -129,12 +129,19 @@ test-integration: ## Run integration tests against real services (requires: make
 	@# wipes the volume, so it genuinely goes missing.
 	@docker compose -f $(COMPOSE_FILE) exec -T postgres psql -U orbital -c "CREATE DATABASE orbital_test;" 2>&1 | grep -v "already exists" || true
 	@# The suite's live graph is dgraph-alpha-test (:8083), NOT blue (:8080) —
-	@# TestMain drop_all's it. Checked here so a stack started before this cluster
-	@# existed fails with the reason instead of a connection error 3 layers down.
-	@curl -fsS -o /dev/null http://localhost:8083/health 2>/dev/null || { \
-		echo "ERROR: test DGraph (:8083) is not up — run 'make up'."; \
-		echo "       It is a separate cluster so the suite cannot wipe your dev graph on :8080."; \
-		exit 1; }
+	@# TestMain drop_all's it, which is exactly why it must never be your dev
+	@# cluster. Started HERE rather than by `make up`: it idles at ~1.4GB and no
+	@# other target needs it. `--wait` blocks on the healthchecks both services
+	@# declare, so the suite never races a cluster that is still coming up.
+	@mkdir -p .local/exports/test
+	@echo "Starting test DGraph (:8083)..."
+	@docker compose -f $(COMPOSE_FILE) --profile test up -d --wait dgraph-zero-test dgraph-alpha-test
+	@# Apply the schema. No TestMain in the suite does this, despite the comment
+	@# in `seed-dgraph.sh` — it worked only because the cluster was long-lived and
+	@# something had applied one at some point. A cluster started per-run is
+	@# always empty, and introspection-driven tests fail with "no GraphQL schema".
+	@curl -fsS -X POST http://localhost:8083/admin/schema \
+		-H 'Content-Type: application/graphql' --data-binary @schema/schema.graphql >/dev/null
 	@bash scripts/check-export-mounts.sh
 	@echo "Running integration tests..."
 	@go test -count=1 -tags integration -timeout 10m -p 1 $(TEST_PKGS)
@@ -200,7 +207,7 @@ edge-down: ## Stop the edge sim
 	docker compose -f deploy/local/docker-compose.edge.yml down -v
 
 docs: ## Regenerate Swagger docs for orbital + orb (requires swag)
-	swag init -g main.go -o docs --dir cmd/orbital,internal/handler,internal/ocitype,internal/graphdiff
+	swag init -g main.go -o docs --dir cmd/orbital,internal/handler,internal/ocitype,internal/graphdiff,internal/configitems
 	swag init -g doc.go -o docs/orb --dir cmd/orb,internal/orbserver,internal/orb,internal/ocitype,internal/divergence
 
 build-css: ## Compile web/sass/main.scss → web/shared/static/css/main.css (requires: npm install)

@@ -24,7 +24,7 @@ secretGenerator:
 
 images:
   - name: armadaeksatest.azurecr.io/orbital
-    newTag: v0.0.49
+    newTag: v0.0.50
   - name: armadaeksatest.azurecr.io/configbundle-bundler
     newTag: v0.0.10
 

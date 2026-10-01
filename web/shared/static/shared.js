@@ -639,26 +639,6 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('.todo')) displayTodoToast()
 })
 
-// ─── Hint banners ─────────────────────────────────────────────────────────────
-
-document.addEventListener('DOMContentLoaded', () => {
-  const banner = document.getElementById('hint-banner-dblclick')
-  if (!banner) return
-  const KEY = document.getElementById('server-list-table')
-    ? 'hint-dblclick-dismissed-srv'
-    : 'hint-dblclick-dismissed-dc'
-  // localStorage, not sessionStorage: a dismissed hint must STAY dismissed.
-  // Under sessionStorage it reappeared on every one of the seven double-click
-  // tables in every new browser session, so dismissing it never felt like it
-  // worked. Logout still clears both stores, so a different user at the same
-  // browser sees the hint again — which is the behaviour we want.
-  if (!localStorage.getItem(KEY)) banner.style.display = ''
-  document.getElementById('hint-banner-dblclick-dismiss').addEventListener('click', () => {
-    localStorage.setItem(KEY, '1')
-    banner.style.display = 'none'
-  })
-})
-
 // ─── Logout — clear tab state ─────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {

@@ -613,19 +613,15 @@ func (h *ChangeRequest) CreateChangeRequest(c echo.Context) error {
 // ListChangeRequests lists change requests.
 //
 // @Summary     List change requests
-// @Description Filters compose. `mine` and `awaiting_review` are caller-relative; `orbId` matches any request whose changeset touches that entity, at any position. `status=active` means not-terminal (open plus approved) — the filter to use for "does this entity have a change in flight", since `approved` is derived and `status=open` excludes it.
-// @Description
-// @Description `status` is **repeatable** and OR-ed, so "everything that has finished" is `status=merged&status=rejected&status=closed` — there is no aggregate keyword for it, because the three stored values already say it and a coined term would have to be learned. An unrecognised value is refused rather than ignored: a `status=Merged` typo used to match no filter at all and return the ENTIRE queue, which looks exactly like a correct answer.
-// @Description
-// @Description `orbId` is **repeatable** and the values are OR-ed (max 32; more is refused, never truncated). A change to an owned child records the CHILD's orbId — a server-maintenance edit lands as `<ns>:server-maintenance-<serial>` — so "is anything in flight for this server" means passing the server's orbId AND the orbIds of everything it owns, exactly as `/api/v1/audit-log` does.
+// @Description Filters AND across params; `status`, `namespace` and `orbId` are each repeatable and OR-ed within. Use `status=active` (open+approved) for "in flight" — `open` alone excludes approved.
 // @Tags        change-requests
 // @Produce     json
-// @Param       status query []string false "open, approved, active (open+approved), rejected, merged or closed. Repeatable and OR-ed: status=merged&status=rejected&status=closed is every terminal state. An unrecognised value is refused (400), never ignored."
-// @Param       namespace query string false "Namespace"
+// @Param       status query []string false "Lifecycle: open, approved, active (open+approved), rejected, merged, closed. Repeatable, OR-ed; unknown value is a 400." collectionFormat(multi)
+// @Param       namespace query []string false "Namespace(s). Repeatable, OR-ed." collectionFormat(multi)
 // @Param       author query string false "Author email"
 // @Param       mine query boolean false "Only requests this caller authored"
 // @Param       awaiting_review query boolean false "Only requests this caller can still review"
-// @Param       orbId query []string false "Only requests touching this entity. Repeatable, max 128 — matches requests touching ANY of them. Over 128 the request is refused (400), not truncated."
+// @Param       orbId query []string false "orbId(s) the changeset touches. Repeatable, OR-ed, max 128." collectionFormat(multi)
 // @Success     200 {object} changeRequestListResponse
 // @Failure     400 {object} errorResponse
 // @Router      /api/v1/change-requests [get]

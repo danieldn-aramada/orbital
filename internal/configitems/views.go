@@ -30,6 +30,12 @@ type View struct {
 	// Derived from containment: a root is a type nothing else owns.
 	IsRoot bool `json:"isRoot"`
 
+	// Nav is the menu position from the type's `nav:` annotation, or
+	// NavUnpinned when it declares none. Published so a client building its own
+	// navigation gets the same order without re-deriving it — the UI sorts
+	// nothing.
+	Nav int `json:"nav"`
+
 	// IsInterface marks a view backed by a GraphQL interface. Such a view
 	// LISTS rows of several concrete types; its detail route resolves each
 	// row's own type, because DGraph generates no get<Interface>.
@@ -235,6 +241,7 @@ func ResolveViews(types map[string]TypeInfo, ifaceFields []string) ([]View, erro
 			}
 			refCols = append(refCols, ViewRefColumn{Field: t.Field, Type: t.Type, Slug: t.Slug})
 		}
+		navPos, _ := NavFor(info.Doc)
 		v := View{
 			IsInterface:     info.IsInterface,
 			Implementations: info.PossibleTypes,
@@ -248,6 +255,7 @@ func ResolveViews(types map[string]TypeInfo, ifaceFields []string) ([]View, erro
 			Type:            name,
 			Label:           Label(slug),
 			IsRoot:          isRootType(name),
+			Nav:             navPos,
 			Fields:          fields,
 			Tabs:            tabs,
 		}
@@ -279,6 +287,14 @@ func ResolveViews(types map[string]TypeInfo, ifaceFields []string) ([]View, erro
 			views[i].IsRoot = false
 		}
 	}
+	// Nav order, then name. Callers render in slice order, so the ordering
+	// decision lives here once rather than in every consumer.
+	sort.SliceStable(views, func(i, j int) bool {
+		if views[i].Nav != views[j].Nav {
+			return views[i].Nav < views[j].Nav
+		}
+		return views[i].Type < views[j].Type
+	})
 	return views, nil
 }
 
@@ -369,6 +385,26 @@ func facetAnnotation(types map[string]TypeInfo, info TypeInfo) (string, []string
 		},
 		func(d decl) bool { return d.field == "" })
 	return d.field, d.extra
+}
+
+// NavWarnings reports `nav:` annotations whose value is not a number.
+//
+// UnknownAnnotations cannot catch these — "nav: left" is a KNOWN prefix with an
+// unusable value, so it passes the typo check and then silently does nothing.
+// The type still appears in the menu, at the unpinned position.
+func NavWarnings(types map[string]TypeInfo) []string {
+	names := make([]string, 0, len(types))
+	for n := range types {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	var out []string
+	for _, n := range names {
+		if _, ok := NavFor(types[n].Doc); !ok {
+			out = append(out, n+": nav is not a number; menu position ignored")
+		}
+	}
+	return out
 }
 
 // FacetWarnings reports `facet:` annotations that did not produce a facet.
