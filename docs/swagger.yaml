@@ -1,6 +1,15 @@
 definitions:
   configitems.View:
     properties:
+      columns:
+        description: |-
+          Columns are extra columns whose value lives at the end of a PATH —
+          `servers.count`, `kubernetesNode.cluster.name`. Resolved and validated
+          against the schema here, so a client rendering its own table gets the
+          same columns without re-walking the graph.
+        items:
+          $ref: '#/definitions/configitems.ViewColumn'
+        type: array
       detailOnly:
         description: |-
           DetailOnly are Display fields that render on a detail page but never as a
@@ -24,23 +33,23 @@ definitions:
         items:
           type: string
         type: array
-      facet:
-        description: |-
-          Facet is the single column the list page offers as a filter dropdown,
-          from the type's `facet:` annotation. Empty when unannotated, and also
-          when the annotation named something this page does not render as a
-          column — a facet over an absent column is a dead control, so it is
-          dropped here and reported by FacetWarnings rather than shipped broken.
-
-          Carried on the view because orbital's UI is a consumer of this API like
-          any other: a client building its own table should be told which column is
-          worth a filter, not have to guess from cardinality.
-        type: string
       fields:
         description: Fields are the EDITABLE scalars — what the editor may write.
         items:
           type: string
         type: array
+      filterBy:
+        description: |-
+          FilterBy is the single column the list page offers as a filter dropdown,
+          from the type's `filterBy:` annotation. Empty when unannotated, and also
+          when the annotation named something this page does not render as a
+          column — a dropdown over an absent column is a dead control, so it is
+          dropped here and reported by FilterByWarnings rather than shipped broken.
+
+          Carried on the view because orbital's UI is a consumer of this API like
+          any other: a client building its own table should be told which column is
+          worth a filter, not have to guess from cardinality.
+        type: string
       implementations:
         description: |-
           Implementations are the concrete types an interface view lists. Empty
@@ -73,6 +82,13 @@ definitions:
         description: Label is DISPLAY, not contract — free to change without breaking
           anyone.
         type: string
+      menuWeight:
+        description: |-
+          Nav is the menu position from the type's `menuWeight:` annotation, or
+          MenuWeightUnpinned when it declares none. Published so a client building its own
+          navigation gets the same order without re-deriving it — the UI sorts
+          nothing.
+        type: integer
       meta:
         description: |-
           Meta are the ConfigItem interface fields — identity and provenance —
@@ -82,13 +98,6 @@ definitions:
         items:
           type: string
         type: array
-      nav:
-        description: |-
-          Nav is the menu position from the type's `nav:` annotation, or
-          NavUnpinned when it declares none. Published so a client building its own
-          navigation gets the same order without re-deriving it — the UI sorts
-          nothing.
-        type: integer
       order:
         description: |-
           Order is the pinned field prefix from the type's `order:` annotation.
@@ -126,6 +135,37 @@ definitions:
         type: array
       type:
         description: Type is the GraphQL type name.
+        type: string
+    type: object
+  configitems.ViewColumn:
+    properties:
+      field:
+        description: |-
+          Field is the leaf — the label is derived from it, so a column reads
+          "Cluster" rather than "Kubernetes Node Cluster Name".
+        type: string
+      isCount:
+        description: IsCount marks an aggregate over a list relationship.
+        type: boolean
+      ownerType:
+        description: |-
+          OwnerType is the type the label field belongs to — the type at the END
+          of the path, not the row's own type. A `gpu` field annotated
+          `label: GPU` lives on KubernetesNode; labelling it with Server's
+          labeller silently ignores that and renders "Gpu".
+        type: string
+      path:
+        description: Path is the declared dotted path, e.g. "kubernetesNode.cluster.name".
+        type: string
+      selection:
+        description: |-
+          Selection is the GraphQL fragment that fetches this column, built here
+          because this is the only place that knows whether a hop lands on an
+          INTERFACE — `cluster { name }` is rejected, because `name` lives on
+          ConfigItem rather than on KubernetesCluster, and needs a type condition.
+
+          Published so a client fetching its own rows can ask for the same thing
+          rather than reverse-engineering the path.
         type: string
     type: object
   configitems.ViewRefColumn:

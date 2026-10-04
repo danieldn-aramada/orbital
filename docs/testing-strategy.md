@@ -123,7 +123,16 @@ test: test-unit test-integration test-e2e
 
 ### DGraph isolation strategy
 
-One shared DGraph instance per test run. Drop-all + schema-apply + minimal seed at the start of the integration test suite (`TestMain`). Individual tests within the suite share state -- they must not depend on each other's mutations or clean up after themselves.
+One shared DGraph instance per test run. Individual tests within the suite share state -- they must not depend on each other's mutations or clean up after themselves.
+
+**Every integration package prepares the graph in its OWN `TestMain`, and which primitive it uses depends on whether it writes:**
+
+| Primitive | For | Effect |
+|---|---|---|
+| `testutil.ResetDGraphE` | packages that MUTATE (`handler`, `divergenceingest`) | `drop_all` + apply schema + wait for it to activate |
+| `testutil.EnsureSchema` | packages that only READ (`approval`, `configitems`, `dgraphschema`) | apply the schema only if the cluster has none; never drops data |
+
+*This sentence used to read "schema-apply ... at the start of the integration test suite (`TestMain`)", as though one TestMain covered everything. There is no such thing — `TestMain` is per package, and only two of the five defined one. The other three queried a graph they never prepared and passed because a neighbour had run first; `go test` guarantees no package order and runs packages in parallel unless `-p 1`, so that was luck. On a cold cluster they failed with "There's no GraphQL schema in Dgraph", and `dgraphschema`'s clean-graph test did something worse — it **passed**, because an empty graph has no orphans either. Fixed 2026-10-02: each package is self-sufficient, `make test-integration` applies the schema too as belt-and-braces (so the common path pays no first-package latency), and the clean-graph test now fails unless orbital's own schema is deployed.*
 
 **Exception -- restore tests:** Restore performs `drop_all` on DGraph, which wipes everything. Restore tests need their own isolated DGraph instance or must run last in the suite.
 
@@ -136,6 +145,27 @@ One shared DGraph instance per test run. Drop-all + schema-apply + minimal seed 
 Run `bash scripts/check-export-mounts.sh` to find it — it probes a write from inside each alpha and checks the host sees it, then prints the restart command for whichever is stale. `make up` now pre-creates the three mount targets (a missing host path at container start is the trigger) and `make test-integration` runs the probe before the suite, so this should fail loudly rather than as a mystery timeout.
 
 **Recovering a wiped local graph:** `POST /api/v1/restore {"backupId": "<id>"}` from `GET /api/v1/backup/jobs`. On macOS you must start orbital with **`TMPDIR=/tmp`** — restore uses `os.MkdirTemp("")`, which resolves to `$TMPDIR` (`/var/folders/...`), while the `dgraph` host wrapper mounts only `/tmp`, so `dgraph live` fails with `no such file or directory` *after* `drop_all` has already run. Tracked in `docs/planning/debt.md`.
+
+### A unit test must never point at a dev DGraph
+
+`make test-unit` promises "no external services required". On 2026-10-02 it was
+breaking that promise destructively: `orbserver`'s route-test config pointed at orb's
+real graph on `:8082`, and `TestImportArtifact_ValidZipReturns202` accepts a bundle and
+returns **202** — an import being `drop_all` + reload, running **asynchronously** after
+the handler returns. Running the unit suite silently emptied the developer's orb graph,
+which surfaced three failing e2e specs with nothing connecting them to the cause.
+
+It was timing-dependent, which is what made it survive: run that test alone and the
+binary exits before the goroutine reaches `drop_all`, so it looks harmless under exactly
+the command someone would use to investigate.
+
+Unit-test configs now use `127.0.0.1:1` — reserved, nothing listening, so an async
+import fails fast and reaches nothing. `TestUnitTestConfigsNeverTargetDevDGraph` scans
+non-integration `_test.go` files for dev ports and fails on a reintroduction. ⚠️ Its
+first version stripped trailing comments with `strings.Cut(line, "//")`, which splits on
+the `//` inside `http://` and blanked every line it was looking for — it passed on a
+deliberately reintroduced `:8082`. Guards get verified in BOTH directions or they are
+decoration.
 
 ### PostgreSQL isolation strategy
 

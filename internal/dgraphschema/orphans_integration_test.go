@@ -4,6 +4,7 @@ package dgraphschema
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/armada/orbital/internal/testutil"
@@ -22,6 +23,21 @@ func TestOrphans_CleanGraphReportsNothing(t *testing.T) {
 	live, err := Active(context.Background(), admin)
 	if err != nil {
 		t.Fatalf("read active schema: %v", err)
+	}
+	// Without this the test passes on a graph that does not exist.
+	//
+	// Verified 2026-09-29 by dropping :8083 entirely: `Active` returns "" with
+	// no error, `Orphans("")` correctly reports nothing, and the assertion
+	// below is satisfied. A clean-graph test that cannot tell "clean" from
+	// "empty" reports green exactly when the cluster is least prepared, which
+	// is the opposite of what it exists for.
+	if strings.TrimSpace(live) == "" {
+		t.Fatal("no GraphQL schema is deployed on the test cluster, so this proves nothing — " +
+			"TestMain should have applied it via testutil.EnsureSchema")
+	}
+	if !strings.Contains(live, "type Server") {
+		t.Fatalf("the deployed schema does not look like orbital's (no `type Server`), so a clean "+
+			"result says nothing; got %d bytes", len(live))
 	}
 	orphans, err := Orphans(context.Background(), admin, live)
 	if err != nil {

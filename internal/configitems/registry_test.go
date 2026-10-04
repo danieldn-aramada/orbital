@@ -220,12 +220,11 @@ func fixtureTypeNames() []string {
 // does not exist rather than failing.
 func fixtureMeta(typeName string) TypeInfo {
 	suffix := map[string]string{
-		"IdracSettings":              "idrac",
-		"ServerConfigurationProfile": "scp",
-		"EtcdBackup":                 "etcd-backup",
-		"VeleroBackup":               "velero-backup",
-		"S3Sync":                     "s3sync",
-		"ClusterBackup":              "backup",
+		"IdracSettings": "idrac",
+		"EtcdBackup":    "etcd-backup",
+		"VeleroBackup":  "velero-backup",
+		"S3Sync":        "s3sync",
+		"ClusterBackup": "backup",
 	}[typeName]
 	if suffix == "" {
 		suffix = strings.ToLower(typeName)

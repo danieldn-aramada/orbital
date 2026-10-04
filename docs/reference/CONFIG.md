@@ -45,7 +45,7 @@ There are currently **no maturity toggles**. Adding one requires naming its remo
 
 ## All settings
 
-Generated from `internal/config/config.go` — the struct tags are the source of truth. A blank default means the value is required, or is derived at runtime.
+Mirrors `internal/config/config.go`, where the struct tags are the source of truth. **Hand-maintained — there is no generator**, despite how this table reads; add your row here when you add a setting. A blank default means the value is required, or is derived at runtime.
 
 | Variable | Default |
 |---|---|
@@ -63,6 +63,7 @@ Generated from `internal/config/config.go` — the struct tags are the source of
 | `ORBITAL_BUNDLER_URLS` | `configbundle-bundler=http://localhost:8020/bundle` |
 | `ORBITAL_CHANGE_CONTROL_ENABLED` | `true` |
 | `ORBITAL_COOKIE_SECURE` | `false` |
+| `ORBITAL_LIST_MAX_ROWS` | `2000` |
 | `ORBITAL_TEMPLATE_HOT_RELOAD_ENABLED` | `false` |
 | `ORBITAL_DGRAPH_ALPHA_GRPC` | `localhost:9080` |
 | `ORBITAL_DGRAPH_ZERO_GRPC` | `localhost:5080` |
@@ -174,6 +175,38 @@ none of the three is a startup error.
 
 Applying a change needs a restart. See [AUTH.md](AUTH.md) § Multiple identity
 providers for why, and for the full model.
+
+## List pages are capped, and what that costs
+
+`ORBITAL_LIST_MAX_ROWS` (orb: `ORB_LIST_MAX_ROWS`, both default **2000**) caps how many rows one
+list page fetches. It is a tunable, not a toggle — the bar at the top of this file governs feature
+toggles, and the comparable settings are `ORBITAL_BUNDLER_MAX_RESPONSE_BYTES` and
+`ORBITAL_BACKUP_RETENTION_DAYS`.
+
+**The limitation, stated plainly, because it is not obvious from using the page:**
+
+- The table's **search box and filter dropdown are client-side**. They only ever see the rows that
+  were fetched. Past the cap, searching for a row that was not loaded returns **nothing** — and the
+  page gives no hint that it only looked at part of the data.
+- The filter dropdown's options are built from the fetched rows too, so a data center whose servers
+  all sit past the cap **does not appear in the dropdown at all**.
+- A page that hits the cap says so, with the real total and the name of this setting. A page under
+  it says nothing.
+
+That notice is the whole reason the cap is tolerable. Without it the failure is silent and reads as
+missing data rather than a truncated view.
+
+**Sizing it.** Rendered HTML measured **~1.6 KB per row** (2026-10-02, `/servers`). So 2000 ≈ 3 MB,
+5000 ≈ 8 MB. Above 5000 orbital logs a warning at startup naming the setting; it does **not** clamp
+the value — overriding an operator's explicit number is not orbital's call, but letting them find
+out in production is not either.
+
+**Why not server-side paging instead.** It is the correct long-term answer and it is blocked, not
+forgotten: DataTables' `serverSide` mode moves search and sort to the server too, and DGraph can
+only filter on predicates carrying `@search` — 45 of 85 scalar fields have one. Server-side search
+would therefore be *narrower* than today's client-side search, and closing that gap reindexes the
+graph. Revisit when a deployment reports actually hitting the cap, which tells you which types and
+columns matter rather than guessing at forty fields.
 
 ## Multi-replica notes
 

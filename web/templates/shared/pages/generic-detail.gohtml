@@ -60,7 +60,17 @@ cannot drift — which is the failure mode a sibling /fragment route invites.
         */}}
         <div data-pending-changes-for="{{.OrbID}}"></div>
 
-        <article class="box">
+        {{/* Fields LEFT, Metadata RIGHT — the arrangement every hand-written
+             detail page had, and nothing about it is per-type: every
+             ConfigItem carries the same seven metadata fields. Stacking them
+             was a migration simplification, not a consequence of being
+             generic, and it pushed the actual configuration a full screen
+             down behind provenance nobody opens the page for. Bulma's
+             columns collapse on narrow viewports on their own. */}}
+        <div class="columns">
+        <div class="column is-8">
+
+        <article class="box" style="height:100%">
           <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
             <p class="is-size-6 has-text-weight-semibold">Fields</p>
             <div class="buttons" style="margin-bottom:0">
@@ -135,8 +145,11 @@ cannot drift — which is the failure mode a sibling /fragment route invites.
           the deployed schema — so a field added to the interface appears here
           without a template change.
         */}}
+        </div>
+        <div class="column is-4">
+
         {{if .Meta}}
-        <article class="box" data-testid="generic-meta">
+        <article class="box" style="height:100%" data-testid="generic-meta">
           <p class="is-size-6 has-text-weight-semibold mb-3">Metadata</p>
           <table class="table is-fullwidth is-size-7">
             <tbody>
@@ -155,14 +168,59 @@ cannot drift — which is the failure mode a sibling /fragment route invites.
         </article>
         {{end}}
 
+        </div>
+        </div>
+
         {{/*
-          Owned children render inline: they are edited through this page's
-          JSON editor, so a link away to them would be a worse answer than
-          their data. Read-only here — the Edit button at the top is the one
-          way to change them, matching Server → iDRAC. See UI.md "Edit pattern".
+          Everything below the fold is ONE tabbed box: owned children, then
+          relationship tables, then the audit log.
+
+          Ten stacked boxes made a Server page 2,854px — 3.2 screens — and you
+          scrolled past Storage Controllers to reach Network Interfaces. Tabs
+          were how every hand-written page did it, and "put the children in a
+          tab strip" is as per-type-free as stacking them was: a type with one
+          child gets one tab, a type with eight gets eight.
+
+          initDetailTabs (shared.js) wires this: each <li> names its panel via
+          data-panel, the panel is a SIBLING of the tabs div, and the audit tab
+          is the one carrying data-orb-id — which also makes the audit log load
+          on CLICK rather than with every page.
+
+          The js-tab-dot span is lit by renderTabDots for a panel holding a
+          pending proposed change, so an unopened tab still says there is
+          something in it. Without it, tabbing would re-hide exactly what the
+          field marks exist to surface.
         */}}
-        {{range .Owned}}
-        <article class="box" data-testid="generic-owned" data-field="{{.Label}}">
+        {{if or .Owned .Tabs .Actions.ShowAuditTab}}
+        <article class="box pb-2" data-testid="generic-detail-tabs">
+          <div class="tabs is-boxed has-text-weight-medium" style="font-size:14px"
+               id="generic-detail-tabs-{{.DomID}}">
+            <ul>
+              {{range $i, $o := .Owned}}
+              <li {{if eq $i 0}}class="is-active"{{end}} data-panel="gpanel-{{$.DomID}}-owned-{{$i}}">
+                <a><span>{{$o.Label}}</span><span class="js-tab-dot"></span></a>
+              </li>
+              {{end}}
+              {{range $i, $t := .Tabs}}
+              <li {{if and (not $.Owned) (eq $i 0)}}class="is-active"{{end}} data-panel="gpanel-{{$.DomID}}-tab-{{$i}}">
+                <a><span>{{$t.Label}}</span><span class="js-tab-dot"></span></a>
+              </li>
+              {{end}}
+              {{if .Actions.ShowAuditTab}}
+              <li {{if and (not .Owned) (not .Tabs)}}class="is-active"{{end}}
+                  data-panel="{{.AuditPanelID}}"
+                  data-orb-id="{{.OrbID}}"
+                  data-related-orb-ids="{{.RelatedOrbIDsCSV}}">
+                <a><span>Audit Log</span></a>
+              </li>
+              {{end}}
+            </ul>
+          </div>
+
+        {{range $i, $o := .Owned}}
+        <div id="gpanel-{{$.DomID}}-owned-{{$i}}" {{if ne $i 0}}style="display:none"{{end}}>
+        {{with $o}}
+        <article class="pt-3" data-testid="generic-owned" data-field="{{.Label}}">
           <p class="is-size-6 has-text-weight-semibold mb-3">{{.Label}}</p>
           {{if .Fields}}
           <table class="table is-fullwidth is-size-7"
@@ -203,9 +261,13 @@ cannot drift — which is the failure mode a sibling /fragment route invites.
           {{end}}
         </article>
         {{end}}
+        </div>
+        {{end}}
 
-        {{range .Tabs}}
-        <article class="box" data-testid="generic-tab" data-field="{{.Field}}">
+        {{range $i, $t := .Tabs}}
+        <div id="gpanel-{{$.DomID}}-tab-{{$i}}" {{if or $.Owned (ne $i 0)}}style="display:none"{{end}}>
+        {{with $t}}
+        <article class="pt-3" data-testid="generic-tab" data-field="{{.Field}}">
           <p class="is-size-6 has-text-weight-semibold mb-3">{{.Label}}</p>
           {{if not .Rows}}
           <p class="has-text-grey is-size-7">None.</p>
@@ -217,6 +279,7 @@ cannot drift — which is the failure mode a sibling /fragment route invites.
                   <th style="white-space:nowrap">Name</th>
                   {{range .Columns}}<th style="white-space:nowrap">{{.Label}}</th>{{end}}
                   {{range .RefColumns}}<th style="white-space:nowrap">{{.Label}}</th>{{end}}
+                  {{range .ComputedColumns}}<th style="white-space:nowrap">{{.Label}}</th>{{end}}
                   <th style="white-space:nowrap">Orb ID</th>
                 </tr>
               </thead>
@@ -224,17 +287,35 @@ cannot drift — which is the failure mode a sibling /fragment route invites.
                 {{$slug := .Slug}}
                 {{$cols := .Columns}}
                 {{$refs := .RefColumns}}
+                {{$cc := .ComputedColumns}}
+                {{$fv := .FieldValues}}
+                {{$editable := .Editable}}
                 {{range .Rows}}
-                <tr>
-                  <td style="white-space:nowrap"><a href="{{$.BasePath}}/{{$slug}}/{{index . "orbId"}}">{{index . "name"}}</a></td>
+                {{/* The proposed-change marks, at ROW scope.
+                     Every other marked surface puts data-field-orbid on the
+                     TABLE because one table is one entity. Here each ROW is a
+                     different entity, so the attributes move down a level —
+                     and loadFieldMarks needs no change at all, because it
+                     already walks [data-field-orbid] then [data-field] inside
+                     it. One shape, two depths, rather than a second code
+                     path. */}}
+                {{$orbId := index . "orbId"}}
+                <tr data-field-orbid="{{$orbId}}" data-field-values="{{index $fv $orbId}}">
+                  <td style="white-space:nowrap"><a href="{{$.BasePath}}/{{$slug}}/{{$orbId}}">{{index . "name"}}</a></td>
                   {{$row := .}}
-                  {{range $cols}}<td>{{with index $row .Field}}{{.}}{{else}}—{{end}}</td>{{end}}
+                  {{range $cols}}
+                  {{$f := .Field}}
+                  <td {{if index $editable $f}}data-field="{{$f}}"{{end}} style="white-space:nowrap">
+                    {{with index $row $f}}{{.}}{{else}}—{{end}}{{if index $editable $f}}<span class="js-field-mark"></span>{{end}}
+                  </td>
+                  {{end}}
                   {{range $refs}}
                   {{$rc := .}}
                   <td style="white-space:nowrap">
                     {{with index $row $rc.Field}}<a href="{{$.BasePath}}/{{$rc.Slug}}/{{index . "orbId"}}">{{index . "name"}}</a>{{else}}—{{end}}
                   </td>
                   {{end}}
+                  {{range $cc}}<td style="white-space:nowrap">{{with index $row .Field}}{{.}}{{else}}—{{end}}</td>{{end}}
                   <td class="has-text-grey" style="white-space:nowrap"><code>{{index . "orbId"}}</code></td>
                 </tr>
                 {{end}}
@@ -244,21 +325,28 @@ cannot drift — which is the failure mode a sibling /fragment route invites.
           {{end}}
         </article>
         {{end}}
+        </div>
+        {{end}}
 
         {{/*
-          Audit Log. The panel is filled by the same shared.js fetch the
-          hand-written pages use, keyed off data-orb-id and
-          data-related-orb-ids — a change to an owned child records the CHILD's
-          orbId, so asking about the parent alone would report nothing while its
-          settings were being rewritten.
+          Audit Log, as the last TAB rather than a tenth box.
+          
+          No data-generic-audit here any more: that attribute drove
+          initGenericAudit, which loaded the panel with every page render
+          because a stacked box has no click to hang it on. As a tab,
+          initDetailTabs loads it when the tab is activated — one request
+          saved on every detail view nobody opens the audit for.
+
+          data-orb-id and data-related-orb-ids live on the TAB (that is how
+          initDetailTabs identifies which one is the audit tab); a change to
+          an owned child records the CHILD's orbId, so asking about the parent
+          alone would report nothing while its settings were being rewritten.
         */}}
         {{if .Actions.ShowAuditTab}}
-        <article class="box" data-testid="generic-audit"
-          data-generic-audit="{{.AuditPanelID}}"
-          data-orb-id="{{.OrbID}}"
-          data-related-orb-ids="{{.RelatedOrbIDsCSV}}">
-          <p class="is-size-6 has-text-weight-semibold mb-3">Audit Log</p>
-          <div id="{{.AuditPanelID}}"></div>
+        <div id="{{.AuditPanelID}}" {{if or .Owned .Tabs}}style="display:none"{{end}}
+             data-testid="generic-audit"></div>
+        {{end}}
+
         </article>
         {{end}}
 

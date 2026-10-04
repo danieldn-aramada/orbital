@@ -23,6 +23,7 @@ import (
 	"github.com/armada/orbital/internal/orb"
 	"github.com/armada/orbital/internal/orbmetrics"
 	"github.com/armada/orbital/internal/webrender"
+	"github.com/armada/orbital/web"
 	"github.com/labstack/echo/v4"
 )
 
@@ -235,7 +236,7 @@ type tagInfo struct {
 // success and the list-failed paths go through it so the empty state can only
 // ever be the template's own row, inside a real <tbody>.
 func (s *Server) renderOrbTagsFragment(c echo.Context, data orbTagsContentData) error {
-	tmpl, err := template.ParseFiles("web/templates/orb/partials/orb-tags-content.gohtml")
+	tmpl, err := template.ParseFS(web.Dir(), "templates/orb/partials/orb-tags-content.gohtml")
 	if err != nil {
 		return fmt.Errorf("parse orb tags fragment: %w", err)
 	}
@@ -526,7 +527,7 @@ func (s *Server) importHistoryLayers(c echo.Context) error {
 	if match == nil {
 		return echo.ErrNotFound
 	}
-	tmpl, err := template.ParseFiles("web/templates/shared/partials/layers-modal.gohtml")
+	tmpl, err := template.ParseFS(web.Dir(), "templates/shared/partials/layers-modal.gohtml")
 	if err != nil {
 		return fmt.Errorf("parse layers-modal: %w", err)
 	}

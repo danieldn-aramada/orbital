@@ -43,6 +43,7 @@ func genericListQuery(v configitems.View, viewOf func(string) configitems.View, 
 	for _, rc := range v.RefColumns {
 		sel += " " + rc.Field + " { " + idNameSel(viewOf(rc.Type)) + " }"
 	}
+	sel += columnSelection(v)
 	// An interface view lists several concrete types, so each implementation
 	// contributes its own columns through a fragment. A row whose type lacks a
 	// column simply has no value for it and renders as "—" — which is the
@@ -59,7 +60,31 @@ func genericListQuery(v configitems.View, viewOf func(string) configitems.View, 
 		}
 		sel += " ... on " + impl + " { " + strings.Join(own, " ") + " }"
 	}
-	return fmt.Sprintf("{ query%s(first: %d) { %s } }", v.Type, limit, sel)
+	// The total rides along in the SAME request. The page is capped, and a
+	// capped table that does not say so reads as the whole set — which is a
+	// wrong answer, not a slow one. DGraph generates aggregate<T> for
+	// interfaces as well as concrete types, so this needs no special case.
+	return fmt.Sprintf("{ query%s(first: %d) { %s } aggregate%s { count } }", v.Type, limit, sel, v.Type)
+}
+
+// columnSelection folds the view's computed column paths into the SAME
+// selection the rows already use — `kubernetesNode { cluster { ... } role }`.
+//
+// No extra request and no extra round trip: a path is just more of the tree the
+// query was already fetching.
+//
+// Paths that share a prefix are NOT merged here, and do not need to be: GraphQL
+// merges duplicate field selections by definition, and DGraph honours it
+// (verified against v25.3.1 — `server { hostname } server { serviceTag }`
+// returns one `server` with both). The selection fragment for each path is
+// built in configitems.resolveColumns, which is the only place that knows
+// whether a hop lands on an interface and therefore needs a type condition.
+func columnSelection(v configitems.View) string {
+	out := ""
+	for _, c := range v.Columns {
+		out += " " + c.Selection
+	}
+	return out
 }
 
 func containsString(haystack []string, needle string) bool {
@@ -110,7 +135,12 @@ func genericDetailQuery(v configitems.View, viewOf func(string) configitems.View
 			continue
 		}
 		if childSel, isOwned := owned[tab.Field]; isOwned {
-			sel += " " + tab.Field + " { " + childSel + " }"
+			// An OWNED child is rendered as a row too, so it needs its computed
+			// columns as much as a non-owned one. Missing this is why a data
+			// centre's Racks tab had a Servers header over empty cells: Rack is
+			// owned by DataCenter, so it took this branch and never selected
+			// the aggregate.
+			sel += " " + tab.Field + " { " + childSel + columnSelection(viewOf(tab.Type)) + " }"
 			continue
 		}
 		// A related entity is rendered as a ROW, so fetch the columns that row
@@ -127,6 +157,9 @@ func genericDetailQuery(v configitems.View, viewOf func(string) configitems.View
 		for _, rc := range refColumns(tab.Type) {
 			childSel += " " + rc.Field + " { " + idNameSel(viewOf(rc.Type)) + " }"
 		}
+		// ...and its computed columns, so a Server inside a network device's
+		// tab shows the same cluster and role it shows on /servers.
+		childSel += columnSelection(viewOf(tab.Type))
 		sel += " " + tab.Field + " { " + childSel + " }"
 	}
 	return fmt.Sprintf("{ get%s(orbId: %q) { %s } }", v.Type, orbID, sel)
@@ -208,6 +241,43 @@ func runGraphQL(ctx context.Context, url, query, rootField string) (json.RawMess
 		return nil, fmt.Errorf("%s", env.Errors[0].Message)
 	}
 	return env.Data[rootField], nil
+}
+
+// runGraphQLAll is runGraphQL for a query with more than one root field.
+//
+// The list page asks for a page of rows AND the total count, and they belong in
+// ONE request: two round trips to answer one question about one page is latency
+// nobody asked for, and the two answers could disagree if a write landed
+// between them.
+func runGraphQLAll(ctx context.Context, url, query string) (map[string]json.RawMessage, error) {
+	body, err := json.Marshal(map[string]string{"query": query})
+	if err != nil {
+		return nil, fmt.Errorf("marshal query: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("query dgraph: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var env struct {
+		Data   map[string]json.RawMessage `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	if len(env.Errors) > 0 {
+		return nil, fmt.Errorf("%s", env.Errors[0].Message)
+	}
+	return env.Data, nil
 }
 
 // viewBySlug finds the view a URL segment addresses.

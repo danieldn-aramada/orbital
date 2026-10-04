@@ -1,19 +1,20 @@
 {{/*
 generic-list.gohtml — the list page for ANY ConfigItem type.
 
-Structure MIRRORS shared/pages/servers.gohtml: a tabs bar
-whose single tab reads "Summary", a .tab-content tabpanel, and a DataTable with
-the house toolbar. No page heading and no description — those pages carry
-neither, and the page is identified by the active nav item and the URL.
+A page heading, a tabs bar, a .tab-content tabpanel, and a DataTable with the
+house toolbar.
 
-That omission is a known house quirk, not an accident: debt.md tracks "six list
-pages use a one-tab tabs bar instead of a page heading". The generic page
-matches the pages it REPLACES rather than fixing the quirk unilaterally; fix it
-there and it fixes here too.
+The heading sits ABOVE the tabs rather than replacing them, which looks like a
+one-tab bar with a title over it and is not. `loadGenericTab` appends to
+#tablist when a row is opened, so the bar grows; and #tab-summary is what
+closing a tab clicks to get back to the list. Replacing it means designing a
+new return affordance — tracked in debt.md, deliberately not done here.
 
-The difference from servers.gohtml is that NOTHING here is per-type: columns
-come from the view's derived field list, so a type added to the schema gets this
-page with no template and no handler.
+This page carries no description line. A list of things does not need a
+sentence explaining that it is a list of things.
+
+NOTHING here is per-type: columns come from the view's derived field list, so a
+type added to the schema gets this page with no template and no handler.
 
 Rows are rendered server-side rather than fetched by JS. The bespoke pages each
 carry their own GraphQL query and tab-opening behaviour in LIST_PAGES; this page
@@ -29,6 +30,7 @@ has one query built from the view, so there is nothing per-type for JS to know.
         {{template "login-gate.gohtml" .}}
       {{else}}
 
+      <p class="is-size-4 mb-2" data-testid="page-heading">{{.View.Label}}</p>
 
       <nav class="tabs is-boxed has-text-weight-medium" style="font-size: 14px;">
         <ul id="tablist" role="tablist">
@@ -47,14 +49,27 @@ has one query built from the view, so there is nothing per-type for JS to know.
           <p class="is-size-7">{{.Unavailable}}</p>
         </div>
         {{else}}
-        {{/* The facet dropdown, rendered HERE rather than built in JS.
+        {{/* Said, not silent — and it states the LIMITATION, not just the count.
+             The first wording said "search or filter to narrow the list", which
+             is advice that cannot work: search and the filterBy are client-side
+             over the rows actually rendered, so neither can reach a row past
+             the cap. Someone following it searches, finds nothing, and
+             concludes the row does not exist. */}}
+        {{if .Truncated}}
+        <div class="notification is-info is-light is-size-7" data-testid="list-truncated">
+          Showing the first <strong>{{len .Rows}}</strong> of <strong>{{.Total}}</strong>.
+          Search and filtering on this page cover only these {{len .Rows}} rows.
+          Raise <code>{{.RowCapSetting}}</code> to load more.
+        </div>
+        {{end}}
+        {{/* The filterBy dropdown, rendered HERE rather than built in JS.
              Structure belongs in the template (UI.md); shared.js only moves it
              into the DataTables toolbar and wires `change` to a column search.
              Column index and option list are resolved server-side so an API
              consumer drawing its own table gets the same control for free. */}}
-        {{with .Facet}}
-        <div class="select is-small js-facet" data-facet-column="{{.Column}}" style="display:none">
-          <select id="generic-facet" data-testid="generic-facet" aria-label="Filter by {{.Label}}">
+        {{with .FilterBy}}
+        <div class="select is-small js-filterBy" data-filter-by-column="{{.Column}}" style="display:none">
+          <select id="generic-filter-by" data-testid="generic-filter-by" aria-label="Filter by {{.Label}}">
             <option value="">{{.All}}</option>
             {{range .Options}}<option value="{{.}}">{{.}}</option>{{end}}
           </select>
@@ -74,6 +89,7 @@ has one query built from the view, so there is nothing per-type for JS to know.
               <th>Name</th>
               {{range .Columns}}<th>{{.Label}}</th>{{end}}
               {{range .RefColumns}}<th style="white-space:nowrap">{{.Label}}</th>{{end}}
+              {{range .ComputedColumns}}<th style="white-space:nowrap">{{.Label}}</th>{{end}}
               <th>Orb ID</th>
             </tr>
           </thead>
@@ -94,6 +110,7 @@ has one query built from the view, so there is nothing per-type for JS to know.
                 {{with index $row $rc.Field}}<a href="{{$base}}/{{$rc.Slug}}/{{index . "orbId"}}">{{index . "name"}}</a>{{else}}—{{end}}
               </td>
               {{end}}
+              {{range $.ComputedColumns}}<td style="white-space:nowrap">{{with index $row .Field}}{{.}}{{else}}—{{end}}</td>{{end}}
               <td style="white-space:nowrap"><code>{{index . "orbId"}}</code></td>
             </tr>
             {{end}}

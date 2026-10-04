@@ -316,12 +316,12 @@ func viewFor(t *testing.T, views []View, typeName string) View {
 	return View{}
 }
 
-// TestView_CarriesFacet is acceptance item 8: the resolved facet rides on the
+// TestView_CarriesFilterBy is acceptance item 8: the resolved filterBy rides on the
 // view, so orbital's own UI and any API consumer read the SAME answer rather
 // than each deciding which column is worth a filter.
-func TestView_CarriesFacet(t *testing.T) {
+func TestView_CarriesFilterBy(t *testing.T) {
 	types := map[string]TypeInfo{
-		"Server": {Doc: "facet: dataCenter", Fields: []DerivedField{
+		"Server": {Doc: "filterBy: dataCenter", Fields: []DerivedField{
 			{Name: "hostname", Editable: true, Kind: "SCALAR"},
 			{Name: "dataCenter", Kind: "OBJECT", TypeName: "DataCenter"},
 		}},
@@ -331,26 +331,26 @@ func TestView_CarriesFacet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := viewFor(t, views, "Server").Facet; got != "dataCenter" {
-		t.Errorf("Server.Facet = %q, want dataCenter", got)
+	if got := viewFor(t, views, "Server").FilterBy; got != "dataCenter" {
+		t.Errorf("Server.FilterBy = %q, want dataCenter", got)
 	}
-	// The negative: a type that declares nothing gets nothing. A facet that
+	// The negative: a type that declares nothing gets nothing. A filterBy that
 	// appears without being asked for is a control nobody can turn off.
-	if got := viewFor(t, views, "DataCenter").Facet; got != "" {
-		t.Errorf("an unannotated type must have no facet, got %q", got)
+	if got := viewFor(t, views, "DataCenter").FilterBy; got != "" {
+		t.Errorf("an unannotated type must have no filterBy, got %q", got)
 	}
 }
 
-// TestFacetFor_InheritsFromInterface is acceptance item 5.
+// TestFilterByFor_InheritsFromInterface is acceptance item 5.
 //
 // A TYPE docstring does NOT reach implementations on its own — that is a
 // per-annotation decision, and `slug:` must never inherit or every
-// implementation would claim the interface's URL. `facet:` does, so /clusters
+// implementation would claim the interface's URL. `filterBy:` does, so /clusters
 // and /eksa-kubernetes-clusters cannot disagree about having a filter.
-func TestFacetFor_InheritsFromInterface(t *testing.T) {
+func TestFilterByFor_InheritsFromInterface(t *testing.T) {
 	types := map[string]TypeInfo{
 		"KubernetesCluster": {
-			Doc:           "slug: clusters\nfacet: dataCenter",
+			Doc:           "slug: clusters\nfilterBy: dataCenter",
 			IsInterface:   true,
 			PossibleTypes: []string{"EksaKubernetesCluster"},
 			Fields: []DerivedField{
@@ -371,11 +371,11 @@ func TestFacetFor_InheritsFromInterface(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := viewFor(t, views, "KubernetesCluster").Facet; got != "dataCenter" {
-		t.Errorf("the interface view's facet = %q, want dataCenter", got)
+	if got := viewFor(t, views, "KubernetesCluster").FilterBy; got != "dataCenter" {
+		t.Errorf("the interface view's filterBy = %q, want dataCenter", got)
 	}
-	if got := viewFor(t, views, "EksaKubernetesCluster").Facet; got != "dataCenter" {
-		t.Errorf("an implementation must inherit the interface's facet, got %q", got)
+	if got := viewFor(t, views, "EksaKubernetesCluster").FilterBy; got != "dataCenter" {
+		t.Errorf("an implementation must inherit the interface's filterBy, got %q", got)
 	}
 	// Inheritance must not leak the interface's SLUG, which is the reason this
 	// is per-annotation rather than a blanket rule.
@@ -384,22 +384,22 @@ func TestFacetFor_InheritsFromInterface(t *testing.T) {
 	}
 }
 
-// TestFacetValidation_RejectsNonColumn is acceptance item 7.
+// TestFilterByValidation_RejectsNonColumn is acceptance item 7.
 //
-// A facet over a column the table does not render is a dead control: the
+// A `filterBy:` naming a column the table does not render is a dead control: the
 // dropdown appears and filters column -1. Dropped, and REPORTED — an
 // annotation that reads as correct and does nothing is worse than one nobody
 // wrote, which is the same reasoning UnknownAnnotations exists for.
-func TestFacetValidation_RejectsNonColumn(t *testing.T) {
+func TestFilterByValidation_RejectsNonColumn(t *testing.T) {
 	types := map[string]TypeInfo{
 		"Server": {
-			Doc: "facet: assetDataV2",
+			Doc: "filterBy: assetDataV2",
 			Fields: []DerivedField{
 				{Name: "hostname", Editable: true, Kind: "SCALAR"},
 				{Name: "assetDataV2", Editable: true, Kind: "SCALAR", Doc: "detailOnly"},
 			},
 		},
-		"Rack": {Doc: "facet: nosuchfield", Fields: []DerivedField{
+		"Rack": {Doc: "filterBy: nosuchfield", Fields: []DerivedField{
 			{Name: "uHeight", Editable: true, Kind: "SCALAR"},
 		}},
 	}
@@ -407,16 +407,16 @@ func TestFacetValidation_RejectsNonColumn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := viewFor(t, views, "Server").Facet; got != "" {
-		t.Errorf("a detailOnly field is not a column and must not become a facet, got %q", got)
+	if got := viewFor(t, views, "Server").FilterBy; got != "" {
+		t.Errorf("a detailOnly field is not a column and must not become a filter dropdown, got %q", got)
 	}
-	if got := viewFor(t, views, "Rack").Facet; got != "" {
-		t.Errorf("an unknown field must not become a facet, got %q", got)
+	if got := viewFor(t, views, "Rack").FilterBy; got != "" {
+		t.Errorf("an unknown field must not become a filter dropdown, got %q", got)
 	}
 
-	warnings := FacetWarnings(types, views)
+	warnings := FilterByWarnings(types, views)
 	if len(warnings) != 2 {
-		t.Fatalf("both dropped facets must be reported, got %v", warnings)
+		t.Fatalf("both dropped annotations must be reported, got %v", warnings)
 	}
 	joined := warnings[0] + "|" + warnings[1]
 	for _, want := range []string{"assetDataV2", "nosuchfield", "Server", "Rack"} {
@@ -426,11 +426,11 @@ func TestFacetValidation_RejectsNonColumn(t *testing.T) {
 	}
 }
 
-// A second facet field is honoured-first-and-reported, never silently dropped:
+// A second filterBy field is honoured-first-and-reported, never silently dropped:
 // someone who wrote two and got one needs to be told which.
-func TestFacetWarnings_ReportsExtraFields(t *testing.T) {
+func TestFilterByWarnings_ReportsExtraFields(t *testing.T) {
 	types := map[string]TypeInfo{
-		"Server": {Doc: "facet: dataCenter, rack", Fields: []DerivedField{
+		"Server": {Doc: "filterBy: dataCenter, rack", Fields: []DerivedField{
 			{Name: "hostname", Editable: true, Kind: "SCALAR"},
 			{Name: "dataCenter", Kind: "OBJECT", TypeName: "DataCenter"},
 			{Name: "rack", Kind: "OBJECT", TypeName: "Rack"},
@@ -442,11 +442,184 @@ func TestFacetWarnings_ReportsExtraFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := viewFor(t, views, "Server").Facet; got != "dataCenter" {
+	if got := viewFor(t, views, "Server").FilterBy; got != "dataCenter" {
 		t.Errorf("the first field must win, got %q", got)
 	}
-	warnings := FacetWarnings(types, views)
+	warnings := FilterByWarnings(types, views)
 	if len(warnings) != 1 || !contains(warnings[0], "rack") {
 		t.Fatalf("the extra field must be reported by name, got %v", warnings)
+	}
+}
+
+// columnFixture is a Server/KubernetesNode/KubernetesCluster/Rack slice of the
+// real schema — the two shapes `column:` exists for.
+func columnFixture() (map[string]TypeInfo, []string) {
+	return map[string]TypeInfo{
+		"Server": {
+			Doc: "column: kubernetesNode.cluster.name, kubernetesNode.role, servers.count",
+			Fields: []DerivedField{
+				{Name: "hostname", Editable: true, Kind: "SCALAR"},
+				{Name: "kubernetesNode", Kind: "OBJECT", TypeName: "KubernetesNode"},
+			},
+		},
+		"KubernetesNode": {Fields: []DerivedField{
+			{Name: "role", Editable: true, Kind: "SCALAR"},
+			{Name: "cluster", Kind: "OBJECT", TypeName: "KubernetesCluster"},
+		}},
+		"KubernetesCluster": {IsInterface: true, Fields: []DerivedField{
+			{Name: "kubernetesVersion", Editable: true, Kind: "SCALAR"},
+		}},
+		"Rack": {
+			Doc: "column: servers.count",
+			Fields: []DerivedField{
+				{Name: "uHeight", Editable: true, Kind: "SCALAR"},
+				{Name: "servers", Kind: "OBJECT", TypeName: "Server", IsList: true},
+			},
+		},
+	}, []string{"name", "orbId"}
+}
+
+// TestResolveColumns covers acceptance items 2 and 3: a count over a list, and
+// a value reached through single relationships.
+func TestResolveColumns(t *testing.T) {
+	types, iface := columnFixture()
+	views, err := ResolveViews(types, iface)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rack := viewFor(t, views, "Rack")
+	if len(rack.Columns) != 1 {
+		t.Fatalf("Rack columns = %+v, want one", rack.Columns)
+	}
+	c := rack.Columns[0]
+	if !c.IsCount || c.Field != "servers" {
+		t.Errorf("servers.count must resolve as a count over `servers`, got %+v", c)
+	}
+	// The generated aggregate field, not the list itself — selecting `servers`
+	// would pull every row to count them.
+	if c.Selection != "serversAggregate { count }" {
+		t.Errorf("Selection = %q, want serversAggregate { count }", c.Selection)
+	}
+
+	srv := viewFor(t, views, "Server")
+	byPath := map[string]ViewColumn{}
+	for _, c := range srv.Columns {
+		byPath[c.Path] = c
+	}
+	// `name` lives on the ConfigItem INTERFACE, so it is absent from
+	// KubernetesCluster's own field list while being perfectly selectable —
+	// and because the hop lands on an interface it needs a type condition.
+	cl, ok := byPath["kubernetesNode.cluster.name"]
+	if !ok {
+		t.Fatalf("the cluster-name path must resolve; got %+v", srv.Columns)
+	}
+	if cl.Selection != "kubernetesNode { cluster { ... on ConfigItem { name } } }" {
+		t.Errorf("Selection = %q, want a ConfigItem type condition on the leaf", cl.Selection)
+	}
+	// Labelled "Cluster", not "Name" — which would also collide with the row's
+	// own Name column.
+	if cl.Field != "cluster" {
+		t.Errorf("an identity leaf labels by its hop; Field = %q, want cluster", cl.Field)
+	}
+	if r := byPath["kubernetesNode.role"]; r.Selection != "kubernetesNode { role }" {
+		t.Errorf("a one-hop scalar = %q", r.Selection)
+	}
+	// `servers.count` on Server names a field Server does not have.
+	if _, bad := byPath["servers.count"]; bad {
+		t.Error("a path naming a field the type lacks must not produce a column")
+	}
+}
+
+// TestColumnWarnings is acceptance item 7: a path the schema cannot support is
+// dropped AND reported. Silent is the failure mode — the column simply is not
+// there, indistinguishable from never having annotated it.
+func TestColumnWarnings(t *testing.T) {
+	types, iface := columnFixture()
+	types["Rack"] = TypeInfo{
+		Doc: "column: nosuch.count, uHeight.somehow, servers.name",
+		Fields: []DerivedField{
+			{Name: "uHeight", Editable: true, Kind: "SCALAR"},
+			{Name: "servers", Kind: "OBJECT", TypeName: "Server", IsList: true},
+		},
+	}
+	views, err := ResolveViews(types, iface)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cols := viewFor(t, views, "Rack").Columns; len(cols) != 0 {
+		t.Fatalf("none of those paths is valid; got %+v", cols)
+	}
+	w := ColumnWarnings(types, views, iface)
+	joined := strings.Join(w, " | ")
+	for _, want := range []string{"nosuch", "uHeight", "servers.name"} {
+		if !contains(joined, want) {
+			t.Errorf("warnings must name %q; got %v", want, w)
+		}
+	}
+	// Each failure says WHY, not just that it failed.
+	if !contains(joined, "scalar") || !contains(joined, "list") {
+		t.Errorf("warnings must explain the cause; got %v", w)
+	}
+}
+
+// TestViewIgnored_HidesTheRelationshipEverywhere pins both halves: the edge
+// disappears from the page, and containment is untouched.
+//
+// The second half is the one that matters. The delete cascade, audit roll-up
+// and the editor's tree all read the registry's containment model; if hiding a
+// relationship also dropped it from there, deleting a parent would orphan the
+// child and the editor would read the missing subtree as a deletion.
+func TestViewIgnored_HidesTheRelationshipEverywhere(t *testing.T) {
+	types := map[string]TypeInfo{
+		"Server": {Fields: []DerivedField{
+			{Name: "hostname", Editable: true, Kind: "SCALAR"},
+			{Name: "idracSettings", Kind: "OBJECT", TypeName: "IdracSettings"},
+			{Name: "scp", Doc: "viewIgnored", Kind: "OBJECT", TypeName: "ServerConfigurationProfile"},
+			{Name: "notes", Doc: "viewIgnored", Kind: "OBJECT", TypeName: "IdracSettings", IsList: true},
+		}},
+		"IdracSettings":              {Fields: []DerivedField{{Name: "firmwareVersion", Editable: true, Kind: "SCALAR"}}},
+		"ServerConfigurationProfile": {Fields: []DerivedField{{Name: "json", Editable: true, Kind: "SCALAR"}}},
+	}
+	views, err := ResolveViews(types, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := viewFor(t, views, "Server")
+
+	for _, tab := range srv.Tabs {
+		if tab.Field == "scp" || tab.Field == "notes" {
+			t.Errorf("a viewIgnored relationship must not be a tab: %q", tab.Field)
+		}
+	}
+	// RefColumns derive from Tabs, so filtering one source must cover both.
+	for _, rc := range srv.RefColumns {
+		if rc.Field == "scp" {
+			t.Error("a viewIgnored relationship must not be a reference column")
+		}
+	}
+	// The un-annotated sibling still renders, so this is a filter and not an
+	// off switch for relationships generally.
+	var sawIdrac bool
+	for _, tab := range srv.Tabs {
+		if tab.Field == "idracSettings" {
+			sawIdrac = true
+		}
+	}
+	if !sawIdrac {
+		t.Error("an unannotated relationship must still be a tab")
+	}
+
+	// The hidden type keeps its OWN view: hiding an edge says nothing about
+	// whether the thing at the other end deserves a page.
+	if _, ok := func() (View, bool) {
+		for _, v := range views {
+			if v.Type == "ServerConfigurationProfile" {
+				return v, true
+			}
+		}
+		return View{}, false
+	}(); !ok {
+		t.Error("a viewIgnored target must still get its own view")
 	}
 }

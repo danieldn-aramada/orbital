@@ -577,10 +577,10 @@ func TestDetailOnlyIsSeparateFromJSONString(t *testing.T) {
 	}
 }
 
-// TestFacetFor covers acceptance item 1 (the annotation is read) and the
+// TestFilterByFor covers acceptance item 1 (the annotation is read) and the
 // only-one-supported rule: extras are RETURNED so the caller can warn, never
 // silently dropped.
-func TestFacetFor(t *testing.T) {
+func TestFilterByFor(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		doc   string
@@ -588,19 +588,19 @@ func TestFacetFor(t *testing.T) {
 		extra []string
 	}{
 		{"absent", "", "", nil},
-		{"single", "facet: dataCenter", "dataCenter", nil},
-		{"with other annotations", "slug: servers\nfacet: dataCenter\norder: name", "dataCenter", nil},
-		{"extras are reported", "facet: dataCenter, rack, model", "dataCenter", []string{"rack", "model"}},
-		{"whitespace tolerated", "facet:    rack   ", "rack", nil},
-		{"empty value", "facet:", "", nil},
-		// Prose that merely contains the word must not arm a facet — the same
+		{"single", "filterBy: dataCenter", "dataCenter", nil},
+		{"with other annotations", "slug: servers\nfilterBy: dataCenter\norder: name", "dataCenter", nil},
+		{"extras are reported", "filterBy: dataCenter, rack, model", "dataCenter", []string{"rack", "model"}},
+		{"whitespace tolerated", "filterBy:    rack   ", "rack", nil},
+		{"empty value", "filterBy:", "", nil},
+		// Prose that merely contains the word must not arm a filter dropdown — the same
 		// exact-line rule the other annotations use.
-		{"prose mentioning it", "the facet: idea was rejected here", "", nil},
+		{"prose mentioning it", "the filterBy: idea was rejected here", "", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, extra := FacetFor(tc.doc)
+			got, extra := FilterByFor(tc.doc)
 			if got != tc.want {
-				t.Errorf("FacetFor(%q) = %q, want %q", tc.doc, got, tc.want)
+				t.Errorf("FilterByFor(%q) = %q, want %q", tc.doc, got, tc.want)
 			}
 			if len(extra) != len(tc.extra) {
 				t.Fatalf("extras = %v, want %v", extra, tc.extra)
@@ -614,11 +614,59 @@ func TestFacetFor(t *testing.T) {
 	}
 }
 
-// TestKnownAnnotations_IncludesFacet is acceptance item 9. Without this entry
-// every `facet:` in the schema is reported at startup as a suspected typo —
+// TestKnownAnnotations_IncludesFilterBy is acceptance item 9. Without this entry
+// every `filterBy:` in the schema is reported at startup as a suspected typo —
 // noise that trains people to ignore the one report that matters.
-func TestKnownAnnotations_IncludesFacet(t *testing.T) {
-	if u := UnknownAnnotations("facet: dataCenter"); len(u) != 0 {
-		t.Errorf("facet must be a known annotation, got %v", u)
+func TestKnownAnnotations_IncludesFilterBy(t *testing.T) {
+	if u := UnknownAnnotations("filterBy: dataCenter"); len(u) != 0 {
+		t.Errorf("filterBy must be a known annotation, got %v", u)
+	}
+}
+
+// TestColumnPaths covers the shape check — acceptance item 1 and the depth rule.
+//
+// Three segments, where `include:` allows two. The limits differ because the
+// hazards do: `include:` walks LIST relationships and produces ROWS, which is
+// where cycles live; a column walks SINGLE relationships and produces ONE CELL.
+func TestColumnPaths(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		doc  string
+		want []string
+	}{
+		{"absent", "", nil},
+		{"one hop", "column: kubernetesNode.role", []string{"kubernetesNode.role"}},
+		{"two hops", "column: kubernetesNode.cluster.name", []string{"kubernetesNode.cluster.name"}},
+		{"count", "column: servers.count", []string{"servers.count"}},
+		{"several", "column: a.b, c.d.e", []string{"a.b", "c.d.e"}},
+		// A bare field is a column the type already renders; ignored rather
+		// than drawn twice.
+		{"bare field ignored", "column: hostname", nil},
+		// Four segments is the real ceiling: `server.kubernetesNode.cluster.name`
+		// is what puts a cluster name on a network device's Connections tab.
+		{"four segments", "column: a.b.c.d", []string{"a.b.c.d"}},
+		// Five is past where an annotation stays readable. The limit is
+		// readability, not correctness — single-ref paths terminate at any depth.
+		{"too deep", "column: a.b.c.d.e", nil},
+		{"with other annotations", "filterBy: dataCenter\ncolumn: servers.count", []string{"servers.count"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ColumnPaths(tc.doc)
+			if len(got) != len(tc.want) {
+				t.Fatalf("ColumnPaths(%q) = %v, want %v", tc.doc, got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("ColumnPaths(%q) = %v, want %v", tc.doc, got, tc.want)
+				}
+			}
+		})
+	}
+}
+
+// `column` must be a known annotation or every use is reported as a typo.
+func TestKnownAnnotations_IncludesColumn(t *testing.T) {
+	if u := UnknownAnnotations("column: servers.count"); len(u) != 0 {
+		t.Errorf("column must be a known annotation, got %v", u)
 	}
 }

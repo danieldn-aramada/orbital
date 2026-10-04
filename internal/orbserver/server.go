@@ -198,7 +198,8 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	// sets CanMutate, so these pages are read-only without needing a separate
 	// read-only implementation.
 	generic := handler.NewGenericRenderer(fieldSource, cfg.DGraphURL, "", logger, s.orbBase,
-		func(echo.Context) layout.PageActions { return layout.OrbActions }, s.render, s.renderFragment)
+		func(echo.Context) layout.PageActions { return layout.OrbActions }, s.render, s.renderFragment).
+		WithRowCap(cfg.ListMaxRows, "ORB_LIST_MAX_ROWS")
 
 	// MIGRATED: /data-centers/:orbId is served by the generic renderer via the
 	// RouteNotFound fallback. The old path redirects.

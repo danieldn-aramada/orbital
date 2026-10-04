@@ -9,7 +9,7 @@
 // drifts, this fails.
 
 import { test, expect, Page } from '@playwright/test'
-import { openEditor as openGenericEditor } from './helpers/generic';
+import { openEditor as openGenericEditor, openAllDetailPanels } from './helpers/generic';
 
 const SERVER_ORB_ID  = '2f-uae:server-5HSC3D4'  // seeded R750 with iDRAC in 2f-uae namespace
 const DC_ORB_ID      = 'seattle:seattle-galleon'
@@ -99,43 +99,6 @@ test.describe('configitem-editor module — browser validation', () => {
     // audit log would say updateServer with a nested-blob.
     await expect(auditPanel).toContainText('updateIdracSettings', { timeout: 10_000 })
     await expect(auditPanel.locator('strong:has-text("firmwareVersion")').first()).toBeVisible()
-  })
-
-  // The "datacenter edit" case was DELETED 2026-09-25 with the bespoke page.
-  // Editing a DataCenter now goes through the generic renderer, covered by
-  // e2e/generic-editor.spec.ts (edit + persist + MVCC on every reachable
-  // target). NOTE what did NOT carry over: this case also asserted the
-  // resulting updateDataCenter AUDIT ROW and its diff. Audit integration for
-  // the generic editor has no e2e cover yet.
-  // ── NOT WIRED — edit modals not yet implemented for these ConfigItem types ──
-  //
-  // Rack, IPAddress, KubernetesNode, ServerConfigurationProfile have no FormFields
-  // in the configitem registry, no edit modal templates, and no JS handlers.
-  // These tests are skipped until the corresponding UI is wired up. Each skip is
-  // a product gap, not just a test gap — flag for future work.
-
-  test.skip('rack edit: name change → updateRack audit row with diff', async () => {
-    // NOT WIRED: Rack has no edit modal in the current UI. Racks tab (inside a DC
-    // tab) is read-only display only. No data-rack-edit-id trigger, no
-    // edit-modal-rack template, no updateRack JS dispatch path.
-    // Target: seattle:Rack-5 or any seeded rack in examples/seed/seattle-galleon.graphql
-  })
-
-  test.skip('ip address edit: address change → updateIPAddress audit row with diff', async () => {
-    // NOT WIRED: IPAddress has no edit modal in the current UI. No IP detail page,
-    // no data-ip-edit-id trigger, no updateIPAddress JS dispatch.
-    // Target: seeded IPs in examples/seed/seattle-galleon-storage.graphql
-  })
-
-  test.skip('kubernetes node edit: role change → updateKubernetesNode audit row with diff', async () => {
-    // NOT WIRED: KubernetesNode has no edit modal. Cluster Nodes sub-tab is
-    // read-only. No data-node-edit-id trigger, no updateKubernetesNode JS dispatch.
-    // Target: any seeded node in examples/seed/seattle-galleon-clusters.graphql
-  })
-
-  test.skip('server config profile: JSON field change → updateServerConfigurationProfile audit row with diff', async () => {
-    // NOT WIRED: ServerConfigurationProfile has no edit modal in the current UI.
-    // No data-profile-edit-id trigger, no updateServerConfigurationProfile JS dispatch.
   })
 
   // Regression guard: server / cluster / DC handlers must return 404 when the

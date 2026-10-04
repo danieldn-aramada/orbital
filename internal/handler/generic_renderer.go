@@ -32,6 +32,47 @@ type GenericRenderer struct {
 	actions        func(echo.Context) layout.PageActions
 	render         func(c echo.Context, name string, data any) error
 	renderFragment func(c echo.Context, page, fragment string, data any) error
+	listMaxRows    int
+	rowCapSetting  string
+}
+
+// DefaultListMaxRows is the row cap when the operator sets none.
+//
+// ~1.6 KB of rendered HTML per row (measured 2026-10-02 on /servers), so this
+// is roughly 3 MB — enough headroom for ~50 data centers at today's densest
+// type, and small enough that a page still renders promptly.
+const DefaultListMaxRows = 2000
+
+// listMaxRowsWarnAbove is where a configured value stops being a tuning choice
+// and starts being a broken page: ~8 MB of HTML, which no browser renders
+// pleasantly. Warned about, NOT clamped — overriding the operator's explicit
+// number is not orbital's call, but letting them discover it in production
+// without a word is not either.
+const listMaxRowsWarnAbove = 5000
+
+// WithRowCap sets the list-page row cap and names the setting that changes it.
+//
+// Both together because the truncation notice tells the operator what to raise,
+// and the two apps answer that differently — ORBITAL_LIST_MAX_ROWS against
+// ORB_LIST_MAX_ROWS. The caller knows which app it is; deriving it here from
+// some other property would be a guess that silently goes wrong.
+//
+// A value <= 0 falls back to the default, so a caller that forgets this never
+// serves an empty page.
+func (g *GenericRenderer) WithRowCap(max int, setting string) *GenericRenderer {
+	g.rowCapSetting = setting
+	if max <= 0 {
+		g.listMaxRows = DefaultListMaxRows
+		return g
+	}
+	if max > listMaxRowsWarnAbove && g.logger != nil {
+		g.logger.Warn("list row cap is very high; pages may become slow or unrenderable",
+			"rows", max, "approx_html_mb", max*1600/(1024*1024),
+			"setting", setting,
+			"fix", "lower it, or use the API for bulk reads")
+	}
+	g.listMaxRows = max
+	return g
 }
 
 // NewGenericRenderer builds a renderer for one app.
@@ -84,13 +125,19 @@ func (g *GenericRenderer) List(c echo.Context) error {
 	label := g.fieldLabeller(v.Type)
 	data.Columns = columnHeaders(listColumns(v, display), label)
 	data.RefColumns = refHeaders(v.RefColumns, label)
+	data.ComputedColumns = g.columnHeadersFor(v.Columns)
 
-	raw, err := runGraphQL(c.Request().Context(), g.dgraphURL, genericListQuery(v, viewOf, display, 500), "query"+v.Type)
+	listLimit := g.listMaxRows
+	if listLimit <= 0 {
+		listLimit = DefaultListMaxRows
+	}
+	fields, err := runGraphQLAll(c.Request().Context(), g.dgraphURL, genericListQuery(v, viewOf, display, listLimit))
 	if err != nil {
 		g.logger.Warn("generic list query failed", "type", v.Type, "err", err)
 		data.Unavailable = "Could not read " + v.Label + " from DGraph: " + err.Error()
 		return g.render(c, "generic-list", data)
 	}
+	raw := fields["query"+v.Type]
 	var rows []map[string]any
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &rows); err != nil {
@@ -99,34 +146,130 @@ func (g *GenericRenderer) List(c echo.Context) error {
 			return g.render(c, "generic-list", data)
 		}
 	}
-	for _, r := range rows {
-		data.Rows = append(data.Rows, stringifyRow(r))
+	// Truncation is STATED, never silent.
+	//
+	// The query is capped, and a capped table that says nothing reads as the
+	// complete set. The filterBy makes it worse: its options come from the rows
+	// actually rendered and it filters that same window, so a filtered view
+	// looks authoritative while being a slice of a slice.
+	//
+	// A missing or unparseable count leaves Total at 0 and the notice unshown —
+	// the rows are still right, and inventing a number would be worse than
+	// omitting one.
+	var agg struct {
+		Count int `json:"count"`
 	}
-	data.Facet = buildFacet(v, data.Columns, data.RefColumns, data.Rows)
+	if c := fields["aggregate"+v.Type]; len(c) > 0 {
+		_ = json.Unmarshal(c, &agg)
+	}
+	data.Total = agg.Count
+	data.Truncated = isTruncated(len(rows), agg.Count, listLimit)
+	data.RowCapSetting = g.rowCapSetting
+	for _, r := range rows {
+		row := stringifyRow(r)
+		// Computed columns are keyed by their PATH, so the template reads them
+		// the same way it reads any other cell.
+		for _, c := range v.Columns {
+			row[c.Path] = stringify(columnValue(r, c))
+		}
+		data.Rows = append(data.Rows, row)
+	}
+	data.FilterBy = buildFilterBy(v, data.Columns, data.RefColumns, data.Rows)
 	return g.render(c, "generic-list", data)
 }
 
-// buildFacet resolves the view's `facet:` field into the control the template
+// columnValue pulls a computed column's value out of a row.
+//
+// The row holds the nested shape the query asked for —
+// `{"kubernetesNode": {"cluster": {"name": "colo-prod"}}}` — and a table cell
+// wants the one value at the end. A missing hop is a legitimate answer, not an
+// error: a server with no Kubernetes node has no cluster, and the cell renders
+// an em dash like any other absent value.
+func columnValue(row map[string]any, c configitems.ViewColumn) any {
+	segs := strings.Split(c.Path, ".")
+	if c.IsCount {
+		// `a.b.servers.count` is fetched as `a { b { serversAggregate { count } } }`,
+		// so the response path replaces the list field and its `count` leaf with
+		// the generated aggregate field.
+		segs = append(append([]string{}, segs[:len(segs)-2]...), c.Field+"Aggregate", "count")
+	}
+	// An inline fragment does not nest in the RESPONSE — `... on ConfigItem
+	// { name }` returns `name` at the same level — so the declared path walks
+	// the result directly.
+	var cur any = row
+	for _, seg := range segs {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return nil
+		}
+		cur = m[seg]
+		if cur == nil {
+			return nil
+		}
+	}
+	return cur
+}
+
+// columnHeadersFor labels the computed columns by their LEAF field, so a path
+// reads "Cluster" rather than "Kubernetes Node Cluster Name". Two paths with
+// the same leaf would collide; the schema has none today and the label
+// annotation is the escape hatch if one appears.
+func (g *GenericRenderer) columnHeadersFor(cols []configitems.ViewColumn) []page.ColumnHeader {
+	out := make([]page.ColumnHeader, 0, len(cols))
+	for _, c := range cols {
+		// Labelled by the type the field BELONGS to, not the row's type: `gpu`
+		// carries `label: GPU` on KubernetesNode, and Server's labeller has
+		// never heard of it.
+		out = append(out, page.ColumnHeader{Field: c.Path, Label: g.fieldLabeller(c.OwnerType)(c.Field)})
+	}
+	return out
+}
+
+// editableSet turns a field list into a template-indexable set.
+func editableSet(fields []string) map[string]bool {
+	out := make(map[string]bool, len(fields))
+	for _, f := range fields {
+		out[f] = true
+	}
+	return out
+}
+
+// isTruncated reports whether the row cap actually bit.
+//
+// Both conditions are load-bearing. A full page is not proof of truncation —
+// a type with exactly `limit` rows fills the page and nothing is missing — and
+// a total larger than the rows is not proof either, because a count fetched
+// from a graph that changed under us could exceed a short page. Claiming
+// truncation when none happened sends people hunting for rows that are all
+// already there, which is its own kind of wrong answer.
+//
+// A zero total means the count was missing or unparseable: say nothing rather
+// than invent a denominator.
+func isTruncated(rows, total, limit int) bool {
+	return rows >= limit && total > rows
+}
+
+// buildFilterBy resolves the view's `filterBy:` field into the control the template
 // renders: which column index it filters, and the values present in it.
 //
-// Returns nil when the view declares no facet, and also when the column holds
+// Returns nil when the view declares no filterBy, and also when the column holds
 // fewer than two distinct values — a dropdown whose only option selects
 // everything is a control that cannot do anything, and one per page adds up.
-func buildFacet(v configitems.View, cols []page.ColumnHeader, refs []page.RefHeader, rows []map[string]any) *page.Facet {
-	if v.Facet == "" {
+func buildFilterBy(v configitems.View, cols []page.ColumnHeader, refs []page.RefHeader, rows []map[string]any) *page.FilterBy {
+	if v.FilterBy == "" {
 		return nil
 	}
 	// Column index must match the template's header order exactly: Name, then
 	// scalar columns, then reference columns, then Orb ID.
 	idx, label, isRef := -1, "", false
 	for i, c := range cols {
-		if c.Field == v.Facet {
+		if c.Field == v.FilterBy {
 			idx, label = i+1, c.Label
 		}
 	}
 	if idx < 0 {
 		for i, r := range refs {
-			if r.Field == v.Facet {
+			if r.Field == v.FilterBy {
 				idx, label, isRef = len(cols)+1+i, r.Label, true
 			}
 		}
@@ -137,7 +280,7 @@ func buildFacet(v configitems.View, cols []page.ColumnHeader, refs []page.RefHea
 
 	seen := map[string]bool{}
 	for _, row := range rows {
-		val := row[v.Facet]
+		val := row[v.FilterBy]
 		if isRef {
 			// A reference cell renders the related entity's name.
 			m, ok := val.(map[string]any)
@@ -164,7 +307,7 @@ func buildFacet(v configitems.View, cols []page.ColumnHeader, refs []page.RefHea
 	// singular because it heads one cell; the empty option names the whole
 	// set. configitems.Pluralize already handles the awkward endings — the
 	// "IdracSettings is already plural" case is exactly why it exists.
-	return &page.Facet{Label: label, All: "All " + configitems.Pluralize(label), Column: idx, Options: opts}
+	return &page.FilterBy{Label: label, All: "All " + configitems.Pluralize(label), Column: idx, Options: opts}
 }
 
 // Detail renders /{slug}/{orbId} for any ConfigItem type.
@@ -264,6 +407,7 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, v.Type+" not found: "+orbID)
 	}
 
+	data.DomID = SafeDomID(orbID)
 	data.Entity = stringifyRow(entity)
 	if n, ok := entity["name"].(string); ok && n != "" {
 		data.PageTitle = n
@@ -313,7 +457,11 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 	data.FieldValuesJSON = rawValuesJSON(editableSubtree(v, entity))
 
 	data.Meta = g.metaRows(v, entity)
-	data.AuditPanelID = "generic-panel-audit-" + data.EditModal.DomID
+	// From data.DomID, not EditModal.DomID: the edit modal is only populated
+	// when the viewer can mutate, so a readonly user got the id
+	// "generic-panel-audit-" with nothing after it — unique by accident while
+	// one detail view is open, and colliding the moment two are.
+	data.AuditPanelID = "generic-panel-audit-" + data.DomID
 	data.RelatedOrbIDsCSV = strings.Join(ownedSubtreeOrbIDs(orbID, v.Type, entity), ",")
 	// Single relationships are split out of the tab list: owned ones get a box
 	// that shows their data, everything else becomes a link row in the field
@@ -360,9 +508,23 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 			// page; the field list already says the relationship exists.
 			continue
 		}
+		childView := byType[tab.Type]
+		childCols := childView.Columns
 		stamped := make([]map[string]any, 0, len(rows))
+		// Each ROW is a different entity, so the proposed-change marks key on
+		// the row's own orbId. That is the same shape the field tables use, one
+		// level down — which is why loadFieldMarks needs no change: it already
+		// walks [data-field-orbid] then [data-field] within it.
+		rowValues := make(map[string]string, len(rows))
 		for _, r := range rows {
-			stamped = append(stamped, stringifyRow(r))
+			row := stringifyRow(r)
+			for _, c := range childCols {
+				row[c.Path] = stringify(columnValue(r, c))
+			}
+			if id, ok := r["orbId"].(string); ok && id != "" {
+				rowValues[id] = rawValuesJSON(editableSubtree(childView, r))
+			}
+			stamped = append(stamped, row)
 		}
 		data.Tabs = append(data.Tabs, page.GenericTab{
 			Label:      tabLabel(tab.Field, label),
@@ -371,7 +533,14 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 			IsList:     tab.IsList,
 			Columns:    columnHeaders(byType[tab.Type].ColumnFields(), g.fieldLabeller(tab.Type)),
 			RefColumns: refHeaders(withoutBackReferences(tabRefColumns(byType[tab.Type], data.RefColumnsDropped), stamped, v.Type, orbID), g.fieldLabeller(tab.Type)),
-			Rows:       stamped,
+			// The child type's `column:` paths, so a Server rendered inside a
+			// network device's tab carries its cluster and node role exactly as
+			// it does on /servers. One annotation, every table of that type —
+			// which is what makes this cheap enough to be worth having.
+			ComputedColumns: g.columnHeadersFor(childView.Columns),
+			Rows:            stamped,
+			Editable:        editableSet(childView.Fields),
+			FieldValues:     rowValues,
 		})
 	}
 
@@ -540,11 +709,57 @@ func stampFetchedVersions(targets []configitems.EditTarget, entity map[string]an
 
 // editableSubtree picks an entity's EDITABLE scalars out of what was fetched.
 func editableSubtree(v configitems.View, raw map[string]any) map[string]any {
+	// A `jsonString` field is PARSED into the tree the editor renders.
+	//
+	// It is declared `String` and holds a JSON document, so copied raw it
+	// reaches the editor as one line of escaped quotes — technically editable,
+	// practically not. The bespoke DataCenter handler unmarshalled it for
+	// exactly this reason and the generic renderer dropped the behaviour
+	// silently, because `valueForMutation` in configitem-editor.js re-stringifies
+	// on submit whether the value arrived as a string or a tree. Nothing broke;
+	// the field just became unusable.
+	//
+	// Unparseable values pass through as the raw string. The field is annotated
+	// as holding JSON, and if it does not, showing what is actually stored is
+	// how someone finds that out.
+	isJSON := make(map[string]bool, len(v.JSONString))
+	for _, f := range v.JSONString {
+		isJSON[f] = true
+	}
 	out := make(map[string]any, len(v.Fields))
 	for _, f := range v.Fields {
-		if val, ok := raw[f]; ok && val != nil {
-			out[f] = val
+		val, ok := raw[f]
+		if !ok || val == nil {
+			// An unset field is still EDITABLE, so it belongs in the tree as
+			// an explicit null.
+			//
+			// Omitting it meant the editor showed only fields that already had
+			// a value: every seeded ServerMaintenance is `{"enabled": false}`,
+			// so scheduling a window required typing `windowStart` by hand,
+			// guessing the name and the format, with nothing on the page
+			// saying the field exists. That is general — it applies to every
+			// nullable field on every type, not just maintenance.
+			//
+			// Safe against the field-CLEARING contract, which is the thing to
+			// be careful of here: configitem-editor.js treats null as empty in
+			// BOTH directions. `removePayload` emits a `remove` only when a
+			// field was non-empty at open and is empty now, so a null that was
+			// null at open can never produce one; `scalarPayload` skips empty
+			// values, so an untouched null is never sent in `set`. A key the
+			// user leaves alone is therefore a no-op, which is what makes
+			// showing it free.
+			out[f] = nil
+			continue
 		}
+		if isJSON[f] {
+			if s, isStr := val.(string); isStr && s != "" {
+				var parsed any
+				if err := json.Unmarshal([]byte(s), &parsed); err == nil {
+					val = parsed
+				}
+			}
+		}
+		out[f] = val
 	}
 	return out
 }

@@ -1,3 +1,4 @@
+import { openAllDetailPanels } from './helpers/generic';
 import { test, expect } from '@playwright/test';
 
 // The Clusters page after the bespoke handler was deleted.
@@ -35,6 +36,7 @@ test('a cluster detail page resolves its concrete type from the data', async ({ 
   const href = await page.locator('#generic-table tbody tr td:first-child a').first().getAttribute('href');
   expect(href, 'rows must link under the interface slug, not the implementation').toContain('/clusters/');
   await page.goto(href!);
+  await openAllDetailPanels(page);
 
   // clusterType exists only on EksaKubernetesCluster. Rendering it proves the
   // page resolved the concrete type — the interface has no such field and no
@@ -46,6 +48,7 @@ test('a cluster detail page resolves its concrete type from the data', async ({ 
 
 test('cluster fields show relationships as links', async ({ page }) => {
   await page.goto('/clusters/' + encodeURIComponent('colo:dev-main'));
+  await openAllDetailPanels(page);
   const fields = page.getByTestId('generic-fields');
 
   // Each of these is a single relationship, and the bespoke page showed every
@@ -62,6 +65,7 @@ test('cluster fields show relationships as links', async ({ page }) => {
 
 test('the backup tree renders inline, and says so when absent', async ({ page }) => {
   await page.goto('/clusters/' + encodeURIComponent('colo:dev-main'));
+  await openAllDetailPanels(page);
   const backup = page.getByTestId('generic-owned').filter({ hasText: 'Backup' });
   await expect(backup).toContainText('Etcd');
   await expect(backup).toContainText('Velero');
@@ -71,6 +75,7 @@ test('the backup tree renders inline, and says so when absent', async ({ page })
   // "No backup configured" and "no information about backups" are different
   // answers. An omitted box gives neither.
   await page.goto('/clusters/' + encodeURIComponent('alaska-dot-cruiser:adot-m'));
+  await openAllDetailPanels(page);
   const absent = page.getByTestId('generic-owned').filter({ hasText: 'Backup' });
   await expect(absent).toContainText('Etcd');
   await expect(absent).toContainText('Not configured');
@@ -78,6 +83,7 @@ test('the backup tree renders inline, and says so when absent', async ({ page })
 
 test('nodes and workload clusters render as tables with populated columns', async ({ page }) => {
   await page.goto('/clusters/' + encodeURIComponent('colo:dev-main'));
+  await openAllDetailPanels(page);
   const nodes = page.getByTestId('generic-tab').filter({ hasText: 'Nodes' }).first();
   await expect(nodes).toBeVisible();
 
@@ -92,6 +98,7 @@ test('nodes and workload clusters render as tables with populated columns', asyn
 
 test('a cluster detail page shows metadata and its audit log', async ({ page }) => {
   await page.goto('/clusters/' + encodeURIComponent('colo:dev-main'));
+  await openAllDetailPanels(page);
   const meta = page.getByTestId('generic-meta');
   await expect(meta).toContainText('Namespace');
   await expect(meta).toContainText('Version');
@@ -100,6 +107,7 @@ test('a cluster detail page shows metadata and its audit log', async ({ page }) 
 
 test('a cluster can be edited through the generic editor, backup subtree included', async ({ page }) => {
   await page.goto('/clusters/' + encodeURIComponent('colo:dev-main'));
+  await openAllDetailPanels(page);
   const domId = await page.locator('[data-generic-edit-id]').getAttribute('data-generic-edit-id');
   await page.locator('[data-generic-edit-id]').click();
 
@@ -124,6 +132,7 @@ test('a cluster can be edited through the generic editor, backup subtree include
 
 test('a stale version is refused rather than overwriting', async ({ page }) => {
   await page.goto('/clusters/' + encodeURIComponent('colo:dev-main'));
+  await openAllDetailPanels(page);
   const domId = await page.locator('[data-generic-edit-id]').getAttribute('data-generic-edit-id');
 
   // Staled BEFORE the first open: configitem-editor.js parses the targets
@@ -176,6 +185,7 @@ test('a stale version is refused rather than overwriting', async ({ page }) => {
 
 test('a cluster edit produces an audit row for the cluster, with a rendered diff', async ({ page }) => {
   await page.goto('/clusters/' + encodeURIComponent('colo:dev-main'));
+  await openAllDetailPanels(page);
   const domId = await page.locator('[data-generic-edit-id]').getAttribute('data-generic-edit-id');
   await page.locator('[data-generic-edit-id]').click();
 
@@ -203,6 +213,7 @@ test('an owned-child edit is attributed to the child, not blobbed into the paren
   // otherwise the audit log says "the cluster changed" and loses which of its
   // owned records actually did.
   await page.goto('/clusters/' + encodeURIComponent('colo:dev-main'));
+  await openAllDetailPanels(page);
   const domId = await page.locator('[data-generic-edit-id]').getAttribute('data-generic-edit-id');
   await page.locator('[data-generic-edit-id]').click();
 
@@ -247,6 +258,7 @@ test('the schema pins column order, and back-references are dropped', async ({ p
 
   // A relationship table must not carry a column naming the entity you are on.
   await page.goto('/clusters/' + encodeURIComponent('houston:g2-m'));
+  await openAllDetailPanels(page);
   const nodes = page.getByTestId('generic-tab').filter({ hasText: 'Nodes' }).first();
   await expect(nodes).toBeVisible();
   expect(await nodes.locator('thead th').allInnerTexts(),
@@ -262,6 +274,7 @@ test('relationship tables fit their container', async ({ page }) => {
   // The symptom the two changes above were for: 13 columns overflowing the box.
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/clusters/' + encodeURIComponent('houston:g2-m'));
+  await openAllDetailPanels(page);
   const tabs = page.getByTestId('generic-tab');
   for (let i = 0; i < await tabs.count(); i++) {
     const table = await tabs.nth(i).locator('table').boundingBox();

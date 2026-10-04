@@ -1919,6 +1919,13 @@ const docTemplate = `{
         "configitems.View": {
             "type": "object",
             "properties": {
+                "columns": {
+                    "description": "Columns are extra columns whose value lives at the end of a PATH —\n` + "`" + `servers.count` + "`" + `, ` + "`" + `kubernetesNode.cluster.name` + "`" + `. Resolved and validated\nagainst the schema here, so a client rendering its own table gets the\nsame columns without re-walking the graph.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configitems.ViewColumn"
+                    }
+                },
                 "detailOnly": {
                     "description": "DetailOnly are Display fields that render on a detail page but never as a\ntable column — the ` + "`" + `detailOnly` + "`" + ` annotation. Placement is DECLARED, not\ninferred from what a field holds.\n\nReported rather than silently dropped, because a client building its own\ntable needs the same distinction and should not have to re-derive it.",
                     "type": "array",
@@ -1933,16 +1940,16 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
-                "facet": {
-                    "description": "Facet is the single column the list page offers as a filter dropdown,\nfrom the type's ` + "`" + `facet:` + "`" + ` annotation. Empty when unannotated, and also\nwhen the annotation named something this page does not render as a\ncolumn — a facet over an absent column is a dead control, so it is\ndropped here and reported by FacetWarnings rather than shipped broken.\n\nCarried on the view because orbital's UI is a consumer of this API like\nany other: a client building its own table should be told which column is\nworth a filter, not have to guess from cardinality.",
-                    "type": "string"
-                },
                 "fields": {
                     "description": "Fields are the EDITABLE scalars — what the editor may write.",
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
+                },
+                "filterBy": {
+                    "description": "FilterBy is the single column the list page offers as a filter dropdown,\nfrom the type's ` + "`" + `filterBy:` + "`" + ` annotation. Empty when unannotated, and also\nwhen the annotation named something this page does not render as a\ncolumn — a dropdown over an absent column is a dead control, so it is\ndropped here and reported by FilterByWarnings rather than shipped broken.\n\nCarried on the view because orbital's UI is a consumer of this API like\nany other: a client building its own table should be told which column is\nworth a filter, not have to guess from cardinality.",
+                    "type": "string"
                 },
                 "implementations": {
                     "description": "Implementations are the concrete types an interface view lists. Empty\nfor a concrete view.",
@@ -1970,16 +1977,16 @@ const docTemplate = `{
                     "description": "Label is DISPLAY, not contract — free to change without breaking anyone.",
                     "type": "string"
                 },
+                "menuWeight": {
+                    "description": "Nav is the menu position from the type's ` + "`" + `menuWeight:` + "`" + ` annotation, or\nMenuWeightUnpinned when it declares none. Published so a client building its own\nnavigation gets the same order without re-deriving it — the UI sorts\nnothing.",
+                    "type": "integer"
+                },
                 "meta": {
                     "description": "Meta are the ConfigItem interface fields — identity and provenance —\nwhich displayScalars deliberately strips out of Display. They are shown\nseparately, in their own box, exactly as every hand-written detail page\nshowed them.",
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
-                },
-                "nav": {
-                    "description": "Nav is the menu position from the type's ` + "`" + `nav:` + "`" + ` annotation, or\nNavUnpinned when it declares none. Published so a client building its own\nnavigation gets the same order without re-deriving it — the UI sorts\nnothing.",
-                    "type": "integer"
                 },
                 "order": {
                     "description": "Order is the pinned field prefix from the type's ` + "`" + `order:` + "`" + ` annotation.\nExposed because a list page re-applies it after unioning an interface's\nimplementations, and because a client building its own table should\norder it the way orbital does rather than guess.",
@@ -2008,6 +2015,31 @@ const docTemplate = `{
                 },
                 "type": {
                     "description": "Type is the GraphQL type name.",
+                    "type": "string"
+                }
+            }
+        },
+        "configitems.ViewColumn": {
+            "type": "object",
+            "properties": {
+                "field": {
+                    "description": "Field is the leaf — the label is derived from it, so a column reads\n\"Cluster\" rather than \"Kubernetes Node Cluster Name\".",
+                    "type": "string"
+                },
+                "isCount": {
+                    "description": "IsCount marks an aggregate over a list relationship.",
+                    "type": "boolean"
+                },
+                "ownerType": {
+                    "description": "OwnerType is the type the label field belongs to — the type at the END\nof the path, not the row's own type. A ` + "`" + `gpu` + "`" + ` field annotated\n` + "`" + `label: GPU` + "`" + ` lives on KubernetesNode; labelling it with Server's\nlabeller silently ignores that and renders \"Gpu\".",
+                    "type": "string"
+                },
+                "path": {
+                    "description": "Path is the declared dotted path, e.g. \"kubernetesNode.cluster.name\".",
+                    "type": "string"
+                },
+                "selection": {
+                    "description": "Selection is the GraphQL fragment that fetches this column, built here\nbecause this is the only place that knows whether a hop lands on an\nINTERFACE — ` + "`" + `cluster { name }` + "`" + ` is rejected, because ` + "`" + `name` + "`" + ` lives on\nConfigItem rather than on KubernetesCluster, and needs a type condition.\n\nPublished so a client fetching its own rows can ask for the same thing\nrather than reverse-engineering the path.",
                     "type": "string"
                 }
             }

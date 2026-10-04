@@ -11,13 +11,29 @@ import (
 
 // testCfg builds a minimal config for route-level tests. Templates load from disk
 // using paths relative to the repo root — callers must t.Chdir("../..") first.
+//
+// DGraph points at a DEAD address, deliberately.
+//
+// It used to be `localhost:8082` — orb's real dev graph. These are route tests:
+// they assert status codes, and none of them needs DGraph to answer. But
+// `TestImportArtifact_ValidZipReturns202` accepts a bundle and returns 202,
+// and an import is `drop_all` + reload running ASYNCHRONOUSLY after the
+// handler returns. So `make test-unit` — the target whose whole promise is
+// "no external services required" — silently wiped the developer's orb graph.
+//
+// Worse, it was timing-dependent: run that test alone and the binary exits
+// before the goroutine reaches drop_all, so it looks harmless. It only bites
+// when other tests keep the process alive, which is to say in every real run.
+//
+// Port 1 is reserved and nothing listens there, so the async import fails fast
+// and reaches nothing.
 func testCfg(t *testing.T) *orbconfig.Config {
 	t.Helper()
 	return &orbconfig.Config{
 		Port:            "0",
-		DGraphURL:       "http://localhost:8082/graphql",
-		DGraphAdminURL:  "http://localhost:8082/admin",
-		DGraphAlphaGRPC: "localhost:9082",
+		DGraphURL:       "http://127.0.0.1:1/graphql",
+		DGraphAdminURL:  "http://127.0.0.1:1/admin",
+		DGraphAlphaGRPC: "127.0.0.1:1",
 		DataDir:         t.TempDir(),
 		PollInterval:    60 * time.Second,
 		LogLevel:        "error",

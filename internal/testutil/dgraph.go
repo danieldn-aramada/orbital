@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -113,6 +115,67 @@ func ResetDGraphE(adminURL, schemaPath string) error {
 	// Brief pause to let DGraph finish internal index cleanup before applying schema.
 	time.Sleep(500 * time.Millisecond)
 
+	return applySchema(ctx, adminURL, schemaPath)
+}
+
+// EnsureSchema applies the GraphQL schema to a cluster that has none, and does
+// nothing to one that already has a schema. It never drops data.
+//
+// This exists because schema availability on the test alpha was an accident of
+// package ORDER. Only `handler` and `divergenceingest` called ResetDGraph, which
+// is what applies the schema — so `approval`, `configitems` and `dgraphschema`
+// queried a graph they never prepared and passed only when one of the other two
+// had run first. `go test` makes no promise about package order and runs them in
+// parallel unless -p 1, so that was luck, not design. On a genuinely cold
+// cluster those packages failed with "There's no GraphQL schema in Dgraph".
+//
+// Reset is the WRONG primitive for them: they only read, and wiping the graph
+// between packages costs time and would delete fixtures a neighbouring package
+// is relying on. Apply-if-absent is the smallest thing that makes each package
+// self-sufficient.
+func EnsureSchema(adminURL, schemaPath string) error {
+	if err := refuseDevGraph(adminURL); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if has, err := hasSchema(ctx, adminURL); err != nil {
+		return err
+	} else if has {
+		return nil
+	}
+	return applySchema(ctx, adminURL, schemaPath)
+}
+
+// hasSchema reports whether a GraphQL schema is deployed.
+func hasSchema(ctx context.Context, adminURL string) (bool, error) {
+	payload, _ := json.Marshal(map[string]string{"query": "{ getGQLSchema { schema } }"})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, adminURL, bytes.NewReader(payload))
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("read deployed schema: %w", err)
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Data struct {
+			GetGQLSchema *struct {
+				Schema string `json:"schema"`
+			} `json:"getGQLSchema"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return false, fmt.Errorf("decode deployed schema: %w", err)
+	}
+	return out.Data.GetGQLSchema != nil && strings.TrimSpace(out.Data.GetGQLSchema.Schema) != "", nil
+}
+
+// applySchema uploads the schema and waits for it to become queryable.
+func applySchema(ctx context.Context, adminURL, schemaPath string) error {
 	schemaBytes, err := os.ReadFile(schemaPath)
 	if err != nil {
 		return fmt.Errorf("read schema %s: %w", schemaPath, err)
@@ -164,7 +227,7 @@ func ResetDGraphE(adminURL, schemaPath string) error {
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	return fmt.Errorf("schema did not activate within 10s after reset")
+	return fmt.Errorf("schema did not activate within 10s")
 }
 
 // SeedMinimal creates one Namespace and DataCenter in DGraph and returns the
@@ -310,4 +373,15 @@ func readAndDecode(resp *http.Response, v any) ([]byte, error) {
 		return nil, fmt.Errorf("decode: %w", err)
 	}
 	return raw, nil
+}
+
+// SchemaPath is the repo's schema file, resolved from this package's own
+// location so it works whatever directory `go test` is run from.
+//
+// Two packages had their own copy of this four-line helper and a third was
+// about to; one definition means a future move of schema/ breaks in one place
+// rather than silently in whichever copy nobody updated.
+func SchemaPath() string {
+	_, thisFile, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(thisFile), "..", "..", "schema", "schema.graphql")
 }

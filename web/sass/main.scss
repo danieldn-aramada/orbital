@@ -959,3 +959,44 @@ div.dt-container {
     top: calc(50% - 1em * 0.5);
   }
 }
+
+// The generic detail page's tab strip WRAPS.
+//
+// Bulma's .tabs is nowrap with overflow-x:auto, which was fine for a
+// hand-written page with four tabs. The generic page derives one tab per owned
+// child and per relationship — a Server has eight — and at 1440px the last one
+// was clipped mid-word with no visible affordance that more existed. A clipped
+// tab is a feature nobody finds.
+// `div[id^=...]` rather than `[id^=...]`: Bulma's own rule is `div.tabs`
+// (0,0,1,1) and a bare attribute selector is (0,0,1,0), so it loses and the
+// strip keeps overflow-x:auto.
+div[id^="generic-detail-tabs-"] {
+  overflow-x: visible;
+
+  // Slightly tighter than Bulma's 0.5em 1em.
+  //
+  // A derived tab strip has more tabs than a hand-written one — a Server has
+  // eight — and at 1440px they overflowed by ~37px, which is nothing. Trimming
+  // the horizontal padding fits them on ONE row, which matters for more than
+  // width: `is-boxed` draws its underline on the ul, so with two rows the
+  // active tab floats above a line drawn under the row below it and the boxed
+  // look falls apart. One row keeps the tab sitting on its line.
+  li a {
+    padding-left: 0.7em;
+    padding-right: 0.7em;
+  }
+
+  ul {
+    // Wrap is the FALLBACK, for narrow viewports where no amount of trimming
+    // fits. Bulma's default is nowrap + overflow-x:auto, which clips the last
+    // tab mid-word with no sign that more exist.
+    flex-wrap: wrap;
+    // Bulma sets flex-shrink:0 on the ul, so it keeps its full content width
+    // inside the flex container and wrap never gets a chance to act — the
+    // strip just overflows. This is the line that actually makes it wrap.
+    flex-shrink: 1;
+    // The is-boxed underline STAYS. Removing it took the boxed look with it —
+    // the tabs floated with nothing to sit on. With wrap the ul is one box, so
+    // its bottom border draws once, beneath the last row.
+  }
+}

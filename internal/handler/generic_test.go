@@ -6,6 +6,9 @@ import (
 
 	"github.com/armada/orbital/internal/configitems"
 	"github.com/armada/orbital/internal/web/data/page"
+	"os"
+	"regexp"
+	"strconv"
 )
 
 // TestGenericDetailQuerySelectsMetaFields guards the metadata box's data.
@@ -300,7 +303,7 @@ func TestPrettyJSON(t *testing.T) {
 	}
 }
 
-// TestFacetOptions_AreDistinctColumnValues is acceptance item 2.
+// TestFilterByOptions_AreDistinctColumnValues is acceptance item 2.
 //
 // Resolved server-side, because orbital's UI is a consumer of orbital's API
 // like any other: "walk the rows collecting distinct values" is exactly the
@@ -309,7 +312,7 @@ func TestPrettyJSON(t *testing.T) {
 // template's header order (Name, scalars, references, Orb ID) or the dropdown
 // filters the wrong column, which looks like a broken filter rather than a
 // broken index.
-func TestFacetOptions_AreDistinctColumnValues(t *testing.T) {
+func TestFilterByOptions_AreDistinctColumnValues(t *testing.T) {
 	cols := []page.ColumnHeader{{Field: "hostname", Label: "Hostname"}, {Field: "model", Label: "Model"}}
 	refs := []page.RefHeader{{Field: "rack", Label: "Rack"}, {Field: "dataCenter", Label: "Data Center"}}
 	rows := []map[string]any{
@@ -321,9 +324,9 @@ func TestFacetOptions_AreDistinctColumnValues(t *testing.T) {
 	}
 
 	t.Run("reference column", func(t *testing.T) {
-		f := buildFacet(configitems.View{Facet: "dataCenter"}, cols, refs, rows)
+		f := buildFilterBy(configitems.View{FilterBy: "dataCenter"}, cols, refs, rows)
 		if f == nil {
-			t.Fatal("dataCenter is a reference column and must produce a facet")
+			t.Fatal("dataCenter is a reference column and must produce a filter dropdown")
 		}
 		// Name(0) hostname(1) model(2) rack(3) dataCenter(4).
 		if f.Column != 4 {
@@ -344,9 +347,9 @@ func TestFacetOptions_AreDistinctColumnValues(t *testing.T) {
 	})
 
 	t.Run("scalar column", func(t *testing.T) {
-		f := buildFacet(configitems.View{Facet: "model"}, cols, refs, rows)
+		f := buildFilterBy(configitems.View{FilterBy: "model"}, cols, refs, rows)
 		if f == nil {
-			t.Fatal("model is a scalar column and must produce a facet")
+			t.Fatal("model is a scalar column and must produce a filter dropdown")
 		}
 		if f.Column != 2 {
 			t.Errorf("Column = %d, want 2", f.Column)
@@ -361,18 +364,138 @@ func TestFacetOptions_AreDistinctColumnValues(t *testing.T) {
 	// control at all — acceptance item 1's other half.
 	t.Run("single distinct value yields nothing", func(t *testing.T) {
 		one := []map[string]any{{"model": "R650"}, {"model": "R650"}}
-		if f := buildFacet(configitems.View{Facet: "model"}, cols, refs, one); f != nil {
-			t.Errorf("one distinct value must not produce a facet, got %+v", f)
+		if f := buildFilterBy(configitems.View{FilterBy: "model"}, cols, refs, one); f != nil {
+			t.Errorf("one distinct value must not produce a filter dropdown, got %+v", f)
 		}
 	})
 	t.Run("no annotation yields nothing", func(t *testing.T) {
-		if f := buildFacet(configitems.View{}, cols, refs, rows); f != nil {
-			t.Errorf("an unannotated view must produce no facet, got %+v", f)
+		if f := buildFilterBy(configitems.View{}, cols, refs, rows); f != nil {
+			t.Errorf("an unannotated view must produce no filterBy, got %+v", f)
 		}
 	})
 	t.Run("field that is not a column yields nothing", func(t *testing.T) {
-		if f := buildFacet(configitems.View{Facet: "serialNumber"}, cols, refs, rows); f != nil {
-			t.Errorf("a non-column must produce no facet, got %+v", f)
+		if f := buildFilterBy(configitems.View{FilterBy: "serialNumber"}, cols, refs, rows); f != nil {
+			t.Errorf("a non-column must produce no filterBy, got %+v", f)
 		}
 	})
+}
+
+// TestIsTruncated covers the row-cap notice decision.
+//
+// The edge that matters is a page that is exactly full: a type with precisely
+// `limit` rows renders a full page with nothing missing, and announcing
+// truncation there sends someone looking for rows that are all already on
+// screen. The opposite edge — a full page with more behind it — is the case
+// the notice exists for.
+func TestIsTruncated(t *testing.T) {
+	for _, tc := range []struct {
+		name               string
+		rows, total, limit int
+		want               bool
+	}{
+		{"well under the cap", 190, 190, 500, false},
+		{"exactly at the cap, nothing more", 500, 500, 500, false},
+		{"exactly at the cap, more behind it", 500, 501, 500, true},
+		{"far over", 500, 12000, 500, true},
+		{"empty", 0, 0, 500, false},
+		// A count that is missing or unparseable leaves total at 0. Saying
+		// nothing beats inventing a denominator.
+		{"no count available", 500, 0, 500, false},
+		// A short page cannot be truncated, whatever the count claims — the
+		// graph may have changed between the two root fields.
+		{"short page with a larger count", 12, 900, 500, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isTruncated(tc.rows, tc.total, tc.limit); got != tc.want {
+				t.Errorf("isTruncated(%d, %d, %d) = %v, want %v", tc.rows, tc.total, tc.limit, got, tc.want)
+			}
+		})
+	}
+}
+
+// The two defaults must not drift: envconfig's tag is a string literal and the
+// handler's fallback is a Go const, so nothing connects them but this.
+//
+// Drift is silent and asymmetric — an operator who sets nothing gets the
+// envconfig value, a caller who forgets WithRowCap gets the const, and the two
+// pages would then cap differently with no way to tell from the UI.
+func TestDefaultListMaxRows_MatchesConfigDefault(t *testing.T) {
+	for _, tc := range []struct{ file, env string }{
+		{"../config/config.go", "ORBITAL_LIST_MAX_ROWS"},
+		{"../orbconfig/config.go", "ORB_LIST_MAX_ROWS"},
+	} {
+		src, err := os.ReadFile(tc.file)
+		if err != nil {
+			t.Fatalf("read %s: %v", tc.file, err)
+		}
+		re := regexp.MustCompile(`envconfig:"` + tc.env + `"\s+default:"(\d+)"`)
+		m := re.FindSubmatch(src)
+		if m == nil {
+			t.Fatalf("%s: no %s default found — did the tag change?", tc.file, tc.env)
+		}
+		want, err := strconv.Atoi(string(m[1]))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want != DefaultListMaxRows {
+			t.Errorf("%s default is %d but handler.DefaultListMaxRows is %d — they must match",
+				tc.env, want, DefaultListMaxRows)
+		}
+	}
+}
+
+// A cap of zero must never mean "no rows".
+func TestWithRowCap_NonPositiveFallsBackToDefault(t *testing.T) {
+	for _, n := range []int{0, -1} {
+		g := (&GenericRenderer{}).WithRowCap(n, "X")
+		if g.listMaxRows != DefaultListMaxRows {
+			t.Errorf("WithRowCap(%d) = %d, want the default %d", n, g.listMaxRows, DefaultListMaxRows)
+		}
+	}
+	if g := (&GenericRenderer{}).WithRowCap(37, "X"); g.listMaxRows != 37 {
+		t.Errorf("an explicit cap must be honoured, got %d", g.listMaxRows)
+	}
+}
+
+// TestColumnValue pulls a computed column out of the nested response shape.
+//
+// The absent cases are the point: a server with no Kubernetes node has no
+// cluster, and that must render an em dash like any other missing value rather
+// than panic on a nil map.
+func TestColumnValue(t *testing.T) {
+	row := map[string]any{
+		"orbId": "colo:server-X",
+		"kubernetesNode": map[string]any{
+			"role":    "worker",
+			"cluster": map[string]any{"name": "colo-prod"},
+		},
+		"serversAggregate": map[string]any{"count": float64(22)},
+	}
+	for _, tc := range []struct {
+		name string
+		col  configitems.ViewColumn
+		want any
+	}{
+		{"two hops", configitems.ViewColumn{Path: "kubernetesNode.cluster.name"}, "colo-prod"},
+		{"one hop", configitems.ViewColumn{Path: "kubernetesNode.role"}, "worker"},
+		// The count is fetched as `<field>Aggregate { count }`, so the response
+		// path is not the declared path.
+		{"count", configitems.ViewColumn{Path: "servers.count", Field: "servers", IsCount: true}, float64(22)},
+		{"missing hop", configitems.ViewColumn{Path: "nothing.here"}, nil},
+		{"missing leaf", configitems.ViewColumn{Path: "kubernetesNode.nosuch"}, nil},
+		{"hop is not an object", configitems.ViewColumn{Path: "orbId.deeper"}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := columnValue(row, tc.col); got != tc.want {
+				t.Errorf("columnValue(%q) = %v, want %v", tc.col.Path, got, tc.want)
+			}
+		})
+	}
+
+	// A row missing the relationship entirely — the common case for a server
+	// that is not a cluster node.
+	bare := map[string]any{"orbId": "colo:server-Y"}
+	if got := columnValue(bare, configitems.ViewColumn{Path: "kubernetesNode.role"}); got != nil {
+		t.Errorf("an absent relationship must yield nil, got %v", got)
+	}
 }

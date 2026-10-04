@@ -1,9 +1,11 @@
 // orb.js — orb-specific page logic
 
 import {
+  initDetailTabs,
   BASE,
   INVENTORY_CACHE_KEY,
   initListPages,
+  initGenericTable,
 } from './shared.js'
 
 // ─── Stale-state cleanup ──────────────────────────────────────────────────────
@@ -230,13 +232,28 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 })
 
-// ─── List pages (inventory, DCs, servers, clusters, network devices) ─────────
+// ─── List pages (inventory, data centers, and the generic /{slug} table) ─────
 //
-// One shared wiring for both apps — see initListPages in shared.js. Orb serves
-// network devices too, so it gets that page from the same descriptor list.
+// One shared wiring for both apps — see initListPages in shared.js.
 initListPages()
 
-// ─── Cross-app navigation and reload buttons ──────────────────────────────────
+// The generic /{slug} page: one DataTable for every ConfigItem type.
+//
+// Orb renders the SAME pages as orbital and was never calling this, so every
+// generic list page here was a plain HTML table — no search, no sorting, no
+// paging, no filter dropdown, and no double-click to open a row. Invisible
+// because the four orb specs that exercise it skipped themselves whenever
+// orb's graph was empty, which `make up` always left it.
+initGenericTable()
+
+// The generic detail page's tab strip, on a DIRECT navigation. A fragment
+// opened as a tab on a list page is wired by the htmx:afterSettle handler in
+// shared.js instead; both apps render this page, so both wire it.
+document.addEventListener('DOMContentLoaded', () => {
+  const t = document.querySelector('[id^="generic-detail-tabs-"]')
+  if (t) initDetailTabs(t)
+})
+
 
 
 // ─── Orb divergence publish ───────────────────────────────────────────────────

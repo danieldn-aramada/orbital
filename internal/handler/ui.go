@@ -26,14 +26,18 @@ import (
 	appversion "github.com/armada/orbital/internal/version"
 	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/armada/orbital/internal/web/data/page"
+	"github.com/armada/orbital/web"
 	webtemplates "github.com/armada/orbital/web/templates/orbital"
 	"github.com/labstack/echo/v4"
+	"io/fs"
 )
 
 type UI struct {
 	generic           *GenericRenderer
 	fields            *SharedFields
 	dgraphURL         string
+	listMaxRows       int
+	webFS             fs.FS
 	hotReload         bool
 	ratelURL          string
 	issueTrackerURL   string
@@ -87,12 +91,34 @@ func NewUI(hotReload bool, ratelURL, issueTrackerURL string, oidcEnabled, backup
 		db:              db,
 		logger:          logger,
 		version:         fmt.Sprintf("%d", time.Now().Unix()),
-		templates:       webtemplates.Map(),
 	}
+	// Embedded in production; os.DirFS("web") when hot-reloading, so an edited
+	// template takes effect without a rebuild. Same split orb has used since it
+	// shipped — orbital parsed from disk unconditionally, which meant the
+	// binary could not run outside the repo root.
+	u.webFS = web.FS
+	if hotReload {
+		u.webFS = os.DirFS("web")
+	}
+	u.templates = webtemplates.Map(u.webFS)
 	for _, opt := range opts {
 		opt(u)
 	}
 	return u
+}
+
+// WebFS is the filesystem templates are parsed from — embedded in production,
+// the working tree when hot-reloading. Exposed so the login handler parses its
+// fragment from the same place the pages come from.
+//
+// Falls back to the embedded tree when unset so a zero-value UI — which tests
+// build directly rather than through NewUI — renders instead of panicking on a
+// nil fs.FS.
+func (h *UI) WebFS() fs.FS {
+	if h.webFS == nil {
+		return web.Dir()
+	}
+	return h.webFS
 }
 
 // SetOIDCBranding sets how the sign-in button names and illustrates the
@@ -143,6 +169,11 @@ func (h *UI) SetDGraphAdminURL(url string) {
 	h.dgraphAdminURL = url
 }
 
+// SetListMaxRows sets the generic list page's row cap (ORBITAL_LIST_MAX_ROWS).
+func (h *UI) SetListMaxRows(n int) {
+	h.listMaxRows = n
+}
+
 func (h *UI) SetBackupCronSpec(spec string) {
 	h.backupCronSpec = spec
 }
@@ -150,7 +181,7 @@ func (h *UI) SetBackupCronSpec(spec string) {
 func (h *UI) render(c echo.Context, name string, data any) error {
 	tmpl, ok := h.templates[name]
 	if h.hotReload {
-		tmpl, ok = webtemplates.Map()[name]
+		tmpl, ok = webtemplates.Map(h.WebFS())[name]
 	}
 	if !ok {
 		return echo.ErrNotFound
@@ -165,7 +196,7 @@ func (h *UI) render(c echo.Context, name string, data any) error {
 func (h *UI) renderFragment(c echo.Context, page, fragment string, data any) error {
 	tmpl, ok := h.templates[page]
 	if h.hotReload {
-		tmpl, ok = webtemplates.Map()[page]
+		tmpl, ok = webtemplates.Map(h.WebFS())[page]
 	}
 	if !ok {
 		return echo.ErrNotFound
@@ -938,7 +969,7 @@ func (h *UI) Generic() *GenericRenderer {
 			func(c echo.Context) layout.PageActions {
 				canMutate, _ := c.Get("can_mutate").(bool)
 				return layout.OrbitalActions(canMutate)
-			}, h.render, h.renderFragment)
+			}, h.render, h.renderFragment).WithRowCap(h.listMaxRows, "ORBITAL_LIST_MAX_ROWS")
 	}
 	return h.generic
 }

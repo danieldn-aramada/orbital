@@ -81,6 +81,13 @@ fi
 
 apply_schema "blue"    "http://localhost:8080"
 apply_schema "scratch" "http://localhost:8081"
+# A non-default --dgraph target gets the schema too, so the flag fully prepares
+# whatever cluster it names rather than seeding data into one with no schema.
+# Used by `make seed-orb` to give orb's graph (:8082) a dev fixture.
+case "${DGRAPH}" in
+  http://localhost:8080|http://localhost:8081) ;;
+  *) apply_schema "target" "${DGRAPH}" ;;
+esac
 
 echo "==> Cleaning stale nodes..."
 curl -sf -X POST "${DGRAPH}/graphql" \

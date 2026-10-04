@@ -314,6 +314,7 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	ui.SetRoleOwningIssuers(roleOwning)
 	ui.SetDGraphURL(cfg.DGraphURL)
 	ui.SetDGraphAdminURL(cfg.DGraphAdminURL)
+	ui.SetListMaxRows(cfg.ListMaxRows)
 	ui.SetBackupCronSpec(cfg.BackupSchedule)
 	// Aggressive caching for versioned static assets. head.gohtml's import
 	// map (see web/templates/shared/layouts/head.gohtml) rewrites every ES
@@ -371,7 +372,7 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	var divHandler *handler.DivergenceHandler
 
 	if db != nil {
-		login := handler.NewLogin(db, cfg.SessionKeys(), webtemplates.LoginForm(), cfg.BasePath, logger)
+		login := handler.NewLogin(db, cfg.SessionKeys(), webtemplates.LoginForm(ui.WebFS()), cfg.BasePath, logger)
 		if loginRateLimiter != nil {
 			root.POST("/user/login", login.Post, loginRateLimiter)
 		} else {

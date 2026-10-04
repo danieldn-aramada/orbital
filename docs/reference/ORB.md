@@ -4,6 +4,9 @@ Read this before: orb import pipeline, consumer dispatch, OCI source, divergence
 
 ## Settled Decisions
 
+- **`make seed-orb` fills orb's graph with the same example data orbital gets.** *(Added 2026-10-02.)* Orb's graph is normally filled by an import, and `make up` leaves it EMPTY — so orb's UI showed nothing beside orbital's, and four e2e specs skipped themselves rather than exercise orb's rendering. That is how a shared-JS fault reached main on 2026-09-23: only orbital's suite caught it. This is a dev FIXTURE, not a substitute for testing the import path — `make release-check` still drives a real publish → import → restore. `make seed` depends on it, so the dev invariant now gives you two populated UIs side by side.
+- **orb calls `initGenericTable()` exactly as orbital does.** *(Added 2026-10-02.)* It did not, so every generic list page in orb was a plain HTML table — no search, no sorting, no paging, no filter dropdown, no double-click to open a row. Orb renders the SAME pages from the SAME templates, so it needs the same wiring; anything added to one app's generic page must be wired in both. Found only because the specs above stopped skipping.
+
 ### Core invariants
 
 - **Orb DGraph is a read-only intent mirror** — orb never mutates DGraph. DGraph retains orbital's authoritative intent verbatim. Orb has no local override mechanism.
