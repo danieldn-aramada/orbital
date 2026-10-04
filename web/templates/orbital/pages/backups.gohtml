@@ -5,17 +5,19 @@
     </div>
     <div class="app-main p-5">
       {{if not .IsAuthn}}
-        <div class="notification is-warning is-light">
-          <a class="js-modal-trigger" data-target="login-modal">Login</a> to view this page.
-        </div>
+        {{template "login-gate.gohtml" .}}
       {{else}}
+
+      {{/* Heading ABOVE the permission gate. Every other page titles itself
+           whoever is looking; this one put its title inside `if .CanMutate`,
+           so a readonly user got the access notice on an untitled page. */}}
+      <p class="is-size-4 mb-2" data-testid="page-heading">Backup Graph</p>
+      <p class="has-text-grey page-description mb-5">Exports entire configuration graph to object storage.</p>
 
       {{if not .CanMutate}}{{template "access-required" .}}{{end}}
 
       {{if .CanMutate}}
       <section class="mb-6">
-        <h1 class="title is-5 mb-1">Backup Graph</h1>
-        <p class="subtitle is-6 has-text-grey mb-5">Exports entire configuration graph to object storage.</p>
 
         <div style="max-width: 480px;">
           <div class="field">

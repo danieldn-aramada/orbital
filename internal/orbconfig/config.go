@@ -118,6 +118,11 @@ type Config struct {
 	DivergencePublishSchedule string `envconfig:"ORB_DIVERGENCE_PUBLISH_SCHEDULE" default:""`
 
 	LogLevel string `envconfig:"ORB_LOG_LEVEL" default:"info"`
+
+	// ListMaxRows caps how many rows one generic list page fetches. Orb renders
+	// the same pages as orbital from the same code, so it needs the same lever;
+	// an edge graph is one data center's worth, so the default is plenty.
+	ListMaxRows int `envconfig:"ORB_LIST_MAX_ROWS" default:"2000"`
 }
 
 // SlogLevel converts the LogLevel string to a slog.Level.

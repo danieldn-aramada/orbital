@@ -18,6 +18,7 @@ import (
 	"github.com/armada/orbital/ent/auditevent"
 	"github.com/armada/orbital/ent/auditeventresource"
 	"github.com/armada/orbital/ent/auditeventresourcetype"
+	"github.com/armada/orbital/web"
 	"github.com/labstack/echo/v4"
 )
 
@@ -32,7 +33,7 @@ func NewEventHandler(db *ent.Client, logger *slog.Logger, basePath string) *Audi
 	return &AuditHandler{
 		db:       db,
 		logger:   logger,
-		fragment: template.Must(template.ParseFiles("web/templates/orbital/partials/events-table.gohtml")),
+		fragment: template.Must(template.ParseFS(web.Dir(), "templates/orbital/partials/events-table.gohtml")),
 		basePath: basePath,
 	}
 }

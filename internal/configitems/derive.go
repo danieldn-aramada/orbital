@@ -361,14 +361,21 @@ func (r *Resolver) ensure(ctx context.Context) error {
 			r.logger.Warn("unrecognised orbital annotation in the deployed schema; the field is NOT suppressed",
 				"where", u)
 		}
-		// A facet that named a field the page does not render is dropped
+		// A filterBy that named a field the page does not render is dropped
 		// silently otherwise — the schema claims the list page has a filter
 		// and it simply does not appear.
-		for _, w := range FacetWarnings(types, views) {
-			r.logger.Warn("facet annotation ignored; the list page has no filter dropdown for it",
+		for _, w := range FilterByWarnings(types, views) {
+			r.logger.Warn("filterBy annotation ignored; the list page has no filter dropdown for it",
 				"where", w)
 		}
-		for _, w := range NavWarnings(types) {
+		// A column path the schema cannot support is dropped, so the column
+		// simply is not there — identical from the outside to never having
+		// annotated it.
+		for _, w := range ColumnWarnings(types, views, iface) {
+			r.logger.Warn("column annotation ignored; that column will not render",
+				"where", w)
+		}
+		for _, w := range MenuWeightWarnings(types) {
 			r.logger.Warn("nav annotation ignored; the type sorts after every pinned entry",
 				"where", w)
 		}
@@ -409,6 +416,36 @@ func IsEditorIgnored(doc string) bool {
 	return hasAnnotationLine(doc, EditorIgnoredAnnotation)
 }
 
+// ViewIgnoredAnnotation keeps a RELATIONSHIP off the detail page.
+//
+//	"""viewIgnored"""
+//	serverConfigurationProfile: ServerConfigurationProfile @hasInverse(field: server)
+//
+// Tabs are DERIVED — every relationship to another ConfigItem type becomes one —
+// and `include:` could only ever ADD. That asymmetry left no way to drop an edge
+// the schema declares but a page should not show, short of deleting the edge and
+// its containment with it.
+//
+// FIELD-level, not type-level: what is hidden is THIS EDGE FROM THIS PARENT. The
+// target type may well deserve its own page, and a type-level flag could not say
+// that.
+//
+// ⚠️ DISPLAY ONLY. It hides the tab, the owned box and the reference column; it
+// does NOT change containment, so the delete cascade still reaches the child, the
+// audit log still rolls its events up, and the editor still loads and writes the
+// whole tree it opened. That last one is not a nicety: configitem-editor.js
+// decides a field was CLEARED by diffing the open-time snapshot against the
+// edited tree, so anything dropped from that tree reads as a deletion. Views
+// filter what is rendered and nothing else — see UI.md.
+//
+// Pairs with `editorIgnored`, which is editor-scoped in exactly the same way.
+const ViewIgnoredAnnotation = "viewIgnored"
+
+// IsViewIgnored reports whether a relationship field opts out of the page.
+func IsViewIgnored(doc string) bool {
+	return hasAnnotationLine(doc, ViewIgnoredAnnotation)
+}
+
 // knownAnnotations is orbital's whole annotation vocabulary.
 //
 // It exists so UnknownAnnotations can tell a TYPO from a word it has not been
@@ -425,8 +462,10 @@ var knownAnnotations = []string{
 	LabelAnnotation,         // "label:" prefix
 	DetailOnlyAnnotation,    // bare word
 	EditableAnnotation,      // "editable:" prefix
-	FacetAnnotation,         // "facet:" prefix
-	NavAnnotation,           // "nav:" prefix
+	FilterByAnnotation,      // "filterBy:" prefix
+	ColumnAnnotation,        // "column:" prefix
+	ViewIgnoredAnnotation,   // bare word
+	MenuWeightAnnotation,    // "menuWeight:" prefix
 }
 
 // UnknownAnnotations returns docstring lines that LOOK like an orbital
@@ -661,9 +700,9 @@ func ApplyOrder(fields, pinned []string) []string {
 	return out
 }
 
-// NavAnnotation pins a root type's position in the Config Items menu.
+// MenuWeightAnnotation pins a root type's position in the Config Items menu.
 //
-//	"""nav: 20"""
+//	"""menuWeight: 20"""
 //	type Server implements ConfigItem {
 //
 // Deriving nav order from type names gives alphabetical, which put Clusters
@@ -679,35 +718,35 @@ func ApplyOrder(fields, pinned []string) []string {
 // renumbering its neighbours. Unannotated roots sort AFTER every annotated one,
 // alphabetically among themselves — a new type still reaches the menu on its
 // own, which is the property that makes "define a type, get a page" true.
-const NavAnnotation = "nav:"
+const MenuWeightAnnotation = "menuWeight:"
 
-// NavUnpinned is the sort position of a root with no `nav:`. Above any
+// MenuWeightUnpinned is the sort position of a root with no `menuWeight:`. Above any
 // plausible hand-assigned value, so unannotated types land at the end rather
 // than silently jumping the queue at position 0.
-const NavUnpinned = 1 << 20
+const MenuWeightUnpinned = 1 << 20
 
-// NavFor returns the menu position a type declares, or NavUnpinned when it
+// MenuWeightFor returns the menu position a type declares, or MenuWeightUnpinned when it
 // declares none or declares something that is not a number.
 //
 // A non-numeric value is treated as unpinned rather than rejected: an
 // annotation must never stop a page rendering. UnknownAnnotations does not
-// catch it — "nav: left" is a known prefix with a bad value — so it is also
+// catch it — "menuWeight: left" is a known prefix with a bad value — so it is also
 // reported, otherwise a typo'd position is invisible.
-func NavFor(typeDoc string) (pos int, ok bool) {
-	v := annotationValue(typeDoc, NavAnnotation)
+func MenuWeightFor(typeDoc string) (pos int, ok bool) {
+	v := annotationValue(typeDoc, MenuWeightAnnotation)
 	if v == "" {
-		return NavUnpinned, true
+		return MenuWeightUnpinned, true
 	}
 	n, err := strconv.Atoi(strings.TrimSpace(v))
 	if err != nil {
-		return NavUnpinned, false
+		return MenuWeightUnpinned, false
 	}
 	return n, true
 }
 
-// FacetAnnotation names ONE column a list page offers as a filter dropdown.
+// FilterByAnnotation names ONE column a list page offers as a filter dropdown.
 //
-//	"""facet: dataCenter"""
+//	"""filterBy: dataCenter"""
 //	type Server implements ConfigItem {
 //
 // The bespoke Servers and Clusters pages each carried a hand-built "All Data
@@ -725,16 +764,16 @@ func NavFor(typeDoc string) (pos int, ok bool) {
 // ONE field. The two pages that lost a dropdown had exactly one each, and
 // widening to a list is a compatible change if a page ever wants two — where
 // refusing extra fields now would not be.
-const FacetAnnotation = "facet:"
+const FilterByAnnotation = "filterBy:"
 
-// FacetFor returns the field a type declares as its list-page facet, plus any
+// FilterByFor returns the field a type declares as its list-page filterBy, plus any
 // extra fields the annotation named.
 //
 // Extras are RETURNED rather than ignored so the caller can say so: only one is
 // supported, and silently honouring the first would leave someone convinced
 // their second dropdown was broken.
-func FacetFor(typeDoc string) (string, []string) {
-	v := annotationValue(typeDoc, FacetAnnotation)
+func FilterByFor(typeDoc string) (string, []string) {
+	v := annotationValue(typeDoc, FilterByAnnotation)
 	if v == "" {
 		return "", nil
 	}
@@ -783,6 +822,65 @@ func IncludePaths(typeDoc string) []string {
 		// A path with no separator names a field the type already holds, which
 		// is a tab it already has. Silently ignored rather than duplicating it.
 		if strings.Count(p, ".") == 1 {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// ColumnAnnotation adds a column whose value lives at the end of a PATH.
+//
+//	"""column: servers.count"""
+//	type Rack implements ConfigItem {
+//
+//	"""column: kubernetesNode.cluster.name, kubernetesNode.role"""
+//	type Server implements ConfigItem {
+//
+// Two things were lost when the bespoke pages went, and they are the same
+// shape: a rack table that counted its servers, and a network device's server
+// list that named each server's Kubernetes cluster and node role. Neither value
+// is on the row's own type — one is an aggregate over a list, the other is two
+// hops through single relationships — and the generic renderer only reaches a
+// type's own scalars plus one hop.
+//
+// TYPE-level, so it applies wherever that type renders as a table: `/servers`,
+// a rack's servers tab, and the network device's servers tab all get it from
+// one declaration. That is what makes this cheap — no per-table configuration,
+// which would be the deferred Postgres overrides layer.
+//
+// FOUR segments, where `include:` allows two. The limits differ because the
+// hazards do: `include:` walks LIST relationships and produces ROWS, which is
+// where cycles and row-explosion live ("deeper is a graph browser"). A column
+// walks SINGLE relationships and produces ONE CELL, so it terminates by
+// construction whatever the depth. A `count` leaf is the sole exception and
+// must be last, because an aggregate collapses a list back to one value.
+//
+// So the cap is NOT a correctness bound — it is a readability one, and it is
+// four because that is what the real cases need:
+// `server.kubernetesNode.cluster.name` puts a server's Kubernetes cluster on a
+// network device's Connections tab, and nothing shallower reaches it. It was
+// briefly three, chosen out of caution on 2026-10-02 with a rationale
+// ("terminates by construction") that argued for no limit at all — the number
+// did not follow from the reason, and the first real case fell one segment
+// outside it.
+const ColumnAnnotation = "column:"
+
+// ColumnPaths returns the dotted column paths a type declares.
+//
+// Shape is checked here; whether the fields EXIST is checked against the
+// schema in ResolveViews, which is the only place that knows.
+func ColumnPaths(typeDoc string) []string {
+	v := annotationValue(typeDoc, ColumnAnnotation)
+	if v == "" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(v, ",") {
+		p := strings.TrimSpace(part)
+		// A bare field name is a column the type already has. Ignored rather
+		// than rendered twice.
+		n := strings.Count(p, ".")
+		if n >= 1 && n <= 3 {
 			out = append(out, p)
 		}
 	}

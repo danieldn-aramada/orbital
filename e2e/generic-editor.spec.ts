@@ -1,3 +1,4 @@
+import { openAllDetailPanels, openEditor, editorState, setEditorState, saveEditor } from './helpers/generic';
 import { test, expect } from '@playwright/test';
 
 // Editing through the GENERIC detail page.
@@ -55,6 +56,7 @@ test('the edit button is absent for a type with no editable fields', async ({ pa
   const href = await page.locator('#generic-table tbody tr td:first-child a').first().getAttribute('href');
   if (!href) test.skip(true, 'no storage devices seeded');
   await page.goto(href!);
+  await openAllDetailPanels(page);
 
   // It still SHOWS its data. editorIgnored is editor-scoped, not
   // display-scoped: a scanned hardware fact is exactly what someone opens this
@@ -85,6 +87,7 @@ test('every reachable edit target on a generic page carries an OCC version', asy
   const href = await page.locator('#generic-table tbody tr td:first-child a').first().getAttribute('href');
   if (!href) test.skip(true, 'no cluster backups seeded');
   await page.goto(href!);
+  await openAllDetailPanels(page);
 
   const id = await page.locator('[data-generic-edit-id]').getAttribute('data-generic-edit-id');
   expect(id, 'a wrapper with editable children must offer an Edit button').toBeTruthy();
@@ -122,6 +125,7 @@ test('an edit through the generic page produces an audit row with a diff', async
   await expect(page.locator('#generic-table')).toBeVisible();
   const href = await page.locator('#generic-table tbody tr td:first-child a').first().getAttribute('href');
   await page.goto(href!);
+  await openAllDetailPanels(page);
 
   const orbId = decodeURIComponent(href!.split('/').pop()!);
   const domId = await page.locator('[data-generic-edit-id]').getAttribute('data-generic-edit-id');
@@ -162,4 +166,119 @@ test('an edit through the generic page produces an audit row with a diff', async
   const audit = page.getByTestId('generic-audit');
   await expect(audit).toContainText('updateRack', { timeout: 10_000 });
   await expect(audit).toContainText('uHeight');
+});
+
+// A `jsonString` field survives the editor round-trip as a STRING.
+//
+// Replaces four `test.skip`s deleted 2026-10-02 that claimed Rack, IPAddress,
+// KubernetesNode and ServerConfigurationProfile "have no edit modal in the
+// current UI". Every ConfigItem type has one since the generic renderer
+// landed, so three of those skips duplicated the tests above through the same
+// code path, and the fourth named a field (`ServerConfigurationProfile.json`)
+// that is `editorIgnored` and deliberately not editable.
+//
+// What they gestured at and nothing covered is this: `assetDataV2` is declared
+// `String` but holds JSON, so the editor PARSES it into a tree on open and MUST
+// re-stringify on submit. Forget that and DGraph rejects the write with
+// "cannot use as String" — a whole class of silent-looking failure that no
+// other field in the schema can expose, because it is the only `jsonString`.
+test('a jsonString field is parsed for editing and stored back as a string', async ({ page }) => {
+  const ORB_ID = '2f-uae:2f-uae';
+  await page.goto(`/data-centers/${encodeURIComponent(ORB_ID)}`);
+
+  const btn = page.locator('[data-generic-edit-id]');
+  await expect(btn).toBeVisible();
+  const domId = await btn.getAttribute('data-generic-edit-id');
+  await btn.click();
+
+  const initial = await page.evaluate(
+    (id) => JSON.parse(document.getElementById('generic-edit-data-' + id)!.textContent!.trim()),
+    domId);
+
+  // Parsed into a TREE, not handed to the editor as an opaque string. If this
+  // regresses, the field becomes an uneditable wall of escaped quotes.
+  expect(typeof initial.assetDataV2, 'assetDataV2 must reach the editor parsed').toBe('object');
+
+  const key = Object.keys(initial.assetDataV2)[0];
+  const marker = `e2e-${Date.now()}`;
+  const next = {
+    ...initial,
+    assetDataV2: { ...initial.assetDataV2, [key]: { ...initial.assetDataV2[key], kvmURL: marker } },
+  };
+  await page.evaluate(({ id, next }) => {
+    (window as any).genericEditors.get(id).set({ text: JSON.stringify(next, null, 2) });
+  }, { id: domId, next });
+
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes('/graphql') && r.status() === 200),
+    page.locator(`#generic-edit-submit-${domId}`).click(),
+  ]);
+  await expect(page.locator(`#edit-modal-generic-${domId}`)).not.toHaveClass(/is-active/, { timeout: 10_000 });
+
+  // Read back through a fresh page load. Getting the value back at all proves
+  // it was stored as a String — DGraph refuses an object for a String field,
+  // so a missed stringify fails the write rather than storing something odd.
+  await page.goto(`/data-centers/${encodeURIComponent(ORB_ID)}`);
+  await page.locator('[data-generic-edit-id]').click();
+  const after = await page.evaluate(
+    (id) => JSON.parse(document.getElementById('generic-edit-data-' + id)!.textContent!.trim()),
+    domId);
+  expect(after.assetDataV2[key].kvmURL, 'the edited value did not survive the round trip').toBe(marker);
+});
+
+// A nullable field appears in the editor as an explicit null, and leaving it
+// alone writes nothing.
+//
+// The second half is the one that matters. configitem-editor.js decides a field
+// was CLEARED by diffing the open-time snapshot against the edited tree, so
+// adding keys to that snapshot is exactly the move that could emit a spurious
+// `remove` — the documented data-loss path in CHANGE-CONTROL.md. Asserted
+// against the GraphQL the editor actually sends, not against the resulting
+// state, because a no-op write and no write at all look identical afterwards.
+test('an unset field is editable, and leaving it null writes nothing', async ({ page }) => {
+  const SERVER = 'colo:server-7MP6K74';
+  const domId = await openEditor(page, 'servers', SERVER);
+  const state = await editorState(page, domId);
+
+  // Present as a key, so you can type a value without guessing the name.
+  expect(state.serverMaintenance, 'maintenance must be in the tree').toBeTruthy();
+  for (const f of ['windowStart', 'windowEnd', 'reason']) {
+    expect(f in state.serverMaintenance, `${f} must be offered even when unset`).toBeTruthy();
+    expect(state.serverMaintenance[f], `${f} should be null, not invented`).toBeNull();
+  }
+
+  // Change ONE unrelated field and save, capturing what goes over the wire.
+  const sent: string[] = [];
+  page.on('request', r => {
+    if (r.url().includes('/graphql') && r.method() === 'POST') sent.push(r.postData() || '');
+  });
+  await setEditorState(page, domId, { ...state, hostname: state.hostname });
+  await setEditorState(page, domId, {
+    ...state,
+    serverMaintenance: { ...state.serverMaintenance, enabled: !state.serverMaintenance.enabled },
+  });
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes('/graphql') && r.status() === 200),
+    saveEditor(page, domId),
+  ]);
+  await expect(page.locator(`#edit-modal-generic-${domId}`)).not.toHaveClass(/is-active/, { timeout: 10_000 });
+
+  const body = sent.join('\n');
+  // The null fields must appear in NEITHER half of the mutation.
+  for (const f of ['windowStart', 'windowEnd', 'reason']) {
+    expect(body, `${f} must not be set when it was left null`).not.toContain(`"${f}"`);
+  }
+  expect(body, 'nothing should be cleared').not.toContain('remove');
+
+  // Put it back.
+  const after = await openEditor(page, 'servers', SERVER);
+  const s2 = await editorState(page, after);
+  await setEditorState(page, after, {
+    ...s2,
+    serverMaintenance: { ...s2.serverMaintenance, enabled: !s2.serverMaintenance.enabled },
+  });
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes('/graphql') && r.status() === 200),
+    saveEditor(page, after),
+  ]);
 });

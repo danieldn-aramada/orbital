@@ -48,7 +48,7 @@ enum DataCenterModel {
 
 """
 editable: name
-nav: 10
+menuWeight: 10
 """
 type DataCenter implements ConfigItem {
     """
@@ -64,7 +64,10 @@ type DataCenter implements ConfigItem {
     networkDevices: [NetworkDevice] @hasInverse(field: dataCenter)
 }
 
-"""editable: name"""
+"""
+editable: name
+column: servers.count
+"""
 type Rack implements ConfigItem {
     uHeight: Int
     dataCenter: DataCenter!
@@ -74,8 +77,9 @@ type Rack implements ConfigItem {
 
 """
 include: storageControllers.storageDevices
-facet: dataCenter
-nav: 20
+filterBy: dataCenter
+menuWeight: 20
+column: kubernetesNode.cluster.name, kubernetesNode.role, kubernetesNode.gpu
 """
 type Server implements ConfigItem {
     hostname: String @search(by: [term])
@@ -91,6 +95,7 @@ type Server implements ConfigItem {
     dataCenter: DataCenter!
     rack: Rack
     idracSettings: IdracSettings @hasInverse(field: server)
+    """viewIgnored"""
     serverConfigurationProfile: ServerConfigurationProfile @hasInverse(field: server)
     serverMaintenance: ServerMaintenance @hasInverse(field: server)
     storageControllers: [StorageController] @hasInverse(field: server)
@@ -117,6 +122,14 @@ type IdracSettings implements ConfigItem {
     server: Server!
 }
 
+"""orbIdSuffix: scp"""
+type ServerConfigurationProfile implements ConfigItem {
+    """editorIgnored"""
+    json: String 
+
+    server: Server!
+}
+
 # Maintenance intent for a server — DESIRED state only (edge actuates + observes).
 #   enabled     — on/off switch: true = maintenance requested. Exit = enabled:false
 #                 (symmetric toggle), not clearing a timestamp.
@@ -130,14 +143,6 @@ type ServerMaintenance implements ConfigItem {
     windowStart: DateTime
     windowEnd: DateTime
     reason: String
-
-    server: Server!
-}
-
-"""orbIdSuffix: scp"""
-type ServerConfigurationProfile implements ConfigItem {
-    """editorIgnored"""
-    json: String 
 
     server: Server!
 }
@@ -199,6 +204,7 @@ type NetworkAdapter implements ConfigItem {
     networkInterfaces: [NetworkInterface] @hasInverse(field: networkAdapter)
 }
 
+"""column: server.kubernetesNode.cluster.name, server.kubernetesNode.role, server.kubernetesNode.gpu"""
 type NetworkInterface implements ConfigItem {
     # Port/interface (physical OR logical LAG). name = source ifname/FQDD.
     """
@@ -230,16 +236,16 @@ type NetworkInterface implements ConfigItem {
 }
 
 """
-nav: 40
+menuWeight: 40
 """
 type NetworkDevice implements ConfigItem {
     # Network gear (switch / router / firewall / sd-wan), role-differentiated. NetBox-sourced identity anchor.
     manufacturer: String @search(by: [hash])
     model: String @search(by: [term])
     serial: String @search(by: [hash])
-    role: String @search(by: [term])       # tor | core | mgmt | edge | leaf | spine | router | firewall | sd-wan
+    role: String @search(by: [term])         # tor | core | mgmt | edge | leaf | spine | router | firewall | sd-wan
     """label: MAC Address"""
-    macAddress: String @search(by: [hash])  # device MAC (identity, from NetBox)
+    macAddress: String @search(by: [hash])   # device MAC (identity, from NetBox)
     platform: String @search(by: [term])     # NOS / platform (NetBox device.platform), e.g. Junos
     rackPosition: Int                        # U-slot in the rack (NetBox device.position)
     face: String                             # rack face: front | rear (NetBox device.face)
@@ -261,8 +267,8 @@ type NetworkDevice implements ConfigItem {
 """
 slug: clusters
 order: name, provider, clusterType, environment, kubernetesVersion
-facet: dataCenter
-nav: 30
+filterBy: dataCenter
+menuWeight: 30
 """
 interface KubernetesCluster {
     kubernetesVersion: String
@@ -292,7 +298,10 @@ type KubernetesNode implements ConfigItem {
     """editorIgnored"""
     role: String @search(by: [term]) # control_plane, worker
     ipv4: IPAddress                  # cluster-network IP (distinct from server.oobIP)
-    """editorIgnored"""
+    """
+    editorIgnored
+    label: GPU
+    """
     gpu: Boolean @search             # node contributes GPU resources to the cluster
     """editorIgnored"""
     owner: String @search(by: [term])

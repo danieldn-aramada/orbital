@@ -18,6 +18,7 @@ import (
 	"github.com/armada/orbital/internal/bundler"
 	"github.com/armada/orbital/internal/oci"
 	"github.com/armada/orbital/internal/ocitype"
+	"github.com/armada/orbital/web"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"oras.land/oras-go/v2/registry/remote"
@@ -276,7 +277,7 @@ func (h *OCI) ListArtifacts(c echo.Context) error {
 			rows = append(rows, toArtifactFragRow(a, h.basePath))
 		}
 		enrichPreviousCompleted(rows)
-		tmpl, err := template.ParseFiles("web/templates/orbital/partials/artifacts-tbody.gohtml")
+		tmpl, err := template.ParseFS(web.Dir(), "templates/orbital/partials/artifacts-tbody.gohtml")
 		if err != nil {
 			return fmt.Errorf("parse artifacts fragment: %w", err)
 		}
@@ -503,7 +504,7 @@ func (h *OCI) ArtifactLayers(c echo.Context) error {
 		return fmt.Errorf("get artifact: %w", err)
 	}
 	row := toArtifactFragRow(a, h.basePath)
-	tmpl, err := template.ParseFiles("web/templates/shared/partials/layers-modal.gohtml")
+	tmpl, err := template.ParseFS(web.Dir(), "templates/shared/partials/layers-modal.gohtml")
 	if err != nil {
 		return fmt.Errorf("parse layers-modal: %w", err)
 	}

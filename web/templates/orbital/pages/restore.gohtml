@@ -5,9 +5,7 @@
     </div>
     <div class="app-main p-5">
       {{if not .IsAuthn}}
-        <div class="notification is-warning is-light">
-          <a class="js-modal-trigger" data-target="login-modal">Login</a> to view this page.
-        </div>
+        {{template "login-gate.gohtml" .}}
       {{else if not .CanMutate}}
         {{template "access-required" .}}
       {{else}}

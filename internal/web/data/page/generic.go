@@ -26,8 +26,26 @@ type Generic struct {
 	// RefColumns are the view's single relationships as link columns.
 	RefColumns []RefHeader
 
-	// Facet, when set, is the filter dropdown this page offers.
-	Facet *Facet
+	// ComputedColumns are the `column:` paths — a value fetched from the end of
+	// a path, keyed in each Row by that path.
+	ComputedColumns []ColumnHeader
+
+	// FilterBy, when set, is the filter dropdown this page offers.
+	FilterBy *FilterBy
+
+	// Total is how many of this type exist, which is not how many Rows holds:
+	// the query is capped. Carried for API consumers too — a client paging this
+	// data needs the denominator.
+	Total int
+
+	// Truncated is whether the cap actually bit. False when everything fits,
+	// which is the common case and renders nothing.
+	Truncated bool
+
+	// RowCapSetting names the env var that raises the cap, so the notice tells
+	// an operator what to change rather than leaving them to find it. Differs
+	// per app — orb renders the same page from the same template.
+	RowCapSetting string
 
 	// Unavailable, when set, replaces the table with a stated reason. An empty
 	// table would say "there are none of these", which is a different claim
@@ -35,14 +53,14 @@ type Generic struct {
 	Unavailable string
 }
 
-// Facet is a list page's filter dropdown, resolved server-side.
+// FilterBy is a list page's filter dropdown, resolved server-side.
 //
 // Both the column position and the option list are computed here rather than in
 // JavaScript. Orbital's UI is a consumer of orbital's API like any other, so
 // anything it needs to draw this control an integrator needs too — and "walk
 // the rendered rows collecting distinct values" is precisely the kind of client
 // re-implementation the export-preview flattening was about.
-type Facet struct {
+type FilterBy struct {
 	// Label is the column heading, so the control names what it filters.
 	Label string
 	// All is the empty option's text — the column heading pluralised, because
@@ -80,6 +98,10 @@ type GenericDetail struct {
 	Entity      map[string]any
 	Tabs        []GenericTab
 	Unavailable string
+
+	// DomID is the orbId made id-safe — the suffix every per-page element id
+	// is built from, so two detail fragments open at once cannot collide.
+	DomID string
 
 	// AuditPanelID is the id of the div the audit panel loads into, and the
 	// value JS matches to find it. Per-page because a list page can have
@@ -151,7 +173,27 @@ type GenericTab struct {
 	// RefColumns are the child type's single relationships, rendered as link
 	// columns — a server's rack and OOB IP, one hop away.
 	RefColumns []RefHeader
-	Rows       []map[string]any
+
+	// ComputedColumns are the child type's `column:` paths, keyed in each Row
+	// by path — the same columns its own list page shows.
+	ComputedColumns []ColumnHeader
+
+	Rows []map[string]any
+
+	// Editable marks which of the child type's fields can be proposed against,
+	// so a cell holding one carries a mark slot. Only editable fields: a mark
+	// on a field nobody can propose could never fire.
+	//
+	// A MAP, not a slice, so the template can `index` it. generic-detail.gohtml
+	// is parsed by both apps and orbital has no template FuncMap at all — a
+	// `has` helper would need adding to two parse sets that are already a
+	// documented drift hazard.
+	Editable map[string]bool
+
+	// FieldValues maps each row's orbId to its raw editable values as JSON —
+	// what a mark compares a proposal against to suppress a no-op. Keyed by
+	// orbId rather than row index so the template cannot mis-align them.
+	FieldValues map[string]string
 }
 
 // Views is the view-list settings page. It carries no rows: the table is filled

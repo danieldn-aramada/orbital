@@ -22033,4 +22033,16 @@ div.dt-container .dt-paging .pagination-link {
   top: calc(50% - 0.5em);
 }
 
+div[id^=generic-detail-tabs-] {
+  overflow-x: visible;
+}
+div[id^=generic-detail-tabs-] li a {
+  padding-left: 0.7em;
+  padding-right: 0.7em;
+}
+div[id^=generic-detail-tabs-] ul {
+  flex-wrap: wrap;
+  flex-shrink: 1;
+}
+
 /*# sourceMappingURL=main.css.map */

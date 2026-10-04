@@ -51,6 +51,7 @@ spike 38).
 |---|---|---|
 | `editorIgnored` | field | Keeps the field out of the **editor**. Still displayed — it means "a human may not type this", not "do not show it". |
 | `jsonString` | field | The String holds a JSON document: the editor parses it into a tree, and a detail page pretty-prints it. Says nothing about placement. |
+| `viewIgnored` | field | Keeps a RELATIONSHIP off the detail page — no tab, no owned box, no reference column. **Display only:** containment is untouched, so the delete cascade, audit roll-up and the editor's tree all still include it. |
 | `detailOnly` | field | Never a table column, on a list page or a relationship table. Still rendered on the detail page. |
 | `label: MAC Address` | field | Display label, overriding the title-cased field name. Annotate only what title-casing gets wrong (acronyms). |
 | `slug: clusters` | type / interface | The page's URL segment — and its nav label, which is derived from the slug. |
@@ -58,14 +59,15 @@ spike 38).
 | `order: name, provider` | type | Pins the leading display fields; everything else follows alphabetically. A **prefix**, never a complete list. |
 | `include: a.b` | type | Adds a relationship table whose rows are reached through a two-segment path (`storageControllers.storageDevices`). |
 | `editable: name` | type | Re-admits ConfigItem **interface** fields for editing on this type. Type-level because DGraph forbids redeclaring an interface field on an implementor. |
-| `facet: dataCenter` | type / interface | Offers that column as a filter dropdown on the list page. **One field** — extras are reported and ignored. Must name a rendered column: a `detailOnly` field or a list relationship is refused and logged. |
+| `column: servers.count` | type / interface | Adds a column whose value lives at the end of a PATH — `servers.count`, `kubernetesNode.cluster.name`. Up to **three** segments. Every hop must be a SINGLE relationship; the one exception is a `count` leaf, whose preceding hop must be a LIST. Applies wherever the type renders as a table, list page and relationship tab alike. |
+| `filterBy: dataCenter` | type / interface | Offers that column as a filter dropdown on the list page. **One field** — extras are reported and ignored. Must name a rendered column: a `detailOnly` field or a list relationship is refused and logged. |
 
 **Mechanics — the parts that bite:**
 
 - ⚠️ **GraphQL allows ONE description block per declaration.** Two `"""…"""` in a row is a syntax error DGraph refuses (*"Expected Name, found BlockString"*). Put several annotations on separate lines inside one block; the parsers are line-based.
-- **FIELD annotations on an interface are inherited** by implementing types — DGraph forbids redeclaring the field, so the reader inherits instead. **TYPE annotations are not inherited by default** — inheritance is decided per annotation, because `slug:` must never inherit or every implementation would claim the interface's URL. `order:` and `facet:` both do fall back to an implemented interface, so `/clusters` (an interface view) and each concrete page cannot disagree about column order or about having a filter.
+- **FIELD annotations on an interface are inherited** by implementing types — DGraph forbids redeclaring the field, so the reader inherits instead. **TYPE annotations are not inherited by default** — inheritance is decided per annotation, because `slug:` must never inherit or every implementation would claim the interface's URL. `order:` and `filterBy:` both do fall back to an implemented interface, so `/clusters` (an interface view) and each concrete page cannot disagree about column order or about having a filter.
 - **An annotation naming a field that does not exist is INERT, never an error.** A page must not fail to render because an annotation went stale.
-- **Inert is not the same as silent.** A stale annotation must never break a page, but it must say so: `facet:` logs at boot when it named something the page does not render. An annotation that reads as correct and does nothing is worse than one nobody wrote.
+- **Inert is not the same as silent.** A stale annotation must never break a page, but it must say so: `filterBy:` logs at boot when it named something the page does not render. An annotation that reads as correct and does nothing is worse than one nobody wrote.
 - **A misspelled annotation is silent** — `"""editorIgnroed"""` is a valid docstring that simply never matches. `UnknownAnnotations` reports anything that looks like an annotation and matches none; it logs at boot, so read that line.
 - **Annotation-only changes do NOT bump `schema/VERSION`** — but they take effect only once the schema is **applied** to DGraph, which orbital never does on startup.
 

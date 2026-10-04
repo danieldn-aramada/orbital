@@ -5,9 +5,7 @@
     </div>
     <div class="app-main p-5" data-cr-id="{{.ID}}">
       {{if not .IsAuthn}}
-        <div class="notification is-warning is-light">
-          <a class="js-modal-trigger" data-target="login-modal">Login</a> to view this page.
-        </div>
+        {{template "login-gate.gohtml" .}}
       {{else}}
 
       <div id="cr-detail-error" class="notification is-danger is-light" style="display:none;"></div>

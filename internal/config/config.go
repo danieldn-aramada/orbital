@@ -173,6 +173,15 @@ type Config struct {
 	BundlerTimeout          time.Duration `envconfig:"ORBITAL_BUNDLER_TIMEOUT"             default:"30s"`      // per-attempt HTTP timeout; per-request URLs supplied in publish body
 	BundlerMaxAttempts      int           `envconfig:"ORBITAL_BUNDLER_MAX_ATTEMPTS"        default:"3"`        // total attempts (1 initial + N-1 retries)
 	BundlerMaxResponseBytes int64         `envconfig:"ORBITAL_BUNDLER_MAX_RESPONSE_BYTES"  default:"10485760"` // 10 MB
+	// ListMaxRows caps how many rows one list page fetches.
+	//
+	// The cap is REAL and visible: past it the page says so, and the table's
+	// search and filter only ever cover the rows that were fetched — they are
+	// client-side over the rendered DOM. Raising this is the operator's call
+	// because the right value depends on graph size and client bandwidth,
+	// neither of which orbital can know. ~1.6 KB of HTML per row measured
+	// 2026-10-02, so 2000 is ≈3 MB.
+	ListMaxRows int `envconfig:"ORBITAL_LIST_MAX_ROWS" default:"2000"`
 	// BundlerURLs is the comma-separated list of bundler `name=url` entries to
 	// invoke when a publish request omits `bundlers` in its body. The friendly
 	// name lands in each layer's OCI annotation `com.armada.orbital.producer`

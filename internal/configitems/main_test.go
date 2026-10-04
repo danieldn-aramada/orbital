@@ -25,5 +25,6 @@ func TestMain(m *testing.M) {
 			return []string{"ConfigItem"}
 		}
 	})
+	ensureIntegrationSchema()
 	os.Exit(m.Run())
 }

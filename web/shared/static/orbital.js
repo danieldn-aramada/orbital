@@ -51,8 +51,6 @@ import {
   apiErrorFromBody,
   apiErrorText,
   dtWrapLengthSelect,
-  openServerTab,
-  initServerEventsTable,
   renderTimestamps,
   formatTimestamp,
   dtIPv4Render,
@@ -60,7 +58,6 @@ import {
   subtreeOrbIds,
   initListPages,
   initGenericTable,
-  initGenericAudit,
 } from './shared.js'
 
 // ─── Login modal ─────────────────────────────────────────────────────────────
@@ -104,7 +101,12 @@ initListPages()
 // The generic /{slug} page: one DataTable for every ConfigItem type.
 initGenericTable()
 document.addEventListener('DOMContentLoaded', () => {
-  initGenericAudit()
+  // The generic detail page's tab strip, on a DIRECT navigation. A fragment
+  // opened as a tab on a list page is wired by the htmx:afterSettle handler in
+  // shared.js instead; both apps render this page, so both wire it.
+  const detailTabs = document.querySelector('[id^="generic-detail-tabs-"]')
+  if (detailTabs) initDetailTabs(detailTabs)
+
   // Proposed-change marks on a FULL page load. htmx:afterSettle covers the
   // fragment a list page opens as a tab; navigating straight to /{slug}/{id}
   // never goes through htmx, so without this the marks appear only when the
@@ -1079,7 +1081,11 @@ function loadFieldMarks(root = document) {
   const withIds = tables.filter(t => t.dataset.fieldOrbid)
   // Tabs declare their own orbIds, so a tab is asked about even when its panel
   // holds no field table — and the dot never depends on marks having rendered.
-  const tabs = root.querySelectorAll ? [...root.querySelectorAll('[data-panel-orbids]')] : []
+  // Tabs declare their orbIds explicitly OR carry a dot slot and derive them
+  // from their panel — the generic detail page does the latter.
+  const tabs = root.querySelectorAll
+    ? [...root.querySelectorAll('[data-panel-orbids], li[data-panel]:has(.js-tab-dot)')]
+    : []
   const tabOrbIds = tabs.flatMap(li => panelOrbIds(li))
   if (!withIds.length && !tabOrbIds.length) return
 
@@ -1111,8 +1117,25 @@ function loadFieldMarks(root = document) {
     .catch(() => {})                             // a mark is never worth an error banner
 }
 
+// panelOrbIds answers "which entities live in this tab's panel".
+//
+// Prefers an explicit data-panel-orbids, and otherwise DERIVES the set from the
+// panel's own [data-field-orbid] elements. The generic detail page takes the
+// derived path: a relationship tab can hold hundreds of rows, and listing every
+// orbId in an attribute would be a large piece of markup duplicating what the
+// rows already declare — and it would go stale the moment the panel's contents
+// changed without the attribute being rebuilt.
+//
+// Derivation also costs no extra request: loadFieldMarks already collects every
+// [data-field-orbid] on the page into the one /proposed-changes call, so the
+// answer for these orbIds is in the response either way.
 function panelOrbIds(li) {
-  return (li.dataset.panelOrbids || '').split(',').map(s => s.trim()).filter(Boolean)
+  const declared = (li.dataset.panelOrbids || '').split(',').map(s => s.trim()).filter(Boolean)
+  if (declared.length) return declared
+  const panel = li.dataset.panel ? document.getElementById(li.dataset.panel) : null
+  if (!panel) return []
+  return [...new Set([...panel.querySelectorAll('[data-field-orbid]')]
+    .map(el => el.dataset.fieldOrbid).filter(Boolean))]
 }
 
 // renderTabDots marks a TAB whose panel has something proposed inside it.

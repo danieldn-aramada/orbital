@@ -18,6 +18,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/armada/orbital/internal/configitems"
+	"github.com/armada/orbital/web"
 )
 
 const maxDeleteListItems = 5
@@ -66,7 +67,7 @@ func NewDeleteHandler(dgraphURL string, db *ent.Client, logger *slog.Logger, gql
 }
 
 func parseDeletePreviewTmpl() *template.Template {
-	return template.Must(template.ParseFiles("web/templates/orbital/partials/config-item-delete-preview.gohtml"))
+	return template.Must(template.ParseFS(web.Dir(), "templates/orbital/partials/config-item-delete-preview.gohtml"))
 }
 
 // Preview returns an HTML fragment describing the impact of the delete without modifying anything.
@@ -489,7 +490,6 @@ const srvDeleteGQL = `
       rack { id }
       kubernetesNode { id cluster { ... on ConfigItem { id } } }
       idracSettings { id }
-      serverConfigurationProfile { id }
       storageControllers {
         id name
         storageDevices {

@@ -181,89 +181,6 @@ document.addEventListener('DOMContentLoaded', () => renderTimestamps(document))
 
 export const serverTables = new Map()
 
-export function initServerEventsTable(serverId) {
-  const tableId = `${serverId}-ev`
-  const $table = $(`#${tableId}`)
-
-  if ($.fn.dataTable.isDataTable($table)) {
-    const existingTable = $table.DataTable()
-    existingTable.ajax.reload(null, false)
-    existingTable.columns.adjust().draw(false)
-    setTimeout(() => {
-      const wrapper = document.querySelector('[id$="-ev_wrapper"] > .columns.is-multiline')
-      if (wrapper) wrapper.style.display = 'none'
-    }, 50)
-    return
-  }
-
-  const table = $table.DataTable({
-    dom: '',
-    scrollX: true,
-    searching: false,
-    paging: false,
-    autoWidth: true,
-    order: [[0, 'desc']],
-    ajax: {
-      url: BASE + `/api/v1/servers/${serverId}/events`,
-      method: 'GET',
-      dataSrc: '',
-      deferRender: true,
-      cache: true,
-      timeout: 30000,
-    },
-    columnDefs: [
-      { target: 0, width: '80px' },
-      { target: 1, width: '190px' },
-      { target: 2, width: '140px' },
-      { target: 3, className: 'wrap-text', width: '400px' },
-      { target: 4, className: 'no-wrap-text' },
-    ],
-    columns: [
-      { data: 'type' },
-      { data: 'timestamp', render: (data) => formatTimestamp(data) },
-      { data: 'userId' },
-      { data: 'message' },
-      {
-        data: 'details',
-        render: function (data) {
-          if (!data || !data.diff) return ''
-          const diffLines = data.diff.split('\n')
-          const filtered = []
-          let skip = false
-          for (const line of diffLines) {
-            if (line.startsWith('@')) {
-              skip = line.includes('"version"')
-              if (!skip) filtered.push(line)
-              continue
-            }
-            if (!skip) filtered.push(line)
-          }
-          const colored = filtered.map(line => {
-            if (line.startsWith('+')) return `<span class="diff-added">${line}</span>`
-            if (line.startsWith('-')) return `<span class="diff-removed">${line}</span>`
-            return line
-          }).join('\n')
-          return `<pre class="diff-output">${colored}</pre>`
-        },
-      },
-    ],
-  })
-  serverTables.set(tableId, table)
-}
-
-export function openServerTab(tabId) {
-  const serverId = tabId.split('-')[0]
-  document.querySelectorAll(`[id^="${serverId}-"].detcontent`).forEach(d => d.classList.add('is-hidden'))
-  document.querySelectorAll(`[id^="${serverId}-"].detlinks`).forEach(el => el.classList.remove('is-active'))
-  const panel = document.getElementById(tabId)
-  if (panel) panel.classList.remove('is-hidden')
-  const header = document.getElementById(tabId + '-link') || document.getElementById(tabId.replace('-det', '-detlink'))
-  if (header) header.classList.add('is-active')
-  if (tabId.endsWith('-ev-det')) {
-    setTimeout(() => initServerEventsTable(serverId), 100)
-  }
-}
-
 export function showClusterSkeleton(orbId) {
   const domId = safeDomId(orbId)
   const target = document.getElementById('tab-content-cluster-' + domId)
@@ -447,14 +364,38 @@ export function initDetailTabs(tabContainer, options = {}) {
     panel: findPanel(t.dataset.panel),
   })).filter(p => p.panel)
 
-  function loadAuditPanel() {
+  function loadAuditPanel(before) {
     if (!auditTab) return
     const panel = findPanel(auditPanelId)
     if (!panel) return
-    loadAuditPanelForTab(auditTab, panel)
+    // Re-pin once the rows arrive: the panel is empty when the click is
+    // handled, so the height it settles at is not the height we corrected
+    // against, and the strip drifts by however many rows came back.
+    loadAuditPanelForTab(auditTab, panel, () => {
+      if (before === undefined) return
+      pinStrip(before)
+      reserveShortfall(before, tabContainer.parentElement)
+    })
   }
 
   function activatePanel(panelId) {
+    // Pin the tab strip in the viewport across the switch.
+    //
+    // Panels differ enormously in height — a data centre's Servers tab is 190
+    // rows and its Racks tab is 24 — so swapping one for the other collapses
+    // the page by over a thousand pixels, the browser clamps scrollY to the
+    // new maximum, and the strip you just clicked flies 569px down the screen.
+    // Measured on /data-centers/colo:colo-galleon: 2387px → 961px.
+    //
+    // This is not new behaviour in this function; the hand-written pages used
+    // it unchanged. It only became jarring when the panel set went from four
+    // hand-picked tabs of similar size to one derived per relationship.
+    const before = tabContainer.getBoundingClientRect().top
+    // Cleared first so each switch measures the real content height rather
+    // than whatever the previous switch reserved.
+    const host = tabContainer.parentElement
+    if (host) host.style.removeProperty('min-height')
+
     for (const { tab, panel } of panelPairs) {
       if (tab.dataset.panel === panelId) {
         tab.classList.add('is-active')
@@ -464,8 +405,37 @@ export function initDetailTabs(tabContainer, options = {}) {
         panel.style.setProperty('display', 'none')
       }
     }
-    if (panelId === auditPanelId) loadAuditPanel()
+    if (panelId === auditPanelId) loadAuditPanel(before)
     storageObj.setItem(storageKey, panelId)
+
+    // After the reflow, put the strip back where it was. Instant, not smooth:
+    // this is a correction, and animating it would BE the jump.
+    pinStrip(before)
+
+    // Scrolling back is not always possible. Switching a 190-row panel for a
+    // 24-row one can leave the document SHORTER than the scroll position it
+    // was at, so the browser clamps scrollY and the strip stays displaced
+    // however much we ask it to move — 568px on a data centre page.
+    //
+    // So reserve the shortfall, and only the shortfall: extend the panel host
+    // just enough that the strip can sit where it did. A short panel on an
+    // otherwise short page reserves nothing, which is why this is not a blanket
+    // min-height — reserving the tallest panel's height everywhere would put
+    // 1,400px of whitespace under a four-row table.
+    reserveShortfall(before, host)
+  }
+
+  // pinStrip scrolls so the tab strip sits where it did before the switch.
+  function pinStrip(before) {
+    const delta = tabContainer.getBoundingClientRect().top - before
+    if (delta) window.scrollBy({ top: delta, behavior: 'instant' })
+  }
+
+  function reserveShortfall(before, host) {
+    const off = tabContainer.getBoundingClientRect().top - before
+    if (Math.abs(off) <= 1 || !host) return
+    host.style.minHeight = (host.offsetHeight + Math.abs(off)) + 'px'
+    pinStrip(before)
   }
 
   for (const { tab } of panelPairs) {
@@ -505,7 +475,7 @@ export function subtreeOrbIds(orbId, scope = document) {
   return splitOrbIds(el && el.dataset.relatedOrbIds, orbId)
 }
 
-function loadAuditPanelForTab(tab, panel) {
+function loadAuditPanelForTab(tab, panel, onLoaded) {
   // data-related-orb-ids embeds the full subgraph (parent + nested ConfigItems)
   // so one fetch pulls all relevant events. Falls back to data-orb-id alone.
   const related = splitOrbIds(tab.dataset.relatedOrbIds, tab.dataset.orbId)
@@ -515,7 +485,7 @@ function loadAuditPanelForTab(tab, panel) {
     headers: { 'HX-Request': 'true' },
   })
     .then(r => r.text())
-    .then(html => { panel.innerHTML = html; renderTimestamps(panel) })
+    .then(html => { panel.innerHTML = html; renderTimestamps(panel); onLoaded && onLoaded() })
     .catch(() => {})
 }
 
@@ -556,59 +526,21 @@ document.addEventListener('htmx:afterSettle', (evt) => {
   const target = evt.detail && evt.detail.target
   if (!target) return
   renderTimestamps(target)
-  initGenericAudit(target)
 
-  const dcDetailTabs = target.querySelector('[id^="dc-detail-tabs-"]')
-  if (dcDetailTabs) {
+  // The generic detail page's tab strip — owned children, relationship
+  // tables, then the audit log. Wired here for a fragment opened as a tab on a
+  // list page, and on DOMContentLoaded in orbital.js/orb.js for a direct
+  // navigation.
+  //
+  // This replaced four branches keyed on dc-/cluster-/network-device-/srv-
+  // detail-tabs ids, none of which existed in any template any more: those
+  // pages became schema-derived and their markup went with them, leaving the
+  // handlers looking for elements that could never appear.
+  const genericDetailTabs = target.querySelector('[id^="generic-detail-tabs-"]')
+  if (genericDetailTabs) {
     target.dataset.loaded = 'true'
-    initDetailTabs(dcDetailTabs)
-    const embeddedSrvTabs = target.querySelector('[id^="srv-detail-tabs-"]')
-    if (embeddedSrvTabs) initDetailTabs(embeddedSrvTabs)
-    const dcServersTable = target.querySelector('table[id^="dc-servers-table-"]')
-    if (dcServersTable && !$.fn.DataTable.isDataTable(dcServersTable)) {
-      new DataTable(dcServersTable, {
-        paging: false,
-        searching: false,
-        info: false,
-        ordering: true,
-        select: { style: 'os' },
-        autoWidth: true,
-        columnDefs: [
-          { className: 'dt-left', targets: 5 },
-          { targets: 0, render: dtIPv4Render }, // OOB IP column — numeric sort by octet
-        ],
-        createdRow: function (row) { row.style.cursor = 'pointer'; row.title = 'Double-click to open' },
-      })
-    }
+    initDetailTabs(genericDetailTabs)
     return
-  }
-
-  const clusterDetailTabs = target.querySelector('[id^="cluster-detail-tabs-"]')
-  if (clusterDetailTabs) {
-    target.dataset.loaded = 'true'
-    initDetailTabs(clusterDetailTabs)
-    return
-  }
-
-  const networkDeviceDetailTabs = target.querySelector('[id^="network-device-detail-tabs-"]')
-  if (networkDeviceDetailTabs) {
-    target.dataset.loaded = 'true'
-    initDetailTabs(networkDeviceDetailTabs)
-    return
-  }
-
-  const srvDetailTabs = target.querySelector('[id^="srv-detail-tabs-"]')
-  if (srvDetailTabs) {
-    target.dataset.loaded = 'true'
-    initDetailTabs(srvDetailTabs)
-    const defaultTabLink = target.querySelector('.detlinks.is-active')
-    if (defaultTabLink) {
-      openServerTab(defaultTabLink.id.replace(/-detlink$/, '-det'))
-    }
-    target.querySelectorAll('[id$="-ev"]').forEach(el => {
-      const serverId = el.id.split('-')[0]
-      setTimeout(() => initServerEventsTable(serverId), 100)
-    })
   }
 })
 
@@ -698,7 +630,10 @@ export function loadDataCenterTab(displayName, orbId) {
 
   document.getElementById(`tab-close-${domId}`).addEventListener('click', (event) => {
     event.stopPropagation()
-    localStorage.removeItem(`tab-active:dc-detail-tabs-${domId}`)
+    // The generic detail page's tab container, not the deleted DC page's:
+    // closing a tab must clear the active-panel memory for the markup that
+    // actually renders, or the next open restores a panel id nothing matches.
+    localStorage.removeItem(`tab-active:generic-detail-tabs-${domId}`)
     unloadTab(orbId)
     deleteTab(displayName, orbId)
     document.getElementById('tab-summary').click()
@@ -1315,24 +1250,6 @@ export function initGenericTabRestoration() {
   if (current && document.getElementById(current)) document.getElementById(current).click()
 }
 
-// initGenericAudit fills the audit box on a generic detail page.
-//
-// The hand-written pages load audit lazily, on tab click. A generic detail page
-// stacks boxes instead of tabbing them, so there is no click to hang it on and
-// it loads with the page — one request, the same endpoint and the same rendered
-// fragment.
-//
-// `scope` lets a detail fragment opened as a TAB fill its own panel without
-// touching one already on the page; two of these can be open at once.
-export function initGenericAudit(scope = document) {
-  scope.querySelectorAll('[data-generic-audit]').forEach((box) => {
-    const panel = document.getElementById(box.dataset.genericAudit)
-    if (!panel || panel.dataset.loaded === 'true') return
-    panel.dataset.loaded = 'true'
-    loadAuditPanelForTab(box, panel)
-  })
-}
-
 export function initGenericTable() {
   document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById('generic-table')
@@ -1358,12 +1275,18 @@ export function initGenericTable() {
       className: 'is-link is-outlined is-small', titleAttr: text,
     }, extra)
 
-    // The facet select is rendered by the template and moved into the toolbar,
+    // The filterBy select is rendered by the template and moved into the toolbar,
     // never built here — page structure belongs in the template (UI.md), and
     // the server already resolved which column it filters and what is in it.
-    const facetEl = el.parentElement.querySelector('.js-facet')
-    const facetCol = facetEl ? Number(facetEl.dataset.facetColumn) : -1
-    if (facetEl) facetEl.style.display = ''
+    const filterByEl = el.parentElement.querySelector('.js-filterBy')
+    // dataset.filterByColumn needs the attribute spelled data-filter-by-column.
+    // HTML attribute names are CASE-INSENSITIVE — the parser lowercases
+    // data-filterBy-column to data-filterby-column, which the dataset API then
+    // exposes as `filterbyColumn`. Reading `filterByColumn` returned undefined,
+    // Number(undefined) is NaN, and the column search silently matched nothing:
+    // the dropdown rendered, changed, and filtered zero rows.
+    const filterByCol = filterByEl ? Number(filterByEl.dataset.filterByColumn) : -1
+    if (filterByEl) filterByEl.style.display = ''
 
     const topStart = [
       { buttons: [
@@ -1374,7 +1297,7 @@ export function initGenericTable() {
       ] },
       { pageLength: { menu: [100, 250, 500] } },
     ]
-    if (facetEl) topStart.unshift($(facetEl))
+    if (filterByEl) topStart.unshift($(filterByEl))
 
     new DataTable(el, {
       layout: {
@@ -1412,7 +1335,7 @@ export function initGenericTable() {
           // and DataTables searches whatever it is given — so before this,
           // typing "datacenters" in the search box matched every row that had
           // any link, and an exact column search for "colo" matched nothing at
-          // all because the cell's value was the whole anchor. The facet is
+          // all because the cell's value was the whole anchor. The filterBy is
           // an exact column search, which is how this surfaced.
           const text = String(raw).replace(/<[^>]*>/g, '').trim()
           return (type === 'sort' || type === 'type') ? ipv4SortKey(text) : text
@@ -1427,9 +1350,9 @@ export function initGenericTable() {
       // and Network Devices pages both persisted sort, page and search. The
       // callbacks below restore the behaviour with a key that cannot collide.
       //
-      // The facet rides along for free — a facet IS a column search, and
+      // The filterBy rides along for free — a filterBy IS a column search, and
       // column searches are part of the state DataTables saves. That is why
-      // there is no separate facet-persistence code here.
+      // there is no separate filterBy-persistence code here.
       stateSave: true,
       stateSaveCallback: (_settings, data) => {
         try { localStorage.setItem('dt:' + file, JSON.stringify(data)) } catch { /* quota or private mode */ }
@@ -1449,15 +1372,15 @@ export function initGenericTable() {
       createdRow: (row) => { row.style.cursor = 'pointer'; row.title = 'Double-click to open' },
     })
 
-    // Restore the facet's own <select> from whatever state put into the
+    // Restore the filterBy's own <select> from whatever state put into the
     // column search — the select is ours, so DataTables cannot restore it.
-    if (facetEl) {
+    if (filterByEl) {
       const api = new DataTable.Api(el)
-      const sel = facetEl.querySelector('select')
-      const saved = api.column(facetCol).search()
+      const sel = filterByEl.querySelector('select')
+      const saved = api.column(filterByCol).search()
       if (saved) sel.value = saved
       sel.addEventListener('change', () => {
-        api.column(facetCol).search(sel.value, { exact: !!sel.value }).draw()
+        api.column(filterByCol).search(sel.value, { exact: !!sel.value }).draw()
       })
     }
 

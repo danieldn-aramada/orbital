@@ -8,7 +8,7 @@ import (
 )
 
 // The Config Items menu reads DataCenter, Server, Clusters, Network Devices —
-// the hand-written order, restored by `nav:` after derivation made it
+// the hand-written order, restored by `menuWeight:` after derivation made it
 // alphabetical (Clusters had moved above Servers).
 func TestNavOrder_RootsFollowAnnotatedOrder(t *testing.T) {
 	gql, admin := dgraphURLs()

@@ -22,9 +22,68 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ## [Unreleased]
 
+### Fixed
+- **The list-page filter dropdown did nothing.** It rendered and could be
+  changed, but filtered zero rows — the data attribute carrying its column index
+  was spelled in mixed case, and HTML lowercases attribute names, so the index
+  read back as undefined.
+- **Unset fields are now offered in the editor.** A nullable field that happened
+  to be empty was omitted entirely, so scheduling a maintenance window meant
+  typing the field names from memory. They appear as empty values; leaving one
+  alone writes nothing.
+- **A change proposed against a child now shows on the parent page that lists
+  it.** Field rows, the metadata box and inline child panels all marked a
+  pending change; a child rendered as a table — a data centre's racks, a
+  cluster's nodes — did not, so a proposal on one was invisible from the parent.
+- **orb's list pages gained the table controls they were missing.** Every
+  schema-derived list page in orb rendered as a plain table — no search,
+  sorting, paging, column picker, filter dropdown, or double-click to open a
+  row — while the same pages in orbital had all of them.
+- **orbital runs from any working directory.** Templates and HTML fragments
+  were read from disk by relative path, so the binary only worked when started
+  from the repo root — outside it, orbital panicked at startup and orb returned
+  errors for some fragments. Both now read from the files baked into the image.
+- **List pages say when they are showing only part of the data, and the cap is
+  now yours to set.** Every list page capped at 500 rows and said nothing about
+  it, so a truncated table read as the complete set — and the filter dropdown
+  made that worse, since its options come from the rows on the page. Pages now
+  state the real total **and the limitation**: search and filtering are
+  client-side, so they only cover the rows that were loaded. The cap is
+  `ORBITAL_LIST_MAX_ROWS` (orb: `ORB_LIST_MAX_ROWS`), default **2000** — raised
+  from 500. Set it far above that and orbital warns at startup rather than
+  silently serving a page no browser can render. See `docs/reference/CONFIG.md`
+  for what the cap costs and why server-side paging is not the answer yet.
+- **A data center's asset data is editable as a tree again.** `assetDataV2`
+  holds a JSON document in a String field; since the detail pages became
+  schema-derived it had been reaching the editor as a single line of escaped
+  quotes rather than a navigable structure. Nothing errored — submits were
+  re-stringified either way — so the field simply became impractical to edit.
+
+### Changed
+- **Detail pages are laid out again, not stacked.** Fields and Metadata sit
+  side by side, and owned configuration, related items and the audit log are
+  one set of tabs below them instead of ten boxes in a column — a server page
+  went from 3.2 screens of scrolling to just over one. The audit log now loads
+  when you open its tab rather than with every page, and a tab containing a
+  pending change shows a dot so you can see it without opening it.
+- **Every page now carries a title.** List pages (`/servers`, `/clusters`,
+  `/data-centers`, `/network-devices`, and any type added to the schema) showed
+  only a "Summary" tab where every other page has a heading; they now name
+  themselves in the same style as the rest of the UI. `/backups` used a
+  different heading element from every other page and only showed it to users
+  who could run a backup — it now matches, and titles the page whoever is
+  looking.
+
 ### Added
+- **Columns can show a value from further away in the graph.** A type annotated
+  `column: <path>` gains a column whose value is fetched along that path — a
+  rack's server count (`servers.count`), or a server's Kubernetes cluster and
+  node role (`kubernetesNode.cluster.name`). Declared once per type, it appears
+  wherever that type is listed: its own page and any relationship table showing
+  it. This restores the rack server-count and the cluster/role columns that the
+  network device page had before these pages became schema-derived.
 - **List pages can offer a filter dropdown, declared in the schema.** A type
-  annotated `facet: <field>` renders a select in its table toolbar, filtering
+  annotated `filterBy: <field>` renders a select in its table toolbar, filtering
   on that column. `Server` and `KubernetesCluster` carry it, which restores the
   "All Data Centers" dropdown that `/servers` and `/clusters` each had before
   those pages became schema-derived. The chosen column and its options are

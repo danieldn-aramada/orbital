@@ -3,6 +3,7 @@ package configitems
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -30,11 +31,11 @@ type View struct {
 	// Derived from containment: a root is a type nothing else owns.
 	IsRoot bool `json:"isRoot"`
 
-	// Nav is the menu position from the type's `nav:` annotation, or
-	// NavUnpinned when it declares none. Published so a client building its own
+	// Nav is the menu position from the type's `menuWeight:` annotation, or
+	// MenuWeightUnpinned when it declares none. Published so a client building its own
 	// navigation gets the same order without re-deriving it — the UI sorts
 	// nothing.
-	Nav int `json:"nav"`
+	MenuWeight int `json:"menuWeight"`
 
 	// IsInterface marks a view backed by a GraphQL interface. Such a view
 	// LISTS rows of several concrete types; its detail route resolves each
@@ -70,16 +71,22 @@ type View struct {
 	// rendering. A field is commonly both, but they are separate facts.
 	JSONString []string `json:"jsonString,omitempty"`
 
-	// Facet is the single column the list page offers as a filter dropdown,
-	// from the type's `facet:` annotation. Empty when unannotated, and also
+	// Columns are extra columns whose value lives at the end of a PATH —
+	// `servers.count`, `kubernetesNode.cluster.name`. Resolved and validated
+	// against the schema here, so a client rendering its own table gets the
+	// same columns without re-walking the graph.
+	Columns []ViewColumn `json:"columns,omitempty"`
+
+	// FilterBy is the single column the list page offers as a filter dropdown,
+	// from the type's `filterBy:` annotation. Empty when unannotated, and also
 	// when the annotation named something this page does not render as a
-	// column — a facet over an absent column is a dead control, so it is
-	// dropped here and reported by FacetWarnings rather than shipped broken.
+	// column — a dropdown over an absent column is a dead control, so it is
+	// dropped here and reported by FilterByWarnings rather than shipped broken.
 	//
 	// Carried on the view because orbital's UI is a consumer of this API like
 	// any other: a client building its own table should be told which column is
 	// worth a filter, not have to guess from cardinality.
-	Facet string `json:"facet,omitempty"`
+	FilterBy string `json:"filterBy,omitempty"`
 
 	// Order is the pinned field prefix from the type's `order:` annotation.
 	// Exposed because a list page re-applies it after unioning an interface's
@@ -113,6 +120,32 @@ type ViewRefColumn struct {
 	Field string `json:"field"`
 	Type  string `json:"type"`
 	Slug  string `json:"slug"`
+}
+
+// ViewColumn is one computed column: a path from the row's type to a value.
+type ViewColumn struct {
+	// Path is the declared dotted path, e.g. "kubernetesNode.cluster.name".
+	Path string `json:"path"`
+	// Field is the leaf — the label is derived from it, so a column reads
+	// "Cluster" rather than "Kubernetes Node Cluster Name".
+	Field string `json:"field"`
+	// IsCount marks an aggregate over a list relationship.
+	IsCount bool `json:"isCount,omitempty"`
+
+	// OwnerType is the type the label field belongs to — the type at the END
+	// of the path, not the row's own type. A `gpu` field annotated
+	// `label: GPU` lives on KubernetesNode; labelling it with Server's
+	// labeller silently ignores that and renders "Gpu".
+	OwnerType string `json:"ownerType,omitempty"`
+
+	// Selection is the GraphQL fragment that fetches this column, built here
+	// because this is the only place that knows whether a hop lands on an
+	// INTERFACE — `cluster { name }` is rejected, because `name` lives on
+	// ConfigItem rather than on KubernetesCluster, and needs a type condition.
+	//
+	// Published so a client fetching its own rows can ask for the same thing
+	// rather than reverse-engineering the path.
+	Selection string `json:"selection"`
 }
 
 // ViewTab is one relationship, as a detail page would render it.
@@ -156,6 +189,13 @@ func ResolveViews(types map[string]TypeInfo, ifaceFields []string) ([]View, erro
 		var tabs []ViewTab
 		for _, f := range info.Fields {
 			if f.Kind == "SCALAR" || f.Kind == "ENUM" {
+				continue
+			}
+			if IsViewIgnored(f.Doc) {
+				// Filtered HERE, at the single source: RefColumns, the detail
+				// page's owned boxes and its reference rows are all derived
+				// from Tabs, so one filter drops the relationship from every
+				// surface rather than four places remembering to agree.
 				continue
 			}
 			target, known := types[f.TypeName]
@@ -241,7 +281,7 @@ func ResolveViews(types map[string]TypeInfo, ifaceFields []string) ([]View, erro
 			}
 			refCols = append(refCols, ViewRefColumn{Field: t.Field, Type: t.Type, Slug: t.Slug})
 		}
-		navPos, _ := NavFor(info.Doc)
+		weight, _ := MenuWeightFor(info.Doc)
 		v := View{
 			IsInterface:     info.IsInterface,
 			Implementations: info.PossibleTypes,
@@ -255,17 +295,18 @@ func ResolveViews(types map[string]TypeInfo, ifaceFields []string) ([]View, erro
 			Type:            name,
 			Label:           Label(slug),
 			IsRoot:          isRootType(name),
-			Nav:             navPos,
+			MenuWeight:      weight,
 			Fields:          fields,
 			Tabs:            tabs,
 		}
 		// Validated against the view that was just built, not against the raw
-		// field list: a facet over a `detailOnly` field or a list relationship
+		// field list: a filterBy over a `detailOnly` field or a list relationship
 		// would render a dropdown that filters a column the table does not
-		// have. Dropped here, reported by FacetWarnings.
-		if f, _ := facetAnnotation(types, info); f != "" && v.HasColumn(f) {
-			v.Facet = f
+		// have. Dropped here, reported by FilterByWarnings.
+		if f, _ := filterByAnnotation(types, info); f != "" && v.HasColumn(f) {
+			v.FilterBy = f
 		}
+		v.Columns, _ = resolveColumns(types, info, name, ifaceFields)
 		views = append(views, v)
 	}
 
@@ -290,8 +331,8 @@ func ResolveViews(types map[string]TypeInfo, ifaceFields []string) ([]View, erro
 	// Nav order, then name. Callers render in slice order, so the ordering
 	// decision lives here once rather than in every consumer.
 	sort.SliceStable(views, func(i, j int) bool {
-		if views[i].Nav != views[j].Nav {
-			return views[i].Nav < views[j].Nav
+		if views[i].MenuWeight != views[j].MenuWeight {
+			return views[i].MenuWeight < views[j].MenuWeight
 		}
 		return views[i].Type < views[j].Type
 	})
@@ -310,7 +351,7 @@ func ResolveViews(types map[string]TypeInfo, ifaceFields []string) ([]View, erro
 // relationship table, because they are the same problem.
 //
 // One definition, because there were nearly two: the handler had its own copy
-// of this subtraction, and a facet validated against a different notion of
+// of this subtraction, and a filterBy validated against a different notion of
 // "column" than the table renders would accept an annotation that produces a
 // dropdown filtering a column nobody can see.
 func (v View) ColumnFields() []string {
@@ -351,7 +392,7 @@ func (v View) HasColumn(field string) bool {
 //
 // Inheritance is per-annotation and deliberate, not a general rule: `slug:`
 // must NEVER inherit or every implementation would claim the interface's URL.
-// `order:` and `facet:` both should, because the interface view and the
+// `order:` and `filterBy:` both should, because the interface view and the
 // concrete detail pages are the same page to a reader, and a control that is
 // present on /clusters and absent on /eksa-kubernetes-clusters is the kind of
 // gap nobody notices for months.
@@ -371,28 +412,188 @@ func typeAnnotation[T any](types map[string]TypeInfo, info TypeInfo, read func(s
 	return got
 }
 
-// facetAnnotation reads a type's `facet:` declaration, inheriting from an
+// resolveColumns turns a type's `column:` paths into renderable columns,
+// dropping any the schema cannot support and saying why.
+//
+// The walk enforces what makes a path a COLUMN rather than a sub-query: every
+// intermediate hop must be a SINGLE relationship, so exactly one value arrives
+// at the leaf. The one exception is a `count` leaf, whose preceding hop must be
+// a LIST — an aggregate is the only thing that collapses many rows to one cell.
+//
+// A path naming a field that does not exist is dropped, not fatal: a stale
+// annotation must never stop a page rendering, and the warning is how someone
+// finds out.
+func resolveColumns(types map[string]TypeInfo, info TypeInfo, typeName string, ifaceFields []string) ([]ViewColumn, []string) {
+	paths := typeAnnotation(types, info, ColumnPaths, func(p []string) bool { return len(p) == 0 })
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	var cols []ViewColumn
+	var warn []string
+	for _, path := range paths {
+		segs := strings.Split(path, ".")
+		leaf := segs[len(segs)-1]
+		hops := segs[:len(segs)-1]
+
+		cur, curName := info, typeName
+		ok := true
+		for i, seg := range hops {
+			f, found := fieldNamed(cur, seg)
+			if !found {
+				warn = append(warn, typeName+": column "+path+" — "+cur2(cur, typeName, i)+" has no field "+seg)
+				ok = false
+				break
+			}
+			if f.Kind == "SCALAR" || f.Kind == "ENUM" {
+				warn = append(warn, typeName+": column "+path+" — "+seg+" is a scalar, so nothing follows it")
+				ok = false
+				break
+			}
+			isLast := i == len(hops)-1
+			if f.IsList && !(isLast && leaf == "count") {
+				warn = append(warn, typeName+": column "+path+" — "+seg+" is a list, and only a `count` leaf may follow one")
+				ok = false
+				break
+			}
+			if !f.IsList && isLast && leaf == "count" {
+				warn = append(warn, typeName+": column "+path+" — count needs a list, and "+seg+" is a single relationship")
+				ok = false
+				break
+			}
+			next, known := types[f.TypeName]
+			if !known {
+				warn = append(warn, typeName+": column "+path+" — "+f.TypeName+" is not a ConfigItem type")
+				ok = false
+				break
+			}
+			cur, curName = next, f.TypeName
+		}
+		if !ok {
+			continue
+		}
+		if leaf == "count" {
+			cols = append(cols, ViewColumn{
+				Path:      path,
+				Field:     hops[len(hops)-1],
+				OwnerType: curName,
+				IsCount:   true,
+				Selection: wrapHops(hops[:len(hops)-1], hops[len(hops)-1]+"Aggregate { count }"),
+			})
+			continue
+		}
+		lf, found := fieldNamed(cur, leaf)
+		if !found {
+			// `name` and `orbId` are declared on the ConfigItem INTERFACE, not
+			// on each type, so they are absent from a type's own field list
+			// while being perfectly selectable. `cluster.name` is the whole
+			// point of this annotation, so without this the headline case
+			// fails validation.
+			if !isIfaceField(ifaceFields, leaf) {
+				warn = append(warn, typeName+": column "+path+" — no field "+leaf+" at the end of the path")
+				continue
+			}
+			lf = DerivedField{Name: leaf, Kind: "SCALAR"}
+		}
+		if lf.Kind != "SCALAR" && lf.Kind != "ENUM" {
+			warn = append(warn, typeName+": column "+path+" — "+leaf+" is a relationship, not a value")
+			continue
+		}
+		// A leaf that lives on the ConfigItem interface — `name`, `orbId` —
+		// cannot be selected bare off a sub-interface; DGraph rejects it at
+		// validation. Wrapped in a type condition when the hop landed on one.
+		leafSel := leaf
+		if cur.IsInterface && isIfaceField(ifaceFields, leaf) {
+			leafSel = "... on ConfigItem { " + leaf + " }"
+		}
+		// Labelled by the LEAF, except for an identity leaf: `cluster.name`
+		// reads "Cluster", not "Name" — which would also collide with the
+		// row's own Name column.
+		labelField := leaf
+		if isIfaceField(ifaceFields, leaf) && len(hops) > 0 {
+			labelField = hops[len(hops)-1]
+		}
+		cols = append(cols, ViewColumn{
+			Path:      path,
+			Field:     labelField,
+			OwnerType: curName,
+			Selection: wrapHops(hops, leafSel),
+		})
+	}
+	return cols, warn
+}
+
+// wrapHops nests a leaf selection inside its path: ["a","b"], "x" -> "a { b { x } }".
+func wrapHops(hops []string, leaf string) string {
+	sel := leaf
+	for i := len(hops) - 1; i >= 0; i-- {
+		sel = hops[i] + " { " + sel + " }"
+	}
+	return sel
+}
+
+func isIfaceField(ifaceFields []string, name string) bool {
+	for _, f := range ifaceFields {
+		if f == name {
+			return true
+		}
+	}
+	return false
+}
+
+func fieldNamed(info TypeInfo, name string) (DerivedField, bool) {
+	for _, f := range info.Fields {
+		if f.Name == name {
+			return f, true
+		}
+	}
+	return DerivedField{}, false
+}
+
+// cur2 names the type a failed hop was looking at, for the warning.
+func cur2(_ TypeInfo, root string, hop int) string {
+	if hop == 0 {
+		return root
+	}
+	return "the type at hop " + strconv.Itoa(hop)
+}
+
+// ColumnWarnings reports `column:` paths the schema could not support.
+func ColumnWarnings(types map[string]TypeInfo, views []View, ifaceFields []string) []string {
+	var out []string
+	for _, v := range views {
+		info, ok := types[v.Type]
+		if !ok {
+			continue
+		}
+		if _, w := resolveColumns(types, info, v.Type, ifaceFields); len(w) > 0 {
+			out = append(out, w...)
+		}
+	}
+	return out
+}
+
+// filterByAnnotation reads a type's `filterBy:` declaration, inheriting from an
 // interface it implements, and returns the field in use plus any extras.
-func facetAnnotation(types map[string]TypeInfo, info TypeInfo) (string, []string) {
+func filterByAnnotation(types map[string]TypeInfo, info TypeInfo) (string, []string) {
 	type decl struct {
 		field string
 		extra []string
 	}
 	d := typeAnnotation(types, info,
 		func(doc string) decl {
-			f, rest := FacetFor(doc)
+			f, rest := FilterByFor(doc)
 			return decl{field: f, extra: rest}
 		},
 		func(d decl) bool { return d.field == "" })
 	return d.field, d.extra
 }
 
-// NavWarnings reports `nav:` annotations whose value is not a number.
+// MenuWeightWarnings reports `menuWeight:` annotations whose value is not a number.
 //
-// UnknownAnnotations cannot catch these — "nav: left" is a KNOWN prefix with an
+// UnknownAnnotations cannot catch these — "menuWeight: left" is a KNOWN prefix with an
 // unusable value, so it passes the typo check and then silently does nothing.
 // The type still appears in the menu, at the unpinned position.
-func NavWarnings(types map[string]TypeInfo) []string {
+func MenuWeightWarnings(types map[string]TypeInfo) []string {
 	names := make([]string, 0, len(types))
 	for n := range types {
 		names = append(names, n)
@@ -400,35 +601,35 @@ func NavWarnings(types map[string]TypeInfo) []string {
 	sort.Strings(names)
 	var out []string
 	for _, n := range names {
-		if _, ok := NavFor(types[n].Doc); !ok {
+		if _, ok := MenuWeightFor(types[n].Doc); !ok {
 			out = append(out, n+": nav is not a number; menu position ignored")
 		}
 	}
 	return out
 }
 
-// FacetWarnings reports `facet:` annotations that did not produce a facet.
+// FilterByWarnings reports `filterBy:` annotations that did not produce a filterBy.
 //
 // A dropped annotation is otherwise completely silent: the schema says the page
 // has a filter, the page does not, and nothing connects the two. Same reasoning
 // as UnknownAnnotations — an annotation that reads as correct and does nothing
 // is worse than one that was never written.
-func FacetWarnings(types map[string]TypeInfo, views []View) []string {
+func FilterByWarnings(types map[string]TypeInfo, views []View) []string {
 	var out []string
 	for _, v := range views {
 		info, ok := types[v.Type]
 		if !ok {
 			continue
 		}
-		want, extra := facetAnnotation(types, info)
+		want, extra := filterByAnnotation(types, info)
 		if want == "" {
 			continue
 		}
-		if v.Facet == "" {
-			out = append(out, v.Type+": facet names "+want+", which /"+v.Slug+" does not render as a column")
+		if v.FilterBy == "" {
+			out = append(out, v.Type+": filterBy names "+want+", which /"+v.Slug+" does not render as a column")
 		}
 		if len(extra) > 0 {
-			out = append(out, v.Type+": facet names "+strings.Join(extra, ", ")+" as well; only one facet is supported and "+want+" is the one in use")
+			out = append(out, v.Type+": filterBy names "+strings.Join(extra, ", ")+" as well; only one filterBy is supported and "+want+" is the one in use")
 		}
 	}
 	return out

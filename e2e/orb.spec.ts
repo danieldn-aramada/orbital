@@ -28,23 +28,28 @@ test('orb sidebar nav links navigate correctly', async ({ page }) => {
 // HTMX double-click + tab-open interaction flow specifically.
 
 test('datacenter tab fragment renders populated data', async ({ page }) => {
-  // Requires orb to have imported a bundle — skips on fresh make seed with no import.
+  // Asserted against the GENERIC detail markup. This used to look for an
+  // `article` headed "Data Center Summary" with a Servers count row — that was
+  // datacenter-tab.gohtml, deleted when the pages became schema-derived. The
+  // test never failed over it because it skipped itself whenever orb's graph
+  // was empty, which `make up` always left it. `make seed-orb` fixes that, and
+  // this now describes the page that exists.
   await page.goto('/datacenter');
   const row = page.locator('#datacenter-table tbody tr', { hasText: 'colo-galleon' });
-  if (await row.count() === 0) {
-    test.skip(true, 'orb has no imported data — run orbital export+publish+orb import first')
-    return
-  }
+  await expect(row).toBeVisible({ timeout: 15_000 });
   await row.dblclick();
   await expect(
     page.locator('[id^="tab-content-"] .button.is-loading')
-  ).not.toBeVisible({ timeout: 10000 });
+  ).not.toBeVisible({ timeout: 10_000 });
 
-  const summary = page.locator('article', { hasText: 'Data Center Summary' });
-  await expect(summary.locator('td', { hasText: 'colo-galleon' })).toBeVisible();
-  const serverCount = summary.locator('tr', { hasText: 'Servers' }).locator('td').nth(1);
-  await expect(serverCount).not.toBeEmpty();
-  expect(parseInt((await serverCount.textContent()) ?? '0', 10)).toBeGreaterThan(0);
+  const tab = page.locator('[id^="tab-content-"]').last();
+  await expect(tab.getByTestId('generic-fields')).toBeVisible({ timeout: 10_000 });
+  // The name, not the page heading: a tab renders the detail FRAGMENT, and the
+  // heading belongs to the page wrapper the fragment does not include.
+  await expect(tab).toContainText('colo-galleon');
+  // The relationship tables the detail page derives — a data centre's racks and
+  // servers — rather than a hand-written count that no longer exists.
+  await expect(tab.getByTestId('generic-tab').first()).toBeVisible();
 });
 
 test('cluster tab fragment renders populated data', async ({ page }) => {
@@ -67,7 +72,7 @@ test('cluster tab fragment renders populated data', async ({ page }) => {
   await row.dblclick();
   const tab = page.locator('[id^="tab-content-generic-"]').last();
   await expect(tab.getByTestId('generic-fields')).toBeVisible({ timeout: 10_000 });
-  await expect(tab.getByTestId('generic-fields')).toContainText('provider');
+  await expect(tab.getByTestId('generic-fields')).toContainText('Provider');
 });
 
 test('orb generic detail pages carry no mutation controls', async ({ page }) => {

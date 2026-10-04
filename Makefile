@@ -107,8 +107,18 @@ run-orb: fmt ## Run orb edge service (go run; fast dev iteration). Import requir
 	ORB_TEMPLATE_HOT_RELOAD_ENABLED="$${ORB_TEMPLATE_HOT_RELOAD_ENABLED:-true}" \
 	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orb start
 
-seed: ## Seed DGraph with example data + admin user (local)
+seed: seed-orb ## Seed DGraph with example data + admin user (local), and orb's graph
 	bash scripts/seed.sh
+
+seed-orb: ## Seed ORB's DGraph (:8082) with the same example data
+	@# Orb's graph is normally filled by an import, and `make up` leaves it
+	@# EMPTY — so orb's UI showed nothing next to orbital's, and four e2e specs
+	@# skipped themselves rather than exercise orb's rendering. That is how the
+	@# 2026-09-23 shared-JS fault reached main: only orbital's suite caught it.
+	@#
+	@# This is a dev FIXTURE, not a substitute for testing the import path.
+	@# `make release-check` still drives a real publish -> import -> restore.
+	@bash scripts/seed-dgraph.sh --dgraph http://localhost:8082
 
 ## ── tests ─────────────────────────────────────────────────────────────────────
 
@@ -136,10 +146,16 @@ test-integration: ## Run integration tests against real services (requires: make
 	@mkdir -p .local/exports/test
 	@echo "Starting test DGraph (:8083)..."
 	@docker compose -f $(COMPOSE_FILE) --profile test up -d --wait dgraph-zero-test dgraph-alpha-test
-	@# Apply the schema. No TestMain in the suite does this, despite the comment
-	@# in `seed-dgraph.sh` — it worked only because the cluster was long-lived and
-	@# something had applied one at some point. A cluster started per-run is
-	@# always empty, and introspection-driven tests fail with "no GraphQL schema".
+	@# Apply the schema. Belt and braces, like the test database above: every
+	@# integration package's TestMain also ensures it (testutil.EnsureSchema or
+	@# ResetDGraph), so a direct `go test -tags=integration ./internal/...`
+	@# works without going through make. Doing it here as well means the common
+	@# path never pays the first-package latency.
+	@#
+	@# It used to be done NOWHERE, and worked only because the cluster was
+	@# long-lived and something had applied a schema at some point. A cluster
+	@# started per-run is always empty, and introspection-driven tests failed
+	@# with "no GraphQL schema in Dgraph".
 	@curl -fsS -X POST http://localhost:8083/admin/schema \
 		-H 'Content-Type: application/graphql' --data-binary @schema/schema.graphql >/dev/null
 	@bash scripts/check-export-mounts.sh

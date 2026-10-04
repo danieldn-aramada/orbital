@@ -1,34 +1,33 @@
 import { test, expect } from '@playwright/test';
 
-// Pages with data-testid="page-heading" on their title element.
-// Datacenters/servers use tab layout with no heading — check for their table instead.
-// Backups uses <h1 class="title">.
-const pages: Array<{ path: string; heading?: string; testid?: boolean; tableId?: string }> = [
-  { path: '/data-centers',       tableId: 'generic-table' },   // migrated to the generic renderer
-  { path: '/servers',            tableId: 'generic-table' },
-  { path: '/clusters',           tableId: 'generic-table' },
-  { path: '/inventory',          tableId: 'inventory-table' },
-  { path: '/schema',             heading: 'Schema',             testid: true  },
-  { path: '/export',             heading: 'Export Subgraph',    testid: true  },
-  { path: '/publish-history',    heading: 'Publish History',    testid: true  },
-  { path: '/divergence-reports', heading: 'Divergence Reports', testid: true  },
-  { path: '/audit-log',          heading: 'Audit Log',          testid: true  },
-  { path: '/backups',            heading: 'Backup Graph',       testid: false },
-  { path: '/restore',            heading: 'Restore Graph',      testid: true  },
+// Every page carries data-testid="page-heading" on its title element.
+//
+// This table used to hold three exceptions: the list pages fell back to
+// asserting a table id because they had no heading at all, and /backups used
+// an <h1 class="title"> that nothing else used. Both were fixed in the page
+// templates rather than worked around here — a test table full of exceptions
+// is a map of the inconsistencies, and the map was the thing worth deleting.
+const pages: Array<{ path: string; heading: string }> = [
+  { path: '/data-centers',       heading: 'Data Centers'       },
+  { path: '/servers',            heading: 'Servers'            },
+  { path: '/clusters',           heading: 'Clusters'           },
+  { path: '/network-devices',    heading: 'Network Devices'    },
+  { path: '/inventory',          heading: 'Config Items'       },
+  { path: '/schema',             heading: 'Schema'             },
+  { path: '/export',             heading: 'Export Subgraph'    },
+  { path: '/publish-history',    heading: 'Publish History'    },
+  { path: '/divergence-reports', heading: 'Divergence Reports' },
+  { path: '/audit-log',          heading: 'Audit Log'          },
+  { path: '/backups',            heading: 'Backup Graph'       },
+  { path: '/restore',            heading: 'Restore Graph'      },
 ];
 
-for (const { path, heading, testid, tableId } of pages) {
+for (const { path, heading } of pages) {
   test(`${path} loads and shows heading`, async ({ page }) => {
     await page.goto(path);
-    if (tableId) {
-      await expect(page.locator(`#${tableId}`)).toBeVisible();
-    } else {
-      const locator = testid
-        ? page.getByTestId('page-heading')
-        : page.getByRole('heading').filter({ hasText: heading! });
-      await expect(locator).toBeVisible();
-      await expect(locator).toContainText(heading!);
-    }
+    const locator = page.getByTestId('page-heading');
+    await expect(locator).toBeVisible();
+    await expect(locator).toContainText(heading);
   });
 }
 

@@ -22,6 +22,7 @@ import (
 	"github.com/armada/orbital/ent/backup"
 	"github.com/armada/orbital/ent/restorejob"
 	"github.com/armada/orbital/internal/blobstore"
+	"github.com/armada/orbital/web"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	cron "github.com/robfig/cron/v3"
@@ -406,7 +407,7 @@ func (h *BackupHandler) List(c echo.Context) error {
 		for _, j := range jobs {
 			rows = append(rows, toBackupFragRow(j))
 		}
-		tmpl, err := template.ParseFiles("web/templates/orbital/partials/backup-jobs-tbody.gohtml")
+		tmpl, err := template.ParseFS(web.Dir(), "templates/orbital/partials/backup-jobs-tbody.gohtml")
 		if err != nil {
 			return fmt.Errorf("parse backup fragment: %w", err)
 		}

@@ -23,6 +23,7 @@ import (
 	"github.com/armada/orbital/internal/testutil"
 	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/armada/orbital/internal/web/data/page"
+	"github.com/armada/orbital/web"
 	webtemplates "github.com/armada/orbital/web/templates/orbital"
 	"github.com/labstack/echo/v4"
 )
@@ -359,7 +360,7 @@ func renderPageAs(t *testing.T, name, role string) string {
 	_, file, _, _ := runtime.Caller(0)
 	t.Chdir(filepath.Join(filepath.Dir(file), "..", ".."))
 
-	tmpl, ok := webtemplates.Map()[name]
+	tmpl, ok := webtemplates.Map(web.Dir())[name]
 	if !ok {
 		t.Fatalf("template %q is not registered", name)
 	}

@@ -26,6 +26,7 @@ import (
 	"github.com/armada/orbital/internal/bundler"
 	"github.com/armada/orbital/internal/graphdiff"
 	"github.com/armada/orbital/internal/oci"
+	"github.com/armada/orbital/web"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
@@ -399,7 +400,7 @@ func (h *Export) List(c echo.Context) error {
 			}
 			rows = append(rows, toExportJobFragRow(job, false))
 		}
-		tmpl, err := template.ParseFiles("web/templates/orbital/partials/export-jobs-tbody.gohtml")
+		tmpl, err := template.ParseFS(web.Dir(), "templates/orbital/partials/export-jobs-tbody.gohtml")
 		if err != nil {
 			return fmt.Errorf("parse export fragment: %w", err)
 		}
