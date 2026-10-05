@@ -50,14 +50,15 @@ type Config struct {
 	Region    string // ignored by Azure backend
 	Bucket    string // = container, for Azure
 	AccessKey string // = storage account name, for Azure
-	SecretKey string // = storage account key, for Azure
+	SecretKey string // = storage account key, for Azure; ignored when UseAzureMI
+	UseAzureMI bool
 }
 
 // New constructs a Store, sniffing the endpoint to pick the backend.
 // Returns an error if the backend's client construction fails.
 func New(ctx context.Context, cfg Config) (Store, error) {
 	if strings.Contains(cfg.Endpoint, ".blob.core.windows.net") {
-		return newAzureStore(cfg.Endpoint, cfg.AccessKey, cfg.SecretKey, cfg.Bucket)
+		return newAzureStore(cfg.Endpoint, cfg.AccessKey, cfg.SecretKey, cfg.Bucket, cfg.UseAzureMI)
 	}
 	return newS3Store(ctx, cfg)
 }
