@@ -21712,6 +21712,41 @@ has-background-danger.is-hoverable:active {
   outline-style: var(--bulma-focus-style);
   outline-width: var(--bulma-focus-width);
 }
+.app-main {
+  /* DataTables 2 types each column from its DATA and gives numeric/date ones
+     `dt-type-numeric`, which does TWO things: right-aligns the cells, and sets
+     `flex-direction: row-reverse` on the header so the sort arrow lands on the
+     LEFT. Both have to be undone — fixing only the alignment leaves one header
+     with its arrow on the wrong side, which is how this looked after the second
+     attempt.
+
+     In a table of RECORDS it singles one column out, and it comes and goes with
+     the data: the clusters list's `Nodes` column looks normal only because some
+     clusters render "—".
+
+     ⚠️ Scoped to the WRAPPER, not to #generic-table. Under `scrollX` DataTables
+     clones the header into an id-less table inside `div.dt-scroll-head` and
+     leaves the original `thead` hidden for sizing, so scoping to the table id
+     styles the invisible copy — the cells change and the header does not.
+
+     ⚠️ `columnDefs: [{ className: 'dt-left' }]` is the library's own mechanism
+     and looks like the right answer, but the class does not reach the cloned
+     header. Tried and reverted.
+
+     The inventory and change-request tables are deliberately untouched. */
+}
+.app-main #generic-table_wrapper th.dt-type-numeric,
+.app-main #generic-table_wrapper td.dt-type-numeric,
+.app-main #generic-table_wrapper th.dt-type-date,
+.app-main #generic-table_wrapper td.dt-type-date {
+  text-align: left;
+}
+.app-main #generic-table_wrapper th.dt-type-numeric div.dt-column-header,
+.app-main #generic-table_wrapper th.dt-type-numeric div.dt-column-footer,
+.app-main #generic-table_wrapper th.dt-type-date div.dt-column-header,
+.app-main #generic-table_wrapper th.dt-type-date div.dt-column-footer {
+  flex-direction: row;
+}
 .app-main .tab-content {
   /* Bulma flex columns default to min-width:auto and expand to their widest
      child — which defeats a child's overflow:auto (nothing to scroll, the

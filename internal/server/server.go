@@ -289,7 +289,12 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	// handlers briefly disagree about the schema after a change. The GraphQL
 	// proxy needs it too: it generates the audit before-fetch selection from
 	// the same derived set, so the two cannot drift.
-	fieldSource := handler.NewSharedFieldSource(cfg.DGraphURL, logger)
+	viewsSource := handler.ViewsSource{
+		Path:          cfg.ViewsPath,
+		OverlayPath:   cfg.ViewsOverlayPath,
+		SchemaVersion: handler.ShippedSchemaVersion(cfg.SchemaPath),
+	}
+	fieldSource := handler.NewSharedFieldSource(cfg.DGraphURL, viewsSource, logger)
 
 	gql := handler.NewGraphQL(cfg.DGraphURL, db, logger, cfg.InlineSelectorReject, handler.WithFieldSource(fieldSource))
 	s3Configured := cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != ""
@@ -425,7 +430,7 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 
 	// gql is passed for the approval gate only — this endpoint writes via DQL,
 	// so it cannot reach the check through writeToDGraph's chokepoint.
-	delH := handler.NewDeleteHandler(cfg.DGraphURL, db, logger, gql)
+	delH := handler.NewDeleteHandler(cfg.DGraphURL, db, logger, gql, handler.WithFieldSource(fieldSource))
 	root.GET("/config-items/delete-preview", delH.Preview)
 	api.DELETE("/config-items/:type/:id", delH.Execute)
 
@@ -578,7 +583,7 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		// their own change management should not have integrators discover
 		// endpoints their org does not use.
 		if cfg.ChangeControlEnabled {
-			crh := handler.NewChangeRequest(db, gql, cfg.DGraphURL, logger)
+			crh := handler.NewChangeRequest(db, gql, cfg.DGraphURL, fieldSource.ViewSet, logger)
 			// A gated divergence Accept opens a change request instead of mutating.
 			dh.SetChangeRequests(crh)
 			apiReadonly.GET("/change-requests", crh.ListChangeRequests)
@@ -595,7 +600,6 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 			// Discovery: what pages exist, derived from the deployed schema.
 			// Readable by anyone authenticated — the UI needs it on every render.
 			// Writing an override is a P1 concern and will sit on adminAPI.
-			apiReadonly.GET("/views", handler.NewViewsHandler(fieldSource, logger).List)
 			apiReadonly.GET("/approval-policies", crh.ListApprovalPolicies)
 			apiReadonly.GET("/approval-policies/resolve", crh.ResolveApprovalPolicy)
 			// The field-level projection of open requests, keyed by orbId so a
@@ -608,7 +612,6 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	}
 
 	gqlGroup.Any("/graphql", gql.Handle)
-	root.GET("/views", ui.ViewsPage)
 	root.GET("/swagger/*", echoswagger.WrapHandler)
 
 	// The generic renderer, registered LAST and deliberately.

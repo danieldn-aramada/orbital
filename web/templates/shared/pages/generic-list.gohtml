@@ -98,20 +98,37 @@ has one query built from the view, so there is nothing per-type for JS to know.
             {{$base := .BasePath}}
             {{$cols := .Columns}}
             {{range .Rows}}
-            <tr>
-              <td style="white-space:nowrap">
-                <a href="{{$base}}/{{$slug}}/{{index . "orbId"}}">{{index . "name"}}</a>
-              </td>
+            {{/* data-orb-id, because the name is NOT a link and there is no href
+                 to read the entity out of. The row IS the handle. */}}
+            <tr data-orb-id="{{index . "orbId"}}">
+              {{/* PLAIN TEXT, deliberately. This table has DataTables row
+                   selection (`select: { style: 'os' }`) and the Copy/Excel/CSV
+                   buttons export the selection — so single click is already
+                   taken, and double click is what opens a row as a tab. That is
+                   why the hand-written tables had no links either; it was forced,
+                   not a quirk. A link here would claim a navigation that does not
+                   happen (the tab opens on the page you are already on) and would
+                   fire selection and opening from one gesture.
+
+                   Reference columns below DO link: those leave for another
+                   type's page, where selection is moot. */}}
+              <td style="white-space:nowrap">{{index . "name"}}</td>
               {{$row := .}}
               {{range $cols}}<td>{{with index $row .Field}}{{.}}{{else}}—{{end}}</td>{{end}}
               {{range $.RefColumns}}
               {{$rc := .}}
               <td style="white-space:nowrap">
-                {{with index $row $rc.Field}}<a href="{{$base}}/{{$rc.Slug}}/{{index . "orbId"}}">{{index . "name"}}</a>{{else}}—{{end}}
+                {{/* No slug means the target type has no page: render the name
+                     as text rather than a link to nowhere. */}}
+                {{with index $row $rc.Field}}{{if $rc.Slug}}<a href="{{$base}}/{{$rc.Slug}}?open={{index . "orbId"}}">{{index . "name"}}</a>{{else}}{{index . "name"}}{{end}}{{else}}—{{end}}
               </td>
               {{end}}
               {{range $.ComputedColumns}}<td style="white-space:nowrap">{{with index $row .Field}}{{.}}{{else}}—{{end}}</td>{{end}}
-              <td style="white-space:nowrap"><code>{{index . "orbId"}}</code></td>
+              {{/* Plain text, like every other value cell. `<code>` here made one
+                   column monospace in a table of sans-serif cells, which is the
+                   per-cell differentiation UI.md's list-table rule forbids —
+                   every column reads as a different kind of thing. */}}
+              <td style="white-space:nowrap">{{index . "orbId"}}</td>
             </tr>
             {{end}}
           </tbody>

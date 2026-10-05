@@ -43,6 +43,42 @@ There are currently **no maturity toggles**. Adding one requires naming its remo
 
 **There is deliberately no global "enforcement on/off" setting.** Enforcement is a property of each policy — disable the one that is misbehaving and the rest keep working. That is what every comparable engine does ([Kyverno](https://kyverno.io/docs/policy-types/cluster-policy/validate/) `validationFailureAction`, [Gatekeeper](https://open-policy-agent.github.io/gatekeeper/website/docs/howto/) `enforcementAction`, [HCP Sentinel](https://developer.hashicorp.com/terraform/cloud-docs/workspaces/policy-enforcement/manage-policy-sets) enforcement level, GitHub rulesets' enforcement status), and a global switch is the blunt version of it. The per-policy control is always reachable: policy administration writes PostgreSQL, never DGraph, so it is never itself gated.
 
+## The views configuration
+
+`ORBITAL_VIEWS_PATH` and `ORBITAL_VIEWS_OVERLAY_PATH` are not toggles, and they
+are the only pair of settings that stack, so they get their own note.
+
+| Variable | Default | What it is |
+|---|---|---|
+| `ORBITAL_VIEWS_PATH` | `config/views.yaml` | The SHIPPED view configuration, baked into the image beside `schema/`. What every ConfigItem page shows and edits. |
+| `ORBITAL_VIEWS_OVERLAY_PATH` | *(unset)* | A **PARTIAL** per-deployment override, normally a ConfigMap. Unset means no overlay, which is the common case. |
+
+**The overlay declares only the pages and types this deployment changes.** Every
+entry it does not name keeps receiving whatever ships in `ORBITAL_VIEWS_PATH`.
+Copying the shipped file into the overlay freezes that deployment at today's
+shape — a panel added in a later release would never arrive, silently and with no
+signal. The merge is **per entry**: a declared page replaces the shipped page
+wholesale, and a declared type replaces the shipped type wholesale, because
+"remove this tab" is the likeliest customisation and a key-by-key merge cannot
+express it without a tombstone syntax. ⚠️ An overlay that adds a `pages:` entry
+adds a URL **and** a menu item — the two are one fact — and turns that type's
+dead rows into links on every page that lists it.
+
+⚠️ **Mount the DIRECTORY, never with `subPath`.** The kubelet updates a
+volume-mounted ConfigMap in place, which is what lets a view change take effect
+without a rollout restart; `subPath` mounts are **not** updated. See
+`deploy/base/views-overlay-configmap.yaml`.
+
+A change is picked up within one check interval (`ViewsSource.CheckEvery`, 30s),
+on the same loop that watches the deployed schema. A declaration the deployed
+schema cannot support is **dropped and logged at WARN**, never fatal — a stale
+view must not stop a page rendering.
+
+**Governance is the cluster's, deliberately.** RBAC decides who may edit the
+ConfigMap, GitOps decides review, `git revert` is the reset. Orbital does not
+audit view changes and has no UI for them; see `docs/reference/UI.md` §
+Settled Decisions for why that is a decision rather than an omission.
+
 ## All settings
 
 Mirrors `internal/config/config.go`, where the struct tags are the source of truth. **Hand-maintained — there is no generator**, despite how this table reads; add your row here when you add a setting. A blank default means the value is required, or is derived at runtime.
@@ -57,6 +93,8 @@ Mirrors `internal/config/config.go`, where the struct tags are the source of tru
 | `ORBITAL_BACKUP_SCHEDULE` | — |
 | `ORBITAL_BACKUP_TIMEOUT` | `30m` |
 | `ORBITAL_BASE_PATH` | — |
+| `ORBITAL_VIEWS_OVERLAY_PATH` | — |
+| `ORBITAL_VIEWS_PATH` | `config/views.yaml` |
 | `ORBITAL_BUNDLER_MAX_ATTEMPTS` | `3` |
 | `ORBITAL_BUNDLER_MAX_RESPONSE_BYTES` | `10485760` |
 | `ORBITAL_BUNDLER_TIMEOUT` | `30s` |

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"regexp"
 	"strings"
 	"time"
 
@@ -20,6 +21,8 @@ type handlerOptions struct {
 	fields configitems.FieldsFor
 	meta   configitems.MetaFor
 	state  *fieldResolverState
+	views  ViewsProvider
+	shared *SharedFields
 }
 
 // WithFields supplies the editable field list. Production passes one shared
@@ -137,20 +140,42 @@ func (s *fieldResolverState) Err() error { return s.lastErr }
 // its own resolver and therefore its own cache, which multiplies introspection
 // by the number of handlers and lets them briefly disagree about the schema
 // after a change.
-func NewSharedFieldSource(dgraphURL string, logger *slog.Logger) *SharedFields {
+// ViewsSource locates the views document a process renders from: the shipped
+// default, an optional partial overlay, and the schema version the pair is
+// checked against.
+//
+// A struct rather than three more string parameters, because three adjacent
+// strings at a call site is a transposition waiting to happen and the compiler
+// would not notice.
+type ViewsSource struct {
+	Path          string
+	OverlayPath   string
+	SchemaVersion string
+
+	// CheckEvery bounds how often the deployed schema and the views files are
+	// re-read. Zero means the default.
+	//
+	// It is a knob rather than a constant because the right answer differs by
+	// deployment: a ConfigMap edit is picked up within one interval, so this is
+	// how long "I changed the view and nothing happened" lasts. Lower costs two
+	// file reads and one hash of the deployed SDL.
+	CheckEvery time.Duration
+}
+
+// defaultViewsCheckEvery is the steady-state cost ceiling: at most one SDL hash
+// and two file reads per interval, for any number of page loads.
+const defaultViewsCheckEvery = 30 * time.Second
+
+func NewSharedFieldSource(dgraphURL string, views ViewsSource, logger *slog.Logger) *SharedFields {
+	every := views.CheckEvery
+	if every <= 0 {
+		every = defaultViewsCheckEvery
+	}
 	r := configitems.NewResolver(
 		configitems.NewDGraphSchemaClient(dgraphURL, adminURLFor(dgraphURL)),
-		30*time.Second,
-	).WithLogger(logger)
-	sf := &SharedFields{st: &fieldResolverState{resolver: r}}
-	// Children() and downwardEdges() are package functions with no resolver to
-	// thread, so the interface lookup is wired once here. Set from the SHARED
-	// source deliberately: a per-handler resolver would mean the last handler
-	// constructed silently decided what every caller saw.
-	configitems.SetImplementsLookup(func(typeName string) []string {
-		return sf.Meta(typeName).Implements
-	})
-	return sf
+		every,
+	).WithViews(views.Path, views.OverlayPath, views.SchemaVersion).WithLogger(logger)
+	return &SharedFields{st: &fieldResolverState{resolver: r}}
 }
 
 // SharedFields is one process-wide field source together with its last
@@ -182,6 +207,76 @@ func (s *SharedFields) Views(ctx context.Context) ([]configitems.View, error) {
 	return s.st.resolver.Views(ctx)
 }
 
+// ViewsProvider resolves the current view list.
+//
+// A function rather than a snapshot, because the views document is re-read
+// whenever it or the deployed schema changes: a handler holding a slice from
+// construction time would keep serving the shape orbital booted with, which is
+// precisely the reload this design exists to support.
+type ViewsProvider func(context.Context) (configitems.ViewSet, error)
+
+// ViewSet satisfies ViewsProvider.
+func (s *SharedFields) ViewSet(ctx context.Context) (configitems.ViewSet, error) {
+	v, err := s.Views(ctx)
+	return configitems.ViewSet(v), err
+}
+
+// MutationRegex matches add/update/delete against every ConfigItem type the
+// DEPLOYED schema declares, falling back to a broad pattern when it cannot be
+// read — over-matching rather than leaving a write ungated and unaudited.
+func (s *SharedFields) MutationRegex(ctx context.Context) *regexp.Regexp {
+	if s.st.resolver == nil {
+		return configitems.BroadMutationRegex
+	}
+	return s.st.resolver.MutationRegex(ctx)
+}
+
+// TypeNames returns the ConfigItem type names the deployed schema declares.
+func (s *SharedFields) TypeNames(ctx context.Context) ([]string, error) {
+	if s.st.resolver == nil {
+		return nil, errNoFieldSource
+	}
+	return s.st.resolver.TypeNames(ctx)
+}
+
+// InverseOf returns the `@hasInverse` partner of an edge, from the deployed
+// SDL. Empty when the schema cannot be read.
+func (s *SharedFields) InverseOf(ctx context.Context, typeName, field string) string {
+	if s.st.resolver == nil {
+		return ""
+	}
+	return s.st.resolver.InverseOf(ctx, typeName, field)
+}
+
+// CurrentViewsHash is ViewsHash after a rate-limited re-check — what a WRITE
+// compares against, where the cached value would accept a page composed before
+// the views moved.
+func (s *SharedFields) CurrentViewsHash(ctx context.Context) string {
+	if s.st.resolver == nil {
+		return ""
+	}
+	return s.st.resolver.CurrentViewsHash(ctx)
+}
+
+// ViewConfig returns the merged, validated views document — the answer to
+// "what does this page show", for the handlers that need the declaration rather
+// than the resolved view.
+func (s *SharedFields) ViewConfig(ctx context.Context) (configitems.ViewConfig, error) {
+	if s.st.resolver == nil {
+		return configitems.ViewConfig{}, errNoFieldSource
+	}
+	return s.st.resolver.ViewConfig(ctx)
+}
+
+// ViewsHash identifies the views document the current views were built from.
+// The editor carries it so a save opened under an older view can be refused.
+func (s *SharedFields) ViewsHash() string {
+	if s.st.resolver == nil {
+		return ""
+	}
+	return s.st.resolver.ViewsHash()
+}
+
 var errNoFieldSource = errors.New("no schema source configured")
 
 // WithFieldSource supplies a shared source and keeps its error reachable.
@@ -190,7 +285,32 @@ func WithFieldSource(sf *SharedFields) HandlerOption {
 		o.fields = sf.Fields
 		o.meta = sf.Meta
 		o.state = sf.st
+		o.views = sf.ViewSet
+		o.shared = sf
 	}
+}
+
+// sharedFieldsFrom returns the shared source a handler was given, or nil.
+func sharedFieldsFrom(opts []HandlerOption) *SharedFields {
+	var o handlerOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return o.shared
+}
+
+// viewsFrom returns the views provider a handler was given, or nil.
+//
+// Separate from fieldsFrom rather than a fifth return value: every one of that
+// function's four call sites would have had to grow a parameter for a
+// dependency only one of them uses, and a `_` in three places is how a
+// dependency goes quietly unwired.
+func viewsFrom(opts []HandlerOption) ViewsProvider {
+	var o handlerOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return o.views
 }
 
 // editorUnavailableReason renders a user-facing reason, or "" when the field
@@ -202,4 +322,22 @@ func editorUnavailableReason(st *fieldResolverState) string {
 	}
 	return "Orbital cannot read the schema from DGraph, so it does not know which fields are editable. " +
 		"Editing will work again as soon as DGraph is reachable — no restart needed. (" + st.Err().Error() + ")"
+}
+
+// ShippedSchemaVersion reads the schema/VERSION label beside the schema file
+// this binary ships, for the views config's coarse version check.
+//
+// The SHIPPED version, not the deployed one — those differ, and the difference
+// is deliberate here. What this catches is an OVERLAY authored against an
+// earlier release of orbital, which is the realistic staleness; what it cannot
+// catch is two schemas sharing a version label, because schema/VERSION is
+// bumped by hand and deliberately not for annotation or comment changes. An
+// unreadable file yields "", which skips the comparison rather than warning
+// about a version nobody set.
+func ShippedSchemaVersion(schemaPath string) string {
+	v, err := readSchemaVersion(schemaPath)
+	if err != nil {
+		return ""
+	}
+	return v
 }

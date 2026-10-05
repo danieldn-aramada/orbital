@@ -1,0 +1,252 @@
+# Orbital view configuration.
+#
+# TWO NOUNS
+#   pages:  a URL + a menu entry + a detail layout.  THE TOP LEVEL IS THE MENU.
+#             summary.refs: link rows under the field list
+#             tabs:         the tab strip, in the order you see it
+#   types:  how a type renders WHEREVER it renders. Declared once, because
+#           IPAddress appears on four pages and NetworkInterface on three.
+#           INHERITS along the schema's interfaces.
+#
+# TWO RULES
+#   scalars        SUBTRACTIVE — a field added to the schema shows up on its own.
+#                  summary.ignoreFields drops one from a page; fields.<f>.detailOnly
+#                  keeps it off every TABLE (type-wide, so it cannot differ per page).
+#   relationships  LISTED — summary.refs (a row), tabs (a table), refColumns (a cell)
+#   ⚠️ So a relationship added to the schema appears NOWHERE until it is listed.
+#      That is deliberate: a column or table arriving uninvited is a layout change.
+#
+# EDITABLE
+#   `editable: true` on a tab = this page's editor may write that child.
+#   It gates the TOP LEVEL only; below it, containment governs — which is how a
+#   cluster's etcd schedule is editable while ClusterBackup has no page at all.
+#   A LIST cannot be editable (a path cannot name one row); declaring it is
+#   refused out loud at load and the tab renders read-only.
+#
+# DERIVED, never declared here
+#   inline panel vs table   <- cardinality
+#   what dies together      <- the schema's NON-NULL back-edges (+ containment:)
+#   does a row link         <- does its type have a page
+#   the Audit Log tab       <- always last, on every page
+#
+# A deployment overrides this with a PARTIAL overlay (ORBITAL_VIEWS_OVERLAY_PATH)
+# declaring only the pages or types it changes. Copying this whole file into an
+# overlay freezes that deployment at today's shape, forever.
+
+schemaVersion: v14
+
+pages:
+
+  DataCenter:
+    menuWeight: 10
+    summary:
+      refs: []
+    tabs:
+      - servers
+      - racks
+      - kubernetesClusters
+      - networkDevices
+
+  Server:
+    menuWeight: 20
+    filterBy: dataCenter
+    summary:
+      refs:
+        - dataCenter
+        - rack
+        - kubernetesNode
+        - oobIP
+    tabs:
+      # `editable` now means ONLY "the editor writes this". These two are the
+      # whole Server edit tree; the tables below are read-only from this page.
+      - { path: idracSettings, editable: true }
+      - { path: serverMaintenance, editable: true }
+      - storageControllers
+      - networkAdapters
+      - networkInterfaces
+      - storageControllers.storageDevices
+
+  KubernetesCluster:
+    slug: clusters
+    menuWeight: 30
+    filterBy: dataCenter
+    summary:
+      refs:
+        - controlPlaneEndpoint
+        - dataCenter
+    tabs:
+      - { path: backup, editable: true }
+      - nodes
+
+  NetworkDevice:
+    menuWeight: 40
+    summary:
+      refs:
+        - dataCenter
+        - rack
+        - virtualChassis
+    tabs:
+      - virtualChassisMembers
+      - networkInterfaces
+      - networkInterfaceConnectedNetworkDevice
+
+types:
+
+  # The ConfigItem interface. `types:` inherits along the schema's interfaces, so
+  # one declaration reaches every type — and these fields cannot be redeclared on
+  # an implementor anyway, because DGraph forbids it.
+  ConfigItem:
+    fields:
+      orbId: { label: Orb ID }
+
+  DataCenter:
+    columns:
+      - servers.count
+    fields:
+      assetDataV2: { detailOnly: true }
+      name: { editable: true }
+
+  IPAddress:
+    fields:
+      address: { editable: false }
+      role: { editable: false }
+      type: { editable: false }
+
+  KubernetesCluster:
+    refColumns: [dataCenter]
+    columns:
+      - nodes.count
+    order: [name, provider, clusterType, environment, kubernetesVersion]
+    fields:
+      cni: { label: CNI }
+      description: { editable: false, detailOnly: true }
+      provider: { editable: false }
+
+  KubernetesNode:
+    # The cluster page's Nodes table was Name / Role / Server.
+    refColumns: [server]
+    fields:
+      gpu: { label: GPU, editable: false, detailOnly: true }
+      notes: { editable: false, detailOnly: true }
+      owner: { editable: false, detailOnly: true }
+      role: { editable: false }
+
+  NetworkAdapter:
+    fields:
+      manufacturer: { editable: false }
+      model: { editable: false }
+      partNumber: { editable: false }
+      serialNumber: { editable: false }
+
+  NetworkDevice:
+    refColumns: [dataCenter, rack]
+    fields:
+      macAddress: { label: MAC Address }
+      networkInterfaceConnectedNetworkDevice: { label: Connections }
+      networkInterfaces: { label: Ports }
+      face: { detailOnly: true }
+      platform: { detailOnly: true }
+      rackPosition: { detailOnly: true }
+      vcPosition: { label: VC Position, detailOnly: true }
+      vcPriority: { label: VC Priority, detailOnly: true }
+
+  NetworkInterface:
+    # `server` is here for the network device's Connections tab, where it is the
+    # column that makes a port mean something; inside a SERVER's tab it points
+    # back at the page you are on and is dropped automatically.
+    refColumns: [server, networkAdapter, connectedNetworkDevice]
+    columns:
+      - server.kubernetesNode.cluster.name
+      - server.kubernetesNode.role
+      - server.kubernetesNode.gpu
+    fields:
+      connectedNetworkDevicePort: { editable: false }
+      linkSpeedMbps: { editable: false }
+      macAddress: { label: MAC Address, editable: false }
+      mgmtOnly: { editable: false, detailOnly: true }
+      portType: { editable: false }
+
+  Rack:
+    columns:
+      - servers.count
+    fields:
+      name: { editable: true }
+
+  Server:
+    # The columns the hand-written /servers page showed. idracSettings,
+    # serverConfigurationProfile, serverMaintenance and kubernetesNode are
+    # relationships too — they are simply not listed, which is how a page says
+    # "not here"; they still have tabs on the Server page.
+    refColumns: [dataCenter, oobIP, rack]
+    columns:
+      - kubernetesNode.cluster.name
+      - kubernetesNode.role
+      - kubernetesNode.gpu
+    fields:
+      oobIP: { label: OOB IP }
+      oobMAC: { label: OOB MAC, detailOnly: true }
+      manufacturer: { detailOnly: true }
+      serialNumber: { detailOnly: true }
+      uHeight: { detailOnly: true }
+      # NOT detailOnly, though /servers did not show it: the hand-written data
+      # centre page DID, in its servers table. `detailOnly` is type-wide — it
+      # removes a column from every table — so the two cannot differ, and
+      # keeping a column beats losing one. The cost is one extra column on
+      # /servers versus the original.
+
+  ServerConfigurationProfile:
+    fields:
+      json: { editable: false }
+
+  StorageDevice:
+    refColumns: [storageController]
+    fields:
+      capacityBytes: { editable: false }
+      manufacturer: { editable: false }
+      model: { editable: false, detailOnly: true }
+      serialNumber: { editable: false }
+      wwn: { label: WWN, editable: false }
+
+  StorageVolume:
+    fields:
+      capacityBytes: { editable: false }
+      manufacturer: { editable: false }
+      model: { editable: false }
+      serialNumber: { editable: false }
+      wwn: { editable: false }
+
+# ── containment exceptions ───────────────────────────────────────────────────
+# Containment is DERIVED from NON-NULL back-edges: `Child.parent: Parent!` is
+# the schema saying the child has no existence without that parent. 13 of 14
+# relations derive. ONE cannot:
+#
+# NetworkInterface is owned by exactly one of {server, networkDevice,
+# networkAdapter} — the schema says so in a comment, because "DGraph can't
+# enforce" it. All three edges are nullable, so nullability cannot express it;
+# neither can derivesIdFrom:, which is single-valued.
+#
+# TWO JOBS: what dies with the parent, AND which edge a first-time create links
+# through. Ordered, most-specific first.
+#
+# ⚠️ The real fix is a schema change — splitting the type by owner so each has a
+# non-null edge DELETES this section. It is a data migration that collides with
+# spike 32's switch-port work, so it is recorded, not done.
+containment:
+  NetworkInterface: [networkAdapter, server, networkDevice]
+
+# ── which page is a node's HOME ──────────────────────────────────────────────
+# The inverse question to a page. An IPAddress is deleted by nobody and shown by
+# four pages; with no /ip-addresses/<id> this is the only answer to "that
+# address turned up in a diff, where do I look at it?".
+canonicalParent:
+  IPAddress:
+    - { type: Server, field: serverOobIP, down: oobIP }
+    - { type: KubernetesNode, field: kubernetesNodeIpv4, down: ipv4 }
+    - { type: KubernetesCluster, field: kubernetesClusterControlPlaneEndpoint, down: controlPlaneEndpoint }
+    - { type: EksaKubernetesCluster, field: eksaKubernetesClusterTinkerbellIP, down: tinkerbellIP }
+  NetworkInterface:
+    - { type: NetworkAdapter, field: networkAdapter, down: networkInterfaces }
+    - { type: Server, field: server, down: networkInterfaces }
+    - { type: NetworkDevice, field: networkDevice, down: networkInterfaces }
+  StorageVolume:
+    - { type: StorageController, field: storageController }

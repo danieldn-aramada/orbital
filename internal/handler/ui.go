@@ -453,13 +453,7 @@ func (h *UI) buildMenuSections(path, userRole string, pendingDivergences int) []
 		}
 		sections[i].Items = append(sections[i].Items, derived...)
 		sections[i].Items = append(sections[i].Items,
-			layout.MenuItem{Label: "Schema Version", Href: bp + "/schema", Active: path == bp+"/schema"},
-			// Views sits next to Schema Version because they answer consecutive
-			// questions: what schema is deployed, and what pages it produces.
-			// Visible to everyone; editing (P1) will be admin-gated INSIDE the
-			// page, as approval-policies does, rather than by hiding the menu
-			// item — a reader benefits from seeing what exists either way.
-			layout.MenuItem{Label: "Views", Href: bp + "/views", Active: path == bp+"/views"})
+			layout.MenuItem{Label: "Schema Version", Href: bp + "/schema", Active: path == bp+"/schema"})
 	}
 	return sections
 }
@@ -755,16 +749,6 @@ func (h *UI) PublishHistoryCompare(c echo.Context) error {
 	})
 }
 
-// ViewsPage renders the view list. Read-only: rows come from
-// GET /api/v1/views via JS, so the page consumes the same public endpoint an
-// integrator would rather than a private server-side path.
-func (h *UI) ViewsPage(c echo.Context) error {
-	return h.render(c, "views", page.Views{
-		Base:      h.base(c),
-		PageTitle: "Views",
-	})
-}
-
 func (h *UI) Restore(c echo.Context) error {
 	p := page.Restore{
 		Base:          h.base(c),
@@ -949,7 +933,7 @@ func (h *UI) derivedMenuItems(path string) []layout.MenuItem {
 	covered := map[string]bool{}
 	var items []layout.MenuItem
 	for _, v := range views {
-		if !v.IsRoot || covered[v.Slug] {
+		if v.Slug == "" || covered[v.Slug] {
 			continue
 		}
 		href := bp + "/" + v.Slug

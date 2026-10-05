@@ -115,6 +115,7 @@ func (g *GenericRenderer) List(c echo.Context) error {
 
 	// An interface view's columns come partly from its implementations, so the
 	// query needs to look them up by type.
+	vs := configitems.ViewSet(views)
 	byType := make(map[string]configitems.View, len(views))
 	for _, vv := range views {
 		byType[vv.Type] = vv
@@ -122,10 +123,15 @@ func (g *GenericRenderer) List(c echo.Context) error {
 	display := func(typeName string) []string { return byType[typeName].Display }
 	viewOf := func(typeName string) configitems.View { return byType[typeName] }
 
-	label := g.fieldLabeller(v.Type)
-	data.Columns = columnHeaders(listColumns(v, display), label)
+	// COLUMN fields, not Display: an implementation's `detailOnly` has to hold
+	// when its fields are unioned onto the interface's list, or a field kept off
+	// every table reappears on the one page that unions several types.
+	columnsOf := func(typeName string) []string { return byType[typeName].ColumnFields() }
+
+	label := g.fieldLabeller(vs, v.Type)
+	data.Columns = columnHeaders(listColumns(v, columnsOf), label)
 	data.RefColumns = refHeaders(v.RefColumns, label)
-	data.ComputedColumns = g.columnHeadersFor(v.Columns)
+	data.ComputedColumns = g.columnHeadersFor(vs, v.Columns)
 
 	listLimit := g.listMaxRows
 	if listLimit <= 0 {
@@ -214,13 +220,13 @@ func columnValue(row map[string]any, c configitems.ViewColumn) any {
 // reads "Cluster" rather than "Kubernetes Node Cluster Name". Two paths with
 // the same leaf would collide; the schema has none today and the label
 // annotation is the escape hatch if one appears.
-func (g *GenericRenderer) columnHeadersFor(cols []configitems.ViewColumn) []page.ColumnHeader {
+func (g *GenericRenderer) columnHeadersFor(views configitems.ViewSet, cols []configitems.ViewColumn) []page.ColumnHeader {
 	out := make([]page.ColumnHeader, 0, len(cols))
 	for _, c := range cols {
 		// Labelled by the type the field BELONGS to, not the row's type: `gpu`
 		// carries `label: GPU` on KubernetesNode, and Server's labeller has
 		// never heard of it.
-		out = append(out, page.ColumnHeader{Field: c.Path, Label: g.fieldLabeller(c.OwnerType)(c.Field)})
+		out = append(out, page.ColumnHeader{Field: c.Path, Label: g.fieldLabeller(views, c.OwnerType)(c.Field)})
 	}
 	return out
 }
@@ -311,8 +317,27 @@ func buildFilterBy(v configitems.View, cols []page.ColumnHeader, refs []page.Ref
 }
 
 // Detail renders /{slug}/{orbId} for any ConfigItem type.
+//
+// ONE view model: a ConfigItem is shown as a TAB on its list page, never as a
+// page of its own. A direct navigation here — a pasted link, a bookmark, a
+// ⌘-click from the table — redirects into the workspace with that tab open, and
+// the HTMX request the tab then makes is what actually renders the body below.
+//
+// The hand-written handler this replaced did the same thing and worse: a
+// non-HTMX request to /servers/<orbId> redirected to HOME, so the URL was not a
+// link to anything. The full PAGE the migration introduced was never a design
+// anyone chose — it arrived as a side effect of making every type routable, and
+// it left the product with two layouts for one thing and a list whose first
+// column looked like navigation but opened a tab.
 func (g *GenericRenderer) Detail(c echo.Context) error {
 	slug, orbID := c.Param("slug"), c.Param("orbId")
+
+	if c.Request().Header.Get("HX-Request") != "true" {
+		return echo.NewHTTPError(http.StatusNotFound,
+			"not a page: "+g.basePath+"/"+slug+"/<orbId> is the fragment a detail tab fetches. "+
+				"Open the item from "+g.basePath+"/"+slug+"?open=<orbId>")
+	}
+
 	data := page.GenericDetail{Base: g.base(c), PageTitle: orbID, OrbID: orbID}
 	if g.actions != nil {
 		data.Actions = g.actions(c)
@@ -322,7 +347,7 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 	if err != nil {
 		g.logger.Warn("generic detail: cannot resolve views", "slug", slug, "err", err)
 		data.Unavailable = "Orbital cannot read the schema from DGraph, so it does not know what this page should show. It recovers on its own once DGraph is reachable — no restart needed."
-		return g.render(c, "generic-detail", data)
+		return g.renderFragment(c, "generic-detail", "generic-detail-content", data)
 	}
 	v, ok := viewBySlug(views, slug)
 	if !ok {
@@ -343,7 +368,7 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 			g.logger.Warn("generic detail: cannot resolve concrete type", "orbId", orbID, "err", rerr)
 			data.View = v
 			data.Unavailable = "Could not determine what kind of item " + orbID + " is: " + rerr.Error()
-			return g.render(c, "generic-detail", data)
+			return g.renderFragment(c, "generic-detail", "generic-detail-content", data)
 		}
 		if concrete == "" {
 			return echo.NewHTTPError(http.StatusNotFound, "not found: "+orbID)
@@ -352,7 +377,31 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 		if !known {
 			return echo.NewHTTPError(http.StatusNotFound, "no view for type "+concrete)
 		}
+		// The concrete type supplies its own FIELDS — an EksaKubernetesCluster
+		// has clusterType and tinkerbellIP that the interface does not — but the
+		// PAGE is the interface's, so the tab strip and the summary rows come
+		// from there. The concrete type has no page of its own, which is exactly
+		// what keeps one entry in the menu instead of one per provider.
+		cv.Slug, cv.Label, cv.MenuWeight = v.Slug, v.Label, v.MenuWeight
+		cv.Tabs, cv.SummaryRefs, cv.FilterBy = v.Tabs, v.SummaryRefs, v.FilterBy
 		v = cv
+		// The patched view has to go back into the SET, not just into `v`.
+		// Everything downstream — the edit targets, the owned-child fetch, the
+		// labeller — looks the type up by name, and a set that still holds the
+		// unpatched EksaKubernetesCluster hands them a view with no tabs. That
+		// silently emptied the cluster editor: the data tree had `backup`, the
+		// target list did not, so the write went nowhere.
+		//
+		// Copied rather than written in place: the resolver's slice is shared
+		// by every request.
+		patched := make([]configitems.View, len(views))
+		copy(patched, views)
+		for i := range patched {
+			if patched[i].Type == concrete {
+				patched[i] = cv
+			}
+		}
+		views = patched
 	}
 	data.View = v
 	if data.ListSlug == "" {
@@ -361,6 +410,7 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 
 	// The display lookup lets the query fetch an owned child's own fields, so
 	// the editor has a subtree to work with rather than just a link.
+	vs := configitems.ViewSet(views)
 	byType := make(map[string]configitems.View, len(views))
 	for _, vv := range views {
 		byType[vv.Type] = vv
@@ -394,13 +444,13 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 	if err != nil {
 		g.logger.Warn("generic detail query failed", "type", v.Type, "orbId", orbID, "err", err)
 		data.Unavailable = "Could not read this " + v.Type + " from DGraph: " + err.Error()
-		return g.render(c, "generic-detail", data)
+		return g.renderFragment(c, "generic-detail", "generic-detail-content", data)
 	}
 	var entity map[string]any
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &entity); err != nil {
 			data.Unavailable = "Could not decode this " + v.Type + " from DGraph."
-			return g.render(c, "generic-detail", data)
+			return g.renderFragment(c, "generic-detail", "generic-detail-content", data)
 		}
 	}
 	if entity == nil {
@@ -414,13 +464,13 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 	}
 	data.CanMutate, _ = c.Get("can_mutate").(bool)
 	data.CanDelete = data.CanMutate
-	g.attachGenericEditor(c, &data, v, byType, entity, orbID)
+	g.attachGenericEditor(c, &data, vs, v, byType, entity, orbID)
 
 	// The audit panel needs a DOM id unique on the page and the subtree it
 	// covers. Both are harvested from what the query already fetched rather
 	// than re-queried: the detail query selects every owned child with its
 	// orbId, so a second round trip to DGraph would only re-derive it.
-	label := g.fieldLabeller(v.Type)
+	label := g.fieldLabeller(vs, v.Type)
 
 	// Proposed-change marks. The machinery is entirely attribute-driven
 	// (`data-field-orbid`, `data-field-values`, `data-field`, `.js-field-mark`
@@ -437,10 +487,6 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 	for _, f := range v.JSONString {
 		isJSON[f] = true
 	}
-	detailOnly := make(map[string]bool, len(v.DetailOnly))
-	for _, f := range v.DetailOnly {
-		detailOnly[f] = true
-	}
 	for _, f := range v.Display {
 		val := data.Entity[f]
 		if isJSON[f] {
@@ -451,23 +497,29 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 			Label:    label(f),
 			Value:    val,
 			Editable: editable[f],
-			Blob:     isJSON[f] || detailOnly[f],
+			// `jsonString` only. A blob is what the value CONTAINS; detailOnly
+			// is where the field may render — see UI.md on not conflating them.
+			Blob: isJSON[f],
 		})
 	}
 	data.FieldValuesJSON = rawValuesJSON(editableSubtree(v, entity))
 
-	data.Meta = g.metaRows(v, entity)
+	data.Meta = g.metaRows(vs, v, entity)
 	// From data.DomID, not EditModal.DomID: the edit modal is only populated
 	// when the viewer can mutate, so a readonly user got the id
 	// "generic-panel-audit-" with nothing after it — unique by accident while
 	// one detail view is open, and colliding the moment two are.
 	data.AuditPanelID = "generic-panel-audit-" + data.DomID
-	data.RelatedOrbIDsCSV = strings.Join(ownedSubtreeOrbIDs(orbID, v.Type, entity), ",")
-	// Single relationships are split out of the tab list: owned ones get a box
-	// that shows their data, everything else becomes a link row in the field
-	// list. What is left — the LIST relationships — is what a tab actually is.
-	owned := map[string]configitems.OwnedChild{}
-	for _, oc := range configitems.OwnedChildren(v.Type) {
+	data.RelatedOrbIDsCSV = strings.Join(ownedSubtreeOrbIDs(vs, orbID, v.Type, entity), ",")
+	// The two surfaces are DECLARED now, not split out of one list.
+	//
+	// `tabs:` is the tab strip: a single contained child is an inline panel, a
+	// list is a table. `summary.refs:` is the link rows under the field list.
+	// They used to be one list with the surface derived from cardinality, which
+	// is correct and unreadable — you could not tell what would be a tab without
+	// knowing the containment graph.
+	owned := map[string]configitems.EditableMember{}
+	for _, oc := range v.EditableMembers() {
 		owned[oc.ChildField] = oc
 	}
 	for _, tab := range v.Tabs {
@@ -475,16 +527,21 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 			continue
 		}
 		node, _ := entity[tab.Field].(map[string]any)
-		// Owned AND exclusively so. A shared type — IPAddress, reachable from a
-		// server, a node and two cluster fields — is a record in its own right,
-		// and inlining it would claim an ownership no single parent has.
-		if oc, isOwned := owned[tab.Field]; isOwned && configitems.ExclusivelyOwned(oc.ChildType) {
+		// Contained AND exclusively so. A shared type — IPAddress, reachable
+		// from a server, a node and two cluster fields — is a record in its own
+		// right, and inlining it would claim an ownership no single parent has.
+		if oc, isOwned := owned[tab.Field]; isOwned && vs.ExclusivelyOwned(oc.ChildType) {
 			// Rendered even when absent. "This cluster has no backup
 			// configured" is a fact an operator needs; an omitted box says
 			// nothing at all, and the two are easy to confuse.
-			data.Owned = append(data.Owned, g.ownedBox(tab, oc, byType, node))
-			continue
+			data.Owned = append(data.Owned, g.ownedBox(vs, tab, oc, byType, node))
 		}
+	}
+	// Link rows, in DECLARED order — which is why they are listed rather than
+	// derived from the schema's field order.
+	refLabeller := g.fieldLabeller(vs, v.Type)
+	for _, rc := range v.SummaryRefs {
+		node, _ := entity[rc.Field].(map[string]any)
 		if node == nil {
 			continue
 		}
@@ -494,7 +551,13 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 			name = refLabel(id)
 		}
 		data.Refs = append(data.Refs, page.GenericRef{
-			Label: humanFieldLabel(tab.Field), Slug: tab.Slug, OrbID: id, Name: name,
+			// The VIEW's labeller, so a declared `label: OOB IP` reaches this
+			// surface too. It used to call humanFieldLabel directly, which is
+			// why the row read "Oob IP" while every other surface read "OOB IP".
+			Label: refLabeller(rc.Field),
+			// Empty when the target type has no page: that is what makes the row
+			// a dead row rather than a link to nothing.
+			Slug: rc.Slug, OrbID: id, Name: name,
 		})
 	}
 
@@ -531,27 +594,20 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 			Slug:       tab.Slug,
 			Field:      tab.Field,
 			IsList:     tab.IsList,
-			Columns:    columnHeaders(byType[tab.Type].ColumnFields(), g.fieldLabeller(tab.Type)),
-			RefColumns: refHeaders(withoutBackReferences(tabRefColumns(byType[tab.Type], data.RefColumnsDropped), stamped, v.Type, orbID), g.fieldLabeller(tab.Type)),
+			Columns:    columnHeaders(byType[tab.Type].ColumnFields(), g.fieldLabeller(vs, tab.Type)),
+			RefColumns: refHeaders(withoutBackReferences(vs, tabRefColumns(byType[tab.Type], data.RefColumnsDropped), stamped, v.Type, orbID), g.fieldLabeller(vs, tab.Type)),
 			// The child type's `column:` paths, so a Server rendered inside a
 			// network device's tab carries its cluster and node role exactly as
 			// it does on /servers. One annotation, every table of that type —
 			// which is what makes this cheap enough to be worth having.
-			ComputedColumns: g.columnHeadersFor(childView.Columns),
+			ComputedColumns: g.columnHeadersFor(vs, childView.Columns),
 			Rows:            stamped,
 			Editable:        editableSet(childView.Fields),
 			FieldValues:     rowValues,
 		})
 	}
 
-	// HTML fragment negotiation on the EXISTING route, never a sibling
-	// /fragment path: the list page opens this same URL in a tab and wants just
-	// the body. One handler, one template block, so the page and the tab cannot
-	// drift.
-	if c.Request().Header.Get("HX-Request") == "true" {
-		return g.renderFragment(c, "generic-detail", "generic-detail-content", data)
-	}
-	return g.render(c, "generic-detail", data)
+	return g.renderFragment(c, "generic-detail", "generic-detail-content", data)
 }
 
 // attachGenericEditor wires the shared edit modal onto a generic detail page.
@@ -569,7 +625,7 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 // they are inert: with no subtree in the tree, `changed` is false and the editor
 // never builds a mutation for them. Deepening the query is what makes owned
 // children editable here, and it is deliberately a later step.
-func (g *GenericRenderer) attachGenericEditor(c echo.Context, data *page.GenericDetail, v configitems.View, byType map[string]configitems.View, entity map[string]any, orbID string) {
+func (g *GenericRenderer) attachGenericEditor(c echo.Context, data *page.GenericDetail, vs configitems.ViewSet, v configitems.View, byType map[string]configitems.View, entity map[string]any, orbID string) {
 	if !data.CanMutate {
 		return
 	}
@@ -584,8 +640,12 @@ func (g *GenericRenderer) attachGenericEditor(c echo.Context, data *page.Generic
 	//
 	// `version` and the provenance fields are orbital's to write and are absent
 	// for the same reason — showing them invites someone to type into them.
+	//
+	// The member walk mirrors BuildEditTargets exactly — the page's declaration
+	// at the top level, containment below it. If the two ever disagree the tree
+	// shows a field no target can write, and the save silently drops it.
 	editData := editableSubtree(v, entity)
-	for _, oc := range configitems.OwnedChildren(v.Type) {
+	for _, oc := range v.EditorMembers() {
 		childView, known := byType[oc.ChildType]
 		if !known {
 			continue
@@ -599,7 +659,7 @@ func (g *GenericRenderer) attachGenericEditor(c echo.Context, data *page.Generic
 		// A wrapper (ClusterBackup) has no scalars of its own; its GRANDchildren
 		// are the edit targets, so the tree has to nest one level further or
 		// those targets have nothing behind them.
-		for _, gc := range configitems.OwnedChildren(oc.ChildType) {
+		for _, gc := range vs.Of(oc.ChildType).ContainedSingles() {
 			gcView, gcKnown := byType[gc.ChildType]
 			if !gcKnown {
 				continue
@@ -622,7 +682,7 @@ func (g *GenericRenderer) attachGenericEditor(c echo.Context, data *page.Generic
 		return
 	}
 
-	targets := configitems.BuildEditTargets(g.fields.Fields, g.fields.Meta, v.Type, orbID, namespaceOf(orbID), name)
+	targets := configitems.BuildEditTargets(vs, g.fields.Fields, g.fields.Meta, v.Type, orbID, namespaceOf(orbID), name)
 
 	// Stamp the OCC version on EVERY reachable target, not just the root.
 	//
@@ -654,6 +714,7 @@ func (g *GenericRenderer) attachGenericEditor(c echo.Context, data *page.Generic
 		Version:           version,
 		CurrentUser:       actorFromContext(c),
 		Typename:          v.Type,
+		ViewsHash:         g.fields.ViewsHash(),
 		EditDataJSON:      template.JS(editJSON),
 		EditTargetsJSON:   template.JS(targetsJSON),
 	}
@@ -827,12 +888,12 @@ func (g *GenericRenderer) Fallback(c echo.Context) error {
 // Derived from the response rather than the schema so it can never claim an
 // orbId the page did not actually load — an audit query for a child that was
 // not fetched would silently widen what the panel reports.
-func ownedSubtreeOrbIDs(rootOrbID, rootType string, entity map[string]any) []string {
+func ownedSubtreeOrbIDs(views configitems.ViewSet, rootOrbID, rootType string, entity map[string]any) []string {
 	out := []string{rootOrbID}
 	seen := map[string]bool{rootOrbID: true}
 	var walk func(typeName string, node map[string]any)
 	walk = func(typeName string, node map[string]any) {
-		for _, oc := range configitems.OwnedChildren(typeName) {
+		for _, oc := range views.Of(typeName).EditableMembers() {
 			child, ok := node[oc.ChildField].(map[string]any)
 			if !ok {
 				continue
@@ -851,24 +912,17 @@ func ownedSubtreeOrbIDs(rootOrbID, rootType string, entity map[string]any) []str
 // metaRows builds the provenance box: one row per ConfigItem interface field,
 // in the view's declared order, with the label and the local-time decision
 // already made.
-// fieldLabeller returns a label function for a type, honouring `label:`
-// annotations and falling back to title-casing.
-func (g *GenericRenderer) fieldLabeller(typeName string) func(string) string {
-	declared := map[string]string{}
-	for _, f := range g.fields.Meta(typeName).Fields {
-		if l := configitems.LabelFor(f.Doc); l != "" {
-			declared[f.Name] = l
-		}
-	}
-	return func(field string) string {
-		if l, ok := declared[field]; ok {
-			return l
-		}
-		return humanFieldLabel(field)
-	}
+// fieldLabeller returns a label function for a type, from the labels the VIEW
+// resolved — declared where there is a declaration, title-cased otherwise.
+//
+// Read off the view rather than re-derived from the schema, because an
+// integrator rendering their own table gets exactly this list from
+// the views config and orbital must not be quietly using a second one.
+func (g *GenericRenderer) fieldLabeller(views configitems.ViewSet, typeName string) func(string) string {
+	return views.Of(typeName).Labeller()
 }
 
-func (g *GenericRenderer) metaRows(v configitems.View, entity map[string]any) []page.MetaRow {
+func (g *GenericRenderer) metaRows(vs configitems.ViewSet, v configitems.View, entity map[string]any) []page.MetaRow {
 	kinds := map[string]string{}
 	for _, f := range g.fields.Meta(v.Type).Fields {
 		kinds[f.Name] = f.TypeName
@@ -877,7 +931,7 @@ func (g *GenericRenderer) metaRows(v configitems.View, entity map[string]any) []
 	// is one label mechanism rather than two. This function had its own Go map
 	// of overrides ({"orbId": "Orb ID"}) that duplicated the `label:`
 	// annotation — the annotation now carries it, on ConfigItem.orbId.
-	label := g.fieldLabeller(v.Type)
+	label := g.fieldLabeller(vs, v.Type)
 	rows := make([]page.MetaRow, 0, len(v.Meta))
 	for _, f := range v.Meta {
 		// %v, not a string assertion: `version` is an Int and comes back as a
@@ -901,7 +955,7 @@ func (g *GenericRenderer) metaRows(v configitems.View, entity map[string]any) []
 // One level of recursion, matching the query: ownedChildFields selects
 // grandchildren because a wrapper's children ARE its content, and stops there
 // because a deeper walk on a cyclic schema does not terminate.
-func (g *GenericRenderer) ownedBox(tab configitems.ViewTab, oc configitems.OwnedChild, byType map[string]configitems.View, node map[string]any) page.GenericOwned {
+func (g *GenericRenderer) ownedBox(views configitems.ViewSet, tab configitems.ViewTab, oc configitems.EditableMember, byType map[string]configitems.View, node map[string]any) page.GenericOwned {
 	cv := byType[oc.ChildType]
 	id, _ := node["orbId"].(string)
 	name, _ := node["name"].(string)
@@ -914,13 +968,13 @@ func (g *GenericRenderer) ownedBox(tab configitems.ViewTab, oc configitems.Owned
 	if node == nil {
 		// Absent: still list the sub-kinds this child would have, each marked
 		// unconfigured, so the page shows the SHAPE of what is missing.
-		for _, gc := range configitems.OwnedChildren(oc.ChildType) {
+		for _, gc := range views.Of(oc.ChildType).EditableMembers() {
 			box.Children = append(box.Children, page.GenericOwned{Label: humanFieldLabel(gc.ChildField)})
 		}
 		return box
 	}
 	box.FieldValuesJSON = rawValuesJSON(editableSubtree(cv, node))
-	childLabel := g.fieldLabeller(oc.ChildType)
+	childLabel := g.fieldLabeller(views, oc.ChildType)
 	editable := make(map[string]bool, len(cv.Fields))
 	for _, f := range cv.Fields {
 		editable[f] = true
@@ -936,7 +990,7 @@ func (g *GenericRenderer) ownedBox(tab configitems.ViewTab, oc configitems.Owned
 		}
 		box.Fields = append(box.Fields, row)
 	}
-	for _, gc := range configitems.OwnedChildren(oc.ChildType) {
+	for _, gc := range views.Of(oc.ChildType).EditableMembers() {
 		child, ok := node[gc.ChildField].(map[string]any)
 		if !ok {
 			// A sub-kind that was never configured. Shown as such rather than
@@ -955,7 +1009,7 @@ func (g *GenericRenderer) ownedBox(tab configitems.ViewTab, oc configitems.Owned
 			Name:            gname,
 			FieldValuesJSON: rawValuesJSON(editableSubtree(gv, child)),
 		}
-		gLabel := g.fieldLabeller(gc.ChildType)
+		gLabel := g.fieldLabeller(views, gc.ChildType)
 		gEditable := make(map[string]bool, len(gv.Fields))
 		for _, f := range gv.Fields {
 			gEditable[f] = true
@@ -976,17 +1030,21 @@ func (g *GenericRenderer) ownedBox(tab configitems.ViewTab, oc configitems.Owned
 	return box
 }
 
-// listColumns is the scalar column list for a list page: the view's own
-// scalars, then any an implementation adds. Implementation order is the
-// schema's, so the columns do not reshuffle between requests.
-func listColumns(v configitems.View, display func(string) []string) []string {
+// listColumns is the scalar column list for a list page: the view's own column
+// fields, then any an implementation adds. Implementation order is the schema's,
+// so the columns do not reshuffle between requests.
+//
+// ⚠️ `columns` must be the implementation's COLUMN fields, not its Display —
+// those differ by exactly `detailOnly`, and taking Display let a field declared
+// detail-only come back through the union onto the interface's list page.
+func listColumns(v configitems.View, columns func(string) []string) []string {
 	cols := v.ColumnFields()
 	seen := map[string]bool{}
 	for _, f := range cols {
 		seen[f] = true
 	}
 	for _, impl := range v.Implementations {
-		for _, f := range display(impl) {
+		for _, f := range columns(impl) {
 			if !seen[f] {
 				seen[f] = true
 				cols = append(cols, f)
@@ -1016,12 +1074,12 @@ func listColumns(v configitems.View, display func(string) []string) []string {
 // references to the same kind, and only one of them is the edge you traversed.
 // Confirming against the data means a column carrying anything real is kept,
 // without needing @hasInverse (which introspection cannot see anyway).
-func withoutBackReferences(refs []configitems.ViewRefColumn, rows []map[string]any, parentType, parentOrbID string) []configitems.ViewRefColumn {
+func withoutBackReferences(views configitems.ViewSet, refs []configitems.ViewRefColumn, rows []map[string]any, parentType, parentOrbID string) []configitems.ViewRefColumn {
 	if len(refs) == 0 || len(rows) == 0 {
 		return refs
 	}
 	parentIs := map[string]bool{parentType: true}
-	for _, in := range configitems.ImplementsFor(parentType) {
+	for _, in := range views.Implements(parentType) {
 		parentIs[in] = true
 	}
 	out := make([]configitems.ViewRefColumn, 0, len(refs))

@@ -184,7 +184,7 @@ func TestChangeRequest_ContainmentChangeDoesNotMovePinnedScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	fresh := baseScope(context.Background(), f.crh.dgraphURL, []string{pinServer}, existing)
+	fresh := baseScope(context.Background(), f.crh.dgraphURL, liveViewSet(t, f.crh.dgraphURL), []string{pinServer}, existing)
 	if contains(fresh, pinIdrac) {
 		t.Fatalf("test is vacuous: re-derivation still returns %s, so pinning cannot be distinguished", pinIdrac)
 	}

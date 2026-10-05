@@ -1,44 +1,20 @@
 {{/*
-generic-detail.gohtml — the detail page for ANY ConfigItem type.
+generic-detail.gohtml — the BODY of a ConfigItem detail view, for any type.
 
 Fields come from the view's derived list; tabs come from the type's
 relationships in the deployed schema. No per-type markup.
-*/}}
-{{define "page"}}
-  <main class="app-main-grid">
-    <div class="app-menu">
-      {{template "menu.gohtml" .}}
-    </div>
-    <div class="app-main p-5">
-      {{if and .UI.ShowAuth (not .IsAuthn)}}
-        {{template "login-gate.gohtml" .}}
-      {{else}}
 
-      <p class="is-size-4 mb-2" data-testid="page-heading">
-        {{with .Entity}}{{index . "name"}}{{else}}{{$.OrbID}}{{end}}
-      </p>
-      <p class="has-text-grey page-description">
-        <a href="{{.BasePath}}/{{.ListSlug}}">{{.ListLabel}}</a> ·
-        <code>{{.OrbID}}</code>
-      </p>
+There is NO {{define "page"}} here, and that is the design. A ConfigItem is
+shown as a TAB on its list page and nowhere else: /{slug}/{orbId} is the url
+the tab FETCHES with HX-Request, and it 404s for anyone else. That is what the
+hand-written pages did too — their handler was literally called `Tab` and a
+non-htmx request was redirected away.
 
-      {{template "generic-detail-content" .}}
-
-      {{end}}
-    </div>
-  </main>
-
-  {{if and .CanMutate .HasEditable}}
-  {{template "edit-modal.gohtml" .EditModal}}
-  {{end}}
-{{end}}
-
-{{/*
-generic-detail-content — the body, shared by the full page and the tab fragment.
-
-The detail route serves BOTH: a full page when you navigate to it, and just this
-block when the list page opens it as a tab (HX-Request). One block, so the two
-cannot drift — which is the failure mode a sibling /fragment route invites.
+A full page briefly existed (2026-09-29 to 2026-10-05) because the migration
+made every type routable. It was never a design anyone chose, and it left two
+layouts for one thing plus a list whose rows looked like navigation and opened
+a tab. Its heading and breadcrumb lived here; both are redundant inside a tab,
+where the tab's own label is the heading and the strip is the way back.
 */}}
 {{define "generic-detail-content"}}
       <div class="tab-content">
@@ -49,11 +25,43 @@ cannot drift — which is the failure mode a sibling /fragment route invites.
         </div>
         {{else}}
 
+        {{/* The action row, ABOVE everything — where every hand-written detail
+             page put it, and where it has to stay: this block is served both as
+             a full page and as the tab fragment, so burying the buttons inside
+             the Fields box moved them in BOTH. `is-rounded is-link` is the house
+             primary (UI.md); the green `is-success` the migration introduced was
+             never a colour this project used for Edit. */}}
+        <div class="buttons mb-3">
+          {{if .Actions.Reload}}
+          <button class="button is-rounded is-small is-link js-generic-reload">
+            <span class="icon"><i class="fa-solid fa-refresh"></i></span>
+            <span>Reload</span>
+          </button>
+          {{end}}
+          {{if and .CanMutate .HasEditable}}
+          <button class="button is-rounded is-small is-link" data-generic-edit-id="{{.EditModal.DomID}}">
+            <span class="icon"><i class="fa-solid fa-pen-to-square"></i></span>
+            <span>Edit</span>
+          </button>
+          {{end}}
+          {{/* Delete uses the SAME attributes, global handler and modal the
+               hand-written pages used — only the markup was per-page. */}}
+          {{if .CanDelete}}
+          <button class="button is-rounded is-small is-danger"
+            data-cfg-delete-id="{{.OrbID}}"
+            data-cfg-delete-type="{{.View.Type}}"
+            data-cfg-delete-name="{{with .Entity}}{{index . "name"}}{{else}}{{$.OrbID}}{{end}}">
+            <span class="icon"><i class="fa-solid fa-trash"></i></span>
+            <span>Delete</span>
+          </button>
+          {{end}}
+        </div>
+
         {{/*
           Filled by loadPendingChangeBanners (orbital.js) when this item, or
-          anything it owns, has a change request in flight. Above the fields
-          because it changes what the Edit button will do — a reader who does
-          not know a change is pending retypes it.
+          anything it owns, has a change request in flight. Directly under the
+          action row and above the fields, because it changes what Edit will do
+          — a reader who does not know a change is pending retypes it.
 
           The subtree lookup reads data-related-orb-ids off the audit box, which
           is already on the page; only this placeholder was missing.
@@ -71,28 +79,7 @@ cannot drift — which is the failure mode a sibling /fragment route invites.
         <div class="column is-8">
 
         <article class="box" style="height:100%">
-          <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
-            <p class="is-size-6 has-text-weight-semibold">Fields</p>
-            <div class="buttons" style="margin-bottom:0">
-              {{if and .CanMutate .HasEditable}}
-              <button class="button is-small is-success" data-generic-edit-id="{{.EditModal.DomID}}">
-                <span class="icon"><i class="fa-solid fa-pen"></i></span>
-                <span>Edit</span>
-              </button>
-              {{end}}
-              {{/* Delete uses the SAME attributes, global handler and modal the
-                   hand-written pages used — only the markup was per-page. */}}
-              {{if .CanDelete}}
-              <button class="button is-small is-danger"
-                data-cfg-delete-id="{{.OrbID}}"
-                data-cfg-delete-type="{{.View.Type}}"
-                data-cfg-delete-name="{{with .Entity}}{{index . "name"}}{{else}}{{$.OrbID}}{{end}}">
-                <span class="icon"><i class="fa-solid fa-trash"></i></span>
-                <span>Delete</span>
-              </button>
-              {{end}}
-            </div>
-          </div>
+          <p class="is-size-6 has-text-weight-semibold mb-3">Fields</p>
           {{/*
             data-field-orbid / data-field-values drive the proposed-change field
             marks (loadFieldMarks in orbital.js). Only EDITABLE rows carry
@@ -127,7 +114,11 @@ cannot drift — which is the failure mode a sibling /fragment route invites.
               {{range .Refs}}
               <tr>
                 <td style="white-space:nowrap;width:1%">{{.Label}}</td>
-                <td><a href="{{$.BasePath}}/{{.Slug}}/{{.OrbID}}">{{.Name}}</a></td>
+                {{/* No slug means the target type has no PAGE, so there is
+                     nowhere to go — the value renders as text rather than as a
+                     link to "//<orbId>". Promoting that type to a page is the
+                     one change that turns these into links. */}}
+                <td>{{if .Slug}}<a href="{{$.BasePath}}/{{.Slug}}?open={{.OrbID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</td>
                 <td></td>
               </tr>
               {{end}}
@@ -301,7 +292,7 @@ cannot drift — which is the failure mode a sibling /fragment route invites.
                      path. */}}
                 {{$orbId := index . "orbId"}}
                 <tr data-field-orbid="{{$orbId}}" data-field-values="{{index $fv $orbId}}">
-                  <td style="white-space:nowrap"><a href="{{$.BasePath}}/{{$slug}}/{{$orbId}}">{{index . "name"}}</a></td>
+                  <td style="white-space:nowrap">{{if $slug}}<a href="{{$.BasePath}}/{{$slug}}?open={{$orbId}}">{{index . "name"}}</a>{{else}}{{index . "name"}}{{end}}</td>
                   {{$row := .}}
                   {{range $cols}}
                   {{$f := .Field}}
@@ -312,11 +303,13 @@ cannot drift — which is the failure mode a sibling /fragment route invites.
                   {{range $refs}}
                   {{$rc := .}}
                   <td style="white-space:nowrap">
-                    {{with index $row $rc.Field}}<a href="{{$.BasePath}}/{{$rc.Slug}}/{{index . "orbId"}}">{{index . "name"}}</a>{{else}}—{{end}}
+                    {{/* Same rule one level down: a reference column whose target
+                         type has no page renders as text. */}}
+                    {{with index $row $rc.Field}}{{if $rc.Slug}}<a href="{{$.BasePath}}/{{$rc.Slug}}?open={{index . "orbId"}}">{{index . "name"}}</a>{{else}}{{index . "name"}}{{end}}{{else}}—{{end}}
                   </td>
                   {{end}}
                   {{range $cc}}<td style="white-space:nowrap">{{with index $row .Field}}{{.}}{{else}}—{{end}}</td>{{end}}
-                  <td class="has-text-grey" style="white-space:nowrap"><code>{{index . "orbId"}}</code></td>
+                  <td style="white-space:nowrap">{{index . "orbId"}}</td>
                 </tr>
                 {{end}}
               </tbody>
@@ -348,6 +341,22 @@ cannot drift — which is the failure mode a sibling /fragment route invites.
         {{end}}
 
         </article>
+        {{end}}
+
+        {{/* The edit modal lives INSIDE the shared body, not in the page block.
+             This block is served both as a full page and as the tab fragment,
+             and a modal rendered outside it shipped only with the page — so the
+             Edit button inside a tab found no `edit-modal-generic-<id>` to open,
+             did nothing, and raised no error. The old hand-written fragment
+             (`server-tab.gohtml`) rendered its modal inside itself for exactly
+             this reason. The opener is a delegated click handler that resolves
+             the modal by id at click time, so nothing else has to change.
+
+             Bulma modals are position:fixed, so nesting one inside the panel
+             does not constrain it; a hidden tab's modal is unreachable, which
+             is correct — its Edit button is unreachable too. */}}
+        {{if and .CanMutate .HasEditable}}
+        {{template "edit-modal.gohtml" .EditModal}}
         {{end}}
 
         {{end}}

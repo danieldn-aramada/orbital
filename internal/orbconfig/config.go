@@ -49,6 +49,13 @@ type Config struct {
 	DGraphAdminURL  string `envconfig:"ORB_DGRAPH_ADMIN_URL"   default:"http://localhost:8082/admin"`
 	DGraphAlphaGRPC string `envconfig:"ORB_DGRAPH_ALPHA_GRPC"  default:"localhost:9082"`
 
+	// Views configuration — the same two files orbital reads, from the same
+	// place in the image. Orb renders the same generic pages read-only, so it
+	// needs the same answer to "what does this page show"; a second source would
+	// be the drift the shared templates exist to avoid.
+	ViewsPath        string `envconfig:"ORB_VIEWS_PATH"         default:"config/views.yaml"`
+	ViewsOverlayPath string `envconfig:"ORB_VIEWS_OVERLAY_PATH" default:""`
+
 	// OCI registry — edge-local registry, never ACR directly.
 	// OCIRepo is the OCI repository path orb polls for artifacts. A single
 	// registry typically holds many repositories; this field selects which one

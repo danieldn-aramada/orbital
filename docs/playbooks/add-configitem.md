@@ -1,180 +1,213 @@
 # Playbook: Add a new ConfigItem to orbital
 
 Use this when you're adding a new GraphQL type to `schema/schema.graphql` that
-implements the `ConfigItem` interface — i.e., something with an orbId that
-lives in the parent/child relationship graph (e.g. `EtcdBackup`, `IdracSettings`,
-a future `PvBackup`).
+implements the `ConfigItem` interface — something with an orbId that lives in the
+relationship graph (`EtcdBackup`, `IdracSettings`, a future `PvBackup`).
 
-**This used to be a 13-place touch-list with silent failure modes.** Today it's
-three steps because everything else is registry-driven.
+**This used to be a 13-place touch-list with silent failure modes.** It is TWO
+steps now, in two artifacts that are deliberately separate:
+
+| Step | Artifact | Decides |
+|---|---|---|
+| 1 | `schema/schema.graphql` | what EXISTS — fields, relationships, identity, **what dies with what** |
+| 2 | `config/views.yaml` | what RENDERS — which pages show it, and how |
+
+There is no Go to edit. The audit allowlist, the editable field set, the page,
+the edit targets and the delete cascade are all derived from those two.
 
 ---
 
-## Step 1 — Declare in the schema
-
-Add the type to `schema/schema.graphql`:
+## Step 1 — Declare it in the schema
 
 ```graphql
 type MyNewKind implements ConfigItem {
     enabled: Boolean
     schedule: String
 
-    # Parent back-ref. Match @hasInverse cardinality to operational reality
-    # (singular T if 1:1, list [T] if 1:N — see docs/reference/DGRAPH.md).
-    clusterBackupMyNewKind: ClusterBackup @hasInverse(field: myNewKind)
+    """jsonString"""
+    rawPayload: String       # declared String, holds a JSON document
+
+    # Parent back-ref. NON-NULL if this child has no existence without its
+    # parent — that is how containment is declared, and the only way.
+    clusterBackupMyNewKind: ClusterBackup! @hasInverse(field: myNewKind)
 }
 ```
 
-**Cardinality gotcha:** wrong `@hasInverse` cardinality silently corrupts data
-on the inverse side. If multiple parents can share this child, use `[T]`. See
-`docs/reference/DGRAPH.md` "reverse-pointer pattern".
+**Non-null back-edge = CONTAINED.** It is the whole declaration: the child is
+fetched with the parent, rolled up onto the parent's audit tab, reachable by the
+parent's editor, and **deleted with it**. Make the edge **nullable** to opt out —
+that is a schema decision, not a view one (`ServerConfigurationProfile.server`
+went nullable in v13 for exactly this reason).
 
-Bump `schema/VERSION` if this is a v→v+1 deployment-time schema change.
+**Cardinality gotcha:** wrong `@hasInverse` cardinality silently corrupts data on
+the inverse side. If multiple parents can share this child, use `[T]`.
+⚠️ **`@hasInverse` does NOT backfill** — a newly added inverse field is empty for
+every row already in the graph until something writes it.
 
-**Define this type's `orbId` convention** — `<namespace>:<kind>-<natural-key>` (kebab-case type name + a stable natural key; never random/UUID). Add a row to the per-type table in `docs/reference/DGRAPH.md`. See CLAUDE.md Settled Decisions for the rule.
+Bump `schema/VERSION` if this is a deployment-time schema change, and remember
+the schema only takes effect once it is APPLIED to DGraph — orbital never applies
+it on startup.
 
-**Then annotate it.** The UI derives every page from the deployed schema, so
-docstring annotations are the ONLY way to influence what renders — there is no
-per-type Go to edit any more. Full table: `docs/reference/DGRAPH.md` § Schema
-annotations. The ones a new type usually wants:
+**Define the `orbId` convention** — `<namespace>:<kind>-<natural-key>`, never a
+UUID. Add a row to the per-type table in `docs/reference/DGRAPH.md`.
 
-```graphql
-"""
-slug: my-new-kinds
-order: name, enabled
-orbIdSuffix: mynew
-"""
-type MyNewKind implements ConfigItem {
-    enabled: Boolean
+**TWO annotations exist, and both are about data or identity:**
 
-    """editorIgnored"""
-    scannedAt: String        # read-only hardware fact
+| Annotation | Scope | Meaning |
+|---|---|---|
+| `jsonString` | field | this String CONTAINS a JSON document |
+| `orbIdSuffix: mynew` | type | the token a derived child orbId ends with (default: lower-cased type name) |
 
-    """
-    jsonString
-    detailOnly
-    """
-    rawPayload: String       # a document: pretty-printed on detail, never a column
-}
+⚠️ **One description block per declaration.** Two `"""…"""` in a row is a GraphQL
+syntax error DGraph refuses; put several annotations on separate lines inside one
+block. ⚠️ **A misspelled annotation is silent** — `orbIdSufix:` is a valid
+docstring that derives the wrong orbId for every child. Orbital reports
+unrecognised ones at boot; read that line after applying.
+
+**Everything about RENDERING is step 2.** Slug, menu position, column order,
+labels, filters, which relationships show — none are schema facts, and none
+belong in a docstring.
+
+---
+
+## Step 2 — Decide where it renders
+
+`config/views.yaml` has two sections, and they answer different questions.
+
+### Does it need a PAGE?
+
+Usually **no**. Four types have pages; the other sixteen render as rows on
+somebody else's. A pageless type has no URL, and its rows are text rather than
+links — which is correct, not a gap.
+
+Give it a page only if someone would navigate to it directly:
+
+```yaml
+pages:
+  MyNewKind:
+    menuWeight: 50          # orders the menu; `pages:` decides membership
+    # slug: my-new-kinds    # omit unless it must differ from the kebab plural
+    summary:
+      refs: [clusterBackupMyNewKind]
+    tabs: []
 ```
 
-⚠️ **One description block per declaration** — two `"""…"""` in a row is a
-GraphQL syntax error DGraph refuses. ⚠️ **A misspelled annotation is silent**;
-orbital reports unrecognised ones at boot, so read that line after applying.
+### How does it RENDER, wherever it renders?
 
----
-
-## Step 2 — Register in the registry
-
-Add one entry to `internal/configitems/registry.go::Types`:
-
-```go
-{
-    Name:         "MyNewKind",
-    OwnerType:    "ClusterBackup",          // parent type
-    OwnerField:   "clusterBackupMyNewKind", // @hasInverse field on this type
-    ChildField:   "myNewKind",              // field on the parent that points here
-    BeforeFields: "id orbId name version enabled schedule",
-    FormFields:   []string{"enabled", "schedule"},  // editor-exposed scalars
-    PayloadField: "myNewKind",              // response selection for add{Kind}
-},
+```yaml
+types:
+  MyNewKind:
+    order: [name, enabled]                 # partial order; rest alphabetical
+    fields:
+      scannedAt: { editable: false }       # a scanned fact a human must not type
+      rawPayload: { detailOnly: true }     # a document: never a table column
 ```
 
-**What this auto-wires:**
+Scalars are **subtractive** — every scalar renders unless something removes it,
+so a field added to the schema appears on its own. Relationships are **listed** —
+nothing shows until a page names it in `summary.refs` or `tabs`.
 
-- `knownMutationRe` (audit allowlist) — `add/update/delete MyNewKind` now records audit events
-- `typeBeforeFields` / `BeforeFields("MyNewKind")` — audit before-fetcher knows what to select
-- `BuildEditTargets(...)` — page handlers' edit modal includes this kind in its JSON editor + dispatches `update{Kind}` on edit / `add{Kind}` on first-time create
-- `configitem-editor.js` (the JS module) — consumes the registry-derived targets blob from any page that exports it; no JS edits needed
-- **ownership (Spike 33)** — the export **diff-preview rollup** (`graphdiff.ownerEdges`) AND the **audit related-orbId collector** BOTH derive from this entry's `OwnerType`/`OwnerField`/`ChildField`, so they can never drift from each other again. For a **multi-parent** type — owned by more than one type, or where the rollup parent differs from the down-path (e.g. `NetworkInterface`, `IPAddress`, `StorageVolume`) — declare an ordered `OwnerEdges []OwnerEdge` (most-specific first; the first present edge on a node is its canonical parent, à la Kubernetes `controller:true`)
+### Show it on its PARENT's page
 
-Pin behavior with `internal/configitems/registry_test.go` (parity) and
-`schema_consistency_test.go` (the R3 guard — fails the build if the registry's
-ownership fields drift from `schema.graphql`, or a new ConfigItem type is
-unregistered).
+```yaml
+pages:
+  ClusterBackup:
+    tabs:
+      - { path: myNewKind, editable: true }
+```
 
----
+`editable: true` means **only** "this page's editor may write it". It gates the
+TOP level; below that, containment governs — which is why a cluster's etcd
+schedule is editable even though `ClusterBackup` has no page of its own.
+⚠️ **A LIST cannot be editable** (an edit target is addressed by path, and a path
+cannot name one row). Declaring it is refused at load with a logged reason, and
+the tab renders read-only.
 
-## Step 3 — Extend the parent handler's GraphQL query
+**For a MULTI-PARENT type** — one several pages can show — also declare which
+page is its home, because that ordering is the one thing nothing else supplies:
 
-The page handler that renders the parent (e.g. `internal/handler/cluster.go`)
-needs to fetch the new child's fields so the JSON editor displays them. Add
-the new fields to the cluster's GraphQL `getCluster` query and to the
-response struct.
+```yaml
+canonicalParent:
+  MyNewKind:
+    - { type: ClusterBackup, field: clusterBackupMyNewKind, down: myNewKind }
+```
 
-This is the **only handler-side change required**. Everything downstream —
-audit pipeline, edit-target JSON, JS submit handler, diff rendering — picks
-it up automatically from the registry.
+**For an XOR parent** — a child that belongs to A *or* B *or* C, so every edge
+must be nullable and none can carry the containment statement — declare it:
 
-If the new type is **a new owned child of an existing parent**, audit
-aggregation surfaces its events on the parent's Audit Log tab **automatically** —
-the single generic `collectRelatedOrbIDs` (`internal/handler/related_orbids.go`)
-derives owned children from the registry (`configitems.OwnedChildren`), so no
-hand-written walker to update (Spike 33 removed the per-type ones). Just make
-sure your `OwnerType`/`OwnerField`/`ChildField` (and `OwnerEdges` if multi-parent)
-are correct — the R3 test enforces they match the schema.
+```yaml
+containment:
+  MyNewKind: [adapterEdge, serverEdge, deviceEdge]
+```
 
----
-
-## What you do NOT need to touch (and shouldn't)
-
-These all derive from the registry — modifying them by hand will drift from
-the registry and produce silent bugs:
-
-- `knownMutationRe` — derived from `Types[].Name`
-- `typeBeforeFields` — derived from `Types[].BeforeFields`
-- `configitem-editor.js` mutation shapes — driven by the targets blob
-- Audit diff rendering — generic, no per-type code
-- **The export / subgraph selection** — orbital's export is schema-driven, not
-  hand-enumerated. `fetchUIDPredicates` derives the edge list from the live
-  DGraph schema (`schema {}`) and scalars come via `expand(_all_)`
-  (`internal/handler/export.go`). A new type, its edges, and its scalar fields
-  flow into the export automatically once the schema is applied — **no
-  export-code change, ever.** ⚠ This is only *orbital's* export. A **downstream**
-  consumer with a hand-enumerated GraphQL query — notably the configbundle
-  bundler's `ConfigBundleByOrbID` query — must add the new field on *its* side;
-  that's the consumer's change, not orbital's. Don't conflate the two.
-
-If your new type needs behavior the registry doesn't model today (e.g. a new
-relationship cardinality, a wrapper type pattern, computed fields), extend
-the registry struct + add the derivation logic in `registry.go`. **Don't
-fork off a parallel hand-maintained map** — that's the bug class this whole
-refactor exists to prevent.
+`NetworkInterface` is the only real instance. Reach for this only when
+nullability genuinely cannot express the relationship.
 
 ---
 
-## Validating end-to-end
+## What you do NOT need to touch
 
-After the three steps:
+- **Any Go at all.** The generic renderer builds the list page, the detail page,
+  the tabs, the edit modal, the audit panel and the delete cascade from the two
+  artifacts above.
+- **The audit allowlist.** The set of auditable types is read from the DEPLOYED
+  schema, so a type present in a deployment's graph is gated and audited there
+  whether or not the binary shipped knowing about it.
+- **`configitem-editor.js`.** It consumes the edit-targets blob the view
+  produces; there is no per-kind JS.
+- **The audit before-fetch.** Generated from the same editable-field set the
+  editor uses, so the two cannot disagree.
+- **The export / subgraph selection.** Orbital's export is schema-driven:
+  `fetchUIDPredicates` derives the edge list from the live DGraph schema and
+  scalars come via `expand(_all_)`. A new type flows in automatically once the
+  schema is applied — **no export-code change, ever.**
+  ⚠ This is only *orbital's* export. A downstream consumer with a hand-enumerated
+  query — notably the configbundle bundler's `ConfigBundleByOrbID` — must add the
+  field on *its* side. Don't conflate the two.
+
+---
+
+## Validating end to end
 
 ```bash
-go test ./internal/configitems/   # registry parity test catches the most common misses
+go test ./internal/configitems/   # the schema <-> views drift guard
 go build ./...
-make run-orbital                  # browser-test the edit modal
+make seed                         # applies the schema to DGraph — editing the file is not enough
+make run-orbital
 ```
+
+Read the boot log: `resolved views against the deployed schema` carries the view
+and tab counts, and every dropped declaration is a `WARN` naming itself.
 
 In the browser:
 
-1. Open the parent page, click Edit
-2. The new kind appears as a key in the JSON editor (under its `ChildField` path)
-3. Edit a field, save
-4. Audit Log tab shows `update<MyNewKind>` row with green/red field diff
-5. Delete the JSON key, save → `add<MyNewKind>` row on next configure (first-time create flow)
+1. If you gave it a page, `/<slug>` lists it and `/<slug>/<orbId>` opens one.
+   If you did not, its rows render as plain text and clicking does nothing.
+2. On the PARENT page it appears in the tab strip, and — if `editable: true` —
+   in the JSON editor under its path.
+3. Edit a field, save. The parent's Audit Log tab shows an `update<MyNewKind>`
+   row with a green/red field diff.
+4. Clear the JSON key and save, then configure it again → `add<MyNewKind>`.
 
-If the audit row is **missing** → check `knownMutationRe` is picking it up
-(usually a registry typo).
-If the audit row appears but **shows no diff** → check `BeforeFields` includes
-the editable fields (the diff renderer needs both sides).
-If the new kind **doesn't appear in the editor** → check the parent handler's
-GraphQL query fetches the new fields, and that `BuildEditTargets` sees the
-new type as a child of the parent.
+| Symptom | Cause |
+|---|---|
+| audit row missing | the type is not in the deployed schema — apply it |
+| audit row with no diff | the field is `editable: false`, so it is not in the before-fetch |
+| not in the editor | the parent's tab is missing `editable: true`, or the edge is nullable so nothing contains it |
+| its own children not in the editor | their back-edges are nullable — containment stops there |
+| not on the page at all | no tab on the parent's page, or the schema was never applied |
+| its rows don't link | it has no `pages:` entry — that is the dead-row rule, and it is correct |
+| `editable` ignored on a tab | it is a LIST; check the boot log for the refusal |
+| deleted with its parent unexpectedly | its back-edge is non-null — that IS the containment declaration |
+| child orbId looks wrong | `orbIdSuffix:` missing from the schema |
 
 ---
 
 ## Reference reading
 
-- `docs/reference/UI.md` — Edit pattern, JSON editor convention
+- `docs/reference/UI.md` — the view model, the editor, the JSON editor convention
+- `docs/reference/DGRAPH.md` — schema conventions, annotations, `@hasInverse`
 - `docs/reference/AUDIT.md` — audit pipeline architecture
-- `docs/reference/DGRAPH.md` — schema conventions, @hasInverse cardinality
-- `internal/configitems/registry.go` — the registry itself, with comments on each field
-- `web/shared/static/configitem-editor.js` — generic JS submit handler
+- `config/views.yaml` — the shipped config, with the format documented at the top
+- `internal/configitems/viewconfig.go` — the format's Go definition and its rules
+- `internal/handler/delete_cascade.go` — how containment becomes a delete

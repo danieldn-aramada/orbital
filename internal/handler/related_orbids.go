@@ -12,20 +12,22 @@ import (
 
 // collectRelatedOrbIDs returns a root ConfigItem's orbId plus every owned
 // descendant's orbId, deduped with the root first. It is the single, generic,
-// registry-driven source for the audit tab's data-related-orb-ids across every
-// page (Server, KubernetesCluster, NetworkDevice, DataCenter) — replacing the
-// per-type hand-walked collectors that had drifted from the diff rollup's
-// ownership (Spike 33). Ownership comes entirely from internal/configitems, so
-// it can never drift from graphdiff again.
+// view-driven source for the audit tab's data-related-orb-ids across every page
+// (Server, KubernetesCluster, NetworkDevice, DataCenter) — replacing the
+// per-type hand-walked collectors that had drifted from each other (Spike 33).
+//
+// The subtree is the page's EDIT UNIT, which is the right unit by construction:
+// an audit tab answers "what changed here", and what can change here is exactly
+// what this page's editor writes.
 //
 // On any query error it degrades to just the root orbId (the audit panel still
 // shows the root's own events).
-func collectRelatedOrbIDs(ctx context.Context, dgraphURL, rootType, rootOrbID string) []string {
+func collectRelatedOrbIDs(ctx context.Context, dgraphURL string, views configitems.ViewSet, rootType, rootOrbID string) []string {
 	root := []string{rootOrbID}
 	if rootType == "" || rootOrbID == "" {
 		return root
 	}
-	sel := configitems.OwnedOrbIDSelection(rootType)
+	sel := views.EditableOrbIDSelection(rootType)
 	query := "query($id: String!) { get" + rootType + "(orbId: $id) { orbId " + sel + " } }"
 	body, err := json.Marshal(map[string]any{
 		"query":     query,

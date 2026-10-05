@@ -20,10 +20,32 @@ export function genericDomId(slug: string, orbId: string): string {
   return `${slug}-${safeDomId(orbId)}`;
 }
 
-// openDetail navigates straight to a detail page. Prefer this: it is one
-// navigation, and the page and the tab render the same block.
+// listRows is the list page's data rows. Keyed by `data-orb-id` because the
+// name cell is PLAIN TEXT — this table has DataTables row selection, so a link
+// there would fire selection and opening from one gesture.
+export function listRows(page: Page) {
+  return page.locator('#generic-table tbody tr[data-orb-id]');
+}
+
+// openRow opens the Nth list row as a tab, by DOUBLE click — the gesture the
+// product uses. Returns the row's orbId and label so a spec can assert against
+// the tab it just opened.
+export async function openRow(page: Page, index = 0) {
+  const row = listRows(page).nth(index);
+  const orbId = (await row.getAttribute('data-orb-id'))!;
+  const label = (await row.locator('td').first().innerText()).trim();
+  await row.dblclick();
+  return { orbId, label };
+}
+
+// openDetail opens a ConfigItem's detail view.
+//
+// There is ONE view model: a detail view is a TAB on its list page, reached by
+// `/{slug}?open={orbId}` — the same url the table's rows carry. `/{slug}/{orbId}`
+// is the fragment the tab FETCHES and 404s for anyone else, so no spec should
+// navigate to it.
 export async function openDetail(page: Page, slug: string, orbId: string) {
-  await page.goto(`/${slug}/${encodeURIComponent(orbId)}`);
+  await page.goto(`/${slug}?open=${encodeURIComponent(orbId)}`);
   await expect(page.getByTestId('generic-fields')).toBeVisible();
   // Owned children, relationship tables and the audit log live in one tab
   // strip, so all but the first start hidden. Specs that assert on their
@@ -109,6 +131,13 @@ export async function openDetailPanel(page: Page, label: string | RegExp) {
 // — "the schema pins column order", "back-references are dropped" — clicking
 // through eight tabs is ceremony that tests the tab strip, not the thing.
 export async function openAllDetailPanels(page: Page) {
+  // WAIT for the body first. A detail view arrives by HTMX — it is the fragment
+  // a tab fetches — so it is not in the DOM when page.goto resolves. Without
+  // this the strip lookup below finds nothing, returns having done NOTHING, and
+  // the spec then fails on a panel that is still display:none for a reason that
+  // has nothing to do with what it was testing.
+  await expect(page.getByTestId('generic-fields')).toBeVisible();
+
   const strip = page.locator('[id^="generic-detail-tabs-"]');
   if (!await strip.count()) return;
 
@@ -119,7 +148,11 @@ export async function openAllDetailPanels(page: Page) {
   const audit = strip.locator('li[data-orb-id]');
   if (await audit.count()) {
     await audit.first().click();
-    await expect(page.getByTestId('generic-audit')).not.toBeEmpty({ timeout: 10_000 });
+    // Generous: the audit panel fetches on activation, and under the full
+    // suite's parallelism that round trip is a load-dependent wait rather than
+    // a claim about the product. A tight bound here fails specs that are
+    // testing something else entirely.
+    await expect(page.getByTestId('generic-audit')).not.toBeEmpty({ timeout: 30_000 });
   }
 
   await page.evaluate(() => {

@@ -40,7 +40,7 @@ func newCRFixture(t *testing.T) *crFixture {
 	t.Helper()
 	db := testutil.NewTestDB(t)
 	gql := NewGraphQL(testutil.DGraphURL(), db, slog.Default(), false)
-	crh := NewChangeRequest(db, gql, testutil.DGraphURL(), slog.Default())
+	crh := NewChangeRequest(db, gql, testutil.DGraphURL(), liveViews(t, testutil.DGraphURL()), slog.Default())
 	seedCREngineFixture(t)
 	return &crFixture{db: db, crh: crh, auditH: &AuditHandler{db: db, logger: slog.Default()}}
 }

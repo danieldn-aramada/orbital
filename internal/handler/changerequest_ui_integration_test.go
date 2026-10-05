@@ -269,7 +269,7 @@ func TestListFilter_NonMatchingOrbIDQueryMakesZeroDGraphCalls(t *testing.T) {
 
 	// Pointed at the stub, so any render at all both increments the counter and
 	// fails the request — two independent ways for a regression to show.
-	badge := NewChangeRequest(f.db, NewGraphQL(stub.URL, f.db, f.crh.logger, false), stub.URL, f.crh.logger)
+	badge := NewChangeRequest(f.db, NewGraphQL(stub.URL, f.db, f.crh.logger, false), stub.URL, nil, f.crh.logger)
 
 	rec := callList(t, badge, "?orbId="+crNS+":server-nothing-pending&status=active")
 	if rec.Code != http.StatusOK {
@@ -972,7 +972,7 @@ func TestPendingChanges_SubtreeQueryFindsAChangeOnAChildOnly(t *testing.T) {
 
 	// What it asks now: the parent plus everything it owns, the same list the
 	// audit tab already carries as data-related-orb-ids.
-	subtree := collectRelatedOrbIDs(context.Background(), testutil.DGraphURL(), "Server", crServerA)
+	subtree := collectRelatedOrbIDs(context.Background(), testutil.DGraphURL(), liveViewSet(t, testutil.DGraphURL()), "Server", crServerA)
 	if !containsStr(subtree, crIdracA) {
 		t.Fatalf("the server's subtree %v does not include its IdracSettings child", subtree)
 	}

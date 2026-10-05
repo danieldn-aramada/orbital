@@ -97,8 +97,15 @@ type TypeRef struct {
 }
 
 // Unwrap walks the wrappers to the named type, reporting whether a LIST was
-// crossed. A list of scalars is not the same editing affordance as a scalar.
-func (t *TypeRef) Unwrap() (kind, name string, isList bool) {
+// crossed and whether the OUTERMOST wrapper is NON_NULL.
+//
+// A list of scalars is not the same editing affordance as a scalar — and
+// non-nullability is not cosmetic either: `Child.parent: Parent!` is the schema
+// saying the child cannot outlive the parent, which is where containment is
+// derived from. Only the OUTERMOST wrapper counts: `[Server!]` is a nullable
+// list of non-null elements, and the field itself is optional.
+func (t *TypeRef) Unwrap() (kind, name string, isList, nonNull bool) {
+	nonNull = t != nil && t.Kind == "NON_NULL"
 	for cur := t; cur != nil; cur = cur.OfType {
 		if cur.Kind == "LIST" {
 			isList = true
@@ -107,7 +114,7 @@ func (t *TypeRef) Unwrap() (kind, name string, isList bool) {
 			kind, name = cur.Kind, *cur.Name
 		}
 	}
-	return kind, name, isList
+	return kind, name, isList, nonNull
 }
 
 type introspectedField struct {
@@ -299,7 +306,7 @@ func toDerivedFields(fields []introspectedField) []DerivedField {
 func toDerivedFieldsWithInherited(fields []introspectedField, inherited map[string]string) []DerivedField {
 	out := make([]DerivedField, 0, len(fields))
 	for _, f := range fields {
-		kind, typeName, isList := f.Type.Unwrap()
+		kind, typeName, isList, nonNull := f.Type.Unwrap()
 		doc := ""
 		if f.Description != nil {
 			doc = *f.Description
@@ -314,6 +321,7 @@ func toDerivedFieldsWithInherited(fields []introspectedField, inherited map[stri
 			Kind:     kind,
 			TypeName: typeName,
 			IsList:   isList,
+			NonNull:  nonNull,
 		})
 	}
 	return out
@@ -344,7 +352,7 @@ func (c *DGraphSchemaClient) payloadFieldFor(ctx context.Context, typeName strin
 		return "", nil
 	}
 	for _, f := range out.Type.Fields {
-		if _, name, _ := f.Type.Unwrap(); name == typeName {
+		if _, name, _, _ := f.Type.Unwrap(); name == typeName {
 			return f.Name, nil
 		}
 	}

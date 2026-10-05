@@ -86,23 +86,3 @@ func isVowel(b byte) bool {
 func DerivedSlug(typeName string) string {
 	return Pluralize(KebabTypeName(typeName))
 }
-
-// SlugAnnotation is the docstring form that overrides the derived slug:
-//
-//	"""slug: clusters"""
-//	type EksaKubernetesCluster implements ... {
-//
-// It lives in the SCHEMA, deliberately, and not in the runtime override layer.
-// A slug is a contract: if it could be changed from a preferences UI, every
-// integrator's URLs would move underneath them. In the schema it is
-// version-controlled, reviewed alongside the type, and changing it is a visible
-// breaking act — which is exactly how Kubernetes treats `plural`.
-const SlugAnnotation = "slug:"
-
-// SlugFor returns a type's slug, preferring an annotation over derivation.
-func SlugFor(typeName, typeDoc string) string {
-	if v := annotationValue(typeDoc, SlugAnnotation); v != "" {
-		return v
-	}
-	return DerivedSlug(typeName)
-}

@@ -1,4 +1,4 @@
-import { openAllDetailPanels } from './helpers/generic';
+import { openAllDetailPanels, listRows } from './helpers/generic';
 import { test, expect } from '@playwright/test';
 
 // The Clusters page after the bespoke handler was deleted.
@@ -33,21 +33,26 @@ test('the clusters list is interface-backed and carries implementation columns',
 
 test('a cluster detail page resolves its concrete type from the data', async ({ page }) => {
   await page.goto('/clusters');
-  const href = await page.locator('#generic-table tbody tr td:first-child a').first().getAttribute('href');
-  expect(href, 'rows must link under the interface slug, not the implementation').toContain('/clusters/');
-  await page.goto(href!);
+  const orbId = (await listRows(page).first().getAttribute('data-orb-id'))!;
+  // The row is listed under the INTERFACE's slug, so this is the url that opens
+  // it — /eksa-kubernetes-clusters does not exist and must not.
+  await page.goto('/clusters?open=' + encodeURIComponent(orbId));
   await openAllDetailPanels(page);
 
   // clusterType exists only on EksaKubernetesCluster. Rendering it proves the
   // page resolved the concrete type — the interface has no such field and no
   // get query at all.
   await expect(page.getByTestId('generic-fields')).toContainText('Cluster Type');
-  // And the back-link names the list we came from, not the concrete type's page.
-  await expect(page.locator('.page-description a')).toHaveAttribute('href', /\/clusters$/);
+  // ...and it opened on the INTERFACE's list. An EksaKubernetesCluster has no
+  // page of its own, so there is one entry in the menu rather than one per
+  // provider, and the way back is the Summary tab — the breadcrumb that used to
+  // carry this claim belonged to the full page, which no longer exists.
+  await expect(page).toHaveURL(/\/clusters(\?|$)/);
+  await expect(page.locator('#tab-summary')).toBeVisible();
 });
 
 test('cluster fields show relationships as links', async ({ page }) => {
-  await page.goto('/clusters/' + encodeURIComponent('colo:dev-main'));
+  await page.goto('/clusters?open=' + encodeURIComponent('colo:dev-main'));
   await openAllDetailPanels(page);
   const fields = page.getByTestId('generic-fields');
 
@@ -56,15 +61,18 @@ test('cluster fields show relationships as links', async ({ page }) => {
   await expect(fields).toContainText('Data Center');
   await expect(fields).toContainText('Control Plane Endpoint');
 
-  const cpe = fields.locator('tr', { hasText: 'Control Plane Endpoint' }).locator('a');
-  await expect(cpe).toHaveAttribute('href', /\/ip-addresses\//);
-  // An IPAddress has no `name`, and the link must still read as an address —
+  // IPAddress has NO page, so the row names the address and does not link —
+  // the dead-row rule. The value must still read as an address rather than a
+  // raw orbId with its namespace prefix.
+  const cpeRow = fields.locator('tr', { hasText: 'Control Plane Endpoint' });
+  await expect(cpeRow.locator('a')).toHaveCount(0);
+  // An IPAddress has no `name`, so the value must still read as an address —
   // not as a raw orbId with its namespace prefix.
-  await expect(cpe).toHaveText(/^\d+\.\d+\.\d+\.\d+$/);
+  await expect(cpeRow.locator('td').nth(1)).toHaveText(/^\d+\.\d+\.\d+\.\d+$/);
 });
 
 test('the backup tree renders inline, and says so when absent', async ({ page }) => {
-  await page.goto('/clusters/' + encodeURIComponent('colo:dev-main'));
+  await page.goto('/clusters?open=' + encodeURIComponent('colo:dev-main'));
   await openAllDetailPanels(page);
   const backup = page.getByTestId('generic-owned').filter({ hasText: 'Backup' });
   await expect(backup).toContainText('Etcd');
@@ -74,7 +82,7 @@ test('the backup tree renders inline, and says so when absent', async ({ page })
 
   // "No backup configured" and "no information about backups" are different
   // answers. An omitted box gives neither.
-  await page.goto('/clusters/' + encodeURIComponent('alaska-dot-cruiser:adot-m'));
+  await page.goto('/clusters?open=' + encodeURIComponent('alaska-dot-cruiser:adot-m'));
   await openAllDetailPanels(page);
   const absent = page.getByTestId('generic-owned').filter({ hasText: 'Backup' });
   await expect(absent).toContainText('Etcd');
@@ -82,7 +90,7 @@ test('the backup tree renders inline, and says so when absent', async ({ page })
 });
 
 test('nodes and workload clusters render as tables with populated columns', async ({ page }) => {
-  await page.goto('/clusters/' + encodeURIComponent('colo:dev-main'));
+  await page.goto('/clusters?open=' + encodeURIComponent('colo:dev-main'));
   await openAllDetailPanels(page);
   const nodes = page.getByTestId('generic-tab').filter({ hasText: 'Nodes' }).first();
   await expect(nodes).toBeVisible();
@@ -97,7 +105,7 @@ test('nodes and workload clusters render as tables with populated columns', asyn
 });
 
 test('a cluster detail page shows metadata and its audit log', async ({ page }) => {
-  await page.goto('/clusters/' + encodeURIComponent('colo:dev-main'));
+  await page.goto('/clusters?open=' + encodeURIComponent('colo:dev-main'));
   await openAllDetailPanels(page);
   const meta = page.getByTestId('generic-meta');
   await expect(meta).toContainText('Namespace');
@@ -106,7 +114,7 @@ test('a cluster detail page shows metadata and its audit log', async ({ page }) 
 });
 
 test('a cluster can be edited through the generic editor, backup subtree included', async ({ page }) => {
-  await page.goto('/clusters/' + encodeURIComponent('colo:dev-main'));
+  await page.goto('/clusters?open=' + encodeURIComponent('colo:dev-main'));
   await openAllDetailPanels(page);
   const domId = await page.locator('[data-generic-edit-id]').getAttribute('data-generic-edit-id');
   await page.locator('[data-generic-edit-id]').click();
@@ -131,7 +139,7 @@ test('a cluster can be edited through the generic editor, backup subtree include
 });
 
 test('a stale version is refused rather than overwriting', async ({ page }) => {
-  await page.goto('/clusters/' + encodeURIComponent('colo:dev-main'));
+  await page.goto('/clusters?open=' + encodeURIComponent('colo:dev-main'));
   await openAllDetailPanels(page);
   const domId = await page.locator('[data-generic-edit-id]').getAttribute('data-generic-edit-id');
 
@@ -184,7 +192,7 @@ test('a stale version is refused rather than overwriting', async ({ page }) => {
 // became the generic page. Same guarantees, new renderer.
 
 test('a cluster edit produces an audit row for the cluster, with a rendered diff', async ({ page }) => {
-  await page.goto('/clusters/' + encodeURIComponent('colo:dev-main'));
+  await page.goto('/clusters?open=' + encodeURIComponent('colo:dev-main'));
   await openAllDetailPanels(page);
   const domId = await page.locator('[data-generic-edit-id]').getAttribute('data-generic-edit-id');
   await page.locator('[data-generic-edit-id]').click();
@@ -212,7 +220,7 @@ test('an owned-child edit is attributed to the child, not blobbed into the paren
   // through the parent's JSON tree must still record updateEtcdBackup —
   // otherwise the audit log says "the cluster changed" and loses which of its
   // owned records actually did.
-  await page.goto('/clusters/' + encodeURIComponent('colo:dev-main'));
+  await page.goto('/clusters?open=' + encodeURIComponent('colo:dev-main'));
   await openAllDetailPanels(page);
   const domId = await page.locator('[data-generic-edit-id]').getAttribute('data-generic-edit-id');
   await page.locator('[data-generic-edit-id]').click();
@@ -257,7 +265,7 @@ test('the schema pins column order, and back-references are dropped', async ({ p
   expect(headers.indexOf('CNI')).toBeGreaterThan(positions[positions.length - 1]);
 
   // A relationship table must not carry a column naming the entity you are on.
-  await page.goto('/clusters/' + encodeURIComponent('houston:g2-m'));
+  await page.goto('/clusters?open=' + encodeURIComponent('houston:g2-m'));
   await openAllDetailPanels(page);
   const nodes = page.getByTestId('generic-tab').filter({ hasText: 'Nodes' }).first();
   await expect(nodes).toBeVisible();
@@ -273,7 +281,7 @@ test('the schema pins column order, and back-references are dropped', async ({ p
 test('relationship tables fit their container', async ({ page }) => {
   // The symptom the two changes above were for: 13 columns overflowing the box.
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/clusters/' + encodeURIComponent('houston:g2-m'));
+  await page.goto('/clusters?open=' + encodeURIComponent('houston:g2-m'));
   await openAllDetailPanels(page);
   const tabs = page.getByTestId('generic-tab');
   for (let i = 0; i < await tabs.count(); i++) {

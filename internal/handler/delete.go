@@ -17,7 +17,6 @@ import (
 	"github.com/armada/orbital/ent"
 	"github.com/labstack/echo/v4"
 
-	"github.com/armada/orbital/internal/configitems"
 	"github.com/armada/orbital/web"
 )
 
@@ -38,7 +37,11 @@ type DeletePreview struct {
 	// modal echoes it back on confirm as ?version=, so a delete is refused if
 	// the entity moved while the confirmation dialog sat open — which is
 	// precisely the window a confirmation dialog creates.
-	Version   int           `json:"version,omitempty"`
+	Version int `json:"version,omitempty"`
+	// TypeLabel is the singular display name of the type being deleted, from
+	// the view. The preview prose used to be a three-way `if` on literal type
+	// names that called everything else "server".
+	TypeLabel string        `json:"typeLabel,omitempty"`
 	Groups    []DeleteGroup `json:"groups"`
 	Preserved []DeleteGroup `json:"preserved,omitempty"`
 }
@@ -53,10 +56,17 @@ type DeleteHandler struct {
 	// policy question directly. See guardDelete.
 	gql         *GraphQL
 	previewTmpl *template.Template
+	// views and fields are what the cascade is DERIVED from: the view says which
+	// members are part of a page's unit, and the SDL says which edge points back
+	// along each one.
+	views  ViewsProvider
+	fields *SharedFields
 }
 
-func NewDeleteHandler(dgraphURL string, db *ent.Client, logger *slog.Logger, gql *GraphQL) *DeleteHandler {
+func NewDeleteHandler(dgraphURL string, db *ent.Client, logger *slog.Logger, gql *GraphQL, opts ...HandlerOption) *DeleteHandler {
 	return &DeleteHandler{
+		views:         viewsFrom(opts),
+		fields:        sharedFieldsFrom(opts),
 		dgraphURL:     dgraphURL,
 		dgraphDQLBase: strings.TrimSuffix(dgraphURL, "/graphql"),
 		db:            db,
@@ -77,29 +87,11 @@ func (h *DeleteHandler) Preview(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "id required")
 	}
 	ctx := c.Request().Context()
-	var preview DeletePreview
-	switch deletableType(c.QueryParam("type")) {
-	case "DataCenter":
-		plan, err := h.planDCDelete(ctx, id)
-		if err != nil {
-			return err
-		}
-		preview = plan.preview
-	case "Server":
-		plan, err := h.planServerDelete(ctx, id)
-		if err != nil {
-			return err
-		}
-		preview = plan.preview
-	case "KubernetesCluster":
-		plan, err := h.planClusterDelete(ctx, id)
-		if err != nil {
-			return err
-		}
-		preview = plan.preview
-	default:
-		return echo.NewHTTPError(http.StatusBadRequest, "unsupported type")
+	plan, err := h.planFor(ctx, c.QueryParam("type"), id)
+	if err != nil {
+		return err
 	}
+	preview := plan.preview
 	tmpl := h.previewTmpl
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	return renderHTML(c, tmpl, "", preview)
@@ -138,7 +130,7 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 	}
 	ctx := c.Request().Context()
 	actor := actorFromContext(c)
-	typeName := deletableType(c.Param("type"))
+	typeName := c.Param("type")
 	caller := resolveCallerRole(c, h.db)
 
 	// Before planning: a caller holding a stale view should be told to reload,
@@ -147,800 +139,65 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 		return h.refuse(c, err)
 	}
 
-	switch typeName {
-	case "DataCenter":
-		plan, err := h.planDCDelete(ctx, id)
-		if err != nil {
-			return err
-		}
-		if err := h.guardDelete(ctx, caller, actor, plan.orbID, plan.uids); err != nil {
-			return h.refuse(c, err)
-		}
-		// A DataCenter is the top of its own subtree: nothing that survives this
-		// delete holds an edge into it, so there are no dangling edges to clear.
-		if err := h.bulkDeleteGuarded(ctx, plan.uids, plan.versions, nil); err != nil {
-			var perr *preflightError
-			if errors.As(err, &perr) {
-				return h.refuse(c, err) // concurrent edit — a decision, not a failure
-			}
-			h.logger.Error("dc delete failed", "orbId", plan.orbID, "err", err)
-			return fmt.Errorf("delete data center: %w", err)
-		}
-		writeAuditEvent(h.db, h.logger, "data", actor, "deleteDataCenter",
-			[]string{"deleteDataCenter"}, []string{"DataCenter"}, []string{plan.orbID},
-			map[string]any{
-				"input":  map[string]any{"orbId": plan.orbID},
-				"before": plan.before,
-				"result": map[string]any{"totalDeleted": len(plan.uids), "breakdown": plan.preview.Groups},
-			},
-			originFromContext(c, "rest"),
-		)
-		return c.JSON(http.StatusOK, map[string]any{"deleted": len(plan.uids)})
-
-	case "Server":
-		plan, err := h.planServerDelete(ctx, id)
-		if err != nil {
-			return err
-		}
-		if err := h.guardDelete(ctx, caller, actor, plan.orbID, plan.uids); err != nil {
-			return h.refuse(c, err)
-		}
-		if err := h.bulkDeleteGuarded(ctx, plan.uids, plan.versions, plan.dangling); err != nil {
-			var perr *preflightError
-			if errors.As(err, &perr) {
-				return h.refuse(c, err) // concurrent edit — a decision, not a failure
-			}
-			h.logger.Error("server delete failed", "orbId", plan.orbID, "err", err)
-			return fmt.Errorf("delete server: %w", err)
-		}
-		writeAuditEvent(h.db, h.logger, "data", actor, "deleteServer",
-			[]string{"deleteServer"}, []string{"Server"}, []string{plan.orbID},
-			map[string]any{
-				"input":  map[string]any{"orbId": plan.orbID},
-				"before": plan.before,
-				"result": map[string]any{"totalDeleted": len(plan.uids), "breakdown": plan.preview.Groups},
-			},
-			originFromContext(c, "rest"),
-		)
-		return c.JSON(http.StatusOK, map[string]any{"deleted": len(plan.uids)})
-
-	case "KubernetesCluster":
-		plan, err := h.planClusterDelete(ctx, id)
-		if err != nil {
-			return err
-		}
-		if err := h.guardDelete(ctx, caller, actor, plan.orbID, plan.uids); err != nil {
-			return h.refuse(c, err)
-		}
-		if err := h.bulkDeleteGuarded(ctx, plan.uids, plan.versions, plan.dangling); err != nil {
-			var perr *preflightError
-			if errors.As(err, &perr) {
-				return h.refuse(c, err) // concurrent edit — a decision, not a failure
-			}
-			h.logger.Error("cluster delete failed", "orbId", plan.orbID, "err", err)
-			return fmt.Errorf("delete cluster: %w", err)
-		}
-		writeAuditEvent(h.db, h.logger, "data", actor, "deleteKubernetesCluster",
-			[]string{"deleteKubernetesCluster"}, []string{"KubernetesCluster"}, []string{plan.orbID},
-			map[string]any{
-				"input":  map[string]any{"orbId": plan.orbID},
-				"before": plan.before,
-				"result": map[string]any{"totalDeleted": len(plan.uids), "breakdown": plan.preview.Groups},
-			},
-			originFromContext(c, "rest"),
-		)
-		return c.JSON(http.StatusOK, map[string]any{"deleted": len(plan.uids)})
-
-	default:
-		return echo.NewHTTPError(http.StatusBadRequest, "unsupported type")
+	plan, err := h.planFor(ctx, typeName, id)
+	if err != nil {
+		return err
 	}
+	if err := h.guardDelete(ctx, caller, actor, plan.orbID, plan.uids); err != nil {
+		return h.refuse(c, err)
+	}
+	if err := h.bulkDeleteGuarded(ctx, plan.uids, plan.versions, plan.dangling); err != nil {
+		var perr *preflightError
+		if errors.As(err, &perr) {
+			return h.refuse(c, err) // concurrent edit — a decision, not a failure
+		}
+		h.logger.Error("cascade delete failed", "type", typeName, "orbId", plan.orbID, "err", err)
+		return fmt.Errorf("delete %s: %w", typeName, err)
+	}
+	// One audit event per delete, naming the type the caller actually asked for.
+	// It used to be three near-identical blocks differing only in a literal.
+	op := "delete" + typeName
+	writeAuditEvent(h.db, h.logger, "data", actor, op,
+		[]string{op}, []string{typeName}, []string{plan.orbID},
+		map[string]any{
+			"input":  map[string]any{"orbId": plan.orbID},
+			"before": plan.before,
+			"result": map[string]any{"totalDeleted": len(plan.uids), "breakdown": plan.preview.Groups},
+		},
+		originFromContext(c, "rest"),
+	)
+	return c.JSON(http.StatusOK, map[string]any{"deleted": len(plan.uids)})
+}
+
+// planFor resolves the views once and plans the cascade.
+//
+// It replaced a three-way switch on literal type names. Any ConfigItem type is
+// deletable now, because a cascade is derived from the view rather than written
+// out per root — which is also what made `deletableType`'s interface special
+// case unnecessary.
+func (h *DeleteHandler) planFor(ctx context.Context, typeName, orbID string) (*cascadePlan, error) {
+	if typeName == "" {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, "type required")
+	}
+	if h.views == nil {
+		return nil, echo.NewHTTPError(http.StatusServiceUnavailable,
+			"orbital cannot read its view configuration, so it does not know what a delete would remove")
+	}
+	views, err := h.views(ctx)
+	if err != nil {
+		h.logger.Warn("delete: cannot resolve views", "type", typeName, "err", err)
+		return nil, echo.NewHTTPError(http.StatusServiceUnavailable,
+			"orbital cannot read the schema right now, so it does not know what a delete would remove")
+	}
+	return h.planCascade(ctx, views, typeName, orbID)
 }
 
 // ── plan types ────────────────────────────────────────────────────────────────
-
-type dcDeletePlan struct {
-	preview DeletePreview
-	uids    []string
-	orbID   string
-	name    string
-	before  map[string]any
-	// versions is the version of every uid above AS OF PLANNING — the baseline
-	// bulkDeleteGuarded compares against. Captured here so the window it closes
-	// spans everything between planning and the delete, including the approval
-	// gate's round trip.
-	versions map[string]int
-}
-
-type serverDeletePlan struct {
-	preview DeletePreview
-	uids    []string
-	// dangling are edges from survivors into this delete — see danglingEdge.
-	dangling []danglingEdge
-	orbID    string
-	name     string
-	before   map[string]any
-	// versions is the version of every uid above AS OF PLANNING — the baseline
-	// bulkDeleteGuarded compares against. Captured here so the window it closes
-	// spans everything between planning and the delete, including the approval
-	// gate's round trip.
-	versions map[string]int
-}
-
-// ── DataCenter ────────────────────────────────────────────────────────────────
-
-const dcDeleteGQL = `
-  query GetDCForDelete($orbId: String!) {
-    getDataCenter(orbId: $orbId) {
-      id name orbId namespace version
-      racks { id name }
-      servers {
-        id name hostname
-        idracSettings { id }
-        serverConfigurationProfile { id }
-        storageControllers {
-          id
-          storageDevices {
-            id
-            storageVolumes { id }
-          }
-        }
-        oobIP { id address }
-      }
-      kubernetesClusters {
-        __typename
-        controlPlaneEndpoint { id }
-        nodes { id }
-        ... on ConfigItem { id name }
-        ... on EksaKubernetesCluster {
-          tinkerbellIP { id }
-        }
-      }
-    }
-  }`
-
-type dcDeleteRaw struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	OrbID     string `json:"orbId"`
-	Namespace string `json:"namespace"`
-	Version   int    `json:"version"`
-	Racks     []struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-	} `json:"racks"`
-	Servers []struct {
-		ID            string `json:"id"`
-		Name          string `json:"name"`
-		Hostname      string `json:"hostname"`
-		IdracSettings *struct {
-			ID string `json:"id"`
-		} `json:"idracSettings"`
-		ServerConfigurationProfile *struct {
-			ID string `json:"id"`
-		} `json:"serverConfigurationProfile"`
-		StorageControllers []struct {
-			ID             string `json:"id"`
-			StorageDevices []struct {
-				ID             string `json:"id"`
-				StorageVolumes []struct {
-					ID string `json:"id"`
-				} `json:"storageVolumes"`
-			} `json:"storageDevices"`
-		} `json:"storageControllers"`
-		OobIP *struct {
-			ID      string `json:"id"`
-			Address string `json:"address"`
-		} `json:"oobIP"`
-	} `json:"servers"`
-	KubernetesClusters []struct {
-		Typename             string `json:"__typename"`
-		ID                   string `json:"id"`
-		Name                 string `json:"name"`
-		ControlPlaneEndpoint *struct {
-			ID string `json:"id"`
-		} `json:"controlPlaneEndpoint"`
-		Nodes []struct {
-			ID string `json:"id"`
-		} `json:"nodes"`
-		TinkerbellIP *struct {
-			ID string `json:"id"`
-		} `json:"tinkerbellIP,omitempty"`
-	} `json:"kubernetesClusters"`
-}
-
-func (h *DeleteHandler) planDCDelete(ctx context.Context, orbID string) (*dcDeletePlan, error) {
-	data, err := h.gqlQuery(ctx, dcDeleteGQL, map[string]any{"orbId": orbID})
-	if err != nil {
-		return nil, err
-	}
-	var resp struct {
-		GetDataCenter dcDeleteRaw `json:"getDataCenter"`
-	}
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return nil, fmt.Errorf("decode dc: %w", err)
-	}
-	dc := resp.GetDataCenter
-	if dc.ID == "" {
-		return nil, echo.NewHTTPError(http.StatusNotFound, "data center not found")
-	}
-
-	var uids []string
-	var groups []DeleteGroup
-
-	uids = append(uids, dc.ID)
-
-	// Racks.
-	rackCount := len(dc.Racks)
-	for _, r := range dc.Racks {
-		uids = append(uids, r.ID)
-	}
-
-	// Servers and owned children.
-	var idracCount, scpCount, ctrlCount, devCount, volCount int
-	serverCount := len(dc.Servers)
-	for _, s := range dc.Servers {
-		uids = append(uids, s.ID)
-		if s.IdracSettings != nil && s.IdracSettings.ID != "" {
-			idracCount++
-			uids = append(uids, s.IdracSettings.ID)
-		}
-		if s.ServerConfigurationProfile != nil && s.ServerConfigurationProfile.ID != "" {
-			scpCount++
-			uids = append(uids, s.ServerConfigurationProfile.ID)
-		}
-		for _, ctrl := range s.StorageControllers {
-			ctrlCount++
-			uids = append(uids, ctrl.ID)
-			for _, dev := range ctrl.StorageDevices {
-				devCount++
-				uids = append(uids, dev.ID)
-				for _, vol := range dev.StorageVolumes {
-					volCount++
-					uids = append(uids, vol.ID)
-				}
-			}
-		}
-		if s.OobIP != nil && s.OobIP.ID != "" {
-			uids = append(uids, s.OobIP.ID)
-		}
-	}
-	if rackCount > 0 {
-		groups = append(groups, countGroup("Racks", rackCount))
-	}
-	if serverCount > 0 {
-		groups = append(groups, countGroup("Servers", serverCount))
-	}
-	if idracCount > 0 {
-		groups = append(groups, countGroup("iDRAC Settings", idracCount))
-	}
-	if scpCount > 0 {
-		groups = append(groups, countGroup("Server Config Profiles", scpCount))
-	}
-	if ctrlCount > 0 {
-		groups = append(groups, countGroup("Storage Controllers", ctrlCount))
-	}
-	if devCount > 0 {
-		groups = append(groups, countGroup("Storage Devices", devCount))
-	}
-	if volCount > 0 {
-		groups = append(groups, countGroup("Storage Volumes", volCount))
-	}
-
-	// Kubernetes clusters, their nodes, and provider-owned IP addresses.
-	k8sCount := len(dc.KubernetesClusters)
-	var k8sNodeCount int
-	for _, kc := range dc.KubernetesClusters {
-		uids = append(uids, kc.ID)
-		if kc.ControlPlaneEndpoint != nil && kc.ControlPlaneEndpoint.ID != "" {
-			uids = append(uids, kc.ControlPlaneEndpoint.ID)
-		}
-		for _, n := range kc.Nodes {
-			if n.ID != "" {
-				k8sNodeCount++
-				uids = append(uids, n.ID)
-			}
-		}
-		if kc.TinkerbellIP != nil && kc.TinkerbellIP.ID != "" {
-			uids = append(uids, kc.TinkerbellIP.ID)
-		}
-	}
-	if k8sCount > 0 {
-		groups = append(groups, countGroup("Kubernetes Clusters", k8sCount))
-	}
-	if k8sNodeCount > 0 {
-		groups = append(groups, countGroup("Kubernetes Nodes", k8sNodeCount))
-	}
-
-	// Baseline for the compare-and-swap, read at the same instant as the plan.
-	versions, err := h.planVersions(ctx, uids)
-	if err != nil {
-		return nil, err
-	}
-
-	return &dcDeletePlan{
-		preview: DeletePreview{
-			Name:       dc.Name,
-			Type:       "DataCenter",
-			TotalCount: len(uids),
-			Version:    dc.Version,
-			Groups:     groups,
-		},
-		uids:     uids,
-		versions: versions,
-		orbID:    dc.OrbID,
-		name:     dc.Name,
-		before: map[string]any{
-			"name":            dc.Name,
-			"orbId":           dc.OrbID,
-			"namespace":       dc.Namespace,
-			"rackCount":       len(dc.Racks),
-			"serverCount":     len(dc.Servers),
-			"k8sClusterCount": len(dc.KubernetesClusters),
-		},
-	}, nil
-}
-
-// ── Server ────────────────────────────────────────────────────────────────────
-
-const srvDeleteGQL = `
-  query GetServerForDelete($orbId: String!) {
-    getServer(orbId: $orbId) {
-      id name orbId hostname version
-      dataCenter { id }
-      rack { id }
-      kubernetesNode { id cluster { ... on ConfigItem { id } } }
-      idracSettings { id }
-      storageControllers {
-        id name
-        storageDevices {
-          id
-          storageVolumes { id }
-        }
-      }
-      oobIP { id address }
-    }
-  }`
-
-type srvDeleteRaw struct {
-	ID         string `json:"id"`
-	DataCenter *struct {
-		ID string `json:"id"`
-	} `json:"dataCenter"`
-	Rack *struct {
-		ID string `json:"id"`
-	} `json:"rack"`
-	KubernetesNode *struct {
-		ID      string `json:"id"`
-		Cluster *struct {
-			ID string `json:"id"`
-		} `json:"cluster"`
-	} `json:"kubernetesNode"`
-	Name          string `json:"name"`
-	OrbID         string `json:"orbId"`
-	Hostname      string `json:"hostname"`
-	Version       int    `json:"version"`
-	IdracSettings *struct {
-		ID string `json:"id"`
-	} `json:"idracSettings"`
-	ServerConfigurationProfile *struct {
-		ID string `json:"id"`
-	} `json:"serverConfigurationProfile"`
-	StorageControllers []struct {
-		ID             string `json:"id"`
-		Name           string `json:"name"`
-		StorageDevices []struct {
-			ID             string `json:"id"`
-			StorageVolumes []struct {
-				ID string `json:"id"`
-			} `json:"storageVolumes"`
-		} `json:"storageDevices"`
-	} `json:"storageControllers"`
-	OobIP *struct {
-		ID      string `json:"id"`
-		Address string `json:"address"`
-	} `json:"oobIP"`
-}
-
-func (h *DeleteHandler) planServerDelete(ctx context.Context, orbID string) (*serverDeletePlan, error) {
-	data, err := h.gqlQuery(ctx, srvDeleteGQL, map[string]any{"orbId": orbID})
-	if err != nil {
-		return nil, err
-	}
-	var resp struct {
-		GetServer srvDeleteRaw `json:"getServer"`
-	}
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return nil, fmt.Errorf("decode server: %w", err)
-	}
-	s := resp.GetServer
-	if s.ID == "" {
-		return nil, echo.NewHTTPError(http.StatusNotFound, "server not found")
-	}
-
-	var uids []string
-	var groups []DeleteGroup
-	var preserved []DeleteGroup
-
-	uids = append(uids, s.ID)
-
-	if s.IdracSettings != nil && s.IdracSettings.ID != "" {
-		uids = append(uids, s.IdracSettings.ID)
-		groups = append(groups, countGroup("iDRAC Settings", 1))
-	}
-	if s.ServerConfigurationProfile != nil && s.ServerConfigurationProfile.ID != "" {
-		uids = append(uids, s.ServerConfigurationProfile.ID)
-		groups = append(groups, countGroup("Server Config Profile", 1))
-	}
-
-	var ctrlCount, devCount, volCount int
-	for _, ctrl := range s.StorageControllers {
-		ctrlCount++
-		uids = append(uids, ctrl.ID)
-		for _, dev := range ctrl.StorageDevices {
-			devCount++
-			uids = append(uids, dev.ID)
-			for _, vol := range dev.StorageVolumes {
-				volCount++
-				uids = append(uids, vol.ID)
-			}
-		}
-	}
-	if ctrlCount > 0 {
-		groups = append(groups, countGroup("Storage Controllers", ctrlCount))
-	}
-	if devCount > 0 {
-		groups = append(groups, countGroup("Storage Devices", devCount))
-	}
-	if volCount > 0 {
-		groups = append(groups, countGroup("Storage Volumes", volCount))
-	}
-
-	// IP address is preserved — not deleted.
-	if s.OobIP != nil && s.OobIP.ID != "" {
-		preserved = append(preserved, namedGroup("IP Address", []string{s.OobIP.Address}))
-	}
-
-	srvBefore := map[string]any{
-		"name":               serverDisplayName(s.Hostname, s.Name),
-		"orbId":              s.OrbID,
-		"hostname":           s.Hostname,
-		"storageControllers": ctrlCount,
-		"storageDevices":     devCount,
-		"storageVolumes":     volCount,
-	}
-	if s.OobIP != nil && s.OobIP.Address != "" {
-		srvBefore["oobIP"] = s.OobIP.Address
-	}
-
-	// Baseline for the compare-and-swap, read at the same instant as the plan.
-	versions, err := h.planVersions(ctx, uids)
-	if err != nil {
-		return nil, err
-	}
-
-	// Everything that outlives this server but holds an edge into it. A Rack and
-	// a KubernetesNode both survive a server delete, so both would otherwise be
-	// left pointing at a tombstone — see danglingEdge.
-	var dangling []danglingEdge
-	if s.DataCenter != nil && s.DataCenter.ID != "" {
-		dangling = append(dangling, danglingEdge{s.DataCenter.ID, "DataCenter.servers", s.ID})
-	}
-	if s.Rack != nil && s.Rack.ID != "" {
-		dangling = append(dangling, danglingEdge{s.Rack.ID, "Rack.servers", s.ID})
-	}
-	if s.KubernetesNode != nil && s.KubernetesNode.ID != "" {
-		dangling = append(dangling, danglingEdge{s.KubernetesNode.ID, "KubernetesNode.server", s.ID})
-	}
-
-	return &serverDeletePlan{
-		preview: DeletePreview{
-			Name:       serverDisplayName(s.Hostname, s.Name),
-			Type:       "Server",
-			TotalCount: len(uids),
-			Version:    s.Version,
-			Groups:     groups,
-			Preserved:  preserved,
-		},
-		uids:     uids,
-		versions: versions,
-		orbID:    s.OrbID,
-		name:     serverDisplayName(s.Hostname, s.Name),
-		before:   srvBefore,
-	}, nil
-}
-
-// ── Kubernetes Cluster ───────────────────────────────────────────────────────
-
-// Cascade scope (settled): cluster + its nodes + control plane endpoint IP +
-// (EKSA) tinkerbell IP. Servers are preserved — they're independent inventory,
-// not owned by the cluster. The lookup goes through queryConfigItem because
-// orbId lives on ConfigItem, not on the KubernetesCluster sub-interface.
-const clusterDeleteGQL = `
-  query GetClusterForDelete($orbId: String!) {
-    queryConfigItem(filter: { orbId: { eq: $orbId } }, first: 1) {
-      __typename
-      ... on ConfigItem {
-        id orbId name namespace version
-      }
-      ... on KubernetesCluster {
-        dataCenter { id }
-        controlPlaneEndpoint { id address }
-        nodes {
-          orbId role
-          server { id orbId hostname serviceTag }
-        }
-        backup {
-          id
-          etcd { id }
-          velero { id }
-          s3Sync { id }
-        }
-      }
-      ... on EksaKubernetesCluster {
-        tinkerbellIP { id address }
-      }
-    }
-  }`
-
-// danglingEdge is a link FROM a node that survives this delete TO one that does
-// not. DGraph maintains @hasInverse only for mutations through its GraphQL
-// endpoint; orbital deletes through a DQL upsert (bulkDeleteGuarded) because
-// that is the only way to get a version-guarded CAS. A DQL `S * *` delete
-// therefore clears the child and leaves the parent's list edge pointing at an
-// empty uid — and any later GraphQL query walking that edge and selecting a
-// non-nullable field fails ENTIRELY, because DGraph propagates the error to the
-// root. That is how one cluster delete silently broke export for its whole data
-// centre (2026-09-23).
-//
-// Only edges whose PARENT SURVIVES need listing: when both ends are deleted the
-// stale edge lives on a tombstoned node and is unreachable.
 type danglingEdge struct {
 	ParentUID string // the surviving node holding the edge
 	Predicate string // DGraph predicate, e.g. "DataCenter.kubernetesClusters"
 	ChildUID  string // the node being deleted
 }
-
-type clusterDeleteRaw struct {
-	Typename   string `json:"__typename"`
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	OrbID      string `json:"orbId"`
-	Namespace  string `json:"namespace"`
-	Version    int    `json:"version"`
-	DataCenter *struct {
-		ID string `json:"id"`
-	} `json:"dataCenter"`
-	ControlPlaneEndpoint *struct {
-		ID      string `json:"id"`
-		Address string `json:"address"`
-	} `json:"controlPlaneEndpoint"`
-	Nodes []struct {
-		OrbID  string `json:"orbId"`
-		Role   string `json:"role"`
-		Server struct {
-			ID         string `json:"id"`
-			OrbID      string `json:"orbId"`
-			Hostname   string `json:"hostname"`
-			ServiceTag string `json:"serviceTag"`
-		} `json:"server"`
-	} `json:"nodes"`
-	TinkerbellIP *struct {
-		ID      string `json:"id"`
-		Address string `json:"address"`
-	} `json:"tinkerbellIP,omitempty"`
-	Backup *struct {
-		ID   string `json:"id"`
-		Etcd *struct {
-			ID string `json:"id"`
-		} `json:"etcd"`
-		Velero *struct {
-			ID string `json:"id"`
-		} `json:"velero"`
-		S3Sync *struct {
-			ID string `json:"id"`
-		} `json:"s3Sync"`
-	} `json:"backup,omitempty"`
-}
-
-type clusterDeletePlan struct {
-	preview DeletePreview
-	uids    []string
-	// dangling are edges from survivors into this delete — see danglingEdge.
-	dangling []danglingEdge
-	orbID    string
-	name     string
-	before   map[string]any
-	// versions is the version of every uid above AS OF PLANNING — the baseline
-	// bulkDeleteGuarded compares against. Captured here so the window it closes
-	// spans everything between planning and the delete, including the approval
-	// gate's round trip.
-	versions map[string]int
-}
-
-func nodeUIDFromOrbID(ctx context.Context, h *DeleteHandler, orbID string) (string, error) {
-	// queryKubernetesNode → @id is orbId. Fetch the DGraph UID for one node.
-	data, err := h.gqlQuery(ctx, `query($orbId: String!) {
-		getKubernetesNode(orbId: $orbId) { id }
-	}`, map[string]any{"orbId": orbID})
-	if err != nil {
-		return "", err
-	}
-	var resp struct {
-		GetKubernetesNode *struct {
-			ID string `json:"id"`
-		} `json:"getKubernetesNode"`
-	}
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return "", err
-	}
-	if resp.GetKubernetesNode == nil {
-		return "", nil
-	}
-	return resp.GetKubernetesNode.ID, nil
-}
-
-func (h *DeleteHandler) planClusterDelete(ctx context.Context, orbID string) (*clusterDeletePlan, error) {
-	data, err := h.gqlQuery(ctx, clusterDeleteGQL, map[string]any{"orbId": orbID})
-	if err != nil {
-		return nil, err
-	}
-	var resp struct {
-		QueryConfigItem []clusterDeleteRaw `json:"queryConfigItem"`
-	}
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return nil, fmt.Errorf("decode cluster: %w", err)
-	}
-	if len(resp.QueryConfigItem) == 0 {
-		return nil, echo.NewHTTPError(http.StatusNotFound, "cluster not found")
-	}
-	c := resp.QueryConfigItem[0]
-	if c.Typename != "EksaKubernetesCluster" {
-		return nil, echo.NewHTTPError(http.StatusNotFound, "not a kubernetes cluster")
-	}
-	if c.ID == "" {
-		return nil, echo.NewHTTPError(http.StatusNotFound, "cluster not found")
-	}
-
-	var uids []string
-	var groups []DeleteGroup
-	var preserved []DeleteGroup
-	var dangling []danglingEdge
-
-	uids = append(uids, c.ID)
-
-	// The data centre outlives its cluster, so its list edge must be cleared in
-	// the same transaction — otherwise it points at a tombstone and every later
-	// export of this DC fails. See danglingEdge.
-	if c.DataCenter != nil && c.DataCenter.ID != "" {
-		dangling = append(dangling, danglingEdge{
-			ParentUID: c.DataCenter.ID,
-			Predicate: "DataCenter.kubernetesClusters",
-			ChildUID:  c.ID,
-		})
-	}
-
-	// Nodes — owned by cluster, deleted. Each node has @id orbId; resolve to
-	// DGraph UIDs in one round-trip per node (small N).
-	nodeUIDs := make([]string, 0, len(c.Nodes))
-	for _, n := range c.Nodes {
-		uid, err := nodeUIDFromOrbID(ctx, h, n.OrbID)
-		if err != nil {
-			return nil, fmt.Errorf("resolve node uid: %w", err)
-		}
-		if uid == "" {
-			continue
-		}
-		nodeUIDs = append(nodeUIDs, uid)
-
-		// The node's SERVER survives this delete and points back at the node, so
-		// that edge is cleared with everything else — otherwise the server is
-		// left pointing at a node that no longer exists.
-		//
-		// Not cosmetic. DGraph propagates a missing non-nullable field to the
-		// ROOT of a query, so any later read walking Server.kubernetesNode and
-		// selecting orbId fails ENTIRELY, naming neither the delete nor the node:
-		//
-		//	Non-nullable field 'orbId' (type String!) was not present in result from Dgraph.
-		//
-		// Found 2026-09-25 in local data: one server left this way made a whole
-		// DataCenter page unrenderable. The SERVER delete path already clears the
-		// mirror edge (KubernetesNode.server); this is the same edge from the
-		// other end, and it was missed.
-		if n.Server.ID != "" {
-			dangling = append(dangling, danglingEdge{
-				ParentUID: n.Server.ID,
-				Predicate: "Server.kubernetesNode",
-				ChildUID:  uid,
-			})
-		}
-	}
-	if len(nodeUIDs) > 0 {
-		uids = append(uids, nodeUIDs...)
-		groups = append(groups, countGroup("Kubernetes Nodes", len(nodeUIDs)))
-	}
-
-	if c.ControlPlaneEndpoint != nil && c.ControlPlaneEndpoint.ID != "" {
-		uids = append(uids, c.ControlPlaneEndpoint.ID)
-		groups = append(groups, countGroup("Control plane endpoint IP", 1))
-	}
-	if c.TinkerbellIP != nil && c.TinkerbellIP.ID != "" {
-		uids = append(uids, c.TinkerbellIP.ID)
-		groups = append(groups, countGroup("Tinkerbell IP", 1))
-	}
-
-	// Backup configuration + sub-kinds — all owned by the cluster, cascade-deleted.
-	if c.Backup != nil && c.Backup.ID != "" {
-		uids = append(uids, c.Backup.ID)
-		backupKinds := 0
-		if c.Backup.Etcd != nil && c.Backup.Etcd.ID != "" {
-			uids = append(uids, c.Backup.Etcd.ID)
-			backupKinds++
-		}
-		if c.Backup.Velero != nil && c.Backup.Velero.ID != "" {
-			uids = append(uids, c.Backup.Velero.ID)
-			backupKinds++
-		}
-		if c.Backup.S3Sync != nil && c.Backup.S3Sync.ID != "" {
-			uids = append(uids, c.Backup.S3Sync.ID)
-			backupKinds++
-		}
-		groups = append(groups, countGroup("Backup configuration", 1+backupKinds))
-	}
-
-	// Servers are NOT deleted — they're independent inventory. List the names
-	// in the Preserved section so the operator sees what stays behind.
-	if len(c.Nodes) > 0 {
-		serverNames := make([]string, 0, len(c.Nodes))
-		for _, n := range c.Nodes {
-			name := n.Server.Hostname
-			if name == "" {
-				name = n.Server.ServiceTag
-			}
-			if name == "" {
-				name = n.Server.OrbID
-			}
-			if name != "" {
-				serverNames = append(serverNames, name)
-			}
-		}
-		if len(serverNames) > 0 {
-			preserved = append(preserved, namedGroup("Servers", serverNames))
-		}
-	}
-
-	before := map[string]any{
-		"name":      c.Name,
-		"orbId":     c.OrbID,
-		"namespace": c.Namespace,
-		"typename":  c.Typename,
-		"nodeCount": len(c.Nodes),
-	}
-
-	// Baseline for the compare-and-swap, read at the same instant as the plan.
-	versions, err := h.planVersions(ctx, uids)
-	if err != nil {
-		return nil, err
-	}
-
-	return &clusterDeletePlan{
-		preview: DeletePreview{
-			Name:       c.Name,
-			Type:       "KubernetesCluster",
-			TotalCount: len(uids),
-			Version:    c.Version,
-			Groups:     groups,
-			Preserved:  preserved,
-		},
-		uids:     uids,
-		dangling: dangling,
-		versions: versions,
-		orbID:    c.OrbID,
-		name:     c.Name,
-		before:   before,
-	}, nil
-}
-
-// ── DGraph helpers ────────────────────────────────────────────────────────────
 
 func (h *DeleteHandler) gqlQuery(ctx context.Context, query string, variables map[string]any) (json.RawMessage, error) {
 	body, _ := json.Marshal(map[string]any{"query": query, "variables": variables})
@@ -1370,31 +627,4 @@ func namedGroup(label string, names []string) DeleteGroup {
 
 func countGroup(label string, count int) DeleteGroup {
 	return DeleteGroup{Label: label, Count: count}
-}
-
-func serverDisplayName(hostname, name string) string {
-	if hostname != "" {
-		return hostname
-	}
-	return name
-}
-
-// deletableType maps a concrete type onto the type whose cascade plan covers
-// it, leaving anything else untouched.
-//
-// The plans are written against the INTERFACE — planClusterDelete handles any
-// KubernetesCluster, because what cascades (nodes, backup) is declared there
-// and not by any one provider. Pages used to hardcode "KubernetesCluster" as
-// the delete type; the generic renderer sends the type it actually resolved,
-// which for a cluster is EksaKubernetesCluster. Without this, Delete on a
-// cluster page 400s with "unsupported type" — and it does so in the preview,
-// so the modal opens EMPTY rather than saying anything.
-func deletableType(typeName string) string {
-	for _, iface := range configitems.ImplementsFor(typeName) {
-		switch iface {
-		case "DataCenter", "Server", "KubernetesCluster":
-			return iface
-		}
-	}
-	return typeName
 }

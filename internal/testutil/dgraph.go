@@ -385,3 +385,15 @@ func SchemaPath() string {
 	_, thisFile, _, _ := runtime.Caller(0)
 	return filepath.Join(filepath.Dir(thisFile), "..", "..", "schema", "schema.graphql")
 }
+
+// ViewsPath is the repo's shipped views document, resolved absolutely.
+//
+// Absolute for the same reason SchemaPath is: a test's working directory is its
+// own package, so the relative default in config.go ("config/views.yaml")
+// resolves to nothing from inside internal/handler. A handler built with an
+// unreadable views document renders no members at all, which would make a test
+// pass for the wrong reason.
+func ViewsPath() string {
+	_, thisFile, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(thisFile), "..", "..", "config", "views.yaml")
+}

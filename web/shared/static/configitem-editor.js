@@ -837,6 +837,14 @@ export function initConfigItemEditor({
   // is the drift pattern this codebase has been bitten by before. Pages say
   // which button to label; they never ask the policy themselves.
   let mode = 'save'
+  // The views document this tree was built from. Sent on every write so the
+  // server can refuse a save opened under a view that has since changed —
+  // without it, a member dropped from a view reads as "the user cleared this"
+  // and the save emits a `remove` for an entity nobody touched.
+  const viewsHash = (modal && modal.dataset && modal.dataset.viewsHash) || ''
+  const writeHeaders = () => viewsHash
+    ? { 'Content-Type': 'application/json', 'X-Orbital-Views': viewsHash }
+    : { 'Content-Type': 'application/json' }
   const namespaceOf = (orbId) => String(orbId || '').split(':')[0]
   const rootKind = (targets.find(t => t.path.length === 0) || {}).kind
 
@@ -1124,7 +1132,7 @@ export function initConfigItemEditor({
       try {
         r = await fetch(BASE + '/graphql', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: writeHeaders(),
           body: JSON.stringify(call),
         })
       } catch (_) {

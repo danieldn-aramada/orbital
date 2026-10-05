@@ -33,7 +33,15 @@ func gateFixture(t *testing.T) (*GraphQL, *crFixture) {
 	// the fixture from asserting against a configuration nothing deploys, and
 	// TestGate_RenamedVariableUpdateIsRefused403ThroughHandle depends on it: that
 	// one goes through Handle precisely because no other test here does.
-	return NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), true), f
+	//
+	// WithFieldSource is production's wiring, and it is load-bearing here: the
+	// mutation matcher is DERIVED from the deployed schema through it. Without
+	// one the handler falls back to the broad matcher, which over-matches by
+	// design — correct as a degraded answer, and wrong as the configuration a
+	// gate test runs against, because `addNamespace` would then be gated.
+	return NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), true,
+		WithFieldSource(NewSharedFieldSource(testutil.DGraphURL(),
+			ViewsSource{Path: testutil.ViewsPath()}, slog.Default()))), f
 }
 
 // mutate runs a mutation through the chokepoint exactly as Handle would.
@@ -547,7 +555,9 @@ func gateFixtureWithLog(t *testing.T) (*GraphQL, *crFixture, *logCapture) {
 	t.Helper()
 	f := newCRFixture(t)
 	lc := &logCapture{}
-	return NewGraphQL(testutil.DGraphURL(), f.db, slog.New(lc), true), f, lc
+	return NewGraphQL(testutil.DGraphURL(), f.db, slog.New(lc), true,
+		WithFieldSource(NewSharedFieldSource(testutil.DGraphURL(),
+			ViewsSource{Path: testutil.ViewsPath()}, slog.New(lc)))), f, lc
 }
 
 // Acceptance 4 + 7: one line, naming the entity — not just the policy.

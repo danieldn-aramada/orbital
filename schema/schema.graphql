@@ -26,7 +26,6 @@ type User {
 interface ConfigItem {
     id: ID!
     namespace: String! @search(by: [exact])
-    """label: Orb ID"""
     orbId: String! @id(interface: true) @search(by: [hash])
     name: String @search(by: [term])
     createdBy: String @search(by: [hash])
@@ -46,15 +45,8 @@ enum DataCenterModel {
     Leviathan
 }
 
-"""
-editable: name
-menuWeight: 10
-"""
 type DataCenter implements ConfigItem {
-    """
-    jsonString
-    detailOnly
-    """
+    """jsonString"""
     assetDataV2: String @search(by: [regexp]) # json
     model: DataCenterModel @search(by: [hash])
 
@@ -64,10 +56,6 @@ type DataCenter implements ConfigItem {
     networkDevices: [NetworkDevice] @hasInverse(field: dataCenter)
 }
 
-"""
-editable: name
-column: servers.count
-"""
 type Rack implements ConfigItem {
     uHeight: Int
     dataCenter: DataCenter!
@@ -75,12 +63,6 @@ type Rack implements ConfigItem {
     networkDevices: [NetworkDevice] @hasInverse(field: rack)
 }
 
-"""
-include: storageControllers.storageDevices
-filterBy: dataCenter
-menuWeight: 20
-column: kubernetesNode.cluster.name, kubernetesNode.role, kubernetesNode.gpu
-"""
 type Server implements ConfigItem {
     hostname: String @search(by: [term])
     model: String @search(by: [term])
@@ -89,13 +71,11 @@ type Server implements ConfigItem {
     serialNumber: String @search(by: [hash])
     rackPosition: Int
     uHeight: Float
-    """label: OOB MAC"""
     oobMAC: String
 
     dataCenter: DataCenter!
     rack: Rack
     idracSettings: IdracSettings @hasInverse(field: server)
-    """viewIgnored"""
     serverConfigurationProfile: ServerConfigurationProfile @hasInverse(field: server)
     serverMaintenance: ServerMaintenance @hasInverse(field: server)
     storageControllers: [StorageController] @hasInverse(field: server)
@@ -103,7 +83,6 @@ type Server implements ConfigItem {
     networkInterfaces: [NetworkInterface] @hasInverse(field: server)
     kubernetesNode: KubernetesNode @hasInverse(field: server)
 
-    """label: OOB IP"""
     oobIP: IPAddress @hasInverse(field: serverOobIP)
 }
 
@@ -124,10 +103,13 @@ type IdracSettings implements ConfigItem {
 
 """orbIdSuffix: scp"""
 type ServerConfigurationProfile implements ConfigItem {
-    """editorIgnored"""
     json: String 
 
-    server: Server!
+    # NULLABLE (v13). A non-null back-edge means the child cannot outlive the
+    # parent, which forces it to be an editable member of the server's view —
+    # and an SCP is a scanned document nobody edits from the server page. Made
+    # optional so a view may legitimately leave it out. See UI.md.
+    server: Server
 }
 
 # Maintenance intent for a server — DESIRED state only (edge actuates + observes).
@@ -151,21 +133,17 @@ type StorageController implements ConfigItem {
 
     server: Server!
     storageDevices: [StorageDevice] @hasInverse(field: storageController)
+    # v13: the inverse of StorageVolume.storageController, which existed as a
+    # non-null edge with no way back. A volume belongs to ONE controller and may
+    # span several devices, so the controller is where it is contained.
+    storageVolumes: [StorageVolume] @hasInverse(field: storageController)
 }
 
 type StorageDevice implements ConfigItem {
-    """editorIgnored"""
     capacityBytes: Int
-    """editorIgnored"""
     manufacturer: String
-    """editorIgnored"""
     model: String
-    """editorIgnored"""
     serialNumber: String
-    """
-    editorIgnored
-    label: WWN
-    """
     wwn: String
 
     storageController: StorageController!
@@ -173,15 +151,10 @@ type StorageDevice implements ConfigItem {
 }
 
 type StorageVolume implements ConfigItem {
-    """editorIgnored"""
     capacityBytes: Int
-    """editorIgnored"""
     manufacturer: String
-    """editorIgnored"""
     model: String
-    """editorIgnored"""
     serialNumber: String
-    """editorIgnored"""
     wwn: String
 
     storageController: StorageController!
@@ -191,32 +164,27 @@ type StorageVolume implements ConfigItem {
 type NetworkAdapter implements ConfigItem {
     # NIC card (FRU). Redfish-authoritative; OPTIONAL (absent for flat-only sources).
     # name = adapter FQDD, e.g. "NIC.Integrated.1"
-    """editorIgnored"""
     model: String @search(by: [term])
-    """editorIgnored"""
     manufacturer: String @search(by: [hash])
-    """editorIgnored"""
     serialNumber: String @search(by: [hash])
-    """editorIgnored"""
     partNumber: String @search(by: [hash])
 
     server: Server!
     networkInterfaces: [NetworkInterface] @hasInverse(field: networkAdapter)
 }
 
-"""column: server.kubernetesNode.cluster.name, server.kubernetesNode.role, server.kubernetesNode.gpu"""
+# NO derivesIdFrom. This type's identity hangs off whichever owner it actually
+# has — a server NIC's orbId is built from the SERVER's serviceTag (not the
+# adapter's, which uses the same value), and a switch port's from the DEVICE's
+# serial. That is the same XOR the owner comment below describes, and
+# `derivesIdFrom:` is single-valued, so it cannot say it. It carried
+# `networkAdapter` briefly, which was right for one of three parents and wrong
+# for the other two. The ordered edges live in config/views.yaml instead.
 type NetworkInterface implements ConfigItem {
     # Port/interface (physical OR logical LAG). name = source ifname/FQDD.
-    """
-    editorIgnored
-    label: MAC Address
-    """
     macAddress: String @search(by: [hash])  # cross-source join key (MAC)
-    """editorIgnored"""
     portType: String @search(by: [term])  # Ethernet | InfiniBand | FibreChannel | LAG
-    """editorIgnored"""
     linkSpeedMbps: Int  # negotiated link speed (Redfish CurrentLinkSpeedMbps); null when link down
-    """editorIgnored"""
     mgmtOnly: Boolean @search  # management-plane interface (BMC/iDRAC); mirrors NetBox interface.mgmt_only. No networkAdapter (the BMC is a Manager, not a NIC FRU — its controller identity is IdracSettings)
 
     # Owner — exactly one of {server, networkDevice} (XOR; DGraph can't enforce, app-checked).
@@ -229,56 +197,38 @@ type NetworkInterface implements ConfigItem {
     # Spike 32 (docs/network-model.md §8) — until then these fabric edges are defined-but-unpopulated by design.
     connectedNetworkInterface: NetworkInterface       # cabled far-end PORT (set on both ends)
     connectedNetworkDevice: NetworkDevice   # intended cabling far-end (switch/router/firewall)
-    """editorIgnored"""
     connectedNetworkDevicePort: String      # remote port label, e.g. "xe-1/0/28"
     lag: NetworkInterface                       # link aggregation group
     lagMembers: [NetworkInterface] @hasInverse(field: lag)
 }
 
-"""
-menuWeight: 40
-"""
 type NetworkDevice implements ConfigItem {
     # Network gear (switch / router / firewall / sd-wan), role-differentiated. NetBox-sourced identity anchor.
     manufacturer: String @search(by: [hash])
     model: String @search(by: [term])
     serial: String @search(by: [hash])
     role: String @search(by: [term])         # tor | core | mgmt | edge | leaf | spine | router | firewall | sd-wan
-    """label: MAC Address"""
     macAddress: String @search(by: [hash])   # device MAC (identity, from NetBox)
     platform: String @search(by: [term])     # NOS / platform (NetBox device.platform), e.g. Junos
     rackPosition: Int                        # U-slot in the rack (NetBox device.position)
     face: String                             # rack face: front | rear (NetBox device.face)
-    """label: VC Position"""
     vcPosition: Int                          # Virtual Chassis member position (NetBox vc_position)
-    """label: VC Priority"""
     vcPriority: Int                          # Virtual Chassis member priority (NetBox vc_priority)
 
     dataCenter: DataCenter!
     rack: Rack                               # physical rack (NetBox device.rack) — exposes per-rack failure domains
     virtualChassis: NetworkDevice            # VC master this device belongs to (self-edge, member→master); null if standalone/master
     virtualChassisMembers: [NetworkDevice] @hasInverse(field: virtualChassis)  # auto-filled on the master
-    """label: Ports"""
     networkInterfaces: [NetworkInterface] @hasInverse(field: networkDevice)               # ports THIS device owns (the fabric side)
-    """label: Connections"""
     networkInterfaceConnectedNetworkDevice: [NetworkInterface] @hasInverse(field: connectedNetworkDevice)
 }
 
-"""
-slug: clusters
-order: name, provider, clusterType, environment, kubernetesVersion
-filterBy: dataCenter
-menuWeight: 30
-"""
 interface KubernetesCluster {
     kubernetesVersion: String
     controlPlaneEndpoint: IPAddress
-    """label: CNI"""
     cni: String @search(by: [term])         # cilium, calico, flannel
     environment: String @search(by: [term]) # prod, staging, dev
-    """editorIgnored"""
     description: String                     # free-text purpose ("Aramco ISV", "SpectroCloud POC")
-    """editorIgnored"""
     provider: String @search(by: [term, hash])    # eksa, maas, metal3 — canonical token, single source for UI display + filter
 
     dataCenter: DataCenter!
@@ -295,17 +245,10 @@ type EksaKubernetesCluster implements KubernetesCluster & ConfigItem {
 }
 
 type KubernetesNode implements ConfigItem {
-    """editorIgnored"""
     role: String @search(by: [term]) # control_plane, worker
     ipv4: IPAddress                  # cluster-network IP (distinct from server.oobIP)
-    """
-    editorIgnored
-    label: GPU
-    """
     gpu: Boolean @search             # node contributes GPU resources to the cluster
-    """editorIgnored"""
     owner: String @search(by: [term])
-    """editorIgnored"""
     notes: String
 
     cluster: KubernetesCluster!
@@ -318,7 +261,9 @@ type ClusterBackup implements ConfigItem {
     velero: VeleroBackup
     s3Sync: S3Sync
 
-    cluster: KubernetesCluster @hasInverse(field: backup)
+    # NON-NULL (v14): a ClusterBackup has no existence without its cluster.
+    # A non-null back-edge IS the containment declaration — see UI.md.
+    cluster: KubernetesCluster! @hasInverse(field: backup)
 }
 
 """orbIdSuffix: etcd-backup"""
@@ -328,7 +273,7 @@ type EtcdBackup implements ConfigItem {
     location: String @search(by: [hash])
     retentionDays: Int
 
-    clusterBackupEtcd: ClusterBackup @hasInverse(field: etcd)
+    clusterBackupEtcd: ClusterBackup! @hasInverse(field: etcd)   # NON-NULL (v14)
 }
 
 """orbIdSuffix: velero-backup"""
@@ -338,23 +283,20 @@ type VeleroBackup implements ConfigItem {
     location: String @search(by: [hash])
     retentionDays: Int
 
-    clusterBackupVelero: ClusterBackup @hasInverse(field: velero)
+    clusterBackupVelero: ClusterBackup! @hasInverse(field: velero)   # NON-NULL (v14)
 }
 
 """orbIdSuffix: s3sync"""
 type S3Sync implements ConfigItem {
     enabled: Boolean @search
 
-    clusterBackupS3Sync: ClusterBackup @hasInverse(field: s3Sync)
+    clusterBackupS3Sync: ClusterBackup! @hasInverse(field: s3Sync)   # NON-NULL (v14)
 }
 
 
 type IPAddress implements ConfigItem {
-    """editorIgnored"""
     type: String # ipv4, ipv6
-    """editorIgnored"""
     address: String! @search(by: [hash])
-    """editorIgnored"""
     role: String @search(by: [term]) # oob, tinkerbell, k8s_api, k8s_node
 
     # Reverse-pointer convention: <typeName-camelCase><FieldName-PascalCase>.

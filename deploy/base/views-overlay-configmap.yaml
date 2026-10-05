@@ -1,0 +1,41 @@
+# Per-deployment view overrides: what each ConfigItem page shows and edits.
+#
+# PARTIAL, and that is the whole point. Declare only the views this deployment
+# changes; every view it does not name keeps receiving whatever ships in the
+# image's config/views.yaml. Copying the shipped file in here freezes this
+# deployment at today's shape — a panel added in a later release would never
+# arrive, silently and with no signal.
+#
+# ⚠️ Mounted as a DIRECTORY, never with subPath. The kubelet updates a
+# volume-mounted ConfigMap in place, which is what lets a view change take
+# effect without a rollout restart; subPath mounts are NOT updated.
+#
+# Shipped empty: an empty overlay renders exactly what the image ships, so
+# installing this changes nothing until someone edits it.
+#
+# Governance is the cluster's, deliberately — RBAC decides who may edit it,
+# GitOps decides review, `git revert` is the reset. Orbital does not audit view
+# changes; see docs/reference/UI.md § Settled Decisions.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbital-views-overlay
+data:
+  views.yaml: |
+    # pages:                 # a URL + a menu entry + a detail layout
+    #   Server:
+    #     menuWeight: 20
+    #     summary:
+    #       refs: [dataCenter, oobIP, rack]
+    #     tabs:
+    #       - { path: idracSettings, editable: true }
+    #       - storageControllers
+    #
+    # types:                 # how a type renders WHEREVER it renders
+    #   Server:
+    #     refColumns: [dataCenter, oobIP, rack]
+    #     fields:
+    #       uHeight: { detailOnly: true }
+    #
+    # A declared page or type REPLACES the shipped one wholesale — it is not
+    # merged key by key, so copy the whole entry you mean to change.

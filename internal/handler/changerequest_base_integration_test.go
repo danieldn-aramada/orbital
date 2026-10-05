@@ -43,7 +43,7 @@ func TestBaseSnapshot_ScopeAndHash(t *testing.T) {
 	}
 
 	// The owned child is pulled in without the caller naming it.
-	scope := baseScope(ctx, url, []string{cbServer}, existing)
+	scope := baseScope(ctx, url, liveViewSet(t, url), []string{cbServer}, existing)
 	if !contains(scope, cbServer) || !contains(scope, cbIdrac) {
 		t.Fatalf("scope = %v, want it to contain the server and its idrac", scope)
 	}
@@ -112,7 +112,7 @@ func TestBaseSnapshot_AbsentOrbIDStaysInScopeAndDetectsCreate(t *testing.T) {
 		t.Fatalf("fixture is dirty — %s already exists", willExist)
 	}
 
-	scope := baseScope(ctx, url, []string{willExist}, existing)
+	scope := baseScope(ctx, url, liveViewSet(t, url), []string{willExist}, existing)
 	if len(scope) != 1 || scope[0] != willExist {
 		t.Fatalf("scope = %v, want the declared orbId even though it does not exist", scope)
 	}

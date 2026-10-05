@@ -55,6 +55,19 @@ type EditModal struct {
 	IdracOrbID   string
 	IdracVersion int
 
+	// ViewsHash identifies the views document this tree was built from.
+	//
+	// The editor sends it back on every mutation, and the GraphQL proxy refuses
+	// the save if the views have moved since. That is not belt-and-braces: a
+	// member dropped from a view while a modal sat open is read as "the user
+	// cleared this", because configitem-editor.js decides a field was cleared by
+	// diffing the open-time snapshot against the edited tree — so the save emits
+	// a `remove` for an entity nobody touched.
+	//
+	// The entity-version pre-flight is the same move one level down; this is it
+	// applied to the SHAPE of the tree rather than its contents.
+	ViewsHash string
+
 	EditDataJSON    template.JS
 	EditTargetsJSON template.JS
 }

@@ -5,14 +5,18 @@ package configitems
 import (
 	"context"
 	"os"
+	"path/filepath"
+	"runtime"
 	"sort"
+	"strings"
 	"testing"
 )
 
-// These measure the PRODUCTION derivation against the running schema:
-// DGraphSchemaClient introspects, Derive applies the rule. Nothing here
-// reimplements either — a test that reimplements the rule it checks can only
-// confirm its own copy.
+// These measure the PRODUCTION resolution against the running schema and the
+// SHIPPED views config: DGraphSchemaClient introspects, ResolveViewsFromConfig
+// applies the declarations. Nothing here reimplements either — a test that
+// reimplements the rule it checks can only confirm its own copy, and a test
+// against a fixture views document could pass while the shipped one is wrong.
 
 func dgraphURLs() (graphql, admin string) {
 	base := os.Getenv("ORBITAL_DGRAPH_BASE")
@@ -46,6 +50,14 @@ func derivedScalars(t *testing.T) (map[string][]string, []string, map[string][]s
 	// in no registry, and every assertion below is about what an operator may
 	// EDIT — which happens on a concrete type. Their annotations are already
 	// counted on each implementation, which inherits them.
+	// Collected BEFORE the interfaces are removed, because the views config is
+	// resolved against the whole schema: KubernetesCluster is an interface AND a
+	// view, and validating against a map it had been deleted from reported every
+	// member pointing at it as stale.
+	full := make(map[string]TypeInfo, len(byType))
+	for name, info := range byType {
+		full[name] = info
+	}
 	for name, info := range byType {
 		if info.IsInterface {
 			delete(byType, name)
@@ -65,7 +77,44 @@ func derivedScalars(t *testing.T) (map[string][]string, []string, map[string][]s
 		}
 	}
 
-	return Derive(byType, ifaceFields), ifaceFields, excluded
+	cfg, _, _, err := LoadViewConfig(viewsConfigPath(t), "")
+	if err != nil {
+		t.Fatalf("load the shipped views config: %v", err)
+	}
+	validated, warn := cfg.Validate(full, "")
+	if len(warn) > 0 {
+		t.Fatalf("the shipped views config must validate clean against the deployed schema:\n  %s",
+			strings.Join(warn, "\n  "))
+	}
+	views, err := ResolveViewsFromConfig(full, ifaceFields, validated)
+	if err != nil {
+		t.Fatalf("resolve views: %v", err)
+	}
+	derived := map[string][]string{}
+	for _, v := range views {
+		if full[v.Type].IsInterface {
+			continue
+		}
+		derived[v.Type] = v.Fields
+	}
+	return derived, ifaceFields, excluded
+}
+
+// viewsConfigPath is the repo's shipped views document, resolved absolutely —
+// a test's working directory is its own package, so the relative default in
+// config.go points at nothing from here.
+func schemaVersionLabel(t *testing.T) string {
+	_, thisFile, _, _ := runtime.Caller(0)
+	raw, err := os.ReadFile(filepath.Join(filepath.Dir(thisFile), "..", "..", "schema", "VERSION"))
+	if err != nil {
+		t.Fatalf("read schema/VERSION: %v", err)
+	}
+	return strings.TrimSpace(string(raw))
+}
+
+func viewsConfigPath(t *testing.T) string {
+	_, thisFile, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(thisFile), "..", "..", "config", "views.yaml")
 }
 
 // TestDerivedFieldsVsRegistry_ExactlyMatchesToday is acceptance item 8.
@@ -169,32 +218,61 @@ func difference(a, b []string) []string {
 // TestDeployedSchemaCarriesTheExpectedAnnotations guards the schema half of
 // editability, which nothing else fails loudly on.
 //
-// editorIgnoredBridge is gone: suppression now rests ENTIRELY on
-// `"""editorIgnored"""` in the deployed schema. That makes editability a
-// property of the environment rather than the binary, so an environment running
-// an older schema silently gets MORE editable fields. Zero annotations is the
-// signature of exactly that, and it must fail rather than pass quietly.
-func TestDeployedSchemaCarriesTheExpectedAnnotations(t *testing.T) {
+// The ENVIRONMENT COUPLING hazard did not go away when the annotations did — it
+// moved. Editability is a property of the views document a deployment is
+// running, so a deployment carrying an older views.yaml silently gets a
+// different editable set from every other one. Nothing fails; the editor simply
+// offers fields it should not, in one environment and not another.
+//
+// Zero is the signature of exactly that, and it must fail rather than pass
+// quietly. The count is a smoke alarm, not a guarantee: it says this environment
+// differs, not which answer was intended.
+func TestDeployedViewsCarryTheExpectedSuppressions(t *testing.T) {
+	derived, _, _ := derivedScalars(t)
+
+	// Fields the views config takes OUT of the editor: scanned hardware facts a
+	// human must not type. Measured, not asserted from the file — the question
+	// is what the resolver produced, not what the YAML says.
+	suppressed := 0
 	gql, admin := dgraphURLs()
-	byType, _, err := NewDGraphSchemaClient(gql, admin).Introspect(context.Background())
+	byType, ifaceFields, err := NewDGraphSchemaClient(gql, admin).Introspect(context.Background())
 	if err != nil {
 		t.Fatalf("introspect: %v", err)
 	}
-	rep := Annotations(byType)
+	iface := map[string]bool{}
+	for _, f := range ifaceFields {
+		iface[f] = true
+	}
+	for typeName, info := range byType {
+		if info.IsInterface {
+			continue
+		}
+		editable := map[string]bool{}
+		for _, f := range derived[typeName] {
+			editable[f] = true
+		}
+		for _, f := range info.Fields {
+			if f.Editable && !iface[f.Name] && !editable[f.Name] {
+				suppressed++
+			}
+		}
+	}
 
 	const want = 29
-	if rep.EditorIgnoredTotal == 0 {
-		t.Fatalf("the deployed schema carries NO editorIgnored annotations. This environment is "+
-			"running a schema that predates them, so %d fields are editable here that are not "+
-			"editable elsewhere. Apply schema/schema.graphql.", want)
+	if suppressed == 0 {
+		t.Fatalf("the resolved views suppress NO fields. This environment is running a views "+
+			"document that predates them, so %d fields are editable here that are not editable "+
+			"elsewhere. Check ORBITAL_VIEWS_PATH and the overlay.", want)
 	}
-	if rep.EditorIgnoredTotal != want {
-		t.Errorf("deployed schema has %d editorIgnored annotations, want %d: %v",
-			rep.EditorIgnoredTotal, want, rep.EditorIgnored)
+	if suppressed != want {
+		t.Errorf("resolved views suppress %d fields, want %d", suppressed, want)
 	}
-	if len(rep.Unknown) > 0 {
-		t.Errorf("unrecognised annotations in the deployed schema — these suppress NOTHING and are "+
-			"silent without this check: %v", rep.Unknown)
+
+	// A misspelled annotation in the SCHEMA still suppresses nothing and still
+	// says nothing — more so now that the vocabulary is three words.
+	if u := UnknownAnnotationsIn(byType); len(u) > 0 {
+		t.Errorf("unrecognised annotations in the deployed schema — these do NOTHING and are "+
+			"silent without this check: %v", u)
 	}
 }
 
@@ -283,7 +361,7 @@ func containsField(list []string, s string) bool {
 // `idrac`, not `idracsettings`. The convention belongs with the type it names,
 // and an owned child's orbId is DERIVED from it (`<ns>:<parent>-<suffix>`), so a
 // wrong value silently creates a phantom entity rather than editing the real one.
-func TestDerivedOrbIDSuffixMatchesRegistry(t *testing.T) {
+func TestDerivedOrbIDSuffix(t *testing.T) {
 	gql, admin := dgraphURLs()
 	byType, _, err := NewDGraphSchemaClient(gql, admin).Introspect(context.Background())
 	if err != nil {

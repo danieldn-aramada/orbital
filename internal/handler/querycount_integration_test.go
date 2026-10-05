@@ -92,7 +92,7 @@ func newCountingCRFixture(t *testing.T) (*crFixture, *countingDriver) {
 	})
 
 	gql := NewGraphQL(testutil.DGraphURL(), db, slog.Default(), false)
-	crh := NewChangeRequest(db, gql, testutil.DGraphURL(), slog.Default())
+	crh := NewChangeRequest(db, gql, testutil.DGraphURL(), liveViews(t, testutil.DGraphURL()), slog.Default())
 	seedCREngineFixture(t)
 	return &crFixture{db: db, crh: crh, auditH: &AuditHandler{db: db, logger: slog.Default()}}, cd
 }
@@ -353,7 +353,10 @@ func TestQueueList_MakesNoDGraphCallsAtAll(t *testing.T) {
 	// Same fixture, but any DGraph traffic lands on the trap instead of a real
 	// cluster. Rendering must not notice.
 	gql := NewGraphQL(forbidden.URL, f.db, slog.Default(), false)
-	crh := NewChangeRequest(f.db, gql, forbidden.URL, slog.Default())
+	// Views resolved from the REAL cluster and held, so the handler has them in
+	// hand: the claim under test is that LISTING makes no DGraph calls, not that
+	// the views provider is absent.
+	crh := NewChangeRequest(f.db, gql, forbidden.URL, liveViews(t, testutil.DGraphURL()), slog.Default())
 
 	for i := 0; i < 5; i++ {
 		f.open(t, approval.ChangeItem{
