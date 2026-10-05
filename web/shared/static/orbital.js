@@ -3568,117 +3568,6 @@ function formatPublishRange(fromISO, toISO) {
   return `${dayMonth(a)} → ${dayMonth(b)}`
 }
 
-// ─── Views page ───────────────────────────────────────────────────────────────
-//
-// Every page orbital derives from the deployed schema, read from the PUBLIC
-// endpoint (GET /api/v1/views) rather than a private server-side path — the UI
-// is a first-class consumer of its own API, and a second path would let the two
-// drift.
-//
-// Expandable rows rather than a page per view: a view carries two short lists
-// (its fields and its relationships), and dt-control is the pattern the audit
-// log already established here for exactly that shape.
-function initViewsTable() {
-  const el = document.getElementById('views-table')
-  if (!el || typeof DataTable === 'undefined') return
-  if ($.fn.dataTable.isDataTable(el)) return
-
-  const showError = (msg) => {
-    const box = document.getElementById('views-error')
-    if (!box) return
-    box.textContent = msg
-    box.style.display = ''
-  }
-
-  // The child row: the two lists the summary columns only COUNT. A count tells
-  // you a view has 8 fields; it never tells you which, which is the question
-  // someone opens this page to answer.
-  const childRow = (v) => {
-    const fields = (v.fields && v.fields.length)
-      ? v.fields.map(f => `<span class="tag is-light is-small">${esc(f)}</span>`).join(' ')
-      : '<span class="has-text-grey is-size-7">No editable fields.</span>'
-    // A GRID, not a nested <table>. Bulma scopes .is-striped and .is-hoverable
-    // with DESCENDANT selectors (`.table.is-striped tbody tr`), so a table
-    // nested inside a DataTables child row inherits both from the parent table:
-    // its rows alternate white/grey and highlight on hover, which reads as the
-    // parent table having stray selection. Out-specifying that needs four
-    // classes deep; not nesting a table avoids the question entirely.
-    const tabs = (v.tabs && v.tabs.length)
-      ? `<div style="display:grid;grid-template-columns:auto auto 1fr;gap:0.35em 2.5em;align-items:baseline;">
-           ${v.tabs.map(t => `
-             <span>${esc(t.field)}</span>
-             <span>${esc(t.type)}${t.isList ? ' <span class="has-text-grey">(list)</span>' : ''}</span>
-             <a href="${BASE}/${esc(t.slug)}">/${esc(t.slug)}</a>`).join('')}
-         </div>`
-      : '<span class="has-text-grey is-size-7">No relationships.</span>'
-    return `<div class="p-3">
-      <p class="is-size-7 has-text-weight-semibold mb-2">Fields</p>
-      <div class="mb-4">${fields}</div>
-      <p class="is-size-7 has-text-weight-semibold mb-2">Relationships</p>
-      ${tabs}
-    </div>`
-  }
-
-  const viewsTable = new DataTable(el, {
-    layout: {
-      topStart: [
-        { buttons: [
-          { extend: 'colvis', text: '<span style="display:inline-flex;align-items:center;gap:0.5em;font-size:0.65rem;"><i class="fa fa-columns"></i><span>Select</span></span>', className: 'is-link is-outlined is-small', titleAttr: 'Select Columns' },
-        ] },
-        { pageLength: { menu: [25, 50, 100] } },
-      ],
-      topEnd: { search: { placeholder: 'Search views' } },
-    },
-    pageLength: 50,
-    order: [[1, 'asc']],
-    language: {
-      infoEmpty: 'No views',
-      info: '_START_ to _END_ of _TOTAL_ _ENTRIES-TOTAL_',
-      entries: { _: 'views', 1: 'view' },
-    },
-    columns: [
-      { data: null, orderable: false, className: 'dt-control', defaultContent: '', width: '1%' },
-      { data: 'slug', render: (v) => `<code>${esc(v)}</code>` },
-      { data: 'type' },
-      { data: 'label' },
-      // Nav membership is derived from containment, so this column answers
-      // "why is this in the menu / why isn't it".
-      { data: 'isRoot', render: (v) => v ? '<span class="has-text-success">yes</span>' : '<span class="has-text-grey">no</span>' },
-      { data: 'fields', render: (v) => (v && v.length) ? v.length : 0 },
-      { data: 'tabs', render: (v) => (v && v.length) ? v.length : 0 },
-      // Always "derived" today. The column exists now so it gains the value
-      // "overridden" when the P1 override layer lands, rather than appearing.
-      { data: null, orderable: false, render: () => '<span class="has-text-grey">derived</span>' },
-    ],
-    ajax: {
-      url: BASE + '/api/v1/views',
-      dataSrc: (json) => json.views ?? [],
-      error: (xhr) => {
-        let msg = 'Could not load views.'
-        try {
-          const body = JSON.parse(xhr.responseText)
-          if (body.error) msg = body.error + (body.hint ? ' ' + body.hint : '')
-        } catch (_) { /* non-JSON body; keep the generic message */ }
-        showError(msg)
-      },
-    },
-  })
-
-  $('#views-table tbody').on('click', 'td.dt-control', function () {
-    const tr = this.closest('tr')
-    const row = viewsTable.row(tr)
-    if (row.child.isShown()) {
-      row.child.hide()
-      tr.classList.remove('shown')
-    } else {
-      row.child(childRow(row.data())).show()
-      tr.classList.add('shown')
-    }
-  })
-}
-
-document.addEventListener('DOMContentLoaded', initViewsTable)
-
 // ─── Generic detail editor ────────────────────────────────────────────────────
 //
 // ONE opener for every ConfigItem type. orbital.js currently carries four
@@ -3725,10 +3614,23 @@ document.addEventListener('click', function (e) {
       initialState,
       targets,
       reloadOrbId: modal.dataset.orbId,
-      // A full reload, not a fragment swap. The bespoke pages each own a
-      // fragment endpoint to re-render; the generic page is a whole page, and
-      // re-requesting it re-runs the same derivation that built it.
-      reloadFn: () => { window.location.reload() },
+      // Re-render after a save, resolved the same way the Reload button does:
+      // inside a tab, re-fetch THAT panel; on a full page, reload the window.
+      // A blanket window.reload fired from a tab would throw the reader back to
+      // the list — and under lazy restoration the tab would come back unloaded,
+      // so the edit they just made would not even be on screen.
+      reloadFn: () => {
+        const panel = modal.closest('.tab-content[id^="tab-content-generic-"]')
+        if (panel && panel.dataset.detailUrl) {
+          // The swap replaces the modal this editor is bound to, so drop the
+          // cached instance — the next Edit click must build a fresh one
+          // against the new DOM rather than drive a detached node.
+          genericEditors.delete(id)
+          htmx.ajax('GET', panel.dataset.detailUrl, { target: panel, swap: 'innerHTML' })
+          return
+        }
+        window.location.reload()
+      },
       showError,
       clearError,
       submitBtnId: 'generic-edit-submit-' + id,

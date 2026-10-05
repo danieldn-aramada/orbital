@@ -60,15 +60,30 @@ type Config struct {
 	// identity instead of a password: the Entra token becomes the password, minted
 	// per connection. When DBUseAzMI is false these are ignored and DATABASE_URL is
 	// used as-is, which is what local dev and air-gapped deployments do.
-	DBUseAzMI               bool   `envconfig:"ORBITAL_DB_USE_AZ_MI"            default:"false"`
-	DBHost                  string `envconfig:"ORBITAL_DB_HOST"                 default:""`
-	DBPort                  int    `envconfig:"ORBITAL_DB_PORT"                 default:"5432"`
-	DBUser                  string `envconfig:"ORBITAL_DB_USER"                 default:""`
-	DBName                  string `envconfig:"ORBITAL_DB_NAME"                 default:""`
-	DBSSLMode               string `envconfig:"ORBITAL_DB_SSLMODE"              default:"require"`
-	ExportDir               string `envconfig:"ORBITAL_EXPORT_DIR"              default:"./subgraph-exports"`
-	DGraphScratchExportDir  string `envconfig:"DGRAPH_SCRATCH_EXPORT_DIR"       default:"./.local/exports/scratch"`
-	SchemaPath              string `envconfig:"ORBITAL_SCHEMA_PATH"             default:"schema/schema.graphql"`
+	DBUseAzMI              bool   `envconfig:"ORBITAL_DB_USE_AZ_MI"            default:"false"`
+	DBHost                 string `envconfig:"ORBITAL_DB_HOST"                 default:""`
+	DBPort                 int    `envconfig:"ORBITAL_DB_PORT"                 default:"5432"`
+	DBUser                 string `envconfig:"ORBITAL_DB_USER"                 default:""`
+	DBName                 string `envconfig:"ORBITAL_DB_NAME"                 default:""`
+	DBSSLMode              string `envconfig:"ORBITAL_DB_SSLMODE"              default:"require"`
+	ExportDir              string `envconfig:"ORBITAL_EXPORT_DIR"              default:"./subgraph-exports"`
+	DGraphScratchExportDir string `envconfig:"DGRAPH_SCRATCH_EXPORT_DIR"       default:"./.local/exports/scratch"`
+	SchemaPath             string `envconfig:"ORBITAL_SCHEMA_PATH"             default:"schema/schema.graphql"`
+	// ViewsPath is the SHIPPED view configuration — what each ConfigItem page
+	// shows and edits. Baked into the image beside schema/, and read on the same
+	// rate-limited loop that watches the deployed schema.
+	ViewsPath string `envconfig:"ORBITAL_VIEWS_PATH"              default:"config/views.yaml"`
+	// ViewsOverlayPath is a PARTIAL per-deployment override, normally a
+	// ConfigMap. Declare only the views this deployment changes: every view it
+	// does not name keeps receiving whatever ships in ViewsPath, and a
+	// whole-file copy freezes the deployment at today's shape. Unset means no
+	// overlay, which is the common case.
+	//
+	// ⚠️ Mount the DIRECTORY, not a `subPath`. The kubelet updates a
+	// volume-mounted ConfigMap in place — which is what makes a view change
+	// take effect without a rollout restart — and does NOT update subPath
+	// mounts.
+	ViewsOverlayPath        string `envconfig:"ORBITAL_VIEWS_OVERLAY_PATH"      default:""`
 	SessionHMACKey          string `envconfig:"ORBITAL_SESSION_HMAC_KEY"        default:""`                                 // unset ⇒ ephemeral key per process; sessions end at restart
 	SessionEncryptionKey    string `envconfig:"ORBITAL_SESSION_ENCRYPTION_KEY"  default:"local-dev-enc-key-32-bytes-pad!!"` // must be exactly 32 bytes for AES-256; empty disables cookie encryption
 	DGraphExportDir         string `envconfig:"DGRAPH_EXPORT_DIR"               default:"./.local/exports/blue"`            // host-side mount of /dgraph/export on blue alpha

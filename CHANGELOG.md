@@ -22,7 +22,170 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ## [Unreleased]
 
+### Changed
+- **Schema v14.** `ServerConfigurationProfile.server` is nullable (a scanned
+  document a server page need not carry), `StorageController.storageVolumes`
+  completes the inverse of an edge that previously had no way back, and the four
+  backup back-edges (`ClusterBackup.cluster`, `EtcdBackup.clusterBackupEtcd`,
+  `VeleroBackup.clusterBackupVelero`, `S3Sync.clusterBackupS3Sync`) are non-null —
+  a backup record has no existence without the cluster it backs up, and that is
+  now what the schema says. ⚠️ Apply the schema to DGraph; an image deploy does
+  not reach a running instance by itself.
+- **A ConfigItem page is now configured in `config/views.yaml`, not in the GraphQL
+  schema.** What each page shows and edits — its URL slug, menu position, column
+  order, labels, filters, which relationships render, and which of those are
+  editable — moved out of `schema/schema.graphql` into a views document that ships
+  in the image. The schema keeps the two annotations that are about data and
+  identity (`jsonString`, `orbIdSuffix:`); the other eleven moved, and
+  `derivesIdFrom:` was deleted. A view change needs no schema apply, no version
+  bump and no reindex. The annotation vocabulary went from thirteen words to two.
+- **The views config has two sections, `pages:` and `types:`.** `pages:` is the
+  list of pages, and its top level **is** the menu — four entries, four URLs, four
+  nav items. `types:` says how a type renders wherever it renders, declared once,
+  because a server appears in four other pages' tables and repeating its column
+  order in each is how those copies drift apart. `types:` inherits along the
+  schema's interfaces, so a label declared on `ConfigItem` applies to all twenty.
+- **Two rules, not one per field: scalars are subtractive, relationships are
+  listed.** A page shows every scalar its type has unless `summary.ignoreFields`
+  removes it, so a field added to the schema appears on its own; a relationship
+  shows only where `summary.refs` or `tabs` names it, so a new edge never changes
+  a page's shape uninvited. `viewIgnored` is an edge nobody listed, and `include:`
+  is a tab whose path has two segments.
+- **A row links if and only if its type has a page.** `/idrac-settings/<id>` and
+  `/storage-devices/<id>` were never pages before this work and are not pages now —
+  they existed only because the old derivation made every type routable. A storage
+  device renders as a row on its server's page, scanned fields and all, and
+  clicking it does nothing. Promoting a type to a page is a one-line change that
+  turns its dead rows into links everywhere at once.
+- **Containment is derived from the schema's non-null back-edges, and the delete
+  cascade follows it.** `Child.parent: Parent!` is the schema saying the child has
+  no existence without the parent; thirteen of orbital's fourteen containment
+  relations already said it, and the fourteenth — a network interface belonging to
+  an adapter *or* a server *or* a device — is an exclusive choice that nullability
+  cannot express, so it is the only declared one. `editable:` now means one thing
+  only: this page's editor may write this child. A display decision can no longer
+  move a delete boundary. This replaced three hand-written GraphQL traversals and a
+  three-way switch on literal type names that consulted no model at all, and it
+  fixes four silent defects they had drifted into: a server delete orphaned its
+  NICs, its configuration profile and its Kubernetes node; a data-centre delete
+  orphaned its network devices; and the same IP address was preserved by one
+  delete and destroyed by another depending only on which page you started from.
+  Every one of those left a node holding a non-null edge to something that no
+  longer existed — the failure mode that can break export for an entire data
+  centre, silently, surfacing later in an unrelated subsystem.
+  **An IP address is now owned by no page**, so it survives every delete that
+  reaches it.
+- **A type absent from the views config is a statement, not a gap.** It stays
+  routable and renders its own fields, with no relationships and no menu entry.
+  Leaving something out is now how you say you do not want it on a page.
+- **A page and a menu entry are one fact.** Everything in `pages:` has a URL and a
+  menu entry; `menuWeight` orders the menu and does not decide membership. This
+  replaces a derivation that guessed from containment, admitted the guess in its
+  own comment, and produced twenty-three routable types that then had to be
+  filtered back down to four.
+
+### Added
+- **Orphaning is now structurally impossible rather than guarded against.** A
+  child whose back-edge is non-null is contained by derivation, so there is no
+  view declaration that can fail to say so. Relaxing the edge to nullable is how a
+  child opts out — which is what `ServerConfigurationProfile.server` does as of
+  schema v13.
+- **Per-deployment view overrides, as a partial ConfigMap overlay**
+  (`ORBITAL_VIEWS_OVERLAY_PATH`). A deployment declares only the views it changes;
+  every view it does not name keeps receiving whatever ships in later releases.
+  Changes are picked up **without a process restart** — the overlay is hashed on
+  the same rate-limited loop that already watches the deployed schema.
+  ⚠️ Mount the directory, not a `subPath`: the kubelet does not update `subPath`
+  mounts in place.
+- **The views config is validated against live introspection at load.** A tab or
+  reference naming a field the deployed schema lacks, a path deeper than two
+  segments, a `canonicalParent` edge that does not exist, a page whose type is
+  gone, `editable:` on a list relationship (an edit target is addressed by path,
+  and a path cannot name one row) — each is dropped or refused, and logged at
+  WARN. Never fatal: a stale view must not stop a
+  page rendering. Never silent: a declaration that reads as correct and does
+  nothing is worse than one nobody wrote.
+- **A save composed against an older view is refused with 409.** The editor
+  decides a field was *cleared* by diffing the tree it opened against the tree it
+  submits, so a member dropped from a view while a modal sat open would have
+  emitted a `remove` for fields nobody touched. The editor now declares which
+  views document it was built from, and the GraphQL proxy refuses the write if
+  that has moved. Scoped to the editor: a caller that declares nothing proceeds,
+  because an API client sending an explicit `remove` is doing it deliberately.
+- **`/api/v1/views` now carries `labels`, `summaryRefs`, `contains` and `editable`
+  per tab**, so an integrator rendering their own table gets orbital's own answers
+  rather than re-deriving its title-casing rule or its containment. An empty
+  `slug` means the type has no page — which is how a client knows not to link it.
+
+### Removed
+- **The Views page and `GET /api/v1/views`.** Both existed to show what orbital
+  derived from schema annotations, back when that was the only way to see it.
+  Page configuration is a file now — `config/views.yaml` — and nothing consumed
+  the endpoint except the page. What they answered between them, the resolved
+  result for a deployment that overrides part of its configuration, is now in
+  the startup log, which names the pages it resolved rather than only counting
+  them.
+
 ### Fixed
+- **List pages show the columns they used to.** The reference columns on a table
+  — Data Center, Rack, OOB IP — were derived from the schema, so every
+  single-cardinality relationship became one: the servers list carried Idrac
+  Settings, Server Configuration Profile, Server Maintenance and Kubernetes
+  Node, none of which any earlier version showed, and adding a relationship to
+  the schema widened every table of that type with nobody deciding to. They are
+  declared now, in `types.<T>.refColumns`.
+- **A field marked detail-only no longer reappears on a list that unions several
+  types.** The clusters list showed Description because the union took each
+  implementation's full field set rather than its column set.
+- **There are no individual ConfigItem pages.** A server, cluster, data centre or
+  network device is shown as a tab on its list page and nowhere else, which is
+  how orbital worked before the schema-derived pages landed. Rows link to
+  `/servers?open=<orbId>`; `/servers/<orbId>` is the address a tab fetches its
+  own body from and is no longer reachable as a page.
+- **Closing a tab lands on the tab to its left, not back on the list.** Closing
+  the last of several tabs used to send you to Summary every time. Closing a tab
+  you are not currently viewing now leaves you where you are.
+- **Returning to a list page puts you back on the tab you were on.** It always
+  landed on Summary instead: the active tab was written under one key and read
+  back under another that nothing ever wrote, so the restore quietly did nothing.
+  The key is also per page now — every list page was sharing one, so the tab open
+  on clusters was looked up on servers.
+- **Returning to a list page no longer re-fetches every open tab.** Tabs were
+  rebuilt by selecting each one, so arriving at the page — from the menu, the
+  back button, or a reload — issued one detail query per open tab, for panels
+  nobody had looked at. They are now fetched the first time you actually open
+  them. The rule you see is the same: one fetch per tab per page load.
+- **An open tab no longer comes back permanently blank.** Those restore requests
+  went out all at once and one was dropped, but the tab had already been marked
+  loaded, so it stayed empty with no error until you pressed Reload.
+- **Edit works inside a detail tab again.** The editor's modal shipped only with
+  the full page, so the Edit button in a tab resolved nothing and did nothing —
+  silently. Saving from a tab now re-renders that tab rather than reloading the
+  whole page.
+- **A list page holds at most five detail tabs.** Opening a sixth closes the one
+  you have looked at least recently and says which, rather than refusing to open
+  it. The strip has no overflow menu or tab search, so past a handful it stops
+  being navigable.
+- **Detail tabs no longer go blank when you switch between them.** Showing one
+  tab hid every element carrying the shared `tab-content` layout class, not just
+  the other tab panels — including the wrapper inside each panel's own body. That
+  could never be undone, so the panel stayed visible around content that was
+  permanently hidden, and the second tab you opened blanked the first. The tab
+  strip kept working throughout, which is why it looked like the content had
+  simply not loaded.
+- **Double-clicking a row on a list page opens it as a tab again.** The derived
+  table rendered the name as a link and a click navigated away, so the tab strip
+  never grew — "Summary · server1 · server2" was gone. The name is plain text
+  again, as it was before: single click selects the row (which is what the
+  Copy/Excel/CSV buttons export), and double click opens it.
+- **Edit and Delete are back at the top of a detail view, in the colours they
+  had.** They had moved into the Fields box header, and Edit had turned green.
+  The detail body is served both as a full page and as a tab, so the move
+  affected both at once; green also contradicts orbital's own rule that primary
+  actions are `is-link`.
+- **The Reload button is back on detail views.** It refreshes the panel it is in
+  — a tab reloads only itself and leaves the other open tabs alone.
+
 - **The list-page filter dropdown did nothing.** It rendered and could be
   changed, but filtered zero rows — the data attribute carrying its column index
   was spelled in mixed case, and HTML lowercases attribute names, so the index

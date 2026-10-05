@@ -25,7 +25,7 @@ import (
 func newGenericUI(t *testing.T) (*UI, int) {
 	t.Helper()
 	ui, db := newRenderUI(t)
-	ui.fields = NewSharedFieldSource(testutil.DGraphURL(), slog.Default())
+	ui.fields = NewSharedFieldSource(testutil.DGraphURL(), ViewsSource{Path: testutil.ViewsPath()}, slog.Default())
 
 	admin, err := db.User.Create().
 		SetEmail("generic-admin@test.local").
@@ -39,8 +39,10 @@ func newGenericUI(t *testing.T) (*UI, int) {
 	return ui, admin.ID
 }
 
-// Item 5: /{slug} renders a list for a type that has no bespoke page.
-func TestGeneric_ListRendersForTypesWithNoBespokePage(t *testing.T) {
+// Every PAGE renders its list. There are four, and the top level of `pages:` is
+// the menu — a type without an entry has no URL at all, which is asserted
+// separately below.
+func TestGeneric_ListRendersEveryPage(t *testing.T) {
 	ui, adminID := newGenericUI(t)
 	e := echo.New()
 
@@ -49,10 +51,10 @@ func TestGeneric_ListRendersForTypesWithNoBespokePage(t *testing.T) {
 	// therefore asserted on the table's data-slug/data-type, which is what
 	// actually proves the right view was resolved.
 	for _, tc := range []struct{ slug, wantType string }{
-		{"racks", "Rack"},
-		{"storage-devices", "StorageDevice"},
-		{"ip-addresses", "IPAddress"},
-		{"kubernetes-nodes", "KubernetesNode"},
+		{"data-centers", "DataCenter"},
+		{"servers", "Server"},
+		{"clusters", "KubernetesCluster"},
+		{"network-devices", "NetworkDevice"},
 	} {
 		t.Run(tc.slug, func(t *testing.T) {
 			rec := renderAs(t, e, "/"+tc.slug, ui.Generic().List, adminID, map[string]string{"slug": tc.slug})
@@ -124,16 +126,23 @@ func TestGeneric_UnknownSlugIs404(t *testing.T) {
 	}
 }
 
-// Items 6 and 8: a detail page renders the entity's fields AND its
-// relationships as tabs, both derived.
+// A detail page renders the entity's fields AND its relationships — a tab strip
+// for lists, a link row for singles.
+//
+// Rendered from the DATA CENTRE, not the rack it seeds: Rack has no page any
+// more, so /racks/<id> correctly 404s. A pageless type still renders — as rows
+// in the Racks tab below — which is the half this asserts.
 func TestGeneric_DetailRendersFieldsAndRelationshipTabs(t *testing.T) {
 	ui, adminID := newGenericUI(t)
 	e := echo.New()
 
-	orbID := seedGenericRack(t)
+	seedGenericRack(t)
+	const orbID = "gen-test:datacenter-1"
 
-	rec := renderAs(t, e, "/racks/"+orbID, ui.Generic().Detail, adminID,
-		map[string]string{"slug": "racks", "orbId": orbID})
+	// As a FRAGMENT: this route is the body a detail tab fetches, and without
+	// HX-Request it 404s. There is no page to render.
+	rec := renderAsFragment(t, e, "/data-centers/"+orbID, ui.Generic().Detail, adminID,
+		map[string]string{"slug": "data-centers", "orbId": orbID})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
 	}
@@ -142,28 +151,28 @@ func TestGeneric_DetailRendersFieldsAndRelationshipTabs(t *testing.T) {
 	if !strings.Contains(body, `data-testid="generic-fields"`) {
 		t.Error("no field table rendered")
 	}
-	// uHeight is a derived editable scalar on Rack; its VALUE must appear.
-	if !strings.Contains(body, "uHeight") || !strings.Contains(body, "42") {
-		t.Error("expected the derived field uHeight and its value 42")
+	// The rack renders as a ROW in the Racks tab, carrying its own derived
+	// field — a pageless type keeps its display config.
+	if !strings.Contains(body, "42") {
+		t.Error("expected the rack's uHeight value 42 in the Racks tab")
 	}
-	// dataCenter is a SINGLE relationship, so it renders as a link row in the
-	// field list rather than a table of its own — the hand-written pages all
-	// showed single relationships that way, and a box per relationship buries
-	// the fields beside it. Either way it must link through by the OTHER type's
-	// slug: a client should never re-derive one.
-	if !strings.Contains(body, "Data Center") {
-		t.Error("expected a Data Center link row in the field list")
+	if !strings.Contains(body, "Racks") {
+		t.Error("expected a Racks tab — a list relationship is a table")
 	}
-	if !strings.Contains(body, "/data-centers/") {
-		t.Error("the link must use the target type's slug")
+	// A row of a PAGELESS type must not link: Rack has no URL, so there is
+	// nowhere to go. That is derived from "does its type have a page", which is
+	// what makes promoting a type to a page turn its rows into links with no
+	// other change.
+	// Rows link at `?open=`, so that is the shape a regression would produce —
+	// checking for "/racks/" would now pass no matter what.
+	if strings.Contains(body, "/racks?open=") || strings.Contains(body, "/racks/") {
+		t.Error("Rack has no page, so a rack row must not link to one")
 	}
-	// And it must NOT also appear as a relationship table — rendering both is
-	// the same fact twice.
-	if strings.Contains(body, `data-field="dataCenter"`) {
-		t.Error("a single relationship must not render as a table as well as a row")
-	}
-	if !strings.Contains(body, "</html>") {
-		t.Error("render truncated")
+	// Reached the END of the block. This asserted "</html>" when the route still
+	// served a page; it serves only the fragment now, whose last element is the
+	// audit panel — so that is what proves the render was not truncated.
+	if !strings.Contains(body, `data-testid="generic-audit"`) {
+		t.Error("render truncated: the audit panel closes the detail body")
 	}
 }
 
@@ -173,10 +182,10 @@ func TestGeneric_StatesReasonWhenSchemaUnreadable(t *testing.T) {
 	ui, adminID := newGenericUI(t)
 	// Point the field source at something that answers but is not a schema.
 	stub := newDGraphStub(t, `{"data":{"nope":1}}`)
-	ui.fields = NewSharedFieldSource(stub.URL, slog.Default())
+	ui.fields = NewSharedFieldSource(stub.URL, ViewsSource{Path: testutil.ViewsPath()}, slog.Default())
 
 	e := echo.New()
-	rec := renderAs(t, e, "/racks", ui.Generic().List, adminID, map[string]string{"slug": "racks"})
+	rec := renderAs(t, e, "/servers", ui.Generic().List, adminID, map[string]string{"slug": "servers"})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("the page should still render, got %d", rec.Code)
 	}
@@ -203,7 +212,7 @@ func TestGeneric_StatesReasonWhenSchemaUnreadable(t *testing.T) {
 func TestGeneric_NoUnavailableNoticeWhenSchemaResolves(t *testing.T) {
 	ui, adminID := newGenericUI(t)
 	e := echo.New()
-	rec := renderAs(t, e, "/racks", ui.Generic().List, adminID, map[string]string{"slug": "racks"})
+	rec := renderAs(t, e, "/servers", ui.Generic().List, adminID, map[string]string{"slug": "servers"})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}

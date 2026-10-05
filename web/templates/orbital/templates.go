@@ -61,7 +61,6 @@ func Map(fsys fs.FS) map[string]*template.Template {
 			// The SAME edit modal the bespoke pages parse — one template, not a
 			// generic copy of one.
 			"templates/shared/components/edit-modal.gohtml")...)),
-		"views":   template.Must(template.ParseFS(fsys, page("templates/orbital/pages/views.gohtml")...)),
 		"restore": template.Must(template.ParseFS(fsys, page("templates/orbital/pages/restore.gohtml")...)),
 		"users":   template.Must(template.ParseFS(fsys, page("templates/orbital/pages/users.gohtml")...)),
 

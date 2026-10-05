@@ -56,9 +56,10 @@ test('DataCenter delete works for orbId containing ":"', async ({ page }) => {
     const row = page.locator('#generic-table tbody tr', { hasText: name })
     await expect(row).toBeVisible()
 
-    // Open the detail page. Double-click still opens it as a tab; this test
-    // cares about the delete route, so it navigates directly.
-    await row.locator('td:first-child a').click()
+    // Open the detail view. The row's name is plain text now — the entity is on
+    // the row itself — and `?open=` is how a url addresses one.
+    const rowOrbId = await row.getAttribute('data-orb-id')
+    await page.goto('http://localhost:8001/data-centers?open=' + encodeURIComponent(rowOrbId!))
     await expect(page.getByTestId('generic-fields')).toBeVisible()
 
     // Click Delete in the tab, then Confirm in the modal. The Confirm hits

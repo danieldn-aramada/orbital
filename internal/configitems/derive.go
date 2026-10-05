@@ -6,8 +6,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -44,6 +44,14 @@ type TypeInfo struct {
 	// name, so only the irregular ones need an annotation.
 	OrbIDSuffix string
 
+	// DerivesIDFrom names the edge this type's identity hangs off — the field
+	// on THIS type pointing at the entity whose name its orbId is built from.
+	// Empty for a type with an identity of its own.
+	//
+	// It is also the inverse edge a first-time create links through, which is
+	// not a coincidence: the parent an id derives from and the parent a child is
+	// attached to are the same parent, and declaring them separately would be
+	// two chances to disagree.
 	// PayloadField is the field on `Add<Type>Payload` that returns the affected
 	// rows, so the audit extractor can find the orbId in a mutation response.
 	//
@@ -85,84 +93,18 @@ type DerivedField struct {
 	// IsList distinguishes `[Server]` from `Server`: a list relationship renders
 	// as a table, a single one as a panel.
 	IsList bool
+
+	// NonNull is the OUTERMOST wrapper — `Server!`, not `[Server!]`.
+	//
+	// It is where CONTAINMENT comes from. `Child.parent: Parent!` is the schema
+	// saying the child has no existence without that parent, so it dies with it
+	// and its audit rolls up onto it. 13 of orbital's 14 containment relations
+	// derive from this; the one that cannot is NetworkInterface, whose owner is
+	// an XOR across three nullable edges.
+	NonNull bool
 }
 
-// EditableAnnotation re-admits ConfigItem interface fields for editing on one
-// type.
-//
-//	"""editable: name"""
-//	type DataCenter implements ConfigItem {
-//
-// `name` is declared on the ConfigItem interface, so "type fields minus
-// interface fields" removes it from every type — but DataCenter and Rack have
-// always exposed it for editing.
-//
-// TYPE-level, not field-level, and that is forced: DGraph forbids redeclaring
-// an interface field on an implementor, so `DataCenter.name` cannot carry a
-// docstring of its own. This was a hardcoded map in Go until 2026-09-29; the
-// comment above it had promised an annotation since the day it was written.
-const EditableAnnotation = "editable:"
-
-// EditableInterfaceFields returns the interface fields a type re-admits.
-func EditableInterfaceFields(typeDoc string) []string {
-	v := annotationValue(typeDoc, EditableAnnotation)
-	if v == "" {
-		return nil
-	}
-	var out []string
-	for _, part := range strings.Split(v, ",") {
-		if f := strings.TrimSpace(part); f != "" {
-			out = append(out, f)
-		}
-	}
-	return out
-}
-
-// Derive computes each type's editable scalar set from the running schema:
-// the object type's fields, minus the ConfigItem interface's fields, minus
-// anything that is not a plain scalar — then re-admitting whatever the type's
-// `editable:` annotation names.
-func Derive(types map[string]TypeInfo, ifaceFields []string) map[string][]string {
-	iface := make(map[string]bool, len(ifaceFields))
-	for _, f := range ifaceFields {
-		iface[f] = true
-	}
-
-	derived := make(map[string][]string, len(types))
-	for typeName, info := range types {
-		readmit := make(map[string]bool)
-		for _, f := range EditableInterfaceFields(info.Doc) {
-			readmit[f] = true
-		}
-
-		var scalars []string
-		for _, f := range info.Fields {
-			if !f.Editable {
-				continue
-			}
-			if iface[f.Name] && !readmit[f.Name] {
-				continue
-			}
-			if IsEditorIgnored(f.Doc) {
-				continue
-			}
-			scalars = append(scalars, f.Name)
-		}
-		sort.Strings(scalars)
-		derived[typeName] = scalars
-	}
-	return derived
-}
-
-// BeforeSelection generates the audit before-fetch selection for a type from
-// the same derived model, so the two can never disagree. Shape:
-//
-//	id orbId name version <own scalars> <childField> { <child scalars> } …
-//
-// Hand-maintaining this beside the field list is a Hi-severity debt row: drop a
-// field from one and the mutation still succeeds while the audit event carries
-// no `changes` at all — no error, nothing in the log.
-func BeforeSelection(typeName string, fields FieldsFor, children func(string) []Type) string {
+func BeforeSelection(typeName string, fields FieldsFor, members func(string) []EditableMember) string {
 	sel := "id orbId name version"
 	for _, f := range fields(typeName) {
 		if f == "name" {
@@ -170,15 +112,15 @@ func BeforeSelection(typeName string, fields FieldsFor, children func(string) []
 		}
 		sel += " " + f
 	}
-	for _, ch := range children(typeName) {
-		if ch.ChildField == "" {
-			continue
-		}
-		childScalars := fields(ch.Name)
+	// The page's EDIT UNIT, which is the right scope by construction: the audit
+	// `changes` must cover whatever one mutation through this page could have
+	// altered, and that is exactly what the editor writes.
+	for _, m := range members(typeName) {
+		childScalars := fields(m.ChildType)
 		if len(childScalars) == 0 {
 			continue
 		}
-		sel += " " + ch.ChildField + " { " + joinFields(childScalars) + " }"
+		sel += " " + m.ChildField + " { " + joinFields(childScalars) + " }"
 	}
 	return sel
 }
@@ -218,18 +160,155 @@ type Resolver struct {
 	now        func() time.Time
 	logger     *slog.Logger
 
-	mu        sync.RWMutex
-	derived   map[string][]string
-	snapshot  map[string]TypeInfo
-	views     []View
-	viewsErr  error
-	sdlHash   string
-	lastCheck time.Time
-	resolved  bool
+	// The views document's two file paths and the schema version to compare it
+	// against. Watched on the SAME rate-limited loop as the deployed SDL, which
+	// is what lets a ConfigMap edit reach the pages without a rollout restart:
+	// the kubelet updates a volume-mounted ConfigMap in place, and the next
+	// check sees a different hash.
+	viewsPath     string
+	overlayPath   string
+	schemaVersion string
+
+	mu          sync.RWMutex
+	derived     map[string][]string
+	typeNames   []string
+	mutationRe  *regexp.Regexp
+	inverse     map[string]string
+	snapshot    map[string]TypeInfo
+	ifaceFields []string
+	viewConfig  ViewConfig
+	views       []View
+	viewsErr    error
+	sdlHash     string
+	viewsHash   string
+	lastCheck   time.Time
+	resolved    bool
 }
 
 func NewResolver(client SchemaClient, checkEvery time.Duration) *Resolver {
 	return &Resolver{client: client, checkEvery: checkEvery, now: time.Now}
+}
+
+// WithViews points the resolver at the shipped views document and its optional
+// per-deployment overlay.
+//
+// schemaVersion is the label the config is checked against — the COARSE signal
+// of §5. It catches the case it was built for, an overlay authored against an
+// earlier release, and it cannot catch two schemas sharing a version label,
+// because schema/VERSION is bumped by hand and deliberately not for every
+// change. Per-member validation against live introspection is what actually
+// catches a stale declaration; this only says "look".
+func (r *Resolver) WithViews(viewsPath, overlayPath, schemaVersion string) *Resolver {
+	r.viewsPath, r.overlayPath, r.schemaVersion = viewsPath, overlayPath, schemaVersion
+	return r
+}
+
+// ViewsHash identifies the views document the current view list was built from.
+//
+// The editor stamps it into its payload and sends it back on save, so an edit
+// opened under one view and saved under another is refused rather than silently
+// emitting a `remove` for an entity the view no longer carries. Empty until the
+// first successful resolve.
+func (r *Resolver) ViewsHash() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.viewsHash
+}
+
+// InverseOf returns the field on the FAR type that points back along an edge —
+// the `@hasInverse` partner of `typeName.field`, or "" when the edge declares
+// none.
+//
+// Read from the SDL, because introspection cannot see it: `__Field` exposes
+// name/description/args/type/isDeprecated and no applied directives at all. The
+// SDL is already fetched for the cache-invalidation hash, so this costs nothing
+// extra.
+//
+// It is what lets a delete clear the edges held by SURVIVORS without a
+// hand-maintained list. A DQL delete does NOT maintain `@hasInverse` — orbital's
+// cascade is a DQL upsert, deliberately, because that is the only way to get a
+// version-guarded CAS — so an `S * *` delete clears the child and leaves the
+// parent pointing at an empty uid. Any later query selecting a non-nullable
+// field through that edge then fails ENTIRELY, which is how one cluster delete
+// permanently broke export for its whole data centre.
+func (r *Resolver) InverseOf(ctx context.Context, typeName, field string) string {
+	if err := r.ensure(ctx); err != nil {
+		return ""
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.inverse[typeName+"."+field]
+}
+
+// MutationRegex matches every add/update/delete mutation against a type the
+// DEPLOYED schema declares as a ConfigItem.
+//
+// It gates three things, and the asymmetry between its two failure modes is what
+// decides the design:
+//
+//   - MISSING a type is catastrophic and silent: the approval gate does not run
+//     (an ungated write) and no audit event is recorded (a hole nobody can see).
+//   - MATCHING too much is harmless: the audit path runs only on mutations DGraph
+//     ACCEPTED, so the type exists; the approval gate only ever refuses or passes.
+//
+// So it must never under-match. When the schema cannot be read it returns the
+// BROAD pattern rather than an empty or stale one — over-auditing beats a silent
+// gap, every time.
+//
+// ⚠️ This replaced a hand-maintained Go list, and not only for tidiness. That
+// list was keyed to the SHIPPED schema while the gate operates on the DEPLOYED
+// one. A deployment whose DGraph carried a ConfigItem type the shipped file did
+// not would get ungated, unaudited writes on it — and no build-time test can see
+// that, because the drift is between an environment and a binary, not between
+// two files in one repo.
+func (r *Resolver) MutationRegex(ctx context.Context) *regexp.Regexp {
+	if err := r.ensure(ctx); err != nil {
+		return BroadMutationRegex
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.mutationRe == nil {
+		return BroadMutationRegex
+	}
+	return r.mutationRe
+}
+
+// TypeNames returns the ConfigItem type names the deployed schema declares,
+// sorted. Used where a caller offers or validates the set of types.
+func (r *Resolver) TypeNames(ctx context.Context) ([]string, error) {
+	if err := r.ensure(ctx); err != nil {
+		return nil, err
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return append([]string(nil), r.typeNames...), nil
+}
+
+// CurrentViewsHash is ViewsHash after a rate-limited re-check.
+//
+// The difference matters on the WRITE path. ViewsHash reads the cached value, so
+// it answers with whatever the last resolve saw — fine for stamping a page that
+// just rendered, and useless for deciding whether a submitted page is stale,
+// which is the one question that needs the current answer. Both exist because
+// both are correct for their caller.
+//
+// A failure returns "" rather than an error: the comparison is a guard, and a
+// guard that cannot read the configuration must not refuse every write.
+func (r *Resolver) CurrentViewsHash(ctx context.Context) string {
+	if err := r.ensure(ctx); err != nil {
+		return ""
+	}
+	return r.ViewsHash()
+}
+
+// ViewConfig returns the merged, validated views document.
+func (r *Resolver) ViewConfig(ctx context.Context) (ViewConfig, error) {
+	if err := r.ensure(ctx); err != nil {
+		return ViewConfig{}, err
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.viewConfig, nil
 }
 
 // Fields returns the editable scalar set for a type.
@@ -319,8 +398,23 @@ func (r *Resolver) ensure(ctx context.Context) error {
 	sum := sha256.Sum256([]byte(sdl))
 	hash := hex.EncodeToString(sum[:])
 
+	// The views document is read on the same loop. Two small file reads at most
+	// once per checkEvery, which is what makes "edit the ConfigMap, see the
+	// change" true without a watch, an inotify loop, or a restart.
+	cfg, cfgHash, cfgWarn, cfgErr := LoadViewConfig(r.viewsPath, r.overlayPath)
+	if cfgErr != nil {
+		if resolved {
+			// Keep serving the last good document. A views file that briefly
+			// cannot be read must not take every page down with it.
+			return nil
+		}
+		return fmt.Errorf("cannot read the views configuration, so no page knows what to render: %w", cfgErr)
+	}
+
 	r.mu.RLock()
-	unchanged := resolved && hash == r.sdlHash
+	unchanged := resolved && hash == r.sdlHash && cfgHash == r.viewsHash
+	cachedTypes, cachedIface := r.snapshot, r.ifaceFields
+	schemaMoved := !resolved || hash != r.sdlHash
 	r.mu.RUnlock()
 	if unchanged {
 		r.mu.Lock()
@@ -329,58 +423,115 @@ func (r *Resolver) ensure(ctx context.Context) error {
 		return nil
 	}
 
-	types, iface, err := r.client.Introspect(ctx)
-	if err != nil {
-		if resolved {
-			return nil
+	types, iface := cachedTypes, cachedIface
+	if schemaMoved {
+		types, iface, err = r.client.Introspect(ctx)
+		if err != nil {
+			if resolved {
+				return nil
+			}
+			return fmt.Errorf("cannot introspect the schema, so the editable fields are unknown: %w", err)
 		}
-		return fmt.Errorf("cannot introspect the schema, so the editable fields are unknown: %w", err)
 	}
 
-	views, viewsErr := ResolveViews(types, iface)
+	// Validated against LIVE introspection, never against the schema file: the
+	// two can be different versions, which is the whole exposure a separate
+	// views document creates. Unsupportable declarations are dropped here, and
+	// reported below — never fatal, never silent.
+	validated, viewWarn := cfg.Validate(types, r.schemaVersion)
+	views, viewsErr := ResolveViewsFromConfig(types, iface, validated)
+
+	// ONE editable-field set, built from the views. The editor's field list and
+	// the audit before-fetch both read it, and a second derivation beside the
+	// View's own `Fields` would be two answers to "what may a human write here"
+	// — which is exactly the drift that made the audit before-fetch a
+	// Hi-severity debt row when it was hand-maintained.
+	derived := make(map[string][]string, len(views))
+	for _, v := range views {
+		derived[v.Type] = v.Fields
+	}
+
+	names := make([]string, 0, len(types))
+	for n := range types {
+		names = append(names, n)
+	}
+	sort.Strings(names)
 
 	r.mu.Lock()
-	r.derived = Derive(types, iface)
+	r.derived = derived
+	r.inverse = InverseEdges(sdl)
+	r.typeNames = names
+	r.mutationRe = MutationRegexFor(names)
 	r.snapshot = types
+	r.ifaceFields = iface
+	r.viewConfig = validated
 	r.views, r.viewsErr = views, viewsErr
 	r.sdlHash = hash
+	r.viewsHash = cfgHash
 	r.lastCheck = r.now()
 	r.resolved = true
 	r.mu.Unlock()
 
-	// Logged on EVERY re-derive, not only the first: this covers boot and every
-	// later schema change, and an environment whose annotations went missing
-	// after a redeploy is exactly as invisible as one that never had them.
+	// Logged on EVERY resolve, not only the first. This covers boot and every
+	// later change to either artifact, and a views document whose declarations
+	// went missing after a redeploy is exactly as invisible as one that never
+	// had them — the count is what makes zero-when-expecting-N obvious.
 	if r.logger != nil {
-		rep := Annotations(types)
-		r.logger.Info("resolved schema annotations from the deployed schema",
-			"editor_ignored_total", rep.EditorIgnoredTotal,
-			"editor_ignored_by_type", rep.EditorIgnored,
-			"types", len(types))
-		for _, u := range rep.Unknown {
-			r.logger.Warn("unrecognised orbital annotation in the deployed schema; the field is NOT suppressed",
+		members := 0
+		var pages []string
+		for _, v := range views {
+			members += len(v.Tabs)
+			if v.Slug != "" {
+				pages = append(pages, v.Slug)
+			}
+		}
+		sort.Strings(pages)
+		// The SLUGS, not just a count. This log line is the only place the
+		// RESOLVED set is legible: the shipped config is baked into the image,
+		// a deployment's overlay is a separate ConfigMap, and the derived half
+		// comes from DGraph — so the merged result exists nowhere but in this
+		// process. A /views page and a GET /api/v1/views both used to answer
+		// this and were deleted 2026-10-05: the question is one a developer
+		// asks while debugging, and this is where they already are.
+		r.logger.Info("resolved views against the deployed schema",
+			"views", len(views), "members", members, "types", len(types),
+			"pages", strings.Join(pages, ","),
+			"schema_version", r.schemaVersion, "views_hash", shortHash(cfgHash))
+		for _, w := range cfgWarn {
+			r.logger.Warn("views configuration", "detail", w)
+		}
+		// A declaration the deployed schema cannot support is DROPPED, so the
+		// tab, column or filter simply is not there — indistinguishable from the
+		// outside from never having declared it. That is why it is said out loud.
+		for _, w := range viewWarn {
+			r.logger.Warn("views declaration dropped; the deployed schema cannot support it", "where", w)
+		}
+		for _, w := range FilterByWarningsFromConfig(views, validated) {
+			r.logger.Warn("filterBy dropped; the list page has no filter dropdown for it", "where", w)
+		}
+		for _, w := range ColumnWarningsFromConfig(types, iface, validated) {
+			r.logger.Warn("column dropped; it will not render", "where", w)
+		}
+		// Annotation typos stay worth reporting: the three that remain in the
+		// schema are identity and data facts, and a misspelled one fails as
+		// silently as any other docstring — more so now that there are only
+		// three, with no near-neighbours to make a misspelling look odd.
+		for _, u := range UnknownAnnotationsIn(types) {
+			r.logger.Warn("unrecognised orbital annotation in the deployed schema; it does nothing",
 				"where", u)
-		}
-		// A filterBy that named a field the page does not render is dropped
-		// silently otherwise — the schema claims the list page has a filter
-		// and it simply does not appear.
-		for _, w := range FilterByWarnings(types, views) {
-			r.logger.Warn("filterBy annotation ignored; the list page has no filter dropdown for it",
-				"where", w)
-		}
-		// A column path the schema cannot support is dropped, so the column
-		// simply is not there — identical from the outside to never having
-		// annotated it.
-		for _, w := range ColumnWarnings(types, views, iface) {
-			r.logger.Warn("column annotation ignored; that column will not render",
-				"where", w)
-		}
-		for _, w := range MenuWeightWarnings(types) {
-			r.logger.Warn("nav annotation ignored; the type sorts after every pinned entry",
-				"where", w)
 		}
 	}
 	return nil
+}
+
+// shortHash abbreviates a content hash for a log line, git-style. The whole
+// digest in every resolve line is noise; eight characters is enough to see that
+// it moved, which is the only question the line answers.
+func shortHash(h string) string {
+	if len(h) > 8 {
+		return h[:8]
+	}
+	return h
 }
 
 // WithLogger attaches a logger so each re-derive reports what it resolved.
@@ -389,83 +540,9 @@ func (r *Resolver) WithLogger(l *slog.Logger) *Resolver {
 	return r
 }
 
-// EditorIgnoredAnnotation opts a field OUT of the editor, from the schema.
-//
-// Editability is editable-UNLESS-annotated (decided 2026-09-24), so this is the
-// only opt-out. It is EDITOR-scoped, not API-scoped: an ignored field is still
-// writable through the API, because a scanner must still be able to write e.g.
-// capacityBytes. It only means "do not offer this to a human in the editor".
-//
-// It rides a docstring rather than a directive because DGraph REJECTS unknown
-// directives outright ("Undefined directive orbital"), while docstrings
-// round-trip through getGQLSchema AND surface in introspection as `description`
-// — both verified against a live instance 2026-09-24:
-//
-//	"""editorIgnored"""
-//	capacityBytes: Int64
-//
-// Annotation-only changes do NOT bump schema/VERSION: no data contract moves.
-const EditorIgnoredAnnotation = "editorIgnored"
-
-// IsEditorIgnored reports whether a field's docstring opts it out of the editor.
-//
-// Matching is exact on a trimmed line so that ordinary prose mentioning the word
-// does not silently disable a field. A docstring may carry human text on other
-// lines.
-func IsEditorIgnored(doc string) bool {
-	return hasAnnotationLine(doc, EditorIgnoredAnnotation)
-}
-
-// ViewIgnoredAnnotation keeps a RELATIONSHIP off the detail page.
-//
-//	"""viewIgnored"""
-//	serverConfigurationProfile: ServerConfigurationProfile @hasInverse(field: server)
-//
-// Tabs are DERIVED — every relationship to another ConfigItem type becomes one —
-// and `include:` could only ever ADD. That asymmetry left no way to drop an edge
-// the schema declares but a page should not show, short of deleting the edge and
-// its containment with it.
-//
-// FIELD-level, not type-level: what is hidden is THIS EDGE FROM THIS PARENT. The
-// target type may well deserve its own page, and a type-level flag could not say
-// that.
-//
-// ⚠️ DISPLAY ONLY. It hides the tab, the owned box and the reference column; it
-// does NOT change containment, so the delete cascade still reaches the child, the
-// audit log still rolls its events up, and the editor still loads and writes the
-// whole tree it opened. That last one is not a nicety: configitem-editor.js
-// decides a field was CLEARED by diffing the open-time snapshot against the
-// edited tree, so anything dropped from that tree reads as a deletion. Views
-// filter what is rendered and nothing else — see UI.md.
-//
-// Pairs with `editorIgnored`, which is editor-scoped in exactly the same way.
-const ViewIgnoredAnnotation = "viewIgnored"
-
-// IsViewIgnored reports whether a relationship field opts out of the page.
-func IsViewIgnored(doc string) bool {
-	return hasAnnotationLine(doc, ViewIgnoredAnnotation)
-}
-
-// knownAnnotations is orbital's whole annotation vocabulary.
-//
-// It exists so UnknownAnnotations can tell a TYPO from a word it has not been
-// taught. Every annotation added anywhere must be listed here, or it reports
-// itself as a typo — which is noisy, and worse, trains whoever reads the
-// startup log to ignore the one report that matters.
 var knownAnnotations = []string{
-	EditorIgnoredAnnotation, // bare word
-	JSONStringAnnotation,    // bare word
-	SlugAnnotation,          // "slug:" prefix
-	OrbIDSuffixAnnotation,   // "orbIdSuffix:" prefix
-	OrderAnnotation,         // "order:" prefix
-	IncludeAnnotation,       // "include:" prefix
-	LabelAnnotation,         // "label:" prefix
-	DetailOnlyAnnotation,    // bare word
-	EditableAnnotation,      // "editable:" prefix
-	FilterByAnnotation,      // "filterBy:" prefix
-	ColumnAnnotation,        // "column:" prefix
-	ViewIgnoredAnnotation,   // bare word
-	MenuWeightAnnotation,    // "menuWeight:" prefix
+	JSONStringAnnotation,  // bare word   — what this String CONTAINS
+	OrbIDSuffixAnnotation, // "orbIdSuffix:"   — identity
 }
 
 // UnknownAnnotations returns docstring lines that LOOK like an orbital
@@ -496,6 +573,40 @@ func UnknownAnnotations(doc string) []string {
 	return out
 }
 
+// UnknownAnnotationsIn reports every docstring line in the deployed schema that
+// LOOKS like an orbital annotation and matches none, as "Type.field: text".
+//
+// The vocabulary is three words now, which makes a typo MORE likely to pass
+// unnoticed rather than less: there is no longer a crowd of near-neighbours to
+// make a misspelling look odd. `"""orbIdSufix: idrac"""` is a perfectly valid
+// docstring that silently derives the wrong orbId for every child of that type.
+func UnknownAnnotationsIn(types map[string]TypeInfo) []string {
+	names := make([]string, 0, len(types))
+	for n := range types {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	var out []string
+	for _, typeName := range names {
+		info := types[typeName]
+		if info.IsInterface {
+			// A sub-interface's annotations are INHERITED by each implementing
+			// type and already reported there; counting the interface too
+			// reports every one of them twice.
+			continue
+		}
+		for _, u := range UnknownAnnotations(info.Doc) {
+			out = append(out, typeName+": "+u)
+		}
+		for _, f := range info.Fields {
+			for _, u := range UnknownAnnotations(f.Doc) {
+				out = append(out, typeName+"."+f.Name+": "+u)
+			}
+		}
+	}
+	return out
+}
+
 func matchesKnownAnnotation(line string) bool {
 	for _, a := range knownAnnotations {
 		if line == a || (strings.HasSuffix(a, ":") && strings.HasPrefix(line, a)) {
@@ -505,72 +616,6 @@ func matchesKnownAnnotation(line string) bool {
 	return false
 }
 
-// AnnotationReport summarises the orbital annotations found in the DEPLOYED
-// schema, so a deployment can see what it actually resolved rather than what
-// the source tree implies.
-//
-// ENVIRONMENT COUPLING is the hazard this exists for. Once editability is read
-// from the running schema, it comes from the DEPLOYED schema and not from the
-// binary — so an environment still carrying an older schema.graphql silently
-// gets MORE editable fields, because the annotations suppressing them are not
-// there. Nothing fails; the editor simply offers fields it should not, in one
-// environment and not another. That is the "schema that lies about its own
-// intent" failure at environment scope rather than typo scope, and the only
-// cheap defence is making the resolved count visible: zero-when-expecting-29 is
-// obvious, and invisible otherwise.
-type AnnotationReport struct {
-	// EditorIgnored counts fields suppressed by the annotation, per type.
-	EditorIgnored map[string]int
-	// EditorIgnoredTotal is the figure to eyeball against what the source tree
-	// is expected to carry.
-	EditorIgnoredTotal int
-	// Unknown lists "Type.field: text" for docstring lines that look like an
-	// intended annotation but match none — the silent-typo case.
-	Unknown []string
-}
-
-// Annotations inspects introspected types and reports what was resolved.
-func Annotations(types map[string]TypeInfo) AnnotationReport {
-	rep := AnnotationReport{EditorIgnored: map[string]int{}}
-	names := make([]string, 0, len(types))
-	for n := range types {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	for _, typeName := range names {
-		if types[typeName].IsInterface {
-			// A sub-interface's annotations are INHERITED by each implementing
-			// type and already counted there. Counting the interface too
-			// double-counts every one of them, which turns this total into a
-			// number nobody can reconcile against the schema file.
-			continue
-		}
-		for _, f := range types[typeName].Fields {
-			if f.Doc == "" {
-				continue
-			}
-			if IsEditorIgnored(f.Doc) {
-				rep.EditorIgnored[typeName]++
-				rep.EditorIgnoredTotal++
-			}
-			for _, u := range UnknownAnnotations(f.Doc) {
-				rep.Unknown = append(rep.Unknown, typeName+"."+f.Name+": "+u)
-			}
-		}
-	}
-	return rep
-}
-
-// JSONStringAnnotation marks a field declared `String` whose VALUE is JSON.
-//
-// The page handler parses such a field before handing it to the JSON editor, so
-// it displays as nested structure; on submit the editor MUST stringify it again
-// or DGraph rejects it with "cannot use as String". Nothing about the field's
-// TYPE says this — it is String either way — which is why it cannot be derived
-// and has to be declared.
-//
-//	"""jsonString"""
-//	assetDataV2: String
 const JSONStringAnnotation = "jsonString"
 
 // IsJSONString reports whether a field's docstring marks it as JSON-in-a-String.
@@ -595,9 +640,6 @@ func OrbIDSuffixFor(typeName, typeDoc string) string {
 	}
 	return strings.ToLower(typeName)
 }
-
-// hasAnnotationLine reports whether a docstring carries `name` as a whole
-// trimmed line. Exact-match, so prose mentioning the word does not trigger it.
 func hasAnnotationLine(doc, name string) bool {
 	if doc == "" {
 		return false
@@ -634,48 +676,6 @@ func JSONStringFieldsFor(info TypeInfo) []string {
 	}
 	return out
 }
-
-// OrderAnnotation pins the leading fields of a type's display order.
-//
-//	"""order: name, provider, clusterType"""
-//	interface KubernetesCluster {
-//
-// Everything not named falls in alphabetically BEHIND the pinned list. That
-// partial form is deliberate: a complete ordered list is a frozen view — a
-// field added in a later release would have no place in it and would silently
-// never appear. A prefix leaves the tail open, so new fields still arrive.
-//
-// This is the SHARED layer, and it lives in the schema rather than a database
-// because a default belongs in version control: it ships with the build, it
-// diffs, and it reverts. Per-deployment and per-user overrides layer on top of
-// it later.
-//
-// A name that no longer exists is IGNORED, not an error. A pin is a preference
-// about order, and a field being removed is not a reason to refuse to render a
-// page.
-const OrderAnnotation = "order:"
-
-// OrderFor returns the pinned field order declared by a type, or nil.
-func OrderFor(typeDoc string) []string {
-	v := annotationValue(typeDoc, OrderAnnotation)
-	if v == "" {
-		return nil
-	}
-	var out []string
-	for _, part := range strings.Split(v, ",") {
-		if f := strings.TrimSpace(part); f != "" {
-			out = append(out, f)
-		}
-	}
-	return out
-}
-
-// ApplyOrder puts the pinned fields first, in the order pinned, and leaves the
-// rest as they were — which is alphabetical, since displayScalars sorts.
-//
-// Pins naming a field this type does not have are skipped rather than
-// reported here: an interface's pin list is inherited by every implementation,
-// and an implementation legitimately lacks the fields its siblings add.
 func ApplyOrder(fields, pinned []string) []string {
 	if len(pinned) == 0 {
 		return fields
@@ -700,242 +700,70 @@ func ApplyOrder(fields, pinned []string) []string {
 	return out
 }
 
-// MenuWeightAnnotation pins a root type's position in the Config Items menu.
-//
-//	"""menuWeight: 20"""
-//	type Server implements ConfigItem {
-//
-// Deriving nav order from type names gives alphabetical, which put Clusters
-// above Servers and reordered a menu people navigate by muscle memory. Menu
-// position is a judgement about the product — physical containment before
-// logical here — and is exactly what an annotation is for.
-//
-// Separate from `order:`, which pins COLUMN order within one type's table. A
-// single docstring commonly needs both (KubernetesCluster does), so sharing a
-// name would make one of them unexpressible.
-//
-// Sparse by convention (10, 20, 30) so a type can be inserted without
-// renumbering its neighbours. Unannotated roots sort AFTER every annotated one,
-// alphabetically among themselves — a new type still reaches the menu on its
-// own, which is the property that makes "define a type, get a page" true.
-const MenuWeightAnnotation = "menuWeight:"
-
-// MenuWeightUnpinned is the sort position of a root with no `menuWeight:`. Above any
-// plausible hand-assigned value, so unannotated types land at the end rather
-// than silently jumping the queue at position 0.
 const MenuWeightUnpinned = 1 << 20
 
-// MenuWeightFor returns the menu position a type declares, or MenuWeightUnpinned when it
-// declares none or declares something that is not a number.
+// MutationRegexFor builds the add/update/delete matcher for a set of type names.
 //
-// A non-numeric value is treated as unpinned rather than rejected: an
-// annotation must never stop a page rendering. UnknownAnnotations does not
-// catch it — "menuWeight: left" is a known prefix with a bad value — so it is also
-// reported, otherwise a typo'd position is invisible.
-func MenuWeightFor(typeDoc string) (pos int, ok bool) {
-	v := annotationValue(typeDoc, MenuWeightAnnotation)
-	if v == "" {
-		return MenuWeightUnpinned, true
+// Case-insensitive because DGraph's generated mutation is `addServer` while a
+// query may spell the operation `AddServer`; `\b` anchors so `addServerThing`
+// does not match `addServer`.
+func MutationRegexFor(names []string) *regexp.Regexp {
+	if len(names) == 0 {
+		return BroadMutationRegex
 	}
-	n, err := strconv.Atoi(strings.TrimSpace(v))
-	if err != nil {
-		return MenuWeightUnpinned, false
+	quoted := make([]string, 0, len(names))
+	for _, n := range names {
+		quoted = append(quoted, regexp.QuoteMeta(n))
 	}
-	return n, true
+	return regexp.MustCompile(`(?i)\b(add|update|delete)(` + strings.Join(quoted, "|") + `)\b`)
 }
 
-// FilterByAnnotation names ONE column a list page offers as a filter dropdown.
+// BroadMutationRegex matches an add/update/delete against ANY capitalised name.
 //
-//	"""filterBy: dataCenter"""
-//	type Server implements ConfigItem {
+// The degraded answer, used when the deployed schema cannot be read. It
+// over-matches deliberately: the cost is an audit row for a type orbital does not
+// know about, and the alternative is an ungated, unaudited write — which is the
+// one outcome this whole path exists to prevent.
 //
-// The bespoke Servers and Clusters pages each carried a hand-built "All Data
-// Centers" select; both died with their templates and nobody noticed, because
-// the JavaScript that built them survived and simply returns early now.
-//
-// Declared rather than derived. Cardinality alone identifies the right columns
-// on today's data — 9 data centers across 190 servers, against 190 distinct
-// service tags — but a threshold makes the CONTROL appear and disappear as the
-// data moves, and a dropdown that vanished because someone seeded thirty more
-// rows is not a UI anyone can explain. IPv4 sorting gets to be derived because
-// its test is per-value and stable; "is this worth filtering by" is a judgement
-// about the page, which is what an annotation is for.
-//
-// ONE field. The two pages that lost a dropdown had exactly one each, and
-// widening to a list is a compatible change if a page ever wants two — where
-// refusing extra fields now would not be.
-const FilterByAnnotation = "filterBy:"
+// ⚠️ The TYPE half is case-SENSITIVE while the verb half is not, and that is
+// load-bearing. Written `(?i)...([A-Z]\w*)`, the `(?i)` makes `[A-Z]` match a
+// lowercase letter too — so `updatedAt` parses as `update` + `dAt` and matches.
+// `updatedAt` is in the selection set of essentially every query, so a plain READ
+// would have been treated as a mutation: the approval gate would run on it and
+// the audit pipeline would try to record it. The named-type regex does not have
+// this problem, because a type name anchors what follows the verb.
+var BroadMutationRegex = regexp.MustCompile(`\b([aA]dd|[uU]pdate|[dD]elete)([A-Z]\w*)\b`)
 
-// FilterByFor returns the field a type declares as its list-page filterBy, plus any
-// extra fields the annotation named.
+// InverseEdges maps "Type.field" to the field on the far type that points back,
+// parsed from `@hasInverse` in the SDL.
 //
-// Extras are RETURNED rather than ignored so the caller can say so: only one is
-// supported, and silently honouring the first would leave someone convinced
-// their second dropdown was broken.
-func FilterByFor(typeDoc string) (string, []string) {
-	v := annotationValue(typeDoc, FilterByAnnotation)
-	if v == "" {
-		return "", nil
-	}
-	var fields []string
-	for _, part := range strings.Split(v, ",") {
-		if f := strings.TrimSpace(part); f != "" {
-			fields = append(fields, f)
+// A deliberately small line scanner rather than a GraphQL parser: the directive
+// only ever appears on one line with its field, and taking a parser dependency
+// to read one annotation is the trade this codebase has refused elsewhere.
+//
+// Both directions are recorded. The SDL declares the directive on one end only,
+// but a caller asking "what points back at me" has no way to know which end that
+// was.
+func InverseEdges(sdl string) map[string]string {
+	out := map[string]string{}
+	cur := ""
+	for _, ln := range strings.Split(sdl, "\n") {
+		if m := declRe.FindStringSubmatch(ln); m != nil {
+			cur = m[1]
+			continue
 		}
-	}
-	if len(fields) == 0 {
-		return "", nil
-	}
-	return fields[0], fields[1:]
-}
-
-// IncludeAnnotation adds a relationship the type does not hold directly, named
-// by a PATH through one it does.
-//
-//	"""include: storageControllers.storageDevices"""
-//	type Server implements ConfigItem {
-//
-// A server's disks hang off its storage controllers, and a controller has no
-// scalars of its own — so the controller table is a list of bare names and the
-// disks, which are the reason anyone opens the page, appear nowhere.
-//
-// Deliberately NOT a new kind of panel. It widens what a tab's SOURCE may be
-// from a field to a path; the rows are still a list of one type rendered as a
-// table, by the same code. One concept got slightly wider instead of a fourth
-// rendering case — the renderer's rule count is the thing most at risk of
-// becoming unholdable.
-//
-// Two segments only. Deeper is a graph browser, which is a different product,
-// and the shallowness rule exists because a deep selection on a cyclic schema
-// does not terminate.
-const IncludeAnnotation = "include:"
-
-// IncludePaths returns the dotted relationship paths a type declares.
-func IncludePaths(typeDoc string) []string {
-	v := annotationValue(typeDoc, IncludeAnnotation)
-	if v == "" {
-		return nil
-	}
-	var out []string
-	for _, part := range strings.Split(v, ",") {
-		p := strings.TrimSpace(part)
-		// A path with no separator names a field the type already holds, which
-		// is a tab it already has. Silently ignored rather than duplicating it.
-		if strings.Count(p, ".") == 1 {
-			out = append(out, p)
+		if cur == "" {
+			continue
 		}
+		m := hasInverseRe.FindStringSubmatch(ln)
+		if m == nil {
+			continue
+		}
+		field, target, far := m[1], m[2], m[3]
+		out[cur+"."+field] = far
+		out[target+"."+far] = field
 	}
 	return out
 }
 
-// ColumnAnnotation adds a column whose value lives at the end of a PATH.
-//
-//	"""column: servers.count"""
-//	type Rack implements ConfigItem {
-//
-//	"""column: kubernetesNode.cluster.name, kubernetesNode.role"""
-//	type Server implements ConfigItem {
-//
-// Two things were lost when the bespoke pages went, and they are the same
-// shape: a rack table that counted its servers, and a network device's server
-// list that named each server's Kubernetes cluster and node role. Neither value
-// is on the row's own type — one is an aggregate over a list, the other is two
-// hops through single relationships — and the generic renderer only reaches a
-// type's own scalars plus one hop.
-//
-// TYPE-level, so it applies wherever that type renders as a table: `/servers`,
-// a rack's servers tab, and the network device's servers tab all get it from
-// one declaration. That is what makes this cheap — no per-table configuration,
-// which would be the deferred Postgres overrides layer.
-//
-// FOUR segments, where `include:` allows two. The limits differ because the
-// hazards do: `include:` walks LIST relationships and produces ROWS, which is
-// where cycles and row-explosion live ("deeper is a graph browser"). A column
-// walks SINGLE relationships and produces ONE CELL, so it terminates by
-// construction whatever the depth. A `count` leaf is the sole exception and
-// must be last, because an aggregate collapses a list back to one value.
-//
-// So the cap is NOT a correctness bound — it is a readability one, and it is
-// four because that is what the real cases need:
-// `server.kubernetesNode.cluster.name` puts a server's Kubernetes cluster on a
-// network device's Connections tab, and nothing shallower reaches it. It was
-// briefly three, chosen out of caution on 2026-10-02 with a rationale
-// ("terminates by construction") that argued for no limit at all — the number
-// did not follow from the reason, and the first real case fell one segment
-// outside it.
-const ColumnAnnotation = "column:"
-
-// ColumnPaths returns the dotted column paths a type declares.
-//
-// Shape is checked here; whether the fields EXIST is checked against the
-// schema in ResolveViews, which is the only place that knows.
-func ColumnPaths(typeDoc string) []string {
-	v := annotationValue(typeDoc, ColumnAnnotation)
-	if v == "" {
-		return nil
-	}
-	var out []string
-	for _, part := range strings.Split(v, ",") {
-		p := strings.TrimSpace(part)
-		// A bare field name is a column the type already has. Ignored rather
-		// than rendered twice.
-		n := strings.Count(p, ".")
-		if n >= 1 && n <= 3 {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
-// LabelAnnotation overrides the displayed name of a FIELD.
-//
-//	cni: String  # """label: CNI"""
-//
-// Labels are otherwise derived by title-casing the field name, which handles
-// almost everything ("serviceTag" → "Service Tag") and cannot know an acronym:
-// `cni` becomes "Cni" and `oobIP` becomes "Oob IP". The alternative was a
-// hand-maintained list of exceptions in Go — the shape this whole layer exists
-// to delete — so the exception lives with the field it describes, in the
-// schema, like every other annotation.
-//
-// Only annotate what the rule gets WRONG. A label: repeating what title-casing
-// already produces is a line that has to be kept in step for no gain.
-const LabelAnnotation = "label:"
-
-// LabelFor returns a field's declared label, or "".
-func LabelFor(fieldDoc string) string {
-	return annotationValue(fieldDoc, LabelAnnotation)
-}
-
-// DetailOnlyAnnotation keeps a field off TABLE columns while still rendering it
-// on a detail page.
-//
-//	"""detailOnly"""
-//	assetDataV2: String
-//
-// A data centre's assetDataV2 is ~600 characters of JSON; as a column it made
-// the table unreadable and shoved every other column off the screen. On the
-// detail page the document IS the content.
-//
-// Placement is stated, never inferred. This rule briefly lived in Go as
-// "a jsonString field is never a column", which conflated WHAT a field holds
-// with WHERE it may appear and left "actually, show it as a column"
-// unexpressible. `jsonString` means only that the String holds JSON — it drives
-// editor parsing and pretty-printing, and says nothing about placement.
-const DetailOnlyAnnotation = "detailOnly"
-
-// IsDetailOnly reports whether a field's docstring keeps it out of tables.
-func IsDetailOnly(doc string) bool {
-	return hasAnnotationLine(doc, DetailOnlyAnnotation)
-}
-
-// DetailOnlyFieldsFor returns a type's detail-only fields.
-func DetailOnlyFieldsFor(info TypeInfo) []string {
-	var out []string
-	for _, f := range info.Fields {
-		if IsDetailOnly(f.Doc) {
-			out = append(out, f.Name)
-		}
-	}
-	return out
-}
+var hasInverseRe = regexp.MustCompile(`^\s+(\w+):\s*\[?(\w+)\]?!?\s+@hasInverse\(field:\s*(\w+)\)`)

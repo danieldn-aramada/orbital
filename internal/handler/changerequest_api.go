@@ -17,7 +17,6 @@ import (
 	"github.com/armada/orbital/ent/approvalrequest"
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/approval"
-	"github.com/armada/orbital/internal/configitems"
 	"github.com/armada/orbital/internal/graphdiff"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -1912,13 +1911,31 @@ func (h *ChangeRequest) validatePolicyScope(ctx context.Context, namespace strin
 		}
 	}
 
-	for _, t := range types {
-		if _, ok := configitems.FindByName(t); !ok {
-			return &gatedError{
-				Status:  http.StatusBadRequest,
-				Code:    CodeBadUserInput,
-				Message: fmt.Sprintf("%q is not a ConfigItem type, so a policy naming it would govern nothing", t),
-				Hint:    "Valid types: " + strings.Join(configitems.Names(), ", "),
+	// The valid set comes from the DEPLOYED schema, so a type added to a
+	// deployment's graph is immediately nameable in a policy and one removed
+	// stops being accepted — neither needs a release.
+	//
+	// When the schema cannot be read the check is SKIPPED rather than failed.
+	// Refusing would block policy administration on DGraph availability, and the
+	// cost of letting one through is a policy that governs nothing, which is
+	// visible on the policy page. The reverse — refusing a valid type with
+	// "that is not a ConfigItem type" — is a lie the operator cannot act on.
+	known, err := h.typeNames(ctx)
+	if err != nil {
+		h.logger.Warn("cannot read the deployed schema; policy type names are not validated", "err", err)
+	} else {
+		valid := make(map[string]bool, len(known))
+		for _, n := range known {
+			valid[n] = true
+		}
+		for _, t := range types {
+			if !valid[t] {
+				return &gatedError{
+					Status:  http.StatusBadRequest,
+					Code:    CodeBadUserInput,
+					Message: fmt.Sprintf("%q is not a ConfigItem type, so a policy naming it would govern nothing", t),
+					Hint:    "Valid types: " + strings.Join(known, ", "),
+				}
 			}
 		}
 	}

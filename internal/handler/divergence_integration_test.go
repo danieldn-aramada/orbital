@@ -19,6 +19,7 @@ import (
 	"github.com/armada/orbital/ent/divergenceentry"
 	"github.com/armada/orbital/ent/divergenceresolution"
 	"github.com/armada/orbital/ent/user"
+	"github.com/armada/orbital/internal/configitems"
 	"github.com/armada/orbital/internal/handler"
 	"github.com/armada/orbital/internal/testutil"
 	"github.com/labstack/echo/v4"
@@ -27,6 +28,18 @@ import (
 // seedDivergenceEntry inserts one DivergenceEntry row with the given typeName
 // (empty string is allowed — exercises the legacy-fallback path) and returns
 // the entry's UUID as a string.
+// externalViews resolves the shipped views from outside the handler package,
+// where the in-package test helper is not reachable.
+func externalViews(t *testing.T) handler.ViewsProvider {
+	sf := handler.NewSharedFieldSource(testutil.DGraphURL(),
+		handler.ViewsSource{Path: testutil.ViewsPath()}, slog.Default())
+	vs, err := sf.ViewSet(context.Background())
+	if err != nil {
+		t.Fatalf("resolve the shipped views: %v", err)
+	}
+	return func(context.Context) (configitems.ViewSet, error) { return vs, nil }
+}
+
 func seedDivergenceEntry(t *testing.T, dcID, orbID, field, typeName string, overrideValue any) string {
 	t.Helper()
 	ctx := context.Background()
@@ -424,7 +437,7 @@ func TestResolve_RejectAndIgnoreAreNeverGated(t *testing.T) {
 
 	gql := handler.NewGraphQL(testutil.DGraphURL(), testDB, slog.Default(), false)
 	h := handler.NewDivergenceHandler(testDB, slog.Default(), gql)
-	h.SetChangeRequests(handler.NewChangeRequest(testDB, gql, testutil.DGraphURL(), slog.Default()))
+	h.SetChangeRequests(handler.NewChangeRequest(testDB, gql, testutil.DGraphURL(), externalViews(t), slog.Default()))
 
 	for _, action := range []string{"reject", "ignore"} {
 		orbID := "colo:gate-" + action
@@ -457,7 +470,7 @@ func TestAccept_GatedOpensChangeRequestAndLeavesEntryPending(t *testing.T) {
 	entryID := seedDivergenceEntry(t, "colo:colo-galleon", orbID, "hostname", "Server", "edge-set-name")
 
 	gql := handler.NewGraphQL(testutil.DGraphURL(), testDB, slog.Default(), false)
-	crh := handler.NewChangeRequest(testDB, gql, testutil.DGraphURL(), slog.Default())
+	crh := handler.NewChangeRequest(testDB, gql, testutil.DGraphURL(), externalViews(t), slog.Default())
 	h := handler.NewDivergenceHandler(testDB, slog.Default(), gql)
 	h.SetChangeRequests(crh)
 

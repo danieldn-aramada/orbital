@@ -49,7 +49,7 @@ var knownShadowed = map[string]string{}
 // slug makes that ONE type permanently unreachable — silently, and without
 // affecting any other type.
 func TestGenericRoutes_DoNotSwallowStaticPages(t *testing.T) {
-	sf := NewSharedFieldSource(testutil.DGraphURL(), slog.Default())
+	sf := NewSharedFieldSource(testutil.DGraphURL(), ViewsSource{Path: testutil.ViewsPath()}, slog.Default())
 	views, err := sf.Views(context.Background())
 	if err != nil {
 		t.Fatalf("resolve views: %v", err)
@@ -91,7 +91,7 @@ func TestGenericRoutes_DoNotSwallowStaticPages(t *testing.T) {
 // data-centers and network-devices. That difference IS the URL move the
 // migration makes deliberate, with redirects.
 func TestGenericRoutes_TwoBespokePagesMoveRatherThanCollide(t *testing.T) {
-	sf := NewSharedFieldSource(testutil.DGraphURL(), slog.Default())
+	sf := NewSharedFieldSource(testutil.DGraphURL(), ViewsSource{Path: testutil.ViewsPath()}, slog.Default())
 	views, err := sf.Views(context.Background())
 	if err != nil {
 		t.Fatalf("resolve views: %v", err)

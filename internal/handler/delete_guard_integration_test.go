@@ -39,7 +39,12 @@ func deleteFixture(t *testing.T) (*DeleteHandler, *crFixture) {
 	t.Chdir("../..")
 	f := newCRFixture(t)
 	gql := NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), false)
-	return NewDeleteHandler(testutil.DGraphURL(), f.db, slog.Default(), gql), f
+	// WithFieldSource is production's wiring and it is load-bearing: the cascade
+	// is DERIVED from the view, and the survivor edges it clears come from the
+	// deployed SDL. Without it a delete plans nothing and clears nothing.
+	return NewDeleteHandler(testutil.DGraphURL(), f.db, slog.Default(), gql,
+		WithFieldSource(NewSharedFieldSource(testutil.DGraphURL(),
+			ViewsSource{Path: testutil.ViewsPath()}, slog.Default()))), f
 }
 
 func deleteReq(t *testing.T, h *DeleteHandler, typeName, orbID, query string, role user.Role) *httptest.ResponseRecorder {
@@ -280,7 +285,7 @@ func TestDeleteGuard_ChildEditedAfterPlanningRefusesAndDeletesNothing(t *testing
 	h, _ := deleteFixture(t)
 	ctx := context.Background()
 
-	plan, err := h.planServerDelete(ctx, crServerA)
+	plan, err := h.planFor(ctx, "Server", crServerA)
 	if err != nil {
 		t.Fatalf("plan: %v", err)
 	}
@@ -325,7 +330,7 @@ func TestDeleteGuard_UntouchedPlanDeletesTheWholeSet(t *testing.T) {
 	h, _ := deleteFixture(t)
 	ctx := context.Background()
 
-	plan, err := h.planServerDelete(ctx, crServerA)
+	plan, err := h.planFor(ctx, "Server", crServerA)
 	if err != nil {
 		t.Fatalf("plan: %v", err)
 	}
@@ -348,7 +353,7 @@ func TestDeleteGuard_NodeWithNoVersionFailsClosed(t *testing.T) {
 	h, _ := deleteFixture(t)
 	ctx := context.Background()
 
-	plan, err := h.planServerDelete(ctx, crServerA)
+	plan, err := h.planFor(ctx, "Server", crServerA)
 	if err != nil {
 		t.Fatalf("plan: %v", err)
 	}

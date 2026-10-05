@@ -108,10 +108,25 @@ export function saveTab(displayName, itemId) {
   }
 }
 
+// getTabStorageKey names where "which tab was I on" is stored for THIS page.
+//
+// Per SLUG on the generic list page, because /servers, /clusters, /data-centers
+// and /network-devices are all the same page: one shared key means the tab you
+// left open on one page is looked up on another, where that element does not
+// exist, and the restore silently does nothing. `genericTabs` has been
+// slug-qualified since it was written; this is the same fact, finally spelled
+// the same way.
+//
+// The old `#server-list-table` branch was removed with the page it named — it
+// survived the migration as dead code, which is how EVERY generic list page
+// ended up writing the data-centre page's key.
 export function getTabStorageKey() {
-  if (document.getElementById('server-list-table')) return 'srvTabCurrent'
-  return 'dcTabCurrent'
+  const generic = document.getElementById('generic-table')
+  if (generic) return `${GENERIC_TAB_CURRENT_PREFIX}${generic.dataset.slug}`
+  return 'dcTabCurrent'   // orb still has a hand-written data-centre page
 }
+
+export const GENERIC_TAB_CURRENT_PREFIX = 'genericTabCurrent:'
 
 export function setCurrentTab(id) {
   localStorage[getTabStorageKey()] = id
@@ -132,8 +147,19 @@ export function activateTab(selected) {
   })
 }
 
+// displayTabContent shows one tab panel and hides the others.
+//
+// ⚠️ Only panels that HAVE an id participate. `.tab-content` is also the house
+// layout wrapper (main.scss gives it the box and min-width rules), so the detail
+// FRAGMENT swapped into a tab opens with its own class="tab-content" and no id.
+// Hiding that one was permanent damage: this function can only ever un-hide by
+// matching an id, so an id-less element it hides can never come back — the
+// panel stayed display:block around a child that was display:none, and every
+// detail tab went blank the moment a second one was opened. An element with no
+// id cannot be the target, so there is never a reason to touch it.
 export function displayTabContent(id) {
   ;(document.querySelectorAll('.tab-content') || []).forEach((tabContent) => {
+    if (!tabContent.id) return
     tabContent.style.display = tabContent.id === id ? 'block' : 'none'
   })
 }
@@ -666,8 +692,15 @@ function clearTabStateOnFresh() {
   localStorage.removeItem('clusterTabs')    // was MISSING — see below
   localStorage.removeItem('networkTabs')    // was MISSING — see below
   localStorage.removeItem('genericTabs')    // every /{slug} page shares this one
-  localStorage.removeItem('tabCurrent')
+  localStorage.removeItem('dcTabCurrent')
   localStorage.removeItem('crTabCurrent')   // change-request queue's active tab
+  // Swept by PREFIX, not named one by one: the active-tab key is per slug, so
+  // enumerating them would reintroduce exactly the omission this function was
+  // already caught by once — a key added for a new page that nobody remembers
+  // to list here.
+  for (const k of Object.keys(localStorage)) {
+    if (k.startsWith(GENERIC_TAB_CURRENT_PREFIX)) localStorage.removeItem(k)
+  }
 
   // clusterTabs and networkTabs were absent until 2026-09-25, so a cluster or
   // network-device tab opened by one user survived login on a shared machine
@@ -1115,6 +1148,42 @@ document.addEventListener('click', (e) => {
   document.documentElement.style.overflow = ''
 })
 
+// ─── Reload, on any generic detail view (both apps) ──────────────────────────
+//
+// The detail route serves BOTH a full page and — under HX-Request — just its
+// body, so one button has to mean two things. It resolves which at CLICK time
+// by looking for the tab panel it is sitting in rather than being told by the
+// template: a server-rendered flag would have to know whether this render was a
+// page or a fragment, and the whole point of the shared block is that it does
+// not. Re-fetching the SAME url the tab was opened with means there is no
+// second endpoint to drift.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.js-generic-reload')
+  if (!btn) return
+  e.preventDefault()
+  const panel = btn.closest('.tab-content[id^="tab-content-generic-"]')
+  if (!panel) {
+    window.location.reload()
+    return
+  }
+  const url = panel.dataset.detailUrl
+  if (!url) {
+    window.location.reload()
+    return
+  }
+  btn.classList.add('is-loading')
+  // The swap replaces the modal any open editor is bound to, so drop the cached
+  // instance first — otherwise the next Edit click reuses an editor pointing at
+  // a detached node and the modal opens empty.
+  const editId = panel.querySelector('[data-generic-edit-id]')?.dataset.genericEditId
+  if (editId) window.genericEditors?.delete(editId)
+  // Promise.resolve wraps it rather than chaining directly: htmx.ajax returns a
+  // promise only on the public 3-arg form, and a spinner that never stops is a
+  // worse failure than one that never starts.
+  Promise.resolve(htmx.ajax('GET', url, { target: panel, swap: 'innerHTML' }))
+    .finally(() => btn.classList.remove('is-loading'))
+})
+
 // initGenericTable wires the DataTable on the generic list page (/{slug}).
 //
 // The bespoke list pages each fetch their own rows and register per-type
@@ -1155,7 +1224,20 @@ function readGenericTabs() {
 
 export function saveGenericTab(label, slug, orbId) {
   const tabs = readGenericTabs().filter(t => genericTabKey(t.slug, t.orbId) !== genericTabKey(slug, orbId))
-  tabs.push({ label, slug, orbId })
+  tabs.push({ label, slug, orbId, touchedAt: Date.now() })
+  localStorage.genericTabs = JSON.stringify(tabs)
+}
+
+// touchGenericTab records that a tab was just looked at, which is what makes
+// eviction least-recently-USED rather than least-recently-opened. Survives a
+// reload with the rest of the tab list, so returning to a tab across page loads
+// keeps protecting it.
+function touchGenericTab(slug, orbId) {
+  const key = genericTabKey(slug, orbId)
+  const tabs = readGenericTabs()
+  const hit = tabs.find(t => genericTabKey(t.slug, t.orbId) === key)
+  if (!hit) return
+  hit.touchedAt = Date.now()
   localStorage.genericTabs = JSON.stringify(tabs)
 }
 
@@ -1164,8 +1246,63 @@ export function deleteGenericTab(slug, orbId) {
   localStorage.genericTabs = JSON.stringify(tabs)
 }
 
+// MAX_GENERIC_TABS caps how many detail tabs a list page holds at once.
+//
+// Not configurable, deliberately: per CLAUDE.md's bar a setting earns its place
+// when the default is actively harmful to an adopter, and a tab cap is not that.
+// One constant, changed here.
+//
+// Five is a judgement about the STRIP, not about cost — lazy restoration already
+// removed the cost. Bulma's `.tabs` is `overflow-x: auto; white-space: nowrap`
+// with no overflow menu and no tab search, so past a handful the strip stops
+// being navigable. ~8 fit at 1440px and ~4 at 1024px; five is the number that
+// still works on the narrow end.
+export const MAX_GENERIC_TABS = 5
+
+// evictLeastRecentlyUsedTab closes the oldest-touched tab to make room.
+//
+// Least recently USED, not least recently opened: a tab you keep coming back to
+// is the one you want kept, and open-order would throw it away first. `touchedAt`
+// is stamped on every activation.
+//
+// Eviction rather than refusal, and a toast rather than an error: the click that
+// hit the cap is a reasonable thing to do, and an error dialog would refuse it
+// while leaving the reader to work out which tab to close. Safe because a tab
+// holds no unsaved state — the editor is a modal that opens over it, and closing
+// a background tab cannot discard anything.
+function evictLeastRecentlyUsedTab(slug) {
+  const mine = readGenericTabs()
+    .filter(t => t.slug === slug)
+    .sort((a, b) => (a.touchedAt || 0) - (b.touchedAt || 0))
+  const victim = mine[0]
+  if (!victim) return
+  const domId = genericTabDomId(victim.slug, victim.orbId)
+  deleteGenericTab(victim.slug, victim.orbId)
+  document.getElementById(`tab-generic-${domId}`)?.parentElement?.remove()
+  document.getElementById(`tab-content-generic-${domId}`)?.remove()
+  window.bulmaToast?.toast({
+    message: `Closed “${victim.label}” — ${MAX_GENERIC_TABS} tabs is the maximum.`,
+    closeOnClick: true,
+    type: 'is-info is-light',
+    position: 'top-right',
+    dismissible: false,
+    duration: 4000,
+    offsetTop: '4em',
+    pauseOnHover: true,
+    animate: { in: 'fadeInRight', out: 'fadeOutRight' },
+  })
+}
+
 // loadGenericTab opens (or focuses) a detail tab below the list.
-export function loadGenericTab(label, slug, orbId) {
+//
+// `activate` is false only during RESTORATION: the strip is rebuilt without
+// selecting anything, so no panel fetches until someone actually looks at it.
+// Restoring eagerly meant arriving at a list page fired one detail request per
+// saved tab, all at once, for panels nobody had opened — and firing them
+// concurrently dropped one, which the optimistic `loaded` flag then made
+// permanent (the tab stayed blank until Reload). Lazy keeps "fetch once per tab
+// per page load" and pays it on the click instead of on arrival.
+export function loadGenericTab(label, slug, orbId, activate = true) {
   const domId = genericTabDomId(slug, orbId)
   const tabId = `tab-generic-${domId}`
   const contentId = `tab-content-generic-${domId}`
@@ -1174,6 +1311,12 @@ export function loadGenericTab(label, slug, orbId) {
   if (existing) {
     existing.click()
     return
+  }
+
+  // Counted off the DOM, not off storage: storage holds every slug's tabs and
+  // only this page's are on screen.
+  if (document.querySelectorAll('#tablist li.tab a[id^="tab-generic-"]').length >= MAX_GENERIC_TABS) {
+    evictLeastRecentlyUsedTab(slug)
   }
 
   $('#tablist').append(`<li class="tab">
@@ -1191,30 +1334,77 @@ export function loadGenericTab(label, slug, orbId) {
   const tabLink = document.getElementById(tabId)
   const tabContent = document.getElementById(contentId)
 
+  // The SAME url the row links to. HX-Request makes the handler return the body
+  // alone; there is no second endpoint that could drift from the page. Stashed
+  // on the panel so the Reload button inside the fragment can re-issue it
+  // without reconstructing slug and orbId from the DOM.
+  tabContent.dataset.detailUrl = `${BASE}/${slug}/${encodeURIComponent(orbId)}`
+
   tabLink.addEventListener('click', () => {
     activateTab(tabLink.parentElement)
     displayTabContent(contentId)
     setCurrentTab(tabId)
-    if (!tabContent.dataset.loaded) {
-      // The SAME url the row links to. HX-Request makes the handler return the
-      // body alone; there is no second endpoint that could drift from the page.
-      htmx.ajax('GET', `${BASE}/${slug}/${encodeURIComponent(orbId)}`, { target: tabContent, swap: 'innerHTML' })
-      tabContent.dataset.loaded = '1'
-    }
+    touchGenericTab(slug, orbId)
+    if (tabContent.dataset.loaded) return
+    // `loading` guards a second click while the first request is in flight;
+    // `loaded` is set only once the swap has actually happened. Setting it
+    // optimistically — which is what this did — meant a request that never
+    // arrived left the tab flagged loaded and permanently empty, with no way
+    // back but the Reload button.
+    if (tabContent.dataset.loading) return
+    tabContent.dataset.loading = '1'
+    Promise.resolve(htmx.ajax('GET', tabContent.dataset.detailUrl, { target: tabContent, swap: 'innerHTML' }))
+      .then(() => { tabContent.dataset.loaded = '1' })
+      .finally(() => { delete tabContent.dataset.loading })
   })
 
   document.getElementById(`tab-close-generic-${domId}`).addEventListener('click', (event) => {
     event.stopPropagation()
+
+    // Where to land. Closing the ACTIVE tab moves one to the LEFT — which for
+    // the leftmost detail tab is Summary, so the rule terminates naturally and
+    // needs no special case. Closing a BACKGROUND tab moves nothing: you are
+    // reading something else, and yanking you out of it to tidy up a tab you
+    // were not looking at is the behaviour no tabbed interface has.
+    //
+    // It used to click Summary unconditionally, which got both wrong — closing
+    // the last tab in a row of five sent you back to the list every time, and
+    // closing a background one threw away where you were.
+    const li = tabLink.parentElement
+    const wasActive = li.classList.contains('is-active')
+    const left = li.previousElementSibling
+    const nextId = left ? left.querySelector('a')?.id : 'tab-summary'
+
     deleteGenericTab(slug, orbId)
-    replaceCurrentTab(tabId, 'tab-summary')
-    tabLink.parentElement.remove()
+    // The PERSISTED current tab follows the same answer, or the next arrival
+    // restores a tab that no longer exists and silently falls back to Summary.
+    replaceCurrentTab(tabId, nextId || 'tab-summary')
+    li.remove()
     tabContent.remove()
-    document.getElementById('tab-summary').click()
+    if (wasActive) document.getElementById(nextId || 'tab-summary')?.click()
   })
 
   saveGenericTab(label, slug, orbId)
-  tabLink.click()
+  if (activate) tabLink.click()
 }
+
+// labelFromTable finds a row's display name in the list already rendered on the
+// page. Returns '' when the row is not there — a capped list, or an orbId that
+// does not exist — and the caller falls back to the orbId, which is ugly but
+// honest and still opens.
+function labelFromTable(slug, orbId) {
+  for (const tr of document.querySelectorAll('#generic-table tbody tr[data-orb-id]')) {
+    if (tr.dataset.orbId === orbId) return labelOfRow(tr)
+  }
+  return ''
+}
+
+// labelOfRow reads a row's display name — the first cell. Plain text, because
+// the name is not a link: see the dblclick handler for why.
+function labelOfRow(tr) {
+  return (tr.querySelector('td')?.textContent || '').trim()
+}
+
 
 // initGenericTabRestoration reopens the tabs that were left open, but only the
 // ones belonging to THIS page's slug — a rack tab restored onto /storage-devices
@@ -1225,7 +1415,7 @@ export function initGenericTabRestoration() {
   clearTabStateOnFresh()
   const slug = table.dataset.slug
   for (const t of readGenericTabs()) {
-    if (t.slug === slug) loadGenericTab(t.label, t.slug, t.orbId)
+    if (t.slug === slug) loadGenericTab(t.label, t.slug, t.orbId, false)
   }
 
   // ?open=<orbId>&label=<name> deep-links, the same form every hand-written
@@ -1236,7 +1426,12 @@ export function initGenericTabRestoration() {
   const params = new URLSearchParams(window.location.search)
   const openId = params.get('open')
   if (openId) {
-    const label = params.get('label') || openId
+    // The label comes from the TABLE when the link did not carry one — which is
+    // the common case now that /{slug}/{orbId} redirects here, because the
+    // redirect happens before anything is read from DGraph and so has no name to
+    // put in the URL. The row is already on the page; reading it there costs
+    // nothing and cannot disagree with what the list shows.
+    const label = params.get('label') || labelFromTable(slug, openId) || openId
     loadGenericTab(label, slug, openId)
     saveGenericTab(label, slug, openId)
     document.getElementById(`tab-generic-${genericTabDomId(slug, openId)}`)?.click()
@@ -1246,7 +1441,15 @@ export function initGenericTabRestoration() {
     return
   }
 
-  const current = localStorage.tabCurrent
+  // The tab you were on comes back selected — which is what the hand-written
+  // pages did, and what persisting the strip without the selection leaves half
+  // done. Under lazy restoration this is the ONE panel that fetches on arrival;
+  // the other four stay unloaded until opened.
+  //
+  // It read `localStorage.tabCurrent`, a key nothing has ever written: the
+  // writer goes through getTabStorageKey() and the reader did not, so the
+  // restore silently did nothing and every visit landed on Summary.
+  const current = getCurrentTab()
   if (current && document.getElementById(current)) document.getElementById(current).click()
 }
 
@@ -1384,18 +1587,25 @@ export function initGenericTable() {
       })
     }
 
-    // Double-click opens the row as a tab below, matching every hand-written
-    // list page. The row's own link still navigates on a single click, so both
-    // ways of getting to a detail view keep working.
     const slug = el.dataset.slug
+
+    // DOUBLE click opens the row as a tab. Single click is already taken: this
+    // table has DataTables row selection (`select: { style: 'os' }`), and the
+    // Copy/Excel/CSV buttons export the selection when there is one. Binding
+    // open to a single click fires both actions from one gesture, and made
+    // selecting a row for export impossible.
+    //
+    // This is why the hand-written tables used double click — the same `select`
+    // line was on them. It was forced, not a preference. A single-click opener
+    // was added 2026-10-04 without checking what the gesture already meant, and
+    // removed 2026-10-05.
     el.addEventListener('dblclick', (e) => {
-      const row = e.target.closest('tbody tr')
-      if (!row) return
-      const link = row.querySelector('td:first-child a')
-      if (!link) return
+      const row = e.target.closest('tbody tr[data-orb-id]')
+      if (!row || !el.contains(row)) return
+      const orbId = row.dataset.orbId
+      if (!orbId) return
       e.preventDefault()
-      const orbId = decodeURIComponent(link.getAttribute('href').split('/').pop())
-      loadGenericTab(link.textContent.trim() || orbId, slug, orbId)
+      loadGenericTab(labelOfRow(row) || orbId, slug, orbId)
     })
 
     initGenericTabRestoration()

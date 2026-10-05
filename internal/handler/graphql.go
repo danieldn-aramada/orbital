@@ -21,10 +21,24 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// knownMutationRe matches any DGraph mutation call on a registered ConfigItem
-// type. Derived from `internal/configitems.Types` — adding a type to that
-// registry is the single source of truth; this regex updates automatically.
-var knownMutationRe = configitems.KnownMutationsRegex()
+// mutationRe matches any DGraph mutation call on a ConfigItem type the DEPLOYED
+// schema declares.
+//
+// It was a package-level var built at init from a hand-maintained Go list. That
+// list was keyed to the SHIPPED schema while this gate operates on the DEPLOYED
+// one, so a deployment whose DGraph carried an extra ConfigItem type got
+// ungated, unaudited writes on it — invisible to any build-time check, because
+// the drift is between an environment and a binary.
+//
+// Background context, not the request's: this is a cache read on a resolver that
+// re-checks on its own rate-limited schedule, and a cancelled request must not
+// make the next mutation un-auditable.
+func (h *GraphQL) mutationRe() *regexp.Regexp {
+	if h.sharedFields == nil {
+		return configitems.BroadMutationRegex
+	}
+	return h.sharedFields.MutationRegex(context.Background())
+}
 
 // orbIdFilterRe extracts orbId values from inline GraphQL filter expressions:
 // e.g. filter: { orbId: { eq: "alaska-dot:GRTLY24" } }
@@ -84,10 +98,15 @@ var queryOpRe = regexp.MustCompile(`(?i)^\s*query\s+(\w+)`)
 var beforeFetchOverrides = map[string]string{}
 
 type GraphQL struct {
-	fields    configitems.FieldsFor
-	dgraphURL string
-	db        *ent.Client
-	logger    *slog.Logger
+	fields configitems.FieldsFor
+	views  ViewsProvider
+	// sharedFields is held only for ViewsHash, which identifies the views
+	// document the current view list was built from — the editor sends it back
+	// on every write so a stale-shape save can be refused.
+	sharedFields *SharedFields
+	dgraphURL    string
+	db           *ent.Client
+	logger       *slog.Logger
 	// rejectInlineSelectors, when true, 400s single-entity update mutations whose
 	// selector/set are inline literals instead of variables — the shape the proxy
 	// can't stamp. See docs/reference/ERROR-RESPONSES.md.
@@ -96,7 +115,71 @@ type GraphQL struct {
 
 func NewGraphQL(dgraphURL string, db *ent.Client, logger *slog.Logger, rejectInlineSelectors bool, opts ...HandlerOption) *GraphQL {
 	fields, _, _ := fieldsFrom(dgraphURL, logger, opts)
-	return &GraphQL{dgraphURL: dgraphURL, db: db, logger: logger, rejectInlineSelectors: rejectInlineSelectors, fields: fields}
+	return &GraphQL{dgraphURL: dgraphURL, db: db, logger: logger, rejectInlineSelectors: rejectInlineSelectors,
+		fields: fields, views: viewsFrom(opts), sharedFields: sharedFieldsFrom(opts)}
+}
+
+// refuseIfViewsMoved returns a 409 when the caller declares a views document
+// that is no longer the current one.
+//
+// 409, not 400: nothing about the request is malformed — it was correct when it
+// was composed, and the correct answer is to reload and compose it again, which
+// is exactly what the entity-version conflict already tells a user to do.
+// It returns (refused, err) rather than an error alone: writeError RENDERS the
+// envelope and returns nil, so "err == nil" cannot mean "carry on" here — an
+// earlier spelling of this check wrote the 409 and then proxied the mutation
+// anyway, producing a refusal and a write in the same response body.
+func (h *GraphQL) refuseIfViewsMoved(c echo.Context) (bool, error) {
+	declared := c.Request().Header.Get(viewsHashHeader)
+	if declared == "" || h.views == nil {
+		return false, nil
+	}
+	current := h.currentViewsHash(c.Request().Context())
+	if current == "" || current == declared {
+		// An unknown current hash means the resolver has not resolved yet.
+		// Refusing then would block every write on a transient condition, and
+		// the per-entity version check — the real guard against a lost write —
+		// still runs.
+		return false, nil
+	}
+	h.logger.Info("refused a write composed against an older views configuration",
+		"declared", declared, "current", current, "actor", actorFromContext(c))
+	return true, writeError(c, http.StatusConflict, CodeConflict,
+		"This page was opened before the view configuration changed, so saving it could clear fields it no longer shows.",
+		"Reload the page and make the change again.")
+}
+
+// viewsHashHeader is how the editor declares which views document the tree it
+// is submitting was built from.
+const viewsHashHeader = "X-Orbital-Views"
+
+// currentViewsHash re-checks before answering: a cached hash would accept a page
+// composed before the views moved, which is the entire case being guarded.
+func (h *GraphQL) currentViewsHash(ctx context.Context) string {
+	if h.sharedFields == nil {
+		return ""
+	}
+	return h.sharedFields.CurrentViewsHash(ctx)
+}
+
+// beforeSelection builds the audit before-fetch for a type: its own editable
+// fields plus those of every member its page writes.
+//
+// With no views provider the child half is empty and the event still records
+// the root's own changes — degraded, never absent. An audit event with no
+// `changes` at all is the quietest failure in this codebase, so the root half
+// must not depend on anything optional.
+func (h *GraphQL) beforeSelection(resourceType string) string {
+	members := func(string) []configitems.EditableMember { return nil }
+	if h.views != nil {
+		if vs, err := h.views(context.Background()); err == nil {
+			members = func(t string) []configitems.EditableMember { return vs.Of(t).EditableMembers() }
+		} else {
+			h.logger.Warn("audit before-fetch: cannot resolve views, so owned children are not captured",
+				"type", resourceType, "err", err)
+		}
+	}
+	return configitems.BeforeSelection(resourceType, h.fields, members)
 }
 
 // DGraphURL exposes the configured DGraph endpoint for adjacent handlers that
@@ -157,13 +240,34 @@ func (h *GraphQL) Handle(c echo.Context) error {
 			"Ask an admin to grant you the dev role.")
 	}
 
-	touchesKnownType := knownMutationRe.MatchString(req.Query)
+	mutationRe := h.mutationRe()
+	touchesKnownType := mutationRe.MatchString(req.Query)
 
-	opName := mutationOpName(&req)
+	opName := mutationOpName(mutationRe, &req)
 	c.Set("graphql.operation.name", opName)
 	c.Set("graphql.operation.type", "mutation")
 
 	actor := actorFromContext(c)
+
+	// Refuse a write whose VIEW moved since the editor opened.
+	//
+	// configitem-editor.js decides a field was CLEARED by diffing the open-time
+	// snapshot against the edited tree, so an entity dropped from a view while a
+	// modal sat open reads as a deletion and the save emits `remove` for fields
+	// nobody touched. The ConfigMap model narrows the window — a view change
+	// arrives on reload, not on a live write — but reload is in place, so the
+	// window is real.
+	//
+	// SCOPED TO THE EDITOR, deliberately. The header is sent only by
+	// configitem-editor.js, and a request without it proceeds: an API client,
+	// orbctl or AEP sending an explicit `remove` is doing it on purpose, and the
+	// hazard being guarded is the editor's diff, not the mutation. Blocking
+	// header-less callers would gate the public API on a UI concern.
+	if touchesKnownType {
+		if refused, err := h.refuseIfViewsMoved(c); refused {
+			return err
+		}
+	}
 
 	// Reject single-entity UPDATE mutations that use inline literals instead of
 	// variables. Stamping (version/updatedAt/updatedBy) only fires when the proxy
@@ -175,7 +279,7 @@ func (h *GraphQL) Handle(c echo.Context) error {
 	// intent is to replace the hand-rolled request parsing with a real GraphQL AST
 	// parse; see ROADMAP. See docs/reference/ERROR-RESPONSES.md.
 	if h.rejectInlineSelectors {
-		ops, _ := extractOperations(req.Query)
+		ops, _ := extractOperations(mutationRe, req.Query)
 		for _, op := range ops {
 			if !strings.HasPrefix(op, "update") {
 				continue // add/delete use different (or no) stamping paths
@@ -240,7 +344,7 @@ func (h *GraphQL) Handle(c echo.Context) error {
 	// the body, so the map Handle unmarshalled is the UNSTAMPED one. Auditing it
 	// would record a mutation orbital did not send.
 	if touchesKnownType && h.db != nil && !hasGQLErrors(res.Body) {
-		operations, resourceTypes := extractOperations(req.Query)
+		operations, resourceTypes := extractOperations(mutationRe, req.Query)
 		resourceIDs := extractResourceIDs(req.Query, res.Variables, res.Body)
 		// Captured HERE, not inside the goroutine: Echo pools and reuses Context
 		// objects, so reading c after Handle returns yields another request's
@@ -303,7 +407,7 @@ func (h *GraphQL) DispatchMutation(ctx context.Context, actor string, caller cal
 		if m := mutationOpRe.FindStringSubmatch(query); len(m) > 1 {
 			opName = m[1]
 		}
-		operations, resourceTypes := extractOperations(query)
+		operations, resourceTypes := extractOperations(h.mutationRe(), query)
 		resourceIDs := extractResourceIDs(query, res.Variables, res.Body)
 		go h.auditMutation(opName, operations, resourceTypes, resourceIDs, actor, query, res.Variables, res.Before, res.Bypassed, auditInternal())
 	}
@@ -472,14 +576,14 @@ func (h *GraphQL) writeToDGraph(ctx context.Context, body []byte, actor string, 
 // mutationOpName is the operation name orbital uses for logs, audit rows and the
 // beforeFetchOverrides lookup. Derived identically wherever it is needed, so the
 // override map cannot be keyed on a string one call site would not produce.
-func mutationOpName(req *gqlRequest) string {
+func mutationOpName(re *regexp.Regexp, req *gqlRequest) string {
 	if req.OperationName != "" {
 		return req.OperationName
 	}
 	if m := mutationOpRe.FindStringSubmatch(req.Query); len(m) > 1 {
 		return m[1]
 	}
-	ops, _ := extractOperations(req.Query)
+	ops, _ := extractOperations(re, req.Query)
 	return strings.Join(ops, ",")
 }
 
@@ -564,11 +668,12 @@ func resolveSetMap(query string, variables map[string]any) (map[string]any, stri
 // inline-selector rejection exists on the client path, and why internal
 // dispatchers must use the canonical update{Kind}($orbId, $set) shape.
 func (h *GraphQL) fetchCurrentState(req *gqlRequest) map[string]any {
-	opName := mutationOpName(req)
+	re := h.mutationRe()
+	opName := mutationOpName(re, req)
 
 	resourceType, hasOverride := beforeFetchOverrides[opName]
 	if !hasOverride {
-		_, resourceTypes := extractOperations(req.Query)
+		_, resourceTypes := extractOperations(re, req.Query)
 		if len(resourceTypes) == 1 {
 			resourceType = resourceTypes[0]
 		}
@@ -976,7 +1081,7 @@ func (h *GraphQL) fetchBeforeByID(getter, resourceType, id string) (map[string]a
 	// before-fetch and the editable set cannot disagree. Hand-maintaining them
 	// side by side was a Hi-severity debt row: drop a field from one and the
 	// mutation still succeeds while the audit event carries no `changes` at all.
-	fields := configitems.BeforeSelection(resourceType, h.fields, configitems.Children)
+	fields := h.beforeSelection(resourceType)
 	if fields == "" {
 		fields = "id orbId name version"
 	}
@@ -993,7 +1098,7 @@ func (h *GraphQL) fetchBeforeByOrbID(querier, resourceType, orbID string) (map[s
 	// before-fetch and the editable set cannot disagree. Hand-maintaining them
 	// side by side was a Hi-severity debt row: drop a field from one and the
 	// mutation still succeeds while the audit event carries no `changes` at all.
-	fields := configitems.BeforeSelection(resourceType, h.fields, configitems.Children)
+	fields := h.beforeSelection(resourceType)
 	if fields == "" {
 		fields = "id orbId name version"
 	}
@@ -1105,12 +1210,12 @@ func stripDGraphIDs(v any) any {
 // signature — otherwise `mutation UpdateIdracSettings(...) { addIdracSettings(...) }`
 // would record both `updateIdracSettings` (from the operation name) and
 // `addIdracSettings` (from the body call).
-func extractOperations(query string) (operations []string, resourceTypes []string) {
+func extractOperations(re *regexp.Regexp, query string) (operations []string, resourceTypes []string) {
 	body := query
 	if i := strings.Index(query, "{"); i >= 0 {
 		body = query[i:]
 	}
-	matches := knownMutationRe.FindAllStringSubmatch(body, -1)
+	matches := re.FindAllStringSubmatch(body, -1)
 	seenOp := map[string]bool{}
 	seenType := map[string]bool{}
 	for _, m := range matches {

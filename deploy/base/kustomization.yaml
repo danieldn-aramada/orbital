@@ -4,3 +4,4 @@ resources:
   - deploy.yaml
   - scratch-exports-pvc.yaml
   - dgraph-exports-pvc.yaml
+  - views-overlay-configmap.yaml

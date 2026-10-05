@@ -62,6 +62,7 @@ WORKDIR /app
 # loads from disk; copy once at the shared layer so both images have them.
 COPY --from=builder /app/web ./web
 COPY --from=builder /app/schema ./schema
+COPY --from=builder /app/config ./config
 
 # dgraph binary on PATH so SubprocessBackend / SubprocessRestoreBackend can exec it.
 COPY --from=dgraph-tools /usr/local/bin/dgraph /usr/local/bin/dgraph

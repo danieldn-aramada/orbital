@@ -124,7 +124,8 @@ Read the relevant doc(s) BEFORE writing code in that area — they encode conven
 | Working on | File |
 |---|---|
 | **Adding a new ConfigItem type (schema → audit → UI)** — the canonical recipe | `docs/playbooks/add-configitem.md` |
-| Editing GraphQL schema, **schema annotations** (`slug:`/`order:`/`label:`/`detailOnly`/…), queries, DQL, export, seeding, blue-green | `docs/reference/DGRAPH.md` |
+| **Configuring what a ConfigItem page shows and edits** (`config/views.yaml`: members, editable, slug, menuWeight, order, labels, filters, columns) | `docs/reference/UI.md` § Settled Decisions · format: `config/views.yaml` header + `internal/configitems/viewconfig.go` |
+| Editing GraphQL schema, **schema annotations** (only three left: `jsonString`, `orbIdSuffix:`, `derivesIdFrom:`), queries, DQL, export, seeding, blue-green | `docs/reference/DGRAPH.md` |
 | **Querying NetBox / building or reconciling a network-topology seed** (endpoints, field shapes, join keys, gotchas) | `docs/reference/NETBOX.md` |
 | UI templates, HTMX, JavaScript, CSS, edit modals, JSON editor pattern | `docs/reference/UI.md` |
 | Audit events, mutation recording, diff rendering, `graphql.go` proxy | `docs/reference/AUDIT.md` |

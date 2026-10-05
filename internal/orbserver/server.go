@@ -193,7 +193,12 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 	// handlers briefly disagree about the schema after a change. The GraphQL
 	// proxy needs it too: it generates the audit before-fetch selection from
 	// the same derived set, so the two cannot drift.
-	fieldSource := handler.NewSharedFieldSource(cfg.DGraphURL, logger)
+	// No schema version: orb ships no schema/VERSION of its own, and the graph
+	// it serves came from whatever orbital published. The coarse version check
+	// is skipped; per-member validation against the imported schema still runs,
+	// which is the half that catches a stale declaration anyway.
+	fieldSource := handler.NewSharedFieldSource(cfg.DGraphURL,
+		handler.ViewsSource{Path: cfg.ViewsPath, OverlayPath: cfg.ViewsOverlayPath}, logger)
 	// The same generic renderer orbital uses, with orb's own chrome. Orb never
 	// sets CanMutate, so these pages are read-only without needing a separate
 	// read-only implementation.

@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/armada/orbital/internal/configitems"
 	"io"
 	"log/slog"
 	"net/http"
@@ -126,7 +127,7 @@ func TestExtractOperations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ops, types := extractOperations(tt.query)
+			ops, types := extractOperations(configitems.BroadMutationRegex, tt.query)
 			if !stringSlicesMatch(ops, tt.wantOps) {
 				t.Errorf("ops: got %v, want %v", ops, tt.wantOps)
 			}

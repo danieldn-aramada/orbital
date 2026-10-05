@@ -47,14 +47,13 @@ func TestGenericDetailQuerySelectsMetaFields(t *testing.T) {
 // reports "no changes" while something is in flight. Silent, and exactly the
 // question the panel exists to answer.
 func TestOwnedSubtreeOrbIDs(t *testing.T) {
-	// Server → IdracSettings is the real owned-child edge in the deployed
-	// schema, so this exercises the actual containment table rather than a
-	// fixture that could agree with a broken one.
+	// Server → IdracSettings is a real editable member of the Server view, so
+	// this exercises the shape the page actually resolves.
 	entity := map[string]any{
 		"orbId":         "colo:server-ABC",
 		"idracSettings": map[string]any{"orbId": "colo:idrac-settings-ABC"},
 	}
-	got := ownedSubtreeOrbIDs("colo:server-ABC", "Server", entity)
+	got := ownedSubtreeOrbIDs(fixtureViewSet(), "colo:server-ABC", "Server", entity)
 	if len(got) == 0 || got[0] != "colo:server-ABC" {
 		t.Fatalf("root orbId must come first, got %v", got)
 	}
@@ -63,13 +62,13 @@ func TestOwnedSubtreeOrbIDs(t *testing.T) {
 	}
 
 	// A child the query did not return must not be claimed.
-	bare := ownedSubtreeOrbIDs("colo:server-ABC", "Server", map[string]any{"orbId": "colo:server-ABC"})
+	bare := ownedSubtreeOrbIDs(fixtureViewSet(), "colo:server-ABC", "Server", map[string]any{"orbId": "colo:server-ABC"})
 	if len(bare) != 1 {
 		t.Errorf("with no children fetched, want just the root, got %v", bare)
 	}
 
 	// An unknown type is not an error — it owns nothing.
-	unknown := ownedSubtreeOrbIDs("x:1", "NoSuchType", map[string]any{"orbId": "x:1"})
+	unknown := ownedSubtreeOrbIDs(fixtureViewSet(), "x:1", "NoSuchType", map[string]any{"orbId": "x:1"})
 	if len(unknown) != 1 || unknown[0] != "x:1" {
 		t.Errorf("unknown type: want [x:1], got %v", unknown)
 	}
@@ -195,13 +194,7 @@ func TestGenericDetailQuery_InterfaceTypedRelationship(t *testing.T) {
 // match alone is not enough — a type can hold two references to the same kind,
 // and only one is the edge you traversed. Both halves are asserted.
 func TestWithoutBackReferences(t *testing.T) {
-	configitems.SetImplementsLookup(func(typeName string) []string {
-		if typeName == "EksaKubernetesCluster" {
-			return []string{"ConfigItem", "KubernetesCluster"}
-		}
-		return []string{"ConfigItem"}
-	})
-	t.Cleanup(func() { configitems.SetImplementsLookup(nil) })
+	vs := fixtureViewSet()
 
 	const parent = "colo:dev-main"
 	refs := []configitems.ViewRefColumn{
@@ -217,7 +210,7 @@ func TestWithoutBackReferences(t *testing.T) {
 			{"cluster": ref(parent), "server": ref("colo:server-1")},
 			{"cluster": ref(parent), "server": ref("colo:server-2")},
 		}
-		got := withoutBackReferences(refs, rows, "EksaKubernetesCluster", parent)
+		got := withoutBackReferences(vs, refs, rows, "EksaKubernetesCluster", parent)
 		if len(got) != 1 || got[0].Field != "server" {
 			t.Fatalf("want only the server column, got %+v", got)
 		}
@@ -228,7 +221,7 @@ func TestWithoutBackReferences(t *testing.T) {
 			{"cluster": ref(parent), "server": ref("colo:server-1")},
 			{"cluster": ref("colo:other"), "server": ref("colo:server-2")},
 		}
-		if got := withoutBackReferences(refs, rows, "EksaKubernetesCluster", parent); len(got) != 2 {
+		if got := withoutBackReferences(vs, refs, rows, "EksaKubernetesCluster", parent); len(got) != 2 {
 			t.Fatalf("a column carrying a differing value must be kept, got %+v", got)
 		}
 	})
@@ -239,13 +232,13 @@ func TestWithoutBackReferences(t *testing.T) {
 			{"cluster": ref(parent), "server": ref("colo:server-1")},
 			{"server": ref("colo:server-2")},
 		}
-		if got := withoutBackReferences(refs, rows, "EksaKubernetesCluster", parent); len(got) != 2 {
+		if got := withoutBackReferences(vs, refs, rows, "EksaKubernetesCluster", parent); len(got) != 2 {
 			t.Fatalf("a row with no value must keep the column, got %+v", got)
 		}
 	})
 
 	t.Run("no rows leaves the columns alone", func(t *testing.T) {
-		if got := withoutBackReferences(refs, nil, "EksaKubernetesCluster", parent); len(got) != 2 {
+		if got := withoutBackReferences(vs, refs, nil, "EksaKubernetesCluster", parent); len(got) != 2 {
 			t.Fatalf("want both columns, got %+v", got)
 		}
 	})

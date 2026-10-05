@@ -121,9 +121,21 @@ func genericDetailQuery(v configitems.View, viewOf func(string) configitems.View
 		add(f)
 	}
 
+	// SUMMARY REF ROWS. They are no longer tabs, so they are no longer selected
+	// by the tab walk below — and a ref that is not fetched renders as nothing
+	// at all, silently, which is how the Data Center row vanished off every
+	// Server page the moment the two surfaces were split.
+	for _, rc := range v.SummaryRefs {
+		if seen[rc.Field] {
+			continue
+		}
+		seen[rc.Field] = true
+		sel += " " + rc.Field + " { " + idNameSel(viewOf(rc.Type)) + " }"
+	}
+
 	// Each relationship is selected EXACTLY once, with the union of what the
-	// page needs from it. Owned children are edited inline, so they carry their
-	// own fields; everything else only needs enough to render a link.
+	// page needs from it. Contained children are edited inline, so they carry
+	// their own fields; everything else only needs enough to render a link.
 	owned := ownedChildFields(v.Type, viewOf, display, refColumns)
 	for _, tab := range v.Tabs {
 		// A PATH tab selects nothing of its own: its rows are read out of the
@@ -174,8 +186,14 @@ func genericDetailQuery(v configitems.View, viewOf func(string) configitems.View
 // to nest the same way or those targets have no data behind them.
 func ownedChildFields(rootType string, viewOf func(string) configitems.View, display func(string) []string, refColumns func(string) []configitems.ViewRefColumn) map[string]string {
 	out := map[string]string{}
-	for _, oc := range configitems.OwnedChildren(rootType) {
-		sel := "orbId name version"
+	for _, oc := range viewOf(rootType).EditableMembers() {
+		// idNameSel, not a bare `orbId name`: an editable member may be typed by
+		// an INTERFACE (DataCenter.kubernetesClusters), and `orbId` is declared
+		// on ConfigItem rather than on a sub-interface, so selecting it bare is
+		// rejected at validation — which fails the WHOLE query and takes the page
+		// with it. The non-owned branch below always used idNameSel; this one did
+		// not, and no member had been both editable and interface-typed before.
+		sel := idNameVersionSel(viewOf(oc.ChildType))
 		for _, f := range display(oc.ChildType) {
 			if f != "name" {
 				sel += " " + f
@@ -190,8 +208,8 @@ func ownedChildFields(rootType string, viewOf func(string) configitems.View, dis
 		for _, rc := range refColumns(oc.ChildType) {
 			sel += " " + rc.Field + " { " + idNameSel(viewOf(rc.Type)) + " }"
 		}
-		for _, gc := range configitems.OwnedChildren(oc.ChildType) {
-			gsel := "orbId name version"
+		for _, gc := range viewOf(oc.ChildType).EditableMembers() {
+			gsel := idNameVersionSel(viewOf(gc.ChildType))
 			for _, f := range display(gc.ChildType) {
 				if f != "name" {
 					gsel += " " + f
@@ -417,23 +435,11 @@ func tabLabel(field string, label func(string) string) string {
 	return label(field)
 }
 
-func humanFieldLabel(field string) string {
-	isUpper := func(i int) bool { return i >= 0 && i < len(field) && field[i] >= 'A' && field[i] <= 'Z' }
-	isLower := func(i int) bool { return i >= 0 && i < len(field) && field[i] >= 'a' && field[i] <= 'z' }
-
-	var b strings.Builder
-	for i := 0; i < len(field); i++ {
-		c := field[i]
-		if i > 0 && isUpper(i) && (!isUpper(i-1) || isLower(i+1)) {
-			b.WriteByte(' ')
-		}
-		if i == 0 && isLower(i) {
-			c -= 'a' - 'A'
-		}
-		b.WriteByte(c)
-	}
-	return b.String()
-}
+// humanFieldLabel title-cases a field name. It lives in configitems because the
+// VIEW carries the resolved labels now, and the fallback has to be the same rule
+// on both sides of that boundary — an integrator reading the response and
+// orbital rendering its own header must not disagree about "oobIP".
+func humanFieldLabel(field string) string { return configitems.HumanFieldLabel(field) }
 
 // refLabel is the link text for a reference with no name of its own.
 //
@@ -447,6 +453,19 @@ func refLabel(orbID string) string {
 		return orbID[i+1:]
 	}
 	return orbID
+}
+
+// idNameVersionSel is idNameSel plus the OCC counter, which an editable member
+// needs so the editor can version-guard it.
+//
+// `version` is declared on ConfigItem like `orbId` and `name`, so it has to go
+// INSIDE the type condition — appending it outside fails validation exactly the
+// same way, and fails the whole query with it.
+func idNameVersionSel(v configitems.View) string {
+	if v.IsInterface {
+		return "__typename ... on ConfigItem { orbId name version }"
+	}
+	return "orbId name version"
 }
 
 // idNameSel is how a RELATED entity's identity is selected.

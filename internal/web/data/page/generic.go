@@ -196,13 +196,6 @@ type GenericTab struct {
 	FieldValues map[string]string
 }
 
-// Views is the view-list settings page. It carries no rows: the table is filled
-// from GET /api/v1/views by JS, keeping orbital's UI a consumer of its own API.
-type Views struct {
-	layout.Base
-	PageTitle string
-}
-
 // MetaRow is one row of the provenance box.
 type MetaRow struct {
 	// Field is the schema field name, or "" for a row that is not a field (a
@@ -251,7 +244,7 @@ type GenericOwned struct {
 //
 // The LABEL is computed server-side, not in the template. UI.md settles that a
 // field label is the title-cased field name, and an integrator building their
-// own table from /api/v1/views should not have to re-derive that rule — the
+// own table from orbital's responses should not have to re-derive that rule — the
 // same argument that flattened the export-preview response.
 type ColumnHeader struct {
 	Field string

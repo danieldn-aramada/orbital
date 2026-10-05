@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { listRows } from './helpers/generic';
 
 // Proposed-change marks on generic pages.
 //
@@ -51,7 +52,7 @@ test('a pending proposal marks the field it targets, and only that field', async
   expect(cr.id, `change request not created: ${JSON.stringify(cr).slice(0, 200)}`).toBeTruthy();
 
   try {
-    await page.goto('/clusters/' + encodeURIComponent(CLUSTER));
+    await page.goto('/clusters?open=' + encodeURIComponent(CLUSTER));
 
     // The marked row names the proposed value, so you can see what is pending
     // without opening the change request.
@@ -73,7 +74,10 @@ test('owned children carry their own marks, keyed to the child', async ({ page }
   // parent's, so a child's rows can only be marked from the child's own id.
   // Getting this wrong shows a backup-schedule proposal on the cluster's own
   // fields, or nowhere at all.
-  await page.goto('/clusters/' + encodeURIComponent(CLUSTER));
+  await page.goto('/clusters?open=' + encodeURIComponent(CLUSTER));
+  // The detail body arrives by HTMX — wait for it, or this reads an empty DOM
+  // and reports "no mark table" for a view that renders one perfectly well.
+  await expect(page.getByTestId('generic-fields')).toBeVisible();
 
   const tables = await page.locator('[data-field-orbid]').evaluateAll((els) =>
     els.map((e) => ({
@@ -118,9 +122,9 @@ test('nothing proposed leaves every mark slot empty', async ({ page }) => {
   // The negative the dot spec also protected: a marker that is always on is
   // indistinguishable from a working one until someone notices it never turns
   // off. Asserted on a page with no proposals against it.
-  await page.goto('/racks');
-  const href = await page.locator('#generic-table tbody tr td:first-child a').first().getAttribute('href');
-  await page.goto(href!);
+  await page.goto('/network-devices');
+  const orbId = (await listRows(page).first().getAttribute('data-orb-id'))!;
+  await page.goto('/network-devices?open=' + encodeURIComponent(orbId));
   await expect(page.getByTestId('generic-fields')).toBeVisible();
   // Let the marks fetch resolve, so this cannot pass by asserting too early.
   await page.waitForTimeout(1_500);

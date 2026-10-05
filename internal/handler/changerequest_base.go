@@ -34,7 +34,7 @@ import (
 //     of its IdracSettings: the owned subtree is the unit a reviewer actually
 //     looked at (D1), so a third party editing the child must invalidate the
 //     review of the parent.
-func baseScope(ctx context.Context, dgraphURL string, declared []string, existing map[string]approval.EntityRef) []string {
+func baseScope(ctx context.Context, dgraphURL string, views configitems.ViewSet, declared []string, existing map[string]approval.EntityRef) []string {
 	seen := make(map[string]bool, len(declared))
 	scope := make([]string, 0, len(declared))
 	add := func(id string) {
@@ -49,7 +49,7 @@ func baseScope(ctx context.Context, dgraphURL string, declared []string, existin
 	// This runs for every change request a list renders, and the badge renders
 	// the whole open queue on every page load — so a per-entity round-trip here
 	// multiplies by two factors at once.
-	owned := collectRelatedOrbIDsBatch(ctx, dgraphURL, declared, existing)
+	owned := collectRelatedOrbIDsBatch(ctx, dgraphURL, views, declared, existing)
 	for _, id := range declared {
 		add(id)
 		for _, o := range owned[id] {
@@ -70,7 +70,7 @@ func baseScope(ctx context.Context, dgraphURL string, declared []string, existin
 // Failure is non-fatal for the same reason collectRelatedOrbIDs's is: a root
 // whose subtree cannot be read contributes only itself, which narrows the scope
 // rather than corrupting it.
-func collectRelatedOrbIDsBatch(ctx context.Context, dgraphURL string, declared []string, existing map[string]approval.EntityRef) map[string][]string {
+func collectRelatedOrbIDsBatch(ctx context.Context, dgraphURL string, views configitems.ViewSet, declared []string, existing map[string]approval.EntityRef) map[string][]string {
 	out := make(map[string][]string, len(declared))
 
 	type rootAlias struct{ alias, id string }
@@ -82,7 +82,7 @@ func collectRelatedOrbIDsBatch(ctx context.Context, dgraphURL string, declared [
 		if !ok || ref.Type == "" {
 			continue
 		}
-		sel := configitems.OwnedOrbIDSelection(ref.Type)
+		sel := views.EditableOrbIDSelection(ref.Type)
 		if sel == "" {
 			continue // the type owns nothing — no query needed to learn that
 		}
@@ -135,7 +135,7 @@ func collectRelatedOrbIDsBatch(ctx context.Context, dgraphURL string, declared [
 
 // walkOrbIDs collects every orbId reachable in a decoded GraphQL result.
 //
-// The selection is built from OwnedOrbIDSelection, so everything it can reach
+// The selection is built from the view's edit unit, so everything it reaches
 // is owned by the root by construction — the walk does not need to re-decide
 // ownership, only to find the ids.
 func walkOrbIDs(v any, seen map[string]bool, out *[]string) {

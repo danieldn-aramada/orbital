@@ -47,7 +47,7 @@ func newAcceptFixture(t *testing.T) *acceptFixture {
 	// is in production. Without it the selection degrades to id/orbId/name/version
 	// and every diff assertion below goes quietly empty.
 	gql := NewGraphQL(testutil.DGraphURL(), f.db, slog.Default(), true,
-		WithFieldSource(NewSharedFieldSource(testutil.DGraphURL(), slog.Default())))
+		WithFieldSource(NewSharedFieldSource(testutil.DGraphURL(), ViewsSource{Path: testutil.ViewsPath()}, slog.Default())))
 	return &acceptFixture{crFixture: f, gql: gql, dh: NewDivergenceHandler(f.db, slog.Default(), gql)}
 }
 

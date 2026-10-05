@@ -3,6 +3,8 @@ package configitems
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -47,16 +49,16 @@ func sample() *fakeSchema {
 				{Name: "version", Editable: true},
 				{Name: "hostname", Editable: true},
 				{Name: "model", Editable: true},
-				{Name: "idracSettings"}, // edge — not editable
-				{Name: "racks"},         // list — not editable
+				{Name: "idracSettings", Kind: "OBJECT", TypeName: "IdracSettings"}, // edge — not editable
+				{Name: "racks", Kind: "OBJECT", TypeName: "Rack", IsList: true},    // list — not editable
 			}},
-			"DataCenter": TypeInfo{Doc: "editable: name", Fields: []DerivedField{
+			"DataCenter": TypeInfo{Fields: []DerivedField{
 				{Name: "name", Editable: true},
 				{Name: "model", Editable: true},
 				{Name: "assetDataV2", Editable: true},
-				{Name: "servers"},
+				{Name: "servers", Kind: "OBJECT", TypeName: "Server", IsList: true},
 			}},
-			"Rack": TypeInfo{Doc: "editable: name", Fields: []DerivedField{
+			"Rack": TypeInfo{Fields: []DerivedField{
 				{Name: "name", Editable: true},
 				{Name: "uHeight", Editable: true},
 			}},
@@ -66,6 +68,32 @@ func sample() *fakeSchema {
 			}},
 		},
 	}
+}
+
+// sampleViews writes the views document the fixture schema is resolved against.
+//
+// The resolver needs one: editability comes from the views config now, so a
+// resolver pointed at no file cannot answer "what is editable" at all — which
+// is the correct failure, and not the one these tests are about.
+func sampleViews(t *testing.T) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "views.yaml")
+	if err := os.WriteFile(p, []byte(`
+pages:
+  Server:
+    tabs:
+      - { path: idracSettings, editable: true }
+types:
+  DataCenter:
+    fields:
+      name: { editable: true }
+  Rack:
+    fields:
+      name: { editable: true }
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
 }
 
 func eq(t *testing.T, label string, got, want []string) {
@@ -81,58 +109,15 @@ func eq(t *testing.T, label string, got, want []string) {
 		}
 	}
 }
-
-// Acceptance 5 + 6: interface fields are never editable on any type, and every
-// edge is excluded — both derived, never a literal list.
-func TestDerive_ExcludesInterfaceFieldsAndEdges(t *testing.T) {
-	f := sample()
-	got := Derive(f.types, f.iface)
-
-	eq(t, "Server", got["Server"], []string{"hostname", "model"})
-
-	for _, banned := range []string{"id", "orbId", "version", "createdAt", "updatedBy"} {
-		for _, f := range got["Server"] {
-			if f == banned {
-				t.Errorf("Server: %q is a ConfigItem interface field and must never be editable", banned)
-			}
-		}
-	}
-	for _, edge := range []string{"idracSettings", "racks", "servers"} {
-		for _, f := range append(got["Server"], got["DataCenter"]...) {
-			if f == edge {
-				t.Errorf("%q is an edge and must be excluded from the scalar set", edge)
-			}
-		}
-	}
-}
-
-// Acceptance 7: `name` IS editable on DataCenter and Rack and NOT on Server.
-// Naive type-minus-interface derivation gets this wrong, because `name` lives
-// on the ConfigItem interface.
-// `name` is re-admitted by the type's `editable:` annotation — a hardcoded Go
-// map until 2026-09-29. The fixture carries the annotation because the SCHEMA
-// carries it: DataCenter and Rack declare `editable: name`, Server does not.
-func TestDerive_ReadmitsNameOnDeclaredTypes(t *testing.T) {
-	f := sample()
-	got := Derive(f.types, f.iface)
-
-	eq(t, "DataCenter", got["DataCenter"], []string{"assetDataV2", "model", "name"})
-	eq(t, "Rack", got["Rack"], []string{"name", "uHeight"})
-
-	for _, fld := range got["Server"] {
-		if fld == "name" {
-			t.Error("Server: `name` must NOT be editable — it is editable only on DataCenter and Rack")
-		}
-	}
-}
-
-// BeforeFields is generated from the same model, so the two cannot disagree.
 func TestBeforeSelection_GeneratedFromTheSameDerivedSet(t *testing.T) {
-	f := sample()
-	derived := Derive(f.types, f.iface)
-	children := func(parent string) []Type {
+	derived := map[string][]string{
+		"Server":        {"hostname", "model"},
+		"DataCenter":    {"assetDataV2", "model"},
+		"IdracSettings": {"firmwareVersion", "sshEnabled"},
+	}
+	children := func(parent string) []EditableMember {
 		if parent == "Server" {
-			return []Type{{Name: "IdracSettings", ChildField: "idracSettings"}}
+			return []EditableMember{{ChildType: "IdracSettings", ChildField: "idracSettings"}}
 		}
 		return nil
 	}
@@ -156,7 +141,7 @@ func TestBeforeSelection_GeneratedFromTheSameDerivedSet(t *testing.T) {
 func TestResolver_RefusesWithReasonWhenSchemaUnavailable(t *testing.T) {
 	f := sample()
 	f.err = errors.New("connection refused")
-	r := NewResolver(f, time.Minute)
+	r := NewResolver(f, time.Minute).WithViews(sampleViews(t), "", "")
 
 	got, err := r.Fields(context.Background(), "Server")
 	if err == nil {
@@ -174,7 +159,7 @@ func TestResolver_RefusesWithReasonWhenSchemaUnavailable(t *testing.T) {
 func TestResolver_SelfHealsWithoutRestart(t *testing.T) {
 	f := sample()
 	f.err = errors.New("connection refused")
-	r := NewResolver(f, time.Minute)
+	r := NewResolver(f, time.Minute).WithViews(sampleViews(t), "", "")
 
 	if _, err := r.Fields(context.Background(), "Server"); err == nil {
 		t.Fatal("expected failure while DGraph is down")
@@ -191,7 +176,7 @@ func TestResolver_SelfHealsWithoutRestart(t *testing.T) {
 // The caching guarantee: repeated reads (every page load) do NO network work.
 func TestResolver_ServesFromCacheWithoutRefetching(t *testing.T) {
 	f := sample()
-	r := NewResolver(f, time.Minute)
+	r := NewResolver(f, time.Minute).WithViews(sampleViews(t), "", "")
 	ctx := context.Background()
 
 	if _, err := r.Fields(ctx, "Server"); err != nil {
@@ -214,7 +199,7 @@ func TestResolver_ServesFromCacheWithoutRefetching(t *testing.T) {
 func TestResolver_ReDerivesWhenDeployedSchemaChanges(t *testing.T) {
 	f := sample()
 	now := time.Now()
-	r := NewResolver(f, time.Minute)
+	r := NewResolver(f, time.Minute).WithViews(sampleViews(t), "", "")
 	r.now = func() time.Time { return now }
 	ctx := context.Background()
 
@@ -257,110 +242,29 @@ func contains(s, sub string) bool {
 	return false
 }
 
-// editorIgnored is the ONLY opt-out (editable-unless-annotated), and it is
-// editor-scoped: the field stays writable through the API so a scanner can
-// still write it.
-func TestDerive_EditorIgnoredAnnotationSuppressesAField(t *testing.T) {
-	// A type editorIgnoredBridge does not list, so this asserts the ANNOTATION
-	// and not the temporary bridge.
-	types := map[string]TypeInfo{
-		"AnnotationFixture": {Fields: []DerivedField{
-			{Name: "model", Editable: true},
-			{Name: "capacityBytes", Editable: true, Doc: "editorIgnored"},
-			{Name: "wwn", Editable: true, Doc: "The world-wide name.\neditorIgnored"},
-		}},
-	}
-	got := Derive(types, nil)
-	eq(t, "AnnotationFixture", got["AnnotationFixture"], []string{"model"})
-}
-
-// Prose that merely mentions the word must NOT disable a field — otherwise a
-// docstring explaining the convention would silently switch it on.
-func TestIsEditorIgnored_RequiresAnExactLineNotProse(t *testing.T) {
-	cases := []struct {
-		doc  string
-		want bool
-	}{
-		{"editorIgnored", true},
-		{"  editorIgnored  ", true},
-		{"Human text.\neditorIgnored", true},
-		{"", false},
-		{"this field is not editorIgnored by default", false},
-		{"editorIgnoredMaybe", false},
-		{"editorIgnroed", false}, // the typo case: must NOT match
-	}
-	for _, c := range cases {
-		if got := IsEditorIgnored(c.doc); got != c.want {
-			t.Errorf("IsEditorIgnored(%q) = %v, want %v", c.doc, got, c.want)
-		}
-	}
-}
-
-// A typo'd annotation is silent by construction, so something must surface it.
+// A misspelled annotation is a valid docstring that silently does nothing, and
+// the vocabulary shrinking to TWO words makes that MORE likely to slip
+// through, not less: there is no longer a crowd of near-neighbours to make one
+// look odd. `orbIdSufix:` derives the wrong orbId for every child of its type.
 func TestUnknownAnnotations_SurfacesLikelyTypos(t *testing.T) {
-	got := UnknownAnnotations("editorIgnroed")
-	if len(got) != 1 || got[0] != "editorIgnroed" {
+	got := UnknownAnnotations("orbIdSufix: idrac")
+	if len(got) != 1 || got[0] != "orbIdSufix: idrac" {
 		t.Errorf("a typo'd annotation must be reported, got %v", got)
 	}
-	if len(UnknownAnnotations("editorIgnored")) != 0 {
-		t.Error("the valid annotation must not be reported as unknown")
+	for _, valid := range []string{"jsonString", "orbIdSuffix: idrac"} {
+		if u := UnknownAnnotations(valid); len(u) != 0 {
+			t.Errorf("%q is a valid annotation and must not be reported as unknown; got %v", valid, u)
+		}
+	}
+	// An annotation deleted from the vocabulary must now report as unknown —
+	// otherwise a schema still carrying it reads as configured and does nothing.
+	for _, gone := range []string{"editorIgnored", "derivesIdFrom: server"} {
+		if len(UnknownAnnotations(gone)) != 1 {
+			t.Errorf("%q left the vocabulary; a schema still carrying it must say so", gone)
+		}
 	}
 	if len(UnknownAnnotations("A human sentence about this field.")) != 0 {
 		t.Error("ordinary prose must not be reported as an annotation")
-	}
-}
-
-// The environment-coupling defence: once editability comes from the DEPLOYED
-// schema, an environment on an older schema.graphql silently gets MORE editable
-// fields. Nothing errors — the count is the only signal, so it has to be right.
-func TestAnnotations_ReportsResolvedCountAndTypos(t *testing.T) {
-	types := map[string]TypeInfo{
-		"StorageDevice": {Fields: []DerivedField{
-			{Name: "model", Editable: true},
-			{Name: "capacityBytes", Editable: true, Doc: "editorIgnored"},
-			{Name: "wwn", Editable: true, Doc: "editorIgnored"},
-		}},
-		"Server": {Fields: []DerivedField{
-			{Name: "hostname", Editable: true},
-			{Name: "serialNumber", Editable: true, Doc: "editorIgnroed"}, // typo
-		}},
-	}
-	rep := Annotations(types)
-
-	if rep.EditorIgnoredTotal != 2 {
-		t.Errorf("EditorIgnoredTotal = %d, want 2", rep.EditorIgnoredTotal)
-	}
-	if rep.EditorIgnored["StorageDevice"] != 2 {
-		t.Errorf("StorageDevice count = %d, want 2", rep.EditorIgnored["StorageDevice"])
-	}
-	if _, ok := rep.EditorIgnored["Server"]; ok {
-		t.Error("Server has only a TYPO'd annotation and must not be counted as suppressed")
-	}
-	if len(rep.Unknown) != 1 || rep.Unknown[0] != "Server.serialNumber: editorIgnroed" {
-		t.Errorf("the typo must be reported with its location, got %v", rep.Unknown)
-	}
-}
-
-// An environment whose annotations are absent reports ZERO — which is the
-// signal. It must not silently look the same as a correctly annotated one.
-func TestAnnotations_AbsentAnnotationsReportZeroNotSilence(t *testing.T) {
-	types := map[string]TypeInfo{
-		"AnnotationFixture": {Fields: []DerivedField{
-			{Name: "model", Editable: true},
-			{Name: "capacityBytes", Editable: true}, // older schema: no annotation
-		}},
-	}
-	rep := Annotations(types)
-	if rep.EditorIgnoredTotal != 0 {
-		t.Errorf("EditorIgnoredTotal = %d, want 0", rep.EditorIgnoredTotal)
-	}
-	if len(rep.Unknown) != 0 {
-		t.Errorf("no annotations at all means nothing unknown either, got %v", rep.Unknown)
-	}
-	// And the consequence the count is warning about: the field IS editable here.
-	got := Derive(types, nil)
-	if !containsStr(got["AnnotationFixture"], "capacityBytes") {
-		t.Error("without the annotation the field is editable — that is the hazard the count surfaces")
 	}
 }
 
@@ -372,44 +276,6 @@ func containsStr(list []string, s string) bool {
 	}
 	return false
 }
-
-// TestOrderFor parses the `order:` annotation.
-func TestOrderFor(t *testing.T) {
-	tests := []struct {
-		name string
-		doc  string
-		want []string
-	}{
-		{"absent", "", nil},
-		{"single", "order: name", []string{"name"}},
-		{"spaces trimmed", "order:  name ,  provider ,clusterType ", []string{"name", "provider", "clusterType"}},
-		// The real form: several annotations share one docstring, because
-		// GraphQL allows a declaration only ONE description block.
-		{"alongside another annotation", "slug: clusters\norder: name, provider", []string{"name", "provider"}},
-		{"empty value is not an order", "order:", nil},
-		{"prose is not an annotation", "orders arrive here", nil},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := OrderFor(tt.doc)
-			if len(got) != len(tt.want) {
-				t.Fatalf("OrderFor(%q) = %v, want %v", tt.doc, got, tt.want)
-			}
-			for i := range got {
-				if got[i] != tt.want[i] {
-					t.Fatalf("OrderFor(%q)[%d] = %q, want %q", tt.doc, i, got[i], tt.want[i])
-				}
-			}
-		})
-	}
-}
-
-// TestApplyOrder covers the partial-order rule.
-//
-// Regression class: someone "simplifies" this into a complete ordered list. A
-// complete list is a FROZEN view — a field added in a later release has no
-// place in it and silently never appears, which is the exact failure NetBox
-// carries with its saved column lists. The tail must stay open.
 func TestApplyOrder(t *testing.T) {
 	alphabetical := []string{"cni", "clusterType", "description", "environment", "kubernetesVersion", "provider"}
 
@@ -465,75 +331,6 @@ func assertOrder(t *testing.T, got, want []string) {
 	}
 }
 
-// TestEditableInterfaceFields covers the annotation that replaced the hardcoded
-// readmitInterfaceFields map.
-//
-// Regression class: `name` silently ceasing to be editable on DataCenter and
-// Rack. "Type fields minus interface fields" removes it from every type, and
-// nothing about the page looks wrong afterwards — the field just stops being
-// offered, which is a capability regression nobody sees.
-func TestEditableInterfaceFields(t *testing.T) {
-	tests := []struct {
-		name string
-		doc  string
-		want []string
-	}{
-		{"absent", "", nil},
-		{"single", "editable: name", []string{"name"}},
-		{"several, spaces trimmed", "editable: name , namespace", []string{"name", "namespace"}},
-		// The real form: GraphQL allows one description block, so annotations
-		// share it line by line.
-		{"alongside another", "slug: dcs\neditable: name", []string{"name"}},
-		{"empty value is not a list", "editable:", nil},
-		{"prose is not an annotation", "editable by admins only", nil},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := EditableInterfaceFields(tt.doc)
-			if len(got) != len(tt.want) {
-				t.Fatalf("EditableInterfaceFields(%q) = %v, want %v", tt.doc, got, tt.want)
-			}
-			for i := range got {
-				if got[i] != tt.want[i] {
-					t.Fatalf("[%d] = %q, want %q", i, got[i], tt.want[i])
-				}
-			}
-		})
-	}
-}
-
-// TestDerive_ReadmitsOnlyWhatTheAnnotationNames pins the behaviour end to end.
-func TestDerive_ReadmitsOnlyWhatTheAnnotationNames(t *testing.T) {
-	iface := []string{"orbId", "name", "version"}
-	types := map[string]TypeInfo{
-		"DataCenter": {Doc: "editable: name", Fields: []DerivedField{
-			{Name: "name", Editable: true}, {Name: "model", Editable: true}, {Name: "orbId", Editable: true},
-		}},
-		"Server": {Fields: []DerivedField{
-			{Name: "name", Editable: true}, {Name: "hostname", Editable: true},
-		}},
-		// A pin naming a field the type does not have is inert, not an error:
-		// a page must never fail to render because an annotation went stale.
-		"Rack": {Doc: "editable: nosuchfield", Fields: []DerivedField{
-			{Name: "uHeight", Editable: true},
-		}},
-	}
-	got := Derive(types, iface)
-
-	if !contains2(got["DataCenter"], "name") {
-		t.Errorf("DataCenter must re-admit name: %v", got["DataCenter"])
-	}
-	if contains2(got["DataCenter"], "orbId") {
-		t.Errorf("an interface field NOT named must stay out: %v", got["DataCenter"])
-	}
-	if contains2(got["Server"], "name") {
-		t.Errorf("Server has no editable: annotation, so name must stay out: %v", got["Server"])
-	}
-	if len(got["Rack"]) != 1 || got["Rack"][0] != "uHeight" {
-		t.Errorf("a stale annotation must be inert: %v", got["Rack"])
-	}
-}
-
 func contains2(xs []string, want string) bool {
 	for _, x := range xs {
 		if x == want {
@@ -541,132 +338,4 @@ func contains2(xs []string, want string) bool {
 		}
 	}
 	return false
-}
-
-// TestDetailOnlyIsSeparateFromJSONString pins the layering.
-//
-// Regression class: re-conflating them. `jsonString` says WHAT a field holds
-// (drives editor parsing and pretty-printing); `detailOnly` says WHERE it may
-// appear. Inferring placement from content is what made "show assetDataV2 as a
-// column" unexpressible and forced a Go change to hide it.
-func TestDetailOnlyIsSeparateFromJSONString(t *testing.T) {
-	info := TypeInfo{Fields: []DerivedField{
-		{Name: "assetDataV2", Doc: "jsonString\ndetailOnly"},
-		{Name: "smallJSON", Doc: "jsonString"},
-		{Name: "bigText", Doc: "detailOnly"},
-		{Name: "model", Doc: ""},
-	}}
-
-	detail := DetailOnlyFieldsFor(info)
-	if len(detail) != 2 || detail[0] != "assetDataV2" || detail[1] != "bigText" {
-		t.Errorf("DetailOnlyFieldsFor = %v, want [assetDataV2 bigText]", detail)
-	}
-
-	jsonFields := JSONStringFieldsFor(info)
-	if len(jsonFields) != 2 || jsonFields[0] != "assetDataV2" || jsonFields[1] != "smallJSON" {
-		t.Errorf("JSONStringFieldsFor = %v, want [assetDataV2 smallJSON]", jsonFields)
-	}
-
-	// The two that make the distinction load-bearing: JSON that IS a column,
-	// and a non-JSON field that is not.
-	if IsDetailOnly("jsonString") {
-		t.Error("jsonString alone must not imply detailOnly — that was the conflation")
-	}
-	if !IsDetailOnly("detailOnly") || IsJSONString("detailOnly") {
-		t.Error("detailOnly alone must not imply jsonString")
-	}
-}
-
-// TestFilterByFor covers acceptance item 1 (the annotation is read) and the
-// only-one-supported rule: extras are RETURNED so the caller can warn, never
-// silently dropped.
-func TestFilterByFor(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		doc   string
-		want  string
-		extra []string
-	}{
-		{"absent", "", "", nil},
-		{"single", "filterBy: dataCenter", "dataCenter", nil},
-		{"with other annotations", "slug: servers\nfilterBy: dataCenter\norder: name", "dataCenter", nil},
-		{"extras are reported", "filterBy: dataCenter, rack, model", "dataCenter", []string{"rack", "model"}},
-		{"whitespace tolerated", "filterBy:    rack   ", "rack", nil},
-		{"empty value", "filterBy:", "", nil},
-		// Prose that merely contains the word must not arm a filter dropdown — the same
-		// exact-line rule the other annotations use.
-		{"prose mentioning it", "the filterBy: idea was rejected here", "", nil},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got, extra := FilterByFor(tc.doc)
-			if got != tc.want {
-				t.Errorf("FilterByFor(%q) = %q, want %q", tc.doc, got, tc.want)
-			}
-			if len(extra) != len(tc.extra) {
-				t.Fatalf("extras = %v, want %v", extra, tc.extra)
-			}
-			for i := range extra {
-				if extra[i] != tc.extra[i] {
-					t.Errorf("extras = %v, want %v", extra, tc.extra)
-				}
-			}
-		})
-	}
-}
-
-// TestKnownAnnotations_IncludesFilterBy is acceptance item 9. Without this entry
-// every `filterBy:` in the schema is reported at startup as a suspected typo —
-// noise that trains people to ignore the one report that matters.
-func TestKnownAnnotations_IncludesFilterBy(t *testing.T) {
-	if u := UnknownAnnotations("filterBy: dataCenter"); len(u) != 0 {
-		t.Errorf("filterBy must be a known annotation, got %v", u)
-	}
-}
-
-// TestColumnPaths covers the shape check — acceptance item 1 and the depth rule.
-//
-// Three segments, where `include:` allows two. The limits differ because the
-// hazards do: `include:` walks LIST relationships and produces ROWS, which is
-// where cycles live; a column walks SINGLE relationships and produces ONE CELL.
-func TestColumnPaths(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		doc  string
-		want []string
-	}{
-		{"absent", "", nil},
-		{"one hop", "column: kubernetesNode.role", []string{"kubernetesNode.role"}},
-		{"two hops", "column: kubernetesNode.cluster.name", []string{"kubernetesNode.cluster.name"}},
-		{"count", "column: servers.count", []string{"servers.count"}},
-		{"several", "column: a.b, c.d.e", []string{"a.b", "c.d.e"}},
-		// A bare field is a column the type already renders; ignored rather
-		// than drawn twice.
-		{"bare field ignored", "column: hostname", nil},
-		// Four segments is the real ceiling: `server.kubernetesNode.cluster.name`
-		// is what puts a cluster name on a network device's Connections tab.
-		{"four segments", "column: a.b.c.d", []string{"a.b.c.d"}},
-		// Five is past where an annotation stays readable. The limit is
-		// readability, not correctness — single-ref paths terminate at any depth.
-		{"too deep", "column: a.b.c.d.e", nil},
-		{"with other annotations", "filterBy: dataCenter\ncolumn: servers.count", []string{"servers.count"}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got := ColumnPaths(tc.doc)
-			if len(got) != len(tc.want) {
-				t.Fatalf("ColumnPaths(%q) = %v, want %v", tc.doc, got, tc.want)
-			}
-			for i := range got {
-				if got[i] != tc.want[i] {
-					t.Errorf("ColumnPaths(%q) = %v, want %v", tc.doc, got, tc.want)
-				}
-			}
-		})
-	}
-}
-
-// `column` must be a known annotation or every use is reported as a typo.
-func TestKnownAnnotations_IncludesColumn(t *testing.T) {
-	if u := UnknownAnnotations("column: servers.count"); len(u) != 0 {
-		t.Errorf("column must be a known annotation, got %v", u)
-	}
 }

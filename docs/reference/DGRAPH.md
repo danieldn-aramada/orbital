@@ -16,6 +16,8 @@ Read this before: DGraph schema changes, query/mutation work, export/import, see
 
 ## Schema rules
 
+- **A DQL predicate is namespaced by the type that DECLARES the field, not by the row's concrete type.** *(Added 2026-10-04.)* `nodes` is declared on the `KubernetesCluster` INTERFACE, so the predicate is `KubernetesCluster.nodes` and **`EksaKubernetesCluster.nodes` does not exist**. Writing the wrong name removes nothing and reports nothing — the delete succeeds and the survivor is still pointing at a tombstone. Verified against the live DQL schema: of the `*.servers`/`*.nodes`/`*.kubernetesClusters` predicates, only `KubernetesCluster.nodes` is interface-namespaced, which is exactly why three hand-written edge lists got away with using the concrete type for years. Resolve it by walking the interfaces the type implements and using the first whose own field list carries the name.
+- **A NON-NULL back-edge is a containment declaration, and the build enforces it.** *(Added 2026-10-04.)* `Child.parent: Parent!` says the child has no existence without that parent, so `Parent`'s view MUST carry it as an editable member — otherwise deleting the parent leaves it on a tombstone, and DGraph propagates the missing non-null field to the ROOT of any query selecting it. `TestViews_NonNullBackEdgeMustBeAnEditableMember` fails the build rather than leaving that to review. **Relaxing an edge to nullable is how you opt a child OUT of a parent's unit** — that is why `ServerConfigurationProfile.server` became nullable in v13.
 - Schema changes must be **backwards compatible** — orbs may lag orbital by versions. Safe: new types, new nullable fields. Breaking: removing/renaming types or fields, adding non-null fields to existing types.
 - `id: ID` must be declared on the `ConfigItem` interface — DGraph does not auto-expose internal UIDs via GraphQL without it. Without it, `getDataCenter(id: $id)` queries fail. Always keep it.
 - **`@id` on `orbId` is the API-immutability mechanism — load-bearing for external consumers.** DGraph's schema generator excludes `@id` fields from the auto-generated `XPatch` input type, so `updateServer(filter:{...}, set:{orbId:"..."})` is rejected at schema-validation time. ConfigBundle (cb-controller) uses this property as the basis for SSA list-map identity across the cloud → edge boundary — see `~/armada/configbundle/docs/plans/server-identity-orbid.md`. Do NOT remove `@id` from `orbId` and do NOT add custom mutations that bypass DGraph's auto-generated Patch by allowing `orbId` to be set on existing nodes. orbId format (`<namespace>:<entity>`) is also part of this contract — changing the separator or format forces a coordinated migration in every downstream CR.
@@ -41,37 +43,46 @@ string, so the mapping is not reconstructible from orbital alone.
 
 ## Schema annotations
 
-Orbital reads **docstring annotations** out of the deployed schema. They are how a
-page is configured: the UI derives every list and detail page from introspection,
-and these are the only way to influence what it renders. There is no other layer —
-per-deployment overrides in Postgres were designed and deferred (`docs/planning/backlog.md`,
-spike 38).
+The schema carries **two** docstring annotations, and both are about DATA or
+IDENTITY. It used to carry thirteen: eleven were view configuration and moved to
+`config/views.yaml` (see [UI.md](./UI.md) § Settled Decisions), and `derivesIdFrom:`
+was deleted outright — see below.
 
 | Annotation | Scope | Effect |
 |---|---|---|
-| `editorIgnored` | field | Keeps the field out of the **editor**. Still displayed — it means "a human may not type this", not "do not show it". |
-| `jsonString` | field | The String holds a JSON document: the editor parses it into a tree, and a detail page pretty-prints it. Says nothing about placement. |
-| `viewIgnored` | field | Keeps a RELATIONSHIP off the detail page — no tab, no owned box, no reference column. **Display only:** containment is untouched, so the delete cascade, audit roll-up and the editor's tree all still include it. |
-| `detailOnly` | field | Never a table column, on a list page or a relationship table. Still rendered on the detail page. |
-| `label: MAC Address` | field | Display label, overriding the title-cased field name. Annotate only what title-casing gets wrong (acronyms). |
-| `slug: clusters` | type / interface | The page's URL segment — and its nav label, which is derived from the slug. |
-| `orbIdSuffix: idrac` | type | The token an owned child's orbId ends with. Default is the lower-cased type name. |
-| `order: name, provider` | type | Pins the leading display fields; everything else follows alphabetically. A **prefix**, never a complete list. |
-| `include: a.b` | type | Adds a relationship table whose rows are reached through a two-segment path (`storageControllers.storageDevices`). |
-| `editable: name` | type | Re-admits ConfigItem **interface** fields for editing on this type. Type-level because DGraph forbids redeclaring an interface field on an implementor. |
-| `column: servers.count` | type / interface | Adds a column whose value lives at the end of a PATH — `servers.count`, `kubernetesNode.cluster.name`. Up to **three** segments. Every hop must be a SINGLE relationship; the one exception is a `count` leaf, whose preceding hop must be a LIST. Applies wherever the type renders as a table, list page and relationship tab alike. |
-| `filterBy: dataCenter` | type / interface | Offers that column as a filter dropdown on the list page. **One field** — extras are reported and ignored. Must name a rendered column: a `detailOnly` field or a list relationship is refused and logged. |
+| `jsonString` | field | The String holds a JSON document: the editor parses it into a tree, and a detail page pretty-prints it. Says nothing about placement — that is a view decision. |
+| `orbIdSuffix: idrac` | type | The token an owned child's orbId ends with. Default is the lower-cased type name, so only the irregular ones are annotated. |
+
+**Why these two stayed.** DGraph rejects unknown directives, so orbital's
+annotations ride description strings — a channel designed for documentation. That
+is tolerable for a fact ABOUT THE DATA and was never tolerable for a page
+decision: `menuWeight:` was the proof, since a menu position is not a property of
+a graph type by any reading and lived there only because the schema was the only
+channel available. The split also gives each its own cadence — a schema change is
+a version bump, an apply and reindex care; a views change is a file edit picked up
+with no schema operation at all.
+
+**`derivesIdFrom:` was REMOVED (2026-10-04), not relocated.** It named the edge a
+child's orbId derived from, and the principle it protected still holds — identity
+must never be a side effect of a display decision, which is why `orbIdSuffix:` is
+still here and not in the views config. What failed was the annotation itself: it
+survived on one type, `NetworkInterface`, where it was simply **wrong**. A NIC's
+identity comes from its server's serviceTag or its device's serial — the same XOR
+that makes its containment undeclarable from nullability — and the annotation said
+`networkAdapter`. Nothing read it, so nothing caught it. The derived-orbId path
+uses `<namespace>:<parentName>-<orbIdSuffix>` with the parent the walk arrived
+through, which is the parent the child is being created under by construction.
+⚠️ `debt.md` still carries the Hi-severity orbId-mutability entry: re-keying
+orphans every child id, splits the audit trail across two ids, and breaks
+cb-controller's SSA list-map identity. Nothing here relaxes that.
 
 **Mechanics — the parts that bite:**
 
 - ⚠️ **GraphQL allows ONE description block per declaration.** Two `"""…"""` in a row is a syntax error DGraph refuses (*"Expected Name, found BlockString"*). Put several annotations on separate lines inside one block; the parsers are line-based.
-- **FIELD annotations on an interface are inherited** by implementing types — DGraph forbids redeclaring the field, so the reader inherits instead. **TYPE annotations are not inherited by default** — inheritance is decided per annotation, because `slug:` must never inherit or every implementation would claim the interface's URL. `order:` and `filterBy:` both do fall back to an implemented interface, so `/clusters` (an interface view) and each concrete page cannot disagree about column order or about having a filter.
+- **FIELD annotations on an interface are inherited** by implementing types — DGraph forbids redeclaring the field, so the reader inherits instead.
 - **An annotation naming a field that does not exist is INERT, never an error.** A page must not fail to render because an annotation went stale.
-- **Inert is not the same as silent.** A stale annotation must never break a page, but it must say so: `filterBy:` logs at boot when it named something the page does not render. An annotation that reads as correct and does nothing is worse than one nobody wrote.
-- **A misspelled annotation is silent** — `"""editorIgnroed"""` is a valid docstring that simply never matches. `UnknownAnnotations` reports anything that looks like an annotation and matches none; it logs at boot, so read that line.
+- **A misspelled annotation is silent** — `"""orbIdSufix: idrac"""` is a valid docstring that derives the wrong orbId for every child of that type. `UnknownAnnotationsIn` reports anything that looks like an annotation and matches none; it logs at boot, so read that line. ⚠️ **The vocabulary shrinking to two makes a typo MORE likely to pass unnoticed, not less** — there is no longer a crowd of near-neighbours to make a misspelling look odd.
 - **Annotation-only changes do NOT bump `schema/VERSION`** — but they take effect only once the schema is **applied** to DGraph, which orbital never does on startup.
-
-Rationale for each lives in `docs/reference/UI.md` § Settled Decisions; this table is the index, not the argument.
 
 ## ConfigItem interface
 
@@ -115,61 +126,82 @@ for k,v in list(dups.items())[:10]: print('  COLLISION', k, v)
 
 A clean graph reports equal node and orbId counts and zero collisions. **A collision found here cannot be fixed by the constraint** — it is already stored, and it breaks reads today: `getConfigItem` on a duplicated orbId returns *"A list was returned, but GraphQL was expecting just one item"*, and `internal/graphdiff` keys its `Snapshot` by orbId (`graphdiff.go:203`), so one of the two nodes silently disappears from every diff, export preview and change-request base capture.
 
-## ConfigItem ownership (owned-child model)
+## ConfigItem containment — declared in the views config
 
-> **Ownership is declared in code, never as runtime data — and this is a settled non-goal, with evidence.** The comparative case against operator-tunable ownership is **ServiceNow CMDB**: there, which types may contain which lives in `cmdb_rel_type_suggest`, which is **advisory only** — it populates editor suggestions but does not block an off-model edge. Because that type-policy is admin-edited data with no build step, a new CI class introduces drift caught only by CMDB governance, never by code review. Every other surveyed system does the opposite (NetBox `parent_object`, Kubernetes `controller:true`, Backstage's single declaration) and makes ownership a compile-time property. Orbital follows them: `internal/configitems/registry.go` is the single declaration, and `schema_consistency_test.go` fails the build on drift. Do **not** reintroduce runtime-configurable ownership.
->
-> **Precedence must stay an ordered slice, never a map.** `Type.OwnerEdges` is order-sensitive (most-specific-first: `NetworkInterface` nests under adapter before server before device). Go map iteration is randomized, so a map here yields a non-deterministic presentation parent.
->
-> **Cross-namespace ownership is out of scope — and deliberately not enforced in code.** Ownership models physical/logical containment, so a `colo` server cannot contain an `alaska` disk; Kubernetes forbids the equivalent outright. Nothing in orbital can produce such an edge: `orbId` is `<namespace>:<kind>-<natural-key>`, and the editor derives a child's namespace from its parent on create. It would take a hand-written mutation deliberately pairing orbIds across two namespaces.
->
-> **Do not "add a check to the schema-consistency test" for this** — that test is type-level (it parses `schema.graphql` and validates registry declarations), while namespace is instance data. The check is not expressible there; enforcement would have to be a mutation-time guard or a data-integrity query, which is not worth building for a case nothing produces.
->
-> Worth knowing if it ever *did* occur: the failure is silent, not loud. Export scopes a data center by namespace filter (`eq(ConfigItem.namespace, …)`), not by graph traversal, so a cross-namespace child would be **excluded from its owner's artifact**, leaving a dangling edge with no error.
+**Containment is a VIEW decision, and it is declared in `config/views.yaml` as a
+member with `editable: true`.** Not in Go, not in a schema annotation, not in
+Postgres. The full model is in [UI.md](./UI.md) § Settled Decisions; this section
+is the graph-side half.
 
+**Two layers, two homes — unchanged:**
+- **Containment *instances*** ("this maintenance belongs to *that* server") live
+  in the CMDB — they ARE the child→owner **edge** in DGraph
+  (`ServerMaintenance.server`), read live wherever needed.
+- **Containment *type-policy*** ("which edge types are a page's edit unit") is
+  VIEW configuration: it decides what the editor groups into one tree, what the
+  audit tab rolls up, and — via `baseScope` — what a reviewer is deemed to have
+  looked at. **None of it reaches the data.**
 
-Some ConfigItems are **owned children** of another: they model physical/logical containment (`StorageDevice` ∈ `StorageController` ∈ `Server`; `NetworkInterface` on a `NetworkAdapter` ∈ `Server`; `ServerMaintenance` for a `Server`). Ownership is a **presentation / aggregation** concept, **never actuation** — edge controllers never consume it. It drives: nested JSON editing (children edited through the owner's tree, see UI.md), audit rollup (an owner's audit tab aggregates its children's events — `collectRelatedOrbIDs`), and delete-cascade. It does **not** drive the export diff preview — see the note below.
+**What it drives today:** the JSON editor's subtree paths, the audit roll-up
+(`collectRelatedOrbIDs` → `ViewSet.EditableOrbIDSelection`), the change-request
+base scope, and inline-vs-link rendering. It drives **neither the export diff
+preview** (removed 2026-08-24) **nor the delete cascade** — see below.
 
-**Two layers, two homes:**
-- **Ownership *instances*** ("this maintenance belongs to *that* server") already live in the CMDB — they ARE the child→owner **edge** in DGraph (`ServerMaintenance.server`), read live wherever needed.
-- **Ownership *type-policy*** ("which edge *types* are containment, and their precedence") is **schema metadata**: it changes only when the schema changes, is not operator-tunable, and must be reviewed / versioned / deployed with the schema. It therefore belongs **co-located with the schema, in version control — NOT in Postgres** (the operational/runtime DB; model-definition there invites drift from the schema it describes and bypasses review).
+**Inline-vs-link is DERIVED, never declared.** `ViewSet.ExclusivelyOwned` counts
+how many pages claim a type as an editable member: one page renders it inline,
+several means it is a record in its own right and gets a link. A ClusterBackup is
+only ever a cluster's; an IPAddress is claimed by a server, a node and two cluster
+fields, so inlining it anywhere would assert an ownership no single page has. An
+interface and its implementations count ONCE — both the `KubernetesCluster` view
+and the `EksaKubernetesCluster` view declare `backup`, because the interface backs
+the list page and the concrete type backs the detail page.
 
-**Single source (Spike 33, done 2026-08-24):** the type-policy lives once, in `internal/configitems/registry.go` — each `Type`'s `OwnerType`/`OwnerField`/`ChildField` (single-owner) plus an ordered, most-specific-first `OwnerEdges []OwnerEdge` for multi-parent types (`NetworkInterface`, `IPAddress`, `StorageVolume`). The **audit collector** (`internal/handler/related_orbids.go`) derives from it via `OwnedChildren()` / `OwnedOrbIDSelection()`; the per-type `collectRelatedOrbIDs` / `collectClusterRelatedOrbIDs` walkers are gone, which fixed real drift (storage devices/volumes and switch-side interfaces never rolled up; NetworkDevice and DataCenter aggregated nothing). A schema-consistency test (`configitems/schema_consistency_test.go`, R3) fails the build if the registry drifts from `schema.graphql` or a ConfigItem type goes unregistered. Adding an owned-child type = one registry entry (see `docs/playbooks/add-configitem.md`).
+**Canonical parent stays ordered and explicit.** `canonicalParent` in the views
+config answers the INVERSE question to a view — a view is indexed by root ("what
+does the Server page show?"), this is indexed by child ("this IPAddress turned up
+in a diff, whose page is its home?"). The candidate list falls out of membership;
+**the ORDER does not**, and order is the only hard part. `StorageVolume` is the
+case that forbids deriving it: its canonical parent is its `StorageController`,
+which is **not** the path it is reached by (`StorageDevice.storageVolumes`).
+⚠️ Precedence is an ordered list, never a map — Go map iteration is randomised, so
+a map yields a non-deterministic presentation parent.
 
-The export **diff preview** was briefly a second consumer (it rolled changes up under an owner). That was removed 2026-08-24 — owner was never a decided requirement for the preview, and the orbId convention already identifies the owning entity. Ownership today serves the audit tab, the JSON editor's subtree paths, and delete-cascade. Do not re-add it to the diff without an explicit decision.
+**The delete cascade is DERIVED from the same membership** *(2026-10-04)*. One
+sentence governs it: an editable member is part of this page's unit — edited with
+it, audited with it, and deleted with it. There is no second declaration, because
+there was never a second question. It replaced three hand-written traversals
+(`dcDeleteGQL`, `srvDeleteGQL`, `clusterDeleteGQL`) and a three-way switch that
+consulted no model at all and had drifted into four silent defects — see UI.md.
 
-**AMENDED 2026-09-24 — type-policy is VIEW CONFIGURATION, and moves to shipped
-defaults + per-deployment overrides.** The instances/type-policy split above still
-holds. What changed is the classification of the second layer. Three premises of
-the original decision moved:
-
-- `internal/configitems/registry.go`, named above as the single home, is being
-  retired in favour of deriving field metadata from the running schema.
-- The alternative is no longer compile-checked Go. A schema-side annotation is a
-  string that fails silently when mistyped, so "Postgres invites drift" stopped
-  discriminating between the options — both need a startup validator against
-  introspection.
-- Most importantly: **every consumer of type-policy is a view.** It decides what
-  the editor groups into one tree, what audit rolls up onto a tab, and — via
-  `baseScope` — what a reviewer is deemed to have looked at. None of it reaches
-  the data. Orbital is API-first and its UI is an ergonomic tool over that API;
-  an adopter querying the graph directly should be able to configure what they
-  see and edit.
-
-So: **shipped defaults stay in version control; per-deployment overrides live in
-Postgres**, validated against introspection on write, warn-not-refuse at boot,
-with cross-replica invalidation. Divergence between deployments is the point of
-configuration, not drift.
+⚠️ **What is DELETED comes from the view; what is CLEARED comes from the SCHEMA.**
+The cascade query walks every relationship with a declared `@hasInverse`, not
+just the members, because a node pointing at something being deleted is left on a
+tombstone whether or not any page chose to show that edge.
+`ServerConfigurationProfile` is the worked example: no view lists it, and a
+server delete still has to clear its back-edge. Only true SURVIVORS are cleared —
+when both ends die the stale edge is unreachable, and clearing it anyway puts one
+node in both halves of the upsert, which the version guard reads as a concurrent
+edit and refuses the whole delete.
 
 **The structural boundary is unchanged and is not policy-driven:** export is
-everything reachable from the Namespace node (DQL `expand(_all_)`), and there is
-one DataCenter per namespace. Type-policy never participates.
+everything reachable from the Namespace node (DQL `expand(_all_)`), one DataCenter
+per namespace. Views never participate.
 
-*Naming is unsettled — "containment", "ownership" and "subtree" are all in use
-here. Do not bake the current word into a table name, an exported type or an API
-surface until it is decided.*
+**Cross-namespace containment is out of scope — and deliberately not enforced in
+code.** Containment models physical/logical nesting, so a `colo` server cannot
+contain an `alaska` disk; Kubernetes forbids the equivalent outright. Nothing in
+orbital can produce such an edge: `orbId` is `<namespace>:<kind>-<natural-key>`,
+and the editor derives a child's namespace from its parent on create. It would
+take a hand-written mutation deliberately pairing orbIds across two namespaces.
+Worth knowing if it ever did occur: the failure is silent. Export scopes a data
+centre by namespace filter, not by traversal, so a cross-namespace child would be
+**excluded from its owner's artifact**, leaving a dangling edge with no error.
 
-> **Why not infer ownership from DGraph automatically?** DGraph encodes *relationships*, not *ownership* — `@hasInverse` is bidirectional, there is no `@owns`. Projecting the graph to a tree must pick one canonical parent per node (a NIC nests under its adapter, not its server *and* device), which is a domain policy, not a derivable fact. Ownership must be **declared**; the goal is to declare it once, explicitly, next to the schema.
+> **Why not infer containment from DGraph automatically?** DGraph encodes
+> *relationships*, not *containment* — `@hasInverse` is bidirectional, there is no
+> `@owns`. Projecting the graph to a tree must pick one canonical parent per node
+> (a NIC nests under its adapter, not its server *and* device), which is a view
+> decision, not a derivable fact.
 
 ## Query patterns
 

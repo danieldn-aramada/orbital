@@ -146,6 +146,11 @@ spec:
               value: dgraph-blue-dgraph-alpha:9080
             - name: ORBITAL_DGRAPH_ZERO_GRPC
               value: dgraph-blue-dgraph-zero:5080
+            # The partial view overlay. Unset in an install that customises
+            # nothing; the ConfigMap ships empty, so pointing at it changes
+            # nothing until someone edits it.
+            - name: ORBITAL_VIEWS_OVERLAY_PATH
+              value: /views-overlay/views.yaml
           volumeMounts:
             - name: cosign-key
               mountPath: /secrets
@@ -154,6 +159,12 @@ spec:
               mountPath: /scratch-exports
             - name: dgraph-exports
               mountPath: /dgraph-exports
+            # The DIRECTORY, not a subPath: a subPath mount is not updated in
+            # place by the kubelet, and in-place update is what makes a view
+            # change take effect without a rollout restart.
+            - name: views-overlay
+              mountPath: /views-overlay
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /healthz
@@ -221,6 +232,9 @@ spec:
         - name: dgraph-exports
           persistentVolumeClaim:
             claimName: orbital-dgraph-exports
+        - name: views-overlay
+          configMap:
+            name: orbital-views-overlay
 ---
 apiVersion: v1
 kind: Service

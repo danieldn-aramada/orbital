@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 
-// The `filterBy:` annotation, end to end.
+// The view's `filterBy:`, end to end.
 //
 // The bespoke Servers and Clusters pages each carried a hand-built "All Data
 // Centers" select. Both died with their templates and NOBODY NOTICED for a
@@ -29,7 +29,7 @@ test('servers page has a data center filterBy', async ({ page }) => {
 });
 
 // Acceptance item 5's visible half: /clusters is an INTERFACE view, and the
-// annotation sits on the interface. A per-concrete-type annotation would have
+// declaration sits on the interface view. A per-concrete-type one would have
 // left this page with no control at all.
 test('clusters page inherits the filterBy from the interface', async ({ page }) => {
   await page.goto('/clusters');
@@ -39,8 +39,8 @@ test('clusters page inherits the filterBy from the interface', async ({ page }) 
 
 // Acceptance item 1's negative. Asserted on a page that certainly has rows, so
 // a passing result cannot be "the table was empty".
-test('a page with no filterBy annotation renders no dropdown', async ({ page }) => {
-  await page.goto('/racks');
+test('a page with no filterBy declared renders no dropdown', async ({ page }) => {
+  await page.goto('/network-devices');
   await expect(page.locator('#generic-table tbody tr').first()).toBeVisible({ timeout: 15_000 });
   await expect(page.locator(FILTER_BY)).toHaveCount(0);
 });
@@ -102,13 +102,13 @@ test('a filter on one page does not leak onto another', async ({ page }) => {
   await filterBy.selectOption(pick!);
   await expect.poll(() => rowCount(page), { timeout: 5_000 }).toBeGreaterThan(0);
 
-  await page.goto('/racks');
+  await page.goto('/network-devices');
   await expect(page.locator('#generic-table tbody tr').first()).toBeVisible({ timeout: 15_000 });
   const racks = await rowCount(page);
 
   await page.goto('/servers');
   await page.locator(FILTER_BY).selectOption('');
-  await page.goto('/racks');
+  await page.goto('/network-devices');
   await expect(page.locator('#generic-table tbody tr').first()).toBeVisible({ timeout: 15_000 });
   expect(await rowCount(page), '/racks changed when /servers was filtered').toBe(racks);
 });

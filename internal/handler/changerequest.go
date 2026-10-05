@@ -19,6 +19,7 @@ import (
 	"github.com/armada/orbital/ent/approvalrequest"
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/approval"
+	"github.com/armada/orbital/internal/configitems"
 	"github.com/armada/orbital/internal/graphdiff"
 )
 
@@ -31,10 +32,19 @@ type ChangeRequest struct {
 	gql       *GraphQL
 	dgraphURL string
 	schema    approval.SchemaSource
+	views     ViewsProvider
 	logger    *slog.Logger
 }
 
-func NewChangeRequest(db *ent.Client, gql *GraphQL, dgraphURL string, logger *slog.Logger) *ChangeRequest {
+// NewChangeRequest takes the views provider as a REQUIRED parameter rather than
+// an option.
+//
+// baseScope decides what a reviewer is deemed to have looked at, and it expands
+// a declared orbId into the page's edit unit to get there. A handler built
+// without views would narrow every review scope to the bare declared ids — no
+// error, no warning, and the approval record would simply mean less than it
+// says. That is not a dependency to make optional.
+func NewChangeRequest(db *ent.Client, gql *GraphQL, dgraphURL string, views ViewsProvider, logger *slog.Logger) *ChangeRequest {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -43,8 +53,44 @@ func NewChangeRequest(db *ent.Client, gql *GraphQL, dgraphURL string, logger *sl
 		gql:       gql,
 		dgraphURL: dgraphURL,
 		schema:    approval.NewDGraphSchemaSource(dgraphURL),
+		views:     views,
 		logger:    logger,
 	}
+}
+
+// typeNames is the ConfigItem type set the deployed schema declares.
+func (h *ChangeRequest) typeNames(ctx context.Context) ([]string, error) {
+	if h.views == nil {
+		return nil, errors.New("no views provider configured")
+	}
+	vs, err := h.views(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(vs))
+	for _, v := range vs {
+		out = append(out, v.Type)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// viewSet resolves the current views, or an empty set with a warning.
+//
+// Empty is the degraded answer, not the silent one: every scope it produces is
+// narrower than it should be, and that must appear in the log rather than only
+// in an approval record nobody re-reads.
+func (h *ChangeRequest) viewSet(ctx context.Context) configitems.ViewSet {
+	if h.views == nil {
+		h.logger.Warn("change request has no views provider; review scope will cover only the declared entities")
+		return nil
+	}
+	vs, err := h.views(ctx)
+	if err != nil {
+		h.logger.Warn("cannot resolve views; review scope will cover only the declared entities", "err", err)
+		return nil
+	}
+	return vs
 }
 
 // Sentinel errors the REST layer maps to status codes. Kept as values rather
@@ -136,7 +182,7 @@ func (h *ChangeRequest) Create(ctx context.Context, actor, title, description st
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolve entities: %w", err)
 	}
-	scope := baseScope(ctx, h.dgraphURL, declaredOrbIDs(cs), existing)
+	scope := baseScope(ctx, h.dgraphURL, h.viewSet(ctx), declaredOrbIDs(cs), existing)
 	versions, err := scopeVersions(ctx, h.dgraphURL, scope)
 	if err != nil {
 		return nil, nil, fmt.Errorf("capture base: %w", err)
@@ -319,7 +365,7 @@ func (h *ChangeRequest) State(ctx context.Context, cr *ent.ApprovalRequest) (crS
 		if resolveErr != nil {
 			return st, fmt.Errorf("resolve entities: %w", resolveErr)
 		}
-		st.Scope = baseScope(ctx, h.dgraphURL, declared, existing)
+		st.Scope = baseScope(ctx, h.dgraphURL, h.viewSet(ctx), declared, existing)
 	}
 
 	var err error
@@ -853,7 +899,7 @@ func (h *ChangeRequest) Amend(ctx context.Context, id int64, actor string, role 
 		if err != nil {
 			return nil, nil, fmt.Errorf("resolve entities: %w", err)
 		}
-		scope := baseScope(ctx, h.dgraphURL, declaredOrbIDs(cs), existing)
+		scope := baseScope(ctx, h.dgraphURL, h.viewSet(ctx), declaredOrbIDs(cs), existing)
 		versions, err := scopeVersions(ctx, h.dgraphURL, scope)
 		if err != nil {
 			return nil, nil, fmt.Errorf("capture base: %w", err)

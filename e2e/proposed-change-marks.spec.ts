@@ -178,7 +178,7 @@ test('a proposal on a rack is marked on the data centre that lists it', async ({
   expect(res.ok(), 'propose a rack height').toBeTruthy()
   opened.push((await res.json()).id as string)
 
-  await page.goto('/data-centers/' + encodeURIComponent('colo:colo-galleon'))
+  await page.goto('/data-centers?open=' + encodeURIComponent('colo:colo-galleon'))
   await expect(page.getByTestId('generic-fields')).toBeVisible({ timeout: 15_000 })
   // Open the tab holding the racks, as a person would. The mark RENDERS
   // whether or not the panel is visible — loadFieldMarks does not care — but

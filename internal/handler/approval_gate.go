@@ -74,11 +74,12 @@ func (h *GraphQL) checkApprovalPolicy(ctx context.Context, body []byte, caller c
 	if err := json.Unmarshal(body, &req); err != nil {
 		return "", nil // not a shape we can judge; the proxy will reject it downstream
 	}
-	if !knownMutationRe.MatchString(req.Query) {
+	re := h.mutationRe()
+	if !re.MatchString(req.Query) {
 		return "", nil
 	}
 
-	_, types := extractOperations(req.Query)
+	_, types := extractOperations(re, req.Query)
 	if len(types) == 0 {
 		return "", nil
 	}

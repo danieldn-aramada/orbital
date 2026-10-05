@@ -45,7 +45,7 @@ func newRenderUI(t *testing.T) (*UI, *ent.Client) {
 	// The field source server.go wires. Without it ui.Generic() returns nil,
 	// and a test calling a generic handler panics on a nil method value rather
 	// than failing with something readable.
-	ui.fields = NewSharedFieldSource(testutil.DGraphURL(), slog.Default())
+	ui.fields = NewSharedFieldSource(testutil.DGraphURL(), ViewsSource{Path: testutil.ViewsPath()}, slog.Default())
 	return ui, db
 }
 
@@ -56,6 +56,11 @@ func newRenderUI(t *testing.T) (*UI, *ent.Client) {
 // render exercises only the gate — it would return 200 with a perfectly intact
 // login notice while the real page body was broken. Rendering as a logged-in
 // admin is what puts the page content itself under test.
+// renderAs drives one handler and returns what it wrote.
+//
+// ⚠️ Fragment routes need HX-Request. A ConfigItem detail view is the body a TAB
+// fetches, and `/{slug}/{orbId}` 404s without the header — see renderAsFragment,
+// which is what a detail test wants.
 func renderAs(t *testing.T, e *echo.Echo, path string, fn func(echo.Context) error, userID int, params map[string]string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -184,4 +189,35 @@ func TestOrbitalPages_LoginGateWhenUnauthenticated(t *testing.T) {
 			}
 		})
 	}
+}
+
+// renderAsFragment drives a handler the way HTMX does — with HX-Request set.
+// Detail views are only ever served this way: they are the body of a tab.
+func renderAsFragment(t *testing.T, e *echo.Echo, path string, fn func(echo.Context) error, userID int, params map[string]string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set("HX-Request", "true")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	if userID > 0 {
+		c.Set("is_authn", true)
+		c.Set("user_id", userID)
+		c.Set("user_name", "Render Test")
+		c.Set("user_email", "render@test.local")
+		c.Set("csrf_token", "render-test-csrf")
+	}
+	if len(params) > 0 {
+		names := make([]string, 0, len(params))
+		values := make([]string, 0, len(params))
+		for k, v := range params {
+			names = append(names, k)
+			values = append(values, v)
+		}
+		c.SetParamNames(names...)
+		c.SetParamValues(values...)
+	}
+	if err := fn(c); err != nil {
+		t.Fatalf("handler returned error: %v", err)
+	}
+	return rec
 }

@@ -51,23 +51,3 @@ func TestKebabTypeName_AcronymsAndDigits(t *testing.T) {
 		}
 	}
 }
-
-// A slug is a contract, so the override lives in the SCHEMA (version-controlled,
-// reviewed, a visible breaking act) and never in a runtime preference store.
-func TestSlugFor_AnnotationOverridesDerivation(t *testing.T) {
-	if got := SlugFor("EksaKubernetesCluster", "slug: clusters"); got != "clusters" {
-		t.Errorf("annotation should win, got %q", got)
-	}
-	if got := SlugFor("EksaKubernetesCluster", "Human prose.\nslug: clusters"); got != "clusters" {
-		t.Errorf("annotation on its own line among prose should win, got %q", got)
-	}
-	if got := SlugFor("EksaKubernetesCluster", ""); got != "eksa-kubernetes-clusters" {
-		t.Errorf("no annotation should derive, got %q", got)
-	}
-	if got := SlugFor("Server", "this type has no slug: directive as such"); got != "servers" {
-		t.Errorf("prose mentioning the word must not be read as an annotation, got %q", got)
-	}
-	if got := SlugFor("Server", "slug:"); got != "servers" {
-		t.Errorf("an EMPTY annotation must fall back to derivation, not yield an empty slug, got %q", got)
-	}
-}
