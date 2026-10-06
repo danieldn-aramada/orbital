@@ -52,6 +52,18 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   because an API client sending an explicit `remove` is doing it deliberately.
 
 ### Changed
+- **Bearer provider selection reads RFC 9068's `client_id`, not only `azp`.**
+  `client_id` is REQUIRED on a JWT access token by RFC 9068 §2.2; `azp` is OIDC
+  Core §2 and is specified for *ID tokens*, which Keycloak and Entra v2 emit on
+  access tokens by convention rather than by spec. Orbital read `azp` alone, so a
+  conformant issuer emitting `client_id` only selected no provider and was refused
+  with "token issuer is not trusted by this server" — an error naming the issuer
+  rather than the cause. Resolution order is now `client_id` → `azp` → `appid`
+  (Entra v1), applied to both the unverified peek that selects the provider and
+  the verified path that classifies app principals. Keycloak emits `client_id`
+  and `azp` identically, so nothing changes for the issuer in use today; `appid`
+  is additionally peeked now, so an Entra v1 token selects its own entry instead
+  of falling through to the issuer-wide one.
 - **Schema v14.** `ServerConfigurationProfile.server` is nullable (a scanned
   document a server page need not carry), `StorageController.storageVolumes`
   completes the inverse of an edge that previously had no way back, and the four

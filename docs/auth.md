@@ -9,6 +9,22 @@ identity provider its operator configured; it issues none of its own and has no
 API login flow. So you do not get a token *from* orbital — you get one from the
 IdP it trusts, and present it.
 
+**Will my IdP work? If it issues JWT access tokens, yes.** Orbital validates
+tokens **locally, against your issuer's JWKS** — it fetches
+`<issuer>/.well-known/openid-configuration` at startup, caches the keys, and
+checks signature, `iss`, `aud` and `exp` on every request. It never calls back to
+your IdP to validate a token, which is why there is no per-request dependency on
+it being reachable.
+
+The flip side: orbital has **no token-introspection client (RFC 7662)**, so an
+**opaque** access token cannot be validated and will be refused. Most IdPs can
+issue JWT access tokens — it is usually configuration rather than capability —
+but it is worth confirming before you start. (Auth0 is the classic trap: it
+returns an opaque token when the client requests no `audience`, and a JWT when it
+does.) This is the same position Kubernetes, Istio and Vault's JWT auth take;
+local JWKS validation is the convention for resource servers, because
+introspection puts a network call to the IdP on every request.
+
 Orb does not authenticate to orbital at all: edge-to-cloud traffic flows through
 an OCI registry and object storage, never HTTP calls into orbital.
 

@@ -214,6 +214,25 @@ a provider entry carries a `clientID` (the `azp` it matches), and the
 client of that issuer as an issuer-wide default; a specific entry always wins, so
 selection stays two exact lookups rather than an ordered scan.
 
+**Which claim names the client: `client_id` first, then `azp`, then `appid`.**
+*(Settled 2026-10-06.)* **RFC 9068 §2.2** makes `client_id` REQUIRED on a JWT
+access token and is the only one of the three actually specified for this
+purpose. **`azp`** is OIDC Core §2 and is defined for **ID tokens** — Keycloak
+and Entra v2 emit it on access tokens by convention, not by spec. **`appid`** is
+Entra v1's spelling.
+
+Orbital read `azp` only, and selection therefore failed against a conformant
+issuer emitting `client_id` alone — refused as *"token issuer is not trusted by
+this server"*, an error naming the issuer rather than the real cause. Both the
+unverified peek (`unverifiedClaims.Client()`, which selects the provider) and the
+verified path (app-principal classification, `acting_client`) now resolve in RFC
+order. **Keycloak emits `client_id` and `azp` with identical values** — verified
+against the dev realm 2026-10-06 — so preferring the RFC claim changed nothing
+for the issuer orbital actually runs against. Pinned by
+`TestProviderSelection_AcceptsEitherClientClaim` (each spelling alone) and
+`TestProviderSelection_NoClientClaimDoesNotMatchAPinnedEntry` (the negative: a
+token naming no client must not inherit a client-pinned entry's policy).
+
 Kubernetes keys on issuer alone because a cluster typically has one OIDC client.
 That premise does not hold for a Keycloak realm, which is why this diverges —
 **do not "simplify" it back to issuer-only**.

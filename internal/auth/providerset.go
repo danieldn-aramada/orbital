@@ -185,7 +185,7 @@ func (ps *ProviderSet) verify(c echo.Context, next echo.HandlerFunc, raw string)
 	// Select by (iss, azp), then fall back to the issuer-wide entry. Both are
 	// exact lookups; the specific entry always wins, so a caller cannot steer
 	// itself toward a more permissive provider.
-	azp := peek.AZP
+	azp := peek.Client()
 	p := ps.byKey[providerKey(peek.Iss, azp)]
 	if p == nil {
 		p = ps.byKey[providerKey(peek.Iss, "")]
@@ -228,7 +228,22 @@ func (ps *ProviderSet) verify(c echo.Context, next echo.HandlerFunc, raw string)
 	// is absent — a provider mapping username to preferred_username would
 	// otherwise provision `service-account-<client>` as a readonly user, which
 	// is what happened the first time this was run against the dev realm.
-	appID := claimString(claims["azp"])
+	// Which claim names the client, in standards order.
+	//
+	// `client_id` is REQUIRED on a JWT access token by RFC 9068 §2.2 and is the
+	// only one of the three that is actually specified for this purpose. `azp`
+	// is OIDC Core §2 and is defined for ID TOKENS — Keycloak and Entra v2 emit
+	// it on access tokens by convention, not by spec. `appid` is Entra v1.
+	//
+	// Preferring the RFC claim costs nothing where both appear: Keycloak emits
+	// `client_id` and `azp` with the same value (verified against the dev realm
+	// 2026-10-06). It buys provider selection working against an issuer that
+	// emits only `client_id`, which would otherwise be refused with "token
+	// issuer is not trusted by this server" — an error naming the wrong cause.
+	appID := claimString(claims["client_id"])
+	if appID == "" {
+		appID = claimString(claims["azp"])
+	}
 	if appID == "" {
 		appID = claimString(claims["appid"])
 	}
@@ -400,6 +415,27 @@ func denyBearer(c echo.Context, code, description string) error {
 type unverifiedClaims struct {
 	Iss string `json:"iss"`
 	AZP string `json:"azp"`
+	// ClientID is RFC 9068 §2.2's REQUIRED claim for naming the client on a JWT
+	// access token. AZP is OIDC Core §2 and is specified for ID tokens; Keycloak
+	// and Entra v2 put it on access tokens by convention. Both are peeked so
+	// provider selection works against either, with the RFC claim preferred.
+	ClientID string `json:"client_id"`
+	// AppID is Entra v1's spelling. Peeked so selection works for it too — the
+	// verified path has always read it, while this one did not, so an Entra v1
+	// token fell through to the issuer-wide entry instead of its own.
+	AppID string `json:"appid"`
+}
+
+// Client returns the claim that names the calling client, in standards order:
+// RFC 9068 `client_id`, then OIDC `azp`, then Entra v1 `appid`.
+func (u unverifiedClaims) Client() string {
+	if u.ClientID != "" {
+		return u.ClientID
+	}
+	if u.AZP != "" {
+		return u.AZP
+	}
+	return u.AppID
 }
 
 // parseUnverifiedClaims decodes a JWT payload WITHOUT verifying the signature.

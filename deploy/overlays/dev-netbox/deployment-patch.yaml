@@ -42,7 +42,7 @@ spec:
               value: https://keycloak.devnew.armada.ai/realms/armada
             - name: ORBITAL_OIDC_CLIENT_ID
               value: armada-orbital
-            # Bearer auth: one Keycloak realm, two clients, different policies.
+            # Bearer auth: one Keycloak realm, three clients, different policies.
             # A token selects its provider by (iss, azp).
             #
             #  - aep-fleet-commander: authorization delegated upstream. Every valid
@@ -51,6 +51,16 @@ spec:
             #  - armada-orbital: direct callers (cb-bundler, humans). Role comes from
             #    the orbital_roles claim; defaultRole is the floor for a token that
             #    matches no mapped group — drop it to refuse those instead.
+            #
+            #  - armada-firmware-svc: firmware-svc, read-only, client credentials.
+            #    Two deviations from the entry above, both load-bearing:
+            #    username comes from `preferred_username` because a
+            #    client-credentials token carries no `email` and orbital REFUSES a
+            #    token whose username claim resolves empty; and the role is
+            #    delegated rather than defaultRole, because RequireRole checks the
+            #    context role BEFORE the app-principal branch — and that branch
+            #    treats any app principal as dev-equivalent, so defaultRole would
+            #    never be consulted and the caller would get write access.
             #
             # See docs/reference/AUTH.md § Multiple identity providers.
             - name: ORBITAL_AUTH_PROVIDERS
@@ -79,6 +89,15 @@ spec:
                       { "group": "orbital-admin", "role": "admin" }
                     ],
                     "defaultRole": "readonly"
+                  },
+                  {
+                    "issuer": {
+                      "url": "https://keycloak.devnew.armada.ai/realms/armada",
+                      "audiences": ["armada-orbital"]
+                    },
+                    "clientID": "armada-firmware-svc",
+                    "claimMappings": { "username": { "claim": "preferred_username" } },
+                    "delegatedAuthorization": { "role": "readonly" }
                   }
                 ]
         # cb-bundler mints its own token against the same realm to call orbital's
