@@ -100,7 +100,7 @@ func TestLoadViews_EmbeddedDefaultAloneResolvesEveryView(t *testing.T) {
 		t.Errorf("Server = %d summary refs, %d tables, %d paths, %d editable; every shape must survive the round trip",
 			links, tables, paths, editable)
 	}
-	if len(server.Contains) == 0 {
+	if len(server.Dependents) == 0 {
 		t.Error("Server must CONTAIN children — derived from the schema, not from the page")
 	}
 

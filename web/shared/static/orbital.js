@@ -458,7 +458,7 @@ function renderExportPreview(body, json, note) {
 // Added / Removed). Empty sections are never rendered, and each section's row
 // count equals its summary count — the API returns ONE entry per changed
 // entity, already carrying its owner, so there is no tree to walk and no
-// containment logic here. Any client integrating with orbital renders this the
+// ownership logic here. Any client integrating with orbital renders this the
 // same way; if the UI ever needs bespoke logic, that belongs in the API.
 //
 // The `<namespace>:` prefix is stripped from ids (a preview is scoped to one
@@ -3568,6 +3568,201 @@ function formatPublishRange(fromISO, toISO) {
   return `${dayMonth(a)} → ${dayMonth(b)}`
 }
 
+// ─── Create a node ────────────────────────────────────────────────────────────
+//
+// The form is server-generated from the view (see create-modal.gohtml); this
+// fills it, previews the identity, and sends ONE mutation.
+//
+// ⚠️ ONE nested `add{Kind}` mutation, never a parent-then-child sequence. A
+// single GraphQL mutation is one transaction; N mutations are N transactions and
+// a committed one STAYS committed when a later one fails, which would leave a
+// half-created server that looks like success. Nesting is the one case DGraph
+// performs atomically on create — and it is wrong for EDITING, where a nested
+// object links by @id and silently drops its values. See DGRAPH.md.
+function initCreateForms() {
+  document.querySelectorAll('[id^="create-modal-"]').forEach((modal) => {
+    const domId = modal.id.replace('create-modal-', '')
+    const kind = modal.dataset.kind
+    const template = modal.dataset.orbidTemplate || ''
+    const nsFrom = modal.dataset.namespaceFrom || ''
+    const errorEl = document.getElementById('create-error-' + domId)
+    const orbIdEl = document.getElementById('create-orbid-' + domId)
+    const submitBtn = document.getElementById('create-submit-' + domId)
+    if (!submitBtn) return
+
+    const rels = () => [...modal.querySelectorAll('[data-create-rel]')]
+    const rootFields = () => [...modal.querySelectorAll('[data-create-field]:not([data-create-child])')]
+    const childFields = () => [...modal.querySelectorAll('[data-create-child]')]
+
+    // The mutation is JSON, so a value has to arrive as the type the schema
+    // declares: "false" (a string) into a Boolean field is refused by DGraph,
+    // and "2" into an Int sorts and compares as text.
+    const typed = (el) => {
+      const raw = (el.value || '').trim()
+      if (raw === '') return undefined
+      switch (el.dataset.createType) {
+        case 'Boolean': return raw === 'true'
+        case 'Int': case 'Int64': return parseInt(raw, 10)
+        case 'Float': return parseFloat(raw)
+        case 'DateTime': {
+          // DGraph wants RFC3339. Accept whatever Date can parse and normalise
+          // it; hand back the raw text when it cannot, so the server reports a
+          // bad value rather than this silently inventing one.
+          const d = new Date(raw)
+          return isNaN(d.getTime()) ? raw : d.toISOString()
+        }
+        default: return raw
+      }
+    }
+
+    const showError = (msg) => { errorEl.textContent = msg; errorEl.style.display = '' }
+    const clearError = () => { errorEl.textContent = ''; errorEl.style.display = 'none' }
+
+    // Namespace is the PREFIX of the chosen parent's orbId — never typed. Two
+    // inputs for one value is two chances to disagree with each other.
+    const namespace = () => {
+      const sel = modal.querySelector(`[data-create-rel="${nsFrom}"]`)
+      return sel && sel.value ? String(sel.value).split(':')[0] : ''
+    }
+
+    // Substitute the pattern's remaining placeholders. `{kind}` was resolved
+    // server-side so the kebab/orbIdSuffix rule lives in one place.
+    const orbId = () => {
+      const ns = namespace()
+      if (!ns || !template) return ''
+      let out = template
+      for (const el of rootFields()) {
+        const v = (el.value || '').trim()
+        out = out.replaceAll(`{${el.dataset.createField}}`, v)
+      }
+      // An unfilled placeholder means no id at all: a PARTIAL id would collide
+      // with every other node missing the same field.
+      if (out.includes('{')) return ''
+      return ns + ':' + out
+    }
+
+    const refresh = () => {
+      const id = orbId()
+      orbIdEl.textContent = id || '—'
+      orbIdEl.className = id ? 'is-size-7 is-family-monospace' : 'is-size-7 has-text-grey'
+    }
+    modal.addEventListener('input', refresh)
+    modal.addEventListener('change', refresh)
+
+    submitBtn.addEventListener('click', async () => {
+      clearError()
+      const ns = namespace()
+      const id = orbId()
+
+      for (const sel of rels()) {
+        if (sel.required && !sel.value) {
+          showError('Choose a ' + sel.closest('.field').querySelector('label').textContent.replace('*', '').trim() + ' first.')
+          return
+        }
+      }
+      if (!id) { showError('Fill the fields marked * — the Orb ID is built from them.'); return }
+
+      // Pre-check the root AND every child id. DGraph refuses a duplicate ROOT
+      // with a readable-enough error, but a nested child whose id already exists
+      // is LINKED silently — it keeps its own values and is MOVED off whatever
+      // parent it had. That is data loss with no error, so it is checked here.
+      const childIds = {}
+      const taken = await orbIdsInUse([id])
+      if (taken.length) { showError('An entity with Orb ID ' + taken[0] + ' already exists.'); return }
+
+      const input = { orbId: id, namespace: ns, version: 1 }
+      for (const el of rootFields()) {
+        const v = typed(el)
+        if (v !== undefined) input[el.dataset.createField] = v
+      }
+      for (const sel of rels()) if (sel.value) input[sel.dataset.createRel] = { orbId: sel.value }
+
+      // Children nest INSIDE the same input — one mutation, one transaction.
+      //
+      // Each child needs its OWN orbId: `orbId` is `String! @id`, so a nested
+      // child without one fails the whole mutation. The template is the child's
+      // pattern rewritten against this form's fields — `{server.serviceTag}`
+      // became `{serviceTag}`, because that server is the node being created.
+      const fill = (tmpl) => {
+        let out = tmpl
+        for (const el of rootFields()) {
+          out = out.replaceAll(`{${el.dataset.createField}}`, (el.value || '').trim())
+        }
+        return out.includes('{') ? '' : out
+      }
+      for (const el of childFields()) {
+        const v = typed(el)
+        if (v === undefined) continue
+        const child = el.dataset.createChild
+        if (!input[child]) {
+          const childId = fill(el.dataset.childOrbidTemplate || '')
+          if (!childId) { showError('Cannot build an Orb ID for ' + child + '.'); return }
+          input[child] = { orbId: ns + ':' + childId, namespace: ns, version: 1 }
+          childIds[child] = ns + ':' + childId
+        }
+        input[child][el.dataset.createField] = v
+      }
+
+      // A child whose id already exists would be LINKED, keeping its own values
+      // and MOVING off whatever parent it had — silent data loss. Checked here
+      // because DGraph reports nothing.
+      const childTaken = await orbIdsInUse(Object.values(childIds))
+      if (childTaken.length) {
+        showError('An entity with Orb ID ' + childTaken[0] + ' already exists and would be re-parented.')
+        return
+      }
+
+      submitBtn.classList.add('is-loading')
+      try {
+        const r = await fetch(BASE + '/graphql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: `mutation Create($input: [Add${kind}Input!]!) { add${kind}(input: $input) { numUids } }`,
+            variables: { input: [input] },
+          }),
+        })
+        const body = await r.json()
+        if (body.errors && body.errors.length) { showError(body.errors[0].message); return }
+        window.location.reload()
+      } catch (e) {
+        showError('Could not create: ' + e)
+      } finally {
+        submitBtn.classList.remove('is-loading')
+      }
+    })
+
+    refresh()
+  })
+
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-create-open]')
+    if (!btn) return
+    const modal = document.getElementById('create-modal-' + btn.dataset.createOpen)
+    if (!modal) return
+    modal.classList.add('is-active')
+    document.documentElement.style.overflow = 'hidden'
+  })
+}
+
+// orbIdsInUse returns which of the given orbIds already exist.
+async function orbIdsInUse(ids) {
+  const wanted = ids.filter(Boolean)
+  if (!wanted.length) return []
+  const r = await fetch(BASE + '/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: 'query InUse($ids: [String!]) { queryConfigItem(filter: { orbId: { in: $ids } }) { orbId } }',
+      variables: { ids: wanted },
+    }),
+  })
+  const body = await r.json()
+  return ((body.data && body.data.queryConfigItem) || []).map(n => n.orbId)
+}
+
+document.addEventListener('DOMContentLoaded', initCreateForms)
+
 // ─── Generic detail editor ────────────────────────────────────────────────────
 //
 // ONE opener for every ConfigItem type. orbital.js currently carries four
@@ -3605,6 +3800,27 @@ document.addEventListener('click', function (e) {
     genericEditors.set(id, editor)
 
     const errorEl = document.getElementById('generic-edit-error-' + id)
+    // The mutation is JSON, so a value has to arrive as the type the schema
+    // declares: "false" (a string) into a Boolean field is refused by DGraph,
+    // and "2" into an Int sorts and compares as text.
+    const typed = (el) => {
+      const raw = (el.value || '').trim()
+      if (raw === '') return undefined
+      switch (el.dataset.createType) {
+        case 'Boolean': return raw === 'true'
+        case 'Int': case 'Int64': return parseInt(raw, 10)
+        case 'Float': return parseFloat(raw)
+        case 'DateTime': {
+          // DGraph wants RFC3339. Accept whatever Date can parse and normalise
+          // it; hand back the raw text when it cannot, so the server reports a
+          // bad value rather than this silently inventing one.
+          const d = new Date(raw)
+          return isNaN(d.getTime()) ? raw : d.toISOString()
+        }
+        default: return raw
+      }
+    }
+
     const showError = (msg) => { errorEl.textContent = msg; errorEl.style.display = '' }
     const clearError = () => { errorEl.textContent = ''; errorEl.style.display = 'none' }
 

@@ -101,7 +101,7 @@ type TypeRef struct {
 //
 // A list of scalars is not the same editing affordance as a scalar — and
 // non-nullability is not cosmetic either: `Child.parent: Parent!` is the schema
-// saying the child cannot outlive the parent, which is where containment is
+// saying the child cannot outlive the parent, which is where ownership is
 // derived from. Only the OUTERMOST wrapper counts: `[Server!]` is a nullable
 // list of non-null elements, and the field itself is optional.
 func (t *TypeRef) Unwrap() (kind, name string, isList, nonNull bool) {
@@ -216,9 +216,13 @@ func (c *DGraphSchemaClient) Introspect(ctx context.Context) (map[string]TypeInf
 		if err != nil {
 			return nil, nil, err
 		}
+		// A malformed pattern is DROPPED here and reported by
+		// OrbIDPatternWarnings at resolve time — see why it is not fatal there.
+		patterns, _ := OrbIDPatternsFor(typeDoc)
 		types[pt.Name] = TypeInfo{
 			Doc:          typeDoc,
 			OrbIDSuffix:  OrbIDSuffixFor(pt.Name, typeDoc),
+			OrbIDPattern: patterns,
 			Fields:       toDerivedFieldsWithInherited(obj.Type.Fields, inherited),
 			Implements:   implements,
 			PayloadField: payloadField,

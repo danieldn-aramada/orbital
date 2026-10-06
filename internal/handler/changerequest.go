@@ -347,13 +347,13 @@ func (h *ChangeRequest) State(ctx context.Context, cr *ent.ApprovalRequest) (crS
 	}
 
 	// Scope is PINNED at capture (Create and Amend). Re-deriving it here would
-	// let a later containment change retroactively alter what this review is
+	// let a later ownership change retroactively alter what this review is
 	// deemed to have covered — and this runs on EVERY queue render, so the
 	// answer would drift under readers with nothing recording that it moved.
 	//
 	// Falling back to derivation keeps rows written before base_scope existed
 	// behaving exactly as they always have. They are not backfilled: pinning an
-	// old row with today's containment would assert a review covered something
+	// old row with today's ownership would assert a review covered something
 	// nobody can show it covered.
 	//
 	// The fallback also skips a DGraph round-trip per rendered request once a

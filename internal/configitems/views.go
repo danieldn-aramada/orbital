@@ -43,6 +43,33 @@ type View struct {
 	// for a concrete view.
 	Implementations []string `json:"implementations,omitempty"`
 
+	// OrbIDPattern is this type's declared orbId shape, read from the SCHEMA's
+	// `orbIdPattern:` annotation — not from the views config.
+	//
+	// Identity is not a view decision. A views overlay is per-deployment
+	// (ORBITAL_VIEWS_OVERLAY_PATH), so declaring the key here would let one
+	// deployment mint ids in a shape another cannot derive, for the same data.
+	// It is carried ON the view because the view is what the renderer and the
+	// editor already hold.
+	//
+	// Empty means this type declares no constructible pattern — `external`, or
+	// a schema that has not been re-applied since the annotations landed.
+	OrbIDPattern []OrbIDPattern `json:"-"`
+
+	// OrbIDKind is what `{kind}` resolves to for this type, resolved once at
+	// view-build time so the View does not have to carry the whole docstring.
+	OrbIDKind string `json:"-"`
+
+	// NoCreate are fields kept off the CREATE form (`create: false`), while
+	// staying editable afterwards. See FieldDecl.Create for why that is a
+	// separate axis from `editable` and `tableHidden`.
+	NoCreate map[string]bool `json:"noCreate,omitempty"`
+
+	// Defaults pre-fill the CREATE form, keyed by field. Never applied to an
+	// edit: an existing node's blank field is a fact, and quietly filling it on
+	// open would write a value nobody chose the next time Save was pressed.
+	Defaults map[string]string `json:"defaults,omitempty"`
+
 	// Fields are the EDITABLE scalars — what the editor may write.
 	Fields []string `json:"fields"`
 
@@ -55,13 +82,23 @@ type View struct {
 	// of its fields is annotated.
 	Display []string `json:"display"`
 
-	// DetailOnly are Display fields that render on a detail page but never as a
-	// table column — the `detailOnly` annotation. Placement is DECLARED, not
+	// TableHidden are Display fields that render on a detail page but never as a
+	// table COLUMN — `fields.<f>.tableHidden` in the views config. It governs
+	// both places a table appears: the list page and a relationship tab on a
+	// detail page, which is why it is named for TABLES and not for one of them.
+	//
+	// Was `detailOnly` until 2026-10-06, renamed to match `createHidden`:
+	// surface + Hidden, so a key says which surface it governs. ⚠️ NOT
+	// `summaryHidden` — a tableHidden field still appears in the detail summary
+	// panel, so that name would assert the inverse, and `pages.<T>.summary`
+	// already means that panel.
+	//
+	// Placement is DECLARED, not
 	// inferred from what a field holds.
 	//
 	// Reported rather than silently dropped, because a client building its own
 	// table needs the same distinction and should not have to re-derive it.
-	DetailOnly []string `json:"detailOnly,omitempty"`
+	TableHidden []string `json:"tableHidden,omitempty"`
 
 	// JSONString are fields whose String value holds a JSON document. Says
 	// nothing about placement: it drives editor parsing and the pretty-printed
@@ -118,7 +155,20 @@ type View struct {
 	//
 	// A property of the TYPE, not of a page: a StorageController contains its
 	// devices whether or not any page shows them.
-	Contains []EditableMember `json:"contains,omitempty"`
+	// Dependents is what this type OWNS — what dies with it, what rolls up onto
+	// its audit tab, and what its editor may reach.
+	//
+	// Derived from the schema (non-null back-edges) plus `ownerReferences:`, not
+	// from the page. A StorageController owns its devices whether or not any page
+	// shows them, and a type with no page at all still owns things. Reading this
+	// off a page's tab list was the overload that put `editable: true` on lists
+	// the editor has never been able to edit.
+	//
+	// Not to be confused with EditorMembers(), which is the SUBSET a page
+	// declares `editable: true` on. Those were one letter apart as
+	// EditableMembers()/EditorMembers() and the audit roll-up read the wrong
+	// intent off the name.
+	Dependents []OwnedMember `json:"contains,omitempty"`
 
 	// SummaryRefs are the link rows under a detail page's field list, in the
 	// order declared. A PAGE fact: it is what that one screen shows.
@@ -191,14 +241,14 @@ type ViewTab struct {
 	//
 	// Published because it answers a question an integrator has to answer too —
 	// "if I write this entity, do I write it here or on its own page?" — and the
-	// alternative is every client re-deriving containment from the graph.
+	// alternative is every client re-deriving ownership from the graph.
 	Editable bool `json:"editable,omitempty"`
 }
 
 // ColumnFields returns the scalar fields a LIST page renders as columns:
-// Display minus DetailOnly.
+// Display minus TableHidden.
 //
-// Placement comes from the `detailOnly` annotation, not from what the field
+// Placement comes from the `tableHidden` key, not from what the field
 // holds. One data centre's assetDataV2 is ~600 characters of JSON, and a column
 // of them makes the table unreadable. Applies equally to a list page and to a
 // relationship table, because they are the same problem.
@@ -208,11 +258,11 @@ type ViewTab struct {
 // "column" than the table renders would accept an annotation that produces a
 // dropdown filtering a column nobody can see.
 func (v View) ColumnFields() []string {
-	if len(v.DetailOnly) == 0 {
+	if len(v.TableHidden) == 0 {
 		return v.Display
 	}
-	skip := make(map[string]bool, len(v.DetailOnly))
-	for _, f := range v.DetailOnly {
+	skip := make(map[string]bool, len(v.TableHidden))
+	for _, f := range v.TableHidden {
 		skip[f] = true
 	}
 	out := make([]string, 0, len(v.Display))
@@ -453,4 +503,35 @@ func metaFields(ifaceFields []string) []string {
 	}
 	sort.Strings(rest)
 	return append(out, rest...)
+}
+
+// NewOrbID builds the orbId for a node that does not exist yet, from the type's
+// `orbIdPattern:` — the reason a UUID is forbidden: a derivable id is what makes
+// an upsert idempotent and lets a client construct an id without a lookup.
+//
+// `values` is keyed by PLACEHOLDER PATH, not by field name: a pattern crossing
+// an edge wants `values["server.serviceTag"]`. The caller supplies them because
+// it already holds the surrounding entity; making this function fetch them would
+// turn an id constructor into a database query.
+//
+// Returns "" when the type declares no pattern, or when nothing resolves —
+// a partial id is worse than none, because it collides with every other node
+// missing the same field. ConstructOrbID enforces that; this swallows its error
+// because "could not derive one" is the only thing a caller can act on.
+//
+// Setting a pattern is FORWARD-ONLY: it governs nodes created from here, and
+// says nothing about ids already stored. That is why getting it right at create
+// time is the whole point, and why changing one later is a breaking change
+// rather than a correction.
+func (v View) NewOrbID(namespace string, values map[string]string) string {
+	id, err := ConstructOrbID(namespace, v.OrbIDKind, v.OrbIDPattern,
+		func(path string) (string, bool) {
+			val, ok := values[path]
+			val = strings.TrimSpace(val)
+			return val, ok && val != ""
+		})
+	if err != nil {
+		return ""
+	}
+	return id
 }

@@ -15,7 +15,7 @@ import (
 
 var startCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Launch the self-contained edge service",
+	Short: "Launch the self-owned edge service",
 	RunE:  runStart,
 }
 

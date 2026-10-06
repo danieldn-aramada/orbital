@@ -176,15 +176,15 @@ func cascadeSelection(views configitems.ViewSet, fieldsOf func(string) []configi
 		// hostname where it has one.
 		sel += " hostname"
 	}
-	// CONTAINED, not "shown as an editable tab". Containment is a property of
+	// OWNED, not "shown as an editable tab". Ownership is a property of
 	// the type — a StorageController contains its devices whether or not any
 	// page shows them — and the delete follows it, not the page.
-	contained := containedFields(views, typeName)
+	owned := containedFields(views, typeName)
 	for _, f := range fieldsOf(typeName) {
 		if f.Kind == "SCALAR" || f.Kind == "ENUM" || f.TypeName == "" {
 			continue
 		}
-		if contained[f.Name] {
+		if owned[f.Name] {
 			sel += " " + f.Name + " { " + cascadeSelection(views, fieldsOf, inverse, f.TypeName, depth+1, path) + " }"
 			continue
 		}
@@ -204,11 +204,11 @@ func cascadeSelection(views configitems.ViewSet, fieldsOf func(string) []configi
 //
 // Derived from the schema (non-null back-edges) plus the one declared XOR
 // exception — never from a page's tab flags, which say what the EDITOR writes.
-// Reading containment off the page is the overload that put `editable: true` on
+// Reading ownership off the page is the overload that put `editable: true` on
 // lists the editor has never been able to edit.
 func containedFields(views configitems.ViewSet, typeName string) map[string]bool {
 	out := map[string]bool{}
-	for _, c := range views.Of(typeName).Contains {
+	for _, c := range views.Of(typeName).Dependents {
 		out[c.ChildField] = true
 	}
 	return out
@@ -294,13 +294,13 @@ func (w *cascadeWalk) walk(typeName string, node map[string]any, isRoot bool) {
 		w.record(&w.byType, typeName, node)
 	}
 
-	contained := containedFields(w.views, typeName)
+	owned := containedFields(w.views, typeName)
 	for _, f := range w.fieldsOf(typeName) {
 		if f.Kind == "SCALAR" || f.Kind == "ENUM" || f.TypeName == "" {
 			continue
 		}
 		for _, child := range childNodes(node[f.Name]) {
-			if contained[f.Name] {
+			if owned[f.Name] {
 				w.walk(childTypeOf(f.TypeName, child), child, false)
 				continue
 			}
@@ -467,6 +467,11 @@ func (w *cascadeWalk) before(typeName string, root map[string]any, name, orbID s
 
 // childNodes normalises a relationship's value: DGraph returns an object for a
 // single edge and an array for a list, and a nil for neither.
+//
+// Shared by the delete cascade and the audit roll-up (ownedSubtreeOrbIDs), and
+// the roll-up is here BECAUSE it once had its own walk that handled only the
+// object form — so the cascade deleted a server's NICs while its audit tab
+// never showed their events.
 func childNodes(v any) []map[string]any {
 	switch t := v.(type) {
 	case map[string]any:

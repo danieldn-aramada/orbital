@@ -35,7 +35,7 @@ data:
     #   Server:
     #     refColumns: [dataCenter, oobIP, rack]
     #     fields:
-    #       uHeight: { detailOnly: true }
+    #       uHeight: { tableHidden: true }
     #
     # A declared page or type REPLACES the shipped one wholesale — it is not
     # merged key by key, so copy the whole entry you mean to change.

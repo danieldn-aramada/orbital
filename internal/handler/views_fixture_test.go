@@ -25,11 +25,11 @@ func fixtureViewSet() configitems.ViewSet {
 	// out here. Tabs is what the page shows. They are different questions now:
 	// a page may show something it does not contain, and contains things no page
 	// shows.
-	c := func(field, typeName string, isList bool) configitems.EditableMember {
-		return configitems.EditableMember{ChildType: typeName, ChildField: field, IsList: isList, ParentEdge: "server"}
+	c := func(field, typeName string, isList bool) configitems.OwnedMember {
+		return configitems.OwnedMember{ChildType: typeName, ChildField: field, IsList: isList, ParentEdge: "server"}
 	}
 	return configitems.ViewSet{
-		{Type: "Server", Slug: "servers", Contains: []configitems.EditableMember{
+		{Type: "Server", Slug: "servers", Dependents: []configitems.OwnedMember{
 			c("idracSettings", "IdracSettings", false),
 			c("serverMaintenance", "ServerMaintenance", false),
 			c("storageControllers", "StorageController", true),
@@ -39,13 +39,13 @@ func fixtureViewSet() configitems.ViewSet {
 			m("serverMaintenance", "ServerMaintenance", false, true),
 			m("storageControllers", "StorageController", true, true),
 		}},
-		{Type: "DataCenter", Slug: "data-centers", Contains: []configitems.EditableMember{
+		{Type: "DataCenter", Slug: "data-centers", Dependents: []configitems.OwnedMember{
 			c("servers", "Server", true), c("racks", "Rack", true),
 		}, Tabs: []configitems.ViewTab{
 			m("servers", "Server", true, false),
 			m("racks", "Rack", true, true),
 		}},
-		{Type: "StorageController", Slug: "storage-controllers", Contains: []configitems.EditableMember{
+		{Type: "StorageController", Slug: "storage-controllers", Dependents: []configitems.OwnedMember{
 			c("storageDevices", "StorageDevice", true),
 		}, Tabs: []configitems.ViewTab{
 			m("storageDevices", "StorageDevice", true, true),
@@ -59,19 +59,19 @@ func fixtureViewSet() configitems.ViewSet {
 		// and what stops a cluster's back-reference column being kept.
 		{Type: "KubernetesCluster", Slug: "clusters", IsInterface: true,
 			Implementations: []string{"EksaKubernetesCluster"},
-			Contains: []configitems.EditableMember{
+			Dependents: []configitems.OwnedMember{
 				c("nodes", "KubernetesNode", true), c("backup", "ClusterBackup", false),
 			}, Tabs: []configitems.ViewTab{
 				m("nodes", "KubernetesNode", true, true),
 				m("backup", "ClusterBackup", false, true),
 			}},
-		{Type: "EksaKubernetesCluster", Slug: "eksa-kubernetes-clusters", Contains: []configitems.EditableMember{
+		{Type: "EksaKubernetesCluster", Slug: "eksa-kubernetes-clusters", Dependents: []configitems.OwnedMember{
 			c("nodes", "KubernetesNode", true), c("backup", "ClusterBackup", false),
 		}, Tabs: []configitems.ViewTab{
 			m("nodes", "KubernetesNode", true, true),
 			m("backup", "ClusterBackup", false, true),
 		}},
-		{Type: "ClusterBackup", Slug: "cluster-backups", Contains: []configitems.EditableMember{
+		{Type: "ClusterBackup", Slug: "cluster-backups", Dependents: []configitems.OwnedMember{
 			c("etcd", "EtcdBackup", false), c("velero", "VeleroBackup", false), c("s3Sync", "S3Sync", false),
 		}, Tabs: []configitems.ViewTab{
 			m("etcd", "EtcdBackup", false, true),

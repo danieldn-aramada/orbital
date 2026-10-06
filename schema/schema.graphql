@@ -45,6 +45,7 @@ enum DataCenterModel {
     Leviathan
 }
 
+"""orbIdPattern: {name}"""
 type DataCenter implements ConfigItem {
     """jsonString"""
     assetDataV2: String @search(by: [regexp]) # json
@@ -56,6 +57,7 @@ type DataCenter implements ConfigItem {
     networkDevices: [NetworkDevice] @hasInverse(field: dataCenter)
 }
 
+"""orbIdPattern: {name}"""
 type Rack implements ConfigItem {
     uHeight: Int
     dataCenter: DataCenter!
@@ -63,6 +65,7 @@ type Rack implements ConfigItem {
     networkDevices: [NetworkDevice] @hasInverse(field: rack)
 }
 
+"""orbIdPattern: {kind}-{serviceTag}"""
 type Server implements ConfigItem {
     hostname: String @search(by: [term])
     model: String @search(by: [term])
@@ -87,7 +90,10 @@ type Server implements ConfigItem {
 }
 
 
-"""orbIdSuffix: idrac"""
+"""
+orbIdSuffix: idrac
+orbIdPattern: {server.serviceTag}-{kind}
+"""
 type IdracSettings implements ConfigItem {
     firmwareVersion: String
     osToIdracPassThroughEnabled: Boolean
@@ -101,7 +107,10 @@ type IdracSettings implements ConfigItem {
     server: Server!
 }
 
-"""orbIdSuffix: scp"""
+"""
+orbIdSuffix: scp
+orbIdPattern: {server.serviceTag}-{kind}
+"""
 type ServerConfigurationProfile implements ConfigItem {
     json: String 
 
@@ -120,6 +129,7 @@ type ServerConfigurationProfile implements ConfigItem {
 #                 gates entry only, never exit.
 # Observed phase (Draining/Active/...) lives at the edge (serverconfig.status +
 # monitoring), NOT here.
+"""orbIdPattern: {kind}-{server.serviceTag}"""
 type ServerMaintenance implements ConfigItem {
     enabled: Boolean
     windowStart: DateTime
@@ -129,16 +139,18 @@ type ServerMaintenance implements ConfigItem {
     server: Server!
 }
 
+"""orbIdPattern: {server.serviceTag}-{name}"""
 type StorageController implements ConfigItem {
 
     server: Server!
     storageDevices: [StorageDevice] @hasInverse(field: storageController)
     # v13: the inverse of StorageVolume.storageController, which existed as a
     # non-null edge with no way back. A volume belongs to ONE controller and may
-    # span several devices, so the controller is where it is contained.
+    # span several devices, so the controller is where it is owned.
     storageVolumes: [StorageVolume] @hasInverse(field: storageController)
 }
 
+"""orbIdPattern: {serialNumber}"""
 type StorageDevice implements ConfigItem {
     capacityBytes: Int
     manufacturer: String
@@ -150,6 +162,7 @@ type StorageDevice implements ConfigItem {
     storageVolumes: [StorageVolume] @hasInverse(field: storageDevices)
 }
 
+"""orbIdPattern: {storageController.server.serviceTag}-{name}"""
 type StorageVolume implements ConfigItem {
     capacityBytes: Int
     manufacturer: String
@@ -161,6 +174,7 @@ type StorageVolume implements ConfigItem {
     storageDevices: [StorageDevice] @hasInverse(field: storageVolumes)
 }
 
+"""orbIdPattern: {kind}-{server.serviceTag}-{name}"""
 type NetworkAdapter implements ConfigItem {
     # NIC card (FRU). Redfish-authoritative; OPTIONAL (absent for flat-only sources).
     # name = adapter FQDD, e.g. "NIC.Integrated.1"
@@ -173,13 +187,21 @@ type NetworkAdapter implements ConfigItem {
     networkInterfaces: [NetworkInterface] @hasInverse(field: networkAdapter)
 }
 
-# NO derivesIdFrom. This type's identity hangs off whichever owner it actually
-# has — a server NIC's orbId is built from the SERVER's serviceTag (not the
-# adapter's, which uses the same value), and a switch port's from the DEVICE's
-# serial. That is the same XOR the owner comment below describes, and
-# `derivesIdFrom:` is single-valued, so it cannot say it. It carried
-# `networkAdapter` briefly, which was right for one of three parents and wrong
-# for the other two. The ordered edges live in config/views.yaml instead.
+# TWO patterns, because this type's identity hangs off whichever owner it
+# actually has — a server NIC's orbId is built from the SERVER's serviceTag (not
+# the adapter's, which carries the same value), and a switch port's from the
+# DEVICE's serial. That is the same XOR the owner comment below describes.
+#
+# This is the case that killed `derivesIdFrom:`: it was single-valued, so it
+# could not say "one of these". It carried `networkAdapter` briefly, which was
+# right for one of three parents and wrong for the other two, and the field it
+# populated was deleted in 2026-10 without ever having been read. Repeating
+# `orbIdPattern:` is how the alternative is expressed; first one whose
+# placeholders all resolve wins.
+"""
+orbIdPattern: {kind}-{server.serviceTag}-{name}
+orbIdPattern: {kind}-{networkDevice.serial}-{name}
+"""
 type NetworkInterface implements ConfigItem {
     # Port/interface (physical OR logical LAG). name = source ifname/FQDD.
     macAddress: String @search(by: [hash])  # cross-source join key (MAC)
@@ -202,6 +224,7 @@ type NetworkInterface implements ConfigItem {
     lagMembers: [NetworkInterface] @hasInverse(field: lag)
 }
 
+"""orbIdPattern: {kind}-{serial}"""
 type NetworkDevice implements ConfigItem {
     # Network gear (switch / router / firewall / sd-wan), role-differentiated. NetBox-sourced identity anchor.
     manufacturer: String @search(by: [hash])
@@ -236,6 +259,7 @@ interface KubernetesCluster {
     backup: ClusterBackup
 }
 
+"""orbIdPattern: {name}"""
 type EksaKubernetesCluster implements KubernetesCluster & ConfigItem {
     clusterType: String @search(by: [term]) # management, standalone, workload
     tinkerbellIP: IPAddress
@@ -244,6 +268,7 @@ type EksaKubernetesCluster implements KubernetesCluster & ConfigItem {
     workloadClusters: [EksaKubernetesCluster] @hasInverse(field: managementCluster)
 }
 
+"""orbIdPattern: {name}"""
 type KubernetesNode implements ConfigItem {
     role: String @search(by: [term]) # control_plane, worker
     ipv4: IPAddress                  # cluster-network IP (distinct from server.oobIP)
@@ -255,18 +280,24 @@ type KubernetesNode implements ConfigItem {
     server: Server!
 }
 
-"""orbIdSuffix: backup"""
+"""
+orbIdSuffix: backup
+orbIdPattern: {cluster.name}-{kind}
+"""
 type ClusterBackup implements ConfigItem {
     etcd: EtcdBackup
     velero: VeleroBackup
     s3Sync: S3Sync
 
     # NON-NULL (v14): a ClusterBackup has no existence without its cluster.
-    # A non-null back-edge IS the containment declaration — see UI.md.
+    # A non-null back-edge IS the ownership declaration — see UI.md.
     cluster: KubernetesCluster! @hasInverse(field: backup)
 }
 
-"""orbIdSuffix: etcd-backup"""
+"""
+orbIdSuffix: etcd-backup
+orbIdPattern: {clusterBackupEtcd.cluster.name}-{kind}
+"""
 type EtcdBackup implements ConfigItem {
     enabled: Boolean @search   
     schedule: String
@@ -276,7 +307,10 @@ type EtcdBackup implements ConfigItem {
     clusterBackupEtcd: ClusterBackup! @hasInverse(field: etcd)   # NON-NULL (v14)
 }
 
-"""orbIdSuffix: velero-backup"""
+"""
+orbIdSuffix: velero-backup
+orbIdPattern: {clusterBackupVelero.cluster.name}-{kind}
+"""
 type VeleroBackup implements ConfigItem {
     enabled: Boolean @search
     schedule: String
@@ -286,7 +320,10 @@ type VeleroBackup implements ConfigItem {
     clusterBackupVelero: ClusterBackup! @hasInverse(field: velero)   # NON-NULL (v14)
 }
 
-"""orbIdSuffix: s3sync"""
+"""
+orbIdSuffix: s3sync
+orbIdPattern: {clusterBackupS3Sync.cluster.name}-{kind}
+"""
 type S3Sync implements ConfigItem {
     enabled: Boolean @search
 
@@ -294,6 +331,7 @@ type S3Sync implements ConfigItem {
 }
 
 
+"""orbIdPattern: {address}"""
 type IPAddress implements ConfigItem {
     type: String # ipv4, ipv6
     address: String! @search(by: [hash])

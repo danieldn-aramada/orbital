@@ -51,6 +51,11 @@ type Generic struct {
 	// table would say "there are none of these", which is a different claim
 	// from "orbital could not look".
 	Unavailable string
+
+	// Create, when non-nil, is the New-node form for this type. Nil means the
+	// page offers no create button — an interface view, or a type whose orbId
+	// orbital does not mint.
+	Create *CreateForm
 }
 
 // FilterBy is a list page's filter dropdown, resolved server-side.
@@ -273,4 +278,113 @@ type FieldRow struct {
 	// 600 characters and pushes the table sideways, which is the same problem
 	// that kept it out of list columns.
 	Blob bool
+}
+
+// CreateForm is the New-node form for a list page, resolved server-side.
+//
+// Generated from the view, never hand-written per type: the fields are the
+// type's own editable scalars, the relationships are the ones the SCHEMA marks
+// non-null, and the identity comes from the type's `orbIdPattern`. A blank JSON
+// editor was the alternative and was rejected — the edit tree works because it
+// is prefilled, and empty it offers no affordance and no discoverability.
+type CreateForm struct {
+	// Kind is the CONCRETE GraphQL type the mutation targets. DGraph generates
+	// no add<Interface>, so an interface-backed page cannot create until it
+	// knows which implementation is meant.
+	Kind  string
+	Label string
+	DomID string
+
+	// Unavailable, when set, replaces the form with a stated reason and hides
+	// the submit — the schema was unreadable, or this type cannot be created.
+	Unavailable string
+
+	// NamespaceFrom is the relationship field whose chosen orbId supplies the
+	// namespace. Namespace is never typed: it is the prefix of the parent's id,
+	// and two sources for one value is two chances to disagree.
+	NamespaceFrom string
+
+	// OrbIDTemplate is the type's orbIdPattern with `{kind}` already resolved —
+	// `server-{serviceTag}`. The form substitutes the remaining placeholders as
+	// they are typed, so the reader sees the identity BEFORE committing to it.
+	// Server-side resolution of `{kind}` keeps the kebab/orbIdSuffix rule in one
+	// place rather than reimplementing it in JS.
+	OrbIDTemplate string
+
+	// OrbIDPaths are the placeholder paths the type's pattern needs, so the
+	// form knows which inputs feed the identity preview. Keyed by PATH
+	// (`server.serviceTag`), which is what NewOrbID expects.
+	OrbIDPaths []string
+
+	Fields    []CreateField
+	Relations []CreateRelation
+
+	// Unit are the owned children created in the SAME mutation — the set
+	// the editor already edits. Nested, because a nested create is the one
+	// nesting DGraph performs atomically.
+	Unit []CreateUnitChild
+}
+
+// CreateField is one editable scalar on the form.
+type CreateField struct {
+	Field string
+	Label string
+
+	// Type is the GraphQL scalar — Boolean, Int, Int64, Float, DateTime, String.
+	// Carried because the mutation sends JSON: a Boolean field given the STRING
+	// "false" is rejected by DGraph, and "false" is exactly what a text input
+	// produces. It also decides the control: a checkbox beats a box you can type
+	// "flase" into.
+	Type string
+
+	// Default pre-fills the input. A suggestion, not a hidden write.
+	Default string
+
+	// Hint is the placeholder: what this field EXPECTS. Without it a DateTime
+	// is an empty box and nobody can tell whether it wants a date, a time or
+	// RFC3339 — which is the reason a type would otherwise be hidden from the
+	// form with `create: false`.
+	Hint string
+
+	// Identity marks a field the orbId is built from: it must be filled before
+	// the node has a name at all, so the form marks it required and the preview
+	// watches it. Identity fields never carry a default.
+	Identity bool
+}
+
+// CreateRelation is a relationship the form must supply.
+type CreateRelation struct {
+	Field    string
+	Label    string
+	Type     string
+	Required bool
+	// Options are the existing nodes that may be chosen, as orbId + display
+	// name. Resolved server-side: a picker that yields an orbId is the whole
+	// job, and typing one from memory is the failure this avoids.
+	Options []CreateOption
+}
+
+// CreateOption is one pickable existing node.
+type CreateOption struct {
+	OrbID string
+	Name  string
+}
+
+// CreateUnitChild is a owned child created alongside its parent.
+type CreateUnitChild struct {
+	Field string
+	Label string
+	Kind  string
+
+	// OrbIDTemplate is the CHILD's own orbIdPattern, rewritten against the
+	// PARENT's form inputs: `{server.serviceTag}-idrac` becomes
+	// `{serviceTag}-idrac`, because the server it refers to is the node being
+	// created and its serviceTag is on this very form.
+	//
+	// Required, not optional: `orbId` is `String! @id`, so a nested child
+	// without one fails the whole mutation. Empty means the child's identity
+	// cannot be derived from what the form collects, and it is then not offered.
+	OrbIDTemplate string
+
+	Fields []CreateField
 }

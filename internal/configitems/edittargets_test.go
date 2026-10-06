@@ -6,7 +6,7 @@ import (
 )
 
 func TestBuildEditTargets_Cluster(t *testing.T) {
-	got := BuildEditTargets(fixtureViews(), fixtureFields, fixtureMeta, "EksaKubernetesCluster", "colo:dev-main", "colo", "dev-main")
+	got := BuildEditTargets(fixtureViews(), fixtureFields, fixtureMeta, "EksaKubernetesCluster", "colo:dev-main", "colo", "dev-main", nil)
 	if len(got) != 4 {
 		t.Fatalf("BuildEditTargets returned %d targets, want 4 (root + 3 backup kinds)", len(got))
 	}
@@ -47,7 +47,7 @@ func TestBuildEditTargets_Cluster(t *testing.T) {
 // direct (non-wrapper) child. The path is a single segment ["idracSettings"]
 // and the orbId follows the `<ns>:<name>-idrac` convention.
 func TestBuildEditTargets_Server(t *testing.T) {
-	got := BuildEditTargets(fixtureViews(), fixtureFields, fixtureMeta, "Server", "colo:5L4P7Y3", "colo", "5L4P7Y3")
+	got := BuildEditTargets(fixtureViews(), fixtureFields, fixtureMeta, "Server", "colo:5L4P7Y3", "colo", "5L4P7Y3", nil)
 	// Server has multiple children registered (IdracSettings,
 	// ServerConfigurationProfile, StorageController). All show up; the
 	// FormFields-empty ones still produce targets but with no editable fields.
@@ -140,13 +140,13 @@ func fixtureViews() ViewSet {
 	}
 	// Contains is CONTAINMENT, derived from the schema in production. Tabs is
 	// what the page shows and which of it the editor writes. BuildEditTargets
-	// needs both: contained AND declared editable AND single.
-	contains := func(ms ...EditableMember) []EditableMember { return ms }
-	owned := func(field, typeName, parentEdge string, isList bool) EditableMember {
-		return EditableMember{ChildType: typeName, ChildField: field, ParentEdge: parentEdge, IsList: isList}
+	// needs both: owned AND declared editable AND single.
+	contains := func(ms ...OwnedMember) []OwnedMember { return ms }
+	owned := func(field, typeName, parentEdge string, isList bool) OwnedMember {
+		return OwnedMember{ChildType: typeName, ChildField: field, ParentEdge: parentEdge, IsList: isList}
 	}
 	return ViewSet{
-		{Type: "Server", Slug: "servers", Contains: contains(
+		{Type: "Server", Slug: "servers", Dependents: contains(
 			owned("idracSettings", "IdracSettings", "server", false),
 			owned("serverMaintenance", "ServerMaintenance", "server", false),
 			owned("storageControllers", "StorageController", "server", true),
@@ -161,7 +161,7 @@ func fixtureViews() ViewSet {
 			member("oobIP", "IPAddress", false, true),
 			member("storageControllers.storageDevices", "StorageDevice", true, false),
 		}},
-		{Type: "EksaKubernetesCluster", Slug: "eksa-kubernetes-clusters", Contains: contains(
+		{Type: "EksaKubernetesCluster", Slug: "eksa-kubernetes-clusters", Dependents: contains(
 			owned("nodes", "KubernetesNode", "cluster", true),
 			owned("backup", "ClusterBackup", "cluster", false),
 		), Tabs: []ViewTab{
@@ -169,7 +169,7 @@ func fixtureViews() ViewSet {
 			member("nodes", "KubernetesNode", true, true),
 			member("backup", "ClusterBackup", false, true),
 		}},
-		{Type: "ClusterBackup", Slug: "cluster-backups", Contains: contains(
+		{Type: "ClusterBackup", Slug: "cluster-backups", Dependents: contains(
 			owned("etcd", "EtcdBackup", "clusterBackupEtcd", false),
 			owned("velero", "VeleroBackup", "clusterBackupVelero", false),
 			owned("s3Sync", "S3Sync", "clusterBackupS3Sync", false),
@@ -178,12 +178,12 @@ func fixtureViews() ViewSet {
 			member("velero", "VeleroBackup", false, true),
 			member("s3Sync", "S3Sync", false, true),
 		}},
-		{Type: "StorageController", Slug: "storage-controllers", Contains: contains(
+		{Type: "StorageController", Slug: "storage-controllers", Dependents: contains(
 			owned("storageDevices", "StorageDevice", "storageController", true),
 		), Tabs: []ViewTab{
 			member("storageDevices", "StorageDevice", true, true),
 		}},
-		{Type: "NetworkAdapter", Slug: "network-adapters", Contains: contains(
+		{Type: "NetworkAdapter", Slug: "network-adapters", Dependents: contains(
 			owned("networkInterfaces", "NetworkInterface", "networkAdapter", true),
 		), Tabs: []ViewTab{
 			member("networkInterfaces", "NetworkInterface", true, true),

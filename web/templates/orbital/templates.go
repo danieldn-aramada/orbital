@@ -55,7 +55,12 @@ func Map(fsys fs.FS) map[string]*template.Template {
 			"templates/orbital/partials/publish-history-tabs.gohtml")...)),
 		// One template serves EVERY ConfigItem type, so a new type needs no entry
 		// here. These two are the whole generic renderer.
-		"generic-list": template.Must(template.ParseFS(fsys, page("templates/shared/pages/generic-list.gohtml")...)),
+		"generic-list": template.Must(template.ParseFS(fsys, page(
+			"templates/shared/pages/generic-list.gohtml",
+			// The New-node form. Rendered with the page rather than fetched on
+			// click: the skeleton is server-derived, and a second round trip
+			// would buy nothing.
+			"templates/shared/components/create-modal.gohtml")...)),
 		"generic-detail": template.Must(template.ParseFS(fsys, page(
 			"templates/shared/pages/generic-detail.gohtml",
 			// The SAME edit modal the bespoke pages parse — one template, not a

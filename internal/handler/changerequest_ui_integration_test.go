@@ -972,7 +972,9 @@ func TestPendingChanges_SubtreeQueryFindsAChangeOnAChildOnly(t *testing.T) {
 
 	// What it asks now: the parent plus everything it owns, the same list the
 	// audit tab already carries as data-related-orb-ids.
-	subtree := collectRelatedOrbIDs(context.Background(), testutil.DGraphURL(), liveViewSet(t, testutil.DGraphURL()), "Server", crServerA)
+	subtree := collectRelatedOrbIDsBatch(context.Background(), testutil.DGraphURL(),
+		liveViewSet(t, testutil.DGraphURL()), []string{crServerA},
+		map[string]approval.EntityRef{crServerA: {Type: "Server"}})[crServerA]
 	if !containsStr(subtree, crIdracA) {
 		t.Fatalf("the server's subtree %v does not include its IdracSettings child", subtree)
 	}

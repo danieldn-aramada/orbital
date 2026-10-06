@@ -30,7 +30,23 @@ has one query built from the view, so there is nothing per-type for JS to know.
         {{template "login-gate.gohtml" .}}
       {{else}}
 
-      <p class="is-size-4 mb-2" data-testid="page-heading">{{.View.Label}}</p>
+      {{/* The button sits NEXT TO the heading, not at the far right. At the
+           right edge of a wide table it reads as table chrome and is a long way
+           from the thing it acts on; beside the title it reads as "and you can
+           add one". */}}
+      <div class="is-flex is-align-items-center mb-2" style="gap:0.75rem">
+        <p class="is-size-4" data-testid="page-heading">{{.View.Label}}</p>
+        {{/* Nil for a type that cannot be created — an interface, or one whose
+             orbId orbital does not mint — so no button rather than one that
+             cannot work. */}}
+        {{with .Create}}
+        <button class="button is-rounded is-small is-link" data-create-open="{{.DomID}}"
+                data-testid="create-open">
+          <span class="icon"><i class="fa-solid fa-plus"></i></span>
+          <span>New {{.Label}}</span>
+        </button>
+        {{end}}
+      </div>
 
       <nav class="tabs is-boxed has-text-weight-medium" style="font-size: 14px;">
         <ul id="tablist" role="tablist">
@@ -139,4 +155,8 @@ has one query built from the view, so there is nothing per-type for JS to know.
       {{end}}
     </div>
   </main>
+
+  {{/* Outside <main>, like the edit modal: a Bulma modal is position:fixed, and
+       nesting it inside the scrolling page body constrains it. */}}
+  {{with .Create}}{{template "create-modal.gohtml" .}}{{end}}
 {{end}}

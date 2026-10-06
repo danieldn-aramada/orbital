@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -115,23 +116,33 @@ func TestBeforeSelection_GeneratedFromTheSameDerivedSet(t *testing.T) {
 		"DataCenter":    {"assetDataV2", "model"},
 		"IdracSettings": {"firmwareVersion", "sshEnabled"},
 	}
-	children := func(parent string) []EditableMember {
-		if parent == "Server" {
-			return []EditableMember{{ChildType: "IdracSettings", ChildField: "idracSettings"}}
-		}
-		return nil
-	}
 	lookup := func(t string) []string { return derived[t] }
-	got := BeforeSelection("Server", lookup, children)
-	want := "id orbId name version hostname model idracSettings { firmwareVersion sshEnabled }"
+	got := BeforeSelection("Server", lookup)
+	want := "id orbId name version hostname model"
 	if got != want {
 		t.Errorf("BeforeSelection(Server)\n  got:  %s\n  want: %s", got, want)
 	}
 
 	// `name` is in the head already and must not be repeated.
-	dc := BeforeSelection("DataCenter", lookup, children)
+	dc := BeforeSelection("DataCenter", lookup)
 	if dc != "id orbId name version assetDataV2 model" {
 		t.Errorf("BeforeSelection(DataCenter) = %s", dc)
+	}
+}
+
+// A before-fetch that reaches into an owned child buys nothing: `changes` is
+// keys(before) ∩ keys(set), and no single mutation writes both a type's scalars
+// and its child's. Re-adding the sub-selection puts fields in the stored
+// snapshot that no diff can ever reach.
+func TestBeforeSelection_DoesNotReachIntoOwnedChildren(t *testing.T) {
+	lookup := func(t string) []string {
+		return map[string][]string{
+			"Server":        {"hostname"},
+			"IdracSettings": {"sshEnabled"},
+		}[t]
+	}
+	if got := BeforeSelection("Server", lookup); strings.Contains(got, "{") {
+		t.Errorf("before-fetch must be flat; got a sub-selection: %s", got)
 	}
 }
 

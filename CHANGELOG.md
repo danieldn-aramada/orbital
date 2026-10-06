@@ -22,6 +22,35 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ## [Unreleased]
 
+### Added
+- **Orphaning is now structurally impossible rather than guarded against.** A
+  child whose back-edge is non-null is contained by derivation, so there is no
+  view declaration that can fail to say so. Relaxing the edge to nullable is how a
+  child opts out — which is what `ServerConfigurationProfile.server` does as of
+  schema v13.
+- **Per-deployment view overrides, as a partial ConfigMap overlay**
+  (`ORBITAL_VIEWS_OVERLAY_PATH`). A deployment declares only the views it changes;
+  every view it does not name keeps receiving whatever ships in later releases.
+  Changes are picked up **without a process restart** — the overlay is hashed on
+  the same rate-limited loop that already watches the deployed schema.
+  ⚠️ Mount the directory, not a `subPath`: the kubelet does not update `subPath`
+  mounts in place.
+- **The views config is validated against live introspection at load.** A tab or
+  reference naming a field the deployed schema lacks, a path deeper than two
+  segments, a `canonicalParent` edge that does not exist, a page whose type is
+  gone, `editable:` on a list relationship (an edit target is addressed by path,
+  and a path cannot name one row) — each is dropped or refused, and logged at
+  WARN. Never fatal: a stale view must not stop a
+  page rendering. Never silent: a declaration that reads as correct and does
+  nothing is worse than one nobody wrote.
+- **A save composed against an older view is refused with 409.** The editor
+  decides a field was *cleared* by diffing the tree it opened against the tree it
+  submits, so a member dropped from a view while a modal sat open would have
+  emitted a `remove` for fields nobody touched. The editor now declares which
+  views document it was built from, and the GraphQL proxy refuses the write if
+  that has moved. Scoped to the editor: a caller that declares nothing proceeds,
+  because an API client sending an explicit `remove` is doing it deliberately.
+
 ### Changed
 - **Schema v14.** `ServerConfigurationProfile.server` is nullable (a scanned
   document a server page need not carry), `StorageController.storageVolumes`
@@ -84,38 +113,16 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   own comment, and produced twenty-three routable types that then had to be
   filtered back down to four.
 
-### Added
-- **Orphaning is now structurally impossible rather than guarded against.** A
-  child whose back-edge is non-null is contained by derivation, so there is no
-  view declaration that can fail to say so. Relaxing the edge to nullable is how a
-  child opts out — which is what `ServerConfigurationProfile.server` does as of
-  schema v13.
-- **Per-deployment view overrides, as a partial ConfigMap overlay**
-  (`ORBITAL_VIEWS_OVERLAY_PATH`). A deployment declares only the views it changes;
-  every view it does not name keeps receiving whatever ships in later releases.
-  Changes are picked up **without a process restart** — the overlay is hashed on
-  the same rate-limited loop that already watches the deployed schema.
-  ⚠️ Mount the directory, not a `subPath`: the kubelet does not update `subPath`
-  mounts in place.
-- **The views config is validated against live introspection at load.** A tab or
-  reference naming a field the deployed schema lacks, a path deeper than two
-  segments, a `canonicalParent` edge that does not exist, a page whose type is
-  gone, `editable:` on a list relationship (an edit target is addressed by path,
-  and a path cannot name one row) — each is dropped or refused, and logged at
-  WARN. Never fatal: a stale view must not stop a
-  page rendering. Never silent: a declaration that reads as correct and does
-  nothing is worse than one nobody wrote.
-- **A save composed against an older view is refused with 409.** The editor
-  decides a field was *cleared* by diffing the tree it opened against the tree it
-  submits, so a member dropped from a view while a modal sat open would have
-  emitted a `remove` for fields nobody touched. The editor now declares which
-  views document it was built from, and the GraphQL proxy refuses the write if
-  that has moved. Scoped to the editor: a caller that declares nothing proceeds,
-  because an API client sending an explicit `remove` is doing it deliberately.
-- **`/api/v1/views` now carries `labels`, `summaryRefs`, `contains` and `editable`
-  per tab**, so an integrator rendering their own table gets orbital's own answers
-  rather than re-deriving its title-casing rule or its containment. An empty
-  `slug` means the type has no page — which is how a client knows not to link it.
+- **`containment:` is now `ownerReferences:`.** It declares which node owns
+  another — Kubernetes' `metadata.ownerReferences` by another route — and three
+  things read it: the delete cascade, the audit before-fetch that builds a
+  diff, and the audit roll-up that shows a child's changes on its owner's page.
+  "Containment" named none of those and read as a container, not an owner.
+- **View-config field keys name the surface they govern.** `detailOnly` is now
+  `tableHidden`, `default` is `createDefault`, and a field can be kept off the
+  create form with `createHidden`. Previously a key's name did not say which of
+  the editor, the tables or the create form it affected, and "hide from X" was
+  spelled three different ways.
 
 ### Removed
 - **The Views page and `GET /api/v1/views`.** Both existed to show what orbital
@@ -127,6 +134,21 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   them.
 
 ### Fixed
+- **A parent's Audit Log tab shows its owned children's events again — all of
+  them.** The walk that builds the tab's orbId list read only single-object
+  children, so every list the entity owns was skipped in silence: a server's
+  network adapters, interfaces, storage controllers, drives and volumes changed
+  with nothing on its tab, while deleting the server removed all of them. A
+  populated server went from 3 orbIds to 34. The roll-up stops at any entity
+  that has its own page — a server's events belong on the server's page, not
+  duplicated onto its data centre's — which keeps a data centre at 5 rather
+  than the 1,159 its full subtree holds.
+- **Change requests touching a data centre pin their real scope.** The owned-
+  subtree query selected `orbId` directly off an interface-typed relationship,
+  which DGraph rejects; the expander batches every entity in a request into one
+  query and treats a failure as "owns nothing", so one data centre made every
+  entity in that request expand to nothing. Staleness detection was reading a
+  narrower base than the request actually covered.
 - **List pages show the columns they used to.** The reference columns on a table
   — Data Center, Rack, OOB IP — were derived from the schema, so every
   single-cardinality relationship became one: the servers list carried Idrac

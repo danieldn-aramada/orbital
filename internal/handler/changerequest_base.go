@@ -67,13 +67,12 @@ func baseScope(ctx context.Context, dgraphURL string, views configitems.ViewSet,
 // Roots absent from `existing` are creates and own nothing yet, so they are
 // skipped rather than queried for.
 //
-// Failure is non-fatal for the same reason collectRelatedOrbIDs's is: a root
-// whose subtree cannot be read contributes only itself, which narrows the scope
-// rather than corrupting it.
+// Failure is non-fatal: a root whose subtree cannot be read contributes only
+// itself, which narrows the scope rather than corrupting it.
 func collectRelatedOrbIDsBatch(ctx context.Context, dgraphURL string, views configitems.ViewSet, declared []string, existing map[string]approval.EntityRef) map[string][]string {
 	out := make(map[string][]string, len(declared))
 
-	type rootAlias struct{ alias, id string }
+	type rootAlias struct{ alias, id, typeName string }
 	var roots []rootAlias
 	var b strings.Builder
 	b.WriteString("query {")
@@ -82,7 +81,7 @@ func collectRelatedOrbIDsBatch(ctx context.Context, dgraphURL string, views conf
 		if !ok || ref.Type == "" {
 			continue
 		}
-		sel := views.EditableOrbIDSelection(ref.Type)
+		sel := views.OwnedOrbIDSelection(ref.Type)
 		if sel == "" {
 			continue // the type owns nothing — no query needed to learn that
 		}
@@ -91,7 +90,7 @@ func collectRelatedOrbIDsBatch(ctx context.Context, dgraphURL string, views conf
 			continue
 		}
 		alias := fmt.Sprintf("r%d", i)
-		roots = append(roots, rootAlias{alias: alias, id: id})
+		roots = append(roots, rootAlias{alias: alias, id: id, typeName: ref.Type})
 		fmt.Fprintf(&b, "\n  %s: get%s(orbId: %s) { orbId %s }", alias, ref.Type, q, sel)
 	}
 	b.WriteString("\n}")
@@ -121,41 +120,16 @@ func collectRelatedOrbIDsBatch(ctx context.Context, dgraphURL string, views conf
 		return out
 	}
 	for _, r := range roots {
-		node, ok := decoded.Data[r.alias]
-		if !ok || node == nil {
+		node, ok := decoded.Data[r.alias].(map[string]any)
+		if !ok {
 			continue
 		}
-		seen := map[string]bool{}
-		var ids []string
-		walkOrbIDs(node, seen, &ids)
-		out[r.id] = ids
+		// The SAME walk the detail page's audit roll-up uses. Two walks over
+		// the same ownership set is how the pin and the audit tab came to
+		// disagree about what a server covers.
+		out[r.id] = ownedSubtreeOrbIDs(views, r.typeName, r.id, node)
 	}
 	return out
-}
-
-// walkOrbIDs collects every orbId reachable in a decoded GraphQL result.
-//
-// The selection is built from the view's edit unit, so everything it reaches
-// is owned by the root by construction — the walk does not need to re-decide
-// ownership, only to find the ids.
-func walkOrbIDs(v any, seen map[string]bool, out *[]string) {
-	switch t := v.(type) {
-	case map[string]any:
-		for k, val := range t {
-			if k == "orbId" {
-				if s, ok := val.(string); ok && s != "" && !seen[s] {
-					seen[s] = true
-					*out = append(*out, s)
-				}
-				continue
-			}
-			walkOrbIDs(val, seen, out)
-		}
-	case []any:
-		for _, item := range t {
-			walkOrbIDs(item, seen, out)
-		}
-	}
 }
 
 // baseSnapshot reads the live state of an explicit orbId set and normalizes it

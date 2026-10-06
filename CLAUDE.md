@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Key Concepts
 
 - **`orbital`** — Server running in cloud. Central configuration hub — holds design intent (configuration items) for all modular data centers, serves the Topology API for digital twin building, and exposes a config export API for orbs to consume.
-- **`orb`** — Self-contained edge service running inside a modular data center. Stores and serves orbital's intended state offline. Exposes an API for other edge components (e.g., cb-agent) to submit divergence reports, which orb publishes to external storage (S3/OCI) for orbital to consume. Suitable for air-gapped deployments.
+- **`orb`** — Self-owned edge service running inside a modular data center. Stores and serves orbital's intended state offline. Exposes an API for other edge components (e.g., cb-agent) to submit divergence reports, which orb publishes to external storage (S3/OCI) for orbital to consume. Suitable for air-gapped deployments.
 
 ### Goals
 
@@ -125,7 +125,7 @@ Read the relevant doc(s) BEFORE writing code in that area — they encode conven
 |---|---|
 | **Adding a new ConfigItem type (schema → audit → UI)** — the canonical recipe | `docs/playbooks/add-configitem.md` |
 | **Configuring what a ConfigItem page shows and edits** (`config/views.yaml`: members, editable, slug, menuWeight, order, labels, filters, columns) | `docs/reference/UI.md` § Settled Decisions · format: `config/views.yaml` header + `internal/configitems/viewconfig.go` |
-| Editing GraphQL schema, **schema annotations** (only three left: `jsonString`, `orbIdSuffix:`, `derivesIdFrom:`), queries, DQL, export, seeding, blue-green | `docs/reference/DGRAPH.md` |
+| Editing GraphQL schema, **schema annotations** (three: `jsonString`, `orbIdSuffix:`, `orbIdPattern:` — `knownAnnotations` in `internal/configitems/derive.go` is the authority), queries, DQL, export, seeding, blue-green | `docs/reference/DGRAPH.md` |
 | **Querying NetBox / building or reconciling a network-topology seed** (endpoints, field shapes, join keys, gotchas) | `docs/reference/NETBOX.md` |
 | UI templates, HTMX, JavaScript, CSS, edit modals, JSON editor pattern | `docs/reference/UI.md` |
 | Audit events, mutation recording, diff rendering, `graphql.go` proxy | `docs/reference/AUDIT.md` |

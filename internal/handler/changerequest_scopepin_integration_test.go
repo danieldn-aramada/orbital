@@ -12,13 +12,13 @@ import (
 
 // Scope is PINNED at base capture rather than re-derived on read.
 //
-// baseScope walks containment, and containment is view configuration — it is
+// baseScope walks ownership, and ownership is view configuration — it is
 // editable. Re-deriving on every read therefore lets a later view change
 // retroactively alter what a past review is deemed to have covered. "Which
 // entities did this reviewer look at" is a fact about the moment of review.
 //
 // Scope drives STALENESS only. Merge correctness rests on base_values plus the
-// version pre-flight, neither of which consults containment.
+// version pre-flight, neither of which consults ownership.
 
 const (
 	pinNS     = "cr-pin"
@@ -87,7 +87,7 @@ func TestChangeRequest_ScopeResolvedOnceAtCreation(t *testing.T) {
 		t.Errorf("base_scope %v must contain the declared entity %s", cr.BaseScope, pinServer)
 	}
 	if !contains(cr.BaseScope, pinIdrac) {
-		t.Errorf("base_scope %v must contain the owned child %s that containment pulled in", cr.BaseScope, pinIdrac)
+		t.Errorf("base_scope %v must contain the owned child %s that ownership pulled in", cr.BaseScope, pinIdrac)
 	}
 }
 
@@ -100,20 +100,39 @@ func TestChangeRequest_AmendRePinsScope(t *testing.T) {
 	f := newCRFixture(t)
 	seedPinFixture(t)
 
-	id := openPinCR(t, f, pinServer, "pinned-01")
+	// Opened against the DATA CENTRE, amended DOWN to the server it owns.
+	//
+	// The direction matters: a DataCenter owns its servers, so amending the
+	// other way leaves the old root's orbIds legitimately in scope and the
+	// assertion cannot tell "carried forward" from "owned by the new root".
+	// Downward, the old root is NOT owned by the new one — a server does not
+	// own its data centre — so its disappearance is the whole claim.
+	cr, problems, err := f.crh.Create(context.Background(), author, "pin test", "",
+		&approval.Changeset{Namespace: pinNS, Changes: []approval.ChangeItem{{
+			OrbID: pinDC, Type: "DataCenter", Op: approval.OpUpdate,
+			Set: map[string]any{"name": "renamed"},
+		}}})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if len(problems) > 0 {
+		t.Fatalf("validation problems: %v", problems)
+	}
+	id := cr.ID
+
 	before, err := f.crh.Get(context.Background(), id)
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if !contains(before.BaseScope, pinIdrac) {
-		t.Fatalf("precondition: base_scope %v should contain the child", before.BaseScope)
+	if !contains(before.BaseScope, pinDC) || !contains(before.BaseScope, pinServer) {
+		t.Fatalf("precondition: base_scope %v should contain the data centre and the server it owns",
+			before.BaseScope)
 	}
 
-	// Amend to target the DataCenter instead, which owns a different subtree.
-	_, problems, err := f.crh.Amend(context.Background(), id, author, user.RoleDev, nil, nil,
+	_, problems, err = f.crh.Amend(context.Background(), id, author, user.RoleDev, nil, nil,
 		&approval.Changeset{Namespace: pinNS, Changes: []approval.ChangeItem{{
-			OrbID: pinDC, Type: "DataCenter", Op: approval.OpUpdate,
-			Set: map[string]any{"name": "renamed"},
+			OrbID: pinServer, Type: "Server", Op: approval.OpUpdate,
+			Set: map[string]any{"hostname": "pinned-02"},
 		}}})
 	if err != nil {
 		t.Fatalf("amend: %v", err)
@@ -126,12 +145,16 @@ func TestChangeRequest_AmendRePinsScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get after amend: %v", err)
 	}
-	if !contains(after.BaseScope, pinDC) {
-		t.Errorf("after amend, base_scope %v must contain the newly declared %s", after.BaseScope, pinDC)
+	if !contains(after.BaseScope, pinServer) {
+		t.Errorf("after amend, base_scope %v must contain the newly declared %s", after.BaseScope, pinServer)
 	}
-	if contains(after.BaseScope, pinServer) {
+	if !contains(after.BaseScope, pinIdrac) {
+		t.Errorf("after amend, base_scope %v must still pull in the new root's owned child %s",
+			after.BaseScope, pinIdrac)
+	}
+	if contains(after.BaseScope, pinDC) {
 		t.Errorf("after amend, base_scope %v still names %s — the old changeset's scope was carried forward",
-			after.BaseScope, pinServer)
+			after.BaseScope, pinDC)
 	}
 }
 
@@ -161,9 +184,9 @@ func TestChangeRequest_StalenessHashComputedOverStoredScope(t *testing.T) {
 	}
 }
 
-// Acceptance 4: the load-bearing one. A change to what containment WOULD return
+// Acceptance 4: the load-bearing one. A change to what ownership WOULD return
 // must not move an already-pinned scope.
-func TestChangeRequest_ContainmentChangeDoesNotMovePinnedScope(t *testing.T) {
+func TestChangeRequest_OwnershipChangeDoesNotMovePinnedScope(t *testing.T) {
 	f := newCRFixture(t)
 	seedPinFixture(t)
 
@@ -223,7 +246,7 @@ func TestChangeRequest_StoredScopeRoundTripsThroughAPI(t *testing.T) {
 
 // Acceptance 6: a row written before base_scope existed still renders. Those
 // rows are deliberately NOT backfilled — pinning an old row with today's
-// containment would assert a review covered something nobody can show it did.
+// ownership would assert a review covered something nobody can show it did.
 func TestChangeRequest_PreExistingRowWithoutStoredScopeStillWorks(t *testing.T) {
 	f := newCRFixture(t)
 	seedPinFixture(t)

@@ -63,7 +63,7 @@ short in four areas:
 - **`orbital`** — Cloud-hosted CMDB and Topology API. Single source of truth for
   configuration intent. GraphQL mutations update authoritative intent only —
   never execute actions remotely.
-- **`orb`** — Self-contained edge service inside a modular data center. Holds a
+- **`orb`** — Self-owned edge service inside a modular data center. Holds a
   local copy of intended configuration, serves it fully offline, and produces
   divergence reports.
 - **`namespace`** — Tenancy boundary scoping a data center's configuration

@@ -100,7 +100,7 @@ func containsString(haystack []string, needle string) bool {
 // relationship, just enough to render a link (orbId and name). Deliberately
 // shallow: a detail page shows what an entity relates to, not the whole graph
 // beneath it, and a deep selection on a cyclic schema does not terminate.
-func genericDetailQuery(v configitems.View, viewOf func(string) configitems.View, display func(string) []string, refColumns func(string) []configitems.ViewRefColumn, orbID string) string {
+func genericDetailQuery(v configitems.View, viewOf func(string) configitems.View, display func(string) []string, refColumns func(string) []configitems.ViewRefColumn, ownedIDSel func(string) string, orbID string) string {
 	// The interface fields are selected alongside the type's own: `version`
 	// because the editor must send it or a concurrent edit overwrites silently
 	// instead of being refused, and the rest because the metadata box shows
@@ -136,7 +136,7 @@ func genericDetailQuery(v configitems.View, viewOf func(string) configitems.View
 	// Each relationship is selected EXACTLY once, with the union of what the
 	// page needs from it. Contained children are edited inline, so they carry
 	// their own fields; everything else only needs enough to render a link.
-	owned := ownedChildFields(v.Type, viewOf, display, refColumns)
+	owned := ownedChildFields(v.Type, viewOf, display, refColumns, ownedIDSel)
 	for _, tab := range v.Tabs {
 		// A PATH tab selects nothing of its own: its rows are read out of the
 		// owned-child subtree this query already fetches for the editor. Its
@@ -146,6 +146,7 @@ func genericDetailQuery(v configitems.View, viewOf func(string) configitems.View
 		if strings.Contains(tab.Field, ".") {
 			continue
 		}
+		seen[tab.Field] = true
 		if childSel, isOwned := owned[tab.Field]; isOwned {
 			// An OWNED child is rendered as a row too, so it needs its computed
 			// columns as much as a non-owned one. Missing this is why a data
@@ -174,6 +175,25 @@ func genericDetailQuery(v configitems.View, viewOf func(string) configitems.View
 		childSel += columnSelection(viewOf(tab.Type))
 		sel += " " + tab.Field + " { " + childSel + " }"
 	}
+
+	// OWNED CHILDREN THE PAGE DOES NOT TAB — ids only, nothing renders them.
+	//
+	// The audit roll-up covers everything the root OWNS and reads it out of
+	// this result (ownedSubtreeOrbIDs), so an owned child nobody listed under
+	// `tabs:` must still appear or the roll-up silently narrows to whatever the
+	// page happens to show. That coupling used to be asserted in a comment here
+	// and enforced by nothing.
+	for _, oc := range v.Dependents {
+		if seen[oc.ChildField] {
+			continue
+		}
+		seen[oc.ChildField] = true
+		childSel := "orbId"
+		if nested := ownedIDSel(oc.ChildType); nested != "" {
+			childSel += " " + nested
+		}
+		sel += " " + oc.ChildField + " { " + childSel + " }"
+	}
 	return fmt.Sprintf("{ get%s(orbId: %q) { %s } }", v.Type, orbID, sel)
 }
 
@@ -184,9 +204,9 @@ func genericDetailQuery(v configitems.View, viewOf func(string) configitems.View
 // and no scalars of its own (ClusterBackup wraps etcd/velero/s3Sync), and
 // BuildEditTargets emits its GRANDchildren as the edit targets, so the tree has
 // to nest the same way or those targets have no data behind them.
-func ownedChildFields(rootType string, viewOf func(string) configitems.View, display func(string) []string, refColumns func(string) []configitems.ViewRefColumn) map[string]string {
+func ownedChildFields(rootType string, viewOf func(string) configitems.View, display func(string) []string, refColumns func(string) []configitems.ViewRefColumn, ownedIDSel func(string) string) map[string]string {
 	out := map[string]string{}
-	for _, oc := range viewOf(rootType).EditableMembers() {
+	for _, oc := range viewOf(rootType).Dependents {
 		// idNameSel, not a bare `orbId name`: an editable member may be typed by
 		// an INTERFACE (DataCenter.kubernetesClusters), and `orbId` is declared
 		// on ConfigItem rather than on a sub-interface, so selecting it bare is
@@ -208,7 +228,7 @@ func ownedChildFields(rootType string, viewOf func(string) configitems.View, dis
 		for _, rc := range refColumns(oc.ChildType) {
 			sel += " " + rc.Field + " { " + idNameSel(viewOf(rc.Type)) + " }"
 		}
-		for _, gc := range viewOf(oc.ChildType).EditableMembers() {
+		for _, gc := range viewOf(oc.ChildType).Dependents {
 			gsel := idNameVersionSel(viewOf(gc.ChildType))
 			for _, f := range display(gc.ChildType) {
 				if f != "name" {
@@ -221,6 +241,15 @@ func ownedChildFields(rootType string, viewOf func(string) configitems.View, dis
 			// row. Same omission as at the child level, one layer down.
 			for _, rc := range refColumns(gc.ChildType) {
 				gsel += " " + rc.Field + " { " + idNameSel(viewOf(rc.Type)) + " }"
+			}
+			// ...and the ids of anything the GRANDCHILD in turn owns. The page
+			// renders nothing below this depth, but the audit roll-up covers
+			// the whole owned subtree and reads it out of this result — so a
+			// three-deep ownership chain would otherwise roll up on the change
+			// request's scope pin and not on the audit tab, which is the exact
+			// disagreement these two were just unified to end.
+			if deeper := ownedIDSel(gc.ChildType); deeper != "" {
+				gsel += " " + deeper
 			}
 			sel += " " + gc.ChildField + " { " + gsel + " }"
 		}

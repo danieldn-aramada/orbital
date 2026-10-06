@@ -179,10 +179,10 @@ func (ApprovalRequest) Fields() []ent.Field {
 		field.JSON("base_values", map[string]map[string]any{}).Optional(),
 
 		// base_scope is the set of orbIds this request was opened against: the
-		// entities its changeset declares, PLUS everything containment pulled in
+		// entities its changeset declares, PLUS everything ownership pulled in
 		// at capture time.
 		//
-		// It is PINNED rather than re-derived because containment is view
+		// It is PINNED rather than re-derived because ownership is view
 		// configuration, not model semantics — it is editable, and once it is,
 		// re-deriving would let a view change retroactively alter what a past
 		// review is deemed to have covered. "Which entities did this reviewer
@@ -196,11 +196,11 @@ func (ApprovalRequest) Fields() []ent.Field {
 		//
 		// Scope drives STALENESS ONLY, never merge correctness. Merge rests on
 		// base_values (per-field ancestor) plus the version pre-flight, and
-		// neither consults containment.
+		// neither consults ownership.
 		//
 		// Optional: absent means "not pinned", and the caller falls back to
 		// deriving it, which is what every row predating this field did on every
-		// read. No backfill — pinning an old row with today's containment would
+		// read. No backfill — pinning an old row with today's ownership would
 		// assert a review covered something nobody can show it covered.
 		field.JSON("base_scope", []string{}).Optional(),
 
@@ -237,7 +237,7 @@ func (ApprovalRequest) Indexes() []ent.Index {
 		// of two requests silently sharing `colo-42`.
 		index.Fields("namespace", "number").Unique(),
 		// GIN on the payload so "which requests touch this orbId" is an indexed
-		// containment lookup rather than a scan-plus-render. Without it the
+		// ownership lookup rather than a scan-plus-render. Without it the
 		// pending-change badge — which fires on every detail view — would load
 		// every request and pay DGraph to derive staleness for each, only to
 		// discard nearly all of them. D13 held the denormalised change_target

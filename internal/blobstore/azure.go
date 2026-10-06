@@ -23,7 +23,6 @@ type azureStore struct {
 	useAzureMI  bool
 }
 
-
 func newAzureStore(endpoint, accountName, accountKey, container string, useAzureMI bool) (*azureStore, error) {
 	if useAzureMI {
 		cred, err := azidentity.NewDefaultAzureCredential(nil)

@@ -292,7 +292,6 @@ test('generic list pages size their table chrome like the inventory page', async
     ['/data-centers', 'generic-table'],
     ['/servers', 'generic-table'],
     ['/network-devices', 'generic-table'],
-    ['/views', 'views-table'],
   ]) {
     const got = await chrome(path, tableId);
     expect(got.info!.fontSize, `${path} info line font`).toBe(reference.info!.fontSize);

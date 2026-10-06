@@ -44,14 +44,10 @@ type TypeInfo struct {
 	// name, so only the irregular ones need an annotation.
 	OrbIDSuffix string
 
-	// DerivesIDFrom names the edge this type's identity hangs off — the field
-	// on THIS type pointing at the entity whose name its orbId is built from.
-	// Empty for a type with an identity of its own.
-	//
-	// It is also the inverse edge a first-time create links through, which is
-	// not a coincidence: the parent an id derives from and the parent a child is
-	// attached to are the same parent, and declaring them separately would be
-	// two chances to disagree.
+	// OrbIDPattern is the type's declared orbId shape, parsed. Several entries
+	// are ALTERNATIVES — see OrbIDPatternAnnotation in orbid.go.
+	OrbIDPattern []OrbIDPattern
+
 	// PayloadField is the field on `Add<Type>Payload` that returns the affected
 	// rows, so the audit extractor can find the orbId in a mutation response.
 	//
@@ -98,13 +94,26 @@ type DerivedField struct {
 	//
 	// It is where CONTAINMENT comes from. `Child.parent: Parent!` is the schema
 	// saying the child has no existence without that parent, so it dies with it
-	// and its audit rolls up onto it. 13 of orbital's 14 containment relations
+	// and its audit rolls up onto it. 13 of orbital's 14 ownership relations
 	// derive from this; the one that cannot is NetworkInterface, whose owner is
 	// an XOR across three nullable edges.
 	NonNull bool
 }
 
-func BeforeSelection(typeName string, fields FieldsFor, members func(string) []EditableMember) string {
+// BeforeSelection is the audit before-fetch for one type: its own derived
+// fields, FLAT.
+//
+// Flat because the mutation decides the diff, not this selection: `changes` is
+// keys(before) ∩ keys(set) (computeChanges), so a before field the mutation
+// never set is dropped, and one mutation only ever reaches one type's scalars —
+// a nested object in `set` links by @id and its values are discarded
+// (DGRAPH.md § "A nested child update in a `set` is SILENTLY DISCARDED").
+// Selecting owned children here widened the stored `before` snapshot with
+// fields no diff could reach.
+//
+// A parent's Audit Log tab still carries its children's events. That roll-up is
+// read-side and by orbId — see ownedSubtreeOrbIDs.
+func BeforeSelection(typeName string, fields FieldsFor) string {
 	sel := "id orbId name version"
 	for _, f := range fields(typeName) {
 		if f == "name" {
@@ -112,28 +121,7 @@ func BeforeSelection(typeName string, fields FieldsFor, members func(string) []E
 		}
 		sel += " " + f
 	}
-	// The page's EDIT UNIT, which is the right scope by construction: the audit
-	// `changes` must cover whatever one mutation through this page could have
-	// altered, and that is exactly what the editor writes.
-	for _, m := range members(typeName) {
-		childScalars := fields(m.ChildType)
-		if len(childScalars) == 0 {
-			continue
-		}
-		sel += " " + m.ChildField + " { " + joinFields(childScalars) + " }"
-	}
 	return sel
-}
-
-func joinFields(f []string) string {
-	s := ""
-	for i, v := range f {
-		if i > 0 {
-			s += " "
-		}
-		s += v
-	}
-	return s
 }
 
 // Resolver serves the derived field sets, continuously rather than as a
@@ -520,6 +508,13 @@ func (r *Resolver) ensure(ctx context.Context) error {
 			r.logger.Warn("unrecognised orbital annotation in the deployed schema; it does nothing",
 				"where", u)
 		}
+		// Reported apart from a generic annotation typo because the consequence
+		// differs: a misspelled annotation does nothing, while a broken
+		// orbIdPattern is an identity orbital can neither construct nor verify.
+		for _, w := range OrbIDPatternWarnings(types) {
+			r.logger.Warn("orbIdPattern unusable; orbital cannot construct or verify this type's orbId",
+				"where", w)
+		}
 	}
 	return nil
 }
@@ -541,8 +536,9 @@ func (r *Resolver) WithLogger(l *slog.Logger) *Resolver {
 }
 
 var knownAnnotations = []string{
-	JSONStringAnnotation,  // bare word   — what this String CONTAINS
-	OrbIDSuffixAnnotation, // "orbIdSuffix:"   — identity
+	JSONStringAnnotation,   // bare word         — what this String CONTAINS
+	OrbIDSuffixAnnotation,  // "orbIdSuffix:"    — identity
+	OrbIDPatternAnnotation, // "orbIdPattern:"   — identity
 }
 
 // UnknownAnnotations returns docstring lines that LOOK like an orbital

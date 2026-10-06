@@ -1,79 +1,102 @@
 package handler
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
-	"net/http"
 	"sort"
 
 	"github.com/armada/orbital/internal/configitems"
 )
 
-// collectRelatedOrbIDs returns a root ConfigItem's orbId plus every owned
-// descendant's orbId, deduped with the root first. It is the single, generic,
-// view-driven source for the audit tab's data-related-orb-ids across every page
-// (Server, KubernetesCluster, NetworkDevice, DataCenter) — replacing the
-// per-type hand-walked collectors that had drifted from each other (Spike 33).
+// maxOwnershipDepth bounds the walk for the same reason OwnedOrbIDSelection is
+// bounded: the ownership graph is operator-editable through `ownerReferences:`
+// and nothing stops a cycle being declared.
+const maxOwnershipDepth = 8
+
+// ownedSubtreeOrbIDs returns rootOrbID plus the orbId of every entity the root
+// OWNS, at every depth the ownership graph declares.
 //
-// The subtree is the page's EDIT UNIT, which is the right unit by construction:
-// an audit tab answers "what changed here", and what can change here is exactly
-// what this page's editor writes.
+// The FULL subtree — everything a delete of the root would cascade to. The
+// change-request scope pin takes this one: its staleness base has to cover what
+// could change, and that is the cascade set, not a display subset.
 //
-// On any query error it degrades to just the root orbId (the audit panel still
-// shows the root's own events).
-func collectRelatedOrbIDs(ctx context.Context, dgraphURL string, views configitems.ViewSet, rootType, rootOrbID string) []string {
-	root := []string{rootOrbID}
-	if rootType == "" || rootOrbID == "" {
-		return root
-	}
-	sel := views.EditableOrbIDSelection(rootType)
-	query := "query($id: String!) { get" + rootType + "(orbId: $id) { orbId " + sel + " } }"
-	body, err := json.Marshal(map[string]any{
-		"query":     query,
-		"variables": map[string]string{"id": rootOrbID},
+// ONE walk for both consumers — this and auditRollupOrbIDs. They answer the
+// same question and had drifted: the page's walk type-asserted map[string]any,
+// so every LIST dependent (a server's NICs, adapters, storage controllers) was
+// skipped in silence, while the scope pin included them. A server rolled up 3
+// orbIds and cascade-deleted ~30.
+func ownedSubtreeOrbIDs(views configitems.ViewSet, rootType, rootOrbID string, entity map[string]any) []string {
+	return walkOwned(views, rootType, rootOrbID, entity, nil)
+}
+
+// auditRollupOrbIDs is the subtree a parent's AUDIT TAB covers: the owned
+// subtree, stopping at any dependent that has its own PAGE.
+//
+// A type with a page has somewhere its events already live; a type without one
+// does not, and carrying those is the whole job. It is the principle
+// `canonicalParent:` already encodes — with no /racks/<id>, the data centre is
+// the only answer to "that rack turned up in a diff, where do I look at it?".
+//
+// It is also what keeps the roll-up BOUNDED. A data centre owns every server,
+// NIC and disk in it — 1,159 orbIds on the seeded colo namespace — and the
+// audit-log API refuses a filter over 128 rather than truncating it, so an
+// unbounded roll-up does not degrade, it 400s. Stopping at pages takes that
+// data centre to 5 — itself and its four racks, which have no page of their
+// own — while leaving a server's 34 untouched, because nothing a server owns
+// has a page.
+//
+// The DIFFERENCE from ownedSubtreeOrbIDs is deliberate and lives here, at one
+// call each, rather than in a second walk — two implementations of this is what
+// the unification removed.
+func auditRollupOrbIDs(views configitems.ViewSet, rootType, rootOrbID string, entity map[string]any) []string {
+	return walkOwned(views, rootType, rootOrbID, entity, func(typeName string) bool {
+		// Slug is non-empty exactly for a type with a `pages:` entry
+		// (configitems.pageSlug), so this is the page test, not a URL detail.
+		return views.Of(typeName).Slug != ""
 	})
-	if err != nil {
-		return root
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, dgraphURL, bytes.NewReader(body))
-	if err != nil {
-		return root
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return root
-	}
-	defer resp.Body.Close()
+}
 
-	var raw any
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
-		return root
-	}
-
-	seen := map[string]bool{rootOrbID: true}
+// walkOwned is the single traversal. `stopAt` names dependent types the walk
+// neither collects nor descends into; nil walks everything.
+//
+// Ownership-GUIDED rather than a blind scrape for orbIds: it descends only the
+// fields View.Dependents names, so a result that also carries non-owned
+// references (a rack, a data centre, a cluster) cannot widen the set.
+//
+// Reads what the caller already fetched. It can therefore only report an orbId
+// the query actually selected — which is why genericDetailQuery selects owned
+// children the page does not tab.
+//
+// Root first, then descendants sorted: this is rendered into an HTML attribute
+// and Go map iteration is random, so an unsorted tail churns on every render.
+func walkOwned(views configitems.ViewSet, rootType, rootOrbID string, entity map[string]any, stopAt func(string) bool) []string {
 	out := []string{rootOrbID}
-	var walk func(v any)
-	walk = func(v any) {
-		switch t := v.(type) {
-		case map[string]any:
-			if id, ok := t["orbId"].(string); ok && id != "" && !seen[id] {
-				seen[id] = true
-				out = append(out, id)
+	if rootType == "" || entity == nil {
+		return out
+	}
+	seen := map[string]bool{rootOrbID: true}
+
+	var walk func(typeName string, node map[string]any, path map[string]bool, depth int)
+	walk = func(typeName string, node map[string]any, path map[string]bool, depth int) {
+		if node == nil || depth >= maxOwnershipDepth || path[typeName] {
+			return
+		}
+		path[typeName] = true
+		defer delete(path, typeName)
+
+		for _, oc := range views.Of(typeName).Dependents {
+			if stopAt != nil && stopAt(oc.ChildType) {
+				continue
 			}
-			for _, vv := range t {
-				walk(vv)
-			}
-		case []any:
-			for _, e := range t {
-				walk(e)
+			for _, child := range childNodes(node[oc.ChildField]) {
+				if id, _ := child["orbId"].(string); id != "" && !seen[id] {
+					seen[id] = true
+					out = append(out, id)
+				}
+				walk(oc.ChildType, child, path, depth+1)
 			}
 		}
 	}
-	walk(raw)
-	// Deterministic output: root first, then descendants sorted. JSON object
-	// key order is random in Go, so without this the CSV would churn per render.
+	walk(rootType, entity, map[string]bool{}, 0)
+
 	sort.Strings(out[1:])
 	return out
 }
