@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/armada/orbital/internal/configitems"
@@ -123,7 +124,7 @@ func (g *GenericRenderer) List(c echo.Context) error {
 	display := func(typeName string) []string { return byType[typeName].Display }
 	viewOf := func(typeName string) configitems.View { return byType[typeName] }
 
-	// COLUMN fields, not Display: an implementation's `detailOnly` has to hold
+	// COLUMN fields, not Display: an implementation's `tableHidden` has to hold
 	// when its fields are unioned onto the interface's list, or a field kept off
 	// every table reappears on the one page that unions several types.
 	columnsOf := func(typeName string) []string { return byType[typeName].ColumnFields() }
@@ -181,6 +182,15 @@ func (g *GenericRenderer) List(c echo.Context) error {
 		data.Rows = append(data.Rows, row)
 	}
 	data.FilterBy = buildFilterBy(v, data.Columns, data.RefColumns, data.Rows)
+
+	// The New-node form. Nil for a type that cannot be created — an interface
+	// (no add<Interface> exists), or one whose orbId orbital does not mint — and
+	// the template then renders no button rather than one that cannot work.
+	if data.CanMutate {
+		data.Create = buildCreateForm(c.Request().Context(), g.dgraphURL, v, byType,
+			func(t string) func(string) string { return g.fieldLabeller(vs, t) },
+			g.fields.Meta)
+	}
 	return g.render(c, "generic-list", data)
 }
 
@@ -418,8 +428,9 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 	display := func(typeName string) []string { return byType[typeName].Display }
 	refColumns := func(typeName string) []configitems.ViewRefColumn { return byType[typeName].RefColumns }
 	viewOf := func(typeName string) configitems.View { return byType[typeName] }
+	ownedIDSel := func(typeName string) string { return vs.OwnedOrbIDSelection(typeName) }
 
-	raw, err := runGraphQL(c.Request().Context(), g.dgraphURL, genericDetailQuery(v, viewOf, display, refColumns, orbID), "get"+v.Type)
+	raw, err := runGraphQL(c.Request().Context(), g.dgraphURL, genericDetailQuery(v, viewOf, display, refColumns, ownedIDSel, orbID), "get"+v.Type)
 	if err != nil {
 		// Retry WITHOUT reference columns before giving up.
 		//
@@ -433,7 +444,7 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 		// log loudly — the underlying data IS corrupt and somebody should fix
 		// it, but not by staring at a blank page.
 		noRefs := func(string) []configitems.ViewRefColumn { return nil }
-		if retry, rerr := runGraphQL(c.Request().Context(), g.dgraphURL, genericDetailQuery(v, viewOf, display, noRefs, orbID), "get"+v.Type); rerr == nil {
+		if retry, rerr := runGraphQL(c.Request().Context(), g.dgraphURL, genericDetailQuery(v, viewOf, display, noRefs, ownedIDSel, orbID), "get"+v.Type); rerr == nil {
 			g.logger.Warn("generic detail: dropped reference columns after a query error — "+
 				"this usually means a DANGLING EDGE, where something points at a deleted node",
 				"type", v.Type, "orbId", orbID, "err", err)
@@ -480,7 +491,7 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 	for _, f := range v.Fields {
 		editable[f] = true
 	}
-	// Pretty-printing is keyed on jsonString, NOT on detailOnly: one is about
+	// Pretty-printing is keyed on jsonString, NOT on tableHidden: one is about
 	// what the value holds, the other about where it appears. A JSON field that
 	// is small enough to be a column should still render formatted on detail.
 	isJSON := make(map[string]bool, len(v.JSONString))
@@ -497,7 +508,7 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 			Label:    label(f),
 			Value:    val,
 			Editable: editable[f],
-			// `jsonString` only. A blob is what the value CONTAINS; detailOnly
+			// `jsonString` only. A blob is what the value CONTAINS; tableHidden
 			// is where the field may render — see UI.md on not conflating them.
 			Blob: isJSON[f],
 		})
@@ -510,16 +521,16 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 	// "generic-panel-audit-" with nothing after it — unique by accident while
 	// one detail view is open, and colliding the moment two are.
 	data.AuditPanelID = "generic-panel-audit-" + data.DomID
-	data.RelatedOrbIDsCSV = strings.Join(ownedSubtreeOrbIDs(vs, orbID, v.Type, entity), ",")
+	data.RelatedOrbIDsCSV = strings.Join(auditRollupOrbIDs(vs, v.Type, orbID, entity), ",")
 	// The two surfaces are DECLARED now, not split out of one list.
 	//
-	// `tabs:` is the tab strip: a single contained child is an inline panel, a
+	// `tabs:` is the tab strip: a single owned child is an inline panel, a
 	// list is a table. `summary.refs:` is the link rows under the field list.
 	// They used to be one list with the surface derived from cardinality, which
 	// is correct and unreadable — you could not tell what would be a tab without
-	// knowing the containment graph.
-	owned := map[string]configitems.EditableMember{}
-	for _, oc := range v.EditableMembers() {
+	// knowing the ownership graph.
+	owned := map[string]configitems.OwnedMember{}
+	for _, oc := range v.Dependents {
 		owned[oc.ChildField] = oc
 	}
 	for _, tab := range v.Tabs {
@@ -631,6 +642,19 @@ func (g *GenericRenderer) attachGenericEditor(c echo.Context, data *page.Generic
 	}
 	name, _ := entity["name"].(string)
 
+	// The root's own scalars, for deriving an owned child's orbId from its
+	// `orbIdPattern:`. A child's pattern names a field on the entity it hangs
+	// off — `{server.serviceTag}` — and this is where that value lives.
+	rootValues := make(map[string]string, len(entity))
+	for k, v := range entity {
+		switch t := v.(type) {
+		case string:
+			rootValues[k] = t
+		case float64:
+			rootValues[k] = strconv.FormatFloat(t, 'f', -1, 64)
+		}
+	}
+
 	// The tree the JSON editor renders: EDITABLE scalars only, at the same paths
 	// BuildEditTargets addresses.
 	//
@@ -642,7 +666,7 @@ func (g *GenericRenderer) attachGenericEditor(c echo.Context, data *page.Generic
 	// for the same reason — showing them invites someone to type into them.
 	//
 	// The member walk mirrors BuildEditTargets exactly — the page's declaration
-	// at the top level, containment below it. If the two ever disagree the tree
+	// at the top level, ownership below it. If the two ever disagree the tree
 	// shows a field no target can write, and the save silently drops it.
 	editData := editableSubtree(v, entity)
 	for _, oc := range v.EditorMembers() {
@@ -659,7 +683,7 @@ func (g *GenericRenderer) attachGenericEditor(c echo.Context, data *page.Generic
 		// A wrapper (ClusterBackup) has no scalars of its own; its GRANDchildren
 		// are the edit targets, so the tree has to nest one level further or
 		// those targets have nothing behind them.
-		for _, gc := range vs.Of(oc.ChildType).ContainedSingles() {
+		for _, gc := range vs.Of(oc.ChildType).DependentSingles() {
 			gcView, gcKnown := byType[gc.ChildType]
 			if !gcKnown {
 				continue
@@ -682,7 +706,7 @@ func (g *GenericRenderer) attachGenericEditor(c echo.Context, data *page.Generic
 		return
 	}
 
-	targets := configitems.BuildEditTargets(vs, g.fields.Fields, g.fields.Meta, v.Type, orbID, namespaceOf(orbID), name)
+	targets := configitems.BuildEditTargets(vs, g.fields.Fields, g.fields.Meta, v.Type, orbID, namespaceOf(orbID), name, rootValues)
 
 	// Stamp the OCC version on EVERY reachable target, not just the root.
 	//
@@ -882,33 +906,6 @@ func (g *GenericRenderer) Fallback(c echo.Context) error {
 	}
 }
 
-// ownedSubtreeOrbIDs returns the entity's orbId plus the orbId of every owned
-// child and grandchild present in the fetched entity, in a stable order.
-//
-// Derived from the response rather than the schema so it can never claim an
-// orbId the page did not actually load — an audit query for a child that was
-// not fetched would silently widen what the panel reports.
-func ownedSubtreeOrbIDs(views configitems.ViewSet, rootOrbID, rootType string, entity map[string]any) []string {
-	out := []string{rootOrbID}
-	seen := map[string]bool{rootOrbID: true}
-	var walk func(typeName string, node map[string]any)
-	walk = func(typeName string, node map[string]any) {
-		for _, oc := range views.Of(typeName).EditableMembers() {
-			child, ok := node[oc.ChildField].(map[string]any)
-			if !ok {
-				continue
-			}
-			if id, _ := child["orbId"].(string); id != "" && !seen[id] {
-				seen[id] = true
-				out = append(out, id)
-			}
-			walk(oc.ChildType, child)
-		}
-	}
-	walk(rootType, entity)
-	return out
-}
-
 // metaRows builds the provenance box: one row per ConfigItem interface field,
 // in the view's declared order, with the label and the local-time decision
 // already made.
@@ -955,7 +952,7 @@ func (g *GenericRenderer) metaRows(vs configitems.ViewSet, v configitems.View, e
 // One level of recursion, matching the query: ownedChildFields selects
 // grandchildren because a wrapper's children ARE its content, and stops there
 // because a deeper walk on a cyclic schema does not terminate.
-func (g *GenericRenderer) ownedBox(views configitems.ViewSet, tab configitems.ViewTab, oc configitems.EditableMember, byType map[string]configitems.View, node map[string]any) page.GenericOwned {
+func (g *GenericRenderer) ownedBox(views configitems.ViewSet, tab configitems.ViewTab, oc configitems.OwnedMember, byType map[string]configitems.View, node map[string]any) page.GenericOwned {
 	cv := byType[oc.ChildType]
 	id, _ := node["orbId"].(string)
 	name, _ := node["name"].(string)
@@ -968,7 +965,7 @@ func (g *GenericRenderer) ownedBox(views configitems.ViewSet, tab configitems.Vi
 	if node == nil {
 		// Absent: still list the sub-kinds this child would have, each marked
 		// unconfigured, so the page shows the SHAPE of what is missing.
-		for _, gc := range views.Of(oc.ChildType).EditableMembers() {
+		for _, gc := range views.Of(oc.ChildType).Dependents {
 			box.Children = append(box.Children, page.GenericOwned{Label: humanFieldLabel(gc.ChildField)})
 		}
 		return box
@@ -990,7 +987,7 @@ func (g *GenericRenderer) ownedBox(views configitems.ViewSet, tab configitems.Vi
 		}
 		box.Fields = append(box.Fields, row)
 	}
-	for _, gc := range views.Of(oc.ChildType).EditableMembers() {
+	for _, gc := range views.Of(oc.ChildType).Dependents {
 		child, ok := node[gc.ChildField].(map[string]any)
 		if !ok {
 			// A sub-kind that was never configured. Shown as such rather than
@@ -1035,7 +1032,7 @@ func (g *GenericRenderer) ownedBox(views configitems.ViewSet, tab configitems.Vi
 // so the columns do not reshuffle between requests.
 //
 // ⚠️ `columns` must be the implementation's COLUMN fields, not its Display —
-// those differ by exactly `detailOnly`, and taking Display let a field declared
+// those differ by exactly `tableHidden`, and taking Display let a field declared
 // detail-only come back through the union onto the interface's list page.
 func listColumns(v configitems.View, columns func(string) []string) []string {
 	cols := v.ColumnFields()

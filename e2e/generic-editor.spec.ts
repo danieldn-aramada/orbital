@@ -82,7 +82,7 @@ test('every reachable edit target on a generic page carries an OCC version', asy
   //
   // The cluster is the demanding case: ClusterBackup is a wrapper with no
   // scalars and no page of its own, and its GRANDchildren are the edit targets.
-  // The page declares `backup` editable; everything below that is containment.
+  // The page declares `backup` editable; everything below that is ownership.
   await page.goto('/clusters?open=' + encodeURIComponent('colo:dev-main'));
   await openAllDetailPanels(page);
 

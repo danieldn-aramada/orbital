@@ -66,7 +66,13 @@ func Map(fsys fs.FS) map[string]*template.Template {
 		"datacenter": parsePage(fsys, "datacenter", page("templates/orb/pages/datacenter.gohtml")),
 		// The SAME two templates orbital uses. Orb renders them read-only —
 		// the editor is gated on CanMutate, which orb never sets.
-		"generic-list": parsePage(fsys, "generic-list", page("templates/shared/pages/generic-list.gohtml")),
+		// The create modal is parsed here too even though orb never renders it —
+		// orb has no mutation controls, so Generic.Create is always nil. The
+		// template must still be in the parse set, because generic-list.gohtml
+		// references it and an unparsed {{template}} is an execute-time error.
+		"generic-list": parsePage(fsys, "generic-list", append(
+			page("templates/shared/pages/generic-list.gohtml"),
+			"templates/shared/components/create-modal.gohtml")),
 		// edit-modal is parsed even though orb NEVER renders it — orb sets no
 		// can_mutate, so that branch cannot be taken.
 		//

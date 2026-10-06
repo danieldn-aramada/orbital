@@ -162,26 +162,6 @@ func (h *GraphQL) currentViewsHash(ctx context.Context) string {
 	return h.sharedFields.CurrentViewsHash(ctx)
 }
 
-// beforeSelection builds the audit before-fetch for a type: its own editable
-// fields plus those of every member its page writes.
-//
-// With no views provider the child half is empty and the event still records
-// the root's own changes — degraded, never absent. An audit event with no
-// `changes` at all is the quietest failure in this codebase, so the root half
-// must not depend on anything optional.
-func (h *GraphQL) beforeSelection(resourceType string) string {
-	members := func(string) []configitems.EditableMember { return nil }
-	if h.views != nil {
-		if vs, err := h.views(context.Background()); err == nil {
-			members = func(t string) []configitems.EditableMember { return vs.Of(t).EditableMembers() }
-		} else {
-			h.logger.Warn("audit before-fetch: cannot resolve views, so owned children are not captured",
-				"type", resourceType, "err", err)
-		}
-	}
-	return configitems.BeforeSelection(resourceType, h.fields, members)
-}
-
 // DGraphURL exposes the configured DGraph endpoint for adjacent handlers that
 // need to issue point-in-time reads (e.g. the divergence Accept handler's MVCC
 // re-fetch). Avoids passing the URL string around redundantly.
@@ -1081,7 +1061,7 @@ func (h *GraphQL) fetchBeforeByID(getter, resourceType, id string) (map[string]a
 	// before-fetch and the editable set cannot disagree. Hand-maintaining them
 	// side by side was a Hi-severity debt row: drop a field from one and the
 	// mutation still succeeds while the audit event carries no `changes` at all.
-	fields := h.beforeSelection(resourceType)
+	fields := configitems.BeforeSelection(resourceType, h.fields)
 	if fields == "" {
 		fields = "id orbId name version"
 	}
@@ -1098,7 +1078,7 @@ func (h *GraphQL) fetchBeforeByOrbID(querier, resourceType, orbID string) (map[s
 	// before-fetch and the editable set cannot disagree. Hand-maintaining them
 	// side by side was a Hi-severity debt row: drop a field from one and the
 	// mutation still succeeds while the audit event carries no `changes` at all.
-	fields := h.beforeSelection(resourceType)
+	fields := configitems.BeforeSelection(resourceType, h.fields)
 	if fields == "" {
 		fields = "id orbId name version"
 	}

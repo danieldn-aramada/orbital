@@ -360,7 +360,7 @@ These steps have been completed. Detailed definitions are preserved for historic
 
 ### T.11 -- Fix test quality issues (Sonnet, ~1 session)
 
-Clean up structural issues found in the Opus review. Small, self-contained fixes.
+Clean up structural issues found in the Opus review. Small, self-owned fixes.
 
 **Tasks:**
 - Delete `TestTempCleanup` from `handler/export_test.go` -- it tests a stdlib guarantee (`t.TempDir()` cleanup) and verifies nothing about orbital.

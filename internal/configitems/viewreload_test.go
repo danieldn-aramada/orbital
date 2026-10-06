@@ -77,9 +77,9 @@ func TestResolver_ViewsFileChangeRederivesWithoutRestart(t *testing.T) {
 // model: editability is a choice a view makes about a member, not a property of
 // the edge. A rack page SHOWS its servers and does not claim the right to edit
 // them; the same edge on a different page could.
-func TestEditTargets_OnlyEditableMembersAreWritable(t *testing.T) {
+func TestEditTargets_OnlyEditorMembersAreWritable(t *testing.T) {
 	views := ViewSet{
-		{Type: "Server", Contains: []EditableMember{
+		{Type: "Server", Dependents: []OwnedMember{
 			{ChildType: "IdracSettings", ChildField: "idracSettings", ParentEdge: "server"},
 			{ChildType: "ServerMaintenance", ChildField: "serverMaintenance", ParentEdge: "server"},
 			{ChildType: "StorageDevice", ChildField: "storageDevices", IsList: true},
@@ -109,7 +109,7 @@ func TestEditTargets_OnlyEditableMembersAreWritable(t *testing.T) {
 		return TypeInfo{OrbIDSuffix: map[string]string{"IdracSettings": "idrac"}[typeName]}
 	}
 
-	got := BuildEditTargets(views, fields, meta, "Server", "colo:server-A", "colo", "A")
+	got := BuildEditTargets(views, fields, meta, "Server", "colo:server-A", "colo", "A", nil)
 
 	writable := map[string]bool{}
 	for _, tgt := range got {
@@ -151,7 +151,7 @@ func TestOrbIDDerivation_FromSchemaNotFromViewConfig(t *testing.T) {
 	}
 	idracTarget := func(views ViewSet) EditTarget {
 		t.Helper()
-		for _, tgt := range BuildEditTargets(views, fields, meta, "Server", "colo:server-A", "colo", "A") {
+		for _, tgt := range BuildEditTargets(views, fields, meta, "Server", "colo:server-A", "colo", "A", nil) {
 			if tgt.Kind == "IdracSettings" {
 				return tgt
 			}
@@ -160,9 +160,9 @@ func TestOrbIDDerivation_FromSchemaNotFromViewConfig(t *testing.T) {
 		return EditTarget{}
 	}
 
-	contains := []EditableMember{{ChildType: "IdracSettings", ChildField: "idracSettings", ParentEdge: "server"}}
+	contains := []OwnedMember{{ChildType: "IdracSettings", ChildField: "idracSettings", ParentEdge: "server"}}
 	base := ViewSet{
-		{Type: "Server", Contains: contains, Tabs: []ViewTab{
+		{Type: "Server", Dependents: contains, Tabs: []ViewTab{
 			{Field: "idracSettings", Type: "IdracSettings", Editable: true}}},
 		{Type: "IdracSettings"},
 	}
@@ -179,7 +179,7 @@ func TestOrbIDDerivation_FromSchemaNotFromViewConfig(t *testing.T) {
 	// Re-lay out the page: another member before it, a different field order,
 	// the whole view rebuilt. Identity must not notice.
 	relaid := ViewSet{
-		{Type: "Server", Contains: append([]EditableMember{
+		{Type: "Server", Dependents: append([]OwnedMember{
 			{ChildType: "ServerMaintenance", ChildField: "serverMaintenance", ParentEdge: "server"}},
 			contains...), Tabs: []ViewTab{
 			{Field: "serverMaintenance", Type: "ServerMaintenance", Editable: true},
@@ -210,18 +210,18 @@ func kinds(targets []EditTarget) []string {
 }
 
 // A wrapper two hops down has no page, so the page's declaration cannot gate it
-// — containment does.
+// — ownership does.
 //
 // This is a regression test with a name: reading `editable:` at EVERY level
 // emptied the cluster editor. ClusterBackup has no page, so it declared no
 // members; the edit DATA tree still carried `backup.etcd` because that tree
-// follows containment, and the TARGET list did not. The editor rendered an etcd
+// follows ownership, and the TARGET list did not. The editor rendered an etcd
 // schedule, accepted a change, and wrote nothing — no error, no audit row, no
 // trace. The page gates the top level; below it, the unit is the unit.
-func TestEditTargets_WrapperDescentFollowsContainmentNotThePage(t *testing.T) {
+func TestEditTargets_WrapperDescentFollowsOwnershipNotThePage(t *testing.T) {
 	views := ViewSet{
 		{Type: "EksaKubernetesCluster",
-			Contains: []EditableMember{
+			Dependents: []OwnedMember{
 				{ChildType: "ClusterBackup", ChildField: "backup", ParentEdge: "cluster"},
 				{ChildType: "KubernetesNode", ChildField: "nodes", ParentEdge: "cluster", IsList: true},
 			},
@@ -231,8 +231,8 @@ func TestEditTargets_WrapperDescentFollowsContainmentNotThePage(t *testing.T) {
 				{Field: "backup", Type: "ClusterBackup", Editable: true},
 				{Field: "nodes", Type: "KubernetesNode", IsList: true},
 			}},
-		// Pageless, therefore tab-less. Its children are contained all the same.
-		{Type: "ClusterBackup", Contains: []EditableMember{
+		// Pageless, therefore tab-less. Its children are owned all the same.
+		{Type: "ClusterBackup", Dependents: []OwnedMember{
 			{ChildType: "EtcdBackup", ChildField: "etcd", ParentEdge: "clusterBackupEtcd"},
 			{ChildType: "S3Sync", ChildField: "s3Sync", ParentEdge: "clusterBackupS3Sync"},
 		}},
@@ -252,7 +252,7 @@ func TestEditTargets_WrapperDescentFollowsContainmentNotThePage(t *testing.T) {
 		}[typeName]}
 	}
 
-	got := BuildEditTargets(views, fields, meta, "EksaKubernetesCluster", "colo:dev-main", "colo", "dev-main")
+	got := BuildEditTargets(views, fields, meta, "EksaKubernetesCluster", "colo:dev-main", "colo", "dev-main", nil)
 
 	byKind := map[string]EditTarget{}
 	for _, tgt := range got {
@@ -261,7 +261,7 @@ func TestEditTargets_WrapperDescentFollowsContainmentNotThePage(t *testing.T) {
 	for _, want := range []string{"EtcdBackup", "S3Sync"} {
 		tgt, ok := byKind[want]
 		if !ok {
-			t.Fatalf("%s must be a target: it is contained by a wrapper the page declared editable; got %v", want, kinds(got))
+			t.Fatalf("%s must be a target: it is owned by a wrapper the page declared editable; got %v", want, kinds(got))
 		}
 		if strings.Join(tgt.Path, ".") != "backup."+map[string]string{"EtcdBackup": "etcd", "S3Sync": "s3Sync"}[want] {
 			t.Errorf("%s path = %v, want the two-segment path the edit tree nests at", want, tgt.Path)
@@ -273,11 +273,11 @@ func TestEditTargets_WrapperDescentFollowsContainmentNotThePage(t *testing.T) {
 	if _, ok := byKind["ClusterBackup"]; ok {
 		t.Error("a wrapper is a path segment, not a target — it has no editable fields to write")
 	}
-	// The TOP level is still the page's call. `nodes` is contained and would be
-	// reachable under containment alone; the page does not declare it editable,
+	// The TOP level is still the page's call. `nodes` is owned and would be
+	// reachable under ownership alone; the page does not declare it editable,
 	// so it must not be writable from here.
 	if _, ok := byKind["KubernetesNode"]; ok {
-		t.Error("containment governs BELOW the page's declaration, never at it — " +
+		t.Error("ownership governs BELOW the page's declaration, never at it — " +
 			"an undeclared top-level member must stay unwritable")
 	}
 }

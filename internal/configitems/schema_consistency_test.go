@@ -135,7 +135,7 @@ var fieldTargets map[string]string
 var schemaImplements map[string][]string
 
 // nonNullFields records "Type.field" -> whether the field is non-null, which is
-// where containment comes from.
+// where ownership comes from.
 var nonNullFields map[string]bool
 
 // parseSchemaTypes returns type/interface name -> set of field names, and the
@@ -183,16 +183,16 @@ func parseSchemaTypes(src string) (map[string]map[string]bool, map[string]bool) 
 	return fields, implCI
 }
 
-// Containment DERIVES from the schema: every non-null back-edge must produce a
+// Ownership DERIVES from the schema: every non-null back-edge must produce a
 // Contains entry on its parent, and the one type that cannot must be declared.
 //
 // This replaced a gate that forced the CONFIG to declare what the schema already
 // required. Derivation makes that unnecessary — a non-null back-edge is now the
-// containment statement itself — so what is left to check is that the derivation
+// ownership statement itself — so what is left to check is that the derivation
 // actually covers them. A gap here is an orphan behind a dangling non-null edge:
 // DGraph propagates the missing field to the ROOT of any query selecting it, and
 // DGRAPH.md records one such delete breaking export for a whole data centre.
-func TestContainment_CoversEveryNonNullBackEdge(t *testing.T) {
+func TestOwnership_CoversEveryNonNullBackEdge(t *testing.T) {
 	src, err := os.ReadFile("../../schema/schema.graphql")
 	if err != nil {
 		t.Fatalf("read schema: %v", err)
@@ -208,7 +208,7 @@ func TestContainment_CoversEveryNonNullBackEdge(t *testing.T) {
 			continue
 		}
 		found := false
-		for _, c := range containedChildren(types, cfg, e.Parent) {
+		for _, c := range dependentsOf(types, cfg, e.Parent) {
 			if c.ChildType == e.Child {
 				found = true
 			}
@@ -220,13 +220,13 @@ func TestContainment_CoversEveryNonNullBackEdge(t *testing.T) {
 	}
 
 	// The declared exception, which nullability cannot express.
-	if len(cfg.Containment["NetworkInterface"]) == 0 {
+	if len(cfg.OwnerReferences["NetworkInterface"]) == 0 {
 		t.Error("NetworkInterface's owner is an XOR across three nullable edges; without a " +
-			"containment: entry a server delete leaves its NICs behind")
+			"ownerReferences: entry a server delete leaves its NICs behind")
 	}
 }
 
-// typesFromSDL builds the minimal TypeInfo containment needs — field names,
+// typesFromSDL builds the minimal TypeInfo ownership needs — field names,
 // their targets and their nullability — without a running DGraph, so this stays
 // in `make test-unit`.
 func typesFromSDL(src string) map[string]TypeInfo {
@@ -244,4 +244,158 @@ func typesFromSDL(src string) map[string]TypeInfo {
 		out[typeName] = info
 	}
 	return out
+}
+
+// Every ConfigItem type must DECLARE its orbId shape.
+//
+// This is the "you forgot Foo" guard, and it is a build-time test rather than a
+// runtime warning on purpose: adding a type without a pattern goes red in
+// `make test-unit` before it is ever applied to a graph, where a log line would
+// have been missed. It reads the file, not a deployed schema, so it needs no
+// services — same contract as TestSchemaMatchesViews above.
+//
+// `orbIdPattern: external` satisfies it for a type whose id is assigned
+// elsewhere. The opt-out is explicit and greppable precisely so that forgetting
+// and deciding look different in review.
+func TestEveryConfigItem_DeclaresAnOrbIdPattern(t *testing.T) {
+	src, err := os.ReadFile("../../schema/schema.graphql")
+	if err != nil {
+		t.Fatalf("read schema: %v", err)
+	}
+	lines := strings.Split(string(src), "\n")
+	typeRe := regexp.MustCompile(`^type\s+(\w+)\s+implements\s+([^{]*)\{`)
+
+	var missing []string
+	seen := 0
+	for i, line := range lines {
+		m := typeRe.FindStringSubmatch(line)
+		if m == nil || !strings.Contains(m[2], "ConfigItem") {
+			continue
+		}
+		seen++
+		if !strings.Contains(docstringAbove(lines, i), OrbIDPatternAnnotation) {
+			missing = append(missing, m[1])
+		}
+	}
+	if seen == 0 {
+		t.Fatal("parsed no ConfigItem types — the parser, not the schema, is wrong")
+	}
+	if len(missing) > 0 {
+		t.Errorf("these ConfigItem types declare no %s — add one naming the natural key, "+
+			"or `%s %s` if the id is assigned outside orbital: %s",
+			OrbIDPatternAnnotation, OrbIDPatternAnnotation, OrbIDPatternExternal, strings.Join(missing, ", "))
+	}
+}
+
+// Each shipped pattern must PARSE and reference only fields the schema has.
+// A pattern is identity: one that cannot resolve builds nothing, and silently
+// falls through to the next alternative or fails construction entirely.
+func TestShippedOrbIdPatterns_ParseAndResolve(t *testing.T) {
+	src, err := os.ReadFile("../../schema/schema.graphql")
+	if err != nil {
+		t.Fatalf("read schema: %v", err)
+	}
+	fields, implCI := parseSchemaTypes(string(src))
+	lines := strings.Split(string(src), "\n")
+	typeRe := regexp.MustCompile(`^type\s+(\w+)\s+implements\s+([^{]*)\{`)
+
+	for i, line := range lines {
+		m := typeRe.FindStringSubmatch(line)
+		if m == nil || !implCI[m[1]] {
+			continue
+		}
+		typeName := m[1]
+		for _, raw := range annotationValues(docstringAbove(lines, i), OrbIDPatternAnnotation) {
+			p, err := ParseOrbIDPattern(raw)
+			if err != nil {
+				t.Errorf("%s: orbIdPattern %q does not parse: %v", typeName, raw, err)
+				continue
+			}
+			if p.External {
+				continue
+			}
+			for _, path := range p.Paths() {
+				if path == "kind" {
+					continue
+				}
+				if !resolvesFrom(typeName, path, fields) {
+					t.Errorf("%s: orbIdPattern %q references %q, which the schema cannot resolve",
+						typeName, raw, path)
+				}
+			}
+		}
+	}
+}
+
+// resolvesFrom walks a dotted placeholder path from a starting type, hopping
+// through fieldTargets at each edge. Inherited interface fields count: DGraph
+// forbids redeclaring one on an implementor, so `name` lives only on ConfigItem.
+func resolvesFrom(typeName, path string, fields map[string]map[string]bool) bool {
+	cur := typeName
+	for _, seg := range strings.Split(path, ".") {
+		if !hasFieldOrInherited(cur, seg, fields) {
+			return false
+		}
+		next, ok := fieldTargets[cur+"."+seg]
+		if !ok {
+			for _, in := range schemaImplements[cur] {
+				if n, ok2 := fieldTargets[in+"."+seg]; ok2 {
+					next, ok = n, true
+					break
+				}
+			}
+		}
+		cur = next
+	}
+	return true
+}
+
+func hasFieldOrInherited(typeName, field string, fields map[string]map[string]bool) bool {
+	if fs, ok := fields[typeName]; ok && fs[field] {
+		return true
+	}
+	for _, in := range schemaImplements[typeName] {
+		if fs, ok := fields[in]; ok && fs[field] {
+			return true
+		}
+	}
+	// An INTERFACE-typed edge resolves through its implementors. ClusterBackup
+	// points at `KubernetesCluster`, which is an interface that does NOT itself
+	// implement ConfigItem — so `name` exists only on EksaKubernetesCluster,
+	// and that is the node actually stored. Without this hop every
+	// cluster-derived pattern reads as unresolvable while working fine.
+	for impl, ifaces := range schemaImplements {
+		for _, in := range ifaces {
+			if in != typeName {
+				continue
+			}
+			if hasFieldOrInherited(impl, field, fields) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// docstringAbove returns the """...""" block immediately preceding line i, or
+// "". Adjacency is the rule: a docstring separated from its type by anything
+// else is not that type's docstring, and GraphQL agrees.
+func docstringAbove(lines []string, i int) string {
+	if i == 0 {
+		return ""
+	}
+	end := i - 1
+	if strings.TrimSpace(lines[end]) == "" || !strings.HasSuffix(strings.TrimSpace(lines[end]), `"""`) {
+		return ""
+	}
+	// Single-line form: """...""" on one line.
+	if t := strings.TrimSpace(lines[end]); strings.HasPrefix(t, `"""`) && len(t) > 6 {
+		return strings.TrimSuffix(strings.TrimPrefix(t, `"""`), `"""`)
+	}
+	for start := end - 1; start >= 0; start-- {
+		if strings.TrimSpace(lines[start]) == `"""` {
+			return strings.Join(lines[start+1:end], "\n")
+		}
+	}
+	return ""
 }

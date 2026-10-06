@@ -102,7 +102,7 @@ func TestEventList_EmptyDB(t *testing.T) {
 }
 
 // TestEventList_OperationNameFilter pins the operation_name filter (JSONB
-// array-membership). The regression class is the containment predicate: it must
+// array-membership). The regression class is the ownership predicate: it must
 // match an event whose `operations` array *contains* the value — including
 // compound multi-op events — and exclude events that don't. A broken predicate
 // 500s or returns the wrong set; neither is visible without a real Postgres.

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -23,7 +24,7 @@ func TestGenericDetailQuerySelectsMetaFields(t *testing.T) {
 		Display: []string{"name", "uHeight"},
 		Meta:    []string{"namespace", "orbId", "version", "createdAt"},
 	}
-	q := genericDetailQuery(v, func(string) configitems.View { return configitems.View{} }, func(string) []string { return nil }, func(string) []configitems.ViewRefColumn { return nil }, "colo:rack-1")
+	q := genericDetailQuery(v, func(string) configitems.View { return configitems.View{} }, func(string) []string { return nil }, func(string) []configitems.ViewRefColumn { return nil }, func(string) string { return "" }, "colo:rack-1")
 
 	for _, f := range []string{"namespace", "orbId", "version", "createdAt", "uHeight"} {
 		if !strings.Contains(q, f) {
@@ -40,46 +41,6 @@ func TestGenericDetailQuerySelectsMetaFields(t *testing.T) {
 	}
 }
 
-// TestOwnedSubtreeOrbIDs covers the CSV the audit panel queries with.
-//
-// Regression class: an owned child missing from the list means a change to it
-// records the CHILD's orbId, the panel asks only about the parent, and the page
-// reports "no changes" while something is in flight. Silent, and exactly the
-// question the panel exists to answer.
-func TestOwnedSubtreeOrbIDs(t *testing.T) {
-	// Server → IdracSettings is a real editable member of the Server view, so
-	// this exercises the shape the page actually resolves.
-	entity := map[string]any{
-		"orbId":         "colo:server-ABC",
-		"idracSettings": map[string]any{"orbId": "colo:idrac-settings-ABC"},
-	}
-	got := ownedSubtreeOrbIDs(fixtureViewSet(), "colo:server-ABC", "Server", entity)
-	if len(got) == 0 || got[0] != "colo:server-ABC" {
-		t.Fatalf("root orbId must come first, got %v", got)
-	}
-	if len(got) != 2 || got[1] != "colo:idrac-settings-ABC" {
-		t.Fatalf("owned child missing from the subtree: got %v", got)
-	}
-
-	// A child the query did not return must not be claimed.
-	bare := ownedSubtreeOrbIDs(fixtureViewSet(), "colo:server-ABC", "Server", map[string]any{"orbId": "colo:server-ABC"})
-	if len(bare) != 1 {
-		t.Errorf("with no children fetched, want just the root, got %v", bare)
-	}
-
-	// An unknown type is not an error — it owns nothing.
-	unknown := ownedSubtreeOrbIDs(fixtureViewSet(), "x:1", "NoSuchType", map[string]any{"orbId": "x:1"})
-	if len(unknown) != 1 || unknown[0] != "x:1" {
-		t.Errorf("unknown type: want [x:1], got %v", unknown)
-	}
-}
-
-// TestHumanFieldLabel covers the camelCase → heading conversion.
-//
-// Regression class: acronyms. The naive "space before every capital" rule
-// rendered `tinkerbellIP` as "Tinkerbell I P", which reads as a typo on a page
-// an operator is meant to trust. Pure function, and the acronym cases ARE the
-// regression class.
 func TestHumanFieldLabel(t *testing.T) {
 	tests := []struct{ field, want string }{
 		{"name", "Name"},
@@ -180,7 +141,7 @@ func TestGenericDetailQuery_InterfaceTypedRelationship(t *testing.T) {
 		return configitems.View{Type: name}
 	}
 	q := genericDetailQuery(node, viewOf, func(string) []string { return nil },
-		func(string) []configitems.ViewRefColumn { return nil }, "ns:node-1")
+		func(string) []configitems.ViewRefColumn { return nil }, func(string) string { return "" }, "ns:node-1")
 
 	if !strings.Contains(q, "cluster { __typename ... on ConfigItem { orbId name }") {
 		t.Errorf("an interface-typed relationship must select identity through ConfigItem: %s", q)
@@ -244,26 +205,26 @@ func TestWithoutBackReferences(t *testing.T) {
 	})
 }
 
-// TestTableColumns_ExcludesDetailOnly covers keeping declared fields out of
+// TestTableColumns_ExcludesTableHidden covers keeping declared fields out of
 // tables.
 //
-// Regression class: a `detailOnly` field back in a list column. It is silent —
+// Regression class: a `tableHidden` field back in a list column. It is silent —
 // the page renders, nothing errors — and it destroys the table: one data
 // centre's assetDataV2 is ~600 characters of JSON in a single cell, which
 // shoves every other column off the screen. Exactly what /data-centers did.
 //
-// Keyed on DetailOnly, never on JSONString: placement is declared, not inferred
+// Keyed on TableHidden, never on JSONString: placement is declared, not inferred
 // from what a field holds. Conflating them made "show this JSON as a column"
 // unexpressible and forced a Go change to hide it.
-func TestTableColumns_ExcludesDetailOnly(t *testing.T) {
+func TestTableColumns_ExcludesTableHidden(t *testing.T) {
 	v := configitems.View{
-		Display:    []string{"assetDataV2", "model", "name"},
-		DetailOnly: []string{"assetDataV2"},
+		Display:     []string{"assetDataV2", "model", "name"},
+		TableHidden: []string{"assetDataV2"},
 	}
 	got := v.ColumnFields()
 	for _, f := range got {
 		if f == "assetDataV2" {
-			t.Fatalf("a detailOnly field must not be a table column: %v", got)
+			t.Fatalf("a tableHidden field must not be a table column: %v", got)
 		}
 	}
 	if len(got) != 2 || got[0] != "model" || got[1] != "name" {
@@ -490,5 +451,67 @@ func TestColumnValue(t *testing.T) {
 	bare := map[string]any{"orbId": "colo:server-Y"}
 	if got := columnValue(bare, configitems.ViewColumn{Path: "kubernetesNode.role"}); got != nil {
 		t.Errorf("an absent relationship must yield nil, got %v", got)
+	}
+}
+
+// One type, one orbId pattern — a type declaring several gets no create form.
+//
+// More than one means the identity depends on WHICH owner the node has
+// (NetworkInterface takes its id from a server's serviceTag or a switch's
+// serial), and a form cannot know which was meant. Guessing mints an id under
+// the wrong pattern, and a wrong orbId is permanent — `debt.md` rates re-keying
+// Hi severity. It also keeps the "first pattern whose placeholders resolve" rule
+// in ONE place, Go's ConstructOrbID, rather than reimplemented in JS where the
+// two would drift.
+func TestBuildCreateForm_AmbiguousIdentityOffersNoForm(t *testing.T) {
+	// The fixture deliberately HAS a required relationship, so the form gets
+	// past the namespace check. Without one every case returns nil for that
+	// reason instead, and the test passes no matter what the pattern count does
+	// — which is exactly what it did before a mutation check caught it.
+	info := configitems.TypeInfo{Fields: []configitems.DerivedField{
+		{Name: "name", Editable: true, Kind: "SCALAR"},
+		{Name: "serviceTag", Editable: true, Kind: "SCALAR"},
+		{Name: "dataCenter", Kind: "OBJECT", TypeName: "DataCenter", NonNull: true},
+	}}
+	meta := func(string) configitems.TypeInfo { return info }
+	labels := func(string) func(string) string { return func(f string) string { return f } }
+
+	one, err := configitems.ParseOrbIDPattern("{kind}-{serviceTag}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	two, err := configitems.ParseOrbIDPattern("{kind}-{networkDevice.serial}-{name}")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	base := configitems.View{Type: "Thing", Slug: "things", OrbIDKind: "thing", Fields: []string{"serviceTag"}}
+	byType := map[string]configitems.View{"Thing": base, "DataCenter": {Type: "DataCenter"}}
+
+	// The CONTROL. One pattern gets a form — it cannot reach DGraph for the
+	// picker options, so it reports that instead, which is a different refusal
+	// and proves the fixture is otherwise complete.
+	single := base
+	single.OrbIDPattern = []configitems.OrbIDPattern{one}
+	got := buildCreateForm(context.Background(), "http://127.0.0.1:1/unreachable", single, byType, labels, meta)
+	if got == nil {
+		t.Fatal("precondition: a single-pattern type with a required relationship must produce a form")
+	}
+	if got.Unavailable == "" {
+		t.Error("precondition: the picker could not be loaded, so the form must say so")
+	}
+
+	// Two patterns: the identity depends on which owner the node has, and a
+	// form cannot know. No form at all, rather than an id under the wrong one.
+	ambiguous := base
+	ambiguous.OrbIDPattern = []configitems.OrbIDPattern{one, two}
+	if f := buildCreateForm(context.Background(), "http://127.0.0.1:1/unreachable", ambiguous, byType, labels, meta); f != nil {
+		t.Error("a type with TWO patterns must offer no create form; got one")
+	}
+
+	// No pattern: orbital does not mint this type's ids and must not invent one.
+	none := base
+	if f := buildCreateForm(context.Background(), "http://127.0.0.1:1/unreachable", none, byType, labels, meta); f != nil {
+		t.Error("a type with NO pattern must offer no create form")
 	}
 }

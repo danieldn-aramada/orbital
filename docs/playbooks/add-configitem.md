@@ -28,12 +28,12 @@ type MyNewKind implements ConfigItem {
     rawPayload: String       # declared String, holds a JSON document
 
     # Parent back-ref. NON-NULL if this child has no existence without its
-    # parent — that is how containment is declared, and the only way.
+    # parent — that is how ownership is declared, and the only way.
     clusterBackupMyNewKind: ClusterBackup! @hasInverse(field: myNewKind)
 }
 ```
 
-**Non-null back-edge = CONTAINED.** It is the whole declaration: the child is
+**Non-null back-edge = OWNED.** It is the whole declaration: the child is
 fetched with the parent, rolled up onto the parent's audit tab, reachable by the
 parent's editor, and **deleted with it**. Make the edge **nullable** to opt out —
 that is a schema decision, not a view one (`ServerConfigurationProfile.server`
@@ -48,15 +48,37 @@ Bump `schema/VERSION` if this is a deployment-time schema change, and remember
 the schema only takes effect once it is APPLIED to DGraph — orbital never applies
 it on startup.
 
-**Define the `orbId` convention** — `<namespace>:<kind>-<natural-key>`, never a
-UUID. Add a row to the per-type table in `docs/reference/DGRAPH.md`.
+**Declare the `orbId` shape** — `<namespace>:<kind>-<natural-key>`, never a UUID:
 
-**TWO annotations exist, and both are about data or identity:**
+```graphql
+"""orbIdPattern: {kind}-{serialNumber}"""
+type MyNewKind implements ConfigItem {
+```
+
+**This is REQUIRED. `make test-unit` fails without it**, naming your type —
+there is no default, because there is no safe guess at a natural key (`Server`
+has a `name` and it is not identity) and a wrong one corrupts the graph
+silently. `orbIdPattern: external` opts out when the id is assigned outside
+orbital; it is explicit so that forgetting and deciding look different in review.
+
+**THREE annotations exist, and all are about data or identity:**
 
 | Annotation | Scope | Meaning |
 |---|---|---|
 | `jsonString` | field | this String CONTAINS a JSON document |
 | `orbIdSuffix: mynew` | type | the token a derived child orbId ends with (default: lower-cased type name) |
+| `orbIdPattern: {kind}-{key}` | type | **required** — the orbId's shape |
+
+`orbIdPattern:` placeholders: `{field}` a scalar on this type, `{edge.field}`
+across a relationship (any depth — `{storageController.server.serviceTag}` is
+real), `{kind}` the kind token (`orbIdSuffix:` if annotated, else the KEBAB type
+name — `network-device`, not `networkdevice`).
+
+**Repeat the line for a type with several possible owners.** First pattern whose
+placeholders all resolve wins — this is how `NetworkInterface` says "a server
+NIC's id comes from the SERVER, a switch port's from the DEVICE", which the
+single-valued `derivesIdFrom:` could not and which is why that annotation was
+deleted.
 
 ⚠️ **One description block per declaration.** Two `"""…"""` in a row is a GraphQL
 syntax error DGraph refuses; put several annotations on separate lines inside one
@@ -100,7 +122,7 @@ types:
     order: [name, enabled]                 # partial order; rest alphabetical
     fields:
       scannedAt: { editable: false }       # a scanned fact a human must not type
-      rawPayload: { detailOnly: true }     # a document: never a table column
+      rawPayload: { tableHidden: true }     # a document: never a table column
 ```
 
 Scalars are **subtractive** — every scalar renders unless something removes it,
@@ -117,7 +139,7 @@ pages:
 ```
 
 `editable: true` means **only** "this page's editor may write it". It gates the
-TOP level; below that, containment governs — which is why a cluster's etcd
+TOP level; below that, ownership governs — which is why a cluster's etcd
 schedule is editable even though `ClusterBackup` has no page of its own.
 ⚠️ **A LIST cannot be editable** (an edit target is addressed by path, and a path
 cannot name one row). Declaring it is refused at load with a logged reason, and
@@ -133,10 +155,10 @@ canonicalParent:
 ```
 
 **For an XOR parent** — a child that belongs to A *or* B *or* C, so every edge
-must be nullable and none can carry the containment statement — declare it:
+must be nullable and none can carry the ownership statement — declare it:
 
 ```yaml
-containment:
+ownerReferences:
   MyNewKind: [adapterEdge, serverEdge, deviceEdge]
 ```
 
@@ -194,11 +216,11 @@ In the browser:
 | audit row missing | the type is not in the deployed schema — apply it |
 | audit row with no diff | the field is `editable: false`, so it is not in the before-fetch |
 | not in the editor | the parent's tab is missing `editable: true`, or the edge is nullable so nothing contains it |
-| its own children not in the editor | their back-edges are nullable — containment stops there |
+| its own children not in the editor | their back-edges are nullable — ownership stops there |
 | not on the page at all | no tab on the parent's page, or the schema was never applied |
 | its rows don't link | it has no `pages:` entry — that is the dead-row rule, and it is correct |
 | `editable` ignored on a tab | it is a LIST; check the boot log for the refusal |
-| deleted with its parent unexpectedly | its back-edge is non-null — that IS the containment declaration |
+| deleted with its parent unexpectedly | its back-edge is non-null — that IS the ownership declaration |
 | child orbId looks wrong | `orbIdSuffix:` missing from the schema |
 
 ---
@@ -210,4 +232,4 @@ In the browser:
 - `docs/reference/AUDIT.md` — audit pipeline architecture
 - `config/views.yaml` — the shipped config, with the format documented at the top
 - `internal/configitems/viewconfig.go` — the format's Go definition and its rules
-- `internal/handler/delete_cascade.go` — how containment becomes a delete
+- `internal/handler/delete_cascade.go` — how ownership becomes a delete

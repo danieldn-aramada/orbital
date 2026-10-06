@@ -8,9 +8,9 @@
 //
 // A hand-maintained Go registry: per-type editable field lists, before-fetch
 // selections, payload fields, interface lists, the set of type names, and
-// containment — which edges are a page's edit unit and which parent a
+// ownership — which edges are a page's edit unit and which parent a
 // multi-parent node calls home. All of it has left. Field metadata and the type
-// set are read from the DEPLOYED schema; containment is declared in the views
+// set are read from the DEPLOYED schema; ownership is declared in the views
 // config, because every consumer of it was a view (what the editor groups into
 // one tree, what the audit tab rolls up, what a reviewer is deemed to have
 // looked at) and none of it ever reached the data.
@@ -27,6 +27,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -96,23 +97,27 @@ type ViewConfig struct {
 	// schema's interfaces, so an implementation declares only what it changes.
 	Types map[string]TypeDecl `yaml:"types,omitempty"`
 
-	// Containment names the ordered candidate owners of a type whose ownership
+	// Ownership names the ordered candidate owners of a type whose ownership
 	// the SCHEMA cannot express.
 	//
-	// Containment is otherwise DERIVED: a child whose back-edge to a parent is
+	// Ownership is otherwise DERIVED: a child whose back-edge to a parent is
 	// non-null cannot outlive it. One type defeats that — NetworkInterface is
 	// owned by exactly one of {server, networkDevice, networkAdapter}, an XOR
 	// that no single edge can declare non-null.
 	//
-	// It carries TWO jobs: what dies with the parent, and which edge a
-	// first-time create links through. The second used to come from
-	// `derivesIdFrom:`, which is single-valued and therefore wrong for a type
-	// with three candidate parents.
+	// ONE job: what dies with the parent (and, falling out of the same answer,
+	// which edge a child links back through).
+	//
+	// ⚠️ NOT identity. That is `orbIdPattern` in the SCHEMA, where it belongs —
+	// a views overlay is per-deployment, and a key declared there would let one
+	// deployment mint ids another cannot derive for the same data. The two lists
+	// differ in content, not just in home: a NetworkInterface is owned by
+	// its networkAdapter and named after its server or its device.
 	//
 	// Ordered, most-specific first; the first edge a node actually has is its
 	// owner. Never a map — Go map iteration is randomised, and this decides a
 	// delete.
-	Containment map[string][]string `yaml:"containment,omitempty"`
+	OwnerReferences map[string][]string `yaml:"ownerReferences,omitempty"`
 
 	// CanonicalParent answers the INVERSE question to a page: a page is indexed
 	// by root ("what does the Server page show?"), this is indexed by child
@@ -199,6 +204,14 @@ type TypeDecl struct {
 	// entity whose page you are on is dropped automatically.
 	RefColumns []string `yaml:"refColumns,omitempty"`
 
+	// NO naturalKey here, deliberately. A type's orbId shape is declared in the
+	// SCHEMA as `"""orbIdPattern: ..."""`, because identity is not a view
+	// decision: a views overlay is per-deployment, so a key declared here would
+	// let one deployment mint ids in a shape another cannot derive, for the same
+	// data. It also could not express the shapes actually stored — a fixed
+	// `<ns>:<kebab-type>-<values>` cannot say `<ns>:<serviceTag>-idrac`, nor
+	// name one of several possible owners. See DGRAPH.md § orbId convention.
+
 	// Fields configures this type's own scalars.
 	Fields map[string]FieldDecl `yaml:"fields,omitempty"`
 }
@@ -213,14 +226,14 @@ type MemberDecl struct {
 
 	// Editable means THE EDITOR WRITES THIS, and nothing else.
 	//
-	// It used to also carry containment — what dies with the parent and what the
+	// It used to also carry ownership — what dies with the parent and what the
 	// audit tab rolls up — which put `editable: true` on lists the editor has
-	// never been able to edit. Containment is derived from the schema now.
+	// never been able to edit. Ownership is derived from the schema now.
 	//
 	// Kept rather than derived because it expresses something underivable: a
 	// rack page shows its servers and may choose not to let you edit them from
 	// there. No page wants that today, so the flag is currently redundant with
-	// "a contained single that has editable fields".
+	// "a owned single that has editable fields".
 	Editable bool `yaml:"editable,omitempty"`
 }
 
@@ -253,10 +266,10 @@ type FieldDecl struct {
 	// `oobIP` → "Oob IP").
 	Label string `yaml:"label,omitempty"`
 
-	// DetailOnly keeps a field off every table — a list page and a relationship
+	// TableHidden keeps a field off every table — a list page and a relationship
 	// table are the same problem. Placement is DECLARED, never inferred from
 	// what the field holds.
-	DetailOnly bool `yaml:"detailOnly,omitempty"`
+	TableHidden bool `yaml:"tableHidden,omitempty"`
 
 	// Editable decides whether the EDITOR offers the field. Nil means the
 	// default for its origin: true for a type's own scalars, false for the
@@ -265,6 +278,39 @@ type FieldDecl struct {
 	// EDITOR-scoped, not API-scoped: a scanner must still be able to write
 	// capacityBytes through the API.
 	Editable *bool `yaml:"editable,omitempty"`
+
+	// CreateHidden keeps this field off the CREATE form while leaving it
+	// editable afterwards.
+	//
+	// A third axis, distinct from the two that already exist: `editable: false`
+	// removes it from the EDITOR too (so nobody could ever set it), and
+	// `tableHidden` is about table columns and does not touch the form. The case
+	// it serves is a field whose expected format the form cannot yet convey —
+	// a DateTime where nobody can tell whether it wants a date, a time, or
+	// RFC3339 is better absent from a create than guessed at.
+	//
+	// ⚠️ A stopgap by intent. The real fix is the form SAYING what it expects;
+	// when it does, drop this rather than keeping both.
+	CreateHidden bool `yaml:"createHidden,omitempty"`
+
+	// CreateDefault pre-fills this field on the CREATE form. A suggestion a
+	// human sees and may change — not a value written behind their back, which
+	// is what DGraph's `@default` directive would be. Nothing downstream can
+	// tell a defaulted value from a typed one, because there is no difference.
+	//
+	// PREFIXED with the surface it governs, like CreateHidden. A bare `default:`
+	// read as global and was not — and the editor deliberately applies none of
+	// these, because quietly filling an existing node's blank field would write
+	// a value nobody chose the next time Save was pressed.
+	//
+	// Legitimately per-deployment: a site that mostly buys Dell defaulting
+	// `manufacturer: Dell` is exactly what the overlay is for. That is why a
+	// default may live in the views config while IDENTITY may not — a wrong
+	// default is corrected in the form, a wrong orbId is permanent.
+	//
+	// ⚠️ REFUSED on a field the orbId is built from.
+	CreateDefault string `yaml:"createDefault,omitempty"`
+	Default       string `yaml:"default,omitempty"`
 }
 
 // CanonicalParentDecl is one candidate home for a multi-parent type.
@@ -349,7 +395,7 @@ func MergeViewConfig(base, overlay ViewConfig) ViewConfig {
 		SchemaVersion:   base.SchemaVersion,
 		Pages:           map[string]PageDecl{},
 		Types:           map[string]TypeDecl{},
-		Containment:     map[string][]string{},
+		OwnerReferences: map[string][]string{},
 		CanonicalParent: map[string][]CanonicalParentDecl{},
 	}
 	if overlay.SchemaVersion != "" {
@@ -367,11 +413,11 @@ func MergeViewConfig(base, overlay ViewConfig) ViewConfig {
 	for k, v := range overlay.Types {
 		out.Types[k] = v
 	}
-	for k, v := range base.Containment {
-		out.Containment[k] = v
+	for k, v := range base.OwnerReferences {
+		out.OwnerReferences[k] = v
 	}
-	for k, v := range overlay.Containment {
-		out.Containment[k] = v
+	for k, v := range overlay.OwnerReferences {
+		out.OwnerReferences[k] = v
 	}
 	for k, v := range base.CanonicalParent {
 		out.CanonicalParent[k] = v
@@ -408,7 +454,7 @@ func (c ViewConfig) Validate(types map[string]TypeInfo, deployedVersion string) 
 		SchemaVersion:   c.SchemaVersion,
 		Pages:           map[string]PageDecl{},
 		Types:           map[string]TypeDecl{},
-		Containment:     map[string][]string{},
+		OwnerReferences: map[string][]string{},
 		CanonicalParent: map[string][]CanonicalParentDecl{},
 	}
 	// An INTERFACE is a legitimate key here even though introspection returns
@@ -437,6 +483,47 @@ func (c ViewConfig) Validate(types map[string]TypeInfo, deployedVersion string) 
 		// carries labels, never ref columns, and introspection does not report
 		// an interface's fields here.
 		if info, concrete := types[k]; concrete {
+			// Defaults are CHECKED, not trusted. A default that does not match
+			// its field's type silently does nothing: `"false "` with a trailing
+			// space is not `"false"`, so the select renders unselected and the
+			// author sees an empty control with no explanation. Trimmed, typed,
+			// and said out loud when it cannot work.
+			if len(v.Fields) > 0 {
+				fields := make(map[string]FieldDecl, len(v.Fields))
+				for name, fd := range v.Fields {
+					if fd.CreateDefault != "" {
+						trimmed := strings.TrimSpace(fd.CreateDefault)
+						f, found := fieldNamed(info, name)
+						switch {
+						case !found:
+							warn = append(warn, k+": createDefault for "+name+" is not a field on "+k)
+							trimmed = ""
+						case f.Kind == "OBJECT" || f.Kind == "INTERFACE":
+							warn = append(warn, k+": createDefault for "+name+" is a relationship; only scalars can be pre-filled")
+							trimmed = ""
+						case f.TypeName == "Boolean" && trimmed != "true" && trimmed != "false":
+							warn = append(warn, k+": createDefault for "+name+" is "+strconv.Quote(fd.CreateDefault)+
+								", which is not a Boolean — use \"true\" or \"false\"")
+							trimmed = ""
+						case (f.TypeName == "Int" || f.TypeName == "Int64") && !isInteger(trimmed):
+							warn = append(warn, k+": createDefault for "+name+" is "+strconv.Quote(fd.CreateDefault)+", which is not an "+f.TypeName)
+							trimmed = ""
+						case f.TypeName == "Float" && !isNumber(trimmed):
+							warn = append(warn, k+": createDefault for "+name+" is "+strconv.Quote(fd.CreateDefault)+", which is not a Float")
+							trimmed = ""
+						}
+						if fd.CreateHidden && trimmed != "" {
+							warn = append(warn, k+": createDefault for "+name+
+								" is dead config — the field is createHidden, so nobody ever sees it")
+							trimmed = ""
+						}
+						fd.CreateDefault = trimmed
+					}
+					fields[name] = fd
+				}
+				v.Fields = fields
+			}
+
 			kept := v.RefColumns[:0:0]
 			for _, r := range v.RefColumns {
 				f, found := fieldNamed(info, r)
@@ -514,23 +601,23 @@ func (c ViewConfig) Validate(types map[string]TypeInfo, deployedVersion string) 
 		out.Pages[typeName] = kept
 	}
 
-	for _, childType := range sortedKeys(c.Containment) {
+	for _, childType := range sortedKeys(c.OwnerReferences) {
 		info, known := types[childType]
 		if !known {
-			warn = append(warn, childType+": no such type in the deployed schema; its containment is ignored")
+			warn = append(warn, childType+": no such type in the deployed schema; its ownership is ignored")
 			continue
 		}
 		var kept []string
-		for _, edge := range c.Containment[childType] {
+		for _, edge := range c.OwnerReferences[childType] {
 			f, found := fieldNamed(info, edge)
 			if !found || f.Kind == "SCALAR" || f.Kind == "ENUM" {
-				warn = append(warn, childType+": containment edge "+edge+" is not a relationship on "+childType)
+				warn = append(warn, childType+": ownership edge "+edge+" is not a relationship on "+childType)
 				continue
 			}
 			kept = append(kept, edge)
 		}
 		if len(kept) > 0 {
-			out.Containment[childType] = kept
+			out.OwnerReferences[childType] = kept
 		}
 	}
 
@@ -739,4 +826,14 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func isInteger(s string) bool {
+	_, err := strconv.ParseInt(s, 10, 64)
+	return err == nil
+}
+
+func isNumber(s string) bool {
+	_, err := strconv.ParseFloat(s, 64)
+	return err == nil
 }

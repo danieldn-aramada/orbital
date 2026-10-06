@@ -663,3 +663,77 @@ func TestValidateViews_RefColumnDeclarationsAreChecked(t *testing.T) {
 		t.Errorf("only the valid one survives; got %v", got.Types["Server"].RefColumns)
 	}
 }
+
+// A default that cannot work is REFUSED and SAID, never silently ignored.
+//
+// The regression this guards is quiet: `default: "false "` with a trailing space
+// is not `"false"`, so the Boolean select rendered with nothing chosen and the
+// author saw an empty control with no explanation. Found by a user typing
+// exactly that.
+func TestValidateViews_DefaultsAreTrimmedAndTypeChecked(t *testing.T) {
+	types := map[string]TypeInfo{"Thing": {Fields: []DerivedField{
+		{Name: "enabled", Editable: true, Kind: "SCALAR", TypeName: "Boolean"},
+		{Name: "uHeight", Editable: true, Kind: "SCALAR", TypeName: "Int"},
+		{Name: "model", Editable: true, Kind: "SCALAR", TypeName: "String"},
+		{Name: "owner", Kind: "OBJECT", TypeName: "Thing"},
+	}}}
+	cfg := ViewConfig{Types: map[string]TypeDecl{"Thing": {Fields: map[string]FieldDecl{
+		"enabled": {CreateDefault: "false "},   // trailing space — must be TRIMMED, not refused
+		"uHeight": {CreateDefault: "1u"},       // not an Int
+		"model":   {CreateDefault: " R450 "},   // trimmed, kept
+		"owner":   {CreateDefault: "x:y"},      // a relationship cannot be pre-filled
+		"nope":    {CreateDefault: "anything"}, // not a field at all
+	}}}}
+	got, warn := cfg.Validate(types, "")
+	fields := got.Types["Thing"].Fields
+
+	if fields["enabled"].CreateDefault != "false" {
+		t.Errorf(`enabled = %q, want "false" — whitespace is trimmed, not a refusal`, fields["enabled"].CreateDefault)
+	}
+	if fields["model"].CreateDefault != "R450" {
+		t.Errorf(`model = %q, want "R450"`, fields["model"].CreateDefault)
+	}
+	for _, bad := range []string{"uHeight", "owner", "nope"} {
+		if fields[bad].CreateDefault != "" {
+			t.Errorf("%s kept an unusable default %q; it must drop to empty", bad, fields[bad].CreateDefault)
+		}
+		if !anyContains(warn, bad) {
+			t.Errorf("%s must be REPORTED, not silently dropped; got %v", bad, warn)
+		}
+	}
+	// A Boolean that is neither true nor false is refused with the two legal
+	// values named — "it didn't work" is not actionable, "use true or false" is.
+	cfg2 := ViewConfig{Types: map[string]TypeDecl{"Thing": {Fields: map[string]FieldDecl{
+		"enabled": {CreateDefault: "maybe"},
+	}}}}
+	_, warn2 := cfg2.Validate(types, "")
+	if !anyContains(warn2, "true") || !anyContains(warn2, "Boolean") {
+		t.Errorf("a bad Boolean default must name the legal values; got %v", warn2)
+	}
+}
+
+// A createDefault on a createHidden field is DEAD CONFIG, and said so.
+//
+// Nobody ever sees the prefill, so the two keys together express nothing — and
+// silently ignoring one of a pair of keys an author deliberately wrote is how a
+// config grows lines that look meaningful and are not.
+func TestValidateViews_CreateDefaultOnHiddenFieldIsRefused(t *testing.T) {
+	types := map[string]TypeInfo{"Thing": {Fields: []DerivedField{
+		{Name: "reason", Editable: true, Kind: "SCALAR", TypeName: "String"},
+	}}}
+	cfg := ViewConfig{Types: map[string]TypeDecl{"Thing": {Fields: map[string]FieldDecl{
+		"reason": {CreateHidden: true, CreateDefault: "scheduled"},
+	}}}}
+	got, warn := cfg.Validate(types, "")
+
+	if !anyContains(warn, "dead config") {
+		t.Errorf("the pair must be reported; got %v", warn)
+	}
+	if d := got.Types["Thing"].Fields["reason"].CreateDefault; d != "" {
+		t.Errorf("the unusable default must drop to empty; got %q", d)
+	}
+	// ...and the hiding itself still stands — the refusal is about the default.
+	if !got.Types["Thing"].Fields["reason"].CreateHidden {
+		t.Error("createHidden must survive; only the default it shadowed is dropped")
+	}
+}

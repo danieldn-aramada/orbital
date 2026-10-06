@@ -17,7 +17,7 @@ Read this before: DGraph schema changes, query/mutation work, export/import, see
 ## Schema rules
 
 - **A DQL predicate is namespaced by the type that DECLARES the field, not by the row's concrete type.** *(Added 2026-10-04.)* `nodes` is declared on the `KubernetesCluster` INTERFACE, so the predicate is `KubernetesCluster.nodes` and **`EksaKubernetesCluster.nodes` does not exist**. Writing the wrong name removes nothing and reports nothing — the delete succeeds and the survivor is still pointing at a tombstone. Verified against the live DQL schema: of the `*.servers`/`*.nodes`/`*.kubernetesClusters` predicates, only `KubernetesCluster.nodes` is interface-namespaced, which is exactly why three hand-written edge lists got away with using the concrete type for years. Resolve it by walking the interfaces the type implements and using the first whose own field list carries the name.
-- **A NON-NULL back-edge is a containment declaration, and the build enforces it.** *(Added 2026-10-04.)* `Child.parent: Parent!` says the child has no existence without that parent, so `Parent`'s view MUST carry it as an editable member — otherwise deleting the parent leaves it on a tombstone, and DGraph propagates the missing non-null field to the ROOT of any query selecting it. `TestViews_NonNullBackEdgeMustBeAnEditableMember` fails the build rather than leaving that to review. **Relaxing an edge to nullable is how you opt a child OUT of a parent's unit** — that is why `ServerConfigurationProfile.server` became nullable in v13.
+- **A NON-NULL back-edge is a ownership declaration, and the build enforces it.** *(Added 2026-10-04.)* `Child.parent: Parent!` says the child has no existence without that parent, so `Parent`'s view MUST carry it as an editable member — otherwise deleting the parent leaves it on a tombstone, and DGraph propagates the missing non-null field to the ROOT of any query selecting it. `TestViews_NonNullBackEdgeMustBeAnEditableMember` fails the build rather than leaving that to review. **Relaxing an edge to nullable is how you opt a child OUT of a parent's unit** — that is why `ServerConfigurationProfile.server` became nullable in v13.
 - Schema changes must be **backwards compatible** — orbs may lag orbital by versions. Safe: new types, new nullable fields. Breaking: removing/renaming types or fields, adding non-null fields to existing types.
 - `id: ID` must be declared on the `ConfigItem` interface — DGraph does not auto-expose internal UIDs via GraphQL without it. Without it, `getDataCenter(id: $id)` queries fail. Always keep it.
 - **`@id` on `orbId` is the API-immutability mechanism — load-bearing for external consumers.** DGraph's schema generator excludes `@id` fields from the auto-generated `XPatch` input type, so `updateServer(filter:{...}, set:{orbId:"..."})` is rejected at schema-validation time. ConfigBundle (cb-controller) uses this property as the basis for SSA list-map identity across the cloud → edge boundary — see `~/armada/configbundle/docs/plans/server-identity-orbid.md`. Do NOT remove `@id` from `orbId` and do NOT add custom mutations that bypass DGraph's auto-generated Patch by allowing `orbId` to be set on existing nodes. orbId format (`<namespace>:<entity>`) is also part of this contract — changing the separator or format forces a coordinated migration in every downstream CR.
@@ -68,7 +68,7 @@ must never be a side effect of a display decision, which is why `orbIdSuffix:` i
 still here and not in the views config. What failed was the annotation itself: it
 survived on one type, `NetworkInterface`, where it was simply **wrong**. A NIC's
 identity comes from its server's serviceTag or its device's serial — the same XOR
-that makes its containment undeclarable from nullability — and the annotation said
+that makes its ownership undeclarable from nullability — and the annotation said
 `networkAdapter`. Nothing read it, so nothing caught it. The derived-orbId path
 uses `<namespace>:<parentName>-<orbIdSuffix>` with the parent the walk arrived
 through, which is the parent the child is being created under by construction.
@@ -93,19 +93,29 @@ cb-controller's SSA list-map identity. Nothing here relaxes that.
 
 ## orbId convention
 
-`orbId` is `@id(interface: true)` on the `ConfigItem` interface — unique **across every implementing type**, enforced by DGraph as of **schema v8 (2026-09-17)**. A second type reusing an existing orbId is refused: *"already exists for field orbId in some other implementing type of interface ConfigItem"*. Before v8 the directive was a bare `@id`, which DGraph scopes **per implementing type** — a `Rack` and a `Server` could hold the same orbId, and only cross-type *convention* kept them apart. **The directive is NOT retroactive**: altering the schema succeeds even with duplicates already stored, without scanning or rejecting them, so applying it does not prove a graph is clean (verified on v25.3.1). The audit that does is at the end of this section; it passed 2064/2064 with 0 collisions before v8 was applied. **Keep following the prefix convention anyway** — it is what makes an orbId readable and derivable, and the constraint is a backstop, not a substitute. It is **always derivable, never random**: **`<namespace>:<kind>-<natural-key>`**. This makes upserts idempotent (same input → same id) and lets clients construct ids without a lookup. The rule lives in CLAUDE.md Settled Decisions; **adding a new type means adding a row here.**
+`orbId` is `@id(interface: true)` on the `ConfigItem` interface — unique **across every implementing type**, enforced by DGraph as of **schema v8 (2026-09-17)**. A second type reusing an existing orbId is refused: *"already exists for field orbId in some other implementing type of interface ConfigItem"*. Before v8 the directive was a bare `@id`, which DGraph scopes **per implementing type** — a `Rack` and a `Server` could hold the same orbId, and only cross-type *convention* kept them apart. **The directive is NOT retroactive**: altering the schema succeeds even with duplicates already stored, without scanning or rejecting them, so applying it does not prove a graph is clean (verified on v25.3.1). The audit that does is at the end of this section; it passed 2064/2064 with 0 collisions before v8 was applied. **Keep following the prefix convention anyway** — it is what makes an orbId readable and derivable, and the constraint is a backstop, not a substitute. It is **always derivable, never random**: **`<namespace>:<kind>-<natural-key>`**. This makes upserts idempotent (same input → same id) and lets clients construct ids without a lookup. The rule lives in CLAUDE.md Settled Decisions.
 
-| Type | `orbId` | Natural key |
-|---|---|---|
-| `Server` | `<ns>:server-<serviceTag>` | **The vendor's stable chassis identifier**, stored on `Server.serviceTag`. **Dell:** Redfish `ComputerSystem.SKU` — the Service Tag (`CFRHDX3`). **Supermicro:** Redfish `ComputerSystem.SerialNumber` (`S447008X3823034`), because Supermicro leaves SKU unset *(vendor behaviour — not verified against a live BMC; the Dell half was)*. **NOT Dell's `SerialNumber`** — on 15G that is a different value (R650: SKU `CFRHDX3` vs SerialNumber `MXFC400359006Z`, verified on iDRAC 7.20.10.05); on earlier generations the two coincide (R450: `DLP6K74` for both), which is what made the old "SerialNumber" wording look correct. `Server.serialNumber` holds the raw SerialNumber and is **never** an identity key. This same value is the `<serviceTag>` in the network-* ids below. **Never Redfish `AssetTag`** — org-assigned and often empty (`""` on the R650, null for the A100), which breaks scan-idempotency. |
-| `ServerMaintenance` | `<ns>:server-maintenance-<serviceTag>` | owner server `serviceTag` — 1:1 with `Server`, so the natural key is just the owner's serviceTag (same value as `server-<serviceTag>`). No discriminator: one maintenance node per server (intent, not history — history lives in the audit log + edge Events). |
-| `NetworkDevice` | `<ns>:network-device-<serial>` | switch/firewall serial |
-| `NetworkAdapter` | `<ns>:network-adapter-<serviceTag>-<FQDD>` | owner serviceTag + Redfish adapter FQDD |
-| `NetworkInterface` (server NIC) | `<ns>:network-interface-<serviceTag>-<FQDD>` | owner serviceTag + Redfish interface FQDD |
-| `NetworkInterface` (BMC) | `<ns>:network-interface-<serviceTag>-<mgmt>` | owner serviceTag + Redfish Manager name: `iDRAC` (Dell) / `IPMI` (Supermicro) |
-| `NetworkInterface` (device port) | `<ns>:network-interface-<deviceSerial>-<port>` | device serial + port (`ge-0/0/0`) |
+### The shape is DECLARED IN THE SCHEMA, not here *(2026-10-06)*
 
-**Legacy (pre-convention — migrate when next touched, don't treat network types as the special case):** `IPAddress` = `<ns>:<address>`, `Rack` = `<ns>:<rackName>`, `IdracSettings` = `<ns>:<serviceTag>-idrac`, cluster children = `<ns>:<clusterName>-<kind>`. (`Server` migrated to `server-<serviceTag>` 2026-08-12.)
+Every ConfigItem type carries **`"""orbIdPattern: …"""`** naming its orbId shape, and that annotation is the source of truth. `{field}` interpolates a scalar, `{edge.field}` crosses a relationship (any depth), `{kind}` is the type's kind token — `orbIdSuffix:` when annotated, otherwise the kebab type name. **Repeat the line to declare alternatives**, for a type whose identity hangs off whichever of several owners it actually has; the first whose placeholders all resolve wins. `orbIdPattern: external` opts a type out.
+
+Two build-time guards in `internal/configitems/schema_consistency_test.go` run in `make test-unit`: every ConfigItem type must declare a pattern, and every pattern must parse and reference fields the schema can resolve. **Adding a type without one fails the build** — there is no default natural key, because there is no safe guess at identity (`Server.name` exists and is not identity), and a wrong one corrupts the graph silently.
+
+This table no longer restates the shapes — it would be a second place to drift. It documents the **choice of natural key**, which is judgement a pattern cannot carry.
+
+| Type | Natural key |
+|---|---|
+| `Server` | **The vendor's stable chassis identifier**, stored on `Server.serviceTag`. **Dell:** Redfish `ComputerSystem.SKU` — the Service Tag (`CFRHDX3`). **Supermicro:** Redfish `ComputerSystem.SerialNumber` (`S447008X3823034`), because Supermicro leaves SKU unset *(vendor behaviour — not verified against a live BMC; the Dell half was)*. **NOT Dell's `SerialNumber`** — on 15G that is a different value (R650: SKU `CFRHDX3` vs SerialNumber `MXFC400359006Z`, verified on iDRAC 7.20.10.05); on earlier generations the two coincide (R450: `DLP6K74` for both), which is what made the old "SerialNumber" wording look correct. `Server.serialNumber` holds the raw SerialNumber and is **never** an identity key. This same value is the `<serviceTag>` in the network-* ids below. **Never Redfish `AssetTag`** — org-assigned and often empty (`""` on the R650, null for the A100), which breaks scan-idempotency. |
+| `ServerMaintenance` | owner server `serviceTag` — 1:1 with `Server`, so the natural key is just the owner's serviceTag (same value as `server-<serviceTag>`). No discriminator: one maintenance node per server (intent, not history — history lives in the audit log + edge Events). |
+| `NetworkDevice` | switch/firewall serial |
+| `NetworkAdapter` | owner serviceTag + Redfish adapter FQDD |
+| `NetworkInterface` (server NIC) | owner serviceTag + Redfish interface FQDD |
+| `NetworkInterface` (BMC) | owner serviceTag + Redfish Manager name: `iDRAC` (Dell) / `IPMI` (Supermicro) |
+| `NetworkInterface` (device port) | device serial + port (`ge-0/0/0`) |
+
+**Legacy (pre-convention — migrate when next touched, don't treat network types as the special case):** `IPAddress`, `Rack`, `DataCenter`, `KubernetesNode` and the clusters are bare `<ns>:<name>`-shaped; `IdracSettings` and `ServerConfigurationProfile` put the kind token last; `StorageVolume` reaches two hops for its server's serviceTag. (`Server` migrated to `server-<serviceTag>` 2026-08-12.)
+
+Each of those carries an `orbIdPattern:` describing **what is actually stored**, not what the convention wants — verified against the blue dev graph 2026-10-06 and pinned by `TestShippedPatterns_ReproduceStoredOrbIDs`. That is deliberate: a pattern that described the aspiration would report the whole graph as wrong. **The annotation is therefore the migration tracker** — change the pattern, fix the data, and the two agree again.
 
 **The audit — run it before applying the constraint to any graph, and after a bulk import:**
 
@@ -126,18 +136,18 @@ for k,v in list(dups.items())[:10]: print('  COLLISION', k, v)
 
 A clean graph reports equal node and orbId counts and zero collisions. **A collision found here cannot be fixed by the constraint** — it is already stored, and it breaks reads today: `getConfigItem` on a duplicated orbId returns *"A list was returned, but GraphQL was expecting just one item"*, and `internal/graphdiff` keys its `Snapshot` by orbId (`graphdiff.go:203`), so one of the two nodes silently disappears from every diff, export preview and change-request base capture.
 
-## ConfigItem containment — declared in the views config
+## ConfigItem ownership — declared in the views config
 
-**Containment is a VIEW decision, and it is declared in `config/views.yaml` as a
+**Ownership is a VIEW decision, and it is declared in `config/views.yaml` as a
 member with `editable: true`.** Not in Go, not in a schema annotation, not in
 Postgres. The full model is in [UI.md](./UI.md) § Settled Decisions; this section
 is the graph-side half.
 
 **Two layers, two homes — unchanged:**
-- **Containment *instances*** ("this maintenance belongs to *that* server") live
+- **Ownership *instances*** ("this maintenance belongs to *that* server") live
   in the CMDB — they ARE the child→owner **edge** in DGraph
   (`ServerMaintenance.server`), read live wherever needed.
-- **Containment *type-policy*** ("which edge types are a page's edit unit") is
+- **Ownership *type-policy*** ("which edge types are a page's edit unit") is
   VIEW configuration: it decides what the editor groups into one tree, what the
   audit tab rolls up, and — via `baseScope` — what a reviewer is deemed to have
   looked at. **None of it reaches the data.**
@@ -187,8 +197,8 @@ edit and refuses the whole delete.
 everything reachable from the Namespace node (DQL `expand(_all_)`), one DataCenter
 per namespace. Views never participate.
 
-**Cross-namespace containment is out of scope — and deliberately not enforced in
-code.** Containment models physical/logical nesting, so a `colo` server cannot
+**Cross-namespace ownership is out of scope — and deliberately not enforced in
+code.** Ownership models physical/logical nesting, so a `colo` server cannot
 contain an `alaska` disk; Kubernetes forbids the equivalent outright. Nothing in
 orbital can produce such an edge: `orbId` is `<namespace>:<kind>-<natural-key>`,
 and the editor derives a child's namespace from its parent on create. It would
@@ -197,8 +207,8 @@ Worth knowing if it ever did occur: the failure is silent. Export scopes a data
 centre by namespace filter, not by traversal, so a cross-namespace child would be
 **excluded from its owner's artifact**, leaving a dangling edge with no error.
 
-> **Why not infer containment from DGraph automatically?** DGraph encodes
-> *relationships*, not *containment* — `@hasInverse` is bidirectional, there is no
+> **Why not infer ownership from DGraph automatically?** DGraph encodes
+> *relationships*, not *ownership* — `@hasInverse` is bidirectional, there is no
 > `@owns`. Projecting the graph to a tree must pick one canonical parent per node
 > (a NIC nests under its adapter, not its server *and* device), which is a view
 > decision, not a derivable fact.

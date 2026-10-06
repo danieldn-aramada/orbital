@@ -89,7 +89,7 @@ func seedCascadeFixture(t *testing.T) {
 }
 
 // Criterion 1 — an editable member is deleted with its parent, transitively.
-func TestCascade_FollowsEditableMembersTransitively(t *testing.T) {
+func TestCascade_FollowsOwnedMembersTransitively(t *testing.T) {
 	h, _ := deleteFixture(t)
 	seedCascadeFixture(t)
 
@@ -112,7 +112,7 @@ func TestCascade_FollowsEditableMembersTransitively(t *testing.T) {
 //
 // Both halves. Surviving silently is how an operator discovers after the fact
 // that something they expected to go is still there.
-func TestCascade_NonEditableMemberIsPreservedAndSaidSo(t *testing.T) {
+func TestCascade_NonOwnedMemberIsPreservedAndSaidSo(t *testing.T) {
 	h, _ := deleteFixture(t)
 	seedCascadeFixture(t)
 	ctx := context.Background()

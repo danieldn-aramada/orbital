@@ -1,0 +1,126 @@
+{{/*
+create-modal.gohtml — the New-node form, for ANY ConfigItem type with a page.
+
+Generated from the view: scalars from the editable set, relationships from the
+schema's NON-NULL edges, identity from the type's `orbIdPattern`, the unit from
+the same members the editor writes. No per-type markup, and adding a type adds
+no template.
+
+A typed form rather than a blank JSON editor, deliberately. The edit modal works
+because its tree is PREFILLED — empty it would offer no affordance and no
+discoverability, and a required relationship would be an orbId typed from
+memory. Infrahub generates its create form from the schema for the same reason.
+*/}}
+{{define "create-modal.gohtml"}}
+<div id="create-modal-{{.DomID}}" class="modal modal-fx-3dRotateFromBottom" data-kind="{{.Kind}}"
+     data-orbid-template="{{.OrbIDTemplate}}" data-namespace-from="{{.NamespaceFrom}}">
+  <div class="modal-background"></div>
+  <div class="modal-content modal-card is-large">
+    <header class="modal-card-head">
+      <p class="modal-card-title">New {{.Label}}</p>
+      <button class="delete" aria-label="close" data-modal-close></button>
+    </header>
+
+    <section class="modal-card-body">
+      {{if .Unavailable}}
+      <div class="notification is-warning is-light" data-testid="create-unavailable">
+        <p class="is-size-7">{{.Unavailable}}</p>
+      </div>
+      {{else}}
+
+      {{/* The identity, shown before it is committed to. Empty until every
+           placeholder the pattern needs has a value — a partial id is worse
+           than none, because it would collide with every other node missing
+           the same field. */}}
+      <div class="field">
+        <label class="label is-size-7">Orb ID</label>
+        <p class="is-size-7 has-text-grey" id="create-orbid-{{.DomID}}"
+           data-testid="create-orbid">—</p>
+      </div>
+
+      {{range .Relations}}
+      <div class="field">
+        <label class="label is-size-7">
+          {{.Label}}{{if .Required}} <span class="has-text-danger">*</span>{{end}}
+        </label>
+        <div class="select is-small is-fullwidth">
+          <select data-create-rel="{{.Field}}" {{if .Required}}required{{end}}>
+            <option value="">— choose a {{.Label}} —</option>
+            {{range .Options}}<option value="{{.OrbID}}">{{.Name}}</option>{{end}}
+          </select>
+        </div>
+      </div>
+      {{end}}
+
+      {{range .Fields}}
+      <div class="field">
+        <label class="label is-size-7">
+          {{.Label}}{{if .Identity}} <span class="has-text-danger">*</span>{{end}}
+        </label>
+        {{/* The control follows the SCALAR TYPE. A Boolean rendered as a text
+             box produces the string "false", which DGraph refuses — and lets
+             someone type "flase". */}}
+        {{if eq .Type "Boolean"}}
+        <div class="select is-small is-fullwidth">
+          <select data-create-field="{{.Field}}" data-create-type="Boolean">
+            <option value=""{{if eq .Default ""}} selected{{end}}>—</option>
+            <option value="true"{{if eq .Default "true"}} selected{{end}}>true</option>
+            <option value="false"{{if eq .Default "false"}} selected{{end}}>false</option>
+          </select>
+        </div>
+        {{else}}
+        <input class="input is-small"
+               type="{{if or (eq .Type "Int") (eq .Type "Int64") (eq .Type "Float")}}number{{else}}text{{end}}"
+               data-create-field="{{.Field}}" data-create-type="{{.Type}}"
+               value="{{.Default}}" placeholder="{{.Hint}}"
+               {{if .Identity}}data-create-identity="1" required{{end}}>
+        {{end}}
+      </div>
+      {{end}}
+
+      {{/* The unit. Created in the SAME nested mutation as its parent, which is
+           the one nesting DGraph performs atomically — so a failure leaves
+           nothing behind rather than a half-made server. */}}
+      {{range .Unit}}
+      <hr class="my-4">
+      <p class="is-size-7 has-text-weight-semibold mb-2">{{.Label}}</p>
+      {{$child := .Field}}{{$childTmpl := .OrbIDTemplate}}
+      {{range .Fields}}
+      <div class="field">
+        <label class="label is-size-7 has-text-grey">{{.Label}}</label>
+        {{if eq .Type "Boolean"}}
+        <div class="select is-small is-fullwidth">
+          <select data-create-child="{{$child}}" data-create-field="{{.Field}}"
+                  data-create-type="Boolean" data-child-orbid-template="{{$childTmpl}}">
+            <option value=""{{if eq .Default ""}} selected{{end}}>—</option>
+            <option value="true"{{if eq .Default "true"}} selected{{end}}>true</option>
+            <option value="false"{{if eq .Default "false"}} selected{{end}}>false</option>
+          </select>
+        </div>
+        {{else}}
+        <input class="input is-small"
+               type="{{if or (eq .Type "Int") (eq .Type "Int64") (eq .Type "Float")}}number{{else}}text{{end}}"
+               data-create-child="{{$child}}" data-create-field="{{.Field}}"
+               data-create-type="{{.Type}}" value="{{.Default}}"
+               placeholder="{{.Hint}}" data-child-orbid-template="{{$childTmpl}}">
+        {{end}}
+      </div>
+      {{end}}
+      {{end}}
+
+      <div class="notification is-danger is-light is-size-7 mt-4"
+           id="create-error-{{.DomID}}" style="display:none"
+           data-testid="create-error"></div>
+      {{end}}
+    </section>
+
+    <footer class="modal-card-foot is-flex is-align-items-center" style="gap:0.75rem;">
+      {{if not .Unavailable}}
+      <button class="button is-rounded is-small is-link" id="create-submit-{{.DomID}}"
+              data-testid="create-submit">Create</button>
+      {{end}}
+      <button class="button is-rounded is-small" data-modal-close>Cancel</button>
+    </footer>
+  </div>
+</div>
+{{end}}

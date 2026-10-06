@@ -80,13 +80,16 @@ type MetaFor func(typeName string) TypeInfo
 // so the JS module can create it on a first-time configure.
 //
 // The page gates only the TOP level (EditorMembers); below it the walk follows
-// CONTAINMENT (ContainedSingles). A wrapper has no page to declare anything on,
+// CONTAINMENT (DependentSingles). A wrapper has no page to declare anything on,
 // so reading the page at every level emptied the cluster editor: the data tree
 // carried backup.etcd and the target list did not, and the write went nowhere.
-func BuildEditTargets(views ViewSet, fields FieldsFor, meta MetaFor, rootType, rootOrbID, namespace, name string) []EditTarget {
+func BuildEditTargets(views ViewSet, fields FieldsFor, meta MetaFor, rootType, rootOrbID, namespace, name string, rootValues map[string]string) []EditTarget {
 	root := views.Of(rootType)
 	if root.Type == "" {
 		return nil
+	}
+	childOrbID := func(childType string) string {
+		return derivedChildOrbID(meta, childType, namespace, name, rootValues)
 	}
 
 	out := []EditTarget{{
@@ -104,7 +107,7 @@ func BuildEditTargets(views ViewSet, fields FieldsFor, meta MetaFor, rootType, r
 		// entity by path — ["backup", "etcd"] — and a path cannot say which row
 		// of a list it means.
 		if isWrapper(fields, views, child.ChildType) {
-			wrapperOrbID := fmt.Sprintf("%s:%s-%s", namespace, name, orbIDSuffix(meta, child.ChildType))
+			wrapperOrbID := childOrbID(child.ChildType)
 			wrapper := &EditWrapper{
 				Kind:        child.ChildType,
 				OrbID:       wrapperOrbID,
@@ -112,11 +115,11 @@ func BuildEditTargets(views ViewSet, fields FieldsFor, meta MetaFor, rootType, r
 				Namespace:   namespace,
 				ParentField: child.ChildField, // field on the root that points at the wrapper
 			}
-			for _, leaf := range views.Of(child.ChildType).ContainedSingles() {
+			for _, leaf := range views.Of(child.ChildType).DependentSingles() {
 				out = append(out, EditTarget{
 					Path:               []string{child.ChildField, leaf.ChildField},
 					Kind:               leaf.ChildType,
-					OrbID:              fmt.Sprintf("%s:%s-%s", namespace, name, orbIDSuffix(meta, leaf.ChildType)),
+					OrbID:              childOrbID(leaf.ChildType),
 					Fields:             fields(leaf.ChildType),
 					JSONStringFields:   JSONStringFieldsFor(meta(leaf.ChildType)),
 					PayloadField:       meta(leaf.ChildType).PayloadField,
@@ -137,7 +140,7 @@ func BuildEditTargets(views ViewSet, fields FieldsFor, meta MetaFor, rootType, r
 		out = append(out, EditTarget{
 			Path:               []string{child.ChildField},
 			Kind:               child.ChildType,
-			OrbID:              fmt.Sprintf("%s:%s-%s", namespace, name, orbIDSuffix(meta, child.ChildType)),
+			OrbID:              childOrbID(child.ChildType),
 			Fields:             fields(child.ChildType),
 			JSONStringFields:   JSONStringFieldsFor(meta(child.ChildType)),
 			PayloadField:       meta(child.ChildType).PayloadField,
@@ -192,7 +195,7 @@ func StampEditTargetVersion(targets []EditTarget, orbID string, version int) []E
 // their children's targets, so the editor can create one on a first-time
 // configure.
 func isWrapper(fields FieldsFor, views ViewSet, typeName string) bool {
-	return len(fields(typeName)) == 0 && len(views.Of(typeName).ContainedSingles()) > 0
+	return len(fields(typeName)) == 0 && len(views.Of(typeName).DependentSingles()) > 0
 }
 
 // orbIDSuffix returns the token an owned child's derived orbId ends with.
@@ -203,6 +206,55 @@ func isWrapper(fields FieldsFor, views ViewSet, typeName string) bool {
 // lower-cased type name. A wrong value here does not error — it builds an orbId
 // for an entity that does not exist, and upserts a phantom instead of editing
 // the real one.
+// derivedChildOrbID builds the orbId an owned child WILL have, from the child
+// type's `orbIdPattern:` and the values of the root entity it hangs off.
+//
+// A owned child's pattern always walks back to the root it is owned in
+// — IdracSettings is `{server.serviceTag}-{kind}`, EtcdBackup is
+// `{clusterBackupEtcd.cluster.name}-{kind}` — so a path that crosses at least
+// one edge is resolved by taking its LAST segment from the root's own values.
+// The intermediate hops are the way back to the root and carry no value of
+// their own. A single-segment path names a field on the child itself, which
+// does not exist yet, so it cannot resolve and must not be guessed at.
+//
+// This replaced `<namespace>:<rootName>-<suffix>`, which ignored the pattern
+// and used the root's NAME. On a Server that is the hostname, so a first-time
+// configure minted `<ns>:r04-u25.2f-uae-idrac` while all 155 stored rows read
+// `<ns>:<serviceTag>-idrac`. Nothing errored — the next scan simply computed
+// the conventional id, failed to find it, and created a SECOND IdracSettings,
+// orphaning the first along with its audit history. Verified unbitten on the
+// dev graph 2026-10-06 (205/205 children matched the declared patterns), which
+// is only because every one of them was seeded rather than UI-created.
+//
+// Falls back to the old formula when no pattern resolves, which is the deployed
+// schema not having been re-applied since the annotations landed. Today's
+// behaviour is the right thing to degrade to; the build-time guard is what makes
+// sure a MISSING pattern never ships.
+func derivedChildOrbID(meta MetaFor, childType, namespace, rootName string, rootValues map[string]string) string {
+	legacy := fmt.Sprintf("%s:%s-%s", namespace, rootName, orbIDSuffix(meta, childType))
+	if meta == nil {
+		return legacy
+	}
+	info := meta(childType)
+	if len(info.OrbIDPattern) == 0 {
+		return legacy
+	}
+	id, err := ConstructOrbID(namespace, OrbIDKindFor(childType, info.Doc), info.OrbIDPattern,
+		func(path string) (string, bool) {
+			seg := strings.Split(path, ".")
+			if len(seg) < 2 {
+				return "", false
+			}
+			v, ok := rootValues[seg[len(seg)-1]]
+			v = strings.TrimSpace(v)
+			return v, ok && v != ""
+		})
+	if err != nil {
+		return legacy
+	}
+	return id
+}
+
 func orbIDSuffix(meta MetaFor, typeName string) string {
 	if meta != nil {
 		if s := meta(typeName).OrbIDSuffix; s != "" {

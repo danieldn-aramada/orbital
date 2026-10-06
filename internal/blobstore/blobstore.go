@@ -46,11 +46,11 @@ type Store interface {
 // they consume (ORBITAL_S3_*); Azure backends interpret AccessKey as the
 // storage account name and SecretKey as the account key.
 type Config struct {
-	Endpoint  string
-	Region    string // ignored by Azure backend
-	Bucket    string // = container, for Azure
-	AccessKey string // = storage account name, for Azure
-	SecretKey string // = storage account key, for Azure; ignored when UseAzureMI
+	Endpoint   string
+	Region     string // ignored by Azure backend
+	Bucket     string // = container, for Azure
+	AccessKey  string // = storage account name, for Azure
+	SecretKey  string // = storage account key, for Azure; ignored when UseAzureMI
 	UseAzureMI bool
 }
 

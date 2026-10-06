@@ -110,7 +110,7 @@ func ResolveViewsFromConfig(types map[string]TypeInfo, ifaceFields []string, cfg
 			IsInterface:     info.IsInterface,
 			Implementations: info.PossibleTypes,
 			Display:         display,
-			DetailOnly:      detailOnlyFields(info, td),
+			TableHidden:     tableHiddenFields(info, td),
 			JSONString:      JSONStringFieldsFor(info),
 			Order:           td.Order,
 			Labels:          labelsFor(td),
@@ -121,9 +121,13 @@ func ResolveViewsFromConfig(types map[string]TypeInfo, ifaceFields []string, cfg
 			Type:            name,
 			Label:           Label(slug),
 			MenuWeight:      page.MenuWeight,
+			OrbIDPattern:    info.OrbIDPattern,
+			OrbIDKind:       OrbIDKindFor(name, info.Doc),
+			Defaults:        defaultsFor(info, td, orbIDPaths(info.OrbIDPattern)),
+			NoCreate:        noCreateFor(info, td),
 			Fields:          editableFields(info, td, ifaceFields),
 			Tabs:            tabs,
-			Contains:        containedChildren(types, cfg, name),
+			Dependents:      dependentsOf(types, cfg, name),
 		}
 		if !isPage {
 			// A pageless type still renders — as rows on somebody else's page —
@@ -269,13 +273,13 @@ func editableFields(info TypeInfo, decl TypeDecl, ifaceFields []string) []string
 	return out
 }
 
-// detailOnlyFields are the fields that render on a detail page and never as a
+// tableHiddenFields are the fields that render on a detail page and never as a
 // table column — on a list page or a relationship table, which are the same
 // problem.
-func detailOnlyFields(info TypeInfo, decl TypeDecl) []string {
+func tableHiddenFields(info TypeInfo, decl TypeDecl) []string {
 	var out []string
 	for _, f := range info.Fields {
-		if decl.Fields[f.Name].DetailOnly {
+		if decl.Fields[f.Name].TableHidden {
 			out = append(out, f.Name)
 		}
 	}
@@ -340,9 +344,9 @@ func (s ViewSet) BySlug(slug string) (View, bool) {
 	return View{}, false
 }
 
-// EditableMember is one member a page writes through its own editor — the
-// containment relation, read off the view instead of a Go registry.
-type EditableMember struct {
+// OwnedMember is one member a page writes through its own editor — the
+// ownership relation, read off the view instead of a Go registry.
+type OwnedMember struct {
 	ChildType  string
 	ChildField string
 
@@ -350,8 +354,8 @@ type EditableMember struct {
 	// edge a first-time CREATE links through.
 	//
 	// Resolved here because for a multi-parent type the answer depends on which
-	// parent you are creating from, which is exactly why `derivesIdFrom:`
-	// (single-valued) could not supply it.
+	// parent you are creating from — no single non-null edge can say it, which
+	// is what the ordered `ownerReferences:` declaration is for.
 	ParentEdge string
 
 	// IsList distinguishes a table of children from a single related entity.
@@ -361,35 +365,26 @@ type EditableMember struct {
 	IsList bool
 }
 
-// EditableMembers returns what this type CONTAINS — what dies with it, what
-// rolls up onto its audit tab, and what its editor may reach.
-//
-// Derived from the schema, not from the page. A StorageController contains its
-// devices whether or not any page shows them, and a type with no page at all
-// still contains things. Reading this off a page's tab list was the overload
-// that put `editable: true` on lists the editor has never been able to edit.
-func (v View) EditableMembers() []EditableMember { return v.Contains }
-
-// EditorMembers returns what THIS PAGE's editor may write: a contained child
+// EditorMembers returns what THIS PAGE's editor may write: a owned child
 // the page declares `editable: true` on, that is single-cardinality.
 //
-// Three conditions, and each removes a different mistake. CONTAINED, or the
+// Three conditions, and each removes a different mistake. OWNED, or the
 // editor would write an entity this page does not own. DECLARED, because a rack
 // page may show its servers and choose not to edit them from there. SINGLE,
 // because an edit target is addressed by PATH and a path cannot say which row.
 //
-// It can only ever SHRINK the contained set — never grow it. That is the §11
+// It can only ever SHRINK the owned set — never grow it. That is the §11
 // hazard: the editor must not load what the page does not show, or dropping
 // something from the page reads as "the user cleared it".
-func (v View) EditorMembers() []EditableMember {
+func (v View) EditorMembers() []OwnedMember {
 	declared := map[string]bool{}
 	for _, t := range v.Tabs {
 		if t.Editable && !strings.Contains(t.Field, ".") {
 			declared[t.Field] = true
 		}
 	}
-	var out []EditableMember
-	for _, c := range v.Contains {
+	var out []OwnedMember
+	for _, c := range v.Dependents {
 		if declared[c.ChildField] && !c.IsList {
 			out = append(out, c)
 		}
@@ -397,21 +392,21 @@ func (v View) EditorMembers() []EditableMember {
 	return out
 }
 
-// ContainedSingles returns what this type contains at single cardinality —
+// DependentSingles returns what this type contains at single cardinality —
 // the rule that governs the editor BELOW the page's top level.
 //
 // The page declares which of its own children its editor may write; it says
 // nothing about a wrapper two hops down, because a wrapper has no page. Once a
-// child is in the unit, the whole contained subtree below it is in the unit —
+// child is in the unit, the whole owned subtree below it is in the unit —
 // which is the same statement the delete cascade makes, and the reason a
 // cluster's etcd schedule is editable from the cluster page while ClusterBackup
 // has no page of its own.
 //
 // Single-cardinality for the same reason EditorMembers is: a target is
 // addressed by PATH, and a path cannot say which row of a list it means.
-func (v View) ContainedSingles() []EditableMember {
-	var out []EditableMember
-	for _, c := range v.Contains {
+func (v View) DependentSingles() []OwnedMember {
+	var out []OwnedMember
+	for _, c := range v.Dependents {
 		if !c.IsList {
 			out = append(out, c)
 		}
@@ -419,14 +414,14 @@ func (v View) ContainedSingles() []EditableMember {
 	return out
 }
 
-// containedChildren returns the children a type cannot be deleted without
+// dependentsOf returns the children a type cannot be deleted without
 // taking with it.
 //
 // A child whose back-edge to this type is NON-NULL has no existence without it:
-// that is the schema's own statement, and 13 of orbital's 14 containment
+// that is the schema's own statement, and 13 of orbital's 14 ownership
 // relations derive from it. The exception is declared, because its ownership is
 // an XOR that nullability cannot express.
-func containedChildren(types map[string]TypeInfo, cfg ViewConfig, typeName string) []EditableMember {
+func dependentsOf(types map[string]TypeInfo, cfg ViewConfig, typeName string) []OwnedMember {
 	info, known := types[typeName]
 	if !known {
 		return nil
@@ -439,7 +434,7 @@ func containedChildren(types map[string]TypeInfo, cfg ViewConfig, typeName strin
 		is[in] = true
 	}
 
-	var out []EditableMember
+	var out []OwnedMember
 	for _, f := range info.Fields {
 		if f.Kind == "SCALAR" || f.Kind == "ENUM" || f.TypeName == "" {
 			continue
@@ -448,8 +443,8 @@ func containedChildren(types map[string]TypeInfo, cfg ViewConfig, typeName strin
 		if !childKnown {
 			continue
 		}
-		if edge := containmentEdge(cfg, child, f.TypeName, is); edge != "" {
-			out = append(out, EditableMember{
+		if edge := ownerEdge(cfg, child, f.TypeName, is); edge != "" {
+			out = append(out, OwnedMember{
 				ChildType: f.TypeName, ChildField: f.Name, IsList: f.IsList, ParentEdge: edge,
 			})
 		}
@@ -457,22 +452,22 @@ func containedChildren(types map[string]TypeInfo, cfg ViewConfig, typeName strin
 	return out
 }
 
-// containmentEdge returns the child's edge back to one of `is`, or "" when the
-// child is not contained by it.
+// ownerEdge returns the child's edge back to one of `is`, or "" when the
+// child is not owned by it.
 //
-// The edge and the containment are one answer: if a child points back at this
-// parent with a non-null edge it is contained by it, and that same edge is what
+// The edge and the ownership are one answer: if a child points back at this
+// parent with a non-null edge it is owned by it, and that same edge is what
 // a create links through.
-func containmentEdge(cfg ViewConfig, child TypeInfo, childType string, is map[string]bool) string {
+func ownerEdge(cfg ViewConfig, child TypeInfo, childType string, is map[string]bool) string {
 	// DECLARED first: an XOR owner, ordered most-specific-first, which no single
 	// non-null edge can express. Order matters — a NIC nests under its adapter
 	// before its server.
-	for _, edge := range cfg.Containment[childType] {
+	for _, edge := range cfg.OwnerReferences[childType] {
 		if f, ok := fieldNamed(child, edge); ok && is[f.TypeName] {
 			return edge
 		}
 	}
-	// DERIVED: a non-null back-edge IS the containment statement.
+	// DERIVED: a non-null back-edge IS the ownership statement.
 	for _, cf := range child.Fields {
 		if cf.NonNull && is[cf.TypeName] {
 			return cf.Name
@@ -481,14 +476,17 @@ func containmentEdge(cfg ViewConfig, child TypeInfo, childType string, is map[st
 	return ""
 }
 
-// ContainmentEdge returns the field on `childType` pointing back at `parentType`
+// OwnerEdge returns the field on `childType` pointing back at `parentType`
 // — the edge a first-time CREATE links through.
 //
 // For a single-parent type this is the non-null back-edge. For a multi-parent
-// type the answer depends on which page you are creating from, which is why
-// `derivesIdFrom:` (single-valued) could not supply it and the ordered
-// containment declaration does.
-func (s ViewSet) ContainmentEdge(types map[string]TypeInfo, cfg ViewConfig, childType, parentType string) string {
+// type the answer depends on which page you are creating from, which no single
+// non-null edge can express — hence the ordered `ownerReferences:` declaration.
+//
+// ⚠️ Distinct from IDENTITY, which is `orbIdPattern` in the schema. A
+// NetworkInterface is owned by its networkAdapter and named after its
+// server or its device: the two lists are not the same set.
+func (s ViewSet) OwnerEdge(types map[string]TypeInfo, cfg ViewConfig, childType, parentType string) string {
 	child, ok := types[childType]
 	if !ok {
 		return ""
@@ -499,7 +497,7 @@ func (s ViewSet) ContainmentEdge(types map[string]TypeInfo, cfg ViewConfig, chil
 			is[in] = true
 		}
 	}
-	for _, edge := range cfg.Containment[childType] {
+	for _, edge := range cfg.OwnerReferences[childType] {
 		if f, ok := fieldNamed(child, edge); ok && is[f.TypeName] {
 			return edge
 		}
@@ -530,7 +528,7 @@ func (s ViewSet) ContainmentEdge(types map[string]TypeInfo, cfg ViewConfig, chil
 func (s ViewSet) ExclusivelyOwned(typeName string) bool {
 	claims := map[string]bool{}
 	for _, v := range s {
-		for _, c := range v.Contains {
+		for _, c := range v.Dependents {
 			if c.ChildType == typeName {
 				claims[s.collapseToInterface(v.Type)+"."+c.ChildField] = true
 			}
@@ -555,13 +553,22 @@ func (s ViewSet) collapseToInterface(typeName string) string {
 	return typeName
 }
 
-// EditableOrbIDSelection returns a GraphQL sub-selection fetching every orbId in
-// a page's edit unit — the single source the audit roll-up derives from, so a
-// parent's audit tab shows exactly the entities its editor can write.
+// OwnedOrbIDSelection returns a GraphQL sub-selection fetching the orbId of
+// everything a type OWNS, to any declared depth — the subtree the audit
+// roll-up and the change-request scope pin both cover.
 //
-// Depth- and path-guarded: a members graph is operator-editable and nothing
-// stops someone declaring a cycle, which a naive walk would follow forever.
-func (s ViewSet) EditableOrbIDSelection(rootType string) string {
+// Depth- and path-guarded: the ownership graph is operator-editable through
+// `ownerReferences:` and nothing stops someone declaring a cycle, which a naive
+// walk would follow forever.
+//
+// An INTERFACE-typed member takes an inline fragment. `orbId` is declared on
+// ConfigItem rather than on a sub-interface, so selecting it bare off
+// DataCenter.kubernetesClusters is rejected at VALIDATION — and that failure is
+// not local: the batch expander puts every root in one aliased query, so one
+// interface member anywhere killed the whole thing and every root's subtree
+// came back empty. Silently, because the expander treats a query failure as
+// "owns nothing".
+func (s ViewSet) OwnedOrbIDSelection(rootType string) string {
 	var b strings.Builder
 	var rec func(typeName string, path map[string]bool, depth int)
 	rec = func(typeName string, path map[string]bool, depth int) {
@@ -569,9 +576,13 @@ func (s ViewSet) EditableOrbIDSelection(rootType string) string {
 			return
 		}
 		path[typeName] = true
-		for _, m := range s.Of(typeName).EditableMembers() {
+		for _, m := range s.Of(typeName).Dependents {
 			b.WriteString(m.ChildField)
-			b.WriteString(" { orbId ")
+			if s.Of(m.ChildType).IsInterface {
+				b.WriteString(" { __typename ... on ConfigItem { orbId } ")
+			} else {
+				b.WriteString(" { orbId ")
+			}
 			rec(m.ChildType, path, depth+1)
 			b.WriteString("} ")
 		}
@@ -629,7 +640,7 @@ func HumanFieldLabel(field string) string {
 // Implements returns the interfaces a type implements, from the resolved views.
 //
 // It replaces a package-level lookup hook that production set at startup. That
-// hook existed because the registry's containment walk was a package function
+// hook existed because the registry's ownership walk was a package function
 // with no resolver to thread, and it is exactly what made calling one of those
 // functions from inside the resolver re-enter it — every generic page hung, with
 // no error and nothing in the access log, because the request never finished.
@@ -645,6 +656,53 @@ func (s ViewSet) Implements(typeName string) []string {
 				out = append(out, v.Type)
 			}
 		}
+	}
+	return out
+}
+
+// orbIDPaths is every placeholder a type's patterns reference, as a set.
+func orbIDPaths(patterns []OrbIDPattern) map[string]bool {
+	out := map[string]bool{}
+	for _, p := range patterns {
+		for _, path := range p.Paths() {
+			out[path] = true
+		}
+	}
+	return out
+}
+
+// defaultsFor collects the declared create-form defaults for a type.
+//
+// A default on a field the orbId is BUILT FROM is dropped: pre-filling identity
+// creates a node under a key nobody chose, and unlike a wrong manufacturer a
+// wrong orbId cannot be corrected — re-keying orphans every child id and splits
+// the audit trail across two ids.
+func defaultsFor(info TypeInfo, decl TypeDecl, identity map[string]bool) map[string]string {
+	var out map[string]string
+	for _, f := range info.Fields {
+		d := decl.Fields[f.Name].CreateDefault
+		if d == "" || identity[f.Name] {
+			continue
+		}
+		if out == nil {
+			out = map[string]string{}
+		}
+		out[f.Name] = d
+	}
+	return out
+}
+
+// noCreateFor collects the fields a type keeps off the create form.
+func noCreateFor(info TypeInfo, decl TypeDecl) map[string]bool {
+	var out map[string]bool
+	for _, f := range info.Fields {
+		if !decl.Fields[f.Name].CreateHidden {
+			continue
+		}
+		if out == nil {
+			out = map[string]bool{}
+		}
+		out[f.Name] = true
 	}
 	return out
 }
